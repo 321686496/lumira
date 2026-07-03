@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160">
+  <defs>
+    <clipPath id="starClip">
+      <path d="M 100 72 L 104 94 L 128 94 L 108 106 L 116 128 L 100 114 L 84 128 L 92 106 L 72 94 L 96 94 Z"/>
+    </clipPath>
+  </defs>
+
+  <g transform="translate(20, 0)">
+    <!-- Three overlapping viewfinder frames with different rotations -->
+    <!-- Frame 1: 0° rotation (center) -->
+    <rect x="65" y="65" width="70" height="70" rx="14" fill="none" stroke="#E8845C" stroke-width="2" opacity="0.85"/>
+
+    <!-- Frame 2: rotated +15° -->
+    <g transform="rotate(15, 100, 100)" opacity="0.85">
+      <rect x="65" y="65" width="70" height="70" rx="14" fill="none" stroke="#E8845C" stroke-width="2"/>
+    </g>
+
+    <!-- Frame 3: rotated -15° -->
+    <g transform="rotate(-15, 100, 100)" opacity="0.85">
+      <rect x="65" y="65" width="70" height="70" rx="14" fill="none" stroke="#E8845C" stroke-width="2"/>
+    </g>
+
+    <!-- Center light core: four-pointed star (solid fill) -->
+    <path d="M 100 68 L 104 94 L 130 94 L 106 108 L 116 134 L 100 116 L 84 134 L 94 108 L 70 94 L 96 94 Z" fill="#E8845C" fill-opacity="0.95"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="210" y="82" font-family="'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif" font-size="42" font-weight="700" fill="#2B1F18" letter-spacing="0.04em">Lumira</text>
+  <text x="210" y="106" font-family="'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif" font-size="18" font-weight="400" fill="#6B5A4E" letter-spacing="0.1em">Studio</text>
+  <text x="212" y="132" font-family="'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="300" fill="#A89888" letter-spacing="0.1em">万千画卷，集于此处</text>
+</svg>
