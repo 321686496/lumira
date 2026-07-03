@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <clipPath id="squircle">
+    <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224"/>
+  </clipPath>
+
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="#E8845C"/>
+
+    <g transform="translate(152, 152)">
+      <!-- Frame scaled 5.14x: 70*5.14≈360, rx=14*5.14≈72, stroke=2*5.14≈10 -->
+      <rect x="180" y="180" width="360" height="360" rx="72" fill="none" stroke="#FBF8F3" stroke-width="10" opacity="0.92"/>
+
+      <g transform="rotate(15, 360, 360)" opacity="0.92">
+        <rect x="180" y="180" width="360" height="360" rx="72" fill="none" stroke="#FBF8F3" stroke-width="10"/>
+      </g>
+
+      <g transform="rotate(-15, 360, 360)" opacity="0.92">
+        <rect x="180" y="180" width="360" height="360" rx="72" fill="none" stroke="#FBF8F3" stroke-width="10"/>
+      </g>
+
+      <!-- Star scaled 5.14x -->
+      <path d="M 360 195 L 381 329 L 514 329 L 396 391 L 447 525 L 360 442 L 273 525 L 324 391 L 206 329 L 339 329 Z" fill="#FBF8F3"/>
+    </g>
+  </g>
+</svg>
