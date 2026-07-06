@@ -1,0 +1,70 @@
+// lumira-tokens.scss — 如画 Lumira 设计 Token
+// 对应前端文档第 8 章
+
+:root {
+  // === 配色系统 ===
+  // 背景
+  --color-bg-canvas: #FAF7F2;
+  --color-bg-card: #FFFFFF;
+  --color-bg-surface: #F2EEE6;
+
+  // 文字
+  --color-text-primary: #1A1A1A;
+  --color-text-secondary: #5C5852;
+  --color-text-tertiary: #9C9690;
+
+  // 品牌
+  --color-brand-primary: #C9A96E;
+  --color-brand-secondary: #A88550;
+
+  // 语义
+  --color-danger: #B85450;
+  --color-success: #7A8B5C;
+
+  // 分隔
+  --color-border: #EAE5DC;
+
+  // 点缀
+  --color-tag-gold-bg: #F5EDDB;
+  --color-tag-gold-text: #8C7340;
+  --color-tag-red-bg: #F5E3E0;
+  --color-tag-red-text: #9F3F3A;
+  --color-tag-green-bg: #EBEEE2;
+  --color-tag-green-text: #566340;
+
+  // 深色模式
+  --color-bg-canvas-dark: #1C1A17;
+  --color-bg-card-dark: #262320;
+  --color-text-primary-dark: #F2EEE6;
+  --color-brand-dark: #D4B57A;
+
+  // === 间距系统（8px 栅格） ===
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  // === 字号系统 ===
+  --font-size-display: 36px;
+  --font-size-title: 24px;
+  --font-size-heading: 18px;
+  --font-size-body: 15px;
+  --font-size-caption: 13px;
+  --font-size-tag: 11px;
+  --font-size-mono: 13px;
+
+  // === 圆角 ===
+  --radius-button: 6px;
+  --radius-card: 12px;
+  --radius-pill: 9999px;
+
+  // === 阴影 ===
+  --shadow-none: none;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-floating: 0 4px 24px rgba(0, 0, 0, 0.06);
+}

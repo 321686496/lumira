@@ -1,0 +1,29 @@
+{
+  "name": "如画",
+  "appid": "__UNI__LUMIRA",
+  "description": "完全离线的随身摄影工具",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "networkTimeout": { "request": 0 },
+  "debug": false,
+  "uni-app": {
+    "usingComponents": true,
+    "nvue": { "flex-direction": "column" }
+  },
+  "app-plus": {
+    "distribute": {
+      "android": {
+        "permissions": ["android.permission.CAMERA"]
+      },
+      "ios": {
+        "infoPlist": {
+          "NSCameraUsageDescription": "使用相机拍摄照片"
+        }
+      }
+    },
+    "nativePlugins": {
+      "LumiraCamera": { "class": "LumiraCameraModule" },
+      "LumiraImageProcessor": { "class": "LumiraImageProcessorModule" }
+    }
+  }
+}

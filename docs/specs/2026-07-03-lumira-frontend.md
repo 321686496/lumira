@@ -186,38 +186,43 @@ lumira/                        # 如画 单机版工程根目录
    └── 设置 ──→ (/pages/profile/settings)
 ```
 
-### 3.3 TabBar 配置
+### 3.3 TabBar 配置（悬浮式自定义 Tab 栏）
+
+首页采用**悬浮 Tab 栏**（Floating Tab Bar）：Tab 栏脱离页面底部边缘，以圆角胶囊悬浮于内容之上，底部留出安全间距，营造轻盈的编辑式质感。由于原生 `tabBar` 无法实现悬浮、圆角与毛玻璃效果，改用 uni-app **自定义 tabBar** 方案。
+
+**pages.json 中启用自定义 Tab：**
 
 ```json
 {
   "tabBar": {
-    "color": "#9C9690",
-    "selectedColor": "#C9A96E",
-    "backgroundColor": "#FAF7F2",
-    "borderStyle": "white",
+    "custom": true,
     "list": [
-      {
-        "pagePath": "pages/capture/index",
-        "iconPath": "assets/icons/tab-capture.svg",
-        "selectedIconPath": "assets/icons/tab-capture-active.svg",
-        "text": "拍摄"
-      },
-      {
-        "pagePath": "pages/templates/index",
-        "iconPath": "assets/icons/tab-templates.svg",
-        "selectedIconPath": "assets/icons/tab-templates-active.svg",
-        "text": "模板"
-      },
-      {
-        "pagePath": "pages/profile/index",
-        "iconPath": "assets/icons/tab-profile.svg",
-        "selectedIconPath": "assets/icons/tab-profile-active.svg",
-        "text": "我的"
-      }
+      { "pagePath": "pages/capture/index", "text": "拍摄" },
+      { "pagePath": "pages/templates/index", "text": "模板" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
     ]
   }
 }
 ```
+
+> `custom: true` 隐藏原生 Tab 栏，由全局组件 `FloatingTabBar.vue` 接管渲染。`list` 仍需保留以维持路由约定与 App 端 Tab 页栈管理。
+
+**悬浮 Tab 栏视觉规格**：
+
+| 属性 | 规格 |
+|---|---|
+| 定位 | `position: fixed`，脱离底部边缘 |
+| 底部距离 | `calc(env(safe-area-inset-bottom) + 16px)` |
+| 水平内缩 | 左右各 `24px`（`--space-5`） |
+| 容器形态 | 圆角胶囊，`border-radius: 9999px` |
+| 高度 | `56px` |
+| 背景 | `rgba(255,255,255,0.72)` + `backdrop-filter: blur(20px)` |
+| 边框 | `1px solid var(--color-border)` |
+| 阴影 | `0 4px 24px rgba(0,0,0,0.06)`（悬浮托举专用柔和投影） |
+| 图标尺寸 | `24px`，选中态品牌金 `--color-brand-primary` |
+| 文字 | `--font-size-tag`（11px），选中态显示 |
+| 层级 | `z-index: 900` |
+| 拍摄页适配 | 取景器深色时 Tab 栏切换深色玻璃态（见第 13 章） |
 
 ---
 
@@ -225,7 +230,7 @@ lumira/                        # 如画 单机版工程根目录
 
 ```
 App.vue
-├── AppTabBar.vue                   # 底部导航（3 Tab）
+├── FloatingTabBar.vue              # 悬浮胶囊导航（3 Tab，全局固定）
 │
 ├── [Tab: 拍摄] CaptureIndex.vue
 │   ├── AppHeader.vue               # 标题栏 + 设置入口
@@ -680,3 +685,271 @@ interface TemplateEngine {
 - 相机权限按需请求、动态授权
 - 本地 SQLite 数据不加密（设备级存储无敏感数据）
 - 导出文件无跟踪标识
+
+---
+
+## 13. 界面设计与布局
+
+> 本章定义「如画 Lumira」的视觉界面设计与页面布局。设计语言承接品牌文档「东方编辑式留白」：大面积留白、serif 编辑式标题、米白暖金墨配色、克制的点缀色，无渐变、无重投影。
+
+### 13.1 设计原则
+
+| 原则 | 说明 |
+|---|---|
+| 编辑式留白 | 内容区大量宏观留白（页头 `--space-7` 起），呼吸感优先 |
+| 内容即界面 | 照片/取景器为主角，UI 控件退让至边缘或悬浮层 |
+| 字体对比 | Serif 标题（Noto Serif SC）+ Sans 正文，强对比建立层级 |
+| 悬浮层级 | Tab 栏、快门、参数条以悬浮形式浮于内容之上，不占据版式流 |
+| 单点缀色 | 品牌金仅用于选中态、关键 CTA、当前模板标记 |
+
+### 13.2 全局布局栅格
+
+```
+┌─────────────────────────────┐  ← 状态栏（沉浸式，safe-area-inset-top）
+│  AppHeader（可选，透明/留白）  │  ← 高度 88rpx，serif 标题左对齐
+├─────────────────────────────┤
+│                             │
+│                             │
+│        内容主体区            │  ← 左右安全边距 --space-5 (24px)
+│      （列表/网格/画布）       │     内容最大宽度撑满，卡片间距 --space-4
+│                             │
+│                             │
+│                             │
+│      ╭───────────────╮      │  ← 悬浮 Tab 栏（fixed，不占版式流）
+│      │ ◐  ▦  ○        │      │     底部 safe-area + 16px
+│      ╰───────────────╯      │
+└─────────────────────────────┘
+```
+
+- **内容安全边距**：左右各 `--space-5`(24px)，顶部页头 `--space-6`(32px)
+- **底部内容留白**：所有可滚动页面底部 padding 预留 `96px`（`--space-9`），避免被悬浮 Tab 栏遮挡
+- **卡片圆角**：`--radius-card`(12px)，边框统一 `1px solid var(--color-border)`
+
+### 13.3 悬浮 Tab 栏详细设计
+
+悬浮 Tab 栏是本产品导航的核心视觉符号，采用「胶囊悬浮 + 毛玻璃」形态：
+
+```
+        ╭───────────────────────────╮
+        │   ◐        ▦        ○      │   ← 3 图标等分，选中态描金 + 显文字
+        │  拍摄                       │
+        ╰───────────────────────────╯
+   ↑ 底部 safe-area-inset-bottom + 16px    ↑ 左右内缩 24px
+```
+
+**结构与交互**：
+
+| 元素 | 规格 |
+|---|---|
+| 容器 | 胶囊 `border-radius:9999px`，高 `56px`，白色 72% 透明 + `blur(20px)` |
+| 图标（未选中） | 线性图标，`--color-text-tertiary`(#9C9690)，24px |
+| 图标（选中） | 填充图标，`--color-brand-primary`(#C9A96E)，24px + 下方显示文字标签 |
+| 选中动效 | 图标 `scale(1.0→1.08)` + 文字淡入，`200ms cubic-bezier(0.16,1,0.3,1)` |
+| 点击反馈 | `scale(0.94)` on `:active` |
+| 拍摄页深色态 | 容器切换 `rgba(28,26,23,0.6)`，未选中图标转 `rgba(255,255,255,0.6)` |
+
+**FloatingTabBar.vue 骨架**：
+
+```vue
+<script setup lang="ts">
+interface TabItem {
+  key: string
+  pagePath: string
+  label: string
+  icon: string
+  iconActive: string
+}
+interface FloatingTabBarProps {
+  current: string          // 当前选中 tab key
+  theme?: 'light' | 'dark' // 拍摄页传 dark
+}
+const props = withDefaults(defineProps<FloatingTabBarProps>(), {
+  theme: 'light',
+})
+const emit = defineEmits<{
+  (e: 'on-switch', key: string): void
+}>()
+</script>
+
+<template>
+  <view class="floating-tabbar" :class="`floating-tabbar--${theme}`">
+    <view
+      v-for="tab in tabs"
+      :key="tab.key"
+      class="floating-tabbar__item"
+      :class="{ 'is-active': tab.key === current }"
+      @tap="emit('on-switch', tab.key)"
+    >
+      <image class="floating-tabbar__icon" :src="tab.key === current ? tab.iconActive : tab.icon" />
+      <text v-if="tab.key === current" class="floating-tabbar__label">{{ tab.label }}</text>
+    </view>
+  </view>
+</template>
+```
+
+```scss
+.floating-tabbar {
+  position: fixed;
+  left: var(--space-5);
+  right: var(--space-5);
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  z-index: 900;
+
+  &--dark {
+    background: rgba(28, 26, 23, 0.6);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  &__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    &:active { transform: scale(0.94); }
+    &.is-active { transform: scale(1.08); }
+  }
+  &__icon { width: 24px; height: 24px; }
+  &__label {
+    font-size: var(--font-size-tag);
+    color: var(--color-brand-primary);
+  }
+}
+```
+
+### 13.4 关键页面布局（线框图）
+
+#### 拍摄页（Capture Index）— 沉浸式深色
+
+```
+┌─────────────────────────────┐
+│ ☰ 如画            ⚙          │  ← 顶部透明栏：模板名 + 设置（半透明）
+│                             │
+│                             │
+│      ┌ ─ ─ ┬ ─ ─ ┬ ─ ─ ┐    │
+│      │     │     │     │    │  ← 取景器全屏 + 三分构图叠图
+│      ├ ─ ─ ┼ ─ ─ ┼ ─ ─ ┤    │     （品牌金半透明网格线）
+│      │     │  ◇  │     │    │  ← 姿势剪影叠图（可选）
+│      ├ ─ ─ ┼ ─ ─ ┼ ─ ─ ┤    │
+│      │     │     │     │    │
+│      └ ─ ─ ┴ ─ ─ ┴ ─ ─ ┘    │
+│                             │
+│  ⊹ 水平  EV+0.3  WB 5200K   │  ← 参数指示条（底部悬浮 pill）
+│           （ ◉ ）            │  ← 快门按钮（悬浮，56px 圆）
+│      ╭───────────────╮      │
+│      │  ◐   ▦   ○     │      │  ← 悬浮 Tab（深色玻璃态）
+│      ╰───────────────╯      │
+└─────────────────────────────┘
+```
+
+- 取景器占满全屏（无边距），叠图层 `z-index:100`
+- 快门按钮悬浮于 Tab 栏上方 `--space-6`(32px)，直径 `72px`，外描金环
+- 参数指示条为深色玻璃胶囊，仅显示当前生效参数
+
+#### 模板库页（Template Index）— 明亮编辑式
+
+```
+┌─────────────────────────────┐
+│  模板                        │  ← Serif 大标题（--font-size-display）
+│  108 个内置模板               │  ← 副标题 caption 灰
+│                             │
+│ ［全部］人像  风光  美食  夜景 │  ← 分类横滑标签（pill）
+│                             │
+│ ┌───────────┐ ┌───────────┐ │
+│ │           │ │           │ │  ← 双列瀑布流卡片
+│ │   缩略图   │ │   缩略图   │ │     图 + serif 名 + 金标签
+│ │           │ │           │ │
+│ │ 晨光人像   │ │ 城市街拍   │ │
+│ │ ◆ 构图·参数 │ │ ◆ 构图     │ │
+│ └───────────┘ └───────────┘ │
+│ ┌───────────┐ ┌───────────┐ │
+│ │  ...      │ │  ...      │ │
+│      ╭───────────────╮      │
+│      │  ◐   ▦   ○     │      │  ← 悬浮 Tab（明亮态）
+│      ╰───────────────╯      │
+└─────────────────────────────┘
+```
+
+- 双列瀑布流，卡片间距 `--space-4`(16px)
+- 卡片：白底、1px 边框、12px 圆角，图片顶部圆角裁切
+- 模板能力用小金标签标注（构图/姿势/参数/后期）
+
+#### 我的页（Profile Index）
+
+```
+┌─────────────────────────────┐
+│                             │
+│         我的                 │  ← Serif 标题
+│                             │
+│ ┌─────────────────────────┐ │
+│ │  128        36      12   │ │  ← 统计 Bento：拍摄/模板/收藏
+│ │  拍摄张数   使用模板  收藏  │ │
+│ └─────────────────────────┘ │
+│                             │
+│  ▸ 我的相册                  │  ← 列表项，右箭头
+│  ▸ 导入模板                  │
+│  ▸ 我的模板                  │
+│  ─────────────────────────  │  ← 1px 分隔线
+│  ▸ 设置                      │
+│  ▸ 关于如画                  │
+│      ╭───────────────╮      │
+│      │  ◐   ▦   ○     │      │
+│      ╰───────────────╯      │
+└─────────────────────────────┘
+```
+
+- 统计区为单张 Bento 卡片，三栏等分数字（serif 大字）+ caption 标签
+- 功能入口为无框列表，仅 `border-bottom` 分隔
+
+#### 后期编辑页（Gallery Detail）
+
+```
+┌─────────────────────────────┐
+│ ✕                    对比 ⇄   │  ← 顶栏：关闭 + 前后对比
+│ ┌─────────────────────────┐ │
+│ │                         │ │
+│ │        图像画布          │ │  ← 主画布区（居中，深色背景衬托）
+│ │                         │ │
+│ └─────────────────────────┘ │
+│                             │
+│ 调色  LUT  裁剪  磨皮  锐化   │  ← 工具横滑标签
+│ ─────────────────────────── │
+│  亮度   ●───────────  +12   │  ← 参数滑块区
+│  对比   ────●────────   -4   │
+│  饱和   ──────●──────    0   │
+│                             │
+│      ［ 重置 ］  ［ 导出 ］    │  ← 底部操作按钮（导出为墨黑 CTA）
+└─────────────────────────────┘
+```
+
+- 后期编辑为全屏工作台，**不显示悬浮 Tab 栏**（沉浸编辑）
+- 导出按钮为墨黑实底 CTA（`--color-text-primary` 底 + 白字，6px 圆角）
+
+### 13.5 组件视觉规范速查
+
+| 组件 | 关键样式 |
+|---|---|
+| 页面标题 | Noto Serif SC，`--font-size-display`(36px)，`letter-spacing:-0.02em` |
+| 主 CTA 按钮 | 墨黑底 `#1A1A1A` + 白字，`--radius-button`(6px)，无投影，`:active scale(0.98)` |
+| 次级按钮 | 白底 + 1px 边框 + 墨黑字 |
+| 卡片 | 白底、`1px solid var(--color-border)`、`--radius-card`(12px)、`--shadow-card` |
+| 标签/Badge | pill，`--font-size-tag`(11px)，点缀色底 + 对应文字色，大字距 |
+| 分隔线 | `1px solid var(--color-border)`，无阴影 |
+| 滑块 | 轨道 `--color-border`，滑块头品牌金，数值 mono 字体 |
+
+### 13.6 动效规范
+
+- **页面进入**：内容块 `translateY(12px) + opacity:0 → 1`，`600ms cubic-bezier(0.16,1,0.3,1)`
+- **列表交错**：卡片 `animation-delay: calc(var(--index) * 80ms)`
+- **Tab 切换**：仅图标 scale + 文字淡入，禁止整栏位移
+- **仅动画 `transform` 与 `opacity`**，不触发布局重排
+
+---

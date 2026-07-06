@@ -296,50 +296,44 @@ lumira-studio/                 # 画集 联网版工程根目录
                      └── 找回密码 → /auth/forgot
 ```
 
-### 3.3 TabBar 配置
+### 3.3 TabBar 配置（悬浮式自定义 Tab 栏 + 中央拍摄凸起）
+
+首页采用**悬浮 Tab 栏**（Floating Tab Bar）：5 Tab 中「拍摄」居中并以圆形凸起于胶囊之上，形成社区类应用的「中央行动按钮」范式。原生 `tabBar` 无法实现悬浮、圆角、凸起与毛玻璃，改用 uni-app **自定义 tabBar** 方案。
+
+**pages.json 中启用自定义 Tab：**
 
 ```json
 {
   "tabBar": {
-    "color": "#A89888",
-    "selectedColor": "#E8845C",
-    "backgroundColor": "#FFFFFF",
-    "borderStyle": "white",
+    "custom": true,
     "list": [
-      {
-        "pagePath": "pages/home/index",
-        "iconPath": "assets/icons/tab-home.svg",
-        "selectedIconPath": "assets/icons/tab-home-active.svg",
-        "text": "首页"
-      },
-      {
-        "pagePath": "pages/marketplace/index",
-        "iconPath": "assets/icons/tab-marketplace.svg",
-        "selectedIconPath": "assets/icons/tab-marketplace-active.svg",
-        "text": "市场"
-      },
-      {
-        "pagePath": "pages/capture/index",
-        "iconPath": "assets/icons/tab-capture.svg",
-        "selectedIconPath": "assets/icons/tab-capture-active.svg",
-        "text": "拍摄"
-      },
-      {
-        "pagePath": "pages/community/index",
-        "iconPath": "assets/icons/tab-community.svg",
-        "selectedIconPath": "assets/icons/tab-community-active.svg",
-        "text": "社区"
-      },
-      {
-        "pagePath": "pages/profile/index",
-        "iconPath": "assets/icons/tab-profile.svg",
-        "selectedIconPath": "assets/icons/tab-profile-active.svg",
-        "text": "我的"
-      }
+      { "pagePath": "pages/home/index", "text": "首页" },
+      { "pagePath": "pages/marketplace/index", "text": "市场" },
+      { "pagePath": "pages/capture/index", "text": "拍摄" },
+      { "pagePath": "pages/community/index", "text": "社区" },
+      { "pagePath": "pages/profile/index", "text": "我的" }
     ]
   }
 }
 ```
+
+> `custom: true` 隐藏原生 Tab 栏，由全局组件 `FloatingTabBar.vue` 接管渲染。`list` 保留以维持路由约定与 App 端 Tab 页栈管理。
+
+**悬浮 Tab 栏视觉规格**：
+
+| 属性 | 规格 |
+|---|---|
+| 定位 | `position: fixed`，脱离底部边缘 |
+| 底部距离 | `calc(env(safe-area-inset-bottom) + 12px)` |
+| 水平内缩 | 左右各 `16px`（`--space-4`） |
+| 容器形态 | 圆角胶囊，`border-radius: 9999px`，高 `60px` |
+| 背景 | `rgba(255,255,255,0.82)` + `backdrop-filter: blur(20px)` |
+| 边框 | `1px solid var(--color-border)` |
+| 阴影 | `0 6px 28px rgba(200,101,53,0.10)`（暖橙调柔光） |
+| 中央拍摄键 | 直径 `56px` 圆形，暖橙实底 `--color-brand-primary`，凸起于胶囊上方 `20px` |
+| 图标（未选中） | `--color-text-tertiary`(#A89888)，22px |
+| 图标（选中） | `--color-brand-primary`(#E8845C)，22px + 文字标签 |
+| 层级 | `z-index: 900`（中央键 `z-index: 901`） |
 
 ---
 
@@ -347,7 +341,7 @@ lumira-studio/                 # 画集 联网版工程根目录
 
 ```
 App.vue
-├── AppTabBar.vue                           # 底部导航（5 Tab）
+├── FloatingTabBar.vue                     # 悬浮胶囊导航（5 Tab，中央拍摄凸起）
 │
 ├── [Tab: 首页] HomeIndex.vue
 │   ├── AppHeader.vue                       # 标题栏 + 搜索/通知
@@ -970,3 +964,287 @@ interface ImageProcessingService {
 | 热更新 | uni-upgrade-center | App 资源更新 |
 
 > **注意**：以上 uni 插件需在 manifest.json 中额外配置，具体参数以插件文档为准。
+
+---
+
+## 16. 界面设计与布局
+
+> 本章定义「画集 Lumira Studio」的视觉界面设计与页面布局。设计语言承接品牌文档「暖意 bento 社区」：暖橙赤茶米配色、无衬线亲和字体、bento 网格、明快活泼的社区氛围，同时保持克制的层次与轻盈的悬浮导航。
+
+### 16.1 设计原则
+
+| 原则 | 说明 |
+|---|---|
+| 暖意社区 | 暖橙主色营造亲和活力，卡片圆角更小(8px)显现代感 |
+| Bento 组织 | 首页/看板用非对称 Bento 网格聚合多类内容 |
+| 内容优先 | 作品图/模板图为主角，社区流以视觉瀑布呈现 |
+| 悬浮中央键 | 拍摄置于 Tab 栏中央凸起，强化「随手创作」的核心行为 |
+| 分类色语义 | 六大拍摄品类各有专属点缀色（人像/风光/美食/夜景/旅行/家庭） |
+
+### 16.2 全局布局栅格
+
+```
+┌─────────────────────────────┐  ← 状态栏（沉浸式，safe-area-inset-top）
+│  AppHeader  🔍 搜索      🔔   │  ← 标题 + 搜索框 + 通知铃铛
+├─────────────────────────────┤
+│                             │
+│      内容主体区              │  ← 左右安全边距 --space-4 (16px)
+│  （Bento / 瀑布流 / 列表）    │     卡片间距 --space-3 (12px)
+│                             │
+│                             │
+│           ╭───╮             │  ← 中央拍摄键凸起
+│      ╭────┤ ◉ ├────╮        │  ← 悬浮 Tab 栏（5 Tab）
+│      │ ⌂  ▦   ♥  ○ │        │     底部 safe-area + 12px
+│      ╰───────────────╯       │
+└─────────────────────────────┘
+```
+
+- **内容安全边距**：左右各 `--space-4`(16px)
+- **底部内容留白**：可滚动页面底部 padding 预留 `100px`，避让悬浮 Tab 与中央凸起键
+- **卡片圆角**：`--radius-card`(8px)，边框 `1px solid var(--color-border)`
+
+### 16.3 悬浮 Tab 栏详细设计（中央凸起）
+
+```
+                  ╭─────╮
+                  │  ◉  │          ← 中央拍摄键（暖橙实底，凸起 20px）
+        ╭─────────┴─────┴─────────╮
+        │  ⌂      ▦          ♥   ○ │  ← 首页/市场 | (中央) | 社区/我的
+        │  首页                     │  ← 选中态显文字
+        ╰───────────────────────────╯
+   ↑ safe-area + 12px          ↑ 左右内缩 16px
+```
+
+**结构与交互**：
+
+| 元素 | 规格 |
+|---|---|
+| 容器 | 胶囊 `border-radius:9999px`，高 `60px`，白 82% 透明 + `blur(20px)` |
+| 四侧图标 | 首页/市场/社区/我的，22px，未选 `#A89888`，选中 `#E8845C` + 文字 |
+| 中央拍摄键 | 直径 `56px` 圆，暖橙实底 `#E8845C`，白色相机图标，凸起于胶囊上方 |
+| 中央键阴影 | `0 4px 16px rgba(232,132,92,0.35)` |
+| 中央键动效 | `:active scale(0.92)`，点击后轻微暖橙涟漪 |
+| 选中动效 | 图标 `scale(1.08)` + 文字淡入，`200ms cubic-bezier(0.16,1,0.3,1)` |
+
+**FloatingTabBar.vue 骨架**：
+
+```vue
+<script setup lang="ts">
+interface FloatingTabBarProps {
+  current: string          // 当前选中 tab key
+}
+const props = defineProps<FloatingTabBarProps>()
+const emit = defineEmits<{
+  (e: 'on-switch', key: string): void
+  (e: 'on-capture'): void   // 中央拍摄键单独事件
+}>()
+</script>
+
+<template>
+  <view class="studio-tabbar">
+    <!-- 左侧两个 tab -->
+    <view
+      v-for="tab in leftTabs"
+      :key="tab.key"
+      class="studio-tabbar__item"
+      :class="{ 'is-active': tab.key === current }"
+      @tap="emit('on-switch', tab.key)"
+    >
+      <image class="studio-tabbar__icon" :src="tab.key === current ? tab.iconActive : tab.icon" />
+      <text v-if="tab.key === current" class="studio-tabbar__label">{{ tab.label }}</text>
+    </view>
+
+    <!-- 中央拍摄凸起键 -->
+    <view class="studio-tabbar__capture" @tap="emit('on-capture')">
+      <image class="studio-tabbar__capture-icon" src="/static/icons/capture-white.svg" />
+    </view>
+
+    <!-- 右侧两个 tab -->
+    <view
+      v-for="tab in rightTabs"
+      :key="tab.key"
+      class="studio-tabbar__item"
+      :class="{ 'is-active': tab.key === current }"
+      @tap="emit('on-switch', tab.key)"
+    >
+      <image class="studio-tabbar__icon" :src="tab.key === current ? tab.iconActive : tab.icon" />
+      <text v-if="tab.key === current" class="studio-tabbar__label">{{ tab.label }}</text>
+    </view>
+  </view>
+</template>
+```
+
+```scss
+.studio-tabbar {
+  position: fixed;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 6px 28px rgba(200, 101, 53, 0.10);
+  z-index: 900;
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    &.is-active { transform: scale(1.08); }
+  }
+  &__icon { width: 22px; height: 22px; }
+  &__label { font-size: var(--font-size-tag); color: var(--color-brand-primary); }
+
+  &__capture {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    margin-top: -20px;               // 凸起
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-brand-primary);
+    box-shadow: 0 4px 16px rgba(232, 132, 92, 0.35);
+    z-index: 901;
+    transition: transform 150ms ease;
+    &:active { transform: scale(0.92); }
+  }
+  &__capture-icon { width: 26px; height: 26px; }
+}
+```
+
+### 16.4 关键页面布局（线框图）
+
+#### 首页（Home Index）— Bento 网格
+
+```
+┌─────────────────────────────┐
+│ 画集         🔍 搜索灵感   🔔 │  ← 标题 + 搜索 + 通知
+│                             │
+│ ┌───────────────┬─────────┐ │
+│ │               │ 本周挑战 │ │  ← Bento：大卡（本周精选）
+│ │   本周精选     │  #城市光影│ │    + 挑战小卡
+│ │   （大图）     ├─────────┤ │
+│ │               │ 热门榜单 │ │
+│ └───────────────┴─────────┘ │
+│                             │
+│  新晋创作者                  │
+│  ○ ○ ○ ○ ○  →              │  ← 头像横滑
+│                             │
+│  为你推荐                    │
+│ ┌─────────┐ ┌─────────┐     │  ← 推荐模板/作品双列
+│ │  作品图  │ │  作品图  │     │
+│ └─────────┘ └─────────┘     │
+│           ╭───╮             │
+│      ╭────┤ ◉ ├────╮        │  ← 悬浮 Tab（中央拍摄凸起）
+│      │ ⌂  ▦   ♥  ○ │        │
+│      ╰───────────────╯       │
+└─────────────────────────────┘
+```
+
+- 顶部为非对称 Bento（1 大 + 2 小），圆角 8px
+- 「新晋创作者」横向滚动头像列
+- 「为你推荐」双列内容，无限下拉
+
+#### 模板市场（Marketplace Index）
+
+```
+┌─────────────────────────────┐
+│ 市场            🔍           │
+│ ［推荐］热门 新品 免费 榜单    │  ← 排序/筛选横滑 tab
+│                             │
+│ 人像 风光 美食 夜景 旅行 家庭  │  ← 分类色标签（各专属点缀色）
+│                             │
+│ ┌───────────┐ ┌───────────┐ │
+│ │   模板图   │ │   模板图   │ │  ← 双列模板卡片
+│ │           │ │           │ │
+│ │ 晨雾人像   │ │ 赛博夜景   │ │
+│ │ ○作者 ¥6  │ │ ○作者 免费 │ │  ← 作者头像 + 价格
+│ │ ♥1.2k ⭐4.8│ │ ♥890 ⭐4.6 │ │  ← 点赞 + 评分
+│ └───────────┘ └───────────┘ │
+│           ╭───╮             │
+│      ╭────┤ ◉ ├────╮        │
+│      ╰───────────────╯       │
+└─────────────────────────────┘
+```
+
+- 分类标签使用六大品类专属色（对应 tokens 中 `--color-category-*`）
+- 模板卡片含作者、价格、点赞、评分四要素
+
+#### 作品社区（Community Index）— 瀑布流
+
+```
+┌─────────────────────────────┐
+│ 社区            + 发布        │  ← 发布作品入口
+│ ［关注］推荐 挑战赛 附近       │
+│                             │
+│ ┌──────────┐ ┌──────────┐   │  ← 双列瀑布流（不等高）
+│ │          │ │          │   │
+│ │  作品图   │ │  作品图   │   │
+│ │          │ ├──────────┤   │
+│ ├──────────┤ │ ○ 用户名  │   │
+│ │ ○ 用户名  │ │ ♥328 💬45 │   │
+│ │ 拍同款↗   │ │ 拍同款↗   │   │
+│ └──────────┘ └──────────┘   │
+│           ╭───╮             │
+│      ╭────┤ ◉ ├────╮        │
+│      ╰───────────────╯       │
+└─────────────────────────────┘
+```
+
+- Masonry 瀑布流（不等高图片），间距 `--space-3`(12px)
+- 每卡含作者、点赞、评论、「拍同款」快捷入口
+
+#### 创作者看板（Creator Dashboard）— Bento 数据
+
+```
+┌─────────────────────────────┐
+│ ← 创作者中心                  │
+│                             │
+│ ┌─────────┬─────────────┐   │
+│ │ 本月收益 │  ¥ 2,480.50  │   │  ← Bento 数据卡
+│ ├─────────┼──────┬──────┤   │
+│ │ 粉丝     │ 模板 │ 销量  │   │
+│ │ 3,204   │  18  │ 512  │   │
+│ └─────────┴──────┴──────┘   │
+│                             │
+│  📈 近 30 天销量趋势          │  ← 折线图卡片
+│  ▁▂▃▅▆▇▆▅▃▂                │
+│                             │
+│  我的模板              管理→  │
+│  ▸ 晨雾人像   销量 128       │
+│  ▸ 赛博夜景   销量 96        │
+└─────────────────────────────┘
+```
+
+- 创作者看板为深度页面，**不显示悬浮 Tab 栏**
+- 数据以 Bento 卡聚合：收益/粉丝/模板/销量
+
+### 16.5 组件视觉规范速查
+
+| 组件 | 关键样式 |
+|---|---|
+| 页面标题 | 无衬线粗体（如 HarmonyOS Sans / Source Han Sans），`--font-size-display`(32px) |
+| 主 CTA 按钮 | 暖橙实底 `#E8845C` + 白字，`--radius-button`(6px)，`:active scale(0.98)` |
+| 次级按钮 | 白底 + 1px 边框 + 暖橙字 |
+| 卡片 | 白底、`1px solid var(--color-border)`、`--radius-card`(8px) |
+| 分类标签 | pill，`--font-size-tag`(10px)，六大品类各用专属 `--color-category-*` |
+| 社区互动 | 点赞♥ 选中态 `--color-community`(#C45050)，数值 caption |
+| 价格标 | 免费=success 绿标；付费=暖橙数字 + ¥ mono |
+| 头像 | 圆形，边框 `1px rgba(0,0,0,0.06)` |
+
+### 16.6 动效规范
+
+- **页面进入**：内容块 `translateY(12px) + opacity:0 → 1`，`600ms cubic-bezier(0.16,1,0.3,1)`
+- **瀑布流交错**：卡片 `animation-delay: calc(var(--index) * 80ms)`
+- **中央拍摄键**：常驻，点击 `scale(0.92)` + 暖橙涟漪
+- **点赞动效**：♥ 图标 `scale(1→1.3→1)` 弹性回弹 + 变色
+- **仅动画 `transform` 与 `opacity`**，不触发布局重排
