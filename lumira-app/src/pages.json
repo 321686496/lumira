@@ -22,14 +22,20 @@
     "height": "0px",
     "color": "#000000",
     "selectedColor": "#000000",
-    "borderStyle": "black",
-    "list": [
-      {
-        "pagePath": "pages/home/index",
-        "text": "首页",
-        "iconPath": "",
-        "selectedIconPath": ""
-      }
-    ]
+    "borderStyle": "black"
+//    "list": [
+//      {
+//        "pagePath": "pages/home/index",
+//        "text": "首页",
+//        "iconPath": "",
+//        "selectedIconPath": ""
+//      },
+//      {
+//        "pagePath": "pages/profile/index",
+//        "text": "我的",
+//        "iconPath": "",
+//        "selectedIconPath": ""
+//      }
+//    ]
   }
 }
