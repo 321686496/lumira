@@ -1,215 +1,208 @@
-<template>
-  <view class="detail-page">
-    <!-- Top bar -->
-    <view class="top-bar">
-      <view class="back-btn" @tap="onBack">
-        <text class="back-text">←</text>
-      </view>
-      <text class="top-title">模板详情</text>
-      <view class="top-placeholder"></view>
-    </view>
-
-    <scroll-view class="detail-scroll" scroll-y>
-      <!-- Overlay preview -->
-      <view class="preview-card">
-        <view class="preview-frame">
-          <text class="preview-text">叠图预览</text>
-          <text class="preview-hint">{{ template?.name ?? '模板' }}</text>
-        </view>
-      </view>
-
-      <!-- Info -->
-      <view class="info-block">
-        <text class="tpl-name">{{ template?.name ?? '未命名模板' }}</text>
-        <text class="tpl-category">{{ template?.category ?? '' }}</text>
-        <text class="tpl-desc">{{ template?.description ?? '暂无描述' }}</text>
-      </view>
-
-      <view class="bottom-pad"></view>
-    </scroll-view>
-
-    <!-- Action buttons -->
-    <view class="actions">
-      <view class="action-btn action-secondary" @tap="onEdit">
-        <text class="action-text-secondary">编辑</text>
-      </view>
-      <view class="action-btn action-secondary" @tap="onShare">
-        <text class="action-text-secondary">导出分享</text>
-      </view>
-      <view class="action-btn action-primary" @tap="onShoot">
-        <text class="action-text-primary">用此模板拍摄</text>
-      </view>
-    </view>
-  </view>
-</template>
-
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import OverlayPreview from '@/components/template/OverlayPreview.vue'
+import SceneGuidePanel from '@/components/template/SceneGuidePanel.vue'
+import CameraParamsPanel from '@/components/template/CameraParamsPanel.vue'
+import ExampleGallery from '@/components/template/ExampleGallery.vue'
 import { useTemplatesStore } from '@/stores/templates'
+import { useCaptureStore } from '@/stores/capture'
+import type { ResolvedTemplate } from '@/types/template'
 
 const templatesStore = useTemplatesStore()
-const templateId = ref<string>('')
+const captureStore = useCaptureStore()
 
-const template = computed(() => {
-  if (!templateId.value) return null
-  return templatesStore.getResolvedTemplate(templateId.value)
-})
+const templateId = ref('')
+const resolved = ref<ResolvedTemplate | null>(null)
 
-onLoad((options) => {
-  templateId.value = (options?.id as string) ?? ''
-})
-
-const onBack = () => {
-  uni.navigateBack()
-}
-
-const onShoot = () => {
-  if (template.value) {
-    templatesStore.setCategory(template.value.category)
+onLoad(async (query) => {
+  if (query?.id) {
+    templateId.value = query.id
+    templatesStore.setCurrentTemplate(query.id)
+    const result = await templatesStore.getResolvedTemplate(query.id)
+    resolved.value = result
   }
-  uni.switchTab({ url: '/pages/capture/index' })
+})
+
+const hasSceneGuide = computed(() => !!resolved.value?.sceneGuide)
+const hasCameraParams = computed(() => !!resolved.value?.camera)
+const exampleImages = computed(() => {
+  if (!resolved.value) return []
+  return resolved.value.meta.cover ? [resolved.value.meta.cover] : []
+})
+
+const handleApplyTemplate = () => {
+  if (templateId.value) {
+    captureStore.setActiveTemplate(templateId.value)
+  }
+  uni.navigateTo({ url: `/pages/capture/index?templateId=${templateId.value}` })
 }
 
-const onEdit = () => {
-  uni.navigateTo({ url: `/pages/templates/editor?id=${templateId.value}` })
-}
-
-const onShare = () => {
-  uni.showToast({ title: '已生成分享', icon: 'success' })
+const goBack = () => {
+  uni.navigateBack()
 }
 </script>
 
+<template>
+  <view class="template-detail-page">
+    <view class="page-nav">
+      <view class="nav-btn" @click="goBack">
+        <text class="nav-icon">←</text>
+      </view>
+      <text class="nav-title">模板详情</text>
+    </view>
+
+    <scroll-view scroll-y class="detail-scroll" :show-scrollbar="false">
+      <view class="detail-content">
+        <!-- 叠图预览 -->
+        <OverlayPreview
+          v-if="resolved"
+          :composition="resolved.composition"
+          :pose="resolved.pose"
+        />
+
+        <!-- 标题与标签 -->
+        <view class="template-header" v-if="resolved">
+          <text class="template-title">{{ resolved.meta.name }}</text>
+          <view class="capability-tags">
+            <text v-if="resolved.composition" class="cap-tag">◆构图</text>
+            <text v-if="resolved.pose" class="cap-tag">◆姿势</text>
+            <text v-if="resolved.camera" class="cap-tag">◆参数</text>
+            <text v-if="resolved.postProcess" class="cap-tag">◆后期</text>
+          </view>
+        </view>
+
+        <!-- 场景指南 -->
+        <SceneGuidePanel
+          v-if="hasSceneGuide && resolved?.sceneGuide"
+          :guide="resolved.sceneGuide"
+        />
+
+        <!-- 相机参数建议 -->
+        <CameraParamsPanel
+          v-if="hasCameraParams && resolved?.camera"
+          :params="resolved.camera"
+        />
+
+        <!-- 示例作品 -->
+        <ExampleGallery v-if="exampleImages.length > 0" :examples="exampleImages" />
+
+        <!-- 套用拍摄 CTA -->
+        <view class="cta-area">
+          <view class="cta-btn" @click="handleApplyTemplate">
+            <text class="cta-text">套用此模板拍摄</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="bottom-spacer" />
+    </scroll-view>
+  </view>
+</template>
+
 <style lang="scss" scoped>
-.detail-page {
-  position: relative;
-  width: 100%;
-  height: 100vh;
+.template-detail-page {
+  min-height: 100vh;
   background: var(--color-bg-canvas);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.top-bar {
+.page-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--space-5) var(--space-4) var(--space-3);
+  gap: var(--space-3);
+  padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-5) var(--space-3);
 }
 
-.back-btn {
+.nav-btn {
   width: 40px;
   height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
+  &:active { opacity: 0.6; }
 }
 
-.back-text {
-  font-size: var(--font-size-heading);
+.nav-icon {
+  font-size: 22px;
   color: var(--color-text-primary);
 }
 
-.top-title {
-  font-size: var(--font-size-heading);
+.nav-title {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-medium);
   color: var(--color-text-primary);
-}
-
-.top-placeholder {
-  width: 40px;
-  height: 40px;
 }
 
 .detail-scroll {
   flex: 1;
-}
-
-.preview-card {
-  padding: var(--space-3) var(--space-5);
-}
-
-.preview-frame {
   width: 100%;
-  aspect-ratio: 3 / 4;
-  border-radius: var(--radius-card);
-  background: var(--color-bg-card);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
 }
 
-.preview-text {
-  font-size: var(--font-size-heading);
-  color: var(--color-text-secondary);
+.detail-content {
+  padding: 0 var(--space-5);
 }
 
-.preview-hint {
-  font-size: var(--font-size-caption);
-  color: var(--color-text-tertiary);
-  margin-top: var(--space-2);
+.template-header {
+  margin-bottom: var(--space-5);
 }
 
-.info-block {
-  padding: var(--space-5);
-  display: flex;
-  flex-direction: column;
-}
-
-.tpl-name {
+.template-title {
+  display: block;
+  font-family: var(--font-serif);
   font-size: var(--font-size-title);
+  font-weight: var(--weight-medium);
   color: var(--color-text-primary);
+  letter-spacing: var(--letter-spacing-title);
+  line-height: var(--line-height-title);
+  margin-bottom: var(--space-2);
 }
 
-.tpl-category {
-  font-size: var(--font-size-tag);
-  color: var(--color-brand-primary);
-  margin-top: var(--space-2);
-}
-
-.tpl-desc {
-  font-size: var(--font-size-body);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-3);
-  line-height: 1.6;
-}
-
-.bottom-pad {
-  height: var(--space-6);
-}
-
-.actions {
+.capability-tags {
   display: flex;
-  align-items: center;
-  padding: var(--space-3) var(--space-5) var(--space-7);
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.action-btn {
-  flex: 1;
-  height: 48px;
-  border-radius: var(--radius-card);
+.cap-tag {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-tag);
+  font-weight: var(--weight-medium);
+  color: var(--color-tag-gold-text);
+  background: var(--color-tag-gold-bg);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  letter-spacing: var(--letter-spacing-tag);
+}
+
+.cta-area {
+  margin-top: var(--space-7);
+  margin-bottom: var(--space-5);
+}
+
+.cta-btn {
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-text-primary);
+  border-radius: var(--radius-button);
+  transition: transform var(--duration-fast) ease;
+
+  &:active { transform: scale(0.98); }
 }
 
-.action-secondary {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-}
-
-.action-primary {
-  background: var(--color-brand-primary);
-}
-
-.action-text-secondary {
+.cta-text {
+  font-family: var(--font-sans);
   font-size: var(--font-size-body);
-  color: var(--color-text-primary);
+  font-weight: var(--weight-semibold);
+  color: #FFFFFF;
 }
 
-.action-text-primary {
-  font-size: var(--font-size-body);
-  color: var(--color-text-primary);
+.bottom-spacer {
+  height: var(--space-8);
 }
 </style>
