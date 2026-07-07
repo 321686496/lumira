@@ -118,7 +118,7 @@ const emit = defineEmits<{
 }
 
 .placeholder-icon {
-  font-size: 36px;
+  font-size: var(--font-size-display);
   color: var(--color-text-tertiary);
   opacity: 0.3;
 }
@@ -130,6 +130,6 @@ const emit = defineEmits<{
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 2px;
+  padding: 0 var(--space-0);
 }
 </style>
