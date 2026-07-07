@@ -1,200 +1,188 @@
-<template>
-  <view class="param-page">
-    <view class="backdrop" @tap="onBack"></view>
-    <view class="panel">
-      <view class="panel-handle"></view>
-      <view class="panel-header">
-        <text class="panel-title">参数</text>
-        <text class="reset-btn" @tap="onReset">重置</text>
-      </view>
-
-      <scroll-view class="param-list" scroll-y>
-        <view class="param-row">
-          <view class="param-label-row">
-            <text class="param-label">EV</text>
-            <text class="param-value">{{ ev }}</text>
-          </view>
-          <slider
-            class="param-slider"
-            :min="-2"
-            :max="2"
-            :step="0.3"
-            :value="ev"
-            activeColor="var(--color-brand-primary)"
-            @change="onEvChange"
-          />
-        </view>
-
-        <view class="param-row">
-          <view class="param-label-row">
-            <text class="param-label">ISO</text>
-            <text class="param-value">{{ iso }}</text>
-          </view>
-          <slider
-            class="param-slider"
-            :min="50"
-            :max="3200"
-            :step="50"
-            :value="iso"
-            activeColor="var(--color-brand-primary)"
-            @change="onIsoChange"
-          />
-        </view>
-
-        <view class="param-row">
-          <view class="param-label-row">
-            <text class="param-label">WB</text>
-            <text class="param-value">{{ wb }}K</text>
-          </view>
-          <slider
-            class="param-slider"
-            :min="2500"
-            :max="9000"
-            :step="100"
-            :value="wb"
-            activeColor="var(--color-brand-primary)"
-            @change="onWbChange"
-          />
-        </view>
-
-        <view class="param-row">
-          <view class="param-label-row">
-            <text class="param-label">对焦</text>
-            <text class="param-value">{{ focus }}</text>
-          </view>
-          <slider
-            class="param-slider"
-            :min="0"
-            :max="100"
-            :step="1"
-            :value="focus"
-            activeColor="var(--color-brand-primary)"
-            @change="onFocusChange"
-          />
-        </view>
-      </scroll-view>
-    </view>
-  </view>
-</template>
-
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref } from 'vue'
 import { useCaptureStore } from '@/stores/capture'
 
 const captureStore = useCaptureStore()
 
-const ev = computed(() => captureStore.cameraParameters?.ev ?? 0)
-const iso = computed(() => captureStore.cameraParameters?.iso ?? 100)
-const wb = computed(() => captureStore.cameraParameters?.wb ?? 5500)
-const focus = computed(() => captureStore.cameraParameters?.focus ?? 50)
+const evBias = ref(captureStore.cameraParameters.evBias)
+const iso = ref(captureStore.cameraParameters.iso)
+const whiteBalance = ref(captureStore.cameraParameters.whiteBalance)
 
-const onEvChange = (e: any) => {
-  captureStore.updateCameraParameters({ ev: e.detail.value })
+const applyParams = () => {
+  captureStore.updateCameraParameters({
+    evBias: evBias.value,
+    iso: iso.value,
+    whiteBalance: whiteBalance.value,
+  })
+  uni.navigateBack()
 }
 
-const onIsoChange = (e: any) => {
-  captureStore.updateCameraParameters({ iso: e.detail.value })
-}
-
-const onWbChange = (e: any) => {
-  captureStore.updateCameraParameters({ wb: e.detail.value })
-}
-
-const onFocusChange = (e: any) => {
-  captureStore.updateCameraParameters({ focus: e.detail.value })
-}
-
-const onReset = () => {
-  captureStore.resetCameraParameters()
-}
-
-const onBack = () => {
+const closePanel = () => {
   uni.navigateBack()
 }
 </script>
 
+<template>
+  <view class="parameters-page">
+    <view class="panel-header">
+      <text class="panel-title">相机参数</text>
+      <view class="close-btn" @click="closePanel">
+        <text class="close-icon">✕</text>
+      </view>
+    </view>
+
+    <view class="params-list">
+      <view class="param-row">
+        <text class="param-label">曝光补偿</text>
+        <view class="param-control">
+          <text class="param-minus" @click="evBias = Math.max(-3, evBias - 0.3)">−</text>
+          <text class="param-value">EV {{ evBias > 0 ? '+' : '' }}{{ evBias.toFixed(1) }}</text>
+          <text class="param-plus" @click="evBias = Math.min(3, evBias + 0.3)">+</text>
+        </view>
+      </view>
+
+      <view class="param-row">
+        <text class="param-label">ISO</text>
+        <view class="param-control">
+          <text class="param-minus" @click="iso = Math.max(100, iso - 100)">−</text>
+          <text class="param-value">{{ iso }}</text>
+          <text class="param-plus" @click="iso = Math.min(3200, iso + 100)">+</text>
+        </view>
+      </view>
+
+      <view class="param-row">
+        <text class="param-label">白平衡</text>
+        <view class="param-control">
+          <text class="wb-option" :class="{ active: whiteBalance === 'auto' }" @click="whiteBalance = 'auto'">AUTO</text>
+          <text class="wb-option" :class="{ active: whiteBalance === 'daylight' }" @click="whiteBalance = 'daylight'">日光</text>
+          <text class="wb-option" :class="{ active: whiteBalance === 'cloudy' }" @click="whiteBalance = 'cloudy'">阴天</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="apply-area">
+      <view class="apply-btn" @click="applyParams">
+        <text class="apply-text">应用</text>
+      </view>
+    </view>
+  </view>
+</template>
+
 <style lang="scss" scoped>
-.param-page {
-  position: relative;
-  width: 100%;
-  height: 100vh;
-  background: transparent;
-}
-
-.backdrop {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.panel {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 60vh;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-card) var(--radius-card) 0 0;
-  padding: var(--space-3) var(--space-5) var(--space-6);
-  display: flex;
-  flex-direction: column;
-}
-
-.panel-handle {
-  width: 40px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--color-border);
-  align-self: center;
-  margin-bottom: var(--space-4);
+.parameters-page {
+  min-height: 100vh;
+  background: var(--color-bg-canvas);
+  padding-top: env(safe-area-inset-top);
 }
 
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .panel-title {
+  font-family: var(--font-sans);
   font-size: var(--font-size-heading);
+  font-weight: var(--weight-medium);
   color: var(--color-text-primary);
 }
 
-.reset-btn {
-  font-size: var(--font-size-body);
-  color: var(--color-brand-primary);
-}
-
-.param-list {
-  flex: 1;
-}
-
-.param-row {
-  margin-bottom: var(--space-5);
-}
-
-.param-label-row {
+.close-btn {
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-2);
+  justify-content: center;
+  &:active { opacity: 0.6; }
 }
 
-.param-label {
-  font-size: var(--font-size-body);
-  color: var(--color-text-primary);
-}
-
-.param-value {
-  font-size: var(--font-size-caption);
+.close-icon {
+  font-size: 18px;
   color: var(--color-text-secondary);
 }
 
-.param-slider {
-  width: 100%;
+.params-list {
+  padding: var(--space-5);
+}
+
+.param-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.param-label {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+}
+
+.param-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.param-minus,
+.param-plus {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--color-bg-surface);
+  font-size: 18px;
+  color: var(--color-text-primary);
+  &:active { opacity: 0.6; }
+}
+
+.param-value {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-primary);
+  min-width: 60px;
+  text-align: center;
+}
+
+.wb-option {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-tag);
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  &.active {
+    background: var(--color-tag-gold-bg);
+    color: var(--color-tag-gold-text);
+  }
+}
+
+.apply-area {
+  padding: var(--space-5);
+}
+
+.apply-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: var(--color-text-primary);
+  border-radius: var(--radius-button);
+  &:active { transform: scale(0.98); }
+}
+
+.apply-text {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
+  color: #FFFFFF;
 }
 </style>
