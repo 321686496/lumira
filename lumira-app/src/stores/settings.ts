@@ -2,8 +2,17 @@
  * 设置状态仓库
  */
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { storageService } from '@/services/storage'
+
+type SettingKey =
+  | 'showGrid'
+  | 'showLevelIndicator'
+  | 'shutterSound'
+  | 'saveQuality'
+  | 'defaultOverlayOpacity'
+  | 'defaultCamera'
+  | 'waterMarkEnabled'
 
 export const useSettingsStore = defineStore('settings', () => {
   // === State ===
@@ -12,7 +21,20 @@ export const useSettingsStore = defineStore('settings', () => {
   const defaultOverlayOpacity = ref(0.5)
   const defaultCamera = ref<'front' | 'back'>('back')
   const waterMarkEnabled = ref(false)
+  const showLevelIndicator = ref(true)
+  const shutterSound = ref(true)
   const loaded = ref(false)
+
+  // === Aggregated settings (read-only view) ===
+  const settings = computed(() => ({
+    showGrid: defaultGridDisplay.value,
+    showLevelIndicator: showLevelIndicator.value,
+    shutterSound: shutterSound.value,
+    saveQuality: saveQuality.value,
+    defaultOverlayOpacity: defaultOverlayOpacity.value,
+    defaultCamera: defaultCamera.value,
+    waterMarkEnabled: waterMarkEnabled.value,
+  }))
 
   // === Actions ===
   async function loadSettings(): Promise<void> {
@@ -30,6 +52,12 @@ export const useSettingsStore = defineStore('settings', () => {
 
     const wm = await storageService.getSetting('waterMarkEnabled')
     waterMarkEnabled.value = wm === 'true'
+
+    const li = await storageService.getSetting('showLevelIndicator')
+    showLevelIndicator.value = li !== 'false'
+
+    const ss = await storageService.getSetting('shutterSound')
+    shutterSound.value = ss !== 'false'
 
     loaded.value = true
   }
@@ -59,6 +87,45 @@ export const useSettingsStore = defineStore('settings', () => {
     await storageService.setSetting('waterMarkEnabled', String(enabled))
   }
 
+  async function setShowLevelIndicator(enabled: boolean): Promise<void> {
+    showLevelIndicator.value = enabled
+    await storageService.setSetting('showLevelIndicator', String(enabled))
+  }
+
+  async function setShutterSound(enabled: boolean): Promise<void> {
+    shutterSound.value = enabled
+    await storageService.setSetting('shutterSound', String(enabled))
+  }
+
+  async function updateSetting(
+    key: SettingKey,
+    value: boolean | string | number,
+  ): Promise<void> {
+    switch (key) {
+      case 'showGrid':
+        await setDefaultGridDisplay(value as boolean)
+        break
+      case 'showLevelIndicator':
+        await setShowLevelIndicator(value as boolean)
+        break
+      case 'shutterSound':
+        await setShutterSound(value as boolean)
+        break
+      case 'saveQuality':
+        await setSaveQuality(value as 'standard' | 'high' | 'original')
+        break
+      case 'defaultOverlayOpacity':
+        await setDefaultOverlayOpacity(value as number)
+        break
+      case 'defaultCamera':
+        await setDefaultCamera(value as 'front' | 'back')
+        break
+      case 'waterMarkEnabled':
+        await setWaterMarkEnabled(value as boolean)
+        break
+    }
+  }
+
   async function clearCache(): Promise<void> {
     // Mock：实际应清理临时文件
     console.log('缓存已清理')
@@ -71,7 +138,11 @@ export const useSettingsStore = defineStore('settings', () => {
     defaultOverlayOpacity,
     defaultCamera,
     waterMarkEnabled,
+    showLevelIndicator,
+    shutterSound,
     loaded,
+    // aggregated view
+    settings,
     // actions
     loadSettings,
     setSaveQuality,
@@ -79,6 +150,9 @@ export const useSettingsStore = defineStore('settings', () => {
     setDefaultOverlayOpacity,
     setDefaultCamera,
     setWaterMarkEnabled,
+    setShowLevelIndicator,
+    setShutterSound,
+    updateSetting,
     clearCache,
   }
 })
