@@ -29,7 +29,7 @@ const handleTabSwitch = (key: string) => {
   if (key === 'capture') {
     // 拍摄页用 navigateTo 进入，作为独立全屏页面
     uni.navigateTo({ url: '/pages/capture/index' })
-  } else if (key === 'mine') {
+  } else if (key === 'profile') {
     // 主页面切换用 reLaunch，避免页面栈堆积
     uni.redirectTo({ url: '/pages/profile/index' })
   }

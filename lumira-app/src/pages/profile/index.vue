@@ -165,7 +165,7 @@ onShow(() => {
       <view class="bottom-pad"></view>
     </scroll-view>
 
-    <FloatingTabBar current="mine" @on-switch="onTabSwitch" />
+    <FloatingTabBar current="profile" @on-switch="onTabSwitch" />
   </view>
 </template>
 

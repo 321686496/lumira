@@ -1,34 +1,33 @@
 <script setup lang="ts">
-interface Props {
+interface TabItem {
+  key: string
+  label: string
+  iconChar: string
+  center?: boolean
+}
+
+interface FloatingTabBarProps {
   current: string
   theme?: 'light' | 'dark'
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  theme: 'light'
+const props = withDefaults(defineProps<FloatingTabBarProps>(), {
+  theme: 'light',
 })
 
 const emit = defineEmits<{
   (e: 'on-switch', key: string): void
 }>()
 
-interface TabItem {
-  key: string
-  label: string
-  icon: string
-  center?: boolean
-}
-
-// 首页 / 拍摄(中间突出) / 我的
 const tabs: TabItem[] = [
-  { key: 'home', label: '首页', icon: '⌂' },
-  { key: 'capture', label: '拍摄', icon: '◉', center: true },
-  { key: 'mine', label: '我的', icon: '◍' }
+  { key: 'home', label: '首页', iconChar: '⌂' },
+  { key: 'capture', label: '拍摄', iconChar: '◉', center: true },
+  { key: 'profile', label: '我的', iconChar: '◍' },
 ]
 
 const handleSwitch = (key: string) => {
-  // 中间项始终允许触发（即使当前在拍摄页，也可重新进入）
-  if (key === props.current && !tabs.find((t) => t.key === key)?.center) return
+  const tab = tabs.find((t) => t.key === key)
+  if (key === props.current && !tab?.center) return
   emit('on-switch', key)
 }
 </script>
@@ -36,32 +35,29 @@ const handleSwitch = (key: string) => {
 <template>
   <view class="floating-tab-bar" :class="`theme-${theme}`">
     <view class="tab-bar-inner">
-      <!-- 左侧：首页 -->
       <view
         class="tab-item tab-side"
         :class="{ active: current === 'home' }"
         @click="handleSwitch('home')"
       >
-        <text class="tab-icon">{{ tabs[0].icon }}</text>
+        <text class="tab-icon">{{ tabs[0].iconChar }}</text>
         <text v-if="current === 'home'" class="tab-label">{{ tabs[0].label }}</text>
       </view>
 
-      <!-- 中间：拍摄快门按钮 -->
       <view class="tab-center" @click="handleSwitch('capture')">
         <view class="shutter-btn" :class="{ active: current === 'capture' }">
           <view class="shutter-ring"></view>
-          <text class="shutter-icon">{{ tabs[1].icon }}</text>
+          <text class="shutter-icon">{{ tabs[1].iconChar }}</text>
         </view>
       </view>
 
-      <!-- 右侧：我的 -->
       <view
         class="tab-item tab-side"
-        :class="{ active: current === 'mine' }"
-        @click="handleSwitch('mine')"
+        :class="{ active: current === 'profile' }"
+        @click="handleSwitch('profile')"
       >
-        <text class="tab-icon">{{ tabs[2].icon }}</text>
-        <text v-if="current === 'mine'" class="tab-label">{{ tabs[2].label }}</text>
+        <text class="tab-icon">{{ tabs[2].iconChar }}</text>
+        <text v-if="current === 'profile'" class="tab-label">{{ tabs[2].label }}</text>
       </view>
     </view>
   </view>
@@ -72,8 +68,8 @@ const handleSwitch = (key: string) => {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(var(--space-3) + env(safe-area-inset-bottom));
-  z-index: 100;
+  bottom: calc(var(--tabbar-bottom-offset) + env(safe-area-inset-bottom));
+  z-index: 900;
   width: auto;
 }
 
@@ -81,25 +77,25 @@ const handleSwitch = (key: string) => {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  height: 56px;
+  height: var(--tabbar-height);
   padding: 0 var(--space-3);
   border-radius: var(--radius-pill);
   gap: var(--space-6);
   position: relative;
 
   .theme-light & {
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--color-border);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
   }
 
   .theme-dark & {
-    background: rgba(28, 26, 23, 0.7);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(28, 26, 23, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
   }
 }
@@ -113,23 +109,24 @@ const handleSwitch = (key: string) => {
   padding: 0 var(--space-3);
   height: 44px;
   border-radius: var(--radius-pill);
-  transition: all 0.25s ease;
+  transition: transform var(--duration-normal) var(--ease-default);
   min-width: 44px;
 
   .theme-light & {
     color: var(--color-text-tertiary);
   }
+
   .theme-dark & {
     color: rgba(255, 255, 255, 0.5);
   }
 
   &.active {
-    transform: scale(1.05);
+    transform: scale(1.08);
     color: var(--color-brand-primary);
   }
 
   &:active {
-    opacity: 0.6;
+    transform: scale(0.94);
   }
 }
 
@@ -139,9 +136,10 @@ const handleSwitch = (key: string) => {
 }
 
 .tab-label {
-  font-size: var(--font-size-caption);
-  font-weight: 500;
+  font-size: var(--font-size-tag);
+  font-weight: var(--weight-medium);
   line-height: 1;
+  color: var(--color-brand-primary);
 }
 
 /* 中间拍摄按钮 */
@@ -150,7 +148,7 @@ const handleSwitch = (key: string) => {
   align-items: center;
   justify-content: center;
   width: 60px;
-  height: 56px;
+  height: var(--tabbar-height);
   flex-shrink: 0;
 }
 
@@ -159,31 +157,24 @@ const handleSwitch = (key: string) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
-  margin-top: -20px;
+  width: var(--tabbar-shutter-size);
+  height: var(--tabbar-shutter-size);
+  margin-top: calc(var(--tabbar-shutter-protrusion) * -1);
   border-radius: 50%;
-  background: linear-gradient(135deg, #D4B57A 0%, #C9A96E 50%, #A88550 100%);
-  box-shadow:
-    0 4px 16px rgba(201, 169, 110, 0.45),
-    0 1px 4px rgba(168, 133, 80, 0.3),
-    inset 0 1px 2px rgba(255, 255, 255, 0.3);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  border: 3px solid var(--color-bg-canvas);
+  background: var(--color-brand-primary);
+  border: 2px solid var(--color-bg-canvas);
+  transition: transform var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 
   .theme-dark & {
-    border-color: #1C1A17;
+    border-color: var(--color-capture-bg);
   }
 
   &.active {
-    transform: scale(0.95);
-    box-shadow:
-      0 2px 8px rgba(201, 169, 110, 0.4),
-      inset 0 2px 4px rgba(0, 0, 0, 0.15);
+    transform: scale(0.92);
   }
 
   &:active {
-    transform: scale(0.9);
+    transform: scale(0.92);
   }
 }
 
@@ -202,6 +193,5 @@ const handleSwitch = (key: string) => {
   font-size: 24px;
   line-height: 1;
   color: #FFFFFF;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 </style>
