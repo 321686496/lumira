@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
+import { storageService } from '@/services/storage'
 
-onLaunch(() => {
+onLaunch(async () => {
   console.log('如画 Lumira 启动')
+  await storageService.init()
 })
+
 onShow(() => {
   console.log('如画 Lumira 显示')
 })
+
 onHide(() => {
   console.log('如画 Lumira 后台')
 })
@@ -19,12 +23,12 @@ onHide(() => {
 page {
   background-color: var(--color-bg-canvas);
   color: var(--color-text-primary);
-  font-family: 'Noto Serif SC', 'PingFang SC', -apple-system, sans-serif;
+  font-family: var(--font-sans);
   font-size: var(--font-size-body);
-  /* 修复横向溢出 */
   max-width: 100vw;
   overflow-x: hidden;
   box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* 所有元素 box-sizing */
@@ -49,11 +53,26 @@ uni-tabbar,
 }
 
 /* #ifdef H5 */
-/* H5 环境下确保根容器不溢出 */
 uni-page-body,
 uni-page {
   max-width: 100vw;
   overflow-x: hidden;
 }
 /* #endif */
+
+/* 页面进入动画 */
+.page-enter {
+  animation: pageEnter var(--duration-page) var(--ease-default) both;
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>
