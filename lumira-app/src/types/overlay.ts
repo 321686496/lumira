@@ -30,7 +30,7 @@ export interface PoseOverlayData {
 export interface OverlayLine {
   start: { x: number; y: number }
   end: { x: number; y: number }
-  type: 'solid' | 'dashed'
+  type: 'solid' | 'dashed' | 'horizontal' | 'vertical'
 }
 
 /** 叠图设置 */
