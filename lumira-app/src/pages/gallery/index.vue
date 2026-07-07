@@ -2,7 +2,7 @@
   <view class="gallery-page">
     <scroll-view class="photo-scroll" scroll-y>
       <!-- Empty state -->
-      <AppEmpty v-if="!hasPhotos" text="还没有照片，去拍摄第一张吧" />
+      <AppEmpty v-if="!hasPhotos" title="还没有照片，去拍摄第一张吧" />
 
       <!-- Photo grid -->
       <view v-else class="photo-grid">
