@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { Component } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import { useThemeStore } from '@/stores/theme'
+import { useTabBarVariant } from '@/composables/useThemeComponent'
 import BrandHeader from '@/components/home/BrandHeader.vue'
 import DailyInspiration from '@/components/home/DailyInspiration.vue'
 import RecentPhotos from '@/components/home/RecentPhotos.vue'
@@ -15,6 +17,7 @@ import { useSceneGuide } from '@/composables/useSceneGuide'
 
 const templatesStore = useTemplatesStore()
 const galleryStore = useGalleryStore()
+const themeStore = useThemeStore()
 const { inspiration } = useDailyInspiration()
 const { scenes } = useSceneGuide()
 
@@ -22,6 +25,26 @@ const recentPhotos = computed(() => galleryStore.photos.slice(0, 6))
 const featuredTemplates = computed(() => templatesStore.allTemplates.slice(0, 6))
 const photoCount = computed(() => galleryStore.photoCount)
 const templateCount = computed(() => templatesStore.templateCount)
+
+const tabBarVariant = useTabBarVariant()
+
+const sectionMap: Record<string, Component> = {
+  brand: BrandHeader,
+  inspiration: DailyInspiration,
+  recent: RecentPhotos,
+  featured: FeaturedTemplates,
+  scene: SceneQuickAccess,
+  stats: StatsSummary,
+}
+
+const sectionProps = computed<Record<string, Record<string, unknown>>>(() => ({
+  brand: {},
+  inspiration: { inspiration: inspiration.value },
+  recent: { photos: recentPhotos.value, totalCount: photoCount.value },
+  featured: { templates: featuredTemplates.value },
+  scene: { scenes },
+  stats: { photoCount: photoCount.value, templateCount: templateCount.value },
+}))
 
 onShow(() => {
   templatesStore.loadTemplates()
@@ -71,34 +94,22 @@ const handleStatsClick = () => {
 <template>
   <view class="home-page">
     <scroll-view scroll-y class="home-scroll" :show-scrollbar="false">
-      <BrandHeader />
-      <DailyInspiration
-        :inspiration="inspiration"
+      <component
+        v-for="sectionId in themeStore.layout.homeSectionOrder"
+        :key="sectionId"
+        :is="sectionMap[sectionId]"
+        v-bind="sectionProps[sectionId]"
         @on-try="handleInspirationTry"
-      />
-      <RecentPhotos
-        :photos="recentPhotos"
-        :total-count="photoCount"
         @on-photo-click="handlePhotoClick"
         @on-view-all="handleViewAllPhotos"
-      />
-      <FeaturedTemplates
-        :templates="featuredTemplates"
         @on-template-click="handleTemplateClick"
-        @on-view-all="handleViewAllTemplates"
-      />
-      <SceneQuickAccess
-        :scenes="scenes"
+        @on-view-all-templates="handleViewAllTemplates"
         @on-scene-click="handleSceneClick"
-      />
-      <StatsSummary
-        :photo-count="photoCount"
-        :template-count="templateCount"
         @on-click="handleStatsClick"
       />
       <view class="bottom-spacer" />
     </scroll-view>
-    <FloatingTabBar current="home" theme="light" @on-switch="handleTabSwitch" />
+    <component :is="tabBarVariant" current="home" theme="light" @on-switch="handleTabSwitch" />
   </view>
 </template>
 
