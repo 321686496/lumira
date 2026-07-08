@@ -48,6 +48,14 @@ const onShutter = () => {
   uni.navigateTo({ url: '/pages/capture/preview?photoId=tmp' })
 }
 
+const goToGallery = () => {
+  uni.navigateTo({ url: '/pages/gallery/index' })
+}
+
+const goToTemplates = () => {
+  uni.navigateTo({ url: '/pages/templates/index' })
+}
+
 const handleTabSwitch = (key: string) => {
   if (key === 'home') {
     uni.redirectTo({ url: '/pages/home/index' })
@@ -74,7 +82,7 @@ const handleTabSwitch = (key: string) => {
       />
 
       <view class="shutter-row">
-        <view class="shutter-side" @click="() => uni.navigateTo({ url: '/pages/gallery/index' })">
+        <view class="shutter-side" @click="goToGallery">
           <view class="side-icon-wrap">
             <text class="side-icon">▦</text>
           </view>
@@ -83,7 +91,7 @@ const handleTabSwitch = (key: string) => {
 
         <ShutterButton @on-capture="onShutter" />
 
-        <view class="shutter-side" @click="() => uni.navigateTo({ url: '/pages/templates/index' })">
+        <view class="shutter-side" @click="goToTemplates">
           <view class="side-icon-wrap">
             <text class="side-icon">▦</text>
           </view>

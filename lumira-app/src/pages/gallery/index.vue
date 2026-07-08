@@ -36,6 +36,10 @@ const handlePhotoLongpress = (id: string) => {
   })
 }
 
+const goToCapture = () => {
+  uni.navigateTo({ url: '/pages/capture/index' })
+}
+
 const handleTabSwitch = (key: string) => {
   if (key === 'capture') {
     uni.navigateTo({ url: '/pages/capture/index' })
@@ -67,7 +71,7 @@ const handleTabSwitch = (key: string) => {
         v-else
         title="还没有照片"
         description="去拍第一张吧"
-        @on-action="() => uni.navigateTo({ url: '/pages/capture/index' })"
+        @on-action="goToCapture"
       />
 
       <view class="bottom-spacer" />

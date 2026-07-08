@@ -11,7 +11,9 @@ const handleImport = () => {
     count: 1,
     extension: ['.pptpl', '.json'],
     success: async (res) => {
-      const filePath = res.tempFiles[0].path
+      const files = Array.isArray(res.tempFiles) ? res.tempFiles : [res.tempFiles]
+      const firstFile = files[0] as UniApp.ChooseFileSuccessCallbackResultFile
+      const filePath = firstFile.path
       importing.value = true
       result.value = null
       try {

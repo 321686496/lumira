@@ -22,6 +22,10 @@ const goEdit = () => {
 const retake = () => {
   uni.navigateBack()
 }
+
+const savePhoto = () => {
+  uni.navigateBack()
+}
 </script>
 
 <template>
@@ -45,7 +49,7 @@ const retake = () => {
       <view class="action-btn edit-btn" @click="goEdit">
         <text class="action-text">后期编辑</text>
       </view>
-      <view class="action-btn save-btn" @click="() => uni.navigateBack()">
+      <view class="action-btn save-btn" @click="savePhoto">
         <text class="action-text">保存</text>
       </view>
     </view>
