@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import TabBarFloating from '@/components/tabbar/TabBarFloating.vue'
 import TabBarCompact from '@/components/tabbar/TabBarCompact.vue'
+import TabBarMinimal from '@/components/tabbar/TabBarMinimal.vue'
 
 describe('TabBarFloating 组件', () => {
   it('应渲染容器', () => {
@@ -113,5 +114,59 @@ describe('TabBarCompact 组件', () => {
     expect(tabs[0].classes()).not.toContain('active')
     expect(tabs[1].classes()).toContain('active')
     expect(tabs[2].classes()).not.toContain('active')
+  })
+})
+
+describe('TabBarMinimal 组件', () => {
+  it('应渲染容器', () => {
+    const wrapper = mount(TabBarMinimal, { props: { current: 'home' } })
+    expect(wrapper.find('.tab-bar-minimal').exists()).toBe(true)
+  })
+
+  it('应渲染 3 个 Tab', () => {
+    const wrapper = mount(TabBarMinimal, { props: { current: 'home' } })
+    expect(wrapper.findAll('.minimal-tab')).toHaveLength(3)
+  })
+
+  it('点击首页 Tab 应触发 on-switch: home', async () => {
+    const wrapper = mount(TabBarMinimal, { props: { current: 'profile' } })
+    await wrapper.findAll('.minimal-tab')[0].trigger('click')
+    expect(wrapper.emitted('on-switch')![0]).toEqual(['home'])
+  })
+
+  it('点击拍摄 Tab 应触发 on-switch: capture', async () => {
+    const wrapper = mount(TabBarMinimal, { props: { current: 'home' } })
+    await wrapper.findAll('.minimal-tab')[1].trigger('click')
+    expect(wrapper.emitted('on-switch')![0]).toEqual(['capture'])
+  })
+
+  it('点击我的 Tab 应触发 on-switch: profile', async () => {
+    const wrapper = mount(TabBarMinimal, { props: { current: 'home' } })
+    await wrapper.findAll('.minimal-tab')[2].trigger('click')
+    expect(wrapper.emitted('on-switch')![0]).toEqual(['profile'])
+  })
+
+  it('点击当前已选中 Tab 不应触发 on-switch', async () => {
+    const wrapper = mount(TabBarMinimal, { props: { current: 'home' } })
+    await wrapper.findAll('.minimal-tab')[0].trigger('click')
+    expect(wrapper.emitted('on-switch')).toBeFalsy()
+  })
+
+  it('点击拍摄 Tab 即使已选中也应触发', async () => {
+    const wrapper = mount(TabBarMinimal, { props: { current: 'capture' } })
+    await wrapper.findAll('.minimal-tab')[1].trigger('click')
+    expect(wrapper.emitted('on-switch')).toBeTruthy()
+  })
+
+  it('默认 theme 应为 light', () => {
+    const wrapper = mount(TabBarMinimal, { props: { current: 'home' } })
+    expect(wrapper.props('theme')).toBe('light')
+  })
+
+  it('当前 Tab 应有 active 类和下划线', () => {
+    const wrapper = mount(TabBarMinimal, { props: { current: 'home' } })
+    const tabs = wrapper.findAll('.minimal-tab')
+    expect(tabs[0].classes()).toContain('active')
+    expect(tabs[0].find('.minimal-underline').exists()).toBe(true)
   })
 })
