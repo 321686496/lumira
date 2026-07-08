@@ -18,6 +18,9 @@ onHide(() => {
 
 <style lang="scss">
 @import '@/theme/tokens.scss';
+@import '@/theme/theme-ink.scss';
+@import '@/theme/theme-retro.scss';
+@import '@/theme/theme-fresh.scss';
 
 /* 全局重置 */
 page {

@@ -1,0 +1,39 @@
+// theme-retro.scss — 胶片复古主题（暖橘深棕，衬线字体）
+// 对应 spec 2.1/2.2/2.3 retro 列
+
+[data-theme="retro"] {
+  // === 配色 ===
+  --color-bg-canvas: #F5E6D3;
+  --color-bg-card: #FAF0E0;
+  --color-bg-surface: #EDDFC8;
+
+  --color-text-primary: #3D2817;
+  --color-text-secondary: #6B4C2F;
+  --color-text-tertiary: #9C8060;
+
+  --color-brand-primary: #D4865C;
+  --color-brand-secondary: #B06440;
+
+  --color-danger: #A04030;
+  --color-success: #6B7B4C;
+
+  --color-border: #E0D0B8;
+
+  --color-tag-gold-bg: #F0E0C8;
+  --color-tag-gold-text: #8C5A30;
+
+  // === 字体 ===
+  --font-sans: 'Noto Serif SC', 'PingFang SC', serif;
+
+  // === 形状 ===
+  --radius-button: 4px;
+  --radius-card: 8px;
+
+  // === 阴影 ===
+  --shadow-card: 0 2px 6px rgba(60, 40, 20, 0.08);
+
+  // === 布局参数 ===
+  --layout-grid-columns: 2;
+  --layout-gallery-columns: 2;
+  --layout-card-aspect: 1 / 1;
+}

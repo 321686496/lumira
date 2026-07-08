@@ -1,0 +1,36 @@
+// theme-ink.scss — 浓墨主题（深色沉浸）
+// 对应 spec 2.1/2.2/2.3 ink 列
+
+[data-theme="ink"] {
+  // === 配色 ===
+  --color-bg-canvas: #1C1A17;
+  --color-bg-card: #262320;
+  --color-bg-surface: #2E2A26;
+
+  --color-text-primary: #F2EEE6;
+  --color-text-secondary: #9C9690;
+  --color-text-tertiary: #6B6660;
+
+  --color-brand-primary: #D4B57A;
+  --color-brand-secondary: #BFA060;
+
+  --color-danger: #C8625C;
+  --color-success: #8A9B6C;
+
+  --color-border: #3A3530;
+
+  --color-tag-gold-bg: #3A3328;
+  --color-tag-gold-text: #D4B57A;
+
+  // === 形状 ===
+  --radius-button: 6px;
+  --radius-card: 12px;
+
+  // === 阴影 ===
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  // === 布局参数 ===
+  --layout-grid-columns: 2;
+  --layout-gallery-columns: 3;
+  --layout-card-aspect: 3 / 4;
+}

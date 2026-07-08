@@ -117,4 +117,9 @@
   --color-capture-text: rgba(255, 255, 255, 0.6);
   --color-capture-text-bright: #FFFFFF;
   --color-capture-overlay-line: rgba(201, 169, 110, 0.35);
+
+  // === 布局参数（v2 主题系统） ===
+  --layout-grid-columns: 2;
+  --layout-gallery-columns: 3;
+  --layout-card-aspect: 3 / 4;
 }
