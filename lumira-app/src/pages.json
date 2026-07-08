@@ -12,7 +12,8 @@
     { "path": "pages/gallery/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/gallery/detail", "style": { "navigationStyle": "custom" } },
     { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/profile/settings", "style": { "navigationStyle": "custom" } }
+    { "path": "pages/profile/settings", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/settings/theme", "style": { "navigationStyle": "custom" } }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
