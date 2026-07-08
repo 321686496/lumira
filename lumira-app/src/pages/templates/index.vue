@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import CategoryTabs from '@/components/template/CategoryTabs.vue'
-import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import { useTabBarVariant } from '@/composables/useThemeComponent'
 import AppEmpty from '@/components/AppEmpty.vue'
 import { useTemplatesStore } from '@/stores/templates'
 
@@ -11,6 +11,8 @@ const templatesStore = useTemplatesStore()
 const categories = computed(() => templatesStore.categories)
 const currentCategory = computed(() => templatesStore.currentCategory)
 const filteredTemplates = computed(() => templatesStore.filteredTemplates)
+
+const tabBarVariant = useTabBarVariant()
 
 let urlCategory = ''
 
@@ -92,7 +94,7 @@ const handleTabSwitch = (key: string) => {
       <view class="bottom-spacer" />
     </scroll-view>
 
-    <FloatingTabBar current="home" theme="light" @on-switch="handleTabSwitch" />
+    <component :is="tabBarVariant" current="home" theme="light" @on-switch="handleTabSwitch" />
   </view>
 </template>
 
@@ -134,7 +136,7 @@ const handleTabSwitch = (key: string) => {
 
 .templates-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(var(--layout-grid-columns, 2), 1fr);
   gap: var(--space-4);
   padding: 0 var(--space-5);
 }
@@ -150,7 +152,7 @@ const handleTabSwitch = (key: string) => {
 
 .card-cover {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: var(--layout-card-aspect, 3 / 4);
   background: var(--color-bg-surface);
   overflow: hidden;
 }

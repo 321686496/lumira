@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import { useThemeStore } from '@/stores/theme'
+import { useTabBarVariant } from '@/composables/useThemeComponent'
 import PhotoGrid from '@/components/gallery/PhotoGrid.vue'
 import AppEmpty from '@/components/AppEmpty.vue'
 import { useGalleryStore } from '@/stores/gallery'
 
 const galleryStore = useGalleryStore()
+const themeStore = useThemeStore()
 const photos = computed(() => galleryStore.photos)
+
+const galleryColumns = computed(() => themeStore.layout.galleryGridColumns)
+const tabBarVariant = useTabBarVariant()
 
 onShow(() => {
   galleryStore.loadPhotos()
@@ -62,7 +67,7 @@ const handleTabSwitch = (key: string) => {
       <PhotoGrid
         v-if="photos.length > 0"
         :photos="photos"
-        :columns="3"
+        :columns="galleryColumns"
         @on-photo-click="handlePhotoClick"
         @on-photo-longpress="handlePhotoLongpress"
       />
@@ -78,7 +83,7 @@ const handleTabSwitch = (key: string) => {
       <view class="bottom-spacer" />
     </scroll-view>
 
-    <FloatingTabBar current="home" theme="light" @on-switch="handleTabSwitch" />
+    <component :is="tabBarVariant" current="home" theme="light" @on-switch="handleTabSwitch" />
   </view>
 </template>
 
