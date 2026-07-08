@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { onLoad, onShow, onHide } from '@dcloudio/uni-app'
-import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import { useTabBarVariant } from '@/composables/useThemeComponent'
 import CaptureHeader from '@/components/capture/CaptureHeader.vue'
 import CameraViewfinder from '@/components/capture/CameraViewfinder.vue'
 import ParameterBar from '@/components/capture/ParameterBar.vue'
@@ -10,6 +10,7 @@ import { useCaptureStore } from '@/stores/capture'
 import type { OverlayLayer } from '@/types/overlay'
 
 const captureStore = useCaptureStore()
+const tabBarVariant = useTabBarVariant()
 
 const currentTemplateName = computed(() =>
   captureStore.activeTemplateId ? `模板 #${captureStore.activeTemplateId.slice(0, 6)}` : '自由拍摄'
@@ -100,7 +101,7 @@ const handleTabSwitch = (key: string) => {
       </view>
     </view>
 
-    <FloatingTabBar current="capture" theme="dark" @on-switch="handleTabSwitch" />
+    <component :is="tabBarVariant" current="capture" theme="dark" @on-switch="handleTabSwitch" />
   </view>
 </template>
 

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import { useTabBarVariant } from '@/composables/useThemeComponent'
 import { useGalleryStore } from '@/stores/gallery'
 import { useTemplatesStore } from '@/stores/templates'
 
 const galleryStore = useGalleryStore()
 const templatesStore = useTemplatesStore()
+const tabBarVariant = useTabBarVariant()
 
 const goSettings = () => {
   uni.navigateTo({ url: '/pages/profile/settings' })
@@ -67,7 +68,7 @@ const handleTabSwitch = (key: string) => {
       </view>
     </view>
 
-    <FloatingTabBar current="profile" theme="light" @on-switch="handleTabSwitch" />
+    <component :is="tabBarVariant" current="profile" theme="light" @on-switch="handleTabSwitch" />
   </view>
 </template>
 
