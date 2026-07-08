@@ -59,7 +59,7 @@ const savePhoto = () => {
 <style lang="scss" scoped>
 .preview-page {
   min-height: 100vh;
-  background: #1A1A1A;
+  background: var(--color-capture-bg);
   display: flex;
   flex-direction: column;
 }

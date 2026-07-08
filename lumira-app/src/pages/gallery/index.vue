@@ -71,6 +71,7 @@ const handleTabSwitch = (key: string) => {
         v-else
         title="还没有照片"
         description="去拍第一张吧"
+        action-text="去拍摄"
         @on-action="goToCapture"
       />
 

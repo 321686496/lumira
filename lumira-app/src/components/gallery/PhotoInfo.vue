@@ -85,6 +85,6 @@ const emit = defineEmits<{
 }
 
 .info-action.danger .action-label {
-  color: var(--color-status-error);
+  color: var(--color-danger);
 }
 </style>
