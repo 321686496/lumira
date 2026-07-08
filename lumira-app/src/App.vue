@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import { storageService } from '@/services/storage'
+import { useThemeStore } from '@/stores/theme'
 
 onLaunch(async () => {
   console.log('如画 Lumira 启动')
   await storageService.init()
+  const themeStore = useThemeStore()
+  await themeStore.loadTheme()
 })
 
 onShow(() => {
