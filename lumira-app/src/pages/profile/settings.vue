@@ -30,6 +30,10 @@ const clearCache = () => {
     },
   })
 }
+
+const goTheme = () => {
+  uni.navigateTo({ url: '/pages/settings/theme' })
+}
 </script>
 
 <template>
@@ -42,6 +46,10 @@ const clearCache = () => {
     </view>
 
     <view class="settings-list">
+      <view class="setting-row" @click="goTheme">
+        <text class="setting-label">主题</text>
+        <text class="setting-arrow">→</text>
+      </view>
       <view class="setting-row">
         <text class="setting-label">取景器网格</text>
         <switch :checked="settingsStore.settings.showGrid" @change="toggleGrid" color="var(--color-brand-primary)" />
