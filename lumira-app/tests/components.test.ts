@@ -26,7 +26,7 @@ describe('FloatingTabBar 组件', () => {
   // === LM-NAV-NAV-001/002/003: Tab 切换 ===
   it('点击首页 Tab 应触发 on-switch: home', async () => {
     const wrapper = mount(FloatingTabBar, {
-      props: { current: 'mine' },
+      props: { current: 'profile' },
     })
     const sideItems = wrapper.findAll('.tab-side')
     await sideItems[0].trigger('click')
@@ -43,13 +43,13 @@ describe('FloatingTabBar 组件', () => {
     expect(wrapper.emitted('on-switch')![0]).toEqual(['capture'])
   })
 
-  it('点击我的 Tab 应触发 on-switch: mine', async () => {
+  it('点击我的 Tab 应触发 on-switch: profile', async () => {
     const wrapper = mount(FloatingTabBar, {
       props: { current: 'home' },
     })
     const sideItems = wrapper.findAll('.tab-side')
     await sideItems[1].trigger('click')
-    expect(wrapper.emitted('on-switch')![0]).toEqual(['mine'])
+    expect(wrapper.emitted('on-switch')![0]).toEqual(['profile'])
   })
 
   // === LM-NAV-UI-004: 选中态 ===
@@ -66,7 +66,7 @@ describe('FloatingTabBar 组件', () => {
     const wrapper = mount(FloatingTabBar, {
       props: { current: 'home' },
     })
-    await wrapper.setProps({ current: 'mine' })
+    await wrapper.setProps({ current: 'profile' })
     const sideItems = wrapper.findAll('.tab-side')
     expect(sideItems[0].classes()).not.toContain('active')
     expect(sideItems[1].classes()).toContain('active')
@@ -165,9 +165,9 @@ describe('FloatingTabBar 组件', () => {
 describe('FloatingTabBar Props 验证', () => {
   it('应接受 current prop', () => {
     const wrapper = mount(FloatingTabBar, {
-      props: { current: 'mine' },
+      props: { current: 'profile' },
     })
-    expect(wrapper.props('current')).toBe('mine')
+    expect(wrapper.props('current')).toBe('profile')
   })
 
   it('应接受 theme prop', () => {

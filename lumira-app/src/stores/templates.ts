@@ -148,6 +148,10 @@ export const useTemplatesStore = defineStore('templates', () => {
     return templateEngine.parse(local.pptplJson)
   }
 
+  function getTemplateById(id: string): LocalTemplate | undefined {
+    return allTemplates.value.find((t) => t.id === id)
+  }
+
   function resetState(): void {
     builtinTemplates.value = []
     importedTemplates.value = []
@@ -183,6 +187,7 @@ export const useTemplatesStore = defineStore('templates', () => {
     deleteTemplate,
     importFromJson,
     getResolvedTemplate,
+    getTemplateById,
     resetState,
   }
 })

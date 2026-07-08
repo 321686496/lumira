@@ -1,187 +1,139 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+
+const photoId = ref('')
+const showOriginal = ref(false)
+
+onLoad((query) => {
+  if (query?.photoId) {
+    photoId.value = query.photoId
+  }
+})
+
+const toggleCompare = () => {
+  showOriginal.value = !showOriginal.value
+}
+
+const goEdit = () => {
+  uni.navigateTo({ url: `/pages/gallery/detail?id=${photoId.value}` })
+}
+
+const retake = () => {
+  uni.navigateBack()
+}
+
+const savePhoto = () => {
+  uni.navigateBack()
+}
+</script>
+
 <template>
   <view class="preview-page">
-    <!-- Top bar -->
-    <view class="top-bar">
-      <view class="back-btn" @tap="onBack">
-        <text class="back-text">←</text>
+    <view class="preview-nav">
+      <view class="nav-btn" @click="retake">
+        <text class="nav-text">重拍</text>
       </view>
-      <text class="top-title">预览</text>
-      <view class="top-placeholder"></view>
+      <view class="nav-btn compare-btn" @click="toggleCompare">
+        <text class="nav-text">{{ showOriginal ? '效果' : '原图' }}</text>
+      </view>
     </view>
 
-    <!-- Photo preview -->
-    <view class="photo-area">
+    <view class="preview-content">
       <view class="photo-frame">
-        <image
-          v-if="photoUri"
-          class="photo-img"
-          :src="photoUri"
-          mode="aspectFit"
-        />
-        <view v-else class="photo-placeholder">
-          <text class="placeholder-text">已拍摄照片</text>
-          <text class="placeholder-hint">photoId: {{ photoId }}</text>
-        </view>
+        <text class="photo-placeholder">📸 照片预览</text>
       </view>
     </view>
 
-    <!-- Action buttons -->
-    <view class="actions">
-      <view class="action-btn action-secondary" @tap="onRetake">
-        <text class="action-text-secondary">重拍</text>
+    <view class="preview-actions">
+      <view class="action-btn edit-btn" @click="goEdit">
+        <text class="action-text">后期编辑</text>
       </view>
-      <view class="action-btn action-primary" @tap="onSave">
-        <text class="action-text-primary">保存</text>
-      </view>
-      <view class="action-btn action-secondary" @tap="onEdit">
-        <text class="action-text-secondary">编辑</text>
+      <view class="action-btn save-btn" @click="savePhoto">
+        <text class="action-text">保存</text>
       </view>
     </view>
   </view>
 </template>
 
-<script setup lang="ts">
-import { ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
-
-const photoId = ref<string>('')
-const photoUri = ref<string>('')
-
-onLoad((options) => {
-  photoId.value = (options?.photoId as string) ?? ''
-})
-
-const onBack = () => {
-  uni.navigateBack()
-}
-
-const onRetake = () => {
-  uni.navigateBack()
-}
-
-const onSave = () => {
-  uni.showToast({ title: '已保存到相册', icon: 'success' })
-}
-
-const onEdit = () => {
-  uni.navigateTo({ url: `/pages/gallery/detail?id=${photoId.value}` })
-}
-</script>
-
 <style lang="scss" scoped>
 .preview-page {
-  position: relative;
-  width: 100%;
   min-height: 100vh;
-  background: var(--color-bg-canvas);
+  background: var(--color-capture-bg);
   display: flex;
   flex-direction: column;
 }
 
-.top-bar {
+.preview-nav {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: var(--space-5) var(--space-4) var(--space-3);
+  padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-5);
 }
 
-.back-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.nav-btn {
+  padding: var(--space-2) var(--space-4);
+  &:active { opacity: 0.7; }
 }
 
-.back-text {
-  font-size: var(--font-size-heading);
-  color: var(--color-text-primary);
+.nav-text {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+  color: #FFFFFF;
 }
 
-.top-title {
-  font-size: var(--font-size-heading);
-  color: var(--color-text-primary);
-}
-
-.top-placeholder {
-  width: 40px;
-  height: 40px;
-}
-
-.photo-area {
+.preview-content {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-3) var(--space-4);
+  padding: 0 var(--space-5);
 }
 
 .photo-frame {
   width: 100%;
+  max-width: 360px;
   aspect-ratio: 3 / 4;
+  background: #2A2A2A;
   border-radius: var(--radius-card);
-  background: var(--color-bg-card);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
 }
 
-.photo-img {
-  width: 100%;
-  height: 100%;
-}
-
 .photo-placeholder {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.preview-actions {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.placeholder-text {
-  font-size: var(--font-size-body);
-  color: var(--color-text-secondary);
-}
-
-.placeholder-hint {
-  font-size: var(--font-size-caption);
-  color: var(--color-text-tertiary);
-  margin-top: var(--space-2);
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5) var(--space-9);
   gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom));
 }
 
 .action-btn {
   flex: 1;
-  height: 48px;
-  border-radius: var(--radius-card);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: var(--space-4);
+  border-radius: var(--radius-button);
+  &:active { opacity: 0.85; }
 }
 
-.action-secondary {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-}
-
-.action-primary {
+.edit-btn {
   background: var(--color-brand-primary);
 }
 
-.action-text-secondary {
-  font-size: var(--font-size-body);
-  color: var(--color-text-primary);
+.save-btn {
+  background: var(--color-text-primary);
 }
 
-.action-text-primary {
+.action-text {
+  font-family: var(--font-sans);
   font-size: var(--font-size-body);
-  color: var(--color-text-primary);
+  font-weight: var(--weight-semibold);
+  color: #FFFFFF;
 }
 </style>

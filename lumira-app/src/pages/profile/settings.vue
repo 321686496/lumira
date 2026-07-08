@@ -1,207 +1,136 @@
-<template>
-  <view class="settings-page">
-    <!-- Top bar -->
-    <view class="top-bar">
-      <view class="back-btn" @tap="onBack">
-        <text class="back-text">←</text>
-      </view>
-      <text class="top-title">设置</text>
-      <view class="top-placeholder"></view>
-    </view>
-
-    <scroll-view class="content-scroll" scroll-y>
-      <view class="section">
-        <text class="section-title">拍摄</text>
-        <view class="section-card">
-          <view class="setting-item" @tap="onSaveQuality">
-            <text class="setting-label">保存画质</text>
-            <text class="setting-value">{{ saveQuality }}</text>
-          </view>
-          <view class="setting-item">
-            <text class="setting-label">网格默认显示</text>
-            <switch
-              :checked="defaultGridDisplay"
-              color="var(--color-brand-primary)"
-              @change="onGridToggle"
-            />
-          </view>
-          <view class="setting-item">
-            <text class="setting-label">叠图透明度</text>
-            <text class="setting-value">{{ defaultOverlayOpacity }}%</text>
-          </view>
-          <view class="setting-item" @tap="onDefaultCamera">
-            <text class="setting-label">默认摄像头</text>
-            <text class="setting-value">{{ defaultCamera }}</text>
-          </view>
-        </view>
-      </view>
-
-      <view class="section">
-        <text class="section-title">其他</text>
-        <view class="section-card">
-          <view class="setting-item" @tap="onWatermark">
-            <text class="setting-label">水印</text>
-            <text class="setting-value">未开启</text>
-          </view>
-          <view class="setting-item" @tap="onClearCache">
-            <text class="setting-label">清除缓存</text>
-            <text class="setting-value">›</text>
-          </view>
-          <view class="setting-item" @tap="onAbout">
-            <text class="setting-label">关于</text>
-            <text class="setting-value">›</text>
-          </view>
-        </view>
-      </view>
-
-      <view class="bottom-pad"></view>
-    </scroll-view>
-  </view>
-</template>
-
 <script setup lang="ts">
-import { computed } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
 import { useSettingsStore } from '@/stores/settings'
 
 const settingsStore = useSettingsStore()
 
-const saveQuality = computed(() => settingsStore.saveQuality ?? '原画质')
-const defaultGridDisplay = computed(() => settingsStore.defaultGridDisplay ?? false)
-const defaultOverlayOpacity = computed(() => settingsStore.defaultOverlayOpacity ?? 80)
-const defaultCamera = computed(() => settingsStore.defaultCamera ?? '后置')
-
-onShow(() => {
-  settingsStore.loadSettings()
-})
-
-const onSaveQuality = () => {
-  uni.showActionSheet({
-    itemList: ['原画质', '高质量', '标准'],
-    success: (res) => {
-      const labels = ['原画质', '高质量', '标准']
-      settingsStore.setSaveQuality(labels[res.tapIndex])
-    },
-  })
-}
-
-const onGridToggle = (e: any) => {
-  settingsStore.setDefaultGridDisplay(e.detail.value)
-}
-
-const onDefaultCamera = () => {
-  uni.showActionSheet({
-    itemList: ['后置', '前置'],
-    success: (res) => {
-      settingsStore.defaultCamera = res.tapIndex === 0 ? '后置' : '前置'
-    },
-  })
-}
-
-const onWatermark = () => {
-  uni.showToast({ title: '开发中', icon: 'none' })
-}
-
-const onClearCache = () => {
-  settingsStore.clearCache()
-  uni.showToast({ title: '已清除', icon: 'success' })
-}
-
-const onAbout = () => {
-  uni.showToast({ title: '如画 Lumira', icon: 'none' })
-}
-
-const onBack = () => {
+const goBack = () => {
   uni.navigateBack()
+}
+
+const toggleGrid = () => {
+  settingsStore.updateSetting('showGrid', !settingsStore.settings.showGrid)
+}
+
+const toggleLevel = () => {
+  settingsStore.updateSetting('showLevelIndicator', !settingsStore.settings.showLevelIndicator)
+}
+
+const toggleSound = () => {
+  settingsStore.updateSetting('shutterSound', !settingsStore.settings.shutterSound)
+}
+
+const clearCache = () => {
+  uni.showModal({
+    title: '清除缓存',
+    content: '确定清除所有缓存数据？',
+    success: (res) => {
+      if (res.confirm) {
+        uni.showToast({ title: '已清除', icon: 'success' })
+      }
+    },
+  })
 }
 </script>
 
+<template>
+  <view class="settings-page">
+    <view class="page-nav">
+      <view class="nav-btn" @click="goBack">
+        <text class="nav-icon">←</text>
+      </view>
+      <text class="nav-title">设置</text>
+    </view>
+
+    <view class="settings-list">
+      <view class="setting-row">
+        <text class="setting-label">取景器网格</text>
+        <switch :checked="settingsStore.settings.showGrid" @change="toggleGrid" color="var(--color-brand-primary)" />
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">水平仪</text>
+        <switch :checked="settingsStore.settings.showLevelIndicator" @change="toggleLevel" color="var(--color-brand-primary)" />
+      </view>
+      <view class="setting-row">
+        <text class="setting-label">快门声音</text>
+        <switch :checked="settingsStore.settings.shutterSound" @change="toggleSound" color="var(--color-brand-primary)" />
+      </view>
+      <view class="setting-row" @click="clearCache">
+        <text class="setting-label">清除缓存</text>
+        <text class="setting-arrow">→</text>
+      </view>
+    </view>
+
+    <view class="app-info">
+      <text class="app-version">如画 Lumira v1.0.0</text>
+    </view>
+  </view>
+</template>
+
 <style lang="scss" scoped>
 .settings-page {
-  position: relative;
-  width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   background: var(--color-bg-canvas);
-  display: flex;
-  flex-direction: column;
 }
 
-.top-bar {
+.page-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--space-5) var(--space-4) var(--space-3);
+  gap: var(--space-3);
+  padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-5) var(--space-3);
 }
 
-.back-btn {
+.nav-btn {
   width: 40px;
   height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
+  &:active { opacity: 0.6; }
 }
 
-.back-text {
-  font-size: var(--font-size-heading);
+.nav-icon {
+  font-size: 22px;
   color: var(--color-text-primary);
 }
 
-.top-title {
-  font-size: var(--font-size-heading);
+.nav-title {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-medium);
   color: var(--color-text-primary);
 }
 
-.top-placeholder {
-  width: 40px;
-  height: 40px;
+.settings-list {
+  padding: 0 var(--space-5);
 }
 
-.content-scroll {
-  flex: 1;
-}
-
-.section {
-  padding: var(--space-2) var(--space-5) var(--space-5);
-}
-
-.section-title {
-  font-size: var(--font-size-caption);
-  color: var(--color-text-tertiary);
-  display: block;
-  margin-bottom: var(--space-2);
-  padding-left: var(--space-2);
-}
-
-.section-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-
-.setting-item {
+.setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-4) 0;
   border-bottom: 1px solid var(--color-border);
 }
 
-.setting-item:last-child {
-  border-bottom: none;
-}
-
 .setting-label {
+  font-family: var(--font-sans);
   font-size: var(--font-size-body);
   color: var(--color-text-primary);
 }
 
-.setting-value {
-  font-size: var(--font-size-body);
+.setting-arrow {
+  font-size: 16px;
   color: var(--color-text-tertiary);
 }
 
-.bottom-pad {
-  height: var(--space-6);
+.app-info {
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+}
+
+.app-version {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-tag);
+  color: var(--color-text-tertiary);
 }
 </style>
