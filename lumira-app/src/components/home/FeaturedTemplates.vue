@@ -9,7 +9,7 @@ defineProps<FeaturedTemplatesProps>()
 
 const emit = defineEmits<{
   (e: 'on-template-click', id: string): void
-  (e: 'on-view-all'): void
+  (e: 'on-view-all-templates'): void
 }>()
 </script>
 
@@ -17,7 +17,7 @@ const emit = defineEmits<{
   <view class="featured-templates">
     <view class="section-header">
       <text class="section-title">推荐模板</text>
-      <view class="section-more" @click="emit('on-view-all')">
+      <view class="section-more" @click="emit('on-view-all-templates')">
         <text class="more-text">查看全部 →</text>
       </view>
     </view>
