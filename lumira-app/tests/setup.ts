@@ -64,6 +64,11 @@ const mockUni = {
   requireNativePlugin: vi.fn((name: string) => {
     throw new Error(`Native plugin ${name} not available in test`)
   }),
+  // 事件总线（uni-app 跨平台 API，测试环境需提供以支持条件编译分支）
+  $emit: vi.fn(),
+  $on: vi.fn(),
+  $off: vi.fn(),
+  $once: vi.fn(),
 }
 
 // 设置全局
