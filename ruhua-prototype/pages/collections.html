@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>我的精选集 · 如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+  <div class="lumira-container">
+    <!-- Navbar -->
+    <nav class="lumira-nav">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn" onclick="location.href='profile.html'"><i class="ph ph-arrow-left"></i></button>
+      </div>
+      <span class="lumira-nav-title">我的精选集</span>
+      <div class="lumira-nav-right">
+        <button class="lumira-nav-btn" onclick="location.href='#'" style="font-size: 14px; font-weight: 500; padding: 6px 12px;">+ 新建</button>
+      </div>
+    </nav>
+
+    <!-- Collections Grid -->
+    <div style="padding: 20px 24px 0;">
+      <div class="lumira-grid">
+        <!-- Collection 1 -->
+        <div class="lumira-card lumira-card-hover fade-up" style="padding: 0; overflow: hidden;" onclick="location.href='collection-detail.html'">
+          <div style="position: relative;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/326473/400/400" alt="我最爱的九张" style="aspect-ratio: 1/1; border-radius: 12px 12px 0 0;">
+            <div style="position: absolute; top: 8px; right: 8px; background: rgba(26,26,26,0.7); color: #fff; padding: 3px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600;">9�?/div>
+          </div>
+          <div style="padding: 12px 14px 14px;">
+            <div style="font-family: 'Noto Serif SC', serif; font-size: 14px; font-weight: 600;">我最爱的九张</div>
+            <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">更新�?7�?�?/div>
+          </div>
+        </div>
+
+        <!-- Collection 2 -->
+        <div class="lumira-card lumira-card-hover fade-up fade-up-d1" style="padding: 0; overflow: hidden;" onclick="location.href='collection-detail.html'">
+          <div style="position: relative;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/457882/400/400" alt="旅行精�? style="aspect-ratio: 1/1; border-radius: 12px 12px 0 0;">
+            <div style="position: absolute; top: 8px; right: 8px; background: rgba(26,26,26,0.7); color: #fff; padding: 3px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600;">24�?/div>
+          </div>
+          <div style="padding: 12px 14px 14px;">
+            <div style="font-family: 'Noto Serif SC', serif; font-size: 14px; font-weight: 600;">旅行精�?/div>
+            <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">更新�?6�?8�?/div>
+          </div>
+        </div>
+
+        <!-- Collection 3 -->
+        <div class="lumira-card lumira-card-hover fade-up fade-up-d2" style="padding: 0; overflow: hidden;" onclick="location.href='collection-detail.html'">
+          <div style="position: relative;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/1926769/400/400" alt="穿搭合集" style="aspect-ratio: 1/1; border-radius: 12px 12px 0 0;">
+            <div style="position: absolute; top: 8px; right: 8px; background: rgba(26,26,26,0.7); color: #fff; padding: 3px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600;">12�?/div>
+          </div>
+          <div style="padding: 12px 14px 14px;">
+            <div style="font-family: 'Noto Serif SC', serif; font-size: 14px; font-weight: 600;">穿搭合集</div>
+            <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">更新�?7�?�?/div>
+          </div>
+        </div>
+
+        <!-- Collection 4 -->
+        <div class="lumira-card lumira-card-hover fade-up fade-up-d3" style="padding: 0; overflow: hidden;" onclick="location.href='collection-detail.html'">
+          <div style="position: relative;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/312415/400/400" alt="咖啡馆时�? style="aspect-ratio: 1/1; border-radius: 12px 12px 0 0;">
+            <div style="position: absolute; top: 8px; right: 8px; background: rgba(26,26,26,0.7); color: #fff; padding: 3px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600;">8�?/div>
+          </div>
+          <div style="padding: 12px 14px 14px;">
+            <div style="font-family: 'Noto Serif SC', serif; font-size: 14px; font-weight: 600;">咖啡馆时�?/div>
+            <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">更新�?6�?5�?/div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tip Section -->
+    <div class="fade-in" style="padding: 32px 24px 0;">
+      <div style="background: var(--bg-surface); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 12px;">
+        <i class="ph ph-lightbulb" style="font-size: 24px;"></i>
+        <div>
+          <div style="font-size: 13px; font-weight: 500; color: var(--text-primary);">精选集功能</div>
+          <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">将喜欢的照片整理成集，一键导出九宫格拼图</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+</body>
+</html>

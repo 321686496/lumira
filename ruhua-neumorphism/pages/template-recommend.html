@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 为你推荐</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    /* ========== Template Recommend Page Base ========== */
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html {
+      font-size: 16px;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+      line-height: var(--leading-normal);
+      min-height: 100vh;
+      padding-bottom: calc(var(--tab-bar-height) + var(--shutter-size) / 2 + var(--safe-area-bottom) + 20px);
+      overflow-x: hidden;
+    }
+
+    /* ========== Neumorphic Card (Convex) ========== */
+    .neu-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+    }
+
+    .neu-card-subtle {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex-subtle);
+    }
+
+    /* ========== Neumorphic Pill ========== */
+    .neu-pill {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-subtle);
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      cursor: pointer;
+      user-select: none;
+    }
+    .neu-pill:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    /* ========== Scrollbar Hide ========== */
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* ========== Placeholder Image ========== */
+    .img-placeholder {
+      background-color: var(--color-surface-alt);
+      border-radius: var(--radius-sm);
+    }
+
+    /* ========== Bottom Tab Bar ========== */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 0 var(--space-6) var(--safe-area-bottom);
+      display: flex;
+      justify-content: center;
+    }
+
+    .tab-bar-inner {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      width: 100%;
+      max-width: 375px;
+      height: var(--tab-bar-height);
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      box-shadow: 0 -2px 12px rgba(26, 26, 26, 0.04);
+      padding: 0 var(--space-4);
+      position: relative;
+    }
+
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: var(--space-2) var(--space-3);
+      color: var(--tab-inactive-color);
+      font-size: var(--tab-label-size);
+      font-weight: var(--weight-medium);
+      cursor: pointer;
+      transition: color var(--transition-fast);
+      position: relative;
+    }
+
+    .tab-item.active {
+      color: var(--tab-active-color);
+    }
+
+    .tab-item i {
+      font-size: var(--tab-icon-size);
+    }
+
+    .shutter-btn-wrap {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .shutter-btn {
+      width: var(--shutter-size);
+      height: var(--shutter-size);
+      border-radius: var(--radius-shutter);
+      background-color: var(--color-canvas);
+      border: var(--shutter-border-width) solid var(--color-brand);
+      box-shadow: var(--shadow-convex-brand);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .shutter-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.95);
+    }
+    .shutter-btn i {
+      color: var(--color-brand);
+      font-size: 22px;
+    }
+
+    /* ========== Scene Section Title ========== */
+    .scene-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-snug);
+    }
+
+    .scene-subtitle {
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-wide);
+      margin-top: var(--space-1);
+    }
+
+    /* ========== Horizontal Scroll Card ========== */
+    .h-scroll-card {
+      flex-shrink: 0;
+      width: 140px;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-convex-subtle);
+      background-color: var(--color-canvas);
+    }
+
+    /* ========== Rank List Row ========== */
+    .rank-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-4) var(--space-5);
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex-subtle);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .rank-row:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.98);
+    }
+
+    .rank-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--text-caption);
+      font-weight: var(--weight-semibold);
+      flex-shrink: 0;
+    }
+
+    .rank-num.top {
+      background-color: var(--color-brand-subtle);
+      color: var(--color-brand-text);
+    }
+    .rank-num.normal {
+      background-color: var(--color-surface-alt);
+      color: var(--color-text-tertiary);
+    }
+
+    .rank-thumb {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-sm);
+      flex-shrink: 0;
+      background-color: var(--color-surface-alt);
+    }
+
+    /* ========== Refresh Button (Outline Convex) ========== */
+    .refresh-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-6);
+      background-color: var(--color-canvas);
+      border: 1.5px solid var(--color-brand);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-subtle);
+      color: var(--color-brand);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .refresh-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+  </style>
+</head>
+<body data-theme="warm">
+
+  <!-- ==================== Header ==================== -->
+  <header style="padding: var(--space-10) var(--page-padding) var(--space-6);">
+    <h1 style="font-family: var(--font-cn-title); font-size: var(--text-h1); font-weight: var(--weight-semibold); color: var(--color-text-primary); letter-spacing: var(--tracking-snug); line-height: var(--leading-tight);">
+      为你推荐
+    </h1>
+    <p style="margin-top: var(--space-1); font-size: var(--text-caption); color: var(--color-text-tertiary); letter-spacing: var(--tracking-wide);">
+      根据你的喜好精选模板
+    </p>
+  </header>
+
+  <!-- ==================== 场景推荐1: 咖啡馆 ==================== -->
+  <section style="padding: 0 var(--page-padding) var(--space-8);">
+    <div class="neu-card" style="padding: var(--card-padding);">
+      <div style="margin-bottom: var(--space-4);">
+        <h2 class="scene-title">今日推荐</h2>
+        <p class="scene-subtitle">咖啡馆</p>
+      </div>
+      <div class="hide-scrollbar" style="display: flex; gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-1);">
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">暖光日记</p>
+          </div>
+        </div>
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">拿铁时光</p>
+          </div>
+        </div>
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">窗边柔光</p>
+          </div>
+        </div>
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">午后慵懒</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 场景推荐2: 户外自然 ==================== -->
+  <section style="padding: 0 var(--page-padding) var(--space-8);">
+    <div class="neu-card" style="padding: var(--card-padding);">
+      <div style="margin-bottom: var(--space-4);">
+        <h2 class="scene-title">周末灵感</h2>
+        <p class="scene-subtitle">户外自然</p>
+      </div>
+      <div class="hide-scrollbar" style="display: flex; gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-1);">
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">森系清新</p>
+          </div>
+        </div>
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">光影斑驳</p>
+          </div>
+        </div>
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">蓝天白云</p>
+          </div>
+        </div>
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">田园牧歌</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 场景推荐3: 城市街拍 ==================== -->
+  <section style="padding: 0 var(--page-padding) var(--space-10);">
+    <div class="neu-card" style="padding: var(--card-padding);">
+      <div style="margin-bottom: var(--space-4);">
+        <h2 class="scene-title">场景推荐</h2>
+        <p class="scene-subtitle">城市街拍</p>
+      </div>
+      <div class="hide-scrollbar" style="display: flex; gap: var(--space-3); overflow-x: auto; padding-bottom: var(--space-1);">
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">古胶片色</p>
+          </div>
+        </div>
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">极简构框</p>
+          </div>
+        </div>
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">霓虹夜色</p>
+          </div>
+        </div>
+        <div class="h-scroll-card">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-2) var(--space-3) var(--space-3);">
+            <p style="font-size: var(--text-micro); font-weight: var(--weight-medium); color: var(--color-text-primary);">街头故事</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 热门模板排行 ==================== -->
+  <section style="padding: 0 var(--page-padding) var(--space-8);">
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-5);">
+      <h2 style="font-family: var(--font-cn-title); font-size: var(--text-h2); font-weight: var(--weight-semibold); color: var(--color-text-primary); letter-spacing: var(--tracking-snug); line-height: var(--leading-snug);">
+        热门排行
+      </h2>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+      <!-- Rank 1 -->
+      <div class="rank-row">
+        <div class="rank-num top">1</div>
+        <div class="rank-thumb"></div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            水墨留白
+          </p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">
+            <i class="ph ph-user" style="font-size: 11px; vertical-align: -1px;"></i>
+            12,847 人使用
+          </p>
+        </div>
+        <i class="ph ph-caret-right" style="font-size: 14px; color: var(--color-text-tertiary); flex-shrink: 0;"></i>
+      </div>
+      <!-- Rank 2 -->
+      <div class="rank-row">
+        <div class="rank-num top">2</div>
+        <div class="rank-thumb"></div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            暖光日记
+          </p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">
+            <i class="ph ph-user" style="font-size: 11px; vertical-align: -1px;"></i>
+            10,523 人使用
+          </p>
+        </div>
+        <i class="ph ph-caret-right" style="font-size: 14px; color: var(--color-text-tertiary); flex-shrink: 0;"></i>
+      </div>
+      <!-- Rank 3 -->
+      <div class="rank-row">
+        <div class="rank-num top">3</div>
+        <div class="rank-thumb"></div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            古胶片色
+          </p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">
+            <i class="ph ph-user" style="font-size: 11px; vertical-align: -1px;"></i>
+            9,218 人使用
+          </p>
+        </div>
+        <i class="ph ph-caret-right" style="font-size: 14px; color: var(--color-text-tertiary); flex-shrink: 0;"></i>
+      </div>
+      <!-- Rank 4 -->
+      <div class="rank-row">
+        <div class="rank-num top">4</div>
+        <div class="rank-thumb"></div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            极简构框
+          </p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">
+            <i class="ph ph-user" style="font-size: 11px; vertical-align: -1px;"></i>
+            8,654 人使用
+          </p>
+        </div>
+        <i class="ph ph-caret-right" style="font-size: 14px; color: var(--color-text-tertiary); flex-shrink: 0;"></i>
+      </div>
+      <!-- Rank 5 -->
+      <div class="rank-row">
+        <div class="rank-num top">5</div>
+        <div class="rank-thumb"></div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            花草微距
+          </p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">
+            <i class="ph ph-user" style="font-size: 11px; vertical-align: -1px;"></i>
+            7,391 人使用
+          </p>
+        </div>
+        <i class="ph ph-caret-right" style="font-size: 14px; color: var(--color-text-tertiary); flex-shrink: 0;"></i>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 换一批按钮 ==================== -->
+  <section style="padding: 0 var(--page-padding) var(--space-12); display: flex; justify-content: center;">
+    <button class="refresh-btn">
+      <i class="ph ph-arrow-clockwise" style="font-size: 16px;"></i>
+      换一批
+    </button>
+  </section>
+
+  <!-- ==================== Bottom Tab Bar (模板选中) ==================== -->
+  <nav class="tab-bar">
+    <div class="tab-bar-inner">
+      <!-- Tab: Home -->
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-house"></i>
+        <span>首页</span>
+      </div>
+      <!-- Tab: Templates (active) -->
+      <div class="tab-item active" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-squares-four-fill"></i>
+        <span>模板</span>
+      </div>
+      <!-- Center Shutter -->
+      <div class="shutter-btn-wrap">
+        <div class="shutter-btn">
+          <i class="ph ph-camera"></i>
+        </div>
+      </div>
+      <!-- Tab: Challenges -->
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-trophy"></i>
+        <span>挑战</span>
+      </div>
+      <!-- Tab: Profile -->
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-user-circle"></i>
+        <span>我的</span>
+      </div>
+    </div>
+  </nav>
+
+</body>
+</html>

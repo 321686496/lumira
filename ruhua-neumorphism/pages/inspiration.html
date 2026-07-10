@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 灵感</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    /* ========== Inspiration Page Base ========== */
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html {
+      font-size: 16px;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+      line-height: var(--leading-normal);
+      min-height: 100vh;
+      padding-bottom: calc(var(--tab-bar-height) + var(--shutter-size) / 2 + var(--safe-area-bottom) + 20px);
+      overflow-x: hidden;
+    }
+
+    /* ========== Neumorphic Card (Convex) ========== */
+    .neu-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+    }
+
+    .neu-card-subtle {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex-subtle);
+    }
+
+    /* ========== Neumorphic Pill ========== */
+    .neu-pill {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-subtle);
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      cursor: pointer;
+      user-select: none;
+    }
+    .neu-pill:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    /* ========== CTA Button (Warm Gold Convex) ========== */
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-6);
+      background-color: var(--color-brand);
+      border: none;
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-brand);
+      color: var(--color-text-inverse);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-semibold);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .cta-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    /* ========== Scrollbar Hide ========== */
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* ========== Waterfall Grid ========== */
+    .waterfall {
+      column-count: 2;
+      column-gap: var(--space-4);
+    }
+    .waterfall-item {
+      break-inside: avoid;
+      margin-bottom: var(--space-4);
+    }
+
+    /* ========== Bottom Tab Bar ========== */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 0 var(--space-6) var(--safe-area-bottom);
+      display: flex;
+      justify-content: center;
+    }
+
+    .tab-bar-inner {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      width: 100%;
+      max-width: 375px;
+      height: var(--tab-bar-height);
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      box-shadow: 0 -2px 12px rgba(26, 26, 26, 0.04);
+      padding: 0 var(--space-4);
+      position: relative;
+    }
+
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: var(--space-2) var(--space-3);
+      color: var(--tab-inactive-color);
+      font-size: var(--tab-label-size);
+      font-weight: var(--weight-medium);
+      cursor: pointer;
+      transition: color var(--transition-fast);
+      position: relative;
+    }
+
+    .tab-item.active {
+      color: var(--tab-active-color);
+    }
+
+    .tab-item i {
+      font-size: var(--tab-icon-size);
+    }
+
+    .shutter-btn-wrap {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .shutter-btn {
+      width: var(--shutter-size);
+      height: var(--shutter-size);
+      border-radius: var(--radius-shutter);
+      background-color: var(--color-canvas);
+      border: var(--shutter-border-width) solid var(--color-brand);
+      box-shadow: var(--shadow-convex-brand);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .shutter-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.95);
+    }
+    .shutter-btn i {
+      color: var(--color-brand);
+      font-size: 22px;
+    }
+
+    /* ========== Placeholder Image ========== */
+    .img-placeholder {
+      background-color: var(--color-surface-alt);
+      border-radius: var(--radius-sm);
+    }
+
+    /* ========== Warm Gradient Placeholder ========== */
+    .img-placeholder-warm {
+      border-radius: var(--radius-sm);
+      background: linear-gradient(145deg, #EDE8DE 0%, #F2EEE6 40%, #E8E0D4 100%);
+    }
+
+    /* ========== Favorite Icon ========== */
+    .fav-btn {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+      cursor: pointer;
+    }
+    .fav-btn i {
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body data-theme="warm">
+
+  <!-- ==================== Header ==================== -->
+  <header style="padding: var(--space-10) var(--page-padding) var(--space-6);">
+    <h1 style="font-family: var(--font-cn-title); font-size: var(--text-h1); font-weight: var(--weight-semibold); color: var(--color-text-primary); letter-spacing: var(--tracking-snug); line-height: var(--leading-tight);">
+      灵感
+    </h1>
+    <p style="margin-top: var(--space-1); font-size: var(--text-caption); color: var(--color-text-tertiary); letter-spacing: var(--tracking-wide);">
+      2026年7月9日
+    </p>
+  </header>
+
+  <!-- ==================== 今日灵感卡片 ==================== -->
+  <section style="padding: 0 var(--page-padding);">
+    <div class="neu-card" style="overflow: hidden;">
+      <!-- 大面积封面占位 -->
+      <div class="img-placeholder-warm" style="width: 100%; aspect-ratio: 4/3; position: relative;">
+        <!-- 摄影技巧提示 -->
+        <div style="position: absolute; bottom: var(--space-3); left: var(--space-3); right: var(--space-3);">
+          <span class="neu-pill" style="display: inline-flex; align-items: center; gap: 4px; padding: var(--space-1) var(--space-3); font-size: var(--text-micro); color: var(--color-brand-text);">
+            <i class="ph ph-lightbulb" style="font-size: 12px;"></i>
+            摄影技巧
+          </span>
+        </div>
+      </div>
+      <!-- 灵感文案 -->
+      <div style="padding: var(--space-5) var(--card-padding) var(--space-6);">
+        <p style="font-family: var(--font-cn-title); font-size: var(--text-h2); font-weight: var(--weight-semibold); color: var(--color-text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-3);">
+          侧身站立+回头看镜头，显瘦又自然
+        </p>
+        <p style="font-size: var(--text-caption); color: var(--color-text-secondary); line-height: var(--leading-relaxed); margin-bottom: var(--space-5);">
+          身体微微侧转45度，下巴轻收，回头时眼神自然带笑，手臂放松垂落或轻搭身侧。这个角度能拉长身形线条，同时营造不经意的随性氛围。
+        </p>
+        <div style="display: flex; align-items: center; justify-content: flex-end;">
+          <button class="cta-btn">
+            试试看
+            <i class="ph ph-arrow-right" style="font-size: 14px;"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 灵感瀑布流 ==================== -->
+  <section style="margin-top: var(--section-gap); padding: 0 var(--page-padding) var(--space-12);">
+    <h2 style="font-family: var(--font-cn-title); font-size: var(--text-h2); font-weight: var(--weight-semibold); color: var(--color-text-primary); letter-spacing: var(--tracking-snug); line-height: var(--leading-snug); margin-bottom: var(--space-5);">
+      发现更多灵感
+    </h2>
+    <div class="waterfall">
+      <!-- Card 1 (tall) -->
+      <div class="waterfall-item">
+        <div class="neu-card-subtle" style="overflow: hidden;">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-3) var(--space-3) var(--space-4);">
+            <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-2);">
+              借窗框构图，增加画面故事感
+            </p>
+            <div class="fav-btn">
+              <i class="ph ph-heart"></i>
+              <span>128</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Card 2 (short) -->
+      <div class="waterfall-item">
+        <div class="neu-card-subtle" style="overflow: hidden;">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 1/1;"></div>
+          <div style="padding: var(--space-3) var(--space-3) var(--space-4);">
+            <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-2);">
+              手持咖啡杯的随性坐姿
+            </p>
+            <div class="fav-btn">
+              <i class="ph ph-heart"></i>
+              <span>96</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Card 3 (medium) -->
+      <div class="waterfall-item">
+        <div class="neu-card-subtle" style="overflow: hidden;">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 4/5;"></div>
+          <div style="padding: var(--space-3) var(--space-3) var(--space-4);">
+            <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-2);">
+              逆光发丝光效的浪漫感
+            </p>
+            <div class="fav-btn">
+              <i class="ph ph-heart"></i>
+              <span>215</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Card 4 (short) -->
+      <div class="waterfall-item">
+        <div class="neu-card-subtle" style="overflow: hidden;">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 5/6;"></div>
+          <div style="padding: var(--space-3) var(--space-3) var(--space-4);">
+            <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-2);">
+              利用楼梯线条制造纵深
+            </p>
+            <div class="fav-btn">
+              <i class="ph ph-heart"></i>
+              <span>73</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Card 5 (tall) -->
+      <div class="waterfall-item">
+        <div class="neu-card-subtle" style="overflow: hidden;">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/5;"></div>
+          <div style="padding: var(--space-3) var(--space-3) var(--space-4);">
+            <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-2);">
+              低角度仰拍，拉长腿部比例
+            </p>
+            <div class="fav-btn">
+              <i class="ph ph-heart"></i>
+              <span>182</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Card 6 (medium) -->
+      <div class="waterfall-item">
+        <div class="neu-card-subtle" style="overflow: hidden;">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 1/1;"></div>
+          <div style="padding: var(--space-3) var(--space-3) var(--space-4);">
+            <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-2);">
+              绿植背景下的文艺清冷感
+            </p>
+            <div class="fav-btn">
+              <i class="ph ph-heart"></i>
+              <span>147</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Card 7 (short) -->
+      <div class="waterfall-item">
+        <div class="neu-card-subtle" style="overflow: hidden;">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 4/5;"></div>
+          <div style="padding: var(--space-3) var(--space-3) var(--space-4);">
+            <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-2);">
+              镜面反射拍摄创意构图
+            </p>
+            <div class="fav-btn">
+              <i class="ph ph-heart"></i>
+              <span>65</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Card 8 (tall) -->
+      <div class="waterfall-item">
+        <div class="neu-card-subtle" style="overflow: hidden;">
+          <div class="img-placeholder" style="width: 100%; aspect-ratio: 3/4;"></div>
+          <div style="padding: var(--space-3) var(--space-3) var(--space-4);">
+            <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary); line-height: var(--leading-snug); margin-bottom: var(--space-2);">
+              走路抓拍，自然律动感
+            </p>
+            <div class="fav-btn">
+              <i class="ph ph-heart"></i>
+              <span>203</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Bottom Tab Bar (首页选中) ==================== -->
+  <nav class="tab-bar">
+    <div class="tab-bar-inner">
+      <!-- Tab: Home (active) -->
+      <div class="tab-item active" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-house-fill"></i>
+        <span>首页</span>
+      </div>
+      <!-- Tab: Templates -->
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-squares-four"></i>
+        <span>模板</span>
+      </div>
+      <!-- Center Shutter -->
+      <div class="shutter-btn-wrap">
+        <div class="shutter-btn">
+          <i class="ph ph-camera"></i>
+        </div>
+      </div>
+      <!-- Tab: Challenges -->
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-trophy"></i>
+        <span>挑战</span>
+      </div>
+      <!-- Tab: Profile -->
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-user-circle"></i>
+        <span>我的</span>
+      </div>
+    </div>
+  </nav>
+
+</body>
+</html>

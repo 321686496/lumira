@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 设置</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      background-color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+      line-height: var(--leading-normal);
+      min-height: 100vh;
+      padding-bottom: var(--safe-area-bottom);
+      overflow-x: hidden;
+    }
+
+    .neu-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+    }
+
+    /* Setting group */
+    .setting-group {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+      overflow: hidden;
+    }
+    .setting-group-title {
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-wider);
+      text-transform: uppercase;
+      padding: 0 var(--page-padding);
+      margin-bottom: var(--space-2);
+    }
+
+    /* Setting item */
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-4) var(--card-padding);
+      cursor: pointer;
+      transition: background-color var(--transition-fast);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+    }
+    .setting-item:active {
+      background-color: var(--color-surface-alt);
+    }
+    .setting-item + .setting-item {
+      border-top: 1px solid var(--color-divider);
+    }
+    .setting-left {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .setting-icon-wrap {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-concave-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .setting-icon-wrap i {
+      font-size: 18px;
+      color: var(--color-brand);
+    }
+    .setting-right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      color: var(--color-text-tertiary);
+      font-size: var(--text-caption);
+    }
+    .setting-right i {
+      font-size: 14px;
+    }
+
+    /* Neumorphic Toggle */
+    .neu-toggle {
+      width: 48px;
+      height: 26px;
+      border-radius: var(--radius-pill);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+      position: relative;
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast);
+      flex-shrink: 0;
+    }
+    .neu-toggle .toggle-knob {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+    }
+    .neu-toggle.active {
+      box-shadow: var(--shadow-concave);
+    }
+    .neu-toggle.active .toggle-knob {
+      transform: translateX(22px);
+      background-color: var(--color-brand);
+      box-shadow: var(--shadow-convex-brand);
+    }
+
+    /* Version info */
+    .version-info {
+      text-align: center;
+      padding: var(--space-8) var(--page-padding);
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+    }
+  </style>
+</head>
+<body data-theme="warm">
+
+  <!-- ==================== Header ==================== -->
+  <header style="padding: var(--space-8) var(--page-padding) var(--space-6); display: flex; align-items: center; gap: var(--space-3);">
+    <button style="background: none; border: none; cursor: pointer; color: var(--color-text-primary);">
+      <i class="ph ph-arrow-left" style="font-size: 22px;"></i>
+    </button>
+    <h1 style="font-family: var(--font-cn-title); font-size: var(--text-h1); font-weight: var(--weight-semibold); color: var(--color-text-primary); letter-spacing: var(--tracking-snug); line-height: var(--leading-tight);">
+      设置
+    </h1>
+  </header>
+
+  <!-- ==================== General Settings ==================== -->
+  <section style="padding: 0 var(--page-padding); margin-bottom: var(--space-6);">
+    <p class="setting-group-title">通用</p>
+    <div class="setting-group">
+      <!-- Theme -->
+      <button class="setting-item">
+        <div class="setting-left">
+          <div class="setting-icon-wrap"><i class="ph ph-palette"></i></div>
+          <span>主题选择</span>
+        </div>
+        <div class="setting-right">
+          <span style="color: var(--color-brand-text);">暖米白</span>
+          <i class="ph ph-caret-right"></i>
+        </div>
+      </button>
+      <!-- Language -->
+      <button class="setting-item">
+        <div class="setting-left">
+          <div class="setting-icon-wrap"><i class="ph ph-translate"></i></div>
+          <span>语言</span>
+        </div>
+        <div class="setting-right">
+          <span>简体中文</span>
+          <i class="ph ph-caret-right"></i>
+        </div>
+      </button>
+    </div>
+  </section>
+
+  <!-- ==================== Shooting Settings ==================== -->
+  <section style="padding: 0 var(--page-padding); margin-bottom: var(--space-6);">
+    <p class="setting-group-title">拍摄</p>
+    <div class="setting-group">
+      <!-- Resolution -->
+      <button class="setting-item">
+        <div class="setting-left">
+          <div class="setting-icon-wrap"><i class="ph ph-frame-corners"></i></div>
+          <span>默认分辨率</span>
+        </div>
+        <div class="setting-right">
+          <span>4K</span>
+          <i class="ph ph-caret-right"></i>
+        </div>
+      </button>
+      <!-- Watermark -->
+      <div class="setting-item">
+        <div class="setting-left">
+          <div class="setting-icon-wrap"><i class="ph ph-droplet"></i></div>
+          <span>水印</span>
+        </div>
+        <div class="neu-toggle active" onclick="this.classList.toggle('active')">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+      <!-- EXIF -->
+      <div class="setting-item">
+        <div class="setting-left">
+          <div class="setting-icon-wrap"><i class="ph ph-info"></i></div>
+          <span>EXIF 保存</span>
+        </div>
+        <div class="neu-toggle active" onclick="this.classList.toggle('active')">
+          <div class="toggle-knob"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== About Settings ==================== -->
+  <section style="padding: 0 var(--page-padding); margin-bottom: var(--space-4);">
+    <p class="setting-group-title">关于</p>
+    <div class="setting-group">
+      <!-- Version -->
+      <div class="setting-item">
+        <div class="setting-left">
+          <div class="setting-icon-wrap"><i class="ph ph-app-window"></i></div>
+          <span>版本号</span>
+        </div>
+        <div class="setting-right">
+          <span style="font-family: var(--font-mono);">v1.0.0</span>
+        </div>
+      </div>
+      <!-- Clear cache -->
+      <button class="setting-item">
+        <div class="setting-left">
+          <div class="setting-icon-wrap"><i class="ph ph-trash"></i></div>
+          <span>清除缓存</span>
+        </div>
+        <div class="setting-right">
+          <span>23.4 MB</span>
+          <i class="ph ph-caret-right"></i>
+        </div>
+      </button>
+    </div>
+  </section>
+
+  <!-- ==================== Version Footer ==================== -->
+  <div class="version-info">
+    <p>如画 Lumira v1.0.0</p>
+    <p style="margin-top: var(--space-1);">东方新拟态 · 用镜头书写日常的诗</p>
+  </div>
+
+</body>
+</html>

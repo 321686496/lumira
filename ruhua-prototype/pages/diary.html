@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>穿搭日记 · 如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+  <div class="lumira-container">
+    <!-- Navbar -->
+    <nav class="lumira-nav">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn" onclick="location.href='home.html'"><i class="ph ph-caret-left"></i></button>
+      </div>
+      <span class="lumira-nav-title">穿搭日记</span>
+      <div class="lumira-nav-right">
+        <button class="lumira-nav-btn" onclick="location.href='#'"><i class="ph ph-calendar"></i></button>
+      </div>
+    </nav>
+
+    <!-- View Toggle -->
+    <div class="fade-up" style="padding: 16px 24px 0;">
+      <div style="display: flex; background: var(--bg-surface); border-radius: 9999px; padding: 4px; border: 1px solid var(--color-border);">
+        <button style="flex: 1; padding: 8px 0; border-radius: 9999px; font-size: 13px; font-weight: 500; background: var(--brand-primary); color: #fff; border: none; cursor: pointer;">穿搭日记</button>
+        <button style="flex: 1; padding: 8px 0; border-radius: 9999px; font-size: 13px; font-weight: 500; background: transparent; color: var(--text-secondary); border: none; cursor: pointer;">拍摄日记</button>
+      </div>
+    </div>
+
+    <!-- Streak Banner -->
+    <div class="fade-up fade-up-d1" style="padding: 16px 24px 0;">
+      <div style="background: linear-gradient(135deg, #C9A96E 0%, #A88550 100%); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <div style="font-family: 'Noto Serif SC', serif; font-size: 18px; font-weight: 600; color: #fff;">连续打卡 7 <i class="ph ph-fire" style="color: #fff;"></i></div>
+          <div style="font-size: 12px; color: rgba(255,255,255,0.8); margin-top: 4px;">继续保持，解锁「周更达人」徽�?/div>
+        </div>
+        <i class="ph ph-fire" style="font-size: 36px; color: #fff;"></i>
+      </div>
+    </div>
+
+    <!-- Timeline View -->
+    <div style="padding: 24px 24px 0;">
+      <div class="lumira-section-title">
+        <h3>时间�?/h3>
+        <span class="lumira-mono">5�?/span>
+      </div>
+
+      <!-- Entry 1 -->
+      <div class="fade-up fade-up-d1" style="display: flex; gap: 14px; padding-bottom: 20px; border-bottom: 1px solid var(--color-border); margin-bottom: 20px;">
+        <div style="min-width: 56px; text-align: center;">
+          <div style="font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-tertiary);">周一</div>
+          <div style="font-family: 'Noto Serif SC', serif; font-size: 20px; font-weight: 600; color: var(--brand-primary); line-height: 1.2;">07/09</div>
+        </div>
+        <div style="flex: 1; display: flex; gap: 12px;">
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/1926769/400/600" alt="今日穿搭" style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-gold"><i class="ph ph-book-open"></i> 日常通勤</span>
+              <span class="lumira-tag lumira-tag-green"><i class="ph ph-smiley"></i> 开�?/span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/1153245/400/600" alt="街拍" style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-red"><i class="ph ph-camera"></i> 街拍回眸</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entry 2 -->
+      <div class="fade-up fade-up-d2" style="display: flex; gap: 14px; padding-bottom: 20px; border-bottom: 1px solid var(--color-border); margin-bottom: 20px;">
+        <div style="min-width: 56px; text-align: center;">
+          <div style="font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-tertiary);">周日</div>
+          <div style="font-family: 'Noto Serif SC', serif; font-size: 20px; font-weight: 600; color: var(--text-secondary); line-height: 1.2;">07/08</div>
+        </div>
+        <div style="flex: 1; display: flex; gap: 12px;">
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/1038002/400/600" alt="今日穿搭" style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-gold"><i class="ph ph-flower"></i> 约会</span>
+              <span class="lumira-tag lumira-tag-green"><i class="ph ph-heart"></i> 甜蜜</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/1239291/400/600" alt="花园�? style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-red"><i class="ph ph-leaf"></i> 清新自然</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entry 3 -->
+      <div class="fade-up fade-up-d3" style="display: flex; gap: 14px; padding-bottom: 20px; border-bottom: 1px solid var(--color-border); margin-bottom: 20px;">
+        <div style="min-width: 56px; text-align: center;">
+          <div style="font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-tertiary);">周六</div>
+          <div style="font-family: 'Noto Serif SC', serif; font-size: 20px; font-weight: 600; color: var(--text-secondary); line-height: 1.2;">07/07</div>
+        </div>
+        <div style="flex: 1; display: flex; gap: 12px;">
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/774909/400/600" alt="今日穿搭" style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-gold"><i class="ph ph-coffee"></i> 咖啡�?/span>
+              <span class="lumira-tag lumira-tag-green"><i class="ph ph-smiley"></i> 放松</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/2074130/400/600" alt="咖啡�? style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-red"><i class="ph ph-coffee"></i> 咖啡日记</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entry 4 -->
+      <div class="fade-up fade-up-d4" style="display: flex; gap: 14px; padding-bottom: 20px; border-bottom: 1px solid var(--color-border); margin-bottom: 20px;">
+        <div style="min-width: 56px; text-align: center;">
+          <div style="font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-tertiary);">周五</div>
+          <div style="font-family: 'Noto Serif SC', serif; font-size: 20px; font-weight: 600; color: var(--text-secondary); line-height: 1.2;">07/06</div>
+        </div>
+        <div style="flex: 1; display: flex; gap: 12px;">
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/733872/400/600" alt="今日穿搭" style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-gold"><i class="ph ph-buildings"></i> 夜晚出行</span>
+              <span class="lumira-tag lumira-tag-green"><i class="ph ph-smiley"></i> 自信</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/774095/400/600" alt="夜景" style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-red"><i class="ph ph-buildings"></i> 都市夜景</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Entry 5 -->
+      <div class="fade-up fade-up-d5" style="display: flex; gap: 14px; padding-bottom: 20px;">
+        <div style="min-width: 56px; text-align: center;">
+          <div style="font-family: 'Courier New', monospace; font-size: 11px; color: var(--text-tertiary);">周四</div>
+          <div style="font-family: 'Noto Serif SC', serif; font-size: 20px; font-weight: 600; color: var(--text-secondary); line-height: 1.2;">07/05</div>
+        </div>
+        <div style="flex: 1; display: flex; gap: 12px;">
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/414628/400/600" alt="今日穿搭" style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-gold"><i class="ph ph-person-running"></i> 运动�?/span>
+              <span class="lumira-tag lumira-tag-green"><i class="ph ph-lightning"></i> 元气</span>
+            </div>
+          </div>
+          <div style="flex: 1;">
+            <img class="lumira-card-img" src="https://picsum.photos/seed/1926773/400/600" alt="运动�? style="aspect-ratio: 3/4; border-radius: 8px; margin-bottom: 8px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span class="lumira-tag lumira-tag-red"><i class="ph ph-tree"></i> 公园随拍</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAB: Record Today -->
+    <button style="position: fixed; bottom: 88px; right: 24px; width: 56px; height: 56px; border-radius: 50%; background: var(--brand-primary); color: #fff; border: none; font-size: 24px; cursor: pointer; box-shadow: 0 4px 16px rgba(201,169,110,0.35); z-index: 850; display: flex; align-items: center; justify-content: center;" onclick="location.href='capture.html'">
+      <i class="ph ph-pen"></i>
+    </button>
+  </div>
+
+
+</body>
+</html>

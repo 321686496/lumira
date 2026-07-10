@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 邀请有礼</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      background-color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+      line-height: var(--leading-normal);
+      min-height: 100vh;
+      padding-bottom: calc(var(--tab-bar-height) + var(--shutter-size) / 2 + var(--safe-area-bottom) + 20px);
+      overflow-x: hidden;
+    }
+
+    .neu-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+    }
+    .neu-card-lg {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-convex);
+    }
+    .neu-inset {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-concave);
+    }
+    .neu-inset-subtle {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-concave-subtle);
+    }
+    .neu-pill {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-subtle);
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      cursor: pointer;
+      user-select: none;
+    }
+    .neu-pill:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    .section-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-snug);
+    }
+
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-6);
+      background-color: var(--color-canvas);
+      border: none;
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex);
+      color: var(--color-brand);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .cta-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+
+    /* Avatar placeholder */
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: var(--color-surface-alt);
+      flex-shrink: 0;
+    }
+
+    /* ===== Bottom Tab Bar ===== */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 0 var(--space-6) var(--safe-area-bottom);
+      display: flex;
+      justify-content: center;
+    }
+    .tab-bar-inner {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      width: 100%;
+      max-width: 375px;
+      height: var(--tab-bar-height);
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      box-shadow: 0 -2px 12px rgba(26, 26, 26, 0.04);
+      padding: 0 var(--space-4);
+      position: relative;
+    }
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: var(--space-2) var(--space-3);
+      color: var(--tab-inactive-color);
+      font-size: var(--tab-label-size);
+      font-weight: var(--weight-medium);
+      cursor: pointer;
+      transition: color var(--transition-fast);
+    }
+    .tab-item.active { color: var(--tab-active-color); }
+    .tab-item i { font-size: var(--tab-icon-size); }
+    .shutter-btn-wrap {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .shutter-btn {
+      width: var(--shutter-size);
+      height: var(--shutter-size);
+      border-radius: var(--radius-shutter);
+      background-color: var(--color-canvas);
+      border: var(--shutter-border-width) solid var(--color-brand);
+      box-shadow: var(--shadow-convex-brand);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .shutter-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.95);
+    }
+    .shutter-btn i {
+      color: var(--color-brand);
+      font-size: 22px;
+    }
+  </style>
+</head>
+<body data-theme="warm">
+
+  <!-- ==================== Header ==================== -->
+  <header style="padding: var(--space-10) var(--page-padding) var(--space-6);">
+    <h1 class="section-title" style="font-size: var(--text-h1);">邀请有礼</h1>
+    <p style="margin-top: var(--space-1); font-size: var(--text-caption); color: var(--color-text-tertiary); letter-spacing: var(--tracking-wide);">
+      与好友共享创作之乐
+    </p>
+  </header>
+
+  <!-- ==================== Reward Card ==================== -->
+  <section style="padding: 0 var(--page-padding);">
+    <div class="neu-card-lg" style="padding: var(--space-8) var(--space-6); text-align: center;">
+      <!-- Icon decoration -->
+      <div style="margin-bottom: var(--space-4);">
+        <i class="ph ph-gift" style="font-size: 36px; color: var(--color-brand);"></i>
+      </div>
+      <p style="font-family: var(--font-cn-title); font-size: var(--text-h2); font-weight: var(--weight-semibold); color: var(--color-text-primary); margin-bottom: var(--space-2);">
+        每邀请一位好友
+      </p>
+      <p style="font-family: var(--font-cn-title); font-size: var(--text-h2); font-weight: var(--weight-semibold); color: var(--color-brand); margin-bottom: var(--space-6);">
+        解锁 1 个付费模板
+      </p>
+
+      <!-- Invite code (inset area) -->
+      <div class="neu-inset" style="padding: var(--space-5) var(--space-6); margin-bottom: var(--space-6);">
+        <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-bottom: var(--space-2);">我的邀请码</p>
+        <p style="font-family: var(--font-mono); font-size: 22px; font-weight: var(--weight-semibold); color: var(--color-text-primary); letter-spacing: 0.08em;">
+          LUMI-2026-X7K9
+        </p>
+      </div>
+
+      <!-- Copy button -->
+      <button class="cta-btn" style="width: 100%; padding: var(--space-4);">
+        <i class="ph ph-copy" style="font-size: 16px;"></i>
+        复制邀请码
+      </button>
+    </div>
+  </section>
+
+  <!-- ==================== Invited List ==================== -->
+  <section style="margin-top: var(--space-10); padding: 0 var(--page-padding);">
+    <h2 class="section-title" style="margin-bottom: var(--space-4);">已邀请好友</h2>
+    <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+
+      <!-- Invitee 1 -->
+      <div class="neu-card" style="padding: var(--space-4); display: flex; align-items: center; gap: var(--space-3);">
+        <div class="avatar"></div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">摄影师小林</p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">2026-07-01 注册</p>
+        </div>
+        <span class="neu-pill" style="padding: 4px 12px; font-size: var(--text-micro); color: var(--color-success); background-color: var(--color-success-subtle); box-shadow: none;">
+          已生效
+        </span>
+      </div>
+
+      <!-- Invitee 2 -->
+      <div class="neu-card" style="padding: var(--space-4); display: flex; align-items: center; gap: var(--space-3);">
+        <div class="avatar"></div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">光影笔记</p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">2026-06-28 注册</p>
+        </div>
+        <span class="neu-pill" style="padding: 4px 12px; font-size: var(--text-micro); color: var(--color-success); background-color: var(--color-success-subtle); box-shadow: none;">
+          已生效
+        </span>
+      </div>
+
+      <!-- Invitee 3 -->
+      <div class="neu-card" style="padding: var(--space-4); display: flex; align-items: center; gap: var(--space-3);">
+        <div class="avatar"></div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">镜头日记</p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">2026-06-15 注册</p>
+        </div>
+        <span class="neu-pill" style="padding: 4px 12px; font-size: var(--text-micro); color: var(--color-brand-text); background-color: var(--color-brand-subtle); box-shadow: none;">
+          待确认
+        </span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== Rules (Collapsible) ==================== -->
+  <section style="margin-top: var(--space-10); padding: 0 var(--page-padding) var(--space-12);">
+    <div class="neu-card" style="padding: var(--space-5) var(--space-6); cursor: pointer;" onclick="this.querySelector('.rules-body').classList.toggle('hidden'); this.querySelector('.toggle-icon').classList.toggle('rotate-180');">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">
+          <i class="ph ph-scroll" style="font-size: 16px; vertical-align: -2px; margin-right: var(--space-2); color: var(--color-brand);"></i>
+          活动规则
+        </span>
+        <i class="ph ph-caret-down toggle-icon" style="font-size: 16px; color: var(--color-text-tertiary); transition: transform var(--transition-normal);"></i>
+      </div>
+      <div class="rules-body hidden" style="margin-top: var(--space-4); font-size: var(--text-caption); color: var(--color-text-secondary); line-height: var(--leading-relaxed);">
+        <p>1. 每位用户可生成专属邀请码，分享给好友注册即算有效邀请。</p>
+        <p style="margin-top: var(--space-2);">2. 好友完成注册后，您将自动解锁 1 个付费模板使用权限。</p>
+        <p style="margin-top: var(--space-2);">3. 同一设备仅计算一次有效邀请，不可重复领取。</p>
+        <p style="margin-top: var(--space-2);">4. 活动最终解释权归如画 Lumira 团队所有。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Bottom Tab Bar (我的 active) ==================== -->
+  <nav class="tab-bar">
+    <div class="tab-bar-inner">
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-house"></i>
+        <span>首页</span>
+      </div>
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-squares-four"></i>
+        <span>模板</span>
+      </div>
+      <div class="shutter-btn-wrap">
+        <div class="shutter-btn">
+          <i class="ph ph-camera"></i>
+        </div>
+      </div>
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-trophy"></i>
+        <span>挑战</span>
+      </div>
+      <div class="tab-item active" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-user-circle-fill"></i>
+        <span>我的</span>
+      </div>
+    </div>
+  </nav>
+
+</body>
+</html>

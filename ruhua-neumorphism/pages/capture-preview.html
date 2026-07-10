@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira - 拍摄预览</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@400;500;600&family=Newsreader:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #1C1A17;
+      color: var(--color-text-inverse, #FAF7F2);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .preview-page {
+      position: relative;
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background-color: #1C1A17;
+    }
+
+    /* 顶部返回栏 */
+    .preview-top-bar {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-4, 16px) var(--page-padding, 24px);
+      padding-top: calc(var(--space-4, 16px) + env(safe-area-inset-top, 12px));
+    }
+
+    .back-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-pill, 9999px);
+      background: rgba(28, 26, 23, 0.5);
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(242, 238, 230, 0.7);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .preview-title {
+      font-family: var(--font-cn-body, 'Noto Sans SC', sans-serif);
+      font-size: var(--text-caption, 13px);
+      font-weight: var(--weight-medium, 500);
+      color: rgba(242, 238, 230, 0.5);
+      letter-spacing: var(--tracking-wide, 0.02em);
+    }
+
+    /* 大图预览区 */
+    .photo-preview {
+      position: relative;
+      z-index: 1;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 var(--space-6, 24px);
+      padding-top: var(--space-4, 16px);
+    }
+
+    .photo-frame {
+      width: 100%;
+      max-width: 327px;
+      aspect-ratio: 3 / 4;
+      border-radius: var(--radius-md, 10px);
+      overflow: hidden;
+      /* 深色凸起边框 */
+      box-shadow: 6px 6px 14px #0E0D0B, -6px -6px 14px #2A2723;
+      position: relative;
+    }
+
+    .photo-placeholder {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(160deg, #2E2B27 0%, #222019 50%, #1C1A17 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .photo-placeholder .ph-icon {
+      font-size: 48px;
+      color: rgba(201, 169, 110, 0.15);
+    }
+
+    /* 模拟照片内景 */
+    .photo-inner-scene {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 30% 40%, rgba(201, 169, 110, 0.06) 0%, transparent 60%),
+        radial-gradient(ellipse at 70% 70%, rgba(42, 39, 35, 0.8) 0%, transparent 50%),
+        linear-gradient(180deg, #2A2723 0%, #1E1C18 100%);
+    }
+
+    /* EXIF 信息角标 */
+    .exif-badge {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(28, 26, 23, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: var(--radius-sm, 6px);
+      padding: 4px 10px;
+      font-family: var(--font-mono, 'JetBrains Mono', monospace);
+      font-size: 10px;
+      color: rgba(201, 169, 110, 0.6);
+      letter-spacing: var(--tracking-normal, 0);
+    }
+
+    /* 底部操作区 */
+    .action-area {
+      position: relative;
+      z-index: 10;
+      padding: var(--space-6, 24px) var(--page-padding, 24px);
+      padding-bottom: calc(var(--space-6, 24px) + env(safe-area-inset-bottom, 20px));
+    }
+
+    .action-card {
+      background: rgba(28, 26, 23, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: var(--radius-xl, 24px);
+      padding: var(--space-6, 24px) var(--space-7, 28px);
+      /* 深色半透明新拟态 */
+      box-shadow: 4px 4px 12px rgba(14, 13, 11, 0.6), -4px -4px 12px rgba(42, 39, 35, 0.4);
+    }
+
+    /* 按钮行 */
+    .action-buttons {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-5, 20px);
+      margin-bottom: var(--space-6, 24px);
+    }
+
+    .action-btn {
+      flex: 1;
+      max-width: 120px;
+      height: 48px;
+      border: none;
+      border-radius: var(--radius-pill, 9999px);
+      font-family: var(--font-cn-body, 'Noto Sans SC', sans-serif);
+      font-size: var(--text-body, 15px);
+      font-weight: var(--weight-medium, 500);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: box-shadow var(--transition-fast, 100ms ease);
+      letter-spacing: var(--tracking-snug, -0.02em);
+    }
+
+    .action-btn i {
+      font-size: 18px;
+    }
+
+    /* 重拍 - 深色凸起 */
+    .btn-retake {
+      background: #1C1A17;
+      color: var(--color-text-inverse, #FAF7F2);
+      box-shadow: 3px 3px 8px #0E0D0B, -3px -3px 8px #2A2723;
+    }
+
+    .btn-retake:active {
+      box-shadow: inset 2px 2px 5px #0E0D0B, inset -2px -2px 5px #2A2723;
+    }
+
+    /* 后期编辑 - 暖金凸起 */
+    .btn-edit {
+      background: #1C1A17;
+      color: var(--color-brand-light, #D4B57A);
+      box-shadow: 4px 4px 10px #0E0D0B, -4px -4px 10px #2A2723, 0 0 0 1.5px rgba(201, 169, 110, 0.4);
+    }
+
+    .btn-edit:active {
+      box-shadow: inset 2px 2px 5px #0E0D0B, inset -2px -2px 5px #2A2723, 0 0 0 1.5px rgba(201, 169, 110, 0.4);
+    }
+
+    /* 保存 - 深色凸起 */
+    .btn-save {
+      background: #1C1A17;
+      color: var(--color-text-inverse, #FAF7F2);
+      box-shadow: 3px 3px 8px #0E0D0B, -3px -3px 8px #2A2723;
+    }
+
+    .btn-save:active {
+      box-shadow: inset 2px 2px 5px #0E0D0B, inset -2px -2px 5px #2A2723;
+    }
+
+    /* 对比滑块区域 */
+    .compare-section {
+      margin-top: var(--space-4, 16px);
+    }
+
+    .compare-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-3, 12px);
+    }
+
+    .compare-label span {
+      font-family: var(--font-cn-body, 'Noto Sans SC', sans-serif);
+      font-size: var(--text-micro, 11px);
+      color: rgba(242, 238, 230, 0.4);
+      letter-spacing: var(--tracking-wide, 0.02em);
+    }
+
+    .compare-slider-area {
+      width: 100%;
+      height: 56px;
+      border-radius: var(--radius-md, 10px);
+      /* 深色凹陷 */
+      box-shadow: inset 3px 3px 8px #0E0D0B, inset -3px -3px 8px #2A2723;
+      background: rgba(28, 26, 23, 0.5);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .compare-before,
+    .compare-after {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-cn-body, 'Noto Sans SC', sans-serif);
+      font-size: var(--text-micro, 11px);
+      letter-spacing: var(--tracking-wide, 0.02em);
+    }
+
+    .compare-before {
+      left: 0;
+      width: 50%;
+      color: rgba(242, 238, 230, 0.25);
+      background: rgba(30, 28, 24, 0.6);
+    }
+
+    .compare-after {
+      right: 0;
+      width: 50%;
+      color: rgba(201, 169, 110, 0.4);
+      background: rgba(38, 35, 32, 0.6);
+    }
+
+    /* 对比分割线 */
+    .compare-divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 2px;
+      background: rgba(201, 169, 110, 0.2);
+      transform: translateX(-50%);
+      z-index: 2;
+    }
+
+    .compare-divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #1C1A17;
+      border: 1.5px solid rgba(201, 169, 110, 0.35);
+      box-shadow: 2px 2px 5px #0E0D0B, -2px -2px 5px #2A2723;
+    }
+
+    /* 隐藏滚动条 */
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body>
+  <div class="preview-page">
+
+    <!-- 顶部栏 -->
+    <div class="preview-top-bar">
+      <button class="back-btn">
+        <i class="ph ph-arrow-left"></i>
+      </button>
+      <span class="preview-title">拍摄预览</span>
+      <button class="back-btn" style="visibility:hidden;">
+        <i class="ph ph-arrow-left"></i>
+      </button>
+    </div>
+
+    <!-- 大图预览 -->
+    <div class="photo-preview">
+      <div class="photo-frame">
+        <div class="photo-placeholder">
+          <div class="photo-inner-scene"></div>
+          <i class="ph-icon ph ph-image"></i>
+          <div class="exif-badge">ISO 100 · 1/200 · f2.8</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部操作区 -->
+    <div class="action-area">
+      <div class="action-card">
+        <!-- 按钮行 -->
+        <div class="action-buttons">
+          <button class="action-btn btn-retake">
+            <i class="ph ph-arrow-counter-clockwise"></i>
+            <span>重拍</span>
+          </button>
+          <button class="action-btn btn-edit">
+            <i class="ph ph-sliders-horizontal"></i>
+            <span>后期编辑</span>
+          </button>
+          <button class="action-btn btn-save">
+            <i class="ph ph-download-simple"></i>
+            <span>保存</span>
+          </button>
+        </div>
+
+        <!-- 对比滑块 -->
+        <div class="compare-section">
+          <div class="compare-label">
+            <span>原图</span>
+            <span>后期效果</span>
+          </div>
+          <div class="compare-slider-area">
+            <div class="compare-before">Before</div>
+            <div class="compare-after">After</div>
+            <div class="compare-divider"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

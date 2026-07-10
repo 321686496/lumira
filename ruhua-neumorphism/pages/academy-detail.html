@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 课程详情</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      background-color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+      line-height: var(--leading-normal);
+      min-height: 100vh;
+      padding-bottom: 120px;
+      overflow-x: hidden;
+    }
+
+    .neu-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+    }
+    .neu-inset {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-concave);
+    }
+    .neu-pill {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-subtle);
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .section-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-snug);
+    }
+
+    .cta-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      width: 100%;
+      padding: var(--space-4) var(--space-6);
+      background-color: var(--color-canvas);
+      border: none;
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex);
+      color: var(--color-brand);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-semibold);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .cta-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.98);
+    }
+
+    /* Cover placeholder */
+    .cover-placeholder {
+      background-color: var(--color-surface-alt);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Chapter row */
+    .chapter-row {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      padding: var(--space-4) var(--space-5);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast);
+    }
+    .chapter-row:active {
+      box-shadow: var(--shadow-pressed);
+    }
+    .chapter-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-family: var(--font-en-body);
+      font-size: var(--text-micro);
+      font-weight: var(--weight-semibold);
+    }
+    .chapter-num.done {
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+      color: var(--color-success);
+    }
+    .chapter-num.current {
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+      color: var(--color-brand);
+      border: 1.5px solid var(--color-brand);
+    }
+    .chapter-num.pending {
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-concave-subtle);
+      color: var(--color-text-tertiary);
+    }
+
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+
+    /* Fixed bottom bar */
+    .bottom-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: var(--space-4) var(--page-padding) var(--safe-area-bottom);
+      background-color: var(--color-canvas);
+      box-shadow: 0 -2px 12px rgba(26, 26, 26, 0.04);
+    }
+  </style>
+</head>
+<body data-theme="warm">
+
+  <!-- ==================== Top Nav ==================== -->
+  <nav style="display: flex; align-items: center; padding: var(--space-8) var(--page-padding) var(--space-4);">
+    <div style="width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+      <i class="ph ph-arrow-left" style="font-size: 20px; color: var(--color-text-primary);"></i>
+    </div>
+    <span style="flex: 1; text-align: center; font-family: var(--font-cn-title); font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-secondary); letter-spacing: var(--tracking-wide);">
+      课程详情
+    </span>
+    <div style="width: 36px;"></div>
+  </nav>
+
+  <!-- ==================== Cover Image ==================== -->
+  <section style="padding: 0 var(--page-padding);">
+    <div class="neu-inset" style="padding: var(--space-3);">
+      <div class="cover-placeholder" style="width: 100%; aspect-ratio: 16/9;">
+        <i class="ph ph-video-camera" style="font-size: 36px; color: var(--color-text-tertiary);"></i>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Course Info ==================== -->
+  <section style="padding: var(--space-6) var(--page-padding) 0;">
+    <h1 style="font-family: var(--font-cn-title); font-size: var(--text-h1); font-weight: var(--weight-semibold); color: var(--color-text-primary); line-height: var(--leading-snug); letter-spacing: var(--tracking-snug);">
+      构图的艺术：从入门到精通
+    </h1>
+    <p style="margin-top: var(--space-3); font-size: var(--text-caption); color: var(--color-text-secondary); line-height: var(--leading-relaxed);">
+      系统学习摄影构图的核心法则，从三分法到引导线，从对称到黄金分割。掌握这些经典技巧，让你的每一张照片都充满视觉张力与叙事感。
+    </p>
+    <!-- Tags -->
+    <div style="display: flex; gap: var(--space-2); margin-top: var(--space-4);">
+      <span class="neu-pill" style="padding: 4px 14px; font-size: var(--text-micro); color: var(--color-brand-text);">
+        <i class="ph ph-signal" style="font-size: 12px; vertical-align: -1px; margin-right: 4px;"></i>
+        入门
+      </span>
+      <span class="neu-pill" style="padding: 4px 14px; font-size: var(--text-micro); color: var(--color-text-secondary);">
+        <i class="ph ph-clock" style="font-size: 12px; vertical-align: -1px; margin-right: 4px;"></i>
+        32 分钟
+      </span>
+      <span class="neu-pill" style="padding: 4px 14px; font-size: var(--text-micro); color: var(--color-text-secondary);">
+        <i class="ph ph-book-open" style="font-size: 12px; vertical-align: -1px; margin-right: 4px;"></i>
+        5 章
+      </span>
+    </div>
+  </section>
+
+  <!-- ==================== Chapter List ==================== -->
+  <section style="margin-top: var(--space-8); padding: 0 var(--page-padding);">
+    <h2 class="section-title" style="margin-bottom: var(--space-4);">课程章节</h2>
+    <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+
+      <!-- Chapter 1: done -->
+      <div class="neu-card chapter-row">
+        <div class="chapter-num done">
+          <i class="ph ph-check-bold" style="font-size: 14px;"></i>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">第一章：认识构图</p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">了解构图的重要性与基本原则</p>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-tertiary); white-space: nowrap;">5 min</span>
+      </div>
+
+      <!-- Chapter 2: done -->
+      <div class="neu-card chapter-row">
+        <div class="chapter-num done">
+          <i class="ph ph-check-bold" style="font-size: 14px;"></i>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">第二章：三分法实战</p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">用九宫格划分画面，快速提升画面平衡感</p>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-tertiary); white-space: nowrap;">8 min</span>
+      </div>
+
+      <!-- Chapter 3: current -->
+      <div class="neu-card chapter-row">
+        <div class="chapter-num current">3</div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">第三章：引导线运用</p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">利用线条引导视线，创造画面纵深</p>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-brand); white-space: nowrap;">6 min</span>
+      </div>
+
+      <!-- Chapter 4: pending -->
+      <div class="neu-card chapter-row">
+        <div class="chapter-num pending">4</div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">第四章：对称与重复</p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">利用对称与重复元素创造韵律美感</p>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-tertiary); white-space: nowrap;">7 min</span>
+      </div>
+
+      <!-- Chapter 5: pending -->
+      <div class="neu-card chapter-row">
+        <div class="chapter-num pending">5</div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">第五章：黄金分割与留白</p>
+          <p style="font-size: var(--text-micro); color: var(--color-text-tertiary); margin-top: 2px;">高级构图技巧，营造东方意境之美</p>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-tertiary); white-space: nowrap;">6 min</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== Fixed Bottom Bar (no tab bar) ==================== -->
+  <div class="bottom-bar">
+    <button class="cta-btn">
+      <i class="ph ph-play-fill" style="font-size: 18px;"></i>
+      继续学习
+    </button>
+  </div>
+
+</body>
+</html>

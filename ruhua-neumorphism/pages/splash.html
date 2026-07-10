@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    /* ========== Splash Page Specific Styles ========== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background-color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* --- Logo Viewfinder --- */
+    .logo-viewfinder {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      opacity: 0;
+      animation: fadeIn 1.2s ease-out 0.3s forwards;
+    }
+
+    /* Corner brackets - L-shaped marks */
+    .corner {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-color: var(--color-brand);
+      border-style: solid;
+      border-width: 0;
+      transition: border-color var(--transition-normal);
+    }
+
+    .corner--tl {
+      top: 0; left: 0;
+      border-top-width: 2.5px;
+      border-left-width: 2.5px;
+      border-top-left-radius: 4px;
+    }
+    .corner--tr {
+      top: 0; right: 0;
+      border-top-width: 2.5px;
+      border-right-width: 2.5px;
+      border-top-right-radius: 4px;
+    }
+    .corner--bl {
+      bottom: 0; left: 0;
+      border-bottom-width: 2.5px;
+      border-left-width: 2.5px;
+      border-bottom-left-radius: 4px;
+    }
+    .corner--br {
+      bottom: 0; right: 0;
+      border-bottom-width: 2.5px;
+      border-right-width: 2.5px;
+      border-bottom-right-radius: 4px;
+    }
+
+    /* Diagonal light ray */
+    .light-ray {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(
+        135deg,
+        transparent 0%,
+        transparent 40%,
+        var(--color-brand-subtle) 45%,
+        var(--color-brand) 50%,
+        var(--color-brand-subtle) 55%,
+        transparent 60%,
+        transparent 100%
+      );
+      opacity: 0.35;
+    }
+
+    /* --- Brand Title --- */
+    .brand-title {
+      margin-top: 32px;
+      font-family: var(--font-cn-title);
+      font-size: var(--text-display);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-tight);
+      opacity: 0;
+      animation: fadeIn 1s ease-out 0.8s forwards;
+    }
+
+    .brand-title-en {
+      display: block;
+      font-family: var(--font-en-title);
+      font-size: 14px;
+      font-weight: var(--weight-regular);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-wider);
+      margin-top: 4px;
+      text-align: center;
+    }
+
+    /* --- Tagline --- */
+    .tagline {
+      margin-top: 16px;
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-regular);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-wide);
+      opacity: 0;
+      animation: fadeIn 1s ease-out 1.3s forwards;
+    }
+
+    /* --- Keyframes --- */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body data-theme="warm">
+
+  <div class="logo-viewfinder">
+    <span class="corner corner--tl"></span>
+    <span class="corner corner--tr"></span>
+    <span class="corner corner--bl"></span>
+    <span class="corner corner--br"></span>
+    <span class="light-ray"></span>
+  </div>
+
+  <h1 class="brand-title">
+    如画
+    <span class="brand-title-en">Lumira</span>
+  </h1>
+
+  <p class="tagline">如你所见，皆成画卷</p>
+
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>拍摄预览 · 如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+  <div class="lumira-container" style="background: #1C1A17; padding-bottom: 140px;">
+    <!-- Dark Navbar -->
+    <div class="lumira-nav" style="background: rgba(28,26,23,0.9);">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn" style="color: #fff;" onclick="location.href='capture.html'">�?/button>
+      </div>
+      <div class="lumira-nav-title" style="color: #fff;">照片预览</div>
+      <div class="lumira-nav-right">
+        <button class="lumira-nav-btn" style="color: #C9A96E; font-size: 14px; font-weight: 500;">对比 �?/button>
+      </div>
+    </div>
+
+    <!-- Full-width Captured Photo -->
+    <div style="margin: 8px; border-radius: var(--radius-card); overflow: hidden; position: relative;">
+      <img src="https://picsum.photos/seed/733872/400/600" alt="captured photo" style="width: 100%; display: block; aspect-ratio: 3/4; object-fit: cover;">
+    </div>
+
+    <!-- Spacer to push sheet above tabbar -->
+    <div style="flex: 1;"></div>
+
+    <!-- Bottom Sheet Area -->
+    <div style="background: var(--bg-card); border-radius: 20px 20px 0 0; padding: 24px 24px 8px;">
+      <!-- Handle -->
+      <div class="lumira-sheet-handle"></div>
+
+      <!-- Mood Tag Selector -->
+      <div style="margin-bottom: 20px;">
+        <div class="lumira-section-title">
+          <h3 style="font-size: 15px; font-weight: 600;">今天的心情是�?/h3>
+          <button class="lumira-section-link">跳过</button>
+        </div>
+        <div class="lumira-pill-row">
+          <button class="lumira-pill active"><i class="ph ph-smiley"></i> 开�?/button>
+          <button class="lumira-pill"><i class="ph ph-sunglasses"></i> 甜酷</button>
+          <button class="lumira-pill"><i class="ph ph-flower"></i> 温柔</button>
+          <button class="lumira-pill"><i class="ph ph-film-strip"></i> 复古</button>
+          <button class="lumira-pill"><i class="ph ph-leaf"></i> 清新</button>
+          <button class="lumira-pill"><i class="ph ph-palette"></i> 文艺</button>
+          <button class="lumira-pill"><i class="ph ph-plant"></i> 治愈</button>
+        </div>
+      </div>
+
+      <!-- Scene Tag Selector -->
+      <div style="margin-bottom: 24px;">
+        <div class="lumira-section-title">
+          <h3 style="font-size: 15px; font-weight: 600;">拍摄场景</h3>
+        </div>
+        <div class="lumira-pill-row">
+          <button class="lumira-pill active"><i class="ph ph-coffee"></i> 咖啡�?/button>
+          <button class="lumira-pill"><i class="ph ph-flower"></i> 花店</button>
+          <button class="lumira-pill"><i class="ph ph-beach-ball"></i> 海边</button>
+          <button class="lumira-pill"><i class="ph ph-buildings"></i> 街拍</button>
+          <button class="lumira-pill"><i class="ph ph-shopping-bag"></i> 探店</button>
+          <button class="lumira-pill"><i class="ph ph-house"></i> 居家</button>
+        </div>
+      </div>
+
+      <!-- Action Buttons Row -->
+      <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+        <button class="lumira-btn-outline" style="font-size: 13px; padding: 12px 8px;">
+          <span><i class="ph ph-chart-bar"></i></span> 生成对比�?        </button>
+        <button class="lumira-btn-outline" style="font-size: 13px; padding: 12px 8px;">
+          <span><i class="ph ph-clipboard-text"></i></span> 生成EXIF卡片
+        </button>
+      </div>
+
+      <!-- Primary CTA -->
+      <button class="lumira-btn-primary" onclick="location.href='gallery.html'">
+        <i class="ph ph-floppy-disk"></i> 保存到相�?      </button>
+    </div>
+  </div>
+
+  
+</body>
+</html>

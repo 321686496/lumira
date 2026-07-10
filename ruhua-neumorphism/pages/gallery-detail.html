@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira - 编辑</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@400;500;600&family=Newsreader:ital,wght@0,400;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    /* 基础重置 */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: var(--color-canvas);
+      color: var(--color-text-primary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-family: var(--font-cn-body);
+      overflow-x: hidden;
+    }
+
+    /* 页面容器 - 沉浸模式，无 Tab 栏 */
+    .page-container {
+      max-width: 375px;
+      margin: 0 auto;
+      padding-bottom: var(--space-6, 24px);
+    }
+
+    /* 顶部导航栏 */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-4, 16px) var(--page-padding, 24px);
+      padding-top: calc(var(--space-4, 16px) + env(safe-area-inset-top, 12px));
+      background-color: var(--color-canvas);
+    }
+
+    .nav-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-pill, 9999px);
+      background-color: var(--color-canvas);
+      border: none;
+      box-shadow: var(--shadow-convex-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast, 100ms ease), transform var(--transition-fast, 100ms ease);
+    }
+
+    .nav-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.95);
+    }
+
+    .nav-btn i {
+      font-size: 20px;
+      color: var(--color-text-primary);
+    }
+
+    .nav-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h2, 18px);
+      font-weight: var(--weight-semibold, 600);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug, -0.02em);
+    }
+
+    .nav-btn-export {
+      width: auto;
+      padding: 0 var(--space-4, 16px);
+      height: 40px;
+      border-radius: var(--radius-pill, 9999px);
+      background-color: var(--color-brand);
+      border: none;
+      box-shadow: var(--shadow-convex-subtle);
+      display: flex;
+      align-items: center;
+      gap: var(--space-1, 4px);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast, 100ms ease), transform var(--transition-fast, 100ms ease);
+    }
+
+    .nav-btn-export:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.95);
+    }
+
+    .nav-btn-export i,
+    .nav-btn-export span {
+      font-size: var(--text-caption, 13px);
+      font-family: var(--font-cn-body);
+      font-weight: var(--weight-medium, 500);
+      color: var(--color-canvas);
+    }
+
+    /* 大图预览区 */
+    .preview-area {
+      padding: var(--space-2, 8px) var(--page-padding, 24px);
+    }
+
+    .preview-image {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: var(--radius-lg, 16px);
+      background-color: var(--color-surface-alt);
+      box-shadow: var(--shadow-convex);
+      overflow: hidden;
+    }
+
+    /* 工具栏（横向滚动） */
+    .toolbar {
+      padding: var(--space-4, 16px) var(--page-padding, 24px) var(--space-2, 8px);
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .toolbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tool-item {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-1, 4px);
+      padding: var(--space-3, 12px) var(--space-4, 16px);
+      cursor: pointer;
+      transition: color var(--transition-fast, 100ms ease);
+      position: relative;
+      user-select: none;
+    }
+
+    .tool-item i {
+      font-size: 22px;
+      color: var(--color-text-secondary);
+      transition: color var(--transition-fast, 100ms ease);
+    }
+
+    .tool-item span {
+      font-family: var(--font-cn-body);
+      font-size: var(--text-micro, 11px);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-wide, 0.02em);
+      transition: color var(--transition-fast, 100ms ease);
+    }
+
+    /* 选中态指示条 */
+    .tool-item::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 20px;
+      height: 3px;
+      border-radius: var(--radius-pill, 9999px);
+      background-color: transparent;
+      transition: background-color var(--transition-normal, 200ms ease), box-shadow var(--transition-normal, 200ms ease);
+    }
+
+    .tool-item.active i {
+      color: var(--color-brand);
+    }
+
+    .tool-item.active span {
+      color: var(--color-brand);
+    }
+
+    .tool-item.active::after {
+      background-color: var(--color-brand);
+      box-shadow: var(--shadow-concave-subtle);
+    }
+
+    /* 参数调节区（新拟态凹陷面板） */
+    .adjust-panel {
+      margin: var(--space-3, 12px) var(--page-padding, 24px);
+      padding: var(--space-4, 16px);
+      border-radius: var(--radius-lg, 16px);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-concave);
+    }
+
+    .slider-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-5, 20px);
+    }
+
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2, 8px);
+    }
+
+    .slider-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .slider-label {
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption, 13px);
+      font-weight: var(--weight-medium, 500);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-normal, 0);
+    }
+
+    .slider-value {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption, 13px);
+      font-weight: var(--weight-regular, 400);
+      color: var(--color-brand);
+      min-width: 36px;
+      text-align: right;
+      letter-spacing: var(--tracking-wide, 0.02em);
+    }
+
+    /* 新拟态滑块轨道 */
+    .slider-track {
+      position: relative;
+      width: 100%;
+      height: 28px;
+      border-radius: var(--radius-pill, 9999px);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-concave-subtle);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--space-3, 12px);
+      cursor: pointer;
+    }
+
+    .slider-fill {
+      position: absolute;
+      left: var(--space-3, 12px);
+      top: 50%;
+      transform: translateY(-50%);
+      height: 4px;
+      border-radius: var(--radius-pill, 9999px);
+      background-color: var(--color-brand);
+      width: calc(var(--fill-percent, 50%) * (100% - var(--space-6, 24px)));
+      pointer-events: none;
+      opacity: 0.8;
+    }
+
+    .slider-thumb {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background-color: var(--color-brand);
+      box-shadow: var(--shadow-convex-subtle);
+      left: calc(var(--fill-percent, 50%) * (100% - var(--space-6, 24px)) + var(--space-3, 12px));
+      transition: box-shadow var(--transition-fast, 100ms ease);
+      pointer-events: none;
+    }
+
+    /* 滤镜预设行（横向滚动） */
+    .filter-presets {
+      padding: var(--space-4, 16px) var(--page-padding, 24px);
+    }
+
+    .filter-presets-title {
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption, 13px);
+      font-weight: var(--weight-medium, 500);
+      color: var(--color-text-secondary);
+      letter-spacing: var(--tracking-wide, 0.02em);
+      margin-bottom: var(--space-3, 12px);
+    }
+
+    .preset-scroll {
+      display: flex;
+      gap: var(--space-3, 12px);
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .preset-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .preset-item {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-2, 8px);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .preset-thumb {
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius-md, 10px);
+      background-color: var(--color-surface-alt);
+      box-shadow: var(--shadow-convex-subtle);
+      border: 2px solid transparent;
+      transition: border-color var(--transition-normal, 200ms ease), box-shadow var(--transition-normal, 200ms ease);
+    }
+
+    .preset-item.active .preset-thumb {
+      border-color: var(--color-brand);
+      box-shadow: var(--shadow-convex);
+    }
+
+    .preset-name {
+      font-family: var(--font-cn-body);
+      font-size: var(--text-micro, 11px);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-wide, 0.02em);
+      transition: color var(--transition-fast, 100ms ease);
+    }
+
+    .preset-item.active .preset-name {
+      color: var(--color-brand);
+    }
+
+    /* 底部保存按钮 */
+    .save-area {
+      padding: var(--space-4, 16px) var(--page-padding, 24px);
+    }
+
+    .save-btn {
+      width: 100%;
+      height: 52px;
+      border-radius: var(--radius-xl, 24px);
+      background-color: var(--color-brand);
+      border: none;
+      box-shadow: var(--shadow-convex);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2, 8px);
+      cursor: pointer;
+      transition: box-shadow var(--transition-normal, 200ms ease), transform var(--transition-fast, 100ms ease);
+    }
+
+    .save-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.98);
+    }
+
+    .save-btn i {
+      font-size: 20px;
+      color: var(--color-canvas);
+    }
+
+    .save-btn span {
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body, 15px);
+      font-weight: var(--weight-semibold, 600);
+      color: var(--color-canvas);
+      letter-spacing: var(--tracking-wide, 0.02em);
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+
+    <!-- 顶部导航栏 -->
+    <header class="top-nav">
+      <button class="nav-btn" aria-label="返回">
+        <i class="ph ph-arrow-left"></i>
+      </button>
+      <span class="nav-title">编辑</span>
+      <button class="nav-btn-export">
+        <i class="ph ph-export"></i>
+        <span>导出</span>
+      </button>
+    </header>
+
+    <!-- 大图预览区 -->
+    <div class="preview-area">
+      <div class="preview-image"></div>
+    </div>
+
+    <!-- 工具栏 -->
+    <nav class="toolbar" role="toolbar" aria-label="编辑工具">
+      <div class="tool-item active" data-tool="crop">
+        <i class="ph ph-crop"></i>
+        <span>裁剪</span>
+      </div>
+      <div class="tool-item" data-tool="adjust">
+        <i class="ph ph-sliders-horizontal"></i>
+        <span>调色</span>
+      </div>
+      <div class="tool-item" data-tool="filter">
+        <i class="ph ph-funnel"></i>
+        <span>滤镜</span>
+      </div>
+      <div class="tool-item" data-tool="sharpen">
+        <i class="ph ph-focus"></i>
+        <span>锐化</span>
+      </div>
+      <div class="tool-item" data-tool="smooth">
+        <i class="ph ph-drop-half-bottom"></i>
+        <span>磨皮</span>
+      </div>
+      <div class="tool-item" data-tool="vignette">
+        <i class="ph ph-circle-dashed"></i>
+        <span>暗角</span>
+      </div>
+      <div class="tool-item" data-tool="grain">
+        <i class="ph ph-noise"></i>
+        <span>颗粒</span>
+      </div>
+    </nav>
+
+    <!-- 参数调节区（新拟态凹陷面板） -->
+    <div class="adjust-panel">
+      <div class="slider-group">
+        <!-- 亮度 -->
+        <div class="slider-row">
+          <div class="slider-header">
+            <span class="slider-label">亮度</span>
+            <span class="slider-value">+12</span>
+          </div>
+          <div class="slider-track">
+            <div class="slider-fill" style="--fill-percent: 56%;"></div>
+            <div class="slider-thumb" style="--fill-percent: 56%;"></div>
+          </div>
+        </div>
+        <!-- 对比度 -->
+        <div class="slider-row">
+          <div class="slider-header">
+            <span class="slider-label">对比度</span>
+            <span class="slider-value">+8</span>
+          </div>
+          <div class="slider-track">
+            <div class="slider-fill" style="--fill-percent: 58%;"></div>
+            <div class="slider-thumb" style="--fill-percent: 58%;"></div>
+          </div>
+        </div>
+        <!-- 饱和度 -->
+        <div class="slider-row">
+          <div class="slider-header">
+            <span class="slider-label">饱和度</span>
+            <span class="slider-value">+20</span>
+          </div>
+          <div class="slider-track">
+            <div class="slider-fill" style="--fill-percent: 60%;"></div>
+            <div class="slider-thumb" style="--fill-percent: 60%;"></div>
+          </div>
+        </div>
+        <!-- 色温 -->
+        <div class="slider-row">
+          <div class="slider-header">
+            <span class="slider-label">色温</span>
+            <span class="slider-value">+5</span>
+          </div>
+          <div class="slider-track">
+            <div class="slider-fill" style="--fill-percent: 55%;"></div>
+            <div class="slider-thumb" style="--fill-percent: 55%;"></div>
+          </div>
+        </div>
+        <!-- 色调 -->
+        <div class="slider-row">
+          <div class="slider-header">
+            <span class="slider-label">色调</span>
+            <span class="slider-value">-3</span>
+          </div>
+          <div class="slider-track">
+            <div class="slider-fill" style="--fill-percent: 47%;"></div>
+            <div class="slider-thumb" style="--fill-percent: 47%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 滤镜预设行 -->
+    <div class="filter-presets">
+      <div class="filter-presets-title">滤镜预设</div>
+      <div class="preset-scroll">
+        <div class="preset-item active">
+          <div class="preset-thumb"></div>
+          <span class="preset-name">原图</span>
+        </div>
+        <div class="preset-item">
+          <div class="preset-thumb" style="background-color: var(--color-brand-subtle);"></div>
+          <span class="preset-name">暖阳</span>
+        </div>
+        <div class="preset-item">
+          <div class="preset-thumb" style="background-color: #E8EEF2;"></div>
+          <span class="preset-name">冷调</span>
+        </div>
+        <div class="preset-item">
+          <div class="preset-thumb" style="background-color: #E8E0D4;"></div>
+          <span class="preset-name">胶片</span>
+        </div>
+        <div class="preset-item">
+          <div class="preset-thumb" style="background-color: #D5D5D5;"></div>
+          <span class="preset-name">黑白</span>
+        </div>
+        <div class="preset-item">
+          <div class="preset-thumb" style="background-color: #E0D6C8;"></div>
+          <span class="preset-name">复古</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部保存按钮 -->
+    <div class="save-area">
+      <button class="save-btn">
+        <i class="ph ph-floppy-disk"></i>
+        <span>保存</span>
+      </button>
+    </div>
+
+  </div>
+
+  <!-- 交互脚本 -->
+  <script>
+    // 工具栏选中切换
+    document.querySelectorAll('.tool-item').forEach(item => {
+      item.addEventListener('click', function () {
+        document.querySelectorAll('.tool-item').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+
+    // 滤镜预设选中切换
+    document.querySelectorAll('.preset-item').forEach(item => {
+      item.addEventListener('click', function () {
+        document.querySelectorAll('.preset-item').forEach(p => p.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+
+    // 滑块拖拽交互
+    document.querySelectorAll('.slider-track').forEach(track => {
+      const fill = track.querySelector('.slider-fill');
+      const thumb = track.querySelector('.slider-thumb');
+      const row = track.closest('.slider-row');
+      const valueEl = row.querySelector('.slider-value');
+
+      function updateSlider(clientX) {
+        const rect = track.getBoundingClientRect();
+        const padding = 12; // var(--space-3)
+        const usableWidth = rect.width - padding * 2;
+        let percent = (clientX - rect.left - padding) / usableWidth;
+        percent = Math.max(0, Math.min(1, percent));
+        const percentStr = (percent * 100).toFixed(1) + '%';
+
+        fill.style.setProperty('--fill-percent', percentStr);
+        thumb.style.setProperty('--fill-percent', percentStr);
+
+        // 映射为 -50 ~ +50 范围
+        const val = Math.round((percent - 0.5) * 100);
+        valueEl.textContent = (val >= 0 ? '+' : '') + val;
+      }
+
+      let isDragging = false;
+
+      track.addEventListener('pointerdown', function (e) {
+        isDragging = true;
+        updateSlider(e.clientX);
+        track.setPointerCapture(e.pointerId);
+      });
+
+      track.addEventListener('pointermove', function (e) {
+        if (!isDragging) return;
+        updateSlider(e.clientX);
+      });
+
+      track.addEventListener('pointerup', function () {
+        isDragging = false;
+      });
+
+      track.addEventListener('pointercancel', function () {
+        isDragging = false;
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 成长中心</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      background-color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+      line-height: var(--leading-normal);
+      min-height: 100vh;
+      padding-bottom: calc(var(--tab-bar-height) + var(--shutter-size) / 2 + var(--safe-area-bottom) + 20px);
+      overflow-x: hidden;
+    }
+
+    /* Neumorphic components */
+    .neu-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+    }
+    .neu-card-lg {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-convex);
+    }
+    .neu-inset {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-concave);
+    }
+    .neu-inset-subtle {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-concave-subtle);
+    }
+    .neu-pill {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-subtle);
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      cursor: pointer;
+      user-select: none;
+    }
+    .neu-pill:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+    .neu-block {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-convex-subtle);
+    }
+
+    /* Progress bar track (inset) */
+    .progress-track {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-concave-subtle);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: var(--radius-pill);
+      background: linear-gradient(90deg, var(--color-brand), var(--color-brand-light));
+    }
+
+    /* Achievement badge */
+    .badge-circle {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .badge-circle.unlocked {
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+    }
+    .badge-circle.locked {
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-concave-subtle);
+      opacity: 0.45;
+    }
+
+    /* Section title */
+    .section-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-snug);
+    }
+
+    /* Scrollbar hide */
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+
+    /* ===== Bottom Tab Bar ===== */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 0 var(--space-6) var(--safe-area-bottom);
+      display: flex;
+      justify-content: center;
+    }
+    .tab-bar-inner {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      width: 100%;
+      max-width: 375px;
+      height: var(--tab-bar-height);
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      box-shadow: 0 -2px 12px rgba(26, 26, 26, 0.04);
+      padding: 0 var(--space-4);
+      position: relative;
+    }
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: var(--space-2) var(--space-3);
+      color: var(--tab-inactive-color);
+      font-size: var(--tab-label-size);
+      font-weight: var(--weight-medium);
+      cursor: pointer;
+      transition: color var(--transition-fast);
+    }
+    .tab-item.active {
+      color: var(--tab-active-color);
+    }
+    .tab-item i { font-size: var(--tab-icon-size); }
+    .shutter-btn-wrap {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .shutter-btn {
+      width: var(--shutter-size);
+      height: var(--shutter-size);
+      border-radius: var(--radius-shutter);
+      background-color: var(--color-canvas);
+      border: var(--shutter-border-width) solid var(--color-brand);
+      box-shadow: var(--shadow-convex-brand);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .shutter-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.95);
+    }
+    .shutter-btn i {
+      color: var(--color-brand);
+      font-size: 22px;
+    }
+  </style>
+</head>
+<body data-theme="warm">
+
+  <!-- ==================== Header ==================== -->
+  <header style="padding: var(--space-10) var(--page-padding) var(--space-6);">
+    <h1 class="section-title" style="font-size: var(--text-h1);">成长中心</h1>
+    <p style="margin-top: var(--space-1); font-size: var(--text-caption); color: var(--color-text-tertiary); letter-spacing: var(--tracking-wide);">
+      记录你的每一步成长
+    </p>
+  </header>
+
+  <!-- ==================== Level Card ==================== -->
+  <section style="padding: 0 var(--page-padding);">
+    <div class="neu-card-lg" style="padding: var(--space-8) var(--space-6); text-align: center;">
+      <!-- Level number -->
+      <div style="font-family: var(--font-en-title); font-size: 48px; font-weight: var(--weight-semibold); color: var(--color-brand); letter-spacing: var(--tracking-tight); line-height: 1;">
+        Lv.12
+      </div>
+      <div style="margin-top: var(--space-3); font-family: var(--font-cn-title); font-size: var(--text-caption); color: var(--color-brand-text); letter-spacing: var(--tracking-wide);">
+        摄影达人
+      </div>
+
+      <!-- XP bar -->
+      <div style="margin-top: var(--space-6);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-2);">
+          <span style="font-size: var(--text-micro); color: var(--color-text-tertiary);">经验值</span>
+          <span style="font-size: var(--text-micro); color: var(--color-brand-text);">2,450 / 3,000</span>
+        </div>
+        <div class="progress-track" style="height: 10px;">
+          <div class="progress-fill" style="width: 81.7%;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Achievement Wall ==================== -->
+  <section style="margin-top: var(--space-10); padding: 0 var(--page-padding);">
+    <h2 class="section-title" style="margin-bottom: var(--space-4);">成就墙</h2>
+    <div class="hide-scrollbar" style="display: flex; gap: var(--space-4); overflow-x: auto; padding-bottom: var(--space-2);">
+
+      <!-- Badge 1: unlocked -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-2); flex-shrink: 0;">
+        <div class="badge-circle unlocked">
+          <i class="ph ph-camera-fill" style="font-size: 24px; color: var(--color-brand);"></i>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-secondary);">首拍</span>
+      </div>
+      <!-- Badge 2: unlocked -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-2); flex-shrink: 0;">
+        <div class="badge-circle unlocked">
+          <i class="ph ph-fire-fill" style="font-size: 24px; color: var(--color-brand);"></i>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-secondary);">连续7天</span>
+      </div>
+      <!-- Badge 3: unlocked -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-2); flex-shrink: 0;">
+        <div class="badge-circle unlocked">
+          <i class="ph ph-star-fill" style="font-size: 24px; color: var(--color-brand);"></i>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-secondary);">精选作品</span>
+      </div>
+      <!-- Badge 4: unlocked -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-2); flex-shrink: 0;">
+        <div class="badge-circle unlocked">
+          <i class="ph ph-heart-fill" style="font-size: 24px; color: var(--color-brand);"></i>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-secondary);">百赞达人</span>
+      </div>
+      <!-- Badge 5: locked -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-2); flex-shrink: 0;">
+        <div class="badge-circle locked">
+          <i class="ph ph-lock-simple" style="font-size: 24px; color: var(--color-text-tertiary);"></i>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-tertiary);">构图大师</span>
+      </div>
+      <!-- Badge 6: locked -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-2); flex-shrink: 0;">
+        <div class="badge-circle locked">
+          <i class="ph ph-lock-simple" style="font-size: 24px; color: var(--color-text-tertiary);"></i>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-tertiary);">光影猎手</span>
+      </div>
+      <!-- Badge 7: locked -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-2); flex-shrink: 0;">
+        <div class="badge-circle locked">
+          <i class="ph ph-lock-simple" style="font-size: 24px; color: var(--color-text-tertiary);"></i>
+        </div>
+        <span style="font-size: var(--text-micro); color: var(--color-text-tertiary);">全能摄影师</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== Fragment Collection ==================== -->
+  <section style="margin-top: var(--space-10); padding: 0 var(--page-padding);">
+    <h2 class="section-title" style="margin-bottom: var(--space-4);">碎片收集</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3);">
+
+      <!-- 人像 3/5 -->
+      <div class="neu-card" style="padding: var(--space-4);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-2);">
+            <i class="ph ph-user-rectangle" style="font-size: 18px; color: var(--color-brand);"></i>
+            <span style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">人像</span>
+          </div>
+          <span style="font-size: var(--text-micro); color: var(--color-brand-text);">3/5</span>
+        </div>
+        <div class="progress-track" style="height: 6px;">
+          <div class="progress-fill" style="width: 60%;"></div>
+        </div>
+      </div>
+
+      <!-- 风光 1/5 -->
+      <div class="neu-card" style="padding: var(--space-4);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-2);">
+            <i class="ph ph-mountains" style="font-size: 18px; color: var(--color-brand);"></i>
+            <span style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">风光</span>
+          </div>
+          <span style="font-size: var(--text-micro); color: var(--color-brand-text);">1/5</span>
+        </div>
+        <div class="progress-track" style="height: 6px;">
+          <div class="progress-fill" style="width: 20%;"></div>
+        </div>
+      </div>
+
+      <!-- 美食 2/5 -->
+      <div class="neu-card" style="padding: var(--space-4);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-2);">
+            <i class="ph ph-coffee" style="font-size: 18px; color: var(--color-brand);"></i>
+            <span style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">美食</span>
+          </div>
+          <span style="font-size: var(--text-micro); color: var(--color-brand-text);">2/5</span>
+        </div>
+        <div class="progress-track" style="height: 6px;">
+          <div class="progress-fill" style="width: 40%;"></div>
+        </div>
+      </div>
+
+      <!-- 街拍 0/5 -->
+      <div class="neu-card" style="padding: var(--space-4);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2);">
+          <div style="display: flex; align-items: center; gap: var(--space-2);">
+            <i class="ph ph-street-view" style="font-size: 18px; color: var(--color-text-tertiary);"></i>
+            <span style="font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--color-text-primary);">街拍</span>
+          </div>
+          <span style="font-size: var(--text-micro); color: var(--color-text-tertiary);">0/5</span>
+        </div>
+        <div class="progress-track" style="height: 6px;">
+          <div class="progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ==================== Stats Panel ==================== -->
+  <section style="margin-top: var(--space-10); padding: 0 var(--page-padding) var(--space-12);">
+    <h2 class="section-title" style="margin-bottom: var(--space-4);">本月统计</h2>
+    <div class="neu-card" style="padding: var(--space-6);">
+      <div style="display: flex; justify-content: space-around; text-align: center;">
+        <div>
+          <div style="font-family: var(--font-en-title); font-size: 32px; font-weight: var(--weight-semibold); color: var(--color-brand); line-height: 1;">
+            28
+          </div>
+          <div style="margin-top: var(--space-2); font-size: var(--text-micro); color: var(--color-text-secondary);">
+            <i class="ph ph-camera" style="font-size: 12px; vertical-align: -1px; margin-right: 2px;"></i>
+            拍摄张数
+          </div>
+        </div>
+        <div style="width: 1px; background-color: var(--color-divider);"></div>
+        <div>
+          <div style="font-family: var(--font-en-title); font-size: 32px; font-weight: var(--weight-semibold); color: var(--color-brand); line-height: 1;">
+            7
+          </div>
+          <div style="margin-top: var(--space-2); font-size: var(--text-micro); color: var(--color-text-secondary);">
+            <i class="ph ph-fire" style="font-size: 12px; vertical-align: -1px; margin-right: 2px;"></i>
+            连续打卡
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Bottom Tab Bar (我的 active) ==================== -->
+  <nav class="tab-bar">
+    <div class="tab-bar-inner">
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-house"></i>
+        <span>首页</span>
+      </div>
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-squares-four"></i>
+        <span>模板</span>
+      </div>
+      <div class="shutter-btn-wrap">
+        <div class="shutter-btn">
+          <i class="ph ph-camera"></i>
+        </div>
+      </div>
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-trophy"></i>
+        <span>挑战</span>
+      </div>
+      <div class="tab-item active" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-user-circle-fill"></i>
+        <span>我的</span>
+      </div>
+    </div>
+  </nav>
+
+</body>
+</html>

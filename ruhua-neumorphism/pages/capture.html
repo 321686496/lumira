@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira - 拍摄</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@400;500;600&family=Newsreader:ital,wght@0,400;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    /* 页面强制深色沉浸模式 */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #1C1A17;
+      color: var(--color-text-inverse, #FAF7F2);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* 取景器容器 */
+    .viewfinder {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      background-color: #2A2723;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 相机画面占位 */
+    .camera-feed {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(170deg, #2E2B27 0%, #1C1A17 40%, #222019 100%);
+      z-index: 0;
+    }
+
+    /* 三分法构图线 */
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .grid-line-h,
+    .grid-line-v {
+      position: absolute;
+      border-color: rgba(201, 169, 110, 0.28);
+      border-style: dashed;
+    }
+
+    .grid-line-h {
+      left: 0;
+      right: 0;
+      border-width: 0 0 1px 0;
+    }
+
+    .grid-line-v {
+      top: 0;
+      bottom: 0;
+      border-width: 0 0 0 1px;
+    }
+
+    .grid-line-h:nth-child(1) { top: 33.33%; }
+    .grid-line-h:nth-child(2) { top: 66.66%; }
+    .grid-line-v:nth-child(3) { left: 33.33%; }
+    .grid-line-v:nth-child(4) { left: 66.66%; }
+
+    /* 主体框提示 */
+    .subject-frame {
+      position: absolute;
+      top: 18%;
+      left: 15%;
+      width: 70%;
+      height: 54%;
+      border: 1.5px dashed rgba(201, 169, 110, 0.35);
+      border-radius: var(--radius-md, 10px);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* 顶部半透明状态栏 */
+    .top-bar {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-5, 20px) var(--page-padding, 24px);
+      padding-top: calc(var(--space-5, 20px) + env(safe-area-inset-top, 12px));
+      background: linear-gradient(180deg, rgba(28, 26, 23, 0.85) 0%, rgba(28, 26, 23, 0) 100%);
+    }
+
+    .top-bar .template-name {
+      font-family: var(--font-cn-body, 'Noto Sans SC', sans-serif);
+      font-size: var(--text-caption, 13px);
+      font-weight: var(--weight-medium, 500);
+      color: rgba(242, 238, 230, 0.75);
+      letter-spacing: var(--tracking-wide, 0.02em);
+    }
+
+    .top-bar .icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-pill, 9999px);
+      background: rgba(28, 26, 23, 0.5);
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(242, 238, 230, 0.7);
+      cursor: pointer;
+      transition: background var(--transition-fast, 100ms ease);
+      font-size: 20px;
+    }
+
+    .top-bar .icon-btn:active {
+      background: rgba(28, 26, 23, 0.8);
+    }
+
+    /* 参数提示条 */
+    .params-bar {
+      position: absolute;
+      bottom: 180px;
+      left: 16px;
+      right: 16px;
+      z-index: 10;
+      background: rgba(28, 26, 23, 0.7);
+      border-radius: var(--radius-lg, 16px);
+      padding: 12px 20px;
+      /* 新拟态凹陷效果 - 深色版 */
+      box-shadow: inset 3px 3px 8px #0E0D0B, inset -3px -3px 8px #2A2723;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .params-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      font-family: var(--font-mono, 'JetBrains Mono', monospace);
+      font-size: var(--text-caption, 13px);
+      color: var(--color-brand-light, #D4B57A);
+      font-weight: var(--weight-medium, 500);
+      letter-spacing: var(--tracking-normal, 0);
+    }
+
+    .params-row .param-separator {
+      color: rgba(201, 169, 110, 0.3);
+      width: 1px;
+      height: 14px;
+      background: rgba(201, 169, 110, 0.3);
+    }
+
+    .light-hint {
+      text-align: center;
+      margin-top: 6px;
+      font-family: var(--font-cn-body, 'Noto Sans SC', sans-serif);
+      font-size: var(--text-micro, 11px);
+      color: rgba(201, 169, 110, 0.5);
+      letter-spacing: var(--tracking-wide, 0.02em);
+    }
+
+    /* 底部快门区域 */
+    .shutter-area {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 56px;
+      padding: 28px 0;
+      padding-bottom: calc(28px + env(safe-area-inset-bottom, 20px));
+      background: linear-gradient(0deg, rgba(28, 26, 23, 0.9) 0%, rgba(28, 26, 23, 0) 100%);
+    }
+
+    /* 快门按钮 */
+    .shutter-btn {
+      width: var(--shutter-size, 56px);
+      height: var(--shutter-size, 56px);
+      border-radius: var(--radius-shutter, 50%);
+      background: #1C1A17;
+      border: none;
+      cursor: pointer;
+      /* 新拟态凸起 - 暖金描边在深色背景上 */
+      box-shadow: 4px 4px 10px #0E0D0B, -4px -4px 10px #2A2723, 0 0 0 2.5px #C9A96E;
+      transition: box-shadow var(--transition-fast, 100ms ease);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .shutter-btn:active {
+      box-shadow: inset 3px 3px 8px #0E0D0B, inset -3px -3px 8px #2A2723, 0 0 0 2.5px #C9A96E;
+    }
+
+    .shutter-btn .inner-dot {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid rgba(201, 169, 110, 0.5);
+    }
+
+    /* 侧按钮 */
+    .side-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-shutter, 50%);
+      background: rgba(28, 26, 23, 0.6);
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(242, 238, 230, 0.6);
+      font-size: 22px;
+      cursor: pointer;
+      /* 深色凸起 */
+      box-shadow: 3px 3px 8px #0E0D0B, -3px -3px 8px #2A2723;
+      transition: box-shadow var(--transition-fast, 100ms ease);
+    }
+
+    .side-btn:active {
+      box-shadow: inset 2px 2px 5px #0E0D0B, inset -2px -2px 5px #2A2723;
+    }
+
+    /* 相册按钮内缩略图占位 */
+    .album-thumb {
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-sm, 6px);
+      background: #2E2B27;
+      border: 1px solid rgba(201, 169, 110, 0.2);
+    }
+
+    /* 隐藏滚动条 */
+    ::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body>
+  <div class="viewfinder">
+
+    <!-- 相机画面占位 -->
+    <div class="camera-feed"></div>
+
+    <!-- 三分法构图线 -->
+    <div class="grid-overlay">
+      <div class="grid-line-h"></div>
+      <div class="grid-line-h"></div>
+      <div class="grid-line-v"></div>
+      <div class="grid-line-v"></div>
+    </div>
+
+    <!-- 主体框提示 -->
+    <div class="subject-frame"></div>
+
+    <!-- 顶部状态栏 -->
+    <div class="top-bar">
+      <div class="template-name">旅行人像</div>
+      <div style="display:flex; gap:12px;">
+        <button class="icon-btn">
+          <i class="ph ph-gear"></i>
+        </button>
+        <button class="icon-btn">
+          <i class="ph ph-compass"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- 参数提示条 -->
+    <div class="params-bar">
+      <div class="params-row">
+        <span>ISO 100</span>
+        <div class="param-separator"></div>
+        <span>1/200</span>
+        <div class="param-separator"></div>
+        <span>EV -0.7</span>
+      </div>
+      <div class="light-hint">逆光 · 距离 3-5m</div>
+    </div>
+
+    <!-- 底部快门区域 -->
+    <div class="shutter-area">
+      <!-- 相册 -->
+      <button class="side-btn">
+        <div class="album-thumb"></div>
+      </button>
+
+      <!-- 快门 -->
+      <button class="shutter-btn">
+        <div class="inner-dot"></div>
+      </button>
+
+      <!-- 翻转摄像头 -->
+      <button class="side-btn">
+        <i class="ph ph-camera-rotate"></i>
+      </button>
+    </div>
+
+  </div>
+</body>
+</html>

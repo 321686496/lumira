@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>设置 · 如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div class="lumira-container">
+    <!-- Navbar -->
+    <nav class="lumira-nav">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn" onclick="location.href='profile.html'">�?/button>
+      </div>
+      <h1 class="lumira-nav-title">设置</h1>
+      <div class="lumira-nav-right"></div>
+    </nav>
+
+    <div style="padding: 24px;">
+      <!-- Display Settings -->
+      <div class="lumira-card fade-up" style="margin-bottom: 16px;">
+        <div class="lumira-section-title">
+          <h3>显示设置</h3>
+        </div>
+        <div class="lumira-list">
+          <button class="lumira-list-item">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">主题</span>
+            </div>
+            <span style="font-size: 13px; color: var(--text-tertiary);">暖米�?�?/span>
+          </button>
+          <div class="lumira-list-item" style="cursor: default;">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">网格显示</span>
+            </div>
+            <span style="font-size: 13px; color: var(--text-secondary); margin-right: 8px;">2�?/span>
+            <button class="lumira-toggle" onclick="this.classList.toggle('on')"></button>
+          </div>
+          <div class="lumira-list-item" style="cursor: default; border-bottom: none;">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">水平�?/span>
+            </div>
+            <button class="lumira-toggle on" onclick="this.classList.toggle('on')"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Capture Settings -->
+      <div class="lumira-card fade-up fade-up-d1" style="margin-bottom: 16px;">
+        <div class="lumira-section-title">
+          <h3>拍摄设置</h3>
+        </div>
+        <div class="lumira-list">
+          <button class="lumira-list-item">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">水印风格</span>
+            </div>
+            <span style="font-size: 13px; color: var(--text-tertiary);">极简金标 �?/span>
+          </button>
+          <button class="lumira-list-item">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">默认镜头</span>
+            </div>
+            <span style="font-size: 13px; color: var(--text-tertiary);">主摄 �?/span>
+          </button>
+          <div class="lumira-list-item" style="cursor: default; border-bottom: none;">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">快门声音</span>
+            </div>
+            <button class="lumira-toggle on" onclick="this.classList.toggle('on')"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Data Management -->
+      <div class="lumira-card fade-up fade-up-d2" style="margin-bottom: 16px;">
+        <div class="lumira-section-title">
+          <h3>数据管理</h3>
+        </div>
+        <div class="lumira-list">
+          <button class="lumira-list-item">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">导入模板</span>
+            </div>
+            <span class="lumira-list-arrow">�?/span>
+          </button>
+          <button class="lumira-list-item">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">导出所有模�?/span>
+            </div>
+            <span class="lumira-list-arrow">�?/span>
+          </button>
+          <button class="lumira-list-item">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">清除缓存</span>
+              <span class="lumira-list-desc">128 MB</span>
+            </div>
+            <span class="lumira-list-arrow">�?/span>
+          </button>
+        </div>
+      </div>
+
+      <!-- About -->
+      <div class="lumira-card fade-up fade-up-d3" style="margin-bottom: 16px;">
+        <div class="lumira-section-title">
+          <h3>关于</h3>
+        </div>
+        <div class="lumira-list">
+          <button class="lumira-list-item" id="version-trigger" onclick="handleVersionClick()">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">版本�?/span>
+            </div>
+            <span class="lumira-mono">v2.0.0</span>
+          </button>
+          <input type="text" id="redemption-input" placeholder="输入兑换�?.." style="display: none; width: 100%; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--brand-primary); margin-top: 12px; font-size: 14px; background: var(--bg-card); color: var(--text-primary); outline: none;" onkeydown="if(event.key==='Enter'){alert('兑换码已提交'); this.value=''; this.style.display='none';}">
+          <button class="lumira-list-item">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">用户协议</span>
+            </div>
+            <span class="lumira-list-arrow">�?/span>
+          </button>
+          <button class="lumira-list-item" style="border-bottom: none;">
+            <div class="lumira-list-text">
+              <span class="lumira-list-title">隐私政策</span>
+            </div>
+            <span class="lumira-list-arrow">�?/span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let tapCount = 0;
+    let tapTimer = null;
+    function handleVersionClick() {
+      tapCount++;
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => { tapCount = 0; }, 3000);
+      if (tapCount >= 7) {
+        const input = document.getElementById('redemption-input');
+        input.style.display = 'block';
+        input.focus();
+        tapCount = 0;
+      }
+    }
+  </script>
+</body>
+</html>

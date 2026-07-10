@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>相册 · 如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+  <div class="lumira-container">
+    <!-- Navbar -->
+    <div class="lumira-nav">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn"><i class="ph ph-caret-left"></i></button>
+      </div>
+      <div class="lumira-nav-title">相册</div>
+      <div class="lumira-nav-right">
+        <button class="lumira-nav-btn" style="font-size: 13px; color: var(--brand-primary); font-weight: 500;">精选集</button>
+      </div>
+    </div>
+
+    <!-- Count & View Toggle -->
+    <div style="padding: 16px 24px 0;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+        <span style="font-size: 13px; color: var(--text-tertiary);">128 张照�?/span>
+        <div style="display: flex; background: var(--bg-surface); border-radius: 9999px; padding: 3px;">
+          <button style="padding: 6px 18px; border-radius: 9999px; font-size: 13px; font-weight: 500; border: none; background: var(--bg-card); color: var(--text-primary); box-shadow: 0 1px 3px rgba(0,0,0,0.06); cursor: pointer;">照片</button>
+          <button style="padding: 6px 18px; border-radius: 9999px; font-size: 13px; font-weight: 500; border: none; background: transparent; color: var(--text-tertiary); cursor: pointer;">拍摄日记</button>
+        </div>
+      </div>
+
+      <!-- Filter Pills -->
+      <div class="lumira-pill-row" style="margin-bottom: 16px;">
+        <button class="lumira-pill active">全部</button>
+        <button class="lumira-pill"><i class="ph ph-t-shirt"></i> 穿搭</button>
+        <button class="lumira-pill"><i class="ph ph-heart"></i> 收藏</button>
+        <button class="lumira-pill"><i class="ph ph-coffee"></i> 咖啡�?/button>
+        <button class="lumira-pill"><i class="ph ph-buildings"></i> 街拍</button>
+        <button class="lumira-pill"><i class="ph ph-flower"></i> 花店</button>
+      </div>
+    </div>
+
+    <!-- 3-Column Photo Grid -->
+    <div style="padding: 0 24px;">
+      <div class="lumira-gallery">
+        <!-- Row 1 -->
+        <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+          <img src="https://picsum.photos/seed/2074130/400/600" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+          <span style="position: absolute; bottom: 4px; right: 4px;"><i class="ph ph-heart" style="font-size: 12px; color: #fff;"></i></span>
+        </div>
+        <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+          <img src="https://picsum.photos/seed/457882/400/400" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+        </div>
+        <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+          <img src="https://picsum.photos/seed/1153245/400/400" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+          <span style="position: absolute; bottom: 4px; right: 4px;"><i class="ph ph-t-shirt" style="font-size: 12px; color: #fff;"></i></span>
+        </div>
+
+        <!-- Row 2 -->
+        <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+          <img src="https://picsum.photos/seed/1042140/400/400" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+        </div>
+        <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+          <img src="https://picsum.photos/seed/373326/400/400" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+          <span style="position: absolute; bottom: 4px; right: 4px;"><i class="ph ph-heart" style="font-size: 12px; color: #fff;"></i></span>
+        </div>
+        <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+          <img src="https://picsum.photos/seed/774095/400/400" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+        </div>
+
+        <!-- Row 3 -->
+        <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+          <img src="https://picsum.photos/seed/312415/400/400" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+          <span style="position: absolute; bottom: 4px; right: 4px;"><i class="ph ph-coffee" style="font-size: 12px; color: #fff;"></i></span>
+        </div>
+        <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+          <img src="https://picsum.photos/seed/1926773/400/400" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+          <span style="position: absolute; bottom: 4px; right: 4px;"><i class="ph ph-heart" style="font-size: 12px; color: #fff;"></i></span>
+        </div>
+        <div style="position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+          <img src="https://picsum.photos/seed/414628/400/400" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+        </div>
+      </div>
+    </div>
+
+    <!-- Long-press Multi-select Hint -->
+    <div style="text-align: center; padding: 24px 24px 16px;">
+      <p style="font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.04em;">长按照片进入多选模�?· 支持批量删除与导�?/p>
+    </div>
+  </div>
+
+
+</body>
+</html>

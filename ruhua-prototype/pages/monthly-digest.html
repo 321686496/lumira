@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>7月摄影手�?· 如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    .photo-1 { aspect-ratio: 3/4; }
+    .photo-2 { aspect-ratio: 1/1; }
+    .photo-3 { aspect-ratio: 4/3; }
+    .photo-4 { aspect-ratio: 1/1; }
+  </style>
+</head>
+<body>
+  <div class="lumira-container">
+    <!-- Navbar -->
+    <nav class="lumira-nav">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn" onclick="history.back()"><i class="ph ph-arrow-left"></i></button>
+      </div>
+      <div class="lumira-nav-title">7月摄影手�?/div>
+      <div class="lumira-nav-right">
+        <button class="lumira-btn-ghost" style="font-size: 13px;">导出</button>
+      </div>
+    </nav>
+
+    <!-- Content -->
+    <div style="padding: 8px 24px 0;">
+      <!-- Cover Section -->
+      <div class="fade-up" style="text-align: center; padding: 24px 0 32px;">
+        <div style="font-size: 32px; margin-bottom: 12px;"><i class="ph ph-book"></i></div>
+        <h1 style="font-family: 'Noto Serif SC', serif; font-size: 26px; font-weight: 600; line-height: 1.3; margin-bottom: 8px;">
+          我的 7 月摄影手�?
+        </h1>
+        <p style="font-size: 14px; color: var(--brand-primary); font-family: 'Noto Serif SC', serif; letter-spacing: 0.02em;">Lumira · Monthly Digest</p>
+        <!-- Month Stats -->
+        <div style="display: flex; justify-content: center; gap: 24px; margin-top: 20px; padding: 16px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border);">
+          <div style="text-align: center;">
+            <div class="lumira-stat-num" style="font-size: 24px;">32</div>
+            <div class="lumira-stat-label">张照�?/div>
+          </div>
+          <div style="width: 1px; background: var(--color-border);"></div>
+          <div style="text-align: center;">
+            <div class="lumira-stat-num" style="font-size: 24px;">8</div>
+            <div class="lumira-stat-label">个模�?/div>
+          </div>
+          <div style="width: 1px; background: var(--color-border);"></div>
+          <div style="text-align: center;">
+            <div class="lumira-stat-num" style="font-size: 24px;">4</div>
+            <div class="lumira-stat-label">个场�?/div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Photo Grid (Magazine Style) -->
+      <div class="fade-up fade-up-d2" style="padding: 8px 0 32px;">
+        <div class="lumira-section-title" style="margin-bottom: 14px;">
+          <h3>月份照片�?/h3>
+          <span class="lumira-mono">�?32 �?/span>
+        </div>
+        <div class="lumira-gallery" style="--gallery-columns: 2; gap: 8px;">
+          <!-- Row 1 -->
+          <img class="lumira-card-img photo-1" src="https://picsum.photos/seed/733872/400/400" style="border-radius: 8px;">
+          <img class="lumira-card-img photo-2" src="https://picsum.photos/seed/774095/400/400" style="border-radius: 8px;">
+          <!-- Row 2 -->
+          <img class="lumira-card-img photo-3" src="https://picsum.photos/seed/1038002/400/400" style="border-radius: 8px; aspect-ratio: 4/5;">
+          <img class="lumira-card-img photo-4" src="https://picsum.photos/seed/312415/400/400" style="border-radius: 8px;">
+          <!-- Row 3 -->
+          <img class="lumira-card-img photo-4" src="https://picsum.photos/seed/457882/400/400" style="border-radius: 8px;">
+          <img class="lumira-card-img photo-1" src="https://picsum.photos/seed/312415/400/400" style="border-radius: 8px; aspect-ratio: 3/4;">
+          <!-- Row 4 -->
+          <img class="lumira-card-img photo-2" src="https://picsum.photos/seed/1038002/400/400" style="border-radius: 8px;">
+          <img class="lumira-card-img photo-1" src="https://picsum.photos/seed/733872/400/400" style="border-radius: 8px;">
+        </div>
+      </div>
+
+      <!-- Selected Photos -->
+      <div class="fade-up fade-up-d3" style="margin-bottom: 32px;">
+        <div class="lumira-section-title" style="margin-bottom: 14px;">
+          <h3>本月精�?/h3>
+          <span class="lumira-mono">3 �?/span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- Selected 1 -->
+          <div style="border-radius: 12px; overflow: hidden; border: 1px solid var(--color-border);">
+            <img src="https://picsum.photos/seed/733872/400/400" style="width: 100%; aspect-ratio: 16/9; object-fit: cover;">
+            <div style="padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 13px; font-weight: 500;">河畔金色的午�?/span>
+                <span class="lumira-mono">7�?2�?/span>
+              </div>
+              <span class="lumira-tag lumira-tag-gold" style="margin-top: 6px;">日系胶片</span>
+            </div>
+          </div>
+          <!-- Selected 2 -->
+          <div style="border-radius: 12px; overflow: hidden; border: 1px solid var(--color-border);">
+            <img src="https://picsum.photos/seed/774095/400/400" style="width: 100%; aspect-ratio: 16/9; object-fit: cover;">
+            <div style="padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 13px; font-weight: 500;">城市夜雨</span>
+                <span class="lumira-mono">7�?8�?/span>
+              </div>
+              <span class="lumira-tag lumira-tag-gold" style="margin-top: 6px;">黑金电影</span>
+            </div>
+          </div>
+          <!-- Selected 3 -->
+          <div style="border-radius: 12px; overflow: hidden; border: 1px solid var(--color-border);">
+            <img src="https://picsum.photos/seed/1239291/400/400" style="width: 100%; aspect-ratio: 16/9; object-fit: cover;">
+            <div style="padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 13px; font-weight: 500;">山间晨雾</span>
+                <span class="lumira-mono">7�?5�?/span>
+              </div>
+              <span class="lumira-tag lumira-tag-gold" style="margin-top: 6px;">日系清新</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Month Summary -->
+      <div class="fade-up fade-up-d4" style="margin-bottom: 32px;">
+        <div class="lumira-card" style="padding: 24px;">
+          <h3 style="font-family: 'Noto Serif SC', serif; font-size: 18px; font-weight: 600; margin-bottom: 20px;">7月拍摄总结</h3>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div style="padding: 12px; background: var(--bg-surface); border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-family: 'Noto Serif SC', serif; font-weight: 600; color: var(--brand-primary);">12</div>
+              <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">天有拍摄</div>
+            </div>
+            <div style="padding: 12px; background: var(--bg-surface); border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-family: 'Noto Serif SC', serif; font-weight: 600; color: var(--brand-primary);">5</div>
+              <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">个地�?/div>
+            </div>
+            <div style="padding: 12px; background: var(--bg-surface); border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-family: 'Noto Serif SC', serif; font-weight: 600; color: var(--brand-primary);">日系</div>
+              <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">最常用风格</div>
+            </div>
+            <div style="padding: 12px; background: var(--bg-surface); border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-family: 'Noto Serif SC', serif; font-weight: 600; color: var(--brand-primary);">傍晚</div>
+              <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px;">最佳时�?/div>
+            </div>
+          </div>
+          <div style="margin-top: 16px; padding: 12px; background: var(--bg-surface); border-radius: 8px;">
+            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; font-family: 'Noto Serif SC', serif; text-align: center;">
+              "这个月你记录�?32 个美好瞬间，<br>偏爱日系胶片风，最常在傍晚按下快门�?
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene Tags -->
+      <div class="fade-up fade-up-d5" style="margin-bottom: 32px;">
+        <div class="lumira-section-title" style="margin-bottom: 14px;">
+          <h3>场景足迹</h3>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <span class="lumira-pill"><i class="ph ph-buildings"></i> 城市 14</span>
+          <span class="lumira-pill"><i class="ph ph-flower"></i> 自然 8</span>
+          <span class="lumira-pill"><i class="ph ph-house"></i> 室内 6</span>
+          <span class="lumira-pill"><i class="ph ph-bowl-food"></i> 美食 4</span>
+        </div>
+      </div>
+
+      <!-- CTA -->
+      <div class="fade-in fade-up-d5" style="margin-bottom: 24px;">
+        <button class="lumira-btn-primary" style="margin-bottom: 12px;"><i class="ph ph-camera"></i> 生成手帐长图</button>
+        <button class="lumira-btn-outline">分享手帐</button>
+      </div>
+
+      <!-- Footer Branding -->
+      <div style="text-align: center; padding: 16px 0 8px; border-top: 1px solid var(--color-border);" class="fade-in">
+        <p style="font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.04em;">
+          如你所见，皆成画卷 · 如画 Lumira
+        </p>
+      </div>
+
+      <!-- Bottom Spacing -->
+      <div style="height: 16px;"></div>
+    </div>
+  </div>
+
+
+</body>
+</html>

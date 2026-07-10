@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>如画 Lumira · 场景</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+  <div class="lumira-container">
+    <!-- Navbar -->
+    <nav class="lumira-nav">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn" onclick="location.href='home.html'"><i class="ph ph-arrow-left"></i></button>
+      </div>
+      <div class="lumira-nav-title">场景</div>
+      <div class="lumira-nav-right">
+        <button class="lumira-nav-btn"><i class="ph ph-plus"></i></button>
+      </div>
+    </nav>
+
+    <!-- Scene Categories Tabs -->
+    <div class="fade-up" style="padding: 16px 24px 0;">
+      <div style="display: flex; gap: 8px;">
+        <button class="lumira-pill active" style="padding: 8px 20px; font-size: 14px;">常用场景</button>
+        <button class="lumira-pill" style="padding: 8px 20px; font-size: 14px;">收藏场景</button>
+        <button class="lumira-pill" style="padding: 8px 20px; font-size: 14px;">推荐场景</button>
+      </div>
+    </div>
+
+    <!-- 我的场景 Section -->
+    <div style="padding: 24px;" class="fade-up fade-up-d1">
+      <div class="lumira-section-title">
+        <h3>我的场景</h3>
+        <span style="font-size: 12px; color: var(--text-tertiary);">�?8 �?/span>
+      </div>
+      <div class="lumira-list">
+        <!-- 咖啡�?-->
+        <button class="lumira-list-item" onclick="alert('打开咖啡馆场景详�?)">
+          <div class="lumira-list-icon"><i class="ph ph-coffee"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">咖啡�?/div>
+            <div class="lumira-list-desc">已拍�?23 �?· 今天 14:30</div>
+          </div>
+          <img src="https://picsum.photos/seed/2074130/400/600" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" alt="">
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+
+        <!-- 花店 -->
+        <button class="lumira-list-item" onclick="alert('打开花店场景详情')">
+          <div class="lumira-list-icon"><i class="ph ph-flower"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">花店</div>
+            <div class="lumira-list-desc">已拍�?12 �?· 昨天 10:15</div>
+          </div>
+          <img src="https://picsum.photos/seed/1038002/400/600" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" alt="">
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+
+        <!-- 海边 -->
+        <button class="lumira-list-item" onclick="alert('打开海边场景详情')">
+          <div class="lumira-list-icon"><i class="ph ph-waves"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">海边</div>
+            <div class="lumira-list-desc">已拍�?8 �?· 3天前</div>
+          </div>
+          <img src="https://picsum.photos/seed/457882/400/600" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" alt="">
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+
+        <!-- 街拍 -->
+        <button class="lumira-list-item" onclick="alert('打开街拍场景详情')">
+          <div class="lumira-list-icon"><i class="ph ph-buildings"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">街拍</div>
+            <div class="lumira-list-desc">已拍�?31 �?· 2天前</div>
+          </div>
+          <img src="https://picsum.photos/seed/172217/400/400" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" alt="">
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+
+        <!-- 探店 -->
+        <button class="lumira-list-item" onclick="alert('打开探店场景详情')">
+          <div class="lumira-list-icon"><i class="ph ph-shopping-bag"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">探店</div>
+            <div class="lumira-list-desc">已拍�?15 �?· 5天前</div>
+          </div>
+          <img src="https://picsum.photos/seed/1080696/400/600" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" alt="">
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+
+        <!-- 居家 -->
+        <button class="lumira-list-item" onclick="alert('打开居家场景详情')">
+          <div class="lumira-list-icon"><i class="ph ph-house"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">居家</div>
+            <div class="lumira-list-desc">已拍�?19 �?· 昨天 20:00</div>
+          </div>
+          <img src="https://picsum.photos/seed/1080696/400/600" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" alt="">
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+
+        <!-- 纪念�?-->
+        <button class="lumira-list-item" onclick="alert('打开纪念日场景详�?)">
+          <div class="lumira-list-icon"><i class="ph ph-cake"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">纪念�?/div>
+            <div class="lumira-list-desc">已拍�?5 �?· 1周前</div>
+          </div>
+          <img src="https://picsum.photos/seed/774909/400/600" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" alt="">
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+
+        <!-- 合照 -->
+        <button class="lumira-list-item" onclick="alert('打开合照场景详情')">
+          <div class="lumira-list-icon"><i class="ph ph-users"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">合照</div>
+            <div class="lumira-list-desc">已拍�?11 �?· 4天前</div>
+          </div>
+          <img src="https://picsum.photos/seed/774909/400/600" style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" alt="">
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 推荐场景 Section -->
+    <div style="padding: 0 24px 24px;" class="fade-up fade-up-d2">
+      <div class="lumira-section-title">
+        <h3>推荐场景</h3>
+        <button class="lumira-section-link">更多 <i class="ph ph-arrow-right"></i></button>
+      </div>
+      <div class="lumira-list">
+        <!-- 露营 -->
+        <button class="lumira-list-item" onclick="alert('打开露营场景')">
+          <div class="lumira-list-icon" style="background: var(--tag-green-bg);"><i class="ph ph-tent"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">露营</div>
+            <div class="lumira-list-desc">热门场景 · 适合户外人像</div>
+          </div>
+          <span class="lumira-badge lumira-badge-brand" style="font-size: 10px; padding: 3px 8px;">推荐</span>
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+
+        <!-- 咖啡馆外�?-->
+        <button class="lumira-list-item" onclick="alert('打开露台场景')">
+          <div class="lumira-list-icon" style="background: var(--tag-gold-bg);"><i class="ph ph-sunset"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">露台黄昏</div>
+            <div class="lumira-list-desc">新上�?· 逆光/剪影首�?/div>
+          </div>
+          <span style="font-size: 11px; color: var(--tag-red-text); background: var(--tag-red-bg); padding: 2px 8px; border-radius: 9999px; font-weight: 600;">NEW</span>
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+
+        <!-- 雨天 -->
+        <button class="lumira-list-item" onclick="alert('打开雨天文案场景')">
+          <div class="lumira-list-icon" style="background: var(--bg-surface);"><i class="ph ph-rainbow-cloud"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title">雨天文案</div>
+            <div class="lumira-list-desc">氛围�?· 情绪片必�?/div>
+          </div>
+          <span class="lumira-list-arrow">�?/span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 快速添加提�?-->
+    <div style="padding: 0 24px 32px;" class="fade-up fade-up-d3">
+      <div class="lumira-card" style="background: var(--bg-surface); border-color: transparent; text-align: center; padding: 20px;">
+        <div style="font-size: 28px; margin-bottom: 8px;"><i class="ph ph-camera"></i></div>
+        <div style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">添加新场�?/div>
+        <div style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 14px;">右上�?+ 号创建你的专属拍摄场�?/div>
+        <button style="background: var(--brand-primary); color: #fff; border: none; border-radius: 9999px; padding: 8px 20px; font-size: 13px; font-weight: 500; cursor: pointer;">
+          + 新建场景
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom spacer -->
+    <div style="height: 24px;"></div>
+  </div>
+</body>
+</html>

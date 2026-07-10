@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 模板编辑器</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      background-color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+      line-height: var(--leading-normal);
+      min-height: 100vh;
+      padding-bottom: var(--safe-area-bottom);
+      overflow-x: hidden;
+    }
+
+    /* Neumorphic components */
+    .neu-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+    }
+    .neu-inset {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-concave);
+    }
+    .neu-pill {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-subtle);
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      cursor: pointer;
+      user-select: none;
+    }
+    .neu-pill:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+    .neu-block {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-convex-subtle);
+    }
+
+    /* Preview canvas area */
+    .preview-canvas {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-concave);
+      position: relative;
+      overflow: hidden;
+    }
+    .preview-canvas::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px;
+      height: 48px;
+      border: 2px dashed var(--color-text-tertiary);
+      border-radius: var(--radius-sm);
+      opacity: 0.4;
+    }
+
+    /* Tool panel sections */
+    .tool-section {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+      padding: var(--space-4);
+    }
+    .tool-section-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      margin-bottom: var(--space-3);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .tool-section-title i {
+      color: var(--color-brand);
+      font-size: 16px;
+    }
+
+    /* Slider styling */
+    .param-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-2) 0;
+    }
+    .param-label {
+      font-size: var(--text-caption);
+      color: var(--color-text-secondary);
+      min-width: 48px;
+    }
+    .param-value {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption);
+      color: var(--color-brand);
+      min-width: 40px;
+      text-align: right;
+      font-weight: var(--weight-medium);
+    }
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      flex: 1;
+      height: 4px;
+      margin: 0 var(--space-3);
+      background-color: var(--color-divider);
+      border-radius: var(--radius-pill);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+      cursor: pointer;
+      border: none;
+    }
+    input[type="range"]::-webkit-slider-thumb:active {
+      box-shadow: var(--shadow-pressed);
+    }
+
+    /* Upload area (concave) */
+    .upload-area {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-concave-subtle);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      padding: var(--space-5);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast);
+    }
+    .upload-area:active {
+      box-shadow: var(--shadow-pressed);
+    }
+    .upload-area i {
+      color: var(--color-text-tertiary);
+      font-size: 24px;
+    }
+    .upload-area span {
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+    }
+
+    /* Drawing tool selector */
+    .tool-icon-btn {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      border: none;
+      color: var(--color-text-tertiary);
+      font-size: 18px;
+    }
+    .tool-icon-btn.active {
+      box-shadow: var(--shadow-pressed);
+      color: var(--color-brand);
+    }
+    .tool-icon-btn:active {
+      transform: scale(0.95);
+    }
+
+    /* Action buttons */
+    .btn-preview {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-5);
+      background-color: var(--color-canvas);
+      border: none;
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-brand);
+      color: var(--color-brand-deep);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      flex: 1;
+    }
+    .btn-preview:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+    .btn-save {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-5);
+      background-color: var(--color-text-primary);
+      border: none;
+      border-radius: var(--radius-pill);
+      box-shadow: 3px 3px 8px rgba(26,26,26,0.2), -2px -2px 6px rgba(255,255,255,0.06);
+      color: var(--color-text-inverse);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      flex: 1;
+    }
+    .btn-save:active {
+      box-shadow: inset 2px 2px 6px rgba(0,0,0,0.3);
+      transform: scale(0.97);
+    }
+
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body data-theme="warm">
+
+  <!-- ==================== Header ==================== -->
+  <header style="padding: var(--space-8) var(--page-padding) var(--space-4); display: flex; align-items: center; gap: var(--space-3);">
+    <button style="background: none; border: none; cursor: pointer; color: var(--color-text-primary);">
+      <i class="ph ph-arrow-left" style="font-size: 22px;"></i>
+    </button>
+    <h1 style="font-family: var(--font-cn-title); font-size: var(--text-h1); font-weight: var(--weight-semibold); color: var(--color-text-primary); letter-spacing: var(--tracking-snug); line-height: var(--leading-tight);">
+      模板编辑器
+    </h1>
+  </header>
+
+  <!-- ==================== Preview Canvas ==================== -->
+  <section style="padding: 0 var(--page-padding); margin-bottom: var(--space-5);">
+    <div class="preview-canvas" style="width: 100%; aspect-ratio: 3/4; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      <!-- Grid guide lines -->
+      <div style="position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; pointer-events: none; opacity: 0.08;">
+        <div style="border-right: 1px dashed var(--color-text-primary); border-bottom: 1px dashed var(--color-text-primary);"></div>
+        <div style="border-right: 1px dashed var(--color-text-primary); border-bottom: 1px dashed var(--color-text-primary);"></div>
+        <div style="border-bottom: 1px dashed var(--color-text-primary);"></div>
+        <div style="border-right: 1px dashed var(--color-text-primary); border-bottom: 1px dashed var(--color-text-primary);"></div>
+        <div style="border-right: 1px dashed var(--color-text-primary); border-bottom: 1px dashed var(--color-text-primary);"></div>
+        <div style="border-bottom: 1px dashed var(--color-text-primary);"></div>
+        <div style="border-right: 1px dashed var(--color-text-primary);"></div>
+        <div style="border-right: 1px dashed var(--color-text-primary);"></div>
+        <div></div>
+      </div>
+      <!-- Center hint -->
+      <i class="ph ph-image" style="font-size: 32px; color: var(--color-text-tertiary); opacity: 0.3;"></i>
+      <span style="font-size: var(--text-caption); color: var(--color-text-tertiary); opacity: 0.5; margin-top: var(--space-2);">模板编辑画布</span>
+    </div>
+  </section>
+
+  <!-- ==================== Tool Panel ==================== -->
+  <section style="padding: 0 var(--page-padding); display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-5);">
+
+    <!-- 构图叠图 -->
+    <div class="tool-section">
+      <div class="tool-section-title">
+        <i class="ph ph-stack"></i>
+        构图叠图
+      </div>
+      <!-- Upload area -->
+      <div class="upload-area" style="margin-bottom: var(--space-3);">
+        <i class="ph ph-upload-simple"></i>
+        <span>上传姿势参考图</span>
+      </div>
+      <!-- Drawing tools -->
+      <div style="display: flex; gap: var(--space-2); align-items: center;">
+        <button class="tool-icon-btn active">
+          <i class="ph ph-cursor"></i>
+        </button>
+        <button class="tool-icon-btn">
+          <i class="ph ph-pencil-simple"></i>
+        </button>
+        <button class="tool-icon-btn">
+          <i class="ph ph-arrow-up-right"></i>
+        </button>
+        <button class="tool-icon-btn">
+          <i class="ph ph-shapes"></i>
+        </button>
+        <button class="tool-icon-btn">
+          <i class="ph ph-type"></i>
+        </button>
+        <button class="tool-icon-btn">
+          <i class="ph ph-eraser"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- 相机参数 -->
+    <div class="tool-section">
+      <div class="tool-section-title">
+        <i class="ph ph-camera"></i>
+        相机参数
+      </div>
+      <div class="param-row">
+        <span class="param-label">EV</span>
+        <input type="range" min="-3" max="3" step="0.1" value="0">
+        <span class="param-value">0.0</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">ISO</span>
+        <input type="range" min="100" max="3200" step="100" value="400">
+        <span class="param-value">400</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">快门</span>
+        <input type="range" min="1" max="1000" step="1" value="125">
+        <span class="param-value">1/125</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">白平衡</span>
+        <input type="range" min="3000" max="7000" step="100" value="5500">
+        <span class="param-value">5500K</span>
+      </div>
+    </div>
+
+    <!-- 后期参数 -->
+    <div class="tool-section">
+      <div class="tool-section-title">
+        <i class="ph ph-sliders-horizontal"></i>
+        后期参数
+      </div>
+      <div class="param-row">
+        <span class="param-label">亮度</span>
+        <input type="range" min="-100" max="100" step="1" value="10">
+        <span class="param-value">+10</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">对比度</span>
+        <input type="range" min="-100" max="100" step="1" value="5">
+        <span class="param-value">+5</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">饱和度</span>
+        <input type="range" min="-100" max="100" step="1" value="15">
+        <span class="param-value">+15</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">色温</span>
+        <input type="range" min="-100" max="100" step="1" value="0">
+        <span class="param-value">0</span>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ==================== Bottom Action Buttons ==================== -->
+  <section style="padding: var(--space-4) var(--page-padding) var(--space-8); display: flex; gap: var(--space-4);">
+    <button class="btn-preview">
+      <i class="ph ph-eye" style="font-size: 16px;"></i>
+      预览效果
+    </button>
+    <button class="btn-save">
+      <i class="ph ph-floppy-disk" style="font-size: 16px;"></i>
+      保存模板
+    </button>
+  </section>
+
+</body>
+</html>

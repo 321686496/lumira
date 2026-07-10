@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>拍摄 · 如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    .capture-container {
+      width: 100vw;
+      height: 100vh;
+      background: #181614;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    .capture-viewer {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-image: url('https://picsum.photos/seed/733872/400/600');
+      background-size: cover;
+      background-position: center;
+    }
+    .capture-viewer::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(24, 22, 20, 0.45);
+      pointer-events: none;
+    }
+    .capture-grid {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+    }
+    .capture-grid::before,
+    .capture-grid::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .capture-grid::before {
+      width: 100%;
+      height: 1px;
+      top: 33.33%;
+      left: 0;
+    }
+    .capture-grid::after {
+      width: 1px;
+      height: 100%;
+      left: 33.33%;
+      top: 0;
+    }
+    .capture-grid-extra-h {
+      position: absolute;
+      width: 100%;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.2);
+      top: 66.66%;
+      left: 0;
+    }
+    .capture-grid-extra-v {
+      position: absolute;
+      width: 1px;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.2);
+      left: 66.66%;
+      top: 0;
+    }
+    .glass-bar {
+      background: rgba(24, 22, 20, 0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .shutter-btn {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      border: 3px solid #C9A96E;
+      background: transparent;
+      cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+      box-shadow: 0 0 0 0 rgba(201, 169, 110, 0);
+    }
+    .shutter-btn:hover {
+      box-shadow: 0 0 20px rgba(201, 169, 110, 0.3);
+    }
+    .shutter-btn:active {
+      transform: scale(0.9);
+    }
+    .shutter-inner {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: #fff;
+      margin: auto;
+      transition: background 0.15s ease;
+    }
+    .shutter-btn:active .shutter-inner {
+      background: #C9A96E;
+    }
+    .param-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      padding: 8px 22px;
+      border-radius: 9999px;
+      background: rgba(24, 22, 20, 0.7);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(201, 169, 110, 0.25);
+    }
+    .template-thumb {
+      flex-shrink: 0;
+      width: 50px;
+      height: 50px;
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .template-thumb:active {
+      transform: scale(0.94);
+    }
+    .template-thumb.active {
+      border: 2px solid #C9A96E;
+      box-shadow: 0 0 12px rgba(201, 169, 110, 0.4);
+    }
+    .template-thumb:not(.active) {
+      border: 1.5px solid rgba(255, 255, 255, 0.15);
+    }
+    .template-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .template-thumb-label {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.75));
+      color: #fff;
+      font-size: 8px;
+      text-align: center;
+      padding: 8px 0 3px;
+      letter-spacing: 0.03em;
+    }
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      color: #fff;
+      cursor: pointer;
+      transition: color 0.15s ease, transform 0.1s ease;
+    }
+    .icon-btn:active {
+      transform: scale(0.88);
+      color: #C9A96E;
+    }
+    .pose-pill {
+      background: rgba(24, 22, 20, 0.65);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(201, 169, 110, 0.3);
+      padding: 6px 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="capture-container">
+    <!-- Translucent Top Bar -->
+    <div class="glass-bar" style="position: absolute; top: 0; left: 0; right: 0; z-index: 100; padding-top: env(safe-area-inset-top, 0px);">
+      <div style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 20px;">
+        <!-- Menu Icon -->
+        <button class="icon-btn" style="width: 40px; height: 40px;">
+          <i class="ph ph-list" style="font-size: 22px;"></i>
+        </button>
+
+        <!-- Template Name (center) -->
+        <div style="color: #fff; font-size: 14px; font-weight: 500; letter-spacing: 0.04em;">旅行人像</div>
+
+        <!-- Flash Toggle (right) -->
+        <button class="icon-btn" style="width: 40px; height: 40px;">
+          <i class="ph ph-lightning" style="font-size: 22px; color: #C9A96E;"></i>
+        </button>
+      </div>
+
+      <!-- Secondary top controls -->
+      <div style="display: flex; align-items: center; justify-content: center; gap: 32px; padding: 4px 20px 8px;">
+        <button class="icon-btn" style="display: flex; align-items: center; gap: 4px;">
+          <i class="ph ph-sun" style="font-size: 18px; color: rgba(255,255,255,0.7);"></i>
+        </button>
+        <button class="icon-btn" style="display: flex; align-items: center; gap: 4px;">
+          <i class="ph ph-star" style="font-size: 18px; color: rgba(255,255,255,0.7);"></i>
+        </button>
+        <button class="icon-btn" style="display: flex; align-items: center; gap: 4px;">
+          <i class="ph ph-gear" style="font-size: 18px; color: rgba(255,255,255,0.7);"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Full-screen Camera Viewer -->
+    <div class="capture-viewer">
+      <!-- Grid Overlay -->
+      <div class="capture-grid">
+        <div class="capture-grid-extra-h"></div>
+        <div class="capture-grid-extra-v"></div>
+      </div>
+
+      <!-- Pose Silhouette Indicator Pill -->
+      <div class="pose-pill" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #C9A96E; font-size: 12px; letter-spacing: 0.04em; border-radius: 9999px; white-space: nowrap; display: flex; align-items: center; gap: 6px; z-index: 20;">
+        <i class="ph ph-camera" style="font-size: 14px;"></i>
+        姿势剪影已开�?      </div>
+    </div>
+
+    <!-- Bottom Glassmorphism Control Area -->
+    <div class="glass-bar" style="padding: 16px 24px calc(env(safe-area-inset-bottom, 0px) + 16px); position: relative; z-index: 50; border-radius: 24px 24px 0 0; border-top: 1px solid rgba(255,255,255,0.06);">
+
+      <!-- Parameter Bar -->
+      <div style="display: flex; justify-content: center; margin-bottom: 18px;">
+        <div class="param-pill">
+          <span style="color: #C9A96E; font-size: 11px; letter-spacing: 0.04em; display: flex; align-items: center; gap: 3px;">
+            <i class="ph ph-camera" style="font-size: 12px;"></i>
+            水平
+          </span>
+          <span style="color: rgba(255,255,255,0.3); font-size: 10px;">|</span>
+          <span style="color: #fff; font-size: 11px; font-family: 'Courier New', monospace;">EV+0.3</span>
+          <span style="color: rgba(255,255,255,0.3); font-size: 10px;">|</span>
+          <span style="color: #fff; font-size: 11px; font-family: 'Courier New', monospace;">WB 5200K</span>
+        </div>
+      </div>
+
+      <!-- Shutter Row -->
+      <div style="display: flex; align-items: center; justify-content: center; gap: 28px;">
+        <!-- Last Photo Thumbnail -->
+        <div class="template-thumb" style="border-radius: 10px;">
+          <img src="https://picsum.photos/seed/733872/400/600" style="width: 100%; height: 100%; object-fit: cover;" alt="">
+        </div>
+
+        <!-- Shutter Button -->
+        <button class="shutter-btn" onclick="this.style.transform='scale(0.9)'; setTimeout(()=>this.style.transform='scale(1)', 100);">
+          <div class="shutter-inner"></div>
+        </button>
+
+        <!-- Flip Camera -->
+        <button class="icon-btn" style="width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.25);">
+          <i class="ph ph-arrows-left-right" style="font-size: 20px;"></i>
+        </button>
+      </div>
+
+      <!-- Quick Template Selector -->
+      <div style="margin-top: 20px;">
+        <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch;">
+          <!-- Active Template - Cafe -->
+          <div class="template-thumb active">
+            <img src="https://picsum.photos/seed/2074130/400/400" alt="">
+            <div class="template-thumb-label">咖啡�?/div>
+          </div>
+          <!-- Sunset -->
+          <div class="template-thumb">
+            <img src="https://picsum.photos/seed/355465/400/400" alt="">
+            <div class="template-thumb-label">日落</div>
+          </div>
+          <!-- Street -->
+          <div class="template-thumb">
+            <img src="https://picsum.photos/seed/1926769/400/400" alt="">
+            <div class="template-thumb-label">街拍</div>
+          </div>
+          <!-- Flower -->
+          <div class="template-thumb">
+            <img src="https://picsum.photos/seed/1038002/400/400" alt="">
+            <div class="template-thumb-label">花园</div>
+          </div>
+          <!-- Home -->
+          <div class="template-thumb">
+            <img src="https://picsum.photos/seed/1571460/400/400" alt="">
+            <div class="template-thumb-label">居家</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

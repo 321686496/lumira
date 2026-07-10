@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 个人中心</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      background-color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+      line-height: var(--leading-normal);
+      min-height: 100vh;
+      padding-bottom: calc(var(--tab-bar-height) + var(--shutter-size) / 2 + var(--safe-area-bottom) + 20px);
+      overflow-x: hidden;
+    }
+
+    .neu-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+    }
+    .neu-pill {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-subtle);
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      cursor: pointer;
+      user-select: none;
+    }
+    .neu-pill:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+    .neu-block {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-convex-subtle);
+    }
+
+    /* Avatar ring */
+    .avatar-ring {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+    }
+    .avatar-inner {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background-color: var(--color-surface-alt);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .avatar-inner i {
+      font-size: 32px;
+      color: var(--color-brand);
+    }
+
+    /* Stats card */
+    .stat-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+      padding: var(--space-4) var(--space-3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-1);
+      flex: 1;
+    }
+    .stat-number {
+      font-family: var(--font-mono);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-semibold);
+      color: var(--color-brand);
+      line-height: var(--leading-tight);
+    }
+    .stat-label {
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-wide);
+    }
+
+    /* Menu list */
+    .menu-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+      overflow: hidden;
+    }
+    .menu-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--card-padding);
+      cursor: pointer;
+      transition: background-color var(--transition-fast);
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+    }
+    .menu-item:active {
+      background-color: var(--color-surface-alt);
+    }
+    .menu-item + .menu-item {
+      border-top: 1px solid var(--color-divider);
+    }
+    .menu-icon-wrap {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-concave-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .menu-icon-wrap i {
+      font-size: 18px;
+      color: var(--color-brand);
+    }
+    .menu-item-text {
+      flex: 1;
+    }
+    .menu-item-arrow {
+      color: var(--color-text-tertiary);
+      font-size: 16px;
+    }
+
+    /* Level badge */
+    .level-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-pill);
+      background-color: var(--color-brand-subtle);
+      font-size: var(--text-micro);
+      font-weight: var(--weight-medium);
+      color: var(--color-brand-text);
+    }
+
+    /* Tab Bar */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 0 var(--space-6) var(--safe-area-bottom);
+      display: flex;
+      justify-content: center;
+    }
+    .tab-bar-inner {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      width: 100%;
+      max-width: 375px;
+      height: var(--tab-bar-height);
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      box-shadow: 0 -2px 12px rgba(26, 26, 26, 0.04);
+      padding: 0 var(--space-4);
+      position: relative;
+    }
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: var(--space-2) var(--space-3);
+      color: var(--tab-inactive-color);
+      font-size: var(--tab-label-size);
+      font-weight: var(--weight-medium);
+      cursor: pointer;
+      transition: color var(--transition-fast);
+    }
+    .tab-item.active {
+      color: var(--tab-active-color);
+    }
+    .tab-item i { font-size: var(--tab-icon-size); }
+    .shutter-btn-wrap {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .shutter-btn {
+      width: var(--shutter-size);
+      height: var(--shutter-size);
+      border-radius: var(--radius-shutter);
+      background-color: var(--color-canvas);
+      border: var(--shutter-border-width) solid var(--color-brand);
+      box-shadow: var(--shadow-convex-brand);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+    .shutter-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.95);
+    }
+    .shutter-btn i {
+      color: var(--color-brand);
+      font-size: 22px;
+    }
+  </style>
+</head>
+<body data-theme="warm">
+
+  <!-- ==================== Profile Header ==================== -->
+  <section style="padding: var(--space-10) var(--page-padding) var(--space-6); display: flex; flex-direction: column; align-items: center; gap: var(--space-3);">
+    <!-- Avatar -->
+    <div class="avatar-ring">
+      <div class="avatar-inner">
+        <i class="ph ph-user-circle-fill"></i>
+      </div>
+    </div>
+    <!-- Name & ID -->
+    <h1 style="font-family: var(--font-cn-title); font-size: var(--text-h1); font-weight: var(--weight-semibold); color: var(--color-text-primary); letter-spacing: var(--tracking-snug); line-height: var(--leading-tight); margin-top: var(--space-2);">
+      如画用户
+    </h1>
+    <span style="font-size: var(--text-micro); color: var(--color-text-tertiary); font-family: var(--font-mono);">
+      ID: LUM-2024-0718
+    </span>
+    <!-- Level -->
+    <div class="level-badge">
+      <i class="ph ph-star-fill" style="font-size: 12px;"></i>
+      Lv.12
+    </div>
+  </section>
+
+  <!-- ==================== Stats Overview ==================== -->
+  <section style="padding: 0 var(--page-padding); margin-bottom: var(--space-6);">
+    <div style="display: flex; gap: var(--space-3);">
+      <div class="stat-card">
+        <span class="stat-number">128</span>
+        <span class="stat-label">拍摄</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number">36</span>
+        <span class="stat-label">模板</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number">12</span>
+        <span class="stat-label">收藏</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-number" style="color: var(--color-brand-deep);">12</span>
+        <span class="stat-label">等级</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Function Menu ==================== -->
+  <section style="padding: 0 var(--page-padding); display: flex; flex-direction: column; gap: var(--space-4); margin-bottom: var(--space-6);">
+
+    <!-- Group 1: Content -->
+    <div class="menu-card">
+      <button class="menu-item">
+        <div class="menu-icon-wrap"><i class="ph ph-images"></i></div>
+        <span class="menu-item-text">我的相册</span>
+        <i class="ph ph-caret-right menu-item-arrow"></i>
+      </button>
+      <button class="menu-item">
+        <div class="menu-icon-wrap"><i class="ph ph-notebook"></i></div>
+        <span class="menu-item-text">拍摄日记</span>
+        <i class="ph ph-caret-right menu-item-arrow"></i>
+      </button>
+      <button class="menu-item">
+        <div class="menu-icon-wrap"><i class="ph ph-bookmark-simple"></i></div>
+        <span class="menu-item-text">精选集</span>
+        <i class="ph ph-caret-right menu-item-arrow"></i>
+      </button>
+    </div>
+
+    <!-- Group 2: Growth -->
+    <div class="menu-card">
+      <button class="menu-item">
+        <div class="menu-icon-wrap"><i class="ph ph-chart-line-up"></i></div>
+        <span class="menu-item-text">成长中心</span>
+        <i class="ph ph-caret-right menu-item-arrow"></i>
+      </button>
+      <button class="menu-item">
+        <div class="menu-icon-wrap"><i class="ph ph-graduation-cap"></i></div>
+        <span class="menu-item-text">摄影美学院</span>
+        <i class="ph ph-caret-right menu-item-arrow"></i>
+      </button>
+      <button class="menu-item">
+        <div class="menu-icon-wrap"><i class="ph ph-gift"></i></div>
+        <span class="menu-item-text">邀请有礼</span>
+        <i class="ph ph-caret-right menu-item-arrow"></i>
+      </button>
+    </div>
+
+    <!-- Group 3: Template & Import -->
+    <div class="menu-card">
+      <button class="menu-item">
+        <div class="menu-icon-wrap"><i class="ph ph-plus-circle"></i></div>
+        <span class="menu-item-text">创建模板</span>
+        <i class="ph ph-caret-right menu-item-arrow"></i>
+      </button>
+      <button class="menu-item">
+        <div class="menu-icon-wrap"><i class="ph ph-download-simple"></i></div>
+        <span class="menu-item-text">导入模板</span>
+        <i class="ph ph-caret-right menu-item-arrow"></i>
+      </button>
+    </div>
+
+    <!-- Group 4: Settings -->
+    <div class="menu-card">
+      <button class="menu-item">
+        <div class="menu-icon-wrap"><i class="ph ph-gear-six"></i></div>
+        <span class="menu-item-text">设置</span>
+        <i class="ph ph-caret-right menu-item-arrow"></i>
+      </button>
+    </div>
+
+  </section>
+
+  <!-- ==================== Bottom Tab Bar ==================== -->
+  <nav class="tab-bar">
+    <div class="tab-bar-inner">
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-house"></i>
+        <span>首页</span>
+      </div>
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-squares-four"></i>
+        <span>模板</span>
+      </div>
+      <div class="shutter-btn-wrap">
+        <div class="shutter-btn">
+          <i class="ph ph-camera"></i>
+        </div>
+      </div>
+      <div class="tab-item" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-trophy"></i>
+        <span>挑战</span>
+      </div>
+      <div class="tab-item active" style="margin-bottom: var(--space-1);">
+        <i class="ph ph-user-circle-fill"></i>
+        <span>我的</span>
+      </div>
+    </div>
+  </nav>
+
+</body>
+</html>
