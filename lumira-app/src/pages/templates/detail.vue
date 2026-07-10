@@ -1,208 +1,330 @@
-<script setup lang="ts">
-import { ref, computed } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
-import OverlayPreview from '@/components/template/OverlayPreview.vue'
-import SceneGuidePanel from '@/components/template/SceneGuidePanel.vue'
-import CameraParamsPanel from '@/components/template/CameraParamsPanel.vue'
-import ExampleGallery from '@/components/template/ExampleGallery.vue'
-import { useTemplatesStore } from '@/stores/templates'
-import { useCaptureStore } from '@/stores/capture'
-import type { ResolvedTemplate } from '@/types/template'
-
-const templatesStore = useTemplatesStore()
-const captureStore = useCaptureStore()
-
-const templateId = ref('')
-const resolved = ref<ResolvedTemplate | null>(null)
-
-onLoad(async (query) => {
-  if (query?.id) {
-    templateId.value = query.id
-    templatesStore.setCurrentTemplate(query.id)
-    const result = await templatesStore.getResolvedTemplate(query.id)
-    resolved.value = result
-  }
-})
-
-const hasSceneGuide = computed(() => !!resolved.value?.sceneGuide)
-const hasCameraParams = computed(() => !!resolved.value?.camera)
-const exampleImages = computed(() => {
-  if (!resolved.value) return []
-  return resolved.value.meta.cover ? [resolved.value.meta.cover] : []
-})
-
-const handleApplyTemplate = () => {
-  if (templateId.value) {
-    captureStore.setActiveTemplate(templateId.value)
-  }
-  uni.navigateTo({ url: `/pages/capture/index?templateId=${templateId.value}` })
-}
-
-const goBack = () => {
-  uni.navigateBack()
-}
-</script>
-
 <template>
-  <view class="template-detail-page">
-    <view class="page-nav">
-      <view class="nav-btn" @click="goBack">
-        <text class="nav-icon">←</text>
+  <view class="lumira-container no-tabbar">
+    <!-- Navbar -->
+    <view class="lumira-nav">
+      <view class="lumira-nav-left" @click="back">
+        <text class="ph ph-arrow-left back-icon"></text>
       </view>
-      <text class="nav-title">模板详情</text>
+      <text class="lumira-nav-title">模板详情</text>
+      <view class="lumira-nav-right"></view>
     </view>
 
-    <scroll-view scroll-y class="detail-scroll" :show-scrollbar="false">
-      <view class="detail-content">
-        <!-- 叠图预览 -->
-        <OverlayPreview
-          v-if="resolved"
-          :composition="resolved.composition"
-          :pose="resolved.pose"
-        />
-
-        <!-- 标题与标签 -->
-        <view class="template-header" v-if="resolved">
-          <text class="template-title">{{ resolved.meta.name }}</text>
-          <view class="capability-tags">
-            <text v-if="resolved.composition" class="cap-tag">◆构图</text>
-            <text v-if="resolved.pose" class="cap-tag">◆姿势</text>
-            <text v-if="resolved.camera" class="cap-tag">◆参数</text>
-            <text v-if="resolved.postProcess" class="cap-tag">◆后期</text>
-          </view>
+    <!-- Overlay Preview Image -->
+    <view class="preview-wrap fade-up">
+      <view class="preview-img-wrap">
+        <image class="preview-img" src="https://picsum.photos/seed/1563356/800/600" mode="aspectFill" />
+        <view class="grid-overlay">
+          <view class="grid-line-h grid-line-h-1"></view>
+          <view class="grid-line-h grid-line-h-2"></view>
+          <view class="grid-line-v grid-line-v-1"></view>
+          <view class="grid-line-v grid-line-v-2"></view>
         </view>
+      </view>
+    </view>
 
-        <!-- 场景指南 -->
-        <SceneGuidePanel
-          v-if="hasSceneGuide && resolved?.sceneGuide"
-          :guide="resolved.sceneGuide"
-        />
+    <!-- Template Name & Tags -->
+    <view class="title-wrap fade-up fade-up-d1">
+      <text class="tpl-title">日落逆光剪影</text>
+      <view class="tag-row">
+        <text class="lumira-tag lumira-tag-gold">构图</text>
+        <text class="lumira-tag lumira-tag-gold">姿势</text>
+        <text class="lumira-tag lumira-tag-gold">参数</text>
+        <text class="lumira-tag lumira-tag-gold">后期</text>
+      </view>
+    </view>
 
-        <!-- 相机参数建议 -->
-        <CameraParamsPanel
-          v-if="hasCameraParams && resolved?.camera"
-          :params="resolved.camera"
-        />
-
-        <!-- 示例作品 -->
-        <ExampleGallery v-if="exampleImages.length > 0" :examples="exampleImages" />
-
-        <!-- 套用拍摄 CTA -->
-        <view class="cta-area">
-          <view class="cta-btn" @click="handleApplyTemplate">
-            <text class="cta-text">套用此模板拍摄</text>
+    <!-- Scene Guide -->
+    <view class="block-pad fade-up fade-up-d2">
+      <view class="lumira-card lumira-card-svg-bg">
+        <text class="card-title">场景指南</text>
+        <view class="guide-list">
+          <view class="guide-item">
+            <text class="ph ph-lightbulb guide-icon"></text>
+            <view class="guide-text">
+              <text class="guide-label">光线</text>
+              <text class="guide-value">逆光，太阳位于模特身后 45°</text>
+            </view>
+          </view>
+          <view class="guide-item">
+            <text class="ph ph-ruler guide-icon"></text>
+            <view class="guide-text">
+              <text class="guide-label">距离</text>
+              <text class="guide-value">3-5 米，中长焦压缩背景</text>
+            </view>
+          </view>
+          <view class="guide-item">
+            <text class="ph ph-magic-wand guide-icon"></text>
+            <view class="guide-text">
+              <text class="guide-label">道具</text>
+              <text class="guide-value">宽檐帽、纱巾、透明伞</text>
+            </view>
+          </view>
+          <view class="guide-item">
+            <text class="ph ph-notepad guide-icon"></text>
+            <view class="guide-text">
+              <text class="guide-label">Tips</text>
+              <text class="guide-value">让模特侧身站立，轮廓边缘会更清晰</text>
+            </view>
           </view>
         </view>
       </view>
+    </view>
 
-      <view class="bottom-spacer" />
-    </scroll-view>
+    <!-- Camera Parameters -->
+    <view class="block-pad-top fade-up fade-up-d3">
+      <view class="lumira-card lumira-card-svg-bg">
+        <text class="card-title">相机参数建议</text>
+        <view class="param-mono">
+          <text class="param-line">EV -0.7    ISO 100    1/200s</text>
+          <text class="param-line">WB: 日光    镜头: 主摄 2×</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- Example Works -->
+    <view class="block-pad-top fade-up fade-up-d4">
+      <view class="lumira-section-title">
+        <text class="section-title-text">示例作品</text>
+      </view>
+      <view class="gallery-grid">
+        <view class="gallery-img-wrap">
+          <image class="gallery-img" src="https://picsum.photos/seed/206434/400/400" mode="aspectFill" />
+        </view>
+        <view class="gallery-img-wrap">
+          <image class="gallery-img" src="https://picsum.photos/seed/1689731/400/400" mode="aspectFill" />
+        </view>
+      </view>
+    </view>
+
+    <!-- Unlock Status -->
+    <view class="block-pad-top fade-up fade-up-d5">
+      <view class="unlock-status">
+        <text class="ph ph-check-circle unlock-icon"></text>
+        <text class="unlock-text">已解锁</text>
+      </view>
+    </view>
+
+    <!-- Spacer for fixed CTA -->
+    <view class="cta-spacer"></view>
+
+    <!-- Fixed Bottom CTA -->
+    <view class="fixed-cta">
+      <view class="lumira-btn-primary" @click="goCapture">套用此模板拍摄</view>
+    </view>
   </view>
 </template>
 
+<script setup lang="ts">
+const back = () => uni.navigateBack()
+const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
+</script>
+
 <style lang="scss" scoped>
-.template-detail-page {
-  min-height: 100vh;
-  background: var(--color-bg-canvas);
-  display: flex;
-  flex-direction: column;
+.back-icon {
+  font-size: 40rpx;
+  color: var(--color-text-primary);
+}
+
+.preview-wrap {
+  padding: 0 48rpx 40rpx;
+}
+
+.preview-img-wrap {
+  position: relative;
+  width: 100%;
+  padding-bottom: 75%;
+  border-radius: 28rpx;
   overflow: hidden;
 }
 
-.page-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-5) var(--space-3);
-}
-
-.nav-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  &:active { opacity: 0.6; }
-}
-
-.nav-icon {
-  font-size: 22px;
-  color: var(--color-text-primary);
-}
-
-.nav-title {
-  font-family: var(--font-sans);
-  font-size: var(--font-size-body);
-  font-weight: var(--weight-medium);
-  color: var(--color-text-primary);
-}
-
-.detail-scroll {
-  flex: 1;
+.preview-img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
+  height: 100%;
 }
 
-.detail-content {
-  padding: 0 var(--space-5);
+.grid-overlay {
+  position: absolute;
+  top: 24rpx;
+  left: 24rpx;
+  right: 24rpx;
+  bottom: 24rpx;
+  pointer-events: none;
 }
 
-.template-header {
-  margin-bottom: var(--space-5);
+.grid-line-h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2rpx;
+  background: rgba(201, 169, 110, 0.5);
 }
 
-.template-title {
+.grid-line-h-1 {
+  top: 33.3%;
+}
+
+.grid-line-h-2 {
+  top: 66.6%;
+}
+
+.grid-line-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2rpx;
+  background: rgba(201, 169, 110, 0.5);
+}
+
+.grid-line-v-1 {
+  left: 33.3%;
+}
+
+.grid-line-v-2 {
+  left: 66.6%;
+}
+
+.title-wrap {
+  padding: 0 48rpx;
+}
+
+.tpl-title {
   display: block;
-  font-family: var(--font-serif);
-  font-size: var(--font-size-title);
-  font-weight: var(--weight-medium);
+  font-family: 'Noto Serif SC', serif;
+  font-size: 44rpx;
+  font-weight: 600;
   color: var(--color-text-primary);
-  letter-spacing: var(--letter-spacing-title);
-  line-height: var(--line-height-title);
-  margin-bottom: var(--space-2);
+  margin-bottom: 20rpx;
 }
 
-.capability-tags {
+.tag-row {
   display: flex;
+  gap: 12rpx;
   flex-wrap: wrap;
-  gap: var(--space-2);
 }
 
-.cap-tag {
-  font-family: var(--font-sans);
-  font-size: var(--font-size-tag);
-  font-weight: var(--weight-medium);
-  color: var(--color-tag-gold-text);
-  background: var(--color-tag-gold-bg);
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-pill);
-  letter-spacing: var(--letter-spacing-tag);
+.block-pad {
+  padding: 48rpx 48rpx 0;
 }
 
-.cta-area {
-  margin-top: var(--space-7);
-  margin-bottom: var(--space-5);
+.block-pad-top {
+  padding: 32rpx 48rpx 0;
 }
 
-.cta-btn {
+.card-title {
+  display: block;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 28rpx;
+}
+
+.guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.guide-item {
+  display: flex;
+  gap: 16rpx;
+  align-items: flex-start;
+}
+
+.guide-icon {
+  flex-shrink: 0;
+  font-size: 32rpx;
+  color: var(--color-brand);
+  margin-top: 4rpx;
+}
+
+.guide-text {
+  flex: 1;
+}
+
+.guide-label {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.guide-value {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+  margin-left: 8rpx;
+}
+
+.param-mono {
+  line-height: 2;
+}
+
+.param-line {
+  display: block;
+  font-family: 'Courier New', monospace;
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.section-title-text {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 34rpx;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24rpx;
+}
+
+.gallery-img-wrap {
+  width: 100%;
+  padding-bottom: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 28rpx;
+}
+
+.gallery-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.unlock-status {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: var(--space-4) var(--space-6);
-  background: var(--color-text-primary);
-  border-radius: var(--radius-button);
-  transition: transform var(--duration-fast) ease;
-
-  &:active { transform: scale(0.98); }
+  gap: 12rpx;
 }
 
-.cta-text {
-  font-family: var(--font-sans);
-  font-size: var(--font-size-body);
-  font-weight: var(--weight-semibold);
-  color: #FFFFFF;
+.unlock-icon {
+  font-size: 32rpx;
+  color: var(--color-success);
 }
 
-.bottom-spacer {
-  height: var(--space-8);
+.unlock-text {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+}
+
+.cta-spacer {
+  height: 200rpx;
+}
+
+.fixed-cta {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 32rpx 48rpx 48rpx;
+  background: linear-gradient(to top, var(--color-canvas) 60%, transparent);
+  z-index: 100;
 }
 </style>
