@@ -1,184 +1,536 @@
-<script setup lang="ts">
-import { useTabBarVariant } from '@/composables/useThemeComponent'
-import { useGalleryStore } from '@/stores/gallery'
-import { useTemplatesStore } from '@/stores/templates'
-
-const galleryStore = useGalleryStore()
-const templatesStore = useTemplatesStore()
-const tabBarVariant = useTabBarVariant()
-
-const goSettings = () => {
-  uni.navigateTo({ url: '/pages/profile/settings' })
-}
-
-const goGallery = () => {
-  uni.navigateTo({ url: '/pages/gallery/index' })
-}
-
-const goTemplates = () => {
-  uni.navigateTo({ url: '/pages/templates/index' })
-}
-
-const goImport = () => {
-  uni.navigateTo({ url: '/pages/templates/import' })
-}
-
-const handleTabSwitch = (key: string) => {
-  if (key === 'capture') {
-    uni.navigateTo({ url: '/pages/capture/index' })
-  } else if (key === 'home') {
-    uni.redirectTo({ url: '/pages/home/index' })
-  }
-}
-</script>
-
 <template>
-  <view class="profile-page">
-    <view class="profile-header">
-      <view class="avatar-area">
-        <view class="avatar-placeholder">
-          <text class="avatar-icon">◍</text>
+  <view class="lumira-container">
+    <!-- 顶部导航 -->
+    <view class="lumira-nav">
+      <view class="lumira-nav-left"></view>
+      <text class="lumira-nav-title">我的</text>
+      <view class="lumira-nav-right"></view>
+    </view>
+
+    <view class="page-body">
+      <!-- 个人头部卡片 -->
+      <view class="hero-card fade-up">
+        <view class="hero-deco-1"></view>
+        <view class="hero-deco-2"></view>
+
+        <!-- 头像 -->
+        <view class="avatar-wrap">
+          <image class="avatar" src="https://picsum.photos/seed/733872/200/200" mode="aspectFill" />
+          <view class="avatar-badge">
+            <text class="ph ph-caret-up avatar-badge-icon"></text>
+          </view>
         </view>
-        <view class="user-info">
-          <text class="user-name">如画用户</text>
-          <text class="user-tagline">用镜头记录生活</text>
+
+        <!-- 名字 -->
+        <text class="hero-name">小美</text>
+
+        <!-- 等级徽章 -->
+        <view class="level-badge">
+          <text class="ph ph-medal level-badge-icon"></text>
+          <text class="level-badge-text">Lv.12 入门学徒</text>
+        </view>
+
+        <!-- 经验进度 -->
+        <view class="xp-wrap">
+          <view class="xp-head">
+            <text class="xp-label">经验</text>
+            <text class="xp-value">1,280 / 2,000 XP</text>
+          </view>
+          <view class="xp-track">
+            <view class="xp-fill" style="width: 64%;"></view>
+          </view>
+          <text class="xp-tip">还差 720 XP 升级至进阶学徒</text>
+        </view>
+      </view>
+
+      <!-- 统计 Bento -->
+      <view class="lumira-card stats-card fade-up fade-up-d1">
+        <view class="stats-grid">
+          <view class="stats-cell stats-cell-mid">
+            <text class="stats-num">128</text>
+            <text class="stats-label">拍摄作品</text>
+          </view>
+          <view class="stats-cell stats-cell-mid">
+            <text class="stats-num">36</text>
+            <text class="stats-label">使用模板</text>
+          </view>
+          <view class="stats-cell">
+            <text class="stats-num">12</text>
+            <text class="stats-label">收藏</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 碎片收集 -->
+      <view class="lumira-card fragment-card fade-up fade-up-d2">
+        <view class="lumira-section-title">
+          <view class="fragment-title-wrap">
+            <text class="ph ph-puzzle-piece fragment-title-icon"></text>
+            <text class="fragment-title">碎片收集</text>
+          </view>
+          <text class="fragment-count">3/20 已集</text>
+        </view>
+        <view class="fragment-list">
+          <view class="fragment-item" v-for="f in fragments" :key="f.name">
+            <view class="fragment-row">
+              <view class="fragment-name-wrap">
+                <view class="fragment-icon-wrap">
+                  <text class="ph fragment-icon" :class="f.icon"></text>
+                </view>
+                <text class="fragment-name">{{ f.name }}</text>
+              </view>
+              <text class="fragment-rate">{{ f.cur }}/5</text>
+            </view>
+            <view class="lumira-progress">
+              <view class="lumira-progress-fill" :style="{ width: f.percent + '%' }"></view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 快捷入口 -->
+      <view class="quick-row fade-up fade-up-d3">
+        <view class="lumira-btn-ghost quick-btn" @click="goPage('/pages/profile/growth')">
+          <text class="ph ph-trophy"></text>
+          <text>成长中心</text>
+        </view>
+        <view class="lumira-btn-ghost quick-btn" @click="goPage('/pages/profile/invite')">
+          <text class="ph ph-gift"></text>
+          <text>邀请有礼</text>
+        </view>
+        <view class="lumira-btn-ghost quick-btn" @click="goPage('/pages/profile/academy')">
+          <text class="ph ph-book-open"></text>
+          <text>摄影美学院</text>
+        </view>
+      </view>
+
+      <!-- 菜单列表 -->
+      <view class="lumira-card menu-card fade-up fade-up-d4">
+        <view class="lumira-list">
+          <view class="lumira-list-item" @click="goPage('/pages/gallery/index')">
+            <view class="lumira-list-icon">
+              <text class="ph ph-image"></text>
+            </view>
+            <view class="lumira-list-text">
+              <text class="lumira-list-title">我的相册</text>
+            </view>
+            <text class="lumira-list-arrow"><text class="ph ph-caret-right"></text></text>
+          </view>
+          <view class="lumira-list-item" @click="goPage('/pages/templates/index')">
+            <view class="lumira-list-icon">
+              <text class="ph ph-book-open"></text>
+            </view>
+            <view class="lumira-list-text">
+              <text class="lumira-list-title">我的模板</text>
+            </view>
+            <text class="lumira-list-arrow"><text class="ph ph-caret-right"></text></text>
+          </view>
+          <view class="lumira-list-item">
+            <view class="lumira-list-icon">
+              <text class="ph ph-map-trifold"></text>
+            </view>
+            <view class="lumira-list-text">
+              <text class="lumira-list-title">场景管理</text>
+            </view>
+            <text class="lumira-list-arrow"><text class="ph ph-caret-right"></text></text>
+          </view>
+          <view class="lumira-list-item">
+            <view class="lumira-list-icon">
+              <text class="ph ph-download-simple"></text>
+            </view>
+            <view class="lumira-list-text">
+              <text class="lumira-list-title">导入模板</text>
+            </view>
+            <text class="lumira-list-arrow"><text class="ph ph-caret-right"></text></text>
+          </view>
+          <view class="lumira-list-item" @click="goPage('/pages/profile/settings')">
+            <view class="lumira-list-icon">
+              <text class="ph ph-gear"></text>
+            </view>
+            <view class="lumira-list-text">
+              <text class="lumira-list-title">设置</text>
+            </view>
+            <text class="lumira-list-arrow"><text class="ph ph-caret-right"></text></text>
+          </view>
+          <view class="lumira-list-item lumira-list-item-last">
+            <view class="lumira-list-icon">
+              <text class="ph ph-info"></text>
+            </view>
+            <view class="lumira-list-text">
+              <text class="lumira-list-title">关于如画</text>
+            </view>
+            <text class="lumira-list-arrow"><text class="ph ph-caret-right"></text></text>
+          </view>
         </view>
       </view>
     </view>
 
-    <view class="stats-row">
-      <view class="stat-block" @click="goGallery">
-        <text class="stat-num">{{ galleryStore.photoCount }}</text>
-        <text class="stat-lbl">拍摄</text>
-      </view>
-      <view class="stat-block" @click="goTemplates">
-        <text class="stat-num">{{ templatesStore.templateCount }}</text>
-        <text class="stat-lbl">模板</text>
-      </view>
-    </view>
-
-    <view class="menu-section">
-      <view class="menu-item" @click="goSettings">
-        <text class="menu-label">设置</text>
-        <text class="menu-arrow">→</text>
-      </view>
-      <view class="menu-item" @click="goImport">
-        <text class="menu-label">导入模板</text>
-        <text class="menu-arrow">→</text>
-      </view>
-    </view>
-
-    <component :is="tabBarVariant" current="profile" theme="light" @on-switch="handleTabSwitch" />
+    <FloatingTabBar active="profile" />
   </view>
 </template>
 
+<script setup lang="ts">
+import { ref } from 'vue'
+import FloatingTabBar from '@/components/FloatingTabBar.vue'
+
+const fragments = ref([
+  { name: '人像', icon: 'ph-user', cur: 3, percent: 60 },
+  { name: '风光', icon: 'ph-mountain', cur: 2, percent: 40 },
+  { name: '美食', icon: 'ph-fork-knife', cur: 4, percent: 80 },
+  { name: '街拍', icon: 'ph-camera', cur: 1, percent: 20 }
+])
+
+const goPage = (url: string) => uni.navigateTo({ url })
+</script>
+
 <style lang="scss" scoped>
-.profile-page {
-  min-height: 100vh;
-  background: var(--color-bg-canvas);
-  padding-bottom: 120px;
+.page-body {
+  padding: 48rpx 40rpx;
 }
 
-.profile-header {
-  padding: calc(var(--space-6) + env(safe-area-inset-top)) var(--space-5) var(--space-5);
+/* 头部卡片 */
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 48rpx;
+  padding: 64rpx 48rpx 48rpx;
+  text-align: center;
+  margin-bottom: 32rpx;
+  background: linear-gradient(145deg, #FFF8EE 0%, #F5EDDB 40%, #EDE3D0 100%);
+  border: 2rpx solid rgba(201, 169, 110, 0.12);
+  box-shadow: 0 8rpx 48rpx rgba(201, 169, 110, 0.08), 0 2rpx 4rpx rgba(0, 0, 0, 0.02);
 }
 
-.avatar-area {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.avatar-placeholder {
-  width: 64px;
-  height: 64px;
+.hero-deco-1 {
+  position: absolute;
+  top: -80rpx;
+  right: -80rpx;
+  width: 240rpx;
+  height: 240rpx;
   border-radius: 50%;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
+  background: rgba(201, 169, 110, 0.06);
+  pointer-events: none;
+}
+
+.hero-deco-2 {
+  position: absolute;
+  bottom: -60rpx;
+  left: -40rpx;
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 50%;
+  background: rgba(201, 169, 110, 0.04);
+  pointer-events: none;
+}
+
+.avatar-wrap {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 32rpx;
+}
+
+.avatar {
+  width: 176rpx;
+  height: 176rpx;
+  border-radius: 50%;
+  border: 6rpx solid #fff;
+  box-shadow: 0 8rpx 32rpx rgba(201, 169, 110, 0.2);
+}
+
+.avatar-badge {
+  position: absolute;
+  bottom: 4rpx;
+  right: 4rpx;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #C9A96E 0%, #A88550 100%);
+  border: 5rpx solid #fff;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.avatar-icon {
-  font-size: 28px;
-  color: var(--color-text-tertiary);
+.avatar-badge-icon {
+  color: #fff;
+  font-size: 20rpx;
 }
 
-.user-info {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+.hero-name {
+  display: block;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 48rpx;
+  font-weight: 600;
+  color: #3D2817;
+  margin-bottom: 20rpx;
+  letter-spacing: 0.02em;
 }
 
-.user-name {
-  font-family: var(--font-serif);
-  font-size: var(--font-size-title);
-  font-weight: var(--weight-medium);
-  color: var(--color-text-primary);
-  letter-spacing: var(--letter-spacing-title);
-}
-
-.user-tagline {
-  font-family: var(--font-sans);
-  font-size: var(--font-size-caption);
-  color: var(--color-text-tertiary);
-}
-
-.stats-row {
-  display: flex;
-  gap: var(--space-4);
-  padding: 0 var(--space-5) var(--space-6);
-}
-
-.stat-block {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.level-badge {
+  display: inline-flex;
   align-items: center;
-  padding: var(--space-4);
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-card);
-  &:active { opacity: 0.85; }
+  gap: 8rpx;
+  padding: 10rpx 28rpx;
+  border-radius: 9999rpx;
+  background: linear-gradient(135deg, #F5EDDB 0%, #EDE0C8 100%);
+  border: 2rpx solid rgba(140, 115, 64, 0.15);
+  margin-bottom: 40rpx;
 }
 
-.stat-num {
-  font-family: var(--font-serif);
-  font-size: var(--font-size-title);
-  font-weight: var(--weight-semibold);
+.level-badge-icon {
+  font-size: 26rpx;
+  color: #8C7340;
+}
+
+.level-badge-text {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #8C7340;
+  letter-spacing: 0.04em;
+}
+
+.xp-wrap {
+  max-width: 520rpx;
+  margin: 0 auto;
+}
+
+.xp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.xp-label {
+  font-size: 24rpx;
+  color: #8C7340;
+  font-weight: 500;
+}
+
+.xp-value {
+  font-size: 24rpx;
+  color: #8C7340;
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+.xp-track {
+  width: 100%;
+  height: 12rpx;
+  border-radius: 6rpx;
+  background: rgba(201, 169, 110, 0.18);
+  overflow: hidden;
+}
+
+.xp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #C9A96E 0%, #D4B57A 100%);
+  border-radius: 6rpx;
+}
+
+.xp-tip {
+  display: block;
+  font-size: 22rpx;
+  color: #B89860;
+  margin-top: 16rpx;
+  letter-spacing: 0.02em;
+}
+
+/* 统计 Bento */
+.stats-card {
+  margin-bottom: 32rpx;
+  padding: 0;
+  overflow: hidden;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  text-align: center;
+}
+
+.stats-cell {
+  padding: 44rpx 16rpx;
+  position: relative;
+}
+
+.stats-cell-mid::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 48rpx;
+  bottom: 48rpx;
+  width: 2rpx;
+  background: var(--color-divider);
+}
+
+.stats-num {
+  display: block;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 52rpx;
+  font-weight: 600;
   color: var(--color-text-primary);
   line-height: 1;
 }
 
-.stat-lbl {
-  font-family: var(--font-sans);
-  font-size: var(--font-size-tag);
+.stats-label {
+  display: block;
+  font-size: 24rpx;
   color: var(--color-text-tertiary);
-  margin-top: var(--space-2);
+  margin-top: 12rpx;
+  letter-spacing: 0.04em;
 }
 
-.menu-section {
-  padding: 0 var(--space-5);
+/* 碎片收集 */
+.fragment-card {
+  margin-bottom: 32rpx;
 }
 
-.menu-item {
+.fragment-title-wrap {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--color-border);
-  &:active { opacity: 0.7; }
+  gap: 12rpx;
 }
 
-.menu-label {
-  font-family: var(--font-sans);
-  font-size: var(--font-size-body);
+.fragment-title-icon {
+  font-size: 32rpx;
+  color: var(--color-brand);
+}
+
+.fragment-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 32rpx;
+  font-weight: 600;
   color: var(--color-text-primary);
 }
 
-.menu-arrow {
-  font-size: 16px;
+.fragment-count {
+  font-size: 24rpx;
   color: var(--color-text-tertiary);
+}
+
+.fragment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 32rpx;
+}
+
+.fragment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.fragment-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.fragment-icon-wrap {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 16rpx;
+  background: rgba(201, 169, 110, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fragment-icon {
+  font-size: 28rpx;
+  color: var(--color-brand);
+}
+
+.fragment-name {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.fragment-rate {
+  font-size: 24rpx;
+  font-family: 'Courier New', monospace;
+  color: var(--color-text-tertiary);
+  font-weight: 600;
+}
+
+/* 快捷入口 */
+.quick-row {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 32rpx;
+}
+
+.quick-btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.quick-btn .ph {
+  font-size: 32rpx;
+}
+
+/* 菜单列表 */
+.menu-card {
+  padding: 16rpx 32rpx;
+}
+
+.lumira-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.lumira-list-item {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 32rpx 0;
+  border-bottom: 2rpx solid var(--color-divider);
+}
+
+.lumira-list-item-last {
+  border-bottom: none;
+}
+
+.lumira-list-item:active {
+  opacity: 0.7;
+}
+
+.lumira-list-icon {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--color-surface-alt);
+}
+
+.lumira-list-icon .ph {
+  font-size: 40rpx;
+  color: var(--color-brand);
+}
+
+.lumira-list-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.lumira-list-title {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.lumira-list-arrow {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.lumira-list-arrow .ph {
+  font-size: 28rpx;
 }
 </style>
