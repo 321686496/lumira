@@ -1,100 +1,77 @@
 /**
  * 主题配置表
- * 定义 4 套内置主题的元数据与布局参数
+ * 定义 4 套主题的元数据
  */
 
-/** 主题 ID */
 export type ThemeId = 'warm' | 'ink' | 'retro' | 'fresh'
 
-/** 主题布局参数 */
-export interface ThemeLayout {
-  /** 首页区块顺序 */
-  homeSectionOrder: string[]
-  /** 模板库网格列数 */
-  templateGridColumns: number
-  /** 相册网格列数 */
-  galleryGridColumns: number
-  /** 卡片宽高比 */
-  cardAspectRatio: string
-  /** TabBar 样式 */
-  tabBarStyle: 'floating' | 'compact' | 'minimal'
-}
-
-/** 主题元数据 */
 export interface ThemeMeta {
-  /** 主题 ID */
   id: ThemeId
-  /** 主题名称（中文） */
   label: string
-  /** 主题描述（中文） */
   description: string
-  /** 图标风格 */
-  iconStyle: 'line' | 'fill' | 'handdrawn'
-  /** 组件变体标识 */
-  componentVariant: 'default' | 'default-dark' | 'retro' | 'fresh'
-  /** 布局参数 */
-  layout: ThemeLayout
+  icon: string
+  colors: {
+    canvas: string
+    brand: string
+    surface: string
+    textPrimary: string
+    textSecondary: string
+  }
 }
 
-/** 全部主题 ID 列表 */
-export const THEME_IDS: ThemeId[] = ['warm', 'ink', 'retro', 'fresh']
-
-/** 主题配置表 */
 export const THEME_METAS: Record<ThemeId, ThemeMeta> = {
   warm: {
     id: 'warm',
     label: '暖米白',
-    description: '温暖留白，编辑式质感',
-    iconStyle: 'line',
-    componentVariant: 'default',
-    layout: {
-      homeSectionOrder: ['brand', 'inspiration', 'recent', 'featured', 'scene', 'stats'],
-      templateGridColumns: 2,
-      galleryGridColumns: 3,
-      cardAspectRatio: '3 / 4',
-      tabBarStyle: 'floating',
-    },
+    description: '温润如玉，东方留白的经典底色',
+    icon: 'ph-sun',
+    colors: {
+      canvas: '#FAF7F2',
+      brand: '#C9A96E',
+      surface: '#FFFFFF',
+      textPrimary: '#1A1A1A',
+      textSecondary: '#5C5852'
+    }
   },
   ink: {
     id: 'ink',
     label: '浓墨',
-    description: '深色沉浸，夜拍伴侣',
-    iconStyle: 'line',
-    componentVariant: 'default-dark',
-    layout: {
-      homeSectionOrder: ['brand', 'inspiration', 'recent', 'featured', 'scene', 'stats'],
-      templateGridColumns: 2,
-      galleryGridColumns: 3,
-      cardAspectRatio: '3 / 4',
-      tabBarStyle: 'floating',
-    },
+    description: '深邃墨色，暗夜中的专注拍摄',
+    icon: 'ph-moon',
+    colors: {
+      canvas: '#1C1A17',
+      brand: '#D4B57A',
+      surface: '#262320',
+      textPrimary: '#F2EEE6',
+      textSecondary: '#A39D94'
+    }
   },
   retro: {
     id: 'retro',
     label: '胶片复古',
-    description: '暖橘深棕，胶片方格',
-    iconStyle: 'handdrawn',
-    componentVariant: 'retro',
-    layout: {
-      homeSectionOrder: ['brand', 'scene', 'featured', 'inspiration', 'recent', 'stats'],
-      templateGridColumns: 2,
-      galleryGridColumns: 2,
-      cardAspectRatio: '1 / 1',
-      tabBarStyle: 'compact',
-    },
+    description: '温暖胶片质感，怀旧色彩调色',
+    icon: 'ph-film-strip',
+    colors: {
+      canvas: '#F5E6D3',
+      brand: '#C4956A',
+      surface: '#FFF8F0',
+      textPrimary: '#3D2817',
+      textSecondary: '#6B4C2F'
+    }
   },
   fresh: {
     id: 'fresh',
     label: '日系清新',
-    description: '淡粉米白，杂志呼吸',
-    iconStyle: 'line',
-    componentVariant: 'fresh',
-    layout: {
-      homeSectionOrder: ['brand', 'inspiration', 'featured', 'scene', 'recent', 'stats'],
-      templateGridColumns: 1,
-      galleryGridColumns: 2,
-      cardAspectRatio: '4 / 5',
-      tabBarStyle: 'minimal',
-    },
-  },
+    description: '清新自然，柔和明亮的日常感',
+    icon: 'ph-flower-tulip',
+    colors: {
+      canvas: '#F8FAF6',
+      brand: '#8BAD72',
+      surface: '#FFFFFF',
+      textPrimary: '#4A3F35',
+      textSecondary: '#8C7F70'
+    }
+  }
 }
+
+export const THEME_IDS: ThemeId[] = ['warm', 'ink', 'retro', 'fresh']
