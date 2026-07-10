@@ -145,7 +145,7 @@ const goComplete = () => uni.navigateTo({ url: '/pages/challenge/detail' })
 }
 
 .page-body {
-  padding: 48rpx 48rpx 0;
+  padding: 48rpx 40rpx 0;
 }
 
 /* 主挑战卡 */

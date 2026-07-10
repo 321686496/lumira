@@ -265,6 +265,7 @@ const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
 /* 导航定位 */
 .loc {
   gap: 8rpx;
+  margin-right: 16rpx;
 }
 
 .loc-icon {

@@ -181,7 +181,7 @@ page {
   display: flex;
   align-items: center;
   gap: 16rpx;
-  min-width: 32rpx;
+  min-width: 0;
 }
 
 .lumira-nav-right {
