@@ -18,12 +18,22 @@ function applyTheme(id: ThemeId) {
   // #endif
 }
 
+let listenerRegistered = false
+
 function setupSystemListener() {
   // #ifdef H5
   if (typeof window !== 'undefined' && window.matchMedia) {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     if (followSystem.value) {
       setTheme(mq.matches ? 'ink' : 'warm')
+    }
+    if (!listenerRegistered) {
+      listenerRegistered = true
+      mq.addEventListener('change', (e) => {
+        if (followSystem.value) {
+          setTheme(e.matches ? 'ink' : 'warm')
+        }
+      })
     }
   }
   // #endif

@@ -298,7 +298,7 @@ const onFlip = () => {
   background-color: rgba(24, 22, 20, 0.65);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 2rpx solid rgba(201, 169, 110, 0.3);
+  border: 2rpx solid rgba(var(--color-brand-rgb), 0.3);
 }
 
 .pose-pill-icon {
@@ -339,7 +339,7 @@ const onFlip = () => {
   background-color: rgba(24, 22, 20, 0.7);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 2rpx solid rgba(201, 169, 110, 0.25);
+  border: 2rpx solid rgba(var(--color-brand-rgb), 0.25);
 }
 
 .param-label {
@@ -464,7 +464,7 @@ const onFlip = () => {
 
 .template-thumb.active {
   border: 4rpx solid var(--color-brand);
-  box-shadow: 0 0 24rpx rgba(201, 169, 110, 0.4);
+  box-shadow: 0 0 24rpx rgba(var(--color-brand-rgb), 0.4);
 }
 
 .template-thumb:active {

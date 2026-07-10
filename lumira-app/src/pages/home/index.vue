@@ -412,7 +412,7 @@ const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
 }
 
 .quick-circle-gold {
-  background-color: #FDF6EC;
+  background-color: var(--color-brand-subtle);
 
   .ph {
     color: var(--color-brand);
@@ -420,18 +420,18 @@ const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
 }
 
 .quick-circle-green {
-  background-color: #E8F5E4;
+  background-color: var(--color-success-subtle);
 
   .ph {
-    color: #5A7A48;
+    color: var(--color-success);
   }
 }
 
 .quick-circle-red {
-  background-color: #FEE8E8;
+  background-color: var(--color-danger-subtle);
 
   .ph {
-    color: #C44A4A;
+    color: var(--color-danger);
   }
 }
 

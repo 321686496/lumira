@@ -28,6 +28,7 @@ onLaunch(() => {
   --color-brand-light: #D4B57A;
   --color-brand-subtle: #F5EDDB;
   --color-brand-text: #8C7340;
+  --color-brand-rgb: 201, 169, 110;
   --color-danger: #B85450;
   --color-danger-subtle: #F5E3E0;
   --color-success: #7A8B5C;
@@ -61,6 +62,7 @@ onLaunch(() => {
   --color-brand-deep: #B8985A;
   --color-brand-subtle: #2E2820;
   --color-brand-text: #D4B57A;
+  --color-brand-rgb: 212, 181, 122;
   --color-danger: #D4706C;
   --color-danger-subtle: #2E201E;
   --color-success: #8FA06A;
@@ -89,6 +91,7 @@ onLaunch(() => {
   --color-brand-deep: #A67B52;
   --color-brand-subtle: #F0E0C8;
   --color-brand-text: #8C5A30;
+  --color-brand-rgb: 196, 149, 106;
   --color-danger: #A04030;
   --color-danger-subtle: #F0D8D0;
   --color-success: #6B7B4C;
@@ -99,6 +102,8 @@ onLaunch(() => {
   --shadow-concave: inset 4px 4px 8px #D0C1AC, inset -4px -4px 8px #FFFDF7;
   --shadow-concave-subtle: inset 2px 2px 5px #D5C6B0, inset -2px -2px 5px #FFFDF7;
   --shadow-pressed: inset 3px 3px 6px #D0C1AC, inset -3px -3px 6px #FFFDF7;
+  --shadow-convex-brand: 4px 4px 10px #B08560, -4px -4px 10px #DAA577;
+  --shadow-float: 0 8px 32px rgba(61, 40, 23, 0.1);
 }
 
 /* 日系清新主题 */
@@ -115,6 +120,7 @@ onLaunch(() => {
   --color-brand-deep: #6E9458;
   --color-brand-subtle: #E8F0E2;
   --color-brand-text: #5E8348;
+  --color-brand-rgb: 139, 173, 114;
   --color-danger: #C87878;
   --color-danger-subtle: #F5E0E0;
   --color-success: #9AAB7C;
@@ -125,6 +131,8 @@ onLaunch(() => {
   --shadow-concave: inset 4px 4px 10px #D6DDD2, inset -4px -4px 10px #FFFFFF;
   --shadow-concave-subtle: inset 2px 2px 5px #D8DFD4, inset -2px -2px 5px #FFFFFF;
   --shadow-pressed: inset 3px 3px 8px #D6DDD2, inset -3px -3px 8px #FFFFFF;
+  --shadow-convex-brand: 4px 4px 10px #7A9B62, -4px -4px 10px #9CC084;
+  --shadow-float: 0 8px 32px rgba(74, 63, 53, 0.08);
 }
 
 /* ===== 全局重置（仅 class 选择器） ===== */
