@@ -65,7 +65,7 @@
     </view>
 
     <!-- 连续打卡 -->
-    <view class="section fade-up fade-up-d2">
+    <view class="section section-pad fade-up fade-up-d2">
       <view class="lumira-card">
         <view class="streak-head">
           <view class="streak-title-wrap">

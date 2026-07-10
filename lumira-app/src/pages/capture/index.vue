@@ -4,8 +4,13 @@
     <view class="glass-bar top-bar">
       <view class="status-spacer" :style="{ height: statusBarHeight + 'px' }"></view>
       <view class="top-bar-main">
-        <view class="icon-btn" @click="goSceneGuide">
-          <text class="ph ph-list top-icon"></text>
+        <view class="top-left-group">
+          <view class="icon-btn" @click="goBack">
+            <text class="ph ph-caret-left top-icon"></text>
+          </view>
+          <view class="icon-btn" @click="goSceneGuide">
+            <text class="ph ph-list top-icon"></text>
+          </view>
         </view>
         <text class="top-template-name">旅行人像</text>
         <view class="icon-btn" @click="toggleFlash">
@@ -129,6 +134,10 @@ const goSceneGuide = () => {
   uni.navigateTo({ url: '/pages/capture/scene-guide' })
 }
 
+const goBack = () => {
+  uni.navigateBack({ fail: () => uni.reLaunch({ url: '/pages/home/index' }) })
+}
+
 const onFlip = () => {
   uni.showToast({ title: '翻转镜头', icon: 'none' })
 }
@@ -172,6 +181,12 @@ const onFlip = () => {
   justify-content: space-between;
   height: 104rpx;
   padding: 0 40rpx;
+}
+
+.top-left-group {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
 }
 
 .top-template-name {

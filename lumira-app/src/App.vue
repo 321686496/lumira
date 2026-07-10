@@ -181,25 +181,25 @@ page {
   display: flex;
   align-items: center;
   gap: 16rpx;
-  min-width: 96rpx;
+  min-width: 32rpx;
 }
 
 .lumira-nav-right {
   display: flex;
   align-items: center;
   gap: 16rpx;
-  min-width: 96rpx;
+  min-width: 32rpx;
   justify-content: flex-end;
 }
 
 .lumira-nav-title {
   font-family: var(--font-cn-title);
-  font-size: 34rpx;
-  font-weight: 600;
+  font-size: 40rpx;
+  font-weight: 700;
   text-align: left;
   flex: 1;
   letter-spacing: -0.01em;
-  padding-left: 16rpx;
+  padding-left: 0;
   color: var(--color-text-primary);
 }
 
