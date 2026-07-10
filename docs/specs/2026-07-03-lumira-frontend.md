@@ -51,20 +51,30 @@ lumira/                        # 如画 单机版工程根目录
 │   ├── uni.scss                # 全局 SCSS 变量
 │   │
 │   ├── pages/                  # 页面目录（按功能划分）
-│   │   ├── capture/            # 拍摄模块
-│   │   │   ├── index.vue       #   拍摄页（取景器 + 叠图）
-│   │   │   ├── preview.vue     #   拍摄预览页
-│   │   │   └── parameters.vue  #   参数面板（半屏弹窗）
-│   │   ├── gallery/            # 相册模块
-│   │   │   ├── index.vue       #   相册页
-│   │   │   └── detail.vue      #   照片详情/后期编辑
-│   │   ├── templates/          # 模板模块
+│   │   ├── home/                # 首页模块（Tab 1）
+│   │   │   └── index.vue       #   首页（推荐/挑战/数据）
+│   │   ├── templates/           # 模板模块（Tab 2）
 │   │   │   ├── index.vue       #   模板库页
 │   │   │   ├── detail.vue      #   模板详情页
 │   │   │   ├── editor.vue      #   模板编辑器
-│   │   │   └── import.vue      #   模板导入页
-│   │   └── profile/            # 个人/设置模块
+│   │   │   ├── import.vue      #   模板导入页
+│   │   │   └── unlock.vue      #   解锁面板（弹出式）
+│   │   ├── capture/             # 拍摄模块（中心按钮跳转）
+│   │   │   ├── index.vue       #   拍摄页（取景器 + 叠图）
+│   │   │   ├── preview.vue     #   拍摄预览页
+│   │   │   └── parameters.vue  #   参数面板（半屏弹窗）
+│   │   ├── inspiration/         # 灵感模块（Tab 3）
+│   │   │   └── index.vue       #   灵感页（穿搭/心情/探店/场景）
+│   │   ├── gallery/             # 相册模块
+│   │   │   ├── index.vue       #   相册页
+│   │   │   ├── detail.vue      #   照片详情/后期编辑
+│   │   │   └── diary.vue       #   拍摄日记/穿搭日记
+│   │   └── profile/             # 个人/设置模块（Tab 4）
 │   │       ├── index.vue       #   我的页
+│   │       ├── growth.vue      #   成长中心
+│   │       ├── invite.vue      #   邀请有礼
+│   │       ├── academy.vue     #   摄影美学院
+│   │       ├── academy-detail.vue # 教程详情
 │   │       └── settings.vue    #   设置页
 │   │
 │   ├── components/             # 可复用组件
@@ -103,10 +113,15 @@ lumira/                        # 如画 单机版工程根目录
 │   │   └── useDevice.ts       #   设备信息/传感器
 │   │
 │   ├── stores/                 # Pinia 状态仓库
-│   │   ├── capture.ts         #   拍摄状态
-│   │   ├── gallery.ts         #   相册状态
-│   │   ├── templates.ts       #   模板库状态
-│   │   └── settings.ts        #   设置状态
+│   │   ├── capture.ts          #   拍摄状态
+│   │   ├── gallery.ts          #   相册状态
+│   │   ├── templates.ts        #   模板库状态
+│   │   ├── profile.ts          #   个人等级/经验/统计
+│   │   ├── challenge.ts        #   每日挑战进度
+│   │   ├── diary.ts            #   拍摄日记/穿搭日记
+│   │   ├── achievement.ts      #   成就/勋章
+│   │   ├── invitation.ts       #   邀请裂变计数
+│   │   └── settings.ts         #   设置状态
 │   │
 │   ├── services/               # 服务层
 │   │   ├── camera.ts          #   相机原生服务（依赖注入接口）
@@ -155,40 +170,75 @@ lumira/                        # 如画 单机版工程根目录
 
 | 路径 | 页面 | Tab | 说明 |
 |---|---|---|---|
-| `/pages/capture/index` | 拍摄页 | 是 | 首页，取景器 + 快门 |
+| `/pages/home/index` | 首页 | 是 | 留存枢纽：推荐/挑战/数据/限时免费 |
+| `/pages/templates/index` | 模板库 | 是 | 模板浏览/解锁/兑换码 |
+| `/pages/capture/index` | 拍摄页 | 否（中心按钮） | 取景器 + 快门，无 Tab 栏沉浸页 |
 | `/pages/capture/preview` | 拍摄预览 | 否 | 拍摄后立即预览 |
 | `/pages/capture/parameters` | 参数面板 | 否 | 半屏弹窗式 |
-| `/pages/templates/index` | 模板库 | 是 | 所有可用模板 |
+| `/pages/inspiration/index` | 灵感 | 是 | 女性向功能：穿搭/心情/探店/场景 |
+| `/pages/profile/index` | 我的 | 是 | 个人/等级/成就/设置 |
 | `/pages/templates/detail` | 模板详情 | 否 | 单模板详解 |
 | `/pages/templates/editor` | 模板编辑器 | 否 | 创建/编辑模板 |
 | `/pages/templates/import` | 模板导入 | 否 | 从文件导入 |
-| `/pages/gallery/index` | 相册 | 否 | 从拍摄页底部入口 |
+| `/pages/templates/unlock` | 模板解锁面板 | 否 | 弹出式多路径解锁 |
+| `/pages/gallery/index` | 相册 | 否 | 从首页/拍摄页入口 |
 | `/pages/gallery/detail` | 照片详情/后期 | 否 | 查看/编辑单张 |
-| `/pages/profile/index` | 我的 | 是 | 个人/设置入口 |
+| `/pages/gallery/diary` | 拍摄日记/穿搭日记 | 否 | 时间轴视图 |
+| `/pages/profile/growth` | 成长中心 | 否 | 成就/等级/统计 |
+| `/pages/profile/invite` | 邀请有礼 | 否 | 裂变分享入口 |
+| `/pages/profile/academy` | 摄影美学院 | 否 | 教程列表 |
+| `/pages/profile/academy-detail` | 教程详情 | 否 | 单篇教程阅读 |
 | `/pages/profile/settings` | 设置 | 否 | 应用设置 |
 
 ### 3.2 导航图
 
 ```
-[Tab 1: 拍摄] ──── (/pages/capture/index)
-   ├── 拍摄预览 ──→ (/pages/capture/preview)
-   │     └── 后期编辑 ──→ (/pages/gallery/detail)
-   ├── 参数面板 ──→ (/pages/capture/parameters)
-   └── 相册入口 ──→ (/pages/gallery/index)
-                      └── 照片详情 ──→ (/pages/gallery/detail)
+[Tab 1: 首页] ──── (/pages/home/index)
+   ├── 模板解锁面板 ──→ (/pages/templates/unlock)
+   ├── 拍摄入口 ──→ (/pages/capture/index)
+   ├── 每日挑战拍摄 ──→ (/pages/capture/index)
+   ├── 合拍挑战 ──→ (/pages/capture/index)
+   ├── 限时免费 ──→ (/pages/templates/unlock)
+   ├── 相册 ──→ (/pages/gallery/index)
+   └── 照片详情 ──→ (/pages/gallery/detail)
 
 [Tab 2: 模板] ──── (/pages/templates/index)
    ├── 模板详情 ──→ (/pages/templates/detail)
    ├── 模板创建 ──→ (/pages/templates/editor)
-   └── 模板导入 ──→ (/pages/templates/import)
+   ├── 模板导入 ──→ (/pages/templates/import)
+   └── 模板解锁 ──→ (/pages/templates/unlock)
 
-[Tab 3: 我的] ──── (/pages/profile/index)
-   └── 设置 ──→ (/pages/profile/settings)
+[中心按钮: 拍摄] ──── (/pages/capture/index)
+   ├── 拍摄预览 ──→ (/pages/capture/preview)
+   │     └── 后期编辑 ──→ (/pages/gallery/detail)
+   └── 参数面板 ──→ (/pages/capture/parameters)
+
+[Tab 3: 灵感] ──── (/pages/inspiration/index)
+   ├── 穿搭日记 ──→ (/pages/gallery/diary)
+   ├── 心情标签筛选 ──→ (/pages/gallery/index?filter=mood)
+   ├── 探店打卡 ──→ (/pages/capture/index?mode=checkin)
+   ├── 合拍指南 ──→ (/pages/capture/index?mode=group)
+   └── 场景向导 ──→ (/pages/capture/index?scene=xxx)
+
+[Tab 4: 我的] ──── (/pages/profile/index)
+   ├── 成长中心 ──→ (/pages/profile/growth)
+   ├── 邀请有礼 ──→ (/pages/profile/invite)
+   ├── 摄影美学院 ──→ (/pages/profile/academy)
+   ├── 设置 ──→ (/pages/profile/settings)
+   └── 穿搭日记 ──→ (/pages/gallery/diary)
 ```
 
-### 3.3 TabBar 配置（悬浮式自定义 Tab 栏）
+### 3.3 TabBar 配置（4 Tab + 中心拍摄按钮）
 
-首页采用**悬浮 Tab 栏**（Floating Tab Bar）：Tab 栏脱离页面底部边缘，以圆角胶囊悬浮于内容之上，底部留出安全间距，营造轻盈的编辑式质感。由于原生 `tabBar` 无法实现悬浮、圆角与毛玻璃效果，改用 uni-app **自定义 tabBar** 方案。
+首页采用 **4 Tab + 中心凸起拍摄按钮** 的悬浮胶囊导航：
+
+```
+        ╭─────────────────────────────────╮
+        │   🏠      📚      📷      ✨      👤   │
+        │  首页    模板    拍摄    灵感    我的  │
+        │        (中心凸起按钮)             │
+        ╰─────────────────────────────────╯
+```
 
 **pages.json 中启用自定义 Tab：**
 
@@ -197,15 +247,16 @@ lumira/                        # 如画 单机版工程根目录
   "tabBar": {
     "custom": true,
     "list": [
-      { "pagePath": "pages/capture/index", "text": "拍摄" },
+      { "pagePath": "pages/home/index", "text": "首页" },
       { "pagePath": "pages/templates/index", "text": "模板" },
+      { "pagePath": "pages/inspiration/index", "text": "灵感" },
       { "pagePath": "pages/profile/index", "text": "我的" }
     ]
   }
 }
 ```
 
-> `custom: true` 隐藏原生 Tab 栏，由全局组件 `FloatingTabBar.vue` 接管渲染。`list` 仍需保留以维持路由约定与 App 端 Tab 页栈管理。
+> `custom: true` 隐藏原生 Tab 栏，由全局组件 `FloatingTabBar.vue` 接管渲染。拍摄页不在 Tab 列表中，通过中心按钮跳转。
 
 **悬浮 Tab 栏视觉规格**：
 
@@ -218,11 +269,47 @@ lumira/                        # 如画 单机版工程根目录
 | 高度 | `56px` |
 | 背景 | `rgba(255,255,255,0.72)` + `backdrop-filter: blur(20px)` |
 | 边框 | `1px solid var(--color-border)` |
-| 阴影 | `0 4px 24px rgba(0,0,0,0.06)`（悬浮托举专用柔和投影） |
+| 阴影 | `0 4px 24px rgba(0,0,0,0.06)` |
 | 图标尺寸 | `24px`，选中态品牌金 `--color-brand-primary` |
 | 文字 | `--font-size-tag`（11px），选中态显示 |
 | 层级 | `z-index: 900` |
-| 拍摄页适配 | 取景器深色时 Tab 栏切换深色玻璃态（见第 13 章） |
+
+**中心拍摄按钮规格**：
+
+| 属性 | 规格 |
+|---|---|
+| 位置 | 悬浮胶囊中心，凸起高于 Tab 栏 `8px` |
+| 尺寸 | `56px × 56px` 圆形 |
+| 背景 | 品牌金 `--color-brand-primary`（`#C9A96E`） |
+| 图标 | 相机图标，白色，`28px` |
+| 阴影 | `0 4px 16px rgba(201,169,110,0.35)`（金色辉光） |
+| 点击反馈 | `scale(0.92)` on `:active`，回弹 spring 动效 |
+| 跳转到 | `/pages/capture/index`（无 Tab 栏沉浸页） |
+
+**Tab 与按钮布局**：
+
+```
+┌──────────────────────────────────────────────┐
+│                                              │
+│   🏠      📚       📷       ✨      👤      │
+│  首页    模板    (凸起)    灵感    我的     │
+│                    相机                     │
+│                                              │
+└──────────────────────────────────────────────┘
+         ↑         ↑         ↑        ↑
+      常规Tab   常规Tab   中心凸起   常规Tab
+                        (比其他Tab大1.5倍)
+```
+
+**首页 Tab 定位**：
+
+| Tab | 定位 | 核心职责 | 日活驱动力 |
+|---|---|---|---|
+| 首页 | Tab 1 | 留存枢纽：推荐/挑战/数据/限时免费 | 挑战刷新、限时免费、连续打卡 |
+| 模板 | Tab 2 | 内容消费：模板浏览/解锁/兑换码 | 每周限免、碎片收集 |
+| 拍摄 | 中心按钮 | 核心动作：取景器+快门 | 唯一 CTA，无 Tab 沉浸 |
+| 灵感 | Tab 3 | 女性向复合：穿搭/心情/探店/场景 | 穿搭连续打卡、场景收集 |
+| 我的 | Tab 4 | 身份认同：等级/成就/邀请/设置 | 升级里程碑、成就解锁 |
 
 ---
 
@@ -230,10 +317,23 @@ lumira/                        # 如画 单机版工程根目录
 
 ```
 App.vue
-├── FloatingTabBar.vue              # 悬浮胶囊导航（3 Tab，全局固定）
+├── FloatingTabBar.vue              # 悬浮胶囊导航（4 Tab + 中心拍摄按钮，全局固定）
 │
-├── [Tab: 拍摄] CaptureIndex.vue
-│   ├── AppHeader.vue               # 标题栏 + 设置入口
+├── [Tab: 首页] HomeIndex.vue
+│   ├── AppHeader                   # 日期 + 天气 + 通知入口
+│   ├── RecommendSwiper             # 模板推荐横滑轮播（3-5张）
+│   ├── TodayDataStrip              # 一行基础数据
+│   ├── DailyChallengeCard          # 今日挑战卡片
+│   ├── GroupChallengeCard          # 合拍挑战卡片
+│   ├── LimitedFreeReminder         # 限时免费提醒
+│   └── StreakReminder              # 连续打卡提醒
+│
+├── [Tab: 模板] TemplateIndex.vue
+│   ├── AppHeader
+│   ├── CategoryTabs                # 分类标签
+│   └── TemplateCard[]              # 模板卡片列表
+│
+├── [拍摄页] CaptureIndex.vue       # 不在 Tab 中，通过中心按钮跳转
 │   ├── CameraViewfinder.vue        # 取景器（全屏主体）
 │   │   ├── OverlayLayer.vue        #   构图线叠图
 │   │   │   ├── RuleOfThirdsGrid.vue
@@ -243,37 +343,36 @@ App.vue
 │   ├── TemplateTag.vue             # 当前模板名称
 │   └── ShutterButton.vue           # 快门按钮
 │
-├── [Tab: 模板] TemplateIndex.vue
-│   ├── AppHeader.vue
-│   ├── CategoryTabs.vue            # 分类标签
-│   └── TemplateCard.vue[]          # 模板卡片列表
+├── [Tab: 灵感] InspirationIndex.vue
+│   ├── AppHeader
+│   ├── DiaryEntryCard              # 穿搭日记入口（连续天数/最近记录）
+│   ├── MoodTagCloud                # 心情标签云
+│   ├── CheckinEntryCard            # 探店打卡入口
+│   ├── GroupGuideEntryCard         # 合拍指南入口
+│   └── SceneGuideGrid              # 场景向导网格
 │
 ├── [Tab: 我的] ProfileIndex.vue
-│   ├── AppHeader.vue
-│   ├── ProfileStats.vue            # 拍摄统计
-│   └── SettingsEntry.vue           # 设置入口
+│   ├── AppHeader
+│   ├── ProfileHeader               # 头像/昵称/等级/经验
+│   ├── QuickActions                # 成长中心/成就/邀请 快捷入口
+│   ├── FragmentProgress            # 碎片收集进度
+│   └── MenuList                    # 摄影美学院/关于/设置
 │
 ├── TemplateDetail.vue              # 非 Tab 页
-│   ├── OverlayPreview.vue
-│   └── TemplateInfo.vue
+│
+├── TemplateUnlock.vue              # 弹出式多路径解锁面板
 │
 ├── TemplateEditor.vue              # 非 Tab 页
-│   ├── EditorCanvas.vue            # 编辑画布
-│   ├── ControlPanel.vue            # 参数控制面板
-│   └── PreviewToggle.vue           # 预览切换
 │
 ├── ImageEditor.vue                 # 非 Tab 页（后期）
-│   ├── ImageCanvas.vue             # 图像显示画布
-│   ├── AdjustmentPanel.vue         # 参数调节面板
-│   │   ├── ColorSliders.vue        #   调色滑块
-│   │   ├── LutSelector.vue         #   LUT 滤镜选择
-│   │   ├── CropFrame.vue           #   裁剪框
-│   │   ├── SmoothSlider.vue        #   磨皮强度
-│   │   └── SharpenSlider.vue       #   锐化强度
-│   └── CompareToggle.vue           # 前后对比
 │
-└── SettingsPage.vue                 # 非 Tab 页
-    └── SettingItem.vue[]
+├── GalleryDiary.vue                # 拍摄日记/穿搭日记
+│
+├── GrowthCenter.vue                # 成长中心
+│
+├── InvitePage.vue                  # 邀请有礼
+│
+└── SettingsPage.vue                # 非 Tab 页
 ```
 
 ---
@@ -374,12 +473,64 @@ interface TemplatesState {
 
 ## 6. 页面 Spec（规格定义）
 
-### 6.1 拍摄页（Capture Index）
+### 6.1 首页（Home Index）
+
+| 属性 | 规格 |
+|---|---|
+| **路径** | `/pages/home/index` |
+| **Tab** | 是，首页 |
+| **核心功能** | 留存枢纽：情绪入口 + 推荐 + 数据 + 限时免费 |
+| **加载输入** | 每日挑战池（按日期哈希）、用户统计数据、限时免费配置 |
+| **关键状态** | 今日挑战状态、限时免费倒计时、连续打卡天数 |
+| **用户操作** | 预览推荐模板 → 套用一个；查看挑战可拍；点击进入模板库 |
+| **反馈度量** | 首屏加载 < 800ms，Swiper 轮播顺滑 |
+| **边界情况** | 无拍摄记录 → 展示系统引导照片；无网络 → 所有功能纯本地 |
+| **数据依赖** | challenge store, template store, profile store |
+| **验收标准** | 1. 日期 + 天气 + 每日一句正确显示 2. Swiper 模板推荐正常 3. 基础数据一行正确展示 4. 今日挑战状态正确 5. 合拍挑战入口可点 6. 限时免费倒计时刷新 7. 连续打卡进度刷新 |
+
+**首页从上到下模块**：
+
+```
+┌─────────────────────────────────────────┐
+│  1. 日期 + 天气 + 一句温柔               │  ← 情绪入口（无功能操作）
+├─────────────────────────────────────────┤
+│  2. Swiper 模板推荐（3-5 张卡横滑）       │  ← 种草推荐（第一视觉落点）
+│     点击卡片 → 解锁面板 / 拍摄页         │
+├─────────────────────────────────────────┤
+│  3. 基础数据（一行）                      │  ← 本周：XX 张 · XX 个模板 · Lv.X
+├─────────────────────────────────────────┤
+│  4. 今日挑战                             │  ← 主挑战 + 支线 A/B
+├─────────────────────────────────────────┤
+│  5. 合拍挑战                             │  ← 双人/多人拍摄入口
+├─────────────────────────────────────────┤
+│  6. 限时免费提醒                         │  ← 一行，点击跳转解锁
+├─────────────────────────────────────────┤
+│  7. 连续打卡提醒                         │  ← 一行，点击跳转拍摄
+└─────────────────────────────────────────┘
+```
+
+**首页 vs 灵感边界**：
+
+| 维度 | 首页 | 灵感 |
+|---|---|---|
+| 情绪价值 | ✅ 日期+天气+每日一句 | ❌ 无 |
+| 推荐 | ✅ Swiper 模板推荐 + 限时免费 | ❌ 无 |
+| 数据 | ✅ 基础数据一行 | ❌ 无 |
+| 挑战 | ✅ 每日挑战 + 合拍挑战 | ❌ 无 |
+| 打卡 | ✅ 一行进度 | ❌ 无 |
+| 穿搭日记 | ❌ | ✅ |
+| 心情标签 | ❌ | ✅ |
+| 探店打卡 | ❌ | ✅ |
+| 场景向导 | ❌ | ✅ |
+
+---
+
+### 6.2 拍摄页（Capture Index）
 
 | 属性 | 规格 |
 |---|---|
 | **路径** | `/pages/capture/index` |
-| **Tab** | 是，首页 |
+| **Tab** | 否（中心按钮跳转，无 Tab 栏沉浸页） |
 | **核心功能** | 取景器 + 叠图 + 拍摄 |
 | **加载输入** | 相机权限 → 激活相机 → 加载默认/上次模板 |
 | **关键状态** | `capture.isActive`, `capture.activeTemplateId` |
@@ -389,22 +540,78 @@ interface TemplatesState {
 | **数据依赖** | camera service, template store |
 | **验收标准** | 1. 取景器实时显示画面 2. 叠图准确叠加 3. 快门响应 < 100ms 4. 参数面板可调 5. 无网络权限提示 |
 
-### 6.2 模板库页（Template Index）
+---
+
+### 6.3 模板库页（Template Index）
 
 | 属性 | 规格 |
 |---|---|
 | **路径** | `/pages/templates/index` |
 | **Tab** | 是 |
-| **核心功能** | 浏览/搜索/分类模板 |
+| **核心功能** | 浏览/搜索/分类模板，解锁面板入口 |
 | **加载输入** | 读取 SQLite 中所有模板（内置+导入） |
-| **关键状态** | `templates.*` |
-| **用户操作** | 分类筛选 → 点击模板 → 进入详情/直接套用 |
+| **关键状态** | `templates.*`, 解锁状态 |
+| **用户操作** | 分类筛选 → 点击模板 → 进入详情/弹出解锁面板/直接套用 |
 | **反馈度量** | 列表加载 < 500ms |
 | **边界情况** | 无模板 → 展示空状态+引导创建/导入 |
 | **数据依赖** | template store, storage service |
-| **验收标准** | 1. 内置模板正确显示 2. 分类筛选正常 3. 模板卡片展示完整 4. 点击可套用 |
+| **验收标准** | 1. 内置模板正确显示 2. 分类筛选正常 3. 模板卡片展示完整 4. 点击可套用 5. 解锁面板可触发 6. 兑换码入口可用 |
 
-### 6.3 后期编辑页（Gallery Detail）
+---
+
+### 6.4 灵感页（Inspiration Index）
+
+| 属性 | 规格 |
+|---|---|
+| **路径** | `/pages/inspiration/index` |
+| **Tab** | 是，第三 Tab |
+| **核心功能** | 纯女性向功能合集：穿搭日记 + 心情标签 + 探店打卡 + 场景向导 |
+| **加载输入** | 用户穿搭记录、心情标签统计、探店地点统计 |
+| **关键状态** | 穿搭连续天数、标签使用频率、已打卡地点数 |
+| **用户操作** | 进入穿搭时间线 / 按心情筛选照片 / 打卡新地点 / 选择场景 |
+| **反馈度量** | 首屏加载 < 800ms |
+| **边界情况** | 无穿搭记录 → 展示穿搭灵感引导；无标签记录 → 引导首次标记 |
+| **数据依赖** | gallery store, diary store, mood/place statistics |
+| **验收标准** | 1. 穿搭日记入口展示连续天数 2. 心情标签云可点击筛选 3. 探店打卡入口展示已打卡数 4. 场景向导可点击进入拍摄 5. 无首页情绪装饰（纯功能导向） |
+
+**灵感页从上到下模块**：
+
+```
+┌─────────────────────────────────────────┐
+│  1. 穿搭日记卡片                         │  ← 连续天数 + 最近两条记录
+│     点击 → 穿搭时间线                    │
+├─────────────────────────────────────────┤
+│  2. 心情标签云                           │  ← 7 种标签 + 各自标记次数
+│     点击 → 按心情筛选照片                │
+├─────────────────────────────────────────┤
+│  3. 探店打卡卡片                         │  ← 已打卡总数 + 最近 3 个地点
+│     点击 → 地点列表/地图                 │
+├─────────────────────────────────────────┤
+│  4. 场景向导网格                         │  ← 6-8 个预设场景
+│     点击 → 对应场景模板推荐 + 拍摄       │
+└─────────────────────────────────────────┘
+```
+
+---
+
+### 6.5 我的页（Profile Index）
+
+| 属性 | 规格 |
+|---|---|
+| **路径** | `/pages/profile/index` |
+| **Tab** | 是 |
+| **核心功能** | 个人身份 + 等级/成就/邀请/设置 |
+| **加载输入** | 用户等级、经验值、成就列表、碎片统计 |
+| **关键状态** | `profile.level`, `profile.xp`, `profile.unlocks` |
+| **用户操作** | 查看成长中心 / 邀请好友 / 查看成就 / 进入设置 |
+| **反馈度量** | 首屏加载 < 800ms |
+| **边界情况** | 无网络 → 所有数据纯本地 |
+| **数据依赖** | profile store, achievement store |
+| **验收标准** | 1. 头像/昵称/等级正确展示 2. 经验进度条动画正确 3. 成就列表可滚动 4. 邀请入口可用 5. 设置入口可用 6. 碎片收集进度展示 |
+
+---
+
+### 6.6 后期编辑页（Gallery Detail）
 
 | 属性 | 规格 |
 |---|---|
@@ -417,7 +624,7 @@ interface TemplatesState {
 | **边界情况** | 照片被删除 / 不支持的格式 |
 | **验收标准** | 1. 亮度/对比度/饱和度/色温可调 2. LUT 滤镜生效 3. 磨皮锐化可用 4. 裁剪旋转可用 5. 前后对比 6. 导出到相册 |
 
-### 6.4 模板编辑器页（Template Editor）
+### 6.7 模板编辑器页（Template Editor）
 
 | 属性 | 规格 |
 |---|---|
@@ -623,15 +830,24 @@ interface TemplateEngine {
 ```json
 {
   "pages": [
-    { "path": "pages/capture/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/capture/preview", "style": { "navigationBarTitleText": "预览" } },
+    { "path": "pages/home/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/templates/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/templates/detail", "style": { "navigationBarTitleText": "模板详情" } },
     { "path": "pages/templates/editor", "style": { "navigationBarTitleText": "模板编辑器" } },
     { "path": "pages/templates/import", "style": { "navigationBarTitleText": "导入模板" } },
+    { "path": "pages/templates/unlock", "style": { "navigationBarTitleText": "解锁模板" } },
+    { "path": "pages/capture/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/capture/preview", "style": { "navigationBarTitleText": "预览" } },
+    { "path": "pages/capture/parameters", "style": { "navigationBarTitleText": "参数" } },
+    { "path": "pages/inspiration/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/gallery/index", "style": { "navigationBarTitleText": "相册" } },
     { "path": "pages/gallery/detail", "style": { "navigationBarTitleText": "编辑" } },
+    { "path": "pages/gallery/diary", "style": { "navigationBarTitleText": "穿搭日记" } },
     { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/profile/growth", "style": { "navigationBarTitleText": "成长中心" } },
+    { "path": "pages/profile/invite", "style": { "navigationBarTitleText": "邀请有礼" } },
+    { "path": "pages/profile/academy", "style": { "navigationBarTitleText": "摄影美学院" } },
+    { "path": "pages/profile/academy-detail", "style": { "navigationBarTitleText": "教程详情" } },
     { "path": "pages/profile/settings", "style": { "navigationBarTitleText": "设置" } }
   ],
   "globalStyle": {

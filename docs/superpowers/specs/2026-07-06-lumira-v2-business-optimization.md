@@ -537,6 +537,8 @@ CREATE TABLE IF NOT EXISTS ReferralStats (
 
 | 路径 | 页面 | 说明 |
 |---|---|---|
+| `/pages/home/index` | 首页 | 留存枢纽：推荐/挑战/数据/限时免费 |
+| `/pages/inspiration/index` | 灵感 | 女性向功能：穿搭/心情/探店/场景 |
 | `/pages/templates/unlock` | 模板解锁面板 | 弹出式，展示多路径解锁选项 |
 | `/pages/profile/invite` | 邀请有礼 | 挑战卡生成、进度展示、奖励阶梯、邀请记录 |
 | `/pages/profile/growth` | 成长中心 | 成就展示、等级/经验、每日挑战、碎片收集 |

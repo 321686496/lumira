@@ -1,1 +1,9 @@
 .worktrees/
+
+# Build cache
+lumira-app/.vite/
+
+# Agent/process artifacts
+.FullName
+.agents/
+.superpowers/

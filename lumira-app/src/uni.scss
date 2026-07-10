@@ -1,0 +1,48 @@
+/**
+ * 如画 Lumira 设计 Token
+ * 仅包含 SCSS 变量定义，不包含任何 CSS 规则
+ * uni-app 会自动注入到每个组件的 <style> 块中
+ */
+
+/* ===== 暖米白主题颜色（默认） ===== */
+$color-bg-canvas: #FAF7F2;
+$color-bg-canvas-alt: #F2EDE6;
+$color-bg-card: #FFFFFF;
+$color-bg-surface: #F0EBE3;
+$color-text-primary: #1A1A1A;
+$color-text-secondary: #5C5852;
+$color-text-tertiary: #9C9690;
+$color-border: #E5E0D8;
+
+$color-brand-primary: #C9A96E;
+$color-brand-secondary: #A88550;
+$color-brand-light: #F5EDDB;
+
+$color-tag-gold-bg: #F5EDDB;
+$color-tag-gold-text: #8C7340;
+$color-tag-red-bg: #F5E3E0;
+$color-tag-red-text: #9F3F3A;
+$color-tag-green-bg: #EBEEE2;
+$color-tag-green-text: #566340;
+
+$color-danger: #B85450;
+$color-success: #7A8B5C;
+
+/* ===== 圆角 ===== */
+$radius-sm: 12rpx;
+$radius-md: 20rpx;
+$radius-btn: 16rpx;
+$radius-card: 28rpx;
+$radius-lg: 40rpx;
+
+/* ===== 阴影 ===== */
+$shadow-sm: 0 2rpx 6rpx rgba(0,0,0,0.04);
+$shadow-md: 0 8rpx 32rpx rgba(0,0,0,0.06);
+$shadow-lg: 0 16rpx 64rpx rgba(0,0,0,0.08);
+$shadow-card: 0 4rpx 16rpx rgba(0,0,0,0.04), 0 2rpx 4rpx rgba(0,0,0,0.02);
+$shadow-card-hover: 0 16rpx 48rpx rgba(0,0,0,0.08), 0 4rpx 8rpx rgba(0,0,0,0.04);
+
+/* ===== 渐变 ===== */
+$gradient-brand: linear-gradient(135deg, #C9A96E 0%, #A88550 100%);
+$gradient-card: linear-gradient(135deg, #FFFFFF 0%, #FAF7F2 100%);
+$gradient-surface: linear-gradient(180deg, #F8F5F0 0%, #F0EBE3 100%);

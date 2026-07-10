@@ -1,33 +1,114 @@
 {
-  "pages": [
-    { "path": "pages/splash/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/home/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/capture/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/capture/preview", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/capture/parameters", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/templates/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/templates/detail", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/templates/editor", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/templates/import", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/gallery/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/gallery/detail", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/profile/settings", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/settings/theme", "style": { "navigationStyle": "custom" } }
-  ],
-  "globalStyle": {
-    "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "如画",
-    "backgroundColor": "#FAF7F2"
-  },
-  "tabBar": {
-    "custom": true,
-    "color": "#9C9690",
-    "selectedColor": "#C9A96E",
-    "borderStyle": "black",
-    "list": [
-      { "pagePath": "pages/home/index", "text": "首页" },
-      { "pagePath": "pages/profile/index", "text": "我的" }
-    ]
-  }
+	"pages": [
+		{
+			"path": "pages/splash/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/home/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/challenge/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/capture/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#181614" }
+		},
+		{
+			"path": "pages/capture/preview",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#181614" }
+		},
+		{
+			"path": "pages/capture/scene-guide",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/unlock",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/editor",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/recommend",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/challenge/detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/inspiration/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/gallery/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/gallery/detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/gallery/diary",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/gallery/monthly-digest",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/settings",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/settings/theme",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/growth",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/invite",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/academy",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/academy-detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/collections",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/collection-detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "如画 Lumira",
+		"navigationBarBackgroundColor": "#FAF7F2",
+		"backgroundColor": "#FAF7F2"
+	}
 }
