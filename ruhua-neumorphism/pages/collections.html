@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 精选集</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    body {
+      padding-bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 20px);
+    }
+
+    /* --- Page Header --- */
+    .page-header {
+      padding: var(--space-10) var(--page-padding) var(--space-6);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .page-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-tight);
+    }
+
+    /* --- Create Button (Gold Outline Convex) --- */
+    .btn-outline-gold {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-5);
+      background-color: var(--color-canvas);
+      border: 1.5px solid var(--color-brand);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-convex-subtle);
+      color: var(--color-brand);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-micro);
+      font-weight: var(--weight-semibold);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .btn-outline-gold:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    .btn-outline-gold i {
+      font-size: 14px;
+    }
+
+    /* --- Collection Grid --- */
+    .collection-grid {
+      padding: 0 var(--page-padding);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--card-gap);
+    }
+
+    /* --- Collection Card --- */
+    .collection-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+      overflow: hidden;
+      padding: var(--space-3);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast);
+    }
+
+    .collection-card:active {
+      box-shadow: var(--shadow-pressed);
+    }
+
+    /* --- 2x2 Thumbnail Grid --- */
+    .thumb-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      margin-bottom: var(--space-3);
+    }
+
+    .thumb-item {
+      aspect-ratio: 1;
+      background-color: var(--color-surface-alt);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .thumb-item i {
+      font-size: 16px;
+      color: var(--color-text-tertiary);
+      opacity: 0.3;
+    }
+
+    /* --- Collection Name --- */
+    .collection-name {
+      font-size: var(--text-caption);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-snug);
+      margin-bottom: var(--space-1);
+    }
+
+    .collection-count {
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+    }
+
+    /* --- Tab Bar --- */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 375px;
+      padding: 0 var(--space-4);
+      padding-bottom: var(--safe-area-bottom);
+      z-index: 100;
+    }
+
+    .tab-bar-inner {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-convex);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      height: var(--tab-bar-height);
+      padding: 0 var(--space-2);
+    }
+
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      text-decoration: none;
+      cursor: pointer;
+      flex: 1;
+      padding: var(--space-2) 0;
+    }
+
+    .tab-item i {
+      font-size: var(--tab-icon-size);
+      color: var(--tab-inactive-color);
+      transition: color var(--transition-normal);
+    }
+
+    .tab-item span {
+      font-size: var(--tab-label-size);
+      font-weight: var(--weight-medium);
+      color: var(--tab-inactive-color);
+      letter-spacing: var(--tracking-label);
+      font-family: var(--font-cn-body);
+      transition: color var(--transition-normal);
+    }
+
+    .tab-item.active i,
+    .tab-item.active span {
+      color: var(--tab-active-color);
+    }
+
+    .tab-item-shutter {
+      position: relative;
+      width: var(--shutter-size);
+      height: var(--shutter-size);
+      margin-top: -16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-shutter);
+      box-shadow: var(--shadow-convex-brand);
+      border: var(--shutter-border-width) solid var(--color-brand);
+      cursor: pointer;
+      transition: all var(--transition-normal);
+    }
+
+    .tab-item-shutter:active {
+      box-shadow: var(--shadow-pressed);
+    }
+
+    .tab-item-shutter i {
+      font-size: 22px;
+      color: var(--color-brand);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">精选集</h1>
+    <button class="btn-outline-gold">
+      <i class="ph ph-plus"></i>
+      创建精选集
+    </button>
+  </div>
+
+  <!-- ==================== Collection Grid ==================== -->
+  <div class="collection-grid">
+
+    <!-- Collection 1 -->
+    <a href="collection-detail.html" class="collection-card" style="text-decoration: none;">
+      <div class="thumb-grid">
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+      </div>
+      <div class="collection-name">街角咖啡时光</div>
+      <div class="collection-count">12 张照片</div>
+    </a>
+
+    <!-- Collection 2 -->
+    <a href="collection-detail.html" class="collection-card" style="text-decoration: none;">
+      <div class="thumb-grid">
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+      </div>
+      <div class="collection-name">夏日花语</div>
+      <div class="collection-count">8 张照片</div>
+    </a>
+
+    <!-- Collection 3 -->
+    <a href="collection-detail.html" class="collection-card" style="text-decoration: none;">
+      <div class="thumb-grid">
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+      </div>
+      <div class="collection-name">城市光影</div>
+      <div class="collection-count">23 张照片</div>
+    </a>
+
+    <!-- Collection 4 -->
+    <a href="collection-detail.html" class="collection-card" style="text-decoration: none;">
+      <div class="thumb-grid">
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+        <div class="thumb-item"><i class="ph ph-image"></i></div>
+      </div>
+      <div class="collection-name">胶片记忆</div>
+      <div class="collection-count">16 张照片</div>
+    </a>
+
+  </div>
+
+  <!-- ==================== Tab Bar ==================== -->
+  <nav class="tab-bar">
+    <div class="tab-bar-inner">
+      <!-- 首页 -->
+      <a class="tab-item" href="home.html">
+        <i class="ph ph-house"></i>
+        <span>首页</span>
+      </a>
+      <!-- 模板 -->
+      <a class="tab-item" href="templates.html">
+        <i class="ph ph-squares-four"></i>
+        <span>模板</span>
+      </a>
+      <!-- 快门 (Center) -->
+      <a class="tab-item" href="capture.html">
+        <div class="tab-item-shutter">
+          <i class="ph ph-camera"></i>
+        </div>
+      </a>
+      <!-- 作品集 -->
+      <a class="tab-item" href="collections.html">
+        <i class="ph ph-images"></i>
+        <span>作品</span>
+      </a>
+      <!-- 我的 (Active) -->
+      <a class="tab-item active" href="profile.html">
+        <i class="ph ph-user-circle"></i>
+        <span>我的</span>
+      </a>
+    </div>
+  </nav>
+
+</body>
+</html>

@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 每月手帐</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    body {
+      padding-bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 20px);
+    }
+
+    /* --- Page Header --- */
+    .page-header {
+      padding: var(--space-10) var(--page-padding) var(--space-6);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .page-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-tight);
+    }
+
+    .month-nav {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .month-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+      border: none;
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast);
+    }
+
+    .month-arrow:active {
+      box-shadow: var(--shadow-pressed);
+    }
+
+    .month-arrow i {
+      font-size: 16px;
+      color: var(--color-text-secondary);
+    }
+
+    /* --- Overview Card --- */
+    .overview-card {
+      margin: 0 var(--page-padding);
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-convex);
+      padding: var(--space-6);
+    }
+
+    .overview-stat {
+      font-family: var(--font-en-title);
+      font-size: 48px;
+      font-weight: var(--weight-semibold);
+      color: var(--color-brand);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-tight);
+    }
+
+    .overview-stat-label {
+      font-size: var(--text-caption);
+      color: var(--color-text-secondary);
+      margin-top: var(--space-1);
+    }
+
+    .overview-divider {
+      height: 1px;
+      background-color: var(--color-divider);
+      margin: var(--space-5) 0;
+    }
+
+    .overview-sub {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-size: var(--text-caption);
+      color: var(--color-text-secondary);
+    }
+
+    .overview-sub i {
+      font-size: 16px;
+      color: var(--color-brand);
+    }
+
+    .overview-sub strong {
+      color: var(--color-text-primary);
+      font-weight: var(--weight-semibold);
+    }
+
+    /* --- Heatmap --- */
+    .heatmap-label {
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+      margin-top: var(--space-4);
+      margin-bottom: var(--space-2);
+    }
+
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: var(--space-1);
+    }
+
+    .heatmap-cell {
+      aspect-ratio: 1;
+      border-radius: 3px;
+      background-color: var(--color-surface-alt);
+      transition: background-color var(--transition-fast);
+    }
+
+    .heatmap-cell.level-1 { background-color: rgba(201, 169, 110, 0.2); }
+    .heatmap-cell.level-2 { background-color: rgba(201, 169, 110, 0.4); }
+    .heatmap-cell.level-3 { background-color: rgba(201, 169, 110, 0.65); }
+    .heatmap-cell.level-4 { background-color: rgba(201, 169, 110, 0.9); }
+
+    /* --- Section Title --- */
+    .section-label {
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-label);
+      margin-bottom: var(--space-3);
+    }
+
+    /* --- Featured Works Horizontal Scroll --- */
+    .featured-scroll {
+      padding: 0 var(--page-padding);
+      display: flex;
+      gap: var(--space-4);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .featured-scroll::-webkit-scrollbar { display: none; }
+
+    .featured-card {
+      flex-shrink: 0;
+      width: 200px;
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+      overflow: hidden;
+    }
+
+    .featured-img {
+      width: 100%;
+      aspect-ratio: 4 / 5;
+      background-color: var(--color-surface-alt);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .featured-img i {
+      font-size: 28px;
+      color: var(--color-text-tertiary);
+      opacity: 0.3;
+    }
+
+    .featured-date {
+      padding: var(--space-2) var(--space-3);
+      font-family: var(--font-en-body);
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+    }
+
+    /* --- Fragment Progress --- */
+    .progress-section {
+      margin: 0 var(--page-padding);
+    }
+
+    .progress-label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-3);
+    }
+
+    .progress-label {
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      color: var(--color-text-secondary);
+    }
+
+    .progress-value {
+      font-family: var(--font-en-body);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-semibold);
+      color: var(--color-brand);
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow-concave);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 65%;
+      background: linear-gradient(90deg, var(--color-brand-deep), var(--color-brand));
+      border-radius: var(--radius-pill);
+    }
+
+    /* --- Share Button --- */
+    .btn-gold-convex {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      width: calc(100% - 2 * var(--page-padding));
+      margin: var(--space-9) var(--page-padding) 0;
+      padding: var(--space-4) var(--space-6);
+      background-color: var(--color-brand);
+      border: none;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-convex-brand);
+      color: var(--color-text-inverse);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-semibold);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+
+    .btn-gold-convex:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    /* --- Tab Bar --- */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 375px;
+      padding: 0 var(--space-4);
+      padding-bottom: var(--safe-area-bottom);
+      z-index: 100;
+    }
+
+    .tab-bar-inner {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-convex);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      height: var(--tab-bar-height);
+      padding: 0 var(--space-2);
+    }
+
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      text-decoration: none;
+      cursor: pointer;
+      flex: 1;
+      padding: var(--space-2) 0;
+    }
+
+    .tab-item i {
+      font-size: var(--tab-icon-size);
+      color: var(--tab-inactive-color);
+      transition: color var(--transition-normal);
+    }
+
+    .tab-item span {
+      font-size: var(--tab-label-size);
+      font-weight: var(--weight-medium);
+      color: var(--tab-inactive-color);
+      letter-spacing: var(--tracking-label);
+      font-family: var(--font-cn-body);
+      transition: color var(--transition-normal);
+    }
+
+    .tab-item.active i,
+    .tab-item.active span {
+      color: var(--tab-active-color);
+    }
+
+    .tab-item-shutter {
+      position: relative;
+      width: var(--shutter-size);
+      height: var(--shutter-size);
+      margin-top: -16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-shutter);
+      box-shadow: var(--shadow-convex-brand);
+      border: var(--shutter-border-width) solid var(--color-brand);
+      cursor: pointer;
+      transition: all var(--transition-normal);
+    }
+
+    .tab-item-shutter:active {
+      box-shadow: var(--shadow-pressed);
+    }
+
+    .tab-item-shutter i {
+      font-size: 22px;
+      color: var(--color-brand);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">七月摄影手帐</h1>
+    <div class="month-nav">
+      <button class="month-arrow"><i class="ph ph-caret-left"></i></button>
+      <button class="month-arrow"><i class="ph ph-caret-right"></i></button>
+    </div>
+  </div>
+
+  <!-- ==================== Monthly Overview Card ==================== -->
+  <div class="overview-card">
+    <div class="overview-stat">28</div>
+    <div class="overview-stat-label">本月拍摄</div>
+
+    <div class="overview-divider"></div>
+
+    <div class="overview-sub">
+      <i class="ph ph-squares-four"></i>
+      <span>最常用模板：<strong>咖啡馆半身</strong></span>
+    </div>
+
+    <!-- Heatmap -->
+    <div class="heatmap-label">最活跃日期</div>
+    <div class="heatmap-grid">
+      <div class="heatmap-cell level-0"></div>
+      <div class="heatmap-cell level-2"></div>
+      <div class="heatmap-cell level-3"></div>
+      <div class="heatmap-cell level-1"></div>
+      <div class="heatmap-cell level-4"></div>
+      <div class="heatmap-cell level-0"></div>
+      <div class="heatmap-cell level-1"></div>
+
+      <div class="heatmap-cell level-3"></div>
+      <div class="heatmap-cell level-4"></div>
+      <div class="heatmap-cell level-2"></div>
+      <div class="heatmap-cell level-0"></div>
+      <div class="heatmap-cell level-1"></div>
+      <div class="heatmap-cell level-3"></div>
+      <div class="heatmap-cell level-2"></div>
+
+      <div class="heatmap-cell level-0"></div>
+      <div class="heatmap-cell level-1"></div>
+      <div class="heatmap-cell level-4"></div>
+      <div class="heatmap-cell level-3"></div>
+      <div class="heatmap-cell level-2"></div>
+      <div class="heatmap-cell level-0"></div>
+      <div class="heatmap-cell level-1"></div>
+
+      <div class="heatmap-cell level-2"></div>
+      <div class="heatmap-cell level-3"></div>
+      <div class="heatmap-cell level-1"></div>
+      <div class="heatmap-cell level-4"></div>
+      <div class="heatmap-cell level-0"></div>
+      <div class="heatmap-cell level-0"></div>
+      <div class="heatmap-cell level-2"></div>
+    </div>
+  </div>
+
+  <!-- ==================== Featured Works ==================== -->
+  <section style="margin-top: var(--space-9); padding: 0 var(--page-padding);">
+    <div class="section-label">精选作品</div>
+  </section>
+  <div class="featured-scroll" style="margin-top: 0;">
+
+    <!-- Work 1 -->
+    <div class="featured-card">
+      <div class="featured-img"><i class="ph ph-image"></i></div>
+      <div class="featured-date">07.08</div>
+    </div>
+
+    <!-- Work 2 -->
+    <div class="featured-card">
+      <div class="featured-img"><i class="ph ph-image"></i></div>
+      <div class="featured-date">07.05</div>
+    </div>
+
+    <!-- Work 3 -->
+    <div class="featured-card">
+      <div class="featured-img"><i class="ph ph-image"></i></div>
+      <div class="featured-date">07.01</div>
+    </div>
+
+  </div>
+
+  <!-- ==================== Fragment Progress ==================== -->
+  <section style="margin-top: var(--space-9);">
+    <div class="progress-section">
+      <div class="progress-label-row">
+        <span class="progress-label">月度碎片收集</span>
+        <span class="progress-value">13 / 20</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== Share Button ==================== -->
+  <button class="btn-gold-convex">
+    <i class="ph ph-share-network" style="font-size: 18px;"></i>
+    分享月度报告
+  </button>
+
+  <!-- ==================== Tab Bar ==================== -->
+  <nav class="tab-bar">
+    <div class="tab-bar-inner">
+      <!-- 首页 -->
+      <a class="tab-item" href="home.html">
+        <i class="ph ph-house"></i>
+        <span>首页</span>
+      </a>
+      <!-- 模板 -->
+      <a class="tab-item" href="templates.html">
+        <i class="ph ph-squares-four"></i>
+        <span>模板</span>
+      </a>
+      <!-- 快门 (Center) -->
+      <a class="tab-item" href="capture.html">
+        <div class="tab-item-shutter">
+          <i class="ph ph-camera"></i>
+        </div>
+      </a>
+      <!-- 作品集 -->
+      <a class="tab-item" href="collections.html">
+        <i class="ph ph-images"></i>
+        <span>作品</span>
+      </a>
+      <!-- 我的 (Active) -->
+      <a class="tab-item active" href="profile.html">
+        <i class="ph ph-user-circle"></i>
+        <span>我的</span>
+      </a>
+    </div>
+  </nav>
+
+</body>
+</html>

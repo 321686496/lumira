@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira - 模板库</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@400;500;600&family=Newsreader:ital,wght@0,400;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-cn-body);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      padding-bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 16px);
+    }
+
+    /* --- Page Header --- */
+    .page-header {
+      padding: var(--space-6) var(--page-padding) var(--space-4);
+    }
+
+    .page-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h1);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-tight);
+    }
+
+    /* --- Search Bar (Neumorphism Concave) --- */
+    .search-bar {
+      margin: 0 var(--page-padding) var(--space-5);
+      position: relative;
+      height: 48px;
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-concave);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--space-5);
+    }
+
+    .search-bar .search-icon {
+      color: var(--color-text-tertiary);
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .search-bar input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      color: var(--color-text-primary);
+      margin-left: var(--space-3);
+      letter-spacing: var(--tracking-normal);
+    }
+
+    .search-bar input::placeholder {
+      color: var(--color-text-tertiary);
+    }
+
+    /* --- Category Filter Pills --- */
+    .filter-bar {
+      padding: 0 var(--page-padding);
+      margin-bottom: var(--space-6);
+      display: flex;
+      gap: var(--space-2);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+
+    .filter-bar::-webkit-scrollbar { display: none; }
+
+    .filter-pill {
+      flex-shrink: 0;
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-pill);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-medium);
+      letter-spacing: var(--tracking-label);
+      color: var(--color-text-secondary);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+      border: none;
+      cursor: pointer;
+      transition: all var(--transition-normal);
+      font-family: var(--font-cn-body);
+      white-space: nowrap;
+    }
+
+    .filter-pill.active {
+      color: var(--color-brand-deep);
+      box-shadow: var(--shadow-pressed);
+      background-color: var(--color-canvas);
+    }
+
+    /* --- Template Card Grid --- */
+    .card-grid {
+      padding: 0 var(--page-padding);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--card-gap);
+    }
+
+    /* --- Template Card --- */
+    .template-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-convex);
+      overflow: hidden;
+      transition: box-shadow var(--transition-normal);
+    }
+
+    .template-card:active {
+      box-shadow: var(--shadow-pressed);
+    }
+
+    .card-cover {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      background-color: var(--color-surface-alt);
+      position: relative;
+    }
+
+    .card-cover-placeholder {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        145deg,
+        var(--color-surface-alt) 0%,
+        var(--color-divider) 50%,
+        var(--color-surface-alt) 100%
+      );
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-cover-placeholder i {
+      font-size: 28px;
+      color: var(--color-text-tertiary);
+      opacity: 0.4;
+    }
+
+    .card-price-badge {
+      position: absolute;
+      top: var(--space-3);
+      right: var(--space-3);
+      padding: 2px var(--space-3);
+      border-radius: var(--radius-pill);
+      font-size: var(--text-micro);
+      font-weight: var(--weight-semibold);
+      letter-spacing: var(--tracking-label);
+      font-family: var(--font-cn-body);
+    }
+
+    .card-price-badge.free {
+      background-color: var(--color-success-subtle);
+      color: var(--color-success);
+    }
+
+    .card-price-badge.paid {
+      background-color: var(--color-brand-subtle);
+      color: var(--color-brand-text);
+    }
+
+    .card-body {
+      padding: var(--space-3) var(--space-4) var(--space-4);
+    }
+
+    .card-name {
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      margin-bottom: var(--space-2);
+      line-height: var(--leading-snug);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px var(--space-3);
+      border-radius: var(--radius-pill);
+      font-size: var(--text-micro);
+      font-weight: var(--weight-medium);
+      letter-spacing: var(--tracking-label);
+      color: var(--color-text-tertiary);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+    }
+
+    /* --- Floating Tab Bar (5+1) --- */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 375px;
+      padding: 0 var(--space-4);
+      padding-bottom: var(--safe-area-bottom);
+      z-index: 100;
+    }
+
+    .tab-bar-inner {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-convex);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      height: var(--tab-bar-height);
+      padding: 0 var(--space-2);
+    }
+
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      text-decoration: none;
+      cursor: pointer;
+      flex: 1;
+      position: relative;
+      padding: var(--space-2) 0;
+    }
+
+    .tab-item i {
+      font-size: var(--tab-icon-size);
+      color: var(--tab-inactive-color);
+      transition: color var(--transition-normal);
+    }
+
+    .tab-item span {
+      font-size: var(--tab-label-size);
+      font-weight: var(--weight-medium);
+      color: var(--tab-inactive-color);
+      letter-spacing: var(--tracking-label);
+      font-family: var(--font-cn-body);
+      transition: color var(--transition-normal);
+    }
+
+    .tab-item.active i,
+    .tab-item.active span {
+      color: var(--tab-active-color);
+    }
+
+    /* Shutter button in center */
+    .tab-item-shutter {
+      position: relative;
+      width: var(--shutter-size);
+      height: var(--shutter-size);
+      margin-top: -16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-shutter);
+      box-shadow: var(--shadow-convex-brand);
+      border: var(--shutter-border-width) solid var(--color-brand);
+      cursor: pointer;
+      transition: all var(--transition-normal);
+    }
+
+    .tab-item-shutter:active {
+      box-shadow: var(--shadow-pressed);
+    }
+
+    .tab-item-shutter i {
+      font-size: 22px;
+      color: var(--color-brand);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">模板库</h1>
+  </div>
+
+  <!-- Search Bar -->
+  <div class="search-bar">
+    <i class="ph ph-magnifying-glass search-icon"></i>
+    <input type="text" placeholder="搜索拍摄模板..." />
+  </div>
+
+  <!-- Category Filter Pills -->
+  <div class="filter-bar">
+    <button class="filter-pill active">全部</button>
+    <button class="filter-pill">人像</button>
+    <button class="filter-pill">风光</button>
+    <button class="filter-pill">美食</button>
+    <button class="filter-pill">夜景</button>
+    <button class="filter-pill">街拍</button>
+  </div>
+
+  <!-- Template Card Grid -->
+  <div class="card-grid">
+
+    <!-- Card 1 -->
+    <a href="template-detail.html" class="template-card" style="text-decoration:none;">
+      <div class="card-cover">
+        <div class="card-cover-placeholder">
+          <i class="ph ph-portrait"></i>
+        </div>
+        <span class="card-price-badge free">免费</span>
+      </div>
+      <div class="card-body">
+        <div class="card-name">柔光人像</div>
+        <span class="card-tag">人像</span>
+      </div>
+    </a>
+
+    <!-- Card 2 -->
+    <a href="template-detail.html" class="template-card" style="text-decoration:none;">
+      <div class="card-cover">
+        <div class="card-cover-placeholder">
+          <i class="ph ph-mountains"></i>
+        </div>
+        <span class="card-price-badge free">免费</span>
+      </div>
+      <div class="card-body">
+        <div class="card-name">山川烟雨</div>
+        <span class="card-tag">风光</span>
+      </div>
+    </a>
+
+    <!-- Card 3 -->
+    <a href="template-detail.html" class="template-card" style="text-decoration:none;">
+      <div class="card-cover">
+        <div class="card-cover-placeholder">
+          <i class="ph ph-coffee"></i>
+        </div>
+        <span class="card-price-badge paid">PRO</span>
+      </div>
+      <div class="card-body">
+        <div class="card-name">晨间咖啡</div>
+        <span class="card-tag">美食</span>
+      </div>
+    </a>
+
+    <!-- Card 4 -->
+    <a href="template-detail.html" class="template-card" style="text-decoration:none;">
+      <div class="card-cover">
+        <div class="card-cover-placeholder">
+          <i class="ph ph-moon-stars"></i>
+        </div>
+        <span class="card-price-badge paid">PRO</span>
+      </div>
+      <div class="card-body">
+        <div class="card-name">城市夜色</div>
+        <span class="card-tag">夜景</span>
+      </div>
+    </a>
+
+    <!-- Card 5 -->
+    <a href="template-detail.html" class="template-card" style="text-decoration:none;">
+      <div class="card-cover">
+        <div class="card-cover-placeholder">
+          <i class="ph ph-street-view"></i>
+        </div>
+        <span class="card-price-badge free">免费</span>
+      </div>
+      <div class="card-body">
+        <div class="card-name">胡同光影</div>
+        <span class="card-tag">街拍</span>
+      </div>
+    </a>
+
+    <!-- Card 6 -->
+    <a href="template-detail.html" class="template-card" style="text-decoration:none;">
+      <div class="card-cover">
+        <div class="card-cover-placeholder">
+          <i class="ph ph-sun-dim"></i>
+        </div>
+        <span class="card-price-badge free">免费</span>
+      </div>
+      <div class="card-body">
+        <div class="card-name">逆光剪影</div>
+        <span class="card-tag">人像</span>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- Floating Tab Bar -->
+  <nav class="tab-bar">
+    <div class="tab-bar-inner">
+      <!-- 首页 -->
+      <a class="tab-item" href="home.html">
+        <i class="ph ph-house"></i>
+        <span>首页</span>
+      </a>
+      <!-- 模板库 (Active) -->
+      <a class="tab-item active" href="templates.html">
+        <i class="ph ph-squares-four"></i>
+        <span>模板</span>
+      </a>
+      <!-- 快门 (Center) -->
+      <a class="tab-item" href="capture.html">
+        <div class="tab-item-shutter">
+          <i class="ph ph-camera"></i>
+        </div>
+      </a>
+      <!-- 作品集 -->
+      <a class="tab-item" href="collections.html">
+        <i class="ph ph-images"></i>
+        <span>作品</span>
+      </a>
+      <!-- 我的 -->
+      <a class="tab-item" href="profile.html">
+        <i class="ph ph-user"></i>
+        <span>我的</span>
+      </a>
+    </div>
+  </nav>
+
+  <script>
+    // Filter pill toggle
+    document.querySelectorAll('.filter-pill').forEach(pill => {
+      pill.addEventListener('click', function() {
+        document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+        this.classList.add('active');
+      });
+    });
+  </script>
+
+</body>
+</html>

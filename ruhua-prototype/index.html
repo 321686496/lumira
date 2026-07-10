@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>如画 Lumira · 完整原型导航</title>
+  <link rel="stylesheet" href="css/lumira.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    body {
+      background: #FAF7F2;
+      font-family: 'Noto Sans SC', sans-serif;
+    }
+    .nav-page-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 0;
+      border-bottom: 1px solid #EAE5DC;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      color: #1A1A1A;
+      text-decoration: none;
+      width: 100%;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      font: inherit;
+      text-align: left;
+    }
+    .nav-page-link:hover { opacity: 0.7; }
+    .nav-page-link:last-child { border-bottom: none; }
+    .page-tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      margin-right: 6px;
+    }
+    .tag-v1 { background: #EBEEE2; color: #566340; }
+    .tag-v2 { background: #F5EDDB; color: #8C7340; }
+    .theme-switcher {
+      display: flex;
+      gap: 4px;
+      padding: 6px;
+      background: #F2EEE6;
+      border-radius: 9999px;
+    }
+    .theme-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .theme-dot.active { border-color: #1A1A1A; }
+    section { margin-bottom: 32px; }
+  </style>
+</head>
+<body>
+  <div class="lumira-container" style="padding-bottom: 32px;">
+    <!-- Header -->
+    <div style="text-align: center; padding: 48px 24px 24px;">
+      <div style="font-size: 48px; margin-bottom: 12px;">◧</div>
+      <h1 style="font-family: 'Noto Serif SC', serif; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px;">
+        如画 Lumira
+      </h1>
+      <p style="font-size: 13px; color: #9C9690; letter-spacing: 0.02em;">如你所见，皆成画卷</p>
+      <p style="font-size: 11px; color: #C9A96E; margin-top: 8px; letter-spacing: 0.04em;">V1 + V2 完整原型 · 24 PAGES</p>
+    </div>
+
+    <!-- Theme Switcher -->
+    <div style="display: flex; justify-content: center; margin-bottom: 32px;">
+      <div class="theme-switcher">
+        <button class="theme-dot active" style="background: #FAF7F2;" data-theme="warm" title="暖米白"><i class="ph ph-sun"></i></button>
+        <button class="theme-dot" style="background: #1C1A17;" data-theme="ink" title="浓墨"><i class="ph ph-moon" style="color: #F5E6D3;"></i></button>
+        <button class="theme-dot" style="background: #F5E6D3;" data-theme="retro" title="胶片复古"><i class="ph ph-film-strip"></i></button>
+        <button class="theme-dot" style="background: #FAF7F2;" data-theme="fresh" title="日系清新"><i class="ph ph-flower"></i></button>
+      </div>
+    </div>
+
+    <div style="padding: 0 24px;">
+      <!-- V1 Core -->
+      <section>
+        <h2 style="font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #9C9690; text-transform: uppercase; margin-bottom: 8px;">
+          V1 核心功能
+        </h2>
+        <div style="background: #fff; border-radius: 12px; border: 1px solid #EAE5DC; padding: 0 16px;">
+          <button class="nav-page-link" onclick="location.href='pages/splash.html'">
+            <span><span class="page-tag tag-v1">V1</span>启动页 Splash</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/home.html'">
+            <span><span class="page-tag tag-v1">V1</span>首页 Home</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/templates.html'">
+            <span><span class="page-tag tag-v1">V1</span>模板库 Templates</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/template-detail.html'">
+            <span><span class="page-tag tag-v1">V1</span>模板详情 Template Detail</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/template-editor.html'">
+            <span><span class="page-tag tag-v1">V1</span>模板编辑器 Template Editor</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/capture.html'">
+            <span><span class="page-tag tag-v1">V1</span>拍摄页 Capture</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/capture-preview.html'">
+            <span><span class="page-tag tag-v1">V1</span>拍摄预览 Capture Preview</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/gallery.html'">
+            <span><span class="page-tag tag-v1">V1</span>相册 Gallery</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/gallery-detail.html'">
+            <span><span class="page-tag tag-v1">V1</span>后期编辑 Image Editor</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- V1 Personal + Settings -->
+      <section>
+        <h2 style="font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #9C9690; text-transform: uppercase; margin-bottom: 8px;">
+          V1 个人 · 设置
+        </h2>
+        <div style="background: #fff; border-radius: 12px; border: 1px solid #EAE5DC; padding: 0 16px;">
+          <button class="nav-page-link" onclick="location.href='pages/profile.html'">
+            <span><span class="page-tag tag-v1">V1</span>个人中心 Profile</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/settings.html'">
+            <span><span class="page-tag tag-v1">V1</span>设置页 Settings</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- V1 场景 -->
+      <section>
+        <h2 style="font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #9C9690; text-transform: uppercase; margin-bottom: 8px;">
+          V1 场景
+        </h2>
+        <div style="background: #fff; border-radius: 12px; border: 1px solid #EAE5DC; padding: 0 16px;">
+          <button class="nav-page-link" onclick="location.href='pages/scene.html'">
+            <span><span class="page-tag tag-v1">V1</span>场景管理 Scene</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- V2 Female -->
+      <section>
+        <h2 style="font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #9C9690; text-transform: uppercase; margin-bottom: 8px;">
+          V2 女性向 · 灵感
+        </h2>
+        <div style="background: #fff; border-radius: 12px; border: 1px solid #EAE5DC; padding: 0 16px;">
+          <button class="nav-page-link" onclick="location.href='pages/inspiration.html'">
+            <span><span class="page-tag tag-v2">V2</span>灵感页 Inspiration</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/diary.html'">
+            <span><span class="page-tag tag-v2">V2</span>穿搭日记 Diary</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/template-recommend.html'">
+            <span><span class="page-tag tag-v2">V2</span>模板推荐 Template Rec</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- V2 Growth -->
+      <section>
+        <h2 style="font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #9C9690; text-transform: uppercase; margin-bottom: 8px;">
+          V2 游戏化 · 成长
+        </h2>
+        <div style="background: #fff; border-radius: 12px; border: 1px solid #EAE5DC; padding: 0 16px;">
+          <button class="nav-page-link" onclick="location.href='pages/growth.html'">
+            <span><span class="page-tag tag-v2">V2</span>成长中心 Growth</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/invite.html'">
+            <span><span class="page-tag tag-v2">V2</span>邀请有礼 Invite</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/academy.html'">
+            <span><span class="page-tag tag-v2">V2</span>摄影美学院 Academy</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/academy-detail.html'">
+            <span><span class="page-tag tag-v2">V2</span>教程详情 Lesson Detail</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- V2 Commercial -->
+      <section>
+        <h2 style="font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #9C9690; text-transform: uppercase; margin-bottom: 8px;">
+          V2 商业化 · 内容
+        </h2>
+        <div style="background: #fff; border-radius: 12px; border: 1px solid #EAE5DC; padding: 0 16px;">
+          <button class="nav-page-link" onclick="location.href='pages/unlock.html'">
+            <span><span class="page-tag tag-v2">V2</span>模板解锁面板 Unlock</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/challenge.html'">
+            <span><span class="page-tag tag-v2">V2</span>每日挑战 Daily Challenge</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/collections.html'">
+            <span><span class="page-tag tag-v2">V2</span>精选集 Collections</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/collection-detail.html'">
+            <span><span class="page-tag tag-v2">V2</span>精选集详情 Collection Detail</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+          <button class="nav-page-link" onclick="location.href='pages/monthly-digest.html'">
+            <span><span class="page-tag tag-v2">V2</span>每月摄影手帐 Monthly Digest</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- V2 Theme -->
+      <section>
+        <h2 style="font-size: 13px; font-weight: 700; letter-spacing: 0.06em; color: #9C9690; text-transform: uppercase; margin-bottom: 8px;">
+          V2 主题系统
+        </h2>
+        <div style="background: #fff; border-radius: 12px; border: 1px solid #EAE5DC; padding: 0 16px;">
+          <button class="nav-page-link" onclick="location.href='pages/theme.html'">
+            <span><span class="page-tag tag-v2">V2</span>主题选择 Theme Picker</span>
+            <i class="ph ph-arrow-right" style="color: #9C9690; font-size: 14px;"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <div style="text-align: center; padding: 32px 0 16px;">
+        <p style="font-size: 11px; color: #9C9690; letter-spacing: 0.04em;">
+          共 24 个页面 · V1 + V2 完整功能原型
+        </p>
+        <p style="font-size: 11px; color: #C9A96E; margin-top: 4px; letter-spacing: 0.04em;">
+          如你所见，皆成画卷
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.theme-dot').forEach(dot => {
+      dot.addEventListener('click', () => {
+        document.querySelectorAll('.theme-dot').forEach(d => d.classList.remove('active'));
+        dot.classList.add('active');
+        const theme = dot.dataset.theme;
+        document.documentElement.setAttribute('data-theme', theme);
+      });
+    });
+  </script>
+</body>
+</html>

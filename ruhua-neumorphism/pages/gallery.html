@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira - 我的相册</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@400;500;600&family=Newsreader:ital,wght@0,400;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    /* 基础重置 */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: var(--color-canvas);
+      color: var(--color-text-primary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-family: var(--font-cn-body);
+    }
+
+    /* 页面容器 */
+    .page-container {
+      max-width: 375px;
+      margin: 0 auto;
+      padding-bottom: calc(var(--tab-bar-height, 64px) + var(--safe-area-bottom, 20px) + 16px);
+    }
+
+    /* 页面标题区 */
+    .page-header {
+      padding: var(--space-5, 20px) var(--page-padding, 24px) 0;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+
+    .page-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h1, 24px);
+      font-weight: var(--weight-semibold, 600);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug, -0.02em);
+      line-height: var(--leading-tight, 1.1);
+    }
+
+    .page-subtitle {
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption, 13px);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-normal, 0);
+      line-height: var(--leading-normal, 1.5);
+    }
+
+    /* 筛选标签条 */
+    .filter-bar {
+      padding: var(--space-4, 16px) var(--page-padding, 24px);
+      display: flex;
+      gap: var(--space-2, 8px);
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .filter-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter-pill {
+      flex-shrink: 0;
+      padding: var(--space-2, 8px) var(--space-4, 16px);
+      border-radius: var(--radius-pill, 9999px);
+      border: none;
+      background-color: var(--color-canvas);
+      color: var(--color-text-secondary);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-caption, 13px);
+      font-weight: var(--weight-medium, 500);
+      letter-spacing: var(--tracking-wide, 0.02em);
+      cursor: pointer;
+      transition: all var(--transition-normal, 200ms ease);
+      box-shadow: var(--shadow-convex-subtle);
+      user-select: none;
+    }
+
+    .filter-pill:hover {
+      color: var(--color-text-primary);
+    }
+
+    .filter-pill.active {
+      background-color: var(--color-canvas);
+      color: var(--color-brand);
+      box-shadow: var(--shadow-concave-subtle);
+    }
+
+    /* 照片数量统计 */
+    .photo-count {
+      padding: 0 var(--page-padding, 24px);
+      margin-bottom: var(--space-3, 12px);
+    }
+
+    .photo-count span {
+      font-family: var(--font-cn-body);
+      font-size: var(--text-micro, 11px);
+      color: var(--color-text-tertiary);
+      letter-spacing: var(--tracking-label, 0.06em);
+      text-transform: uppercase;
+    }
+
+    /* 照片网格 */
+    .photo-grid {
+      padding: 0 var(--page-padding, 24px);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-3, 12px);
+    }
+
+    .photo-item {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border-radius: var(--radius-md, 10px);
+      background-color: var(--color-surface-alt);
+      box-shadow: var(--shadow-convex-subtle);
+      overflow: hidden;
+      cursor: pointer;
+      transition: box-shadow var(--transition-normal, 200ms ease), transform var(--transition-fast, 100ms ease);
+    }
+
+    .photo-item:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    /* 照片占位灰色方块内的纹理提示 */
+    .photo-item::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-color: var(--color-surface-alt);
+      opacity: 0.6;
+    }
+
+    /* 照片信息叠加 */
+    .photo-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: var(--space-2, 8px) var(--space-2, 8px);
+      background: linear-gradient(0deg, rgba(26, 26, 26, 0.45) 0%, rgba(26, 26, 26, 0) 100%);
+      border-radius: 0 0 var(--radius-md, 10px) var(--radius-md, 10px);
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .photo-date {
+      font-family: var(--font-cn-body);
+      font-size: 10px;
+      color: rgba(250, 247, 242, 0.85);
+      letter-spacing: var(--tracking-wide, 0.02em);
+      line-height: var(--leading-snug, 1.2);
+    }
+
+    .photo-template {
+      font-family: var(--font-cn-body);
+      font-size: 9px;
+      color: rgba(250, 247, 242, 0.6);
+      letter-spacing: var(--tracking-wide, 0.02em);
+      line-height: var(--leading-snug, 1.2);
+    }
+
+    /* 底部悬浮 Tab 栏 */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 375px;
+      height: calc(var(--tab-bar-height, 64px) + var(--safe-area-bottom, 20px));
+      padding-bottom: var(--safe-area-bottom, 20px);
+      background-color: var(--tab-bg, var(--color-canvas));
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-around;
+      padding-top: var(--space-3, 12px);
+      z-index: 100;
+    }
+
+    .tab-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: color var(--transition-fast, 100ms ease);
+      min-width: 48px;
+    }
+
+    .tab-item i {
+      font-size: var(--tab-icon-size, 24px);
+      color: var(--tab-inactive-color, var(--color-text-tertiary));
+      transition: color var(--transition-fast, 100ms ease);
+    }
+
+    .tab-item span {
+      font-family: var(--font-cn-body);
+      font-size: var(--tab-label-size, 11px);
+      color: var(--tab-inactive-color, var(--color-text-tertiary));
+      letter-spacing: var(--tracking-label, 0.06em);
+      transition: color var(--transition-fast, 100ms ease);
+    }
+
+    .tab-item.active i,
+    .tab-item.active span {
+      color: var(--tab-active-color, var(--color-brand));
+    }
+
+    /* 快门 Tab（中间大按钮） */
+    .tab-shutter {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      cursor: pointer;
+      text-decoration: none;
+      margin-top: -14px;
+    }
+
+    .tab-shutter .shutter-btn {
+      width: var(--shutter-size, 56px);
+      height: var(--shutter-size, 56px);
+      border-radius: var(--radius-shutter, 50%);
+      background-color: var(--color-canvas);
+      border: var(--shutter-border-width, 2.5px) solid var(--color-brand);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-convex);
+      transition: box-shadow var(--transition-normal, 200ms ease), transform var(--transition-fast, 100ms ease);
+    }
+
+    .tab-shutter .shutter-btn:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.95);
+    }
+
+    .tab-shutter .shutter-btn i {
+      font-size: 22px;
+      color: var(--color-brand);
+    }
+
+    .tab-shutter span {
+      font-family: var(--font-cn-body);
+      font-size: var(--tab-label-size, 11px);
+      color: var(--tab-inactive-color, var(--color-text-tertiary));
+      letter-spacing: var(--tracking-label, 0.06em);
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+
+    <!-- 页面标题 -->
+    <header class="page-header">
+      <h1 class="page-title">我的相册</h1>
+      <span class="page-subtitle">Gallery</span>
+    </header>
+
+    <!-- 筛选标签条 -->
+    <nav class="filter-bar" role="tablist">
+      <button class="filter-pill active" role="tab" aria-selected="true">全部</button>
+      <button class="filter-pill" role="tab" aria-selected="false">按模板</button>
+      <button class="filter-pill" role="tab" aria-selected="false">按时间</button>
+      <button class="filter-pill" role="tab" aria-selected="false">按场景</button>
+    </nav>
+
+    <!-- 照片数量统计 -->
+    <div class="photo-count">
+      <span>共 36 张</span>
+    </div>
+
+    <!-- 照片网格 -->
+    <div class="photo-grid">
+      <!-- 第1行 -->
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.09</span>
+          <span class="photo-template">落日</span>
+        </div>
+      </div>
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.08</span>
+          <span class="photo-template">清风</span>
+        </div>
+      </div>
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.08</span>
+          <span class="photo-template">静谧</span>
+        </div>
+      </div>
+      <!-- 第2行 -->
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.07</span>
+          <span class="photo-template">落日</span>
+        </div>
+      </div>
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.06</span>
+          <span class="photo-template">水墨</span>
+        </div>
+      </div>
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.05</span>
+          <span class="photo-template">花香</span>
+        </div>
+      </div>
+      <!-- 第3行 -->
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.04</span>
+          <span class="photo-template">清风</span>
+        </div>
+      </div>
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.03</span>
+          <span class="photo-template">墨韵</span>
+        </div>
+      </div>
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.02</span>
+          <span class="photo-template">落日</span>
+        </div>
+      </div>
+      <!-- 第4行 -->
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">07.01</span>
+          <span class="photo-template">静谧</span>
+        </div>
+      </div>
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">06.30</span>
+          <span class="photo-template">花香</span>
+        </div>
+      </div>
+      <div class="photo-item">
+        <div class="photo-overlay">
+          <span class="photo-date">06.29</span>
+          <span class="photo-template">水墨</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 底部悬浮 Tab 栏 -->
+  <nav class="tab-bar" aria-label="主导航">
+    <a class="tab-item" href="home.html">
+      <i class="ph ph-house"></i>
+      <span>首页</span>
+    </a>
+    <a class="tab-item" href="templates.html">
+      <i class="ph ph-squares-four"></i>
+      <span>模板</span>
+    </a>
+    <a class="tab-shutter" href="capture.html">
+      <div class="shutter-btn">
+        <i class="ph ph-camera"></i>
+      </div>
+      <span>拍摄</span>
+    </a>
+    <a class="tab-item" href="inspiration.html">
+      <i class="ph ph-sparkle"></i>
+      <span>灵感</span>
+    </a>
+    <a class="tab-item active" href="gallery.html">
+      <i class="ph ph-images-square"></i>
+      <span>我的</span>
+    </a>
+  </nav>
+
+  <!-- 筛选标签交互 -->
+  <script>
+    document.querySelectorAll('.filter-pill').forEach(pill => {
+      pill.addEventListener('click', function () {
+        document.querySelectorAll('.filter-pill').forEach(p => {
+          p.classList.remove('active');
+          p.setAttribute('aria-selected', 'false');
+        });
+        this.classList.add('active');
+        this.setAttribute('aria-selected', 'true');
+      });
+    });
+  </script>
+</body>
+</html>

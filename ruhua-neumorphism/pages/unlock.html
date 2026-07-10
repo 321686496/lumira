@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 模板解锁</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    /* --- Overlay Mask --- */
+    .overlay-mask {
+      position: fixed;
+      inset: 0;
+      background-color: rgba(26, 26, 26, 0.45);
+      z-index: 200;
+      animation: fadeIn 0.25s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0.8; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* --- Bottom Panel --- */
+    .bottom-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 210;
+      max-width: 375px;
+      margin: 0 auto;
+      animation: slideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .panel-card {
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      box-shadow: var(--shadow-float);
+      padding: var(--space-6) var(--page-padding) var(--safe-area-bottom);
+    }
+
+    /* --- Panel Handle --- */
+    .panel-handle {
+      width: 40px;
+      height: 4px;
+      background-color: var(--color-divider);
+      border-radius: var(--radius-pill);
+      margin: 0 auto var(--space-6);
+    }
+
+    /* --- Template Cover --- */
+    .template-cover-area {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      background-color: var(--color-surface-alt);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-concave);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: var(--space-5);
+    }
+
+    .template-cover-area i {
+      font-size: 36px;
+      color: var(--color-text-tertiary);
+      opacity: 0.35;
+    }
+
+    /* --- Template Info --- */
+    .template-name {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-snug);
+    }
+
+    .template-author {
+      font-size: var(--text-caption);
+      color: var(--color-text-tertiary);
+      margin-top: var(--space-1);
+    }
+
+    /* --- Price --- */
+    .price-display {
+      font-family: var(--font-en-title);
+      font-size: 36px;
+      font-weight: var(--weight-semibold);
+      color: var(--color-brand);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-tight);
+      margin-top: var(--space-5);
+      margin-bottom: var(--space-6);
+    }
+
+    /* --- Content List --- */
+    .content-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      margin-bottom: var(--space-7);
+    }
+
+    .content-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-size: var(--text-caption);
+      color: var(--color-text-secondary);
+    }
+
+    .content-item .check-icon {
+      color: var(--color-success);
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    /* --- CTA Button (Gold Fill Convex) --- */
+    .btn-gold-convex {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      width: 100%;
+      padding: var(--space-4) var(--space-6);
+      background-color: var(--color-brand);
+      border: none;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-convex-brand);
+      color: var(--color-text-inverse);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-semibold);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+    }
+
+    .btn-gold-convex:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    /* --- Restore Purchase Link --- */
+    .restore-link {
+      display: block;
+      text-align: center;
+      font-size: var(--text-caption);
+      color: var(--color-text-tertiary);
+      margin-top: var(--space-4);
+      cursor: pointer;
+      padding: var(--space-2) 0;
+    }
+
+    /* --- Cancel Button (Dark Convex) --- */
+    .btn-cancel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: var(--space-4) var(--space-6);
+      background-color: var(--color-text-primary);
+      border: none;
+      border-radius: var(--radius-lg);
+      box-shadow: 4px 4px 10px rgba(26, 26, 26, 0.25), -4px -4px 10px rgba(60, 58, 55, 0.15);
+      color: var(--color-canvas);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-medium);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      margin-top: var(--space-4);
+    }
+
+    .btn-cancel:active {
+      box-shadow: inset 3px 3px 8px rgba(26, 26, 26, 0.2), inset -3px -3px 8px rgba(60, 58, 55, 0.1);
+      transform: scale(0.97);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Semi-transparent Overlay Mask -->
+  <div class="overlay-mask"></div>
+
+  <!-- Bottom Panel -->
+  <div class="bottom-panel">
+    <div class="panel-card">
+
+      <!-- Drag Handle -->
+      <div class="panel-handle"></div>
+
+      <!-- Template Cover Placeholder -->
+      <div class="template-cover-area">
+        <i class="ph ph-image"></i>
+      </div>
+
+      <!-- Template Name & Author -->
+      <div class="template-name">咖啡馆半身</div>
+      <div class="template-author">
+        <i class="ph ph-user-circle" style="font-size: 14px; vertical-align: -2px; margin-right: 2px;"></i>
+        作者：如画官方
+      </div>
+
+      <!-- Price -->
+      <div class="price-display">¥6.00</div>
+
+      <!-- Content List -->
+      <div class="content-list">
+        <div class="content-item">
+          <i class="ph ph-check-circle-fill check-icon"></i>
+          <span>构图叠图</span>
+        </div>
+        <div class="content-item">
+          <i class="ph ph-check-circle-fill check-icon"></i>
+          <span>姿势参考</span>
+        </div>
+        <div class="content-item">
+          <i class="ph ph-check-circle-fill check-icon"></i>
+          <span>相机参数</span>
+        </div>
+        <div class="content-item">
+          <i class="ph ph-check-circle-fill check-icon"></i>
+          <span>后期参数</span>
+        </div>
+      </div>
+
+      <!-- Unlock CTA -->
+      <button class="btn-gold-convex">
+        <i class="ph ph-lock-open" style="font-size: 18px;"></i>
+        解锁此模板
+      </button>
+
+      <!-- Restore Purchase -->
+      <div class="restore-link">恢复购买</div>
+
+      <!-- Cancel Button -->
+      <button class="btn-cancel">取消</button>
+
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>如画 Lumira · 模板编辑�?/title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+  <div class="lumira-container">
+    <!-- Navbar -->
+    <nav class="lumira-nav">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn" onclick="history.back()">�?/button>
+      </div>
+      <div class="lumira-nav-title">模板编辑�?/div>
+      <div class="lumira-nav-right">
+        <button class="lumira-nav-btn" style="font-size: 14px; font-weight: 500; color: var(--brand-primary);">保存</button>
+      </div>
+    </nav>
+
+    <!-- Upload Pose Reference -->
+    <div style="padding: 16px 24px 0;" class="fade-up">
+      <div class="lumira-card" style="border-style: dashed; border-width: 2px; text-align: center; padding: 32px 20px;">
+        <div style="font-size: 32px; margin-bottom: 8px;"><i class="ph ph-paper-plane-tilt"></i></div>
+        <p style="font-size: 14px; font-weight: 500; margin-bottom: 4px;">上传姿势参考图</p>
+        <p style="font-size: 12px; color: var(--text-tertiary);">支持 JPG / PNG 格式</p>
+      </div>
+    </div>
+
+    <!-- Composition Overlay Drawing -->
+    <div style="padding: 16px 24px 0;" class="fade-up fade-up-d1">
+      <div class="lumira-section-title">
+        <h3>构图叠图</h3>
+        <button class="lumira-section-link">编辑 �?/button>
+      </div>
+      <div style="border-radius: var(--radius-card); overflow: hidden; background: var(--bg-surface); aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center; position: relative;">
+        <div style="position: absolute; inset: 12px; pointer-events: none;">
+          <div style="width: 100%; height: 100%; position: relative;">
+            <div style="position: absolute; top: 33.3%; left: 0; right: 0; height: 1px; background: rgba(201,169,110,0.4);"></div>
+            <div style="position: absolute; top: 66.6%; left: 0; right: 0; height: 1px; background: rgba(201,169,110,0.4);"></div>
+            <div style="position: absolute; left: 33.3%; top: 0; bottom: 0; width: 1px; background: rgba(201,169,110,0.4);"></div>
+            <div style="position: absolute; left: 66.6%; top: 0; bottom: 0; width: 1px; background: rgba(201,169,110,0.4);"></div>
+          </div>
+        </div>
+        <span style="font-size: 13px; color: var(--text-tertiary);">叠图画布区域</span>
+      </div>
+    </div>
+
+    <!-- Camera Parameters Form -->
+    <div style="padding: 16px 24px 0;" class="fade-up fade-up-d2">
+      <div class="lumira-card">
+        <h3 style="font-family: 'Noto Serif SC', serif; font-size: 15px; font-weight: 600; margin-bottom: 16px;">相机参数</h3>
+
+        <!-- EV Slider -->
+        <div class="lumira-slider-row">
+          <span class="lumira-slider-label">EV</span>
+          <input type="range" class="lumira-slider" min="-3" max="3" step="0.1" value="-0.7" oninput="this.nextElementSibling.textContent = (this.value > 0 ? '+' : '') + this.value">
+          <span class="lumira-slider-value">-0.7</span>
+        </div>
+
+        <!-- ISO Selector -->
+        <div class="lumira-slider-row">
+          <span class="lumira-slider-label">ISO</span>
+          <div style="flex: 1; display: flex; gap: 6px;">
+            <button class="lumira-pill" style="padding: 5px 12px; font-size: 12px;">100</button>
+            <button class="lumira-pill" style="padding: 5px 12px; font-size: 12px;">200</button>
+            <button class="lumira-pill active" style="padding: 5px 12px; font-size: 12px;">400</button>
+            <button class="lumira-pill" style="padding: 5px 12px; font-size: 12px;">800</button>
+          </div>
+        </div>
+
+        <!-- Shutter Speed -->
+        <div class="lumira-slider-row">
+          <span class="lumira-slider-label">快门</span>
+          <div style="flex: 1; display: flex; gap: 6px;">
+            <button class="lumira-pill" style="padding: 5px 12px; font-size: 12px;">1/125</button>
+            <button class="lumira-pill active" style="padding: 5px 12px; font-size: 12px;">1/200</button>
+            <button class="lumira-pill" style="padding: 5px 12px; font-size: 12px;">1/500</button>
+          </div>
+        </div>
+
+        <!-- White Balance -->
+        <div class="lumira-slider-row">
+          <span class="lumira-slider-label">白平�?/span>
+          <div style="flex: 1; display: flex; gap: 6px;">
+            <button class="lumira-pill active" style="padding: 5px 12px; font-size: 12px;">日光</button>
+            <button class="lumira-pill" style="padding: 5px 12px; font-size: 12px;">阴天</button>
+            <button class="lumira-pill" style="padding: 5px 12px; font-size: 12px;">钨丝�?/button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post-Process Section -->
+    <div style="padding: 16px 24px 0;" class="fade-up fade-up-d3">
+      <div class="lumira-card">
+        <h3 style="font-family: 'Noto Serif SC', serif; font-size: 15px; font-weight: 600; margin-bottom: 16px;">后期调色</h3>
+
+        <!-- Brightness -->
+        <div class="lumira-slider-row">
+          <span class="lumira-slider-label">亮度</span>
+          <input type="range" class="lumira-slider" min="-100" max="100" step="1" value="0" oninput="this.nextElementSibling.textContent = (this.value > 0 ? '+' : '') + this.value">
+          <span class="lumira-slider-value">0</span>
+        </div>
+
+        <!-- Contrast -->
+        <div class="lumira-slider-row">
+          <span class="lumira-slider-label">对比�?/span>
+          <input type="range" class="lumira-slider" min="-100" max="100" step="1" value="0" oninput="this.nextElementSibling.textContent = (this.value > 0 ? '+' : '') + this.value">
+          <span class="lumira-slider-value">0</span>
+        </div>
+
+        <!-- Saturation -->
+        <div class="lumira-slider-row">
+          <span class="lumira-slider-label">饱和�?/span>
+          <input type="range" class="lumira-slider" min="-100" max="100" step="1" value="0" oninput="this.nextElementSibling.textContent = (this.value > 0 ? '+' : '') + this.value">
+          <span class="lumira-slider-value">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spacer for preview button -->
+    <div style="height: 100px;"></div>
+  </div>
+
+  <!-- Fixed Bottom Preview Button -->
+  <div style="position: fixed; bottom: 0; left: 0; right: 0; max-width: 430px; margin: 0 auto; padding: 16px 24px calc(env(safe-area-inset-bottom, 0px) + 16px); background: linear-gradient(to top, var(--bg-canvas) 60%, transparent);">
+    <button class="lumira-btn-brand">预览效果</button>
+  </div>
+
+
+</body>
+</html>

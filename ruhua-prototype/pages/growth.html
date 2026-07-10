@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>成长中心 · 如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+  <div class="lumira-container">
+    <!-- Navbar -->
+    <nav class="lumira-nav">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn" onclick="location.href='profile.html'"><i class="ph ph-arrow-left"></i></button>
+      </div>
+      <h1 class="lumira-nav-title">成长中心</h1>
+      <div class="lumira-nav-right"></div>
+    </nav>
+
+    <div style="padding: 24px;">
+      <!-- Level Progress Card -->
+      <div class="lumira-card fade-up" style="margin-bottom: 16px; text-align: center;">
+        <span class="lumira-mono" style="font-size: 13px; letter-spacing: 0.06em; color: var(--brand-primary);">LEVEL</span>
+        <h1 style="font-family: 'Noto Serif SC', serif; font-size: 48px; font-weight: 600; line-height: 1.1; margin: 4px 0;">12</h1>
+        <p style="font-size: 15px; color: var(--text-secondary); margin-bottom: 16px;">入门学徒</p>
+        <div class="lumira-progress" style="height: 8px;">
+          <div class="lumira-progress-fill" style="width: 64%;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px;">
+          <span class="lumira-mono" style="font-size: 12px;">1,280 XP</span>
+          <span class="lumira-mono" style="font-size: 12px;">还差 720 XP 升级</span>
+          <span class="lumira-mono" style="font-size: 12px;">2,000 XP</span>
+        </div>
+      </div>
+
+      <!-- Achievement Wall -->
+      <div class="lumira-card fade-up fade-up-d1" style="margin-bottom: 16px;">
+        <div class="lumira-section-title">
+          <h3>成就</h3>
+          <span style="font-size: 12px; color: var(--text-tertiary);">4 / 6</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+          <div class="achievement-card">
+            <span class="achievement-icon"><i class="ph ph-sunrise"></i></span>
+            <p style="font-size: 11px; font-weight: 500;">初露锋芒</p>
+          </div>
+          <div class="achievement-card">
+            <span class="achievement-icon"><i class="ph ph-camera"></i></span>
+            <p style="font-size: 11px; font-weight: 500;">快门达人</p>
+          </div>
+          <div class="achievement-card">
+            <span class="achievement-icon"><i class="ph ph-trophy"></i></span>
+            <p style="font-size: 11px; font-weight: 500;">模板收藏�?/p>
+          </div>
+          <div class="achievement-card locked">
+            <span class="achievement-icon"><i class="ph ph-paint-brush"></i></span>
+            <p style="font-size: 11px; font-weight: 500; color: var(--text-tertiary);">构图大师</p>
+          </div>
+          <div class="achievement-card locked">
+            <span class="achievement-icon"><i class="ph ph-sparkle"></i></span>
+            <p style="font-size: 11px; font-weight: 500; color: var(--text-tertiary);">后期魔法�?/p>
+          </div>
+          <div class="achievement-card">
+            <span class="achievement-icon"><i class="ph ph-moon-stars"></i></span>
+            <p style="font-size: 11px; font-weight: 500;">百变达人</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Growth Trajectory -->
+      <div class="lumira-card fade-up fade-up-d2" style="margin-bottom: 16px;">
+        <div class="lumira-section-title">
+          <h3>成长轨迹</h3>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0; padding-left: 4px;">
+          <div style="display: flex; gap: 16px; position: relative;">
+            <div style="display: flex; flex-direction: column; align-items: center;">
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--brand-primary); border: 2px solid var(--bg-card); box-shadow: 0 0 0 2px var(--brand-primary);"></div>
+              <div style="width: 2px; height: 48px; background: var(--color-border);"></div>
+            </div>
+            <div style="padding-bottom: 16px;">
+              <p style="font-size: 14px; font-weight: 500;">�?张照�?/p>
+              <p class="lumira-mono" style="font-size: 11px; margin-top: 2px;">2026-05-01</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 16px; position: relative;">
+            <div style="display: flex; flex-direction: column; align-items: center;">
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--brand-primary); border: 2px solid var(--bg-card); box-shadow: 0 0 0 2px var(--brand-primary);"></div>
+              <div style="width: 2px; height: 48px; background: var(--color-border);"></div>
+            </div>
+            <div style="padding-bottom: 16px;">
+              <p style="font-size: 14px; font-weight: 500;">�?0张照�?/p>
+              <p class="lumira-mono" style="font-size: 11px; margin-top: 2px;">2026-05-20</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 16px; position: relative;">
+            <div style="display: flex; flex-direction: column; align-items: center;">
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--brand-primary); border: 2px solid var(--bg-card); box-shadow: 0 0 0 2px var(--brand-primary);"></div>
+              <div style="width: 2px; height: 48px; background: var(--color-border);"></div>
+            </div>
+            <div style="padding-bottom: 16px;">
+              <p style="font-size: 14px; font-weight: 500;">升至 Lv.5</p>
+              <p class="lumira-mono" style="font-size: 11px; margin-top: 2px;">2026-06-01</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 16px; position: relative;">
+            <div style="display: flex; flex-direction: column; align-items: center;">
+              <div style="width: 10px; height: 10px; border-radius: 50%; background: var(--brand-primary); border: 2px solid var(--bg-card); box-shadow: 0 0 0 2px var(--brand-primary);"></div>
+            </div>
+            <div>
+              <p style="font-size: 14px; font-weight: 500;">�?00张照�?/p>
+              <p class="lumira-mono" style="font-size: 11px; margin-top: 2px;">2026-06-15</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calendar Heatmap -->
+      <div class="lumira-card fade-up fade-up-d3" style="margin-bottom: 16px;">
+        <div class="lumira-section-title">
+          <h3>拍摄日历</h3>
+          <span style="font-size: 12px; color: var(--text-tertiary);">本月 42 �?/span>
+        </div>
+        <div style="overflow-x: auto;">
+          <div class="heatmap-grid" style="min-width: 360px; grid-template-columns: repeat(10, 1fr);">
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c3"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c4"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell heatmap-c1"></div>
+            <div class="heatmap-cell heatmap-c2"></div>
+            <div class="heatmap-cell"></div>
+            <div class="heatmap-cell"></div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin-top: 12px;">
+          <span style="font-size: 11px; color: var(--text-tertiary);">�?/span>
+          <div class="heatmap-cell" style="width: 10px; height: 10px;"></div>
+          <div class="heatmap-cell heatmap-c1" style="width: 10px; height: 10px;"></div>
+          <div class="heatmap-cell heatmap-c2" style="width: 10px; height: 10px;"></div>
+          <div class="heatmap-cell heatmap-c3" style="width: 10px; height: 10px;"></div>
+          <div class="heatmap-cell heatmap-c4" style="width: 10px; height: 10px;"></div>
+          <span style="font-size: 11px; color: var(--text-tertiary);">�?/span>
+        </div>
+      </div>
+    </div>
+
+    
+  </div>
+</body>
+</html>

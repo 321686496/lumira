@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .splash-container {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-canvas);
+      padding: 24px;
+    }
+    .splash-logo {
+      width: 88px;
+      height: 88px;
+      border-radius: 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--color-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      color: var(--brand-primary);
+      box-shadow: 0 4px 24px rgba(201,169,110,0.12);
+      position: relative;
+      overflow: hidden;
+    }
+    .splash-logo::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(135deg, transparent 40%, rgba(201,169,110,0.08) 50%, transparent 60%);
+      animation: beam 3s ease-in-out infinite;
+    }
+    @keyframes beam {
+      0%, 100% { transform: translate(-30%, -30%); }
+      50% { transform: translate(30%, 30%); }
+    }
+    .splash-brand {
+      margin-top: 28px;
+      font-family: 'Noto Serif SC', serif;
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+    }
+    .splash-tagline {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+  <div class="splash-container fade-in">
+    <div class="splash-logo scale-in">�?/div>
+    <h1 class="splash-brand fade-up fade-up-d1">如画 Lumira</h1>
+    <p class="splash-tagline fade-up fade-up-d2">如你所见，皆成画卷</p>
+  </div>
+
+  <script>
+    setTimeout(function() {
+      location.href = 'home.html';
+    }, 2000);
+  </script>
+</body>
+</html>

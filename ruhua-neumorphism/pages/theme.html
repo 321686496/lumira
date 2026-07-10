@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>如画 Lumira — 主题</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      background-color: var(--color-canvas);
+      color: var(--color-text-primary);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    body {
+      padding-bottom: calc(100px + var(--safe-area-bottom));
+    }
+
+    /* --- Top Navigation Bar --- */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-6) var(--page-padding) var(--space-4);
+      background-color: var(--color-canvas);
+    }
+
+    .back-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background-color: var(--color-canvas);
+      box-shadow: var(--shadow-convex-subtle);
+      border: none;
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast);
+    }
+
+    .back-btn:active {
+      box-shadow: var(--shadow-pressed);
+    }
+
+    .back-btn i {
+      font-size: 20px;
+      color: var(--color-text-primary);
+    }
+
+    .nav-title {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-h2);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-snug);
+    }
+
+    .nav-placeholder {
+      width: 36px;
+    }
+
+    /* --- Theme Card --- */
+    .theme-card {
+      margin: 0 var(--page-padding);
+      background-color: var(--color-canvas);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-convex);
+      padding: var(--space-5);
+      margin-bottom: var(--space-4);
+      cursor: pointer;
+      transition: box-shadow var(--transition-normal);
+      display: flex;
+      align-items: center;
+      gap: var(--space-5);
+    }
+
+    .theme-card:active {
+      box-shadow: var(--shadow-pressed);
+    }
+
+    /* --- Selected Theme Card (Concave + Gold Border) --- */
+    .theme-card.selected {
+      box-shadow: var(--shadow-concave);
+      border: 2px solid var(--color-brand);
+    }
+
+    /* --- Theme Icon --- */
+    .theme-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: var(--radius-md);
+      background-color: var(--color-surface-alt);
+      box-shadow: var(--shadow-convex-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .theme-icon i {
+      font-size: 24px;
+      color: var(--color-brand);
+    }
+
+    .theme-card.selected .theme-icon {
+      background-color: var(--color-brand-subtle);
+      box-shadow: var(--shadow-concave-subtle);
+    }
+
+    /* --- Theme Text Area --- */
+    .theme-text {
+      flex: 1;
+    }
+
+    .theme-name {
+      font-family: var(--font-cn-title);
+      font-size: var(--text-body);
+      font-weight: var(--weight-semibold);
+      color: var(--color-text-primary);
+      letter-spacing: var(--tracking-snug);
+      line-height: var(--leading-snug);
+      margin-bottom: var(--space-1);
+    }
+
+    .theme-desc {
+      font-size: var(--text-micro);
+      color: var(--color-text-tertiary);
+      line-height: var(--leading-relaxed);
+    }
+
+    /* --- Color Preview Dots --- */
+    .color-dots {
+      display: flex;
+      gap: 6px;
+      margin-top: var(--space-3);
+    }
+
+    .color-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: var(--radius-shutter);
+      box-shadow: var(--shadow-convex-subtle);
+    }
+
+    /* --- Apply Button (Gold Convex) --- */
+    .btn-apply {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: calc(100% - 2 * var(--page-padding));
+      max-width: calc(375px - 2 * var(--page-padding));
+      margin-bottom: var(--safe-area-bottom);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      padding: var(--space-4) var(--space-6);
+      background-color: var(--color-brand);
+      border: none;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-convex-brand);
+      color: var(--color-text-inverse);
+      font-family: var(--font-cn-body);
+      font-size: var(--text-body);
+      font-weight: var(--weight-semibold);
+      letter-spacing: var(--tracking-wide);
+      cursor: pointer;
+      transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+      z-index: 50;
+    }
+
+    .btn-apply:active {
+      box-shadow: var(--shadow-pressed);
+      transform: scale(0.97);
+    }
+
+    .btn-apply i {
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== Top Navigation ==================== -->
+  <div class="top-nav">
+    <button class="back-btn" onclick="history.back()">
+      <i class="ph ph-caret-left"></i>
+    </button>
+    <span class="nav-title">主题</span>
+    <div class="nav-placeholder"></div>
+  </div>
+
+  <!-- ==================== Theme Options ==================== -->
+
+  <!-- Theme 1: Warm (Selected) -->
+  <div class="theme-card selected" onclick="selectTheme(this)">
+    <div class="theme-icon">
+      <i class="ph ph-sun"></i>
+    </div>
+    <div class="theme-text">
+      <div class="theme-name">暖米白</div>
+      <div class="theme-desc">温润如玉，东方留白的经典底色</div>
+      <div class="color-dots">
+        <div class="color-dot" style="background-color: #FAF7F2;"></div>
+        <div class="color-dot" style="background-color: #C9A96E;"></div>
+        <div class="color-dot" style="background-color: #1A1A1A;"></div>
+        <div class="color-dot" style="background-color: #5C5852;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Theme 2: Ink -->
+  <div class="theme-card" onclick="selectTheme(this)">
+    <div class="theme-icon">
+      <i class="ph ph-moon"></i>
+    </div>
+    <div class="theme-text">
+      <div class="theme-name">浓墨</div>
+      <div class="theme-desc">深邃墨色，暗夜中的专注拍摄</div>
+      <div class="color-dots">
+        <div class="color-dot" style="background-color: #1C1A17;"></div>
+        <div class="color-dot" style="background-color: #D4B57A;"></div>
+        <div class="color-dot" style="background-color: #F2EEE6;"></div>
+        <div class="color-dot" style="background-color: #A39D94;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Theme 3: Retro -->
+  <div class="theme-card" onclick="selectTheme(this)">
+    <div class="theme-icon">
+      <i class="ph ph-film-strip"></i>
+    </div>
+    <div class="theme-text">
+      <div class="theme-name">胶片复古</div>
+      <div class="theme-desc">温暖胶片质感，怀旧色彩调色</div>
+      <div class="color-dots">
+        <div class="color-dot" style="background-color: #F5E6D3;"></div>
+        <div class="color-dot" style="background-color: #C4956A;"></div>
+        <div class="color-dot" style="background-color: #FFF8F0;"></div>
+        <div class="color-dot" style="background-color: #A67B52;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Theme 4: Fresh -->
+  <div class="theme-card" onclick="selectTheme(this)">
+    <div class="theme-icon">
+      <i class="ph ph-flower-tulip"></i>
+    </div>
+    <div class="theme-text">
+      <div class="theme-name">日系清新</div>
+      <div class="theme-desc">清新自然，柔和明亮的日常感</div>
+      <div class="color-dots">
+        <div class="color-dot" style="background-color: #F8FAF6;"></div>
+        <div class="color-dot" style="background-color: #8BAD72;"></div>
+        <div class="color-dot" style="background-color: #FFFFFF;"></div>
+        <div class="color-dot" style="background-color: #5E8348;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Apply Button ==================== -->
+  <button class="btn-apply">
+    <i class="ph ph-check"></i>
+    应用
+  </button>
+
+  <script>
+    function selectTheme(el) {
+      document.querySelectorAll('.theme-card').forEach(card => {
+        card.classList.remove('selected');
+        card.style.boxShadow = '';
+      });
+      el.classList.add('selected');
+    }
+  </script>
+
+</body>
+</html>

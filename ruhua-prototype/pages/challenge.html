@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="warm">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>每日挑战 · 如画 Lumira</title>
+  <link rel="stylesheet" href="../css/lumira.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    .blur-text {
+      filter: blur(5px);
+      user-select: none;
+      pointer-events: none;
+    }
+    .streak-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 12px;
+      background: linear-gradient(135deg, #F5EDDB, #EDD0C8);
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #8C7340;
+    }
+    .challenge-check {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--tag-gold-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      color: var(--tag-gold-text);
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="lumira-container">
+    <!-- Navbar -->
+    <nav class="lumira-nav">
+      <div class="lumira-nav-left">
+        <button class="lumira-nav-btn" onclick="history.back()">�?/button>
+      </div>
+      <div class="lumira-nav-title">每日挑战</div>
+      <div class="lumira-nav-right">
+        <button class="lumira-nav-btn"><i class="ph ph-clipboard-text"></i></button>
+      </div>
+    </nav>
+
+    <!-- Content -->
+    <div style="padding: 24px 24px 0;">
+      <!-- Main Challenge Card (Completed) -->
+      <div class="lumira-card fade-up" style="padding: 24px; border-color: var(--brand-primary);">
+        <div style="display: flex; align-items: flex-start; gap: 14px;">
+          <div class="challenge-check">�?/div>
+          <div style="flex: 1;">
+            <h3 style="font-family: 'Noto Serif SC', serif; font-size: 16px; font-weight: 600; margin-bottom: 6px;"><i class="ph ph-check"></i> 今日挑战已完�?/h3>
+            <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin-bottom: 12px;">用模板拍一张人像照�?/p>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="lumira-tag lumira-tag-gold">+30 XP</span>
+              <span class="lumira-tag lumira-tag-green"><i class="ph ph-check"></i> 已完�?/span>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border);">
+          <div style="display: flex; align-items: center; justify-content: center;">
+            <img src="https://picsum.photos/seed/733872/400/600" alt="今日作品" style="width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Sub-challenges Section -->
+      <div style="margin-top: 32px;" class="fade-up fade-up-d1">
+        <div class="lumira-section-title" style="margin-bottom: 12px;">
+          <h3>附加挑战</h3>
+          <span class="lumira-mono">1+2 弹性模�?/span>
+        </div>
+      </div>
+
+      <!-- Sub-challenge A (Completed) -->
+      <div class="lumira-card fade-up fade-up-d2" style="margin-bottom: 12px; padding: 16px; opacity: 0.7;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="lumira-list-icon" style="background: var(--tag-green-bg);"><i class="ph ph-check"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title" style="font-size: 14px;">�?个不同模板分别拍一�?/div>
+            <div class="lumira-list-desc">已完�?· 3/3</div>
+          </div>
+          <span class="lumira-tag lumira-tag-gold" style="margin-left: auto;">+15 XP</span>
+        </div>
+      </div>
+
+      <!-- Sub-challenge B (Available) -->
+      <div class="lumira-card fade-up fade-up-d3" style="margin-bottom: 12px; padding: 16px;">
+        <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px;">
+          <div class="lumira-list-icon"><i class="ph ph-palette"></i></div>
+          <div class="lumira-list-text">
+            <div class="lumira-list-title" style="font-size: 14px;">拍一张照片完成调色并导出</div>
+            <div class="lumira-list-desc">未完�?· 0/1</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+          <span class="lumira-tag lumira-tag-gold">+20 XP</span>
+          <span class="lumira-tag lumira-tag-red">碎片机会</span>
+        </div>
+        <button class="lumira-btn-brand" style="font-size: 13px; padding: 10px 24px;">去完�?/button>
+      </div>
+
+      <!-- Challenge Pool Preview -->
+      <div style="margin-top: 32px;" class="fade-up fade-up-d4">
+        <div class="lumira-section-title" style="margin-bottom: 12px;">
+          <h3>明日挑战预览</h3>
+          <button class="lumira-section-link">全部 �?/button>
+        </div>
+        <div class="lumira-card" style="padding: 20px; position: relative; overflow: hidden;">
+          <div class="blur-text" style="line-height: 2;">
+            <p style="font-family: 'Noto Serif SC', serif; font-size: 16px; margin-bottom: 8px;">在日落时分拍一张剪影照�?/p>
+            <p style="font-size: 13px; color: var(--text-secondary);">附加挑战：使用「黄金时刻」模�?/p>
+            <p style="font-size: 12px; color: var(--text-tertiary); margin-top: 8px;">附加挑战：完成一次胶片调色导�?/p>
+          </div>
+          <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(250,247,242,0.4); backdrop-filter: blur(2px);">
+            <span class="lumira-badge lumira-badge-brand">明日揭晓</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Streak Info -->
+      <div style="margin-top: 32px;" class="fade-up fade-up-d5">
+        <div class="lumira-card" style="text-align: center; padding: 24px;">
+          <div style="font-size: 36px; margin-bottom: 8px;"><i class="ph ph-flame"></i></div>
+          <h3 style="font-family: 'Noto Serif SC', serif; font-size: 20px; font-weight: 600; margin-bottom: 4px;">连续打卡 7 �?/h3>
+          <p style="font-size: 13px; color: var(--text-tertiary);">继续保持，解锁连续打卡奖励！</p>
+          <div style="display: flex; justify-content: center; gap: 6px; margin-top: 16px;">
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff;"><i class="ph ph-check"></i></div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff;"><i class="ph ph-check"></i></div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff;"><i class="ph ph-check"></i></div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff;"><i class="ph ph-check"></i></div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff;"><i class="ph ph-check"></i></div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff;"><i class="ph ph-check"></i></div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff;"><i class="ph ph-check"></i></div>
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--color-border); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-tertiary);">8</div>
+          </div>
+          <p style="font-size: 11px; color: var(--text-tertiary); margin-top: 12px;">再坚�?1 天获得额�?50 XP</p>
+        </div>
+      </div>
+
+      <!-- Bottom Spacing -->
+      <div style="height: 24px;"></div>
+    </div>
+  </div>
+
+  
+</body>
+</html>
