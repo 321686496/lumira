@@ -1,388 +1,373 @@
 <template>
-  <view class="capture-container">
-    <!-- 顶部玻璃栏 -->
-    <view class="glass-bar top-bar">
+  <view class="capture-page">
+    <!-- 顶部沉浸式深色标题栏（自定义，不走 lumira-nav） -->
+    <view class="capture-nav">
       <view class="status-spacer" :style="{ height: statusBarHeight + 'px' }"></view>
-      <view class="top-bar-main">
-        <view class="top-left-group">
-          <view class="icon-btn" @click="goBack">
-            <text class="ph ph-caret-left top-icon"></text>
+      <view class="nav-main">
+        <view class="nav-back" @click="back">
+          <text class="ph ph-caret-left" />
+        </view>
+        <view class="nav-center">
+          <text class="nav-title">{{ currentTemplate?.meta.name || '拍摄' }}</text>
+          <text class="nav-sub" v-if="currentTemplate">{{ categoryLabel }} · {{ currentTemplate.composition.aspectRatio }}</text>
+        </view>
+        <view class="nav-actions">
+          <view class="nav-action" @click="goSceneGuide">
+            <text class="ph ph-question" />
           </view>
-          <view class="icon-btn" @click="goSceneGuide">
-            <text class="ph ph-list top-icon"></text>
+          <view class="nav-action" :class="{ active: flashOn }" @click="toggleFlash">
+            <text class="ph" :class="flashOn ? 'ph-lightning' : 'ph-lightning-slash'" />
           </view>
-        </view>
-        <text class="top-template-name">旅行人像</text>
-        <view class="icon-btn" @click="toggleFlash">
-          <text class="ph top-icon" :class="flashOn ? 'ph-lightning top-icon-gold' : 'ph-lightning-slash'"></text>
-        </view>
-      </view>
-      <view class="top-bar-secondary">
-        <view class="icon-btn">
-          <text class="ph ph-sun top-icon-sm top-icon-muted"></text>
-        </view>
-        <view class="icon-btn">
-          <text class="ph ph-star top-icon-sm top-icon-muted"></text>
-        </view>
-        <view class="icon-btn">
-          <text class="ph ph-gear top-icon-sm top-icon-muted"></text>
         </view>
       </view>
     </view>
 
-    <!-- 全屏取景器 -->
-    <view class="capture-viewer">
-      <image class="viewer-bg" src="https://picsum.photos/seed/733872/400/600" mode="aspectFill" />
-      <view class="viewer-overlay"></view>
+    <!-- 取景器（占位图） -->
+    <view class="viewfinder">
+      <image class="viewfinder-bg" src="https://picsum.photos/seed/capture-viewfinder/400/600" mode="aspectFill" />
+      <view class="viewfinder-mask" />
 
-      <!-- 三分法网格 -->
-      <view class="capture-grid">
-        <view class="grid-line-h grid-line-h1"></view>
-        <view class="grid-line-h grid-line-h2"></view>
-        <view class="grid-line-v grid-line-v1"></view>
-        <view class="grid-line-v grid-line-v2"></view>
-      </view>
+      <!-- 构图叠图 -->
+      <CompositionOverlay
+        v-if="currentTemplate"
+        :composition="currentTemplate.composition"
+        :overlay-opacity-override="panelExpanded ? 0.2 : undefined"
+      />
 
-      <!-- 姿势剪影指示 -->
-      <view class="pose-pill">
-        <text class="ph ph-camera pose-pill-icon"></text>
-        <text class="pose-pill-text">姿势剪影已开启</text>
+      <!-- 姿势剪影叠图 -->
+      <PoseSilhouette
+        v-if="currentTemplate && hasSilhouette"
+        :pose="currentTemplate.pose"
+      />
+
+      <!-- 顶部参数 pill 栏 -->
+      <view class="param-pill-bar" v-if="currentTemplate">
+        <view class="param-pill" @click="openPanel('camera')">
+          <text class="pill-label">EV</text>
+          <text class="pill-value">{{ evDisplay }}</text>
+        </view>
+        <view class="param-pill" @click="openPanel('camera')">
+          <text class="pill-label">WB</text>
+          <text class="pill-value">{{ wbDisplay }}</text>
+        </view>
+        <view class="param-pill apply-pill" :class="{ applied }" @click="toggleApply">
+          <text class="ph" :class="applied ? 'ph-check' : 'ph-magic-wand'" />
+          <text class="pill-text">{{ applied ? '已应用' : '一键应用' }}</text>
+        </view>
       </view>
     </view>
 
-    <!-- 底部玻璃控制区 -->
-    <view class="glass-bar bottom-bar">
-      <!-- 参数栏 -->
-      <view class="param-bar">
-        <view class="param-pill">
-          <view class="param-label">
-            <text class="ph ph-camera param-label-icon"></text>
-            <text class="param-label-text">水平</text>
-          </view>
-          <text class="param-sep">|</text>
-          <text class="param-value">EV+0.3</text>
-          <text class="param-sep">|</text>
-          <text class="param-value">WB 5200K</text>
-        </view>
-      </view>
-
+    <!-- 底部控制区 -->
+    <view class="capture-bottom">
       <!-- 快门行 -->
       <view class="shutter-row">
-        <view class="last-thumb" @click="goPreview">
-          <image class="last-thumb-img" src="https://picsum.photos/seed/733872/400/600" mode="aspectFill" />
+        <view class="last-photo" @click="goPreview">
+          <image class="last-photo-img" src="https://picsum.photos/seed/last-photo/100/100" mode="aspectFill" />
         </view>
         <view class="shutter-btn" @click="onShutter">
-          <view class="shutter-inner"></view>
+          <view class="shutter-inner" />
         </view>
-        <view class="flip-btn" @click="onFlip">
-          <text class="ph ph-arrows-left-right flip-icon"></text>
+        <view class="flip-btn" @click="flipCamera">
+          <text class="ph ph-arrows-clockwise" />
         </view>
       </view>
 
-      <!-- 快速模板选择 -->
-      <scroll-view class="template-scroll" scroll-x>
-        <view class="template-list">
+      <!-- 模板快速切换横滑 -->
+      <scroll-view class="template-strip" scroll-x>
+        <view class="strip-list">
           <view
-            class="template-thumb"
-            :class="{ active: t.active }"
-            v-for="t in templates"
-            :key="t.name"
-            @click="selectTemplate(t)"
+            v-for="tpl in recentTemplates"
+            :key="tpl.meta.id"
+            class="strip-item"
+            :class="{ active: tpl.meta.id === currentTemplateId }"
+            @click="switchTemplate(tpl.meta.id)"
           >
-            <image class="template-thumb-img" :src="t.img" mode="aspectFill" />
-            <view class="template-thumb-label">
-              <text class="template-thumb-label-text">{{ t.name }}</text>
-            </view>
+            <image class="strip-img" :src="tpl.meta.cover" mode="aspectFill" />
+            <text class="strip-name">{{ tpl.meta.name }}</text>
           </view>
         </view>
       </scroll-view>
     </view>
+
+    <!-- 半屏参数面板 -->
+    <ParamPanel
+      v-if="currentTemplate"
+      :template="currentTemplate"
+      :visible="panelExpanded"
+      :applied="applied"
+      @close="panelExpanded = false"
+      @apply="toggleApply"
+      @update:opacity="onOpacityUpdate"
+    />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { useTemplate } from '@/composables/useTemplate'
+import CompositionOverlay from '@/components/CompositionOverlay.vue'
+import PoseSilhouette from '@/components/PoseSilhouette.vue'
+import ParamPanel from '@/components/ParamPanel.vue'
+
+const { loadTemplate, recentTemplates, pushRecent, loadRecent } = useTemplate()
 
 const statusBarHeight = uni.getSystemInfoSync().statusBarHeight || 20
-const flashOn = ref(true)
+const currentTemplateId = ref('')
+const currentTemplate = computed(() =>
+  currentTemplateId.value ? loadTemplate(currentTemplateId.value) : null
+)
+const panelExpanded = ref(false)
+const applied = ref(false)
+const flashOn = ref(false)
 
-const templates = ref([
-  { name: '咖啡馆', img: 'https://picsum.photos/seed/2074130/400/400', active: true },
-  { name: '日落', img: 'https://picsum.photos/seed/355465/400/400', active: false },
-  { name: '街拍', img: 'https://picsum.photos/seed/1926769/400/400', active: false },
-  { name: '花园', img: 'https://picsum.photos/seed/1038002/400/400', active: false },
-  { name: '居家', img: 'https://picsum.photos/seed/1571460/400/400', active: false }
-])
+onLoad((options) => {
+  if (options?.templateId) {
+    currentTemplateId.value = options.templateId
+    pushRecent(options.templateId)
+  }
+  loadRecent()
+  // 如果没有 templateId，使用第一个最近模板或第一个内置模板
+  if (!currentTemplateId.value && recentTemplates.value.length > 0) {
+    currentTemplateId.value = recentTemplates.value[0].meta.id
+  }
+})
 
-const toggleFlash = () => {
-  flashOn.value = !flashOn.value
+const hasSilhouette = computed(() => {
+  const pose = currentTemplate.value?.pose
+  if (!pose) return false
+  if (pose.silhouette.type === 'builtin' && pose.silhouette.data === 'none') return false
+  return true
+})
+
+const evDisplay = computed(() => {
+  const ev = currentTemplate.value?.camera.exposureCompensation
+  if (ev === undefined) return ''
+  return ev > 0 ? `+${ev}` : `${ev}`
+})
+
+const wbDisplay = computed(() => {
+  const k = currentTemplate.value?.camera.whiteBalanceK
+  return k ? `${k}K` : ''
+})
+
+const categoryLabel = computed(() => {
+  const cat = currentTemplate.value?.meta.category
+  const map: Record<string, string> = {
+    portrait: '人像', landscape: '风光', food: '美食',
+    street: '街拍', night: '夜景', macro: '微距', 'still-life': '静物'
+  }
+  return cat ? (map[cat] || cat) : ''
+})
+
+const openPanel = (_tab: string) => {
+  panelExpanded.value = true
 }
 
-const selectTemplate = (t: { name: string; active: boolean }) => {
-  templates.value.forEach((item) => (item.active = item.name === t.name))
+const toggleApply = () => {
+  applied.value = !applied.value
+  uni.showToast({
+    title: applied.value ? '已应用模板参数' : '已重置参数',
+    icon: 'none'
+  })
 }
 
-const onShutter = () => {
-  uni.navigateTo({ url: '/pages/capture/preview' })
+const onOpacityUpdate = (v: number) => {
+  // 透明度变化通过 prop 传入，不需要额外处理
+  console.log('opacity update', v)
 }
 
-const goPreview = () => {
-  uni.navigateTo({ url: '/pages/capture/preview' })
+const switchTemplate = (id: string) => {
+  currentTemplateId.value = id
+  applied.value = false
+  pushRecent(id)
 }
 
-const goSceneGuide = () => {
-  uni.navigateTo({ url: '/pages/capture/scene-guide' })
-}
-
-const goBack = () => {
-  uni.navigateBack({ fail: () => uni.reLaunch({ url: '/pages/home/index' }) })
-}
-
-const onFlip = () => {
-  uni.showToast({ title: '翻转镜头', icon: 'none' })
-}
+const back = () => uni.navigateBack({ fail: () => uni.reLaunch({ url: '/pages/home/index' }) })
+const goSceneGuide = () => uni.navigateTo({ url: '/pages/capture/scene-guide' })
+const goPreview = () => uni.navigateTo({ url: '/pages/capture/preview' })
+const onShutter = () => uni.navigateTo({ url: '/pages/capture/preview' })
+const flipCamera = () => uni.showToast({ title: '翻转镜头', icon: 'none' })
+const toggleFlash = () => { flashOn.value = !flashOn.value }
 </script>
 
 <style lang="scss" scoped>
-.capture-container {
-  display: flex;
-  flex-direction: column;
+.capture-page {
   width: 100%;
   height: 100vh;
-  background-color: #181614;
+  background: #181614;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-/* ===== 玻璃栏通用 ===== */
-.glass-bar {
-  background-color: rgba(24, 22, 20, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 2rpx solid rgba(255, 255, 255, 0.06);
-}
-
-/* ===== 顶部玻璃栏 ===== */
-.top-bar {
-  position: absolute;
+/* ===== 沉浸式标题栏 ===== */
+.capture-nav {
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 100;
+  background: transparent;
+}
+
+.capture-nav::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 200rpx;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.4), transparent);
+  pointer-events: none;
+  z-index: -1;
 }
 
 .status-spacer {
   width: 100%;
 }
 
-.top-bar-main {
+.nav-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 104rpx;
-  padding: 0 40rpx;
+  padding: 0 32rpx;
+  height: 96rpx;
 }
 
-.top-left-group {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-}
-
-.top-template-name {
-  color: #ffffff;
-  font-size: 28rpx;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-}
-
-.top-bar-secondary {
+.nav-back .ph {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 64rpx;
-  padding: 8rpx 40rpx 16rpx;
-}
-
-.icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 80rpx;
-  min-height: 80rpx;
-}
-
-.top-icon {
-  font-size: 44rpx;
-  color: #ffffff;
-}
-
-.top-icon-gold {
-  color: var(--color-brand);
-}
-
-.top-icon-sm {
   font-size: 36rpx;
+  color: #fff;
 }
 
-.top-icon-muted {
+.nav-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.nav-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.3);
+}
+
+.nav-sub {
+  font-size: 22rpx;
   color: rgba(255, 255, 255, 0.7);
+  margin-top: 4rpx;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+}
+
+.nav-action {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  color: #fff;
+  margin-left: 12rpx;
+}
+
+.nav-action.active {
+  background: rgba(201, 169, 110, 0.7);
 }
 
 /* ===== 取景器 ===== */
-.capture-viewer {
+.viewfinder {
   flex: 1;
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
 }
 
-.viewer-bg {
+.viewfinder-bg {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
 }
 
-.viewer-overlay {
+.viewfinder-mask {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(24, 22, 20, 0.45);
+  inset: 0;
+  background: rgba(24, 22, 20, 0.35);
 }
 
-/* ===== 三分法网格 ===== */
-.capture-grid {
+/* ===== 参数 pill 栏 ===== */
+.param-pill-bar {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 10;
-}
-
-.grid-line-h {
-  position: absolute;
-  width: 100%;
-  height: 2rpx;
-  left: 0;
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.grid-line-h1 {
-  top: 33.33%;
-}
-
-.grid-line-h2 {
-  top: 66.66%;
-}
-
-.grid-line-v {
-  position: absolute;
-  width: 2rpx;
-  height: 100%;
-  top: 0;
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.grid-line-v1 {
-  left: 33.33%;
-}
-
-.grid-line-v2 {
-  left: 66.66%;
-}
-
-/* ===== 姿势剪影指示 ===== */
-.pose-pill {
-  position: absolute;
-  top: 50%;
+  top: 240rpx;
   left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 20;
+  transform: translateX(-50%);
   display: flex;
-  align-items: center;
-  gap: 12rpx;
-  padding: 12rpx 32rpx;
-  border-radius: 9999rpx;
-  background-color: rgba(24, 22, 20, 0.65);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 2rpx solid rgba(var(--color-brand-rgb), 0.3);
-}
-
-.pose-pill-icon {
-  font-size: 28rpx;
-  color: var(--color-brand);
-}
-
-.pose-pill-text {
-  color: var(--color-brand);
-  font-size: 24rpx;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
-/* ===== 底部玻璃控制区 ===== */
-.bottom-bar {
-  position: relative;
-  z-index: 50;
-  border-radius: 48rpx 48rpx 0 0;
-  border-top: 2rpx solid rgba(255, 255, 255, 0.06);
-  padding: 32rpx 48rpx;
-  padding-bottom: calc(env(safe-area-inset-bottom) + 32rpx);
-}
-
-/* ===== 参数栏 ===== */
-.param-bar {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 36rpx;
+  gap: 16rpx;
+  z-index: 5;
 }
 
 .param-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 28rpx;
-  padding: 16rpx 44rpx;
-  border-radius: 9999rpx;
-  background-color: rgba(24, 22, 20, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 2rpx solid rgba(var(--color-brand-rgb), 0.25);
-}
-
-.param-label {
   display: flex;
   align-items: center;
-  gap: 6rpx;
+  gap: 8rpx;
+  padding: 12rpx 24rpx;
+  border-radius: 9999rpx;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.param-label-icon {
-  font-size: 24rpx;
-  color: var(--color-brand);
-}
-
-.param-label-text {
-  color: var(--color-brand);
-  font-size: 22rpx;
-  letter-spacing: 0.04em;
-}
-
-.param-sep {
-  color: rgba(255, 255, 255, 0.3);
+.pill-label {
   font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.6);
 }
 
-.param-value {
-  color: #ffffff;
-  font-size: 22rpx;
+.pill-value {
+  font-size: 24rpx;
+  color: #fff;
   font-family: 'Courier New', monospace;
+}
+
+.apply-pill {
+  background: rgba(201, 169, 110, 0.8);
+}
+
+.apply-pill.applied {
+  background: rgba(122, 139, 92, 0.8);
+}
+
+.pill-text {
+  font-size: 24rpx;
+  color: #fff;
+}
+
+/* ===== 底部控制区 ===== */
+.capture-bottom {
+  position: relative;
+  z-index: 50;
+  background: rgba(24, 22, 20, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 32rpx 40rpx;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 32rpx);
 }
 
 /* ===== 快门行 ===== */
@@ -393,16 +378,15 @@ const onFlip = () => {
   gap: 56rpx;
 }
 
-.last-thumb {
+.last-photo {
   width: 100rpx;
   height: 100rpx;
   border-radius: 20rpx;
   overflow: hidden;
   border: 3rpx solid rgba(255, 255, 255, 0.15);
-  flex-shrink: 0;
 }
 
-.last-thumb-img {
+.last-photo-img {
   width: 100%;
   height: 100%;
 }
@@ -412,26 +396,16 @@ const onFlip = () => {
   height: 152rpx;
   border-radius: 50%;
   border: 6rpx solid var(--color-brand);
-  background-color: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-}
-
-.shutter-btn:active {
-  transform: scale(0.9);
 }
 
 .shutter-inner {
   width: 116rpx;
   height: 116rpx;
   border-radius: 50%;
-  background-color: #ffffff;
-}
-
-.shutter-btn:active .shutter-inner {
-  background-color: var(--color-brand);
+  background: #fff;
 }
 
 .flip-btn {
@@ -442,56 +416,41 @@ const onFlip = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  color: #fff;
 }
 
-.flip-btn:active {
-  transform: scale(0.88);
-}
-
-.flip-icon {
-  font-size: 40rpx;
-  color: #ffffff;
-}
-
-/* ===== 快速模板选择 ===== */
-.template-scroll {
-  margin-top: 40rpx;
-  width: 100%;
+/* ===== 模板横滑 ===== */
+.template-strip {
+  margin-top: 32rpx;
   white-space: nowrap;
 }
 
-.template-list {
+.strip-list {
   display: inline-flex;
   gap: 16rpx;
-  padding-bottom: 8rpx;
 }
 
-.template-thumb {
-  position: relative;
+.strip-item {
   width: 100rpx;
   height: 100rpx;
   border-radius: 20rpx;
   overflow: hidden;
-  flex-shrink: 0;
+  position: relative;
   border: 3rpx solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
 }
 
-.template-thumb.active {
+.strip-item.active {
   border: 4rpx solid var(--color-brand);
   box-shadow: 0 0 24rpx rgba(var(--color-brand-rgb), 0.4);
 }
 
-.template-thumb:active {
-  transform: scale(0.94);
-}
-
-.template-thumb-img {
+.strip-img {
   width: 100%;
   height: 100%;
 }
 
-.template-thumb-label {
+.strip-name {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -499,11 +458,7 @@ const onFlip = () => {
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
   padding: 16rpx 0 6rpx;
   text-align: center;
-}
-
-.template-thumb-label-text {
-  color: #ffffff;
+  color: #fff;
   font-size: 16rpx;
-  letter-spacing: 0.03em;
 }
 </style>

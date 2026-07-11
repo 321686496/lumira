@@ -116,9 +116,9 @@
             </view>
             <text class="lumira-list-arrow"><text class="ph ph-caret-right"></text></text>
           </view>
-          <view class="lumira-list-item" @click="goPage('/pages/templates/index')">
+          <view class="lumira-list-item" @click="goPage('/pages/profile/my-templates')">
             <view class="lumira-list-icon">
-              <text class="ph ph-book-open"></text>
+              <text class="ph ph-stack"></text>
             </view>
             <view class="lumira-list-text">
               <text class="lumira-list-title">我的模板</text>

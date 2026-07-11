@@ -103,6 +103,10 @@
 		{
 			"path": "pages/profile/collection-detail",
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/my-templates",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		}
 	],
 	"globalStyle": {
