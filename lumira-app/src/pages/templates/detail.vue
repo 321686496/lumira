@@ -124,7 +124,9 @@
         <view class="lumira-card lumira-card-svg-bg">
           <text class="card-title">姿势参考</text>
           <view class="pose-preview-wrap">
-            <PoseSilhouette :pose="template.pose" />
+            <view class="pose-layer" :style="poseLayerStyle">
+              <PoseSilhouette :pose="template.pose" />
+            </view>
           </view>
           <text class="pose-desc">{{ template.pose.description }}</text>
         </view>
@@ -191,6 +193,17 @@ const hasSilhouette = computed(() => {
   if (!pose) return false
   if (pose.silhouette.type === 'builtin' && pose.silhouette.data === 'none') return false
   return true
+})
+
+// 剪影预览层定位样式
+const poseLayerStyle = computed(() => {
+  const pose = template.value?.pose
+  if (!pose) return {}
+  return {
+    left: `${pose.position.x * 100}%`,
+    top: `${pose.position.y * 100}%`,
+    transform: 'translate(-50%, -50%)'
+  }
 })
 
 const categoryLabel = computed(() => {
@@ -475,6 +488,14 @@ const goCapture = () => uni.navigateTo({ url: `/pages/capture/index?templateId=$
   overflow: hidden;
   background: linear-gradient(135deg, rgba(201, 169, 110, 0.08), rgba(201, 169, 110, 0.02));
   margin-bottom: 24rpx;
+}
+
+.pose-layer {
+  position: absolute;
+  width: 40%;
+  aspect-ratio: 1 / 1.6;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .pose-desc {

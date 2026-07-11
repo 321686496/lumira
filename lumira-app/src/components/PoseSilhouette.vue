@@ -42,39 +42,42 @@ const svgContent = computed(() => {
   return ''
 })
 
+// 仅返回 transform 和 color，不返回定位（定位由外部容器控制）
 const wrapperStyle = computed(() => {
-  const { position, scale, rotation } = props.pose
+  const { scale, rotation } = props.pose
   return {
-    left: `${position.x * 100}%`,
-    top: `${position.y * 100}%`,
-    transform: `translate(-50%, -50%) scale(${scale}) rotate(${rotation}deg)`,
-    opacity: 0.7,
-    // 设置 color 让 SVG 的 currentColor 解析为白色
-    color: 'rgba(255, 255, 255, 0.85)'
+    transform: `scale(${scale}) rotate(${rotation}deg)`,
+    color: 'rgba(255, 255, 255, 0.9)'
   }
 })
 </script>
 
 <style lang="scss" scoped>
 .pose-silhouette-wrap {
-  position: absolute;
-  width: 40%;
-  aspect-ratio: 1 / 1.6;
-  z-index: 3;
-  pointer-events: none;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 显式声明容器尺寸，打破 SVG width:100% 的循环依赖 */
+.pose-svg-builtin,
+.pose-svg-inline {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 :deep(svg) {
   width: 100%;
   height: 100%;
-  // 不设置 fill，让 SVG 内部的 fill="currentColor" 生效
-  // currentColor 继承自 .pose-silhouette-wrap 的 color 属性
+  display: block;
 }
 
 .pose-image {
   width: 100%;
   height: 100%;
-  opacity: 0.7;
 }
 </style>

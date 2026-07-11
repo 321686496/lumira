@@ -265,10 +265,7 @@
           <view class="preview-bg"></view>
           <view
             class="pose-drag-layer"
-            @pointerdown="onPosePointerDown"
-            @pointermove="onPosePointerMove"
-            @pointerup="onPosePointerUp"
-            @pointerleave="onPosePointerUp"
+            @touchstart="onPoseDragStart"
           >
             <view class="pose-drag-handle" :style="poseDragStyle">
               <PoseSilhouette :pose="form.pose" />
@@ -685,7 +682,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
 import { useTemplateIO } from '@/composables/useTemplateIO'
@@ -728,37 +725,70 @@ const poseDragStyle = computed(() => ({
   transform: `translate(calc(-50% + ${(form.value.pose.position.x - 0.5) * 100}%), calc(-50% + ${(form.value.pose.position.y - 0.5) * 100}%))`
 }))
 
-function onPosePointerDown(e: PointerEvent) {
+function getDragXY(e: any): { x: number; y: number } {
+  // uni-app @touchstart 事件有 touches[0].clientX/clientY
+  if (e.touches && e.touches.length > 0) {
+    return { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }
+  }
+  // 原生 mousemove/touchmove (document-level) 或 @mousedown
+  return { x: e.clientX ?? 0, y: e.clientY ?? 0 }
+}
+
+function onPoseDragStart(e: any) {
   isDraggingPose.value = true
-  poseDragStartClientX = e.clientX
-  poseDragStartClientY = e.clientY
+  const { x, y } = getDragXY(e)
+  poseDragStartClientX = x
+  poseDragStartClientY = y
   poseDragStartX = form.value.pose.position.x
   poseDragStartY = form.value.pose.position.y
-  const el = (posePreviewRef.value as any)?.$el || posePreviewRef.value
+  const layerEl = document.querySelector('.pose-drag-layer')
+  const el = (layerEl as any)?.$el || layerEl
   posePreviewRect = el?.getBoundingClientRect?.() || null
-  try {
-    ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
-  } catch (_) { /* ignore */ }
-  e.preventDefault()
+  if (e?.preventDefault) e.preventDefault()
 }
 
-function onPosePointerMove(e: PointerEvent) {
+function onPoseDragMove(e: any) {
   if (!isDraggingPose.value || !posePreviewRect) return
-  e.preventDefault()
-  const dx = (e.clientX - poseDragStartClientX) / posePreviewRect.width
-  const dy = (e.clientY - poseDragStartClientY) / posePreviewRect.height
-  form.value.pose.position.x = Math.max(0.1, Math.min(0.9, poseDragStartX + dx))
-  form.value.pose.position.y = Math.max(0.1, Math.min(0.9, poseDragStartY + dy))
+  if (e.preventDefault) e.preventDefault()
+  const { x, y } = getDragXY(e)
+  const dx = (x - poseDragStartClientX) / posePreviewRect.width
+  const dy = (y - poseDragStartClientY) / posePreviewRect.height
+  const newX = Math.max(0.1, Math.min(0.9, poseDragStartX + dx))
+  const newY = Math.max(0.1, Math.min(0.9, poseDragStartY + dy))
+  form.value.pose.position = { x: newX, y: newY }
 }
 
-function onPosePointerUp(e: PointerEvent) {
+function onPoseDragEnd() {
   if (!isDraggingPose.value) return
   isDraggingPose.value = false
   posePreviewRect = null
-  try {
-    ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
-  } catch (_) { /* ignore */ }
 }
+
+// @touchstart 在 <view> 上可用（含 touches[0].clientX），但 @mousedown/@pointerdown
+// 的 uni-app 事件包装会丢失 clientX/clientY，所以 mousedown 需用原生 addEventListener
+onMounted(() => {
+  nextTick(() => {
+    const layerEl = document.querySelector('.pose-drag-layer')
+    if (layerEl) layerEl.addEventListener('mousedown', onPoseDragStart as any)
+  })
+  document.addEventListener('touchmove', onPoseDragMove, { passive: false })
+  document.addEventListener('touchend', onPoseDragEnd)
+  document.addEventListener('touchcancel', onPoseDragEnd)
+  document.addEventListener('mousemove', onPoseDragMove)
+  document.addEventListener('mouseup', onPoseDragEnd)
+})
+onUnmounted(() => {
+  const layerEl = document.querySelector('.pose-drag-layer')
+  if (layerEl) layerEl.removeEventListener('mousedown', onPoseDragStart as any)
+  document.removeEventListener('touchmove', onPoseDragMove)
+  document.removeEventListener('touchend', onPoseDragEnd)
+  document.removeEventListener('touchcancel', onPoseDragEnd)
+  document.removeEventListener('mousemove', onPoseDragMove)
+  document.removeEventListener('mouseup', onPoseDragEnd)
+})
 
 // 文本缓冲（数组字段与输入框双向同步，避免 cursor 跳动）
 const tagsText = ref('')
@@ -1406,6 +1436,8 @@ function goDrafts() {
   position: absolute;
   top: 50%;
   left: 50%;
+  width: 40%;
+  aspect-ratio: 1 / 1.6;
   pointer-events: none;
   transition: transform 0.05s ease-out;
 }

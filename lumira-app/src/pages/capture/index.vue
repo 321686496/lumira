@@ -35,10 +35,13 @@
       />
 
       <!-- 姿势剪影叠图 -->
-      <PoseSilhouette
+      <view
         v-if="currentTemplate && hasSilhouette"
-        :pose="currentTemplate.pose"
-      />
+        class="silhouette-layer"
+        :style="silhouetteLayerStyle"
+      >
+        <PoseSilhouette :pose="currentTemplate.pose" />
+      </view>
 
       <!-- 顶部参数 pill 栏 -->
       <view class="param-pill-bar" v-if="currentTemplate">
@@ -138,6 +141,17 @@ const hasSilhouette = computed(() => {
   if (!pose) return false
   if (pose.silhouette.type === 'builtin' && pose.silhouette.data === 'none') return false
   return true
+})
+
+// 剪影叠图层定位样式
+const silhouetteLayerStyle = computed(() => {
+  const pose = currentTemplate.value?.pose
+  if (!pose) return {}
+  return {
+    left: `${pose.position.x * 100}%`,
+    top: `${pose.position.y * 100}%`,
+    transform: `translate(-50%, -50%)`
+  }
 })
 
 const evDisplay = computed(() => {
@@ -311,6 +325,16 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
   position: absolute;
   inset: 0;
   background: rgba(24, 22, 20, 0.35);
+}
+
+/* ===== 剪影叠图层 ===== */
+.silhouette-layer {
+  position: absolute;
+  width: 40%;
+  aspect-ratio: 1 / 1.6;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.7;
 }
 
 /* ===== 参数 pill 栏 ===== */

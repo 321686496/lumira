@@ -28,10 +28,7 @@
       <view
         v-if="template && hasSilhouette"
         class="silhouette-drag-layer"
-        @pointerdown="onSilhouettePointerDown"
-        @pointermove="onSilhouettePointerMove"
-        @pointerup="onSilhouettePointerUp"
-        @pointerleave="onSilhouettePointerUp"
+        @touchstart="onSilhouetteDragStart"
       >
         <view class="silhouette-drag-handle" :style="silhouetteDragStyle">
           <PoseSilhouette :pose="template.pose" />
@@ -195,7 +192,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
 import CompositionOverlay from '@/components/CompositionOverlay.vue'
@@ -212,63 +209,87 @@ const flashOn = ref(false)
 // ===== 剪影拖动状态 =====
 const viewfinderRef = ref<any>(null)
 const isDraggingSilhouette = ref(false)
-// 拖动偏移量（相对百分比 0-1）
+// 拖动偏移量（相对百分比 -0.5~0.5）
 const dragOffsetX = ref(0)
 const dragOffsetY = ref(0)
 // 拖动起始记录
 let dragStartClientX = 0
 let dragStartClientY = 0
-let dragStartOffsetX = 0
-let dragStartOffsetY = 0
+let dragStartPosX = 0.5
+let dragStartPosY = 0.5
 let viewfinderRect: DOMRect | null = null
 
 const silhouetteDragStyle = computed(() => ({
   transform: `translate(calc(-50% + ${dragOffsetX.value * 100}%), calc(-50% + ${dragOffsetY.value * 100}%))`
 }))
 
-function onSilhouettePointerDown(e: PointerEvent) {
-  if (!template.value) return
-  isDraggingSilhouette.value = true
-  dragStartClientX = e.clientX
-  dragStartClientY = e.clientY
-  dragStartOffsetX = dragOffsetX.value
-  dragStartOffsetY = dragOffsetY.value
-  // 缓存取景器 rect
-  const vfEl = (viewfinderRef.value as any)?.$el || viewfinderRef.value
-  viewfinderRect = vfEl?.getBoundingClientRect?.() || null
-  try {
-    ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
-  } catch (_) { /* ignore */ }
-  e.preventDefault()
+function getDragXY(e: any): { x: number; y: number } {
+  if (e.touches && e.touches.length > 0) {
+    return { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+  if (e.changedTouches && e.changedTouches.length > 0) {
+    return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }
+  }
+  return { x: e.clientX ?? 0, y: e.clientY ?? 0 }
 }
 
-function onSilhouettePointerMove(e: PointerEvent) {
-  if (!isDraggingSilhouette || !viewfinderRect) return
-  e.preventDefault()
-  const dx = (e.clientX - dragStartClientX) / viewfinderRect.width
-  const dy = (e.clientY - dragStartClientY) / viewfinderRect.height
-  // 更新模板的 pose.position（0-1 范围）
-  let newX = dragStartOffsetX + dx
-  let newY = dragStartOffsetY + dy
-  // 限制范围 0.1-0.9
-  newX = Math.max(0.1, Math.min(0.9, newX))
-  newY = Math.max(0.1, Math.min(0.9, newY))
+function onSilhouetteDragStart(e: any) {
+  if (!template.value) return
+  isDraggingSilhouette.value = true
+  const { x, y } = getDragXY(e)
+  dragStartClientX = x
+  dragStartClientY = y
+  dragStartPosX = template.value.pose.position.x
+  dragStartPosY = template.value.pose.position.y
+  const layerEl = document.querySelector('.silhouette-drag-layer')
+  const el = (layerEl as any)?.$el || layerEl
+  viewfinderRect = el?.getBoundingClientRect?.() || null
+  if (e?.preventDefault) e.preventDefault()
+}
+
+function onSilhouetteDragMove(e: any) {
+  if (!isDraggingSilhouette.value || !viewfinderRect) return
+  if (e.preventDefault) e.preventDefault()
+  const { x, y } = getDragXY(e)
+  const dx = (x - dragStartClientX) / viewfinderRect.width
+  const dy = (y - dragStartClientY) / viewfinderRect.height
+  const newX = Math.max(0.1, Math.min(0.9, dragStartPosX + dx))
+  const newY = Math.max(0.1, Math.min(0.9, dragStartPosY + dy))
   dragOffsetX.value = newX - 0.5
   dragOffsetY.value = newY - 0.5
   if (template.value) {
-    template.value.pose.position.x = newX
-    template.value.pose.position.y = newY
+    template.value.pose.position = { x: newX, y: newY }
   }
 }
 
-function onSilhouettePointerUp(e: PointerEvent) {
-  if (!isDraggingSilhouette) return
+function onSilhouetteDragEnd() {
+  if (!isDraggingSilhouette.value) return
   isDraggingSilhouette.value = false
   viewfinderRect = null
-  try {
-    ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
-  } catch (_) { /* ignore */ }
 }
+
+// @touchstart 在 <view> 上可用，但 @mousedown 的 uni-app 包装丢失 clientX/clientY
+// mousedown 需用原生 addEventListener 绑定到 DOM 元素
+onMounted(() => {
+  nextTick(() => {
+    const layerEl = document.querySelector('.silhouette-drag-layer')
+    if (layerEl) layerEl.addEventListener('mousedown', onSilhouetteDragStart as any)
+  })
+  document.addEventListener('touchmove', onSilhouetteDragMove, { passive: false })
+  document.addEventListener('touchend', onSilhouetteDragEnd)
+  document.addEventListener('touchcancel', onSilhouetteDragEnd)
+  document.addEventListener('mousemove', onSilhouetteDragMove)
+  document.addEventListener('mouseup', onSilhouetteDragEnd)
+})
+onUnmounted(() => {
+  const layerEl = document.querySelector('.silhouette-drag-layer')
+  if (layerEl) layerEl.removeEventListener('mousedown', onSilhouetteDragStart as any)
+  document.removeEventListener('touchmove', onSilhouetteDragMove)
+  document.removeEventListener('touchend', onSilhouetteDragEnd)
+  document.removeEventListener('touchcancel', onSilhouetteDragEnd)
+  document.removeEventListener('mousemove', onSilhouetteDragMove)
+  document.removeEventListener('mouseup', onSilhouetteDragEnd)
+})
 
 onLoad((options) => {
   if (options?.draftId) {
@@ -529,6 +550,8 @@ function toggleFlash() {
   position: absolute;
   top: 50%;
   left: 50%;
+  width: 40%;
+  aspect-ratio: 1 / 1.6;
   pointer-events: none;
   transition: transform 0.05s ease-out;
 }
