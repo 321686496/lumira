@@ -91,65 +91,87 @@
 
 ### 3.2 模板文件格式（`.pptpl` JSON 格式）
 
+`.pptpl` 为完全自包含的 JSON 文件，不依赖任何外部资源文件。剪影资源按来源分三种类型：
+- `builtin`：`data` 为内置 SVG 库 key（如 `standing-profile`），导入方根据 key 查找内置 SVG
+- `image`：`data` 为 base64 data URL（用户导入的 PNG/JPG），完全自包含
+- `svg`：`data` 为内联 SVG 字符串（用户绘制），完全自包含
+
 ```json
 {
   "meta": {
-    "id": "tmpl_xxx",
+    "id": "sunset-silhouette",
     "name": "日落逆光剪影",
     "author": "local_device_id",
     "version": "1.0.0",
-    "category": "人像",
+    "category": "portrait",
     "tags": ["逆光", "剪影", "日落"],
     "price": 0,
     "cover": "local_cover_path",
-    "description": "适合黄昏海边/山顶的逆光人像剪影"
+    "description": "适合黄昏海边/山顶的逆光人像剪影",
+    "referenceSource": "样片 EXIF: Pexels #12345"
   },
   "composition": {
-    "overlayType": "rule_of_thirds | grid | leading_lines | custom",
-    "overlayResource": "svg_or_png_path",
+    "overlayType": "rule_of_thirds",
+    "gridType": "thirds",
     "subjectFrame": { "x": 0.3, "y": 0.2, "w": 0.4, "h": 0.6 },
-    "opacity": 0.5
+    "opacity": 0.5,
+    "aspectRatio": "3:4",
+    "description": "将人物置于左侧三分线交点"
   },
   "pose": {
-    "referenceImage": "transparent_png_path",
+    "silhouette": {
+      "type": "builtin",
+      "data": "standing-profile"
+    },
     "position": { "x": 0.5, "y": 0.5 },
     "scale": 1.0,
-    "rotation": 0
+    "rotation": 0,
+    "description": "侧身站立，轮廓边缘清晰"
   },
   "camera": {
     "exposureCompensation": -0.7,
-    "isoMode": "auto | manual",
+    "isoMode": "manual",
     "iso": 100,
     "shutterSpeed": "1/200",
-    "whiteBalance": "daylight | cloudy | auto",
-    "focusMode": "auto | manual",
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5500,
+    "flashMode": "off",
+    "focusMode": "auto",
     "filterPreset": "warm",
-    "lensSuggestion": "main | wide | tele"
+    "lensSuggestion": "telephoto"
   },
   "sceneGuide": {
-    "lightDirection": "backlight",
+    "lightDirection": "逆光 45°",
     "shootingDistance": "3-5m",
     "background": "天空/水面，避免杂物",
     "props": ["宽檐帽", "纱巾"],
-    "tips": "让模特侧身，轮廓更清晰"
+    "bestTime": "日落前 30 分钟",
+    "tips": ["让模特侧身，轮廓更清晰", "使用点测光对准面部"]
   },
   "postProcess": {
     "cropRatio": "3:4",
     "color": {
-      "brightness": 0.1,
-      "contrast": 0.15,
-      "saturation": -0.1,
-      "temperature": 0.2,
-      "tint": 0.0
+      "brightness": 10,
+      "contrast": 15,
+      "saturation": -10,
+      "temperature": 20,
+      "tint": 0
     },
-    "smoothStrength": 0.3,
-    "sharpen": 0.2,
-    "vignette": 0.3,
-    "grain": 0.1,
-    "lut": "warm_sunset.cube"
+    "smoothStrength": 30,
+    "sharpen": 20,
+    "vignette": 30,
+    "grain": 10,
+    "lut": "warm_film"
   }
 }
 ```
+
+**字段说明**：
+- `meta.referenceSource`：记录参数参考来源（如样片 EXIF、摄影教程等），用于溯源
+- `composition.overlayType`：`rule_of_thirds | golden_ratio | diagonal | grid | leading_lines | center | none`
+- `pose.silhouette.type`：`builtin`（内置库引用）| `image`（base64 data URL）| `svg`（内联 SVG 字符串）
+- `postProcess.color` 各项：`-100 ~ 100` 整数
+- `postProcess.smoothStrength/sharpen/vignette/grain`：`0 ~ 100` 整数
 
 ### 3.3 模板流通路径
 

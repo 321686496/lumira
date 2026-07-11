@@ -341,54 +341,94 @@ export const useCaptureStore = defineStore('capture', () => {
 
 ## 五、模板 `.pptpl` 互操作规范
 
-两个 APP 共享 `.pptpl` 模板格式。Agent 必须确保模板处理的代码遵循以下结构：
+两个 APP 共享 `.pptpl` 模板格式。`.pptpl` 为完全自包含的 JSON 文件，不依赖任何外部资源文件。Agent 必须确保模板处理的代码遵循以下统一接口结构（实现位于各 APP 的 `types/template.ts`）：
 
 ```typescript
 // types/template.ts
+
+/** 剪影资源类型 */
+type SilhouetteType = 'builtin' | 'image' | 'svg'
+
+/**
+ * 剪影资源（统一承载内置引用与自定义资源）
+ * - builtin: data 为内置 SVG 库 key（如 'standing-profile'）
+ * - image:   data 为 base64 data URL（用户导入 PNG/JPG）
+ * - svg:     data 为内联 SVG 字符串（用户绘制）
+ */
+interface SilhouetteResource {
+  type: SilhouetteType
+  data: string
+  filename?: string
+  sizeKB?: number
+}
+
 interface PhotoTemplate {
   meta: {
     id: string
     name: string
+    author: string
     version: string
-    author?: string
-    description?: string
-    thumbnail?: string
-    target?: 'lumira' | 'lumira-studio' | 'both'
+    category: 'portrait' | 'landscape' | 'food' | 'street' | 'night' | 'macro' | 'still-life'
+    tags: string[]
+    price: number
+    cover: string
+    description: string
+    referenceSource: string  // 参数参考来源（如「样片 EXIF: Pexels #12345」）
   }
   composition: {
-    guideLines: GuideLine[]
-    ruleOfThirds: boolean
-    gridType: 'none' | 'thirds' | 'golden' | 'diagonal'
-    aspectRatios: string[]
+    overlayType: 'rule_of_thirds' | 'golden_ratio' | 'diagonal' | 'grid' | 'leading_lines' | 'center' | 'none'
+    gridType?: 'thirds' | 'quarters' | 'golden_spiral'
+    subjectFrame: { x: number; y: number; w: number; h: number }
+    opacity: number
+    aspectRatio: string
+    description: string
   }
-  pose?: {
-    silhouetteUrl?: string
-    description?: string
-    keyPoints?: Joint[]
+  pose: {
+    silhouette: SilhouetteResource
+    position: { x: number; y: number }
+    scale: number
+    rotation: number
+    description: string
   }
   camera: {
-    suggestedMode: 'auto' | 'portrait' | 'landscape' | 'night'
-    evBias: number
-    whiteBalance?: string
-    flashMode: 'off' | 'auto' | 'on'
+    exposureCompensation: number
+    isoMode: 'auto' | 'manual'
+    iso: number
+    shutterSpeed: string
+    whiteBalance: 'daylight' | 'cloudy' | 'shade' | 'tungsten' | 'fluorescent' | 'custom'
+    whiteBalanceK: number
+    flashMode: 'off' | 'on' | 'auto' | 'torch'
+    focusMode: 'auto' | 'manual' | 'continuous'
+    filterPreset: string
+    lensSuggestion: 'wide' | 'main' | 'telephoto' | 'ultra_wide'
   }
-  sceneGuide?: {
-    description: string
-    bestTime?: string
-    lightingTip?: string
+  sceneGuide: {
+    lightDirection: string
+    shootingDistance: string
+    background: string
+    props: string[]
+    bestTime: string
+    tips: string[]
   }
   postProcess: {
-    lut?: string
-    colorParams?: ColorAdjustment
-    sharpness?: number
-    smoothing?: number
-    vignette?: number
+    cropRatio: string
+    color: { brightness: number; contrast: number; saturation: number; temperature: number; tint: number }
+    smoothStrength: number
+    sharpen: number
+    vignette: number
+    grain: number
+    lut: 'none' | 'cinematic' | 'vintage' | 'bw' | 'warm_film' | 'cool_film' | 'pastel' | 'fuji'
   }
 }
 ```
 
+**剪影资源自包含策略**：
+- 导出时：`builtin` 仅存 key 字符串；`image` 存完整 base64 data URL；`svg` 存完整 SVG 字符串
+- 导入时：校验 `builtin` 的 key 是否存在于内置 SVG 库，不存在则降级为 `none`
+- ID 冲突时：自动追加 `_imported_${Date.now()}` 后缀避免覆盖
+
 - 离线版导入时做版本兼容性检查
-- 联网版上传/下载时带 `target` 元数据过滤
+- 联网版上传/下载时按 `meta.category` 等元数据过滤
 
 ---
 
