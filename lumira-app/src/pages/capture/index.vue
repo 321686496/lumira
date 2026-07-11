@@ -40,8 +40,35 @@
 
     <!-- 取景器 -->
     <view class="viewfinder" @click="onViewfinderTap">
-      <image class="viewfinder-bg" src="https://picsum.photos/seed/capture-viewfinder/400/600" mode="aspectFill" />
+      <!-- 真实相机预览 (H5) -->
+      <video
+        v-if="camera.platform === 'h5'"
+        ref="videoRef"
+        class="viewfinder-video"
+        :style="viewfinderFilterStyle"
+        autoplay
+        playsinline
+        muted
+      />
+      <!-- 占位图（无相机权限或非 H5 平台） -->
+      <image
+        v-if="camera.platform !== 'h5' || !camera.isReady.value"
+        class="viewfinder-bg"
+        src="https://picsum.photos/seed/capture-viewfinder/400/600"
+        mode="aspectFill"
+        :style="viewfinderFilterStyle"
+      />
       <view class="viewfinder-mask" />
+
+      <!-- 权限错误提示 -->
+      <view v-if="camera.error.value" class="camera-error">
+        <text class="ph ph-warning-circle camera-error-icon"></text>
+        <text class="camera-error-text">{{ camera.error.value }}</text>
+        <view class="camera-error-btn" @click="retryCamera">
+          <text class="ph ph-arrow-clockwise"></text>
+          <text>重试</text>
+        </view>
+      </view>
 
       <!-- 构图叠图 -->
       <CompositionOverlay
@@ -89,9 +116,12 @@
     <view class="capture-bottom" :style="landscapeZoomStyle">
       <view class="shutter-row">
         <view class="last-photo" @click="goPreview">
-          <image class="last-photo-img" src="https://picsum.photos/seed/last-photo/100/100" mode="aspectFill" />
+          <image v-if="lastPhoto" class="last-photo-img" :src="lastPhoto" mode="aspectFill" />
+          <view v-else class="last-photo-empty">
+            <text class="ph ph-image"></text>
+          </view>
         </view>
-        <view class="shutter-btn" @click="onShutter">
+        <view class="shutter-btn" :class="{ capturing: isCapturing }" @click="onShutter">
           <view class="shutter-inner" />
         </view>
         <view class="flip-btn" @click="flipCamera">
@@ -116,35 +146,45 @@
     </view>
 
     <ParamPanel
-      v-if="currentTemplate"
-      :template="currentTemplate"
+      v-if="editableTemplate"
+      :template="editableTemplate"
       :visible="panelExpanded"
       :applied="applied"
       @close="panelExpanded = false"
       @apply="toggleApply"
       @update:opacity="onOpacityUpdate"
+      @update:template="onTemplateUpdate"
     />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
+import { useCamera } from '@/composables/useCamera'
+import { buildCssFilter } from '@/utils/filterRecipe'
+import type { PhotoTemplate } from '@/types/template'
 import CompositionOverlay from '@/components/CompositionOverlay.vue'
 import PoseSilhouette from '@/components/PoseSilhouette.vue'
 import ParamPanel from '@/components/ParamPanel.vue'
 
 const { loadTemplate, recentTemplates, pushRecent, loadRecent } = useTemplate()
+const camera = useCamera()
 
 const statusBarHeight = uni.getSystemInfoSync().statusBarHeight || 20
 const currentTemplateId = ref('')
-const currentTemplate = computed(() =>
+const originalTemplate = computed<PhotoTemplate | null>(() =>
   currentTemplateId.value ? loadTemplate(currentTemplateId.value) : null
 )
+// 可编辑副本：ParamPanel 直接修改此对象，实时反映到预览
+const editableTemplate = ref<PhotoTemplate | null>(null)
+
 const panelExpanded = ref(false)
 const applied = ref(false)
 const flashOn = ref(false)
+const isCapturing = ref(false)
+const lastPhoto = ref('')
 
 // 显隐控制
 const showTemplate = ref(true)
@@ -163,22 +203,59 @@ const levelAngle = ref(0)
 let lastTapTime = 0
 const DBL_TAP_THRESHOLD = 300
 
-// 计算横屏缩放比例：让横屏下 rpx 物理尺寸与竖屏一致
+// 视频元素 ref
+const videoRef = ref<HTMLVideoElement | null>(null)
+
+// 计算横屏缩放比例
 const updateOrientation = (windowWidth: number, windowHeight: number) => {
   isLandscape.value = windowWidth > windowHeight
   if (isLandscape.value) {
-    // 竖屏宽度（短边） / 横屏宽度（长边）= 缩放比
     landscapeScale.value = windowHeight / windowWidth
   } else {
     landscapeScale.value = 1
   }
 }
 
-// 横屏缩放样式：仅应用到控制元素（nav-main / capture-bottom / param-pill-bar）
-// 不应用到整个页面，避免 100vh 高度计算错误导致取景器不充满
 const landscapeZoomStyle = computed(() => {
   if (!isLandscape.value) return {}
   return { zoom: landscapeScale.value }
+})
+
+// 当前生效的相机 + 后期参数（用于滤镜）
+const activeCamera = computed(() => {
+  if (applied.value && editableTemplate.value) {
+    return editableTemplate.value.camera
+  }
+  // 未应用时仅显示原始相机参数（不应用滤镜）
+  return {} as Record<string, unknown>
+})
+
+const activePost = computed(() => {
+  if (applied.value && editableTemplate.value) {
+    return editableTemplate.value.postProcess
+  }
+  return {} as Record<string, unknown>
+})
+
+// 实时滤镜样式（应用到视频/占位图）
+const viewfinderFilterStyle = computed(() => {
+  if (!applied.value || !editableTemplate.value) return {}
+  const filter = buildCssFilter(
+    editableTemplate.value.camera,
+    editableTemplate.value.postProcess
+  )
+  return filter ? { filter, webkitFilter: filter } : {}
+})
+
+onMounted(async () => {
+  // 启动相机预览
+  await camera.startPreview()
+  // 绑定视频元素
+  if (videoRef.value) {
+    camera.bindVideoElement(videoRef.value)
+    // 确保视频播放
+    videoRef.value.play().catch(() => {})
+  }
 })
 
 onLoad((options) => {
@@ -187,8 +264,6 @@ onLoad((options) => {
     pushRecent(options.templateId)
   }
   loadRecent()
-  // 不自动选择最近模板：直接进入拍摄页时为自由拍摄模式
-  // 最近模板仅在底部横滑列表中展示供用户手动切换
 
   // 横竖屏检测
   const sysInfo = uni.getSystemInfoSync()
@@ -199,17 +274,31 @@ onLoad((options) => {
   uni.onWindowResize(resizeListener)
 })
 
+// 监听原始模板变化，创建可编辑副本
+watch(originalTemplate, (tpl) => {
+  if (tpl) {
+    // 深拷贝创建可编辑副本
+    editableTemplate.value = JSON.parse(JSON.stringify(tpl))
+  } else {
+    editableTemplate.value = null
+  }
+}, { immediate: true })
+
 onUnload(() => {
-  // 退出时清空当前模板状态，防止下次直接进入读取残留
+  // 退出时清空当前模板状态
   currentTemplateId.value = ''
   applied.value = false
   showTemplate.value = true
   showSilhouette.value = true
+  // 释放相机资源
+  camera.release()
   if (resizeListener) {
     uni.offWindowResize(resizeListener)
     resizeListener = null
   }
 })
+
+const currentTemplate = editableTemplate
 
 const hasSilhouette = computed(() => {
   const pose = currentTemplate.value?.pose
@@ -261,8 +350,14 @@ const toggleApply = () => {
 }
 
 const onOpacityUpdate = (v: number) => {
-  // 透明度变化通过 prop 传入，不需要额外处理
-  console.log('opacity update', v)
+  if (editableTemplate.value) {
+    editableTemplate.value.composition.opacity = v
+  }
+}
+
+// ParamPanel 修改参数时触发
+const onTemplateUpdate = (tpl: PhotoTemplate) => {
+  editableTemplate.value = tpl
 }
 
 const switchTemplate = (id: string) => {
@@ -283,14 +378,57 @@ const back = () => uni.navigateBack({ fail: () => uni.reLaunch({ url: '/pages/ho
 const goSceneGuide = () => uni.navigateTo({ url: '/pages/capture/scene-guide' })
 const goPreview = () => uni.navigateTo({ url: '/pages/capture/preview' })
 
-const onShutter = () => {
+const onShutter = async () => {
+  if (isCapturing.value) return
+  isCapturing.value = true
+
   // v2: 快门振动反馈
   uni.vibrateShort({ type: 'light', fail: () => {} })
-  uni.navigateTo({ url: '/pages/capture/preview' })
+
+  try {
+    // 拍照：截帧 + 应用所有滤镜 + 烘焙为 dataURL
+    const cameraParams = applied.value && editableTemplate.value
+      ? editableTemplate.value.camera
+      : {}
+    const postParams = applied.value && editableTemplate.value
+      ? editableTemplate.value.postProcess
+      : {}
+
+    const result = await camera.capture(cameraParams, postParams)
+    lastPhoto.value = result.dataUrl
+
+    // 跳转到预览页（携带 dataURL）
+    // dataURL 太长不能放 URL，使用全局变量传递
+    ;(uni as unknown as { _lastCaptureData?: string })._lastCaptureData = result.dataUrl
+    uni.navigateTo({ url: '/pages/capture/preview' })
+  } catch (err) {
+    uni.showToast({
+      title: '拍照失败: ' + (err as Error).message,
+      icon: 'none'
+    })
+  } finally {
+    isCapturing.value = false
+  }
 }
 
-const flipCamera = () => uni.showToast({ title: '翻转镜头', icon: 'none' })
-const toggleFlash = () => { flashOn.value = !flashOn.value }
+const flipCamera = async () => {
+  await camera.switchCamera()
+  uni.showToast({ title: `已切换至${camera.facing.value === 'front' ? '前置' : '后置'}镜头`, icon: 'none' })
+}
+
+const toggleFlash = () => {
+  flashOn.value = !flashOn.value
+  camera.setFlash(flashOn.value ? 'torch' : 'off')
+}
+
+const retryCamera = async () => {
+  await camera.release()
+  await camera.startPreview()
+  if (videoRef.value) {
+    camera.bindVideoElement(videoRef.value)
+    videoRef.value.play().catch(() => {})
+  }
+}
 
 // 双击取景器切换摄像头 (v2手势)
 const onViewfinderTap = () => {
@@ -434,20 +572,63 @@ const onViewfinderTap = () => {
   overflow: hidden;
 }
 
+.viewfinder-video,
 .viewfinder-bg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: cover;
+}
+
+.viewfinder-video {
+  object-fit: cover;
 }
 
 .viewfinder-mask {
   position: absolute;
   inset: 0;
-  background: rgba(24, 22, 20, 0.35);
+  background: rgba(24, 22, 20, 0.15);
+  pointer-events: none;
 }
 
-/* ===== 叠图动画 (v2: 200ms 淡入淡出) ===== */
+/* ===== 相机错误提示 ===== */
+.camera-error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+  padding: 40rpx;
+  z-index: 10;
+}
+
+.camera-error-icon {
+  font-size: 80rpx;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.camera-error-text {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+}
+
+.camera-error-btn {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 16rpx 32rpx;
+  border-radius: 9999rpx;
+  background: rgba(201, 169, 110, 0.8);
+  color: #fff;
+  font-size: 26rpx;
+}
+
+/* ===== 叠图动画 ===== */
 .overlay-anim {
   animation: overlayFadeIn 200ms ease-out;
 }
@@ -592,6 +773,17 @@ const onViewfinderTap = () => {
   height: 100%;
 }
 
+.last-photo-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 36rpx;
+}
+
 .shutter-btn {
   width: 140rpx;
   height: 140rpx;
@@ -601,6 +793,11 @@ const onViewfinderTap = () => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: transform 100ms ease-out;
+}
+
+.shutter-btn.capturing {
+  transform: scale(0.92);
 }
 
 .shutter-inner {
@@ -665,15 +862,10 @@ const onViewfinderTap = () => {
 }
 
 /* ===== 横屏自适应 ===== */
-/* zoom 已通过 inline style 应用到控制元素，保证按钮物理尺寸与竖屏一致 */
-/* 这里只做布局调整：底部控制区变为右侧固定侧栏，内部纵向排版 */
-
-/* 取景器填满整个屏幕（横屏无需额外处理，flex:1 自动填满） */
 .capture-page.is-landscape .viewfinder {
   flex: 1;
 }
 
-/* 底部控制区变为右侧固定侧栏 */
 .capture-page.is-landscape .capture-bottom {
   position: fixed;
   right: 0;
@@ -690,13 +882,11 @@ const onViewfinderTap = () => {
   width: 520rpx;
 }
 
-/* 快门行变为纵向排列 */
 .capture-page.is-landscape .shutter-row {
   flex-direction: column;
   gap: 24rpx;
 }
 
-/* 模板横滑变为纵向滚动 */
 .capture-page.is-landscape .template-strip {
   margin-top: 24rpx;
   height: 300rpx;
@@ -708,7 +898,6 @@ const onViewfinderTap = () => {
   align-items: center;
 }
 
-/* 参数 pill 栏移到左下角（避开右侧控制栏） */
 .capture-page.is-landscape .param-pill-bar {
   top: auto;
   bottom: 60rpx;
@@ -716,7 +905,6 @@ const onViewfinderTap = () => {
   transform: none;
 }
 
-/* 水平仪移到左下角 */
 .capture-page.is-landscape .level-indicator {
   bottom: 40rpx;
   left: 40rpx;

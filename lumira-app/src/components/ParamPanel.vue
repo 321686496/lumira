@@ -34,67 +34,121 @@
       <scroll-view scroll-y class="panel-content">
         <!-- 相机 Tab -->
         <view v-if="activeTab === 0" class="tab-pane">
-          <view class="param-row">
-            <view class="param-label">曝光补偿</view>
-            <view class="param-value">
-              {{ template.camera.exposureCompensation > 0 ? '+' : '' }}{{ template.camera.exposureCompensation }} EV
+          <!-- 曝光补偿 -->
+          <view class="slider-block">
+            <view class="slider-header">
+              <text class="param-label">曝光补偿 EV</text>
+              <text class="slider-value">{{ evDisplay }}</text>
             </view>
-            <view class="param-tag" :class="applied ? 'tag-applied' : 'tag-suggest'">
-              {{ applied ? '已应用' : '建议' }}
-            </view>
+            <slider
+              :value="template.camera.exposureCompensation"
+              :min="-3"
+              :max="3"
+              :step="0.3"
+              activeColor="var(--color-brand)"
+              backgroundColor="var(--color-divider)"
+              block-color="var(--color-brand)"
+              @change="(e: any) => updateCamera('exposureCompensation', e.detail.value)"
+            />
           </view>
-          <view class="param-row">
-            <view class="param-label">ISO</view>
-            <view class="param-value">
-              {{ template.camera.isoMode === 'auto' ? '自动' : '手动' }} · {{ template.camera.iso }}
+
+          <!-- ISO -->
+          <view class="slider-block">
+            <view class="slider-header">
+              <text class="param-label">ISO</text>
+              <text class="slider-value">{{ template.camera.iso === 0 ? '自动' : template.camera.iso }}</text>
             </view>
-            <view class="param-tag" :class="applied ? 'tag-applied' : 'tag-suggest'">
-              {{ applied ? '已应用' : '建议' }}
-            </view>
+            <slider
+              :value="template.camera.iso"
+              :min="0"
+              :max="6400"
+              :step="50"
+              activeColor="var(--color-brand)"
+              backgroundColor="var(--color-divider)"
+              block-color="var(--color-brand)"
+              @change="(e: any) => updateCamera('iso', e.detail.value)"
+            />
           </view>
+
+          <!-- 快门速度 -->
           <view class="param-row">
             <view class="param-label">快门速度</view>
             <view class="param-value">{{ template.camera.shutterSpeed }}</view>
-            <view class="param-tag" :class="applied ? 'tag-applied' : 'tag-suggest'">
-              {{ applied ? '已应用' : '建议' }}
-            </view>
           </view>
+
+          <!-- 白平衡 -->
           <view class="param-row">
             <view class="param-label">白平衡</view>
             <view class="param-value">
               {{ wbLabel(template.camera.whiteBalance, template.camera.whiteBalanceK) }}
             </view>
-            <view class="param-tag" :class="applied ? 'tag-applied' : 'tag-suggest'">
-              {{ applied ? '已应用' : '建议' }}
+          </view>
+          <view class="slider-block">
+            <view class="slider-header">
+              <text class="param-label">色温 K</text>
+              <text class="slider-value">{{ template.camera.whiteBalanceK }}K</text>
+            </view>
+            <slider
+              :value="template.camera.whiteBalanceK"
+              :min="2500"
+              :max="8000"
+              :step="100"
+              activeColor="var(--color-brand)"
+              backgroundColor="var(--color-divider)"
+              block-color="var(--color-brand)"
+              @change="(e: any) => updateCamera('whiteBalanceK', e.detail.value)"
+            />
+          </view>
+          <view class="pill-row">
+            <view
+              v-for="wb in wbOptions"
+              :key="wb.value"
+              class="pill-option"
+              :class="{ active: template.camera.whiteBalance === wb.value }"
+              @click="updateCamera('whiteBalance', wb.value)"
+            >
+              {{ wb.label }}
             </view>
           </view>
+
+          <!-- 闪光 -->
           <view class="param-row">
             <view class="param-label">闪光</view>
             <view class="param-value">{{ flashLabel(template.camera.flashMode) }}</view>
-            <view class="param-tag" :class="applied ? 'tag-applied' : 'tag-suggest'">
-              {{ applied ? '已应用' : '建议' }}
+          </view>
+          <view class="pill-row">
+            <view
+              v-for="f in flashOptions"
+              :key="f.value"
+              class="pill-option"
+              :class="{ active: template.camera.flashMode === f.value }"
+              @click="updateCamera('flashMode', f.value)"
+            >
+              {{ f.label }}
             </view>
           </view>
+
+          <!-- 对焦 -->
           <view class="param-row">
             <view class="param-label">对焦</view>
             <view class="param-value">{{ focusLabel(template.camera.focusMode) }}</view>
-            <view class="param-tag" :class="applied ? 'tag-applied' : 'tag-suggest'">
-              {{ applied ? '已应用' : '建议' }}
+          </view>
+          <view class="pill-row">
+            <view
+              v-for="f in focusOptions"
+              :key="f.value"
+              class="pill-option"
+              :class="{ active: template.camera.focusMode === f.value }"
+              @click="updateCamera('focusMode', f.value)"
+            >
+              {{ f.label }}
             </view>
           </view>
+
+          <!-- 镜头建议 -->
           <view class="param-row">
             <view class="param-label">镜头建议</view>
             <view class="param-value">{{ lensLabel(template.camera.lensSuggestion) }}</view>
-            <view class="param-tag" :class="applied ? 'tag-applied' : 'tag-suggest'">
-              {{ applied ? '已应用' : '建议' }}
-            </view>
-          </view>
-          <view class="param-row" v-if="template.camera.filterPreset">
-            <view class="param-label">滤镜预设</view>
-            <view class="param-value">{{ template.camera.filterPreset }}</view>
-            <view class="param-tag" :class="applied ? 'tag-applied' : 'tag-suggest'">
-              {{ applied ? '已应用' : '建议' }}
-            </view>
           </view>
         </view>
 
@@ -133,7 +187,7 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              @change="onOpacityChange"
+              @change="(e: any) => updateComposition('opacity', e.detail.value / 100)"
             />
           </view>
           <view class="desc-block" v-if="template.composition.description">
@@ -189,10 +243,7 @@
                 class="silhouette-img"
                 mode="aspectFit"
               />
-              <view
-                v-else
-                class="silhouette-placeholder"
-              >
+              <view v-else class="silhouette-placeholder">
                 <text class="ph ph-person silhouette-icon" />
               </view>
             </view>
@@ -209,13 +260,37 @@
               {{ Math.round(template.pose.position.x * 100) }}%, {{ Math.round(template.pose.position.y * 100) }}%
             </view>
           </view>
-          <view class="param-row">
-            <view class="param-label">缩放</view>
-            <view class="param-value">{{ template.pose.scale.toFixed(2) }}</view>
+          <view class="slider-block">
+            <view class="slider-header">
+              <text class="param-label">缩放</text>
+              <text class="slider-value">{{ template.pose.scale.toFixed(2) }}</text>
+            </view>
+            <slider
+              :value="template.pose.scale"
+              :min="0.3"
+              :max="3"
+              :step="0.05"
+              activeColor="var(--color-brand)"
+              backgroundColor="var(--color-divider)"
+              block-color="var(--color-brand)"
+              @change="(e: any) => updatePose('scale', e.detail.value)"
+            />
           </view>
-          <view class="param-row">
-            <view class="param-label">旋转</view>
-            <view class="param-value">{{ template.pose.rotation }}°</view>
+          <view class="slider-block">
+            <view class="slider-header">
+              <text class="param-label">旋转</text>
+              <text class="slider-value">{{ template.pose.rotation }}°</text>
+            </view>
+            <slider
+              :value="template.pose.rotation"
+              :min="-180"
+              :max="180"
+              :step="1"
+              activeColor="var(--color-brand)"
+              backgroundColor="var(--color-divider)"
+              block-color="var(--color-brand)"
+              @change="(e: any) => updatePose('rotation', e.detail.value)"
+            />
           </view>
           <view class="desc-block" v-if="template.pose.description">
             <view class="desc-title">姿势描述</view>
@@ -229,10 +304,25 @@
             <view class="param-label">裁剪比</view>
             <view class="param-value">{{ template.postProcess.cropRatio }}</view>
           </view>
+
+          <!-- LUT 预设 -->
           <view class="param-row">
             <view class="param-label">LUT 预设</view>
             <view class="param-value">{{ lutLabel(template.postProcess.lut) }}</view>
           </view>
+          <view class="pill-row">
+            <view
+              v-for="lut in lutOptions"
+              :key="lut.value"
+              class="pill-option"
+              :class="{ active: template.postProcess.lut === lut.value }"
+              @click="updatePostProcess('lut', lut.value)"
+            >
+              {{ lut.label }}
+            </view>
+          </view>
+
+          <!-- 亮度 -->
           <view class="slider-block">
             <view class="slider-header">
               <text class="param-label">亮度</text>
@@ -246,9 +336,10 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              disabled
+              @change="(e: any) => updateColor('brightness', e.detail.value)"
             />
           </view>
+          <!-- 对比度 -->
           <view class="slider-block">
             <view class="slider-header">
               <text class="param-label">对比度</text>
@@ -262,9 +353,10 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              disabled
+              @change="(e: any) => updateColor('contrast', e.detail.value)"
             />
           </view>
+          <!-- 饱和度 -->
           <view class="slider-block">
             <view class="slider-header">
               <text class="param-label">饱和度</text>
@@ -278,9 +370,10 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              disabled
+              @change="(e: any) => updateColor('saturation', e.detail.value)"
             />
           </view>
+          <!-- 色温 -->
           <view class="slider-block">
             <view class="slider-header">
               <text class="param-label">色温</text>
@@ -294,9 +387,10 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              disabled
+              @change="(e: any) => updateColor('temperature', e.detail.value)"
             />
           </view>
+          <!-- 色调 -->
           <view class="slider-block">
             <view class="slider-header">
               <text class="param-label">色调</text>
@@ -310,9 +404,10 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              disabled
+              @change="(e: any) => updateColor('tint', e.detail.value)"
             />
           </view>
+          <!-- 磨皮 -->
           <view class="slider-block">
             <view class="slider-header">
               <text class="param-label">磨皮</text>
@@ -326,9 +421,10 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              disabled
+              @change="(e: any) => updatePostProcess('smoothStrength', e.detail.value)"
             />
           </view>
+          <!-- 锐化 -->
           <view class="slider-block">
             <view class="slider-header">
               <text class="param-label">锐化</text>
@@ -342,9 +438,10 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              disabled
+              @change="(e: any) => updatePostProcess('sharpen', e.detail.value)"
             />
           </view>
+          <!-- 暗角 -->
           <view class="slider-block">
             <view class="slider-header">
               <text class="param-label">暗角</text>
@@ -358,9 +455,10 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              disabled
+              @change="(e: any) => updatePostProcess('vignette', e.detail.value)"
             />
           </view>
+          <!-- 颗粒 -->
           <view class="slider-block">
             <view class="slider-header">
               <text class="param-label">颗粒</text>
@@ -374,7 +472,7 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              disabled
+              @change="(e: any) => updatePostProcess('grain', e.detail.value)"
             />
           </view>
         </view>
@@ -396,10 +494,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import type { PhotoTemplate } from '@/types/template'
+import { ref, computed } from 'vue'
+import type { PhotoTemplate, WhiteBalance, FlashMode, FocusMode, LutPreset } from '@/types/template'
 
-defineProps<{
+const props = defineProps<{
   template: PhotoTemplate
   visible: boolean
   applied: boolean
@@ -409,6 +507,7 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'apply'): void
   (e: 'update:opacity', value: number): void
+  (e: 'update:template', template: PhotoTemplate): void
 }>()
 
 const tabs = [
@@ -420,6 +519,42 @@ const tabs = [
 ]
 
 const activeTab = ref(0)
+
+// 选项列表
+const wbOptions: { value: WhiteBalance; label: string }[] = [
+  { value: 'daylight', label: '日光' },
+  { value: 'cloudy', label: '阴天' },
+  { value: 'shade', label: '阴影' },
+  { value: 'tungsten', label: '钨丝灯' },
+  { value: 'fluorescent', label: '荧光灯' },
+  { value: 'custom', label: '自定义' }
+]
+const flashOptions: { value: FlashMode; label: string }[] = [
+  { value: 'off', label: '关闭' },
+  { value: 'on', label: '常开' },
+  { value: 'auto', label: '自动' },
+  { value: 'torch', label: '手电筒' }
+]
+const focusOptions: { value: FocusMode; label: string }[] = [
+  { value: 'auto', label: '自动' },
+  { value: 'manual', label: '手动' },
+  { value: 'continuous', label: '连续' }
+]
+const lutOptions: { value: LutPreset; label: string }[] = [
+  { value: 'none', label: '原图' },
+  { value: 'cinematic', label: '电影感' },
+  { value: 'vintage', label: '复古' },
+  { value: 'bw', label: '黑白' },
+  { value: 'warm_film', label: '暖色' },
+  { value: 'cool_film', label: '冷色' },
+  { value: 'pastel', label: '柔色' },
+  { value: 'fuji', label: '富士' }
+]
+
+const evDisplay = computed(() => {
+  const ev = props.template.camera.exposureCompensation
+  return ev > 0 ? `+${ev.toFixed(1)}` : ev.toFixed(1)
+})
 
 const overlayTypeLabel = (t: string) => ({
   rule_of_thirds: '三分法',
@@ -471,8 +606,41 @@ const lutLabel = (l: string) => ({
   fuji: '富士'
 }[l] || l)
 
-const onOpacityChange = (e: any) => {
-  emit('update:opacity', e.detail.value / 100)
+// ===== 参数修改方法 =====
+
+/** 深拷贝并触发更新 */
+function cloneTemplate(): PhotoTemplate {
+  return JSON.parse(JSON.stringify(props.template))
+}
+
+function updateCamera<K extends keyof PhotoTemplate['camera']>(key: K, value: PhotoTemplate['camera'][K]) {
+  const tpl = cloneTemplate()
+  tpl.camera[key] = value
+  emit('update:template', tpl)
+}
+
+function updateComposition<K extends keyof PhotoTemplate['composition']>(key: K, value: PhotoTemplate['composition'][K]) {
+  const tpl = cloneTemplate()
+  tpl.composition[key] = value
+  emit('update:template', tpl)
+}
+
+function updatePose<K extends keyof PhotoTemplate['pose']>(key: K, value: PhotoTemplate['pose'][K]) {
+  const tpl = cloneTemplate()
+  tpl.pose[key] = value
+  emit('update:template', tpl)
+}
+
+function updatePostProcess<K extends keyof PhotoTemplate['postProcess']>(key: K, value: PhotoTemplate['postProcess'][K]) {
+  const tpl = cloneTemplate()
+  tpl.postProcess[key] = value
+  emit('update:template', tpl)
+}
+
+function updateColor<K extends keyof PhotoTemplate['postProcess']['color']>(key: K, value: PhotoTemplate['postProcess']['color'][K]) {
+  const tpl = cloneTemplate()
+  tpl.postProcess.color[key] = value
+  emit('update:template', tpl)
 }
 </script>
 
@@ -649,23 +817,6 @@ const onOpacityChange = (e: any) => {
   word-break: break-all;
 }
 
-.param-tag {
-  font-size: 20rpx;
-  padding: 4rpx 14rpx;
-  border-radius: 9999rpx;
-  flex-shrink: 0;
-}
-
-.tag-suggest {
-  background-color: var(--color-brand-subtle);
-  color: var(--color-brand-text);
-}
-
-.tag-applied {
-  background-color: var(--color-success-subtle);
-  color: var(--color-success);
-}
-
 /* 滑块块 */
 .slider-block {
   padding: 20rpx 0;
@@ -682,6 +833,30 @@ const onOpacityChange = (e: any) => {
 .slider-value {
   font-size: 26rpx;
   color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+/* 选项 pill 行 */
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  padding: 12rpx 0 20rpx;
+  border-bottom: 1rpx solid var(--color-divider);
+}
+
+.pill-option {
+  padding: 10rpx 20rpx;
+  border-radius: 9999rpx;
+  background-color: var(--color-surface-alt);
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.pill-option.active {
+  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-deep) 100%);
+  color: #fff;
   font-weight: 500;
 }
 

@@ -13,7 +13,11 @@
 
     <!-- 拍摄照片 -->
     <view class="photo-frame fade-in">
-      <image class="photo-img" src="https://picsum.photos/seed/733872/400/600" mode="aspectFill" />
+      <image v-if="photoUrl" class="photo-img" :src="photoUrl" mode="aspectFill" />
+      <view v-else class="photo-empty">
+        <text class="ph ph-image photo-empty-icon"></text>
+        <text class="photo-empty-text">无照片数据</text>
+      </view>
     </view>
 
     <!-- 底部白色 Sheet -->
@@ -87,6 +91,19 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+
+const photoUrl = ref('')
+
+onLoad(() => {
+  // 从全局变量读取拍摄的照片数据
+  const data = (uni as unknown as { _lastCaptureData?: string })._lastCaptureData
+  if (data) {
+    photoUrl.value = data
+    // 读取后清除，避免残留
+    delete (uni as unknown as { _lastCaptureData?: string })._lastCaptureData
+  }
+})
 
 const moods = ref([
   { name: '开心', icon: 'ph-smiley', active: true },
@@ -134,7 +151,26 @@ const onExifCard = () => {
 }
 
 const onSave = () => {
-  uni.navigateTo({ url: '/pages/gallery/index' })
+  if (!photoUrl.value) {
+    uni.showToast({ title: '无照片数据', icon: 'none' })
+    return
+  }
+  // H5 端：通过创建 <a> 栿签下载图片
+  // #ifdef H5
+  try {
+    const link = document.createElement('a')
+    link.download = `lumira_${Date.now()}.jpg`
+    link.href = photoUrl.value
+    link.click()
+    uni.showToast({ title: '已保存', icon: 'success' })
+  } catch (err) {
+    uni.showToast({ title: '保存失败', icon: 'none' })
+  }
+  // #endif
+  // #ifndef H5
+  // App-Plus / 小程序：使用 uni.saveImageToPhotosAlbum
+  // #endif
+  setTimeout(() => uni.navigateTo({ url: '/pages/gallery/index' }), 800)
 }
 </script>
 
@@ -197,6 +233,27 @@ const onSave = () => {
   left: 0;
   width: 100%;
   height: 100%;
+}
+
+.photo-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.photo-empty-icon {
+  font-size: 80rpx;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.photo-empty-text {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 /* ===== 底部白色 Sheet ===== */

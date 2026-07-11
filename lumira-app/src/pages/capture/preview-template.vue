@@ -22,7 +22,7 @@
     <!-- 取景器 -->
     <view class="viewfinder" ref="viewfinderRef">
       <view class="viewfinder-frame" :style="viewfinderFrameStyle">
-        <image class="viewfinder-bg" :src="template?.meta?.cover" mode="aspectFill" />
+        <image class="viewfinder-bg" :src="template?.meta?.cover" mode="aspectFill" :style="viewfinderFilterStyle" />
         <view class="viewfinder-mask" />
         <CompositionOverlay v-if="template" :composition="template.composition" />
         <!-- 可拖动的剪影叠图 -->
@@ -138,6 +138,16 @@
         <view class="adjust-section">
           <text class="section-title">后期调色</text>
           <view class="adjust-row">
+            <text class="row-label">LUT 预设</text>
+            <view class="seg-btns">
+              <view v-for="lut in lutOptions" :key="lut.value"
+                    class="seg-btn" :class="{ active: template.postProcess.lut === lut.value }"
+                    @click="template!.postProcess.lut = lut.value">
+                <text>{{ lut.label }}</text>
+              </view>
+            </view>
+          </view>
+          <view class="adjust-row">
             <text class="row-label">亮度</text>
             <slider :value="template.postProcess.color.brightness" :min="-100" :max="100" :step="1"
                     activeColor="#C9A96E" @change="onColorChange('brightness', $event)" />
@@ -197,9 +207,10 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
+import { buildCssFilter } from '@/utils/filterRecipe'
 import CompositionOverlay from '@/components/CompositionOverlay.vue'
 import PoseSilhouette from '@/components/PoseSilhouette.vue'
-import type { PhotoTemplate, WhiteBalance, FlashMode, FocusMode } from '@/types/template'
+import type { PhotoTemplate, WhiteBalance, FlashMode, FocusMode, LutPreset } from '@/types/template'
 
 const { loadDraft, loadTemplate, saveAdjustment } = useTemplate()
 const template = ref<PhotoTemplate | null>(null)
@@ -236,6 +247,13 @@ const viewfinderFrameStyle = computed(() => {
     return { height: '100%', aspectRatio: `${w} / ${h}` }
   }
   return { width: '100%', aspectRatio: `${w} / ${h}` }
+})
+
+// 实时滤镜预览样式（应用到取景器背景图）
+const viewfinderFilterStyle = computed(() => {
+  if (!template.value) return {}
+  const filter = buildCssFilter(template.value.camera, template.value.postProcess)
+  return filter ? { filter, webkitFilter: filter } : {}
 })
 
 function getDragXY(e: any): { x: number; y: number } {
@@ -372,6 +390,17 @@ const focusOptions: { label: string; value: FocusMode }[] = [
   { label: '自动', value: 'auto' },
   { label: '手动', value: 'manual' },
   { label: '连续', value: 'continuous' }
+]
+
+const lutOptions: { label: string; value: LutPreset }[] = [
+  { label: '原图', value: 'none' },
+  { label: '电影感', value: 'cinematic' },
+  { label: '复古', value: 'vintage' },
+  { label: '黑白', value: 'bw' },
+  { label: '暖色', value: 'warm_film' },
+  { label: '冷色', value: 'cool_film' },
+  { label: '柔色', value: 'pastel' },
+  { label: '富士', value: 'fuji' }
 ]
 
 // ===== 格式化 =====
