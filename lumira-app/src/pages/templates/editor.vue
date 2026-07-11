@@ -628,7 +628,13 @@
       <view class="footer-btns">
         <view
           class="lumira-btn-ghost footer-btn"
-          :class="{ disabled: !isEditMode }"
+          @click="onSaveDraft"
+        >
+          <text class="ph ph-note-pencil"></text>
+          <text>草稿</text>
+        </view>
+        <view
+          class="lumira-btn-ghost footer-btn"
           @click="onPreview"
         >
           <text class="ph ph-eye"></text>
@@ -660,7 +666,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
 import { useTemplateIO } from '@/composables/useTemplateIO'
 import { BUILTIN_SILHOUETTES, BUILTIN_SILHOUETTE_KEYS } from '@/data/silhouettes'
@@ -680,7 +686,7 @@ import type {
   IsoMode
 } from '@/types/template'
 
-const { loadTemplate, saveCustomTemplate, createBlankTemplate } = useTemplate()
+const { loadTemplate, saveCustomTemplate, createBlankTemplate, saveDraft, loadDraft, clearDraft, hasDraft, loadAdjustment, clearAdjustment } = useTemplate()
 const { exportTemplate } = useTemplateIO()
 
 const isEditMode = ref(false)
@@ -806,11 +812,33 @@ onLoad((options) => {
       form.value = JSON.parse(JSON.stringify(tpl)) as PhotoTemplate
       isEditMode.value = true
     }
+  } else if (options?.draft === '1') {
+    // 从草稿恢复
+    const draft = loadDraft()
+    if (draft) {
+      form.value = draft
+      isEditMode.value = !!loadTemplate(draft.meta.id)
+    }
   }
   // 同步文本缓冲
   tagsText.value = form.value.meta.tags.join(', ')
   propsText.value = form.value.sceneGuide.props.join(', ')
   tipsText.value = form.value.sceneGuide.tips.join('\n')
+})
+
+// ===== onShow: 检查预览页同步回来的调整数据 =====
+onShow(() => {
+  const adjusted = loadAdjustment()
+  if (adjusted) {
+    // 将预览页调整后的参数同步到表单
+    form.value = adjusted
+    clearAdjustment()
+    // 同步文本缓冲
+    tagsText.value = form.value.meta.tags.join(', ')
+    propsText.value = form.value.sceneGuide.props.join(', ')
+    tipsText.value = form.value.sceneGuide.tips.join('\n')
+    uni.showToast({ title: '已同步预览调整', icon: 'success' })
+  }
 })
 
 // ===== Picker 变更处理 =====
@@ -999,8 +1027,15 @@ function onSave() {
     return
   }
   saveCustomTemplate(form.value)
+  // 保存后清除草稿
+  clearDraft()
   uni.showToast({ title: '保存成功', icon: 'success' })
   setTimeout(() => uni.navigateBack(), 800)
+}
+
+function onSaveDraft() {
+  saveDraft(form.value)
+  uni.showToast({ title: '草稿已保存', icon: 'success' })
 }
 
 function onExport() {
@@ -1008,11 +1043,9 @@ function onExport() {
 }
 
 function onPreview() {
-  if (!isEditMode.value) {
-    uni.showToast({ title: '请先保存模板', icon: 'none' })
-    return
-  }
-  uni.navigateTo({ url: `/pages/templates/detail?templateId=${form.value.meta.id}` })
+  // 保存草稿并跳转到预览拍照页（无论是否编辑模式都可用）
+  saveDraft(form.value)
+  uni.navigateTo({ url: `/pages/capture/preview-template?draft=1` })
 }
 
 function back() {

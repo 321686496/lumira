@@ -29,6 +29,10 @@
 			"style": { "navigationStyle": "custom", "backgroundColor": "#181614" }
 		},
 		{
+			"path": "pages/capture/preview-template",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#181614" }
+		},
+		{
 			"path": "pages/capture/scene-guide",
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},

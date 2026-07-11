@@ -14,6 +14,8 @@ import type { PhotoTemplate } from '@/types/template'
 
 const CUSTOM_TEMPLATES_KEY = 'lumira_custom_templates'
 const RECENT_TEMPLATES_KEY = 'lumira_recent_templates'
+const DRAFT_KEY = 'lumira_template_draft'
+const ADJUSTMENT_KEY = 'lumira_template_adjustment'
 const MAX_RECENT = 6
 
 /** 最近使用的模板列表（跨组件共享） */
@@ -190,6 +192,57 @@ export function useTemplate() {
       .slice(0, MAX_RECENT)
   }
 
+  // ===== 草稿管理 =====
+
+  /** 保存草稿到本地 */
+  function saveDraft(tpl: PhotoTemplate): void {
+    uni.setStorageSync(DRAFT_KEY, JSON.stringify(tpl))
+  }
+
+  /** 加载草稿 */
+  function loadDraft(): PhotoTemplate | null {
+    const raw = uni.getStorageSync(DRAFT_KEY)
+    if (!raw) return null
+    try {
+      return JSON.parse(raw) as PhotoTemplate
+    } catch {
+      return null
+    }
+  }
+
+  /** 清除草稿 */
+  function clearDraft(): void {
+    uni.removeStorageSync(DRAFT_KEY)
+  }
+
+  /** 是否有草稿 */
+  function hasDraft(): boolean {
+    return !!uni.getStorageSync(DRAFT_KEY)
+  }
+
+  // ===== 预览调参同步 =====
+
+  /** 保存预览页调整后的模板（用于同步回编辑器） */
+  function saveAdjustment(tpl: PhotoTemplate): void {
+    uni.setStorageSync(ADJUSTMENT_KEY, JSON.stringify(tpl))
+  }
+
+  /** 加载预览页调整后的模板 */
+  function loadAdjustment(): PhotoTemplate | null {
+    const raw = uni.getStorageSync(ADJUSTMENT_KEY)
+    if (!raw) return null
+    try {
+      return JSON.parse(raw) as PhotoTemplate
+    } catch {
+      return null
+    }
+  }
+
+  /** 清除预览调整数据 */
+  function clearAdjustment(): void {
+    uni.removeStorageSync(ADJUSTMENT_KEY)
+  }
+
   return {
     recentTemplates,
     loadTemplate,
@@ -203,6 +256,13 @@ export function useTemplate() {
     duplicateTemplate,
     pushRecent,
     loadRecent,
-    createBlankTemplate
+    createBlankTemplate,
+    saveDraft,
+    loadDraft,
+    clearDraft,
+    hasDraft,
+    saveAdjustment,
+    loadAdjustment,
+    clearAdjustment
   }
 }

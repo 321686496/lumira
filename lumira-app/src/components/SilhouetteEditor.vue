@@ -59,7 +59,7 @@
           class="draw-canvas"
           ref="canvasRef"
           @touchstart="onTouchStart"
-          @touchmove="onTouchMove"
+          @touchmove.prevent="onTouchMove"
           @touchend="onTouchEnd"
         >
           <svg viewBox="0 0 300 480" class="draw-svg" xmlns="http://www.w3.org/2000/svg">
@@ -131,7 +131,7 @@ const paths = ref<DrawPath[]>([])
 const redoStack = ref<DrawPath[]>([])
 const referenceImage = ref('')
 const isDrawing = ref(false)
-const canvasRef = ref<HTMLElement | null>(null)
+const canvasRef = ref<any>(null)
 
 // 触摸事件处理
 const onTouchStart = (e: TouchEvent) => {
@@ -148,7 +148,6 @@ const onTouchStart = (e: TouchEvent) => {
 
 const onTouchMove = (e: TouchEvent) => {
   if (!isDrawing.value) return
-  e.preventDefault()
   const pt = getPoint(e)
   const last = paths.value[paths.value.length - 1]
   if (!last) return
@@ -161,10 +160,13 @@ const onTouchEnd = () => {
 }
 
 // 坐标转换：触摸坐标 -> SVG viewBox 坐标
+// 使用 e.currentTarget 获取原生 DOM 元素，而非 canvasRef（uni-app ref 不指向原生 HTMLElement）
 const getPoint = (e: TouchEvent) => {
   const touch = e.touches[0] || e.changedTouches[0]
-  const rect = canvasRef.value?.getBoundingClientRect()
-  if (!rect || !touch) return { x: 0, y: 0 }
+  const target = (e.currentTarget || canvasRef.value?.$el || canvasRef.value) as HTMLElement | null
+  if (!target || !touch) return { x: 0, y: 0 }
+  const rect = target.getBoundingClientRect?.()
+  if (!rect) return { x: 0, y: 0 }
   const x = ((touch.clientX - rect.left) / rect.width) * 300
   const y = ((touch.clientY - rect.top) / rect.height) * 480
   return { x: Math.round(x), y: Math.round(y) }
