@@ -49,6 +49,10 @@
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},
 		{
+			"path": "pages/templates/drafts",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
 			"path": "pages/templates/recommend",
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},

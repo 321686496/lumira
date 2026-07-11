@@ -6,7 +6,9 @@
         <text class="ph ph-arrow-left back-icon"></text>
       </view>
       <text class="lumira-nav-title">{{ pageTitle }}</text>
-      <view class="lumira-nav-right"></view>
+      <view class="lumira-nav-right">
+        <text class="ph ph-note-pencil nav-icon" @click="goDrafts"></text>
+      </view>
     </view>
 
     <!-- Step 1: 模板信息 -->
@@ -258,10 +260,28 @@
           />
         </view>
 
-        <!-- 预览 -->
-        <view class="preview-box" :style="{ paddingBottom: '100%' }">
+        <!-- 预览（可拖动调整位置） -->
+        <view class="preview-box" :style="{ paddingBottom: '100%' }" ref="posePreviewRef">
           <view class="preview-bg"></view>
-          <PoseSilhouette :pose="form.pose" />
+          <view
+            class="pose-drag-layer"
+            @pointerdown="onPosePointerDown"
+            @pointermove="onPosePointerMove"
+            @pointerup="onPosePointerUp"
+            @pointerleave="onPosePointerUp"
+          >
+            <view class="pose-drag-handle" :style="poseDragStyle">
+              <PoseSilhouette :pose="form.pose" />
+            </view>
+            <view class="pose-drag-hint" v-if="!isDraggingPose">
+              <text class="ph ph-hand-grabbing"></text>
+              <text>拖动调整位置</text>
+            </view>
+          </view>
+        </view>
+        <!-- 位置数值显示 -->
+        <view class="pose-pos-display" v-if="form.pose.silhouette.data !== 'none'">
+          <text>位置 X: {{ (form.pose.position.x * 100).toFixed(0) }}%  Y: {{ (form.pose.position.y * 100).toFixed(0) }}%</text>
         </view>
       </view>
     </view>
@@ -665,7 +685,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
 import { useTemplateIO } from '@/composables/useTemplateIO'
@@ -686,12 +706,59 @@ import type {
   IsoMode
 } from '@/types/template'
 
-const { loadTemplate, saveCustomTemplate, createBlankTemplate, saveDraft, loadDraft, clearDraft, hasDraft, loadAdjustment, clearAdjustment } = useTemplate()
+const { loadTemplate, saveCustomTemplate, createBlankTemplate, getAllDrafts, saveDraft, loadDraft, deleteDraft, loadAdjustment, clearAdjustment } = useTemplate()
 const { exportTemplate } = useTemplateIO()
 
 const isEditMode = ref(false)
 const form = ref<PhotoTemplate>(createBlankTemplate())
 const editorVisible = ref(false)
+const currentDraftId = ref('')  // 当前草稿 ID（用于自动更新草稿）
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+// ===== 姿势预览拖动状态 =====
+const posePreviewRef = ref<any>(null)
+const isDraggingPose = ref(false)
+let poseDragStartClientX = 0
+let poseDragStartClientY = 0
+let poseDragStartX = 0
+let poseDragStartY = 0
+let posePreviewRect: DOMRect | null = null
+
+const poseDragStyle = computed(() => ({
+  transform: `translate(calc(-50% + ${(form.value.pose.position.x - 0.5) * 100}%), calc(-50% + ${(form.value.pose.position.y - 0.5) * 100}%))`
+}))
+
+function onPosePointerDown(e: PointerEvent) {
+  isDraggingPose.value = true
+  poseDragStartClientX = e.clientX
+  poseDragStartClientY = e.clientY
+  poseDragStartX = form.value.pose.position.x
+  poseDragStartY = form.value.pose.position.y
+  const el = (posePreviewRef.value as any)?.$el || posePreviewRef.value
+  posePreviewRect = el?.getBoundingClientRect?.() || null
+  try {
+    ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
+  } catch (_) { /* ignore */ }
+  e.preventDefault()
+}
+
+function onPosePointerMove(e: PointerEvent) {
+  if (!isDraggingPose.value || !posePreviewRect) return
+  e.preventDefault()
+  const dx = (e.clientX - poseDragStartClientX) / posePreviewRect.width
+  const dy = (e.clientY - poseDragStartClientY) / posePreviewRect.height
+  form.value.pose.position.x = Math.max(0.1, Math.min(0.9, poseDragStartX + dx))
+  form.value.pose.position.y = Math.max(0.1, Math.min(0.9, poseDragStartY + dy))
+}
+
+function onPosePointerUp(e: PointerEvent) {
+  if (!isDraggingPose.value) return
+  isDraggingPose.value = false
+  posePreviewRect = null
+  try {
+    ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
+  } catch (_) { /* ignore */ }
+}
 
 // 文本缓冲（数组字段与输入框双向同步，避免 cursor 跳动）
 const tagsText = ref('')
@@ -812,11 +879,12 @@ onLoad((options) => {
       form.value = JSON.parse(JSON.stringify(tpl)) as PhotoTemplate
       isEditMode.value = true
     }
-  } else if (options?.draft === '1') {
+  } else if (options?.draftId) {
     // 从草稿恢复
-    const draft = loadDraft()
+    const draft = loadDraft(options.draftId)
     if (draft) {
       form.value = draft
+      currentDraftId.value = options.draftId
       isEditMode.value = !!loadTemplate(draft.meta.id)
     }
   }
@@ -825,6 +893,15 @@ onLoad((options) => {
   propsText.value = form.value.sceneGuide.props.join(', ')
   tipsText.value = form.value.sceneGuide.tips.join('\n')
 })
+
+// ===== 自动保存草稿（表单变化时 debounce 保存） =====
+watch(form, () => {
+  if (autoSaveTimer) clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(() => {
+    // 表单有变化时自动保存草稿
+    currentDraftId.value = saveDraft(form.value, currentDraftId.value || undefined)
+  }, 1000)
+}, { deep: true })
 
 // ===== onShow: 检查预览页同步回来的调整数据 =====
 onShow(() => {
@@ -1027,14 +1104,17 @@ function onSave() {
     return
   }
   saveCustomTemplate(form.value)
-  // 保存后清除草稿
-  clearDraft()
+  // 保存成功后删除当前草稿
+  if (currentDraftId.value) {
+    deleteDraft(currentDraftId.value)
+    currentDraftId.value = ''
+  }
   uni.showToast({ title: '保存成功', icon: 'success' })
   setTimeout(() => uni.navigateBack(), 800)
 }
 
 function onSaveDraft() {
-  saveDraft(form.value)
+  currentDraftId.value = saveDraft(form.value, currentDraftId.value || undefined)
   uni.showToast({ title: '草稿已保存', icon: 'success' })
 }
 
@@ -1043,13 +1123,17 @@ function onExport() {
 }
 
 function onPreview() {
-  // 保存草稿并跳转到预览拍照页（无论是否编辑模式都可用）
-  saveDraft(form.value)
-  uni.navigateTo({ url: `/pages/capture/preview-template?draft=1` })
+  // 确保有草稿 ID 后跳转预览页
+  currentDraftId.value = saveDraft(form.value, currentDraftId.value || undefined)
+  uni.navigateTo({ url: `/pages/capture/preview-template?draftId=${currentDraftId.value}` })
 }
 
 function back() {
   uni.navigateBack()
+}
+
+function goDrafts() {
+  uni.navigateTo({ url: '/pages/templates/drafts' })
 }
 </script>
 
@@ -1057,6 +1141,12 @@ function back() {
 .back-icon {
   font-size: 40rpx;
   color: var(--color-text-primary);
+}
+
+.nav-icon {
+  font-size: 38rpx;
+  color: var(--color-text-secondary);
+  padding: 12rpx;
 }
 
 .block-pad {
@@ -1297,6 +1387,57 @@ function back() {
   position: absolute;
   inset: 0;
   background: linear-gradient(135deg, #3A3631 0%, #2A2622 100%);
+}
+
+/* 姿势预览拖动 */
+.pose-drag-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  touch-action: none;
+  cursor: grab;
+}
+
+.pose-drag-layer:active {
+  cursor: grabbing;
+}
+
+.pose-drag-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+  transition: transform 0.05s ease-out;
+}
+
+.pose-drag-hint {
+  position: absolute;
+  bottom: 16rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 9999rpx;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  pointer-events: none;
+
+  .ph {
+    font-size: 24rpx;
+  }
+}
+
+.pose-pos-display {
+  margin-top: 16rpx;
+  font-size: 22rpx;
+  color: var(--color-text-tertiary);
+  font-family: 'SF Mono', 'Menlo', monospace;
 }
 
 /* Footer */

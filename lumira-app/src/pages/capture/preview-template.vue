@@ -20,11 +20,27 @@
     </view>
 
     <!-- 取景器 -->
-    <view class="viewfinder">
+    <view class="viewfinder" ref="viewfinderRef">
       <image class="viewfinder-bg" src="https://picsum.photos/seed/preview-template/400/600" mode="aspectFill" />
       <view class="viewfinder-mask" />
       <CompositionOverlay v-if="template" :composition="template.composition" />
-      <PoseSilhouette v-if="template && hasSilhouette" :pose="template.pose" />
+      <!-- 可拖动的剪影叠图 -->
+      <view
+        v-if="template && hasSilhouette"
+        class="silhouette-drag-layer"
+        @pointerdown="onSilhouettePointerDown"
+        @pointermove="onSilhouettePointerMove"
+        @pointerup="onSilhouettePointerUp"
+        @pointerleave="onSilhouettePointerUp"
+      >
+        <view class="silhouette-drag-handle" :style="silhouetteDragStyle">
+          <PoseSilhouette :pose="template.pose" />
+        </view>
+        <view class="drag-hint" v-if="!isDraggingSilhouette">
+          <text class="ph ph-hand-grabbing"></text>
+          <text>拖动调整剪影位置</text>
+        </view>
+      </view>
 
       <!-- 参数 pill 栏 -->
       <view class="param-pill-bar" v-if="template">
@@ -193,9 +209,70 @@ const statusBarHeight = uni.getSystemInfoSync().statusBarHeight || 20
 const panelExpanded = ref(false)
 const flashOn = ref(false)
 
+// ===== 剪影拖动状态 =====
+const viewfinderRef = ref<any>(null)
+const isDraggingSilhouette = ref(false)
+// 拖动偏移量（相对百分比 0-1）
+const dragOffsetX = ref(0)
+const dragOffsetY = ref(0)
+// 拖动起始记录
+let dragStartClientX = 0
+let dragStartClientY = 0
+let dragStartOffsetX = 0
+let dragStartOffsetY = 0
+let viewfinderRect: DOMRect | null = null
+
+const silhouetteDragStyle = computed(() => ({
+  transform: `translate(calc(-50% + ${dragOffsetX.value * 100}%), calc(-50% + ${dragOffsetY.value * 100}%))`
+}))
+
+function onSilhouettePointerDown(e: PointerEvent) {
+  if (!template.value) return
+  isDraggingSilhouette.value = true
+  dragStartClientX = e.clientX
+  dragStartClientY = e.clientY
+  dragStartOffsetX = dragOffsetX.value
+  dragStartOffsetY = dragOffsetY.value
+  // 缓存取景器 rect
+  const vfEl = (viewfinderRef.value as any)?.$el || viewfinderRef.value
+  viewfinderRect = vfEl?.getBoundingClientRect?.() || null
+  try {
+    ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
+  } catch (_) { /* ignore */ }
+  e.preventDefault()
+}
+
+function onSilhouettePointerMove(e: PointerEvent) {
+  if (!isDraggingSilhouette || !viewfinderRect) return
+  e.preventDefault()
+  const dx = (e.clientX - dragStartClientX) / viewfinderRect.width
+  const dy = (e.clientY - dragStartClientY) / viewfinderRect.height
+  // 更新模板的 pose.position（0-1 范围）
+  let newX = dragStartOffsetX + dx
+  let newY = dragStartOffsetY + dy
+  // 限制范围 0.1-0.9
+  newX = Math.max(0.1, Math.min(0.9, newX))
+  newY = Math.max(0.1, Math.min(0.9, newY))
+  dragOffsetX.value = newX - 0.5
+  dragOffsetY.value = newY - 0.5
+  if (template.value) {
+    template.value.pose.position.x = newX
+    template.value.pose.position.y = newY
+  }
+}
+
+function onSilhouettePointerUp(e: PointerEvent) {
+  if (!isDraggingSilhouette) return
+  isDraggingSilhouette.value = false
+  viewfinderRect = null
+  try {
+    ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
+  } catch (_) { /* ignore */ }
+}
+
 onLoad((options) => {
-  if (options?.draft === '1') {
-    const draft = loadDraft()
+  if (options?.draftId) {
+    const draft = loadDraft(options.draftId)
     if (draft) template.value = draft
   } else if (options?.templateId) {
     const tpl = loadTemplate(options.templateId)
@@ -204,6 +281,10 @@ onLoad((options) => {
   if (!template.value) {
     uni.showToast({ title: '模板加载失败', icon: 'none' })
     setTimeout(() => uni.navigateBack(), 1000)
+  } else {
+    // 初始化拖动偏移量（基于模板的 position）
+    dragOffsetX.value = template.value.pose.position.x - 0.5
+    dragOffsetY.value = template.value.pose.position.y - 0.5
   }
 })
 
@@ -431,6 +512,50 @@ function toggleFlash() {
   background: rgba(24, 22, 20, 0.35);
 }
 
+/* ===== 剪影拖动层 ===== */
+.silhouette-drag-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  touch-action: none;
+  cursor: grab;
+}
+
+.silhouette-drag-layer:active {
+  cursor: grabbing;
+}
+
+.silhouette-drag-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  pointer-events: none;
+  transition: transform 0.05s ease-out;
+}
+
+.drag-hint {
+  position: absolute;
+  bottom: 24rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx 24rpx;
+  border-radius: 9999rpx;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  pointer-events: none;
+
+  .ph {
+    font-size: 26rpx;
+  }
+}
+
 /* ===== 参数 pill 栏 ===== */
 .param-pill-bar {
   position: absolute;
@@ -473,6 +598,8 @@ function toggleFlash() {
   -webkit-backdrop-filter: blur(20px);
   border-top: 1rpx solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .panel-header {
@@ -480,6 +607,7 @@ function toggleFlash() {
   align-items: center;
   gap: 12rpx;
   padding: 24rpx 32rpx;
+  box-sizing: border-box;
 }
 
 .panel-header .ph {
@@ -502,6 +630,7 @@ function toggleFlash() {
 .panel-scroll {
   max-height: 600rpx;
   padding: 0 32rpx 24rpx;
+  box-sizing: border-box;
 }
 
 /* ===== 调整区 ===== */
@@ -527,6 +656,7 @@ function toggleFlash() {
   align-items: center;
   gap: 16rpx;
   padding: 16rpx 0;
+  flex-wrap: wrap;
 }
 
 .row-label {
@@ -592,6 +722,7 @@ function toggleFlash() {
   padding: 24rpx 32rpx;
   padding-bottom: calc(env(safe-area-inset-bottom, 0) + 24rpx);
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .sync-btn {

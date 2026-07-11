@@ -428,6 +428,7 @@ const goCapture = () => uni.navigateTo({ url: `/pages/capture/index?templateId=$
 
 .guide-text {
   flex: 1;
+  min-width: 0;
 }
 
 .guide-label {
@@ -440,10 +441,13 @@ const goCapture = () => uni.navigateTo({ url: `/pages/capture/index?templateId=$
   font-size: 26rpx;
   color: var(--color-text-secondary);
   margin-left: 8rpx;
+  word-break: break-all;
 }
 
 .param-mono {
   line-height: 2;
+  overflow-x: hidden;
+  word-break: break-all;
 }
 
 .param-line {
@@ -452,6 +456,15 @@ const goCapture = () => uni.navigateTo({ url: `/pages/capture/index?templateId=$
   font-size: 24rpx;
   color: var(--color-text-secondary);
   letter-spacing: 0.02em;
+  white-space: normal;
+  word-break: break-all;
+  overflow-wrap: break-word;
+}
+
+/* 卡片溢出保护 */
+.lumira-card {
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .pose-preview-wrap {
@@ -469,6 +482,7 @@ const goCapture = () => uni.navigateTo({ url: `/pages/capture/index?templateId=$
   font-size: 26rpx;
   color: var(--color-text-secondary);
   line-height: 1.6;
+  word-break: break-all;
 }
 
 .unlock-status {
@@ -495,6 +509,7 @@ const goCapture = () => uni.navigateTo({ url: `/pages/capture/index?templateId=$
   font-size: 22rpx;
   color: var(--color-text-tertiary);
   line-height: 1.6;
+  word-break: break-all;
 }
 
 .cta-spacer {

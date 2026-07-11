@@ -14,9 +14,17 @@ import type { PhotoTemplate } from '@/types/template'
 
 const CUSTOM_TEMPLATES_KEY = 'lumira_custom_templates'
 const RECENT_TEMPLATES_KEY = 'lumira_recent_templates'
-const DRAFT_KEY = 'lumira_template_draft'
+const DRAFTS_KEY = 'lumira_template_drafts'  // 多草稿列表
 const ADJUSTMENT_KEY = 'lumira_template_adjustment'
 const MAX_RECENT = 6
+
+/** 草稿数据结构 */
+export interface TemplateDraft {
+  id: string          // 草稿唯一 ID
+  template: PhotoTemplate  // 模板数据
+  updatedAt: number    // 最后更新时间戳
+  name: string         // 草稿显示名称（取模板名或"未命名草稿"）
+}
 
 /** 最近使用的模板列表（跨组件共享） */
 const recentTemplates = ref<PhotoTemplate[]>([])
@@ -192,32 +200,76 @@ export function useTemplate() {
       .slice(0, MAX_RECENT)
   }
 
-  // ===== 草稿管理 =====
+  // ===== 草稿管理（多草稿版本） =====
 
-  /** 保存草稿到本地 */
-  function saveDraft(tpl: PhotoTemplate): void {
-    uni.setStorageSync(DRAFT_KEY, JSON.stringify(tpl))
-  }
-
-  /** 加载草稿 */
-  function loadDraft(): PhotoTemplate | null {
-    const raw = uni.getStorageSync(DRAFT_KEY)
-    if (!raw) return null
+  /** 读取所有草稿 */
+  function getAllDrafts(): TemplateDraft[] {
+    const raw = uni.getStorageSync(DRAFTS_KEY)
+    if (!raw) return []
     try {
-      return JSON.parse(raw) as PhotoTemplate
+      const arr = JSON.parse(raw) as TemplateDraft[]
+      return Array.isArray(arr) ? arr : []
     } catch {
-      return null
+      return []
     }
   }
 
-  /** 清除草稿 */
-  function clearDraft(): void {
-    uni.removeStorageSync(DRAFT_KEY)
+  /** 写入所有草稿 */
+  function writeAllDrafts(drafts: TemplateDraft[]): void {
+    uni.setStorageSync(DRAFTS_KEY, JSON.stringify(drafts))
+  }
+
+  /**
+   * 保存草稿（自动更新或新建）
+   * - 若 draftId 存在则更新对应草稿
+   * - 若不存在则新建草稿
+   * 返回草稿 ID
+   */
+  function saveDraft(tpl: PhotoTemplate, draftId?: string): string {
+    const id = draftId || `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const drafts = getAllDrafts()
+    const idx = drafts.findIndex(d => d.id === id)
+    const draft: TemplateDraft = {
+      id,
+      template: tpl,
+      updatedAt: Date.now(),
+      name: tpl.meta.name?.trim() || '未命名草稿'
+    }
+    if (idx >= 0) {
+      drafts[idx] = draft
+    } else {
+      drafts.unshift(draft)
+    }
+    writeAllDrafts(drafts)
+    return id
+  }
+
+  /** 加载指定草稿 */
+  function loadDraft(draftId: string): PhotoTemplate | null {
+    const drafts = getAllDrafts()
+    const draft = drafts.find(d => d.id === draftId)
+    return draft ? draft.template : null
+  }
+
+  /** 删除指定草稿 */
+  function deleteDraft(draftId: string): void {
+    const drafts = getAllDrafts().filter(d => d.id !== draftId)
+    writeAllDrafts(drafts)
+  }
+
+  /** 清除所有草稿 */
+  function clearAllDrafts(): void {
+    uni.removeStorageSync(DRAFTS_KEY)
   }
 
   /** 是否有草稿 */
   function hasDraft(): boolean {
-    return !!uni.getStorageSync(DRAFT_KEY)
+    return getAllDrafts().length > 0
+  }
+
+  /** 获取草稿数量 */
+  function getDraftCount(): number {
+    return getAllDrafts().length
   }
 
   // ===== 预览调参同步 =====
@@ -257,10 +309,15 @@ export function useTemplate() {
     pushRecent,
     loadRecent,
     createBlankTemplate,
+    // 草稿管理
+    getAllDrafts,
     saveDraft,
     loadDraft,
-    clearDraft,
+    deleteDraft,
+    clearAllDrafts,
     hasDraft,
+    getDraftCount,
+    // 预览调参同步
     saveAdjustment,
     loadAdjustment,
     clearAdjustment

@@ -511,6 +511,8 @@ const onOpacityChange = (e: any) => {
   display: flex;
   flex-direction: column;
   pointer-events: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
 
   &.is-visible {
     transform: translateY(0);
@@ -537,6 +539,7 @@ const onOpacityChange = (e: any) => {
 .panel-summary {
   padding: 12rpx 40rpx 20rpx;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .summary-name {
@@ -564,6 +567,8 @@ const onOpacityChange = (e: any) => {
   padding: 0 20rpx;
   border-bottom: 1rpx solid var(--color-divider);
   flex-shrink: 0;
+  overflow-x: auto;
+  box-sizing: border-box;
 }
 
 .tab-item {
@@ -609,6 +614,7 @@ const onOpacityChange = (e: any) => {
   flex: 1;
   overflow: hidden;
   padding: 20rpx 40rpx;
+  box-sizing: border-box;
 }
 
 .tab-pane {
@@ -621,6 +627,8 @@ const onOpacityChange = (e: any) => {
 .param-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
   padding: 20rpx 0;
   border-bottom: 1rpx solid var(--color-divider);
 }
@@ -633,11 +641,11 @@ const onOpacityChange = (e: any) => {
 
 .param-value {
   flex: 1;
+  min-width: 0;
   text-align: right;
   font-size: 26rpx;
   color: var(--color-text-primary);
   font-weight: 500;
-  margin-left: 20rpx;
   word-break: break-all;
 }
 
@@ -645,7 +653,6 @@ const onOpacityChange = (e: any) => {
   font-size: 20rpx;
   padding: 4rpx 14rpx;
   border-radius: 9999rpx;
-  margin-left: 16rpx;
   flex-shrink: 0;
 }
 
@@ -694,6 +701,7 @@ const onOpacityChange = (e: any) => {
   font-size: 26rpx;
   color: var(--color-text-primary);
   line-height: 1.6;
+  word-break: break-all;
 }
 
 /* 标签列表 */
@@ -743,6 +751,7 @@ const onOpacityChange = (e: any) => {
   color: var(--color-text-primary);
   line-height: 1.6;
   flex: 1;
+  min-width: 0;
 }
 
 /* 剪影预览 */
@@ -788,6 +797,7 @@ const onOpacityChange = (e: any) => {
   padding-bottom: calc(20rpx + env(safe-area-inset-bottom, 0));
   flex-shrink: 0;
   border-top: 1rpx solid var(--color-divider);
+  box-sizing: border-box;
 }
 
 .apply-btn {
