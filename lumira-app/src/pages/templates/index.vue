@@ -97,7 +97,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onLoad } from '@dcloudio/uni-app'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
 import { useTemplate } from '@/composables/useTemplate'
 import { useTemplateIO } from '@/composables/useTemplateIO'
@@ -107,6 +107,14 @@ const { getFreeTemplates, getPaidTemplates, getCustomTemplates } = useTemplate()
 const { importTemplate } = useTemplateIO()
 
 type CategoryValue = Target | 'all' | 'custom'
+
+// 场景推荐页传入的 scene 参数 → 模板分类映射
+const sceneToCategory: Record<string, Target> = {
+  cafe: 'portrait',
+  street: 'street',
+  food: 'food',
+  home: 'still-life'
+}
 
 const categories: { value: CategoryValue; label: string }[] = [
   { value: 'all', label: '全部' },
@@ -121,6 +129,13 @@ const categories: { value: CategoryValue; label: string }[] = [
 ]
 
 const activeCategory = ref<CategoryValue>('all')
+
+// 接收场景推荐页传入的 scene 参数，自动切换到对应分类
+onLoad((options) => {
+  if (options?.scene && sceneToCategory[options.scene]) {
+    activeCategory.value = sceneToCategory[options.scene]
+  }
+})
 
 const categoryLabelMap: Record<Target, string> = {
   portrait: '人像',

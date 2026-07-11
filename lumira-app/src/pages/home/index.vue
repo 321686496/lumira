@@ -125,7 +125,7 @@
         <text class="lumira-section-link">管理</text>
       </view>
       <view class="scene-grid section-pad">
-        <view class="scene-card lumira-card-hover" v-for="s in scenes" :key="s.name" @click="goPage('/pages/templates/index')">
+        <view class="scene-card lumira-card-hover" v-for="s in scenes" :key="s.name" @click="goPage(`/pages/capture/scene-guide?scene=${s.scene}`)">
           <view class="scene-img-wrap">
             <image class="scene-img" :src="s.img" mode="aspectFill" />
             <view class="scene-badge" :class="{ 'scene-badge-brand': s.brand }">
@@ -221,10 +221,10 @@ const weekDays = ref([
 ])
 
 const scenes = ref([
-  { name: '咖啡馆', desc: '柔和光线 · 氛围感', img: 'https://picsum.photos/seed/scene-cafe/400/600', tag: '你最常去', brand: false },
-  { name: '街拍', desc: '城市光影 · 故事感', img: 'https://picsum.photos/seed/scene-street/400/600', tag: '31张照片', brand: false },
-  { name: '探店', desc: '美食记录 · 色温', img: 'https://picsum.photos/seed/scene-shop/400/600', tag: '新场景推荐', brand: true },
-  { name: '居家', desc: '温馨光线 · 静谧', img: 'https://picsum.photos/seed/scene-home/400/600', tag: '适合今天天气', brand: false }
+  { name: '咖啡馆', desc: '柔和光线 · 氛围感', img: '/static/scenes/scene_cafe.jpg', tag: '你最常去', brand: false, scene: 'cafe' },
+  { name: '街拍', desc: '城市光影 · 故事感', img: '/static/scenes/scene_street.jpg', tag: '31张照片', brand: false, scene: 'street' },
+  { name: '探店', desc: '美食记录 · 色温', img: '/static/scenes/scene_shop.jpg', tag: '新场景推荐', brand: true, scene: 'food' },
+  { name: '居家', desc: '温馨光线 · 静谧', img: '/static/scenes/scene_home.jpg', tag: '适合今天天气', brand: false, scene: 'home' }
 ])
 
 const recents = ref([

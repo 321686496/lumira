@@ -1,9 +1,9 @@
 <template>
-  <view class="capture-page">
-    <!-- 顶部沉浸式深色标题栏（自定义，不走 lumira-nav） -->
+  <view class="capture-page" :class="{ 'is-landscape': isLandscape }">
+    <!-- 顶部沉浸式深色标题栏 -->
     <view class="capture-nav">
       <view class="status-spacer" :style="{ height: statusBarHeight + 'px' }"></view>
-      <view class="nav-main">
+      <view class="nav-main" :style="landscapeZoomStyle">
         <view class="nav-back" @click="back">
           <text class="ph ph-caret-left" />
         </view>
@@ -12,6 +12,22 @@
           <text class="nav-sub" v-if="currentTemplate">{{ categoryLabel }} · {{ currentTemplate.composition.aspectRatio }}</text>
         </view>
         <view class="nav-actions">
+          <view
+            v-if="currentTemplate"
+            class="nav-action"
+            :class="{ active: showTemplate }"
+            @click="toggleTemplate"
+          >
+            <text class="ph ph-frame-corners" />
+          </view>
+          <view
+            v-if="currentTemplate && hasSilhouette"
+            class="nav-action"
+            :class="{ active: showSilhouette }"
+            @click="toggleSilhouette"
+          >
+            <text class="ph ph-person" />
+          </view>
           <view class="nav-action" @click="goSceneGuide">
             <text class="ph ph-question" />
           </view>
@@ -22,47 +38,55 @@
       </view>
     </view>
 
-    <!-- 取景器（占位图） -->
-    <view class="viewfinder">
+    <!-- 取景器 -->
+    <view class="viewfinder" @click="onViewfinderTap">
       <image class="viewfinder-bg" src="https://picsum.photos/seed/capture-viewfinder/400/600" mode="aspectFill" />
       <view class="viewfinder-mask" />
 
       <!-- 构图叠图 -->
       <CompositionOverlay
-        v-if="currentTemplate"
+        v-if="currentTemplate && showTemplate"
         :composition="currentTemplate.composition"
         :overlay-opacity-override="panelExpanded ? 0.2 : undefined"
+        class="overlay-anim"
       />
 
       <!-- 姿势剪影叠图 -->
       <view
-        v-if="currentTemplate && hasSilhouette"
-        class="silhouette-layer"
+        v-if="currentTemplate && hasSilhouette && showSilhouette"
+        class="silhouette-layer overlay-anim"
         :style="silhouetteLayerStyle"
       >
         <PoseSilhouette :pose="currentTemplate.pose" />
       </view>
 
       <!-- 顶部参数 pill 栏 -->
-      <view class="param-pill-bar" v-if="currentTemplate">
-        <view class="param-pill" @click="openPanel('camera')">
+      <view class="param-pill-bar" v-if="currentTemplate" :style="landscapeZoomStyle">
+        <view class="param-pill" @click.stop="openPanel('camera')">
           <text class="pill-label">EV</text>
           <text class="pill-value">{{ evDisplay }}</text>
         </view>
-        <view class="param-pill" @click="openPanel('camera')">
+        <view class="param-pill" @click.stop="openPanel('camera')">
           <text class="pill-label">WB</text>
           <text class="pill-value">{{ wbDisplay }}</text>
         </view>
-        <view class="param-pill apply-pill" :class="{ applied }" @click="toggleApply">
+        <view class="param-pill apply-pill" :class="{ applied }" @click.stop="toggleApply">
           <text class="ph" :class="applied ? 'ph-check' : 'ph-magic-wand'" />
           <text class="pill-text">{{ applied ? '已应用' : '一键应用' }}</text>
+        </view>
+      </view>
+
+      <!-- 水平仪 (v2) -->
+      <view class="level-indicator" v-if="levelEnabled">
+        <view class="level-track">
+          <view class="level-center"></view>
+          <view class="level-bubble" :style="{ transform: `translateX(${levelAngle * 2}px)` }"></view>
         </view>
       </view>
     </view>
 
     <!-- 底部控制区 -->
-    <view class="capture-bottom">
-      <!-- 快门行 -->
+    <view class="capture-bottom" :style="landscapeZoomStyle">
       <view class="shutter-row">
         <view class="last-photo" @click="goPreview">
           <image class="last-photo-img" src="https://picsum.photos/seed/last-photo/100/100" mode="aspectFill" />
@@ -75,8 +99,7 @@
         </view>
       </view>
 
-      <!-- 模板快速切换横滑 -->
-      <scroll-view class="template-strip" scroll-x>
+      <scroll-view class="template-strip" :scroll-x="!isLandscape" :scroll-y="isLandscape">
         <view class="strip-list">
           <view
             v-for="tpl in recentTemplates"
@@ -92,7 +115,6 @@
       </scroll-view>
     </view>
 
-    <!-- 半屏参数面板 -->
     <ParamPanel
       v-if="currentTemplate"
       :template="currentTemplate"
@@ -107,7 +129,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
 import CompositionOverlay from '@/components/CompositionOverlay.vue'
 import PoseSilhouette from '@/components/PoseSilhouette.vue'
@@ -124,15 +146,68 @@ const panelExpanded = ref(false)
 const applied = ref(false)
 const flashOn = ref(false)
 
+// 显隐控制
+const showTemplate = ref(true)
+const showSilhouette = ref(true)
+
+// 横竖屏自适应
+const isLandscape = ref(false)
+const landscapeScale = ref(1)
+let resizeListener: ((res: { size: { windowWidth: number; windowHeight: number } }) => void) | null = null
+
+// 水平仪 (v2)
+const levelEnabled = ref(true)
+const levelAngle = ref(0)
+
+// 双击检测
+let lastTapTime = 0
+const DBL_TAP_THRESHOLD = 300
+
+// 计算横屏缩放比例：让横屏下 rpx 物理尺寸与竖屏一致
+const updateOrientation = (windowWidth: number, windowHeight: number) => {
+  isLandscape.value = windowWidth > windowHeight
+  if (isLandscape.value) {
+    // 竖屏宽度（短边） / 横屏宽度（长边）= 缩放比
+    landscapeScale.value = windowHeight / windowWidth
+  } else {
+    landscapeScale.value = 1
+  }
+}
+
+// 横屏缩放样式：仅应用到控制元素（nav-main / capture-bottom / param-pill-bar）
+// 不应用到整个页面，避免 100vh 高度计算错误导致取景器不充满
+const landscapeZoomStyle = computed(() => {
+  if (!isLandscape.value) return {}
+  return { zoom: landscapeScale.value }
+})
+
 onLoad((options) => {
   if (options?.templateId) {
     currentTemplateId.value = options.templateId
     pushRecent(options.templateId)
   }
   loadRecent()
-  // 如果没有 templateId，使用第一个最近模板或第一个内置模板
-  if (!currentTemplateId.value && recentTemplates.value.length > 0) {
-    currentTemplateId.value = recentTemplates.value[0].meta.id
+  // 不自动选择最近模板：直接进入拍摄页时为自由拍摄模式
+  // 最近模板仅在底部横滑列表中展示供用户手动切换
+
+  // 横竖屏检测
+  const sysInfo = uni.getSystemInfoSync()
+  updateOrientation(sysInfo.windowWidth, sysInfo.windowHeight)
+  resizeListener = (res) => {
+    updateOrientation(res.size.windowWidth, res.size.windowHeight)
+  }
+  uni.onWindowResize(resizeListener)
+})
+
+onUnload(() => {
+  // 退出时清空当前模板状态，防止下次直接进入读取残留
+  currentTemplateId.value = ''
+  applied.value = false
+  showTemplate.value = true
+  showSilhouette.value = true
+  if (resizeListener) {
+    uni.offWindowResize(resizeListener)
+    resizeListener = null
   }
 })
 
@@ -143,14 +218,13 @@ const hasSilhouette = computed(() => {
   return true
 })
 
-// 剪影叠图层定位样式
 const silhouetteLayerStyle = computed(() => {
   const pose = currentTemplate.value?.pose
   if (!pose) return {}
   return {
     left: `${pose.position.x * 100}%`,
     top: `${pose.position.y * 100}%`,
-    transform: `translate(-50%, -50%)`
+    transform: 'translate(-50%, -50%)'
   }
 })
 
@@ -197,12 +271,37 @@ const switchTemplate = (id: string) => {
   pushRecent(id)
 }
 
+const toggleTemplate = () => {
+  showTemplate.value = !showTemplate.value
+}
+
+const toggleSilhouette = () => {
+  showSilhouette.value = !showSilhouette.value
+}
+
 const back = () => uni.navigateBack({ fail: () => uni.reLaunch({ url: '/pages/home/index' }) })
 const goSceneGuide = () => uni.navigateTo({ url: '/pages/capture/scene-guide' })
 const goPreview = () => uni.navigateTo({ url: '/pages/capture/preview' })
-const onShutter = () => uni.navigateTo({ url: '/pages/capture/preview' })
+
+const onShutter = () => {
+  // v2: 快门振动反馈
+  uni.vibrateShort({ type: 'light', fail: () => {} })
+  uni.navigateTo({ url: '/pages/capture/preview' })
+}
+
 const flipCamera = () => uni.showToast({ title: '翻转镜头', icon: 'none' })
 const toggleFlash = () => { flashOn.value = !flashOn.value }
+
+// 双击取景器切换摄像头 (v2手势)
+const onViewfinderTap = () => {
+  const now = Date.now()
+  if (now - lastTapTime < DBL_TAP_THRESHOLD) {
+    flipCamera()
+    lastTapTime = 0
+  } else {
+    lastTapTime = now
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -243,16 +342,21 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
 }
 
 .nav-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 32rpx;
-  height: 96rpx;
+  position: relative;
+  height: 72rpx;
+  padding: 0 24rpx;
+}
+
+.nav-back {
+  position: absolute;
+  left: 24rpx;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .nav-back .ph {
-  width: 64rpx;
-  height: 64rpx;
+  width: 56rpx;
+  height: 56rpx;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(12px);
@@ -260,37 +364,52 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36rpx;
+  font-size: 32rpx;
   color: #fff;
 }
 
 .nav-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
+  max-width: 400rpx;
 }
 
 .nav-title {
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: 600;
   color: #fff;
   text-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .nav-sub {
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: rgba(255, 255, 255, 0.7);
-  margin-top: 4rpx;
+  margin-top: 2rpx;
+  white-space: nowrap;
 }
 
 .nav-actions {
+  position: absolute;
+  right: 24rpx;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
+  gap: 12rpx;
 }
 
 .nav-action {
-  width: 64rpx;
-  height: 64rpx;
+  width: 56rpx;
+  height: 56rpx;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(12px);
@@ -298,13 +417,14 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32rpx;
-  color: #fff;
-  margin-left: 12rpx;
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
 }
 
 .nav-action.active {
   background: rgba(201, 169, 110, 0.7);
+  color: #fff;
 }
 
 /* ===== 取景器 ===== */
@@ -327,6 +447,16 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
   background: rgba(24, 22, 20, 0.35);
 }
 
+/* ===== 叠图动画 (v2: 200ms 淡入淡出) ===== */
+.overlay-anim {
+  animation: overlayFadeIn 200ms ease-out;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* ===== 剪影叠图层 ===== */
 .silhouette-layer {
   position: absolute;
@@ -340,34 +470,39 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
 /* ===== 参数 pill 栏 ===== */
 .param-pill-bar {
   position: absolute;
-  top: 240rpx;
+  top: 200rpx;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
   z-index: 5;
+  max-width: 90%;
 }
 
 .param-pill {
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  padding: 12rpx 24rpx;
+  gap: 6rpx;
+  padding: 10rpx 20rpx;
   border-radius: 9999rpx;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .pill-label {
   font-size: 20rpx;
   color: rgba(255, 255, 255, 0.6);
+  white-space: nowrap;
 }
 
 .pill-value {
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: #fff;
   font-family: 'Courier New', monospace;
+  white-space: nowrap;
 }
 
 .apply-pill {
@@ -379,8 +514,50 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
 }
 
 .pill-text {
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: #fff;
+  white-space: nowrap;
+}
+
+/* ===== 水平仪 (v2) ===== */
+.level-indicator {
+  position: absolute;
+  bottom: 40rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+}
+
+.level-track {
+  width: 160rpx;
+  height: 6rpx;
+  border-radius: 3rpx;
+  background: rgba(255, 255, 255, 0.2);
+  position: relative;
+}
+
+.level-center {
+  position: absolute;
+  left: 50%;
+  top: -4rpx;
+  transform: translateX(-50%);
+  width: 4rpx;
+  height: 14rpx;
+  border-radius: 2rpx;
+  background: rgba(201, 169, 110, 0.8);
+}
+
+.level-bubble {
+  position: absolute;
+  top: -6rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  background: #C9A96E;
+  box-shadow: 0 0 8rpx rgba(201, 169, 110, 0.5);
+  transition: transform 100ms ease-out;
 }
 
 /* ===== 底部控制区 ===== */
@@ -390,11 +567,10 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
   background: rgba(24, 22, 20, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 32rpx 40rpx;
-  padding-bottom: calc(env(safe-area-inset-bottom) + 32rpx);
+  padding: 24rpx 40rpx;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 24rpx);
 }
 
-/* ===== 快门行 ===== */
 .shutter-row {
   display: flex;
   align-items: center;
@@ -403,11 +579,12 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
 }
 
 .last-photo {
-  width: 100rpx;
-  height: 100rpx;
+  width: 96rpx;
+  height: 96rpx;
   border-radius: 20rpx;
   overflow: hidden;
   border: 3rpx solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
 }
 
 .last-photo-img {
@@ -416,36 +593,37 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
 }
 
 .shutter-btn {
-  width: 152rpx;
-  height: 152rpx;
+  width: 140rpx;
+  height: 140rpx;
   border-radius: 50%;
   border: 6rpx solid var(--color-brand);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .shutter-inner {
-  width: 116rpx;
-  height: 116rpx;
+  width: 108rpx;
+  height: 108rpx;
   border-radius: 50%;
   background: #fff;
 }
 
 .flip-btn {
-  width: 84rpx;
-  height: 84rpx;
+  width: 80rpx;
+  height: 80rpx;
   border-radius: 50%;
   border: 3rpx solid rgba(255, 255, 255, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
+  flex-shrink: 0;
 }
 
-/* ===== 模板横滑 ===== */
 .template-strip {
-  margin-top: 32rpx;
+  margin-top: 24rpx;
   white-space: nowrap;
 }
 
@@ -455,8 +633,8 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
 }
 
 .strip-item {
-  width: 100rpx;
-  height: 100rpx;
+  width: 96rpx;
+  height: 96rpx;
   border-radius: 20rpx;
   overflow: hidden;
   position: relative;
@@ -484,5 +662,64 @@ const toggleFlash = () => { flashOn.value = !flashOn.value }
   text-align: center;
   color: #fff;
   font-size: 16rpx;
+}
+
+/* ===== 横屏自适应 ===== */
+/* zoom 已通过 inline style 应用到控制元素，保证按钮物理尺寸与竖屏一致 */
+/* 这里只做布局调整：底部控制区变为右侧固定侧栏，内部纵向排版 */
+
+/* 取景器填满整个屏幕（横屏无需额外处理，flex:1 自动填满） */
+.capture-page.is-landscape .viewfinder {
+  flex: 1;
+}
+
+/* 底部控制区变为右侧固定侧栏 */
+.capture-page.is-landscape .capture-bottom {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24rpx 20rpx;
+  padding-top: calc(env(safe-area-inset-top) + 24rpx);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 24rpx);
+  width: 520rpx;
+}
+
+/* 快门行变为纵向排列 */
+.capture-page.is-landscape .shutter-row {
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+/* 模板横滑变为纵向滚动 */
+.capture-page.is-landscape .template-strip {
+  margin-top: 24rpx;
+  height: 300rpx;
+  white-space: normal;
+}
+
+.capture-page.is-landscape .strip-list {
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 参数 pill 栏移到左下角（避开右侧控制栏） */
+.capture-page.is-landscape .param-pill-bar {
+  top: auto;
+  bottom: 60rpx;
+  left: 40rpx;
+  transform: none;
+}
+
+/* 水平仪移到左下角 */
+.capture-page.is-landscape .level-indicator {
+  bottom: 40rpx;
+  left: 40rpx;
+  transform: none;
 }
 </style>
