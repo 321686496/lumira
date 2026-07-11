@@ -16,6 +16,7 @@ onLaunch(() => {
 :root {
   /* 暖米白主题（默认） */
   --color-canvas: #FAF7F2;
+  --color-canvas-rgb: 250, 247, 242;
   --color-surface: #FFFFFF;
   --color-surface-alt: #F2EEE6;
   --color-canvas-deep: #F5F1EB;
@@ -57,6 +58,7 @@ onLaunch(() => {
 /* 浓墨主题 */
 [data-theme="ink"] {
   --color-canvas: #1C1A17;
+  --color-canvas-rgb: 28, 26, 23;
   --color-surface: #262320;
   --color-surface-alt: #2E2B27;
   --color-canvas-deep: #151310;
@@ -86,6 +88,7 @@ onLaunch(() => {
 /* 胶片复古主题 */
 [data-theme="retro"] {
   --color-canvas: #F5E6D3;
+  --color-canvas-rgb: 245, 230, 211;
   --color-surface: #FFF8F0;
   --color-surface-alt: #EBDAC4;
   --color-canvas-deep: #EBDAC4;
@@ -115,6 +118,7 @@ onLaunch(() => {
 /* 日系清新主题 */
 [data-theme="fresh"] {
   --color-canvas: #F8FAF6;
+  --color-canvas-rgb: 248, 250, 246;
   --color-surface: #FFFFFF;
   --color-surface-alt: #EDF2EB;
   --color-canvas-deep: #E8EDE5;
@@ -144,6 +148,7 @@ onLaunch(() => {
 /* 温馨粉主题 */
 [data-theme="cozy"] {
   --color-canvas: #FFF5F5;
+  --color-canvas-rgb: 255, 245, 245;
   --color-surface: #FFFFFF;
   --color-surface-alt: #FAEDED;
   --color-canvas-deep: #F5EAEA;
@@ -174,6 +179,7 @@ onLaunch(() => {
 /* 马卡龙主题 */
 [data-theme="macaron"] {
   --color-canvas: #FFF8F0;
+  --color-canvas-rgb: 255, 248, 240;
   --color-surface: #FFFFFF;
   --color-surface-alt: #F5F0E8;
   --color-canvas-deep: #F0EAE0;
@@ -204,6 +210,7 @@ onLaunch(() => {
 /* 莫兰迪主题 */
 [data-theme="morandi"] {
   --color-canvas: #E8E4E0;
+  --color-canvas-rgb: 232, 228, 224;
   --color-surface: #F2EFEA;
   --color-surface-alt: #E0DCD6;
   --color-canvas-deep: #DDD9D3;
@@ -234,6 +241,7 @@ onLaunch(() => {
 /* 玫瑰金主题 */
 [data-theme="rosegold"] {
   --color-canvas: #FAF6F2;
+  --color-canvas-rgb: 250, 246, 242;
   --color-surface: #FFFFFF;
   --color-surface-alt: #F5EDE8;
   --color-canvas-deep: #F0E8E2;
@@ -334,13 +342,25 @@ page {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28rpx 40rpx;
-  background-color: var(--color-canvas);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  transition: background-color 0.3s ease;
+  padding: 24rpx 40rpx;
+  padding-top: calc(24rpx + env(safe-area-inset-top, 0));
+  min-height: 88rpx;
+  background-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background-color 0.3s ease, backdrop-filter 0.3s ease, border-color 0.3s ease;
+  border-bottom: 1rpx solid transparent;
 }
 
+/* 滚动后毛玻璃态（JS 滚动监听添加 .scrolled 类） */
+.lumira-nav.scrolled {
+  background-color: rgba(var(--color-canvas-rgb, 250, 247, 242), 0.72);
+  backdrop-filter: blur(24px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  border-bottom: 1rpx solid var(--color-divider);
+}
+
+/* 兼容旧 .translucent 修饰类（已废弃，保留向后兼容） */
 .lumira-nav.translucent {
   background-color: transparent !important;
   backdrop-filter: none;
@@ -350,26 +370,28 @@ page {
 .lumira-nav-left {
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  min-width: 0;
+  gap: 12rpx;
+  min-width: 64rpx;
+  min-height: 64rpx;
 }
 
 .lumira-nav-right {
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  min-width: 32rpx;
+  gap: 8rpx;
+  min-width: 64rpx;
+  min-height: 64rpx;
   justify-content: flex-end;
 }
 
 .lumira-nav-title {
   font-family: var(--font-cn-title);
-  font-size: 40rpx;
-  font-weight: 700;
+  font-size: 36rpx;
+  font-weight: 600;
   text-align: left;
   flex: 1;
-  letter-spacing: -0.01em;
-  padding-left: 0;
+  letter-spacing: 0.02em;
+  padding-left: 8rpx;
   color: var(--color-text-primary);
 }
 
@@ -383,6 +405,42 @@ page {
   justify-content: center;
   line-height: 1;
   border-radius: 16rpx;
+}
+
+/* 导航图标统一样式 */
+.lumira-nav .ph,
+.lumira-nav-left .ph,
+.lumira-nav-right .ph {
+  font-size: 40rpx;
+  color: var(--color-text-secondary);
+  transition: color 0.2s ease;
+}
+
+.lumira-nav .ph:active {
+  color: var(--color-brand);
+}
+
+/* 返回按钮圆形毛玻璃背景 */
+.lumira-nav-left .ph.ph-caret-left,
+.lumira-nav-left .ph.ph-arrow-left,
+.lumira-nav-left .ph.ph-x {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background-color: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-convex-subtle);
+  font-size: 36rpx;
+  color: var(--color-text-primary);
+}
+
+.lumira-nav-left .ph.ph-caret-left:active,
+.lumira-nav-left .ph.ph-arrow-left:active,
+.lumira-nav-left .ph.ph-x:active {
+  box-shadow: var(--shadow-concave-subtle);
+  color: var(--color-brand);
 }
 
 /* ===== 悬浮 Tab 栏（新拟态） ===== */
@@ -804,7 +862,6 @@ page {
 [data-style="glass"] .neu-card,
 [data-style="glass"] .lumira-card,
 [data-style="glass"] .floating-tabbar,
-[data-style="glass"] .lumira-nav,
 [data-style="glass"] .scene-card,
 [data-style="glass"] .recent-card,
 [data-style="glass"] .tpl-card,
@@ -855,19 +912,26 @@ page {
   background-attachment: fixed;
 }
 
-/* 玻璃拟态：导航栏也需要半透明 */
-[data-style="glass"] .lumira-nav {
-  background-color: rgba(255, 255, 255, var(--surface-alpha));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1rpx solid rgba(255, 255, 255, 0.2);
+/* 玻璃拟态：导航栏滚动后毛玻璃 */
+[data-style="glass"] .lumira-nav.scrolled {
+  background-color: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(24px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.8) !important;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* 女性美学：导航栏滚动后毛玻璃 */
+[data-style="female"] .lumira-nav.scrolled {
+  background-color: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(24px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.8) !important;
+  border-bottom: 1rpx solid rgba(var(--color-brand-rgb), 0.15) !important;
 }
 
 /* ===== 女性美学：半透明 + 暖粉弥散阴影 + 大圆角 ===== */
 [data-style="female"] .neu-card,
 [data-style="female"] .lumira-card,
 [data-style="female"] .floating-tabbar,
-[data-style="female"] .lumira-nav,
 [data-style="female"] .scene-card,
 [data-style="female"] .recent-card,
 [data-style="female"] .tpl-card,
@@ -1102,7 +1166,6 @@ page {
 [data-theme="ink"][data-style="glass"] .neu-card,
 [data-theme="ink"][data-style="glass"] .lumira-card,
 [data-theme="ink"][data-style="glass"] .floating-tabbar,
-[data-theme="ink"][data-style="glass"] .lumira-nav,
 [data-theme="ink"][data-style="glass"] .scene-card,
 [data-theme="ink"][data-style="glass"] .recent-card,
 [data-theme="ink"][data-style="glass"] .tpl-card,
@@ -1115,10 +1178,20 @@ page {
   border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
+/* 深色主题导航栏滚动后毛玻璃 */
+[data-theme="ink"][data-style="glass"] .lumira-nav.scrolled {
+  background-color: rgba(28, 26, 23, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="ink"][data-style="female"] .lumira-nav.scrolled {
+  background-color: rgba(28, 26, 23, 0.75) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
 [data-theme="ink"][data-style="female"] .neu-card,
 [data-theme="ink"][data-style="female"] .lumira-card,
 [data-theme="ink"][data-style="female"] .floating-tabbar,
-[data-theme="ink"][data-style="female"] .lumira-nav,
 [data-theme="ink"][data-style="female"] .scene-card,
 [data-theme="ink"][data-style="female"] .recent-card,
 [data-theme="ink"][data-style="female"] .tpl-card,
