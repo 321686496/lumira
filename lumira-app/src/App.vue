@@ -8,6 +8,21 @@ onLaunch(() => {
   console.log("如画 Lumira App Launch");
   loadTheme();
   loadStyle();
+
+  // 滚动感知标题栏：滚动超过阈值时添加 .scrolled 类触发毛玻璃效果
+  if (typeof window !== "undefined") {
+    const updateNavScroll = () => {
+      const scrollTop =
+        window.scrollY || document.documentElement.scrollTop || 0;
+      document.querySelectorAll<HTMLElement>(".lumira-nav").forEach((nav) => {
+        nav.classList.toggle("scrolled", scrollTop > 20);
+      });
+    };
+    window.addEventListener("scroll", updateNavScroll, { passive: true });
+    window.addEventListener("pageshow", updateNavScroll);
+    // 首次执行一次
+    updateNavScroll();
+  }
 });
 </script>
 
@@ -342,22 +357,27 @@ page {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24rpx 40rpx;
-  padding-top: calc(24rpx + env(safe-area-inset-top, 0));
-  min-height: 88rpx;
+  padding: 20rpx 40rpx;
+  padding-top: calc(20rpx + env(safe-area-inset-top, 0));
+  min-height: 96rpx;
   background-color: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  transition: background-color 0.3s ease, backdrop-filter 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    backdrop-filter 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s ease,
+    box-shadow 0.4s ease;
   border-bottom: 1rpx solid transparent;
 }
 
 /* 滚动后毛玻璃态（JS 滚动监听添加 .scrolled 类） */
 .lumira-nav.scrolled {
   background-color: rgba(var(--color-canvas-rgb, 250, 247, 242), 0.72);
-  backdrop-filter: blur(24px) saturate(1.8);
-  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
   border-bottom: 1rpx solid var(--color-divider);
+  box-shadow: 0 1rpx 12rpx rgba(0, 0, 0, 0.03);
 }
 
 /* 兼容旧 .translucent 修饰类（已废弃，保留向后兼容） */
@@ -386,13 +406,15 @@ page {
 
 .lumira-nav-title {
   font-family: var(--font-cn-title);
-  font-size: 36rpx;
+  font-size: 38rpx;
   font-weight: 600;
   text-align: left;
   flex: 1;
-  letter-spacing: 0.02em;
-  padding-left: 8rpx;
+  letter-spacing: 0.04em;
+  padding-left: 12rpx;
   color: var(--color-text-primary);
+  line-height: 1.3;
+  transition: color 0.3s ease;
 }
 
 .lumira-nav-btn {
