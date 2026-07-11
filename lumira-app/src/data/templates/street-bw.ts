@@ -9,7 +9,7 @@ const streetBw: PhotoTemplate = {
     category: 'street',
     tags: ['黑白', '街拍', '人文', '极简'],
     price: 0,
-    cover: 'https://picsum.photos/seed/street-bw/600/800',
+    cover: '/static/templates/street_bw.jpg',
     description: '黑白街拍摄影，强调光影对比与几何线条，捕捉城市人文瞬间',
     referenceSource: '样片 EXIF: Magnum 街拍作品；参数参考 Magnum Photos 黑白街拍合集'
   },

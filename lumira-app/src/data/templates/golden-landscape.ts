@@ -9,7 +9,7 @@ const goldenLandscape: PhotoTemplate = {
     category: 'landscape',
     tags: ['风光', '黄金时刻', '日出日落', '广角'],
     price: 0,
-    cover: 'https://picsum.photos/seed/golden-landscape/600/800',
+    cover: '/static/templates/golden_landscape.jpg',
     description: '黄金时刻拍摄风光，色调温暖柔和，强调自然光影层次',
     referenceSource: '样片 EXIF: 500px 风光精选；参数参考 500px 风光摄影黄金时刻合集'
   },

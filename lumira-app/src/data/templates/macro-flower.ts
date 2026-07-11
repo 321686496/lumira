@@ -9,7 +9,7 @@ const macroFlower: PhotoTemplate = {
     category: 'macro',
     tags: ['微距', '花卉', '特写', '自然'],
     price: 3,
-    cover: 'https://picsum.photos/seed/macro-flower/600/800',
+    cover: '/static/templates/macro_flower.jpg',
     description: '微距镜头捕捉花卉细节，呈现花蕊纹理与娇嫩质感',
     referenceSource: '样片 EXIF: 500px 微距花卉作品；参数参考微距摄影教程'
   },

@@ -21,21 +21,23 @@
 
     <!-- 取景器 -->
     <view class="viewfinder" ref="viewfinderRef">
-      <image class="viewfinder-bg" src="https://picsum.photos/seed/preview-template/400/600" mode="aspectFill" />
-      <view class="viewfinder-mask" />
-      <CompositionOverlay v-if="template" :composition="template.composition" />
-      <!-- 可拖动的剪影叠图 -->
-      <view
-        v-if="template && hasSilhouette"
-        class="silhouette-drag-layer"
-        @touchstart="onSilhouetteDragStart"
-      >
-        <view class="silhouette-drag-handle" :style="silhouetteDragStyle">
-          <PoseSilhouette :pose="template.pose" />
-        </view>
-        <view class="drag-hint" v-if="!isDraggingSilhouette">
-          <text class="ph ph-hand-grabbing"></text>
-          <text>拖动调整剪影位置</text>
+      <view class="viewfinder-frame" :style="viewfinderFrameStyle">
+        <image class="viewfinder-bg" :src="template?.meta?.cover" mode="aspectFill" />
+        <view class="viewfinder-mask" />
+        <CompositionOverlay v-if="template" :composition="template.composition" />
+        <!-- 可拖动的剪影叠图 -->
+        <view
+          v-if="template && hasSilhouette"
+          class="silhouette-drag-layer"
+          @touchstart="onSilhouetteDragStart"
+        >
+          <view class="silhouette-drag-handle" :style="silhouetteDragStyle">
+            <PoseSilhouette :pose="template.pose" />
+          </view>
+          <view class="drag-hint" v-if="!isDraggingSilhouette">
+            <text class="ph ph-hand-grabbing"></text>
+            <text>拖动调整剪影位置</text>
+          </view>
         </view>
       </view>
 
@@ -222,6 +224,19 @@ let viewfinderRect: DOMRect | null = null
 const silhouetteDragStyle = computed(() => ({
   transform: `translate(calc(-50% + ${dragOffsetX.value * 100}%), calc(-50% + ${dragOffsetY.value * 100}%))`
 }))
+
+// 取景器画面比例（与模板的 composition.aspectRatio 一致）
+const viewfinderFrameStyle = computed(() => {
+  const ratio = template.value?.composition.aspectRatio || '3:4'
+  const parts = ratio.split(':')
+  const w = Number(parts[0]) || 3
+  const h = Number(parts[1]) || 4
+  // 竖向比例 (h > w): 高度撑满，宽度按比例；横向比例 (w > h): 宽度撑满，高度按比例
+  if (h >= w) {
+    return { height: '100%', aspectRatio: `${w} / ${h}` }
+  }
+  return { width: '100%', aspectRatio: `${w} / ${h}` }
+})
 
 function getDragXY(e: any): { x: number; y: number } {
   if (e.touches && e.touches.length > 0) {
@@ -517,6 +532,16 @@ function toggleFlash() {
 .viewfinder {
   flex: 1;
   position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.viewfinder-frame {
+  position: relative;
+  max-width: 100%;
+  max-height: 100%;
   overflow: hidden;
 }
 

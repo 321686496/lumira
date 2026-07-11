@@ -9,7 +9,7 @@ const softPortrait: PhotoTemplate = {
     category: 'portrait',
     tags: ['人像', '柔光', '自然光', '清新'],
     price: 0,
-    cover: 'https://picsum.photos/seed/soft-portrait/600/800',
+    cover: '/static/templates/soft_portrait.jpg',
     description: '柔光环境下的半身人像，肤色通透自然，适合清新风格肖像',
     referenceSource: '样片 EXIF: Unsplash 柔光人像合集；参数参考人像摄影工作室'
   },

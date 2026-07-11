@@ -261,7 +261,7 @@
         </view>
 
         <!-- 预览（可拖动调整位置） -->
-        <view class="preview-box" :style="{ paddingBottom: '100%' }" ref="posePreviewRef">
+        <view class="preview-box" :style="{ paddingBottom: compositionPreviewPadding }" ref="posePreviewRef">
           <view class="preview-bg"></view>
           <view
             class="pose-drag-layer"

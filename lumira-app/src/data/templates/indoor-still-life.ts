@@ -9,7 +9,7 @@ const indoorStillLife: PhotoTemplate = {
     category: 'still-life',
     tags: ['静物', '室内', '柔光', '生活美学'],
     price: 0,
-    cover: 'https://picsum.photos/seed/indoor-still-life/600/800',
+    cover: '/static/templates/indoor_still_life.jpg',
     description: '室内柔光环境下的静物台面拍摄，突出物体质感与生活气息',
     referenceSource: '样片 EXIF: Pexels 静物摄影作品；参数参考静物摄影教程'
   },
