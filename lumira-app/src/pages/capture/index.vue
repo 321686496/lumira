@@ -40,19 +40,11 @@
 
     <!-- 取景器 -->
     <view class="viewfinder" @click="onViewfinderTap">
-      <!-- 真实相机预览 (H5) -->
-      <video
-        v-if="camera.platform === 'h5'"
-        ref="videoRef"
-        class="viewfinder-video"
-        :style="viewfinderFilterStyle"
-        autoplay
-        playsinline
-        muted
-      />
+      <!-- 真实相机预览 (H5)：原生 video 元素容器 -->
+      <view id="videoContainer" class="viewfinder-video-wrap" />
       <!-- 占位图（无相机权限或非 H5 平台） -->
       <image
-        v-if="camera.platform !== 'h5' || !camera.isReady.value"
+        v-if="!camera.isReady.value"
         class="viewfinder-bg"
         src="https://picsum.photos/seed/capture-viewfinder/400/600"
         mode="aspectFill"
@@ -159,7 +151,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
 import { useCamera } from '@/composables/useCamera'
@@ -205,6 +197,51 @@ const DBL_TAP_THRESHOLD = 300
 
 // 视频元素 ref
 const videoRef = ref<HTMLVideoElement | null>(null)
+const VIDEO_CONTAINER_ID = 'videoContainer'
+
+// 创建原生 video 元素（绕过 uni-app 的 <uni-video> 包装）
+function createVideoElement(): HTMLVideoElement | null {
+  // 通过 document.getElementById 获取真实 DOM 节点（uni-app <view> ref 不支持 querySelector）
+  const container = document.getElementById(VIDEO_CONTAINER_ID)
+  if (!container) {
+    console.warn('[capture] video container not found')
+    return null
+  }
+
+  // 复用已存在的 video 元素
+  const existing = container.querySelector('video')
+  if (existing) return existing
+
+  const video = document.createElement('video')
+  video.autoplay = true
+  video.playsInline = true
+  video.muted = true
+  video.loop = false
+  video.controls = false
+  video.setAttribute('playsinline', '')
+  video.setAttribute('webkit-playsinline', '')
+  video.setAttribute('x5-video-player-type', 'h5')
+  video.setAttribute('x5-video-player-fullscreen', 'false')
+  video.style.width = '100%'
+  video.style.height = '100%'
+  video.style.objectFit = 'cover'
+  video.style.display = 'block'
+  video.style.position = 'absolute'
+  video.style.inset = '0'
+  container.appendChild(video)
+  return video
+}
+
+// 将 filter 样式应用到 video 元素
+function applyVideoFilter() {
+  if (!videoRef.value) return
+  // 参数实时生效：只要有模板就直接应用滤镜，无需"一键应用"
+  const filter = editableTemplate.value
+    ? buildCssFilter(editableTemplate.value.camera, editableTemplate.value.postProcess)
+    : ''
+  videoRef.value.style.filter = filter
+  videoRef.value.style.webkitFilter = filter
+}
 
 // 计算横屏缩放比例
 const updateOrientation = (windowWidth: number, windowHeight: number) => {
@@ -237,9 +274,10 @@ const activePost = computed(() => {
   return {} as Record<string, unknown>
 })
 
-// 实时滤镜样式（应用到视频/占位图）
+// 实时滤镜样式（应用到占位图）
 const viewfinderFilterStyle = computed(() => {
-  if (!applied.value || !editableTemplate.value) return {}
+  // 参数实时生效：只要有模板就直接应用滤镜
+  if (!editableTemplate.value) return {}
   const filter = buildCssFilter(
     editableTemplate.value.camera,
     editableTemplate.value.postProcess
@@ -247,14 +285,29 @@ const viewfinderFilterStyle = computed(() => {
   return filter ? { filter, webkitFilter: filter } : {}
 })
 
+// 监听 applied / editableTemplate 变化，同步 filter 到 video 元素
+watch([applied, editableTemplate], () => {
+  applyVideoFilter()
+}, { deep: true })
+
 onMounted(async () => {
+  // 创建原生 video 元素并绑定到相机（H5 平台）
+  if (camera.platform === 'h5') {
+    // 等待 DOM 渲染完成
+    await nextTick()
+    videoRef.value = createVideoElement()
+    if (videoRef.value) {
+      camera.bindVideoElement(videoRef.value)
+      // 创建后立即应用当前滤镜（修复 watch 触发早于 video 创建的时序问题）
+      applyVideoFilter()
+    }
+  }
   // 启动相机预览
   await camera.startPreview()
-  // 绑定视频元素
+  // 确保视频播放
   if (videoRef.value) {
-    camera.bindVideoElement(videoRef.value)
-    // 确保视频播放
     videoRef.value.play().catch(() => {})
+    applyVideoFilter()
   }
 })
 
@@ -387,10 +440,11 @@ const onShutter = async () => {
 
   try {
     // 拍照：截帧 + 应用所有滤镜 + 烘焙为 dataURL
-    const cameraParams = applied.value && editableTemplate.value
+    // 参数实时生效：只要有模板就应用参数到最终照片
+    const cameraParams = editableTemplate.value
       ? editableTemplate.value.camera
       : {}
-    const postParams = applied.value && editableTemplate.value
+    const postParams = editableTemplate.value
       ? editableTemplate.value.postProcess
       : {}
 
@@ -423,10 +477,19 @@ const toggleFlash = () => {
 
 const retryCamera = async () => {
   await camera.release()
+  if (camera.platform === 'h5') {
+    await nextTick()
+    if (!videoRef.value) {
+      videoRef.value = createVideoElement()
+    }
+    if (videoRef.value) {
+      camera.bindVideoElement(videoRef.value)
+    }
+  }
   await camera.startPreview()
   if (videoRef.value) {
-    camera.bindVideoElement(videoRef.value)
     videoRef.value.play().catch(() => {})
+    applyVideoFilter()
   }
 }
 
@@ -572,17 +635,34 @@ const onViewfinderTap = () => {
   overflow: hidden;
 }
 
-.viewfinder-video,
+.viewfinder-video-wrap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.viewfinder-video-wrap video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+  display: block;
+}
+
+.viewfinder-video-wrap video::-webkit-media-controls {
+  display: none !important;
+}
+
+.viewfinder-video-wrap video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+
 .viewfinder-bg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-}
-
-.viewfinder-video {
-  object-fit: cover;
 }
 
 .viewfinder-mask {

@@ -48,6 +48,7 @@ const WB_K: Record<WhiteBalance, number> = {
 /**
  * 计算白平衡对色温的影响（返回 -100 ~ 100 的偏移量）
  * 5500K 为中性（0），高于 5500 偏暖（+），低于 5500 偏冷（-）
+ * 使用更陡的映射曲线让效果更明显
  */
 function temperatureOffset(wb: WhiteBalance, wbK: number): number {
   const k = wb === 'custom' ? wbK : WB_K[wb]
@@ -68,23 +69,25 @@ export function buildCssFilter(
   const filters: string[] = []
 
   // ===== 相机参数 =====
-  // EV → brightness
+  // EV → brightness（-3 ~ +3 → 0.4 ~ 1.6）
   const ev = camera.exposureCompensation ?? 0
   if (ev !== 0) {
     filters.push(`brightness(${(1 + ev / 3).toFixed(3)})`)
   }
 
-  // 白平衡 → 色温（sepia + hue-rotate 模拟）
+  // 白平衡 → 色温（sepia + hue-rotate 组合模拟）
   if (camera.whiteBalance) {
     const t = temperatureOffset(camera.whiteBalance, camera.whiteBalanceK ?? 5500)
     if (t > 0) {
-      // 暖：sepia 轻微增加 + hue-rotate 微负
-      filters.push(`sepia(${(t / 200).toFixed(3)})`)
-      filters.push(`hue-rotate(${(-t / 10).toFixed(1)}deg)`)
-    } else if (t < 0) {
-      // 冷：hue-rotate 正向 + saturate 轻微降低
+      // 暖：sepia + hue-rotate 负向（让黄色更明显）
+      filters.push(`sepia(${(t / 100).toFixed(3)})`)
       filters.push(`hue-rotate(${(-t / 5).toFixed(1)}deg)`)
       filters.push(`saturate(${(1 + t / 200).toFixed(3)})`)
+    } else if (t < 0) {
+      // 冷：hue-rotate 正向 + saturate 降低
+      filters.push(`hue-rotate(${(-t / 3).toFixed(1)}deg)`)
+      filters.push(`saturate(${(1 + t / 150).toFixed(3)})`)
+      filters.push(`brightness(${(1 + t / 300).toFixed(3)})`)
     }
   }
 
@@ -107,19 +110,24 @@ export function buildCssFilter(
     filters.push(`saturate(${(1 + saturation / 100).toFixed(3)})`)
   }
 
-  // 色温（后期）
+  // 色温（后期，-100 ~ 100）
   const temp = post.color?.temperature ?? 0
   if (temp > 0) {
-    filters.push(`sepia(${(temp / 200).toFixed(3)})`)
-    filters.push(`hue-rotate(${(-temp / 10).toFixed(1)}deg)`)
-  } else if (temp < 0) {
+    // 暖色温：sepia + hue-rotate 负向 + saturate 提升
+    filters.push(`sepia(${(temp / 100).toFixed(3)})`)
     filters.push(`hue-rotate(${(-temp / 5).toFixed(1)}deg)`)
+    filters.push(`saturate(${(1 + temp / 200).toFixed(3)})`)
+  } else if (temp < 0) {
+    // 冷色温：hue-rotate 正向 + saturate 降低 + brightness 微降
+    filters.push(`hue-rotate(${(-temp / 3).toFixed(1)}deg)`)
+    filters.push(`saturate(${(1 + temp / 150).toFixed(3)})`)
+    filters.push(`brightness(${(1 + temp / 300).toFixed(3)})`)
   }
 
-  // 色调
+  // 色调（-100 ~ 100 → -90deg ~ 90deg）
   const tint = post.color?.tint ?? 0
   if (tint !== 0) {
-    filters.push(`hue-rotate(${(tint / 2).toFixed(1)}deg)`)
+    filters.push(`hue-rotate(${(tint * 0.9).toFixed(1)}deg)`)
   }
 
   // LUT 预设（叠加在基础调整之后）
