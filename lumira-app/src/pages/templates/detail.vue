@@ -524,5 +524,8 @@ const goCapture = () => uni.navigateTo({ url: `/pages/capture/index?templateId=$
   padding: 32rpx 48rpx 48rpx;
   background: linear-gradient(to top, var(--color-canvas) 60%, transparent);
   z-index: 100;
+  box-sizing: border-box;
+  width: 100%;
+  overflow-x: hidden;
 }
 </style>

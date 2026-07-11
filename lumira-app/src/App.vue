@@ -548,6 +548,8 @@ page {
   justify-content: center;
   gap: 16rpx;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   line-height: 1;
 }
 
@@ -568,6 +570,8 @@ page {
   justify-content: center;
   gap: 16rpx;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   line-height: 1;
   box-shadow: var(--shadow-convex-brand);
 }
@@ -590,6 +594,8 @@ page {
   justify-content: center;
   gap: 16rpx;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   line-height: 1;
 }
 

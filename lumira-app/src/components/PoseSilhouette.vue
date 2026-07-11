@@ -48,7 +48,9 @@ const wrapperStyle = computed(() => {
     left: `${position.x * 100}%`,
     top: `${position.y * 100}%`,
     transform: `translate(-50%, -50%) scale(${scale}) rotate(${rotation}deg)`,
-    opacity: 0.55
+    opacity: 0.7,
+    // 设置 color 让 SVG 的 currentColor 解析为白色
+    color: 'rgba(255, 255, 255, 0.85)'
   }
 })
 </script>
@@ -66,7 +68,8 @@ const wrapperStyle = computed(() => {
 :deep(svg) {
   width: 100%;
   height: 100%;
-  fill: rgba(255, 255, 255, 0.7);
+  // 不设置 fill，让 SVG 内部的 fill="currentColor" 生效
+  // currentColor 继承自 .pose-silhouette-wrap 的 color 属性
 }
 
 .pose-image {
