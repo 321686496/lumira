@@ -155,7 +155,7 @@ const createCollection = () => {
 }
 
 .tip-card {
-  background-color: $color-bg-surface;
+  background-color: var(--color-canvas);
   border-radius: 24rpx;
   padding: 32rpx 40rpx;
   display: flex;

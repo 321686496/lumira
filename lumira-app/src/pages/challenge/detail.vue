@@ -261,7 +261,7 @@ const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
 .work-card {
   border-radius: $radius-card;
   overflow: hidden;
-  background-color: $color-bg-card;
+  background-color: var(--color-canvas);
   border: 2rpx solid $color-border;
   box-shadow: $shadow-card;
 }

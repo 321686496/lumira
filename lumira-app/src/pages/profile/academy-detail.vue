@@ -374,7 +374,7 @@ const back = () => uni.navigateBack()
 
 /* 小贴士 */
 .tips-card {
-  background: $color-bg-surface;
+  background: var(--color-canvas);
   border-radius: 24rpx;
   padding: 32rpx 40rpx;
 }

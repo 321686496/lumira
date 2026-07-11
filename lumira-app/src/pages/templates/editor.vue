@@ -180,7 +180,7 @@ const back = () => uni.navigateBack()
   border: 4rpx dashed $color-border;
   text-align: center;
   padding: 64rpx 40rpx;
-  background: linear-gradient(135deg, #FFFFFF 0%, #FAF7F2 100%);
+  background: var(--color-canvas);
   box-shadow: $shadow-card;
 }
 

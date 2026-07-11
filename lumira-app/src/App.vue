@@ -796,51 +796,200 @@ page {
 
 /* ===== 风格定向覆盖规则 ===== */
 
-/* 玻璃拟态：半透明 + backdrop-filter */
+/* 所有页面卡片类的统一切换选择器 */
+/* 涵盖全局工具类 + 页面自定义卡片类 */
+/* eslint-disable-next-line no-useless-concat */
+
+/* ===== 玻璃拟态：半透明 + backdrop-filter ===== */
 [data-style="glass"] .neu-card,
 [data-style="glass"] .lumira-card,
 [data-style="glass"] .floating-tabbar,
+[data-style="glass"] .lumira-nav,
+[data-style="glass"] .scene-card,
+[data-style="glass"] .recent-card,
+[data-style="glass"] .tpl-card,
+[data-style="glass"] .col-card,
+[data-style="glass"] .new-card,
+[data-style="glass"] .tip-card,
+[data-style="glass"] .work-card,
+[data-style="glass"] .preview-card,
+[data-style="glass"] .option-card,
+[data-style="glass"] .mood-card,
+[data-style="glass"] .section-card,
+[data-style="glass"] .selected-card,
+[data-style="glass"] .summary-card,
+[data-style="glass"] .stats-card,
+[data-style="glass"] .fragment-card,
+[data-style="glass"] .menu-card,
+[data-style="glass"] .level-card,
+[data-style="glass"] .achievement-card,
+[data-style="glass"] .trajectory-card,
+[data-style="glass"] .calendar-card,
+[data-style="glass"] .collection-card,
+[data-style="glass"] .main-card,
+[data-style="glass"] .sub-card,
+[data-style="glass"] .streak-card,
+[data-style="glass"] .practice-card,
+[data-style="glass"] .recommend-card,
+[data-style="glass"] .setting-group,
+[data-style="glass"] .tips-card,
+[data-style="glass"] .add-card,
+[data-style="glass"] .upload-card,
+[data-style="glass"] .style-card,
+[data-style="glass"] .theme-card,
+[data-style="glass"] .sys-card,
+[data-style="glass"] .hero-card {
+  background-color: rgba(255, 255, 255, var(--surface-alpha)) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1rpx solid rgba(255, 255, 255, 0.3) !important;
+}
+
+/* 玻璃拟态：页面背景添加渐变装饰，让模糊效果可见 */
+[data-style="glass"] .lumira-container {
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(circle at 15% 20%, var(--color-brand-subtle) 0%, transparent 40%),
+    radial-gradient(circle at 85% 60%, var(--color-brand-light) 0%, transparent 35%),
+    radial-gradient(circle at 50% 90%, var(--color-brand-subtle) 0%, transparent 30%);
+  background-attachment: fixed;
+}
+
+/* 玻璃拟态：导航栏也需要半透明 */
 [data-style="glass"] .lumira-nav {
   background-color: rgba(255, 255, 255, var(--surface-alpha));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.2);
 }
 
-[data-style="glass"] .neu-card,
-[data-style="glass"] .lumira-card {
-  border: var(--card-border);
-}
-
-/* 女性美学：半透明 + backdrop-filter + 大圆角 */
+/* ===== 女性美学：半透明 + 暖粉弥散阴影 + 大圆角 ===== */
 [data-style="female"] .neu-card,
 [data-style="female"] .lumira-card,
 [data-style="female"] .floating-tabbar,
-[data-style="female"] .lumira-nav {
-  background-color: rgba(255, 255, 255, var(--surface-alpha));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+[data-style="female"] .lumira-nav,
+[data-style="female"] .scene-card,
+[data-style="female"] .recent-card,
+[data-style="female"] .tpl-card,
+[data-style="female"] .col-card,
+[data-style="female"] .new-card,
+[data-style="female"] .tip-card,
+[data-style="female"] .work-card,
+[data-style="female"] .preview-card,
+[data-style="female"] .option-card,
+[data-style="female"] .mood-card,
+[data-style="female"] .section-card,
+[data-style="female"] .selected-card,
+[data-style="female"] .summary-card,
+[data-style="female"] .stats-card,
+[data-style="female"] .fragment-card,
+[data-style="female"] .menu-card,
+[data-style="female"] .level-card,
+[data-style="female"] .achievement-card,
+[data-style="female"] .trajectory-card,
+[data-style="female"] .calendar-card,
+[data-style="female"] .collection-card,
+[data-style="female"] .main-card,
+[data-style="female"] .sub-card,
+[data-style="female"] .streak-card,
+[data-style="female"] .practice-card,
+[data-style="female"] .recommend-card,
+[data-style="female"] .setting-group,
+[data-style="female"] .tips-card,
+[data-style="female"] .add-card,
+[data-style="female"] .upload-card,
+[data-style="female"] .style-card,
+[data-style="female"] .theme-card,
+[data-style="female"] .sys-card,
+[data-style="female"] .hero-card {
+  background-color: rgba(255, 255, 255, var(--surface-alpha)) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: 0 8px 32px rgba(var(--color-brand-rgb), 0.15) !important;
+  border: none !important;
 }
 
-[data-style="female"] .neu-card,
-[data-style="female"] .lumira-card {
-  border-radius: var(--card-radius);
-}
-
-/* 女性美学：所有卡片过渡使用 cubic-bezier */
+/* 女性美学：大圆角 */
 [data-style="female"] .neu-card,
 [data-style="female"] .lumira-card,
+[data-style="female"] .scene-card,
+[data-style="female"] .recent-card,
+[data-style="female"] .tpl-card,
+[data-style="female"] .col-card,
+[data-style="female"] .new-card,
+[data-style="female"] .tip-card,
+[data-style="female"] .work-card,
+[data-style="female"] .preview-card,
+[data-style="female"] .option-card,
+[data-style="female"] .mood-card,
+[data-style="female"] .section-card,
+[data-style="female"] .selected-card,
+[data-style="female"] .summary-card,
+[data-style="female"] .stats-card,
+[data-style="female"] .fragment-card,
+[data-style="female"] .menu-card,
+[data-style="female"] .level-card,
+[data-style="female"] .achievement-card,
+[data-style="female"] .trajectory-card,
+[data-style="female"] .calendar-card,
+[data-style="female"] .collection-card,
+[data-style="female"] .main-card,
+[data-style="female"] .sub-card,
+[data-style="female"] .streak-card,
+[data-style="female"] .practice-card,
+[data-style="female"] .recommend-card,
+[data-style="female"] .setting-group,
+[data-style="female"] .tips-card,
+[data-style="female"] .add-card,
+[data-style="female"] .upload-card,
+[data-style="female"] .style-card,
+[data-style="female"] .theme-card,
+[data-style="female"] .sys-card,
+[data-style="female"] .hero-card {
+  border-radius: var(--card-radius) !important;
+}
+
+/* 女性美学：页面背景添加柔和渐变装饰 */
+[data-style="female"] .lumira-container {
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(circle at 20% 10%, rgba(var(--color-brand-rgb), 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(var(--color-brand-rgb), 0.06) 0%, transparent 45%);
+  background-attachment: fixed;
+}
+
+/* 女性美学：所有卡片和按钮过渡使用 cubic-bezier */
+[data-style="female"] .neu-card,
+[data-style="female"] .lumira-card,
+[data-style="female"] .scene-card,
+[data-style="female"] .recent-card,
+[data-style="female"] .tpl-card,
+[data-style="female"] .tip-card,
+[data-style="female"] .work-card,
 [data-style="female"] .neu-btn-convex,
 [data-style="female"] .neu-btn-brand,
 [data-style="female"] .lumira-btn-brand,
-[data-style="female"] .neu-pill {
+[data-style="female"] .neu-pill,
+[data-style="female"] .style-card,
+[data-style="female"] .theme-card,
+[data-style="female"] .menu-card,
+[data-style="female"] .setting-item {
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* 女性美学：按压反馈 scale(0.96) */
 [data-style="female"] .neu-card:active,
 [data-style="female"] .lumira-card:active,
+[data-style="female"] .scene-card:active,
+[data-style="female"] .recent-card:active,
+[data-style="female"] .tpl-card:active,
+[data-style="female"] .tip-card:active,
+[data-style="female"] .work-card:active,
 [data-style="female"] .neu-btn-convex:active,
-[data-style="female"] .neu-btn-brand:active {
+[data-style="female"] .neu-btn-brand:active,
+[data-style="female"] .lumira-btn-brand:active,
+[data-style="female"] .style-card:active,
+[data-style="female"] .theme-card:active {
   transform: scale(0.96);
 }
 
@@ -859,11 +1008,55 @@ page {
   animation: female-pulse 2s ease-in-out infinite;
 }
 
-/* 扁平化：卡片边框 + 圆角 */
+/* 女性美学：品牌按钮使用暖粉弥散阴影 */
+[data-style="female"] .neu-btn-brand,
+[data-style="female"] .lumira-btn-brand {
+  box-shadow: 0 8px 24px rgba(var(--color-brand-rgb), 0.25);
+}
+
+[data-style="female"] .neu-btn-brand:active,
+[data-style="female"] .lumira-btn-brand:active {
+  box-shadow: 0 4px 12px rgba(var(--color-brand-rgb), 0.2);
+}
+
+/* ===== 扁平化：卡片边框 + 圆角 ===== */
 [data-style="flat"] .neu-card,
-[data-style="flat"] .lumira-card {
-  border: var(--card-border);
-  border-radius: var(--card-radius);
+[data-style="flat"] .lumira-card,
+[data-style="flat"] .scene-card,
+[data-style="flat"] .recent-card,
+[data-style="flat"] .tpl-card,
+[data-style="flat"] .col-card,
+[data-style="flat"] .new-card,
+[data-style="flat"] .tip-card,
+[data-style="flat"] .work-card,
+[data-style="flat"] .preview-card,
+[data-style="flat"] .option-card,
+[data-style="flat"] .mood-card,
+[data-style="flat"] .section-card,
+[data-style="flat"] .selected-card,
+[data-style="flat"] .summary-card,
+[data-style="flat"] .stats-card,
+[data-style="flat"] .fragment-card,
+[data-style="flat"] .menu-card,
+[data-style="flat"] .level-card,
+[data-style="flat"] .achievement-card,
+[data-style="flat"] .trajectory-card,
+[data-style="flat"] .calendar-card,
+[data-style="flat"] .collection-card,
+[data-style="flat"] .main-card,
+[data-style="flat"] .sub-card,
+[data-style="flat"] .streak-card,
+[data-style="flat"] .practice-card,
+[data-style="flat"] .recommend-card,
+[data-style="flat"] .setting-group,
+[data-style="flat"] .tips-card,
+[data-style="flat"] .add-card,
+[data-style="flat"] .upload-card,
+[data-style="flat"] .style-card,
+[data-style="flat"] .theme-card,
+[data-style="flat"] .sys-card {
+  border: var(--card-border) !important;
+  border-radius: var(--card-radius) !important;
 }
 
 /* 扁平化：toggle 色块填充 */
@@ -887,11 +1080,16 @@ page {
   box-shadow: none;
 }
 
-/* 扁平化：去除 neu-block 阴影 */
+/* 扁平化：去除所有阴影 */
 [data-style="flat"] .neu-block,
 [data-style="flat"] .neu-pill,
-[data-style="flat"] .neu-btn-convex {
-  box-shadow: none;
+[data-style="flat"] .neu-btn-convex,
+[data-style="flat"] .scene-card,
+[data-style="flat"] .recent-card,
+[data-style="flat"] .tpl-card,
+[data-style="flat"] .tip-card,
+[data-style="flat"] .work-card {
+  box-shadow: none !important;
 }
 
 [data-style="flat"] .neu-block-inset,
@@ -904,15 +1102,31 @@ page {
 [data-theme="ink"][data-style="glass"] .neu-card,
 [data-theme="ink"][data-style="glass"] .lumira-card,
 [data-theme="ink"][data-style="glass"] .floating-tabbar,
-[data-theme="ink"][data-style="glass"] .lumira-nav {
-  background-color: rgba(38, 35, 32, 0.55);
-  border-color: rgba(255, 255, 255, 0.1);
+[data-theme="ink"][data-style="glass"] .lumira-nav,
+[data-theme="ink"][data-style="glass"] .scene-card,
+[data-theme="ink"][data-style="glass"] .recent-card,
+[data-theme="ink"][data-style="glass"] .tpl-card,
+[data-theme="ink"][data-style="glass"] .tip-card,
+[data-theme="ink"][data-style="glass"] .work-card,
+[data-theme="ink"][data-style="glass"] .hero-card,
+[data-theme="ink"][data-style="glass"] .stats-card,
+[data-theme="ink"][data-style="glass"] .menu-card {
+  background-color: rgba(38, 35, 32, 0.55) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 [data-theme="ink"][data-style="female"] .neu-card,
 [data-theme="ink"][data-style="female"] .lumira-card,
 [data-theme="ink"][data-style="female"] .floating-tabbar,
-[data-theme="ink"][data-style="female"] .lumira-nav {
-  background-color: rgba(38, 35, 32, 0.75);
+[data-theme="ink"][data-style="female"] .lumira-nav,
+[data-theme="ink"][data-style="female"] .scene-card,
+[data-theme="ink"][data-style="female"] .recent-card,
+[data-theme="ink"][data-style="female"] .tpl-card,
+[data-theme="ink"][data-style="female"] .tip-card,
+[data-theme="ink"][data-style="female"] .work-card,
+[data-theme="ink"][data-style="female"] .hero-card,
+[data-theme="ink"][data-style="female"] .stats-card,
+[data-theme="ink"][data-style="female"] .menu-card {
+  background-color: rgba(38, 35, 32, 0.75) !important;
 }
 </style>

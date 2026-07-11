@@ -229,7 +229,7 @@ const onStartUse = () => {
 .preview-card {
   border-radius: 28rpx;
   border: 2rpx solid var(--color-divider);
-  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-canvas) 100%);
+  background: var(--color-canvas);
   box-shadow: var(--shadow-convex);
   overflow: hidden;
 }
@@ -342,7 +342,7 @@ const onStartUse = () => {
 .option-card {
   border-radius: 28rpx;
   border: 2rpx solid var(--color-divider);
-  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-canvas) 100%);
+  background: var(--color-canvas);
   box-shadow: var(--shadow-convex);
   padding: 32rpx;
 }

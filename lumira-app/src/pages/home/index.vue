@@ -635,7 +635,7 @@ const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
   border-radius: 28rpx;
   overflow: hidden;
   border: 2rpx solid var(--color-divider);
-  background-color: var(--color-surface);
+  background-color: var(--color-canvas);
   box-shadow: var(--shadow-convex);
 }
 
@@ -705,7 +705,7 @@ const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
   border-radius: 28rpx;
   overflow: hidden;
   border: 2rpx solid var(--color-divider);
-  background-color: var(--color-surface);
+  background-color: var(--color-canvas);
   box-shadow: var(--shadow-convex);
 }
 

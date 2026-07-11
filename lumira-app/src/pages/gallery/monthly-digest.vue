@@ -309,7 +309,7 @@ const back = () => uni.navigateBack()
   border-radius: 24rpx;
   overflow: hidden;
   border: 2rpx solid $color-border;
-  background-color: $color-bg-card;
+  background-color: var(--color-canvas);
 }
 
 .selected-img-wrap {

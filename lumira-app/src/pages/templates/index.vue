@@ -396,7 +396,7 @@ const goUnlock = () => uni.navigateTo({ url: '/pages/templates/unlock' })
   border-radius: 28rpx;
   overflow: hidden;
   border: none;
-  background-color: var(--color-surface);
+  background-color: var(--color-canvas);
   box-shadow: var(--shadow-convex);
 }
 
@@ -541,7 +541,7 @@ const goUnlock = () => uni.navigateTo({ url: '/pages/templates/unlock' })
   border-radius: 28rpx;
   overflow: hidden;
   border: 2rpx solid var(--color-divider);
-  background-color: var(--color-surface);
+  background-color: var(--color-canvas);
   box-shadow: var(--shadow-convex);
   display: flex;
   padding: 24rpx;
@@ -614,7 +614,7 @@ const goUnlock = () => uni.navigateTo({ url: '/pages/templates/unlock' })
   border-radius: 28rpx;
   overflow: hidden;
   border: 2rpx solid var(--color-divider);
-  background-color: var(--color-surface);
+  background-color: var(--color-canvas);
   box-shadow: var(--shadow-convex);
   display: flex;
   padding: 24rpx;
