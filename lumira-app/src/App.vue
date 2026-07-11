@@ -2,11 +2,12 @@
 import { onLaunch } from "@dcloudio/uni-app";
 import { useTheme } from "@/composables/useTheme";
 
-const { loadTheme } = useTheme();
+const { loadTheme, loadStyle } = useTheme();
 
 onLaunch(() => {
   console.log("如画 Lumira App Launch");
   loadTheme();
+  loadStyle();
 });
 </script>
 
@@ -42,6 +43,11 @@ onLaunch(() => {
   --shadow-concave-subtle: inset 2px 2px 5px #E5E0D8, inset -2px -2px 5px #FFFFFF;
   --shadow-pressed: inset 3px 3px 8px #E0DCD4, inset -3px -3px 8px #FFFFFF;
   --shadow-float: 0 8px 32px rgba(26, 26, 26, 0.08);
+
+  /* 风格基础变量（新拟态默认值） */
+  --card-border: none;
+  --card-radius: 28rpx;
+  --surface-alpha: 1;
 
   /* 字体 */
   --font-cn-title: 'Noto Serif SC', 'Source Han Serif SC', serif;
@@ -133,6 +139,170 @@ onLaunch(() => {
   --shadow-pressed: inset 3px 3px 8px #D6DDD2, inset -3px -3px 8px #FFFFFF;
   --shadow-convex-brand: 4px 4px 10px #7A9B62, -4px -4px 10px #9CC084;
   --shadow-float: 0 8px 32px rgba(74, 63, 53, 0.08);
+}
+
+/* 温馨粉主题 */
+[data-theme="cozy"] {
+  --color-canvas: #FFF5F5;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #FAEDED;
+  --color-canvas-deep: #F5EAEA;
+  --color-text-primary: #4A3A3A;
+  --color-text-secondary: #8C7070;
+  --color-text-tertiary: #B89A9A;
+  --color-divider: #F0E0E0;
+  --color-brand: #E8A0A0;
+  --color-brand-deep: #D4858A;
+  --color-brand-light: #F0B5B5;
+  --color-brand-subtle: #FCE8E8;
+  --color-brand-text: #C47070;
+  --color-brand-rgb: 232, 160, 160;
+  --color-danger: #D47070;
+  --color-danger-subtle: #FCE8E8;
+  --color-success: #8FB088;
+  --color-success-subtle: #EDF2E8;
+
+  --shadow-convex: 6px 6px 14px #F0E0E0, -6px -6px 14px #FFFFFF;
+  --shadow-convex-subtle: 3px 3px 6px #F2E2E2, -3px -3px 6px #FFFFFF;
+  --shadow-convex-brand: 4px 4px 10px #D4858A, -4px -4px 10px #F0B5B5;
+  --shadow-concave: inset 4px 4px 10px #F0E0E0, inset -4px -4px 10px #FFFFFF;
+  --shadow-concave-subtle: inset 2px 2px 5px #F2E2E2, inset -2px -2px 5px #FFFFFF;
+  --shadow-pressed: inset 3px 3px 8px #F0E0E0, inset -3px -3px 8px #FFFFFF;
+  --shadow-float: 0 8px 32px rgba(74, 58, 58, 0.08);
+}
+
+/* 马卡龙主题 */
+[data-theme="macaron"] {
+  --color-canvas: #FFF8F0;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F5F0E8;
+  --color-canvas-deep: #F0EAE0;
+  --color-text-primary: #5A4A4A;
+  --color-text-secondary: #8C7A7A;
+  --color-text-tertiary: #B8A8A0;
+  --color-divider: #E8E0D5;
+  --color-brand: #A8D8C8;
+  --color-brand-deep: #8CC5B5;
+  --color-brand-light: #C5E8DD;
+  --color-brand-subtle: #E0F0EA;
+  --color-brand-text: #5E9882;
+  --color-brand-rgb: 168, 216, 200;
+  --color-danger: #E8A0A0;
+  --color-danger-subtle: #FCE8E8;
+  --color-success: #A8D8C8;
+  --color-success-subtle: #E0F0EA;
+
+  --shadow-convex: 6px 6px 14px #E8E0D5, -6px -6px 14px #FFFFFF;
+  --shadow-convex-subtle: 3px 3px 6px #EDE5D8, -3px -3px 6px #FFFFFF;
+  --shadow-convex-brand: 4px 4px 10px #8CC5B5, -4px -4px 10px #C5E8DD;
+  --shadow-concave: inset 4px 4px 10px #E8E0D5, inset -4px -4px 10px #FFFFFF;
+  --shadow-concave-subtle: inset 2px 2px 5px #EDE5D8, inset -2px -2px 5px #FFFFFF;
+  --shadow-pressed: inset 3px 3px 8px #E8E0D5, inset -3px -3px 8px #FFFFFF;
+  --shadow-float: 0 8px 32px rgba(90, 74, 74, 0.08);
+}
+
+/* 莫兰迪主题 */
+[data-theme="morandi"] {
+  --color-canvas: #E8E4E0;
+  --color-surface: #F2EFEA;
+  --color-surface-alt: #E0DCD6;
+  --color-canvas-deep: #DDD9D3;
+  --color-text-primary: #4A4540;
+  --color-text-secondary: #7A7570;
+  --color-text-tertiary: #A8A29C;
+  --color-divider: #D5D0CA;
+  --color-brand: #8B9DAF;
+  --color-brand-deep: #6B7D8F;
+  --color-brand-light: #A8B8C8;
+  --color-brand-subtle: #D5DDE5;
+  --color-brand-text: #5B6D7F;
+  --color-brand-rgb: 139, 157, 175;
+  --color-danger: #A88080;
+  --color-danger-subtle: #E8DDDD;
+  --color-success: #8FA590;
+  --color-success-subtle: #DDE5DD;
+
+  --shadow-convex: 6px 6px 14px #D5D0CA, -6px -6px 14px #F2EFEA;
+  --shadow-convex-subtle: 3px 3px 6px #D8D3CD, -3px -3px 6px #F2EFEA;
+  --shadow-convex-brand: 4px 4px 10px #6B7D8F, -4px -4px 10px #A8B8C8;
+  --shadow-concave: inset 4px 4px 10px #D5D0CA, inset -4px -4px 10px #F2EFEA;
+  --shadow-concave-subtle: inset 2px 2px 5px #D8D3CD, inset -2px -2px 5px #F2EFEA;
+  --shadow-pressed: inset 3px 3px 8px #D5D0CA, inset -3px -3px 8px #F2EFEA;
+  --shadow-float: 0 8px 32px rgba(74, 69, 64, 0.08);
+}
+
+/* 玫瑰金主题 */
+[data-theme="rosegold"] {
+  --color-canvas: #FAF6F2;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F5EDE8;
+  --color-canvas-deep: #F0E8E2;
+  --color-text-primary: #3D2E2A;
+  --color-text-secondary: #6B5450;
+  --color-text-tertiary: #A89088;
+  --color-divider: #E8DDD5;
+  --color-brand: #C9A0A0;
+  --color-brand-deep: #B08585;
+  --color-brand-light: #DDB8B8;
+  --color-brand-subtle: #F0E0E0;
+  --color-brand-text: #A06868;
+  --color-brand-rgb: 201, 160, 160;
+  --color-danger: #C47878;
+  --color-danger-subtle: #F0E0E0;
+  --color-success: #9AB088;
+  --color-success-subtle: #E8F0E0;
+
+  --shadow-convex: 6px 6px 14px #E8DDD5, -6px -6px 14px #FFFFFF;
+  --shadow-convex-subtle: 3px 3px 6px #EDE2DA, -3px -3px 6px #FFFFFF;
+  --shadow-convex-brand: 4px 4px 10px #B08585, -4px -4px 10px #DDB8B8;
+  --shadow-concave: inset 4px 4px 10px #E8DDD5, inset -4px -4px 10px #FFFFFF;
+  --shadow-concave-subtle: inset 2px 2px 5px #EDE2DA, inset -2px -2px 5px #FFFFFF;
+  --shadow-pressed: inset 3px 3px 8px #E8DDD5, inset -3px -3px 8px #FFFFFF;
+  --shadow-float: 0 8px 32px rgba(61, 46, 42, 0.08);
+}
+
+/* ===== UI 风格变量重定义 ===== */
+
+/* 扁平化风格 */
+[data-style="flat"] {
+  --shadow-convex: none;
+  --shadow-concave: none;
+  --shadow-convex-subtle: none;
+  --shadow-concave-subtle: none;
+  --shadow-pressed: none;
+  --shadow-convex-brand: none;
+  --shadow-float: none;
+  --card-border: 1rpx solid var(--color-divider);
+  --card-radius: 20rpx;
+  --surface-alpha: 1;
+}
+
+/* 玻璃拟态风格 */
+[data-style="glass"] {
+  --shadow-convex: 0 8px 32px rgba(0,0,0,0.08);
+  --shadow-concave: inset 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-convex-subtle: 0 4px 16px rgba(0,0,0,0.06);
+  --shadow-concave-subtle: inset 0 1px 4px rgba(0,0,0,0.04);
+  --shadow-pressed: inset 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-convex-brand: 0 8px 24px rgba(var(--color-brand-rgb), 0.3);
+  --shadow-float: 0 8px 32px rgba(0,0,0,0.08);
+  --card-border: 1rpx solid rgba(255,255,255,0.3);
+  --card-radius: 28rpx;
+  --surface-alpha: 0.55;
+}
+
+/* 女性美学风格 */
+[data-style="female"] {
+  --shadow-convex: 0 8px 32px rgba(var(--color-brand-rgb), 0.15);
+  --shadow-concave: inset 0 2px 8px rgba(var(--color-brand-rgb), 0.08);
+  --shadow-convex-subtle: 0 4px 16px rgba(var(--color-brand-rgb), 0.1);
+  --shadow-concave-subtle: inset 0 1px 4px rgba(var(--color-brand-rgb), 0.05);
+  --shadow-pressed: inset 0 2px 8px rgba(var(--color-brand-rgb), 0.1);
+  --shadow-convex-brand: 0 8px 24px rgba(var(--color-brand-rgb), 0.25);
+  --shadow-float: 0 8px 32px rgba(var(--color-brand-rgb), 0.12);
+  --card-border: none;
+  --card-radius: 48rpx;
+  --surface-alpha: 0.75;
 }
 
 /* ===== 全局重置（仅 class 选择器） ===== */
@@ -623,4 +793,126 @@ page {
 .fade-up-d5 { animation: fadeUp 0.55s cubic-bezier(0.16,1,0.3,1) 400ms both; }
 .fade-in { animation: fadeIn 0.4s ease both; }
 .scale-in { animation: scaleIn 0.35s cubic-bezier(0.16,1,0.3,1) both; }
+
+/* ===== 风格定向覆盖规则 ===== */
+
+/* 玻璃拟态：半透明 + backdrop-filter */
+[data-style="glass"] .neu-card,
+[data-style="glass"] .lumira-card,
+[data-style="glass"] .floating-tabbar,
+[data-style="glass"] .lumira-nav {
+  background-color: rgba(255, 255, 255, var(--surface-alpha));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+[data-style="glass"] .neu-card,
+[data-style="glass"] .lumira-card {
+  border: var(--card-border);
+}
+
+/* 女性美学：半透明 + backdrop-filter + 大圆角 */
+[data-style="female"] .neu-card,
+[data-style="female"] .lumira-card,
+[data-style="female"] .floating-tabbar,
+[data-style="female"] .lumira-nav {
+  background-color: rgba(255, 255, 255, var(--surface-alpha));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+[data-style="female"] .neu-card,
+[data-style="female"] .lumira-card {
+  border-radius: var(--card-radius);
+}
+
+/* 女性美学：所有卡片过渡使用 cubic-bezier */
+[data-style="female"] .neu-card,
+[data-style="female"] .lumira-card,
+[data-style="female"] .neu-btn-convex,
+[data-style="female"] .neu-btn-brand,
+[data-style="female"] .lumira-btn-brand,
+[data-style="female"] .neu-pill {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 女性美学：按压反馈 scale(0.96) */
+[data-style="female"] .neu-card:active,
+[data-style="female"] .lumira-card:active,
+[data-style="female"] .neu-btn-convex:active,
+[data-style="female"] .neu-btn-brand:active {
+  transform: scale(0.96);
+}
+
+/* 女性美学：呼吸光晕动画 */
+@keyframes female-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(var(--color-brand-rgb), 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8rpx rgba(var(--color-brand-rgb), 0);
+  }
+}
+
+[data-style="female"] .tabbar-item.active,
+[data-style="female"] .tabbar-center {
+  animation: female-pulse 2s ease-in-out infinite;
+}
+
+/* 扁平化：卡片边框 + 圆角 */
+[data-style="flat"] .neu-card,
+[data-style="flat"] .lumira-card {
+  border: var(--card-border);
+  border-radius: var(--card-radius);
+}
+
+/* 扁平化：toggle 色块填充 */
+[data-style="flat"] .neu-toggle {
+  box-shadow: none;
+  background-color: var(--color-divider);
+}
+
+[data-style="flat"] .neu-toggle.active {
+  background-color: var(--color-brand);
+  box-shadow: none;
+}
+
+[data-style="flat"] .neu-toggle-knob {
+  box-shadow: none;
+  background-color: #FFFFFF;
+}
+
+[data-style="flat"] .neu-toggle.active .neu-toggle-knob {
+  background-color: #FFFFFF;
+  box-shadow: none;
+}
+
+/* 扁平化：去除 neu-block 阴影 */
+[data-style="flat"] .neu-block,
+[data-style="flat"] .neu-pill,
+[data-style="flat"] .neu-btn-convex {
+  box-shadow: none;
+}
+
+[data-style="flat"] .neu-block-inset,
+[data-style="flat"] .neu-inset {
+  box-shadow: none;
+  background-color: var(--color-surface-alt);
+}
+
+/* ===== 深色主题 + 玻璃/女性美学适配 ===== */
+[data-theme="ink"][data-style="glass"] .neu-card,
+[data-theme="ink"][data-style="glass"] .lumira-card,
+[data-theme="ink"][data-style="glass"] .floating-tabbar,
+[data-theme="ink"][data-style="glass"] .lumira-nav {
+  background-color: rgba(38, 35, 32, 0.55);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="ink"][data-style="female"] .neu-card,
+[data-theme="ink"][data-style="female"] .lumira-card,
+[data-theme="ink"][data-style="female"] .floating-tabbar,
+[data-theme="ink"][data-style="female"] .lumira-nav {
+  background-color: rgba(38, 35, 32, 0.75);
+}
 </style>

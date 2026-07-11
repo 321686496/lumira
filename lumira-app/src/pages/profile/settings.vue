@@ -23,6 +23,16 @@
             <text class="ph ph-caret-right setting-arrow"></text>
           </view>
         </view>
+        <view class="setting-item" @click="goTheme">
+          <view class="setting-icon-wrap">
+            <text class="ph ph-shapes"></text>
+          </view>
+          <text class="setting-label">风格选择</text>
+          <view class="setting-right">
+            <text class="setting-value setting-value-brand">{{ currentStyleName }}</text>
+            <text class="ph ph-caret-right setting-arrow"></text>
+          </view>
+        </view>
         <view class="setting-item">
           <view class="setting-icon-wrap">
             <text class="ph ph-translate"></text>
@@ -145,10 +155,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useTheme } from '@/composables/useTheme'
-import { THEME_METAS } from '@/theme/theme-configs'
+import { THEME_METAS, STYLE_METAS } from '@/theme/theme-configs'
 
-const { currentTheme } = useTheme()
+const { currentTheme, currentStyle } = useTheme()
 const currentThemeName = computed(() => THEME_METAS[currentTheme.value].label)
+const currentStyleName = computed(() => STYLE_METAS[currentStyle.value].label)
 
 const gridOn = ref(false)
 const levelOn = ref(true)

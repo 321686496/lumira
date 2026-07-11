@@ -1,12 +1,13 @@
 /**
- * 主题管理 composable
- * 管理当前主题状态、持久化、跟随系统
+ * 主题 + 风格管理 composable
+ * 管理当前主题（颜色）和风格（效果）状态、持久化、跟随系统
  */
 import { ref } from 'vue'
-import type { ThemeId } from '@/theme/theme-configs'
-import { THEME_IDS } from '@/theme/theme-configs'
+import type { ThemeId, StyleId } from '@/theme/theme-configs'
+import { THEME_IDS, STYLE_IDS } from '@/theme/theme-configs'
 
 const currentTheme = ref<ThemeId>('warm')
+const currentStyle = ref<StyleId>('neumorphism')
 const followSystem = ref(false)
 let initialized = false
 
@@ -14,6 +15,14 @@ function applyTheme(id: ThemeId) {
   // #ifdef H5
   if (typeof document !== 'undefined') {
     document.documentElement.setAttribute('data-theme', id)
+  }
+  // #endif
+}
+
+function applyStyle(id: StyleId) {
+  // #ifdef H5
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-style', id)
   }
   // #endif
 }
@@ -49,6 +58,16 @@ function setTheme(id: ThemeId) {
   }
 }
 
+function setStyle(id: StyleId) {
+  currentStyle.value = id
+  applyStyle(id)
+  try {
+    uni.setStorageSync('uiStyle', id)
+  } catch (e) {
+    console.warn('Failed to persist style', e)
+  }
+}
+
 function loadTheme() {
   if (initialized) return
   initialized = true
@@ -68,6 +87,18 @@ function loadTheme() {
   }
 }
 
+function loadStyle() {
+  try {
+    const saved = uni.getStorageSync('uiStyle') as StyleId
+    if (saved && STYLE_IDS.includes(saved)) {
+      currentStyle.value = saved
+    }
+  } catch (e) {
+    console.warn('Failed to load style', e)
+  }
+  applyStyle(currentStyle.value)
+}
+
 function setFollowSystem(enabled: boolean) {
   followSystem.value = enabled
   try {
@@ -83,9 +114,12 @@ function setFollowSystem(enabled: boolean) {
 export function useTheme() {
   return {
     currentTheme,
+    currentStyle,
     followSystem,
     setTheme,
+    setStyle,
     loadTheme,
+    loadStyle,
     setFollowSystem
   }
 }

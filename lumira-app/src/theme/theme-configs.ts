@@ -1,9 +1,11 @@
 /**
  * 主题配置表
- * 定义 4 套主题的元数据
+ * 定义 8 套颜色主题 + 4 种 UI 风格的元数据
  */
 
-export type ThemeId = 'warm' | 'ink' | 'retro' | 'fresh'
+export type ThemeId = 'warm' | 'ink' | 'retro' | 'fresh' | 'cozy' | 'macaron' | 'morandi' | 'rosegold'
+
+export type StyleId = 'neumorphism' | 'flat' | 'glass' | 'female'
 
 export interface ThemeMeta {
   id: ThemeId
@@ -17,6 +19,13 @@ export interface ThemeMeta {
     textPrimary: string
     textSecondary: string
   }
+}
+
+export interface StyleMeta {
+  id: StyleId
+  label: string
+  description: string
+  icon: string
 }
 
 export const THEME_METAS: Record<ThemeId, ThemeMeta> = {
@@ -71,7 +80,88 @@ export const THEME_METAS: Record<ThemeId, ThemeMeta> = {
       textPrimary: '#4A3F35',
       textSecondary: '#8C7F70'
     }
+  },
+  cozy: {
+    id: 'cozy',
+    label: '温馨粉',
+    description: '柔粉温暖，温馨治愈的日常',
+    icon: 'ph-heart',
+    colors: {
+      canvas: '#FFF5F5',
+      brand: '#E8A0A0',
+      surface: '#FFFFFF',
+      textPrimary: '#4A3A3A',
+      textSecondary: '#8C7070'
+    }
+  },
+  macaron: {
+    id: 'macaron',
+    label: '马卡龙',
+    description: '薄荷糖果，甜美活泼',
+    icon: 'ph-ice-cream',
+    colors: {
+      canvas: '#FFF8F0',
+      brand: '#A8D8C8',
+      surface: '#FFFFFF',
+      textPrimary: '#5A4A4A',
+      textSecondary: '#8C7A7A'
+    }
+  },
+  morandi: {
+    id: 'morandi',
+    label: '莫兰迪',
+    description: '灰调优雅，安静内敛',
+    icon: 'ph-mountains',
+    colors: {
+      canvas: '#E8E4E0',
+      brand: '#8B9DAF',
+      surface: '#F2EFEA',
+      textPrimary: '#4A4540',
+      textSecondary: '#7A7570'
+    }
+  },
+  rosegold: {
+    id: 'rosegold',
+    label: '玫瑰金',
+    description: '轻奢优雅，玫瑰金质感',
+    icon: 'ph-diamond',
+    colors: {
+      canvas: '#FAF6F2',
+      brand: '#C9A0A0',
+      surface: '#FFFFFF',
+      textPrimary: '#3D2E2A',
+      textSecondary: '#6B5450'
+    }
   }
 }
 
-export const THEME_IDS: ThemeId[] = ['warm', 'ink', 'retro', 'fresh']
+export const THEME_IDS: ThemeId[] = ['warm', 'ink', 'retro', 'fresh', 'cozy', 'macaron', 'morandi', 'rosegold']
+
+export const STYLE_METAS: Record<StyleId, StyleMeta> = {
+  neumorphism: {
+    id: 'neumorphism',
+    label: '新拟态',
+    description: '双向阴影，柔和立体',
+    icon: 'ph-circle-half'
+  },
+  flat: {
+    id: 'flat',
+    label: '扁平化',
+    description: '干净利落，无多余修饰',
+    icon: 'ph-square'
+  },
+  glass: {
+    id: 'glass',
+    label: '玻璃拟态',
+    description: '半透明毛玻璃，通透感',
+    icon: 'ph-square-logo'
+  },
+  female: {
+    id: 'female',
+    label: '女性美学',
+    description: '暖粉弥散，大圆角，呼吸感',
+    icon: 'ph-heart'
+  }
+}
+
+export const STYLE_IDS: StyleId[] = ['neumorphism', 'flat', 'glass', 'female']
