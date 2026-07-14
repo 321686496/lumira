@@ -31,7 +31,7 @@
       </view>
 
       <!-- 滚动内容区 -->
-      <scroll-view scroll-y class="panel-content">
+      <view class="panel-content">
         <!-- 相机 Tab -->
         <view v-if="activeTab === 0" class="tab-pane">
           <!-- 曝光补偿 -->
@@ -707,7 +707,7 @@
             </view>
           </AdvancedSection>
         </view>
-      </scroll-view>
+      </view>
 
       <!-- 底部一键应用按钮 -->
       <view class="panel-footer">
@@ -1105,7 +1105,8 @@ const thumbStyle = (filter: string) => {
 /* 滚动内容区 */
 .panel-content {
   flex: 1;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 20rpx 40rpx;
   box-sizing: border-box;
 }
