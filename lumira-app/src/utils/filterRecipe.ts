@@ -14,7 +14,7 @@
  * - LUT 预设 → 预定义复合 filter 链
  */
 
-import type { CameraParams, PostProcess, LutPreset, WhiteBalance } from '@/types/template'
+import type { CameraParams, PostProcess, LutPreset, WhiteBalance, SystemFilter } from '@/types/template'
 
 /** LUT 预设对应的复合 filter（不含基础调整） */
 const LUT_FILTERS: Record<LutPreset, string> = {
@@ -32,7 +32,27 @@ const LUT_FILTERS: Record<LutPreset, string> = {
   // 柔色
   pastel: 'contrast(0.92) saturate(0.85) brightness(1.08)',
   // 富士胶片感
-  fuji: 'saturate(1.2) contrast(1.05) hue-rotate(-3deg) brightness(1.02)'
+  fuji: 'saturate(1.2) contrast(1.05) hue-rotate(-3deg) brightness(1.02)',
+  // 新增 8 种
+  portrait: 'saturate(1.05) contrast(1.05) brightness(1.03) sepia(0.05)',
+  japanese: 'saturate(0.85) contrast(0.92) brightness(1.1) hue-rotate(3deg)',
+  cyberpunk: 'saturate(1.4) contrast(1.2) hue-rotate(-15deg) brightness(0.95)',
+  sepia_classic: 'sepia(0.7) contrast(1.05) brightness(1.02)',
+  mist: 'contrast(0.88) brightness(1.12) saturate(0.9)',
+  rouge: 'sepia(0.2) saturate(1.1) hue-rotate(-10deg) brightness(1.02)',
+  twilight: 'saturate(1.15) hue-rotate(15deg) contrast(1.05) brightness(0.95)',
+  cyan: 'saturate(1.1) hue-rotate(20deg) contrast(1.05) brightness(1.02)'
+}
+
+/** 系统内置滤镜（苹果风格）对应的 filter */
+export const SYSTEM_FILTERS: Record<SystemFilter, string> = {
+  none: '',
+  vivid: 'contrast(1.1) saturate(1.25) brightness(1.02)',
+  vivid_warm: 'sepia(0.15) saturate(1.2) contrast(1.08) brightness(1.03) hue-rotate(-5deg)',
+  vivid_cool: 'saturate(1.15) contrast(1.08) brightness(1.02) hue-rotate(8deg)',
+  mono: 'grayscale(1) contrast(1.05)',
+  silver: 'grayscale(1) sepia(0.2) contrast(0.95) brightness(1.08)',
+  noir: 'grayscale(1) contrast(1.3) brightness(0.95)'
 }
 
 /** 白平衡预设 → 色温偏移（K） */
@@ -130,7 +150,14 @@ export function buildCssFilter(
     filters.push(`hue-rotate(${(tint * 0.9).toFixed(1)}deg)`)
   }
 
-  // LUT 预设（叠加在基础调整之后）
+  // 系统内置滤镜（在 LUT 之前应用，类似苹果原相机滤镜）
+  const systemFilter = post.systemFilter ?? 'none'
+  const systemFilterStr = SYSTEM_FILTERS[systemFilter] || ''
+  if (systemFilterStr) {
+    filters.push(systemFilterStr)
+  }
+
+  // LUT 预设（叠加在系统滤镜之后）
   const lut = post.lut ?? 'none'
   const lutFilter = LUT_FILTERS[lut] || ''
   if (lutFilter) {
@@ -191,7 +218,53 @@ export function getLutLabel(lut: LutPreset): string {
     warm_film: '暖色胶片',
     cool_film: '冷色胶片',
     pastel: '柔色',
-    fuji: '富士感'
+    fuji: '富士感',
+    portrait: '人像',
+    japanese: '日系',
+    cyberpunk: '赛博朋克',
+    sepia_classic: '褐调',
+    mist: '薄雾',
+    rouge: '胭脂',
+    twilight: '暮光',
+    cyan: '青调'
   }
   return map[lut] || '原图'
+}
+
+/**
+ * 获取系统内置滤镜的显示名称
+ */
+export function getSystemFilterLabel(filter: SystemFilter): string {
+  const map: Record<SystemFilter, string> = {
+    none: '原图',
+    vivid: '鲜明',
+    vivid_warm: '鲜暖色',
+    vivid_cool: '鲜冷色',
+    mono: '单色',
+    silver: '银色调',
+    noir: '黑白'
+  }
+  return map[filter] || '原图'
+}
+
+/**
+ * 获取所有系统滤镜选项（用于 UI 渲染）
+ */
+export function getSystemFilterOptions(): { id: SystemFilter; name: string; filter: string }[] {
+  return (Object.keys(SYSTEM_FILTERS) as SystemFilter[]).map((id) => ({
+    id,
+    name: getSystemFilterLabel(id),
+    filter: SYSTEM_FILTERS[id]
+  }))
+}
+
+/**
+ * 获取所有 LUT 预设选项（用于 UI 渲染）
+ */
+export function getLutOptions(): { id: LutPreset; name: string; filter: string }[] {
+  return (Object.keys(LUT_FILTERS) as LutPreset[]).map((id) => ({
+    id,
+    name: getLutLabel(id),
+    filter: LUT_FILTERS[id]
+  }))
 }
