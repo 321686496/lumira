@@ -991,6 +991,28 @@ const thumbStyle = (filter: string) => {
 }
 
 .param-panel-body {
+  /* 拍照页面始终使用深色配色，不跟随全局主题 */
+  --color-canvas: #1C1A17;
+  --color-surface: #262320;
+  --color-surface-alt: #2E2B27;
+  --color-canvas-deep: #151310;
+  --color-text-primary: #F2EEE6;
+  --color-text-secondary: #A39D94;
+  --color-text-tertiary: #6E695F;
+  --color-text-inverse: #1A1A1A;
+  --color-divider: #3A3630;
+  --color-brand: #D4B57A;
+  --color-brand-deep: #B8985A;
+  --color-brand-light: #D4B57A;
+  --color-brand-subtle: #2E2820;
+  --color-brand-text: #D4B57A;
+  --color-brand-rgb: 212, 181, 122;
+  --color-danger: #D4706C;
+  --color-danger-subtle: #2E201E;
+  --color-success: #8FA06A;
+  --color-success-subtle: #22251D;
+  --color-canvas-rgb: 28, 26, 23;
+
   position: absolute;
   left: 0;
   right: 0;
@@ -1163,6 +1185,35 @@ const thumbStyle = (filter: string) => {
 }
 
 /* 选项 pill 行 */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 10rpx 20rpx;
+  border-radius: 9999rpx;
+  background-color: var(--color-surface-alt);
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.pill.active {
+  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-deep) 100%);
+  color: #fff;
+  font-weight: 500;
+}
+
+/* 水平滚动 pill 列表（scroll-view scroll-x 容器） */
+.pill-list {
+  white-space: nowrap;
+}
+
+.pill-list-inner {
+  display: inline-flex;
+  gap: 8rpx;
+  padding: 0 4rpx;
+}
+
 .pill-row {
   display: flex;
   flex-wrap: wrap;
@@ -1172,12 +1223,15 @@ const thumbStyle = (filter: string) => {
 }
 
 .pill-option {
+  display: inline-flex;
+  align-items: center;
   padding: 10rpx 20rpx;
   border-radius: 9999rpx;
   background-color: var(--color-surface-alt);
   font-size: 24rpx;
   color: var(--color-text-secondary);
   flex-shrink: 0;
+  line-height: 1.2;
 }
 
 .pill-option.active {
