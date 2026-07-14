@@ -34,6 +34,12 @@ export type FocusMode = 'auto' | 'manual' | 'continuous'
 /** 镜头建议 */
 export type LensSuggestion = 'wide' | 'main' | 'telephoto' | 'ultra_wide'
 
+/** 镜头类型（仅记录，不真切换硬件） */
+export type LensType = '0.5x' | '1x' | '2x' | '3x'
+
+/** 拍照风格（参照苹果原相机） */
+export type PhotographicStyle = 'standard' | 'high_contrast' | 'warm' | 'cool' | 'mono'
+
 /** 后期 LUT 预设 */
 export type LutPreset =
   | 'none'
@@ -44,6 +50,25 @@ export type LutPreset =
   | 'cool_film'
   | 'pastel'
   | 'fuji'
+  // 新增 8 种
+  | 'portrait'
+  | 'japanese'
+  | 'cyberpunk'
+  | 'sepia_classic'
+  | 'mist'
+  | 'rouge'
+  | 'twilight'
+  | 'cyan'
+
+/** 系统内置滤镜（苹果风格） */
+export type SystemFilter =
+  | 'none'
+  | 'vivid'
+  | 'vivid_warm'
+  | 'vivid_cool'
+  | 'mono'
+  | 'silver'
+  | 'noir'
 
 /** 剪影资源类型 */
 export type SilhouetteType = 'builtin' | 'image' | 'svg'
@@ -100,6 +125,10 @@ export interface Pose {
   silhouette: SilhouetteResource
   /** 归一化位置 0-1 */
   position: { x: number; y: number }
+  /** 剪影位置 X 偏移 -100~100（用于精细调整） */
+  positionX?: number
+  /** 剪影位置 Y 偏移 -100~100 */
+  positionY?: number
   /** 缩放 0.5-1.5 */
   scale: number
   /** 旋转角度 -45~45 */
@@ -112,7 +141,6 @@ export interface Pose {
 export interface CameraParams {
   /** EV 值，-3 ~ +3 */
   exposureCompensation: number
-  isoMode: IsoMode
   /** ISO 值（auto 时为建议值） */
   iso: number
   /** 快门，如 '1/200'、'1/30' */
@@ -122,9 +150,18 @@ export interface CameraParams {
   whiteBalanceK: number
   flashMode: FlashMode
   focusMode: FocusMode
-  /** 滤镜预设名 */
-  filterPreset: string
-  lensSuggestion: LensSuggestion
+  /** 镜头类型（仅记录） */
+  lensType?: LensType
+  /** 拍照风格 */
+  photographicStyle?: PhotographicStyle
+  /** HDR 开关 */
+  hdr?: boolean
+  /** @deprecated 改用 lensType */
+  lensSuggestion?: LensSuggestion
+  /** @deprecated 改用独立滤镜系统 */
+  filterPreset?: string
+  /** @deprecated 无意义字段 */
+  isoMode?: IsoMode
 }
 
 /** 场景指南 */
@@ -167,6 +204,8 @@ export interface PostProcess {
   grain: number
   /** LUT 预设 */
   lut: LutPreset
+  /** 系统内置滤镜（苹果风格） */
+  systemFilter?: SystemFilter
 }
 
 /** 完整拍照模板 */
