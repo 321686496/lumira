@@ -463,21 +463,22 @@ const onTemplateUpdate = (tpl: PhotoTemplate) => {
 
 // FilterPicker 选择系统滤镜
 const onSelectSystemFilter = (filter: SystemFilter) => {
-  const target = editableTemplate.value ?? emptyTemplate
-  target.postProcess.systemFilter = filter
+  if (rawMode.value) return
   if (!editableTemplate.value) {
-    // 自由调参模式下，emptyTemplate 是模块级单例，需要触发响应式
-    editableTemplate.value = JSON.parse(JSON.stringify(emptyTemplate))
+    // 自由调参模式下，基于空白模板创建可编辑副本，避免修改模块级单例
+    editableTemplate.value = createEmptyTemplate()
   }
+  editableTemplate.value.postProcess.systemFilter = filter
 }
 
 // FilterPicker 选择 LUT
 const onSelectLut = (lut: LutPreset) => {
-  const target = editableTemplate.value ?? emptyTemplate
-  target.postProcess.lut = lut
+  if (rawMode.value) return
   if (!editableTemplate.value) {
-    editableTemplate.value = JSON.parse(JSON.stringify(emptyTemplate))
+    // 自由调参模式下，基于空白模板创建可编辑副本，避免修改模块级单例
+    editableTemplate.value = createEmptyTemplate()
   }
+  editableTemplate.value.postProcess.lut = lut
 }
 
 const openFilterPicker = () => {

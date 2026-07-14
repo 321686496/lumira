@@ -20,7 +20,10 @@ const ADJUSTABLE_PARAM_PATHS = [
   'composition.overlayType',
   'composition.gridType',
   'composition.aspectRatio',
-  'composition.subjectFrame',
+  'composition.subjectFrame.x',
+  'composition.subjectFrame.y',
+  'composition.subjectFrame.w',
+  'composition.subjectFrame.h',
   'composition.opacity',
   // 姿势 Tab
   'pose.silhouette.type',

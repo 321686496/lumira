@@ -590,7 +590,7 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              @change="(e: any) => updatePostProcess('sharpen', e.detail.value)"
+              @change="(e: any) => updatePost('sharpen', e.detail.value)"
             />
           </view>
           <!-- 暗角 -->
@@ -608,7 +608,7 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              @change="(e: any) => updatePostProcess('vignette', e.detail.value)"
+              @change="(e: any) => updatePost('vignette', e.detail.value)"
             />
           </view>
           <!-- 颗粒 -->
@@ -626,7 +626,7 @@
               activeColor="var(--color-brand)"
               backgroundColor="var(--color-divider)"
               block-color="var(--color-brand)"
-              @change="(e: any) => updatePostProcess('grain', e.detail.value)"
+              @change="(e: any) => updatePost('grain', e.detail.value)"
             />
           </view>
 
@@ -702,7 +702,7 @@
                 activeColor="var(--color-brand)"
                 backgroundColor="var(--color-divider)"
                 block-color="var(--color-brand)"
-                @change="(e: any) => updatePostProcess('smoothStrength', e.detail.value)"
+                @change="(e: any) => updatePost('smoothStrength', e.detail.value)"
               />
             </view>
           </AdvancedSection>
@@ -953,13 +953,6 @@ const lensLabel = (l?: string) => {
 /** 深拷贝当前 template，避免 mutate prop */
 function cloneTemplate(): PhotoTemplate {
   return JSON.parse(JSON.stringify(props.template))
-}
-
-function updatePostProcess<K extends keyof PhotoTemplate['postProcess']>(key: K, value: PhotoTemplate['postProcess'][K]) {
-  if (props.rawMode) return
-  const tpl = cloneTemplate()
-  tpl.postProcess[key] = value
-  emit('update:template', tpl)
 }
 
 function updateColor<K extends keyof PhotoTemplate['postProcess']['color']>(key: K, value: PhotoTemplate['postProcess']['color'][K]) {
@@ -1336,8 +1329,10 @@ const thumbStyle = (filter: string) => {
 
 /* 原相机模式下参数控件灰化 */
 .raw-mode-disabled .pill,
+.raw-mode-disabled .pill-option,
 .raw-mode-disabled .param-slider,
-.raw-mode-disabled .mode-toggle {
+.raw-mode-disabled .mode-toggle,
+.raw-mode-disabled .filter-item {
   opacity: 0.5;
   pointer-events: none;
 }
