@@ -41,6 +41,7 @@
               <text class="slider-value">{{ evDisplay }}</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.camera.exposureCompensation"
               :min="-3"
               :max="3"
@@ -59,6 +60,7 @@
               <text class="slider-value">{{ template.camera.iso === 0 ? '自动' : template.camera.iso }}</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.camera.iso"
               :min="0"
               :max="6400"
@@ -89,6 +91,7 @@
               <text class="slider-value">{{ template.camera.whiteBalanceK }}K</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.camera.whiteBalanceK"
               :min="2500"
               :max="8000"
@@ -211,6 +214,7 @@
               <text class="param-label">HDR</text>
               <view class="switch-row">
                 <switch
+                  class="mode-toggle"
                   :checked="template.camera.hdr || false"
                   @change="updateCamera('hdr', $event.detail.value)"
                 />
@@ -238,7 +242,10 @@
           <view class="param-row">
             <view class="param-label">主体建议框</view>
             <view class="param-value">
-              {{ Math.round(template.composition.subjectFrame.x * 100) }}%, {{ Math.round(template.composition.subjectFrame.y * 100) }}%
+              <template v-if="template.composition.subjectFrame">
+                {{ Math.round(template.composition.subjectFrame.x * 100) }}%, {{ Math.round(template.composition.subjectFrame.y * 100) }}%
+              </template>
+              <template v-else>未启用</template>
             </view>
           </view>
           <view class="slider-block">
@@ -247,6 +254,7 @@
               <text class="slider-value">{{ Math.round(template.composition.opacity * 100) }}%</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.composition.opacity * 100"
               :min="0"
               :max="100"
@@ -316,6 +324,7 @@
               <text class="param-label">主体建议框</text>
               <view class="switch-row">
                 <switch
+                  class="mode-toggle"
                   :checked="!!template.composition.subjectFrame"
                   @change="updateComposition('subjectFrame', $event.detail.value ? { x: 0.3, y: 0.3, w: 0.4, h: 0.4 } : null)"
                 />
@@ -394,6 +403,7 @@
               <text class="slider-value">{{ template.pose.scale.toFixed(2) }}</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.pose.scale"
               :min="0.3"
               :max="3"
@@ -410,6 +420,7 @@
               <text class="slider-value">{{ template.pose.rotation }}°</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.pose.rotation"
               :min="-180"
               :max="180"
@@ -433,6 +444,7 @@
             <view class="param-row">
               <text class="param-label">位置 X</text>
               <slider
+                class="param-slider"
                 :value="template.pose.positionX || 0"
                 :min="-100"
                 :max="100"
@@ -445,6 +457,7 @@
             <view class="param-row">
               <text class="param-label">位置 Y</text>
               <slider
+                class="param-slider"
                 :value="template.pose.positionY || 0"
                 :min="-100"
                 :max="100"
@@ -515,6 +528,7 @@
               <text class="slider-value">{{ template.postProcess.color.brightness }}</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.postProcess.color.brightness"
               :min="-100"
               :max="100"
@@ -532,6 +546,7 @@
               <text class="slider-value">{{ template.postProcess.color.contrast }}</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.postProcess.color.contrast"
               :min="-100"
               :max="100"
@@ -549,6 +564,7 @@
               <text class="slider-value">{{ template.postProcess.color.saturation }}</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.postProcess.color.saturation"
               :min="-100"
               :max="100"
@@ -566,6 +582,7 @@
               <text class="slider-value">{{ template.postProcess.sharpen }}</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.postProcess.sharpen"
               :min="0"
               :max="100"
@@ -583,6 +600,7 @@
               <text class="slider-value">{{ template.postProcess.vignette }}</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.postProcess.vignette"
               :min="0"
               :max="100"
@@ -600,6 +618,7 @@
               <text class="slider-value">{{ template.postProcess.grain }}</text>
             </view>
             <slider
+              class="param-slider"
               :value="template.postProcess.grain"
               :min="0"
               :max="100"
@@ -639,6 +658,7 @@
                 <text class="slider-value">{{ template.postProcess.color.temperature }}</text>
               </view>
               <slider
+                class="param-slider"
                 :value="template.postProcess.color.temperature"
                 :min="-100"
                 :max="100"
@@ -656,6 +676,7 @@
                 <text class="slider-value">{{ template.postProcess.color.tint }}</text>
               </view>
               <slider
+                class="param-slider"
                 :value="template.postProcess.color.tint"
                 :min="-100"
                 :max="100"
@@ -673,6 +694,7 @@
                 <text class="slider-value">{{ template.postProcess.smoothStrength }}</text>
               </view>
               <slider
+                class="param-slider"
                 :value="template.postProcess.smoothStrength"
                 :min="0"
                 :max="100"
@@ -704,7 +726,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { PhotoTemplate, WhiteBalance, FlashMode, FocusMode, LutPreset, SystemFilter, LensType, PhotographicStyle } from '@/types/template'
+import type { PhotoTemplate, WhiteBalance, FlashMode, FocusMode, LutPreset, SystemFilter, LensType, PhotographicStyle, OverlayType, GridType } from '@/types/template'
 import { getSystemFilterOptions, getLutOptions } from '@/utils/filterRecipe'
 import AdvancedSection from '@/components/AdvancedSection.vue'
 
@@ -786,7 +808,7 @@ const photographicStyleOptions: { value: PhotographicStyle; label: string }[] = 
   { value: 'mono', label: '单色' }
 ]
 
-const overlayTypeOptions = [
+const overlayTypeOptions: { value: OverlayType; label: string }[] = [
   { value: 'rule_of_thirds', label: '三分法' },
   { value: 'golden_ratio', label: '黄金比例' },
   { value: 'diagonal', label: '对角线' },
@@ -796,7 +818,7 @@ const overlayTypeOptions = [
   { value: 'none', label: '无' }
 ]
 
-const gridTypeOptions = [
+const gridTypeOptions: { value: GridType; label: string }[] = [
   { value: 'thirds', label: '三分' },
   { value: 'quarters', label: '四分' },
   { value: 'golden_spiral', label: '黄金螺旋' }
@@ -819,29 +841,33 @@ const cropRatioOptions = [
 const systemFilterOptions = computed(() => getSystemFilterOptions())
 const lutOptions = computed(() => getLutOptions())
 
-// 更新参数通用方法
-const updateCamera = (key: string, value: unknown) => {
+// 更新参数通用方法（泛型 + 深拷贝模式，保证类型安全与单向数据流）
+const updateCamera = <K extends keyof PhotoTemplate['camera']>(key: K, value: PhotoTemplate['camera'][K]) => {
   if (props.rawMode) return
-  ;(props.template.camera as unknown as Record<string, unknown>)[key] = value
-  emit('update:template', props.template)
+  const tpl = cloneTemplate()
+  tpl.camera[key] = value
+  emit('update:template', tpl)
 }
 
-const updateComposition = (key: string, value: unknown) => {
+const updateComposition = <K extends keyof PhotoTemplate['composition']>(key: K, value: PhotoTemplate['composition'][K]) => {
   if (props.rawMode) return
-  ;(props.template.composition as unknown as Record<string, unknown>)[key] = value
-  emit('update:template', props.template)
+  const tpl = cloneTemplate()
+  tpl.composition[key] = value
+  emit('update:template', tpl)
 }
 
-const updatePose = (key: string, value: unknown) => {
+const updatePose = <K extends keyof PhotoTemplate['pose']>(key: K, value: PhotoTemplate['pose'][K]) => {
   if (props.rawMode) return
-  ;(props.template.pose as unknown as Record<string, unknown>)[key] = value
-  emit('update:template', props.template)
+  const tpl = cloneTemplate()
+  tpl.pose[key] = value
+  emit('update:template', tpl)
 }
 
-const updatePost = (key: string, value: unknown) => {
+const updatePost = <K extends keyof PhotoTemplate['postProcess']>(key: K, value: PhotoTemplate['postProcess'][K]) => {
   if (props.rawMode) return
-  ;(props.template.postProcess as unknown as Record<string, unknown>)[key] = value
-  emit('update:template', props.template)
+  const tpl = cloneTemplate()
+  tpl.postProcess[key] = value
+  emit('update:template', tpl)
 }
 
 const onSelectSystemFilter = (id: SystemFilter) => {
@@ -922,9 +948,9 @@ const lensLabel = (l?: string) => {
 }
 
 
-// ===== 参数修改方法（深拷贝版，用于 color 子对象与 postProcess 顶层字段）=====
+// ===== 深拷贝辅助与 color 子对象/postProcess 顶层字段更新方法 =====
 
-/** 深拷贝并触发更新 */
+/** 深拷贝当前 template，避免 mutate prop */
 function cloneTemplate(): PhotoTemplate {
   return JSON.parse(JSON.stringify(props.template))
 }
@@ -1310,8 +1336,8 @@ const thumbStyle = (filter: string) => {
 
 /* 原相机模式下参数控件灰化 */
 .raw-mode-disabled .pill,
-.raw-mode-disabled .slider,
-.raw-mode-disabled switch {
+.raw-mode-disabled .param-slider,
+.raw-mode-disabled .mode-toggle {
   opacity: 0.5;
   pointer-events: none;
 }

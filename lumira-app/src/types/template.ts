@@ -110,8 +110,8 @@ export interface Composition {
   overlayType: OverlayType
   /** 网格细分（仅 overlayType=grid 时生效） */
   gridType?: GridType
-  /** 主体建议框（归一化 0-1 坐标） */
-  subjectFrame: { x: number; y: number; w: number; h: number }
+  /** 主体建议框（归一化 0-1 坐标，null 表示无主体框） */
+  subjectFrame: { x: number; y: number; w: number; h: number } | null
   /** 叠图透明度 0-1 */
   opacity: number
   /** 建议宽高比，如 '3:4'、'16:9' */

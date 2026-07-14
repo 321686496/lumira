@@ -53,7 +53,7 @@
 
     <!-- 主体建议框 -->
     <view
-      v-if="overlayType !== 'none'"
+      v-if="overlayType !== 'none' && subjectFrame"
       class="subject-frame"
       :style="{
         left: subjectFrame.x * 100 + '%',
