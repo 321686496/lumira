@@ -8,7 +8,7 @@
           <text class="ph ph-caret-left" />
         </view>
         <view class="nav-center">
-          <text class="nav-title">{{ currentTemplate?.meta.name || '拍摄' }}</text>
+          <text class="nav-title">{{ navTitle }}</text>
           <text class="nav-sub" v-if="currentTemplate">{{ categoryLabel }} · {{ currentTemplate.composition.aspectRatio }}</text>
         </view>
         <view class="nav-actions">
@@ -80,7 +80,7 @@
       </view>
 
       <!-- 顶部参数 pill 栏 -->
-      <view class="param-pill-bar" v-if="currentTemplate" :style="landscapeZoomStyle">
+      <view class="param-pill-bar" :style="landscapeZoomStyle">
         <view class="param-pill" @click.stop="openPanel('camera')">
           <text class="pill-label">EV</text>
           <text class="pill-value">{{ evDisplay }}</text>
@@ -89,9 +89,19 @@
           <text class="pill-label">WB</text>
           <text class="pill-value">{{ wbDisplay }}</text>
         </view>
-        <view class="param-pill apply-pill" :class="{ applied }" @click.stop="toggleApply">
-          <text class="ph" :class="applied ? 'ph-check' : 'ph-magic-wand'" />
-          <text class="pill-text">{{ applied ? '已应用' : '一键应用' }}</text>
+        <ApplyButton
+          v-if="originalTemplate"
+          :applied="applied"
+          @apply="onApplyClick"
+        />
+        <RawModeToggle
+          :raw-mode="rawMode"
+          :has-template="!!originalTemplate"
+          @update:raw-mode="rawMode = $event"
+        />
+        <view class="param-pill" @click.stop="openFilterPicker">
+          <text class="ph ph-funnel" />
+          <text class="pill-text">滤镜</text>
         </view>
       </view>
 
@@ -138,14 +148,27 @@
     </view>
 
     <ParamPanel
-      v-if="editableTemplate"
-      :template="editableTemplate"
+      v-if="activeTemplate"
+      :template="activeTemplate"
       :visible="panelExpanded"
       :applied="applied"
+      :raw-mode="rawMode"
       @close="panelExpanded = false"
-      @apply="toggleApply"
+      @apply="onApplyClick"
       @update:opacity="onOpacityUpdate"
       @update:template="onTemplateUpdate"
+      @select-system-filter="onSelectSystemFilter"
+      @select-lut="onSelectLut"
+    />
+
+    <FilterPicker
+      :visible="filterPickerVisible"
+      :current-system-filter="activeTemplate?.postProcess.systemFilter || 'none'"
+      :current-lut="activeTemplate?.postProcess.lut || 'none'"
+      :disabled="rawMode"
+      @update:visible="filterPickerVisible = $event"
+      @select-system-filter="onSelectSystemFilter"
+      @select-lut="onSelectLut"
     />
   </view>
 </template>
@@ -156,10 +179,15 @@ import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
 import { useCamera } from '@/composables/useCamera'
 import { buildCssFilter } from '@/utils/filterRecipe'
-import type { PhotoTemplate } from '@/types/template'
+import { isParametersMatchingTemplate } from '@/utils/parameterMatch'
+import { createEmptyTemplate } from '@/utils/emptyTemplate'
+import type { PhotoTemplate, SystemFilter, LutPreset } from '@/types/template'
 import CompositionOverlay from '@/components/CompositionOverlay.vue'
 import PoseSilhouette from '@/components/PoseSilhouette.vue'
 import ParamPanel from '@/components/ParamPanel.vue'
+import ApplyButton from '@/components/ApplyButton.vue'
+import RawModeToggle from '@/components/RawModeToggle.vue'
+import FilterPicker from '@/components/FilterPicker.vue'
 
 const { loadTemplate, recentTemplates, pushRecent, loadRecent } = useTemplate()
 const camera = useCamera()
@@ -169,14 +197,34 @@ const currentTemplateId = ref('')
 const originalTemplate = computed<PhotoTemplate | null>(() =>
   currentTemplateId.value ? loadTemplate(currentTemplateId.value) : null
 )
-// 可编辑副本：ParamPanel 直接修改此对象，实时反映到预览
 const editableTemplate = ref<PhotoTemplate | null>(null)
+const emptyTemplate = createEmptyTemplate()
 
 const panelExpanded = ref(false)
-const applied = ref(false)
+const filterPickerVisible = ref(false)
+const rawMode = ref(false)
 const flashOn = ref(false)
 const isCapturing = ref(false)
 const lastPhoto = ref('')
+
+// applied 改为 computed：基于参数匹配判定
+const applied = computed(() => {
+  if (!originalTemplate.value || !editableTemplate.value) return false
+  return isParametersMatchingTemplate(editableTemplate.value, originalTemplate.value)
+})
+
+// 当前生效的模板（决定 ParamPanel 显示哪份数据）
+const activeTemplate = computed(() => {
+  if (rawMode.value) return null
+  return editableTemplate.value ?? emptyTemplate
+})
+
+// 标题栏显示文本
+const navTitle = computed(() => {
+  if (rawMode.value) return '原相机'
+  if (originalTemplate.value) return originalTemplate.value.meta.name
+  return '自由调参'
+})
 
 // 显隐控制
 const showTemplate = ref(true)
@@ -235,10 +283,15 @@ function createVideoElement(): HTMLVideoElement | null {
 // 将 filter 样式应用到 video 元素
 function applyVideoFilter() {
   if (!videoRef.value) return
-  // 参数实时生效：只要有模板就直接应用滤镜，无需"一键应用"
-  const filter = editableTemplate.value
-    ? buildCssFilter(editableTemplate.value.camera, editableTemplate.value.postProcess)
-    : ''
+  // 原相机模式：无任何滤镜
+  if (rawMode.value) {
+    videoRef.value.style.filter = ''
+    videoRef.value.style.webkitFilter = ''
+    return
+  }
+  // 自由调参模式：使用 emptyTemplate
+  const tpl = editableTemplate.value ?? emptyTemplate
+  const filter = buildCssFilter(tpl.camera, tpl.postProcess)
   videoRef.value.style.filter = filter
   videoRef.value.style.webkitFilter = filter
 }
@@ -258,26 +311,16 @@ const landscapeZoomStyle = computed(() => {
   return { zoom: landscapeScale.value }
 })
 
-// 当前生效的相机 + 后期参数（用于滤镜）
-const activeCamera = computed(() => {
-  if (applied.value && editableTemplate.value) {
-    return editableTemplate.value.camera
-  }
-  // 未应用时仅显示原始相机参数（不应用滤镜）
-  return {} as Record<string, unknown>
-})
-
-const activePost = computed(() => {
-  if (applied.value && editableTemplate.value) {
-    return editableTemplate.value.postProcess
-  }
-  return {} as Record<string, unknown>
-})
-
 // 实时滤镜样式（应用到占位图）
 const viewfinderFilterStyle = computed(() => {
-  // 参数实时生效：只要有模板就直接应用滤镜
-  if (!editableTemplate.value) return {}
+  // 原相机模式：无任何滤镜
+  if (rawMode.value) return {}
+  // 自由调参模式：使用 emptyTemplate
+  if (!editableTemplate.value) {
+    const filter = buildCssFilter(emptyTemplate.camera, emptyTemplate.postProcess)
+    return filter ? { filter, webkitFilter: filter } : {}
+  }
+  // 模板模式：使用 editableTemplate
   const filter = buildCssFilter(
     editableTemplate.value.camera,
     editableTemplate.value.postProcess
@@ -285,8 +328,8 @@ const viewfinderFilterStyle = computed(() => {
   return filter ? { filter, webkitFilter: filter } : {}
 })
 
-// 监听 applied / editableTemplate 变化，同步 filter 到 video 元素
-watch([applied, editableTemplate], () => {
+// 监听 rawMode / editableTemplate 变化，同步 filter 到 video 元素
+watch([rawMode, editableTemplate], () => {
   applyVideoFilter()
 }, { deep: true })
 
@@ -340,7 +383,7 @@ watch(originalTemplate, (tpl) => {
 onUnload(() => {
   // 退出时清空当前模板状态
   currentTemplateId.value = ''
-  applied.value = false
+  rawMode.value = false
   showTemplate.value = true
   showSilhouette.value = true
   // 释放相机资源
@@ -371,14 +414,16 @@ const silhouetteLayerStyle = computed(() => {
 })
 
 const evDisplay = computed(() => {
-  const ev = currentTemplate.value?.camera.exposureCompensation
-  if (ev === undefined) return ''
+  const tpl = activeTemplate.value
+  const ev = tpl?.camera.exposureCompensation
+  if (ev === undefined || ev === 0) return '0'
   return ev > 0 ? `+${ev}` : `${ev}`
 })
 
 const wbDisplay = computed(() => {
-  const k = currentTemplate.value?.camera.whiteBalanceK
-  return k ? `${k}K` : ''
+  const tpl = activeTemplate.value
+  const k = tpl?.camera.whiteBalanceK
+  return k ? `${k}K` : '5500K'
 })
 
 const categoryLabel = computed(() => {
@@ -394,12 +439,15 @@ const openPanel = (_tab: string) => {
   panelExpanded.value = true
 }
 
-const toggleApply = () => {
-  applied.value = !applied.value
-  uni.showToast({
-    title: applied.value ? '已应用模板参数' : '已重置参数',
-    icon: 'none'
-  })
+// 一键应用：把 originalTemplate 深拷贝回 editableTemplate
+const onApplyClick = () => {
+  if (!originalTemplate.value) return
+  if (applied.value) {
+    uni.showToast({ title: '参数已是模板原值', icon: 'none' })
+    return
+  }
+  editableTemplate.value = JSON.parse(JSON.stringify(originalTemplate.value))
+  // applied 会自动变 true（computed）
 }
 
 const onOpacityUpdate = (v: number) => {
@@ -413,9 +461,38 @@ const onTemplateUpdate = (tpl: PhotoTemplate) => {
   editableTemplate.value = tpl
 }
 
+// FilterPicker 选择系统滤镜
+const onSelectSystemFilter = (filter: SystemFilter) => {
+  const target = editableTemplate.value ?? emptyTemplate
+  target.postProcess.systemFilter = filter
+  if (!editableTemplate.value) {
+    // 自由调参模式下，emptyTemplate 是模块级单例，需要触发响应式
+    editableTemplate.value = JSON.parse(JSON.stringify(emptyTemplate))
+  }
+}
+
+// FilterPicker 选择 LUT
+const onSelectLut = (lut: LutPreset) => {
+  const target = editableTemplate.value ?? emptyTemplate
+  target.postProcess.lut = lut
+  if (!editableTemplate.value) {
+    editableTemplate.value = JSON.parse(JSON.stringify(emptyTemplate))
+  }
+}
+
+const openFilterPicker = () => {
+  if (rawMode.value) {
+    uni.showToast({ title: '已切换至原相机模式，请先退出', icon: 'none' })
+    return
+  }
+  filterPickerVisible.value = true
+}
+
 const switchTemplate = (id: string) => {
   currentTemplateId.value = id
-  applied.value = false
+  // editableTemplate 通过 watch(originalTemplate) 自动深拷贝
+  // applied 自动变 true（参数与原值一致）
+  rawMode.value = false  // 切换模板时退出原相机模式
   pushRecent(id)
 }
 
@@ -440,13 +517,17 @@ const onShutter = async () => {
 
   try {
     // 拍照：截帧 + 应用所有滤镜 + 烘焙为 dataURL
-    // 参数实时生效：只要有模板就应用参数到最终照片
-    const cameraParams = editableTemplate.value
-      ? editableTemplate.value.camera
-      : {}
-    const postParams = editableTemplate.value
-      ? editableTemplate.value.postProcess
-      : {}
+    let cameraParams: Record<string, unknown>
+    let postParams: Record<string, unknown>
+    if (rawMode.value) {
+      // 原相机模式：拍照无滤镜
+      cameraParams = {}
+      postParams = {}
+    } else {
+      const tpl = editableTemplate.value ?? emptyTemplate
+      cameraParams = tpl.camera as unknown as Record<string, unknown>
+      postParams = tpl.postProcess as unknown as Record<string, unknown>
+    }
 
     const result = await camera.capture(cameraParams, postParams)
     lastPhoto.value = result.dataUrl
