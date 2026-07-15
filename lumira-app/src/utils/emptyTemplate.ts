@@ -45,7 +45,15 @@ export function createEmptyTemplate(): PhotoTemplate {
       focusMode: 'auto',
       lensType: '1x',
       photographicStyle: 'standard',
-      hdr: false
+      hdr: false,
+      // 新增字段默认值
+      aperture: null,
+      nightMode: false,
+      nightExposureTime: 3,
+      livePhoto: false,
+      gridEnabled: false,
+      aeAfLock: false,
+      lensCorrection: false
     },
     sceneGuide: {
       lightDirection: '',
@@ -53,7 +61,12 @@ export function createEmptyTemplate(): PhotoTemplate {
       background: '',
       props: [],
       bestTime: '',
-      tips: []
+      tips: [],
+      presetId: undefined,
+      lightDirectionAngle: 0,
+      shootingDistanceM: 2,
+      bestTimeFrom: '09:00',
+      bestTimeTo: '17:00'
     },
     postProcess: {
       cropRatio: '3:4',
@@ -62,7 +75,13 @@ export function createEmptyTemplate(): PhotoTemplate {
         contrast: 0,
         saturation: 0,
         temperature: 0,
-        tint: 0
+        tint: 0,
+        highlights: 0,
+        shadows: 0,
+        blackPoint: 0,
+        clarity: 0,
+        vibrance: 0,
+        brilliance: 0
       },
       smoothStrength: 0,
       sharpen: 0,
