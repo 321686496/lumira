@@ -6,6 +6,12 @@
 /** 模板目标主体类型 */
 export type Target = 'portrait' | 'landscape' | 'food' | 'street' | 'night' | 'macro' | 'still-life'
 
+/** 场景预设 ID */
+export type ScenePresetId =
+  | 'cafe' | 'street' | 'beach' | 'macro'
+  | 'night' | 'food' | 'home' | 'sunset'
+  | 'forest' | 'indoor'
+
 /** 构图叠图类型 */
 export type OverlayType =
   | 'rule_of_thirds'
@@ -156,6 +162,20 @@ export interface CameraParams {
   photographicStyle?: PhotographicStyle
   /** HDR 开关 */
   hdr?: boolean
+  /** 人像模式光圈 f 值，1.4 / 1.8 / 2.0 / 2.8 / 4 / 5.6 / 8 / 11 / 16；null 表示非人像模式 */
+  aperture?: number | null
+  /** 夜景模式开关 */
+  nightMode?: boolean
+  /** 夜景曝光时间（秒），1-30，仅 nightMode=true 时有意义 */
+  nightExposureTime?: number
+  /** Live Photo 实况照片开关 */
+  livePhoto?: boolean
+  /** 网格辅助线开关 */
+  gridEnabled?: boolean
+  /** AE/AF 锁定状态 */
+  aeAfLock?: boolean
+  /** 镜头校正开关（超广角畸变修正） */
+  lensCorrection?: boolean
   /** @deprecated 改用 lensType */
   lensSuggestion?: LensSuggestion
   /** @deprecated 改用独立滤镜系统 */
@@ -178,22 +198,46 @@ export interface SceneGuide {
   bestTime: string
   /** 拍摄贴士数组 */
   tips: string[]
+  /** 关联的场景预设 ID */
+  presetId?: ScenePresetId
+  /** 光线角度 0-360 度（0=正前方，90=右侧，180=正后方，270=左侧） */
+  lightDirectionAngle?: number
+  /** 拍摄距离米数 */
+  shootingDistanceM?: number
+  /** 最佳时间起 HH:mm */
+  bestTimeFrom?: string
+  /** 最佳时间止 HH:mm */
+  bestTimeTo?: string
+}
+
+/** 后期色彩参数 */
+export interface PostProcessColor {
+  brightness: number
+  contrast: number
+  saturation: number
+  /** 暖/冷 -100 ~ 100 */
+  temperature: number
+  /** 绿/品 -100 ~ 100 */
+  tint: number
+  /** 高光 -100~100（负值压暗高光，正值提亮高光） */
+  highlights?: number
+  /** 阴影 -100~100（负值压暗阴影，正值提亮阴影） */
+  shadows?: number
+  /** 黑点 0-100（黑场深度） */
+  blackPoint?: number
+  /** 清晰度 -100~100（中间调对比度） */
+  clarity?: number
+  /** 自然饱和度 -100~100（智能饱和度，肤色保护） */
+  vibrance?: number
+  /** 鲜明度 -100~100（亮部饱和度+亮度组合） */
+  brilliance?: number
 }
 
 /** 后期参数 */
 export interface PostProcess {
   /** 裁剪比，如 '3:4' */
   cropRatio: string
-  color: {
-    /** -100 ~ 100 */
-    brightness: number
-    contrast: number
-    saturation: number
-    /** 暖/冷 -100 ~ 100 */
-    temperature: number
-    /** 绿/品 -100 ~ 100 */
-    tint: number
-  }
+  color: PostProcessColor
   /** 磨皮 0-100 */
   smoothStrength: number
   /** 锐化 0-100 */
@@ -206,6 +250,24 @@ export interface PostProcess {
   lut: LutPreset
   /** 系统内置滤镜（苹果风格） */
   systemFilter?: SystemFilter
+}
+
+/** 场景预设：完整的参数建议包 */
+export interface ScenePreset {
+  id: ScenePresetId
+  name: string
+  /** Phosphor 图标 class */
+  icon: string
+  /** 场景描述 */
+  description: string
+  /** 一键应用的相机参数 */
+  cameraSuggestion: Partial<CameraParams>
+  /** 一键应用的后期参数（含 color 子对象） */
+  postSuggestion: Partial<PostProcess> & { color?: Partial<PostProcessColor> }
+  /** 场景指南数据 */
+  sceneGuide: Omit<SceneGuide, 'presetId'>
+  /** 关联的模板分类 */
+  relatedCategory: Target
 }
 
 /** 完整拍照模板 */
