@@ -181,6 +181,7 @@ import { useCamera } from '@/composables/useCamera'
 import { buildCssFilter } from '@/utils/filterRecipe'
 import { isParametersMatchingTemplate } from '@/utils/parameterMatch'
 import { createEmptyTemplate } from '@/utils/emptyTemplate'
+import { SCENE_PRESETS } from '@/data/scenePresets'
 import type { PhotoTemplate, SystemFilter, LutPreset } from '@/types/template'
 import CompositionOverlay from '@/components/CompositionOverlay.vue'
 import PoseSilhouette from '@/components/PoseSilhouette.vue'
@@ -358,6 +359,22 @@ onLoad((options) => {
   if (options?.templateId) {
     currentTemplateId.value = options.templateId
     pushRecent(options.templateId)
+  } else if (options?.scenePreset) {
+    // 场景预设模式：基于 preset 创建可编辑模板
+    const preset = SCENE_PRESETS.find(p => p.id === options.scenePreset)
+    if (preset) {
+      const tpl = createEmptyTemplate()
+      tpl.sceneGuide.presetId = preset.id
+      Object.assign(tpl.sceneGuide, preset.sceneGuide)
+      Object.assign(tpl.camera, preset.cameraSuggestion)
+      // postSuggestion 单独处理 color 子对象，避免整体替换
+      if (preset.postSuggestion.color) {
+        Object.assign(tpl.postProcess.color, preset.postSuggestion.color)
+      }
+      const { color: _omitColor, ...restPost } = preset.postSuggestion
+      Object.assign(tpl.postProcess, restPost)
+      editableTemplate.value = tpl
+    }
   }
   loadRecent()
 
