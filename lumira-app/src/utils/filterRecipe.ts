@@ -150,6 +150,45 @@ export function buildCssFilter(
     filters.push(`hue-rotate(${(tint * 0.9).toFixed(1)}deg)`)
   }
 
+  // 高光（负值压暗亮部，正值提亮亮部）
+  const highlights = post.color?.highlights ?? 0
+  if (highlights !== 0) {
+    filters.push(`brightness(${(1 + highlights / 300).toFixed(3)})`)
+  }
+
+  // 阴影（负值压暗暗部，正值提亮暗部）
+  const shadows = post.color?.shadows ?? 0
+  if (shadows !== 0) {
+    filters.push(`brightness(${(1 + shadows / 250).toFixed(3)})`)
+    filters.push(`contrast(${(1 - shadows / 400).toFixed(3)})`)
+  }
+
+  // 黑点（0-100，加深黑场）
+  const blackPoint = post.color?.blackPoint ?? 0
+  if (blackPoint !== 0) {
+    filters.push(`contrast(${(1 + blackPoint / 200).toFixed(3)})`)
+    filters.push(`brightness(${(1 - blackPoint / 500).toFixed(3)})`)
+  }
+
+  // 清晰度（中间调对比度）
+  const clarity = post.color?.clarity ?? 0
+  if (clarity !== 0) {
+    filters.push(`contrast(${(1 + clarity / 200).toFixed(3)})`)
+  }
+
+  // 自然饱和度（智能饱和度，CSS filter 无法精确模拟，用 saturate 近似）
+  const vibrance = post.color?.vibrance ?? 0
+  if (vibrance !== 0) {
+    filters.push(`saturate(${(1 + vibrance / 150).toFixed(3)})`)
+  }
+
+  // 鲜明度（亮度+饱和度组合）
+  const brilliance = post.color?.brilliance ?? 0
+  if (brilliance !== 0) {
+    filters.push(`brightness(${(1 + brilliance / 300).toFixed(3)})`)
+    filters.push(`saturate(${(1 + brilliance / 200).toFixed(3)})`)
+  }
+
   // 系统内置滤镜（在 LUT 之前应用，类似苹果原相机滤镜）
   const systemFilter = post.systemFilter ?? 'none'
   const systemFilterStr = SYSTEM_FILTERS[systemFilter] || ''
