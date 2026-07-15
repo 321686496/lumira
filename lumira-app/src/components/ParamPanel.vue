@@ -335,32 +335,85 @@
 
         <!-- 场景 Tab -->
         <view v-if="activeTab === 2" class="tab-pane">
+          <!-- 场景预设选择 -->
+          <view class="scene-preset-section">
+            <text class="section-title">场景预设</text>
+            <scroll-view scroll-x class="scene-preset-scroll">
+              <view class="scene-preset-list">
+                <view
+                  v-for="preset in scenePresets"
+                  :key="preset.id"
+                  class="scene-preset-card"
+                  :class="{ active: template.sceneGuide.presetId === preset.id }"
+                  @click="onSelectScenePreset(preset.id)"
+                >
+                  <view class="scene-preset-icon-wrap">
+                    <text class="ph scene-preset-icon" :class="preset.icon" />
+                  </view>
+                  <text class="scene-preset-name">{{ preset.name }}</text>
+                </view>
+              </view>
+            </scroll-view>
+          </view>
+
+          <!-- 一键应用场景参数 -->
+          <view class="scene-apply-btn" @click="onApplyScenePreset">
+            <text class="ph ph-sparkle" />
+            <text>一键应用场景参数</text>
+          </view>
+
+          <!-- 当前场景参数预览 -->
+          <view v-if="currentScenePreset" class="scene-suggestion-block">
+            <text class="section-title">场景参数建议</text>
+            <view class="param-row">
+              <text class="param-label">白平衡</text>
+              <text class="param-value">{{ wbLabel(currentScenePreset.cameraSuggestion.whiteBalance || 'daylight', currentScenePreset.cameraSuggestion.whiteBalanceK ?? 5500) }}</text>
+            </view>
+            <view class="param-row" v-if="currentScenePreset.cameraSuggestion.photographicStyle">
+              <text class="param-label">拍照风格</text>
+              <text class="param-value">{{ photographicStyleLabel(currentScenePreset.cameraSuggestion.photographicStyle) }}</text>
+            </view>
+            <view class="param-row" v-if="currentScenePreset.cameraSuggestion.aperture">
+              <text class="param-label">建议光圈</text>
+              <text class="param-value">f/{{ currentScenePreset.cameraSuggestion.aperture }}</text>
+            </view>
+            <view class="param-row" v-if="currentScenePreset.postSuggestion.lut">
+              <text class="param-label">建议 LUT</text>
+              <text class="param-value">{{ getLutLabel(currentScenePreset.postSuggestion.lut) }}</text>
+            </view>
+          </view>
+
+          <!-- 场景信息（只读） -->
           <view class="param-row">
-            <view class="param-label">光线方向</view>
-            <view class="param-value">{{ template.sceneGuide.lightDirection }}</view>
+            <text class="param-label">光线方向</text>
+            <text class="param-value">{{ template.sceneGuide.lightDirection }}</text>
           </view>
           <view class="param-row">
-            <view class="param-label">拍摄距离</view>
-            <view class="param-value">{{ template.sceneGuide.shootingDistance }}</view>
+            <text class="param-label">拍摄距离</text>
+            <text class="param-value">{{ template.sceneGuide.shootingDistance }}</text>
           </view>
           <view class="param-row">
-            <view class="param-label">背景建议</view>
-            <view class="param-value">{{ template.sceneGuide.background }}</view>
+            <text class="param-label">背景建议</text>
+            <text class="param-value">{{ template.sceneGuide.background }}</text>
           </view>
           <view class="param-row">
-            <view class="param-label">最佳时间</view>
-            <view class="param-value">{{ template.sceneGuide.bestTime }}</view>
+            <text class="param-label">最佳时间</text>
+            <text class="param-value">{{ template.sceneGuide.bestTime }}</text>
           </view>
+
+          <!-- 道具建议 -->
           <view class="tag-list-block" v-if="template.sceneGuide.props.length">
-            <view class="desc-title">道具建议</view>
+            <text class="desc-title">道具建议</text>
             <view class="tag-list">
               <view class="prop-tag" v-for="(item, idx) in template.sceneGuide.props" :key="idx">
                 {{ item }}
               </view>
             </view>
           </view>
+
+          <!-- 拍摄贴士 -->
           <view class="desc-block" v-if="template.sceneGuide.tips.length">
-            <view class="desc-title">拍摄贴士</view>
+            <text class="desc-title">拍摄贴士</text>
             <view class="tips-list">
               <view class="tips-item" v-for="(tip, idx) in template.sceneGuide.tips" :key="idx">
                 <text class="ph ph-circle tips-dot" />
@@ -368,6 +421,45 @@
               </view>
             </view>
           </view>
+
+          <!-- 高级：自定义场景参数 -->
+          <AdvancedSection
+            title="自定义场景参数"
+            :open="advancedOpen.sceneCustom"
+            @update:open="advancedOpen.sceneCustom = $event"
+          >
+            <view class="param-row">
+              <text class="param-label">光线方向</text>
+              <view class="pill-list-inline">
+                <view
+                  v-for="opt in lightDirectionOptions"
+                  :key="opt.value"
+                  class="pill"
+                  :class="{ active: template.sceneGuide.lightDirectionAngle === opt.value }"
+                  @click="updateSceneGuide('lightDirectionAngle', opt.value)"
+                >
+                  <text>{{ opt.label }}</text>
+                </view>
+              </view>
+            </view>
+            <view class="slider-block">
+              <view class="slider-header">
+                <text class="param-label">拍摄距离</text>
+                <text class="slider-value">{{ template.sceneGuide.shootingDistanceM || 2 }}m</text>
+              </view>
+              <slider
+                class="param-slider"
+                :value="template.sceneGuide.shootingDistanceM || 2"
+                :min="0.1"
+                :max="10"
+                :step="0.1"
+                activeColor="var(--color-brand)"
+                backgroundColor="var(--color-divider)"
+                block-color="var(--color-brand)"
+                @change="(e: any) => updateSceneGuide('shootingDistanceM', e.detail.value)"
+              />
+            </view>
+          </AdvancedSection>
         </view>
 
         <!-- 姿势 Tab -->
@@ -726,9 +818,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { PhotoTemplate, WhiteBalance, FlashMode, FocusMode, LutPreset, SystemFilter, LensType, PhotographicStyle, OverlayType, GridType } from '@/types/template'
-import { getSystemFilterOptions, getLutOptions } from '@/utils/filterRecipe'
+import type { PhotoTemplate, WhiteBalance, FlashMode, FocusMode, LutPreset, SystemFilter, LensType, PhotographicStyle, OverlayType, GridType, ScenePresetId } from '@/types/template'
+import { getSystemFilterOptions, getLutOptions, getLutLabel } from '@/utils/filterRecipe'
 import AdvancedSection from '@/components/AdvancedSection.vue'
+import { SCENE_PRESETS } from '@/data/scenePresets'
 
 const props = defineProps<{
   template: PhotoTemplate
@@ -761,7 +854,8 @@ const advancedOpen = ref<Record<string, boolean>>({
   camera: false,
   composition: false,
   pose: false,
-  post: false
+  post: false,
+  sceneCustom: false
 })
 
 const onApplyClick = () => {
@@ -807,6 +901,12 @@ const photographicStyleOptions: { value: PhotographicStyle; label: string }[] = 
   { value: 'cool', label: '冷色调' },
   { value: 'mono', label: '单色' }
 ]
+
+const photographicStyleLabel = (style: PhotographicStyle | undefined): string => {
+  if (!style) return '标准'
+  const opt = photographicStyleOptions.find(o => o.value === style)
+  return opt ? opt.label : '标准'
+}
 
 const overlayTypeOptions: { value: OverlayType; label: string }[] = [
   { value: 'rule_of_thirds', label: '三分法' },
@@ -869,6 +969,66 @@ const updatePost = <K extends keyof PhotoTemplate['postProcess']>(key: K, value:
   tpl.postProcess[key] = value
   emit('update:template', tpl)
 }
+
+const scenePresets = SCENE_PRESETS
+
+const currentScenePreset = computed(() => {
+  const id = props.template.sceneGuide.presetId
+  return id ? scenePresets.find(p => p.id === id) : null
+})
+
+const onSelectScenePreset = (id: ScenePresetId) => {
+  if (props.rawMode) return
+  const tpl = cloneTemplate()
+  tpl.sceneGuide.presetId = id
+  const preset = scenePresets.find(p => p.id === id)
+  if (preset) {
+    tpl.sceneGuide.lightDirection = preset.sceneGuide.lightDirection
+    tpl.sceneGuide.shootingDistance = preset.sceneGuide.shootingDistance
+    tpl.sceneGuide.background = preset.sceneGuide.background
+    tpl.sceneGuide.props = [...preset.sceneGuide.props]
+    tpl.sceneGuide.bestTime = preset.sceneGuide.bestTime
+    tpl.sceneGuide.tips = [...preset.sceneGuide.tips]
+  }
+  emit('update:template', tpl)
+}
+
+const onApplyScenePreset = () => {
+  if (props.rawMode) return
+  const preset = currentScenePreset.value
+  if (!preset) {
+    uni.showToast({ title: '请先选择场景预设', icon: 'none' })
+    return
+  }
+  const tpl = cloneTemplate()
+  Object.assign(tpl.camera, preset.cameraSuggestion)
+  if (preset.postSuggestion.color) {
+    Object.assign(tpl.postProcess.color, preset.postSuggestion.color)
+  }
+  const { color: _omitColor, ...restPost } = preset.postSuggestion
+  Object.assign(tpl.postProcess, restPost)
+  emit('update:template', tpl)
+  uni.showToast({ title: '已应用场景参数', icon: 'success' })
+}
+
+const updateSceneGuide = <K extends keyof PhotoTemplate['sceneGuide']>(
+  key: K,
+  value: PhotoTemplate['sceneGuide'][K]
+) => {
+  if (props.rawMode) return
+  const tpl = cloneTemplate()
+  tpl.sceneGuide[key] = value
+  emit('update:template', tpl)
+}
+
+const lightDirectionOptions = [
+  { value: 0, label: '顺光' },
+  { value: 45, label: '前侧光' },
+  { value: 90, label: '侧光' },
+  { value: 135, label: '侧逆光' },
+  { value: 180, label: '逆光' },
+  { value: 270, label: '反射光' }
+]
 
 const onSelectSystemFilter = (id: SystemFilter) => {
   emit('select-system-filter', id)
@@ -1307,6 +1467,97 @@ const thumbStyle = (filter: string) => {
   line-height: 1.6;
   flex: 1;
   min-width: 0;
+}
+
+.scene-preset-section {
+  margin-bottom: 24rpx;
+}
+
+.scene-preset-scroll {
+  white-space: nowrap;
+  margin-top: 16rpx;
+}
+
+.scene-preset-list {
+  display: inline-flex;
+  gap: 16rpx;
+  padding: 4rpx;
+}
+
+.scene-preset-card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  background-color: var(--color-surface-alt);
+  border: 2rpx solid transparent;
+  min-width: 120rpx;
+}
+
+.scene-preset-card.active {
+  border-color: var(--color-brand);
+  background-color: rgba(255, 200, 120, 0.12);
+}
+
+.scene-preset-icon-wrap {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background-color: var(--color-canvas-deep);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scene-preset-icon {
+  font-size: 36rpx;
+  color: var(--color-text-primary);
+}
+
+.scene-preset-card.active .scene-preset-icon {
+  color: var(--color-brand);
+}
+
+.scene-preset-name {
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.scene-preset-card.active .scene-preset-name {
+  color: var(--color-brand);
+}
+
+.scene-apply-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 24rpx;
+  margin: 24rpx 0;
+  border-radius: 9999rpx;
+  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-deep) 100%);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.scene-apply-btn:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.scene-apply-btn .ph {
+  font-size: 32rpx;
+}
+
+.scene-suggestion-block {
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+  border-radius: 20rpx;
+  background-color: var(--color-surface-alt);
 }
 
 /* 剪影预览 */
