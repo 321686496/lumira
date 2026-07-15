@@ -35,18 +35,17 @@
       <view class="scene-list">
         <view
           class="scene-item"
-          v-for="s in myScenes"
-          :key="s.name"
-          @click="onSceneTap(s)"
+          v-for="preset in myScenes"
+          :key="preset.id"
+          @click="onSceneTap(preset)"
         >
           <view class="scene-item-icon">
-            <text class="ph scene-icon" :class="s.icon"></text>
+            <text class="ph scene-icon" :class="preset.icon"></text>
           </view>
           <view class="scene-item-text">
-            <text class="scene-item-title">{{ s.name }}</text>
-            <text class="scene-item-desc">{{ s.desc }}</text>
+            <text class="scene-item-title">{{ preset.name }}</text>
+            <text class="scene-item-desc">{{ preset.description }}</text>
           </view>
-          <image class="scene-item-thumb" :src="s.img" mode="aspectFill" />
           <text class="ph ph-caret-right scene-item-arrow"></text>
         </view>
       </view>
@@ -64,19 +63,19 @@
       <view class="scene-list">
         <view
           class="scene-item"
-          v-for="r in recommendScenes"
-          :key="r.name"
-          @click="onSceneTap(r)"
+          v-for="preset in recommendScenes"
+          :key="preset.id"
+          @click="onSceneTap(preset)"
         >
-          <view class="scene-item-icon" :class="r.iconBg">
-            <text class="ph scene-icon" :class="r.icon"></text>
+          <view class="scene-item-icon icon-bg-green">
+            <text class="ph scene-icon" :class="preset.icon"></text>
           </view>
           <view class="scene-item-text">
-            <text class="scene-item-title">{{ r.name }}</text>
-            <text class="scene-item-desc">{{ r.desc }}</text>
+            <text class="scene-item-title">{{ preset.name }}</text>
+            <text class="scene-item-desc">{{ preset.description }}</text>
           </view>
-          <view v-if="r.badge" class="scene-badge" :class="r.badgeClass">
-            <text class="scene-badge-text">{{ r.badge }}</text>
+          <view class="scene-badge badge-brand">
+            <text class="scene-badge-text">推荐</text>
           </view>
           <text class="ph ph-caret-right scene-item-arrow"></text>
         </view>
@@ -84,27 +83,46 @@
     </view>
 
     <!-- 场景小贴士（选中场景后显示） -->
-    <view v-if="currentTip" class="section-pad fade-up">
+    <view v-if="selectedPreset" class="section-pad fade-up">
       <view class="tip-detail-card">
         <view class="tip-detail-head">
           <text class="ph ph-lightbulb tip-detail-icon"></text>
-          <text class="tip-detail-title">拍摄小贴士</text>
+          <text class="tip-detail-title">{{ selectedPreset.name }} · 拍摄小贴士</text>
         </view>
         <view class="tip-detail-body">
           <view class="tip-detail-row">
             <text class="ph ph-sun tip-detail-row-icon"></text>
             <text class="tip-detail-row-label">光线</text>
-            <text class="tip-detail-row-text">{{ currentTip.light }}</text>
+            <text class="tip-detail-row-text">{{ selectedPreset.sceneGuide.lightDirection }}</text>
           </view>
           <view class="tip-detail-row">
             <text class="ph ph-ruler tip-detail-row-icon"></text>
             <text class="tip-detail-row-label">距离</text>
-            <text class="tip-detail-row-text">{{ currentTip.distance }}</text>
+            <text class="tip-detail-row-text">{{ selectedPreset.sceneGuide.shootingDistance }}</text>
           </view>
           <view class="tip-detail-row">
-            <text class="ph ph-info tip-detail-row-icon"></text>
+            <text class="ph ph-image tip-detail-row-icon"></text>
+            <text class="tip-detail-row-label">背景</text>
+            <text class="tip-detail-row-text">{{ selectedPreset.sceneGuide.background }}</text>
+          </view>
+          <view class="tip-detail-row">
+            <text class="ph ph-clock tip-detail-row-icon"></text>
+            <text class="tip-detail-row-label">时间</text>
+            <text class="tip-detail-row-text">{{ selectedPreset.sceneGuide.bestTime }}</text>
+          </view>
+          <view v-if="selectedPreset.sceneGuide.props.length" class="tip-detail-row">
+            <text class="ph ph-package tip-detail-row-icon"></text>
+            <text class="tip-detail-row-label">道具</text>
+            <view class="prop-tag-list">
+              <view class="prop-tag" v-for="(p, i) in selectedPreset.sceneGuide.props" :key="i">
+                <text class="prop-tag-text">{{ p }}</text>
+              </view>
+            </view>
+          </view>
+          <view v-for="(tip, i) in selectedPreset.sceneGuide.tips" :key="'tip-'+i" class="tip-detail-row">
+            <text class="ph ph-circle tip-detail-row-icon"></text>
             <text class="tip-detail-row-label">技巧</text>
-            <text class="tip-detail-row-text">{{ currentTip.tip }}</text>
+            <text class="tip-detail-row-text">{{ tip }}</text>
           </view>
         </view>
         <view class="tip-detail-actions">
@@ -139,35 +157,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { SCENE_PRESETS, SCENE_TO_CATEGORY } from '@/data/scenePresets'
+import type { ScenePreset } from '@/types/template'
 
 const tab = ref('common')
-
-// 场景 → 模板分类映射
-const sceneToCategory: Record<string, string> = {
-  cafe: 'portrait',
-  street: 'street',
-  food: 'food',
-  home: 'still-life'
-}
-
-// 场景拍摄小贴士
-const sceneTips: Record<string, { light: string; distance: string; tip: string }> = {
-  cafe: { light: '柔和自然光，靠窗位置最佳', distance: '1-2米半身特写', tip: '利用咖啡杯作为道具，捕捉自然互动瞬间' },
-  street: { light: '利用城市光影对比，黄金时刻最佳', distance: '3-5米环境人像', tip: '寻找街角光影、橱窗反光增加故事感' },
-  food: { light: '暖色温灯光或自然侧光', distance: '30-50cm俯拍或45度', tip: '注意白平衡，让美食色彩还原自然' },
-  home: { light: '窗边柔光或室内暖灯', distance: '1-3米生活场景', tip: '保持画面简洁，突出居家温馨氛围' }
-}
-
-const selectedScene = ref<string>('')
-
-onLoad((options) => {
-  if (options?.scene) {
-    selectedScene.value = options.scene
-    updateTip(options.scene)
-    // 切换到推荐场景tab
-    tab.value = 'recommend'
-  }
-})
 
 const tabList = [
   { label: '常用场景', value: 'common' },
@@ -175,29 +168,21 @@ const tabList = [
   { label: '推荐场景', value: 'recommend' }
 ]
 
-const myScenes = ref([
-  { name: '咖啡馆', desc: '已拍摄 23 张 · 今天 14:30', icon: 'ph-coffee', img: 'https://picsum.photos/seed/2074130/400/600', scene: 'cafe' },
-  { name: '花店', desc: '已拍摄 12 张 · 昨天 10:15', icon: 'ph-flower', img: 'https://picsum.photos/seed/1038002/400/600', scene: 'flower' },
-  { name: '海边', desc: '已拍摄 8 张 · 3天前', icon: 'ph-waves', img: 'https://picsum.photos/seed/457882/400/600', scene: 'beach' },
-  { name: '街拍', desc: '已拍摄 31 张 · 2天前', icon: 'ph-buildings', img: 'https://picsum.photos/seed/172217/400/400', scene: 'street' },
-  { name: '探店', desc: '已拍摄 15 张 · 5天前', icon: 'ph-shopping-bag', img: 'https://picsum.photos/seed/1080696/400/600', scene: 'food' },
-  { name: '居家', desc: '已拍摄 19 张 · 昨天 20:00', icon: 'ph-house', img: 'https://picsum.photos/seed/1571460/400/600', scene: 'home' },
-  { name: '纪念日', desc: '已拍摄 5 张 · 1周前', icon: 'ph-cake', img: 'https://picsum.photos/seed/774909/400/600', scene: 'anniversary' },
-  { name: '合照', desc: '已拍摄 11 张 · 4天前', icon: 'ph-users', img: 'https://picsum.photos/seed/774909/400/600', scene: 'group' }
-])
+// 前 8 个作为「我的场景」，后 2 个作为「推荐场景」
+const myScenes = ref<ScenePreset[]>(SCENE_PRESETS.slice(0, 8))
+const recommendScenes = ref<ScenePreset[]>(SCENE_PRESETS.slice(8))
 
-const recommendScenes = ref([
-  { name: '露营', desc: '热门场景 · 适合户外人像', icon: 'ph-tent', iconBg: 'icon-bg-green', badge: '推荐', badgeClass: 'badge-brand', scene: 'camping' },
-  { name: '露台黄昏', desc: '新上架 · 逆光/剪影首选', icon: 'ph-sunset', iconBg: 'icon-bg-gold', badge: 'NEW', badgeClass: 'badge-red', scene: 'sunset' },
-  { name: '雨天文案', desc: '氛围感 · 情绪片必备', icon: 'ph-rainbow-cloud', iconBg: 'icon-bg-surface', badge: '', badgeClass: '', scene: 'rainy' }
-])
+const selectedPreset = ref<ScenePreset | null>(null)
 
-const currentTip = ref<{ light: string; distance: string; tip: string } | null>(null)
-
-// 当选中场景时显示对应小贴士
-const updateTip = (scene: string) => {
-  currentTip.value = sceneTips[scene] || null
-}
+onLoad((options) => {
+  if (options?.scene) {
+    const preset = SCENE_PRESETS.find(p => p.id === options.scene)
+    if (preset) {
+      selectedPreset.value = preset
+      tab.value = 'recommend'
+    }
+  }
+})
 
 const back = () => uni.navigateBack()
 
@@ -209,24 +194,23 @@ const onMoreRecommend = () => {
   uni.showToast({ title: '更多推荐', icon: 'none' })
 }
 
-const onSceneTap = (s: { name: string; scene: string }) => {
-  selectedScene.value = s.scene
-  updateTip(s.scene)
+const onSceneTap = (preset: ScenePreset) => {
+  selectedPreset.value = preset
 }
 
-// 从场景进入模板列表（带场景筛选）或直接拍摄
 const goTemplates = () => {
-  if (!selectedScene.value) return
-  const cat = sceneToCategory[selectedScene.value]
-  if (cat) {
-    uni.navigateTo({ url: `/pages/templates/index?scene=${selectedScene.value}` })
-  } else {
-    uni.navigateTo({ url: '/pages/templates/index' })
-  }
+  if (!selectedPreset.value) return
+  const cat = SCENE_TO_CATEGORY[selectedPreset.value.id]
+  uni.navigateTo({
+    url: `/pages/templates/index?scene=${selectedPreset.value.id}&category=${cat}`
+  })
 }
 
 const goCapture = () => {
-  uni.navigateTo({ url: '/pages/capture/index' })
+  if (!selectedPreset.value) return
+  uni.navigateTo({
+    url: `/pages/capture/index?scenePreset=${selectedPreset.value.id}`
+  })
 }
 </script>
 
@@ -391,13 +375,6 @@ const goCapture = () => {
   color: var(--color-text-tertiary);
 }
 
-.scene-item-thumb {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 16rpx;
-  flex-shrink: 0;
-}
-
 .scene-item-arrow {
   font-size: 28rpx;
   color: var(--color-text-tertiary);
@@ -542,6 +519,24 @@ const goCapture = () => {
   color: var(--color-text-primary);
   line-height: 1.5;
   flex: 1;
+}
+
+.prop-tag-list {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.prop-tag {
+  padding: 6rpx 20rpx;
+  border-radius: 9999rpx;
+  background-color: var(--color-surface-alt);
+}
+
+.prop-tag-text {
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
 }
 
 .tip-detail-actions {
