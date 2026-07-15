@@ -263,7 +263,7 @@ export interface ScenePreset {
   /** 一键应用的相机参数 */
   cameraSuggestion: Partial<CameraParams>
   /** 一键应用的后期参数（含 color 子对象） */
-  postSuggestion: Partial<PostProcess> & { color?: Partial<PostProcessColor> }
+  postSuggestion: Omit<Partial<PostProcess>, 'color'> & { color?: Partial<PostProcessColor> }
   /** 场景指南数据 */
   sceneGuide: Omit<SceneGuide, 'presetId'>
   /** 关联的模板分类 */
