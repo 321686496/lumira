@@ -1638,7 +1638,9 @@ const thumbStyle = (filter: string) => {
 .raw-mode-disabled .pill-option,
 .raw-mode-disabled .param-slider,
 .raw-mode-disabled .mode-toggle,
-.raw-mode-disabled .filter-item {
+.raw-mode-disabled .filter-item,
+.raw-mode-disabled .scene-preset-card,
+.raw-mode-disabled .scene-apply-btn {
   opacity: 0.5;
   pointer-events: none;
 }
