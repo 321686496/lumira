@@ -15,7 +15,7 @@
 - `<scroll-view scroll-x>` 内部容器必须 `display: inline-flex`，scroll-view 本身需 `white-space: nowrap`
 - pill 类元素必须 `display: inline-flex; align-items: center;`
 - 自定义场景 id 以 `custom_` 前缀区分（如 `custom_1`），避免与预设 id 冲突
-- localStorage key 统一使用 `lumira_custom_scenes` 和 `lumira_scene_favorites`
+- localStorage key 统一使用 `lumira_scene_manager`（单 key 存储整个 SceneManagerState，包含 customScenes / favoritePresetIds / customOrder）
 
 ## 1. 数据模型
 
@@ -64,6 +64,7 @@ function useSceneManager(): {
 
   // 工具
   getSceneById: (id: string) => ScenePreset | CustomScenePreset | undefined
+  isCustomScene: (scene: ScenePreset | CustomScenePreset) => scene is CustomScenePreset
 }
 ```
 
@@ -177,13 +178,23 @@ const displayScenes = computed(() => {
 const goScene = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-guide?scenePreset=${id}` })
 ```
 
-**管理链接：**
+**管理链接修复：**
+当前 home/index.vue 的"管理"文字（约 125 行 `<text class="lumira-section-link">管理</text>`）无 `@click` 绑定，点击无响应。修复为：
+```html
+<text class="lumira-section-link" @click="goSceneManage">管理</text>
+```
 ```typescript
 const goSceneManage = () => uni.navigateTo({ url: '/pages/capture/scene-manage' })
 ```
 
 **收藏入口（新增）：**
-在场景推荐标题行增加"管理"已有链接旁增加"收藏"文字链，跳转 scene-manage
+在"管理"链接旁增加"收藏"文字链，跳转 scene-manage 的收藏 Tab：
+```html
+<text class="lumira-section-link" @click="goSceneFav">收藏</text>
+```
+```typescript
+const goSceneFav = () => uni.navigateTo({ url: '/pages/capture/scene-manage?tab=fav' })
+```
 
 ### 导入变更
 
@@ -214,48 +225,130 @@ const goScene = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-guid
 
 ## 7. 场景指南页集成（pages/capture/scene-guide.vue）
 
-### 收藏按钮
+### Tab 切换修复（当前 Tab 切换无效果）
 
-在场景预设卡片（非自定义场景）的角落增加 ★ 收藏按钮：
+当前三个 Tab（常用/收藏/推荐）切换时内容不变。修复为根据 Tab 切换显示内容：
 
 ```typescript
-import { useSceneManager } from '@/composables/useSceneManager'
+const tabList = [
+  { label: '常用场景', value: 'common' },
+  { label: '收藏场景', value: 'fav' },
+  { label: '推荐场景', value: 'recommend' }
+]
 
-// 在 sceneGuide 模板中预设卡片添加收藏按钮
+// 常用场景 = SCENE_PRESETS 前 8 个 + 自定义场景
+const myScenes = computed(() => [...customScenes.value, ...SCENE_PRESETS.slice(0, 8)])
+// 收藏场景 = favoriteScenes（按收藏顺序）
+const favScenes = favoriteScenes
+// 推荐场景 = SCENE_PRESETS 后 2 个
+const recommendScenes = SCENE_PRESETS.slice(8)
+
+// 当前 Tab 对应的列表
+const currentList = computed(() => {
+  if (tab.value === 'fav') return favScenes.value
+  if (tab.value === 'recommend') return recommendScenes
+  return myScenes.value
+})
 ```
 
-**渲染逻辑：**
-- 当我选择的 presetId 属于 `favoritePresetIds` 时显示实心 ★，否则空心 ☆
-- 点击调用 toggleFavorite(presetId)
-- 自定义场景不显示收藏按钮（无 id 与预设匹配时）
+模板中「我的场景」区块改为根据 `currentList` 渲染单一列表（Tab='common' 时标题"我的场景"，Tab='fav' 时标题"我的收藏"，Tab='recommend' 时标题"推荐场景"），不再同时显示两个区块。
 
-### 我的收藏场景展示
+### 收藏按钮
 
-在现有预设列表下方增加"我的收藏"区块（仅当有收藏时展示）：
+收藏按钮放在**每个场景列表项的右侧**（箭头之前），以及**小贴士卡片标题栏**：
 
+**列表项收藏按钮：**
 ```html
-<view class="section" v-if="favoriteScenes.length">
-  <view class="section-title-row">
-    <text class="section-title-text">我的收藏</text>
+<view class="scene-item" v-for="preset in currentList" :key="preset.id" @click="onSceneTap(preset)">
+  <view class="scene-item-icon">...</view>
+  <view class="scene-item-text">...</view>
+  <!-- 收藏按钮（仅预设场景显示，自定义场景不显示） -->
+  <view v-if="!isCustomScene(preset)" class="fav-btn" @click.stop="onToggleFav(preset.id)">
+    <text class="ph" :class="isFavorite(preset.id) ? 'ph-star-fill' : 'ph-star'"></text>
   </view>
-  <view class="scene-list">
-    <!-- 收藏预设列表（同预设列表样式） -->
+  <text class="ph ph-caret-right scene-item-arrow"></text>
+</view>
+```
+
+**小贴士卡片收藏按钮：**
+```html
+<view class="tip-detail-head">
+  <text class="ph ph-lightbulb tip-detail-icon"></text>
+  <text class="tip-detail-title">{{ selectedPreset.name }} · 拍摄小贴士</text>
+  <!-- 收藏按钮（仅预设场景显示） -->
+  <view v-if="selectedPreset && !isCustomScene(selectedPreset)" class="fav-btn-tip" @click="onToggleFav(selectedPreset.id)">
+    <text class="ph" :class="isFavorite(selectedPreset.id) ? 'ph-star-fill' : 'ph-star'"></text>
   </view>
 </view>
 ```
 
-**排序：** 收藏预设按 `favoritePresetIds` 中顺序展示，后收藏的在前。
+**渲染逻辑：**
+- 预设场景：根据 `isFavorite(preset.id)` 显示实心 `ph-star-fill` 或空心 `ph-star`
+- 自定义场景：不显示收藏按钮（`v-if="!isCustomScene(preset)"` 控制）
+- `@click.stop` 阻止冒泡到列表项的 `onSceneTap`
+
+### 脚本逻辑
+
+```typescript
+import { useSceneManager } from '@/composables/useSceneManager'
+
+const { customScenes, favoriteScenes, favoritePresetIds, toggleFavorite, isFavorite, isCustomScene, getSceneById } = useSceneManager()
+
+const onToggleFav = (id: string) => {
+  toggleFavorite(id as ScenePresetId)
+}
+```
+
+### onAdd 修复
+
+当前 `onAdd` 仅 toast。改为跳转场景管理页的自定义场景 Tab：
+
+```typescript
+const onAdd = () => {
+  uni.navigateTo({ url: '/pages/capture/scene-manage?tab=custom' })
+}
+```
+
+### onMoreRecommend 修复
+
+当前 `onMoreRecommend` 仅 toast。改为跳转场景管理页的收藏 Tab：
+
+```typescript
+const onMoreRecommend = () => {
+  uni.navigateTo({ url: '/pages/capture/scene-manage?tab=fav' })
+}
+```
+
+### onLoad 参数兼容
+
+当前 scene-guide.vue onLoad 仅读 `options?.scene`，但 home/inspiration 页面跳转使用 `?scenePreset=` 参数。修改 onLoad 同时兼容两种参数名，并支持 custom_ 前缀的自定义场景查找：
+
+```typescript
+onLoad((options) => {
+  const sceneId = options?.scene || options?.scenePreset
+  if (sceneId) {
+    // 同时查找预设和自定义场景
+    const scene = getSceneById(sceneId)
+    if (scene) {
+      selectedPreset.value = scene
+      // 自定义场景定位到常用 Tab，预设场景定位到推荐 Tab
+      tab.value = isCustomScene(scene) ? 'common' : 'recommend'
+    }
+  }
+})
+```
 
 ## 8. 文件影响清单
 
 | 文件路径 | 操作 | 改动内容 |
 |----------|------|----------|
 | `lumira-app/src/components/ScenePresetView.vue` | **新建** | 通用场景卡片组件（size=full/mini） |
-| `lumira-app/src/composables/useSceneManager.ts` | **新建** | 场景管理 composable（CRUD + 收藏 + 持久化） |
+| `lumira-app/src/composables/useSceneManager.ts` | **新建** | 场景管理 composable（CRUD + 收藏 + 持久化 + isCustomScene） |
 | `lumira-app/src/pages/capture/scene-manage.vue` | **新建** | 场景管理页（双 Tab + CRUD 表单） |
-| `lumira-app/src/pages/home/index.vue` | 修改 | 场景区数据源更新；跳转修复；管理/收藏链接 |
-| `lumira-app/src/pages/inspiration/index.vue` | 修改 | 场景卡片数据源更新；添加点击跳转；发现更多链接 |
-| `lumira-app/src/pages/capture/scene-guide.vue` | 修改 | 添加收藏按钮和"我的收藏"区块 |
+| `lumira-app/src/pages.json` | 修改 | 注册 `pages/capture/scene-manage` 路由 |
+| `lumira-app/src/pages/home/index.vue` | 修改 | 场景区数据源更新；"管理"链接 @click 修复；新增"收藏"链接 |
+| `lumira-app/src/pages/inspiration/index.vue` | 修改 | 场景卡片数据源更新；添加点击跳转；"发现更多"链接跳转 |
+| `lumira-app/src/pages/capture/scene-guide.vue` | 修改 | Tab 切换修复（内容随 Tab 变化）；收藏按钮（列表项 + 小贴士卡片）；onAdd/onMoreRecommend 跳转修复 |
 
 ## 9. 类型设计
 
@@ -310,7 +403,7 @@ function isCustomScene(scene: AnyScene): scene is CustomScenePreset {
    - 新建表单 icon 选择器正常
    - 删除确认弹窗
 3. **灵感页：** 场景卡片点击跳转 scene指南，"发现更多"跳转管理页
-4. **场景指南页：** 选中预设时收藏按钮可见，点击收藏/取消，"我的收藏"区块展示已收藏预设
+4. **场景指南页：** Tab 切换正常（常用/收藏/推荐内容随 Tab 变化）；列表项和小贴士卡片的收藏按钮可见，点击收藏/取消；onAdd 跳转管理页自定义 Tab；onMoreRecommend 跳转管理页收藏 Tab；onLoad 接收 `?scene=` 或 `?scenePreset=` 参数正确定位场景（含 custom_ 前缀的自定义场景）
 5. **数据持久化：** 关闭小程序再打开，自定义场景和收藏依然存在
 6. **类型检查：** `npm run type-check` 零错误
 
