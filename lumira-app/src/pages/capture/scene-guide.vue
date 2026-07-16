@@ -26,56 +26,35 @@
       </view>
     </view>
 
-    <!-- 我的场景 -->
+    <!-- 场景列表（根据 Tab 切换） -->
     <view class="section-pad fade-up fade-up-d1">
       <view class="section-title-row">
-        <text class="section-title">我的场景</text>
-        <text class="section-count">共 {{ myScenes.length }} 个</text>
+        <text class="section-title">{{ currentTitle }}</text>
+        <text class="section-count">共 {{ currentList.length }} 个</text>
       </view>
-      <view class="scene-list">
+      <view v-if="currentList.length === 0" class="empty-inline">
+        <text class="empty-inline-text">{{ tab === 'fav' ? '还没有收藏的场景，点击 ☆ 收藏' : '暂无场景' }}</text>
+      </view>
+      <view v-else class="scene-list">
         <view
           class="scene-item"
-          v-for="preset in myScenes"
+          v-for="preset in currentList"
           :key="preset.id"
           @click="onSceneTap(preset)"
         >
-          <view class="scene-item-icon">
+          <view class="scene-item-icon" :class="{ 'icon-bg-green': tab === 'recommend' }">
             <text class="ph scene-icon" :class="preset.icon"></text>
           </view>
           <view class="scene-item-text">
             <text class="scene-item-title">{{ preset.name }}</text>
             <text class="scene-item-desc">{{ preset.description }}</text>
           </view>
-          <text class="ph ph-caret-right scene-item-arrow"></text>
-        </view>
-      </view>
-    </view>
-
-    <!-- 推荐场景 -->
-    <view class="section-pad-bottom fade-up fade-up-d2">
-      <view class="section-title-row">
-        <text class="section-title">推荐场景</text>
-        <view class="section-more" @click="onMoreRecommend">
-          <text class="section-more-text">更多</text>
-          <text class="ph ph-arrow-right section-more-icon"></text>
-        </view>
-      </view>
-      <view class="scene-list">
-        <view
-          class="scene-item"
-          v-for="preset in recommendScenes"
-          :key="preset.id"
-          @click="onSceneTap(preset)"
-        >
-          <view class="scene-item-icon icon-bg-green">
-            <text class="ph scene-icon" :class="preset.icon"></text>
-          </view>
-          <view class="scene-item-text">
-            <text class="scene-item-title">{{ preset.name }}</text>
-            <text class="scene-item-desc">{{ preset.description }}</text>
-          </view>
-          <view class="scene-badge badge-brand">
-            <text class="scene-badge-text">推荐</text>
+          <view
+            v-if="!isCustomScene(preset)"
+            class="fav-btn"
+            @click.stop="onToggleFav(preset.id)"
+          >
+            <text class="ph fav-icon" :class="isFavorite(preset.id as ScenePresetId) ? 'ph-star-fill' : 'ph-star'"></text>
           </view>
           <text class="ph ph-caret-right scene-item-arrow"></text>
         </view>
@@ -88,6 +67,13 @@
         <view class="tip-detail-head">
           <text class="ph ph-lightbulb tip-detail-icon"></text>
           <text class="tip-detail-title">{{ selectedPreset.name }} · 拍摄小贴士</text>
+          <view
+            v-if="selectedPreset && !isCustomScene(selectedPreset)"
+            class="fav-btn-tip"
+            @click="selectedPreset && onToggleFav(selectedPreset.id)"
+          >
+            <text class="ph fav-tip-icon" :class="isFavorite(selectedPreset.id as ScenePresetId) ? 'ph-star-fill' : 'ph-star'"></text>
+          </view>
         </view>
         <view class="tip-detail-body">
           <view class="tip-detail-row">
@@ -138,27 +124,25 @@
       </view>
     </view>
 
-    <!-- 快速添加提示 -->
-    <view class="section-pad-bottom fade-up fade-up-d3">
-      <view class="add-card">
-        <text class="ph ph-camera add-card-icon"></text>
-        <text class="add-card-title">添加新场景</text>
-        <text class="add-card-desc">右上角 + 号创建你的专属拍摄场景</text>
-        <view class="add-card-btn" @click="onAdd">
-          <text class="add-card-btn-text">+ 新建场景</text>
-        </view>
-      </view>
-    </view>
-
     <view class="bottom-spacer"></view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { SCENE_PRESETS, SCENE_TO_CATEGORY } from '@/data/scenePresets'
-import type { ScenePreset } from '@/types/template'
+import { useSceneManager } from '@/composables/useSceneManager'
+import type { AnyScene, ScenePresetId } from '@/types/template'
+
+const {
+  customScenes,
+  favoriteScenes,
+  toggleFavorite,
+  isFavorite,
+  isCustomScene,
+  getSceneById
+} = useSceneManager()
 
 const tab = ref('common')
 
@@ -168,18 +152,30 @@ const tabList = [
   { label: '推荐场景', value: 'recommend' }
 ]
 
-// 前 8 个作为「我的场景」，后 2 个作为「推荐场景」
-const myScenes = ref<ScenePreset[]>(SCENE_PRESETS.slice(0, 8))
-const recommendScenes = ref<ScenePreset[]>(SCENE_PRESETS.slice(8))
+const myScenes = computed<AnyScene[]>(() => [...customScenes.value, ...SCENE_PRESETS.slice(0, 8)])
+const recommendScenes = SCENE_PRESETS.slice(8)
 
-const selectedPreset = ref<ScenePreset | null>(null)
+const currentList = computed<AnyScene[]>(() => {
+  if (tab.value === 'fav') return favoriteScenes.value
+  if (tab.value === 'recommend') return recommendScenes
+  return myScenes.value
+})
+
+const currentTitle = computed(() => {
+  if (tab.value === 'fav') return '我的收藏'
+  if (tab.value === 'recommend') return '推荐场景'
+  return '我的场景'
+})
+
+const selectedPreset = ref<AnyScene | null>(null)
 
 onLoad((options) => {
-  if (options?.scene) {
-    const preset = SCENE_PRESETS.find(p => p.id === options.scene)
-    if (preset) {
-      selectedPreset.value = preset
-      tab.value = 'recommend'
+  const sceneId = options?.scene || options?.scenePreset
+  if (sceneId) {
+    const scene = getSceneById(sceneId)
+    if (scene) {
+      selectedPreset.value = scene
+      tab.value = isCustomScene(scene) ? 'common' : 'recommend'
     }
   }
 })
@@ -187,20 +183,26 @@ onLoad((options) => {
 const back = () => uni.navigateBack()
 
 const onAdd = () => {
-  uni.showToast({ title: '新建场景', icon: 'none' })
+  uni.navigateTo({ url: '/pages/capture/scene-manage?tab=custom' })
 }
 
 const onMoreRecommend = () => {
-  uni.showToast({ title: '更多推荐', icon: 'none' })
+  uni.navigateTo({ url: '/pages/capture/scene-manage?tab=fav' })
 }
 
-const onSceneTap = (preset: ScenePreset) => {
+const onSceneTap = (preset: AnyScene) => {
   selectedPreset.value = preset
+}
+
+const onToggleFav = (id: string) => {
+  toggleFavorite(id as ScenePresetId)
 }
 
 const goTemplates = () => {
   if (!selectedPreset.value) return
-  const cat = SCENE_TO_CATEGORY[selectedPreset.value.id]
+  const cat = isCustomScene(selectedPreset.value)
+    ? selectedPreset.value.relatedCategory
+    : SCENE_TO_CATEGORY[selectedPreset.value.id as ScenePresetId]
   uni.navigateTo({
     url: `/pages/templates/index?scene=${selectedPreset.value.id}&category=${cat}`
   })
@@ -282,22 +284,6 @@ const goCapture = () => {
   color: var(--color-text-tertiary);
 }
 
-.section-more {
-  display: flex;
-  align-items: center;
-  gap: 4rpx;
-}
-
-.section-more-text {
-  font-size: 26rpx;
-  color: var(--color-text-tertiary);
-}
-
-.section-more-icon {
-  font-size: 24rpx;
-  color: var(--color-text-tertiary);
-}
-
 /* ===== 场景列表 ===== */
 .scene-list {
   display: flex;
@@ -335,14 +321,6 @@ const goCapture = () => {
   background-color: var(--color-success-subtle);
 }
 
-.icon-bg-gold {
-  background-color: var(--color-brand-subtle);
-}
-
-.icon-bg-surface {
-  background-color: var(--color-surface-alt);
-}
-
 .scene-icon {
   font-size: 40rpx;
   color: var(--color-text-primary);
@@ -350,10 +328,6 @@ const goCapture = () => {
 
 .icon-bg-green .scene-icon {
   color: var(--color-success);
-}
-
-.icon-bg-gold .scene-icon {
-  color: var(--color-brand-text);
 }
 
 .scene-item-text {
@@ -381,79 +355,42 @@ const goCapture = () => {
   flex-shrink: 0;
 }
 
-/* ===== 场景徽章 ===== */
-.scene-badge {
+/* ===== 收藏按钮 ===== */
+.fav-btn {
   flex-shrink: 0;
-  padding: 6rpx 16rpx;
-  border-radius: 9999rpx;
-}
-
-.badge-brand {
-  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-deep) 100%);
-}
-
-.badge-red {
-  background-color: var(--color-danger-subtle);
-}
-
-.scene-badge-text {
-  font-size: 22rpx;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-.badge-brand .scene-badge-text {
-  color: #ffffff;
-}
-
-.badge-red .scene-badge-text {
-  color: var(--color-danger);
-}
-
-/* ===== 添加新场景卡片 ===== */
-.add-card {
-  background-color: var(--color-surface-alt);
-  border-radius: 28rpx;
-  padding: 40rpx;
-  text-align: center;
+  padding: 8rpx;
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
 }
 
-.add-card-icon {
-  font-size: 56rpx;
-  color: var(--color-brand);
-  margin-bottom: 16rpx;
-}
-
-.add-card-title {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  margin-bottom: 8rpx;
-}
-
-.add-card-desc {
-  font-size: 24rpx;
+.fav-icon {
+  font-size: 36rpx;
   color: var(--color-text-tertiary);
-  margin-bottom: 28rpx;
 }
 
-.add-card-btn {
-  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-deep) 100%);
-  border-radius: 9999rpx;
-  padding: 16rpx 40rpx;
+.fav-btn-tip {
+  margin-left: auto;
+  padding: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.add-card-btn:active {
-  transform: scale(0.97);
+.fav-tip-icon {
+  font-size: 36rpx;
+  color: var(--color-brand);
 }
 
-.add-card-btn-text {
+/* ===== 空状态（内联） ===== */
+.empty-inline {
+  padding: 48rpx 0;
+  text-align: center;
+}
+
+.empty-inline-text {
   font-size: 26rpx;
-  font-weight: 500;
-  color: #ffffff;
+  color: var(--color-text-tertiary);
 }
 
 .bottom-spacer {
