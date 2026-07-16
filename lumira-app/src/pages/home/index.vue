@@ -128,18 +128,16 @@
         </view>
       </view>
       <view class="scene-grid section-pad">
-        <view class="scene-card lumira-card-hover" v-for="s in scenes" :key="s.name" @click="goPage(`/pages/capture/scene-guide?scene=${s.scene}`)">
-          <view class="scene-img-wrap">
-            <image class="scene-img" :src="s.img" mode="aspectFill" />
-            <view class="scene-badge" :class="{ 'scene-badge-brand': s.brand }">
-              <text class="scene-badge-text">{{ s.tag }}</text>
-            </view>
-          </view>
-          <view class="scene-info">
-            <text class="scene-name">{{ s.name }}</text>
-            <text class="scene-desc">{{ s.desc }}</text>
-          </view>
-        </view>
+        <ScenePresetView
+          v-for="(s, index) in scenes"
+          :key="s.id"
+          :scene="s"
+          variant="card"
+          :imageSrc="`https://picsum.photos/seed/scene-home-${s.id}/400/600`"
+          :badgeText="getSceneBadge(s, index)"
+          :badgeBrand="index === 2"
+          @click="goScene($event)"
+        />
       </view>
     </view>
 
@@ -212,10 +210,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import ScenePresetView from '@/components/ScenePresetView.vue'
 import { SCENE_PRESETS } from '@/data/scenePresets'
 import { useSceneManager } from '@/composables/useSceneManager'
+import type { AnyScene } from '@/types/template'
 
-const { customScenes } = useSceneManager()
+const { customScenes, isCustomScene } = useSceneManager()
 
 const weekDays = ref([
   { label: '一', done: true, today: false },
@@ -227,25 +227,18 @@ const weekDays = ref([
   { label: '日', done: false, today: true }
 ])
 
-const scenes = computed(() => {
-  const customs = customScenes.value.slice(0, 4).map(c => ({
-    name: c.name,
-    desc: c.description,
-    img: `https://picsum.photos/seed/scene-home-${c.id}/400/600`,
-    tag: '我的场景',
-    brand: false,
-    scene: c.id
-  }))
-  const presets = SCENE_PRESETS.slice(0, 4).map((p, i) => ({
-    name: p.name,
-    desc: p.description,
-    img: `https://picsum.photos/seed/scene-home-${p.id}/400/600`,
-    tag: i === 0 ? '你最常去' : i === 2 ? '新场景推荐' : `${p.name}拍摄`,
-    brand: i === 2,
-    scene: p.id
-  }))
+const scenes = computed<AnyScene[]>(() => {
+  const customs = customScenes.value.slice(0, 4)
+  const presets = SCENE_PRESETS.slice(0, 4)
   return [...customs, ...presets].slice(0, 4)
 })
+
+const getSceneBadge = (s: AnyScene, index: number): string => {
+  if (isCustomScene(s)) return '我的场景'
+  if (index === 0) return '你最常去'
+  if (index === 2) return '新场景推荐'
+  return `${s.name}拍摄`
+}
 
 const recents = ref([
   { name: '自然光人像', cat: '人像', icon: 'ph-user', img: 'https://picsum.photos/seed/recent-portrait/400/600', steps: 12, match: '98% 匹配', progress: '' },
@@ -258,6 +251,7 @@ const recents = ref([
 const goTab = (url: string) => uni.reLaunch({ url })
 const goPage = (url: string) => uni.navigateTo({ url })
 const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
+const goScene = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-guide?scenePreset=${id}` })
 const goSceneManage = () => uni.navigateTo({ url: '/pages/capture/scene-manage' })
 const goSceneFav = () => uni.navigateTo({ url: '/pages/capture/scene-manage?tab=fav' })
 </script>
@@ -656,69 +650,6 @@ const goSceneFav = () => uni.navigateTo({ url: '/pages/capture/scene-manage?tab=
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24rpx;
-}
-
-.scene-card {
-  border-radius: 28rpx;
-  overflow: hidden;
-  border: 2rpx solid var(--color-divider);
-  background-color: var(--color-canvas);
-  box-shadow: var(--shadow-convex);
-}
-
-.scene-img-wrap {
-  position: relative;
-  width: 100%;
-  padding-bottom: 133.33%;
-  overflow: hidden;
-  border-radius: 24rpx;
-}
-
-.scene-img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.scene-badge {
-  position: absolute;
-  top: 16rpx;
-  left: 16rpx;
-  background-color: rgba(26, 26, 26, 0.6);
-  padding: 6rpx 16rpx;
-  border-radius: 9999rpx;
-}
-
-.scene-badge-brand {
-  background-color: var(--color-brand);
-}
-
-.scene-badge-text {
-  font-size: 20rpx;
-  font-weight: 500;
-  color: #fff;
-  letter-spacing: 0.04em;
-}
-
-.scene-info {
-  padding: 24rpx 28rpx 28rpx;
-}
-
-.scene-name {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 600;
-  font-family: 'Noto Serif SC', serif;
-  color: var(--color-text-primary);
-}
-
-.scene-desc {
-  display: block;
-  font-size: 22rpx;
-  color: var(--color-text-tertiary);
-  margin-top: 8rpx;
 }
 
 /* 最近拍摄 */

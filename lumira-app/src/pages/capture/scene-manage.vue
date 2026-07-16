@@ -40,24 +40,18 @@
         </view>
       </view>
       <view v-else class="fav-list">
-        <view
+        <ScenePresetView
           v-for="preset in favoriteScenes"
           :key="preset.id"
-          class="fav-item"
-          @click="goGuide(preset.id)"
+          :scene="preset"
+          @click="goGuide($event)"
         >
-          <view class="fav-item-icon">
-            <text class="ph fav-icon" :class="preset.icon"></text>
-          </view>
-          <view class="fav-item-text">
-            <text class="fav-item-name">{{ preset.name }}</text>
-            <text class="fav-item-desc">{{ preset.description }}</text>
-          </view>
-          <view class="fav-star-btn" @click.stop="onToggleFav(preset.id)">
-            <text class="ph ph-star-fill fav-star-icon"></text>
-          </view>
-          <text class="ph ph-caret-right fav-item-arrow"></text>
-        </view>
+          <template #actions>
+            <view class="fav-star-btn" @click.stop="onToggleFav(preset.id)">
+              <text class="ph ph-star-fill fav-star-icon"></text>
+            </view>
+          </template>
+        </ScenePresetView>
       </view>
     </view>
 
@@ -189,24 +183,18 @@
           </view>
         </view>
         <view v-else class="custom-list">
-          <view
+          <ScenePresetView
             v-for="scene in customScenes"
             :key="scene.id"
-            class="custom-item"
-            @click="goGuide(scene.id)"
+            :scene="scene"
+            @click="goGuide($event)"
           >
-            <view class="custom-item-icon">
-              <text class="ph custom-icon" :class="scene.icon"></text>
-            </view>
-            <view class="custom-item-text">
-              <text class="custom-item-name">{{ scene.name }}</text>
-              <text class="custom-item-desc">{{ scene.description || '点击查看详情' }}</text>
-            </view>
-            <view class="custom-more-btn" @click.stop="onMore(scene)">
-              <text class="ph ph-dots-three custom-more-icon"></text>
-            </view>
-            <text class="ph ph-caret-right custom-item-arrow"></text>
-          </view>
+            <template #actions>
+              <view class="custom-more-btn" @click.stop="onMore(scene)">
+                <text class="ph ph-dots-three custom-more-icon"></text>
+              </view>
+            </template>
+          </ScenePresetView>
           <view class="add-btn" @click="onNew">
             <text class="ph ph-plus add-btn-icon"></text>
             <text class="add-btn-text">新建场景</text>
@@ -220,8 +208,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { ref, reactive, watch, nextTick } from 'vue'
+import { onLoad, onShow } from '@dcloudio/uni-app'
+import ScenePresetView from '@/components/ScenePresetView.vue'
 import { useSceneManager } from '@/composables/useSceneManager'
 import { getLutOptions } from '@/utils/filterRecipe'
 import type { ScenePresetId, Target, WhiteBalance, PhotographicStyle, LutPreset, CustomScenePreset } from '@/types/template'
@@ -232,7 +221,8 @@ const {
   toggleFavorite,
   addCustomScene,
   updateCustomScene,
-  deleteCustomScene
+  deleteCustomScene,
+  reloadFromStorage
 } = useSceneManager()
 
 const tab = ref<'fav' | 'custom'>('fav')
@@ -321,12 +311,39 @@ function createDefaultForm(): FormData {
 }
 
 const formData = reactive<FormData>(createDefaultForm())
+const formDirty = ref(false)
 
 onLoad((options) => {
   if (options?.tab === 'custom') {
     tab.value = 'custom'
   }
 })
+
+onShow(() => {
+  reloadFromStorage()
+})
+
+// 监听表单字段变化，标记为脏状态
+watch(
+  () => ({
+    name: formData.name,
+    icon: formData.icon,
+    description: formData.description,
+    relatedCategory: formData.relatedCategory,
+    lightDirection: formData.sceneGuide.lightDirection,
+    shootingDistance: formData.sceneGuide.shootingDistance,
+    background: formData.sceneGuide.background,
+    bestTime: formData.sceneGuide.bestTime,
+    whiteBalance: formData.cameraSuggestion.whiteBalance,
+    photographicStyle: formData.cameraSuggestion.photographicStyle,
+    lut: formData.postSuggestion.lut
+  }),
+  () => {
+    if (formVisible.value) {
+      formDirty.value = true
+    }
+  }
+)
 
 const back = () => uni.navigateBack()
 
@@ -345,6 +362,10 @@ const onNew = () => {
   editingId.value = null
   Object.assign(formData, createDefaultForm())
   formVisible.value = true
+  // 在 watch 触发后重置脏状态，避免初始赋值被误判为用户编辑
+  nextTick(() => {
+    formDirty.value = false
+  })
 }
 
 const onEdit = (scene: CustomScenePreset) => {
@@ -371,11 +392,28 @@ const onEdit = (scene: CustomScenePreset) => {
     }
   })
   formVisible.value = true
+  nextTick(() => {
+    formDirty.value = false
+  })
 }
 
 const onCancelForm = () => {
-  formVisible.value = false
-  editingId.value = null
+  if (formDirty.value) {
+    uni.showModal({
+      title: '确认离开',
+      content: '当前表单有未保存的变更，确定要离开吗？',
+      success: (res) => {
+        if (res.confirm) {
+          formVisible.value = false
+          editingId.value = null
+          formDirty.value = false
+        }
+      }
+    })
+  } else {
+    formVisible.value = false
+    editingId.value = null
+  }
 }
 
 const onSaveForm = () => {
@@ -415,6 +453,7 @@ const onSaveForm = () => {
   }
   formVisible.value = false
   editingId.value = null
+  formDirty.value = false
 }
 
 const onMore = (scene: CustomScenePreset) => {
@@ -537,57 +576,6 @@ const onMore = (scene: CustomScenePreset) => {
   flex-direction: column;
 }
 
-.fav-item {
-  display: flex;
-  align-items: center;
-  gap: 24rpx;
-  padding: 32rpx 0;
-  border-bottom: 2rpx solid var(--color-divider);
-}
-
-.fav-list .fav-item:last-child {
-  border-bottom: none;
-}
-
-.fav-item:active {
-  opacity: 0.7;
-}
-
-.fav-item-icon {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 20rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background-color: var(--color-brand-subtle);
-}
-
-.fav-icon {
-  font-size: 40rpx;
-  color: var(--color-brand);
-}
-
-.fav-item-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.fav-item-name {
-  font-size: 30rpx;
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-
-.fav-item-desc {
-  font-size: 24rpx;
-  color: var(--color-text-tertiary);
-}
-
 .fav-star-btn {
   flex-shrink: 0;
   padding: 8rpx;
@@ -598,67 +586,10 @@ const onMore = (scene: CustomScenePreset) => {
   color: var(--color-brand);
 }
 
-.fav-item-arrow {
-  font-size: 28rpx;
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
-}
-
 /* ===== 自定义场景列表 ===== */
 .custom-list {
   display: flex;
   flex-direction: column;
-}
-
-.custom-item {
-  display: flex;
-  align-items: center;
-  gap: 24rpx;
-  padding: 32rpx 0;
-  border-bottom: 2rpx solid var(--color-divider);
-}
-
-.custom-list .custom-item:last-child {
-  border-bottom: none;
-}
-
-.custom-item:active {
-  opacity: 0.7;
-}
-
-.custom-item-icon {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 20rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background-color: var(--color-surface-alt);
-}
-
-.custom-icon {
-  font-size: 40rpx;
-  color: var(--color-text-primary);
-}
-
-.custom-item-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.custom-item-name {
-  font-size: 30rpx;
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-
-.custom-item-desc {
-  font-size: 24rpx;
-  color: var(--color-text-tertiary);
 }
 
 .custom-more-btn {
@@ -669,12 +600,6 @@ const onMore = (scene: CustomScenePreset) => {
 .custom-more-icon {
   font-size: 36rpx;
   color: var(--color-text-tertiary);
-}
-
-.custom-item-arrow {
-  font-size: 28rpx;
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
 }
 
 .add-btn {

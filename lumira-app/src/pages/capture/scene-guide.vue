@@ -36,28 +36,22 @@
         <text class="empty-inline-text">{{ tab === 'fav' ? '还没有收藏的场景，点击 ☆ 收藏' : '暂无场景' }}</text>
       </view>
       <view v-else class="scene-list">
-        <view
-          class="scene-item"
+        <ScenePresetView
           v-for="preset in currentList"
           :key="preset.id"
+          :scene="preset"
           @click="onSceneTap(preset)"
         >
-          <view class="scene-item-icon" :class="{ 'icon-bg-green': tab === 'recommend' }">
-            <text class="ph scene-icon" :class="preset.icon"></text>
-          </view>
-          <view class="scene-item-text">
-            <text class="scene-item-title">{{ preset.name }}</text>
-            <text class="scene-item-desc">{{ preset.description }}</text>
-          </view>
-          <view
-            v-if="!isCustomScene(preset)"
-            class="fav-btn"
-            @click.stop="onToggleFav(preset.id)"
-          >
-            <text class="ph fav-icon" :class="isFavorite(preset.id as ScenePresetId) ? 'ph-star-fill' : 'ph-star'"></text>
-          </view>
-          <text class="ph ph-caret-right scene-item-arrow"></text>
-        </view>
+          <template #actions>
+            <view
+              v-if="!isCustomScene(preset)"
+              class="fav-btn"
+              @click.stop="onToggleFav(preset.id)"
+            >
+              <text class="ph fav-icon" :class="isFavorite(preset.id as ScenePresetId) ? 'ph-star-fill' : 'ph-star'"></text>
+            </view>
+          </template>
+        </ScenePresetView>
       </view>
     </view>
 
@@ -130,7 +124,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
+import ScenePresetView from '@/components/ScenePresetView.vue'
 import { SCENE_PRESETS, SCENE_TO_CATEGORY } from '@/data/scenePresets'
 import { useSceneManager } from '@/composables/useSceneManager'
 import type { AnyScene, ScenePresetId } from '@/types/template'
@@ -138,6 +133,7 @@ import type { AnyScene, ScenePresetId } from '@/types/template'
 const {
   customScenes,
   favoriteScenes,
+  allScenes,
   toggleFavorite,
   isFavorite,
   isCustomScene,
@@ -153,11 +149,11 @@ const tabList = [
 ]
 
 const myScenes = computed<AnyScene[]>(() => [...customScenes.value, ...SCENE_PRESETS.slice(0, 8)])
-const recommendScenes = SCENE_PRESETS.slice(8)
+const recommendScenes = computed(() => SCENE_PRESETS.slice(8))
 
 const currentList = computed<AnyScene[]>(() => {
   if (tab.value === 'fav') return favoriteScenes.value
-  if (tab.value === 'recommend') return recommendScenes
+  if (tab.value === 'recommend') return recommendScenes.value
   return myScenes.value
 })
 
@@ -180,14 +176,19 @@ onLoad((options) => {
   }
 })
 
+onShow(() => {
+  if (selectedPreset.value) {
+    const stillExists = allScenes.value.find(s => s.id === selectedPreset.value!.id)
+    if (!stillExists) {
+      selectedPreset.value = null
+    }
+  }
+})
+
 const back = () => uni.navigateBack()
 
 const onAdd = () => {
   uni.navigateTo({ url: '/pages/capture/scene-manage?tab=custom' })
-}
-
-const onMoreRecommend = () => {
-  uni.navigateTo({ url: '/pages/capture/scene-manage?tab=fav' })
 }
 
 const onSceneTap = (preset: AnyScene) => {
@@ -288,71 +289,6 @@ const goCapture = () => {
 .scene-list {
   display: flex;
   flex-direction: column;
-}
-
-.scene-item {
-  display: flex;
-  align-items: center;
-  gap: 24rpx;
-  padding: 32rpx 0;
-  border-bottom: 2rpx solid var(--color-divider);
-}
-
-.scene-list .scene-item:last-child {
-  border-bottom: none;
-}
-
-.scene-item:active {
-  opacity: 0.7;
-}
-
-.scene-item-icon {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 20rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  background-color: var(--color-surface-alt);
-}
-
-.icon-bg-green {
-  background-color: var(--color-success-subtle);
-}
-
-.scene-icon {
-  font-size: 40rpx;
-  color: var(--color-text-primary);
-}
-
-.icon-bg-green .scene-icon {
-  color: var(--color-success);
-}
-
-.scene-item-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4rpx;
-}
-
-.scene-item-title {
-  font-size: 30rpx;
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-
-.scene-item-desc {
-  font-size: 24rpx;
-  color: var(--color-text-tertiary);
-}
-
-.scene-item-arrow {
-  font-size: 28rpx;
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
 }
 
 /* ===== 收藏按钮 ===== */

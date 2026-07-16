@@ -70,18 +70,22 @@
           </view>
         </view>
         <view class="scene-grid">
-          <view class="scene-card lumira-card-hover" v-for="s in scenes" :key="s.id" @click="goScene(s.id)">
-            <view class="scene-img-wrap">
-              <image class="scene-img" :src="s.img" mode="aspectFill" />
-              <view class="scene-badge">
-                <text class="ph scene-badge-icon" :class="s.icon"></text>
-                <text class="scene-badge-text">{{ s.name }}</text>
+          <ScenePresetView
+            v-for="s in scenes"
+            :key="s.id"
+            :scene="s"
+            variant="card"
+            :imageSrc="`https://picsum.photos/seed/scene-inspiration-${s.id}/400/533`"
+            :badgeText="s.name"
+            :badgeIcon="s.icon"
+            @click="goScene($event)"
+          >
+            <template #footer>
+              <view class="scene-tag-wrap">
+                <text class="lumira-tag" :class="getSceneTagInfo(s).tagCls">{{ getSceneTagInfo(s).tag }}</text>
               </view>
-            </view>
-            <view class="scene-tag-wrap">
-              <text class="lumira-tag" :class="s.tagCls">{{ s.tag }}</text>
-            </view>
-          </view>
+            </template>
+          </ScenePresetView>
         </view>
         <view class="more-link-wrap" @click="goSceneManage">
           <text class="more-link">
@@ -130,10 +134,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import ScenePresetView from '@/components/ScenePresetView.vue'
 import { SCENE_PRESETS } from '@/data/scenePresets'
 import { useSceneManager } from '@/composables/useSceneManager'
+import type { AnyScene } from '@/types/template'
 
-const { customScenes } = useSceneManager()
+const { customScenes, isCustomScene } = useSceneManager()
 
 const moods = ref([
   { cls: 'mood-happy', icon: 'ph-smiley', label: '开心', count: 12 },
@@ -150,25 +156,19 @@ const outfitPhotos = ref([
   { img: 'https://picsum.photos/seed/1926769/400/533', date: '7月7日' }
 ])
 
-const scenes = computed(() => {
-  const customs = customScenes.value.slice(0, 4).map(c => ({
-    id: c.id,
-    img: `https://picsum.photos/seed/scene-inspiration-${c.id}/400/533`,
-    icon: c.icon,
-    name: c.name,
-    tag: '我的场景',
-    tagCls: 'lumira-tag-gold'
-  }))
-  const presets = SCENE_PRESETS.slice(0, 4).map((p, i) => ({
-    id: p.id,
-    img: `https://picsum.photos/seed/scene-inspiration-${p.id}/400/533`,
-    icon: p.icon,
-    name: p.name,
-    tag: i === 0 ? '你最常去' : i === 2 ? '新场景推荐' : `${p.name}拍摄`,
-    tagCls: i === 0 ? 'lumira-tag-gold' : i === 2 ? 'lumira-tag-red' : 'lumira-tag-green'
-  }))
+const scenes = computed<AnyScene[]>(() => {
+  const customs = customScenes.value.slice(0, 4)
+  const presets = SCENE_PRESETS.slice(0, 4)
   return [...customs, ...presets].slice(0, 4)
 })
+
+const getSceneTagInfo = (s: AnyScene): { tag: string; tagCls: string } => {
+  if (isCustomScene(s)) return { tag: '我的场景', tagCls: 'lumira-tag-gold' }
+  const presetIndex = SCENE_PRESETS.slice(0, 4).findIndex(p => p.id === s.id)
+  if (presetIndex === 0) return { tag: '你最常去', tagCls: 'lumira-tag-gold' }
+  if (presetIndex === 2) return { tag: '新场景推荐', tagCls: 'lumira-tag-red' }
+  return { tag: `${s.name}拍摄`, tagCls: 'lumira-tag-green' }
+}
 
 const goScene = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-guide?scenePreset=${id}` })
 const goSceneManage = () => uni.navigateTo({ url: '/pages/capture/scene-manage' })
@@ -396,52 +396,6 @@ const checkins = ref([
   grid-template-columns: 1fr 1fr;
   gap: 20rpx;
   margin-top: 32rpx;
-}
-
-.scene-card {
-  display: flex;
-  flex-direction: column;
-}
-
-.scene-img-wrap {
-  position: relative;
-  width: 100%;
-  padding-bottom: 133.33%;
-  overflow: hidden;
-  border-radius: 20rpx;
-}
-
-.scene-img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.scene-badge {
-  position: absolute;
-  top: 16rpx;
-  left: 16rpx;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 9999rpx;
-  padding: 8rpx 20rpx;
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.scene-badge-icon {
-  font-size: 24rpx;
-  color: $color-brand-primary;
-}
-
-.scene-badge-text {
-  font-size: 24rpx;
-  font-weight: 500;
-  color: $color-text-primary;
 }
 
 .scene-tag-wrap {

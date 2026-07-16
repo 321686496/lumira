@@ -18,26 +18,26 @@ import type {
 const STORAGE_KEY = 'lumira_scene_manager'
 
 interface PersistedState {
+  version: number
   customScenes: CustomScenePreset[]
   favoritePresetIds: ScenePresetId[]
-  customOrder: string[]
 }
 
 const DEFAULT_STATE: PersistedState = {
+  version: 1,
   customScenes: [],
-  favoritePresetIds: [],
-  customOrder: []
+  favoritePresetIds: []
 }
 
 /** 从 localStorage 读取状态 */
 function loadState(): PersistedState {
   try {
     const raw = uni.getStorageSync(STORAGE_KEY)
-    if (!raw) return { ...DEFAULT_STATE }
+    if (!raw || raw.version !== 1) return { ...DEFAULT_STATE }
     return {
+      version: 1,
       customScenes: Array.isArray(raw.customScenes) ? raw.customScenes : [],
-      favoritePresetIds: Array.isArray(raw.favoritePresetIds) ? raw.favoritePresetIds : [],
-      customOrder: Array.isArray(raw.customOrder) ? raw.customOrder : []
+      favoritePresetIds: Array.isArray(raw.favoritePresetIds) ? raw.favoritePresetIds : []
     }
   } catch {
     return { ...DEFAULT_STATE }
@@ -98,8 +98,7 @@ export function useSceneManager() {
     }
     state.value = {
       ...state.value,
-      customScenes: [...state.value.customScenes, newScene],
-      customOrder: [...state.value.customOrder, newScene.id]
+      customScenes: [...state.value.customScenes, newScene]
     }
     persist()
     return newScene
@@ -118,8 +117,7 @@ export function useSceneManager() {
   const deleteCustomScene = (id: string): void => {
     state.value = {
       ...state.value,
-      customScenes: state.value.customScenes.filter(s => s.id !== id),
-      customOrder: state.value.customOrder.filter(oid => oid !== id)
+      customScenes: state.value.customScenes.filter(s => s.id !== id)
     }
     persist()
   }
@@ -150,6 +148,11 @@ export function useSceneManager() {
     return SCENE_PRESETS.find(p => p.id === id)
   }
 
+  /** 从 localStorage 重新加载状态（用于 onShow 同步跨页修改） */
+  const reloadFromStorage = (): void => {
+    state.value = loadState()
+  }
+
   return {
     customScenes,
     favoritePresetIds,
@@ -161,6 +164,7 @@ export function useSceneManager() {
     toggleFavorite,
     isFavorite,
     getSceneById,
-    isCustomScene
+    isCustomScene,
+    reloadFromStorage
   }
 }
