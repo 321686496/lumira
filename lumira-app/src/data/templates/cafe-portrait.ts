@@ -7,9 +7,11 @@ const cafePortrait: PhotoTemplate = {
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
+    classification: { type: 'portrait', style: 'japanese', method: 'normal' },
     tags: ['咖啡馆', '人像', '柔光', '生活'],
+    tagIds: [],
     price: 0,
-    cover: '/static/templates/cafe_portrait.jpg',
+    cover: 'https://picsum.photos/seed/template-cafe-portrait/400/600',
     description: '咖啡馆室内自然光人像，氛围温暖柔和，适合生活感肖像',
     referenceSource: '样片 EXIF: Unsplash #67890；参数参考 Unsplash 咖啡馆人像摄影合集'
   },

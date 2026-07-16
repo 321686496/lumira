@@ -7,9 +7,11 @@ const neonPortrait: PhotoTemplate = {
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
+    classification: { type: 'portrait', style: 'film', method: 'normal' },
     tags: ['霓虹', '夜景人像', '赛博朋克', '城市'],
+    tagIds: [],
     price: 3,
-    cover: '/static/templates/neon_portrait.jpg',
+    cover: 'https://picsum.photos/seed/template-neon-portrait/400/600',
     description: '利用城市霓虹灯光拍摄赛博朋克风格人像',
     referenceSource: '样片 EXIF: 赛博朋克人像作品集；参数参考 500px Neon Portrait 专题'
   },

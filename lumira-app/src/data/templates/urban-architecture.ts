@@ -7,9 +7,11 @@ const urbanArchitecture: PhotoTemplate = {
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'landscape',
+    classification: { type: 'landscape', style: 'epic', method: 'wide' },
     tags: ['建筑', '城市', '风光', '几何线条'],
+    tagIds: [],
     price: 3,
-    cover: '/static/templates/urban_architecture.jpg',
+    cover: 'https://picsum.photos/seed/template-urban-architecture/400/600',
     description: '城市建筑摄影，利用几何线条与透视关系呈现现代建筑之美',
     referenceSource: '样片 EXIF: ArchDaily 建筑摄影作品；参数参考建筑摄影作品集'
   },

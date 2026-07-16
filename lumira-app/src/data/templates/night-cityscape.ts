@@ -7,9 +7,11 @@ const nightCityscape: PhotoTemplate = {
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'night',
+    classification: { type: 'night', style: 'neon', method: 'wide' },
     tags: ['夜景', '城市', '长曝光', '风光'],
+    tagIds: [],
     price: 0,
-    cover: '/static/templates/night_cityscape.jpg',
+    cover: 'https://picsum.photos/seed/template-night-cityscape/400/600',
     description: '城市夜景长曝光拍摄，捕捉灯光车轨与建筑天际线',
     referenceSource: '样片 EXIF: 城市夜景摄影集；参数参考 500px 城市夜景精选作品'
   },

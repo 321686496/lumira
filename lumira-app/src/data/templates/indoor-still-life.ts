@@ -7,9 +7,11 @@ const indoorStillLife: PhotoTemplate = {
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'still-life',
+    classification: { type: 'still-life', style: 'minimal', method: 'single' },
     tags: ['静物', '室内', '柔光', '生活美学'],
+    tagIds: [],
     price: 0,
-    cover: '/static/templates/indoor_still_life.jpg',
+    cover: 'https://picsum.photos/seed/template-indoor-still-life/400/600',
     description: '室内柔光环境下的静物台面拍摄，突出物体质感与生活气息',
     referenceSource: '样片 EXIF: Pexels 静物摄影作品；参数参考静物摄影教程'
   },

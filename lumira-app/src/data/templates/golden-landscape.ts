@@ -7,9 +7,11 @@ const goldenLandscape: PhotoTemplate = {
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'landscape',
+    classification: { type: 'landscape', style: 'fresh', method: 'wide' },
     tags: ['风光', '黄金时刻', '日出日落', '广角'],
+    tagIds: [],
     price: 0,
-    cover: '/static/templates/golden_landscape.jpg',
+    cover: 'https://picsum.photos/seed/template-golden-landscape/400/600',
     description: '黄金时刻拍摄风光，色调温暖柔和，强调自然光影层次',
     referenceSource: '样片 EXIF: 500px 风光精选；参数参考 500px 风光摄影黄金时刻合集'
   },

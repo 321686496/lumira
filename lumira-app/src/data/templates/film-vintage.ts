@@ -7,9 +7,11 @@ const filmVintage: PhotoTemplate = {
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
+    classification: { type: 'portrait', style: 'film', method: 'normal' },
     tags: ['胶片', '复古', '人像', '怀旧', '暖调'],
+    tagIds: [],
     price: 3,
-    cover: '/static/templates/film_vintage.jpg',
+    cover: 'https://picsum.photos/seed/template-film-vintage/400/600',
     description: '模拟胶片质感的复古人像，暖调褪色感营造怀旧氛围',
     referenceSource: '样片 EXIF: 500px 胶片人像作品；参数参考胶片摄影作品'
   },
