@@ -37,6 +37,10 @@
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},
 		{
+			"path": "pages/capture/scene-manage",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
 			"path": "pages/templates/detail",
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},
