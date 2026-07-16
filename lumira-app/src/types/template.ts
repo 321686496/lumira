@@ -270,6 +270,20 @@ export interface ScenePreset {
   relatedCategory: Target
 }
 
+/** 自定义场景 ID */
+export type CustomSceneId = `custom_${string}`
+
+/** 自定义场景预设：用户创建的场景，复用 ScenePreset 结构 */
+export interface CustomScenePreset extends Omit<ScenePreset, 'id'> {
+  id: CustomSceneId
+  creator: 'user'
+  createdAt: number
+  updatedAt: number
+}
+
+/** 任意场景（预设或自定义） */
+export type AnyScene = ScenePreset | CustomScenePreset
+
 /** 完整拍照模板 */
 export interface PhotoTemplate {
   meta: TemplateMeta
