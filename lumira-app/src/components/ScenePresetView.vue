@@ -31,7 +31,7 @@
     @click="onClick"
   >
     <view class="spv-card-img-wrap">
-      <image class="spv-card-img" :src="imageSrc" mode="aspectFill" />
+      <image class="spv-card-img" :src="resolvedImageSrc" mode="aspectFill" />
       <view v-if="badgeText" class="spv-card-badge" :class="{ 'spv-card-badge-brand': badgeBrand }">
         <text v-if="badgeIcon" class="ph spv-card-badge-icon" :class="badgeIcon"></text>
         <text class="spv-card-badge-text">{{ badgeText }}</text>
@@ -44,7 +44,12 @@
           <text class="spv-custom-tag-text">自定义</text>
         </view>
       </view>
+      <text v-if="scene.vibe" class="spv-card-vibe">{{ scene.vibe }}</text>
       <text v-if="scene.description" class="spv-card-desc">{{ scene.description }}</text>
+      <view v-if="hasStats" class="spv-card-stats">
+        <text v-if="photoCount !== undefined" class="spv-stat-item">📷 {{ photoCount }}</text>
+        <text v-if="achievementLevel && achievementLevel > 0" class="spv-stat-item">🏆 Lv.{{ achievementLevel }}</text>
+      </view>
       <slot name="footer" />
     </view>
   </view>
@@ -63,6 +68,8 @@ const props = withDefaults(defineProps<{
   badgeText?: string
   badgeIcon?: string
   badgeBrand?: boolean
+  photoCount?: number
+  achievementLevel?: number
 }>(), {
   size: 'full',
   variant: 'list',
@@ -76,6 +83,18 @@ const emit = defineEmits<{
 const { isCustomScene } = useSceneManager()
 
 const isCustom = computed(() => isCustomScene(props.scene))
+
+/** 图片源：优先使用传入的 imageSrc，否则回退到场景示例图首张 */
+const resolvedImageSrc = computed(() => {
+  if (props.imageSrc) return props.imageSrc
+  const examples = props.scene.exampleImages
+  if (examples && examples.length > 0) return examples[0]
+  return ''
+})
+
+const hasStats = computed(() => {
+  return (props.photoCount !== undefined) || (props.achievementLevel !== undefined && props.achievementLevel > 0)
+})
 
 const onClick = () => {
   emit('click', props.scene.id)
@@ -265,5 +284,27 @@ const onClick = () => {
   display: block;
   font-size: 22rpx;
   color: var(--color-text-tertiary);
+}
+
+.spv-card-vibe {
+  display: block;
+  font-size: 24rpx;
+  color: #C9A876;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.spv-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-top: 4rpx;
+  flex-wrap: wrap;
+}
+
+.spv-stat-item {
+  font-size: 22rpx;
+  color: #6B635A;
+  line-height: 1.2;
 }
 </style>

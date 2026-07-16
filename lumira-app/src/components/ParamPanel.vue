@@ -364,22 +364,18 @@
 
           <!-- 当前场景参数预览 -->
           <view v-if="currentScenePreset" class="scene-suggestion-block">
-            <text class="section-title">场景参数建议</text>
-            <view class="param-row">
-              <text class="param-label">白平衡</text>
-              <text class="param-value">{{ wbLabel(currentScenePreset.cameraSuggestion.whiteBalance || 'daylight', currentScenePreset.cameraSuggestion.whiteBalanceK ?? 5500) }}</text>
-            </view>
-            <view class="param-row" v-if="currentScenePreset.cameraSuggestion.photographicStyle">
-              <text class="param-label">拍照风格</text>
-              <text class="param-value">{{ photographicStyleLabel(currentScenePreset.cameraSuggestion.photographicStyle) }}</text>
-            </view>
-            <view class="param-row" v-if="currentScenePreset.cameraSuggestion.aperture">
-              <text class="param-label">建议光圈</text>
-              <text class="param-value">f/{{ currentScenePreset.cameraSuggestion.aperture }}</text>
-            </view>
-            <view class="param-row" v-if="currentScenePreset.postSuggestion.lut">
+            <text class="section-title">场景氛围滤镜</text>
+            <view class="param-row" v-if="currentScenePreset.filter.lut && currentScenePreset.filter.lut !== 'none'">
               <text class="param-label">建议 LUT</text>
-              <text class="param-value">{{ getLutLabel(currentScenePreset.postSuggestion.lut) }}</text>
+              <text class="param-value">{{ getLutLabel(currentScenePreset.filter.lut) }}</text>
+            </view>
+            <view class="param-row" v-if="currentScenePreset.filter.systemFilter && currentScenePreset.filter.systemFilter !== 'none'">
+              <text class="param-label">系统滤镜</text>
+              <text class="param-value">{{ getSystemFilterLabel(currentScenePreset.filter.systemFilter) }}</text>
+            </view>
+            <view class="param-row" v-if="currentScenePreset.filter.reason">
+              <text class="param-label">氛围理由</text>
+              <text class="param-value">{{ currentScenePreset.filter.reason }}</text>
             </view>
           </view>
 
@@ -819,7 +815,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { PhotoTemplate, WhiteBalance, FlashMode, FocusMode, LutPreset, SystemFilter, LensType, PhotographicStyle, OverlayType, GridType, ScenePresetId } from '@/types/template'
-import { getSystemFilterOptions, getLutOptions, getLutLabel } from '@/utils/filterRecipe'
+import { getSystemFilterOptions, getLutOptions, getLutLabel, getSystemFilterLabel } from '@/utils/filterRecipe'
 import AdvancedSection from '@/components/AdvancedSection.vue'
 import { SCENE_PRESETS } from '@/data/scenePresets'
 
@@ -1001,14 +997,13 @@ const onApplyScenePreset = () => {
     return
   }
   const tpl = cloneTemplate()
-  Object.assign(tpl.camera, preset.cameraSuggestion)
-  if (preset.postSuggestion.color) {
-    Object.assign(tpl.postProcess.color, preset.postSuggestion.color)
+  // 场景预设仅保留氛围滤镜，应用到后期参数（替代旧的 cameraSuggestion/postSuggestion）
+  tpl.postProcess.lut = preset.filter.lut
+  if (preset.filter.systemFilter) {
+    tpl.postProcess.systemFilter = preset.filter.systemFilter
   }
-  const { color: _omitColor, ...restPost } = preset.postSuggestion
-  Object.assign(tpl.postProcess, restPost)
   emit('update:template', tpl)
-  uni.showToast({ title: '已应用场景参数', icon: 'success' })
+  uni.showToast({ title: '已应用场景滤镜', icon: 'success' })
 }
 
 const updateSceneGuide = <K extends keyof PhotoTemplate['sceneGuide']>(
