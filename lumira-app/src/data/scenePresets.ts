@@ -1,352 +1,782 @@
-import type { ScenePreset, ScenePresetId, Target } from '@/types/template'
+import type { ScenePreset, ScenePresetId, SceneCategory, SceneStyle, SceneCategoryGroup, Target } from '@/types/template'
+
+/** 场景风格列表 */
+export const SCENE_STYLES: SceneStyle[] = [
+  { id: 'window-light', name: '窗光', category: 'light' },
+  { id: 'sunset-backlight', name: '日落逆光', category: 'light' },
+  { id: 'neon', name: '霓虹', category: 'light' },
+  { id: 'candle', name: '烛光', category: 'light' },
+  { id: 'seaside', name: '海边', category: 'outdoor' },
+  { id: 'forest', name: '森林', category: 'outdoor' },
+  { id: 'urban', name: '城市', category: 'outdoor' },
+  { id: 'home', name: '居家', category: 'indoor' },
+  { id: 'cafe', name: '咖啡馆店铺', category: 'indoor' },
+  { id: 'studio', name: '影棚', category: 'indoor' },
+  { id: 'healing', name: '治愈', category: 'mood' },
+  { id: 'lonely', name: '孤独', category: 'mood' },
+]
+
+/** 场景大类聚合 */
+export const SCENE_CATEGORIES: SceneCategoryGroup[] = [
+  { category: 'light', name: '光线氛围', icon: 'ph-sun', styles: SCENE_STYLES.filter(s => s.category === 'light') },
+  { category: 'outdoor', name: '室外环境', icon: 'ph-mountains', styles: SCENE_STYLES.filter(s => s.category === 'outdoor') },
+  { category: 'indoor', name: '室内空间', icon: 'ph-house', styles: SCENE_STYLES.filter(s => s.category === 'indoor') },
+  { category: 'mood', name: '情绪氛围', icon: 'ph-heart', styles: SCENE_STYLES.filter(s => s.category === 'mood') },
+]
+
+/* ───────────────────────────────────────────────
+ * 18 个场景预设
+ * ─────────────────────────────────────────────── */
+
+const cafeWindow: ScenePreset = {
+  id: 'cafe-window',
+  name: '咖啡馆',
+  icon: 'ph-coffee',
+  category: 'indoor',
+  style: 'cafe',
+  filter: {
+    lut: 'warm_film',
+    systemFilter: 'vivid_warm',
+    reason: '色温偏暖 +20，对比度 +10，像被午后的光晒软了',
+  },
+  vibe: '慵懒午后，把光调成蜜糖色',
+  description: '适合下午 2-5 点，当阳光斜照进落地窗，整个世界都慢了下来。咖啡馆的木质桌椅、暖色墙面和飘散的咖啡香，构成最治愈的拍摄空间。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-cafe-window-1/600/800',
+    'https://picsum.photos/seed/scene-cafe-window-2/600/800',
+    'https://picsum.photos/seed/scene-cafe-window-3/600/800',
+  ],
+  tips: [
+    '让模特面朝窗户，利用柔光均匀照亮面部',
+    '大光圈虚化背景，突出人物',
+    '咖啡杯做前景更有氛围感',
+  ],
+  whereToShoot: '咖啡馆 / 图书馆 / 居家窗边',
+  bestTime: '下午 14:00-17:00',
+  sceneGuide: {
+    lightDirection: '侧光 45°-90°（窗户自然光为主光源）',
+    shootingDistance: '1.5-2.5m',
+    background: '咖啡馆室内环境，虚化的吧台、书架或暖色墙面',
+    props: ['咖啡杯', '书本', '绿植盆栽'],
+    bestTime: '下午 14:00-17:00',
+    tips: ['让模特面朝窗户', '大光圈虚化背景', '咖啡杯做前景'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 2,
+    bestTimeFrom: '14:00',
+    bestTimeTo: '17:00',
+  },
+  relatedCategory: 'portrait',
+  recommendedTagIds: [],
+}
+
+const libraryQuiet: ScenePreset = {
+  id: 'library-quiet',
+  name: '图书馆',
+  icon: 'ph-books',
+  category: 'indoor',
+  style: 'cafe',
+  filter: {
+    lut: 'fuji',
+    reason: '清新绿调 + 微反差，像旧书页里夹着的一片叶',
+  },
+  vibe: '静谧书海，让时间在指尖慢下来',
+  description: '适合午后或周末，光线穿过书架的缝隙洒在书页与脸庞上。木质书架、烫金书脊和安静的氛围，最适合沉静的肖像。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-library-quiet-1/600/800',
+    'https://picsum.photos/seed/scene-library-quiet-2/600/800',
+    'https://picsum.photos/seed/scene-library-quiet-3/600/800',
+  ],
+  tips: [
+    '利用书架做背景虚化，营造纵深感',
+    '让模特低头翻书，捕捉自然的侧脸',
+    '避免闪光灯，使用高感光度或大光圈',
+  ],
+  whereToShoot: '图书馆 / 独立书店 / 大学阅览室',
+  bestTime: '下午 14:00-17:00',
+  sceneGuide: {
+    lightDirection: '侧光 45°-90°（书架间隙漏光）',
+    shootingDistance: '1.5-2m 半身或侧脸特写',
+    background: '书架、烫金书脊、阅读灯下的桌面',
+    props: ['书本', '老花镜', '笔记本', '钢笔'],
+    bestTime: '下午 14:00-17:00',
+    tips: ['利用书架做背景虚化', '让模特低头翻书', '避免闪光灯使用大光圈'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 1.8,
+    bestTimeFrom: '14:00',
+    bestTimeTo: '17:00',
+  },
+  relatedCategory: 'portrait',
+  recommendedTagIds: [],
+}
+
+const homeCozy: ScenePreset = {
+  id: 'home-cozy',
+  name: '居家温馨',
+  icon: 'ph-house',
+  category: 'indoor',
+  style: 'home',
+  filter: {
+    lut: 'warm_film',
+    reason: '暖调 +15，像清晨第一缕晒进屋子的光',
+  },
+  vibe: '慵懒清晨，把日子过成一首慢歌',
+  description: '适合上午或周末午后，窗边的阳光洒在沙发和地毯上。家中的毛毯、绿植和马克杯，是最真实的治愈系拍摄空间。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-home-cozy-1/600/800',
+    'https://picsum.photos/seed/scene-home-cozy-2/600/800',
+    'https://picsum.photos/seed/scene-home-cozy-3/600/800',
+  ],
+  tips: [
+    '利用窗光做侧光，营造柔和的明暗',
+    '抱枕、毛毯当道具增加生活感',
+    '大光圈虚化背景杂物，突出主体',
+  ],
+  whereToShoot: '居家 / 民宿 / 短租公寓',
+  bestTime: '上午 09:00-11:00 或下午 15:00-17:00',
+  sceneGuide: {
+    lightDirection: '侧光 45°-90°（窗边自然光）',
+    shootingDistance: '1.5-3m 生活场景',
+    background: '沙发、床铺、书架、绿植角落',
+    props: ['抱枕', '毛毯', '马克杯', '书本'],
+    bestTime: '上午 09:00-11:00 或下午 15:00-17:00',
+    tips: ['利用窗光做侧光', '抱枕毛毯增加生活感', '大光圈虚化背景杂物'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 2,
+    bestTimeFrom: '09:00',
+    bestTimeTo: '11:00',
+  },
+  relatedCategory: 'still-life',
+  recommendedTagIds: [],
+}
+
+const sunsetSilhouette: ScenePreset = {
+  id: 'sunset-silhouette',
+  name: '黄昏剪影',
+  icon: 'ph-sunset',
+  category: 'light',
+  style: 'sunset-backlight',
+  filter: {
+    lut: 'cinematic',
+    reason: '宽容差 + 暖调，把天空压成电影感',
+  },
+  vibe: '把人放进夕阳里，剪成一帧诗',
+  description: '适合日落前后 30 分钟，逆光下的人物轮廓被金色光线勾勒。天空的晚霞和地平线，是这张照片最壮阔的舞台。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-sunset-silhouette-1/600/800',
+    'https://picsum.photos/seed/scene-sunset-silhouette-2/600/800',
+    'https://picsum.photos/seed/scene-sunset-silhouette-3/600/800',
+  ],
+  tips: [
+    '对天空测光锁定，拍摄人物剪影',
+    '利用前景增加画面纵深感',
+    '黄金时刻色温最暖，抓紧时间',
+  ],
+  whereToShoot: '海边 / 山顶 / 城市天台',
+  bestTime: '黄昏 17:30-19:00（日落前后 30 分钟）',
+  sceneGuide: {
+    lightDirection: '逆光（太阳位于主体正后方）',
+    shootingDistance: '3-8m 剪影或半身',
+    background: '落日、晚霞、地平线、剪影前景',
+    props: ['草帽', '气球', '雨伞'],
+    bestTime: '黄昏 17:30-19:00',
+    tips: ['对天空测光锁定', '利用前景增加纵深', '黄金时刻色温最暖'],
+    lightDirectionAngle: 180,
+    shootingDistanceM: 5,
+    bestTimeFrom: '17:30',
+    bestTimeTo: '19:00',
+  },
+  relatedCategory: 'portrait',
+  recommendedTagIds: [],
+}
+
+const goldenRimPortrait: ScenePreset = {
+  id: 'golden-rim-portrait',
+  name: '金边人像',
+  icon: 'ph-sun-horizon',
+  category: 'light',
+  style: 'sunset-backlight',
+  filter: {
+    lut: 'rouge',
+    reason: '暖红调 + 肤色提亮，像夕阳吻过脸颊',
+  },
+  vibe: '夕阳描边，把发丝染成蜜金',
+  description: '适合日落前 1 小时，太阳低角度逆光打亮人物轮廓，发丝边缘会出现金色光晕。柔和的前侧光补面，皮肤透亮有质感。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-golden-rim-portrait-1/600/800',
+    'https://picsum.photos/seed/scene-golden-rim-portrait-2/600/800',
+    'https://picsum.photos/seed/scene-golden-rim-portrait-3/600/800',
+  ],
+  tips: [
+    '让太阳位于人物侧后方，避免直射镜头',
+    '用反光板或白墙补面光',
+    '大光圈拍摄，让背景光斑化',
+  ],
+  whereToShoot: '户外空旷地 / 公园 / 屋顶',
+  bestTime: '黄昏前 1 小时 16:30-18:00',
+  sceneGuide: {
+    lightDirection: '侧逆光 135°-225°（太阳位于人物侧后方）',
+    shootingDistance: '2-3m 半身人像',
+    background: '逆光下的草地、远山、虚化城市',
+    props: ['草帽', '透明雨伞', '反光板'],
+    bestTime: '黄昏前 1 小时 16:30-18:00',
+    tips: ['太阳位于人物侧后方', '用反光板补面光', '大光圈让背景光斑化'],
+    lightDirectionAngle: 200,
+    shootingDistanceM: 2.5,
+    bestTimeFrom: '16:30',
+    bestTimeTo: '18:00',
+  },
+  relatedCategory: 'portrait',
+  recommendedTagIds: [],
+}
+
+const nightStreet: ScenePreset = {
+  id: 'night-street',
+  name: '霓虹街角',
+  icon: 'ph-moon-stars',
+  category: 'light',
+  style: 'neon',
+  filter: {
+    lut: 'cyberpunk',
+    reason: '高饱和蓝紫对比 + 暗部品红，赛博味拉满',
+  },
+  vibe: '赛博夜行，让霓虹流过脸颊',
+  description: '适合夜晚 19:00 后，城市的霓虹招牌、车流光轨和橱窗灯箱，是天然的赛博朋克布景。潮湿的柏油路反光更是绝佳镜面。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-night-street-1/600/800',
+    'https://picsum.photos/seed/scene-night-street-2/600/800',
+    'https://picsum.photos/seed/scene-night-street-3/600/800',
+  ],
+  tips: [
+    '寻找霓虹招牌做轮廓光或发丝光',
+    '雨后路面反光增加色彩层次',
+    '注意快门速度避免手抖',
+  ],
+  whereToShoot: '商业街 / 霓虹招牌密集街区 / 地下通道',
+  bestTime: '夜晚 19:00-23:00',
+  sceneGuide: {
+    lightDirection: '利用环境光源（霓虹灯、路灯、橱窗灯）',
+    shootingDistance: '2-4m 人像',
+    background: '霓虹招牌、车流光轨、城市天际线',
+    props: ['透明雨伞', '反光镜面', '发光道具'],
+    bestTime: '夜晚 19:00-23:00',
+    tips: ['霓虹招牌做轮廓光', '雨后路面反光增色', '注意快门速度避免手抖'],
+    lightDirectionAngle: 180,
+    shootingDistanceM: 3,
+    bestTimeFrom: '19:00',
+    bestTimeTo: '23:00',
+  },
+  relatedCategory: 'night',
+  recommendedTagIds: [],
+}
+
+const barNeon: ScenePreset = {
+  id: 'bar-neon',
+  name: '酒吧霓虹',
+  icon: 'ph-martini',
+  category: 'light',
+  style: 'neon',
+  filter: {
+    lut: 'cyberpunk',
+    reason: '高对比蓝粉 + 暗角，像一杯调过的霓虹鸡尾酒',
+  },
+  vibe: '微醺夜色，把灯光调到最暧昧',
+  description: '适合夜晚 21:00 后，酒吧里的霓虹招牌、暖色灯串和金属反光，营造出暧昧又迷离的氛围。低光高感的拍摄，是夜晚最性感的时刻。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-bar-neon-1/600/800',
+    'https://picsum.photos/seed/scene-bar-neon-2/600/800',
+    'https://picsum.photos/seed/scene-bar-neon-3/600/800',
+  ],
+  tips: [
+    '利用吧台灯做主光源，避免顶光',
+    '玻璃杯反光增加画面层次',
+    '大光圈虚化背景光斑',
+  ],
+  whereToShoot: '鸡尾酒吧 / 居酒屋 / 精酿啤酒馆',
+  bestTime: '夜晚 21:00-次日 01:00',
+  sceneGuide: {
+    lightDirection: '侧光或侧逆光（吧台灯、霓虹招牌）',
+    shootingDistance: '1.5-2.5m 半身人像',
+    background: '吧台、酒瓶阵列、霓虹招牌、暖色灯串',
+    props: ['鸡尾酒杯', '威士忌杯', '烟卷'],
+    bestTime: '夜晚 21:00-次日 01:00',
+    tips: ['吧台灯做主光源', '玻璃杯反光增层次', '大光圈虚化背景光斑'],
+    lightDirectionAngle: 135,
+    shootingDistanceM: 2,
+    bestTimeFrom: '21:00',
+    bestTimeTo: '01:00',
+  },
+  relatedCategory: 'night',
+  recommendedTagIds: [],
+}
+
+const convenienceStore: ScenePreset = {
+  id: 'convenience-store',
+  name: '便利店',
+  icon: 'ph-storefront',
+  category: 'light',
+  style: 'neon',
+  filter: {
+    lut: 'twilight',
+    reason: '冷蓝 + 暖黄对比，像便利店窗外的夜色',
+  },
+  vibe: '凌晨三点，把便利店的灯拍成港湾',
+  description: '适合深夜或凌晨，便利店刺眼的白光与窗外夜色形成强烈对比。货架、便当、收银台，是城市里最孤独又最温暖的存在。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-convenience-store-1/600/800',
+    'https://picsum.photos/seed/scene-convenience-store-2/600/800',
+    'https://picsum.photos/seed/scene-convenience-store-3/600/800',
+  ],
+  tips: [
+    '从店内向外拍，利用大光比剪影',
+    '货架做背景增加纵深感',
+    '让人物靠着玻璃，捕捉冷光下的轮廓',
+  ],
+  whereToShoot: '24 小时便利店 / 加油站便利店 / 地铁站便利店',
+  bestTime: '深夜 22:00-次日 06:00',
+  sceneGuide: {
+    lightDirection: '店内顶光为主，窗外夜色为辅',
+    shootingDistance: '2-3m 半身或环境人像',
+    background: '货架、便当柜、收银台、店外街景',
+    props: ['便当盒', '饮料罐', '塑料袋', '耳机'],
+    bestTime: '深夜 22:00-次日 06:00',
+    tips: ['从店内向外拍剪影', '货架做背景增加纵深', '人物靠玻璃拍轮廓'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 2.5,
+    bestTimeFrom: '22:00',
+    bestTimeTo: '06:00',
+  },
+  relatedCategory: 'street',
+  recommendedTagIds: [],
+}
+
+const seasideBeach: ScenePreset = {
+  id: 'seaside-beach',
+  name: '海边沙滩',
+  icon: 'ph-waves',
+  category: 'outdoor',
+  style: 'seaside',
+  filter: {
+    lut: 'pastel',
+    reason: '低饱和 + 提亮，像被海水冲淡的颜色',
+  },
+  vibe: '海风咸甜，把云朵调成棉花糖',
+  description: '适合日出或日落前后的黄金时刻，开阔的海平面和柔软的沙滩是最好的画布。海风吹动发丝和裙摆，是清新自然风的最佳拍摄场景。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-seaside-beach-1/600/800',
+    'https://picsum.photos/seed/scene-seaside-beach-2/600/800',
+    'https://picsum.photos/seed/scene-seaside-beach-3/600/800',
+  ],
+  tips: [
+    '利用海风让头发飘动增加动感',
+    '低角度拍摄拉长身形，融入海平面',
+    '注意镜头防沙防水',
+  ],
+  whereToShoot: '海边 / 沙滩 / 海岛',
+  bestTime: '黄金时刻 06:00-08:00 或 17:00-19:00',
+  sceneGuide: {
+    lightDirection: '顺光或侧光（避免正午顶光）',
+    shootingDistance: '2-5m 半身至全身',
+    background: '海平面、沙滩、礁石、天空',
+    props: ['草帽', '丝巾', '沙滩裙'],
+    bestTime: '黄金时刻 06:00-08:00 或 17:00-19:00',
+    tips: ['海风让头发飘动', '低角度拉长身形', '注意镜头防沙防水'],
+    lightDirectionAngle: 45,
+    shootingDistanceM: 3,
+    bestTimeFrom: '17:00',
+    bestTimeTo: '19:00',
+  },
+  relatedCategory: 'landscape',
+  recommendedTagIds: [],
+}
+
+const seasideRocks: ScenePreset = {
+  id: 'seaside-rocks',
+  name: '海边礁石',
+  icon: 'ph-mountains',
+  category: 'outdoor',
+  style: 'seaside',
+  filter: {
+    lut: 'cinematic',
+    reason: '宽容差 + 冷调对比，把海压成电影画面',
+  },
+  vibe: '黑礁拍浪，把海拍成史诗',
+  description: '适合阴天或日落，深色礁石与翻涌的白浪形成强烈对比。壮阔的海岸线和孤独的人物，是史诗感照片的最佳舞台。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-seaside-rocks-1/600/800',
+    'https://picsum.photos/seed/scene-seaside-rocks-2/600/800',
+    'https://picsum.photos/seed/scene-seaside-rocks-3/600/800',
+  ],
+  tips: [
+    '长曝光拍摄海浪，柔化水面',
+    '利用礁石做前景，增加纵深',
+    '阴天更出片，避免正午强光',
+  ],
+  whereToShoot: '海岸礁石区 / 海岛 / 海蚀平台',
+  bestTime: '阴天全天 或 黄昏 17:00-19:00',
+  sceneGuide: {
+    lightDirection: '侧光或漫射光（阴天最佳）',
+    shootingDistance: '3-8m 环境人像',
+    background: '礁石、白浪、海平面、远山',
+    props: ['长裙', '风衣', '透明雨伞'],
+    bestTime: '阴天全天 或 黄昏 17:00-19:00',
+    tips: ['长曝光柔化海浪', '礁石做前景增加纵深', '阴天更出片'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 5,
+    bestTimeFrom: '17:00',
+    bestTimeTo: '19:00',
+  },
+  relatedCategory: 'landscape',
+  recommendedTagIds: [],
+}
+
+const forestBamboo: ScenePreset = {
+  id: 'forest-bamboo',
+  name: '竹海禅意',
+  icon: 'ph-tree',
+  category: 'outdoor',
+  style: 'forest',
+  filter: {
+    lut: 'fuji',
+    reason: '青绿调 + 微反差，像被竹林过滤过的光',
+  },
+  vibe: '竹影斑驳，把光调成一片青玉',
+  description: '适合上午 8-11 点，光线透过竹叶形成丁达尔效应。深绿的竹林与飘动的雾气，是禅意照片的最佳布景。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-forest-bamboo-1/600/800',
+    'https://picsum.photos/seed/scene-forest-bamboo-2/600/800',
+    'https://picsum.photos/seed/scene-forest-bamboo-3/600/800',
+  ],
+  tips: [
+    '寻找光线穿透竹叶的光斑',
+    '低角度仰拍突出竹林高度',
+    '利用雾气增加层次感',
+  ],
+  whereToShoot: '竹林 / 植物园 / 山间小径',
+  bestTime: '上午 08:00-11:00 光线通透',
+  sceneGuide: {
+    lightDirection: '侧光或顶光穿透竹叶（丁达尔效应）',
+    shootingDistance: '2-5m 人像或环境',
+    background: '竹林、竹叶、林间小径、雾气',
+    props: ['油纸伞', '竹篮', '汉服'],
+    bestTime: '上午 08:00-11:00',
+    tips: ['寻找光斑穿透竹叶', '低角度仰拍竹林', '利用雾气增加层次'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 3,
+    bestTimeFrom: '08:00',
+    bestTimeTo: '11:00',
+  },
+  relatedCategory: 'landscape',
+  recommendedTagIds: [],
+}
+
+const forestMaple: ScenePreset = {
+  id: 'forest-maple',
+  name: '枫林秋色',
+  icon: 'ph-leaf',
+  category: 'outdoor',
+  style: 'forest',
+  filter: {
+    lut: 'vintage',
+    reason: '褪色黄绿 + 颗粒感，像一帧旧胶片里的秋天',
+  },
+  vibe: '红叶纷飞，把秋拍成一封旧信',
+  description: '适合深秋 10-11 月，红黄相间的枫叶与斑驳的树皮，构成温暖的复古画面。落叶铺满的小径，是最诗意的拍摄背景。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-forest-maple-1/600/800',
+    'https://picsum.photos/seed/scene-forest-maple-2/600/800',
+    'https://picsum.photos/seed/scene-forest-maple-3/600/800',
+  ],
+  tips: [
+    '拾起枫叶做前景或道具',
+    '利用树干做引导线构图',
+    '逆光拍摄枫叶透亮的红',
+  ],
+  whereToShoot: '枫林 / 公园 / 山间小径',
+  bestTime: '深秋 10-11 月，上午 09:00-11:00',
+  sceneGuide: {
+    lightDirection: '侧光或逆光（透亮红叶）',
+    shootingDistance: '2-4m 人像或环境',
+    background: '枫树、红叶、落叶小径、树皮',
+    props: ['枫叶', '风衣', '复古书包', '毛线帽'],
+    bestTime: '深秋 10-11 月，上午 09:00-11:00',
+    tips: ['枫叶做前景或道具', '树干做引导线构图', '逆光透亮红叶'],
+    lightDirectionAngle: 135,
+    shootingDistanceM: 3,
+    bestTimeFrom: '09:00',
+    bestTimeTo: '11:00',
+  },
+  relatedCategory: 'landscape',
+  recommendedTagIds: [],
+}
+
+const urbanRooftop: ScenePreset = {
+  id: 'urban-rooftop',
+  name: '城市天台',
+  icon: 'ph-building',
+  category: 'outdoor',
+  style: 'urban',
+  filter: {
+    lut: 'cinematic',
+    reason: '宽容差 + 冷调，把城市压成科幻片',
+  },
+  vibe: '站在天台，把城市踩在脚下',
+  description: '适合黄昏或夜晚，天台是俯瞰城市的最佳视角。远处的天际线、近处的空调外机和水泥围栏，构成冷峻的都市感。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-urban-rooftop-1/600/800',
+    'https://picsum.photos/seed/scene-urban-rooftop-2/600/800',
+    'https://picsum.photos/seed/scene-urban-rooftop-3/600/800',
+  ],
+  tips: [
+    '黄昏拍摄，天空与城市灯光同时亮起',
+    '利用天台围栏做引导线',
+    '广角镜头强化空间感',
+  ],
+  whereToShoot: '楼顶天台 / 停车场顶层 / 城市观景平台',
+  bestTime: '黄昏 17:00-19:00 或夜晚 19:00-22:00',
+  sceneGuide: {
+    lightDirection: '顺光或侧光（黄昏）/ 环境光（夜晚）',
+    shootingDistance: '2-5m 半身至全身',
+    background: '天际线、高楼、空调外机、水泥围栏',
+    props: ['风衣', '耳机', '啤酒罐'],
+    bestTime: '黄昏 17:00-19:00 或夜晚 19:00-22:00',
+    tips: ['黄昏天空与灯光同时亮', '天台围栏做引导线', '广角强化空间感'],
+    lightDirectionAngle: 0,
+    shootingDistanceM: 3,
+    bestTimeFrom: '17:00',
+    bestTimeTo: '22:00',
+  },
+  relatedCategory: 'landscape',
+  recommendedTagIds: [],
+}
+
+const urbanSubway: ScenePreset = {
+  id: 'urban-subway',
+  name: '地铁站',
+  icon: 'ph-train',
+  category: 'outdoor',
+  style: 'urban',
+  filter: {
+    lut: 'bw',
+    reason: '黑白 + 高反差，把喧嚣剥离只剩结构',
+  },
+  vibe: '银盐地铁，把通勤拍成默片',
+  description: '适合全天候，地铁站的几何线条、冷白灯光和匆匆人流，是黑白街拍的最佳舞台。站台的对称构图与车厢内的瞬间，都是经典的拍摄瞬间。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-urban-subway-1/600/800',
+    'https://picsum.photos/seed/scene-urban-subway-2/600/800',
+    'https://picsum.photos/seed/scene-urban-subway-3/600/800',
+  ],
+  tips: [
+    '利用站台对称构图，营造秩序感',
+    '长焦压缩空间，捕捉车厢内的瞬间',
+    '高速快门凝固走动的人流',
+  ],
+  whereToShoot: '地铁站 / 火车站 / 公交枢纽',
+  bestTime: '全天（室内光线稳定）',
+  sceneGuide: {
+    lightDirection: '站顶冷白光为主，环境光均匀',
+    shootingDistance: '3-8m 环境人像',
+    background: '站台、轨道、车厢门、广告灯箱',
+    props: ['耳机', '报纸', '通勤包'],
+    bestTime: '全天（室内光线稳定）',
+    tips: ['站台对称构图', '长焦压缩空间', '高速快门凝固人流'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 5,
+    bestTimeFrom: '07:00',
+    bestTimeTo: '22:00',
+  },
+  relatedCategory: 'street',
+  recommendedTagIds: [],
+}
+
+const bedroomMorning: ScenePreset = {
+  id: 'bedroom-morning',
+  name: '卧室晨光',
+  icon: 'ph-bed',
+  category: 'indoor',
+  style: 'home',
+  filter: {
+    lut: 'mist',
+    reason: '低对比 + 提亮，像清晨透过薄纱帘的光',
+  },
+  vibe: '醒在晨雾里，把梦拍成一片白',
+  description: '适合清晨 7-9 点，透过窗帘的晨光带有薄雾感。白色的床单、凌乱的枕头和慵懒的身影，是治愈系照片的最佳画面。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-bedroom-morning-1/600/800',
+    'https://picsum.photos/seed/scene-bedroom-morning-2/600/800',
+    'https://picsum.photos/seed/scene-bedroom-morning-3/600/800',
+  ],
+  tips: [
+    '拉开一半窗帘，让光线有方向感',
+    '白色床单做主背景，简化画面',
+    '拍摄侧脸或背影，留白更有意境',
+  ],
+  whereToShoot: '卧室 / 民宿 / 酒店房间',
+  bestTime: '清晨 07:00-09:00',
+  sceneGuide: {
+    lightDirection: '侧光 45°-90°（透过窗帘的晨光）',
+    shootingDistance: '1.5-2.5m 半身或静物',
+    background: '白色床单、枕头、窗帘、床头柜',
+    props: ['被子', '睡衣', '咖啡杯', '书'],
+    bestTime: '清晨 07:00-09:00',
+    tips: ['拉开一半窗帘', '白色床单做主背景', '拍摄侧脸或背影留白'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 2,
+    bestTimeFrom: '07:00',
+    bestTimeTo: '09:00',
+  },
+  relatedCategory: 'still-life',
+  recommendedTagIds: [],
+}
+
+const kitchenCooking: ScenePreset = {
+  id: 'kitchen-cooking',
+  name: '厨房烟火',
+  icon: 'ph-cooking-pot',
+  category: 'indoor',
+  style: 'home',
+  filter: {
+    lut: 'warm_film',
+    reason: '暖调 + 微饱和，像锅底刚熄的火',
+  },
+  vibe: '把油烟拍成最暖的人间味',
+  description: '适合白天自然光下，厨房的木质台面、铸铁锅和正在烹饪的食物，构成最有生活感的画面。蒸汽升腾的瞬间，是烟火气最浓的时刻。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-kitchen-cooking-1/600/800',
+    'https://picsum.photos/seed/scene-kitchen-cooking-2/600/800',
+    'https://picsum.photos/seed/scene-kitchen-cooking-3/600/800',
+  ],
+  tips: [
+    '侧光拍摄，突出食物质感',
+    '利用蒸汽增加氛围感',
+    '加入手部动作，更有生活感',
+  ],
+  whereToShoot: '家中厨房 / 民宿厨房 / 烹饪工作室',
+  bestTime: '白天自然光 11:00-14:00',
+  sceneGuide: {
+    lightDirection: '侧光 45°-90°（厨房窗光或顶灯）',
+    shootingDistance: '30-80cm 俯拍或 45 度',
+    background: '木质台面、铸铁锅、砧板、调料瓶',
+    props: ['铸铁锅', '砧板', '刀具', '食材', '蒸汽'],
+    bestTime: '白天自然光 11:00-14:00',
+    tips: ['侧光突出食物质感', '蒸汽增加氛围感', '加入手部动作'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 0.5,
+    bestTimeFrom: '11:00',
+    bestTimeTo: '14:00',
+  },
+  relatedCategory: 'food',
+  recommendedTagIds: [],
+}
+
+const candleWarm: ScenePreset = {
+  id: 'candle-warm',
+  name: '烛光暖夜',
+  icon: 'ph-candle',
+  category: 'light',
+  style: 'candle',
+  filter: {
+    lut: 'sepia_classic',
+    reason: '深棕褪色 + 颗粒，像 19 世纪的银盐照片',
+  },
+  vibe: '一盏烛火，把夜染成琥珀',
+  description: '适合夜晚，单一的烛光光源营造出深邃的暗调画面。火焰的暖光打在物体表面，金属反光与皮革质感尤为出彩，是最复古的拍摄场景。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-candle-warm-1/600/800',
+    'https://picsum.photos/seed/scene-candle-warm-2/600/800',
+    'https://picsum.photos/seed/scene-candle-warm-3/600/800',
+  ],
+  tips: [
+    '关闭其他光源，仅用烛光',
+    '高感光度 + 大光圈，避免长曝光抖动',
+    '拍摄静物或半身，营造静谧感',
+  ],
+  whereToShoot: '餐桌 / 书桌 / 任何可放置蜡烛的暗室',
+  bestTime: '夜晚 20:00-23:00',
+  sceneGuide: {
+    lightDirection: '单点光源（烛火为主光）',
+    shootingDistance: '30cm-1.5m 静物或半身',
+    background: '暗色桌面、书本、金属器皿、皮革',
+    props: ['蜡烛', '老书', '威士忌杯', '金属怀表'],
+    bestTime: '夜晚 20:00-23:00',
+    tips: ['仅用烛光', '高感光度+大光圈', '拍摄静物或半身'],
+    lightDirectionAngle: 0,
+    shootingDistanceM: 0.8,
+    bestTimeFrom: '20:00',
+    bestTimeTo: '23:00',
+  },
+  relatedCategory: 'still-life',
+  recommendedTagIds: [],
+}
+
+const rainyWindow: ScenePreset = {
+  id: 'rainy-window',
+  name: '雨窗静思',
+  icon: 'ph-drop',
+  category: 'mood',
+  style: 'healing',
+  filter: {
+    lut: 'mist',
+    reason: '低对比 + 灰蓝调，像被雨水稀释过的世界',
+  },
+  vibe: '听雨落窗，把心放慢半拍',
+  description: '适合雨天，窗外的雨滴在玻璃上形成水珠，模糊的世界透着宁静。一杯热茶、一本旧书、模糊的窗外，是治愈系照片最经典的画面。',
+  exampleImages: [
+    'https://picsum.photos/seed/scene-rainy-window-1/600/800',
+    'https://picsum.photos/seed/scene-rainy-window-2/600/800',
+    'https://picsum.photos/seed/scene-rainy-window-3/600/800',
+  ],
+  tips: [
+    '对焦在玻璃水珠上，让窗外虚化',
+    '利用窗外的色彩透过滤镜',
+    '加入热饮或书本，增加治愈感',
+  ],
+  whereToShoot: '家中窗边 / 咖啡馆 / 车内',
+  bestTime: '雨天全天',
+  sceneGuide: {
+    lightDirection: '漫射光（雨天自然光）',
+    shootingDistance: '20-80cm 玻璃水珠特写',
+    background: '雨窗、模糊街景、室内暖光',
+    props: ['热茶杯', '旧书', '绿植', '毛毯'],
+    bestTime: '雨天全天',
+    tips: ['对焦玻璃水珠虚化窗外', '利用窗外色彩透过滤镜', '加入热饮或书本'],
+    lightDirectionAngle: 90,
+    shootingDistanceM: 0.3,
+    bestTimeFrom: '08:00',
+    bestTimeTo: '18:00',
+  },
+  relatedCategory: 'still-life',
+  recommendedTagIds: [],
+}
 
 export const SCENE_PRESETS: ScenePreset[] = [
-  {
-    id: 'cafe',
-    name: '咖啡馆',
-    icon: 'ph-coffee',
-    description: '柔和自然光，温暖氛围',
-    cameraSuggestion: {
-      whiteBalance: 'cloudy',
-      whiteBalanceK: 4800,
-      photographicStyle: 'warm',
-      aperture: 2.8
-    },
-    postSuggestion: {
-      lut: 'warm_film',
-      color: { temperature: 20, contrast: 10 }
-    },
-    sceneGuide: {
-      lightDirection: '侧光 45°-90°（窗户自然光为主光源）',
-      shootingDistance: '1.5-2.5m',
-      background: '咖啡馆室内环境，虚化的吧台、书架或暖色墙面',
-      props: ['咖啡杯', '书本', '绿植盆栽'],
-      bestTime: '下午 14:00-17:00',
-      tips: [
-        '让模特面朝窗户，利用柔光均匀照亮面部',
-        '使用大光圈虚化背景突出人物',
-        '避免顶光直射造成眼窝阴影'
-      ],
-      lightDirectionAngle: 90,
-      shootingDistanceM: 2,
-      bestTimeFrom: '14:00',
-      bestTimeTo: '17:00'
-    },
-    relatedCategory: 'portrait'
-  },
-  {
-    id: 'street',
-    name: '街拍',
-    icon: 'ph-buildings',
-    description: '城市光影，故事感构图',
-    cameraSuggestion: {
-      whiteBalance: 'daylight',
-      whiteBalanceK: 5500,
-      photographicStyle: 'high_contrast',
-      aperture: 4
-    },
-    postSuggestion: {
-      lut: 'cinematic',
-      color: { contrast: 15, clarity: 10 }
-    },
-    sceneGuide: {
-      lightDirection: '侧光/侧逆光（利用建筑遮挡形成光斑）',
-      shootingDistance: '3-5m 环境人像',
-      background: '街角、橱窗、斑马线、涂鸦墙等城市元素',
-      props: ['咖啡杯', '墨镜', '手提包'],
-      bestTime: '黄金时刻 16:00-18:00 或清晨 07:00-09:00',
-      tips: [
-        '寻找街角光影对比，利用橱窗反光增加层次',
-        '采用抓拍方式捕捉自然步态',
-        '注意背景行人避免干扰主体'
-      ],
-      lightDirectionAngle: 135,
-      shootingDistanceM: 4,
-      bestTimeFrom: '16:00',
-      bestTimeTo: '18:00'
-    },
-    relatedCategory: 'street'
-  },
-  {
-    id: 'beach',
-    name: '海边',
-    icon: 'ph-waves',
-    description: '广阔天际线，清新明亮',
-    cameraSuggestion: {
-      whiteBalance: 'daylight',
-      whiteBalanceK: 5500,
-      photographicStyle: 'standard',
-      aperture: 8
-    },
-    postSuggestion: {
-      lut: 'cool_film',
-      color: { brightness: 5, vibrance: 10 }
-    },
-    sceneGuide: {
-      lightDirection: '顺光或侧光（避免正午顶光）',
-      shootingDistance: '2-5m 半身至全身',
-      background: '海平面、沙滩、礁石、天空',
-      props: ['草帽', '丝巾', '沙滩裙'],
-      bestTime: '黄金时刻 06:00-08:00 或 17:00-19:00',
-      tips: [
-        '利用海风让头发飘动增加动感',
-        '低角度拍摄拉长身形，融入海平面',
-        '注意镜头防沙防水'
-      ],
-      lightDirectionAngle: 45,
-      shootingDistanceM: 3,
-      bestTimeFrom: '17:00',
-      bestTimeTo: '19:00'
-    },
-    relatedCategory: 'landscape'
-  },
-  {
-    id: 'macro',
-    name: '微距',
-    icon: 'ph-flower',
-    description: '细节之美，浅景深虚化',
-    cameraSuggestion: {
-      whiteBalance: 'daylight',
-      whiteBalanceK: 5500,
-      focusMode: 'manual',
-      aperture: 8
-    },
-    postSuggestion: {
-      lut: 'pastel',
-      color: { clarity: 15 },
-      sharpen: 20
-    },
-    sceneGuide: {
-      lightDirection: '柔光（避免直射造成硬阴影）',
-      shootingDistance: '10-30cm 微距范围',
-      background: '纯色虚化背景或同色系环境',
-      props: ['花朵', '水滴', '昆虫'],
-      bestTime: '上午 09:00-11:00 柔光时段',
-      tips: [
-        '使用手动对焦精准控制焦点',
-        '保持稳定，建议使用三脚架',
-        '收小光圈保证足够景深'
-      ],
-      lightDirectionAngle: 45,
-      shootingDistanceM: 0.2,
-      bestTimeFrom: '09:00',
-      bestTimeTo: '11:00'
-    },
-    relatedCategory: 'macro'
-  },
-  {
-    id: 'night',
-    name: '夜景',
-    icon: 'ph-moon',
-    description: '霓虹光影，赛博氛围',
-    cameraSuggestion: {
-      nightMode: true,
-      iso: 800,
-      shutterSpeed: '1/30',
-      aperture: 1.8,
-      whiteBalance: 'daylight',
-      whiteBalanceK: 5500
-    },
-    postSuggestion: {
-      lut: 'cyberpunk',
-      color: { contrast: 20 },
-      vignette: 20
-    },
-    sceneGuide: {
-      lightDirection: '利用环境光源（霓虹灯、路灯、橱窗灯）',
-      shootingDistance: '2-4m 人像',
-      background: '霓虹招牌、车流光轨、城市天际线',
-      props: ['透明雨伞', '反光镜面', '发光道具'],
-      bestTime: '夜晚 19:00-23:00',
-      tips: [
-        '开启夜景模式提升暗部细节',
-        '寻找霓虹灯作为轮廓光或发丝光',
-        '注意快门速度避免手抖'
-      ],
-      lightDirectionAngle: 180,
-      shootingDistanceM: 3,
-      bestTimeFrom: '19:00',
-      bestTimeTo: '23:00'
-    },
-    relatedCategory: 'night'
-  },
-  {
-    id: 'food',
-    name: '美食',
-    icon: 'ph-fork-knife',
-    description: '诱人色泽，俯拍构图',
-    cameraSuggestion: {
-      whiteBalance: 'tungsten',
-      whiteBalanceK: 3200,
-      photographicStyle: 'warm',
-      aperture: 2.8
-    },
-    postSuggestion: {
-      lut: 'warm_film',
-      color: { saturation: 15 },
-      sharpen: 10
-    },
-    sceneGuide: {
-      lightDirection: '侧光或逆光（突出食物质感）',
-      shootingDistance: '30-50cm 俯拍或 45 度',
-      background: '木质桌面、大理石、纯色餐布',
-      props: ['餐具', '餐巾', '装饰花草'],
-      bestTime: '白天自然光 11:00-14:00',
-      tips: [
-        '注意白平衡让美食色彩还原自然',
-        '俯拍展示全貌，45 度展示层次',
-        '加入手部动作增加生活感'
-      ],
-      lightDirectionAngle: 90,
-      shootingDistanceM: 0.4,
-      bestTimeFrom: '11:00',
-      bestTimeTo: '14:00'
-    },
-    relatedCategory: 'food'
-  },
-  {
-    id: 'home',
-    name: '居家',
-    icon: 'ph-house',
-    description: '温馨日常，生活质感',
-    cameraSuggestion: {
-      whiteBalance: 'tungsten',
-      whiteBalanceK: 3200,
-      photographicStyle: 'warm',
-      aperture: 2.0
-    },
-    postSuggestion: {
-      lut: 'warm_film',
-      color: { temperature: 15 }
-    },
-    sceneGuide: {
-      lightDirection: '窗边柔光或室内暖灯',
-      shootingDistance: '1-3m 生活场景',
-      background: '沙发、床铺、书架、绿植角落',
-      props: ['抱枕', '毛毯', '马克杯', '书本'],
-      bestTime: '上午 09:00-11:00 或下午 15:00-17:00',
-      tips: [
-        '保持画面简洁，突出居家温馨氛围',
-        '利用窗光营造柔和明暗过渡',
-        '大光圈虚化背景杂物'
-      ],
-      lightDirectionAngle: 90,
-      shootingDistanceM: 2,
-      bestTimeFrom: '09:00',
-      bestTimeTo: '11:00'
-    },
-    relatedCategory: 'still-life'
-  },
-  {
-    id: 'sunset',
-    name: '黄昏',
-    icon: 'ph-sunset',
-    description: '逆光剪影，暖调氛围',
-    cameraSuggestion: {
-      whiteBalance: 'shade',
-      whiteBalanceK: 7500,
-      photographicStyle: 'warm',
-      aperture: 5.6
-    },
-    postSuggestion: {
-      lut: 'twilight',
-      color: { temperature: 30, saturation: 10 }
-    },
-    sceneGuide: {
-      lightDirection: '逆光（太阳位于主体正后方）',
-      shootingDistance: '3-8m 剪影或半身',
-      background: '落日、晚霞、地平线、剪影前景',
-      props: ['草帽', '气球', '雨伞'],
-      bestTime: '黄昏 17:30-19:00（日落前后 30 分钟）',
-      tips: [
-        '对天空测光锁定，拍摄人物剪影',
-        '利用前景增加画面纵深',
-        '黄金时刻色温最暖，抓紧时间'
-      ],
-      lightDirectionAngle: 180,
-      shootingDistanceM: 5,
-      bestTimeFrom: '17:30',
-      bestTimeTo: '19:00'
-    },
-    relatedCategory: 'landscape'
-  },
-  {
-    id: 'forest',
-    name: '森林',
-    icon: 'ph-tree',
-    description: '通透绿意，自然光影',
-    cameraSuggestion: {
-      whiteBalance: 'daylight',
-      whiteBalanceK: 5500,
-      photographicStyle: 'standard',
-      aperture: 5.6
-    },
-    postSuggestion: {
-      lut: 'fuji',
-      color: { vibrance: 10 }
-    },
-    sceneGuide: {
-      lightDirection: '侧光或顶光穿透树叶（丁达尔效应）',
-      shootingDistance: '2-5m 人像或环境',
-      background: '树林、蕨类、苔藓、林间小径',
-      props: ['野餐垫', '篮子', '花束'],
-      bestTime: '上午 08:00-11:00 光线通透',
-      tips: [
-        '寻找光线穿透树叶的光斑',
-        '使用绿色浓郁的 LUT 增强氛围',
-        '低角度仰拍突出树冠'
-      ],
-      lightDirectionAngle: 90,
-      shootingDistanceM: 3,
-      bestTimeFrom: '08:00',
-      bestTimeTo: '11:00'
-    },
-    relatedCategory: 'landscape'
-  },
-  {
-    id: 'indoor',
-    name: '室内',
-    icon: 'ph-building',
-    description: '柔和均匀，干净构图',
-    cameraSuggestion: {
-      whiteBalance: 'fluorescent',
-      whiteBalanceK: 4000,
-      photographicStyle: 'standard',
-      aperture: 2.8
-    },
-    postSuggestion: {
-      lut: 'pastel',
-      color: { brightness: 5 }
-    },
-    sceneGuide: {
-      lightDirection: '均匀柔光（避免强反差）',
-      shootingDistance: '1.5-3m 人像或静物',
-      background: '白墙、纯色背景纸、简约家具',
-      props: ['书本', '花瓶', '装饰画'],
-      bestTime: '全天（室内光线稳定）',
-      tips: [
-        '使用大光圈虚化背景突出主体',
-        '注意色温准确性，避免偏色',
-        '利用墙面反射光补光'
-      ],
-      lightDirectionAngle: 45,
-      shootingDistanceM: 2,
-      bestTimeFrom: '10:00',
-      bestTimeTo: '16:00'
-    },
-    relatedCategory: 'still-life'
-  }
+  cafeWindow, libraryQuiet, homeCozy,
+  sunsetSilhouette, goldenRimPortrait,
+  nightStreet, barNeon, convenienceStore,
+  seasideBeach, seasideRocks,
+  forestBamboo, forestMaple,
+  urbanRooftop, urbanSubway,
+  bedroomMorning, kitchenCooking,
+  candleWarm, rainyWindow,
 ]
 
 export const SCENE_TO_CATEGORY: Record<ScenePresetId, Target> = {
-  cafe: 'portrait',
-  street: 'street',
-  beach: 'landscape',
-  macro: 'macro',
-  night: 'night',
-  food: 'food',
-  home: 'still-life',
-  sunset: 'landscape',
-  forest: 'landscape',
-  indoor: 'still-life'
+  'cafe-window': 'portrait',
+  'library-quiet': 'portrait',
+  'home-cozy': 'still-life',
+  'sunset-silhouette': 'portrait',
+  'golden-rim-portrait': 'portrait',
+  'night-street': 'night',
+  'bar-neon': 'night',
+  'convenience-store': 'street',
+  'seaside-beach': 'landscape',
+  'seaside-rocks': 'landscape',
+  'forest-bamboo': 'landscape',
+  'forest-maple': 'landscape',
+  'urban-rooftop': 'landscape',
+  'urban-subway': 'street',
+  'bedroom-morning': 'still-life',
+  'kitchen-cooking': 'food',
+  'candle-warm': 'still-life',
+  'rainy-window': 'still-life',
 }
