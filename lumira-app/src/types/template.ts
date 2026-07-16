@@ -6,11 +6,40 @@
 /** 模板目标主体类型 */
 export type Target = 'portrait' | 'landscape' | 'food' | 'street' | 'night' | 'macro' | 'still-life'
 
+/* ── 场景分类（两层结构） ── */
+export type SceneCategory = 'light' | 'outdoor' | 'indoor' | 'mood'
+
+export interface SceneStyle {
+  id: string
+  name: string
+  category: SceneCategory
+}
+
+export interface SceneCategoryGroup {
+  category: SceneCategory
+  name: string
+  icon: string
+  styles: SceneStyle[]
+}
+
 /** 场景预设 ID */
 export type ScenePresetId =
-  | 'cafe' | 'street' | 'beach' | 'macro'
-  | 'night' | 'food' | 'home' | 'sunset'
-  | 'forest' | 'indoor'
+  | 'cafe-window' | 'library-quiet' | 'home-cozy'
+  | 'sunset-silhouette' | 'golden-rim-portrait'
+  | 'night-street' | 'bar-neon' | 'convenience-store'
+  | 'seaside-beach' | 'seaside-rocks'
+  | 'forest-bamboo' | 'forest-maple'
+  | 'urban-rooftop' | 'urban-subway'
+  | 'bedroom-morning' | 'kitchen-cooking'
+  | 'candle-warm' | 'rainy-window'
+
+/** 场景氛围滤镜配置 */
+export interface SceneFilter {
+  lut: LutPreset
+  systemFilter?: SystemFilter
+  /** 选用该滤镜的理由（情绪化说明） */
+  reason: string
+}
 
 /** 构图叠图类型 */
 export type OverlayType =
@@ -95,14 +124,24 @@ export interface SilhouetteResource {
   sizeKB?: number
 }
 
+/** 模板三层分类 */
+export interface TemplateClassification {
+  type: Target
+  style: string
+  method: string
+}
+
 /** 模板元信息 */
 export interface TemplateMeta {
   id: string
   name: string
   author: string
   version: string
-  category: Target
+  category: Target                    // 保留旧字段（向后兼容）
+  classification: TemplateClassification  // 新增三层分类
   tags: string[]
+  /** 用户自定义标签 ids */
+  tagIds: string[]
   /** 价格（0 = 免费） */
   price: number
   cover: string
@@ -252,22 +291,38 @@ export interface PostProcess {
   systemFilter?: SystemFilter
 }
 
-/** 场景预设：完整的参数建议包 */
+/** 场景预设（氛围引擎定位） */
 export interface ScenePreset {
   id: ScenePresetId
   name: string
-  /** Phosphor 图标 class */
   icon: string
-  /** 场景描述 */
+
+  /** 两层分类 */
+  category: SceneCategory
+  style: string
+
+  /** 氛围滤镜（唯一保留的"参数"） */
+  filter: SceneFilter
+
+  /** 情绪化主标题 */
+  vibe: string
+  /** 场景描述：氛围 + 光线 + 环境 */
   description: string
-  /** 一键应用的相机参数 */
-  cameraSuggestion: Partial<CameraParams>
-  /** 一键应用的后期参数（含 color 子对象） */
-  postSuggestion: Omit<Partial<PostProcess>, 'color'> & { color?: Partial<PostProcessColor> }
-  /** 场景指南数据 */
+  /** 示例图 1-3 张（picsum.photos） */
+  exampleImages: string[]
+  /** 拍摄小贴士 */
+  tips: string[]
+  /** 出片地点建议 */
+  whereToShoot: string
+  /** 最佳拍摄时间 */
+  bestTime: string
+
+  /** 兼容保留：场景指南文字 */
   sceneGuide: Omit<SceneGuide, 'presetId'>
-  /** 关联的模板分类 */
   relatedCategory: Target
+
+  /** 推荐标签 ids（预设自带） */
+  recommendedTagIds: string[]
 }
 
 /** 自定义场景 ID */
@@ -279,6 +334,8 @@ export interface CustomScenePreset extends Omit<ScenePreset, 'id'> {
   creator: 'user'
   createdAt: number
   updatedAt: number
+  /** 用户自定义标签 ids */
+  tagIds: string[]
 }
 
 /** 任意场景（预设或自定义） */
@@ -293,3 +350,57 @@ export interface PhotoTemplate {
   sceneGuide: SceneGuide
   postProcess: PostProcess
 }
+
+/* ── 用户自定义标签 ── */
+export interface UserTag {
+  id: string
+  name: string
+  type: 'scene' | 'template' | 'both'
+  color?: string
+  createdAt: number
+}
+
+/* ── 拍摄组合 ── */
+export interface ShootKit {
+  id: string
+  name: string
+  sceneId: ScenePresetId | CustomSceneId
+  templateId: string
+  overrides?: {
+    camera?: Partial<CameraParams>
+    postProcess?: Partial<PostProcess>
+  }
+  createdAt: number
+  updatedAt: number
+  useCount: number
+  lastUsedAt?: number
+}
+
+/* ── 本地照片记录 ── */
+export interface LocalPhoto {
+  id: string
+  dataUrl: string
+  sceneId: ScenePresetId | CustomSceneId | null
+  templateId?: string
+  kitId?: string
+  mood?: string
+  lut?: LutPreset
+  createdAt: number
+}
+
+/* ── 场景成就 ── */
+export interface SceneAchievement {
+  sceneId: string
+  level: number
+  levelName: string
+  photoCount: number
+  nextLevelCount: number
+}
+
+export const SCENE_LEVELS = [
+  { level: 1, name: '初探', threshold: 1 },
+  { level: 2, name: '熟悉', threshold: 5 },
+  { level: 3, name: '达人', threshold: 15 },
+  { level: 4, name: '专家', threshold: 30 },
+  { level: 5, name: '大师', threshold: 50 },
+] as const
