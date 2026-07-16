@@ -1,18 +1,24 @@
 /**
  * 场景管理组合式函数
  *
- * 提供自定义场景 CRUD、预设收藏、localStorage 持久化。
+ * 提供自定义场景 CRUD、预设收藏、照片统计、成就、排行榜，localStorage 持久化。
  * 使用 module-level ref 实现跨组件共享的单例状态。
  */
 
 import { computed, ref } from 'vue'
-import { SCENE_PRESETS } from '@/data/scenePresets'
+import { SCENE_PRESETS, SCENE_CATEGORIES } from '@/data/scenePresets'
+import { SCENE_LEVELS } from '@/types/template'
 import type {
   ScenePreset,
   ScenePresetId,
   CustomScenePreset,
   CustomSceneId,
-  AnyScene
+  AnyScene,
+  SceneCategory,
+  SceneCategoryGroup,
+  LocalPhoto,
+  SceneAchievement,
+  LutPreset
 } from '@/types/template'
 
 const STORAGE_KEY = 'lumira_scene_manager'
@@ -20,25 +26,65 @@ const STORAGE_KEY = 'lumira_scene_manager'
 interface PersistedState {
   version: number
   customScenes: CustomScenePreset[]
-  favoritePresetIds: ScenePresetId[]
+  favoritePresetIds: string[]
+  photos: LocalPhoto[]
 }
 
 const DEFAULT_STATE: PersistedState = {
-  version: 1,
+  version: 2,
   customScenes: [],
-  favoritePresetIds: []
+  favoritePresetIds: [],
+  photos: []
+}
+
+/**
+ * v1 → v2 迁移：删除 customScenes 中已废弃的 cameraSuggestion/postSuggestion，
+ * 补默认 filter/vibe/description/exampleImages/tips/whereToShoot/bestTime/category/style/recommendedTagIds/tagIds。
+ */
+function migrateState(raw: any): PersistedState {
+  if (raw && raw.version === 1) {
+    const migratedCustomScenes = (Array.isArray(raw.customScenes) ? raw.customScenes : []).map((s: any) => ({
+      ...s,
+      // 删除旧字段（设置 undefined，JSON 序列化时会被剔除）
+      cameraSuggestion: undefined,
+      postSuggestion: undefined,
+      // 补新字段默认值
+      filter: s.filter || { lut: 'none' as LutPreset, reason: '自定义场景滤镜' },
+      vibe: s.vibe || s.description || '自定义场景',
+      description: s.description || '',
+      exampleImages: s.exampleImages || [],
+      tips: s.tips || s.sceneGuide?.tips || [],
+      whereToShoot: s.whereToShoot || '',
+      bestTime: s.bestTime || s.sceneGuide?.bestTime || '',
+      category: s.category || ('indoor' as SceneCategory),
+      style: s.style || 'cafe',
+      recommendedTagIds: s.recommendedTagIds || [],
+      tagIds: s.tagIds || [],
+    }))
+    return {
+      version: 2,
+      customScenes: migratedCustomScenes,
+      favoritePresetIds: Array.isArray(raw.favoritePresetIds) ? raw.favoritePresetIds : [],
+      photos: [],
+    }
+  }
+  if (raw && raw.version === 2) {
+    return {
+      version: 2,
+      customScenes: Array.isArray(raw.customScenes) ? raw.customScenes : [],
+      favoritePresetIds: Array.isArray(raw.favoritePresetIds) ? raw.favoritePresetIds : [],
+      photos: Array.isArray(raw.photos) ? raw.photos : [],
+    }
+  }
+  return { ...DEFAULT_STATE }
 }
 
 /** 从 localStorage 读取状态 */
 function loadState(): PersistedState {
   try {
     const raw = uni.getStorageSync(STORAGE_KEY)
-    if (!raw || raw.version !== 1) return { ...DEFAULT_STATE }
-    return {
-      version: 1,
-      customScenes: Array.isArray(raw.customScenes) ? raw.customScenes : [],
-      favoritePresetIds: Array.isArray(raw.favoritePresetIds) ? raw.favoritePresetIds : []
-    }
+    if (!raw) return { ...DEFAULT_STATE }
+    return migrateState(raw)
   } catch {
     return { ...DEFAULT_STATE }
   }
@@ -74,6 +120,7 @@ function persist() {
 export function useSceneManager() {
   const customScenes = computed(() => state.value.customScenes)
   const favoritePresetIds = computed(() => state.value.favoritePresetIds)
+  const photos = computed(() => state.value.photos)
 
   const allScenes = computed<AnyScene[]>(() => {
     return [...state.value.customScenes, ...SCENE_PRESETS]
@@ -84,6 +131,114 @@ export function useSceneManager() {
       .map(id => SCENE_PRESETS.find(p => p.id === id))
       .filter((p): p is ScenePreset => p !== undefined)
   })
+
+  // ── 分类 computed ──
+
+  const scenesByCategory = computed<Record<SceneCategory, AnyScene[]>>(() => {
+    const result: Record<SceneCategory, AnyScene[]> = {
+      light: [], outdoor: [], indoor: [], mood: []
+    }
+    for (const scene of allScenes.value) {
+      result[scene.category].push(scene)
+    }
+    return result
+  })
+
+  const scenesByStyle = computed<Record<string, AnyScene[]>>(() => {
+    const result: Record<string, AnyScene[]> = {}
+    for (const scene of allScenes.value) {
+      if (!result[scene.style]) result[scene.style] = []
+      result[scene.style].push(scene)
+    }
+    return result
+  })
+
+  const sceneCategoryTree = computed<SceneCategoryGroup[]>(() => {
+    return SCENE_CATEGORIES.map(group => ({
+      ...group,
+      styles: group.styles.map(style => ({ ...style })),
+    }))
+  })
+
+  // ── 照片管理 ──
+
+  function addPhoto(data: Omit<LocalPhoto, 'id' | 'createdAt'>): string {
+    const id = `photo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const photo: LocalPhoto = { ...data, id, createdAt: Date.now() }
+    // 最新照片在前（按 createdAt 降序）
+    state.value = {
+      ...state.value,
+      photos: [photo, ...state.value.photos],
+    }
+    persist()
+    return id
+  }
+
+  function deletePhoto(id: string): void {
+    state.value = {
+      ...state.value,
+      photos: state.value.photos.filter(p => p.id !== id),
+    }
+    persist()
+  }
+
+  function getPhotoCountByScene(sceneId: string): number {
+    return state.value.photos.filter(p => p.sceneId === sceneId).length
+  }
+
+  function getPhotosByScene(sceneId: string): LocalPhoto[] {
+    return state.value.photos.filter(p => p.sceneId === sceneId)
+  }
+
+  // ── 成就系统 ──
+
+  function getSceneAchievement(sceneId: string): SceneAchievement {
+    const count = getPhotoCountByScene(sceneId)
+    let currentLevel = 0
+    for (const lv of SCENE_LEVELS) {
+      if (count >= lv.threshold) currentLevel = lv.level
+    }
+    if (currentLevel === 0) {
+      return { sceneId, level: 0, levelName: '未开始', photoCount: count, nextLevelCount: 1 }
+    }
+    const currentLevelDef = SCENE_LEVELS.find(l => l.level === currentLevel)!
+    const nextLevelDef = SCENE_LEVELS.find(l => l.level === currentLevel + 1)
+    return {
+      sceneId,
+      level: currentLevel,
+      levelName: currentLevelDef.name,
+      photoCount: count,
+      nextLevelCount: nextLevelDef ? nextLevelDef.threshold : currentLevelDef.threshold,
+    }
+  }
+
+  const sceneAchievements = computed<SceneAchievement[]>(() => {
+    return allScenes.value.map(s => getSceneAchievement(s.id))
+  })
+
+  // ── 排行榜 ──
+
+  const allTimeRanking = computed<{ scene: AnyScene; photoCount: number; rank: number }[]>(() => {
+    return allScenes.value
+      .map(scene => ({ scene, photoCount: getPhotoCountByScene(scene.id) }))
+      .filter(item => item.photoCount > 0)
+      .sort((a, b) => b.photoCount - a.photoCount)
+      .map((item, idx) => ({ ...item, rank: idx + 1 }))
+  })
+
+  const weeklyRanking = computed<{ scene: AnyScene; photoCount: number; rank: number }[]>(() => {
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+    return allScenes.value
+      .map(scene => ({
+        scene,
+        photoCount: state.value.photos.filter(p => p.sceneId === scene.id && p.createdAt >= oneWeekAgo).length,
+      }))
+      .filter(item => item.photoCount > 0)
+      .sort((a, b) => b.photoCount - a.photoCount)
+      .map((item, idx) => ({ ...item, rank: idx + 1 }))
+  })
+
+  // ── 自定义场景 CRUD ──
 
   const addCustomScene = (
     scene: Omit<CustomScenePreset, 'id' | 'creator' | 'createdAt' | 'updatedAt'>
@@ -154,6 +309,7 @@ export function useSceneManager() {
   }
 
   return {
+    // 原 API
     customScenes,
     favoritePresetIds,
     allScenes,
@@ -165,6 +321,22 @@ export function useSceneManager() {
     isFavorite,
     getSceneById,
     isCustomScene,
-    reloadFromStorage
+    reloadFromStorage,
+    // 新增：分类
+    scenesByCategory,
+    scenesByStyle,
+    sceneCategoryTree,
+    // 新增：照片管理
+    photos,
+    addPhoto,
+    deletePhoto,
+    getPhotoCountByScene,
+    getPhotosByScene,
+    // 新增：成就
+    getSceneAchievement,
+    sceneAchievements,
+    // 新增：排行榜
+    weeklyRanking,
+    allTimeRanking,
   }
 }
