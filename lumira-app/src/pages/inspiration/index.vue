@@ -70,7 +70,7 @@
           </view>
         </view>
         <view class="scene-grid">
-          <view class="scene-card lumira-card-hover" v-for="s in scenes" :key="s.name">
+          <view class="scene-card lumira-card-hover" v-for="s in scenes" :key="s.id" @click="goScene(s.id)">
             <view class="scene-img-wrap">
               <image class="scene-img" :src="s.img" mode="aspectFill" />
               <view class="scene-badge">
@@ -83,7 +83,7 @@
             </view>
           </view>
         </view>
-        <view class="more-link-wrap">
+        <view class="more-link-wrap" @click="goSceneManage">
           <text class="more-link">
             <text>发现更多场景</text>
             <text class="ph ph-arrow-right"></text>
@@ -129,7 +129,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { SCENE_PRESETS } from '@/data/scenePresets'
+import { useSceneManager } from '@/composables/useSceneManager'
+
+const { customScenes } = useSceneManager()
 
 const moods = ref([
   { cls: 'mood-happy', icon: 'ph-smiley', label: '开心', count: 12 },
@@ -146,12 +150,28 @@ const outfitPhotos = ref([
   { img: 'https://picsum.photos/seed/1926769/400/533', date: '7月7日' }
 ])
 
-const scenes = ref([
-  { img: 'https://picsum.photos/seed/2074130/400/533', icon: 'ph-coffee', name: '咖啡馆', tag: '你最常去', tagCls: 'lumira-tag-gold' },
-  { img: 'https://picsum.photos/seed/1926769/400/533', icon: 'ph-buildings', name: '街拍', tag: '31张照片', tagCls: 'lumira-tag-gold' },
-  { img: 'https://picsum.photos/seed/1640777/400/533', icon: 'ph-shopping-bag', name: '探店', tag: '新场景推荐', tagCls: 'lumira-tag-red' },
-  { img: 'https://picsum.photos/seed/1571460/400/533', icon: 'ph-house-line', name: '居家', tag: '适合今天天气', tagCls: 'lumira-tag-green' }
-])
+const scenes = computed(() => {
+  const customs = customScenes.value.slice(0, 4).map(c => ({
+    id: c.id,
+    img: `https://picsum.photos/seed/scene-inspiration-${c.id}/400/533`,
+    icon: c.icon,
+    name: c.name,
+    tag: '我的场景',
+    tagCls: 'lumira-tag-gold'
+  }))
+  const presets = SCENE_PRESETS.slice(0, 4).map((p, i) => ({
+    id: p.id,
+    img: `https://picsum.photos/seed/scene-inspiration-${p.id}/400/533`,
+    icon: p.icon,
+    name: p.name,
+    tag: i === 0 ? '你最常去' : i === 2 ? '新场景推荐' : `${p.name}拍摄`,
+    tagCls: i === 0 ? 'lumira-tag-gold' : i === 2 ? 'lumira-tag-red' : 'lumira-tag-green'
+  }))
+  return [...customs, ...presets].slice(0, 4)
+})
+
+const goScene = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-guide?scenePreset=${id}` })
+const goSceneManage = () => uni.navigateTo({ url: '/pages/capture/scene-manage' })
 
 const checkins = ref([
   { iconCls: 'checkin-icon-coffee', icon: 'ph-coffee', title: 'Manner Coffee 武康路店', desc: '2天前' },
