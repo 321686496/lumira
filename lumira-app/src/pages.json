@@ -41,6 +41,14 @@
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},
 		{
+			"path": "pages/capture/scene-detail",
+			"style": {
+				"navigationBarTitleText": "场景详情",
+				"navigationStyle": "custom",
+				"backgroundColor": "#FAF7F2"
+			}
+		},
+		{
 			"path": "pages/templates/detail",
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},
