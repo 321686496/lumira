@@ -122,7 +122,10 @@
           <text class="section-title-text">场景推荐</text>
           <text class="lumira-tag lumira-tag-green">为你而选</text>
         </view>
-        <text class="lumira-section-link">管理</text>
+        <view class="section-link-row">
+          <text class="lumira-section-link" @click="goSceneFav">收藏</text>
+          <text class="lumira-section-link" @click="goSceneManage">管理</text>
+        </view>
       </view>
       <view class="scene-grid section-pad">
         <view class="scene-card lumira-card-hover" v-for="s in scenes" :key="s.name" @click="goPage(`/pages/capture/scene-guide?scene=${s.scene}`)">
@@ -207,8 +210,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import { SCENE_PRESETS } from '@/data/scenePresets'
+import { useSceneManager } from '@/composables/useSceneManager'
+
+const { customScenes } = useSceneManager()
 
 const weekDays = ref([
   { label: '一', done: true, today: false },
@@ -220,12 +227,25 @@ const weekDays = ref([
   { label: '日', done: false, today: true }
 ])
 
-const scenes = ref([
-  { name: '咖啡馆', desc: '柔和光线 · 氛围感', img: '/static/scenes/scene_cafe.jpg', tag: '你最常去', brand: false, scene: 'cafe' },
-  { name: '街拍', desc: '城市光影 · 故事感', img: '/static/scenes/scene_street.jpg', tag: '31张照片', brand: false, scene: 'street' },
-  { name: '探店', desc: '美食记录 · 色温', img: '/static/scenes/scene_shop.jpg', tag: '新场景推荐', brand: true, scene: 'food' },
-  { name: '居家', desc: '温馨光线 · 静谧', img: '/static/scenes/scene_home.jpg', tag: '适合今天天气', brand: false, scene: 'home' }
-])
+const scenes = computed(() => {
+  const customs = customScenes.value.slice(0, 4).map(c => ({
+    name: c.name,
+    desc: c.description,
+    img: `https://picsum.photos/seed/scene-home-${c.id}/400/600`,
+    tag: '我的场景',
+    brand: false,
+    scene: c.id
+  }))
+  const presets = SCENE_PRESETS.slice(0, 4).map((p, i) => ({
+    name: p.name,
+    desc: p.description,
+    img: `https://picsum.photos/seed/scene-home-${p.id}/400/600`,
+    tag: i === 0 ? '你最常去' : i === 2 ? '新场景推荐' : `${p.name}拍摄`,
+    brand: i === 2,
+    scene: p.id
+  }))
+  return [...customs, ...presets].slice(0, 4)
+})
 
 const recents = ref([
   { name: '自然光人像', cat: '人像', icon: 'ph-user', img: 'https://picsum.photos/seed/recent-portrait/400/600', steps: 12, match: '98% 匹配', progress: '' },
@@ -238,6 +258,8 @@ const recents = ref([
 const goTab = (url: string) => uni.reLaunch({ url })
 const goPage = (url: string) => uni.navigateTo({ url })
 const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
+const goSceneManage = () => uni.navigateTo({ url: '/pages/capture/scene-manage' })
+const goSceneFav = () => uni.navigateTo({ url: '/pages/capture/scene-manage?tab=fav' })
 </script>
 
 <style lang="scss" scoped>
@@ -253,6 +275,11 @@ const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
   display: flex;
   align-items: center;
   gap: 16rpx;
+}
+
+.section-link-row {
+  display: flex;
+  gap: 24rpx;
 }
 
 .section-title-text {
