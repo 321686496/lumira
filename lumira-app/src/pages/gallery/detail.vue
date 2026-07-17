@@ -13,8 +13,24 @@
     </view>
 
     <!-- Main Image Canvas Area -->
-    <view class="canvas-area">
-      <image class="canvas-img" src="https://picsum.photos/seed/2074130/400/600" mode="aspectFit" />
+    <view v-if="photo" class="canvas-area">
+      <image class="canvas-img" :src="photo.dataUrl" mode="aspectFit" />
+    </view>
+    <view v-else class="canvas-area empty-canvas">
+      <text class="ph ph-image empty-canvas-icon"></text>
+      <text class="empty-canvas-text">照片不存在或已被删除</text>
+    </view>
+
+    <!-- 场景信息行（仅当 photo 存在时显示） -->
+    <view v-if="photo" class="info-row" @click="onChangeScene">
+      <view class="info-label-wrap">
+        <text class="ph ph-map-pin info-label-icon"></text>
+        <text class="info-label">场景</text>
+      </view>
+      <view class="info-value-row">
+        <text class="info-value">{{ currentSceneName || '未分类' }}</text>
+        <text class="ph ph-caret-right change-arrow"></text>
+      </view>
     </view>
 
     <!-- Tool Tab Row (Horizontal Scroll Pills) -->
@@ -87,11 +103,55 @@
         <text class="action-btn-primary-text">导出</text>
       </view>
     </view>
+
+    <!-- 场景选择 sheet -->
+    <view v-if="sceneSelectorVisible" class="scene-selector-mask" @click="sceneSelectorVisible = false">
+      <view class="scene-selector-sheet" @click.stop>
+        <text class="selector-title">归类到场景</text>
+        <scroll-view scroll-y class="selector-list">
+          <view
+            class="selector-item"
+            :class="{ active: !photo?.sceneId }"
+            @click="onSelectScene(null)"
+          >
+            <text class="ph selector-icon ph-folder-dashed"></text>
+            <text>不归类（未分类）</text>
+          </view>
+          <view
+            v-for="s in allScenes"
+            :key="s.id"
+            class="selector-item"
+            :class="{ active: photo?.sceneId === s.id }"
+            @click="onSelectScene(s.id)"
+          >
+            <text class="ph selector-icon" :class="s.icon"></text>
+            <text>{{ s.name }}</text>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { onLoad, onShow } from '@dcloudio/uni-app'
+import { useSceneManager } from '@/composables/useSceneManager'
+import type { ScenePresetId, CustomSceneId } from '@/types/template'
+
+const { photos, updatePhotoScene, allScenes, reloadFromStorage } = useSceneManager()
+
+const photoId = ref('')
+const photo = computed(() => photos.value.find(p => p.id === photoId.value))
+
+const currentSceneName = computed(() => {
+  const sid = photo.value?.sceneId
+  if (!sid) return ''
+  const scene = allScenes.value.find(s => s.id === sid)
+  return scene?.name || ''
+})
+
+const sceneSelectorVisible = ref(false)
 
 const activeTool = ref(0)
 const tools = ['调色', 'LUT', '裁剪', '磨皮', '锐化']
@@ -112,6 +172,27 @@ const sliders = ref([
   { label: '饱和度', value: 50, display: '0' },
   { label: '色温', value: 58, display: '+8' }
 ])
+
+onLoad((options) => {
+  const id = options?.id
+  if (typeof id === 'string' && id) photoId.value = id
+})
+
+onShow(() => {
+  reloadFromStorage()
+})
+
+function onChangeScene() {
+  sceneSelectorVisible.value = true
+}
+
+function onSelectScene(sceneId: ScenePresetId | CustomSceneId | null) {
+  if (photo.value) {
+    updatePhotoScene(photo.value.id, sceneId)
+    sceneSelectorVisible.value = false
+    uni.showToast({ title: '已更新', icon: 'success' })
+  }
+}
 
 const back = () => uni.navigateBack()
 const reset = () => {
@@ -356,5 +437,114 @@ const exportPhoto = () => {
   font-size: 30rpx;
   font-weight: 500;
   color: #FAF7F2;
+}
+
+/* 场景信息行（深色主题） */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 48rpx;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 2rpx solid rgba(255, 255, 255, 0.08);
+}
+
+.info-label-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.info-label-icon {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.info-label {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.info-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.info-value {
+  font-size: 26rpx;
+  color: #ffffff;
+}
+
+.change-arrow {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* 空照片状态 */
+.empty-canvas {
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.empty-canvas-icon {
+  font-size: 96rpx;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.empty-canvas-text {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* 场景选择 sheet（modal，浅色） */
+.scene-selector-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+}
+
+.scene-selector-sheet {
+  width: 100%;
+  max-height: 70vh;
+  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 32rpx;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 32rpx);
+}
+
+.selector-title {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: $color-text-primary;
+  display: block;
+  margin-bottom: 24rpx;
+}
+
+.selector-list {
+  max-height: 50vh;
+}
+
+.selector-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 24rpx;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: $color-text-primary;
+}
+
+.selector-item.active {
+  background: $color-brand-light;
+  color: $color-tag-gold-text;
+}
+
+.selector-icon {
+  font-size: 32rpx;
 }
 </style>
