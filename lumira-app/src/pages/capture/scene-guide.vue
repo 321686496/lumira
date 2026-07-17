@@ -1,447 +1,306 @@
 <template>
-  <view class="lumira-container no-tabbar">
-    <!-- 顶部导航 -->
-    <view class="lumira-nav">
-      <view class="lumira-nav-left" @click="back">
-        <text class="ph ph-arrow-left nav-icon"></text>
+  <view class="scene-guide-page">
+    <!-- 导航栏 -->
+    <view class="guide-nav">
+      <view class="nav-back" @click="goBack">
+        <text class="ph ph-arrow-left nav-back-icon"></text>
       </view>
-      <text class="lumira-nav-title">场景</text>
-      <view class="lumira-nav-right" @click="onAdd">
-        <text class="ph ph-plus nav-icon"></text>
+      <text class="nav-title">场景灵感</text>
+      <view class="nav-manage" @click="goSceneManage">
+        <text class="ph ph-gear-six nav-manage-icon"></text>
       </view>
     </view>
 
-    <!-- 场景分类标签 -->
-    <view class="tabs-wrap fade-up">
-      <view class="tabs-row">
+    <scroll-view scroll-y class="guide-scroll">
+      <!-- 分类导航 -->
+      <view class="guide-section">
+        <CategoryNav :layers="categoryLayers" @select="onLayerSelect" />
+      </view>
+
+      <!-- 标签筛选 -->
+      <view class="guide-tags">
+        <TagSelector
+          :selected-tag-ids="selectedTagIds"
+          type="scene"
+          @update:selected-tag-ids="selectedTagIds = $event"
+        />
+      </view>
+
+      <!-- 场景卡片列表 -->
+      <view class="guide-list">
         <view
-          class="tab-pill"
-          :class="{ active: tab === t.value }"
-          v-for="t in tabList"
-          :key="t.value"
-          @click="tab = t.value"
+          v-for="scene in filteredScenes"
+          :key="scene.id"
+          class="guide-card"
+          @click="goSceneDetail(scene.id)"
         >
-          <text class="tab-pill-text">{{ t.label }}</text>
-        </view>
-      </view>
-    </view>
-
-    <!-- 场景列表（根据 Tab 切换） -->
-    <view class="section-pad fade-up fade-up-d1">
-      <view class="section-title-row">
-        <text class="section-title">{{ currentTitle }}</text>
-        <text class="section-count">共 {{ currentList.length }} 个</text>
-      </view>
-      <view v-if="currentList.length === 0" class="empty-inline">
-        <text class="empty-inline-text">{{ tab === 'fav' ? '还没有收藏的场景，点击 ☆ 收藏' : '暂无场景' }}</text>
-      </view>
-      <view v-else class="scene-list">
-        <ScenePresetView
-          v-for="preset in currentList"
-          :key="preset.id"
-          :scene="preset"
-          @click="onSceneTap(preset)"
-        >
-          <template #actions>
-            <view
-              v-if="!isCustomScene(preset)"
-              class="fav-btn"
-              @click.stop="onToggleFav(preset.id)"
-            >
-              <text class="ph fav-icon" :class="isFavorite(preset.id as ScenePresetId) ? 'ph-star-fill' : 'ph-star'"></text>
-            </view>
-          </template>
-        </ScenePresetView>
-      </view>
-    </view>
-
-    <!-- 场景小贴士（选中场景后显示） -->
-    <view v-if="selectedPreset" class="section-pad fade-up">
-      <view class="tip-detail-card">
-        <view class="tip-detail-head">
-          <text class="ph ph-lightbulb tip-detail-icon"></text>
-          <text class="tip-detail-title">{{ selectedPreset.name }} · 拍摄小贴士</text>
-          <view
-            v-if="selectedPreset && !isCustomScene(selectedPreset)"
-            class="fav-btn-tip"
-            @click="selectedPreset && onToggleFav(selectedPreset.id)"
-          >
-            <text class="ph fav-tip-icon" :class="isFavorite(selectedPreset.id as ScenePresetId) ? 'ph-star-fill' : 'ph-star'"></text>
+          <image
+            v-if="scene.exampleImages[0]"
+            class="guide-card-img"
+            :src="scene.exampleImages[0]"
+            mode="aspectFill"
+          />
+          <view v-else class="guide-card-img guide-card-img-placeholder">
+            <text class="ph ph-image guide-card-img-placeholder-icon"></text>
           </view>
-        </view>
-        <view class="tip-detail-body">
-          <view class="tip-detail-row">
-            <text class="ph ph-sun tip-detail-row-icon"></text>
-            <text class="tip-detail-row-label">光线</text>
-            <text class="tip-detail-row-text">{{ selectedPreset.sceneGuide.lightDirection }}</text>
-          </view>
-          <view class="tip-detail-row">
-            <text class="ph ph-ruler tip-detail-row-icon"></text>
-            <text class="tip-detail-row-label">距离</text>
-            <text class="tip-detail-row-text">{{ selectedPreset.sceneGuide.shootingDistance }}</text>
-          </view>
-          <view class="tip-detail-row">
-            <text class="ph ph-image tip-detail-row-icon"></text>
-            <text class="tip-detail-row-label">背景</text>
-            <text class="tip-detail-row-text">{{ selectedPreset.sceneGuide.background }}</text>
-          </view>
-          <view class="tip-detail-row">
-            <text class="ph ph-clock tip-detail-row-icon"></text>
-            <text class="tip-detail-row-label">时间</text>
-            <text class="tip-detail-row-text">{{ selectedPreset.sceneGuide.bestTime }}</text>
-          </view>
-          <view v-if="selectedPreset.sceneGuide.props.length" class="tip-detail-row">
-            <text class="ph ph-package tip-detail-row-icon"></text>
-            <text class="tip-detail-row-label">道具</text>
-            <view class="prop-tag-list">
-              <view class="prop-tag" v-for="(p, i) in selectedPreset.sceneGuide.props" :key="i">
-                <text class="prop-tag-text">{{ p }}</text>
-              </view>
+          <view class="guide-card-info">
+            <text class="guide-card-name">{{ scene.name }}</text>
+            <text class="guide-card-vibe">{{ scene.vibe }}</text>
+            <view class="guide-card-stats">
+              <text class="stat-item">📷 {{ getPhotoCountByScene(scene.id) }}</text>
+              <text v-if="getSceneAchievement(scene.id).level > 0" class="stat-item">
+                🏆 Lv.{{ getSceneAchievement(scene.id).level }}
+              </text>
             </view>
           </view>
-          <view v-for="(tip, i) in selectedPreset.sceneGuide.tips" :key="'tip-'+i" class="tip-detail-row">
-            <text class="ph ph-circle tip-detail-row-icon"></text>
-            <text class="tip-detail-row-label">技巧</text>
-            <text class="tip-detail-row-text">{{ tip }}</text>
-          </view>
-        </view>
-        <view class="tip-detail-actions">
-          <view class="tip-detail-btn-ghost" @click="goTemplates">
-            <text class="ph ph-book-open"></text>
-            <text>查看模板</text>
-          </view>
-          <view class="tip-detail-btn-brand" @click="goCapture">
-            <text class="ph ph-camera"></text>
-            <text>开始拍摄</text>
-          </view>
         </view>
       </view>
-    </view>
 
-    <view class="bottom-spacer"></view>
+      <view v-if="filteredScenes.length === 0" class="guide-empty">
+        <text class="guide-empty-text">暂无匹配场景</text>
+      </view>
+
+      <view class="guide-bottom-space"></view>
+    </scroll-view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import ScenePresetView from '@/components/ScenePresetView.vue'
-import { SCENE_PRESETS, SCENE_TO_CATEGORY } from '@/data/scenePresets'
 import { useSceneManager } from '@/composables/useSceneManager'
-import type { AnyScene, ScenePresetId } from '@/types/template'
+import { SCENE_CATEGORIES } from '@/data/scenePresets'
+import CategoryNav from '@/components/CategoryNav.vue'
+import TagSelector from '@/components/TagSelector.vue'
+import type { SceneCategory, AnyScene } from '@/types/template'
 
-const {
-  customScenes,
-  favoriteScenes,
-  allScenes,
-  toggleFavorite,
-  isFavorite,
-  isCustomScene,
-  getSceneById
-} = useSceneManager()
+const { allScenes, reloadFromStorage, getPhotoCountByScene, getSceneAchievement } = useSceneManager()
 
-const tab = ref('common')
+onLoad(() => {})
+onShow(() => { reloadFromStorage() })
 
-const tabList = [
-  { label: '常用场景', value: 'common' },
-  { label: '收藏场景', value: 'fav' },
-  { label: '推荐场景', value: 'recommend' }
-]
+// 分类导航：第一层大类，第二层风格
+const selectedCategory = ref<SceneCategory | null>(null)
+const selectedStyle = ref<string | null>(null)
+const selectedTagIds = ref<string[]>([])
 
-const myScenes = computed<AnyScene[]>(() => [...customScenes.value, ...SCENE_PRESETS.slice(0, 8)])
-const recommendScenes = computed(() => SCENE_PRESETS.slice(8))
-
-const currentList = computed<AnyScene[]>(() => {
-  if (tab.value === 'fav') return favoriteScenes.value
-  if (tab.value === 'recommend') return recommendScenes.value
-  return myScenes.value
-})
-
-const currentTitle = computed(() => {
-  if (tab.value === 'fav') return '我的收藏'
-  if (tab.value === 'recommend') return '推荐场景'
-  return '我的场景'
-})
-
-const selectedPreset = ref<AnyScene | null>(null)
-
-onLoad((options) => {
-  const sceneId = options?.scene || options?.scenePreset
-  if (sceneId) {
-    const scene = getSceneById(sceneId)
-    if (scene) {
-      selectedPreset.value = scene
-      tab.value = isCustomScene(scene) ? 'common' : 'recommend'
+const categoryLayers = computed(() => {
+  const layers = []
+  // 第一层：大类
+  layers.push({
+    label: '大类',
+    selected: selectedCategory.value,
+    options: SCENE_CATEGORIES.map(c => ({ value: c.category, label: c.name })),
+  })
+  // 第二层：风格（仅当大类选中时显示）
+  if (selectedCategory.value) {
+    const group = SCENE_CATEGORIES.find(c => c.category === selectedCategory.value)
+    if (group) {
+      layers.push({
+        label: '风格',
+        selected: selectedStyle.value,
+        options: group.styles.map(s => ({ value: s.id, label: s.name })),
+      })
     }
   }
+  return layers
 })
 
-onShow(() => {
-  if (selectedPreset.value) {
-    const stillExists = allScenes.value.find(s => s.id === selectedPreset.value!.id)
-    if (!stillExists) {
-      selectedPreset.value = null
-    }
+function onLayerSelect(idx: number, value: string | null) {
+  if (idx === 0) {
+    selectedCategory.value = value as SceneCategory | null
+    selectedStyle.value = null  // 重置子分类
+  } else if (idx === 1) {
+    selectedStyle.value = value
   }
+}
+
+// 筛选后的场景列表
+// 注意：偏离 brief —— brief 中调用 filterScenesByTags(selectedTagIds.value) 会从 allScenes 重新过滤，
+// 导致已应用的 category/style 筛选被覆盖。此处改为在已筛选的 list 上直接做标签匹配，
+// 保留 category + style + tag 的组合筛选结果。
+const filteredScenes = computed<AnyScene[]>(() => {
+  let list: AnyScene[] = allScenes.value
+  if (selectedCategory.value) {
+    list = list.filter(s => s.category === selectedCategory.value)
+  }
+  if (selectedStyle.value) {
+    list = list.filter(s => s.style === selectedStyle.value)
+  }
+  if (selectedTagIds.value.length > 0) {
+    list = list.filter(s => {
+      const ids = 'tagIds' in s ? s.tagIds : s.recommendedTagIds
+      return selectedTagIds.value.some(id => ids.includes(id))
+    })
+  }
+  return list
 })
 
-const back = () => uni.navigateBack()
-
-const onAdd = () => {
-  uni.navigateTo({ url: '/pages/capture/scene-manage?tab=custom' })
+function goBack() {
+  uni.navigateBack()
 }
 
-const onSceneTap = (preset: AnyScene) => {
-  selectedPreset.value = preset
+function goSceneDetail(id: string) {
+  uni.navigateTo({ url: `/pages/capture/scene-detail?sceneId=${id}` })
 }
 
-const onToggleFav = (id: string) => {
-  toggleFavorite(id as ScenePresetId)
-}
-
-const goTemplates = () => {
-  if (!selectedPreset.value) return
-  const cat = isCustomScene(selectedPreset.value)
-    ? selectedPreset.value.relatedCategory
-    : SCENE_TO_CATEGORY[selectedPreset.value.id as ScenePresetId]
-  uni.navigateTo({
-    url: `/pages/templates/index?scene=${selectedPreset.value.id}&category=${cat}`
-  })
-}
-
-const goCapture = () => {
-  if (!selectedPreset.value) return
-  uni.navigateTo({
-    url: `/pages/capture/index?scenePreset=${selectedPreset.value.id}`
-  })
+function goSceneManage() {
+  uni.navigateTo({ url: '/pages/capture/scene-manage' })
 }
 </script>
 
 <style lang="scss" scoped>
-.nav-icon {
-  font-size: 40rpx;
-  color: var(--color-text-primary);
-}
-
-/* ===== 分类标签 ===== */
-.tabs-wrap {
-  padding: 32rpx 48rpx 0;
-}
-
-.tabs-row {
+.scene-guide-page {
+  min-height: 100vh;
+  background: #FAF7F2;
   display: flex;
-  gap: 16rpx;
+  flex-direction: column;
 }
 
-.tab-pill {
-  padding: 16rpx 40rpx;
-  border-radius: 9999rpx;
-  border: 3rpx solid var(--color-divider);
-  background-color: var(--color-surface);
-}
-
-.tab-pill.active {
-  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-deep) 100%);
-  border-color: transparent;
-}
-
-.tab-pill-text {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-
-.tab-pill.active .tab-pill-text {
-  color: #ffffff;
-}
-
-/* ===== 区块通用 ===== */
-.section-pad {
-  padding: 48rpx 48rpx 0;
-}
-
-.section-pad-bottom {
-  padding: 0 48rpx 0;
-  margin-top: 48rpx;
-}
-
-.section-title-row {
+/* ===== 导航栏 ===== */
+.guide-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 32rpx;
+  padding: 0 24rpx;
+  height: 88rpx;
+  padding-top: env(safe-area-inset-top);
 }
 
-.section-title {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 34rpx;
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.section-count {
-  font-size: 24rpx;
-  color: var(--color-text-tertiary);
-}
-
-/* ===== 场景列表 ===== */
-.scene-list {
-  display: flex;
-  flex-direction: column;
-}
-
-/* ===== 收藏按钮 ===== */
-.fav-btn {
-  flex-shrink: 0;
-  padding: 8rpx;
+.nav-back {
+  width: 64rpx;
+  height: 64rpx;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.fav-icon {
+.nav-back-icon {
   font-size: 36rpx;
-  color: var(--color-text-tertiary);
+  color: #2A2520;
 }
 
-.fav-btn-tip {
-  margin-left: auto;
-  padding: 8rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.fav-tip-icon {
-  font-size: 36rpx;
-  color: var(--color-brand);
-}
-
-/* ===== 空状态（内联） ===== */
-.empty-inline {
-  padding: 48rpx 0;
-  text-align: center;
-}
-
-.empty-inline-text {
-  font-size: 26rpx;
-  color: var(--color-text-tertiary);
-}
-
-.bottom-spacer {
-  height: 48rpx;
-}
-
-/* ===== 场景小贴士卡片 ===== */
-.tip-detail-card {
-  background-color: var(--color-surface);
-  border-radius: 28rpx;
-  padding: 40rpx;
-  box-shadow: var(--shadow-convex);
-}
-
-.tip-detail-head {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-bottom: 32rpx;
-}
-
-.tip-detail-icon {
-  font-size: 36rpx;
-  color: var(--color-brand);
-}
-
-.tip-detail-title {
-  font-family: 'Noto Serif SC', serif;
+.nav-title {
   font-size: 32rpx;
   font-weight: 600;
-  color: var(--color-text-primary);
+  color: #2A2520;
 }
 
-.tip-detail-body {
+.nav-manage {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-manage-icon {
+  font-size: 36rpx;
+  color: #2A2520;
+}
+
+/* ===== 滚动区 ===== */
+.guide-scroll {
+  flex: 1;
+}
+
+/* ===== 分类导航区 ===== */
+.guide-section {
+  padding: 24rpx 0 8rpx;
+}
+
+/* ===== 标签筛选区 ===== */
+.guide-tags {
+  padding: 16rpx 0 24rpx;
+}
+
+/* ===== 场景卡片列表 ===== */
+.guide-list {
+  padding: 0 24rpx;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
-  margin-bottom: 40rpx;
-}
-
-.tip-detail-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12rpx;
-}
-
-.tip-detail-row-icon {
-  font-size: 28rpx;
-  color: var(--color-brand);
-  flex-shrink: 0;
-  margin-top: 2rpx;
-}
-
-.tip-detail-row-label {
-  font-size: 26rpx;
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
-  width: 64rpx;
-}
-
-.tip-detail-row-text {
-  font-size: 26rpx;
-  color: var(--color-text-primary);
-  line-height: 1.5;
-  flex: 1;
-}
-
-.prop-tag-list {
-  flex: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-}
-
-.prop-tag {
-  padding: 6rpx 20rpx;
-  border-radius: 9999rpx;
-  background-color: var(--color-surface-alt);
-}
-
-.prop-tag-text {
-  font-size: 24rpx;
-  color: var(--color-text-secondary);
-}
-
-.tip-detail-actions {
-  display: flex;
   gap: 20rpx;
 }
 
-.tip-detail-btn-ghost,
-.tip-detail-btn-brand {
-  flex: 1;
+.guide-card {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 24rpx;
+  overflow: hidden;
+}
+
+.guide-card-img {
+  width: 200rpx;
+  height: 200rpx;
+  flex-shrink: 0;
+}
+
+.guide-card-img-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(201, 168, 118, 0.12);
+}
+
+.guide-card-img-placeholder-icon {
+  font-size: 56rpx;
+  color: #C9A876;
+}
+
+.guide-card-info {
+  flex: 1;
+  min-width: 0;
+  padding: 24rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   gap: 8rpx;
-  padding: 24rpx 0;
-  border-radius: 9999rpx;
-  font-size: 28rpx;
-  font-weight: 500;
 }
 
-.tip-detail-btn-ghost {
-  background-color: var(--color-surface-alt);
-  color: var(--color-text-primary);
-}
-
-.tip-detail-btn-brand {
-  background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-deep) 100%);
-  color: #fff;
-}
-
-.tip-detail-btn-ghost .ph,
-.tip-detail-btn-brand .ph {
+.guide-card-name {
   font-size: 30rpx;
+  font-weight: 600;
+  color: #2A2520;
+  line-height: 1.3;
+}
+
+.guide-card-vibe {
+  font-size: 24rpx;
+  color: #6B635A;
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.guide-card-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20rpx;
+  margin-top: 4rpx;
+}
+
+.stat-item {
+  font-size: 22rpx;
+  color: #6B635A;
+  line-height: 1.2;
+}
+
+/* ===== 空状态 ===== */
+.guide-empty {
+  padding: 80rpx 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guide-empty-text {
+  font-size: 26rpx;
+  color: #6B635A;
+}
+
+.guide-bottom-space {
+  height: 48rpx;
 }
 </style>
