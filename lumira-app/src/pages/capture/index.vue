@@ -131,6 +131,23 @@
         </view>
       </view>
 
+      <!-- 我的组合 快速入口 -->
+      <view class="kit-bar" v-if="kits.length > 0">
+        <text class="kit-bar-title">我的组合</text>
+        <scroll-view scroll-x class="kit-scroll" :show-scrollbar="false">
+          <view class="kit-scroll-inner">
+            <view
+              v-for="kit in kits"
+              :key="kit.id"
+              class="kit-bar-item"
+              @click="applyKit(kit.id)"
+            >
+              <text class="kit-bar-name">{{ kit.name }}</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
       <scroll-view class="template-strip" :scroll-x="!isLandscape" :scroll-y="isLandscape">
         <view class="strip-list">
           <view
@@ -178,6 +195,8 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { onLoad, onUnload } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
 import { useCamera } from '@/composables/useCamera'
+import { useShootKit } from '@/composables/useShootKit'
+import { useSceneManager } from '@/composables/useSceneManager'
 import { buildCssFilter } from '@/utils/filterRecipe'
 import { isParametersMatchingTemplate } from '@/utils/parameterMatch'
 import { createEmptyTemplate } from '@/utils/emptyTemplate'
@@ -191,6 +210,8 @@ import RawModeToggle from '@/components/RawModeToggle.vue'
 import FilterPicker from '@/components/FilterPicker.vue'
 
 const { loadTemplate, recentTemplates, pushRecent, loadRecent } = useTemplate()
+const { kits, recordUsage } = useShootKit()
+const { getSceneById } = useSceneManager()
 const camera = useCamera()
 
 const statusBarHeight = uni.getSystemInfoSync().statusBarHeight || 20
@@ -366,13 +387,11 @@ onLoad((options) => {
       const tpl = createEmptyTemplate()
       tpl.sceneGuide.presetId = preset.id
       Object.assign(tpl.sceneGuide, preset.sceneGuide)
-      Object.assign(tpl.camera, preset.cameraSuggestion)
-      // postSuggestion 单独处理 color 子对象，避免整体替换
-      if (preset.postSuggestion.color) {
-        Object.assign(tpl.postProcess.color, preset.postSuggestion.color)
+      // 仅应用滤镜（新结构：ScenePreset 不再含相机参数）
+      tpl.postProcess.lut = preset.filter.lut
+      if (preset.filter.systemFilter) {
+        tpl.postProcess.systemFilter = preset.filter.systemFilter
       }
-      const { color: _omitColor, ...restPost } = preset.postSuggestion
-      Object.assign(tpl.postProcess, restPost)
       editableTemplate.value = tpl
     }
   }
@@ -512,6 +531,37 @@ const switchTemplate = (id: string) => {
   // applied 自动变 true（参数与原值一致）
   rawMode.value = false  // 切换模板时退出原相机模式
   pushRecent(id)
+}
+
+// 一键加载组合：模板 + 场景滤镜 + overrides
+const applyKit = (kitId: string) => {
+  const kit = kits.value.find(k => k.id === kitId)
+  if (!kit) return
+
+  const scene = getSceneById(kit.sceneId)
+  const template = loadTemplate(kit.templateId)
+  if (!scene || !template) return
+
+  // 加载模板（深拷贝，避免污染模板源数据）
+  const tpl = JSON.parse(JSON.stringify(template)) as PhotoTemplate
+  currentTemplateId.value = template.meta.id
+
+  // 叠加场景滤镜
+  tpl.postProcess.lut = scene.filter.lut
+  if (scene.filter.systemFilter) {
+    tpl.postProcess.systemFilter = scene.filter.systemFilter
+  }
+
+  // 应用 overrides（如有）
+  if (kit.overrides?.camera) {
+    Object.assign(tpl.camera, kit.overrides.camera)
+  }
+  if (kit.overrides?.postProcess) {
+    Object.assign(tpl.postProcess, kit.overrides.postProcess)
+  }
+
+  editableTemplate.value = tpl
+  recordUsage(kitId)
 }
 
 const toggleTemplate = () => {
@@ -1038,6 +1088,51 @@ const onViewfinderTap = () => {
   text-align: center;
   color: #fff;
   font-size: 16rpx;
+}
+
+/* ===== 我的组合 横滑区 ===== */
+.kit-bar {
+  margin-top: 20rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.kit-bar-title {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: rgba(201, 169, 110, 0.9);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.kit-scroll {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.kit-scroll-inner {
+  display: inline-flex;
+  gap: 12rpx;
+}
+
+.kit-bar-item {
+  flex-shrink: 0;
+  padding: 10rpx 24rpx;
+  border-radius: 9999rpx;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(201, 169, 110, 0.35);
+  transition: background 120ms ease-out;
+}
+
+.kit-bar-item:active {
+  background: rgba(201, 169, 110, 0.25);
+}
+
+.kit-bar-name {
+  font-size: 22rpx;
+  color: #FAF7F2;
+  white-space: nowrap;
 }
 
 /* ===== 横屏自适应 ===== */
