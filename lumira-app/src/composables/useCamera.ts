@@ -16,6 +16,7 @@
 
 import { ref, onUnmounted } from 'vue'
 import { bakePhoto, type BakeResult } from '@/utils/captureBake'
+import { bakePhotoForCanvas } from '@/utils/bakeCanvas'
 import type { CameraParams, PostProcess, FlashMode } from '@/types/template'
 
 export type CameraFacing = 'front' | 'back'
@@ -167,12 +168,12 @@ export function useCamera(options: UseCameraOptions = {}) {
 
     // App-Plus 平台：通过 uni.createCameraContext().takePhoto() 拍照
     if (platform === 'app-plus') {
-      return await captureAppPlus()
+      return await captureAppPlus(camera, post)
     }
 
     // 小程序平台
     if (platform === 'mp') {
-      return await captureAppPlus()
+      return await captureAppPlus(camera, post)
     }
 
     throw new Error('当前平台暂不支持拍照')
@@ -181,9 +182,30 @@ export function useCamera(options: UseCameraOptions = {}) {
   /**
    * App-Plus / 小程序平台拍照
    * 使用 uni.createCameraContext().takePhoto() 获取临时图片路径
-   * 注意：原生相机组件不支持 CSS 滤镜实时预览，所拍即为原始相机输出
+   * 通过离屏 canvas 应用完整后期烘焙（亮度/对比度/LUT/暗角/颗粒/锐化/磨皮）
    */
-  function captureAppPlus(): Promise<BakeResult> {
+  async function captureAppPlus(
+    camera: Partial<CameraParams>,
+    post: Partial<PostProcess>
+  ): Promise<BakeResult> {
+    // 1. takePhoto
+    const tempPath = await takePhotoAsync()
+    // 2. getImageInfo
+    const info = await getImageInfoAsync(tempPath)
+    // 3. createOffscreenCanvas
+    const canvas = uni.createOffscreenCanvas({ type: '2d', width: info.width, height: info.height })
+    const ctx = canvas.getContext('2d')
+    // 4. loadImage
+    const img = canvas.createImage()
+    await loadImageAsync(img, tempPath)
+    // 5. bake
+    const dataUrl = bakePhotoForCanvas(canvas, ctx, img, info.width, info.height, camera, post, 0.92)
+    // 6. return
+    const size = Math.floor((dataUrl.length - 22) * 3 / 4)
+    return { dataUrl, width: info.width, height: info.height, size }
+  }
+
+  function takePhotoAsync(): Promise<string> {
     return new Promise((resolve, reject) => {
       const ctx = uni.createCameraContext()
       ctx.takePhoto({
@@ -194,32 +216,30 @@ export function useCamera(options: UseCameraOptions = {}) {
             reject(new Error('拍照失败：未获取到图片路径'))
             return
           }
-          // 读取图片信息以获取宽高
-          uni.getImageInfo({
-            src: tempPath,
-            success: (info) => {
-              resolve({
-                dataUrl: tempPath,
-                width: info.width,
-                height: info.height,
-                size: 0
-              })
-            },
-            fail: () => {
-              // 即使读取信息失败，也返回路径（预览页 <image> 可直接显示）
-              resolve({
-                dataUrl: tempPath,
-                width: 0,
-                height: 0,
-                size: 0
-              })
-            }
-          })
+          resolve(tempPath)
         },
         fail: (err: { errMsg?: string }) => {
           reject(new Error(`拍照失败: ${err?.errMsg || '未知错误'}`))
         }
       })
+    })
+  }
+
+  function getImageInfoAsync(src: string): Promise<{ width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+      uni.getImageInfo({
+        src,
+        success: (info) => resolve({ width: info.width, height: info.height }),
+        fail: () => reject(new Error('获取图片信息失败'))
+      })
+    })
+  }
+
+  function loadImageAsync(img: any, src: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('图片加载失败'))
+      img.src = src
     })
   }
 
