@@ -122,7 +122,7 @@ function goCapture() {
 }
 
 function goCreateKit() {
-  uni.navigateTo({ url: `/pages/capture/scene-manage?tab=kit&sceneId=${sceneId.value}` })
+  uni.navigateTo({ url: `/pages/shootkit/editor?sceneId=${sceneId.value}` })
 }
 </script>
 

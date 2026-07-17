@@ -131,6 +131,10 @@
 		{
 			"path": "pages/scenes/index",
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/shootkit/editor",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		}
 	],
 	"globalStyle": {

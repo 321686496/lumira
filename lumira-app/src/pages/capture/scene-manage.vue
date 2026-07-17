@@ -254,7 +254,7 @@
       <view v-if="kits.length === 0" class="empty-state">
         <text class="ph ph-stack empty-icon"></text>
         <text class="empty-title">还没有组合</text>
-        <text class="empty-desc">去场景详情页把场景和模板组合起来吧</text>
+        <text class="empty-desc">点击下方按钮新建一个吧</text>
       </view>
       <view v-else class="kit-list">
         <view
@@ -269,6 +269,10 @@
             :template="loadTemplate(kit.templateId) || undefined"
           />
         </view>
+      </view>
+      <view class="kit-create-btn" @click="goCreateKit">
+        <text class="ph ph-plus kit-create-icon"></text>
+        <text class="kit-create-text">新建组合</text>
       </view>
     </view>
 
@@ -625,6 +629,10 @@ const onKitClick = (id: string) => {
     }
   })
 }
+
+function goCreateKit() {
+  uni.navigateTo({ url: '/pages/shootkit/editor' })
+}
 </script>
 
 <style lang="scss" scoped>
@@ -960,5 +968,29 @@ const onKitClick = (id: string) => {
 
 .kit-item:active {
   opacity: 0.85;
+}
+
+/* ===== 新建组合按钮 ===== */
+.kit-create-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  margin-top: 32rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  border: 2rpx dashed var(--color-brand);
+  background: var(--color-brand-subtle);
+}
+
+.kit-create-icon {
+  font-size: 32rpx;
+  color: var(--color-brand);
+}
+
+.kit-create-text {
+  font-size: 28rpx;
+  color: var(--color-brand);
+  font-weight: 500;
 }
 </style>
