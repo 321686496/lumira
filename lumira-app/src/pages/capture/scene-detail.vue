@@ -22,7 +22,7 @@
       <!-- 标题区 -->
       <view class="detail-header">
         <view class="detail-header-row">
-          <text class="detail-icon">{{ scene.icon === 'ph-coffee' ? '☕' : '📍' }}</text>
+          <text class="ph detail-icon" :class="scene.icon"></text>
           <text class="detail-name">{{ scene.name }}</text>
         </view>
         <text class="detail-vibe">{{ scene.vibe }}</text>
@@ -34,8 +34,8 @@
         <view class="section-card">
           <text class="section-text">{{ scene.description }}</text>
           <view class="section-meta">
-            <text class="meta-item">📍 {{ scene.whereToShoot }}</text>
-            <text class="meta-item">🕐 {{ scene.bestTime }}</text>
+            <text class="meta-item"><text class="ph ph-map-pin"></text> {{ scene.whereToShoot }}</text>
+            <text class="meta-item"><text class="ph ph-clock"></text> {{ scene.bestTime }}</text>
           </view>
         </view>
       </view>

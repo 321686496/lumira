@@ -2,11 +2,11 @@
   <view class="achievement-card">
     <view class="ach-row">
       <view class="ach-stat">
-        <text class="ach-icon">📷</text>
+        <text class="ph ph-images-square ach-icon"></text>
         <text class="ach-value">{{ achievement.photoCount }} 张</text>
       </view>
       <view class="ach-stat" v-if="achievement.level > 0">
-        <text class="ach-icon">🏆</text>
+        <text class="ph ph-trophy ach-icon"></text>
         <text class="ach-value">{{ sceneName }} {{ achievement.levelName }} Lv.{{ achievement.level }}</text>
       </view>
     </view>
@@ -17,7 +17,7 @@
       <text class="ach-progress-text">{{ achievement.photoCount }}/{{ achievement.nextLevelCount }}</text>
     </view>
     <view class="ach-rank" v-if="rank">
-      <text class="ach-rank-icon">🔥</text>
+      <text class="ph ph-fire ach-rank-icon"></text>
       <text class="ach-rank-text">{{ rankLabel || '本周' }}热门 #{{ rank }}</text>
     </view>
   </view>

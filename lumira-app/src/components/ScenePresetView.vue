@@ -47,8 +47,8 @@
       <text v-if="scene.vibe" class="spv-card-vibe">{{ scene.vibe }}</text>
       <text v-if="scene.description" class="spv-card-desc">{{ scene.description }}</text>
       <view v-if="hasStats" class="spv-card-stats">
-        <text v-if="photoCount !== undefined" class="spv-stat-item">📷 {{ photoCount }}</text>
-        <text v-if="achievementLevel && achievementLevel > 0" class="spv-stat-item">🏆 Lv.{{ achievementLevel }}</text>
+        <text v-if="photoCount !== undefined" class="spv-stat-item"><text class="ph ph-images-square"></text> {{ photoCount }}</text>
+        <text v-if="achievementLevel && achievementLevel > 0" class="spv-stat-item"><text class="ph ph-trophy"></text> Lv.{{ achievementLevel }}</text>
       </view>
       <slot name="footer" />
     </view>

@@ -1,6 +1,6 @@
 <template>
   <view class="filter-badge">
-    <text class="filter-icon">🎞</text>
+    <text class="ph ph-film-strip filter-icon"></text>
     <view class="filter-info">
       <view class="filter-name-row">
         <text class="filter-name">{{ lutName }}</text>

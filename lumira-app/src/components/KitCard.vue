@@ -1,9 +1,9 @@
 <template>
   <view class="kit-card">
     <view class="kit-icons">
-      <text class="kit-icon">{{ sceneIcon }}</text>
+      <text class="ph kit-icon" :class="sceneIcon"></text>
       <text class="kit-link">+</text>
-      <text class="kit-icon">{{ templateIcon }}</text>
+      <text class="ph kit-icon" :class="templateIcon"></text>
     </view>
     <text class="kit-name">{{ kit.name }}</text>
     <text class="kit-meta">{{ sceneName }} · {{ templateName }}</text>
@@ -21,9 +21,9 @@ const props = defineProps<{
   template?: PhotoTemplate
 }>()
 
-const sceneIcon = computed(() => props.scene?.icon || '📍')
+const sceneIcon = computed(() => props.scene?.icon || 'ph-map-pin')
 
-const templateIcon = computed(() => (props.template ? '📓' : '📸'))
+const templateIcon = computed(() => (props.template ? 'ph-book' : 'ph-camera'))
 
 const sceneName = computed(() => props.scene?.name || '?')
 

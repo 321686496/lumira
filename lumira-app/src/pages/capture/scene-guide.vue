@@ -47,9 +47,9 @@
             <text class="guide-card-name">{{ scene.name }}</text>
             <text class="guide-card-vibe">{{ scene.vibe }}</text>
             <view class="guide-card-stats">
-              <text class="stat-item">📷 {{ getPhotoCountByScene(scene.id) }}</text>
+              <text class="stat-item"><text class="ph ph-images-square"></text> {{ getPhotoCountByScene(scene.id) }}</text>
               <text v-if="getSceneAchievement(scene.id).level > 0" class="stat-item">
-                🏆 Lv.{{ getSceneAchievement(scene.id).level }}
+                <text class="ph ph-trophy"></text> Lv.{{ getSceneAchievement(scene.id).level }}
               </text>
             </view>
           </view>
