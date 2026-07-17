@@ -123,6 +123,20 @@ export function useTagManager() {
     return templates.filter(t => tagIds.some(id => t.meta.tagIds.includes(id)))
   }
 
+  /** 按 id 列表批量获取标签 */
+  function getTagsByIds(ids: string[]): UserTag[] {
+    if (!ids || ids.length === 0) return []
+    return state.value.tags.filter(t => ids.includes(t.id))
+  }
+
+  /** 更新场景标签（仅自定义场景可编辑，预设场景为只读） */
+  function updateSceneTags(sceneId: string, tagIds: string[]): void {
+    const { allScenes, isCustomScene, updateCustomScene } = useSceneManager()
+    const scene = allScenes.value.find(s => s.id === sceneId)
+    if (!scene || !isCustomScene(scene)) return
+    updateCustomScene(sceneId, { tagIds })
+  }
+
   return {
     tags,
     getTagsByType,
@@ -133,5 +147,7 @@ export function useTagManager() {
     getTemplatesByTag,
     filterScenesByTags,
     filterTemplatesByTags,
+    getTagsByIds,
+    updateSceneTags,
   }
 }

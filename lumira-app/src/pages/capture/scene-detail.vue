@@ -40,6 +40,25 @@
         </view>
       </view>
 
+      <!-- 标签 -->
+      <view class="detail-section">
+        <text class="section-title">标签</text>
+        <view class="tag-list-row">
+          <text v-for="t in sceneTags" :key="t.id" class="lumira-tag lumira-tag-gold">{{ t.name }}</text>
+          <text v-if="sceneTags.length === 0 && !canEditTags" class="tag-empty-text">暂无标签</text>
+          <view v-if="canEditTags" class="tag-add-btn" @click="tagSelectorVisible = !tagSelectorVisible">
+            <text class="ph ph-plus tag-add-icon"></text>
+            <text class="tag-add-text">添加标签</text>
+          </view>
+        </view>
+        <TagSelector
+          v-if="canEditTags && tagSelectorVisible"
+          :selected-tag-ids="editableTagIds"
+          type="scene"
+          @update:selectedTagIds="onTagUpdate"
+        />
+      </view>
+
       <!-- 推荐滤镜 -->
       <view class="detail-section">
         <text class="section-title">推荐滤镜</text>
@@ -87,9 +106,11 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useSceneManager } from '@/composables/useSceneManager'
+import { useTagManager } from '@/composables/useTagManager'
 import type { ScenePresetId } from '@/types/template'
 import SceneFilterBadge from '@/components/SceneFilterBadge.vue'
 import SceneAchievementCard from '@/components/SceneAchievementCard.vue'
+import TagSelector from '@/components/TagSelector.vue'
 
 const sceneId = ref<string>('')
 
@@ -99,7 +120,7 @@ onLoad((options) => {
   }
 })
 
-const { getSceneById, getSceneAchievement, isFavorite, toggleFavorite, weeklyRanking } = useSceneManager()
+const { getSceneById, getSceneAchievement, isFavorite, toggleFavorite, weeklyRanking, isCustomScene } = useSceneManager()
 
 const scene = computed(() => getSceneById(sceneId.value))
 const isFav = computed(() => sceneId.value ? isFavorite(sceneId.value as ScenePresetId) : false)
@@ -108,6 +129,37 @@ const sceneRank = computed(() => {
   const found = weeklyRanking.value.find(r => r.scene.id === sceneId.value)
   return found?.rank
 })
+
+const { getTagsByIds, updateSceneTags } = useTagManager()
+
+// 场景标签：自定义场景用 tagIds，预设场景用 recommendedTagIds（只读）
+const sceneTags = computed(() => {
+  const s = scene.value
+  if (!s) return []
+  const ids = isCustomScene(s) ? s.tagIds : s.recommendedTagIds
+  return getTagsByIds(ids)
+})
+
+// 仅自定义场景可编辑标签
+const canEditTags = computed(() => {
+  const s = scene.value
+  return !!s && isCustomScene(s)
+})
+
+// 可编辑的标签 ids（用于 TagSelector 双向绑定）
+const editableTagIds = computed<string[]>(() => {
+  const s = scene.value
+  if (!s || !isCustomScene(s)) return []
+  return s.tagIds
+})
+
+const tagSelectorVisible = ref(false)
+
+function onTagUpdate(ids: string[]) {
+  if (scene.value) {
+    updateSceneTags(scene.value.id, ids)
+  }
+}
 
 function goBack() {
   uni.navigateBack()
@@ -157,4 +209,9 @@ function goCreateKit() {
 .btn-primary-text { font-size: 28rpx; color: #FFFFFF; font-weight: 600; }
 .btn-secondary { flex: 1; height: 88rpx; background: rgba(201,168,118,0.15); border-radius: 44rpx; display: flex; align-items: center; justify-content: center; }
 .btn-secondary-text { font-size: 28rpx; color: #C9A876; font-weight: 600; }
+.tag-list-row { display: flex; flex-wrap: wrap; gap: 12rpx; align-items: center; }
+.tag-empty-text { font-size: 24rpx; color: var(--color-text-tertiary); }
+.tag-add-btn { display: flex; align-items: center; gap: 6rpx; padding: 8rpx 20rpx; border-radius: 9999rpx; border: 2rpx dashed var(--color-brand); background: var(--color-brand-subtle); }
+.tag-add-icon { font-size: 24rpx; color: var(--color-brand); }
+.tag-add-text { font-size: 24rpx; color: var(--color-brand); font-weight: 500; }
 </style>

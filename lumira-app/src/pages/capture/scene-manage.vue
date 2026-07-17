@@ -207,6 +207,16 @@
           />
         </view>
 
+        <!-- 标签 -->
+        <view class="form-field">
+          <text class="form-label">标签</text>
+          <TagSelector
+            :selected-tag-ids="formData.tagIds"
+            type="scene"
+            @update:selectedTagIds="onTagIdsUpdate"
+          />
+        </view>
+
         <!-- 表单按钮 -->
         <view class="form-actions">
           <view class="form-btn-ghost" @click="onCancelForm">
@@ -285,6 +295,7 @@ import { ref, reactive, watch, nextTick } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import ScenePresetView from '@/components/ScenePresetView.vue'
 import KitCard from '@/components/KitCard.vue'
+import TagSelector from '@/components/TagSelector.vue'
 import { useSceneManager } from '@/composables/useSceneManager'
 import { useShootKit } from '@/composables/useShootKit'
 import { useTemplate } from '@/composables/useTemplate'
@@ -527,6 +538,11 @@ const onCancelForm = () => {
     formVisible.value = false
     editingId.value = null
   }
+}
+
+// TagSelector 双向更新：直接赋值触发 reactive 更新
+const onTagIdsUpdate = (ids: string[]) => {
+  formData.tagIds = ids
 }
 
 const onSaveForm = () => {
