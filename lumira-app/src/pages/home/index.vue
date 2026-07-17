@@ -123,6 +123,7 @@
           <text class="lumira-tag lumira-tag-green">为你而选</text>
         </view>
         <view class="section-link-row">
+          <text class="lumira-section-link" @click="goAllScenes">查看全部</text>
           <text class="lumira-section-link" @click="goSceneFav">收藏</text>
           <text class="lumira-section-link" @click="goSceneManage">管理</text>
         </view>
@@ -259,6 +260,7 @@ const goTab = (url: string) => uni.reLaunch({ url })
 const goPage = (url: string) => uni.navigateTo({ url })
 const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
 const goSceneDetail = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-detail?sceneId=${id}` })
+const goAllScenes = () => uni.navigateTo({ url: '/pages/scenes/index' })
 const goSceneManage = () => uni.navigateTo({ url: '/pages/capture/scene-manage' })
 const goSceneFav = () => uni.navigateTo({ url: '/pages/capture/scene-manage?tab=fav' })
 </script>
