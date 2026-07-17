@@ -190,6 +190,24 @@ export function useSceneManager() {
     return state.value.photos.filter(p => p.sceneId === sceneId)
   }
 
+  function updatePhotoScene(photoId: string, sceneId: ScenePresetId | CustomSceneId | null): void {
+    const photo = state.value.photos.find(p => p.id === photoId)
+    if (photo) {
+      photo.sceneId = sceneId
+      persist()
+    }
+  }
+
+  function getPhotosGroupedByScene(): Record<string, LocalPhoto[]> {
+    const groups: Record<string, LocalPhoto[]> = {}
+    state.value.photos.forEach(p => {
+      const key = p.sceneId || 'uncategorized'
+      if (!groups[key]) groups[key] = []
+      groups[key].push(p)
+    })
+    return groups
+  }
+
   // ── 成就系统 ──
 
   function getSceneAchievement(sceneId: string): SceneAchievement {
@@ -332,6 +350,8 @@ export function useSceneManager() {
     deletePhoto,
     getPhotoCountByScene,
     getPhotosByScene,
+    updatePhotoScene,
+    getPhotosGroupedByScene,
     // 新增：成就
     getSceneAchievement,
     sceneAchievements,

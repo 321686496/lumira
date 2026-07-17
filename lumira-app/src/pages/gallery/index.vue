@@ -14,7 +14,7 @@
     <!-- Count & View Toggle -->
     <view class="top-bar fade-up">
       <view class="top-bar-row">
-        <text class="count-text">128 张照片</text>
+        <text class="count-text">{{ photos.length }} 张照片</text>
         <view class="view-toggle">
           <view
             class="view-toggle-item"
@@ -37,14 +37,15 @@
       <scroll-view scroll-x class="pill-row" :show-scrollbar="false">
         <view class="pill-inner">
           <view
-            v-for="(p, i) in pills"
-            :key="i"
+            v-for="p in pills"
+            :key="p.key"
             class="pill"
-            :class="{ active: activePill === i }"
-            @click="activePill = i"
+            :class="{ active: activeFilter === p.key }"
+            @click="activeFilter = p.key"
           >
             <text v-if="p.icon" class="ph pill-icon" :class="p.icon"></text>
             <text class="pill-text">{{ p.label }}</text>
+            <text class="pill-count">{{ p.count }}</text>
           </view>
         </view>
       </scroll-view>
@@ -52,18 +53,19 @@
 
     <!-- 3-Column Photo Grid -->
     <view class="grid-wrap">
-      <view class="photo-grid">
+      <view v-if="filteredPhotos.length === 0" class="empty-state">
+        <text class="ph ph-image empty-icon"></text>
+        <text class="empty-text">还没有照片，去拍一张吧</text>
+      </view>
+      <view v-else class="photo-grid">
         <view
-          v-for="(photo, i) in photos"
-          :key="i"
+          v-for="(photo, i) in filteredPhotos"
+          :key="photo.id"
           class="photo-cell fade-up"
           :class="delayClass(i)"
-          @click="goDetail"
+          @click="goDetail(photo.id)"
         >
-          <image class="photo-img" :src="photo.img" mode="aspectFill" />
-          <view v-if="photo.mark" class="photo-mark">
-            <text class="ph photo-mark-icon" :class="photo.mark"></text>
-          </view>
+          <image class="photo-img" :src="photo.dataUrl" mode="aspectFill" />
         </view>
       </view>
     </view>
@@ -76,39 +78,65 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import { useSceneManager } from '@/composables/useSceneManager'
+import type { AnyScene } from '@/types/template'
+
+const { photos, getPhotosGroupedByScene, getSceneById, reloadFromStorage } = useSceneManager()
 
 const viewTab = ref<'photo' | 'diary'>('photo')
-const activePill = ref(0)
 
-const pills = ref([
-  { label: '全部', icon: '' },
-  { label: '穿搭', icon: 'ph-t-shirt' },
-  { label: '收藏', icon: 'ph-heart' },
-  { label: '咖啡馆', icon: 'ph-coffee' },
-  { label: '街拍', icon: 'ph-buildings' },
-  { label: '花店', icon: 'ph-flower' }
-])
+interface Pill {
+  label: string
+  icon: string
+  count: number
+  key: string
+}
 
-const photos = ref([
-  { img: 'https://picsum.photos/seed/2074130/400/600', mark: 'ph-heart' },
-  { img: 'https://picsum.photos/seed/457882/400/400', mark: '' },
-  { img: 'https://picsum.photos/seed/1153245/400/400', mark: 'ph-t-shirt' },
-  { img: 'https://picsum.photos/seed/1042140/400/400', mark: '' },
-  { img: 'https://picsum.photos/seed/373326/400/400', mark: 'ph-heart' },
-  { img: 'https://picsum.photos/seed/774095/400/400', mark: '' },
-  { img: 'https://picsum.photos/seed/312415/400/400', mark: 'ph-coffee' },
-  { img: 'https://picsum.photos/seed/1926773/400/400', mark: 'ph-heart' },
-  { img: 'https://picsum.photos/seed/414628/400/400', mark: '' }
-])
+const pills = computed<Pill[]>(() => {
+  const groups = getPhotosGroupedByScene()
+  const result: Pill[] = [
+    { label: '全部', icon: '', count: photos.value.length, key: 'all' }
+  ]
+  Object.entries(groups).forEach(([key, list]) => {
+    if (key === 'uncategorized') {
+      result.push({ label: '未分类', icon: 'ph-folder-dashed', count: list.length, key: 'uncategorized' })
+    } else {
+      const scene = getSceneById(key)
+      if (scene) {
+        result.push({ label: scene.name, icon: scene.icon, count: list.length, key: `scene_${key}` })
+      }
+    }
+  })
+  return result
+})
+
+const activeFilter = ref('all')
+
+const filteredPhotos = computed(() => {
+  if (activeFilter.value === 'all') return photos.value
+  if (activeFilter.value === 'uncategorized') {
+    return photos.value.filter(p => !p.sceneId)
+  }
+  if (activeFilter.value.startsWith('scene_')) {
+    const sceneId = activeFilter.value.replace('scene_', '')
+    return photos.value.filter(p => p.sceneId === sceneId)
+  }
+  return photos.value
+})
 
 const delayClass = (i: number) => {
   const d = (i % 3) + 1
   return d === 1 ? 'fade-up-d1' : d === 2 ? 'fade-up-d2' : 'fade-up-d3'
 }
 
+onShow(() => {
+  reloadFromStorage()
+})
+
 const back = () => uni.navigateBack()
-const goDetail = () => uni.navigateTo({ url: '/pages/gallery/detail' })
+const goDetail = (id: string) => uni.navigateTo({ url: `/pages/gallery/detail?id=${id}` })
 const goDiary = () => uni.navigateTo({ url: '/pages/gallery/diary' })
 const goCollections = () => uni.navigateTo({ url: '/pages/profile/collections' })
 </script>
@@ -177,7 +205,7 @@ const goCollections = () => uni.navigateTo({ url: '/pages/profile/collections' }
 }
 
 .pill-inner {
-  display: flex;
+  display: inline-flex;
   gap: 16rpx;
 }
 
@@ -216,9 +244,41 @@ const goCollections = () => uni.navigateTo({ url: '/pages/profile/collections' }
   color: #fff;
 }
 
+.pill-count {
+  font-size: 20rpx;
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2rpx 12rpx;
+  border-radius: 9999rpx;
+  color: $color-text-tertiary;
+}
+
+.pill.active .pill-count {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
 /* 3 列网格 */
 .grid-wrap {
   padding: 0 48rpx;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 0;
+  gap: 16rpx;
+}
+
+.empty-icon {
+  font-size: 96rpx;
+  color: $color-text-tertiary;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: $color-text-tertiary;
 }
 
 .photo-grid {
@@ -242,17 +302,6 @@ const goCollections = () => uni.navigateTo({ url: '/pages/profile/collections' }
   left: 0;
   width: 100%;
   height: 100%;
-}
-
-.photo-mark {
-  position: absolute;
-  bottom: 8rpx;
-  right: 8rpx;
-}
-
-.photo-mark-icon {
-  font-size: 24rpx;
-  color: #fff;
 }
 
 /* 提示 */
