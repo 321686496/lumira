@@ -1,5 +1,5 @@
 <template>
-  <view class="capture-page" :class="{ 'is-landscape': isLandscape }">
+  <view class="capture-page" :class="{ 'is-landscape': isLandscape, 'capture-fullscreen': isFullscreen }">
     <!-- 顶部沉浸式深色标题栏 -->
     <view class="capture-nav">
       <view class="status-spacer" :style="{ height: statusBarHeight + 'px' }"></view>
@@ -12,6 +12,9 @@
           <text class="nav-sub" v-if="currentTemplate">{{ categoryLabel }} · {{ currentTemplate.composition.aspectRatio }}</text>
         </view>
         <view class="nav-actions">
+          <view class="nav-action" @click="toggleFullscreen">
+            <text :class="isFullscreen ? 'ph ph-frame' : 'ph ph-frame-corners'" />
+          </view>
           <view
             v-if="currentTemplate"
             class="nav-action"
@@ -100,12 +103,13 @@
       <!-- 顶部参数 pill 栏 -->
       <view class="param-pill-bar" :style="landscapeZoomStyle">
         <view class="param-pill" @click.stop="openPanel('camera')">
-          <text class="pill-label">EV</text>
           <text class="pill-value">{{ evDisplay }}</text>
         </view>
         <view class="param-pill" @click.stop="openPanel('camera')">
-          <text class="pill-label">WB</text>
           <text class="pill-value">{{ wbDisplay }}</text>
+        </view>
+        <view class="param-pill" @click.stop="openPanel('camera')">
+          <text class="pill-value">{{ isoDisplay }}</text>
         </view>
         <ApplyButton
           v-if="originalTemplate"
@@ -180,6 +184,62 @@
           </view>
         </view>
       </scroll-view>
+
+      <!-- 可折叠面板：模板 + 场景横滑 -->
+      <view v-if="bottomPanelExpanded" class="expandable-panel">
+        <view class="panel-section">
+          <view class="panel-section-title">
+            <text class="ph ph-squares-four"></text>
+            <text>模板</text>
+          </view>
+          <scroll-view class="horizontal-scroll" scroll-x>
+            <view class="strip-list">
+              <view
+                v-for="tpl in recentTemplates"
+                :key="tpl.meta.id"
+                class="strip-item"
+                :class="{ active: currentTemplateId === tpl.meta.id }"
+                @click="switchTemplate(tpl.meta.id)"
+              >
+                <image
+                  class="strip-img"
+                  :src="tpl.meta.cover || `https://picsum.photos/seed/${tpl.meta.id}/100/100`"
+                  mode="aspectFill"
+                />
+                <text class="strip-name">{{ tpl.meta.name }}</text>
+              </view>
+            </view>
+          </scroll-view>
+        </view>
+        <view class="panel-section">
+          <view class="panel-section-title">
+            <text class="ph ph-map-pin"></text>
+            <text>场景</text>
+          </view>
+          <scroll-view class="horizontal-scroll" scroll-x>
+            <view class="strip-list">
+              <view
+                v-for="scene in sceneStripList"
+                :key="scene.id"
+                class="strip-item"
+                :class="{ active: activeScenePresetId === scene.id }"
+                @click="applyScene(scene.id)"
+              >
+                <image
+                  class="strip-img"
+                  :src="scene.exampleImages[0] || `https://picsum.photos/seed/${scene.id}/100/100`"
+                  mode="aspectFill"
+                />
+                <text class="strip-name">{{ scene.name }}</text>
+              </view>
+            </view>
+          </scroll-view>
+        </view>
+      </view>
+
+      <view class="toggle-btn" @click="bottomPanelExpanded = !bottomPanelExpanded">
+        <text :class="bottomPanelExpanded ? 'ph ph-caret-down' : 'ph ph-caret-up'"></text>
+      </view>
     </view>
 
     <ParamPanel
@@ -248,6 +308,34 @@ const isCapturing = ref(false)
 const lastPhoto = ref('')
 // 当前生效的场景预设 ID（用于显示场景滤镜 badge）
 const activeScenePresetId = ref<string | null>(null)
+
+// 全屏取景器开关（持久化到 localStorage）
+const isFullscreen = ref(false)
+try {
+  const savedFs = uni.getStorageSync('lumira_capture_fullscreen')
+  if (savedFs === 'true') isFullscreen.value = true
+} catch {}
+function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value
+  uni.setStorageSync('lumira_capture_fullscreen', String(isFullscreen.value))
+}
+
+// 底部模板/场景折叠面板展开状态
+const bottomPanelExpanded = ref(false)
+const sceneStripList = computed(() => SCENE_PRESETS.slice(0, 8))
+
+// 应用场景预设：仅叠加滤镜到当前可编辑模板
+function applyScene(id: string) {
+  activeScenePresetId.value = id
+  const preset = SCENE_PRESETS.find(p => p.id === id)
+  if (preset) {
+    const tpl = editableTemplate.value ?? emptyTemplate
+    tpl.postProcess.lut = preset.filter.lut
+    if (preset.filter.systemFilter) {
+      tpl.postProcess.systemFilter = preset.filter.systemFilter
+    }
+  }
+}
 
 // applied 改为 computed：基于参数匹配判定
 const applied = computed(() => {
@@ -502,16 +590,19 @@ const silhouetteLayerStyle = computed(() => {
 })
 
 const evDisplay = computed(() => {
-  const tpl = activeTemplate.value
-  const ev = tpl?.camera.exposureCompensation
-  if (ev === undefined || ev === 0) return '0'
-  return ev > 0 ? `+${ev}` : `${ev}`
+  const ev = activeTemplate.value?.camera.exposureCompensation
+  if (ev === undefined || ev === 0) return '0.00'
+  return (ev > 0 ? '+' : '') + ev.toFixed(2)
 })
 
 const wbDisplay = computed(() => {
-  const tpl = activeTemplate.value
-  const k = tpl?.camera.whiteBalanceK
-  return k ? `${k}K` : '5500K'
+  const k = activeTemplate.value?.camera.whiteBalanceK
+  return k ? `${Math.round(k)}K` : 'AUTO'
+})
+
+const isoDisplay = computed(() => {
+  const iso = activeTemplate.value?.camera.iso
+  return iso ? `${iso}` : 'AUTO'
 })
 
 // 当前生效的场景滤镜（用于顶部 badge 显示）
@@ -983,22 +1074,22 @@ const onViewfinderTap = () => {
 }
 
 .param-pill {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-  padding: 10rpx 20rpx;
-  border-radius: 9999rpx;
+  width: 96rpx;
+  height: 56rpx;
+  padding: 0;
+  border-radius: 28rpx;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .pill-label {
-  font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.6);
-  white-space: nowrap;
+  display: none;
 }
 
 .pill-value {
@@ -1006,6 +1097,7 @@ const onViewfinderTap = () => {
   color: #fff;
   font-family: 'Courier New', monospace;
   white-space: nowrap;
+  line-height: 1;
 }
 
 .apply-pill {
@@ -1276,5 +1368,125 @@ const onViewfinderTap = () => {
   bottom: 40rpx;
   left: 40rpx;
   transform: none;
+}
+
+/* ===== 全屏取景器模式 ===== */
+.capture-fullscreen .viewfinder {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  border-radius: 0;
+  margin: 0;
+  padding-bottom: 0;
+}
+
+.capture-fullscreen .param-pill-bar {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12rpx);
+  left: 24rpx;
+  right: 24rpx;
+  z-index: 20;
+  max-width: none;
+  transform: none;
+  justify-content: center;
+}
+
+.capture-fullscreen .capture-bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ===== 底部可折叠面板 ===== */
+.expandable-panel {
+  padding: 24rpx 24rpx 8rpx;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.panel-section {
+  margin-bottom: 16rpx;
+}
+
+.panel-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-bottom: 8rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.panel-section-title .ph {
+  font-size: 24rpx;
+}
+
+.horizontal-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.expandable-panel .strip-list {
+  display: inline-flex;
+  gap: 12rpx;
+  padding-bottom: 4rpx;
+}
+
+.expandable-panel .strip-item {
+  flex-shrink: 0;
+  width: 96rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+  padding: 8rpx;
+  border-radius: 12rpx;
+  border: 3rpx solid transparent;
+  height: auto;
+  overflow: visible;
+  position: static;
+}
+
+.expandable-panel .strip-item.active {
+  border-color: var(--color-brand);
+  box-shadow: none;
+}
+
+.expandable-panel .strip-img {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 8rpx;
+}
+
+.expandable-panel .strip-name {
+  position: static;
+  background: none;
+  padding: 0;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+  max-width: 96rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toggle-btn {
+  display: flex;
+  justify-content: center;
+  padding: 8rpx;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.toggle-btn .ph {
+  font-size: 32rpx;
+  color: rgba(255, 255, 255, 0.7);
 }
 </style>
