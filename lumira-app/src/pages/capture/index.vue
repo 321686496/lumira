@@ -329,7 +329,11 @@ function applyScene(id: string) {
   activeScenePresetId.value = id
   const preset = SCENE_PRESETS.find(p => p.id === id)
   if (preset) {
-    const tpl = editableTemplate.value ?? emptyTemplate
+    // 若无当前可编辑模板，基于空白模板深拷贝创建一个，避免直接 mutate 单例
+    if (!editableTemplate.value) {
+      editableTemplate.value = JSON.parse(JSON.stringify(emptyTemplate))
+    }
+    const tpl = editableTemplate.value!
     tpl.postProcess.lut = preset.filter.lut
     if (preset.filter.systemFilter) {
       tpl.postProcess.systemFilter = preset.filter.systemFilter
