@@ -542,25 +542,29 @@ const applyKit = (kitId: string) => {
   const template = loadTemplate(kit.templateId)
   if (!scene || !template) return
 
-  // 加载模板（深拷贝，避免污染模板源数据）
-  const tpl = JSON.parse(JSON.stringify(template)) as PhotoTemplate
+  // 先设置 currentTemplateId，触发 watch(originalTemplate) 重建 editableTemplate
   currentTemplateId.value = template.meta.id
 
-  // 叠加场景滤镜
-  tpl.postProcess.lut = scene.filter.lut
-  if (scene.filter.systemFilter) {
-    tpl.postProcess.systemFilter = scene.filter.systemFilter
-  }
+  // 在 watcher 重建后叠加场景滤镜与 overrides（nextTick 回调在 pre-flush watcher 之后执行）
+  nextTick(() => {
+    const tpl = editableTemplate.value
+    if (!tpl) return
 
-  // 应用 overrides（如有）
-  if (kit.overrides?.camera) {
-    Object.assign(tpl.camera, kit.overrides.camera)
-  }
-  if (kit.overrides?.postProcess) {
-    Object.assign(tpl.postProcess, kit.overrides.postProcess)
-  }
+    // 叠加场景滤镜
+    tpl.postProcess.lut = scene.filter.lut
+    if (scene.filter.systemFilter) {
+      tpl.postProcess.systemFilter = scene.filter.systemFilter
+    }
 
-  editableTemplate.value = tpl
+    // 应用 overrides（如有）
+    if (kit.overrides?.camera) {
+      Object.assign(tpl.camera, kit.overrides.camera)
+    }
+    if (kit.overrides?.postProcess) {
+      Object.assign(tpl.postProcess, kit.overrides.postProcess)
+    }
+  })
+
   recordUsage(kitId)
 }
 
