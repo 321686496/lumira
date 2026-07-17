@@ -69,6 +69,10 @@
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},
 		{
+			"path": "pages/templates/all",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
 			"path": "pages/challenge/detail",
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},

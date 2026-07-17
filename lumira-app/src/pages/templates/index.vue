@@ -1,102 +1,93 @@
 <template>
   <view class="lumira-container">
-    <!-- NAVBAR (Tab页，无返回按钮) -->
+    <!-- NAVBAR (Tab 页，无返回按钮，右上角导航入口) -->
     <view class="lumira-nav">
       <view class="lumira-nav-left"></view>
-      <text class="lumira-nav-title">模板库</text>
-      <view class="lumira-nav-right">
-        <text class="ph ph-magnifying-glass nav-icon"></text>
+      <text class="lumira-nav-title">模板</text>
+      <view class="lumira-nav-right" @click="goAll">
+        <text class="ph ph-squares-four nav-icon"></text>
       </view>
     </view>
 
-    <!-- HERO -->
+    <!-- HERO 推荐区 -->
     <view class="hero-wrap fade-up">
-      <view class="hero-card">
-        <view class="hero-deco"></view>
-        <view class="hero-deco-2"></view>
-        <view class="hero-body">
-          <text class="hero-title">模板库</text>
-          <text class="hero-desc">{{ allTemplatesCount }} 个模板等你探索</text>
-          <view class="hero-pill">
-            <text class="ph ph-lock-simple-open hero-pill-icon"></text>
-            <text class="hero-pill-text">已解锁 {{ unlockedCount }} 个</text>
+      <text class="hero-title">今日为你推荐</text>
+      <scroll-view scroll-x class="rec-scroll" :show-scrollbar="false">
+        <view class="rec-list">
+          <view
+            v-for="rec in recommendations"
+            :key="rec.template.meta.id"
+            class="rec-card lumira-card-hover"
+            @click="goTemplateDetail(rec.template.meta.id)"
+          >
+            <view class="rec-img-wrap">
+              <image
+                class="rec-img"
+                :src="rec.template.meta.cover || 'https://picsum.photos/seed/' + rec.template.meta.id + '/240/320'"
+                mode="aspectFill"
+              />
+              <view class="rec-source-badge" :class="'source-' + rec.source">
+                <text class="rec-source-text">{{ sourceLabel(rec.source) }}</text>
+              </view>
+            </view>
+            <text class="rec-name">{{ rec.template.meta.name }}</text>
+            <text class="rec-reason">{{ rec.reason }}</text>
           </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 拍摄偏好（仅有照片时显示） -->
+    <view v-if="userPreference.totalPhotos > 0" class="pref-section fade-up fade-up-d1">
+      <text class="section-title">你的拍摄偏好</text>
+      <view class="pref-card">
+        <view class="pref-row">
+          <text class="pref-label">累计作品</text>
+          <text class="pref-val">{{ userPreference.totalPhotos }} 张</text>
+        </view>
+        <view v-if="userPreference.topCategory" class="pref-row">
+          <text class="pref-label">最常用分类</text>
+          <text class="pref-val">{{ categoryLabel(userPreference.topCategory) }} · {{ userPreference.topCategoryPercentage }}%</text>
         </view>
       </view>
     </view>
 
-    <!-- 三层分类导航 + 标签筛选 -->
-    <view class="template-filter fade-up fade-up-d1">
-      <CategoryNav :layers="categoryLayers" @select="onLayerSelect" />
-      <view class="template-tags">
-        <TagSelector
-          :selected-tag-ids="selectedTagIds"
-          type="template"
-          @update:selected-tag-ids="selectedTagIds = $event"
-        />
+    <!-- 更多模板 -->
+    <view class="other-section fade-up fade-up-d2">
+      <view class="section-header">
+        <text class="section-title">更多模板</text>
+        <text class="section-link" @click="goAll">查看全部 ›</text>
       </view>
-      <!-- "我的"自定义模板切换 -->
-      <view class="custom-toggle-row">
+      <view v-if="otherTemplates.length" class="other-grid">
         <view
-          class="custom-toggle-pill"
-          :class="{ 'custom-toggle-pill-active': showCustom }"
-          @click="showCustom = !showCustom"
+          v-for="tpl in otherTemplates.slice(0, 6)"
+          :key="tpl.meta.id"
+          class="other-card lumira-card-hover"
+          @click="goTemplateDetail(tpl.meta.id)"
         >
-          <text class="custom-toggle-text">我的</text>
-        </view>
-      </view>
-    </view>
-
-    <!-- "我的"分类操作入口按钮行 -->
-    <view v-if="showCustom" class="action-row fade-up fade-up-d2">
-      <view class="action-btn lumira-btn-ghost" @click="handleImport">
-        <text class="ph ph-download-simple action-btn-icon"></text>
-        <text class="action-btn-text">导入模板</text>
-      </view>
-      <view class="action-btn lumira-btn-ghost" @click="goEditor">
-        <text class="ph ph-plus action-btn-icon"></text>
-        <text class="action-btn-text">新建模板</text>
-      </view>
-    </view>
-
-    <!-- 模板网格 -->
-    <view v-if="filteredTemplates.length" class="tpl-grid section-pad fade-up fade-up-d2">
-      <view
-        class="tpl-card lumira-card-hover"
-        v-for="t in filteredTemplates"
-        :key="t.meta.id"
-        @click="goDetail(t.meta.id)"
-      >
-        <view class="tpl-img-wrap">
-          <image class="tpl-img" :src="coverUrl(t)" mode="aspectFill" />
-          <view v-if="t.meta.price === 0" class="tpl-badge-free">
-            <text class="tpl-badge-free-text">免费</text>
+          <view class="other-img-wrap">
+            <image
+              class="other-img"
+              :src="tpl.meta.cover || 'https://picsum.photos/seed/' + tpl.meta.id + '/200/200'"
+              mode="aspectFill"
+            />
+            <view v-if="tpl.meta.price === 0" class="other-badge-free">
+              <text class="other-badge-text">免费</text>
+            </view>
           </view>
-          <view v-else class="tpl-badge-premium">
-            <text class="ph ph-star tpl-badge-icon"></text>
-            <text class="tpl-badge-text">精选 ¥{{ t.meta.price }}</text>
-          </view>
-        </view>
-        <view class="tpl-info">
-          <text class="tpl-name">{{ t.meta.name }}</text>
-          <view class="tpl-meta">
-            <text class="tpl-cat">{{ categoryLabel(t.meta.category) }}</text>
-            <text v-if="showCustom" class="tpl-custom-tag">自定义</text>
+          <view class="other-info">
+            <text class="other-name">{{ tpl.meta.name }}</text>
+            <text class="other-cat">{{ categoryLabel(tpl.meta.category) }}</text>
           </view>
         </view>
       </view>
-    </view>
-
-    <!-- 空状态 -->
-    <view v-else class="empty-state-wrap fade-up fade-up-d2">
-      <text class="ph ph-folder-open empty-icon"></text>
-      <text class="empty-text">{{
-        showCustom ? '还没有自定义模板' : '该分类暂无模板'
-      }}</text>
-      <view v-if="showCustom" class="empty-btn" @click="goEditor">
-        去创建
+      <view v-else class="empty-state">
+        <text class="ph ph-folder-open empty-icon"></text>
+        <text class="empty-text">暂无更多模板</text>
       </view>
     </view>
+
+    <view class="bottom-spacer"></view>
 
     <FloatingTabBar active="templates" />
   </view>
@@ -104,224 +95,29 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onShow, onLoad } from '@dcloudio/uni-app'
+import { onShow } from '@dcloudio/uni-app'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
-import CategoryNav from '@/components/CategoryNav.vue'
-import TagSelector from '@/components/TagSelector.vue'
-import { useTemplate } from '@/composables/useTemplate'
-import { useTemplateIO } from '@/composables/useTemplateIO'
-import { useTagManager } from '@/composables/useTagManager'
-import { SCENE_TO_CATEGORY } from '@/data/scenePresets'
-import type { PhotoTemplate, Target, ScenePresetId } from '@/types/template'
+import { useRecommendation } from '@/composables/useRecommendation'
+import type { Target } from '@/types/template'
 
-const { getAllTemplates, getCustomTemplates } = useTemplate()
-const { filterTemplatesByTags } = useTagManager()
-const { importTemplate } = useTemplateIO()
+const { getRecommendedTemplates, getOtherTemplates, userPreference } = useRecommendation()
 
-// ===== 三层分类 + 标签筛选 =====
-const selectedType = ref<Target | null>(null)
-const selectedStyle = ref<string | null>(null)
-const selectedMethod = ref<string | null>(null)
-const selectedTagIds = ref<string[]>([])
-const showCustom = ref(false)
-
-// 自定义模板刷新触发器：onShow / 导入后自增，触发 computed 重算
-// （getAllTemplates / getCustomTemplates 内部读 storage，本身非响应式）
+// 刷新触发器：onShow 时自增，触发 recommendations 重算
+// （getRecommendedTemplates 内部读 photos / recentTemplates / getAllTemplates，需触发响应式）
 const refreshTick = ref(0)
-
-// 接收场景推荐页传入的 scene 参数，自动切换到对应分类
-onLoad((options) => {
-  if (options?.scene) {
-    const cat = SCENE_TO_CATEGORY[options.scene as ScenePresetId]
-    if (cat) selectedType.value = cat
-  }
-})
-
 onShow(() => {
   refreshTick.value++
 })
 
-// 三层分类选项
-const STYLE_MAP: Record<Target, { value: string; label: string }[]> = {
-  portrait: [
-    { value: 'japanese', label: '日系' },
-    { value: 'emotional', label: '情绪' },
-    { value: 'film', label: '胶片' },
-    { value: 'western', label: '欧美' },
-  ],
-  landscape: [
-    { value: 'fresh', label: '清新' },
-    { value: 'epic', label: '大气' },
-  ],
-  food: [
-    { value: 'overhead', label: '俯拍' },
-    { value: 'closeup', label: '特写' },
-  ],
-  street: [
-    { value: 'casual', label: '随性' },
-    { value: 'geometric', label: '几何' },
-  ],
-  night: [
-    { value: 'neon', label: '霓虹' },
-    { value: 'starry', label: '星空' },
-  ],
-  macro: [
-    { value: 'nature', label: '自然' },
-    { value: 'object', label: '物品' },
-  ],
-  'still-life': [
-    { value: 'minimal', label: '极简' },
-    { value: 'flat', label: '扁平' },
-  ],
-}
-
-const METHOD_MAP: Record<string, { value: string; label: string }[]> = {
-  japanese: [
-    { value: 'selfie', label: '自拍' },
-    { value: 'normal', label: '他拍' },
-    { value: 'overhead', label: '俯拍' },
-  ],
-  emotional: [
-    { value: 'selfie', label: '自拍' },
-    { value: 'wide', label: '远景' },
-  ],
-  film: [
-    { value: 'selfie', label: '自拍' },
-    { value: 'normal', label: '他拍' },
-  ],
-  western: [
-    { value: 'normal', label: '他拍' },
-    { value: 'wide', label: '远景' },
-  ],
-  fresh: [
-    { value: 'wide', label: '远景' },
-    { value: 'flat', label: '平拍' },
-  ],
-  epic: [
-    { value: 'wide', label: '远景' },
-    { value: 'overhead', label: '俯拍' },
-  ],
-  overhead: [
-    { value: 'flat', label: '平拍' },
-    { value: 'overhead', label: '俯拍' },
-  ],
-  closeup: [
-    { value: 'macro', label: '微距' },
-    { value: 'detail', label: '细节' },
-  ],
-  casual: [
-    { value: 'normal', label: '随拍' },
-    { value: 'wide', label: '远景' },
-  ],
-  geometric: [
-    { value: 'wide', label: '远景' },
-    { value: 'overhead', label: '俯拍' },
-  ],
-  neon: [
-    { value: 'normal', label: '他拍' },
-    { value: 'wide', label: '远景' },
-  ],
-  starry: [
-    { value: 'wide', label: '远景' },
-    { value: 'long', label: '长曝' },
-  ],
-  nature: [
-    { value: 'macro', label: '微距' },
-    { value: 'detail', label: '细节' },
-  ],
-  object: [
-    { value: 'macro', label: '微距' },
-    { value: 'flat', label: '平拍' },
-  ],
-  minimal: [
-    { value: 'flat', label: '平拍' },
-    { value: 'detail', label: '细节' },
-  ],
-  flat: [
-    { value: 'flat', label: '平拍' },
-    { value: 'overhead', label: '俯拍' },
-  ],
-}
-
-interface CategoryLayer {
-  label: string
-  selected: string | null
-  options: { value: string; label: string }[]
-}
-
-const categoryLayers = computed<CategoryLayer[]>(() => {
-  const layers: CategoryLayer[] = [{
-    label: '类型',
-    selected: selectedType.value,
-    options: [
-      { value: 'portrait', label: '人像' },
-      { value: 'landscape', label: '风景' },
-      { value: 'food', label: '美食' },
-      { value: 'street', label: '街拍' },
-      { value: 'night', label: '夜景' },
-      { value: 'macro', label: '微距' },
-      { value: 'still-life', label: '静物' },
-    ],
-  }]
-  if (selectedType.value && STYLE_MAP[selectedType.value]) {
-    layers.push({
-      label: '风格',
-      selected: selectedStyle.value,
-      options: STYLE_MAP[selectedType.value],
-    })
-  }
-  if (selectedStyle.value && METHOD_MAP[selectedStyle.value]) {
-    layers.push({
-      label: '方式',
-      selected: selectedMethod.value,
-      options: METHOD_MAP[selectedStyle.value],
-    })
-  }
-  return layers
-})
-
-function onLayerSelect(idx: number, value: string | null) {
-  if (idx === 0) {
-    selectedType.value = value as Target | null
-    selectedStyle.value = null
-    selectedMethod.value = null
-  } else if (idx === 1) {
-    selectedStyle.value = value
-    selectedMethod.value = null
-  } else if (idx === 2) {
-    selectedMethod.value = value
-  }
-}
-
-// 所有模板（builtin + 自定义）。访问 refreshTick 触发 onShow 刷新
-const allTemplates = computed<PhotoTemplate[]>(() => {
+const recommendations = computed(() => {
   void refreshTick.value
-  return getAllTemplates()
+  return getRecommendedTemplates(4)
 })
 
-const customOnly = computed<PhotoTemplate[]>(() => {
+const otherTemplates = computed(() => {
   void refreshTick.value
-  return getCustomTemplates()
-})
-
-const allTemplatesCount = computed(() => allTemplates.value.length)
-const unlockedCount = computed(() => allTemplates.value.filter(t => t.meta.price === 0).length)
-
-const filteredTemplates = computed<PhotoTemplate[]>(() => {
-  let list = showCustom.value ? customOnly.value : allTemplates.value
-  if (selectedType.value) {
-    list = list.filter(t => t.meta.classification.type === selectedType.value)
-  }
-  if (selectedStyle.value) {
-    list = list.filter(t => t.meta.classification.style === selectedStyle.value)
-  }
-  if (selectedMethod.value) {
-    list = list.filter(t => t.meta.classification.method === selectedMethod.value)
-  }
-  if (selectedTagIds.value.length > 0) {
-    list = filterTemplatesByTags(selectedTagIds.value, list)
-  }
-  return list
+  const recIds = recommendations.value.map(r => r.template.meta.id)
+  return getOtherTemplates(recIds)
 })
 
 const categoryLabelMap: Record<Target, string> = {
@@ -338,23 +134,22 @@ function categoryLabel(cat: Target): string {
   return categoryLabelMap[cat] || cat
 }
 
-function coverUrl(t: PhotoTemplate): string {
-  return t.meta.cover || `https://picsum.photos/seed/${t.meta.id}/400/600`
-}
-
-function goDetail(id: string) {
-  uni.navigateTo({ url: `/pages/templates/detail?templateId=${id}` })
-}
-
-function goEditor() {
-  uni.navigateTo({ url: '/pages/templates/editor' })
-}
-
-async function handleImport() {
-  const tpl = await importTemplate()
-  if (tpl) {
-    refreshTick.value++
+function sourceLabel(source: string): string {
+  const map: Record<string, string> = {
+    recent_used: '最近使用',
+    scene_match: '场景匹配',
+    category_match: '同分类',
+    system_pick: '系统精选'
   }
+  return map[source] || '推荐'
+}
+
+function goAll() {
+  uni.navigateTo({ url: '/pages/templates/all' })
+}
+
+function goTemplateDetail(id: string) {
+  uni.navigateTo({ url: `/pages/templates/detail?id=${id}` })
 }
 </script>
 
@@ -364,169 +159,52 @@ async function handleImport() {
   color: var(--color-text-primary);
 }
 
-.section-pad {
-  padding: 0 40rpx;
-}
-
-/* Hero */
+/* Hero 推荐区 */
 .hero-wrap {
-  padding: 0 40rpx 32rpx;
-}
-
-.hero-card {
-  position: relative;
-  background: linear-gradient(135deg, #FDF6EC 0%, #F5E6CC 100%);
-  border-radius: 40rpx;
-  padding: 56rpx 48rpx;
-  overflow: hidden;
-}
-
-.hero-deco {
-  position: absolute;
-  top: -60rpx;
-  right: -60rpx;
-  width: 280rpx;
-  height: 280rpx;
-  border-radius: 50%;
-  background: rgba(201, 169, 110, 0.10);
-}
-
-.hero-deco-2 {
-  position: absolute;
-  bottom: -40rpx;
-  left: -40rpx;
-  width: 200rpx;
-  height: 200rpx;
-  border-radius: 50%;
-  background: rgba(201, 169, 110, 0.06);
-}
-
-.hero-body {
-  position: relative;
-  z-index: 1;
+  padding: 24rpx 0 32rpx;
 }
 
 .hero-title {
   display: block;
   font-family: 'Noto Serif SC', serif;
-  font-size: 44rpx;
-  font-weight: 600;
+  font-size: 40rpx;
+  font-weight: 700;
   color: var(--color-text-primary);
-  margin-bottom: 16rpx;
+  padding: 0 40rpx 20rpx;
   letter-spacing: -0.01em;
 }
 
-.hero-desc {
-  display: block;
-  font-size: 26rpx;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-  margin-bottom: 24rpx;
+.rec-scroll {
+  width: 100%;
+  white-space: nowrap;
+  padding: 0 40rpx;
+  box-sizing: border-box;
 }
 
-.hero-pill {
+.rec-list {
   display: inline-flex;
-  align-items: center;
-  gap: 8rpx;
-  padding: 10rpx 24rpx;
-  border-radius: 9999rpx;
-  background-color: rgba(255, 255, 255, 0.6);
-}
-
-.hero-pill-icon {
-  font-size: 26rpx;
-  color: var(--color-brand);
-}
-
-.hero-pill-text {
-  font-size: 24rpx;
-  color: var(--color-text-secondary);
-  font-weight: 500;
-}
-
-/* 三层分类 + 标签筛选区 */
-.template-filter {
-  padding: 0 16rpx 24rpx;
-}
-
-.template-tags {
-  margin-top: 16rpx;
-}
-
-.custom-toggle-row {
-  display: flex;
-  justify-content: flex-start;
-  padding: 16rpx 24rpx 0;
-}
-
-.custom-toggle-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 12rpx 32rpx;
-  border-radius: 32rpx;
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.custom-toggle-pill-active {
-  background: #2A2520;
-}
-
-.custom-toggle-text {
-  font-size: 24rpx;
-  color: #2A2520;
-  line-height: 1.2;
-}
-
-.custom-toggle-pill-active .custom-toggle-text {
-  color: #FFFFFF;
-}
-
-/* "我的"分类操作按钮行 */
-.action-row {
-  display: flex;
   gap: 20rpx;
-  padding: 0 40rpx 24rpx;
+  padding-bottom: 8rpx;
 }
 
-.action-btn {
-  flex: 1;
-  justify-content: center;
-  padding: 24rpx 0;
-}
-
-.action-btn-icon {
-  font-size: 32rpx;
-}
-
-.action-btn-text {
-  font-size: 28rpx;
-  font-weight: 500;
-}
-
-/* 模板网格 */
-.tpl-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24rpx;
-  padding-bottom: 48rpx;
-}
-
-.tpl-card {
-  border-radius: 28rpx;
+.rec-card {
+  flex-shrink: 0;
+  width: 260rpx;
+  background-color: var(--color-surface);
+  border-radius: 24rpx;
   overflow: hidden;
-  border: none;
-  background-color: var(--color-canvas);
-  box-shadow: var(--shadow-convex);
+  display: inline-flex;
+  flex-direction: column;
 }
 
-.tpl-img-wrap {
+.rec-img-wrap {
+  position: relative;
   width: 100%;
   padding-bottom: 133.33%;
-  position: relative;
   overflow: hidden;
 }
 
-.tpl-img {
+.rec-img {
   position: absolute;
   top: 0;
   left: 0;
@@ -534,102 +212,197 @@ async function handleImport() {
   height: 100%;
 }
 
-.tpl-badge-free {
+.rec-source-badge {
   position: absolute;
-  top: 16rpx;
-  left: 16rpx;
-  padding: 6rpx 20rpx;
+  top: 12rpx;
+  left: 12rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 9999rpx;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+.rec-source-text {
+  font-size: 20rpx;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.source-recent_used .rec-source-text { color: #F5E6CC; }
+.source-scene_match { background-color: rgba(90, 122, 72, 0.85); }
+.source-category_match { background-color: rgba(201, 169, 110, 0.85); }
+.source-system_pick { background-color: rgba(0, 0, 0, 0.65); }
+
+.rec-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  font-family: 'Noto Serif SC', serif;
+  padding: 16rpx 20rpx 4rpx;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rec-reason {
+  font-size: 22rpx;
+  color: var(--color-text-secondary);
+  padding: 0 20rpx 20rpx;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+/* 拍摄偏好 */
+.pref-section {
+  padding: 16rpx 40rpx 24rpx;
+}
+
+.section-title {
+  display: block;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 16rpx;
+  letter-spacing: -0.01em;
+}
+
+.pref-card {
+  background-color: var(--color-surface);
+  border-radius: 24rpx;
+  padding: 28rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.pref-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pref-label {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+}
+
+.pref-val {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--color-brand);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 更多模板 */
+.other-section {
+  padding: 16rpx 40rpx 0;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.section-link {
+  color: var(--color-brand);
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.other-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24rpx;
+}
+
+.other-card {
+  background-color: var(--color-surface);
+  border-radius: 24rpx;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.other-img-wrap {
+  position: relative;
+  width: 100%;
+  padding-bottom: 100%;
+  overflow: hidden;
+}
+
+.other-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.other-badge-free {
+  position: absolute;
+  top: 12rpx;
+  left: 12rpx;
+  padding: 4rpx 14rpx;
   border-radius: 9999rpx;
   background-color: rgba(90, 122, 72, 0.85);
 }
 
-.tpl-badge-free-text {
-  font-size: 22rpx;
+.other-badge-text {
+  font-size: 20rpx;
   font-weight: 600;
-  color: #fff;
+  color: #ffffff;
 }
 
-.tpl-badge-premium {
-  position: absolute;
-  top: 16rpx;
-  left: 16rpx;
-  padding: 6rpx 20rpx;
-  border-radius: 9999rpx;
-  background-color: rgba(201, 169, 110, 0.85);
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
+.other-info {
+  padding: 16rpx 20rpx 20rpx;
 }
 
-.tpl-badge-icon {
-  font-size: 22rpx;
-  color: #fff;
-}
-
-.tpl-badge-text {
-  font-size: 22rpx;
-  font-weight: 600;
-  color: #fff;
-}
-
-.tpl-info {
-  padding: 24rpx 28rpx 28rpx;
-}
-
-.tpl-name {
+.other-name {
   display: block;
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 600;
   font-family: 'Noto Serif SC', serif;
   color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.tpl-meta {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-top: 12rpx;
-}
-
-.tpl-cat {
+.other-cat {
+  display: block;
   font-size: 22rpx;
   color: var(--color-brand);
-}
-
-.tpl-custom-tag {
-  font-size: 20rpx;
-  color: var(--color-brand);
-  background-color: rgba(201, 169, 110, 0.12);
-  padding: 4rpx 14rpx;
-  border-radius: 9999rpx;
+  margin-top: 6rpx;
 }
 
 /* 空状态 */
-.empty-state-wrap {
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 80rpx 40rpx 48rpx;
-  gap: 24rpx;
+  padding: 64rpx 40rpx;
+  gap: 16rpx;
 }
 
 .empty-icon {
-  font-size: 96rpx;
+  font-size: 80rpx;
   color: var(--color-text-tertiary);
   opacity: 0.4;
 }
 
 .empty-text {
-  font-size: 28rpx;
+  font-size: 26rpx;
   color: var(--color-text-tertiary);
 }
 
-.empty-btn {
-  padding: 16rpx 48rpx;
-  border-radius: 9999rpx;
-  background: linear-gradient(135deg, #C9A96E 0%, #A88550 100%);
-  color: #fff;
-  font-size: 26rpx;
-  font-weight: 500;
+/* 底部留白避开 FloatingTabBar */
+.bottom-spacer {
+  height: calc(env(safe-area-inset-bottom) + 140rpx);
 }
 </style>
