@@ -44,7 +44,6 @@
           <text class="spv-custom-tag-text">自定义</text>
         </view>
       </view>
-      <text v-if="scene.vibe" class="spv-card-vibe">{{ scene.vibe }}</text>
       <text v-if="scene.description" class="spv-card-desc">{{ scene.description }}</text>
       <view v-if="hasStats" class="spv-card-stats">
         <text v-if="photoCount !== undefined" class="spv-stat-item"><text class="ph ph-images-square"></text> {{ photoCount }}</text>
@@ -281,17 +280,13 @@ const onClick = () => {
 }
 
 .spv-card-desc {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   font-size: 22rpx;
   color: var(--color-text-tertiary);
-}
-
-.spv-card-vibe {
-  display: block;
-  font-size: 24rpx;
-  color: #C9A876;
-  font-style: italic;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .spv-card-stats {
