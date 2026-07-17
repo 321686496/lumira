@@ -149,7 +149,7 @@ function goAll() {
 }
 
 function goTemplateDetail(id: string) {
-  uni.navigateTo({ url: `/pages/templates/detail?id=${id}` })
+  uni.navigateTo({ url: `/pages/templates/detail?templateId=${id}` })
 }
 </script>
 
