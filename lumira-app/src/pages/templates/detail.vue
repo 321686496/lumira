@@ -228,13 +228,24 @@ function onTagUpdate(ids: string[]) {
   refreshTick.value++
 }
 
-function onCreateTag(name: string) {
+function onCreateTag() {
   if (!template.value) return
-  const newId = createTag(name, 'template')
-  const currentIds = [...(template.value.meta.tagIds || []), newId]
-  updateTemplateTags(template.value.meta.id, currentIds)
-  // 触发 userTags 重算
-  refreshTick.value++
+  // TagSelector 的 create-tag 事件无 payload，需主动弹出输入框获取名称
+  uni.showModal({
+    title: '新建标签',
+    editable: true,
+    placeholderText: '请输入标签名称',
+    success: (res) => {
+      if (!res.confirm || !template.value) return
+      const name = (res.content || '').trim()
+      if (!name) return
+      const newId = createTag(name, 'template')
+      const currentIds = [...(template.value.meta.tagIds || []), newId]
+      updateTemplateTags(template.value.meta.id, currentIds)
+      // 触发 userTags 重算
+      refreshTick.value++
+    }
+  })
 }
 
 onLoad((options) => {
