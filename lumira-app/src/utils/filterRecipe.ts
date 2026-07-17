@@ -203,6 +203,15 @@ export function buildCssFilter(
     filters.push(lutFilter)
   }
 
+  // ISO 近似效果（H5 + App-Plus 统一）
+  const iso = camera.iso
+  if (iso && iso > 200) {
+    const brightnessBoost = (iso - 200) / 6400 * 0.3
+    if (brightnessBoost > 0) {
+      filters.push(`brightness(${(1 + brightnessBoost).toFixed(3)})`)
+    }
+  }
+
   return filters.join(' ')
 }
 
@@ -226,9 +235,17 @@ export function getVignetteStrength(post: Partial<PostProcess>): number {
 
 /**
  * 计算颗粒强度（0-1，用于 Canvas 像素处理）
+ * ISO > 200 时叠加额外颗粒，模拟高 ISO 噪点
  */
-export function getGrainStrength(post: Partial<PostProcess>): number {
-  return (post.grain ?? 0) / 100
+export function getGrainStrength(post: Partial<PostProcess>, iso?: number): number {
+  let strength = 0
+  if (typeof post.grain === 'number') {
+    strength = Math.max(0, Math.min(1, post.grain / 100))
+  }
+  if (iso && iso > 200) {
+    strength += (iso - 200) / 6400 * 0.4
+  }
+  return Math.min(1, strength)
 }
 
 /**
