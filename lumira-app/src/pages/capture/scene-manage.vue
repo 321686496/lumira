@@ -26,6 +26,13 @@
         >
           <text class="tab-pill-text">自定义场景</text>
         </view>
+        <view
+          class="tab-pill"
+          :class="{ active: tab === 'kit' }"
+          @click="tab = 'kit'"
+        >
+          <text class="tab-pill-text">我的组合</text>
+        </view>
       </view>
     </view>
 
@@ -65,6 +72,12 @@
         <view class="form-field">
           <text class="form-label">场景名称</text>
           <input class="form-input" v-model="formData.name" placeholder="如：夕阳人像" maxlength="20" />
+        </view>
+
+        <!-- 氛围主标题 vibe -->
+        <view class="form-field">
+          <text class="form-label">情绪主标题</text>
+          <input class="form-input" v-model="formData.vibe" placeholder="如：慵懒午后，把光调成蜜糖色" maxlength="40" />
         </view>
 
         <!-- 图标选择 -->
@@ -115,37 +128,19 @@
           <input class="form-input" v-model="formData.sceneGuide.background" placeholder="如：简洁背景" />
         </view>
 
-        <!-- 相机建议 -->
+        <!-- 出片地点 -->
         <view class="form-field">
-          <text class="form-label">白平衡</text>
-          <view class="pill-list-inline">
-            <view
-              v-for="wb in wbOptions"
-              :key="wb.value"
-              class="pill"
-              :class="{ active: formData.cameraSuggestion.whiteBalance === wb.value }"
-              @click="formData.cameraSuggestion.whiteBalance = wb.value"
-            >
-              <text class="pill-text">{{ wb.label }}</text>
-            </view>
-          </view>
-        </view>
-        <view class="form-field">
-          <text class="form-label">拍照风格</text>
-          <view class="pill-list-inline">
-            <view
-              v-for="ps in psOptions"
-              :key="ps.value"
-              class="pill"
-              :class="{ active: formData.cameraSuggestion.photographicStyle === ps.value }"
-              @click="formData.cameraSuggestion.photographicStyle = ps.value"
-            >
-              <text class="pill-text">{{ ps.label }}</text>
-            </view>
-          </view>
+          <text class="form-label">出片地点</text>
+          <input class="form-input" v-model="formData.whereToShoot" placeholder="如：咖啡馆 / 图书馆" />
         </view>
 
-        <!-- LUT -->
+        <!-- 最佳拍摄时间 -->
+        <view class="form-field">
+          <text class="form-label">最佳拍摄时间</text>
+          <input class="form-input" v-model="formData.bestTime" placeholder="如：下午 14:00-17:00" />
+        </view>
+
+        <!-- 氛围滤镜 LUT -->
         <view class="form-field">
           <text class="form-label">LUT 滤镜</text>
           <view class="pill-list-inline">
@@ -153,12 +148,63 @@
               v-for="lut in lutOptions"
               :key="lut.value"
               class="pill"
-              :class="{ active: formData.postSuggestion.lut === lut.value }"
-              @click="formData.postSuggestion.lut = lut.value"
+              :class="{ active: formData.filter.lut === lut.value }"
+              @click="formData.filter.lut = lut.value"
             >
               <text class="pill-text">{{ lut.label }}</text>
             </view>
           </view>
+        </view>
+
+        <!-- 系统滤镜（可选） -->
+        <view class="form-field">
+          <text class="form-label">系统滤镜（可选）</text>
+          <view class="pill-list-inline">
+            <view
+              v-for="sf in systemFilterOptions"
+              :key="sf.value"
+              class="pill"
+              :class="{ active: formData.filter.systemFilter === sf.value }"
+              @click="formData.filter.systemFilter = formData.filter.systemFilter === sf.value ? undefined : sf.value"
+            >
+              <text class="pill-text">{{ sf.label }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 滤镜理由 -->
+        <view class="form-field">
+          <text class="form-label">滤镜理由</text>
+          <input class="form-input" v-model="formData.filter.reason" placeholder="如：让画面像被夕阳包住一样温柔" />
+        </view>
+
+        <!-- 示例图（picsum seed） -->
+        <view class="form-field">
+          <text class="form-label">示例图（输入关键词，最多 3 张）</text>
+          <view class="seed-list">
+            <view
+              v-for="(_, idx) in formData.exampleImageSeeds"
+              :key="idx"
+              class="seed-row"
+            >
+              <input
+                class="form-input seed-input"
+                v-model="formData.exampleImageSeeds[idx]"
+                :placeholder="`图 ${idx + 1} 关键词（如：cat`"
+              />
+            </view>
+          </view>
+        </view>
+
+        <!-- 拍摄贴士 -->
+        <view class="form-field">
+          <text class="form-label">拍摄贴士（每行一条）</text>
+          <textarea
+            class="form-textarea"
+            v-model="formData.tipsText"
+            placeholder="如：&#10;让模特侧对窗户&#10;白平衡偏暖一档"
+            :auto-height="true"
+          />
         </view>
 
         <!-- 表单按钮 -->
@@ -203,6 +249,29 @@
       </view>
     </view>
 
+    <!-- Tab 3: 我的组合 -->
+    <view v-if="tab === 'kit'" class="section-pad fade-up fade-up-d1">
+      <view v-if="kits.length === 0" class="empty-state">
+        <text class="ph ph-stack empty-icon"></text>
+        <text class="empty-title">还没有组合</text>
+        <text class="empty-desc">去场景详情页把场景和模板组合起来吧</text>
+      </view>
+      <view v-else class="kit-list">
+        <view
+          v-for="kit in kits"
+          :key="kit.id"
+          class="kit-item"
+          @click="onKitClick(kit.id)"
+        >
+          <KitCard
+            :kit="kit"
+            :scene="getSceneById(kit.sceneId)"
+            :template="loadTemplate(kit.templateId) || undefined"
+          />
+        </view>
+      </view>
+    </view>
+
     <view class="bottom-spacer"></view>
   </view>
 </template>
@@ -211,9 +280,19 @@
 import { ref, reactive, watch, nextTick } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import ScenePresetView from '@/components/ScenePresetView.vue'
+import KitCard from '@/components/KitCard.vue'
 import { useSceneManager } from '@/composables/useSceneManager'
-import { getLutOptions } from '@/utils/filterRecipe'
-import type { ScenePresetId, Target, WhiteBalance, PhotographicStyle, LutPreset, CustomScenePreset } from '@/types/template'
+import { useShootKit } from '@/composables/useShootKit'
+import { useTemplate } from '@/composables/useTemplate'
+import { getLutOptions, getSystemFilterOptions } from '@/utils/filterRecipe'
+import type {
+  ScenePresetId,
+  Target,
+  LutPreset,
+  SystemFilter,
+  SceneCategory,
+  CustomScenePreset
+} from '@/types/template'
 
 const {
   customScenes,
@@ -222,10 +301,14 @@ const {
   addCustomScene,
   updateCustomScene,
   deleteCustomScene,
-  reloadFromStorage
+  reloadFromStorage,
+  getSceneById
 } = useSceneManager()
 
-const tab = ref<'fav' | 'custom'>('fav')
+const { kits, deleteKit } = useShootKit()
+const { loadTemplate } = useTemplate()
+
+const tab = ref<'fav' | 'custom' | 'kit'>('fav')
 const formVisible = ref(false)
 const editingId = ref<string | null>(null)
 
@@ -246,29 +329,17 @@ const categoryOptions: { value: Target; label: string }[] = [
   { value: 'still-life', label: '静物' }
 ]
 
-const wbOptions: { value: WhiteBalance; label: string }[] = [
-  { value: 'daylight', label: '日光' },
-  { value: 'cloudy', label: '阴天' },
-  { value: 'shade', label: '阴影' },
-  { value: 'tungsten', label: '白炽灯' },
-  { value: 'fluorescent', label: '荧光灯' }
-]
-
-const psOptions: { value: PhotographicStyle; label: string }[] = [
-  { value: 'standard', label: '标准' },
-  { value: 'high_contrast', label: '高对比' },
-  { value: 'warm', label: '暖色' },
-  { value: 'cool', label: '冷色' },
-  { value: 'mono', label: '黑白' }
-]
-
 const lutOptions = getLutOptions().map(o => ({ value: o.id, label: o.name }))
+const systemFilterOptions = getSystemFilterOptions().map(o => ({ value: o.id, label: o.name }))
 
 interface FormData {
   name: string
   icon: string
   description: string
+  vibe: string
   relatedCategory: Target
+  category: SceneCategory
+  style: string
   sceneGuide: {
     lightDirection: string
     shootingDistance: string
@@ -277,13 +348,17 @@ interface FormData {
     bestTime: string
     tips: string[]
   }
-  cameraSuggestion: {
-    whiteBalance: WhiteBalance
-    photographicStyle: PhotographicStyle
-  }
-  postSuggestion: {
+  filter: {
     lut: LutPreset
+    systemFilter?: SystemFilter
+    reason: string
   }
+  exampleImageSeeds: string[]
+  whereToShoot: string
+  bestTime: string
+  tipsText: string
+  recommendedTagIds: string[]
+  tagIds: string[]
 }
 
 function createDefaultForm(): FormData {
@@ -291,7 +366,10 @@ function createDefaultForm(): FormData {
     name: '',
     icon: 'ph-camera',
     description: '',
+    vibe: '',
     relatedCategory: 'portrait',
+    category: 'indoor',
+    style: 'cafe',
     sceneGuide: {
       lightDirection: '自然光',
       shootingDistance: '1-2米',
@@ -300,13 +378,17 @@ function createDefaultForm(): FormData {
       bestTime: '全天',
       tips: []
     },
-    cameraSuggestion: {
-      whiteBalance: 'daylight',
-      photographicStyle: 'standard'
+    filter: {
+      lut: 'none',
+      systemFilter: undefined,
+      reason: ''
     },
-    postSuggestion: {
-      lut: 'none'
-    }
+    exampleImageSeeds: ['', '', ''],
+    whereToShoot: '',
+    bestTime: '',
+    tipsText: '',
+    recommendedTagIds: [],
+    tagIds: []
   }
 }
 
@@ -316,7 +398,11 @@ const formDirty = ref(false)
 onLoad((options) => {
   if (options?.tab === 'custom') {
     tab.value = 'custom'
+  } else if (options?.tab === 'kit') {
+    tab.value = 'kit'
   }
+  // sceneId 参数：从 scene-detail 跳转来创建组合的入口；
+  // 当前页仅展示已有组合列表，这里仅做读取，不强制弹出新建表单（YAGNI）。
 })
 
 onShow(() => {
@@ -329,14 +415,20 @@ watch(
     name: formData.name,
     icon: formData.icon,
     description: formData.description,
+    vibe: formData.vibe,
     relatedCategory: formData.relatedCategory,
+    category: formData.category,
+    style: formData.style,
     lightDirection: formData.sceneGuide.lightDirection,
     shootingDistance: formData.sceneGuide.shootingDistance,
     background: formData.sceneGuide.background,
-    bestTime: formData.sceneGuide.bestTime,
-    whiteBalance: formData.cameraSuggestion.whiteBalance,
-    photographicStyle: formData.cameraSuggestion.photographicStyle,
-    lut: formData.postSuggestion.lut
+    whereToShoot: formData.whereToShoot,
+    bestTime: formData.bestTime,
+    filterLut: formData.filter.lut,
+    filterSystemFilter: formData.filter.systemFilter,
+    filterReason: formData.filter.reason,
+    exampleImageSeeds: [...formData.exampleImageSeeds],
+    tipsText: formData.tipsText
   }),
   () => {
     if (formVisible.value) {
@@ -358,6 +450,12 @@ const onToggleFav = (id: ScenePresetId) => {
   toggleFavorite(id)
 }
 
+/** 从 picsum URL 中提取 seed */
+function seedFromUrl(url: string): string {
+  const m = url.match(/\/seed\/([^/]+)\//)
+  return m ? m[1] : ''
+}
+
 const onNew = () => {
   editingId.value = null
   Object.assign(formData, createDefaultForm())
@@ -374,7 +472,10 @@ const onEdit = (scene: CustomScenePreset) => {
     name: scene.name,
     icon: scene.icon,
     description: scene.description,
+    vibe: scene.vibe,
     relatedCategory: scene.relatedCategory,
+    category: scene.category,
+    style: scene.style,
     sceneGuide: {
       lightDirection: scene.sceneGuide.lightDirection,
       shootingDistance: scene.sceneGuide.shootingDistance,
@@ -383,13 +484,21 @@ const onEdit = (scene: CustomScenePreset) => {
       bestTime: scene.sceneGuide.bestTime,
       tips: [...scene.sceneGuide.tips]
     },
-    cameraSuggestion: {
-      whiteBalance: scene.cameraSuggestion.whiteBalance || 'daylight',
-      photographicStyle: scene.cameraSuggestion.photographicStyle || 'standard'
+    filter: {
+      lut: scene.filter.lut,
+      systemFilter: scene.filter.systemFilter,
+      reason: scene.filter.reason
     },
-    postSuggestion: {
-      lut: scene.postSuggestion.lut || 'none'
-    }
+    exampleImageSeeds: [
+      scene.exampleImages[0] ? seedFromUrl(scene.exampleImages[0]) : '',
+      scene.exampleImages[1] ? seedFromUrl(scene.exampleImages[1]) : '',
+      scene.exampleImages[2] ? seedFromUrl(scene.exampleImages[2]) : ''
+    ],
+    whereToShoot: scene.whereToShoot,
+    bestTime: scene.bestTime,
+    tipsText: scene.tips.join('\n'),
+    recommendedTagIds: [...scene.recommendedTagIds],
+    tagIds: [...scene.tagIds]
   })
   formVisible.value = true
   nextTick(() => {
@@ -422,10 +531,24 @@ const onSaveForm = () => {
     return
   }
 
+  const exampleImages = formData.exampleImageSeeds
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+    .map(s => `https://picsum.photos/seed/${s}/600/800`)
+
+  const tips = formData.tipsText
+    .split('\n')
+    .map(t => t.trim())
+    .filter(t => t.length > 0)
+
   const sceneData = {
     name: formData.name.trim(),
     icon: formData.icon,
     description: formData.description.trim(),
+    vibe: formData.vibe.trim(),
+    relatedCategory: formData.relatedCategory,
+    category: formData.category,
+    style: formData.style,
     sceneGuide: {
       lightDirection: formData.sceneGuide.lightDirection,
       shootingDistance: formData.sceneGuide.shootingDistance,
@@ -434,14 +557,17 @@ const onSaveForm = () => {
       bestTime: formData.sceneGuide.bestTime,
       tips: [...formData.sceneGuide.tips]
     },
-    cameraSuggestion: {
-      whiteBalance: formData.cameraSuggestion.whiteBalance,
-      photographicStyle: formData.cameraSuggestion.photographicStyle
+    filter: {
+      lut: formData.filter.lut,
+      systemFilter: formData.filter.systemFilter,
+      reason: formData.filter.reason.trim()
     },
-    postSuggestion: {
-      lut: formData.postSuggestion.lut
-    },
-    relatedCategory: formData.relatedCategory
+    exampleImages,
+    whereToShoot: formData.whereToShoot.trim(),
+    bestTime: formData.bestTime.trim(),
+    tips,
+    recommendedTagIds: [...formData.recommendedTagIds],
+    tagIds: [...formData.tagIds]
   }
 
   if (editingId.value) {
@@ -470,6 +596,27 @@ const onMore = (scene: CustomScenePreset) => {
           success: (modalRes) => {
             if (modalRes.confirm) {
               deleteCustomScene(scene.id)
+              uni.showToast({ title: '已删除', icon: 'success' })
+            }
+          }
+        })
+      }
+    }
+  })
+}
+
+const onKitClick = (id: string) => {
+  uni.showActionSheet({
+    itemList: ['删除组合'],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        uni.showModal({
+          title: '删除组合',
+          content: '确定删除这个组合吗？',
+          confirmColor: '#C9453D',
+          success: (modalRes) => {
+            if (modalRes.confirm) {
+              deleteKit(id)
               uni.showToast({ title: '已删除', icon: 'success' })
             }
           }
@@ -669,6 +816,18 @@ const onMore = (scene: CustomScenePreset) => {
   box-sizing: border-box;
 }
 
+.form-textarea {
+  width: 100%;
+  min-height: 160rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  border: 2rpx solid var(--color-divider);
+  background-color: var(--color-surface-alt);
+  font-size: 28rpx;
+  color: var(--color-text-primary);
+  box-sizing: border-box;
+}
+
 /* icon scroll-x */
 .icon-scroll {
   white-space: nowrap;
@@ -738,6 +897,21 @@ const onMore = (scene: CustomScenePreset) => {
   font-weight: 500;
 }
 
+/* 示例图 seed 输入 */
+.seed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.seed-row {
+  display: flex;
+}
+
+.seed-input {
+  flex: 1;
+}
+
 /* 表单按钮 */
 .form-actions {
   display: flex;
@@ -770,5 +944,21 @@ const onMore = (scene: CustomScenePreset) => {
 .form-btn-ghost:active,
 .form-btn-brand:active {
   opacity: 0.8;
+}
+
+/* ===== 组合列表 ===== */
+.kit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.kit-item {
+  border-radius: 20rpx;
+  overflow: hidden;
+}
+
+.kit-item:active {
+  opacity: 0.85;
 }
 </style>
