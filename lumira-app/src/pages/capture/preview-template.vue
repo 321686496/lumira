@@ -29,7 +29,11 @@
         <view
           v-if="template && hasSilhouette"
           class="silhouette-drag-layer"
+          ref="silhouetteDragLayerRef"
           @touchstart="onSilhouetteDragStart"
+          @touchmove="onSilhouetteDragMove"
+          @touchend="onSilhouetteDragEnd"
+          @touchcancel="onSilhouetteDragEnd"
         >
           <view class="silhouette-drag-handle" :style="silhouetteDragStyle">
             <PoseSilhouette :pose="template.pose" />
@@ -221,10 +225,8 @@ const flashOn = ref(false)
 
 // ===== 剪影拖动状态 =====
 const viewfinderRef = ref<any>(null)
+const silhouetteDragLayerRef = ref<any>(null)
 const isDraggingSilhouette = ref(false)
-// 拖动偏移量（相对百分比 -0.5~0.5）
-const dragOffsetX = ref(0)
-const dragOffsetY = ref(0)
 // 拖动起始记录
 let dragStartClientX = 0
 let dragStartClientY = 0
@@ -232,9 +234,17 @@ let dragStartPosX = 0.5
 let dragStartPosY = 0.5
 let viewfinderRect: DOMRect | null = null
 
-const silhouetteDragStyle = computed(() => ({
-  transform: `translate(calc(-50% + ${dragOffsetX.value * 100}%), calc(-50% + ${dragOffsetY.value * 100}%))`
-}))
+// 使用 left/top 百分比（相对父容器）+ translate(-50%, -50%) 居中
+// 与 detail.vue 的 poseLayerStyle 保持一致，确保位置在所有页面一致
+const silhouetteDragStyle = computed(() => {
+  const pose = template.value?.pose
+  if (!pose) return {}
+  return {
+    left: `${pose.position.x * 100}%`,
+    top: `${pose.position.y * 100}%`,
+    transform: 'translate(-50%, -50%)'
+  }
+})
 
 // 取景器画面比例（与模板的 composition.aspectRatio 一致）
 const viewfinderFrameStyle = computed(() => {
@@ -274,8 +284,9 @@ function onSilhouetteDragStart(e: any) {
   dragStartClientY = y
   dragStartPosX = template.value.pose.position.x
   dragStartPosY = template.value.pose.position.y
-  const layerEl = document.querySelector('.silhouette-drag-layer')
-  const el = (layerEl as any)?.$el || layerEl
+  // 通过 Vue ref 获取元素 rect（跨平台，避免 document.querySelector 在 App-Plus 失败）
+  const layerRef = silhouetteDragLayerRef.value
+  const el = layerRef?.$el || layerRef
   viewfinderRect = el?.getBoundingClientRect?.() || null
   if (e?.preventDefault) e.preventDefault()
 }
@@ -286,10 +297,9 @@ function onSilhouetteDragMove(e: any) {
   const { x, y } = getDragXY(e)
   const dx = (x - dragStartClientX) / viewfinderRect.width
   const dy = (y - dragStartClientY) / viewfinderRect.height
-  const newX = Math.max(0.1, Math.min(0.9, dragStartPosX + dx))
-  const newY = Math.max(0.1, Math.min(0.9, dragStartPosY + dy))
-  dragOffsetX.value = newX - 0.5
-  dragOffsetY.value = newY - 0.5
+  // 与位置滑块范围一致 (0~1)，允许剪影拖到画面边缘（超出部分由 overflow:hidden 裁剪）
+  const newX = Math.max(0, Math.min(1, dragStartPosX + dx))
+  const newY = Math.max(0, Math.min(1, dragStartPosY + dy))
   if (template.value) {
     template.value.pose.position = { x: newX, y: newY }
   }
@@ -301,25 +311,32 @@ function onSilhouetteDragEnd() {
   viewfinderRect = null
 }
 
-// @touchstart 在 <view> 上可用，但 @mousedown 的 uni-app 包装丢失 clientX/clientY
-// mousedown 需用原生 addEventListener 绑定到 DOM 元素
+// @touchstart/@touchmove/@touchend 已绑定到 <view> 元素，跨平台可靠
+// 仅 H5 桌面端需要 mouse 事件（mouse 需通过原生 addEventListener 绑定）
 onMounted(() => {
   nextTick(() => {
-    const layerEl = document.querySelector('.silhouette-drag-layer')
-    if (layerEl) layerEl.addEventListener('mousedown', onSilhouetteDragStart as any)
+    const layerRef = silhouetteDragLayerRef.value
+    const el = layerRef?.$el || layerRef
+    if (el?.addEventListener) {
+      el.addEventListener('mousedown', onSilhouetteDragStart as any)
+    } else {
+      const layerEl = document.querySelector('.silhouette-drag-layer')
+      if (layerEl) layerEl.addEventListener('mousedown', onSilhouetteDragStart as any)
+    }
   })
-  document.addEventListener('touchmove', onSilhouetteDragMove, { passive: false })
-  document.addEventListener('touchend', onSilhouetteDragEnd)
-  document.addEventListener('touchcancel', onSilhouetteDragEnd)
+  // mouse 事件需 document 级（拖动时鼠标可能离开元素）
   document.addEventListener('mousemove', onSilhouetteDragMove)
   document.addEventListener('mouseup', onSilhouetteDragEnd)
 })
 onUnmounted(() => {
-  const layerEl = document.querySelector('.silhouette-drag-layer')
-  if (layerEl) layerEl.removeEventListener('mousedown', onSilhouetteDragStart as any)
-  document.removeEventListener('touchmove', onSilhouetteDragMove)
-  document.removeEventListener('touchend', onSilhouetteDragEnd)
-  document.removeEventListener('touchcancel', onSilhouetteDragEnd)
+  const layerRef = silhouetteDragLayerRef.value
+  const el = layerRef?.$el || layerRef
+  if (el?.removeEventListener) {
+    el.removeEventListener('mousedown', onSilhouetteDragStart as any)
+  } else {
+    const layerEl = document.querySelector('.silhouette-drag-layer')
+    if (layerEl) layerEl.removeEventListener('mousedown', onSilhouetteDragStart as any)
+  }
   document.removeEventListener('mousemove', onSilhouetteDragMove)
   document.removeEventListener('mouseup', onSilhouetteDragEnd)
 })
@@ -335,10 +352,6 @@ onLoad((options) => {
   if (!template.value) {
     uni.showToast({ title: '模板加载失败', icon: 'none' })
     setTimeout(() => uni.navigateBack(), 1000)
-  } else {
-    // 初始化拖动偏移量（基于模板的 position）
-    dragOffsetX.value = template.value.pose.position.x - 0.5
-    dragOffsetY.value = template.value.pose.position.y - 0.5
   }
 })
 

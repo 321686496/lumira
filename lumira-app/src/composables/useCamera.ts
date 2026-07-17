@@ -165,9 +165,62 @@ export function useCamera(options: UseCameraOptions = {}) {
       })
     }
 
-    // App-Plus / 小程序平台：通过组件 API 拍照
-    // TODO: 实现 createCameraContext.takePhoto 的调用
+    // App-Plus 平台：通过 uni.createCameraContext().takePhoto() 拍照
+    if (platform === 'app-plus') {
+      return await captureAppPlus()
+    }
+
+    // 小程序平台
+    if (platform === 'mp') {
+      return await captureAppPlus()
+    }
+
     throw new Error('当前平台暂不支持拍照')
+  }
+
+  /**
+   * App-Plus / 小程序平台拍照
+   * 使用 uni.createCameraContext().takePhoto() 获取临时图片路径
+   * 注意：原生相机组件不支持 CSS 滤镜实时预览，所拍即为原始相机输出
+   */
+  function captureAppPlus(): Promise<BakeResult> {
+    return new Promise((resolve, reject) => {
+      const ctx = uni.createCameraContext()
+      ctx.takePhoto({
+        quality: 'high',
+        success: (res: { tempImagePath: string; tempThumbPath?: string }) => {
+          const tempPath = res.tempImagePath || res.tempThumbPath
+          if (!tempPath) {
+            reject(new Error('拍照失败：未获取到图片路径'))
+            return
+          }
+          // 读取图片信息以获取宽高
+          uni.getImageInfo({
+            src: tempPath,
+            success: (info) => {
+              resolve({
+                dataUrl: tempPath,
+                width: info.width,
+                height: info.height,
+                size: 0
+              })
+            },
+            fail: () => {
+              // 即使读取信息失败，也返回路径（预览页 <image> 可直接显示）
+              resolve({
+                dataUrl: tempPath,
+                width: 0,
+                height: 0,
+                size: 0
+              })
+            }
+          })
+        },
+        fail: (err: { errMsg?: string }) => {
+          reject(new Error(`拍照失败: ${err?.errMsg || '未知错误'}`))
+        }
+      })
+    })
   }
 
   /**

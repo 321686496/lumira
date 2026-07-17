@@ -93,16 +93,17 @@
       <view class="canvas-wrap">
         <!-- 参考图（半透明，便于临摹） -->
         <image v-if="referenceImage" :src="referenceImage" class="reference-img" mode="aspectFit" />
-        <!-- SVG 绘图画布（绑定 pointer 事件，SVG 是原生元素） -->
+        <!-- SVG 绘图画布（使用 Touch Events 比 Pointer Events 在移动端更可靠） -->
         <svg
           ref="svgRef"
           viewBox="0 0 300 480"
           class="draw-svg"
           xmlns="http://www.w3.org/2000/svg"
-          @pointerdown="onPointerDown"
-          @pointermove="onPointerMove"
-          @pointerup="onPointerUp"
-          @pointerleave="onPointerUp"
+          @touchstart="onTouchStart"
+          @touchmove="onTouchMove"
+          @touchend="onTouchEnd"
+          @touchcancel="onTouchEnd"
+          @mousedown="onMouseDown"
           style="touch-action: none;"
         >
           <path
@@ -221,14 +222,15 @@ function onGuidePosChange(idx: number, e: { detail: { value: number } }) {
   guideLines.value[idx].position = e.detail.value
 }
 
-// ===== 绘制逻辑（使用 Pointer Events，比 Touch Events 更可靠） =====
+// ===== 绘制逻辑 =====
+// 使用 Touch Events（移动端）+ Mouse Events（H5 桌面端），比 Pointer Events 更可靠
+// 关键修复：移除原 @pointerleave 中断绘制的行为，避免手指靠近 SVG 边缘时停止绘制
 
-const onPointerDown = (e: PointerEvent) => {
-  e.preventDefault()
+const onTouchStart = (e: TouchEvent) => {
+  if (e.cancelable) e.preventDefault()
   isDrawing.value = true
-  // 缓存 SVG 元素的 rect
   cachedRect = (svgRef.value as unknown as SVGElement)?.getBoundingClientRect?.() || null
-  const pt = getPoint(e)
+  const pt = getPointFromTouch(e)
   paths.value.push({
     d: `M ${pt.x} ${pt.y}`,
     color: '#000000',
@@ -236,38 +238,73 @@ const onPointerDown = (e: PointerEvent) => {
     eraser: tool.value === 'eraser'
   })
   redoStack.value = []
-  // 捕获指针确保后续 move 事件持续触发
-  try {
-    ;(e.target as Element).setPointerCapture?.(e.pointerId)
-  } catch (_) {
-    // 忽略捕获失败
-  }
 }
 
-const onPointerMove = (e: PointerEvent) => {
+const onTouchMove = (e: TouchEvent) => {
   if (!isDrawing.value) return
-  e.preventDefault()
-  const pt = getPoint(e)
+  if (e.cancelable) e.preventDefault()
+  const pt = getPointFromTouch(e)
   const last = paths.value[paths.value.length - 1]
   if (!last) return
   last.d += ` L ${pt.x} ${pt.y}`
   paths.value = [...paths.value]
 }
 
-const onPointerUp = (e: PointerEvent) => {
+const onTouchEnd = () => {
   if (!isDrawing.value) return
   isDrawing.value = false
   cachedRect = null
-  try {
-    ;(e.target as Element).releasePointerCapture?.(e.pointerId)
-  } catch (_) {
-    // 忽略
-  }
 }
 
-// 坐标转换：pointer 坐标 -> SVG viewBox 坐标
-const getPoint = (e: PointerEvent) => {
-  // 优先用缓存 rect，否则实时获取
+// H5 桌面端鼠标支持
+const onMouseDown = (e: MouseEvent) => {
+  e.preventDefault()
+  isDrawing.value = true
+  cachedRect = (svgRef.value as unknown as SVGElement)?.getBoundingClientRect?.() || null
+  const pt = getPointFromMouse(e)
+  paths.value.push({
+    d: `M ${pt.x} ${pt.y}`,
+    color: '#000000',
+    width: brushSize.value,
+    eraser: tool.value === 'eraser'
+  })
+  redoStack.value = []
+  // 绑定 document 级 mousemove/mouseup（拖动时鼠标可能离开 SVG）
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
+
+const onMouseMove = (e: MouseEvent) => {
+  if (!isDrawing.value) return
+  const pt = getPointFromMouse(e)
+  const last = paths.value[paths.value.length - 1]
+  if (!last) return
+  last.d += ` L ${pt.x} ${pt.y}`
+  paths.value = [...paths.value]
+}
+
+const onMouseUp = () => {
+  if (!isDrawing.value) return
+  isDrawing.value = false
+  cachedRect = null
+  document.removeEventListener('mousemove', onMouseMove)
+  document.removeEventListener('mouseup', onMouseUp)
+}
+
+// 坐标转换：Touch 事件坐标 -> SVG viewBox 坐标
+const getPointFromTouch = (e: TouchEvent) => {
+  const svgEl = svgRef.value as unknown as SVGElement | null
+  const rect = cachedRect || svgEl?.getBoundingClientRect?.()
+  if (!rect) return { x: 0, y: 0 }
+  const touch = e.touches[0] || e.changedTouches[0]
+  if (!touch) return { x: 0, y: 0 }
+  const x = ((touch.clientX - rect.left) / rect.width) * 300
+  const y = ((touch.clientY - rect.top) / rect.height) * 480
+  return { x: Math.round(x), y: Math.round(y) }
+}
+
+// 坐标转换：Mouse 事件坐标 -> SVG viewBox 坐标
+const getPointFromMouse = (e: MouseEvent) => {
   const svgEl = svgRef.value as unknown as SVGElement | null
   const rect = cachedRect || svgEl?.getBoundingClientRect?.()
   if (!rect) return { x: 0, y: 0 }

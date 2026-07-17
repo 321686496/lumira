@@ -181,8 +181,36 @@ const onSave = () => {
     uni.showToast({ title: '保存失败', icon: 'none' })
   }
   // #endif
-  // #ifndef H5
-  // App-Plus / 小程序：使用 uni.saveImageToPhotosAlbum
+  // #ifdef APP-PLUS || MP
+  // App-Plus / 小程序：保存到系统相册
+  // 注意：camera 模块返回的是临时文件路径（tempImagePath），可直接保存
+  uni.saveImageToPhotosAlbum({
+    filePath: photoUrl.value,
+    success: () => {
+      uni.showToast({ title: '已保存到相册', icon: 'success' })
+    },
+    fail: (err) => {
+      const errMsg = err?.errMsg || ''
+      // 权限被拒绝（用户拒绝授权保存到相册）
+      if (errMsg.includes('auth') || errMsg.includes('deny') || errMsg.includes('permission')) {
+        uni.showModal({
+          title: '权限提示',
+          content: '保存到相册需要相册访问权限，请在系统设置中允许',
+          confirmText: '去设置',
+          success: (modalRes) => {
+            if (modalRes.confirm) {
+              // 跳转到应用权限设置页
+              if (uni.openAppAuthorizeSetting) {
+                uni.openAppAuthorizeSetting()
+              }
+            }
+          }
+        })
+      } else {
+        uni.showToast({ title: '保存失败', icon: 'none' })
+      }
+    }
+  })
   // #endif
   setTimeout(() => uni.navigateTo({ url: '/pages/gallery/index' }), 800)
 }

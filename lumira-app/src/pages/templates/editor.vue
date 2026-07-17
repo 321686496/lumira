@@ -265,7 +265,11 @@
           <view class="preview-bg"></view>
           <view
             class="pose-drag-layer"
+            ref="poseDragLayerRef"
             @touchstart="onPoseDragStart"
+            @touchmove="onPoseDragMove"
+            @touchend="onPoseDragEnd"
+            @touchcancel="onPoseDragEnd"
           >
             <view class="pose-drag-handle" :style="poseDragStyle">
               <PoseSilhouette :pose="form.pose" />
@@ -714,6 +718,7 @@ let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 // ===== 姿势预览拖动状态 =====
 const posePreviewRef = ref<any>(null)
+const poseDragLayerRef = ref<any>(null)
 const isDraggingPose = ref(false)
 let poseDragStartClientX = 0
 let poseDragStartClientY = 0
@@ -721,8 +726,12 @@ let poseDragStartX = 0
 let poseDragStartY = 0
 let posePreviewRect: DOMRect | null = null
 
+// 使用 left/top 百分比（相对父容器）+ translate(-50%, -50%) 居中
+// 与 detail.vue 的 poseLayerStyle 保持一致，确保位置在所有页面一致
 const poseDragStyle = computed(() => ({
-  transform: `translate(calc(-50% + ${(form.value.pose.position.x - 0.5) * 100}%), calc(-50% + ${(form.value.pose.position.y - 0.5) * 100}%))`
+  left: `${form.value.pose.position.x * 100}%`,
+  top: `${form.value.pose.position.y * 100}%`,
+  transform: 'translate(-50%, -50%)'
 }))
 
 function getDragXY(e: any): { x: number; y: number } {
@@ -744,8 +753,9 @@ function onPoseDragStart(e: any) {
   poseDragStartClientY = y
   poseDragStartX = form.value.pose.position.x
   poseDragStartY = form.value.pose.position.y
-  const layerEl = document.querySelector('.pose-drag-layer')
-  const el = (layerEl as any)?.$el || layerEl
+  // 通过 Vue ref 获取元素 rect（跨平台，避免 document.querySelector 在 App-Plus 失败）
+  const layerRef = poseDragLayerRef.value
+  const el = layerRef?.$el || layerRef
   posePreviewRect = el?.getBoundingClientRect?.() || null
   if (e?.preventDefault) e.preventDefault()
 }
@@ -756,8 +766,9 @@ function onPoseDragMove(e: any) {
   const { x, y } = getDragXY(e)
   const dx = (x - poseDragStartClientX) / posePreviewRect.width
   const dy = (y - poseDragStartClientY) / posePreviewRect.height
-  const newX = Math.max(0.1, Math.min(0.9, poseDragStartX + dx))
-  const newY = Math.max(0.1, Math.min(0.9, poseDragStartY + dy))
+  // 与位置滑块范围一致 (0~1)，允许剪影拖到画面边缘（超出部分由 overflow:hidden 裁剪）
+  const newX = Math.max(0, Math.min(1, poseDragStartX + dx))
+  const newY = Math.max(0, Math.min(1, poseDragStartY + dy))
   form.value.pose.position = { x: newX, y: newY }
 }
 
@@ -767,25 +778,34 @@ function onPoseDragEnd() {
   posePreviewRect = null
 }
 
-// @touchstart 在 <view> 上可用（含 touches[0].clientX），但 @mousedown/@pointerdown
-// 的 uni-app 事件包装会丢失 clientX/clientY，所以 mousedown 需用原生 addEventListener
+// @touchstart/@touchmove/@touchend 已绑定到 <view> 元素，跨平台可靠
+// 仅 H5 桌面端需要 mouse 事件（mouse 需通过原生 addEventListener 绑定，
+// 因 uni-app 的 @mousedown 包装会丢失 clientX/clientY）
 onMounted(() => {
   nextTick(() => {
-    const layerEl = document.querySelector('.pose-drag-layer')
-    if (layerEl) layerEl.addEventListener('mousedown', onPoseDragStart as any)
+    const layerRef = poseDragLayerRef.value
+    const el = layerRef?.$el || layerRef
+    if (el?.addEventListener) {
+      el.addEventListener('mousedown', onPoseDragStart as any)
+    } else {
+      // H5 桌面端 fallback：document.querySelector
+      const layerEl = document.querySelector('.pose-drag-layer')
+      if (layerEl) layerEl.addEventListener('mousedown', onPoseDragStart as any)
+    }
   })
-  document.addEventListener('touchmove', onPoseDragMove, { passive: false })
-  document.addEventListener('touchend', onPoseDragEnd)
-  document.addEventListener('touchcancel', onPoseDragEnd)
+  // mouse 事件需 document 级（拖动时鼠标可能离开元素）
   document.addEventListener('mousemove', onPoseDragMove)
   document.addEventListener('mouseup', onPoseDragEnd)
 })
 onUnmounted(() => {
-  const layerEl = document.querySelector('.pose-drag-layer')
-  if (layerEl) layerEl.removeEventListener('mousedown', onPoseDragStart as any)
-  document.removeEventListener('touchmove', onPoseDragMove)
-  document.removeEventListener('touchend', onPoseDragEnd)
-  document.removeEventListener('touchcancel', onPoseDragEnd)
+  const layerRef = poseDragLayerRef.value
+  const el = layerRef?.$el || layerRef
+  if (el?.removeEventListener) {
+    el.removeEventListener('mousedown', onPoseDragStart as any)
+  } else {
+    const layerEl = document.querySelector('.pose-drag-layer')
+    if (layerEl) layerEl.removeEventListener('mousedown', onPoseDragStart as any)
+  }
   document.removeEventListener('mousemove', onPoseDragMove)
   document.removeEventListener('mouseup', onPoseDragEnd)
 })

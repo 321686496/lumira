@@ -40,11 +40,24 @@
 
     <!-- 取景器 -->
     <view class="viewfinder" @click="onViewfinderTap">
-      <!-- 真实相机预览 (H5)：原生 video 元素容器 -->
+      <!-- App-Plus 原生相机组件 -->
+      <!-- #ifdef APP-PLUS -->
+      <camera
+        v-if="cameraApi.isReady.value"
+        class="viewfinder-camera"
+        :device-position="cameraApi.facing.value"
+        :flash="cameraFlashProp"
+        @error="onCameraError"
+        @initdone="onCameraInitDone"
+      />
+      <!-- #endif -->
+      <!-- H5 原生 video 元素容器 -->
+      <!-- #ifdef H5 -->
       <view id="videoContainer" class="viewfinder-video-wrap" />
+      <!-- #endif -->
       <!-- 占位图（无相机权限或非 H5 平台） -->
       <image
-        v-if="!camera.isReady.value"
+        v-if="!cameraApi.isReady.value"
         class="viewfinder-bg"
         src="https://picsum.photos/seed/capture-viewfinder/400/600"
         mode="aspectFill"
@@ -53,9 +66,9 @@
       <view class="viewfinder-mask" />
 
       <!-- 权限错误提示 -->
-      <view v-if="camera.error.value" class="camera-error">
+      <view v-if="cameraApi.error.value" class="camera-error">
         <text class="ph ph-warning-circle camera-error-icon"></text>
-        <text class="camera-error-text">{{ camera.error.value }}</text>
+        <text class="camera-error-text">{{ cameraApi.error.value }}</text>
         <view class="camera-error-btn" @click="retryCamera">
           <text class="ph ph-arrow-clockwise"></text>
           <text>重试</text>
@@ -212,7 +225,7 @@ import FilterPicker from '@/components/FilterPicker.vue'
 const { loadTemplate, recentTemplates, pushRecent, loadRecent } = useTemplate()
 const { kits, recordUsage } = useShootKit()
 const { getSceneById } = useSceneManager()
-const camera = useCamera()
+const cameraApi = useCamera()
 
 const statusBarHeight = uni.getSystemInfoSync().statusBarHeight || 20
 const currentTemplateId = ref('')
@@ -268,6 +281,30 @@ const DBL_TAP_THRESHOLD = 300
 // 视频元素 ref
 const videoRef = ref<HTMLVideoElement | null>(null)
 const VIDEO_CONTAINER_ID = 'videoContainer'
+
+// App-Plus 相机组件的 flash prop 映射
+// FlashMode 类型与 <camera> 的 flash 属性一致：'off' | 'on' | 'auto' | 'torch'
+const cameraFlashProp = computed(() => {
+  const m = flashOn.value ? 'torch' : 'off'
+  return m
+})
+
+// App-Plus 相机组件事件处理
+function onCameraError(e: any) {
+  const detail = e?.detail || {}
+  const errMsg = detail.errMsg || '相机启动失败'
+  console.error('[camera] error:', errMsg)
+  // 权限被拒等错误，写入 cameraApi.error 由 UI 显示
+  if (errMsg.includes('auth') || errMsg.includes('permission') || errMsg.includes('deny')) {
+    cameraApi.error.value = '相机权限被拒绝，请在系统设置中允许'
+  } else {
+    cameraApi.error.value = errMsg
+  }
+}
+
+function onCameraInitDone(e: any) {
+  console.log('[camera] initdone', e?.detail)
+}
 
 // 创建原生 video 元素（绕过 uni-app 的 <uni-video> 包装）
 function createVideoElement(): HTMLVideoElement | null {
@@ -357,18 +394,18 @@ watch([rawMode, editableTemplate], () => {
 
 onMounted(async () => {
   // 创建原生 video 元素并绑定到相机（H5 平台）
-  if (camera.platform === 'h5') {
+  if (cameraApi.platform === 'h5') {
     // 等待 DOM 渲染完成
     await nextTick()
     videoRef.value = createVideoElement()
     if (videoRef.value) {
-      camera.bindVideoElement(videoRef.value)
+      cameraApi.bindVideoElement(videoRef.value)
       // 创建后立即应用当前滤镜（修复 watch 触发早于 video 创建的时序问题）
       applyVideoFilter()
     }
   }
   // 启动相机预览
-  await camera.startPreview()
+  await cameraApi.startPreview()
   // 确保视频播放
   if (videoRef.value) {
     videoRef.value.play().catch(() => {})
@@ -423,7 +460,7 @@ onUnload(() => {
   showTemplate.value = true
   showSilhouette.value = true
   // 释放相机资源
-  camera.release()
+  cameraApi.release()
   if (resizeListener) {
     uni.offWindowResize(resizeListener)
     resizeListener = null
@@ -601,7 +638,7 @@ const onShutter = async () => {
       postParams = tpl.postProcess as unknown as Record<string, unknown>
     }
 
-    const result = await camera.capture(cameraParams, postParams)
+    const result = await cameraApi.capture(cameraParams, postParams)
     lastPhoto.value = result.dataUrl
 
     // 跳转到预览页（携带 dataURL）
@@ -619,27 +656,27 @@ const onShutter = async () => {
 }
 
 const flipCamera = async () => {
-  await camera.switchCamera()
-  uni.showToast({ title: `已切换至${camera.facing.value === 'front' ? '前置' : '后置'}镜头`, icon: 'none' })
+  await cameraApi.switchCamera()
+  uni.showToast({ title: `已切换至${cameraApi.facing.value === 'front' ? '前置' : '后置'}镜头`, icon: 'none' })
 }
 
 const toggleFlash = () => {
   flashOn.value = !flashOn.value
-  camera.setFlash(flashOn.value ? 'torch' : 'off')
+  cameraApi.setFlash(flashOn.value ? 'torch' : 'off')
 }
 
 const retryCamera = async () => {
-  await camera.release()
-  if (camera.platform === 'h5') {
+  await cameraApi.release()
+  if (cameraApi.platform === 'h5') {
     await nextTick()
     if (!videoRef.value) {
       videoRef.value = createVideoElement()
     }
     if (videoRef.value) {
-      camera.bindVideoElement(videoRef.value)
+      cameraApi.bindVideoElement(videoRef.value)
     }
   }
-  await camera.startPreview()
+  await cameraApi.startPreview()
   if (videoRef.value) {
     videoRef.value.play().catch(() => {})
     applyVideoFilter()
@@ -794,6 +831,15 @@ const onViewfinderTap = () => {
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+/* App-Plus 原生相机组件铺满取景器 */
+.viewfinder-camera {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
 }
 
 .viewfinder-video-wrap video {
