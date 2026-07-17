@@ -223,9 +223,9 @@ function onAddTag() {
 
 function onTagUpdate(ids: string[]) {
   if (!template.value) return
+  // 同步更新内存对象，触发 editableTagIds / userTags 响应式更新
+  template.value.meta.tagIds = ids
   updateTemplateTags(template.value.meta.id, ids)
-  // 触发 userTags 重算
-  refreshTick.value++
 }
 
 function onCreateTag() {
@@ -241,9 +241,9 @@ function onCreateTag() {
       if (!name) return
       const newId = createTag(name, 'template')
       const currentIds = [...(template.value.meta.tagIds || []), newId]
+      // 同步更新内存对象，触发 editableTagIds / userTags 响应式更新
+      template.value.meta.tagIds = currentIds
       updateTemplateTags(template.value.meta.id, currentIds)
-      // 触发 userTags 重算
-      refreshTick.value++
     }
   })
 }
