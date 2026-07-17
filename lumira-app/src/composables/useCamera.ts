@@ -275,6 +275,24 @@ export function useCamera(options: UseCameraOptions = {}) {
   }
 
   /**
+   * 设置 ISO（H5 通过 MediaTrackConstraints 应用，App-Plus 通过 buildCssFilter 中的 ISO 公式实现视觉效果）
+   */
+  function setIso(iso: number): void {
+    if (platform === 'h5' && mediaStream) {
+      const videoTrack = mediaStream.getVideoTracks()[0]
+      if (videoTrack) {
+        const capabilities = videoTrack.getCapabilities?.() as MediaTrackCapabilities & { iso?: { min: number; max: number; step: number } }
+        if (capabilities?.iso) {
+          videoTrack.applyConstraints({
+            advanced: [{ iso: Number(iso) } as MediaTrackConstraintSet]
+          }).catch(() => {})
+        }
+      }
+    }
+    // App-Plus: ISO 视觉效果在 buildCssFilter 中处理（D1 已实现）
+  }
+
+  /**
    * 释放所有资源
    */
   async function release(): Promise<void> {
@@ -300,6 +318,7 @@ export function useCamera(options: UseCameraOptions = {}) {
     capture,
     switchCamera,
     setFlash,
+    setIso,
     release
   }
 }

@@ -63,6 +63,11 @@
         mode="aspectFill"
         :style="viewfinderFilterStyle"
       />
+      <!-- 场景滤镜已套用 badge -->
+      <view v-if="activeSceneFilter" class="scene-filter-badge">
+        <text class="ph ph-magic-wand"></text>
+        <text class="badge-text">{{ activeSceneFilter }}</text>
+      </view>
       <view class="viewfinder-mask" />
 
       <!-- 权限错误提示 -->
@@ -241,6 +246,8 @@ const rawMode = ref(false)
 const flashOn = ref(false)
 const isCapturing = ref(false)
 const lastPhoto = ref('')
+// 当前生效的场景预设 ID（用于显示场景滤镜 badge）
+const activeScenePresetId = ref<string | null>(null)
 
 // applied 改为 computed：基于参数匹配判定
 const applied = computed(() => {
@@ -392,6 +399,13 @@ watch([rawMode, editableTemplate], () => {
   applyVideoFilter()
 }, { deep: true })
 
+// 监听 ISO 变化，实时应用到相机（H5 通过 MediaTrackConstraints，App-Plus 由 buildCssFilter 处理）
+watch(() => editableTemplate.value?.camera.iso, (iso) => {
+  if (iso !== undefined && iso > 0) {
+    cameraApi.setIso(iso)
+  }
+})
+
 onMounted(async () => {
   // 创建原生 video 元素并绑定到相机（H5 平台）
   if (cameraApi.platform === 'h5') {
@@ -419,6 +433,7 @@ onLoad((options) => {
     pushRecent(options.templateId)
   } else if (options?.scenePreset) {
     // 场景预设模式：基于 preset 创建可编辑模板
+    activeScenePresetId.value = options.scenePreset
     const preset = SCENE_PRESETS.find(p => p.id === options.scenePreset)
     if (preset) {
       const tpl = createEmptyTemplate()
@@ -497,6 +512,14 @@ const wbDisplay = computed(() => {
   const tpl = activeTemplate.value
   const k = tpl?.camera.whiteBalanceK
   return k ? `${k}K` : '5500K'
+})
+
+// 当前生效的场景滤镜（用于顶部 badge 显示）
+const activeSceneFilter = computed(() => {
+  if (!activeScenePresetId.value) return ''
+  const preset = SCENE_PRESETS.find(p => p.id === activeScenePresetId.value)
+  if (!preset || preset.filter.lut === 'none') return ''
+  return preset.filter.reason || preset.filter.lut
 })
 
 const categoryLabel = computed(() => {
@@ -869,6 +892,26 @@ const onViewfinderTap = () => {
   inset: 0;
   background: rgba(24, 22, 20, 0.15);
   pointer-events: none;
+}
+
+/* ===== 场景滤镜 badge ===== */
+.scene-filter-badge {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 80rpx);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  padding: 8rpx 20rpx;
+  border-radius: 9999rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  z-index: 20;
+}
+.scene-filter-badge .badge-text {
+  color: #ffffff;
+  font-size: 22rpx;
 }
 
 /* ===== 相机错误提示 ===== */
