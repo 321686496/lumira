@@ -134,6 +134,7 @@
           :key="s.id"
           :scene="s"
           variant="card"
+          textField="vibe"
           :imageSrc="`https://picsum.photos/seed/scene-home-${s.id}/400/600`"
           :badgeText="getSceneBadge(s, index)"
           :badgeBrand="index === 2"

@@ -123,6 +123,8 @@ export function useShootingTip() {
   /** 获取所有候选贴士（供"换一批"使用） */
   function getAllCandidateTips(): ShootingTip[] {
     const tips: ShootingTip[] = []
+
+    // 1. 近期最常用场景的全部 tips
     if (topScene.value && topScene.value.scene.tips?.length > 0) {
       topScene.value.scene.tips.forEach(t => tips.push({
         text: t,
@@ -132,6 +134,54 @@ export function useShootingTip() {
         priority: 35
       }))
     }
+
+    // 2. 近期最常用模板关联场景的全部 tips
+    const recentTpl = recentTemplates.value[0]
+    if (recentTpl) {
+      const presetId = recentTpl.sceneGuide?.presetId
+      if (presetId) {
+        const preset = allScenes.value.find(s => s.id === presetId)
+        if (preset?.tips?.length) {
+          preset.tips.forEach(t => tips.push({
+            text: t,
+            sub: `— 基于你最近使用「${recentTpl.meta.name}」模板`,
+            sceneName: preset.name,
+            source: 'recent_template',
+            priority: 25
+          }))
+        }
+      }
+    }
+
+    // 3. 当前时段贴士
+    const hour = new Date().getHours()
+    if (hour >= 6 && hour < 10) {
+      tips.push({
+        text: '清晨黄金时刻：光线柔和暖黄，适合拍人像与风光。',
+        sub: '— 当前时段推荐',
+        sceneName: '通用',
+        source: 'time_match',
+        priority: 15
+      })
+    } else if (hour >= 16 && hour < 19) {
+      tips.push({
+        text: '黄昏黄金时刻：日落前 1 小时光线最美，提前踩点。',
+        sub: '— 当前时段推荐',
+        sceneName: '通用',
+        source: 'time_match',
+        priority: 15
+      })
+    } else if (hour >= 19) {
+      tips.push({
+        text: '夜景拍摄：使用三脚架或稳定支撑，降低 ISO，延长曝光时间。',
+        sub: '— 当前时段推荐',
+        sceneName: '通用',
+        source: 'time_match',
+        priority: 15
+      })
+    }
+
+    // 4. 兜底贴士
     FALLBACK_TIPS.forEach(t => tips.push({ ...t }))
     return tips
   }

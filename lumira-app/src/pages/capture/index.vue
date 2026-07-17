@@ -1386,7 +1386,8 @@ const onViewfinderTap = () => {
 
 .capture-fullscreen .param-pill-bar {
   position: fixed;
-  top: calc(env(safe-area-inset-top) + 12rpx);
+  /* 下移到 capture-nav（高 72rpx）之下，避免被 z-index:100 的 nav 遮挡导致 pills 不可点击 */
+  top: calc(env(safe-area-inset-top) + 96rpx);
   left: 24rpx;
   right: 24rpx;
   z-index: 20;

@@ -44,7 +44,7 @@
           <text class="spv-custom-tag-text">自定义</text>
         </view>
       </view>
-      <text v-if="scene.description" class="spv-card-desc">{{ scene.description }}</text>
+      <text v-if="scene[textField]" :class="textField === 'vibe' ? 'spv-card-vibe' : 'spv-card-desc'">{{ scene[textField] }}</text>
       <view v-if="hasStats" class="spv-card-stats">
         <text v-if="photoCount !== undefined" class="spv-stat-item"><text class="ph ph-images-square"></text> {{ photoCount }}</text>
         <text v-if="achievementLevel && achievementLevel > 0" class="spv-stat-item"><text class="ph ph-trophy"></text> Lv.{{ achievementLevel }}</text>
@@ -69,10 +69,12 @@ const props = withDefaults(defineProps<{
   badgeBrand?: boolean
   photoCount?: number
   achievementLevel?: number
+  textField?: 'description' | 'vibe'
 }>(), {
   size: 'full',
   variant: 'list',
-  badgeBrand: false
+  badgeBrand: false,
+  textField: 'description'
 })
 
 const emit = defineEmits<{
@@ -287,6 +289,14 @@ const onClick = () => {
   font-size: 22rpx;
   color: var(--color-text-tertiary);
   line-height: 1.5;
+}
+
+.spv-card-vibe {
+  display: block;
+  font-size: 24rpx;
+  color: #C9A876;
+  font-style: italic;
+  line-height: 1.4;
 }
 
 .spv-card-stats {
