@@ -25,23 +25,30 @@
       </view>
     </view>
 
-    <!-- 分类横滑pill -->
-    <view class="cat-scroll fade-up fade-up-d1">
-      <scroll-view scroll-x class="cat-scroll-inner" :show-scrollbar="false">
+    <!-- 三层分类导航 + 标签筛选 -->
+    <view class="template-filter fade-up fade-up-d1">
+      <CategoryNav :layers="categoryLayers" @select="onLayerSelect" />
+      <view class="template-tags">
+        <TagSelector
+          :selected-tag-ids="selectedTagIds"
+          type="template"
+          @update:selected-tag-ids="selectedTagIds = $event"
+        />
+      </view>
+      <!-- "我的"自定义模板切换 -->
+      <view class="custom-toggle-row">
         <view
-          class="cat-pill"
-          :class="{ active: activeCategory === cat.value }"
-          v-for="cat in categories"
-          :key="cat.value"
-          @click="activeCategory = cat.value"
+          class="custom-toggle-pill"
+          :class="{ 'custom-toggle-pill-active': showCustom }"
+          @click="showCustom = !showCustom"
         >
-          <text class="cat-pill-text">{{ cat.label }}</text>
+          <text class="custom-toggle-text">我的</text>
         </view>
-      </scroll-view>
+      </view>
     </view>
 
     <!-- "我的"分类操作入口按钮行 -->
-    <view v-if="activeCategory === 'custom'" class="action-row fade-up fade-up-d2">
+    <view v-if="showCustom" class="action-row fade-up fade-up-d2">
       <view class="action-btn lumira-btn-ghost" @click="handleImport">
         <text class="ph ph-download-simple action-btn-icon"></text>
         <text class="action-btn-text">导入模板</text>
@@ -53,10 +60,10 @@
     </view>
 
     <!-- 模板网格 -->
-    <view v-if="displayTemplates.length" class="tpl-grid section-pad fade-up fade-up-d2">
+    <view v-if="filteredTemplates.length" class="tpl-grid section-pad fade-up fade-up-d2">
       <view
         class="tpl-card lumira-card-hover"
-        v-for="t in displayTemplates"
+        v-for="t in filteredTemplates"
         :key="t.meta.id"
         @click="goDetail(t.meta.id)"
       >
@@ -74,7 +81,7 @@
           <text class="tpl-name">{{ t.meta.name }}</text>
           <view class="tpl-meta">
             <text class="tpl-cat">{{ categoryLabel(t.meta.category) }}</text>
-            <text v-if="activeCategory === 'custom'" class="tpl-custom-tag">自定义</text>
+            <text v-if="showCustom" class="tpl-custom-tag">自定义</text>
           </view>
         </view>
       </view>
@@ -84,9 +91,9 @@
     <view v-else class="empty-state-wrap fade-up fade-up-d2">
       <text class="ph ph-folder-open empty-icon"></text>
       <text class="empty-text">{{
-        activeCategory === 'custom' ? '还没有自定义模板' : '该分类暂无模板'
+        showCustom ? '还没有自定义模板' : '该分类暂无模板'
       }}</text>
-      <view v-if="activeCategory === 'custom'" class="empty-btn" @click="goEditor">
+      <view v-if="showCustom" class="empty-btn" @click="goEditor">
         去创建
       </view>
     </view>
@@ -99,42 +106,222 @@
 import { ref, computed } from 'vue'
 import { onShow, onLoad } from '@dcloudio/uni-app'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import CategoryNav from '@/components/CategoryNav.vue'
+import TagSelector from '@/components/TagSelector.vue'
 import { useTemplate } from '@/composables/useTemplate'
 import { useTemplateIO } from '@/composables/useTemplateIO'
-import type { PhotoTemplate, Target } from '@/types/template'
+import { useTagManager } from '@/composables/useTagManager'
+import { SCENE_TO_CATEGORY } from '@/data/scenePresets'
+import type { PhotoTemplate, Target, ScenePresetId } from '@/types/template'
 
-const { getFreeTemplates, getPaidTemplates, getCustomTemplates } = useTemplate()
+const { getAllTemplates, getCustomTemplates } = useTemplate()
+const { filterTemplatesByTags } = useTagManager()
 const { importTemplate } = useTemplateIO()
 
-type CategoryValue = Target | 'all' | 'custom'
+// ===== 三层分类 + 标签筛选 =====
+const selectedType = ref<Target | null>(null)
+const selectedStyle = ref<string | null>(null)
+const selectedMethod = ref<string | null>(null)
+const selectedTagIds = ref<string[]>([])
+const showCustom = ref(false)
 
-// 场景推荐页传入的 scene 参数 → 模板分类映射
-const sceneToCategory: Record<string, Target> = {
-  cafe: 'portrait',
-  street: 'street',
-  food: 'food',
-  home: 'still-life'
-}
-
-const categories: { value: CategoryValue; label: string }[] = [
-  { value: 'all', label: '全部' },
-  { value: 'portrait', label: '人像' },
-  { value: 'landscape', label: '风光' },
-  { value: 'food', label: '美食' },
-  { value: 'night', label: '夜景' },
-  { value: 'street', label: '街拍' },
-  { value: 'macro', label: '微距' },
-  { value: 'still-life', label: '静物' },
-  { value: 'custom', label: '我的' }
-]
-
-const activeCategory = ref<CategoryValue>('all')
+// 自定义模板刷新触发器：onShow / 导入后自增，触发 computed 重算
+// （getAllTemplates / getCustomTemplates 内部读 storage，本身非响应式）
+const refreshTick = ref(0)
 
 // 接收场景推荐页传入的 scene 参数，自动切换到对应分类
 onLoad((options) => {
-  if (options?.scene && sceneToCategory[options.scene]) {
-    activeCategory.value = sceneToCategory[options.scene]
+  if (options?.scene) {
+    const cat = SCENE_TO_CATEGORY[options.scene as ScenePresetId]
+    if (cat) selectedType.value = cat
   }
+})
+
+onShow(() => {
+  refreshTick.value++
+})
+
+// 三层分类选项
+const STYLE_MAP: Record<Target, { value: string; label: string }[]> = {
+  portrait: [
+    { value: 'japanese', label: '日系' },
+    { value: 'emotional', label: '情绪' },
+    { value: 'film', label: '胶片' },
+    { value: 'western', label: '欧美' },
+  ],
+  landscape: [
+    { value: 'fresh', label: '清新' },
+    { value: 'epic', label: '大气' },
+  ],
+  food: [
+    { value: 'overhead', label: '俯拍' },
+    { value: 'closeup', label: '特写' },
+  ],
+  street: [
+    { value: 'casual', label: '随性' },
+    { value: 'geometric', label: '几何' },
+  ],
+  night: [
+    { value: 'neon', label: '霓虹' },
+    { value: 'starry', label: '星空' },
+  ],
+  macro: [
+    { value: 'nature', label: '自然' },
+    { value: 'object', label: '物品' },
+  ],
+  'still-life': [
+    { value: 'minimal', label: '极简' },
+    { value: 'flat', label: '扁平' },
+  ],
+}
+
+const METHOD_MAP: Record<string, { value: string; label: string }[]> = {
+  japanese: [
+    { value: 'selfie', label: '自拍' },
+    { value: 'normal', label: '他拍' },
+    { value: 'overhead', label: '俯拍' },
+  ],
+  emotional: [
+    { value: 'selfie', label: '自拍' },
+    { value: 'wide', label: '远景' },
+  ],
+  film: [
+    { value: 'selfie', label: '自拍' },
+    { value: 'normal', label: '他拍' },
+  ],
+  western: [
+    { value: 'normal', label: '他拍' },
+    { value: 'wide', label: '远景' },
+  ],
+  fresh: [
+    { value: 'wide', label: '远景' },
+    { value: 'flat', label: '平拍' },
+  ],
+  epic: [
+    { value: 'wide', label: '远景' },
+    { value: 'overhead', label: '俯拍' },
+  ],
+  overhead: [
+    { value: 'flat', label: '平拍' },
+    { value: 'overhead', label: '俯拍' },
+  ],
+  closeup: [
+    { value: 'macro', label: '微距' },
+    { value: 'detail', label: '细节' },
+  ],
+  casual: [
+    { value: 'normal', label: '随拍' },
+    { value: 'wide', label: '远景' },
+  ],
+  geometric: [
+    { value: 'wide', label: '远景' },
+    { value: 'overhead', label: '俯拍' },
+  ],
+  neon: [
+    { value: 'normal', label: '他拍' },
+    { value: 'wide', label: '远景' },
+  ],
+  starry: [
+    { value: 'wide', label: '远景' },
+    { value: 'long', label: '长曝' },
+  ],
+  nature: [
+    { value: 'macro', label: '微距' },
+    { value: 'detail', label: '细节' },
+  ],
+  object: [
+    { value: 'macro', label: '微距' },
+    { value: 'flat', label: '平拍' },
+  ],
+  minimal: [
+    { value: 'flat', label: '平拍' },
+    { value: 'detail', label: '细节' },
+  ],
+  flat: [
+    { value: 'flat', label: '平拍' },
+    { value: 'overhead', label: '俯拍' },
+  ],
+}
+
+interface CategoryLayer {
+  label: string
+  selected: string | null
+  options: { value: string; label: string }[]
+}
+
+const categoryLayers = computed<CategoryLayer[]>(() => {
+  const layers: CategoryLayer[] = [{
+    label: '类型',
+    selected: selectedType.value,
+    options: [
+      { value: 'portrait', label: '人像' },
+      { value: 'landscape', label: '风景' },
+      { value: 'food', label: '美食' },
+      { value: 'street', label: '街拍' },
+      { value: 'night', label: '夜景' },
+      { value: 'macro', label: '微距' },
+      { value: 'still-life', label: '静物' },
+    ],
+  }]
+  if (selectedType.value && STYLE_MAP[selectedType.value]) {
+    layers.push({
+      label: '风格',
+      selected: selectedStyle.value,
+      options: STYLE_MAP[selectedType.value],
+    })
+  }
+  if (selectedStyle.value && METHOD_MAP[selectedStyle.value]) {
+    layers.push({
+      label: '方式',
+      selected: selectedMethod.value,
+      options: METHOD_MAP[selectedStyle.value],
+    })
+  }
+  return layers
+})
+
+function onLayerSelect(idx: number, value: string | null) {
+  if (idx === 0) {
+    selectedType.value = value as Target | null
+    selectedStyle.value = null
+    selectedMethod.value = null
+  } else if (idx === 1) {
+    selectedStyle.value = value
+    selectedMethod.value = null
+  } else if (idx === 2) {
+    selectedMethod.value = value
+  }
+}
+
+// 所有模板（builtin + 自定义）。访问 refreshTick 触发 onShow 刷新
+const allTemplates = computed<PhotoTemplate[]>(() => {
+  void refreshTick.value
+  return getAllTemplates()
+})
+
+const customOnly = computed<PhotoTemplate[]>(() => {
+  void refreshTick.value
+  return getCustomTemplates()
+})
+
+const allTemplatesCount = computed(() => allTemplates.value.length)
+const unlockedCount = computed(() => allTemplates.value.filter(t => t.meta.price === 0).length)
+
+const filteredTemplates = computed<PhotoTemplate[]>(() => {
+  let list = showCustom.value ? customOnly.value : allTemplates.value
+  if (selectedType.value) {
+    list = list.filter(t => t.meta.classification.type === selectedType.value)
+  }
+  if (selectedStyle.value) {
+    list = list.filter(t => t.meta.classification.style === selectedStyle.value)
+  }
+  if (selectedMethod.value) {
+    list = list.filter(t => t.meta.classification.method === selectedMethod.value)
+  }
+  if (selectedTagIds.value.length > 0) {
+    list = filterTemplatesByTags(selectedTagIds.value, list)
+  }
+  return list
 })
 
 const categoryLabelMap: Record<Target, string> = {
@@ -151,32 +338,6 @@ function categoryLabel(cat: Target): string {
   return categoryLabelMap[cat] || cat
 }
 
-// 内置模板（静态，仅加载一次）
-const freeTemplates = getFreeTemplates()
-const paidTemplates = getPaidTemplates()
-const builtinTemplates: PhotoTemplate[] = [...freeTemplates, ...paidTemplates]
-
-// 自定义模板（本地存储，需在 onShow 时刷新）
-const customTemplates = ref<PhotoTemplate[]>([])
-
-function reloadCustom() {
-  customTemplates.value = getCustomTemplates()
-}
-
-onShow(() => {
-  reloadCustom()
-})
-
-const allTemplatesCount = builtinTemplates.length
-const unlockedCount = freeTemplates.length + paidTemplates.length
-
-const displayTemplates = computed<PhotoTemplate[]>(() => {
-  const cat = activeCategory.value
-  if (cat === 'all') return builtinTemplates
-  if (cat === 'custom') return customTemplates.value
-  return builtinTemplates.filter(t => t.meta.category === cat)
-})
-
 function coverUrl(t: PhotoTemplate): string {
   return t.meta.cover || `https://picsum.photos/seed/${t.meta.id}/400/600`
 }
@@ -192,7 +353,7 @@ function goEditor() {
 async function handleImport() {
   const tpl = await importTemplate()
   if (tpl) {
-    reloadCustom()
+    refreshTick.value++
   }
 }
 </script>
@@ -283,40 +444,41 @@ async function handleImport() {
   font-weight: 500;
 }
 
-/* 分类pill */
-.cat-scroll {
-  padding-bottom: 24rpx;
+/* 三层分类 + 标签筛选区 */
+.template-filter {
+  padding: 0 16rpx 24rpx;
 }
 
-.cat-scroll-inner {
-  white-space: nowrap;
-  padding: 0 40rpx;
+.template-tags {
+  margin-top: 16rpx;
 }
 
-.cat-pill {
+.custom-toggle-row {
+  display: flex;
+  justify-content: flex-start;
+  padding: 16rpx 24rpx 0;
+}
+
+.custom-toggle-pill {
   display: inline-flex;
   align-items: center;
-  padding: 14rpx 36rpx;
-  border-radius: 9999rpx;
-  background-color: var(--color-surface-alt);
-  margin-right: 16rpx;
-  box-shadow: var(--shadow-convex-subtle);
-  border: none;
+  padding: 12rpx 32rpx;
+  border-radius: 32rpx;
+  background: rgba(0, 0, 0, 0.05);
 }
 
-.cat-pill.active {
-  background: linear-gradient(135deg, #C9A96E 0%, #A88550 100%);
-  box-shadow: var(--shadow-pressed);
+.custom-toggle-pill-active {
+  background: #2A2520;
 }
 
-.cat-pill-text {
-  font-size: 26rpx;
-  color: var(--color-text-secondary);
+.custom-toggle-text {
+  font-size: 24rpx;
+  color: #2A2520;
+  line-height: 1.2;
 }
 
-.cat-pill.active .cat-pill-text {
-  color: #fff;
-  font-weight: 500;
+.custom-toggle-pill-active .custom-toggle-text {
+  color: #FFFFFF;
 }
 
 /* "我的"分类操作按钮行 */
