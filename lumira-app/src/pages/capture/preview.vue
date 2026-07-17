@@ -56,13 +56,20 @@
           <view class="pill-list">
             <view
               class="pill"
-              :class="{ active: s.active }"
-              v-for="s in scenes"
-              :key="s.name"
-              @click="selectScene(s)"
+              :class="{ active: selectedSceneId === s.id }"
+              v-for="s in sceneOptions"
+              :key="s.id"
+              @click="selectedSceneId = s.id"
             >
               <text class="ph pill-icon" :class="s.icon"></text>
               <text class="pill-text">{{ s.name }}</text>
+            </view>
+            <view
+              class="pill"
+              :class="{ active: selectedSceneId === null }"
+              @click="selectedSceneId = null"
+            >
+              <text class="pill-text">不标记</text>
             </view>
           </view>
         </scroll-view>
@@ -90,8 +97,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import { useSceneManager } from '@/composables/useSceneManager'
+import type { ScenePresetId, CustomSceneId } from '@/types/template'
 
 const photoUrl = ref('')
 
@@ -115,21 +124,17 @@ const moods = ref([
   { name: '治愈', icon: 'ph-plant', active: false }
 ])
 
-const scenes = ref([
-  { name: '咖啡馆', icon: 'ph-coffee', active: true },
-  { name: '花店', icon: 'ph-flower', active: false },
-  { name: '海边', icon: 'ph-beach-ball', active: false },
-  { name: '街拍', icon: 'ph-buildings', active: false },
-  { name: '探店', icon: 'ph-shopping-bag', active: false },
-  { name: '居家', icon: 'ph-house', active: false }
-])
+// 场景选择器：使用真实数据（预设场景 + 用户自定义场景）
+const { allScenes, addPhoto } = useSceneManager()
+const selectedSceneId = ref<string | null>(null)
+const sceneOptions = computed(() => allScenes.value.map(s => ({
+  id: s.id,
+  name: s.name,
+  icon: s.icon,
+})))
 
 const selectMood = (m: { name: string; active: boolean }) => {
   moods.value.forEach((item) => (item.active = item.name === m.name))
-}
-
-const selectScene = (s: { name: string; active: boolean }) => {
-  scenes.value.forEach((item) => (item.active = item.name === s.name))
 }
 
 const back = () => uni.navigateBack()
@@ -155,7 +160,16 @@ const onSave = () => {
     uni.showToast({ title: '无照片数据', icon: 'none' })
     return
   }
-  // H5 端：通过创建 <a> 栿签下载图片
+
+  // 写入 LocalPhoto（应用内部记录，与保存到相册相互独立）
+  const selectedMoodName = moods.value.find(m => m.active)?.name
+  addPhoto({
+    dataUrl: photoUrl.value,
+    sceneId: selectedSceneId.value as ScenePresetId | CustomSceneId | null,
+    mood: selectedMoodName || undefined,
+  })
+
+  // H5 端：通过创建 <a> 标签下载图片
   // #ifdef H5
   try {
     const link = document.createElement('a')
