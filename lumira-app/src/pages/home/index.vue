@@ -136,8 +136,15 @@
           :imageSrc="`https://picsum.photos/seed/scene-home-${s.id}/400/600`"
           :badgeText="getSceneBadge(s, index)"
           :badgeBrand="index === 2"
-          @click="goScene($event)"
-        />
+          @click="goSceneDetail($event)"
+        >
+          <template #footer>
+            <view class="scene-stat">
+              <text class="ph ph-images-square scene-stat-icon"></text>
+              <text class="scene-stat-num">{{ getPhotoCountByScene(s.id) }}</text>
+            </view>
+          </template>
+        </ScenePresetView>
       </view>
     </view>
 
@@ -215,7 +222,7 @@ import { SCENE_PRESETS } from '@/data/scenePresets'
 import { useSceneManager } from '@/composables/useSceneManager'
 import type { AnyScene } from '@/types/template'
 
-const { customScenes, isCustomScene } = useSceneManager()
+const { customScenes, isCustomScene, getPhotoCountByScene } = useSceneManager()
 
 const weekDays = ref([
   { label: '一', done: true, today: false },
@@ -251,7 +258,7 @@ const recents = ref([
 const goTab = (url: string) => uni.reLaunch({ url })
 const goPage = (url: string) => uni.navigateTo({ url })
 const goCapture = () => uni.navigateTo({ url: '/pages/capture/index' })
-const goScene = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-guide?scenePreset=${id}` })
+const goSceneDetail = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-detail?sceneId=${id}` })
 const goSceneManage = () => uni.navigateTo({ url: '/pages/capture/scene-manage' })
 const goSceneFav = () => uni.navigateTo({ url: '/pages/capture/scene-manage?tab=fav' })
 </script>
@@ -650,6 +657,24 @@ const goSceneFav = () => uni.navigateTo({ url: '/pages/capture/scene-manage?tab=
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24rpx;
+}
+
+.scene-stat {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 12rpx;
+}
+
+.scene-stat-icon {
+  font-size: 24rpx;
+  color: #C9A876;
+}
+
+.scene-stat-num {
+  font-size: 22rpx;
+  color: #6B635A;
+  font-weight: 500;
 }
 
 /* 最近拍摄 */

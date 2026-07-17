@@ -78,11 +78,15 @@
             :imageSrc="`https://picsum.photos/seed/scene-inspiration-${s.id}/400/533`"
             :badgeText="s.name"
             :badgeIcon="s.icon"
-            @click="goScene($event)"
+            @click="goSceneDetail($event)"
           >
             <template #footer>
               <view class="scene-tag-wrap">
                 <text class="lumira-tag" :class="getSceneTagInfo(s).tagCls">{{ getSceneTagInfo(s).tag }}</text>
+                <view class="scene-stat">
+                  <text class="ph ph-images-square scene-stat-icon"></text>
+                  <text class="scene-stat-num">{{ getPhotoCountByScene(s.id) }}</text>
+                </view>
               </view>
             </template>
           </ScenePresetView>
@@ -139,7 +143,7 @@ import { SCENE_PRESETS } from '@/data/scenePresets'
 import { useSceneManager } from '@/composables/useSceneManager'
 import type { AnyScene } from '@/types/template'
 
-const { customScenes, isCustomScene } = useSceneManager()
+const { customScenes, isCustomScene, getPhotoCountByScene } = useSceneManager()
 
 const moods = ref([
   { cls: 'mood-happy', icon: 'ph-smiley', label: '开心', count: 12 },
@@ -170,7 +174,7 @@ const getSceneTagInfo = (s: AnyScene): { tag: string; tagCls: string } => {
   return { tag: `${s.name}拍摄`, tagCls: 'lumira-tag-green' }
 }
 
-const goScene = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-guide?scenePreset=${id}` })
+const goSceneDetail = (id: string) => uni.navigateTo({ url: `/pages/capture/scene-detail?sceneId=${id}` })
 const goSceneManage = () => uni.navigateTo({ url: '/pages/capture/scene-manage' })
 
 const checkins = ref([
@@ -399,8 +403,28 @@ const checkins = ref([
 }
 
 .scene-tag-wrap {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
   margin-top: 20rpx;
+}
+
+.scene-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.scene-stat-icon {
+  font-size: 24rpx;
+  color: #C9A876;
+}
+
+.scene-stat-num {
+  font-size: 22rpx;
+  color: #6B635A;
+  font-weight: 500;
 }
 
 .more-link-wrap {
