@@ -422,3 +422,29 @@ function isCustomScene(scene: AnyScene): scene is CustomScenePreset {
 - 复用现有颜色变量：`--color-brand`、`--color-surface-alt`、`--color-divider` 等
 - composable 命名遵循 `useXxx` 模式，与 `useTemplate`、`useTemplateIO` 一致
 - 修改已有文件时保持现有代码风格（不顺手重构其他部分）
+
+## V2 增强章节（2026-07-17）
+
+### 场景标签系统
+- 场景详情页支持标签 add/display
+- 预设场景使用 recommendedTagIds（只读，预设自带）
+- 自定义场景使用 tagIds（可增删，用户自定义）
+- 通过 `useTagManager.updateSceneTags` 统一管理
+- TagSelector 组件复用（type='scene'）
+
+### 独立场景库页面
+- 新增 `/pages/scenes/index.vue`（非 tab 页，含返回按钮）
+- 从多入口跳转（首页"查看全部"、拍摄页、个人中心）
+- 分类 tab + grid 2 列展示
+- 复用 `ScenePresetView variant="list"`
+
+### 滤镜合法性校验
+- 场景引用的 systemFilter 必须是 `SYSTEM_FILTERS` 中存在的
+- 通过 scene-manage 表单下拉限制 systemFilter 选项（用户只能选预设中的合法值）
+- 未单独实现运行时 `isFilterRegistered` 校验函数（表单限制已足够防止非法值）
+
+### 组合编辑器
+- 新增 `/pages/shootkit/editor.vue`
+- scene-detail "加入组合"按钮跳转到此页
+- 支持选择模板 + 参数覆盖（EV/WB/ISO）
+- ShootKit 数据结构含 sceneId + templateId + overrides

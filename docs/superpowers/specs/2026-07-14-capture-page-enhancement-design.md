@@ -538,3 +538,33 @@ const switchTemplate = (id: string) => {
 8. **系统滤镜**：顶部"滤镜"按钮点击弹出面板，含 6 种苹果风格 + 16 种 LUT；后期 Tab 也有完整列表
 9. **滤镜应用**：选中滤镜后预览实时变化，拍照导出应用对应滤镜
 10. **死代码清理**：activeCamera/activePost 已删除，toggleApply 假重置已移除
+
+## V2 增强章节（2026-07-17）
+
+### 全屏拍摄切换
+- 顶部新增全屏切换按钮（`ph-frame-corners` / `ph-frame`）
+- 全屏模式：取景器 `position: fixed; inset: 0`，参数栏与操作栏 fixed 半透明叠加
+- 状态持久化到 localStorage
+
+### 底部操作栏折叠
+- 新增 `bottomPanelExpanded` 状态
+- 展开时显示模板/场景横滑条（`<scroll-view scroll-x>`）
+- 折叠按钮切换 `ph-caret-up` / `ph-caret-down`
+
+### 参数 pill 椭圆修复
+- 改为固定尺寸 `width: 96rpx; height: 56rpx`
+- `font-variant-numeric: tabular-nums` 等宽数字
+- EV 显示 2 位小数（如 `+0.50`），WB 整数+K（如 `5500K`），ISO 显示数值或 `AUTO`
+
+### ISO 跨平台对等
+- H5: `MediaTrackConstraints.advanced: [{ iso }]` 直接应用硬件 ISO
+- App-Plus: `buildCssFilter` 增加 ISO 公式（`iso > 200` 时 `brightness` 提升 + `grain` 增强）
+- 跨平台对等通过 `buildCssFilter` ISO 公式与 `getGrainStrength(post, iso)` 实现
+- 未单独封装 `setIso` 方法（应用分散在 `buildCssFilter` 与 `MediaTrackConstraints`）
+
+### 后期参数跨平台烘焙
+- `useCamera.captureAppPlus` 改造为完整烘焙流程
+- 使用 `uni.createOffscreenCanvas({ type: '2d', width, height })`
+- 调用 `bakePhotoForCanvas` 公共函数（D1 抽取）
+- `ctx.filter` 不支持时降级到 `applyFilterFromPost` 像素级实现
+- H5 与 App-Plus 共用同一烘焙逻辑

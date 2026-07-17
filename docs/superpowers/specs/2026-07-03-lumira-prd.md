@@ -366,3 +366,36 @@ LocalDeviceId(id TEXT PK)  -- 用于模板作者标识
 - **LUT（Look-Up Table）**：颜色查找表，用于实现滤镜与调色。
 - **PGC**：专业生产内容（Professional Generated Content）。
 - **EXIF**：图像文件元数据，记录相机参数等信息。
+
+## V2 增强章节（2026-07-17）
+
+### 照片墙分类与场景关联
+- 照片墙读取 `useSceneManager.photos`（移除硬编码 mock 数据）
+- 动态生成分类 pills：全部 | 各场景（按 `getPhotosGroupedByScene()` 分组）| 未分类（仅当存在无 sceneId 照片时）
+- 照片详情页支持"归类到场景"功能（`/pages/gallery/detail.vue`）
+  - 读取 URL `?id=photo_xxx` 定位真实照片
+  - 点击场景信息行弹出 sheet 选择场景
+  - 调用 `updatePhotoScene(photoId, sceneId)` 持久化
+  - "不归类"选项将 sceneId 设为 null
+- 拍照后未选场景的照片归"未分类"（sceneId 为 null）
+
+### 今日拍摄贴士算法化
+- 新增 `useShootingTip` composable（`lumira-app/src/composables/useShootingTip.ts`）
+- 综合 4 类候选：
+  - `recent_scene` (priority 35)：近 30 天最常拍场景的 tips
+  - `recent_template` (priority 25)：最近使用模板关联场景的 tips
+  - `time_match` (priority 15)：清晨/黄昏/夜景时段贴士
+  - `fallback` (priority 5)：4 条通用兜底贴士
+- "换一批"从候选池中随机抽取不同的贴士（`getNextShootingTip(current)`）
+- 注：原计划含 `paramPreference` (20%) 候选，因 `LocalPhoto` 无 `metadata` 字段无法实现，已移除
+
+### 页面 bounce 移除
+- App-Plus: `plus.webview.setBounce('none')`
+- `pages.json` globalStyle: `bounce: "none"`
+- 全局 CSS: `overscroll-behavior: none`
+
+### 场景推荐卡片简化
+- 移除 vibe / tips / whereToShoot / bestTime 展示
+- 仅保留 name + description + icon + exampleImages + 照片计数 badge
+- `ScenePresetView variant="card"` 仅渲染核心信息
+- 新增 `variant="list"` 用于独立场景库页面的列表展示

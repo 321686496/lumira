@@ -1135,3 +1135,30 @@ export function useTemplateIO() {
 6. 剪影绘制笔刷压感、图层
 7. 模板分享社区
 8. 模板评分与评论
+
+## V2 增强章节（2026-07-17）
+
+### 模板推荐机制
+- 新增 `useRecommendation` composable（`lumira-app/src/composables/useRecommendation.ts`）
+- 综合多因素加权打分：
+  - `recent_used`: `35 + count*2`（top 3 按使用频次）
+  - `scene_match`: `25 + overlap*3`（与 topScene.recommendedTagIds 重叠的模板）
+  - `category_match`: `20`（top 2 未使用模板在同 topCategory）
+  - `system_pick`: `20`（按时段精选模板）
+- `TemplateRecommendation` 返回 `template + reason + score + source`
+- `UserPreference` 暴露 `totalPhotos` / `topCategory` / `topCategoryPercentage`
+
+### 模板 tab 改造
+- `/pages/templates/index.vue` 改为推荐结构（Tab 页，FloatingTabBar）
+  - Hero 推荐区（横向 `<scroll-view scroll-x>`）
+  - 用户拍摄偏好区（gated by `userPreference.totalPhotos > 0`）
+  - "更多模板" 2 列网格 + "查看全部 ›" 入口
+- `/pages/templates/all.vue` 承载完整列表（非 Tab 页，含返回按钮）
+  - 保留原 index.vue 的三层分类导航 + TagSelector + "我的"切换 + 导入/新建模板操作
+
+### 模板详情页标签
+- `tag-row` 同时展示 `meta.tags`（预设 string[]）与 `meta.tagIds`（用户自定义）
+- 通过 `useTagManager.updateTemplateTags` 更新
+- TagSelector 内联展示（`v-if="tagSelectorVisible && canEditTags"`）
+- `canEditTags` 判定：`meta.id.startsWith('custom_')`（仅自定义模板可编辑标签）
+- 新建标签通过 `uni.showModal({ editable: true })` 弹窗输入（TagSelector `create-tag` 事件无 payload）
