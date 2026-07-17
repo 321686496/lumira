@@ -10,6 +10,7 @@
 import { computed, ref } from 'vue'
 import type { UserTag, AnyScene, PhotoTemplate } from '@/types/template'
 import { useSceneManager } from './useSceneManager'
+import { useTemplate } from './useTemplate'
 
 const STORAGE_KEY = 'lumira_user_tags'
 
@@ -137,6 +138,17 @@ export function useTagManager() {
     updateCustomScene(sceneId, { tagIds })
   }
 
+  /** 更新模板标签（仅自定义模板可编辑，内置模板为只读） */
+  function updateTemplateTags(templateId: string, tagIds: string[]): void {
+    // 内部依赖 useTemplate 的 saveCustomTemplate
+    // 通过动态 import 避免顶层循环依赖
+    const { getCustomTemplates, saveCustomTemplate } = useTemplate()
+    const tpl = getCustomTemplates().find(t => t.meta.id === templateId)
+    if (!tpl) return  // 内置模板不可编辑
+    tpl.meta.tagIds = tagIds
+    saveCustomTemplate(tpl)
+  }
+
   return {
     tags,
     getTagsByType,
@@ -149,5 +161,6 @@ export function useTagManager() {
     filterTemplatesByTags,
     getTagsByIds,
     updateSceneTags,
+    updateTemplateTags,
   }
 }

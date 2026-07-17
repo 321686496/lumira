@@ -36,7 +36,26 @@
             :key="tag"
             class="lumira-tag lumira-tag-gold"
           >{{ tag }}</text>
+          <text
+            v-for="ut in userTags"
+            :key="ut.id"
+            class="lumira-tag lumira-tag-gold"
+          >{{ ut.name }}</text>
+          <view v-if="canEditTags" class="tag-add-btn" @click="onAddTag">
+            <text class="ph ph-plus tag-add-icon"></text>
+            <text class="tag-add-text">添加</text>
+          </view>
         </view>
+      </view>
+
+      <!-- 标签选择器（内联，仅自定义模板时显示） -->
+      <view v-if="tagSelectorVisible && canEditTags" class="tag-selector-wrap fade-up fade-up-d1">
+        <TagSelector
+          :selected-tag-ids="editableTagIds"
+          type="template"
+          @update:selectedTagIds="onTagUpdate"
+          @create-tag="onCreateTag"
+        />
       </view>
 
       <!-- Scene Guide -->
@@ -158,14 +177,65 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
+import { useTagManager } from '@/composables/useTagManager'
 import CompositionOverlay from '@/components/CompositionOverlay.vue'
 import PoseSilhouette from '@/components/PoseSilhouette.vue'
+import TagSelector from '@/components/TagSelector.vue'
 import type { PhotoTemplate } from '@/types/template'
 
 const { loadTemplate } = useTemplate()
 const template = ref<PhotoTemplate | null>(null)
+
+const { getTagsByIds, updateTemplateTags, createTag } = useTagManager()
+
+// 刷新触发器：onShow 时自增，触发 userTags 重算
+// （getCustomTemplates / getTagsByIds 读 storage，本身非响应式）
+const refreshTick = ref(0)
+onShow(() => {
+  refreshTick.value++
+})
+
+// 用户自定义标签（基于 meta.tagIds 解析）
+const userTags = computed(() => {
+  void refreshTick.value
+  const ids = template.value?.meta.tagIds || []
+  return getTagsByIds(ids)
+})
+
+// 当前可编辑的标签 id 列表（用于 TagSelector 双向绑定）
+const editableTagIds = computed(() => template.value?.meta.tagIds || [])
+
+// 是否可编辑：仅自定义模板可编辑标签（内置模板为只读）
+const canEditTags = computed(() => {
+  const t = template.value
+  if (!t) return false
+  // 通过 meta.id 前缀判断（自定义模板 id 形如 custom_xxx）
+  return t.meta.id.startsWith('custom_')
+})
+
+const tagSelectorVisible = ref(false)
+
+function onAddTag() {
+  tagSelectorVisible.value = !tagSelectorVisible.value
+}
+
+function onTagUpdate(ids: string[]) {
+  if (!template.value) return
+  updateTemplateTags(template.value.meta.id, ids)
+  // 触发 userTags 重算
+  refreshTick.value++
+}
+
+function onCreateTag(name: string) {
+  if (!template.value) return
+  const newId = createTag(name, 'template')
+  const currentIds = [...(template.value.meta.tagIds || []), newId]
+  updateTemplateTags(template.value.meta.id, currentIds)
+  // 触发 userTags 重算
+  refreshTick.value++
+}
 
 onLoad((options) => {
   const id = options?.templateId
@@ -401,6 +471,30 @@ const goCapture = () => uni.navigateTo({ url: `/pages/capture/index?templateId=$
   display: flex;
   gap: 12rpx;
   flex-wrap: wrap;
+}
+
+.tag-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 9999rpx;
+  border: 2rpx dashed var(--color-brand);
+  background-color: var(--color-surface-alt);
+}
+
+.tag-add-icon {
+  font-size: 20rpx;
+  color: var(--color-brand);
+}
+
+.tag-add-text {
+  font-size: 22rpx;
+  color: var(--color-brand);
+}
+
+.tag-selector-wrap {
+  padding: 24rpx 48rpx 0;
 }
 
 .block-pad {
