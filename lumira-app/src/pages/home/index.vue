@@ -98,8 +98,8 @@
           </view>
           <view class="tip-body">
             <text class="tip-title">今日拍摄小贴士</text>
-            <text class="tip-text">侧逆光人像：让模特侧向镜头，让自然光从侧面打在脸上，显瘦又自然。</text>
-            <text class="tip-sub">— 适合午后窗边或户外树下</text>
+            <text class="tip-text">{{ currentTip.text }}</text>
+            <text v-if="currentTip.sub" class="tip-sub">{{ currentTip.sub }}</text>
           </view>
         </view>
         <view class="tip-btns">
@@ -107,7 +107,7 @@
             <text class="ph ph-camera tip-btn-icon"></text>
             <text>试试</text>
           </view>
-          <view class="tip-btn-ghost">
+          <view class="tip-btn-ghost" @click="refreshTip">
             <text class="ph ph-arrow-clockwise tip-btn-icon"></text>
             <text>换一批</text>
           </view>
@@ -221,9 +221,17 @@ import FloatingTabBar from '@/components/FloatingTabBar.vue'
 import ScenePresetView from '@/components/ScenePresetView.vue'
 import { SCENE_PRESETS } from '@/data/scenePresets'
 import { useSceneManager } from '@/composables/useSceneManager'
+import { useShootingTip, type ShootingTip } from '@/composables/useShootingTip'
 import type { AnyScene } from '@/types/template'
 
 const { customScenes, isCustomScene, getPhotoCountByScene } = useSceneManager()
+
+const { getShootingTip, getNextShootingTip } = useShootingTip()
+const currentTip = ref<ShootingTip>(getShootingTip())
+
+function refreshTip() {
+  currentTip.value = getNextShootingTip(currentTip.value)
+}
 
 const weekDays = ref([
   { label: '一', done: true, today: false },
