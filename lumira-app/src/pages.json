@@ -130,6 +130,7 @@
 		}
 	],
 	"globalStyle": {
+		"bounce": "none",
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "如画 Lumira",
 		"navigationBarBackgroundColor": "#FAF7F2",

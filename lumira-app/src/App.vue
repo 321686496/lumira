@@ -23,6 +23,15 @@ onLaunch(() => {
     // 首次执行一次
     updateNavScroll();
   }
+
+  // #ifdef APP-PLUS
+  // Disable WebView overscroll bounce effect
+  const currentWebview = (plus as any).webview.currentWebview();
+  if (currentWebview) {
+    if (currentWebview.setBounce) currentWebview.setBounce("none");
+    if (currentWebview.setStyle) currentWebview.setStyle({ bounce: "none" });
+  }
+  // #endif
 });
 </script>
 
@@ -332,6 +341,17 @@ onLaunch(() => {
 page {
   background-color: var(--color-canvas);
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Disable global rubber-band scrolling */
+html,
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
+}
+::-webkit-scrollbar {
+  display: none;
 }
 
 /* ===== 容器 ===== */
