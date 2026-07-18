@@ -61,6 +61,9 @@ dev_dependencies:
   flutter_lints: ^2.0.1
   # brief ^1.0.3 → 调整为兼容 Dart 2.19 的版本，1.x 需 Dart 3
   mocktail: ^0.3.0
+  # sqflite 测试支持（in-memory 数据库，无需真实设备）
+  # brief ^2.3.0 → 调整为兼容 Dart 2.19 的版本，2.3+ 需 Dart 3
+  sqflite_common_ffi: ^2.2.0+1
 
 # Harmony 3.7 适配版本依赖覆盖
 # 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md （3.7 推荐版本列）
