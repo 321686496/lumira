@@ -1,0 +1,211 @@
+import 'package:flutter/material.dart';
+
+/// 一周打卡日（连续打卡 section）
+class WeekDay {
+  const WeekDay({
+    required this.label,
+    required this.done,
+    required this.today,
+  });
+
+  final String label; // '一' | '二' | ... | '日'
+  final bool done;
+  final bool today;
+}
+
+/// 场景推荐项（场景推荐 section）
+class SceneReco {
+  const SceneReco({
+    required this.id,
+    required this.name,
+    required this.vibe,
+    required this.imageSeed,
+    required this.badgeText,
+    required this.badgeBrand,
+    required this.photoCount,
+  });
+
+  final String id;
+  final String name;
+  final String vibe;
+  final String imageSeed; // picsum seed
+  final String badgeText;
+  final bool badgeBrand;
+  final int photoCount;
+}
+
+/// 最近拍摄项（最近拍摄 section）
+class RecentShot {
+  const RecentShot({
+    required this.name,
+    required this.category,
+    required this.icon,
+    required this.imageSeed,
+    required this.steps,
+    required this.match,
+    required this.progress,
+  });
+
+  final String name;
+  final String category;
+  final IconData icon;
+  final String imageSeed;
+  final int steps;
+  final String match; // '98% 匹配' 或 ''
+  final String progress; // '进行中' 或 ''
+}
+
+/// 拍摄小贴士（今日拍摄小贴士 section）
+class ShootingTip {
+  const ShootingTip({
+    required this.text,
+    required this.sub,
+  });
+
+  final String text;
+  final String sub;
+}
+
+/// 首页 mock 数据
+/// 来源：lumira-app/src/pages/home/index.vue 的 weekDays / scenes / recents
+/// 以及 lumira-app/src/composables/useShootingTip.ts 的 FALLBACK_TIPS
+class HomeMockData {
+  HomeMockData._();
+
+  /// 城市定位（顶部导航左侧）
+  static const String location = '上海';
+
+  /// 连续打卡天数
+  static const int streakDays = 7;
+
+  /// 一周打卡日（一/二/三/四/五/六/日，今天=周日且未完成）
+  static const List<WeekDay> weekDays = [
+    WeekDay(label: '一', done: true, today: false),
+    WeekDay(label: '二', done: true, today: false),
+    WeekDay(label: '三', done: true, today: false),
+    WeekDay(label: '四', done: true, today: false),
+    WeekDay(label: '五', done: true, today: false),
+    WeekDay(label: '六', done: true, today: false),
+    WeekDay(label: '日', done: false, today: true),
+  ];
+
+  /// 今日灵感卡片
+  static const String heroDateText = '7月9日 星期二 · 光线极佳';
+  static const String heroTitle = '今日灵感';
+  static const String heroDesc = '捕捉每一束光，让日常成为习惯';
+  static const String heroWeatherText = '17°C 晴 · 黄金时刻 16:30';
+
+  /// 场景推荐（4 个，对齐 home/index.vue 的 scenes computed.slice(0,4)）
+  static const List<SceneReco> scenes = [
+    SceneReco(
+      id: 'preset_cafe',
+      name: '咖啡馆',
+      vibe: '温暖的午后光线，木质与金属的对比',
+      imageSeed: 'scene-home-preset_cafe',
+      badgeText: '你最常去',
+      badgeBrand: false,
+      photoCount: 12,
+    ),
+    SceneReco(
+      id: 'preset_street',
+      name: '街头',
+      vibe: '都市节奏，光影与人物的瞬间交错',
+      imageSeed: 'scene-home-preset_street',
+      badgeText: '街头拍摄',
+      badgeBrand: false,
+      photoCount: 8,
+    ),
+    SceneReco(
+      id: 'preset_park',
+      name: '公园',
+      vibe: '自然光与树影斑驳，四季变换的色彩',
+      imageSeed: 'scene-home-preset_park',
+      badgeText: '新场景推荐',
+      badgeBrand: true,
+      photoCount: 5,
+    ),
+    SceneReco(
+      id: 'preset_studio',
+      name: '工作室',
+      vibe: '可控光线下的人像与静物创作',
+      imageSeed: 'scene-home-preset_studio',
+      badgeText: '工作室拍摄',
+      badgeBrand: false,
+      photoCount: 3,
+    ),
+  ];
+
+  /// 最近拍摄（5 个，对齐 home/index.vue 的 recents）
+  static const List<RecentShot> recents = [
+    RecentShot(
+      name: '自然光人像',
+      category: '人像',
+      icon: Icons.person_outline,
+      imageSeed: 'recent-portrait',
+      steps: 12,
+      match: '98% 匹配',
+      progress: '',
+    ),
+    RecentShot(
+      name: '复古胶片感',
+      category: '胶片',
+      icon: Icons.movie_outlined,
+      imageSeed: 'recent-film',
+      steps: 8,
+      match: '',
+      progress: '',
+    ),
+    RecentShot(
+      name: '窗边咖啡时光',
+      category: '咖啡馆半身',
+      icon: Icons.local_cafe_outlined,
+      imageSeed: 'recent-cafe',
+      steps: 15,
+      match: '',
+      progress: '',
+    ),
+    RecentShot(
+      name: '氛围感人像',
+      category: '人像氛围',
+      icon: Icons.auto_awesome_outlined,
+      imageSeed: 'recent-mood',
+      steps: 15,
+      match: '',
+      progress: '进行中',
+    ),
+    RecentShot(
+      name: '黄金时刻风光',
+      category: '风光',
+      icon: Icons.landscape_outlined,
+      imageSeed: 'recent-landscape',
+      steps: 10,
+      match: '',
+      progress: '',
+    ),
+  ];
+
+  /// 拍摄小贴士候选（对齐 useShootingTip.ts FALLBACK_TIPS）
+  static const List<ShootingTip> tips = [
+    ShootingTip(
+      text: '侧逆光人像：让模特侧向镜头，让自然光从侧面打在脸上，显瘦又自然。',
+      sub: '— 适合午后窗边或户外树下',
+    ),
+    ShootingTip(
+      text: '黄金时刻：日出后或日落前 1 小时，光线柔和暖黄，适合拍摄人像与风光。',
+      sub: '— 注意提前踩点',
+    ),
+    ShootingTip(
+      text: '三分构图：将主体放在画面九宫格交叉点上，让画面更平衡有张力。',
+      sub: '— 适合所有场景',
+    ),
+    ShootingTip(
+      text: '前景遮挡：用花草、树叶、玻璃等作为前景，增加画面层次感。',
+      sub: '— 适合静物与人像',
+    ),
+  ];
+
+  /// 统计数据
+  static const int statsFavorites = 12;
+  static const String statsLikes = '8.5k';
+  static const int statsWorks = 47;
+}

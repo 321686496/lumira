@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../core/router/route_names.dart';
 import '../core/router/route_observers.dart';
+import '../features/home/pages/home_page.dart';
+import '../features/splash/pages/splash_page.dart';
 
 /// 占位页面 widget（Task 2.x 将替换为实际页面）
 class _PlaceholderPage extends StatelessWidget {
@@ -37,12 +39,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.splash,
         name: 'splash',
-        builder: (context, state) => const _PlaceholderPage(name: 'splash'),
+        builder: (context, state) => const SplashPage(),
       ),
       GoRoute(
         path: RouteNames.home,
         name: 'home',
-        builder: (context, state) => const _PlaceholderPage(name: 'home'),
+        builder: (context, state) => const HomePage(),
       ),
 
       // === 拍摄流程 ===
