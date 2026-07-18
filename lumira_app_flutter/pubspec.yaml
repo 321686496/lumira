@@ -69,8 +69,12 @@ dev_dependencies:
 # mime / path_provider / uuid 锁定为 Dart 2.19 兼容版本：saver_gallery 3.0.6 的 ^1.0.5 / ^2.1.3 / ^4.4.0 需 Dart 3+；
 # 1.0.4 / 2.0.14 / 4.2.2 为同主版本下兼容 Dart 2.19 的最新版本，API 稳定，详见 Fix Report
 dependency_overrides:
-  path: ^1.8.3
-  meta: ^1.9.1
+  # Task 1.1 注释说明 flutter_test SDK 锁定 path 1.8.2 / meta 1.8.0（API 兼容）
+  # 但 ^1.8.3 / ^1.9.1 caret 约束会解析到 path 1.9.1 / meta 1.19.0（需 Dart 3+），
+  # 在 Dart 2.19.6 上导致 flutter_test 编译失败。
+  # Task 1.2 修正：改为精确版本钉定，与 SDK 锁定值一致。
+  path: 1.8.2
+  meta: 1.8.0
   js: ^0.6.7
   mime: '1.0.4'
   path_provider: '2.0.14'
