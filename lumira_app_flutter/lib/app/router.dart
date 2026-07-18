@@ -6,6 +6,7 @@ import '../core/router/route_names.dart';
 import '../core/router/route_observers.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/splash/pages/splash_page.dart';
+import '../features/templates/pages/templates_page.dart';
 
 /// 占位页面 widget（Task 2.x 将替换为实际页面）
 class _PlaceholderPage extends StatelessWidget {
@@ -93,7 +94,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.templates,
         name: 'templates',
-        builder: (context, state) => const _PlaceholderPage(name: 'templates'),
+        builder: (context, state) => const TemplatesPage(),
       ),
       GoRoute(
         path: RouteNames.templatesDetail,
