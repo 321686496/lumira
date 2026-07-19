@@ -26,8 +26,10 @@ import '../features/profile/pages/profile_theme_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_all_page.dart';
 import '../features/templates/pages/templates_detail_page.dart';
+import '../features/templates/pages/templates_drafts_page.dart';
 import '../features/templates/pages/templates_page.dart';
 import '../features/templates/pages/templates_recommend_page.dart';
+import '../features/templates/pages/templates_unlock_page.dart';
 
 /// 占位页面 widget（Task 2.x 将替换为实际页面）
 class _PlaceholderPage extends StatelessWidget {
@@ -133,7 +135,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'templatesUnlock',
         builder: (context, state) {
           final templateId = state.queryParams[RouteNames.paramTemplateId];
-          return _PlaceholderPage(name: 'templatesUnlock?templateId=$templateId');
+          return TemplatesUnlockPage(templateId: templateId);
         },
       ),
       GoRoute(
@@ -147,7 +149,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.templatesDrafts,
         name: 'templatesDrafts',
-        builder: (context, state) => const _PlaceholderPage(name: 'templatesDrafts'),
+        builder: (context, state) => const TemplatesDraftsPage(),
       ),
       GoRoute(
         path: RouteNames.templatesRecommend,
