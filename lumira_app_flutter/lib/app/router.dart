@@ -7,6 +7,10 @@ import '../core/router/route_observers.dart';
 import '../features/capture/pages/capture_page.dart';
 import '../features/challenge/pages/challenge_detail_page.dart';
 import '../features/challenge/pages/challenge_page.dart';
+import '../features/gallery/pages/gallery_detail_page.dart';
+import '../features/gallery/pages/gallery_diary_page.dart';
+import '../features/gallery/pages/gallery_monthly_digest_page.dart';
+import '../features/gallery/pages/gallery_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_page.dart';
@@ -166,25 +170,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.gallery,
         name: 'gallery',
-        builder: (context, state) => const _PlaceholderPage(name: 'gallery'),
+        builder: (context, state) => const GalleryPage(),
       ),
       GoRoute(
         path: RouteNames.galleryDetail,
         name: 'galleryDetail',
         builder: (context, state) {
           final photoId = state.queryParams[RouteNames.paramPhotoId];
-          return _PlaceholderPage(name: 'galleryDetail?photoId=$photoId');
+          return GalleryDetailPage(photoId: photoId);
         },
       ),
       GoRoute(
         path: RouteNames.galleryDiary,
         name: 'galleryDiary',
-        builder: (context, state) => const _PlaceholderPage(name: 'galleryDiary'),
+        builder: (context, state) => const GalleryDiaryPage(),
       ),
       GoRoute(
         path: RouteNames.galleryMonthlyDigest,
         name: 'galleryMonthlyDigest',
-        builder: (context, state) => const _PlaceholderPage(name: 'galleryMonthlyDigest'),
+        builder: (context, state) => const GalleryMonthlyDigestPage(),
       ),
 
       // === 个人中心 ===
