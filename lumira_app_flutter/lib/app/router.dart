@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/router/route_names.dart';
 import '../core/router/route_observers.dart';
+import '../features/capture/pages/capture_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_page.dart';
@@ -52,7 +53,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.capture,
         name: 'capture',
-        builder: (context, state) => const _PlaceholderPage(name: 'capture'),
+        builder: (context, state) {
+          final templateId = state.queryParams[RouteNames.paramTemplateId];
+          return CapturePage(templateId: templateId);
+        },
       ),
       GoRoute(
         path: RouteNames.capturePreview,

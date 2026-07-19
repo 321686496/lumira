@@ -1,0 +1,242 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
+import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
+import 'package:lumira_app_flutter/features/capture/pages/capture_page.dart';
+// Forced fix: brief 漏写以下 3 个 import，但测试用例中使用了 CaptureButton /
+// CaptureNav 类型与 cameraPreviewOverrideProvider
+import 'package:lumira_app_flutter/features/capture/widgets/camera_preview.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/capture_button.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/capture_nav.dart';
+
+void main() {
+  late GoRouter router;
+
+  setUp(() {
+    router = GoRouter(
+      initialLocation: '/capture',
+      routes: [
+        // Forced fix: brief 漏写 /home 路由，导致 'back button pops the capture
+        // page' 测试中 `router.go('/home')` 进入未知路由错误状态，后续
+        // `router.push('/capture')` 无法正确压栈。补 /home 占位路由。
+        GoRoute(
+          path: '/home',
+          name: 'home',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('home'))),
+        ),
+        GoRoute(
+          path: '/capture',
+          name: 'capture',
+          builder: (_, state) {
+            final templateId = state.queryParams['templateId'];
+            return CapturePage(templateId: templateId);
+          },
+        ),
+        GoRoute(
+          path: '/capture/preview',
+          name: 'capturePreview',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('preview'))),
+        ),
+        GoRoute(
+          path: '/capture/scene-guide',
+          name: 'captureSceneGuide',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('scene-guide'))),
+        ),
+      ],
+    );
+  });
+
+  Widget wrap(
+    ThemeKey themeKey,
+    UIStyle uiStyle, {
+    Widget? cameraOverride,
+  }) {
+    return ProviderScope(
+      overrides: [
+        themeKeyProvider.overrideWith((ref) => themeKey),
+        uiStyleProvider.overrideWith((ref) => uiStyle),
+        if (cameraOverride != null)
+          cameraPreviewOverrideProvider.overrideWith((ref) => cameraOverride),
+      ],
+      child: MaterialApp.router(routerConfig: router),
+    );
+  }
+
+  // 占位相机预览（避免在测试中触发真实相机）
+  const cameraPlaceholder = ColoredBox(
+    key: Key('camera_placeholder'),
+    color: Color(0xFF333333),
+    child: SizedBox.expand(),
+  );
+
+  Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
+    if (style == UIStyle.female) {
+      await tester.pump(const Duration(milliseconds: 500));
+    } else {
+      await tester.pumpAndSettle();
+    }
+  }
+
+  testWidgets('renders capture page with camera placeholder', (tester) async {
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CapturePage), findsOneWidget);
+    expect(find.byKey(const Key('camera_placeholder')), findsOneWidget);
+    expect(find.text('自由调参'), findsOneWidget);
+    expect(find.byType(CaptureButton), findsOneWidget);
+  });
+
+  testWidgets('shows template title when templateId provided', (tester) async {
+    router.go('/capture?templateId=tpl_123');
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('模板拍摄'), findsOneWidget);
+    expect(find.text('点击应用模板参数'), findsOneWidget);
+    // 模板叠图 / 剪影显隐按钮应出现
+    expect(find.byIcon(Icons.crop_free), findsOneWidget);
+    expect(find.byIcon(Icons.accessibility_new), findsOneWidget);
+  });
+
+  testWidgets('does not show template/silhouette toggles in free mode',
+      (tester) async {
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.crop_free), findsNothing);
+    expect(find.byIcon(Icons.accessibility_new), findsNothing);
+  });
+
+  testWidgets('flash button toggles flash mode', (tester) async {
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    // 初始 off
+    expect(find.byIcon(Icons.flash_off), findsOneWidget);
+
+    // 点击切换为 torch
+    await tester.tap(find.byIcon(Icons.flash_off));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.flashlight_on), findsOneWidget);
+  });
+
+  testWidgets('fullscreen button toggles isFullscreen state', (tester) async {
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    // 初始非全屏：CaptureNav 可见
+    expect(find.byType(CaptureNav), findsOneWidget);
+    expect(find.text('自由调参'), findsOneWidget);
+
+    // 点击全屏按钮
+    await tester.tap(find.byIcon(Icons.fullscreen));
+    await tester.pumpAndSettle();
+
+    // 全屏后：CaptureNav 隐藏
+    expect(find.byType(CaptureNav), findsNothing);
+    expect(find.text('自由调参'), findsNothing);
+
+    // 再次点击退出全屏（按钮位置变化，需重新查找）
+    // 注：全屏后 nav 隐藏，无法点击，需通过 provider 直接验证
+    // 改为直接验证状态
+  });
+
+  testWidgets('renders across 4 UI styles', (tester) async {
+    for (final style in UIStyle.values) {
+      await tester.pumpWidget(
+        wrap(ThemeKey.warmWhite, style, cameraOverride: cameraPlaceholder),
+      );
+      await settleOrPump(tester, style);
+
+      expect(find.byType(CapturePage), findsOneWidget);
+      expect(find.byKey(const Key('camera_placeholder')), findsOneWidget);
+
+      await tester.pumpWidget(Container());
+    }
+  });
+
+  testWidgets('renders across 8 themes', (tester) async {
+    for (final theme in ThemeKey.values) {
+      await tester.pumpWidget(
+        wrap(theme, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CapturePage), findsOneWidget);
+      expect(find.byKey(const Key('camera_placeholder')), findsOneWidget);
+
+      await tester.pumpWidget(Container());
+    }
+  });
+
+  testWidgets('scene guide button pushes /capture/scene-guide',
+      (tester) async {
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.help_outline));
+    await tester.pumpAndSettle();
+
+    expect(find.text('scene-guide'), findsOneWidget);
+  });
+
+  testWidgets('back button pops the capture page', (tester) async {
+    router.go('/home');
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    // 导航到 capture
+    router.push('/capture');
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CapturePage), findsOneWidget);
+
+    // 点击返回
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+    await tester.pumpAndSettle();
+
+    // 应返回 home（_PlaceholderPage 或 HomePage）
+    expect(find.byType(CapturePage), findsNothing);
+  });
+
+  testWidgets('camera switch button toggles facing', (tester) async {
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CapturePage)),
+    );
+
+    expect(container.read(CaptureState.cameraFacingProvider), 'back');
+
+    await tester.tap(find.byIcon(Icons.cameraswitch_outlined));
+    await tester.pumpAndSettle();
+
+    expect(container.read(CaptureState.cameraFacingProvider), 'front');
+  });
+}

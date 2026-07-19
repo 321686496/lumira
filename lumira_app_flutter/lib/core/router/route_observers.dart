@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../features/capture/data/capture_state.dart';
 import 'route_names.dart';
 
 /// 监听路由变化，用于：
@@ -9,9 +11,6 @@ import 'route_names.dart';
 class LumiraRouteObserver extends RouteObserver<PageRoute<dynamic>> {
   LumiraRouteObserver(this._ref);
 
-  // Task 2.3 将在 _clearCaptureState 中使用 _ref 读取/重置 capture 相关 provider；
-  // 当前为 stub，保留字段以避免后续破坏构造签名。
-  // ignore: unused_field
   final Ref _ref;
 
   @override
@@ -55,18 +54,30 @@ class LumiraRouteObserver extends RouteObserver<PageRoute<dynamic>> {
     return null;
   }
 
-  bool _isCapturePage(String? path) {
-    if (path == null) return false;
-    return path == RouteNames.capture ||
-        path == RouteNames.capturePreview ||
-        path == RouteNames.capturePreviewTemplate;
+  /// 拍摄页路径与名称集合
+  /// go_router 6.5.9 在 GoRoute 设置了 name: 时，settings.name 返回 NAME（如 'capture'）
+  /// 而非 PATH（如 '/capture'）。_isCapturePage 同时匹配两者。
+  /// 修复 Minor finding #1。
+  static const _capturePaths = <String>{
+    RouteNames.capture,           // '/capture'
+    RouteNames.capturePreview,    // '/capture/preview'
+    RouteNames.capturePreviewTemplate, // '/capture/preview-template'
+  };
+
+  static const _captureNames = <String>{
+    'capture',
+    'capturePreview',
+    'capturePreviewTemplate',
+  };
+
+  bool _isCapturePage(String? pathOrName) {
+    if (pathOrName == null) return false;
+    return _capturePaths.contains(pathOrName) || _captureNames.contains(pathOrName);
   }
 
   void _clearCaptureState() {
-    // 后续 Task 2.3 会注入 captureSessionProvider 等 provider 用于清理
-    // 当前 stub 仅打印日志，避免引用尚未创建的 provider
-    // ignore: avoid_print
-    print('[LumiraRouteObserver] Leaving capture page, clearing template state');
+    // Forced fix: CaptureState.resetAll 接收 ProviderContainer（见 capture_state.dart 注释）
+    CaptureState.resetAll(_ref.container);
   }
 }
 
