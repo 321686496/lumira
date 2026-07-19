@@ -27,6 +27,7 @@ import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_all_page.dart';
 import '../features/templates/pages/templates_detail_page.dart';
 import '../features/templates/pages/templates_drafts_page.dart';
+import '../features/templates/pages/templates_editor_page.dart';
 import '../features/templates/pages/templates_page.dart';
 import '../features/templates/pages/templates_recommend_page.dart';
 import '../features/templates/pages/templates_unlock_page.dart';
@@ -143,7 +144,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'templatesEditor',
         builder: (context, state) {
           final templateId = state.queryParams[RouteNames.paramTemplateId];
-          return _PlaceholderPage(name: 'templatesEditor?templateId=$templateId');
+          final draftId = state.queryParams['draftId'];
+          return TemplatesEditorPage(templateId: templateId, draftId: draftId);
         },
       ),
       GoRoute(
