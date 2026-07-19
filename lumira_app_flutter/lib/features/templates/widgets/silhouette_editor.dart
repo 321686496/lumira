@@ -178,6 +178,7 @@ class _SilhouetteEditorDialogState extends State<SilhouetteEditorDialog> {
           child: CustomPaint(
             painter: _DrawPainter(
               paths: _paths,
+              // 硬编码颜色，与 uni-app 一致（canvas-bg: #2A2622）
               canvasBgColor: const Color(0xFF2A2622),
             ),
             child: const SizedBox.expand(),

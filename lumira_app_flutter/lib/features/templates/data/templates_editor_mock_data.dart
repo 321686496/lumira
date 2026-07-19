@@ -430,3 +430,14 @@ String formatEvSlider(double v) {
 String formatSigned(int v) {
   return v > 0 ? '+$v' : '$v';
 }
+
+/// 解析 aspectRatio 字符串 '3:4' → 3/4
+/// 来源：editor.vue 的 _compositionPreviewPadding 中的解析逻辑
+/// 用于 Step 2 构图预览框和 Step 3 姿势预览框的 AspectRatio 计算
+double parseAspectRatio(String ratio) {
+  final parts = (ratio.isNotEmpty ? ratio : '4:3').split(':');
+  final w = int.tryParse(parts[0]) ?? 4;
+  final h = parts.length > 1 ? (int.tryParse(parts[1]) ?? 3) : 3;
+  if (w <= 0 || h <= 0) return 4 / 3;
+  return w / h;
+}

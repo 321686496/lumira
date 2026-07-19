@@ -15,15 +15,15 @@ import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 /// Task 2.8C — TemplatesEditorPage 测试
 ///
 /// 覆盖 brief 第 5.2 节 ≥25 项断言 + cross-theme/cross-style smoke test。
-/// 10 个分类：
+/// 10 个分类（35 tests）：
 /// 1. 路由参数加载（4）
-/// 2. Step 1 模板信息（4）
-/// 3. Step 2 构图叠图（3）
+/// 2. Step 1 模板信息（5）
+/// 3. Step 2 构图叠图（4）
 /// 4. Step 3 姿势剪影（5）
-/// 5. Step 4 相机参数（3）
-/// 6. Step 5 场景指南（2）
-/// 7. Step 6 后期参数（2）
-/// 8. Footer 操作（4）
+/// 5. Step 4 相机参数（4）
+/// 6. Step 5 场景指南（3）
+/// 7. Step 6 后期参数（3）
+/// 8. Footer 操作（5）
 /// 9. 自动保存（1）
 /// 10. Cross-theme/cross-style smoke（1，12 组合）
 void main() {
@@ -49,6 +49,7 @@ void main() {
     required ThemeKey themeKey,
     required UIStyle uiStyle,
     String initialLocation = '/templates/editor',
+    List<String>? capturedPreviewUrls,
   }) {
     final goRouter = GoRouter(
       initialLocation: initialLocation,
@@ -78,7 +79,13 @@ void main() {
         GoRoute(
           path: RouteNames.capturePreviewTemplate,
           name: 'capturePreviewTemplate',
-          builder: (_, __) => const _StubPage(text: 'PREVIEW_TEMPLATE_PAGE'),
+          builder: (context, state) {
+            // 捕获 preview 路由 URL（含 draftId 查询参数），用于 Finding #3 验证 _currentDraftId
+            if (capturedPreviewUrls != null) {
+              capturedPreviewUrls.add(state.location);
+            }
+            return const _StubPage(text: 'PREVIEW_TEMPLATE_PAGE');
+          },
         ),
         GoRoute(
           path: '/home',
@@ -177,7 +184,7 @@ void main() {
   });
 
   // ============================================================
-  // 分类 2: Step 1 模板信息（4 tests）
+  // 分类 2: Step 1 模板信息（5 tests）
   // ============================================================
   group('TemplatesEditorPage — Step 1 模板信息', () {
     testWidgets('renders 6 step cards with numbered badges', (tester) async {
@@ -208,10 +215,20 @@ void main() {
 
       // 名称字段：占位符为 '输入模板名称'
       expect(find.text('输入模板名称'), findsOneWidget);
+      // 通过 hintText 精确定位 name 字段（避免 .first 的非确定性）
+      // 注：name 字段使用 TextFormField（_FieldInput 无 controller 分支），
+      // TextFormField 内部构建 TextField（其 decoration.hintText 与传入一致），故用 TextField 匹配
+      final nameFieldFinder = find.byWidgetPredicate(
+        (w) =>
+            w is TextField &&
+            (w.decoration?.hintText ?? '') == '输入模板名称',
+      );
+      expect(nameFieldFinder, findsOneWidget);
       // 输入文本
-      await tester.enterText(
-          find.widgetWithText(TextField, '').first, '我的新模板');
+      await tester.enterText(nameFieldFinder, '我的新模板');
       await settleOrPump(tester, UIStyle.neumorphic);
+      // 验证：输入的文本已显示
+      expect(find.text('我的新模板'), findsOneWidget);
     });
 
     testWidgets('Step 1: renders 4 field labels (名称/分类/标签/简介)',
@@ -237,10 +254,44 @@ void main() {
       // DropdownButton 显示当前选中项 '人像'
       expect(find.text('人像'), findsWidgets);
     });
+
+    // Finding #4 — Step 1 行为测试：切换分类 → dropdown label 更新
+    testWidgets('Step 1: switching category to 风光 updates dropdown label',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 默认 category='portrait'，dropdown 显示 '人像'
+      expect(find.text('人像'), findsWidgets);
+
+      // 通过 ancestor 模式定位 category DropdownButton（包裹 '人像' 文字）
+      final categoryDropdown = find.ancestor(
+        of: find.text('人像').first,
+        matching: find.byType(DropdownButton<String>),
+      );
+      expect(categoryDropdown, findsOneWidget);
+
+      // 点击 dropdown 打开菜单
+      await tester.tap(categoryDropdown);
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 菜单弹出后，点击 '风光' 菜单项
+      await tester.tap(find.text('风光').last);
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 验证：dropdown 现在显示 '风光'（value 已更新为 'landscape'）
+      final updatedDropdown = find.ancestor(
+        of: find.text('风光'),
+        matching: find.byType(DropdownButton<String>),
+      );
+      expect(updatedDropdown, findsOneWidget);
+    });
   });
 
   // ============================================================
-  // 分类 3: Step 2 构图叠图（3 tests）
+  // 分类 3: Step 2 构图叠图（4 tests）
   // ============================================================
   group('TemplatesEditorPage — Step 2 构图叠图', () {
     testWidgets('renders overlay type dropdown with default 三分法',
@@ -275,6 +326,39 @@ void main() {
       expect(find.text('宽高比'), findsOneWidget);
       // '3:4' 出现 2 次：Step 2 aspectRatio + Step 6 cropRatio（默认值均为 '3:4'）
       expect(find.text('3:4'), findsNWidgets(2));
+    });
+
+    // Finding #4 — Step 2 行为测试：拖动透明度滑块 → valueText 更新
+    testWidgets('Step 2: dragging 透明度 slider updates value text',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 默认 opacity=0.5，valueText '0.5'
+      expect(find.text('透明度'), findsOneWidget);
+      expect(find.text('0.5'), findsOneWidget);
+
+      // 通过 ancestor + descendant 模式定位 透明度 slider
+      final opacityRow = find.ancestor(
+        of: find.text('透明度'),
+        matching: find.byType(Row),
+      );
+      final opacitySlider = find.descendant(
+        of: opacityRow,
+        matching: find.byType(Slider),
+      );
+      expect(opacitySlider, findsOneWidget);
+
+      // 拖动 slider 到最右端（value → 1.0）
+      await tester.drag(opacitySlider, const Offset(500, 0));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 验证：valueText 从 '0.5' 变为 '1.0'
+      expect(find.text('1.0'), findsOneWidget);
+      // '0.5' 应已不再显示（位置 X/Y 的 '0.50' 是 toStringAsFixed(2)，不冲突）
+      expect(find.text('0.5'), findsNothing);
     });
   });
 
@@ -365,7 +449,7 @@ void main() {
   });
 
   // ============================================================
-  // 分类 5: Step 4 相机参数（3 tests）
+  // 分类 5: Step 4 相机参数（4 tests）
   // ============================================================
   group('TemplatesEditorPage — Step 4 相机参数', () {
     testWidgets('renders EV slider with default 0.0', (tester) async {
@@ -402,10 +486,47 @@ void main() {
       // 默认 whiteBalance='daylight'，显示 '日光'
       expect(find.text('日光'), findsWidgets);
     });
+
+    // Finding #4 — Step 4 行为测试：点击 '手动' ISO 模式 pill → pill 激活
+    testWidgets('Step 4: tapping 手动 ISO mode pill activates it',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      final tokens = ThemeTokens.of(ThemeKey.warmWhite);
+
+      // '手动' 出现在两处：ISO 模式 _PillGroup（Wrap）+ 对焦 DropdownButton 内
+      // IndexedStack 中的 DropdownMenuItem（focusModeOptions 也有 '手动'）。
+      // 仅 _PillGroup 使用 Wrap 组件，故用 find.descendant(of: Wrap) 精确定位
+      // ISO 模式的 '手动' pill（silhouetteSourceOptions 无 '手动' 标签）。
+      final isoManualText = find.descendant(
+        of: find.byType(Wrap),
+        matching: find.text('手动'),
+      );
+
+      // 默认 isoMode='auto'，'手动' pill 非激活：文字颜色 = textSecondary
+      final manualTextBefore = tester.widget<Text>(isoManualText);
+      expect(manualTextBefore.style?.color, equals(tokens.textSecondary));
+
+      // '手动' pill 在页面深处（y≈3678），视口外，需先滚动到可见区域再点击，
+      // 否则 tap 中心点超出 root bounds 会跳过 hit test 导致点击无效。
+      await tester.ensureVisible(isoManualText);
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 点击 '手动' pill（通过 Wrap 后裔精确定位，避免误触 DropdownButton 内项）
+      await tester.tap(isoManualText);
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 验证：'手动' pill 已激活：文字颜色 = textInverse（与 tokens.brand 形成对比）
+      final manualTextAfter = tester.widget<Text>(isoManualText);
+      expect(manualTextAfter.style?.color, equals(tokens.textInverse));
+    });
   });
 
   // ============================================================
-  // 分类 6: Step 5 场景指南（2 tests）
+  // 分类 6: Step 5 场景指南（3 tests）
   // ============================================================
   group('TemplatesEditorPage — Step 5 场景指南', () {
     testWidgets('renders 6 field labels (光线方向/拍摄距离/背景/最佳时间/道具/贴士)',
@@ -440,10 +561,38 @@ void main() {
       // props 已解析：'咖啡杯, 书'（逗号分隔）
       expect(find.text('咖啡杯, 书'), findsOneWidget);
     });
+
+    // Finding #4 — Step 5 行为测试：输入 道具 字段 → 文本显示
+    testWidgets('Step 5: entering text in 道具 field shows the text',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 道具 字段：占位符 '道具1, 道具2'
+      expect(find.text('道具'), findsOneWidget);
+      expect(find.text('道具1, 道具2'), findsOneWidget);
+
+      // 通过 hintText 定位 道具 输入字段（_FieldInput 用 controller → 返回 TextField）
+      final propsFieldFinder = find.byWidgetPredicate(
+        (w) =>
+            w is TextField &&
+            (w.decoration?.hintText ?? '') == '道具1, 道具2',
+      );
+      expect(propsFieldFinder, findsOneWidget);
+
+      // 输入文本
+      await tester.enterText(propsFieldFinder, '咖啡杯, 书, 花');
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 验证：输入的文本已显示
+      expect(find.text('咖啡杯, 书, 花'), findsOneWidget);
+    });
   });
 
   // ============================================================
-  // 分类 7: Step 6 后期参数（2 tests）
+  // 分类 7: Step 6 后期参数（3 tests）
   // ============================================================
   group('TemplatesEditorPage — Step 6 后期参数', () {
     testWidgets('renders LUT dropdown with default 无', (tester) async {
@@ -475,10 +624,48 @@ void main() {
       expect(find.text('暗角'), findsOneWidget);
       expect(find.text('颗粒'), findsOneWidget);
     });
+
+    // Finding #4 — Step 6 行为测试：拖动亮度滑块 → valueText 更新
+    testWidgets('Step 6: dragging 亮度 slider updates value text',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 默认 brightness=0，valueText '0'（多个 slider 默认 '0'，用 findsWidgets）
+      expect(find.text('亮度'), findsOneWidget);
+      expect(find.text('0'), findsWidgets);
+      // '+100' 不应出现
+      expect(find.text('+100'), findsNothing);
+
+      // 通过 ancestor + descendant 模式定位 亮度 slider
+      final brightnessRow = find.ancestor(
+        of: find.text('亮度'),
+        matching: find.byType(Row),
+      );
+      final brightnessSlider = find.descendant(
+        of: brightnessRow,
+        matching: find.byType(Slider),
+      );
+      expect(brightnessSlider, findsOneWidget);
+
+      // 亮度 slider 在页面深处（y≈5124.5），远在 2400 视口外，
+      // tester.drag 中心点超出 root bounds 会跳过 hit test，需先滚动到可见区域。
+      await tester.ensureVisible(brightnessSlider);
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 拖动 slider 到最右端（value → 100）
+      await tester.drag(brightnessSlider, const Offset(500, 0));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 验证：valueText 从 '0' 变为 '+100'
+      expect(find.text('+100'), findsOneWidget);
+    });
   });
 
   // ============================================================
-  // 分类 8: Footer 操作（4 tests）
+  // 分类 8: Footer 操作（5 tests）
   // ============================================================
   group('TemplatesEditorPage — Footer 操作', () {
     testWidgets('renders 3 footer buttons (草稿/预览/保存) in new mode',
@@ -510,6 +697,41 @@ void main() {
       expect(find.text('请输入模板名称'), findsOneWidget);
     });
 
+    // Finding #1 — 名称非空时点保存 → 显示 '保存成功' SnackBar + 800ms 后 pop
+    testWidgets(
+        'tapping 保存 with valid name shows 保存成功 SnackBar and pops after 800ms',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 通过 hintText 定位 name 字段
+      // 注：name 字段使用 TextFormField，内部 TextField 的 decoration.hintText 一致
+      final nameFieldFinder = find.byWidgetPredicate(
+        (w) =>
+            w is TextField &&
+            (w.decoration?.hintText ?? '') == '输入模板名称',
+      );
+      // 输入非空名称
+      await tester.enterText(nameFieldFinder, '我的新模板');
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 点击 保存 按钮
+      await tester.tap(find.text('保存'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 显示 '保存成功' SnackBar
+      expect(find.text('保存成功'), findsOneWidget);
+
+      // 推进时间 800ms（_onSave 内 Future.delayed(800ms) 触发 pop）
+      await tester.pump(const Duration(milliseconds: 800));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 验证：编辑器页已 pop（LumiraNav 标题 '新建模板' 不再显示）
+      expect(find.widgetWithText(LumiraNav, '新建模板'), findsNothing);
+    });
+
     testWidgets('tapping 草稿 shows 草稿已保存 SnackBar', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
@@ -539,24 +761,51 @@ void main() {
   // 分类 9: 自动保存（1 test）
   // ============================================================
   group('TemplatesEditorPage — 自动保存', () {
+    // Finding #3 — 加强 test 28：通过 Option B（preview 导航 URL 捕获）验证 _currentDraftId 赋值
     testWidgets(
-        'form change schedules auto-save timer (1000ms debounce, no crash)',
+        'auto-save assigns _currentDraftId (verified via preview URL draftId param)',
         (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      final capturedUrls = <String>[];
+      await tester.pumpWidget(wrap(
+        themeKey: ThemeKey.warmWhite,
+        uiStyle: UIStyle.neumorphic,
+        capturedPreviewUrls: capturedUrls,
+      ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 切换到 '导入图片' 源（触发 _onChange → _scheduleAutoSave）
+      // 触发表单变更（切换 silhouette source → _onChange → _scheduleAutoSave）
       await tester.tap(find.text('导入图片'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 推进时间至 1000ms 之后（auto-save timer 触发）
+      // 推进时间至 1000ms 之后（auto-save timer 触发，应设置 _currentDraftId）
       await tester.pump(const Duration(milliseconds: 1100));
 
-      // 验证：无崩溃 + 仍在编辑器页（无 SnackBar 因为 auto-save 静默执行）
+      // 验证：auto-save 静默执行（无崩溃，仍在编辑器页）
       expect(find.widgetWithText(LumiraNav, '新建模板'), findsOneWidget);
       expect(find.text('选择图片'), findsOneWidget);
+
+      // 点击 预览 → 应导航至 /capture/preview-template?draftId=draft-editor-...
+      await tester.tap(find.text('预览'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 验证：preview 路由被触发（stub 渲染）
+      expect(find.text('PREVIEW_TEMPLATE_PAGE'), findsOneWidget);
+
+      // 验证 Option B：捕获的 URL 包含 draftId= 且有非空值（_currentDraftId 已被 auto-save 赋值）
+      expect(capturedUrls, isNotEmpty,
+          reason: 'preview 路由应被触发');
+      final url = capturedUrls.last;
+      expect(url, contains('draftId='),
+          reason: 'preview URL 必须包含 draftId 参数');
+      final draftIdMatch = RegExp(r'draftId=([^&]+)').firstMatch(url);
+      expect(draftIdMatch, isNotNull,
+          reason: 'draftId 参数必须存在');
+      final draftIdValue = draftIdMatch!.group(1)!;
+      expect(draftIdValue, isNotEmpty,
+          reason: 'draftId 不能为空字符串（_currentDraftId 应已被 auto-save 赋值）');
+      expect(draftIdValue, startsWith('draft-editor-'),
+          reason: 'draftId 应为 auto-save 生成的格式');
     });
   });
 

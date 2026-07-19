@@ -957,15 +957,6 @@ class _Step2Composition extends StatelessWidget {
   final EditorForm form;
   final void Function(void Function() mutator) onChange;
 
-  /// 解析 aspectRatio 字符串 '3:4' → 3/4
-  double _parseAspectRatio(String ratio) {
-    final parts = (ratio.isNotEmpty ? ratio : '4:3').split(':');
-    final w = int.tryParse(parts[0]) ?? 4;
-    final h = parts.length > 1 ? (int.tryParse(parts[1]) ?? 3) : 3;
-    if (w <= 0 || h <= 0) return 4 / 3;
-    return w / h;
-  }
-
   @override
   Widget build(BuildContext context) {
     return _StepCard(
@@ -1017,7 +1008,7 @@ class _Step2Composition extends StatelessWidget {
           const SizedBox(height: 14),
           _PreviewBox(
             tokens: tokens,
-            aspectRatio: _parseAspectRatio(form.composition.aspectRatio),
+            aspectRatio: parseAspectRatio(form.composition.aspectRatio),
             child: CompositionOverlay(
               overlayType: form.composition.overlayType,
               opacity: form.composition.opacity,
@@ -1096,14 +1087,6 @@ class _Step3Pose extends StatelessWidget {
   final void Function(DragStartDetails) onPoseDragStart;
   final void Function(DragUpdateDetails, BoxConstraints) onPoseDragUpdate;
   final void Function(DragEndDetails) onPoseDragEnd;
-
-  double _parseAspectRatio(String ratio) {
-    final parts = (ratio.isNotEmpty ? ratio : '4:3').split(':');
-    final w = int.tryParse(parts[0]) ?? 4;
-    final h = parts.length > 1 ? (int.tryParse(parts[1]) ?? 3) : 3;
-    if (w <= 0 || h <= 0) return 4 / 3;
-    return w / h;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1215,7 +1198,7 @@ class _Step3Pose extends StatelessWidget {
           const SizedBox(height: 14),
           // 预览框（可拖动）
           AspectRatio(
-            aspectRatio: _parseAspectRatio(form.composition.aspectRatio),
+            aspectRatio: parseAspectRatio(form.composition.aspectRatio),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: LayoutBuilder(
