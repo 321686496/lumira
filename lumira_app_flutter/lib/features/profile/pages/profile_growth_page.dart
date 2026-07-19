@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -162,7 +163,7 @@ class _LevelCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${_formatNum(user.currentXp)} XP',
+                  '${formatThousands(user.currentXp)} XP',
                   style: TextStyle(
                     fontFamily: 'Courier New',
                     fontSize: 12,
@@ -174,7 +175,7 @@ class _LevelCard extends StatelessWidget {
               Expanded(
                 child: Center(
                   child: Text(
-                    '还差 ${_formatNum(user.xpRemaining)} XP 升级',
+                    '还差 ${formatThousands(user.xpRemaining)} XP 升级',
                     style: TextStyle(
                       fontFamily: 'Courier New',
                       fontSize: 11,
@@ -187,7 +188,7 @@ class _LevelCard extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  '${_formatNum(user.maxXp)} XP',
+                  '${formatThousands(user.maxXp)} XP',
                   textAlign: TextAlign.right,
                   style: TextStyle(
                     fontFamily: 'Courier New',
@@ -202,16 +203,6 @@ class _LevelCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatNum(int n) {
-    final s = n.toString();
-    final buf = <String>[];
-    for (var i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.add(',');
-      buf.add(s[s.length - i - 1]);
-    }
-    return buf.reversed.join();
   }
 }
 

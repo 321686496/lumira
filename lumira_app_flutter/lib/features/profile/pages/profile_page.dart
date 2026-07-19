@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
@@ -232,7 +233,7 @@ class _HeroCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${_formatNum(user.currentXp)} / ${_formatNum(user.maxXp)} XP',
+                      '${formatThousands(user.currentXp)} / ${formatThousands(user.maxXp)} XP',
                       style: const TextStyle(
                         fontSize: 12,
                         fontFamily: 'Courier New',
@@ -270,7 +271,7 @@ class _HeroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '还差 ${_formatNum(user.xpRemaining)} XP 升级至${ProfileMockData.nextLevelName}',
+                  '还差 ${formatThousands(user.xpRemaining)} XP 升级至${ProfileMockData.nextLevelName}',
                   style: const TextStyle(
                     fontSize: 11, // 22rpx → 11dp
                     color: Color(0xFFB89860),
@@ -283,17 +284,6 @@ class _HeroCard extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  String _formatNum(int n) {
-    // 1,280 / 2,000 格式
-    final s = n.toString();
-    final buf = <String>[];
-    for (var i = 0; i < s.length; i++) {
-      if (i > 0 && (s.length - i) % 3 == 0) buf.add(',');
-      buf.add(s[s.length - i - 1]);
-    }
-    return buf.reversed.join();
   }
 }
 

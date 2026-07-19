@@ -128,6 +128,8 @@ void main() {
           cellCount++;
         }
       }
+      expect(ProfileMockData.heatmap.length, greaterThanOrEqualTo(100),
+          reason: '热力图至少应有 100 格数据');
       expect(cellCount, expected);
     });
 
