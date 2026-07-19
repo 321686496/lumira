@@ -144,10 +144,13 @@ void main() {
       expect(formatDraftTime(ts, now: now), '3天前');
     });
 
-    testWidgets('formats 15 days ago as "15天前"', (tester) async {
+    testWidgets('formats 15 days ago as "M月D日" (date format)', (tester) async {
+      // 7-day threshold (matching uni-app drafts.vue): 15 days ago falls into 'M月D日' branch
       final now = DateTime(2026, 7, 19, 12, 0, 0).millisecondsSinceEpoch;
       final ts = now - 15 * 24 * 60 * 60 * 1000;
-      expect(formatDraftTime(ts, now: now), '15天前');
+      final d = DateTime.fromMillisecondsSinceEpoch(ts);
+      final expected = '${d.month}月${d.day}日';
+      expect(formatDraftTime(ts, now: now), expected);
     });
 
     testWidgets('tapping delete button shows confirmation dialog',

@@ -90,12 +90,11 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
       },
     );
     if (code != null && code.isNotEmpty) {
+      if (!mounted) return;
       setState(() => _unlocked = true);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('解锁成功')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('解锁成功')),
+      );
     }
   }
 

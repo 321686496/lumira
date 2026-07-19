@@ -75,11 +75,8 @@ class DraftsMockData {
 
 /// 格式化时间为相对时间
 ///
-/// 来源：drafts.vue formatTime
-/// Forced fix: 将 'N天前' 阈值从 7 天扩展到 30 天（uni-app 原值为 7 天）。
-/// 原因：brief 第 2.2 节明确要求 15 天前的草稿格式化为 '15天前'，与 mock 数据 draft-3 (15 天前) 一致。
-/// uni-app 原逻辑对 15 天前返回 '7月4日'，与 brief 测试期望冲突。
-/// 影响：超过 30 天的草稿才会回落到 'M月D日' 格式，更符合用户感知。
+/// 来源：drafts.vue formatTime（与 uni-app 原始实现逐字一致）
+/// 阈值说明：'N天前' 阈值为 7 天，超过 7 天的草稿回落到 'M月D日' 格式。
 String formatDraftTime(int timestamp, {int? now}) {
   final nowMs = now ?? DateTime.now().millisecondsSinceEpoch;
   final diff = nowMs - timestamp;
@@ -90,7 +87,7 @@ String formatDraftTime(int timestamp, {int? now}) {
   if (diff < hour) return '${diff ~/ minute}分钟前';
   if (diff < day) return '${diff ~/ hour}小时前';
   if (diff < 2 * day) return '昨天';
-  if (diff < 30 * day) return '${diff ~/ day}天前';
+  if (diff < 7 * day) return '${diff ~/ day}天前';
   final d = DateTime.fromMillisecondsSinceEpoch(timestamp);
   return '${d.month}月${d.day}日';
 }
