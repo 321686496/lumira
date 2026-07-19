@@ -17,10 +17,14 @@ class SceneRecoCard extends ConsumerWidget {
     super.key,
     required this.scene,
     required this.onTap,
+    this.showPhotoCount = true,
+    this.footer,
   });
 
   final SceneReco scene;
   final VoidCallback onTap;
+  final bool showPhotoCount;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -116,28 +120,35 @@ class SceneRecoCard extends ConsumerWidget {
                         height: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 6), // 12rpx → 6dp
-                    // 照片数
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.photo_library_outlined,
-                          size: 12, // 24rpx → 12dp
-                          color: Color(0xFFC9A876), // scene-stat-icon 色
-                        ),
-                        const SizedBox(width: 4), // 8rpx → 4dp
-                        Text(
-                          '${scene.photoCount}',
-                          style: const TextStyle(
-                            fontSize: 11, // 22rpx → 11dp
-                            color: Color(0xFF6B635A),
-                            fontWeight: FontWeight.w500,
-                            height: 1.2,
+                    // 照片数行：条件渲染（home 页默认 showPhotoCount=true 行为不变）
+                    if (showPhotoCount) ...[
+                      const SizedBox(height: 6), // 12rpx → 6dp
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.photo_library_outlined,
+                            size: 12, // 24rpx → 12dp
+                            color: Color(0xFFC9A876), // scene-stat-icon 色
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 4), // 8rpx → 4dp
+                          Text(
+                            '${scene.photoCount}',
+                            style: const TextStyle(
+                              fontSize: 11, // 22rpx → 11dp
+                              color: Color(0xFF6B635A),
+                              fontWeight: FontWeight.w500,
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    // footer widget：条件渲染（home 页默认 footer=null 不渲染）
+                    if (footer != null) ...[
+                      const SizedBox(height: 6),
+                      footer!,
+                    ],
                   ],
                 ),
               ),

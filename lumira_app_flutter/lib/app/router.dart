@@ -12,6 +12,7 @@ import '../features/gallery/pages/gallery_diary_page.dart';
 import '../features/gallery/pages/gallery_monthly_digest_page.dart';
 import '../features/gallery/pages/gallery_page.dart';
 import '../features/home/pages/home_page.dart';
+import '../features/inspiration/pages/inspiration_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_page.dart';
 
@@ -165,7 +166,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.inspiration,
         name: 'inspiration',
-        builder: (context, state) => const _PlaceholderPage(name: 'inspiration'),
+        builder: (context, state) => const InspirationPage(),
       ),
       GoRoute(
         path: RouteNames.gallery,
