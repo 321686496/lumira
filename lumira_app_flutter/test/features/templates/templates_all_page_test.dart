@@ -149,6 +149,23 @@ void main() {
       expect(find.text('情绪'), findsOneWidget);
       expect(find.text('胶片'), findsOneWidget);
       expect(find.text('欧美'), findsOneWidget);
+
+      // Task 2.8A Fix #1: 验证切换 type 时下层 method 被清空
+      // 选 'japanese' style → METHOD_MAP['japanese'] = [自拍, 他拍, 俯拍]
+      await tester.tap(find.text('日系'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('自拍'), findsOneWidget);
+
+      // 选 '自拍' method（选中后 method pill 仍渲染）
+      await tester.tap(find.text('自拍'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('自拍'), findsOneWidget);
+
+      // 切换 type 到 '风光' → _onLayerSelect(0, 'landscape') 清空 style + method
+      // STYLE_MAP['landscape'] = [清新, 大气]，无 method 层；'自拍' 应不再渲染
+      await tester.tap(find.text('风光').first);
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('自拍'), findsNothing);
     });
 
     testWidgets('tapping style pill shows METHOD_MAP options',
@@ -244,7 +261,7 @@ void main() {
       expect(find.text('静物暖光'), findsOneWidget);
     });
 
-    testWidgets('tapping template card pushes /templates/detail with templateId',
+    testWidgets('tapping template card navigates to /templates/detail page',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));

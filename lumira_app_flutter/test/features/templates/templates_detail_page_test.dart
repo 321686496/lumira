@@ -254,7 +254,7 @@ void main() {
     });
 
     testWidgets(
-        'tapping 套用此模板拍摄 button pushes /capture with templateId',
+        'tapping 套用此模板拍摄 button navigates to /capture page',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
