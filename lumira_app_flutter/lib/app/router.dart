@@ -13,8 +13,13 @@ import '../features/gallery/pages/gallery_monthly_digest_page.dart';
 import '../features/gallery/pages/gallery_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/inspiration/pages/inspiration_page.dart';
+import '../features/profile/pages/profile_academy_detail_page.dart';
+import '../features/profile/pages/profile_academy_page.dart';
+import '../features/profile/pages/profile_collection_detail_page.dart';
+import '../features/profile/pages/profile_collections_page.dart';
 import '../features/profile/pages/profile_growth_page.dart';
 import '../features/profile/pages/profile_invite_page.dart';
+import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
@@ -226,33 +231,33 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.profileAcademy,
         name: 'profileAcademy',
-        builder: (context, state) => const _PlaceholderPage(name: 'profileAcademy'),
+        builder: (context, state) => const ProfileAcademyPage(),
       ),
       GoRoute(
         path: RouteNames.profileAcademyDetail,
         name: 'profileAcademyDetail',
         builder: (context, state) {
           final academyId = state.queryParams[RouteNames.paramAcademyId];
-          return _PlaceholderPage(name: 'profileAcademyDetail?academyId=$academyId');
+          return ProfileAcademyDetailPage(academyId: academyId);
         },
       ),
       GoRoute(
         path: RouteNames.profileCollections,
         name: 'profileCollections',
-        builder: (context, state) => const _PlaceholderPage(name: 'profileCollections'),
+        builder: (context, state) => const ProfileCollectionsPage(),
       ),
       GoRoute(
         path: RouteNames.profileCollectionDetail,
         name: 'profileCollectionDetail',
         builder: (context, state) {
           final collectionId = state.queryParams[RouteNames.paramCollectionId];
-          return _PlaceholderPage(name: 'profileCollectionDetail?collectionId=$collectionId');
+          return ProfileCollectionDetailPage(collectionId: collectionId);
         },
       ),
       GoRoute(
         path: RouteNames.profileMyTemplates,
         name: 'profileMyTemplates',
-        builder: (context, state) => const _PlaceholderPage(name: 'profileMyTemplates'),
+        builder: (context, state) => const ProfileMyTemplatesPage(),
       ),
 
       // === 场景 ===
