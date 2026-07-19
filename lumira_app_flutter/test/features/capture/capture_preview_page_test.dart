@@ -184,15 +184,30 @@ void main() {
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 初始：开心 active（mock 默认）
+      // 初始：开心 active（mock 默认 _moods[0].active = true）
       // 点击 甜酷 切换 active
       await tester.tap(find.text('甜酷'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 验证：通过检查 pill 渲染状态难以直接断言 active 颜色
-      // 改为验证点击不报错 + pill 仍存在
-      expect(find.text('开心'), findsOneWidget);
-      expect(find.text('甜酷'), findsOneWidget);
+      // 验证 active 状态切换：通过 _Pill 的 BoxDecoration.gradient 判定
+      // active → LinearGradient（非 null）；inactive → null
+      BoxDecoration pillDecorationOf(String name) {
+        final container = tester.widget<Container>(
+          find.ancestor(
+                  of: find.text(name),
+                  matching: find.byType(Container))
+              .first,
+        );
+        return container.decoration as BoxDecoration;
+      }
+
+      final sweetDecoration = pillDecorationOf('甜酷');
+      final happyDecoration = pillDecorationOf('开心');
+
+      expect(sweetDecoration.gradient, isA<LinearGradient>(),
+          reason: '点击 甜酷 后：甜酷 pill 应为 active（gradient 应为 LinearGradient）');
+      expect(happyDecoration.gradient, isNull,
+          reason: '点击 甜酷 后：开心 pill 应为 inactive（gradient 应为 null）');
     });
 
     testWidgets('tapping scene pill updates selectedSceneId', (tester) async {
@@ -201,12 +216,30 @@ void main() {
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
+      // 初始：不标记 active（_selectedSceneId == null）
       // 点击 咖啡馆 场景
       await tester.tap(find.text('咖啡馆'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 验证点击不报错 + pill 仍存在
-      expect(find.text('咖啡馆'), findsOneWidget);
+      // 验证 active 状态切换：通过 _Pill 的 BoxDecoration.gradient 判定
+      // active → LinearGradient（非 null）；inactive → null
+      BoxDecoration pillDecorationOf(String name) {
+        final container = tester.widget<Container>(
+          find.ancestor(
+                  of: find.text(name),
+                  matching: find.byType(Container))
+              .first,
+        );
+        return container.decoration as BoxDecoration;
+      }
+
+      final cafeDecoration = pillDecorationOf('咖啡馆');
+      final unmarkedDecoration = pillDecorationOf('不标记');
+
+      expect(cafeDecoration.gradient, isA<LinearGradient>(),
+          reason: '点击 咖啡馆 后：咖啡馆 pill 应为 active（gradient 应为 LinearGradient）');
+      expect(unmarkedDecoration.gradient, isNull,
+          reason: '点击 咖啡馆 后：不标记 pill 应为 inactive（gradient 应为 null）');
     });
 
     testWidgets('tapping 跳过 shows SnackBar 已跳过', (tester) async {
