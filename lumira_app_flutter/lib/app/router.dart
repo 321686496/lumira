@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../core/router/route_names.dart';
 import '../core/router/route_observers.dart';
 import '../features/capture/pages/capture_page.dart';
+import '../features/challenge/pages/challenge_detail_page.dart';
+import '../features/challenge/pages/challenge_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_page.dart';
@@ -144,14 +146,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.challenge,
         name: 'challenge',
-        builder: (context, state) => const _PlaceholderPage(name: 'challenge'),
+        builder: (context, state) => const ChallengePage(),
       ),
       GoRoute(
         path: RouteNames.challengeDetail,
         name: 'challengeDetail',
         builder: (context, state) {
           final challengeId = state.queryParams[RouteNames.paramChallengeId];
-          return _PlaceholderPage(name: 'challengeDetail?challengeId=$challengeId');
+          return ChallengeDetailPage(challengeId: challengeId);
         },
       ),
 
