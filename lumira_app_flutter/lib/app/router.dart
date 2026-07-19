@@ -24,7 +24,10 @@ import '../features/profile/pages/profile_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
 import '../features/splash/pages/splash_page.dart';
+import '../features/templates/pages/templates_all_page.dart';
+import '../features/templates/pages/templates_detail_page.dart';
 import '../features/templates/pages/templates_page.dart';
+import '../features/templates/pages/templates_recommend_page.dart';
 
 /// 占位页面 widget（Task 2.x 将替换为实际页面）
 class _PlaceholderPage extends StatelessWidget {
@@ -122,7 +125,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'templatesDetail',
         builder: (context, state) {
           final templateId = state.queryParams[RouteNames.paramTemplateId];
-          return _PlaceholderPage(name: 'templatesDetail?templateId=$templateId');
+          return TemplatesDetailPage(templateId: templateId);
         },
       ),
       GoRoute(
@@ -149,12 +152,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.templatesRecommend,
         name: 'templatesRecommend',
-        builder: (context, state) => const _PlaceholderPage(name: 'templatesRecommend'),
+        builder: (context, state) => const TemplatesRecommendPage(),
       ),
       GoRoute(
         path: RouteNames.templatesAll,
         name: 'templatesAll',
-        builder: (context, state) => const _PlaceholderPage(name: 'templatesAll'),
+        builder: (context, state) {
+          final scene = state.queryParams[RouteNames.paramScene];
+          return TemplatesAllPage(scene: scene);
+        },
       ),
 
       // === 挑战 ===
