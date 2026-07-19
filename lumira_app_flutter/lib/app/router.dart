@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../core/router/route_names.dart';
 import '../core/router/route_observers.dart';
 import '../features/capture/pages/capture_page.dart';
+import '../features/capture/pages/capture_preview_page.dart';
+import '../features/capture/pages/capture_preview_template_page.dart';
 import '../features/challenge/pages/challenge_detail_page.dart';
 import '../features/challenge/pages/challenge_page.dart';
 import '../features/gallery/pages/gallery_detail_page.dart';
@@ -84,12 +86,22 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.capturePreview,
         name: 'capturePreview',
-        builder: (context, state) => const _PlaceholderPage(name: 'capturePreview'),
+        builder: (context, state) {
+          final photoUrl = state.queryParams['photoUrl'];
+          return CapturePreviewPage(photoUrl: photoUrl);
+        },
       ),
       GoRoute(
         path: RouteNames.capturePreviewTemplate,
         name: 'capturePreviewTemplate',
-        builder: (context, state) => const _PlaceholderPage(name: 'capturePreviewTemplate'),
+        builder: (context, state) {
+          final templateId = state.queryParams[RouteNames.paramTemplateId];
+          final draftId = state.queryParams['draftId'];
+          return CapturePreviewTemplatePage(
+            templateId: templateId,
+            draftId: draftId,
+          );
+        },
       ),
       GoRoute(
         path: RouteNames.captureSceneGuide,
