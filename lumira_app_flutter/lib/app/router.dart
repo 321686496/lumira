@@ -13,6 +13,11 @@ import '../features/gallery/pages/gallery_monthly_digest_page.dart';
 import '../features/gallery/pages/gallery_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/inspiration/pages/inspiration_page.dart';
+import '../features/profile/pages/profile_growth_page.dart';
+import '../features/profile/pages/profile_invite_page.dart';
+import '../features/profile/pages/profile_page.dart';
+import '../features/profile/pages/profile_settings_page.dart';
+import '../features/profile/pages/profile_theme_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_page.dart';
 
@@ -196,27 +201,27 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.profile,
         name: 'profile',
-        builder: (context, state) => const _PlaceholderPage(name: 'profile'),
+        builder: (context, state) => const ProfilePage(),
       ),
       GoRoute(
         path: RouteNames.profileSettings,
         name: 'profileSettings',
-        builder: (context, state) => const _PlaceholderPage(name: 'profileSettings'),
+        builder: (context, state) => const ProfileSettingsPage(),
       ),
       GoRoute(
         path: RouteNames.profileSettingsTheme,
         name: 'profileSettingsTheme',
-        builder: (context, state) => const _PlaceholderPage(name: 'profileSettingsTheme'),
+        builder: (context, state) => const ProfileThemePage(),
       ),
       GoRoute(
         path: RouteNames.profileGrowth,
         name: 'profileGrowth',
-        builder: (context, state) => const _PlaceholderPage(name: 'profileGrowth'),
+        builder: (context, state) => const ProfileGrowthPage(),
       ),
       GoRoute(
         path: RouteNames.profileInvite,
         name: 'profileInvite',
-        builder: (context, state) => const _PlaceholderPage(name: 'profileInvite'),
+        builder: (context, state) => const ProfileInvitePage(),
       ),
       GoRoute(
         path: RouteNames.profileAcademy,
