@@ -65,6 +65,7 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
     _overrides = const CameraOverrides();
 
     // 编辑模式：加载已有组合
+    // 若 kitId 无效（getKitById 返回 null），回退到新建模式（清空 _kitId 使 _isEdit 为 false）
     if (_kitId.isNotEmpty) {
       final kit = ShootKitMockData.getKitById(_kitId);
       if (kit != null) {
@@ -72,6 +73,8 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
         _selectedTemplateId = kit.templateId;
         _sceneId = kit.sceneId;
         _overrides = kit.overrides;
+      } else {
+        _kitId = '';
       }
     }
 
