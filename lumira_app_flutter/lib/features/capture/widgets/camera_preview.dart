@@ -1,4 +1,4 @@
-import 'package:camerawesome/camerawesome_plugin.dart';
+import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,7 +6,7 @@ import '../data/capture_state.dart';
 
 /// 相机预览组件
 ///
-/// 使用 camerawesome 1.4.0 实现（用户明确要求使用此包）。
+/// 使用 camerawesome_ohos 1.0.2（CPF-Flutter Harmony 适配版本，对应原 camerawesome 1.4.0）实现。
 /// 在真实设备上渲染相机预览；在 widget 测试中通过 cameraPreviewOverrideProvider 覆盖为占位 widget。
 ///
 /// 视觉规格来源：lumira-app/src/pages/capture/index.vue line 44-68
@@ -16,6 +16,9 @@ import '../data/capture_state.dart';
 /// camerawesome 1.4.0 实际 API 不匹配。1.4.0 的 `.awesome()` 工厂仅接受 `sensor:` 和 `flashMode:`
 /// 两个独立参数；`SaveConfig.photo(pathBuilder:)` 的 pathBuilder 返回 `Future<String>`；
 /// `onMediaTap` 在用户点击已保存媒体缩略图时触发，参数为 `MediaCapture` 数据类（无 capture 方法）。
+///
+/// Harmony 适配：pub.dev 上的 camerawesome 无 ohos 实现，平台通道无人响应会导致取景器一直转圈。
+/// 改用 CPF-Flutter fork 的 camerawesome_ohos 包（gitcode.com/CPF-Flutter/fluttertpc_camerawesome）。
 class CameraPreview extends ConsumerWidget {
   const CameraPreview({super.key, required this.onCaptured});
 

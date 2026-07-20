@@ -14,8 +14,9 @@
   },
   "overrides": {
     "@ohos/flutter_module": "file:./entry",
+    "@ohos/flutter_ohos": "file:./har/flutter.har",
     "permission_handler_ohos": "file:./har/permission_handler_ohos.har",
     "device_info_plus": "file:./har/device_info_plus.har",
-    "@ohos/flutter_ohos": "file:./har/flutter.har"
+    "camerawesome_ohos": "file:./har/camerawesome_ohos.har"
   }
 }

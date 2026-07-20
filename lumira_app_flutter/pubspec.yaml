@@ -13,13 +13,22 @@ dependencies:
     sdk: flutter
 
   # 状态管理（brief ^2.5.1 → 调整为兼容 Dart 2.19 的版本）
-  flutter_riverpod: ^2.3.6
+  # Fix: 钉定到 2.3.6，避免解析到 2.4.10（其硬依赖 riverpod 2.5.0，2.5.0 使用 @mustBeOverridden 注解，
+  # 需 meta 1.12.0+，与 Harmony 3.7 / Dart 2.19.6 必需的 meta 1.8.0 冲突）
+  flutter_riverpod: 2.3.6
 
   # 路由（brief ^14.6.1 → 调整为兼容 Dart 2.19 的版本，14.x 需 Dart 3）
   go_router: ^6.5.7
 
   # 相机（brief ^2.5.0 → 调整为兼容 Dart 2.19 的版本，2.x 需 Dart 3）
-  camerawesome: ^1.4.0
+  # Fix: 改用 CPF-Flutter Harmony 适配版本 camerawesome_ohos 1.0.2（对应原库名 camerawesome 1.4.0）
+  # 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md 第 81 行
+  # pub.dev 版本无 ohos 实现，导致 Harmony 端取景器一直转圈；改用 gitcode fork 的 ohos 子目录包
+  camerawesome_ohos:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_camerawesome.git
+      ref: master
+      path: ohos
 
   # 权限（brief ^12.0.1 → CPF-Flutter 3.7 Harmony 适配版本 10.3.2，11+ 需 Dart 3；未回合上游，见 dependency_overrides）
   permission_handler: 10.3.2  # Harmony 3.7 适配版本 (CPF-Flutter)

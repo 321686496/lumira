@@ -11,6 +11,14 @@
     {
       "name": "EntryAbility_label",
       "value": "lumira_app_flutter"
+    },
+    {
+      "name": "permission_camera_reason",
+      "value": "Used for capturing photos and previewing the viewfinder"
+    },
+    {
+      "name": "permission_microphone_reason",
+      "value": "Used for recording audio when capturing videos"
     }
   ]
 }
