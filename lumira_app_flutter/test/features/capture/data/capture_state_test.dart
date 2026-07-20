@@ -1,4 +1,3 @@
-// test/features/capture/data/capture_state_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';

@@ -1,5 +1,3 @@
-// lib/features/capture/data/capture_state.dart  (MODIFY — add to existing class)
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/photo_template.dart';
 import '../data/template_registry.dart';
