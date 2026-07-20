@@ -2,6 +2,10 @@ import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:lumira_app_flutter/features/capture/domain/filter_recipe.dart';
+import 'package:lumira_app_flutter/features/templates/widgets/composition_overlay.dart';
+import 'package:lumira_app_flutter/features/templates/widgets/pose_silhouette.dart';
+
 import '../data/capture_state.dart';
 
 /// 相机预览组件
@@ -28,15 +32,27 @@ class CameraPreview extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final overrideWidget = ref.watch(cameraPreviewOverrideProvider);
+    final editable = ref.watch(CaptureState.editableTemplateProvider);
 
-    if (overrideWidget != null) {
+    // 自由拍摄模式（无模板）下，override 直接返回，不包裹 ColorFiltered/Stack。
+    // 选中模板时，override 作为相机本体的替身进入 ColorFiltered/Stack 管线，
+    // 以便测试能验证滤镜与叠图逻辑（Fix 6 原意为"避免实例化真实相机"，
+    // 但 brief 的测试 2/4 要求 override 被包裹，此处为兼容两者的最小改动）。
+    if (overrideWidget != null && editable == null) {
       return overrideWidget;
     }
 
     final flashMode = ref.watch(CaptureState.flashModeProvider);
     final facing = ref.watch(CaptureState.cameraFacingProvider);
+    final showTemplate = ref.watch(CaptureState.showTemplateProvider);
+    final showSilhouette = ref.watch(CaptureState.showSilhouetteProvider);
+    final rawMode = ref.watch(CaptureState.rawModeProvider);
 
-    return CameraAwesomeBuilder.awesome(
+    // 滤镜仅在 editable != null && !rawMode 时应用
+    final applyFilter = editable != null && !rawMode;
+
+    // 相机预览本体（保持已有参数不变；测试中由 override 替换）
+    final cameraWidget = overrideWidget ?? CameraAwesomeBuilder.awesome(
       saveConfig: SaveConfig.photo(
         pathBuilder: () async {
           // 1.4.0: pathBuilder 返回 Future<String>（路径），由调用方决定保存位置
@@ -54,6 +70,55 @@ class CameraPreview extends ConsumerWidget {
           onCaptured(mediaCapture.filePath);
         }
       },
+    );
+
+    // 滤镜包裹（仅在 applyFilter 时）
+    // Note: Dart 2.19 flow analysis promotes `editable` to non-null in the
+    // truthy branch via the `final applyFilter = editable != null && !rawMode`
+    // assignment, so no `!` is needed here.
+    final filteredCamera = applyFilter
+        ? ColorFiltered(
+            colorFilter: fromPostProcess(editable.postProcess),
+            child: cameraWidget,
+          )
+        : cameraWidget;
+
+    // 构图叠图（仅在 editable != null && showTemplate 时显示）
+    final compositionOverlay =
+        (editable != null && showTemplate && editable.composition.overlayType != 'none')
+            ? Positioned.fill(
+                child: IgnorePointer(
+                  child: CompositionOverlay(
+                    overlayType: editable.composition.overlayType,
+                    opacity: editable.composition.opacity,
+                  ),
+                ),
+              )
+            : const SizedBox.shrink();
+
+    // 姿势剪影（仅在 editable != null && silhouette.data != 'none' && showSilhouette 时显示）
+    final silhouetteOverlay = (editable != null &&
+            editable.pose.silhouette.data != 'none' &&
+            showSilhouette)
+        ? Positioned.fill(
+            child: IgnorePointer(
+              child: PoseSilhouette(
+                silhouetteType: editable.pose.silhouette.type,
+                silhouetteData: editable.pose.silhouette.data,
+                scale: editable.pose.scale,
+                rotation: editable.pose.rotation,
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        filteredCamera,
+        compositionOverlay,
+        silhouetteOverlay,
+      ],
     );
   }
 
