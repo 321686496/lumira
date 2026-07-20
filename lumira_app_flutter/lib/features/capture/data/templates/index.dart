@@ -1,0 +1,13 @@
+// lib/features/capture/data/templates/index.dart
+export 'soft_portrait.dart';
+export 'golden_landscape.dart';
+export 'cafe_portrait.dart';
+export 'film_vintage.dart';
+export 'food_flat_lay.dart';
+export 'indoor_still_life.dart';
+export 'macro_flower.dart';
+export 'neon_portrait.dart';
+export 'night_cityscape.dart';
+export 'street_bw.dart';
+export 'sunset_silhouette.dart';
+export 'urban_architecture.dart';
