@@ -28,6 +28,7 @@ import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
+import '../features/scenes/pages/scenes_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_all_page.dart';
 import '../features/templates/pages/templates_detail_page.dart';
@@ -289,7 +290,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.scenes,
         name: 'scenes',
-        builder: (context, state) => const _PlaceholderPage(name: 'scenes'),
+        builder: (context, state) => const ScenesPage(),
       ),
 
       // === 拍摄套件 ===
