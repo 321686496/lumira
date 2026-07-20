@@ -7,6 +7,9 @@ import '../core/router/route_observers.dart';
 import '../features/capture/pages/capture_page.dart';
 import '../features/capture/pages/capture_preview_page.dart';
 import '../features/capture/pages/capture_preview_template_page.dart';
+import '../features/capture/pages/capture_scene_detail_page.dart';
+import '../features/capture/pages/capture_scene_guide_page.dart';
+import '../features/capture/pages/capture_scene_manage_page.dart';
 import '../features/challenge/pages/challenge_detail_page.dart';
 import '../features/challenge/pages/challenge_page.dart';
 import '../features/gallery/pages/gallery_detail_page.dart';
@@ -109,7 +112,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           // 接收 scene 参数（uni-app: /pages/capture/scene-guide?scene=xxx）
           final scene = state.queryParams[RouteNames.paramScene];
-          return _PlaceholderPage(name: 'captureSceneGuide?scene=$scene');
+          return CaptureSceneGuidePage(scene: scene);
         },
       ),
       GoRoute(
@@ -117,7 +120,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'captureSceneManage',
         builder: (context, state) {
           final tab = state.queryParams[RouteNames.paramTab];
-          return _PlaceholderPage(name: 'captureSceneManage?tab=$tab');
+          return CaptureSceneManagePage(initialTab: tab);
         },
       ),
       GoRoute(
@@ -125,7 +128,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'captureSceneDetail',
         builder: (context, state) {
           final sceneId = state.queryParams[RouteNames.paramSceneId];
-          return _PlaceholderPage(name: 'captureSceneDetail?sceneId=$sceneId');
+          return CaptureSceneDetailPage(sceneId: sceneId);
         },
       ),
 
