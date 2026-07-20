@@ -5,5 +5,8 @@
   "main": "",
   "author": "",
   "license": "",
-  "dependencies": {}
+  "dependencies": {
+    "permission_handler_ohos": "file:../har/permission_handler_ohos.har",
+    "device_info_plus": "file:../har/device_info_plus.har"
+  }
 }

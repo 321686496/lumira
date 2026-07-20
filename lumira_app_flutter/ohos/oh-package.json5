@@ -1,5 +1,3 @@
-
-
 {
   "modelVersion": "5.0.0",
   "name": "lumira_app_flutter",
@@ -15,6 +13,9 @@
     "@ohos/hypium": "1.0.6"
   },
   "overrides": {
-    "@ohos/flutter_ohos": "file:./har/flutter.har"
+    "@ohos/flutter_ohos": "file:./har/flutter.har",
+    "permission_handler_ohos": "C:/Users/黄sir/AppData/Local/Pub/Cache/git/flutter_permission_handler-f79dfe1770c5e3df1e1fd1f68092f9718bf87712/permission_handler_ohos/ohos",
+    "device_info_plus": "C:/Users/黄sir/AppData/Local/Pub/Cache/git/flutter_plus_plugins-44f907d59a3d7c8c1bce7e37893564de3d81f335/packages/device_info_plus/device_info_plus/ohos",
+    "@ohos/flutter_module": "file:./entry"
   }
 }

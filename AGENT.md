@@ -2,17 +2,18 @@
 
 > 项目根目录智能体指令文件
 > 开发范式：**Harness Engineering（马具工程）**
-> 最后更新：2026-07-09（新增 uni-app 官方文档强制阅读章节）
+> 最后更新：2026-07-18（新增 Flutter Harmony 适配规则章节，明确 Flutter 工程为后续主开发技术栈）
 
 ---
 
 ## 一、项目概览
 
-本项目包含 **两个独立的 uni-app 工程**，共享 `.pptpl` 模板格式，但产品边界与商业模式完全不同：
+本项目包含 **两个独立的应用工程**（如画 Lumira / 画集 Lumira Studio），共享 `.pptpl` 模板格式，但产品边界与商业模式完全不同。**Flutter 为后续主开发技术栈**，原 uni-app 工程作为参考实现保留：
 
 | 维度 | 如画 Lumira | 画集 Lumira Studio |
 |---|---|---|
-| 工程目录 | `lumira-app/` | `lumira-studio-app/` |
+| uni-app 工程 | `lumira-app/` | `lumira-studio-app/` |
+| Flutter 工程（主开发） | `lumira_app_flutter/` | （后续按需创建） |
 | 产品定位 | 单机离线拍摄辅助 | 联网模板社区平台 |
 | 网络依赖 | 零网络权限 | 全功能在线 |
 | AI 能力 | 纯算法（LUT/滤波/锐化） | 云端 AI（识别/评分/分割） |
@@ -20,8 +21,11 @@
 | 商业模式 | 预置付费模板 | 免费 + 模板抽成 + 广告 |
 | 用户身份 | 无账号 | 普通用户 / 创作者 |
 | 核心文档 | PRD + Brand + Frontend | PRD + Brand + Frontend |
+| 目标平台 | iOS / Android / **HarmonyOS** | iOS / Android / **HarmonyOS** |
 
-> **关键约束**：两个工程独立开发、独立构建、独立发布。不允许在同一工程中通过条件编译混用。
+> **关键约束**：
+> 1. 两个产品独立开发、独立构建、独立发布。不允许在同一工程中通过条件编译混用。
+> 2. Flutter 工程必须同时兼容 **iOS / Android / HarmonyOS** 三大平台，所有三方库必须先通过 Harmony 适配清单校验后才可引入。
 
 ### 1.1 ⚠️ 防混淆强制规则（MUST NOT VIOLATE）
 
@@ -586,6 +590,85 @@ Agent 在完成任何工程或文档变更后，**必须自问并确认**：
 > - 开发前：阅读「快速入门」了解项目结构与生命周期
 > - 开发中：查阅「组件」文档确认组件属性、事件、插槽的正确用法
 > - 遇到平台差异时：参考官方文档中的「平台差异说明」
+
+---
+
+## 十二、Flutter 工程开发规范（Harmony 适配强制阅读）
+
+> **核心原则**：Flutter 工程为后续主开发技术栈，所有 Flutter 代码必须同时兼容 **iOS / Android / HarmonyOS** 三大平台。
+> **每次开发 Flutter 工程前**，必须先读取以下 Harmony 版 Flutter 与三方库适配参考资源，确保所用 API、三方库均在 Harmony 适配清单内。
+
+### 12.1 强制参考资源（开发前必读）
+
+| 资源 | 地址 | 用途 |
+|---|---|---|
+| Harmony 版 Flutter 引擎 | https://gitcode.com/CPF-Flutter/flutter_flutter | 华为 HarmonyOS 适配的 Flutter SDK 主仓 |
+| Harmony 版 Flutter 引擎（分支） | https://gitcode.com/CPF-Flutter/flutter_flutter/tree/br_3.7.12-ohos-1.1.3 | 当前项目使用的 Harmony 适配分支（3.7.12-ohos-1.1.3） |
+| 三方库适配清单 | https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md | 已适配 Harmony 的三方库查询清单 |
+| CPF-Flutter 文档总仓 | https://gitcode.com/CPF-Flutter/docs | Harmony 版 Flutter 适配文档总入口 |
+
+### 12.2 三方库引入强制流程（MUST FOLLOW）
+
+在 `lumira_app_flutter/`（或任何 Flutter 工程）中引入任何新的三方库之前，**必须**按以下流程执行：
+
+1. **查询适配清单**：访问 [三方库适配清单](https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md)，搜索目标库是否已适配 Harmony
+2. **版本匹配**：确认适配清单中标注的库版本与 `pubspec.yaml` 中要引入的版本兼容
+3. **降级 / 替代方案**：若目标库未适配 Harmony，必须寻找替代库（同样需通过清单校验）或自行实现等价功能，**禁止**强行引入未适配库导致 Harmony 平台构建失败
+4. **平台测试**：库引入后，必须在 iOS / Android / HarmonyOS 三平台分别构建一次确认无平台报错
+
+### 12.3 Flutter 工程目录约定
+
+```
+lumira_app_flutter/
+├── lib/
+│   ├── main.dart                    # 应用入口
+│   ├── app/                         # 应用根组件、路由配置
+│   │   ├── app.dart                 # MaterialApp / CupertinoApp 根
+│   │   ├── router.dart              # 路由生成器与路由表
+│   │   └── theme.dart               # 全局主题
+│   ├── pages/                       # 页面（与 uni-app 路由对齐）
+│   ├── widgets/                     # 公共组件（对应 uni-app components/）
+│   ├── composables/                 # 业务逻辑 Hooks（对应 useXxx.ts）
+│   ├── services/                    # 服务层（接口 + 实现分离）
+│   ├── stores/                      # 状态管理（推荐 Riverpod / Provider）
+│   ├── models/                      # 数据模型（对应 types/template.ts）
+│   ├── theme/                       # 设计 Token 与主题切换
+│   ├── utils/                       # 工具函数
+│   └── data/                        # 静态数据（模板、剪影等）
+├── assets/                          # 静态资源（图片、字体）
+├── ohos/                            # HarmonyOS 工程目录
+├── android/                         # Android 工程目录
+└── ios/                             # iOS 工程目录
+```
+
+### 12.4 Flutter 开发准则
+
+- **语言**：Dart 强类型，禁用 `dynamic`（除与原生交互必要的边界外），开启 `strict-casts` 与 `strict-raw-types`
+- **状态管理**：统一使用 Riverpod（或团队约定的方案），禁止 Store-to-Store 直接引用
+- **路由**：使用命名路由（`Navigator.pushNamed`）+ 路由参数传递 `templateId` 等业务参数，与 uni-app 路由表保持一一对应
+- **相机**：使用已通过 Harmony 适配的相机三方库（开发前需从 12.1 清单中确认具体库名与版本）
+- **主题切换**：9 个主题 + 4 种 UI 风格需 1:1 迁移，通过 `ThemeData` + 自定义 `InheritedWidget` 实现
+- **资源引用**：所有静态图片、字体通过 `assets/` 引用并在 `pubspec.yaml` 中声明
+- **平台条件编译**：使用 `Platform.isIOS` / `Platform.isAndroid` / `kHarmonyOS`（或对应常量）做平台分支，禁止使用未适配 API
+- **测试**：每个核心 Service / Composable 必须有单元测试，关键页面有 Widget Test
+
+### 12.5 Harmony 平台特别注意事项
+
+1. **`ohos/` 目录维护**：`ohos/entry/src/main/ets/plugins/GeneratedPluginRegistrant.ets` 由构建工具自动生成，**禁止手动编辑**
+2. **EntryAbility**：`ohos/entry/src/main/ets/entryability/EntryAbility.ets` 必须继承 `FlutterAbility` 并在 `configureFlutterEngine` 中调用 `GeneratedPluginRegistrant.registerWith`
+3. **权限声明**：相机、相册等权限需在 `ohos/entry/src/main/module.json5` 中声明，与 `android/app/src/main/AndroidManifest.xml`、`ios/Runner/Info.plist` 保持一致
+4. **构建命令**：Harmony 平台构建使用 `flutter build hap`（HAP 包）或 `flutter build app`（APP 包），开发调试使用 `flutter run -d <harmony-device>`
+
+### 12.6 AI Agent Flutter 任务自检
+
+每次 Flutter 工程任务完成后，**必须**自问并确认：
+
+- [ ] 是否已先读取 12.1 中的 Harmony 适配参考资源？
+- [ ] 新引入的三方库是否已通过 12.2 的适配清单校验？
+- [ ] 代码是否在 iOS / Android / HarmonyOS 三平台都能构建通过？
+- [ ] 是否使用了未适配 Harmony 的私有 API 或三方库？
+- [ ] 路由表是否与 uni-app 原路由表保持一致（迁移阶段）？
+- [ ] 是否同步更新了相关设计文档与测试文档？
 
 ---
 
