@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,12 @@ import '../data/capture_state.dart';
 import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
 import '../widgets/camera_preview.dart';
+import '../widgets/filter_picker.dart';
+import '../widgets/level_indicator.dart';
+import '../widgets/param_panel.dart';
+import '../widgets/param_pill_bar.dart';
+import '../widgets/scene_preset_strip.dart';
+import '../widgets/template_strip.dart';
 
 /// 拍摄页（Phase 2 MVP）
 ///
@@ -82,17 +90,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
   @override
   Widget build(BuildContext context) {
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
-    final lastPhoto = ref.watch(CaptureState.lastPhotoPathProvider);
+    final bottomPanelExpanded =
+        ref.watch(CaptureState.bottomPanelExpandedProvider);
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 相机预览（全屏）
+          // 1. 取景器 + 叠图（CameraPreview 内部处理 ColorFiltered + overlay + silhouette）
           CameraPreview(onCaptured: _onCaptured),
 
-          // 顶部导航栏（全屏模式下隐藏）
+          // 2. 导航栏（全屏模式下隐藏）
           if (!isFullscreen)
             Positioned(
               top: 0,
@@ -101,15 +110,26 @@ class _CapturePageState extends ConsumerState<CapturePage>
               child: CaptureNav(onBack: _onBack),
             ),
 
-          // 底部操作栏（拍摄按钮 + 缩略图 + 切换摄像头）
+          // 3. 顶部参数 pill 栏（全屏模式下隐藏）
           if (!isFullscreen)
             Positioned(
+              top: MediaQuery.of(context).padding.top + 72, // 导航栏高度下方
+              left: 12,
+              right: 12,
+              child: const ParamPillBar(),
+            ),
+
+          // 4. 底部控制区（全屏模式下隐藏）
+          if (!isFullscreen)
+            Positioned(
+              bottom: 0,
               left: 0,
               right: 0,
-              bottom: 0,
-              child: _BottomBar(
-                isLandscape: _isLandscape,
-                lastPhotoPath: lastPhoto,
+              child: _BottomControlArea(
+                bottomPanelExpanded: bottomPanelExpanded,
+                onTogglePanel: () => ref
+                    .read(CaptureState.bottomPanelExpandedProvider.notifier)
+                    .state = !bottomPanelExpanded,
                 onCapture: _onCapture,
                 onSwitchCamera: _switchCamera,
                 onThumbnailTap: (path) {
@@ -119,24 +139,33 @@ class _CapturePageState extends ConsumerState<CapturePage>
                 },
               ),
             ),
+
+          // 5. 参数面板（底部滑入，使用 AnimatedPositioned，必须在 Stack 内）
+          const ParamPanel(),
+
+          // 6. 滤镜选择器（不可见触发器，showModalBottomSheet）
+          const FilterPicker(),
+
+          // 7. 水平仪（使用 Positioned，必须在 Stack 内）
+          const LevelIndicator(),
         ],
       ),
     );
   }
 }
 
-/// 底部操作栏
-class _BottomBar extends StatelessWidget {
-  const _BottomBar({
-    required this.isLandscape,
-    required this.lastPhotoPath,
+/// 底部控制区：模板横滑条 + 折叠按钮 + 可折叠面板 + 拍摄按钮行
+class _BottomControlArea extends StatelessWidget {
+  const _BottomControlArea({
+    required this.bottomPanelExpanded,
+    required this.onTogglePanel,
     required this.onCapture,
     required this.onSwitchCamera,
     required this.onThumbnailTap,
   });
 
-  final bool isLandscape;
-  final String? lastPhotoPath;
+  final bool bottomPanelExpanded;
+  final VoidCallback onTogglePanel;
   final VoidCallback onCapture;
   final VoidCallback onSwitchCamera;
   final void Function(String path) onThumbnailTap;
@@ -156,73 +185,134 @@ class _BottomBar extends StatelessWidget {
             ],
           ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // 缩略图（左）
-            GestureDetector(
-              onTap: lastPhotoPath != null
-                  ? () => onThumbnailTap(lastPhotoPath!)
-                  : null,
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 1.5,
-                  ),
-                ),
-                child: lastPhotoPath != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(6.75),
-                        child: Image.network(
-                          lastPhotoPath!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const Icon(
-                            Icons.photo,
-                            color: Colors.white54,
-                            size: 24,
-                          ),
-                        ),
-                      )
-                    : const Icon(
-                        Icons.photo_camera,
-                        color: Colors.white54,
-                        size: 24,
-                      ),
-              ),
+            // 模板横滑条（紧凑模式）
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: TemplateStrip(compact: true),
             ),
-            const Spacer(),
-            // 拍摄按钮（中）
-            CaptureButton(onTap: onCapture),
-            const Spacer(),
-            // 切换摄像头（右）
+            // 可折叠面板展开/收起按钮
             GestureDetector(
-              onTap: onSwitchCamera,
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.3),
-                    width: 1.5,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.cameraswitch_outlined,
-                  color: Colors.white,
+              onTap: onTogglePanel,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Icon(
+                  bottomPanelExpanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_up,
+                  color: Colors.white70,
                   size: 24,
                 ),
               ),
             ),
+            // 可折叠面板（展开时显示完整模板条 + 场景预设条）
+            if (bottomPanelExpanded)
+              SizedBox(
+                height: 200,
+                child: Column(
+                  children: const [
+                    Expanded(child: TemplateStrip(compact: false)),
+                    Expanded(child: ScenePresetStrip()),
+                  ],
+                ),
+              ),
+            // 拍摄按钮行
+            _CaptureButtonRow(
+              onCapture: onCapture,
+              onSwitchCamera: onSwitchCamera,
+              onThumbnailTap: onThumbnailTap,
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 拍摄按钮行：缩略图 + 拍摄按钮 + 翻转摄像头
+class _CaptureButtonRow extends ConsumerWidget {
+  const _CaptureButtonRow({
+    required this.onCapture,
+    required this.onSwitchCamera,
+    required this.onThumbnailTap,
+  });
+
+  final VoidCallback onCapture;
+  final VoidCallback onSwitchCamera;
+  final void Function(String path) onThumbnailTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lastPhotoPath = ref.watch(CaptureState.lastPhotoPathProvider);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          // 缩略图（左）
+          GestureDetector(
+            onTap: lastPhotoPath != null
+                ? () => onThumbnailTap(lastPhotoPath)
+                : null,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: lastPhotoPath != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(6.75),
+                      child: Image.file(
+                        File(lastPhotoPath),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.photo,
+                          color: Colors.white54,
+                          size: 24,
+                        ),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.photo_camera,
+                      color: Colors.white54,
+                      size: 24,
+                    ),
+            ),
+          ),
+          // 拍摄按钮（中）
+          CaptureButton(onTap: onCapture),
+          // 翻转摄像头（右）
+          GestureDetector(
+            onTap: onSwitchCamera,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: const Icon(
+                Icons.cameraswitch_outlined,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -12,6 +12,12 @@ import 'package:lumira_app_flutter/features/capture/pages/capture_page.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/camera_preview.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/capture_button.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/capture_nav.dart';
+// Task 13: 集成测试新增 import —— 验证所有 widget 都在 widget tree 中
+import 'package:lumira_app_flutter/features/capture/widgets/filter_picker.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/level_indicator.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/param_panel.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/param_pill_bar.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/template_strip.dart';
 
 void main() {
   late GoRouter router;
@@ -238,5 +244,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(CaptureState.cameraFacingProvider), 'front');
+  });
+
+  // ── Task 13 集成测试 ──
+
+  testWidgets('renders all integration widgets', (tester) async {
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ParamPillBar), findsOneWidget);
+    expect(find.byType(TemplateStrip), findsWidgets); // compact + expanded (if toggled)
+    expect(find.byType(ParamPanel), findsOneWidget);
+    expect(find.byType(FilterPicker), findsOneWidget);
+    expect(find.byType(LevelIndicator), findsOneWidget);
+  });
+
+  testWidgets('bottom panel expand toggle button is present', (tester) async {
+    await tester.pumpWidget(
+      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
+    );
+    await tester.pumpAndSettle();
+
+    // The toggle button shows keyboard_arrow_up when collapsed (default state)
+    expect(find.byIcon(Icons.keyboard_arrow_up), findsOneWidget);
+    expect(find.byIcon(Icons.keyboard_arrow_down), findsNothing);
   });
 }
