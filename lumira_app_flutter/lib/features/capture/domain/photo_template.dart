@@ -1,4 +1,5 @@
 // lib/features/capture/domain/photo_template.dart
+import 'package:flutter/foundation.dart';
 
 class PhotoTemplate {
   final TemplateMeta meta;
@@ -117,8 +118,8 @@ class TemplateMeta {
           version == other.version &&
           category == other.category &&
           classification == other.classification &&
-          tags == other.tags &&
-          tagIds == other.tagIds &&
+          listEquals(tags, other.tags) &&
+          listEquals(tagIds, other.tagIds) &&
           price == other.price &&
           cover == other.cover &&
           description == other.description &&
@@ -434,9 +435,9 @@ class SceneGuide {
           lightDirection == other.lightDirection &&
           shootingDistance == other.shootingDistance &&
           background == other.background &&
-          props == other.props &&
+          listEquals(props, other.props) &&
           bestTime == other.bestTime &&
-          tips == other.tips &&
+          listEquals(tips, other.tips) &&
           presetId == other.presetId &&
           lightDirectionAngle == other.lightDirectionAngle &&
           shootingDistanceM == other.shootingDistanceM &&

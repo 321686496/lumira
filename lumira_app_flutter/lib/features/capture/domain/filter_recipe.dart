@@ -64,7 +64,7 @@ List<double> _contrastMatrix(double v) {
 List<double> _saturationMatrix(double v) {
   final s = 1 + v / 100;
   // Standard luminance weights: R*0.3086, G*0.6094, B*0.0820
-  final lumR = 0.3086, lumG = 0.6094, lumB = 0.0820;
+  const lumR = 0.3086, lumG = 0.6094, lumB = 0.0820;
   final sr = (1 - s) * lumR;
   final sg = (1 - s) * lumG;
   final sb = (1 - s) * lumB;
@@ -86,7 +86,6 @@ List<double> _temperatureMatrix(double v) {
     final t = v / 100;
     final rBoost = t * 0.2;
     final bReduce = t * 0.1;
-    final satBoost = t * 0.1;
     return [
       1 + rBoost, 0, 0, 0, 0,
       0, 1, 0, 0, 0,
@@ -124,18 +123,6 @@ List<double> _tintMatrix(double v) {
   ];
 }
 
-/// EV (exposure compensation) → brightness
-/// ev: -3 ~ +3 → brightness 0.0 ~ 2.0 (1 + ev/3)
-List<double> _evMatrix(double ev) {
-  final factor = 1 + ev / 3;
-  return [
-    factor, 0, 0, 0, 0,
-    0, factor, 0, 0, 0,
-    0, 0, factor, 0, 0,
-    0, 0, 0, 1, 0,
-  ];
-}
-
 /// Grayscale matrix: grayscale(1) in CSS
 final List<double> _grayscaleMatrix = [
   0.3086, 0.6094, 0.0820, 0, 0,
@@ -156,13 +143,6 @@ List<double> _sepiaMatrix(double t) {
   ];
   // Lerp between identity and sepia by t
   return List.generate(20, (i) => identity[i] * (1 - t) + sepia[i] * t);
-}
-
-/// ISO effect: ISO > 200 adds slight brightness boost
-List<double> _isoMatrix(int iso) {
-  if (iso <= 200) return List.from(_identityMatrix);
-  final boost = (iso - 200) / 6400 * 0.3;
-  return _brightnessMatrix(boost * 100);
 }
 
 // ─── System Filters ───

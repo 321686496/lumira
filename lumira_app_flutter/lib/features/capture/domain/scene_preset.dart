@@ -1,4 +1,5 @@
 // lib/features/capture/domain/scene_preset.dart
+import 'package:flutter/foundation.dart';
 import 'photo_template.dart';
 
 /// 对应 TS SceneCategory: 'light' | 'outdoor' | 'indoor' | 'mood'
@@ -115,13 +116,13 @@ class ScenePreset {
           filter == other.filter &&
           vibe == other.vibe &&
           description == other.description &&
-          exampleImages == other.exampleImages &&
-          tips == other.tips &&
+          listEquals(exampleImages, other.exampleImages) &&
+          listEquals(tips, other.tips) &&
           whereToShoot == other.whereToShoot &&
           bestTime == other.bestTime &&
           sceneGuide == other.sceneGuide &&
           relatedCategory == other.relatedCategory &&
-          recommendedTagIds == other.recommendedTagIds;
+          listEquals(recommendedTagIds, other.recommendedTagIds);
 
   @override
   int get hashCode => Object.hash(
