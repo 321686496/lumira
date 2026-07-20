@@ -29,6 +29,7 @@ import '../features/profile/pages/profile_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
 import '../features/scenes/pages/scenes_page.dart';
+import '../features/shootkit/pages/shootkit_editor_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_all_page.dart';
 import '../features/templates/pages/templates_detail_page.dart';
@@ -37,25 +38,6 @@ import '../features/templates/pages/templates_editor_page.dart';
 import '../features/templates/pages/templates_page.dart';
 import '../features/templates/pages/templates_recommend_page.dart';
 import '../features/templates/pages/templates_unlock_page.dart';
-
-/// 占位页面 widget（Task 2.x 将替换为实际页面）
-class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({required this.name});
-
-  final String name;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Text(
-          'Route: $name',
-          style: const TextStyle(fontSize: 24),
-        ),
-      ),
-    );
-  }
-}
 
 /// GoRouter Provider
 /// 34 个路由与 uni-app pages.json 1:1 对应
@@ -297,7 +279,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.shootkitEditor,
         name: 'shootkitEditor',
-        builder: (context, state) => const _PlaceholderPage(name: 'shootkitEditor'),
+        builder: (context, state) {
+          final kitId = state.queryParams[RouteNames.paramKitId];
+          final sceneId = state.queryParams[RouteNames.paramSceneId];
+          return ShootkitEditorPage(kitId: kitId, sceneId: sceneId);
+        },
       ),
     ],
     errorBuilder: (context, state) => Scaffold(

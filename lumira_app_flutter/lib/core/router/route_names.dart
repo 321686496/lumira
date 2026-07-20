@@ -50,6 +50,7 @@ class RouteNames {
   static const String paramCollectionId = 'collectionId';
   static const String paramAcademyId = 'academyId';
   static const String paramMode = 'mode';
+  static const String paramKitId = 'kitId';
 
   // === 工具方法 ===
   /// 构建 templateId 查询参数 URL
