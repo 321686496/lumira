@@ -169,51 +169,57 @@ List<double> _isoMatrix(int iso) {
 
 /// System filter matrices (approximations of the CSS filter strings from filterRecipe.ts)
 /// Each matches SYSTEM_FILTERS in the TS source.
-List<double> _systemFilterMatrix(String name) {
+///
+/// Composition order: for CSS `A(x) B(y) C(z)` (A applied first, C last), the
+/// matrix is `C * B * A` — last-applied filter is LEFTMOST.
+List<double> composeSystemFilterMatrix(String name) {
   switch (name) {
     case 'none':
       return List.from(_identityMatrix);
     case 'vivid':
-      // contrast(1.1) saturate(1.25) brightness(1.02)
+      // contrast(1.1) saturate(1.25) brightness(1.02) → B·S·C
       return _multiplyMatrices(
-        _multiplyMatrices(_contrastMatrix(10), _saturationMatrix(25)),
         _brightnessMatrix(2),
+        _multiplyMatrices(_saturationMatrix(25), _contrastMatrix(10)),
       );
     case 'vivid_warm':
-      // sepia(0.15) saturate(1.2) contrast(1.08) brightness(1.03) hue-rotate(-5deg)
+      // sepia(0.15) saturate(1.2) contrast(1.08) brightness(1.03) hue-rotate(-5deg) → Tint·B·C·S·Sepia
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_sepiaMatrix(0.15), _saturationMatrix(20)),
-          _multiplyMatrices(_contrastMatrix(8), _brightnessMatrix(3)),
-        ),
         _tintMatrix(-5.5), // -5deg ≈ -5.5 in our -100~100 scale
+        _multiplyMatrices(
+          _brightnessMatrix(3),
+          _multiplyMatrices(
+            _contrastMatrix(8),
+            _multiplyMatrices(_saturationMatrix(20), _sepiaMatrix(0.15)),
+          ),
+        ),
       );
     case 'vivid_cool':
-      // saturate(1.15) contrast(1.08) brightness(1.02) hue-rotate(8deg)
+      // saturate(1.15) contrast(1.08) brightness(1.02) hue-rotate(8deg) → Tint·B·C·S
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_saturationMatrix(15), _contrastMatrix(8)),
-          _brightnessMatrix(2),
-        ),
         _tintMatrix(8.8),
+        _multiplyMatrices(
+          _brightnessMatrix(2),
+          _multiplyMatrices(_contrastMatrix(8), _saturationMatrix(15)),
+        ),
       );
     case 'mono':
-      // grayscale(1) contrast(1.05)
-      return _multiplyMatrices(_grayscaleMatrix, _contrastMatrix(5));
+      // grayscale(1) contrast(1.05) → C·Grayscale
+      return _multiplyMatrices(_contrastMatrix(5), _grayscaleMatrix);
     case 'silver':
-      // grayscale(1) sepia(0.2) contrast(0.95) brightness(1.08)
+      // grayscale(1) sepia(0.2) contrast(0.95) brightness(1.08) → B·C·Sepia·Grayscale
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_grayscaleMatrix, _sepiaMatrix(0.2)),
-          _contrastMatrix(-5),
-        ),
         _brightnessMatrix(8),
+        _multiplyMatrices(
+          _contrastMatrix(-5),
+          _multiplyMatrices(_sepiaMatrix(0.2), _grayscaleMatrix),
+        ),
       );
     case 'noir':
-      // grayscale(1) contrast(1.3) brightness(0.95)
+      // grayscale(1) contrast(1.3) brightness(0.95) → B·C·Grayscale
       return _multiplyMatrices(
-        _multiplyMatrices(_grayscaleMatrix, _contrastMatrix(30)),
         _brightnessMatrix(-5),
+        _multiplyMatrices(_contrastMatrix(30), _grayscaleMatrix),
       );
     default:
       return List.from(_identityMatrix);
@@ -222,133 +228,136 @@ List<double> _systemFilterMatrix(String name) {
 
 /// Returns a ColorFilter for a system filter name.
 ColorFilter fromSystemFilter(String name) {
-  return ColorFilter.matrix(_systemFilterMatrix(name));
+  return ColorFilter.matrix(composeSystemFilterMatrix(name));
 }
 
 // ─── LUT Presets ───
 
 /// LUT preset matrices (approximations of the CSS filter strings from filterRecipe.ts)
 /// Each matches LUT_FILTERS in the TS source (16 presets + 'none').
-List<double> _lutMatrix(String name) {
+///
+/// Composition order: for CSS `A(x) B(y) C(z)` (A applied first, C last), the
+/// matrix is `C * B * A` — last-applied filter is LEFTMOST.
+List<double> composeLutMatrix(String name) {
   switch (name) {
     case 'none':
       return List.from(_identityMatrix);
     case 'cinematic':
-      // contrast(1.15) saturate(0.9) hue-rotate(-8deg) brightness(0.97)
+      // contrast(1.15) saturate(0.9) hue-rotate(-8deg) brightness(0.97) → B·Tint·S·C
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_contrastMatrix(15), _saturationMatrix(-10)),
-          _tintMatrix(-8.8),
-        ),
         _brightnessMatrix(-3),
+        _multiplyMatrices(
+          _tintMatrix(-8.8),
+          _multiplyMatrices(_saturationMatrix(-10), _contrastMatrix(15)),
+        ),
       );
     case 'vintage':
-      // sepia(0.35) contrast(1.1) brightness(1.05) saturate(0.85)
+      // sepia(0.35) contrast(1.1) brightness(1.05) saturate(0.85) → Sat·B·C·Sepia
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_sepiaMatrix(0.35), _contrastMatrix(10)),
-          _brightnessMatrix(5),
-        ),
         _saturationMatrix(-15),
+        _multiplyMatrices(
+          _brightnessMatrix(5),
+          _multiplyMatrices(_contrastMatrix(10), _sepiaMatrix(0.35)),
+        ),
       );
     case 'bw':
-      // grayscale(1) contrast(1.1)
-      return _multiplyMatrices(_grayscaleMatrix, _contrastMatrix(10));
+      // grayscale(1) contrast(1.1) → C·Grayscale
+      return _multiplyMatrices(_contrastMatrix(10), _grayscaleMatrix);
     case 'warm_film':
-      // sepia(0.2) saturate(1.15) brightness(1.03) hue-rotate(-5deg)
+      // sepia(0.2) saturate(1.15) brightness(1.03) hue-rotate(-5deg) → Tint·B·S·Sepia
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_sepiaMatrix(0.2), _saturationMatrix(15)),
-          _brightnessMatrix(3),
-        ),
         _tintMatrix(-5.5),
+        _multiplyMatrices(
+          _brightnessMatrix(3),
+          _multiplyMatrices(_saturationMatrix(15), _sepiaMatrix(0.2)),
+        ),
       );
     case 'cool_film':
-      // saturate(0.9) brightness(0.98) hue-rotate(8deg)
+      // saturate(0.9) brightness(0.98) hue-rotate(8deg) → Tint·B·S
       return _multiplyMatrices(
-        _multiplyMatrices(_saturationMatrix(-10), _brightnessMatrix(-2)),
         _tintMatrix(8.8),
+        _multiplyMatrices(_brightnessMatrix(-2), _saturationMatrix(-10)),
       );
     case 'pastel':
-      // contrast(0.92) saturate(0.85) brightness(1.08)
+      // contrast(0.92) saturate(0.85) brightness(1.08) → B·S·C
       return _multiplyMatrices(
-        _multiplyMatrices(_contrastMatrix(-8), _saturationMatrix(-15)),
         _brightnessMatrix(8),
+        _multiplyMatrices(_saturationMatrix(-15), _contrastMatrix(-8)),
       );
     case 'fuji':
-      // saturate(1.2) contrast(1.05) hue-rotate(-3deg) brightness(1.02)
+      // saturate(1.2) contrast(1.05) hue-rotate(-3deg) brightness(1.02) → B·Tint·C·S
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_saturationMatrix(20), _contrastMatrix(5)),
-          _tintMatrix(-3.3),
-        ),
         _brightnessMatrix(2),
+        _multiplyMatrices(
+          _tintMatrix(-3.3),
+          _multiplyMatrices(_contrastMatrix(5), _saturationMatrix(20)),
+        ),
       );
     case 'portrait':
-      // saturate(1.05) contrast(1.05) brightness(1.03) sepia(0.05)
+      // saturate(1.05) contrast(1.05) brightness(1.03) sepia(0.05) → Sepia·B·C·S
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_saturationMatrix(5), _contrastMatrix(5)),
-          _brightnessMatrix(3),
-        ),
         _sepiaMatrix(0.05),
+        _multiplyMatrices(
+          _brightnessMatrix(3),
+          _multiplyMatrices(_contrastMatrix(5), _saturationMatrix(5)),
+        ),
       );
     case 'japanese':
-      // saturate(0.85) contrast(0.92) brightness(1.1) hue-rotate(3deg)
+      // saturate(0.85) contrast(0.92) brightness(1.1) hue-rotate(3deg) → Tint·B·C·S
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_saturationMatrix(-15), _contrastMatrix(-8)),
-          _brightnessMatrix(10),
-        ),
         _tintMatrix(3.3),
+        _multiplyMatrices(
+          _brightnessMatrix(10),
+          _multiplyMatrices(_contrastMatrix(-8), _saturationMatrix(-15)),
+        ),
       );
     case 'cyberpunk':
-      // saturate(1.4) contrast(1.2) hue-rotate(-15deg) brightness(0.95)
+      // saturate(1.4) contrast(1.2) hue-rotate(-15deg) brightness(0.95) → B·Tint·C·S
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_saturationMatrix(40), _contrastMatrix(20)),
-          _tintMatrix(-16.5),
-        ),
         _brightnessMatrix(-5),
+        _multiplyMatrices(
+          _tintMatrix(-16.5),
+          _multiplyMatrices(_contrastMatrix(20), _saturationMatrix(40)),
+        ),
       );
     case 'sepia_classic':
-      // sepia(0.7) contrast(1.05) brightness(1.02)
+      // sepia(0.7) contrast(1.05) brightness(1.02) → B·C·Sepia
       return _multiplyMatrices(
-        _multiplyMatrices(_sepiaMatrix(0.7), _contrastMatrix(5)),
         _brightnessMatrix(2),
+        _multiplyMatrices(_contrastMatrix(5), _sepiaMatrix(0.7)),
       );
     case 'mist':
-      // contrast(0.88) brightness(1.12) saturate(0.9)
+      // contrast(0.88) brightness(1.12) saturate(0.9) → S·B·C
       return _multiplyMatrices(
-        _multiplyMatrices(_contrastMatrix(-12), _brightnessMatrix(12)),
         _saturationMatrix(-10),
+        _multiplyMatrices(_brightnessMatrix(12), _contrastMatrix(-12)),
       );
     case 'rouge':
-      // sepia(0.2) saturate(1.1) hue-rotate(-10deg) brightness(1.02)
+      // sepia(0.2) saturate(1.1) hue-rotate(-10deg) brightness(1.02) → B·Tint·S·Sepia
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_sepiaMatrix(0.2), _saturationMatrix(10)),
-          _tintMatrix(-11),
-        ),
         _brightnessMatrix(2),
+        _multiplyMatrices(
+          _tintMatrix(-11),
+          _multiplyMatrices(_saturationMatrix(10), _sepiaMatrix(0.2)),
+        ),
       );
     case 'twilight':
-      // saturate(1.15) hue-rotate(15deg) contrast(1.05) brightness(0.95)
+      // saturate(1.15) hue-rotate(15deg) contrast(1.05) brightness(0.95) → B·C·Tint·S
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_saturationMatrix(15), _tintMatrix(16.5)),
-          _contrastMatrix(5),
-        ),
         _brightnessMatrix(-5),
+        _multiplyMatrices(
+          _contrastMatrix(5),
+          _multiplyMatrices(_tintMatrix(16.5), _saturationMatrix(15)),
+        ),
       );
     case 'cyan':
-      // saturate(1.1) hue-rotate(20deg) contrast(1.05) brightness(1.02)
+      // saturate(1.1) hue-rotate(20deg) contrast(1.05) brightness(1.02) → B·C·Tint·S
       return _multiplyMatrices(
-        _multiplyMatrices(
-          _multiplyMatrices(_saturationMatrix(10), _tintMatrix(22)),
-          _contrastMatrix(5),
-        ),
         _brightnessMatrix(2),
+        _multiplyMatrices(
+          _contrastMatrix(5),
+          _multiplyMatrices(_tintMatrix(22), _saturationMatrix(10)),
+        ),
       );
     default:
       return List.from(_identityMatrix);
@@ -357,63 +366,75 @@ List<double> _lutMatrix(String name) {
 
 /// Returns a ColorFilter approximating a LUT preset.
 ColorFilter approximateLut(String lutName) {
-  return ColorFilter.matrix(_lutMatrix(lutName));
+  return ColorFilter.matrix(composeLutMatrix(lutName));
 }
 
 // ─── Combined PostProcess → ColorFilter ───
 
-/// Builds a combined ColorFilter from PostProcess parameters for camera preview.
-/// Corresponds to uni-app's buildCssFilter() but returns a ColorFilter instead of a CSS string.
-ColorFilter fromPostProcess(PostProcess process) {
+/// Composes the raw 5×4 ColorMatrix (List<double> of length 20) for a
+/// PostProcess. Exposed so tests can verify numeric matrix values.
+///
+/// Composition order matches the CSS filter-string order from
+/// filterRecipe.ts `buildCssFilter`: brightness → contrast → saturation →
+/// temperature → tint → highlights/shadows/blackPoint → clarity → vibrance →
+/// brilliance → systemFilter → LUT. In matrix terms the LAST-applied filter is
+/// LEFTMOST (outer), so each subsequent adjustment is prepended to the left.
+List<double> composePostProcessMatrix(PostProcess process) {
   final color = process.color;
 
-  // Build the base color adjustment matrix (order matters):
-  // brightness → contrast → saturation → temperature → tint
+  // Base color: brightness applied first (rightmost), tint applied last (leftmost)
   var matrix = _brightnessMatrix(color.brightness);
-  matrix = _multiplyMatrices(matrix, _contrastMatrix(color.contrast));
-  matrix = _multiplyMatrices(matrix, _saturationMatrix(color.saturation));
-  matrix = _multiplyMatrices(matrix, _temperatureMatrix(color.temperature));
-  matrix = _multiplyMatrices(matrix, _tintMatrix(color.tint));
+  matrix = _multiplyMatrices(_contrastMatrix(color.contrast), matrix);
+  matrix = _multiplyMatrices(_saturationMatrix(color.saturation), matrix);
+  matrix = _multiplyMatrices(_temperatureMatrix(color.temperature), matrix);
+  matrix = _multiplyMatrices(_tintMatrix(color.tint), matrix);
 
   // Highlights, shadows, blackPoint (approximate via brightness/contrast)
+  // Applied after base color in CSS order → prepended to the left.
   if (color.highlights != null && color.highlights != 0) {
-    matrix = _multiplyMatrices(matrix, _brightnessMatrix(color.highlights! / 3));
+    matrix = _multiplyMatrices(_brightnessMatrix(color.highlights! / 3), matrix);
   }
   if (color.shadows != null && color.shadows != 0) {
-    matrix = _multiplyMatrices(matrix, _brightnessMatrix(color.shadows! / 2.5));
-    matrix = _multiplyMatrices(matrix, _contrastMatrix(-color.shadows! / 4));
+    matrix = _multiplyMatrices(_brightnessMatrix(color.shadows! / 2.5), matrix);
+    matrix = _multiplyMatrices(_contrastMatrix(-color.shadows! / 4), matrix);
   }
   if (color.blackPoint != null && color.blackPoint != 0) {
-    matrix = _multiplyMatrices(matrix, _contrastMatrix(color.blackPoint! / 2));
+    matrix = _multiplyMatrices(_contrastMatrix(color.blackPoint! / 2), matrix);
   }
 
   // Clarity (mid-tone contrast)
   if (color.clarity != null && color.clarity != 0) {
-    matrix = _multiplyMatrices(matrix, _contrastMatrix(color.clarity! / 2));
+    matrix = _multiplyMatrices(_contrastMatrix(color.clarity! / 2), matrix);
   }
 
   // Vibrance (approximate as saturation)
   if (color.vibrance != null && color.vibrance != 0) {
-    matrix = _multiplyMatrices(matrix, _saturationMatrix(color.vibrance! / 1.5));
+    matrix = _multiplyMatrices(_saturationMatrix(color.vibrance! / 1.5), matrix);
   }
 
   // Brilliance (brightness + saturation)
   if (color.brilliance != null && color.brilliance != 0) {
-    matrix = _multiplyMatrices(matrix, _brightnessMatrix(color.brilliance! / 3));
-    matrix = _multiplyMatrices(matrix, _saturationMatrix(color.brilliance! / 2));
+    matrix = _multiplyMatrices(_brightnessMatrix(color.brilliance! / 3), matrix);
+    matrix = _multiplyMatrices(_saturationMatrix(color.brilliance! / 2), matrix);
   }
 
-  // System filter (applied before LUT)
+  // System filter (applied before LUT in CSS order → prepended before LUT)
   if (process.systemFilter != null && process.systemFilter != 'none') {
-    matrix = _multiplyMatrices(matrix, _systemFilterMatrix(process.systemFilter!));
+    matrix = _multiplyMatrices(composeSystemFilterMatrix(process.systemFilter!), matrix);
   }
 
-  // LUT preset (applied last)
+  // LUT preset (applied last in CSS order → leftmost)
   if (process.lut != 'none') {
-    matrix = _multiplyMatrices(matrix, _lutMatrix(process.lut));
+    matrix = _multiplyMatrices(composeLutMatrix(process.lut), matrix);
   }
 
-  return ColorFilter.matrix(matrix);
+  return matrix;
+}
+
+/// Builds a combined ColorFilter from PostProcess parameters for camera preview.
+/// Corresponds to uni-app's buildCssFilter() but returns a ColorFilter instead of a CSS string.
+ColorFilter fromPostProcess(PostProcess process) {
+  return ColorFilter.matrix(composePostProcessMatrix(process));
 }
 
 // ─── Display Labels ───
