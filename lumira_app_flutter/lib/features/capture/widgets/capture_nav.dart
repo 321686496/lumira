@@ -45,36 +45,42 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                 icon: Icons.arrow_back_ios_new,
                 onPressed: onBack,
               ),
-              // 标题
+              // 标题（点击打开参数面板）
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(
-                      hasTemplate ? '模板拍摄' : '自由调参',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                        height: 1.2,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => ref
+                      .read(CaptureState.panelExpandedProvider.notifier)
+                      .state = true,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        hasTemplate ? '模板拍摄' : '自由调参',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (hasTemplate)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 2),
-                        child: Text(
-                          '点击应用模板参数',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.white70,
-                            height: 1.2,
+                      if (hasTemplate)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: Text(
+                            '点击调整参数',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.white70,
+                              height: 1.2,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               // 右侧操作按钮组

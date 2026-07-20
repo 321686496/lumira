@@ -104,7 +104,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('模板拍摄'), findsOneWidget);
-    expect(find.text('点击应用模板参数'), findsOneWidget);
+    expect(find.text('点击调整参数'), findsOneWidget);
     // 模板叠图 / 剪影显隐按钮应出现
     expect(find.byIcon(Icons.crop_free), findsOneWidget);
     expect(find.byIcon(Icons.accessibility_new), findsOneWidget);
