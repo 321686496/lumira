@@ -60,10 +60,12 @@ class NeuCard extends ConsumerWidget {
   Widget _buildCard(AppThemeData appTheme, ThemeTokens tokens, double radius) {
     switch (appTheme.style) {
       case UIStyle.neumorphic:
+        // Forced fix: 新拟态需卡片与背景同色 + 双向阴影才有效果。
+        // 使用 surface（接近 canvas 但稍亮）增强阴影对比，避免与背景完全融合看不见。
         return Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: tokens.canvas, // 与背景同色形成 3D 效果
+            color: tokens.surface, // surface 比 canvas 稍亮，增强阴影对比
             borderRadius: BorderRadius.circular(radius),
             boxShadow: tokens.shadowConvex,
           ),
@@ -71,59 +73,138 @@ class NeuCard extends ConsumerWidget {
         );
 
       case UIStyle.flat:
+        // Forced fix: 扁平化使用 surfaceAlt 区分卡片与背景，无阴影、细边框。
         return Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: tokens.canvas,
+            color: tokens.surfaceAlt, // 区分于 canvas 背景
             borderRadius: BorderRadius.circular(radius),
-            border: Border.all(color: tokens.divider, width: 0.5),
+            border: Border.all(color: tokens.divider, width: 1),
           ),
           child: child,
         );
 
       case UIStyle.glass:
-        // 半透明 + backdrop-filter + 1rpx white 30% border
+        // Forced fix: 玻璃拟态彻底重做，加强 5 个视觉特征让 glass 效果明显：
+        // 1. blur 25（强模糊）
+        // 2. 3 段渐变：顶部高光白 0.85 → 中部白 0.50 → 底部白 0.30（玻璃边缘反射）
+        // 3. 双层边框：外白 0.6 + 内白 0.15（玻璃厚度感）
+        // 4. 顶部高光反射：Stack 顶层放一个 LinearGradient（白 0.45 → 透明）只覆盖顶部 1/3
+        // 5. 深阴影：brand 色微染 + 黑色阴影双层
         return ClipRRect(
           borderRadius: BorderRadius.circular(radius),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              padding: padding,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(appTheme.surfaceAlpha),
-                borderRadius: BorderRadius.circular(radius),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 0.5,
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x14000000),
-                    offset: Offset(0, 4),
-                    blurRadius: 16,
+          child: Stack(
+            children: [
+              // 层 1: BackdropFilter blur
+              Positioned.fill(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      // 3 段渐变模拟玻璃边缘反射
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withOpacity(0.85),
+                          Colors.white.withOpacity(0.50),
+                          Colors.white.withOpacity(0.30),
+                        ],
+                        stops: const [0.0, 0.5, 1.0],
+                      ),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.6),
+                        width: 1.2,
+                      ),
+                    ),
                   ),
-                ],
+                ),
               ),
-              child: child,
-            ),
+              // 层 2: 顶部高光反射（玻璃边缘高光）
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 40,
+                child: IgnorePointer(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(radius),
+                      topRight: Radius.circular(radius),
+                    ),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.white.withOpacity(0.45),
+                            Colors.white.withOpacity(0.0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // 层 3: 内边框（玻璃厚度感）
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    margin: const EdgeInsets.all(1.5),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(radius - 1.5),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.15),
+                        width: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // 层 4: 内容
+              Padding(
+                padding: padding,
+                child: child,
+              ),
+            ],
           ),
         );
 
       case UIStyle.female:
+        // Forced fix: 女性美学加强渐变对比与高光，增加品牌色饱和度。
         // 多渐变卡片：5 层视觉
-        // 层 1: linear gradient 基底
-        // 层 2: radial highlight
-        // 层 3: surface 75% alpha（由 linear gradient 提供）
-        // 层 4: hairline border
-        // 层 5: brand shadow（cardShadow）
         final mg = appTheme.multiGradient!;
         return Container(
           padding: padding,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
-            gradient: mg.linear,
-            border: mg.hairlineBorder,
-            boxShadow: appTheme.cardShadow,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                tokens.brandSubtle.withOpacity(0.85),
+                tokens.surface.withOpacity(0.65),
+                tokens.brandLight.withOpacity(0.45),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.7),
+              width: 0.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: tokens.brand.withOpacity(0.20),
+                offset: const Offset(0, 10),
+                blurRadius: 32,
+              ),
+              BoxShadow(
+                color: tokens.brandLight.withOpacity(0.15),
+                offset: const Offset(0, -2),
+                blurRadius: 8,
+              ),
+            ],
           ),
           child: CustomPaint(
             painter: _RadialHighlightPainter(mg.radialHighlight),

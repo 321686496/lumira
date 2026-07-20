@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/home_mock_data.dart';
@@ -71,10 +72,12 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _goCapture() => GoRouter.of(context).push(RouteNames.capture);
   void _goTemplates() => context.go(RouteNames.templates);
   void _goChallenge() => context.go(RouteNames.challenge);
+  void _goInspiration() => GoRouter.of(context).push(RouteNames.inspiration);
   void _goGallery() => GoRouter.of(context).push(RouteNames.gallery);
   void _goSceneGuide(String sceneId) {
     // 项目记忆规则：场景推荐卡片跳转 scene-guide?scene=xxx（不是 scene-detail）
-    context.go(
+    // Forced fix: 改为 push 而非 context.go，避免返回时跳到其他页面或退出应用
+    GoRouter.of(context).push(
       RouteNames.build(
         RouteNames.captureSceneGuide,
         {RouteNames.paramScene: sceneId},
@@ -112,6 +115,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         children: [
           // 1. 径向渐变背景装饰（glass 风格 backdrop-filter 可见性必需）
           _BackgroundDecoration(tokens: tokens),
+          // Forced fix: glass 风格彩色斑点背景（让毛玻璃效果可见）
+          const Positioned.fill(child: GlassBackground()),
           // 2. 主内容层（可滚动）
           SafeArea(
             child: ListView(
@@ -129,7 +134,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   child: QuickActions(
                     onCapture: _goCapture,
                     onTemplates: _goTemplates,
-                    onInspiration: _goChallenge,
+                    onInspiration: _goInspiration,
                     onGallery: _goGallery,
                   ),
                 ),
@@ -159,16 +164,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                     onLinkTap: (label) {
                       switch (label) {
                         case '查看全部':
-                          context.go(RouteNames.scenes);
+                          GoRouter.of(context).push(RouteNames.scenes);
                           break;
                         case '收藏':
-                          context.go(RouteNames.build(
+                          GoRouter.of(context).push(RouteNames.build(
                             RouteNames.captureSceneManage,
                             {RouteNames.paramTab: 'fav'},
                           ));
                           break;
                         case '管理':
-                          context.go(RouteNames.captureSceneManage);
+                          GoRouter.of(context).push(RouteNames.captureSceneManage);
                           break;
                       }
                     },
@@ -184,10 +189,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                       crossAxisCount: 2,
                       mainAxisSpacing: 12, // 24rpx → 12dp
                       crossAxisSpacing: 12,
-                      // Forced fix: brief 原 0.66 导致 SceneRecoCard 文字区溢出 15px
-                      // (3:4 图 496dp + 文字区 ~100dp = 596dp，0.66 给 567dp 不足)。
-                      // 改为 0.60 给 623dp，留 27dp 缓冲避免溢出。
-                      childAspectRatio: 0.60,
+                      // Forced fix: SceneRecoCard 文字区需要 ~101dp（12+14+4+33+6+14+14）
+                      // + 图片 3:4 占 0.75w。设 w=152.7dp：
+                      //   0.50 → h=305.4dp，图 203.6 + 文字 101 = 304.6dp ✓
+                      //   0.60 → h=254.5dp，图 203.6 + 文字 101 = 304.6dp ✗ 溢出 50dp（原报错 49px）
+                      childAspectRatio: 0.50,
                       children: HomeMockData.scenes
                           .map((scene) => SceneRecoCard(
                                 scene: scene,
@@ -220,12 +226,12 @@ class _HomePageState extends ConsumerState<HomePage> {
                       crossAxisCount: 2,
                       mainAxisSpacing: 12,
                       crossAxisSpacing: 12,
-                      childAspectRatio: 0.66,
+                      childAspectRatio: 0.56,
                       children: HomeMockData.recents
                           .map((recent) => RecentShotCard(
                                 recent: recent,
                                 onTap: () => GoRouter.of(context)
-                                    .push(RouteNames.galleryDetail),
+                                    .push(RouteNames.gallery),
                               ))
                           .toList(),
                     ),

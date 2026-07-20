@@ -311,6 +311,87 @@ class _ActionBar extends StatelessWidget {
   const _ActionBar({required this.tokens});
   final ThemeTokens tokens;
 
+  void _showImportSheet(BuildContext context, ThemeTokens tokens) {
+    // Forced fix: 之前"导入模板"按钮错误跳转到 templatesEditor（新建模板）。
+    // 正确行为：弹出导入方式选择 BottomSheet（文件 / 链接 / 扫码）。
+    // mock 阶段选择后显示 SnackBar 提示。
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: tokens.canvas,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  '导入模板',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _ImportOption(
+                icon: Icons.insert_drive_file_outlined,
+                title: '从文件导入',
+                subtitle: '支持 .json / .lumira 模板文件',
+                tokens: tokens,
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('文件导入功能即将上线'),
+                      duration: Duration(milliseconds: 1500),
+                    ),
+                  );
+                },
+              ),
+              _ImportOption(
+                icon: Icons.link_outlined,
+                title: '从链接导入',
+                subtitle: '粘贴分享链接',
+                tokens: tokens,
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('链接导入功能即将上线'),
+                      duration: Duration(milliseconds: 1500),
+                    ),
+                  );
+                },
+              ),
+              _ImportOption(
+                icon: Icons.qr_code_scanner_outlined,
+                title: '扫码导入',
+                subtitle: '扫描模板分享二维码',
+                tokens: tokens,
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('扫码导入功能即将上线'),
+                      duration: Duration(milliseconds: 1500),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -332,10 +413,78 @@ class _ActionBar extends StatelessWidget {
               icon: Icons.download_outlined,
               variant: LumiraButtonVariant.ghost,
               expand: true,
-              onPressed: () => GoRouter.of(context).push(RouteNames.templatesEditor),
+              onPressed: () => _showImportSheet(context, tokens),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 导入方式选项
+class _ImportOption extends StatelessWidget {
+  const _ImportOption({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.tokens,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final ThemeTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: tokens.brand.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: tokens.brand),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 12,
+              color: tokens.textTertiary,
+            ),
+          ],
+        ),
       ),
     );
   }

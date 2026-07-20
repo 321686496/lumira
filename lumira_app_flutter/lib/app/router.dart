@@ -20,6 +20,7 @@ import '../features/home/pages/home_page.dart';
 import '../features/inspiration/pages/inspiration_page.dart';
 import '../features/profile/pages/profile_academy_detail_page.dart';
 import '../features/profile/pages/profile_academy_page.dart';
+import '../features/profile/pages/profile_about_page.dart';
 import '../features/profile/pages/profile_collection_detail_page.dart';
 import '../features/profile/pages/profile_collections_page.dart';
 import '../features/profile/pages/profile_growth_page.dart';
@@ -266,6 +267,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileMyTemplates,
         name: 'profileMyTemplates',
         builder: (context, state) => const ProfileMyTemplatesPage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileAbout,
+        name: 'profileAbout',
+        builder: (context, state) => const ProfileAboutPage(),
       ),
 
       // === 场景 ===

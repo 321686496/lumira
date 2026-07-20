@@ -59,7 +59,14 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
     }
   }
 
-  void _back() => GoRouter.of(context).pop();
+  void _back() {
+    // Forced fix: canPop 保护，避免 pop 到空栈退出应用
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      GoRouter.of(context).go(RouteNames.challenge);
+    }
+  }
 
   void _goCapture() => GoRouter.of(context).push(RouteNames.capture);
 

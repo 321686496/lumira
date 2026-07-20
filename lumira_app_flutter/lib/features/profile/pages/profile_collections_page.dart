@@ -137,7 +137,10 @@ class _GridWrap extends StatelessWidget {
         crossAxisCount: 2,
         crossAxisSpacing: 16, // 32rpx → 16dp
         mainAxisSpacing: 16,
-        childAspectRatio: 0.79, // uni-app 卡片宽高比
+        // Forced fix: 原 0.79 导致 33px 溢出。
+        // _CollectionCard 文字区 = 14*1.4+2+11+26 = 58.6dp
+        // 设 w=154: 0.70 → h=220dp，图 Expanded 占 220-58.6 = 161.4dp ✓
+        childAspectRatio: 0.70,
         children: [
           for (var i = 0; i < collections.length; i++)
             FadeUp(

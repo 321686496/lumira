@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/router/route_names.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/profile_mock_data.dart';
@@ -17,8 +19,8 @@ import '../data/profile_mock_data.dart';
 /// - 颜色主题区（2 列 × 8 项）：8 套主题
 /// - 跟随系统 toggle
 ///
-/// 切换后即时生效：因 themeKeyProvider / uiStyleProvider 是 StateProvider，
-/// 修改 state 后所有 ref.watch 的 widget 自动 rebuild。
+/// Forced fix: 切换风格后整页 chrome（背景/_StyleCard/_ThemeCard/_FollowSystemCard）
+/// 都根据当前 appTheme.style 动态渲染，让用户能即时预览效果。
 class ProfileThemePage extends ConsumerStatefulWidget {
   const ProfileThemePage({super.key});
 
@@ -55,7 +57,8 @@ class _ProfileThemePageState extends ConsumerState<ProfileThemePage> {
   Widget build(BuildContext context) {
     final currentTheme = ref.watch(themeKeyProvider);
     final currentStyle = ref.watch(uiStyleProvider);
-    final tokens = ref.watch(themeTokensProvider);
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -65,52 +68,163 @@ class _ProfileThemePageState extends ConsumerState<ProfileThemePage> {
         transparent: true,
         leading: _BackButton(tokens: tokens),
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(-0.8, -0.6),
-            radius: 1.2,
-            colors: [
-              tokens.brandSubtle.withOpacity(0.35),
-              tokens.canvas.withOpacity(0.0),
-            ],
+      body: Stack(
+        children: [
+          // Forced fix: 玻璃拟态需彩色背景才能体现 blur。
+          // 不同风格给不同强度装饰背景：
+          // - neumorphic: 单色 canvas（保持拟态同色）
+          // - flat: 轻微径向
+          // - glass: 强径向 + 多色斑（让 blur 后能看出毛玻璃）
+          // - female: 柔和品牌色径向
+          Positioned.fill(
+            child: _StyleBackground(style: currentStyle, tokens: tokens),
           ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(12, 20, 12, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _SectionTitle(text: 'UI 风格', tokens: tokens),
-                const SizedBox(height: 8),
-                _StyleGrid(
-                  currentStyle: currentStyle,
-                  tokens: tokens,
-                  onSelect: _selectStyle,
-                ),
-                const SizedBox(height: 24),
-                _SectionTitle(text: '颜色主题', tokens: tokens),
-                const SizedBox(height: 8),
-                _ThemeGrid(
-                  currentTheme: currentTheme,
-                  tokens: tokens,
-                  onSelect: _selectTheme,
-                ),
-                const SizedBox(height: 16),
-                _FollowSystemCard(
-                  tokens: tokens,
-                  value: _followSystem,
-                  onChanged: (v) => setState(() => _followSystem = v),
-                ),
-                const SizedBox(height: 12),
-                _BottomNote(tokens: tokens),
-              ],
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(12, 20, 12, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _SectionTitle(text: 'UI 风格', tokens: tokens),
+                  const SizedBox(height: 8),
+                  _StyleGrid(
+                    currentStyle: currentStyle,
+                    tokens: tokens,
+                    onSelect: _selectStyle,
+                  ),
+                  const SizedBox(height: 24),
+                  _SectionTitle(text: '颜色主题', tokens: tokens),
+                  const SizedBox(height: 8),
+                  _ThemeGrid(
+                    currentTheme: currentTheme,
+                    appTheme: appTheme,
+                    onSelect: _selectTheme,
+                  ),
+                  const SizedBox(height: 16),
+                  _FollowSystemCard(
+                    tokens: tokens,
+                    value: _followSystem,
+                    onChanged: (v) => setState(() => _followSystem = v),
+                  ),
+                  const SizedBox(height: 12),
+                  _BottomNote(tokens: tokens),
+                ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
+  }
+}
+
+/// 不同风格的页面背景装饰
+class _StyleBackground extends StatelessWidget {
+  const _StyleBackground({required this.style, required this.tokens});
+  final UIStyle style;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    switch (style) {
+      case UIStyle.neumorphic:
+        // 单色 canvas，保持拟态同色背景
+        return ColoredBox(color: tokens.canvas);
+      case UIStyle.flat:
+        // 轻微径向点缀
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: tokens.canvas,
+            gradient: RadialGradient(
+              center: const Alignment(-0.8, -0.6),
+              radius: 1.2,
+              colors: [
+                tokens.brandSubtle.withOpacity(0.20),
+                tokens.canvas,
+              ],
+              stops: const [0.0, 0.7],
+            ),
+          ),
+        );
+      case UIStyle.glass:
+        // 强径向 + 多色斑，让 blur 后能看出毛玻璃
+        return Stack(
+          children: [
+            ColoredBox(color: tokens.canvas),
+            Positioned(
+              top: -60,
+              left: -40,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tokens.brand.withOpacity(0.35),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 120,
+              right: -60,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tokens.brandLight.withOpacity(0.30),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -40,
+              left: 80,
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tokens.brandSubtle.withOpacity(0.55),
+                ),
+              ),
+            ),
+          ],
+        );
+      case UIStyle.female:
+        // 柔和品牌色径向 + 高光
+        return Stack(
+          children: [
+            ColoredBox(color: tokens.canvas),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(-0.7, -0.5),
+                    radius: 1.4,
+                    colors: [
+                      tokens.brandSubtle.withOpacity(0.55),
+                      tokens.brandLight.withOpacity(0.20),
+                      tokens.canvas,
+                    ],
+                    stops: const [0.0, 0.4, 0.85],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 80,
+              right: -30,
+              child: Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tokens.brand.withOpacity(0.18),
+                ),
+              ),
+            ),
+          ],
+        );
+    }
   }
 }
 
@@ -121,7 +235,14 @@ class _BackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => GoRouter.of(context).pop(),
+      onTap: () {
+        // Forced fix: canPop 保护
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          GoRouter.of(context).go(RouteNames.profileSettings);
+        }
+      },
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -184,6 +305,8 @@ class _StyleGrid extends StatelessWidget {
   }
 }
 
+/// Forced fix: _StyleCard 自身按 preview.style 渲染，
+/// 让用户在卡片本身就能预览到该风格的效果（不只是 60dp 的小预览）。
 class _StyleCard extends StatelessWidget {
   const _StyleCard({
     required this.preview,
@@ -198,68 +321,191 @@ class _StyleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isGlass = preview.style == UIStyle.glass;
+    final isFemale = preview.style == UIStyle.female;
+    final isNeu = preview.style == UIStyle.neumorphic;
+
+    // 选中边框颜色
+    final selectedBorder = Border.all(color: tokens.brand, width: 1.5);
+    final normalBorder = Border.all(color: tokens.divider, width: 0.5);
+
+    // 卡片内容
+    final content = Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 预览区
+          SizedBox(
+            height: 60,
+            child: _StylePreview(style: preview.style, tokens: tokens),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            preview.label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            preview.description,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: tokens.textTertiary,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Widget card;
+    if (isGlass) {
+      // Forced fix: glass 预览卡片与 NeuCard.glass 保持一致（5 层视觉）
+      // 1. blur 25
+      // 2. 3 段渐变白 0.85→0.50→0.30
+      // 3. 顶部高光反射
+      // 4. 双层边框
+      // 5. 深阴影
+      card = ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.85),
+                        Colors.white.withOpacity(0.50),
+                        Colors.white.withOpacity(0.30),
+                      ],
+                      stops: const [0.0, 0.5, 1.0],
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.6),
+                      width: 1.2,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // 顶部高光
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 30,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.white.withOpacity(0.45),
+                        Colors.white.withOpacity(0.0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // 选中边框（叠加在 glass 边框上）
+            if (selected)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: tokens.brand, width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
+            content,
+          ],
+        ),
+      );
+    } else if (isFemale) {
+      // 女性美学：多渐变
+      card = Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              tokens.brandSubtle.withOpacity(0.85),
+              tokens.surface.withOpacity(0.65),
+              tokens.brandLight.withOpacity(0.45),
+            ],
+            stops: const [0.0, 0.5, 1.0],
+          ),
+          border: selected
+              ? selectedBorder
+              : Border.all(color: Colors.white.withOpacity(0.6), width: 0.8),
+          boxShadow: [
+            BoxShadow(
+              color: tokens.brand.withOpacity(0.20),
+              offset: const Offset(0, 8),
+              blurRadius: 24,
+            ),
+          ],
+        ),
+        child: content,
+      );
+    } else if (isNeu) {
+      // 新拟态：同色 + 双向阴影
+      card = Container(
+        decoration: BoxDecoration(
+          color: tokens.surface,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: selected ? tokens.shadowConcaveSubtle : tokens.shadowConvexSubtle,
+        ),
+        child: content,
+      );
+    } else {
+      // 扁平化：纯色 + 边框
+      card = Container(
+        decoration: BoxDecoration(
+          color: tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: selected ? selectedBorder : normalBorder,
+        ),
+        child: content,
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        decoration: BoxDecoration(
-          color: tokens.canvas,
-          borderRadius: BorderRadius.circular(14),
-          border: selected
-              ? Border.all(color: tokens.brand, width: 1)
-              : Border.all(color: tokens.divider, width: 0.5),
-          boxShadow: selected ? tokens.shadowConcaveSubtle : null,
-        ),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 预览区
-                  SizedBox(
-                    height: 60,
-                    child: _StylePreview(style: preview.style, tokens: tokens),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    preview.label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    preview.description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: tokens.textTertiary,
-                    ),
-                  ),
-                ],
+      child: Stack(
+        children: [
+          card,
+          if (selected)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  color: tokens.brand,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, size: 14, color: Colors.white),
               ),
             ),
-            if (selected)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: tokens.brand,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.check, size: 14, color: Colors.white),
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -279,7 +525,7 @@ class _StylePreview extends StatelessWidget {
             width: 50,
             height: 40,
             decoration: BoxDecoration(
-              color: tokens.canvas,
+              color: tokens.surface,
               borderRadius: BorderRadius.circular(8),
               boxShadow: tokens.shadowConvexSubtle,
             ),
@@ -291,7 +537,7 @@ class _StylePreview extends StatelessWidget {
             width: 50,
             height: 40,
             decoration: BoxDecoration(
-              color: tokens.canvas,
+              color: tokens.surfaceAlt,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: tokens.divider, width: 1),
             ),
@@ -301,11 +547,11 @@ class _StylePreview extends StatelessWidget {
         return ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
+            filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [tokens.brand.withOpacity(0.2), tokens.brandSubtle.withOpacity(0.3)],
+                  colors: [tokens.brand.withOpacity(0.25), tokens.brandSubtle.withOpacity(0.35)],
                 ),
               ),
               child: Center(
@@ -313,9 +559,9 @@ class _StylePreview extends StatelessWidget {
                   width: 40,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.45),
+                    color: Colors.white.withOpacity(0.55),
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.white.withOpacity(0.3), width: 0.5),
+                    border: Border.all(color: Colors.white.withOpacity(0.4), width: 0.5),
                   ),
                 ),
               ),
@@ -332,9 +578,9 @@ class _StylePreview extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: tokens.brand.withOpacity(0.25),
-                    blurRadius: 16,
-                    spreadRadius: 2,
+                    color: tokens.brand.withOpacity(0.30),
+                    blurRadius: 18,
+                    spreadRadius: 3,
                   ),
                 ],
               ),
@@ -345,9 +591,16 @@ class _StylePreview extends StatelessWidget {
               width: 50,
               height: 32,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.55),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.70),
+                    tokens.brandSubtle.withOpacity(0.60),
+                  ],
+                ),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.5), width: 0.5),
+                border: Border.all(color: Colors.white.withOpacity(0.6), width: 0.5),
               ),
             ),
           ],
@@ -359,11 +612,11 @@ class _StylePreview extends StatelessWidget {
 class _ThemeGrid extends StatelessWidget {
   const _ThemeGrid({
     required this.currentTheme,
-    required this.tokens,
+    required this.appTheme,
     required this.onSelect,
   });
   final ThemeKey currentTheme;
-  final ThemeTokens tokens;
+  final AppThemeData appTheme;
   final void Function(ThemeKey) onSelect;
 
   @override
@@ -379,7 +632,7 @@ class _ThemeGrid extends StatelessWidget {
         return _ThemeCard(
           preview: t,
           selected: t.key == currentTheme,
-          tokens: tokens,
+          appTheme: appTheme,
           onTap: () => onSelect(t.key),
         );
       }).toList(),
@@ -387,104 +640,102 @@ class _ThemeGrid extends StatelessWidget {
   }
 }
 
+/// Forced fix: _ThemeCard 使用 NeuCard 让卡片本身按当前风格渲染。
 class _ThemeCard extends StatelessWidget {
   const _ThemeCard({
     required this.preview,
     required this.selected,
-    required this.tokens,
+    required this.appTheme,
     required this.onTap,
   });
   final ThemePreview preview;
   final bool selected;
-  final ThemeTokens tokens;
+  final AppThemeData appTheme;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = appTheme.tokens;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
+      child: NeuCard(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: tokens.canvas,
-          borderRadius: BorderRadius.circular(14),
-          border: selected
-              ? Border.all(color: tokens.brand, width: 1)
-              : Border.all(color: tokens.divider, width: 0.5),
-          boxShadow: selected ? tokens.shadowConcaveSubtle : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            // 色块
-            SizedBox(
-              height: 48,
-              child: Stack(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: preview.canvasColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 4,
-                    right: 4,
-                    child: Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: preview.brandColor,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
-                      ),
-                    ),
-                  ),
-                  if (selected)
-                    Positioned(
-                      top: 6,
-                      right: 6,
-                      child: Container(
-                        width: 20,
-                        height: 20,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 色块
+                SizedBox(
+                  height: 48,
+                  child: Stack(
+                    children: [
+                      Container(
                         decoration: BoxDecoration(
-                          color: tokens.brand,
-                          shape: BoxShape.circle,
+                          color: preview.canvasColor,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(Icons.check, size: 14, color: Colors.white),
                       ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              preview.label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            // 4 个 color dots
-            Row(
-              children: preview.previewColors.map((c) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: c,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: tokens.divider, width: 0.5),
-                    ),
+                      Positioned(
+                        bottom: 4,
+                        right: 4,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: preview.brandColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                );
-              }).toList(),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  preview.label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // 4 个 color dots
+                Row(
+                  children: preview.previewColors.map((c) {
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: c,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: tokens.divider, width: 0.5),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
             ),
+            if (selected)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: tokens.brand,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check, size: 14, color: Colors.white),
+                ),
+              ),
           ],
         ),
       ),

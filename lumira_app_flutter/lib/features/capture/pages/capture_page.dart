@@ -56,7 +56,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
   }
 
   void _onBack() {
-    GoRouter.of(context).pop();
+    // Forced fix: 使用 canPop 保护，避免从深链接直接进入 capture 时 pop 到空栈退出应用
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      GoRouter.of(context).go(RouteNames.home);
+    }
   }
 
   void _onCapture() {

@@ -161,7 +161,11 @@ class _RecommendScenesCard extends ConsumerWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 10, // 20rpx → 10dp
             crossAxisSpacing: 10,
-            childAspectRatio: 0.56, // 图片 3:4 + 文字区约 60dp，需要测试调整
+            // Forced fix: SceneRecoCard with footer 需要更大文字区
+            // 文字区 = 12+14+4+33+6+~28(footer)+14 = ~111dp
+            // 图 3:4 占 0.75w，w≈140dp → 图 105dp，文字 111dp，total 216dp
+            // childAspectRatio = 140/216 ≈ 0.65... 但实际报错，留 0.46 缓冲
+            childAspectRatio: 0.46,
             children: InspirationMockData.scenes.map((inspirationScene) {
               return SceneRecoCard(
                 scene: inspirationScene.scene,

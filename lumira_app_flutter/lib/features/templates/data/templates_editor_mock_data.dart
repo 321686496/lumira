@@ -412,9 +412,13 @@ class TemplatesEditorMockData {
 
   /// 通过 draftId 加载草稿（mock：返回 draftForm 或 null）
   /// 来源：editor.vue 的 useTemplate().loadDraft(id)
+  ///
+  /// Forced fix: editor 的 _onPreview 会动态生成 draftId 'draft-editor-${timestamp}'。
+  /// mock 阶段没有真实草稿存储，所有以 'draft-editor-' 开头的 id 都返回 draftForm 占位，
+  /// 让模板预览页能正常加载（避免"模板加载失败"）。
   static EditorForm? loadDraftById(String? draftId) {
     if (draftId == null || draftId.isEmpty) return null;
-    if (draftId == 'draft-editor-1') return draftForm.copy();
+    if (draftId.startsWith('draft-editor-')) return draftForm.copy();
     return null;
   }
 }

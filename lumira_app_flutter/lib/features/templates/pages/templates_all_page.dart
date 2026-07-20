@@ -797,7 +797,12 @@ class _TplCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Row(
+                  // Forced fix: 原 Row 在 isCustom=true 时溢出 11px（category + 自定义 tag 超宽）。
+                  // 改用 Wrap 自动换行避免横向溢出。
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
                         TemplatesBrowseMockData.categoryLabel(
@@ -807,8 +812,7 @@ class _TplCard extends StatelessWidget {
                           color: tokens.brand,
                         ),
                       ),
-                      if (template.isCustom) ...[
-                        const SizedBox(width: 8),
+                      if (template.isCustom)
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 1),
@@ -824,7 +828,6 @@ class _TplCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                      ],
                     ],
                   ),
                 ],

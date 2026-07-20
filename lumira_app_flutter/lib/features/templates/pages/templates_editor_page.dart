@@ -1772,6 +1772,38 @@ class _EditorFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Forced fix: 4 个 LumiraButton 在 Row 中（每个 padding horizontal:16-24）
+    // 在窄屏（360dp）下，每按钮宽度仅 60dp，icon 18 + gap 8 + 文字 + padding 32 = 84dp 溢出。
+    // 改为垂直 Column 按钮（icon 上 + text 下），宽度只需 ~50dp。
+    final buttons = <_FooterBtn>[
+      _FooterBtn(
+        icon: Icons.edit_note,
+        label: '草稿',
+        onTap: onSaveDraft,
+        type: _FooterBtnType.secondary,
+      ),
+      _FooterBtn(
+        icon: Icons.visibility_outlined,
+        label: '预览',
+        onTap: onPreview,
+        type: _FooterBtnType.secondary,
+      ),
+      _FooterBtn(
+        icon: Icons.save_outlined,
+        label: '保存',
+        onTap: onSave,
+        type: _FooterBtnType.primary,
+        flex: 2,
+      ),
+      if (isExportVisible)
+        _FooterBtn(
+          icon: Icons.ios_share,
+          label: '导出',
+          onTap: onExport,
+          type: _FooterBtnType.secondary,
+        ),
+    ];
+
     return Positioned(
       left: 0,
       right: 0,
@@ -1790,52 +1822,80 @@ class _EditorFooter extends StatelessWidget {
           ),
         ),
         child: Row(
+          children: buttons.asMap().entries.map((entry) {
+            final btn = entry.value;
+            final isLast = entry.key == buttons.length - 1;
+            return Expanded(
+              flex: btn.flex,
+              child: Padding(
+                padding: EdgeInsets.only(right: isLast ? 0 : 8),
+                child: _VerticalFooterButton(btn: btn, tokens: tokens),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+enum _FooterBtnType { primary, secondary }
+
+class _FooterBtn {
+  const _FooterBtn({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.type,
+    this.flex = 1,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final _FooterBtnType type;
+  final int flex;
+}
+
+class _VerticalFooterButton extends StatelessWidget {
+  const _VerticalFooterButton({required this.btn, required this.tokens});
+  final _FooterBtn btn;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    final isPrimary = btn.type == _FooterBtnType.primary;
+    final bg = isPrimary ? tokens.textPrimary : tokens.surfaceAlt;
+    final fg = isPrimary ? tokens.canvas : tokens.textSecondary;
+    final borderColor = isPrimary ? null : tokens.divider;
+
+    return GestureDetector(
+      onTap: btn.onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(8),
+          border: borderColor != null
+              ? Border.all(color: borderColor, width: 1)
+              : null,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              flex: 1,
-              child: LumiraButton(
-                variant: LumiraButtonVariant.ghost,
-                label: '草稿',
-                icon: Icons.edit_note,
-                expand: false,
-                onPressed: onSaveDraft,
+            Icon(btn.icon, size: 18, color: fg),
+            const SizedBox(height: 4),
+            Text(
+              btn.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: fg,
+                height: 1,
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 1,
-              child: LumiraButton(
-                variant: LumiraButtonVariant.ghost,
-                label: '预览',
-                icon: Icons.visibility_outlined,
-                expand: false,
-                onPressed: onPreview,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: LumiraButton(
-                variant: LumiraButtonVariant.primary,
-                label: '保存',
-                icon: Icons.save_outlined,
-                expand: false,
-                onPressed: onSave,
-              ),
-            ),
-            if (isExportVisible) ...[
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 1,
-                child: LumiraButton(
-                  variant: LumiraButtonVariant.ghost,
-                  label: '导出',
-                  icon: Icons.ios_share,
-                  expand: false,
-                  onPressed: onExport,
-                ),
-              ),
-            ],
           ],
         ),
       ),

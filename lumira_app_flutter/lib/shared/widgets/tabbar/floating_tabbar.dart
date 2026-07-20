@@ -42,6 +42,10 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
     final isFemale = appTheme.style == UIStyle.female;
     final isGlass = appTheme.style == UIStyle.glass;
 
+    // Forced fix: 之前 _CenterCaptureButton 在 ClipRRect 内部，
+    // Transform.translate(0, -6) 的部分被 ClipRRect 剪切。
+    // 改为 Stack 结构：底层是带 ClipRRect 的 tab bar（4 个 tab + 中间空位），
+    // 顶层是悬浮的 capture button（可自由超出 tab bar 范围）。
     return Align(
       alignment: Alignment.bottomCenter,
       child: Padding(
@@ -50,75 +54,119 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
           right: 20,
           bottom: 14, // 28rpx → 14dp
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(1000), // 9999rpx → 完全圆角
-          child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: isGlass ? 12 : 0,
-              sigmaY: isGlass ? 12 : 0,
-            ),
-            child: Container(
-              height: 54, // 108rpx → 54dp
-              decoration: BoxDecoration(
-                color: isGlass
-                    ? Colors.white.withOpacity(appTheme.surfaceAlpha)
-                    : tokens.canvas,
-                borderRadius: BorderRadius.circular(1000),
-                border: isGlass
-                    ? Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 0.5,
-                      )
-                    : null,
-                boxShadow: isFemale
-                    ? [
-                        BoxShadow(
-                          color: tokens.brand.withOpacity(0.15),
-                          offset: const Offset(0, 4),
-                          blurRadius: 16,
-                        ),
-                      ]
-                    : tokens.shadowConvex,
+        child: SizedBox(
+          height: 70, // 容纳 tab bar (54dp) + capture button 上移空间 (16dp)
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.bottomCenter,
+            children: [
+              // 底层：tab bar（带 ClipRRect + BackdropFilter）
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(1000),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(
+                      sigmaX: isGlass ? 25 : 0,
+                      sigmaY: isGlass ? 25 : 0,
+                    ),
+                    child: Container(
+                      height: 54, // 108rpx → 54dp
+                      decoration: BoxDecoration(
+                        // Forced fix: glass 用 3 段渐变模拟玻璃边缘反射
+                        gradient: isGlass
+                            ? LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Colors.white.withOpacity(0.75),
+                                  Colors.white.withOpacity(0.45),
+                                  Colors.white.withOpacity(0.30),
+                                ],
+                                stops: const [0.0, 0.5, 1.0],
+                              )
+                            : null,
+                        color: isGlass ? null : tokens.canvas,
+                        borderRadius: BorderRadius.circular(1000),
+                        border: isGlass
+                            ? Border.all(
+                                color: Colors.white.withOpacity(0.6),
+                                width: 1.0,
+                              )
+                            : null,
+                        boxShadow: isGlass
+                            ? const [
+                                BoxShadow(
+                                  color: Color(0x29000000),
+                                  offset: Offset(0, 10),
+                                  blurRadius: 30,
+                                ),
+                              ]
+                            : isFemale
+                                ? [
+                                    BoxShadow(
+                                      color: tokens.brand.withOpacity(0.15),
+                                      offset: const Offset(0, 4),
+                                      blurRadius: 16,
+                                    ),
+                                  ]
+                                : tokens.shadowConvex,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          _TabItem(
+                            icon: Icons.home_outlined,
+                            label: '首页',
+                            active: widget.active == 'home',
+                            onTap: () => context.go(RouteNames.home),
+                            tokens: tokens,
+                            isFemale: isFemale,
+                          ),
+                          _TabItem(
+                            icon: Icons.grid_view_outlined,
+                            label: '模板',
+                            active: widget.active == 'templates',
+                            onTap: () => context.go(RouteNames.templates),
+                            tokens: tokens,
+                            isFemale: isFemale,
+                          ),
+                          // 中间占位（capture button 由 Stack 顶层渲染）
+                          const SizedBox(width: 60),
+                          _TabItem(
+                            icon: Icons.flag_outlined,
+                            label: '挑战',
+                            active: widget.active == 'challenge',
+                            onTap: () => context.go(RouteNames.challenge),
+                            tokens: tokens,
+                            isFemale: isFemale,
+                          ),
+                          _TabItem(
+                            icon: Icons.person_outline,
+                            label: '我的',
+                            active: widget.active == 'profile',
+                            onTap: () => context.go(RouteNames.profile),
+                            tokens: tokens,
+                            isFemale: isFemale,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _TabItem(
-                    icon: Icons.home_outlined,
-                    label: '首页',
-                    active: widget.active == 'home',
-                    onTap: () => context.go(RouteNames.home),
-                    tokens: tokens,
-                    isFemale: isFemale,
-                  ),
-                  _TabItem(
-                    icon: Icons.grid_view_outlined,
-                    label: '模板',
-                    active: widget.active == 'templates',
-                    onTap: () => context.go(RouteNames.templates),
-                    tokens: tokens,
-                    isFemale: isFemale,
-                  ),
-                  _CenterCaptureButton(tokens: tokens, isFemale: isFemale),
-                  _TabItem(
-                    icon: Icons.flag_outlined,
-                    label: '挑战',
-                    active: widget.active == 'challenge',
-                    onTap: () => context.go(RouteNames.challenge),
-                    tokens: tokens,
-                    isFemale: isFemale,
-                  ),
-                  _TabItem(
-                    icon: Icons.person_outline,
-                    label: '我的',
-                    active: widget.active == 'profile',
-                    onTap: () => context.go(RouteNames.profile),
-                    tokens: tokens,
-                    isFemale: isFemale,
-                  ),
-                ],
+              // 顶层：悬浮 capture button（可超出 tab bar 范围，不被剪切）
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: _CenterCaptureButton(tokens: tokens, isFemale: isFemale),
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -207,6 +255,8 @@ class _CenterCaptureButtonState extends State<_CenterCaptureButton>
 
   @override
   Widget build(BuildContext context) {
+    // Forced fix: 移除 Transform.translate，由 Stack 的 Positioned 控制位置。
+    // 这样按钮可以自由超出 tab bar 范围而不被 ClipRRect 剪切。
     final captureBtn = Container(
       width: 50, // 100rpx → 50dp
       height: 50,
@@ -222,16 +272,13 @@ class _CenterCaptureButtonState extends State<_CenterCaptureButton>
       ),
     );
 
-    final translated = Transform.translate(
-      offset: const Offset(0, -6), // translateY(-12rpx) → -6dp
-      child: GestureDetector(
-        onTap: () => GoRouter.of(context).push(RouteNames.capture),
-        child: captureBtn,
-      ),
+    final button = GestureDetector(
+      onTap: () => GoRouter.of(context).push(RouteNames.capture),
+      child: captureBtn,
     );
 
     if (!widget.isFemale) {
-      return translated;
+      return button;
     }
 
     // 女性美学：呼吸光晕动画
@@ -255,7 +302,7 @@ class _CenterCaptureButtonState extends State<_CenterCaptureButton>
           child: child,
         );
       },
-      child: translated,
+      child: button,
     );
   }
 }

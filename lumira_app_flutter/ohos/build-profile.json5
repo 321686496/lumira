@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\黄sir\\.ohos\\config\\default_ohos_RLxGKtveBddYu3UaFBQm34u16lQ-G3dYn60Hy7I0eAs=.cer",
+          "certpath": "C:\\Users\\Administrator\\.ohos\\config\\default_ohos_Lch-VscW9M8E_8DumF6Y1zMhCbaWvt-BrJdDTe3qT50=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001B01164FDAA982A02468A03C4EB239A52CCD8A7FD8BCDFE5D024A7D55D0F891A985825C2259021B1",
-          "profile": "C:\\Users\\黄sir\\.ohos\\config\\default_ohos_RLxGKtveBddYu3UaFBQm34u16lQ-G3dYn60Hy7I0eAs=.p7b",
+          "keyPassword": "0000001B2F9EC116086D61532FB2A9A50EE4E802B4486A26BEC24552F6B19279F975E598E3584B7DDF6613",
+          "profile": "C:\\Users\\Administrator\\.ohos\\config\\default_ohos_Lch-VscW9M8E_8DumF6Y1zMhCbaWvt-BrJdDTe3qT50=.p7b",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\黄sir\\.ohos\\config\\default_ohos_RLxGKtveBddYu3UaFBQm34u16lQ-G3dYn60Hy7I0eAs=.p12",
-          "storePassword": "0000001BC2CA9D5EC1B7ADDDA694CF98FF1AEB3BEA677BE617A4FACBC24C966F0CA24341118A594270C81A"
+          "storeFile": "C:\\Users\\Administrator\\.ohos\\config\\default_ohos_Lch-VscW9M8E_8DumF6Y1zMhCbaWvt-BrJdDTe3qT50=.p12",
+          "storePassword": "0000001BC70C2493DBC063E52397A60AC3E447BC10EBAB05750FD653BADC1DDB1C966DA4E2369AB8F5BBFC"
         }
       }
     ],
@@ -29,30 +29,6 @@
     {
       "name": "entry",
       "srcPath": "./entry",
-      "targets": [
-        {
-          "name": "default",
-          "applyToProducts": [
-            "default"
-          ]
-        }
-      ]
-    },
-    {
-      "name": "permission_handler_ohos",
-      "srcPath": "C:/Users/黄sir/AppData/Local/Pub/Cache/git/flutter_permission_handler-f79dfe1770c5e3df1e1fd1f68092f9718bf87712/permission_handler_ohos/ohos",
-      "targets": [
-        {
-          "name": "default",
-          "applyToProducts": [
-            "default"
-          ]
-        }
-      ]
-    },
-    {
-      "name": "device_info_plus",
-      "srcPath": "C:/Users/黄sir/AppData/Local/Pub/Cache/git/flutter_plus_plugins-44f907d59a3d7c8c1bce7e37893564de3d81f335/packages/device_info_plus/device_info_plus/ohos",
       "targets": [
         {
           "name": "default",

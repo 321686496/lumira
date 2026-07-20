@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/challenge_mock_data.dart';
@@ -93,6 +94,8 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
               ),
             ),
           ),
+          // Forced fix: glass 风格彩色斑点背景
+          const Positioned.fill(child: GlassBackground(variant: GlassBackgroundVariant.challenge)),
           // 主内容
           SafeArea(
             child: Column(
@@ -101,6 +104,7 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
                   title: '每日挑战',
                   scrolled: _scrolled,
                   transparent: true,
+                  showBackButton: false,
                   actions: [
                     IconButton(
                       icon: Icon(

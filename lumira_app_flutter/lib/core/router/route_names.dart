@@ -37,6 +37,7 @@ class RouteNames {
   static const String profileCollections = '/profile/collections';
   static const String profileCollectionDetail = '/profile/collection-detail';
   static const String profileMyTemplates = '/profile/my-templates';
+  static const String profileAbout = '/profile/about';
   static const String scenes = '/scenes';
   static const String shootkitEditor = '/shootkit/editor';
 

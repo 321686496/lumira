@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/buttons/lumira_buttons.dart';
@@ -147,7 +148,14 @@ class _BackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => GoRouter.of(context).pop(),
+      onTap: () {
+        // Forced fix: canPop 保护
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          GoRouter.of(context).go(RouteNames.profile);
+        }
+      },
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.all(8),

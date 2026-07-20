@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 
 /// 如画应用统一顶部导航栏
 ///
@@ -22,6 +23,7 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
     this.centerTitle = true,
     this.scrolled = false,
     this.transparent = true,
+    this.showBackButton = true,
   });
 
   final String? title;
@@ -30,6 +32,11 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
   final bool centerTitle;
   final bool scrolled;
   final bool transparent;
+
+  /// 是否在 leading 为 null 且 canPop 时自动显示返回按钮。
+  /// Tab 页（home/templates/challenge/profile）应传 false，
+  /// 避免 go_router canPop 误判导致 tab 页显示返回按钮（点击退出应用）。
+  final bool showBackButton;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -43,9 +50,15 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    final isGlass = appTheme.style == UIStyle.glass;
 
+    // Forced fix: glass 风格默认就启用半透明 + blur（不只 scrolled 时），
+    // 让导航栏在 glass 风格下也有毛玻璃效果。
     final Color backgroundColor;
-    if (widget.transparent && !widget.scrolled) {
+    if (isGlass) {
+      // glass 风格：默认半透明白 0.55，scrolled 时加深至 0.72
+      backgroundColor = Colors.white.withOpacity(widget.scrolled ? 0.72 : 0.55);
+    } else if (widget.transparent && !widget.scrolled) {
       backgroundColor = Colors.transparent;
     } else if (widget.scrolled) {
       // .lumira-nav.scrolled: rgba(canvas, 0.72) + blur 28px saturate 1.8
@@ -54,9 +67,12 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
       backgroundColor = tokens.canvas;
     }
 
-    final border = widget.scrolled
+    final border = widget.scrolled || isGlass
         ? Border(
-            bottom: BorderSide(color: tokens.divider, width: 0.5),
+            bottom: BorderSide(
+              color: isGlass ? Colors.white.withOpacity(0.4) : tokens.divider,
+              width: 0.5,
+            ),
           )
         : null;
 
@@ -70,11 +86,24 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
           ]
         : null;
 
+    // Forced fix: 计算 leading widget
+    // - 如果显式传了 leading，用它
+    // - 否则如果 showBackButton=true 且 canPop=true，显示返回按钮
+    // - 否则占位 SizedBox（保持标题居中）
+    // Tab 页传 showBackButton=false，避免 canPop 误判导致 tab 页显示返回按钮
+    final Widget leadingWidget = widget.leading ??
+        (widget.showBackButton && Navigator.of(context).canPop()
+            ? _NavBackButton()
+            : const SizedBox(width: 40));
+
+    // Forced fix: glass 风格默认 blur 20，scrolled 时 blur 28
+    final double blurSigma = isGlass
+        ? (widget.scrolled ? 28.0 : 20.0)
+        : (widget.scrolled ? 14.0 : 0.0);
+
     return ClipRect(
       child: BackdropFilter(
-        filter: widget.scrolled
-            ? ImageFilter.blur(sigmaX: 14, sigmaY: 14)
-            : ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
@@ -93,10 +122,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
                   // 左侧
                   Positioned(
                     left: 8,
-                    child: widget.leading ??
-                        (Navigator.of(context).canPop()
-                            ? _NavBackButton()
-                            : const SizedBox(width: 40)),
+                    child: leadingWidget,
                   ),
                   // 居中标题
                   if (widget.title != null)

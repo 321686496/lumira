@@ -1,15 +1,20 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/profile_mock_data.dart';
 
 /// 个人中心主页
@@ -22,11 +27,8 @@ import '../data/profile_mock_data.dart';
 /// 4. QuickActionsRow（3 个 ghost 按钮：成长中心 / 邀请有礼 / 摄影美学院）
 /// 5. MenuCard（6 项菜单列表）
 ///
-/// 注：与 uni-app 不同，Flutter 版 ProfilePage **不渲染 FloatingTabBar**。
-/// uni-app 中 profile 是 tab 页，但 Flutter 现有架构中 profile 是普通 GoRoute，
-/// TabBar 由父级 Shell Route 渲染（Task 2.1 已实现）。本页未在 Shell Route 内，
-/// 因此渲染时没有底部 TabBar — 与 HomePage / TemplatesPage / ChallengePage /
-/// GalleryPage / InspirationPage 保持一致。
+/// Forced fix: 之前注释说"Flutter 版 ProfilePage 不渲染 FloatingTabBar"是错的。
+/// 与 HomePage / TemplatesPage / ChallengePage 一致，profile 作为 tab 页必须渲染 FloatingTabBar。
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
 
@@ -41,56 +43,70 @@ class ProfilePage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
-      appBar: const LumiraNav(title: '我的', transparent: true),
-      body: Container(
-        // 径向渐变背景装饰（glass 风格可见性）
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(-0.8, -0.6),
-            radius: 1.2,
-            colors: [
-              tokens.brandSubtle.withOpacity(0.35),
-              tokens.canvas.withOpacity(0.0),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // 1. HeroCard
-                const FadeUp(child: _HeroCard(user: ProfileMockData.userProfile)),
-                const SizedBox(height: 20),
-                // 2. StatsCard
-                const FadeUp(
-                  delay: Duration(milliseconds: 100),
-                  child: _StatsCard(user: ProfileMockData.userProfile),
+      appBar: const LumiraNav(title: '我的', transparent: true, showBackButton: false),
+      body: Stack(
+        children: [
+          // Forced fix: glass 风格彩色斑点背景
+          const Positioned.fill(child: GlassBackground(variant: GlassBackgroundVariant.profile)),
+          // 主内容层
+          Container(
+            // 径向渐变背景装饰（glass 风格可见性）
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(-0.8, -0.6),
+                radius: 1.2,
+                colors: [
+                  tokens.brandSubtle.withOpacity(0.35),
+                  tokens.canvas.withOpacity(0.0),
+                ],
+              ),
+            ),
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 1. HeroCard
+                    const FadeUp(child: _HeroCard(user: ProfileMockData.userProfile)),
+                    const SizedBox(height: 20),
+                    // 2. StatsCard
+                    const FadeUp(
+                      delay: Duration(milliseconds: 100),
+                      child: _StatsCard(user: ProfileMockData.userProfile),
+                    ),
+                    const SizedBox(height: 20),
+                    // 3. FragmentCard
+                    const FadeUp(
+                      delay: Duration(milliseconds: 200),
+                      child: _FragmentCard(fragments: ProfileMockData.fragments),
+                    ),
+                    const SizedBox(height: 20),
+                    // 4. QuickActionsRow
+                    FadeUp(
+                      delay: const Duration(milliseconds: 300),
+                      child: _QuickActionsRow(onTap: (p) => _goPage(context, p)),
+                    ),
+                    const SizedBox(height: 20),
+                    // 5. MenuCard
+                    FadeUp(
+                      delay: const Duration(milliseconds: 400),
+                      child: _MenuCard(onTap: (p) => _goPage(context, p)),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                // 3. FragmentCard
-                const FadeUp(
-                  delay: Duration(milliseconds: 200),
-                  child: _FragmentCard(fragments: ProfileMockData.fragments),
-                ),
-                const SizedBox(height: 20),
-                // 4. QuickActionsRow
-                FadeUp(
-                  delay: const Duration(milliseconds: 300),
-                  child: _QuickActionsRow(onTap: (p) => _goPage(context, p)),
-                ),
-                const SizedBox(height: 20),
-                // 5. MenuCard
-                FadeUp(
-                  delay: const Duration(milliseconds: 400),
-                  child: _MenuCard(onTap: (p) => _goPage(context, p)),
-                ),
-                const SizedBox(height: 16),
-              ],
+              ),
             ),
           ),
-        ),
+          // FloatingTabBar
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: FloatingTabBar(active: 'profile'),
+          ),
+        ],
       ),
     );
   }
@@ -485,44 +501,190 @@ class _FragmentRow extends ConsumerWidget {
 }
 
 /// QuickActionsRow：3 个 ghost 按钮（成长中心 / 邀请有礼 / 摄影美学院）
+///
+/// Forced fix: 3 个 ghost LumiraButton 横向 Row 在窄屏（360dp）溢出。
+/// ghost button padding horizontal:16 + icon 18 + gap 8 + 5 字文字 = ~107dp，
+/// 3 个 + 2 个 8dp 间距 = 321dp+，但每列 Expanded 只有 ~98dp。
+/// 改为自定义垂直 Column 布局（icon 上 + text 下），每按钮宽度 ~50dp 足够。
 class _QuickActionsRow extends ConsumerWidget {
   const _QuickActionsRow({required this.onTap});
   final void Function(String path) onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final items = <_QuickActionItem>[
+      _QuickActionItem(
+        icon: Icons.emoji_events_outlined,
+        label: '成长中心',
+        onTap: () => onTap(RouteNames.profileGrowth),
+      ),
+      _QuickActionItem(
+        icon: Icons.card_giftcard_outlined,
+        label: '邀请有礼',
+        onTap: () => onTap(RouteNames.profileInvite),
+      ),
+      _QuickActionItem(
+        icon: Icons.menu_book_outlined,
+        label: '摄影美学院',
+        onTap: () => onTap(RouteNames.profileAcademy),
+      ),
+    ];
+
     return Row(
-      children: [
-        Expanded(
-          child: LumiraButton(
-            label: '成长中心',
-            variant: LumiraButtonVariant.ghost,
-            icon: Icons.emoji_events_outlined,
-            expand: true,
-            onPressed: () => onTap(RouteNames.profileGrowth),
+      children: items.asMap().entries.map((entry) {
+        final item = entry.value;
+        final isLast = entry.key == items.length - 1;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: isLast ? 0 : 8),
+            child: _QuickActionCard(item: item, tokens: tokens, appTheme: appTheme),
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _QuickActionItem {
+  const _QuickActionItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+}
+
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({
+    required this.item,
+    required this.tokens,
+    required this.appTheme,
+  });
+  final _QuickActionItem item;
+  final ThemeTokens tokens;
+  final AppThemeData appTheme;
+
+  @override
+  Widget build(BuildContext context) {
+    // Forced fix: 使用垂直布局避免横向溢出。
+    // 同时按当前 UI 风格渲染，让风格切换效果可见。
+    final isGlass = appTheme.style == UIStyle.glass;
+    final isFemale = appTheme.style == UIStyle.female;
+
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: tokens.brand.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(item.icon, size: 16, color: tokens.brand),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: tokens.textSecondary,
+              height: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (isGlass) {
+      return GestureDetector(
+        onTap: item.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.70),
+                    Colors.white.withOpacity(0.45),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.4),
+                  width: 0.6,
+                ),
+              ),
+              child: content,
+            ),
           ),
         ),
-        const SizedBox(width: 8), // 16rpx gap → 8dp
-        Expanded(
-          child: LumiraButton(
-            label: '邀请有礼',
-            variant: LumiraButtonVariant.ghost,
-            icon: Icons.card_giftcard_outlined,
-            expand: true,
-            onPressed: () => onTap(RouteNames.profileInvite),
+      );
+    }
+
+    if (isFemale) {
+      return GestureDetector(
+        onTap: item.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                tokens.brandSubtle.withOpacity(0.80),
+                tokens.surface.withOpacity(0.65),
+                tokens.brandLight.withOpacity(0.50),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.6),
+              width: 0.6,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: tokens.brand.withOpacity(0.15),
+                offset: const Offset(0, 6),
+                blurRadius: 20,
+              ),
+            ],
           ),
+          child: content,
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: LumiraButton(
-            label: '摄影美学院',
-            variant: LumiraButtonVariant.ghost,
-            icon: Icons.menu_book_outlined,
-            expand: true,
-            onPressed: () => onTap(RouteNames.profileAcademy),
-          ),
+      );
+    }
+
+    // neumorphic / flat：用 NeuCard 风格
+    final isNeu = appTheme.style == UIStyle.neumorphic;
+    return GestureDetector(
+      onTap: item.onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isNeu ? tokens.surface : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(isNeu ? 14 : 10),
+          boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
+          border: isNeu ? null : Border.all(color: tokens.divider, width: 1),
         ),
-      ],
+        child: content,
+      ),
     );
   }
 }
@@ -555,22 +717,33 @@ class _MenuCard extends ConsumerWidget {
               item: items[i],
               isLast: i == items.length - 1,
               tokens: tokens,
-              onTap: () => _handleMenuTap(items[i].title, onTap),
+              onTap: () => _handleMenuTap(context, items[i].title, onTap),
             ),
         ],
       ),
     );
   }
 
-  void _handleMenuTap(String title, void Function(String path) onNav) {
+  void _handleMenuTap(
+    BuildContext context,
+    String title,
+    void Function(String path) onNav,
+  ) {
+    // Forced fix: 之前只处理 3 项菜单（我的相册/我的模板/设置），其余 3 项无响应。
+    // 补齐：场景管理/导入模板/关于如画跳对应页。
     if (title == '我的相册') {
       onNav(RouteNames.gallery);
     } else if (title == '我的模板') {
       onNav(RouteNames.profileMyTemplates);
+    } else if (title == '场景管理') {
+      onNav(RouteNames.captureSceneManage);
+    } else if (title == '导入模板') {
+      onNav(RouteNames.templatesAll);
     } else if (title == '设置') {
       onNav(RouteNames.profileSettings);
+    } else if (title == '关于如画') {
+      onNav(RouteNames.profileAbout);
     }
-    // 场景管理 / 导入模板 / 关于如画 在 uni-app 中无 @click 绑定，仅展示不跳转
   }
 }
 

@@ -76,6 +76,15 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final currentThemeKey = ref.watch(themeKeyProvider);
+    final currentUiStyle = ref.watch(uiStyleProvider);
+    // Forced fix: 主题/风格 value 动态显示当前选择
+    final themeLabel = ProfileMockData.themes
+        .firstWhere((t) => t.key == currentThemeKey)
+        .label;
+    final styleLabel = ProfileMockData.styles
+        .firstWhere((s) => s.style == currentUiStyle)
+        .label;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -111,14 +120,14 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                       _SettingItem(
                         icon: Icons.palette_outlined,
                         label: '主题选择',
-                        value: '暖米白',
+                        value: themeLabel,
                         onTap: () => GoRouter.of(context).push(RouteNames.profileSettingsTheme),
                         tokens: tokens,
                       ),
                       _SettingItem(
                         icon: Icons.style_outlined,
                         label: '风格选择',
-                        value: '新拟态',
+                        value: styleLabel,
                         onTap: () => GoRouter.of(context).push(RouteNames.profileSettingsTheme),
                         tokens: tokens,
                       ),
@@ -283,6 +292,7 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                       _SettingItem(
                         icon: Icons.info_outline,
                         label: '关于如画',
+                        onTap: () => GoRouter.of(context).push(RouteNames.profileAbout),
                         tokens: tokens,
                         isLast: true,
                       ),
@@ -307,7 +317,14 @@ class _BackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => GoRouter.of(context).pop(),
+      onTap: () {
+        // Forced fix: canPop 保护
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          GoRouter.of(context).go(RouteNames.profile);
+        }
+      },
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.all(8),

@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/templates_mock_data.dart';
@@ -75,6 +76,8 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
         children: [
           // 背景装饰（glass 风格可见性）
           _BackgroundDecoration(tokens: tokens),
+          // Forced fix: glass 风格彩色斑点背景
+          const Positioned.fill(child: GlassBackground(variant: GlassBackgroundVariant.templates)),
           // 主内容
           SafeArea(
             child: Column(
@@ -83,6 +86,7 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
                   title: '模板',
                   transparent: true,
                   scrolled: _scrolled,
+                  showBackButton: false,
                   actions: [
                     IconButton(
                       icon: const Icon(Icons.apps_outlined, size: 20),
@@ -297,7 +301,10 @@ class _OtherSection extends StatelessWidget {
                     crossAxisCount: 2,
                     mainAxisSpacing: 12, // 24rpx → 12dp
                     crossAxisSpacing: 12,
-                    childAspectRatio: 0.78, // 1:1 image + 文字区 ≈ 0.78
+                    // Forced fix: 原 0.78 导致 33px 溢出。
+                    // 文字区 = 8+13*1.2+3+11+10 = 47.6dp，图 1:1 = w
+                    // 设 w=154: 0.70 → h=220dp，图 154 + 文字 47.6 = 201.6 ✓
+                    childAspectRatio: 0.70,
                   ),
                   itemCount: others.length > 6 ? 6 : others.length,
                   itemBuilder: (_, index) {
