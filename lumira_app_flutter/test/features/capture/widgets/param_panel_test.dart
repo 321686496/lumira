@@ -23,7 +23,7 @@ void main() {
         ),
       );
 
-      // Panel starts collapsed (bottom: -400). Expand it.
+      // Panel starts collapsed. Expand it.
       container.read(CaptureState.panelExpandedProvider.notifier).state = true;
       await tester.pumpAndSettle();
 
@@ -31,11 +31,11 @@ void main() {
       expect(find.text('相机'), findsOneWidget);
       expect(find.text('EV'), findsOneWidget);
 
-      // The "应用模板参数" button should be present (editable != null && original != null).
-      expect(find.text('应用模板参数'), findsOneWidget);
+      // The "完成" button should be present (always shown when panel is open).
+      expect(find.text('完成'), findsOneWidget);
     });
 
-    testWidgets('does not render apply button when no template is selected', (tester) async {
+    testWidgets('does not render reset button when no template is selected', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
@@ -53,8 +53,8 @@ void main() {
       container.read(CaptureState.panelExpandedProvider.notifier).state = true;
       await tester.pumpAndSettle();
 
-      // No template → no apply button.
-      expect(find.text('应用模板参数'), findsNothing);
+      // No template → no reset button (only "完成" is shown).
+      expect(find.text('重置'), findsNothing);
     });
 
     testWidgets('EV slider drag updates editableTemplate.camera.exposureCompensation',
@@ -99,7 +99,7 @@ void main() {
       expect(newEv, isNot(equals(initialEv)));
     });
 
-    testWidgets('apply button resets editableTemplate to original copy', (tester) async {
+    testWidgets('reset button resets editableTemplate to original copy', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       container.read(CaptureState.currentTemplateIdProvider.notifier).state = 'soft_portrait';
@@ -126,14 +126,80 @@ void main() {
       // Confirm they differ.
       expect(container.read(CaptureState.appliedProvider), false);
 
-      // Tap the "应用模板参数" button.
-      final applyBtn = find.text('应用模板参数');
-      expect(applyBtn, findsOneWidget);
-      await tester.tap(applyBtn);
+      // Tap the "重置" button (only visible when modified).
+      final resetBtn = find.text('重置');
+      expect(resetBtn, findsOneWidget);
+      await tester.tap(resetBtn);
       await tester.pumpAndSettle();
 
       // After tap, editable should equal original (applied == true).
       expect(container.read(CaptureState.appliedProvider), true);
+    });
+
+    testWidgets('close button collapses the panel', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container.read(CaptureState.currentTemplateIdProvider.notifier).state = 'soft_portrait';
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Stack(children: const [ParamPanel()]),
+            ),
+          ),
+        ),
+      );
+
+      // Expand panel.
+      container.read(CaptureState.panelExpandedProvider.notifier).state = true;
+      await tester.pumpAndSettle();
+      expect(container.read(CaptureState.panelExpandedProvider), true);
+
+      // Tap the close icon (Icons.close in the header).
+      final closeBtn = find.byIcon(Icons.close).first;
+      await tester.tap(closeBtn);
+      await tester.pumpAndSettle();
+
+      // Panel should be collapsed.
+      expect(container.read(CaptureState.panelExpandedProvider), false);
+    });
+
+    testWidgets('自由模式下也能调整 EV 参数', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Stack(children: const [ParamPanel()]),
+            ),
+          ),
+        ),
+      );
+
+      container.read(CaptureState.panelExpandedProvider.notifier).state = true;
+      await tester.pumpAndSettle();
+
+      // 自由模式下应该显示"自由模式"标识
+      expect(find.text('自由模式'), findsOneWidget);
+
+      // 应该能调整 EV
+      final initialEv = container
+          .read(CaptureState.freeModeCameraProvider)
+          .exposureCompensation;
+
+      final sliderFinder = find.byType(Slider).first;
+      await tester.drag(sliderFinder, const Offset(200, 0));
+      await tester.pumpAndSettle();
+
+      final newEv = container
+          .read(CaptureState.freeModeCameraProvider)
+          .exposureCompensation;
+      expect(newEv, isNot(equals(initialEv)));
     });
   });
 }

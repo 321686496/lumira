@@ -7,6 +7,18 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 
+/// 阴影变体选择
+enum NeuShadowVariant {
+  /// 标准凸起阴影（默认）：shadowConvex (6,6)/(-6,-6) blur 14
+  convex,
+
+  /// 轻量凸起阴影：shadowConvexSubtle (3,3)/(-3,-3) blur 6
+  convexSubtle,
+
+  /// 品牌色凸起阴影：shadowConvexBrand (4,4)/(-4,-4) blur 10
+  convexBrand,
+}
+
 /// 如画应用统一卡片组件
 ///
 /// 视觉规格来源：lumira-app/src/App.vue line 640-660 + 900-1200
@@ -23,6 +35,8 @@ class NeuCard extends ConsumerWidget {
     this.margin,
     this.onTap,
     this.enableHoverScale = false,
+    this.shadowVariant = NeuShadowVariant.convex,
+    this.backgroundColor,
   });
 
   final Widget child;
@@ -30,6 +44,12 @@ class NeuCard extends ConsumerWidget {
   final EdgeInsetsGeometry? margin;
   final VoidCallback? onTap;
   final bool enableHoverScale;
+
+  /// 新拟态阴影变体（仅 neumorphic 风格生效）
+  final NeuShadowVariant shadowVariant;
+
+  /// 自定义背景色（覆盖默认 surface；为 null 时使用 tokens.surface）
+  final Color? backgroundColor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -62,12 +82,24 @@ class NeuCard extends ConsumerWidget {
       case UIStyle.neumorphic:
         // Forced fix: 新拟态需卡片与背景同色 + 双向阴影才有效果。
         // 使用 surface（接近 canvas 但稍亮）增强阴影对比，避免与背景完全融合看不见。
+        List<BoxShadow> shadows;
+        switch (shadowVariant) {
+          case NeuShadowVariant.convex:
+            shadows = tokens.shadowConvex;
+            break;
+          case NeuShadowVariant.convexSubtle:
+            shadows = tokens.shadowConvexSubtle;
+            break;
+          case NeuShadowVariant.convexBrand:
+            shadows = tokens.shadowConvexBrand;
+            break;
+        }
         return Container(
           padding: padding,
           decoration: BoxDecoration(
-            color: tokens.surface, // surface 比 canvas 稍亮，增强阴影对比
+            color: backgroundColor ?? tokens.surface, // surface 比 canvas 稍亮，增强阴影对比
             borderRadius: BorderRadius.circular(radius),
-            boxShadow: tokens.shadowConvex,
+            boxShadow: shadows,
           ),
           child: child,
         );
@@ -174,9 +206,13 @@ class NeuCard extends ConsumerWidget {
       case UIStyle.female:
         // Forced fix: 女性美学加强渐变对比与高光，增加品牌色饱和度。
         // 多渐变卡片：5 层视觉
+        //
+        // Bug fix: 之前 CustomPaint 放在 padding 内部，导致径向高光只绘制在
+        // 内容区域，padding 区域只有底层 LinearGradient，两层渐变不一致，
+        // 视觉上出现"边框带"效果。改为用 Stack 结构，让径向高光覆盖整个卡片
+        // （包括 padding 区域），再用 Padding 包裹 child。
         final mg = appTheme.multiGradient!;
         return Container(
-          padding: padding,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
             gradient: LinearGradient(
@@ -206,9 +242,27 @@ class NeuCard extends ConsumerWidget {
               ),
             ],
           ),
-          child: CustomPaint(
-            painter: _RadialHighlightPainter(mg.radialHighlight),
-            child: child,
+          child: Stack(
+            children: [
+              // 层 1: 径向高光（覆盖整个卡片，包括 padding 区域）
+              // Bug fix: 传入 radius 让 painter 用 drawRRect 绘制圆角矩形，
+              // 避免覆盖 Container 的 borderRadius 导致圆角视觉消失。
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _RadialHighlightPainter(
+                      mg.radialHighlight,
+                      radius,
+                    ),
+                  ),
+                ),
+              ),
+              // 层 2: 内容（被 padding 包裹）
+              Padding(
+                padding: padding,
+                child: child,
+              ),
+            ],
           ),
         );
     }
@@ -216,22 +270,28 @@ class NeuCard extends ConsumerWidget {
 }
 
 /// 径向高光绘制器（用于 female 风格第 2 层）
+/// Bug fix: 添加 borderRadius 参数，用 drawRRect 绘制圆角矩形，
+/// 避免覆盖 Container 的 borderRadius 导致圆角视觉消失。
 class _RadialHighlightPainter extends CustomPainter {
-  _RadialHighlightPainter(this.gradient);
+  _RadialHighlightPainter(this.gradient, this.borderRadius);
 
   final RadialGradient gradient;
+  final double borderRadius;
 
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(borderRadius));
     final paint = Paint()
       ..shader = gradient.createShader(rect)
       ..blendMode = BlendMode.srcOver;
-    canvas.drawRect(rect, paint);
+    canvas.drawRRect(rrect, paint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RadialHighlightPainter oldDelegate) =>
+      gradient != oldDelegate.gradient ||
+      borderRadius != oldDelegate.borderRadius;
 }
 
 /// 按压缩放容器（用于卡片和按钮的 :active 反馈）

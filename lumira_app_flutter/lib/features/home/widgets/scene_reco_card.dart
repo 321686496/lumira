@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/home_mock_data.dart';
 
 /// 场景推荐卡片
@@ -28,16 +29,23 @@ class SceneRecoCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
 
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          color: tokens.canvas,
+          // neumorphic 风格：surface 背景 + 双向凸起阴影，移除 border
+          // 其他风格：canvas 背景 + divider 1dp 边框
+          color: isNeumorphic ? tokens.surface : tokens.canvas,
           borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
-          border: Border.all(color: tokens.divider, width: 1), // 2rpx → 1dp
+          border: isNeumorphic
+              ? null
+              : Border.all(color: tokens.divider, width: 1), // 2rpx → 1dp
+          boxShadow: isNeumorphic ? tokens.shadowConvex : null,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),

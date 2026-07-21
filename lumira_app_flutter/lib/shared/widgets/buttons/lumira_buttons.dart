@@ -89,7 +89,11 @@ class LumiraButton extends ConsumerWidget {
                 blurRadius: 12,
               ),
             ]
-          : spec.boxShadow,
+          : (appTheme.style == UIStyle.neumorphic &&
+                    variant == LumiraButtonVariant.brand
+                ? tokens
+                    .shadowConvex // 新拟态：使用中性色双向阴影，避免 brand 色阴影造成"发光"感
+                : spec.boxShadow),
     );
 
     Widget button = _ScaleTap(
@@ -143,10 +147,18 @@ class _ButtonSpec {
     ThemeTokens tokens,
     AppThemeData appTheme,
   ) {
-    final brandShadow = appTheme.style == UIStyle.neumorphic ||
-            appTheme.style == UIStyle.female
-        ? tokens.shadowConvexBrand
-        : null;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+
+    // 新拟态下：brand 按钮使用 shadowConvex（中性双向阴影），
+    // primary 按钮也使用 shadowConvex（黑色按钮配中性阴影仍符合新拟态），
+    // 不再使用 shadowConvexBrand（brand 色阴影会让按钮看起来发光）。
+    final brandShadow = isNeumorphic
+        ? tokens.shadowConvex
+        : (appTheme.style == UIStyle.female
+            ? tokens.shadowConvexBrand
+            : null);
+    final primaryShadow = isNeumorphic ? tokens.shadowConvex : null;
+    final ghostShadow = isNeumorphic ? tokens.shadowConvexSubtle : null;
 
     switch (variant) {
       case LumiraButtonVariant.primary:
@@ -159,6 +171,7 @@ class _ButtonSpec {
             horizontal: 24, // 48rpx → 24dp
             vertical: 14, // 28rpx → 14dp
           ),
+          boxShadow: primaryShadow,
         );
 
       case LumiraButtonVariant.brand:
@@ -191,6 +204,7 @@ class _ButtonSpec {
             horizontal: 16, // 32rpx → 16dp
             vertical: 10, // 20rpx → 10dp
           ),
+          boxShadow: ghostShadow,
         );
     }
   }

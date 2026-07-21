@@ -14,7 +14,7 @@ const _cameraPlaceholder = ColoredBox(
 
 void main() {
   group('CameraPreview', () {
-    testWidgets('returns override widget directly (no ColorFiltered wrapping)',
+    testWidgets('returns override widget wrapped in ColorFiltered (default filter)',
         (tester) async {
       final container = ProviderContainer(overrides: [
         cameraPreviewOverrideProvider.overrideWith((ref) => _cameraPlaceholder),
@@ -31,8 +31,8 @@ void main() {
       );
 
       expect(find.byKey(const Key('camera_placeholder')), findsOneWidget);
-      // Override path MUST NOT wrap in ColorFiltered or Stack
-      expect(find.byType(ColorFiltered), findsNothing);
+      // Override path wraps in ColorFiltered with identity matrix by default.
+      expect(find.byType(ColorFiltered), findsOneWidget);
     });
 
     testWidgets('applies ColorFiltered when a template is selected', (tester) async {

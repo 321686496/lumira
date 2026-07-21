@@ -97,9 +97,11 @@ class ThemeTokens {
 
   // === 暖米白主题（默认） ===
   // 来源: App.vue :root (line 40-80)
+  // Neumorphic fix: surface 从纯白 #FFFFFF 改为 canvas 的微亮变体 #FDFBF7，
+  // 保留暖色调，让新拟态卡片与背景色调一致，靠双向阴影区分层次。
   static const _warmWhiteTokens = ThemeTokens(
     canvas: Color(0xFFFAF7F2),
-    surface: Color(0xFFFFFFFF),
+    surface: Color(0xFFFDFBF7), // canvas 微亮变体（RGB +3），保留暖色调
     surfaceAlt: Color(0xFFF2EEE6),
     canvasDeep: Color(0xFFF5F1EB),
     textPrimary: Color(0xFF1A1A1A),
@@ -198,9 +200,11 @@ class ThemeTokens {
   // === 胶片复古主题 ===
   // 来源: App.vue [data-theme="retro"] (line 112-140)
   // 注意: retro 主题 App.vue 未显式定义 --color-brand-light，用 brandLight=brand 稍亮派生 (0xFFD4A57A)
+  // Neumorphic fix: surface 从偏白 #FFF8F0 改为 canvas 微亮变体 #F8EAD7，保留复古黄色调；
+  // brand 调深为 #B8855A，brandDeep #9A6A42，提升胶片复古质感。
   static const _retroTokens = ThemeTokens(
     canvas: Color(0xFFF5E6D3),
-    surface: Color(0xFFFFF8F0),
+    surface: Color(0xFFF8EAD7), // canvas 微亮变体（RGB +3），保留复古黄色调
     surfaceAlt: Color(0xFFEBDAC4),
     canvasDeep: Color(0xFFEBDAC4),
     textPrimary: Color(0xFF3D2817),
@@ -208,8 +212,8 @@ class ThemeTokens {
     textTertiary: Color(0xFF9C8060),
     textInverse: Color(0xFFF5E6D3),
     divider: Color(0xFFD9C9B3),
-    brand: Color(0xFFC4956A),
-    brandDeep: Color(0xFFA67B52),
+    brand: Color(0xFFB8855A), // 调深，质感更佳
+    brandDeep: Color(0xFF9A6A42),
     brandLight: Color(0xFFD4A57A),
     brandSubtle: Color(0xFFF0E0C8),
     brandText: Color(0xFF8C5A30),
@@ -249,151 +253,160 @@ class ThemeTokens {
   // === 日系清新主题 ===
   // 来源: App.vue [data-theme="fresh"] (line 142-170)
   // 注意: fresh 主题 App.vue 未显式定义 --color-brand-light，用 brandLight=brand 稍亮派生 (0xFFA8D8A0)
+  // Neumorphic fix: canvas 从过浅 #F8FAF6 加深为 #F0F4ED，让阴影对比明显；
+  // surface 从纯白 #FFFFFF 改为 canvas 微亮变体 #F3F7F0，保留绿色调；
+  // brand 调深为 #7BA068，brandDeep #5E8348，提升清新质感。
   static const _freshTokens = ThemeTokens(
-    canvas: Color(0xFFF8FAF6),
-    surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFEDF2EB),
-    canvasDeep: Color(0xFFE8EDE5),
-    textPrimary: Color(0xFF4A3F35),
-    textSecondary: Color(0xFF8C7F70),
-    textTertiary: Color(0xFFB8AEA0),
-    textInverse: Color(0xFFF8FAF6),
-    divider: Color(0xFFDDE5D8),
-    brand: Color(0xFF8BAD72),
-    brandDeep: Color(0xFF6E9458),
+    canvas: Color(0xFFF0F4ED), // 加深 2-3%，让新拟态阴影对比明显
+    surface: Color(0xFFF3F7F0), // canvas 微亮变体（RGB +3），保留绿色调
+    surfaceAlt: Color(0xFFE8EDE2),
+    canvasDeep: Color(0xFFE5E9DD),
+    textPrimary: Color(0xFF3D352B),
+    textSecondary: Color(0xFF7A6F60),
+    textTertiary: Color(0xFFA89E90),
+    textInverse: Color(0xFFF0F4ED),
+    divider: Color(0xFFD5DBC8),
+    brand: Color(0xFF7BA068), // 调深，绿色更有活力
+    brandDeep: Color(0xFF5E8348),
     brandLight: Color(0xFFA8D8A0),
-    brandSubtle: Color(0xFFE8F0E2),
-    brandText: Color(0xFF5E8348),
+    brandSubtle: Color(0xFFE5EDDE),
+    brandText: Color(0xFF4A7038),
     danger: Color(0xFFC87878),
     dangerSubtle: Color(0xFFF5E0E0),
-    success: Color(0xFF9AAB7C),
-    successSubtle: Color(0xFFEDF2E8),
+    success: Color(0xFF7A9C5C),
+    successSubtle: Color(0xFFE5EDDE),
     shadowConvex: [
-      BoxShadow(color: Color(0xFFD4DBD0), offset: Offset(6, 6), blurRadius: 14),
+      BoxShadow(color: Color(0xFFCCD3C5), offset: Offset(6, 6), blurRadius: 14),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConvexSubtle: [
-      BoxShadow(color: Color(0xFFD8DFD4), offset: Offset(3, 3), blurRadius: 6),
+      BoxShadow(color: Color(0xFFD2D9CB), offset: Offset(3, 3), blurRadius: 6),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 6),
     ],
     shadowConvexBrand: [
-      BoxShadow(color: Color(0xFF7A9B62), offset: Offset(4, 4), blurRadius: 10),
-      BoxShadow(color: Color(0xFF9CC084), offset: Offset(-4, -4), blurRadius: 10),
+      BoxShadow(color: Color(0xFF6A9058), offset: Offset(4, 4), blurRadius: 10),
+      BoxShadow(color: Color(0xFF92BA80), offset: Offset(-4, -4), blurRadius: 10),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFD6DDD2), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFCED5C7), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFD8DFD4), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFD2D9CB), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFD6DDD2), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFCED5C7), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
-      BoxShadow(color: Color(0x144A3F35), offset: Offset(0, 8), blurRadius: 32),
+      BoxShadow(color: Color(0x143D352B), offset: Offset(0, 8), blurRadius: 32),
     ],
   );
 
   // === 温馨粉主题 ===
   // 来源: App.vue [data-theme="cozy"] (line 172-201)
+  // Neumorphic fix: canvas 从过浅 #FFF5F5 加深为 #F8EBEB，让阴影对比明显；
+  // surface 从纯白 #FFFFFF 改为 canvas 微亮变体 #FBF0F0，保留粉色调；
+  // brand 调深为 #D89090，brandDeep #BC7070，提升温馨粉质感。
   static const _cozyTokens = ThemeTokens(
-    canvas: Color(0xFFFFF5F5),
-    surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFFAEDED),
-    canvasDeep: Color(0xFFF5EAEA),
-    textPrimary: Color(0xFF4A3A3A),
-    textSecondary: Color(0xFF8C7070),
-    textTertiary: Color(0xFFB89A9A),
-    textInverse: Color(0xFFFFF5F5),
-    divider: Color(0xFFF0E0E0),
-    brand: Color(0xFFE8A0A0),
-    brandDeep: Color(0xFFD4858A),
-    brandLight: Color(0xFFF0B5B5),
-    brandSubtle: Color(0xFFFCE8E8),
-    brandText: Color(0xFFC47070),
-    danger: Color(0xFFD47070),
-    dangerSubtle: Color(0xFFFCE8E8),
-    success: Color(0xFF8FB088),
-    successSubtle: Color(0xFFEDF2E8),
+    canvas: Color(0xFFF8EBEB), // 加深 2-3%，让新拟态阴影对比明显
+    surface: Color(0xFFFBF0F0), // canvas 微亮变体（RGB +3），保留粉色调
+    surfaceAlt: Color(0xFFF2E0E0),
+    canvasDeep: Color(0xFFF0DDDD),
+    textPrimary: Color(0xFF3D2E2E),
+    textSecondary: Color(0xFF7A6060),
+    textTertiary: Color(0xFFA88989),
+    textInverse: Color(0xFFF8EBEB),
+    divider: Color(0xFFE8D5D5),
+    brand: Color(0xFFD89090), // 调深，粉色更有质感
+    brandDeep: Color(0xFFBC7070),
+    brandLight: Color(0xFFEAB5B5),
+    brandSubtle: Color(0xFFF5DDDD),
+    brandText: Color(0xFFA85858),
+    danger: Color(0xFFC46868),
+    dangerSubtle: Color(0xFFF5DDDD),
+    success: Color(0xFF8FAA82),
+    successSubtle: Color(0xFFE8EDE2),
     shadowConvex: [
-      BoxShadow(color: Color(0xFFF0E0E0), offset: Offset(6, 6), blurRadius: 14),
+      BoxShadow(color: Color(0xFFE8D5D5), offset: Offset(6, 6), blurRadius: 14),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConvexSubtle: [
-      BoxShadow(color: Color(0xFFF2E2E2), offset: Offset(3, 3), blurRadius: 6),
+      BoxShadow(color: Color(0xFFEDDDDD), offset: Offset(3, 3), blurRadius: 6),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 6),
     ],
     shadowConvexBrand: [
-      BoxShadow(color: Color(0xFFD4858A), offset: Offset(4, 4), blurRadius: 10),
-      BoxShadow(color: Color(0xFFF0B5B5), offset: Offset(-4, -4), blurRadius: 10),
+      BoxShadow(color: Color(0xFFBC7070), offset: Offset(4, 4), blurRadius: 10),
+      BoxShadow(color: Color(0xFFEAB5B5), offset: Offset(-4, -4), blurRadius: 10),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFF0E0E0), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFEADADA), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFF2E2E2), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFEDDDDD), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFF0E0E0), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFEADADA), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
-      BoxShadow(color: Color(0x144A3A3A), offset: Offset(0, 8), blurRadius: 32),
+      BoxShadow(color: Color(0x143D2E2E), offset: Offset(0, 8), blurRadius: 32),
     ],
   );
 
   // === 马卡龙主题 ===
   // 来源: App.vue [data-theme="macaron"] (line 203-232)
+  // Neumorphic fix: canvas 从过浅 #FFF8F0 加深为 #F5EEE0，让阴影对比明显；
+  // surface 从纯白 #FFFFFF 改为 canvas 微亮变体 #F8F1E3，保留米调；
+  // brand 从灰暗 #A8D8C8 提升饱和度为 #7BC4AB，brandDeep #5AA890，让薄荷绿更鲜活有质感。
   static const _macaronTokens = ThemeTokens(
-    canvas: Color(0xFFFFF8F0),
-    surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFF5F0E8),
-    canvasDeep: Color(0xFFF0EAE0),
-    textPrimary: Color(0xFF5A4A4A),
-    textSecondary: Color(0xFF8C7A7A),
-    textTertiary: Color(0xFFB8A8A0),
-    textInverse: Color(0xFFFFF8F0),
-    divider: Color(0xFFE8E0D5),
-    brand: Color(0xFFA8D8C8),
-    brandDeep: Color(0xFF8CC5B5),
-    brandLight: Color(0xFFC5E8DD),
-    brandSubtle: Color(0xFFE0F0EA),
-    brandText: Color(0xFF5E9882),
-    danger: Color(0xFFE8A0A0),
-    dangerSubtle: Color(0xFFFCE8E8),
-    success: Color(0xFFA8D8C8),
-    successSubtle: Color(0xFFE0F0EA),
+    canvas: Color(0xFFF5EEE0), // 加深 2-3%，让新拟态阴影对比明显
+    surface: Color(0xFFF8F1E3), // canvas 微亮变体（RGB +3），保留米调
+    surfaceAlt: Color(0xFFEEE5D3),
+    canvasDeep: Color(0xFFEBE0CC),
+    textPrimary: Color(0xFF4A3D3D),
+    textSecondary: Color(0xFF7A6A6A),
+    textTertiary: Color(0xFFA89595),
+    textInverse: Color(0xFFF5EEE0),
+    divider: Color(0xFFE0D5C0),
+    brand: Color(0xFF7BC4AB), // 提升饱和度，薄荷绿更鲜活
+    brandDeep: Color(0xFF5AA890),
+    brandLight: Color(0xFFA0D8C5),
+    brandSubtle: Color(0xFFDDEDE5),
+    brandText: Color(0xFF3D8068),
+    danger: Color(0xFFE09090),
+    dangerSubtle: Color(0xFFF5DDDD),
+    success: Color(0xFF7BC4AB),
+    successSubtle: Color(0xFFDDEDE5),
     shadowConvex: [
-      BoxShadow(color: Color(0xFFE8E0D5), offset: Offset(6, 6), blurRadius: 14),
+      BoxShadow(color: Color(0xFFE0D5C0), offset: Offset(6, 6), blurRadius: 14),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConvexSubtle: [
-      BoxShadow(color: Color(0xFFEDE5D8), offset: Offset(3, 3), blurRadius: 6),
+      BoxShadow(color: Color(0xFFE5DAC5), offset: Offset(3, 3), blurRadius: 6),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 6),
     ],
     shadowConvexBrand: [
-      BoxShadow(color: Color(0xFF8CC5B5), offset: Offset(4, 4), blurRadius: 10),
-      BoxShadow(color: Color(0xFFC5E8DD), offset: Offset(-4, -4), blurRadius: 10),
+      BoxShadow(color: Color(0xFF5AA890), offset: Offset(4, 4), blurRadius: 10),
+      BoxShadow(color: Color(0xFFA0D8C5), offset: Offset(-4, -4), blurRadius: 10),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFE8E0D5), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFE2D7C2), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFEDE5D8), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFE5DAC5), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFE8E0D5), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFE2D7C2), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
-      BoxShadow(color: Color(0x145A4A4A), offset: Offset(0, 8), blurRadius: 32),
+      BoxShadow(color: Color(0x144A3D3D), offset: Offset(0, 8), blurRadius: 32),
     ],
   );
 
@@ -449,51 +462,54 @@ class ThemeTokens {
 
   // === 玫瑰金主题 ===
   // 来源: App.vue [data-theme="rosegold"] (line 265-294)
+  // Neumorphic fix: canvas 从 #FAF6F2 加深为 #F5EDE8（带粉调），与 warmWhite 区分；
+  // surface 从纯白 #FFFFFF 改为 canvas 微亮变体 #F8F1EC，保留粉调；
+  // brand 调深为 #BC8888，brandDeep #A07070，让玫瑰金特色更明显有质感。
   static const _rosegoldTokens = ThemeTokens(
-    canvas: Color(0xFFFAF6F2),
-    surface: Color(0xFFFFFFFF),
-    surfaceAlt: Color(0xFFF5EDE8),
-    canvasDeep: Color(0xFFF0E8E2),
-    textPrimary: Color(0xFF3D2E2A),
-    textSecondary: Color(0xFF6B5450),
-    textTertiary: Color(0xFFA89088),
-    textInverse: Color(0xFFFAF6F2),
-    divider: Color(0xFFE8DDD5),
-    brand: Color(0xFFC9A0A0),
-    brandDeep: Color(0xFFB08585),
-    brandLight: Color(0xFFDDB8B8),
-    brandSubtle: Color(0xFFF0E0E0),
-    brandText: Color(0xFFA06868),
-    danger: Color(0xFFC47878),
-    dangerSubtle: Color(0xFFF0E0E0),
-    success: Color(0xFF9AB088),
-    successSubtle: Color(0xFFE8F0E0),
+    canvas: Color(0xFFF5EDE8), // 加深 2-3%，带粉调，与 warmWhite 区分
+    surface: Color(0xFFF8F1EC), // canvas 微亮变体（RGB +3），保留粉调
+    surfaceAlt: Color(0xFFEEE0D8),
+    canvasDeep: Color(0xFFEBDBD2),
+    textPrimary: Color(0xFF3D2825),
+    textSecondary: Color(0xFF6B4C48),
+    textTertiary: Color(0xFFA8857D),
+    textInverse: Color(0xFFF5EDE8),
+    divider: Color(0xFFE5D5CC),
+    brand: Color(0xFFBC8888), // 调深，玫瑰金特色更明显
+    brandDeep: Color(0xFFA07070),
+    brandLight: Color(0xFFD8A8A8),
+    brandSubtle: Color(0xFFEFD8D5),
+    brandText: Color(0xFF8C5858),
+    danger: Color(0xFFBC6868),
+    dangerSubtle: Color(0xFFF0D8D5),
+    success: Color(0xFF8FAA82),
+    successSubtle: Color(0xFFE8EDE2),
     shadowConvex: [
-      BoxShadow(color: Color(0xFFE8DDD5), offset: Offset(6, 6), blurRadius: 14),
+      BoxShadow(color: Color(0xFFE5D5CC), offset: Offset(6, 6), blurRadius: 14),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConvexSubtle: [
-      BoxShadow(color: Color(0xFFEDE2DA), offset: Offset(3, 3), blurRadius: 6),
+      BoxShadow(color: Color(0xFFEADAD0), offset: Offset(3, 3), blurRadius: 6),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 6),
     ],
     shadowConvexBrand: [
-      BoxShadow(color: Color(0xFFB08585), offset: Offset(4, 4), blurRadius: 10),
-      BoxShadow(color: Color(0xFFDDB8B8), offset: Offset(-4, -4), blurRadius: 10),
+      BoxShadow(color: Color(0xFFA07070), offset: Offset(4, 4), blurRadius: 10),
+      BoxShadow(color: Color(0xFFD8A8A8), offset: Offset(-4, -4), blurRadius: 10),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFE8DDD5), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFE8D8CE), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFEDE2DA), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFEADAD0), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFE8DDD5), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFE8D8CE), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
-      BoxShadow(color: Color(0x143D2E2A), offset: Offset(0, 8), blurRadius: 32),
+      BoxShadow(color: Color(0x143D2825), offset: Offset(0, 8), blurRadius: 32),
     ],
   );
 }

@@ -7,9 +7,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../data/preview_form_provider.dart';
 import '../data/templates_editor_mock_data.dart';
 import '../widgets/composition_overlay.dart';
 import '../widgets/pose_silhouette.dart';
@@ -131,6 +131,10 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   // 姿势预览拖动状态
   bool _isDraggingPose = false;
 
+  // Bug 11 修复：用 ValueNotifier 通知剪影位置变化，避免拖动时整个 page rebuild
+  // 拖动时只更新此 notifier，剪影预览部分用 ValueListenableBuilder 监听并重建
+  late final ValueNotifier<Offset> _posePositionNotifier;
+
   @override
   void initState() {
     super.initState();
@@ -143,6 +147,26 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         TextEditingController(text: _form.sceneGuide.props.join(', '));
     _tipsController =
         TextEditingController(text: _form.sceneGuide.tips.join('\n'));
+    _posePositionNotifier = ValueNotifier(
+      Offset(_form.pose.position.x, _form.pose.position.y),
+    );
+  }
+
+  @override
+  void dispose() {
+    _autoSaveTimer?.cancel();
+    _scrollController.dispose();
+    _tagsController.dispose();
+    _propsController.dispose();
+    _tipsController.dispose();
+    _posePositionNotifier.dispose();
+    super.dispose();
+  }
+
+  /// 同步 pose position 到 notifier（在所有修改 _form.pose.position 的地方调用）
+  void _syncPosePosition() {
+    _posePositionNotifier.value =
+        Offset(_form.pose.position.x, _form.pose.position.y);
   }
 
   EditorForm _loadInitialForm() {
@@ -158,16 +182,6 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       }
     }
     return createBlankEditorForm();
-  }
-
-  @override
-  void dispose() {
-    _autoSaveTimer?.cancel();
-    _scrollController.dispose();
-    _tagsController.dispose();
-    _propsController.dispose();
-    _tipsController.dispose();
-    super.dispose();
   }
 
   // ===== 表单变更处理 =====
@@ -271,19 +285,32 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
   void _onPoseDragUpdate(DragUpdateDetails details, BoxConstraints constraints) {
     if (!_isDraggingPose) return;
-    setState(() {
-      final dx = details.delta.dx / constraints.maxWidth;
-      final dy = details.delta.dy / constraints.maxHeight;
-      _form.pose.position.x =
-          (_form.pose.position.x + dx).clamp(0.0, 1.0);
-      _form.pose.position.y =
-          (_form.pose.position.y + dy).clamp(0.0, 1.0);
-    });
+    // Bug 11 修复：拖动时不调用 setState（避免整个 page rebuild），
+    // 只更新 _form 和 _posePositionNotifier，让 ValueListenableBuilder 局部重建
+    final dx = details.delta.dx / constraints.maxWidth;
+    final dy = details.delta.dy / constraints.maxHeight;
+    _form.pose.position.x =
+        (_form.pose.position.x + dx).clamp(0.0, 1.0);
+    _form.pose.position.y =
+        (_form.pose.position.y + dy).clamp(0.0, 1.0);
+    _syncPosePosition();
   }
 
   void _onPoseDragEnd(DragEndDetails details) {
     setState(() => _isDraggingPose = false);
     _scheduleAutoSave();
+  }
+
+  /// 位置 X/Y 滑块变化时同步到 notifier（避免拖动滑块时预览不更新）
+  void _onPosePositionSliderChanged(bool isX, double v) {
+    _onChange(() {
+      if (isX) {
+        _form.pose.position.x = v;
+      } else {
+        _form.pose.position.y = v;
+      }
+    });
+    _syncPosePosition();
   }
 
   // ===== 自动保存草稿（debounce 1000ms） =====
@@ -342,14 +369,45 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     );
   }
 
-  void _onPreview() {
-    // 保存草稿后跳转预览页（capture/preview-template?draftId=xxx）
+  Future<void> _onPreview() async {
+    // Bug 12 修复：将当前 _form 的副本写入 previewEditorFormProvider，
+    // 让预览页能直接读取真实编辑器表单（而非 mock 数据）
     if (_currentDraftId.isEmpty) {
       _currentDraftId =
           'draft-editor-${DateTime.now().millisecondsSinceEpoch}';
     }
-    GoRouter.of(context)
+    ref.read(previewEditorFormProvider.notifier).state = _form.copy();
+
+    // 跳转预览页（capture/preview-template?draftId=xxx）
+    // await push 返回后，从 provider 读取用户在预览页修改后的 form
+    await GoRouter.of(context)
         .push('/capture/preview-template?draftId=$_currentDraftId');
+
+    if (!mounted) return;
+
+    // 读取预览页同步回来的 EditorForm
+    final syncedForm = ref.read(previewEditorFormProvider);
+    if (syncedForm != null) {
+      // 将修改后的 form 复制回 _form（深拷贝避免后续 mutation 污染）
+      _form = syncedForm.copy();
+      // 同步 notifier（让剪影预览的位置滑块立即反映新值）
+      _syncPosePosition();
+      // 同步文本控制器
+      _tagsController.text = _form.meta.tags.join(', ');
+      _propsController.text = _form.sceneGuide.props.join(', ');
+      _tipsController.text = _form.sceneGuide.tips.join('\n');
+      // 触发重建 + 自动保存
+      setState(() {});
+      _scheduleAutoSave();
+      // 清空 provider，避免下次预览复用旧数据
+      ref.read(previewEditorFormProvider.notifier).state = null;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已从预览页同步参数')),
+        );
+      }
+    }
   }
 
   void _back() {
@@ -415,6 +473,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                               tokens: tokens,
                               form: _form,
                               isDragging: _isDraggingPose,
+                              posePositionNotifier: _posePositionNotifier,
                               onSourceChange: _onSilhouetteSourceChange,
                               onSelectBuiltin: _selectBuiltinSilhouette,
                               onImportImage: _importSilhouetteImage,
@@ -423,6 +482,8 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                               onPoseDragStart: _onPoseDragStart,
                               onPoseDragUpdate: _onPoseDragUpdate,
                               onPoseDragEnd: _onPoseDragEnd,
+                              onPosePositionSliderChanged:
+                                  _onPosePositionSliderChanged,
                             ),
                             const SizedBox(height: 12),
                             _Step4Camera(
@@ -543,7 +604,7 @@ class _DraftsNavButton extends StatelessWidget {
 
 // ===== 通用 Step 卡片 + 字段组件 =====
 
-class _StepCard extends StatelessWidget {
+class _StepCard extends ConsumerWidget {
   const _StepCard({
     required this.tokens,
     required this.stepNumber,
@@ -559,15 +620,19 @@ class _StepCard extends StatelessWidget {
   final Duration delay;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return FadeUp(
       delay: delay,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: tokens.canvas,
+          // neumorphic 风格下：tokens.canvas 改为 tokens.surface，移除 border
+          color: isNeumorphic ? tokens.surface : tokens.canvas,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: tokens.divider, width: 0.5),
+          border: isNeumorphic
+              ? null
+              : Border.all(color: tokens.divider, width: 0.5),
           boxShadow: tokens.shadowConvex,
         ),
         child: Column(
@@ -636,7 +701,7 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-class _FieldInput extends StatelessWidget {
+class _FieldInput extends ConsumerStatefulWidget {
   const _FieldInput({
     required this.tokens,
     this.controller,
@@ -656,14 +721,48 @@ class _FieldInput extends StatelessWidget {
   final ValueChanged<String>? onChanged;
 
   @override
+  ConsumerState<_FieldInput> createState() => _FieldInputState();
+}
+
+class _FieldInputState extends ConsumerState<_FieldInput> {
+  final FocusNode _focusNode = FocusNode();
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    setState(() => _focused = _focusNode.hasFocus);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+    final tokens = widget.tokens;
+
+    // neumorphic 风格下：聚焦时通过更深的 fillColor 表达"内凹"感
+    // 其他风格：聚焦时用 brand 边框（原逻辑保持不变）
+    final Color fillColor = isNeumorphic && _focused
+        ? tokens.canvas // 聚焦时变浅，与 canvas 背景接近，制造"凹陷"对比
+        : tokens.canvasDeep;
+
     final InputDecoration decoration = InputDecoration(
-      hintText: placeholder,
+      hintText: widget.placeholder,
       filled: true,
-      fillColor: tokens.canvasDeep,
+      fillColor: fillColor,
       contentPadding: EdgeInsets.symmetric(
         horizontal: 12,
-        vertical: multiline ? 12 : 10,
+        vertical: widget.multiline ? 12 : 10,
       ),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
@@ -675,7 +774,10 @@ class _FieldInput extends StatelessWidget {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: tokens.brand, width: 1),
+        // neumorphic 风格下：聚焦时不显示 brand border，靠 fillColor 变化表达聚焦
+        borderSide: isNeumorphic
+            ? BorderSide.none
+            : BorderSide(color: tokens.brand, width: 1),
       ),
     );
 
@@ -684,30 +786,32 @@ class _FieldInput extends StatelessWidget {
       color: tokens.textPrimary,
     );
 
-    if (controller != null) {
+    if (widget.controller != null) {
       return TextField(
-        controller: controller,
+        controller: widget.controller,
+        focusNode: _focusNode,
         decoration: decoration,
         style: style,
-        maxLines: multiline ? null : 1,
-        minLines: multiline ? 3 : 1,
-        keyboardType: keyboardType,
-        onChanged: onChanged,
+        maxLines: widget.multiline ? null : 1,
+        minLines: widget.multiline ? 3 : 1,
+        keyboardType: widget.keyboardType,
+        onChanged: widget.onChanged,
       );
     }
     return TextFormField(
-      initialValue: initialValue,
+      initialValue: widget.initialValue,
+      focusNode: _focusNode,
       decoration: decoration,
       style: style,
-      maxLines: multiline ? null : 1,
-      minLines: multiline ? 3 : 1,
-      keyboardType: keyboardType,
-      onChanged: onChanged,
+      maxLines: widget.multiline ? null : 1,
+      minLines: widget.multiline ? 3 : 1,
+      keyboardType: widget.keyboardType,
+      onChanged: widget.onChanged,
     );
   }
 }
 
-class _FieldDropdown extends StatelessWidget {
+class _FieldDropdown extends ConsumerWidget {
   const _FieldDropdown({
     required this.tokens,
     required this.value,
@@ -721,12 +825,16 @@ class _FieldDropdown extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: tokens.canvasDeep,
         borderRadius: BorderRadius.circular(8),
+        // neumorphic 风格下：添加 shadowConcaveSubtle 内凹阴影
+        boxShadow:
+            isNeumorphic ? tokens.shadowConcaveSubtle : null,
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
@@ -757,7 +865,7 @@ class _FieldDropdown extends StatelessWidget {
   }
 }
 
-class _PillGroup extends StatelessWidget {
+class _PillGroup extends ConsumerWidget {
   const _PillGroup({
     required this.tokens,
     required this.options,
@@ -771,7 +879,8 @@ class _PillGroup extends StatelessWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return Wrap(
       spacing: 8,
       runSpacing: 4,
@@ -783,12 +892,22 @@ class _PillGroup extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: active ? tokens.brand : tokens.canvasDeep,
+              // neumorphic 风格下：激活用 brand + shadowConvex，非激活用 surface + shadowConvexSubtle
+              color: active
+                  ? tokens.brand
+                  : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
               borderRadius: BorderRadius.circular(9999),
-              border: Border.all(
-                color: active ? tokens.brand : Colors.transparent,
-                width: 1,
-              ),
+              border: isNeumorphic
+                  ? null
+                  : Border.all(
+                      color: active ? tokens.brand : Colors.transparent,
+                      width: 1,
+                    ),
+              boxShadow: isNeumorphic
+                  ? (active
+                      ? tokens.shadowConvex
+                      : tokens.shadowConvexSubtle)
+                  : null,
             ),
             child: Text(
               o.label,
@@ -1066,6 +1185,7 @@ class _Step3Pose extends StatelessWidget {
     required this.tokens,
     required this.form,
     required this.isDragging,
+    required this.posePositionNotifier,
     required this.onSourceChange,
     required this.onSelectBuiltin,
     required this.onImportImage,
@@ -1074,11 +1194,13 @@ class _Step3Pose extends StatelessWidget {
     required this.onPoseDragStart,
     required this.onPoseDragUpdate,
     required this.onPoseDragEnd,
+    required this.onPosePositionSliderChanged,
   });
 
   final ThemeTokens tokens;
   final EditorForm form;
   final bool isDragging;
+  final ValueNotifier<Offset> posePositionNotifier;
   final ValueChanged<String> onSourceChange;
   final ValueChanged<String> onSelectBuiltin;
   final VoidCallback onImportImage;
@@ -1087,6 +1209,7 @@ class _Step3Pose extends StatelessWidget {
   final void Function(DragStartDetails) onPoseDragStart;
   final void Function(DragUpdateDetails, BoxConstraints) onPoseDragUpdate;
   final void Function(DragEndDetails) onPoseDragEnd;
+  final void Function(bool isX, double v) onPosePositionSliderChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1152,8 +1275,7 @@ class _Step3Pose extends StatelessWidget {
             min: 0,
             max: 1,
             divisions: 100,
-            onChanged: (v) =>
-                onChange(() => form.pose.position.x = v),
+            onChanged: (v) => onPosePositionSliderChanged(true, v),
             valueText: form.pose.position.x.toStringAsFixed(2),
           ),
           _SliderRow(
@@ -1163,8 +1285,7 @@ class _Step3Pose extends StatelessWidget {
             min: 0,
             max: 1,
             divisions: 100,
-            onChanged: (v) =>
-                onChange(() => form.pose.position.y = v),
+            onChanged: (v) => onPosePositionSliderChanged(false, v),
             valueText: form.pose.position.y.toStringAsFixed(2),
           ),
           _SliderRow(
@@ -1196,102 +1317,117 @@ class _Step3Pose extends StatelessWidget {
             onChanged: (v) => onChange(() => form.pose.description = v),
           ),
           const SizedBox(height: 14),
-          // 预览框（可拖动）
+          // 预览框（可拖动）—— Bug 11 修复：用 RepaintBoundary 隔离重绘，
+          // ValueListenableBuilder 监听位置变化，拖动时只重建此部分而非整个 page
           AspectRatio(
             aspectRatio: parseAspectRatio(form.composition.aspectRatio),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return GestureDetector(
-                    onPanStart: onPoseDragStart,
-                    onPanUpdate: (details) =>
-                        onPoseDragUpdate(details, constraints),
-                    onPanEnd: onPoseDragEnd,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      clipBehavior: Clip.hardEdge,
-                      children: [
-                        // 硬编码颜色，与 uni-app 一致 (preview-bg: linear-gradient(135deg, #3A3631 0%, #2A2622 100%))
-                        Container(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Color(0xFF3A3631),
-                                Color(0xFF2A2622),
-                              ],
-                            ),
-                          ),
-                        ),
-                        // 剪影
-                        Positioned(
-                          left: constraints.maxWidth * form.pose.position.x,
-                          top: constraints.maxHeight * form.pose.position.y,
-                          child: FractionalTranslation(
-                            translation: const Offset(-0.5, -0.5),
-                            child: PoseSilhouette(
-                              silhouetteType: form.pose.silhouette.type,
-                              silhouetteData: form.pose.silhouette.data,
-                              scale: form.pose.scale,
-                              rotation: form.pose.rotation,
-                            ),
-                          ),
-                        ),
-                        // 拖动提示
-                        if (!isDragging)
-                          Positioned(
-                            bottom: 8,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  // 硬编码颜色，与 uni-app 一致 (rgba(0,0,0,0.5))
-                                  color: const Color.fromRGBO(0, 0, 0, 0.5),
-                                  borderRadius: BorderRadius.circular(9999),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.open_with,
-                                      size: 12,
-                                      color: Colors.white.withOpacity(0.8),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '拖动调整位置',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.white.withOpacity(0.8),
-                                      ),
-                                    ),
-                                  ],
-                                ),
+              child: RepaintBoundary(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return GestureDetector(
+                      onPanStart: onPoseDragStart,
+                      onPanUpdate: (details) =>
+                          onPoseDragUpdate(details, constraints),
+                      onPanEnd: onPoseDragEnd,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        clipBehavior: Clip.hardEdge,
+                        children: [
+                          // 硬编码颜色，与 uni-app 一致 (preview-bg: linear-gradient(135deg, #3A3631 0%, #2A2622 100%))
+                          Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF3A3631),
+                                  Color(0xFF2A2622),
+                                ],
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  );
-                },
+                          // 剪影 —— ValueListenableBuilder 局部重建
+                          ValueListenableBuilder<Offset>(
+                            valueListenable: posePositionNotifier,
+                            builder: (context, pos, _) {
+                              return Positioned(
+                                left: constraints.maxWidth * pos.dx,
+                                top: constraints.maxHeight * pos.dy,
+                                child: FractionalTranslation(
+                                  translation: const Offset(-0.5, -0.5),
+                                  child: PoseSilhouette(
+                                    silhouetteType:
+                                        form.pose.silhouette.type,
+                                    silhouetteData:
+                                        form.pose.silhouette.data,
+                                    scale: form.pose.scale,
+                                    rotation: form.pose.rotation,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          // 拖动提示
+                          if (!isDragging)
+                            Positioned(
+                              bottom: 8,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    // 硬编码颜色，与 uni-app 一致 (rgba(0,0,0,0.5))
+                                    color: const Color.fromRGBO(0, 0, 0, 0.5),
+                                    borderRadius: BorderRadius.circular(9999),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.open_with,
+                                        size: 12,
+                                        color: Colors.white.withOpacity(0.8),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '拖动调整位置',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.white.withOpacity(0.8),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
-          // 位置数值显示
+          // 位置数值显示 —— 也用 ValueListenableBuilder 局部重建
           if (form.pose.silhouette.data != 'none') ...[
             const SizedBox(height: 8),
-            Text(
-              '位置 X: ${(form.pose.position.x * 100).round()}%  Y: ${(form.pose.position.y * 100).round()}%',
-              style: TextStyle(
-                fontSize: 11,
-                fontFamily: 'SF Mono',
-                color: tokens.textTertiary,
-              ),
+            ValueListenableBuilder<Offset>(
+              valueListenable: posePositionNotifier,
+              builder: (context, pos, _) {
+                return Text(
+                  '位置 X: ${(pos.dx * 100).round()}%  Y: ${(pos.dy * 100).round()}%',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontFamily: 'SF Mono',
+                    color: tokens.textTertiary,
+                  ),
+                );
+              },
             ),
           ],
         ],
@@ -1300,7 +1436,7 @@ class _Step3Pose extends StatelessWidget {
   }
 }
 
-class _BuiltinSilhouetteThumbnails extends StatelessWidget {
+class _BuiltinSilhouetteThumbnails extends ConsumerWidget {
   const _BuiltinSilhouetteThumbnails({
     required this.tokens,
     required this.selectedKey,
@@ -1312,7 +1448,8 @@ class _BuiltinSilhouetteThumbnails extends StatelessWidget {
   final ValueChanged<String> onSelect;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return SizedBox(
       height: 110,
       child: ListView.separated(
@@ -1329,12 +1466,22 @@ class _BuiltinSilhouetteThumbnails extends StatelessWidget {
               width: 64,
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
               decoration: BoxDecoration(
-                color: active ? tokens.brandSubtle : tokens.canvasDeep,
+                // neumorphic 风格下：激活用 brandSubtle + shadowConvex，非激活用 surface + shadowConvexSubtle
+                color: active
+                    ? tokens.brandSubtle
+                    : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: active ? tokens.brand : Colors.transparent,
-                  width: 1,
-                ),
+                border: isNeumorphic
+                    ? null
+                    : Border.all(
+                        color: active ? tokens.brand : Colors.transparent,
+                        width: 1,
+                      ),
+                boxShadow: isNeumorphic
+                    ? (active
+                        ? tokens.shadowConvex
+                        : tokens.shadowConvexSubtle)
+                    : null,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1856,17 +2003,19 @@ class _FooterBtn {
   final int flex;
 }
 
-class _VerticalFooterButton extends StatelessWidget {
+class _VerticalFooterButton extends ConsumerWidget {
   const _VerticalFooterButton({required this.btn, required this.tokens});
   final _FooterBtn btn;
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     final isPrimary = btn.type == _FooterBtnType.primary;
     final bg = isPrimary ? tokens.textPrimary : tokens.surfaceAlt;
     final fg = isPrimary ? tokens.canvas : tokens.textSecondary;
-    final borderColor = isPrimary ? null : tokens.divider;
+    // neumorphic 风格下：次按钮移除 border，用 shadowConvexSubtle
+    final borderColor = (isPrimary || isNeumorphic) ? null : tokens.divider;
 
     return GestureDetector(
       onTap: btn.onTap,
@@ -1878,6 +2027,9 @@ class _VerticalFooterButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: borderColor != null
               ? Border.all(color: borderColor, width: 1)
+              : null,
+          boxShadow: isNeumorphic && !isPrimary
+              ? tokens.shadowConvexSubtle
               : null,
         ),
         child: Column(

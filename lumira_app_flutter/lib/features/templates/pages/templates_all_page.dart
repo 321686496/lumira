@@ -8,7 +8,9 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../data/imported_templates_provider.dart';
 import '../data/templates_browse_mock_data.dart';
+import '../widgets/template_import_sheet.dart';
 
 /// 全部模板页
 ///
@@ -46,8 +48,12 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
 
   /// mock 阶段简化筛选 — 只按 _selectedType + _showCustom 过滤
   /// brief 明确规定：_showCustom==true 只显示 isCustom==true；false 只显示 isCustom==false
-  List<AllTemplateItem> get _filteredTemplates {
-    return TemplatesBrowseMockData.allTemplates.where((t) {
+  ///
+  /// 注意：导入的模板（来自 importedAllTemplatesProvider）始终合并到 isCustom=true 视图中
+  List<AllTemplateItem> _filteredTemplatesWith(
+      List<AllTemplateItem> imported) {
+    final all = [...TemplatesBrowseMockData.allTemplates, ...imported];
+    return all.where((t) {
       if (_showCustom && !t.isCustom) return false;
       if (!_showCustom && t.isCustom) return false;
       if (_selectedType != null && t.category != _selectedType) return false;
@@ -79,15 +85,6 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     setState(() => _showCustom = value);
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(milliseconds: 1000),
-      ),
-    );
-  }
-
   void _goEditor() {
     GoRouter.of(context).push(RouteNames.templatesEditor);
   }
@@ -100,9 +97,21 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     }
   }
 
+  void _showImportSheet() {
+    TemplateImportSheet.show(
+      context,
+      onImported: (_) {
+        // 导入后自动切换到"我的"视图
+        setState(() => _showCustom = true);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final importedAll = ref.watch(importedAllTemplatesProvider);
+    final filtered = _filteredTemplatesWith(importedAll);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -143,16 +152,15 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                         if (_showCustom)
                           _ActionRow(
                             tokens: tokens,
-                            onImport: () =>
-                                _showSnack('导入模板功能即将上线'),
+                            onImport: _showImportSheet,
                             onCreate: _goEditor,
                           ),
-                        if (_filteredTemplates.isEmpty)
+                        if (filtered.isEmpty)
                           _EmptyState(tokens: tokens)
                         else
                           _TemplateGrid(
                             tokens: tokens,
-                            templates: _filteredTemplates,
+                            templates: filtered,
                           ),
                       ],
                     ),
@@ -423,7 +431,7 @@ class _PillRow extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
+class _Pill extends ConsumerWidget {
   const _Pill({
     required this.tokens,
     required this.label,
@@ -437,7 +445,8 @@ class _Pill extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -446,13 +455,19 @@ class _Pill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           // active: linear gradient brand→brandDeep（硬编码颜色，与 uni-app 一致）
+          // neumorphic 风格下：移除渐变，激活态用 brand 纯色 + shadowConvex
           gradient: active
-              ? LinearGradient(colors: [tokens.brand, tokens.brandDeep])
+              ? (isNeumorphic
+                  ? null
+                  : LinearGradient(colors: [tokens.brand, tokens.brandDeep]))
               : null,
-          color: active ? null : tokens.surfaceAlt,
+          color: active
+              ? (isNeumorphic ? tokens.brand : null)
+              : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
-          boxShadow:
-              active ? tokens.shadowPressed : tokens.shadowConvexSubtle,
+          boxShadow: active
+              ? (isNeumorphic ? tokens.shadowConvex : tokens.shadowPressed)
+              : tokens.shadowConvexSubtle,
         ),
         child: Center(
           child: Text(
@@ -496,7 +511,7 @@ class _TagChip extends StatelessWidget {
   }
 }
 
-class _CustomToggle extends StatelessWidget {
+class _CustomToggle extends ConsumerWidget {
   const _CustomToggle({
     required this.tokens,
     required this.active,
@@ -508,7 +523,8 @@ class _CustomToggle extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -517,13 +533,19 @@ class _CustomToggle extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           // active: linear gradient brand→brandDeep（硬编码颜色，与 uni-app 一致）
+          // neumorphic 风格下：移除渐变，激活态用 brand 纯色 + shadowConvex
           gradient: active
-              ? LinearGradient(colors: [tokens.brand, tokens.brandDeep])
+              ? (isNeumorphic
+                  ? null
+                  : LinearGradient(colors: [tokens.brand, tokens.brandDeep]))
               : null,
-          color: active ? null : tokens.surfaceAlt,
+          color: active
+              ? (isNeumorphic ? tokens.brand : null)
+              : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
-          boxShadow:
-              active ? tokens.shadowPressed : tokens.shadowConvexSubtle,
+          boxShadow: active
+              ? (isNeumorphic ? tokens.shadowConvex : tokens.shadowPressed)
+              : tokens.shadowConvexSubtle,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -593,7 +615,7 @@ class _ActionRow extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
+class _ActionButton extends ConsumerWidget {
   const _ActionButton({
     required this.tokens,
     required this.icon,
@@ -609,7 +631,8 @@ class _ActionButton extends StatelessWidget {
   final bool primary;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return GestureDetector(
       onTap: onPressed,
       behavior: HitTestBehavior.opaque,
@@ -617,12 +640,19 @@ class _ActionButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           // primary: linear gradient brand→brandDeep（硬编码颜色，与 uni-app 一致）
+          // neumorphic 风格下：移除渐变，主按钮用 brand 纯色 + shadowConvex
           gradient: primary
-              ? LinearGradient(colors: [tokens.brand, tokens.brandDeep])
+              ? (isNeumorphic
+                  ? null
+                  : LinearGradient(colors: [tokens.brand, tokens.brandDeep]))
               : null,
-          color: primary ? null : tokens.surfaceAlt,
+          color: primary
+              ? (isNeumorphic ? tokens.brand : null)
+              : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(8),
-          boxShadow: primary ? tokens.shadowConvexBrand : null,
+          boxShadow: primary
+              ? (isNeumorphic ? tokens.shadowConvex : tokens.shadowConvexBrand)
+              : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -713,10 +743,10 @@ class _TemplateGrid extends StatelessWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            // Forced fix: brief 0.72 + 3:4 image 导致 32px 溢出
-            // 计算：image 3/4 height = 0.75w + text section ~53dp > 519dp (0.72 ratio)
-            // 改为 0.62 → card height 603dp，留 104dp 文字空间
-            childAspectRatio: 0.62,
+            // Forced fix: 0.72 → 0.62 修复 emulator 上 32px 溢出，但在 360dp 小屏上仍会溢出 ~25px
+            // 计算小屏（360dp）：card_width=154 → image_h=205 + text_section=53 = 258 > card_h=248（0.62 ratio）
+            // 改为 0.56 → card_h=275，留 17dp 文字空间，与 home_page.dart 一致
+            childAspectRatio: 0.56,
           ),
           itemCount: templates.length,
           itemBuilder: (_, index) => _TplCard(

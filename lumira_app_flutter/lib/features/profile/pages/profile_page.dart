@@ -9,7 +9,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
@@ -113,32 +112,41 @@ class ProfilePage extends ConsumerWidget {
 }
 
 /// HeroCard：用户头像 + 名字 + 等级徽章 + 经验进度
-class _HeroCard extends StatelessWidget {
+class _HeroCard extends ConsumerWidget {
   const _HeroCard({required this.user});
   final UserProfile user;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
     // 硬编码颜色，与 uni-app 一致
     return Container(
       padding: const EdgeInsets.fromLTRB(32, 32, 24, 24), // 64rpx/48rpx/48rpx → 32/24/24dp
       decoration: BoxDecoration(
+        // neumorphic 风格：移除渐变 / 边框，使用 tokens.surface + 双向凸起阴影
+        color: isNeu ? tokens.surface : null,
         // 硬编码颜色：linear-gradient(145deg, #FFF8EE 0%, #F5EDDB 40%, #EDE3D0 100%)
-        gradient: const LinearGradient(
-          begin: Alignment(-0.4, -1),
-          end: Alignment(0.4, 1),
-          colors: [Color(0xFFFFF8EE), Color(0xFFF5EDDB), Color(0xFFEDE3D0)],
-          stops: [0.0, 0.4, 1.0],
-        ),
-        border: Border.all(color: const Color(0xFFC9A96E).withOpacity(0.12), width: 1),
-        borderRadius: BorderRadius.circular(24), // 48rpx → 24dp
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFC9A96E).withOpacity(0.08),
-            offset: const Offset(0, 4),
-            blurRadius: 24,
-          ),
-        ],
+        gradient: isNeu
+            ? null
+            : const LinearGradient(
+                begin: Alignment(-0.4, -1),
+                end: Alignment(0.4, 1),
+                colors: [Color(0xFFFFF8EE), Color(0xFFF5EDDB), Color(0xFFEDE3D0)],
+                stops: [0.0, 0.4, 1.0],
+              ),
+        border: isNeu ? null : Border.all(color: const Color(0xFFC9A96E).withOpacity(0.12), width: 1),
+        borderRadius: BorderRadius.circular(isNeu ? 16 : 24), // 48rpx → 24dp；neumorphic 用 16
+        boxShadow: isNeu
+            ? tokens.shadowConvex
+            : [
+                BoxShadow(
+                  color: const Color(0xFFC9A96E).withOpacity(0.08),
+                  offset: const Offset(0, 4),
+                  blurRadius: 24,
+                ),
+              ],
       ),
       child: Column(
         children: [
@@ -151,14 +159,17 @@ class _HeroCard extends StatelessWidget {
                 height: 88,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 3),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFC9A96E).withOpacity(0.2),
-                      offset: const Offset(0, 4),
-                      blurRadius: 16,
-                    ),
-                  ],
+                  // neumorphic 风格：移除白边框，使用 tokens.shadowConvexSubtle
+                  border: isNeu ? null : Border.all(color: Colors.white, width: 3),
+                  boxShadow: isNeu
+                      ? tokens.shadowConvexSubtle
+                      : [
+                          BoxShadow(
+                            color: const Color(0xFFC9A96E).withOpacity(0.2),
+                            offset: const Offset(0, 4),
+                            blurRadius: 16,
+                          ),
+                        ],
                 ),
                 child: ClipOval(
                   child: Image.network(
@@ -194,11 +205,12 @@ class _HeroCard extends StatelessWidget {
           // 名字
           Text(
             user.name,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Noto Serif SC',
               fontSize: 24, // 48rpx → 24dp
               fontWeight: FontWeight.w600,
-              color: Color(0xFF3D2817), // 硬编码颜色，与 uni-app 一致
+              // neumorphic 风格：tokens.textPrimary
+              color: isNeu ? tokens.textPrimary : const Color(0xFF3D2817),
               letterSpacing: 0.02 * 24,
             ),
           ),
@@ -207,24 +219,35 @@ class _HeroCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5), // 28rpx/10rpx → 14/5dp
             decoration: BoxDecoration(
+              // neumorphic 风格：tokens.brandSubtle 纯色 + 凸起阴影
+              color: isNeu ? tokens.brandSubtle : null,
               // 硬编码颜色：linear-gradient(135deg, #F5EDDB, #EDE0C8)
-              gradient: const LinearGradient(
-                colors: [Color(0xFFF5EDDB), Color(0xFFEDE0C8)],
-              ),
+              gradient: isNeu
+                  ? null
+                  : const LinearGradient(
+                      colors: [Color(0xFFF5EDDB), Color(0xFFEDE0C8)],
+                    ),
               borderRadius: BorderRadius.circular(1000),
-              border: Border.all(color: const Color(0xFF8C7340).withOpacity(0.15), width: 1),
+              border: isNeu ? null : Border.all(color: const Color(0xFF8C7340).withOpacity(0.15), width: 1),
+              boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.military_tech_outlined, size: 13, color: Color(0xFF8C7340)),
+                Icon(
+                  Icons.military_tech_outlined,
+                  size: 13,
+                  // neumorphic 风格：tokens.brandText
+                  color: isNeu ? tokens.brandText : const Color(0xFF8C7340),
+                ),
                 const SizedBox(width: 4),
                 Text(
                   'Lv.${user.level} ${user.levelName}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12, // 24rpx → 12dp
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF8C7340),
+                    // neumorphic 风格：tokens.brandText
+                    color: isNeu ? tokens.brandText : const Color(0xFF8C7340),
                     letterSpacing: 0.04 * 12,
                   ),
                 ),
@@ -240,21 +263,23 @@ class _HeroCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       '经验',
                       style: TextStyle(
                         fontSize: 12, // 24rpx → 12dp
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF8C7340),
+                        // neumorphic 风格：tokens.textSecondary
+                        color: isNeu ? tokens.textSecondary : const Color(0xFF8C7340),
                       ),
                     ),
                     Text(
                       '${formatThousands(user.currentXp)} / ${formatThousands(user.maxXp)} XP',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontFamily: 'Courier New',
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF8C7340),
+                        // neumorphic 风格：tokens.textSecondary
+                        color: isNeu ? tokens.textSecondary : const Color(0xFF8C7340),
                       ),
                     ),
                   ],
@@ -273,10 +298,14 @@ class _HeroCard extends StatelessWidget {
                           widthFactor: user.xpPercent / 100.0,
                           child: Container(
                             decoration: BoxDecoration(
+                              // neumorphic 风格：tokens.brand 纯色填充
+                              color: isNeu ? tokens.brand : null,
                               // 硬编码颜色：linear-gradient(90deg, #C9A96E, #D4B57A)
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFFC9A96E), Color(0xFFD4B57A)],
-                              ),
+                              gradient: isNeu
+                                  ? null
+                                  : const LinearGradient(
+                                      colors: [Color(0xFFC9A96E), Color(0xFFD4B57A)],
+                                    ),
                               borderRadius: BorderRadius.circular(3),
                             ),
                           ),
@@ -288,9 +317,10 @@ class _HeroCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   '还差 ${formatThousands(user.xpRemaining)} XP 升级至${ProfileMockData.nextLevelName}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11, // 22rpx → 11dp
-                    color: Color(0xFFB89860),
+                    // neumorphic 风格：tokens.textSecondary
+                    color: isNeu ? tokens.textSecondary : const Color(0xFFB89860),
                     letterSpacing: 0.02 * 11,
                   ),
                 ),

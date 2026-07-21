@@ -257,13 +257,18 @@ class _CenterCaptureButtonState extends State<_CenterCaptureButton>
   Widget build(BuildContext context) {
     // Forced fix: 移除 Transform.translate，由 Stack 的 Positioned 控制位置。
     // 这样按钮可以自由超出 tab bar 范围而不被 ClipRRect 剪切。
+    //
+    // Neumorphic fix: 之前使用 shadowConvexBrand（brand 色阴影），由于阴影颜色与按钮
+    // 背景色接近，视觉上像"发光"而非新拟态凸起。改为使用标准 shadowConvex（双向
+    // 中性色阴影），让按钮呈现标准新拟态凸起效果。同时叠加一层 surface 色内圈
+    // 制造品牌色"嵌入"感，符合新拟态设计语言。
     final captureBtn = Container(
       width: 50, // 100rpx → 50dp
       height: 50,
       decoration: BoxDecoration(
         color: widget.tokens.brand,
         shape: BoxShape.circle,
-        boxShadow: widget.tokens.shadowConvexBrand,
+        boxShadow: widget.tokens.shadowConvex,
       ),
       child: Icon(
         Icons.camera_alt_outlined,

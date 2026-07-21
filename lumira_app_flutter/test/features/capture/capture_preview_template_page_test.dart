@@ -10,6 +10,7 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/pages/capture_preview_template_page.dart';
+import 'package:lumira_app_flutter/features/capture/widgets/camera_preview.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
 
@@ -78,6 +79,14 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        // Bug 12 修复：用占位 widget 替换 CameraAwesomeBuilder，
+        // 避免 camera 预览持续渲染导致 pumpAndSettle 超时
+        cameraPreviewOverrideProvider.overrideWithValue(
+          const ColoredBox(
+            color: Color(0xFF181614),
+            child: SizedBox.expand(),
+          ),
+        ),
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
@@ -163,6 +172,13 @@ void main() {
         overrides: [
           themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
           uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+          // Bug 12 修复：用占位 widget 替换 CameraAwesomeBuilder，避免 pumpAndSettle 超时
+          cameraPreviewOverrideProvider.overrideWithValue(
+            const ColoredBox(
+              color: Color(0xFF181614),
+              child: SizedBox.expand(),
+            ),
+          ),
         ],
         child: MaterialApp.router(routerConfig: goRouter),
       ));
@@ -395,6 +411,13 @@ void main() {
         overrides: [
           themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
           uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+          // Bug 12 修复：用占位 widget 替换 CameraAwesomeBuilder，避免 pumpAndSettle 超时
+          cameraPreviewOverrideProvider.overrideWithValue(
+            const ColoredBox(
+              color: Color(0xFF181614),
+              child: SizedBox.expand(),
+            ),
+          ),
         ],
         child: MaterialApp.router(routerConfig: goRouter),
       ));

@@ -6,17 +6,20 @@ import 'apply_button.dart';
 import 'raw_mode_toggle.dart';
 
 /// 顶部参数 Pill 栏：横向滚动的 EV / WB / ISO 标签 + ApplyButton + RawModeToggle + 滤镜入口。
-/// 当 editableTemplate 为 null（自由拍摄）时整栏隐藏。
+///
+/// 修复 Bug 2：自由拍摄模式（无模板）下也显示此栏，通过 effectiveCameraProvider
+/// 读取统一的相机参数，使自由模式也能打开参数面板和滤镜选择器
 class ParamPillBar extends ConsumerWidget {
   const ParamPillBar({super.key});
 
   String _evDisplay(CameraParams c) {
     final ev = c.exposureCompensation;
-    return ev == 0 ? 'EV 0' : 'EV ${ev >= 0 ? '+' : ''}$ev';
+    return ev == 0 ? 'EV 0' : 'EV ${ev >= 0 ? '+' : ''}${ev.toStringAsFixed(1)}';
   }
 
   String _wbDisplay(CameraParams c) {
     const labels = {
+      'auto': '自动',
       'daylight': '日光',
       'cloudy': '阴天',
       'shade': '阴影',
@@ -33,17 +36,16 @@ class ParamPillBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final editable = ref.watch(CaptureState.editableTemplateProvider);
-    final cam = editable?.camera;
-    if (cam == null) return const SizedBox.shrink();
+    // 修复 Bug 2：使用 effectiveCameraProvider，自由模式下也能获取参数
+    final cam = ref.watch(CaptureState.effectiveCameraProvider);
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          _Pill(text: _evDisplay(cam), onTap: () => _openPanel(context, ref, 'camera')),
-          _Pill(text: _wbDisplay(cam), onTap: () => _openPanel(context, ref, 'camera')),
-          _Pill(text: _isoDisplay(cam), onTap: () => _openPanel(context, ref, 'camera')),
+          _Pill(text: _evDisplay(cam), onTap: () => _openPanel(ref)),
+          _Pill(text: _wbDisplay(cam), onTap: () => _openPanel(ref)),
+          _Pill(text: _isoDisplay(cam), onTap: () => _openPanel(ref)),
           const ApplyButton(),
           const RawModeToggle(),
           _Pill(
@@ -57,8 +59,8 @@ class ParamPillBar extends ConsumerWidget {
     );
   }
 
-  /// 打开参数面板。`tab` 参数当前未使用（Task 8 将添加 activeTab provider 后接入）。
-  void _openPanel(BuildContext context, WidgetRef ref, String tab) {
+  /// 打开参数面板
+  void _openPanel(WidgetRef ref) {
     ref.read(CaptureState.panelExpandedProvider.notifier).state = true;
   }
 }

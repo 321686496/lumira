@@ -50,9 +50,17 @@ void main() {
 
       // Sheet content should be visible.
       expect(find.text('系统滤镜'), findsOneWidget);
-      expect(find.text('LUT 预设'), findsOneWidget);
       // A known system filter label from systemFilterLabel() in filter_recipe.dart.
       expect(find.text('鲜明'), findsOneWidget);
+
+      // Scroll down to reveal LUT section (lazy SliverGrid).
+      await tester.scrollUntilVisible(
+        find.text('LUT 预设'),
+        300.0,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('LUT 预设'), findsOneWidget);
       // A known LUT label from lutLabel() in filter_recipe.dart.
       expect(find.text('电影感'), findsOneWidget);
     });
@@ -82,6 +90,14 @@ void main() {
           .read(CaptureState.editableTemplateProvider)!
           .postProcess
           .lut;
+
+      // Scroll down to reveal LUT section (lazy SliverGrid).
+      await tester.scrollUntilVisible(
+        find.text('电影感'),
+        300.0,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
 
       // Tap the "电影感" chip (LUT 'cinematic').
       await tester.tap(find.text('电影感'));
@@ -151,7 +167,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // RAW warning text should appear.
-      expect(find.text('RAW 模式下不可用'), findsOneWidget);
+      expect(find.text('RAW 模式已启用'), findsOneWidget);
 
       // Tapping a chip should NOT update the template (chips are disabled).
       final initialLut = container
@@ -159,8 +175,9 @@ void main() {
           .postProcess
           .lut;
 
-      // ChoiceChip with onSelected: null is disabled; tap should be a no-op.
-      await tester.tap(find.text('电影感'), warnIfMissed: false);
+      // In RAW mode, the entire scrollable area is replaced by _RawModePlaceholder,
+      // so '电影感' is NOT present at all. Verify absence and skip the tap.
+      expect(find.text('电影感'), findsNothing);
       await tester.pumpAndSettle();
 
       final newLut = container

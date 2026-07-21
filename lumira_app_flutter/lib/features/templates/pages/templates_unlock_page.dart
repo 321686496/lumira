@@ -231,19 +231,23 @@ class _CloseButton extends StatelessWidget {
   }
 }
 
-class _PreviewCard extends StatelessWidget {
+class _PreviewCard extends ConsumerWidget {
   const _PreviewCard({required this.tokens, required this.unlocked});
   final ThemeTokens tokens;
   final bool unlocked;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return FadeUp(
       child: Container(
         decoration: BoxDecoration(
-          color: tokens.canvas,
+          // neumorphic 风格下：tokens.canvas 改为 tokens.surface，移除 border
+          color: isNeumorphic ? tokens.surface : tokens.canvas,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: tokens.divider, width: 1),
+          border: isNeumorphic
+              ? null
+              : Border.all(color: tokens.divider, width: 1),
           boxShadow: tokens.shadowConvex,
         ),
         clipBehavior: Clip.antiAlias,
@@ -561,7 +565,7 @@ class _OptionsList extends StatelessWidget {
   }
 }
 
-class _OptionCard extends StatelessWidget {
+class _OptionCard extends ConsumerWidget {
   const _OptionCard({
     required this.tokens,
     required this.icon,
@@ -587,16 +591,20 @@ class _OptionCard extends StatelessWidget {
   final bool brandBorder;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: tokens.canvas,
+        // neumorphic 风格下：tokens.canvas 改为 tokens.surface，移除 border
+        color: isNeumorphic ? tokens.surface : tokens.canvas,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: brandBorder ? tokens.brand : tokens.divider,
-          width: 1,
-        ),
+        border: isNeumorphic
+            ? null
+            : Border.all(
+                color: brandBorder ? tokens.brand : tokens.divider,
+                width: 1,
+              ),
         boxShadow: tokens.shadowConvex,
       ),
       child: Column(
@@ -701,7 +709,7 @@ class _SmallBrandButton extends StatelessWidget {
   }
 }
 
-class _SmallOutlineButton extends StatelessWidget {
+class _SmallOutlineButton extends ConsumerWidget {
   const _SmallOutlineButton({
     required this.tokens,
     required this.label,
@@ -713,16 +721,22 @@ class _SmallOutlineButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.transparent,
+          // neumorphic 风格下：移除 border，用 canvasDeep 背景 + shadowConcaveSubtle 内凹阴影
+          color: isNeumorphic ? tokens.canvasDeep : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: tokens.divider, width: 1),
+          border: isNeumorphic
+              ? null
+              : Border.all(color: tokens.divider, width: 1),
+          boxShadow:
+              isNeumorphic ? tokens.shadowConcaveSubtle : null,
         ),
         child: Text(
           label,
@@ -822,7 +836,7 @@ class _SuccessCard extends StatelessWidget {
   }
 }
 
-class _PayPopupDialog extends StatelessWidget {
+class _PayPopupDialog extends ConsumerWidget {
   const _PayPopupDialog({
     required this.tokens,
     required this.onCancel,
@@ -834,7 +848,8 @@ class _PayPopupDialog extends StatelessWidget {
   final VoidCallback onConfirm;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return Dialog(
       backgroundColor: tokens.surface,
       shape: RoundedRectangleBorder(
@@ -883,9 +898,17 @@ class _PayPopupDialog extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       decoration: BoxDecoration(
-                        color: Colors.transparent,
+                        // neumorphic 风格下：移除 border，用 canvasDeep + shadowConcaveSubtle
+                        color: isNeumorphic
+                            ? tokens.canvasDeep
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: tokens.divider, width: 1),
+                        border: isNeumorphic
+                            ? null
+                            : Border.all(color: tokens.divider, width: 1),
+                        boxShadow: isNeumorphic
+                            ? tokens.shadowConcaveSubtle
+                            : null,
                       ),
                       child: Center(
                         child: Text(

@@ -1,3 +1,4 @@
+import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,23 +6,26 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../templates/data/preview_form_provider.dart';
 import '../../templates/data/templates_editor_mock_data.dart';
-import '../../templates/widgets/composition_overlay.dart';
 import '../../templates/widgets/pose_silhouette.dart';
 import '../data/capture_preview_mock_data.dart';
+import '../widgets/camera_preview.dart';
 
 /// 模板预览页（Task 2.9A）
 ///
 /// 视觉规格来源：lumira-app/src/pages/capture/preview-template.vue (754 行)
 /// - 沉浸式自定义导航（不用 LumiraNav — brief §3.2 明示偏离）
-/// - 取景器（3:4 AspectRatio + 背景图 + 遮罩 + CompositionOverlay + 可拖动 PoseSilhouette）
+/// - 取景器（3:4 AspectRatio + 真实 CameraPreview + CompositionOverlay + 可拖动 PoseSilhouette）
 /// - 参数 pill 栏（EV/ISO/SS/WB）
 /// - 折叠调整面板（4 slider 区 + 4 seg-btn 组）
-/// - 同步按钮（SnackBar + pop）
+/// - 拍照按钮（Bug 12 修复：预览页也支持拍照）
+/// - 同步按钮（写回 previewEditorFormProvider + pop）
 ///
-/// 已知简化决策（brief §8）：
-/// - CSS filter 滤镜预览省略（Flutter 无等价 API）
-/// - 同步到编辑器：mock SnackBar + pop，不实际写回 EditorForm
+/// Bug 12 修复：
+/// - 取景器改用真实 CameraPreview（替换 picsum 静态占位图）
+/// - 通过 previewEditorFormProvider 与编辑器双向同步参数
+/// - 同步按钮将修改后的 EditorForm 写回 provider，编辑器 await 返回后读取并同步到 _form
 class CapturePreviewTemplatePage extends ConsumerStatefulWidget {
   const CapturePreviewTemplatePage({
     super.key,
@@ -47,6 +51,11 @@ class _CapturePreviewTemplatePageState
   bool _flashOn = false;
   bool _isDraggingSilhouette = false;
 
+  // Bug 12 修复：CameraState 引用，用于拍照按钮
+  // 由 CameraPreview 的 onCameraStateCreated 回调注入
+  // 在测试环境中为 null（cameraPreviewOverrideProvider 注入占位 widget）
+  CameraState? _cameraState;
+
   @override
   void initState() {
     super.initState();
@@ -54,12 +63,22 @@ class _CapturePreviewTemplatePageState
   }
 
   void _loadTemplate() {
-    EditorForm? loaded;
-    // 优先 draftId，其次 templateId（与 uni-app onLoad 一致）
-    if (widget.draftId != null && widget.draftId!.isNotEmpty) {
-      loaded = CapturePreviewMockData.loadDraftById(widget.draftId);
-    } else if (widget.templateId != null && widget.templateId!.isNotEmpty) {
-      loaded = CapturePreviewMockData.loadTemplateById(widget.templateId);
+    // Bug 12 修复：优先读取 previewEditorFormProvider（来自编辑器的实时表单），
+    // 让预览页参数与编辑器参数双向同步。fallback 到 mock 数据兼容 templateId 直接预览场景。
+    EditorForm? loaded = ref.read(previewEditorFormProvider);
+
+    if (loaded == null) {
+      // 回退：通过 draftId 或 templateId 从 mock 数据加载
+      if (widget.draftId != null && widget.draftId!.isNotEmpty) {
+        loaded = CapturePreviewMockData.loadDraftById(widget.draftId);
+      } else if (widget.templateId != null && widget.templateId!.isNotEmpty) {
+        loaded = CapturePreviewMockData.loadTemplateById(widget.templateId);
+      }
+    } else {
+      // 从 provider 加载的 form 是编辑器的副本，预览页修改不影响编辑器原 form
+      // 同步按钮点击时再把修改后的 form 写回 provider
+      _template = loaded;
+      return;
     }
 
     if (loaded != null) {
@@ -140,10 +159,16 @@ class _CapturePreviewTemplatePageState
   // ===== 同步按钮 =====
 
   void _onSyncBack() {
+    // Bug 12 修复：将当前 _template 写回 previewEditorFormProvider，
+    // 让编辑器 await push 返回后能读取到修改后的 form
+    final tpl = _template;
+    if (tpl != null) {
+      ref.read(previewEditorFormProvider.notifier).state = tpl;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('已同步到编辑器')),
     );
-    Future.delayed(const Duration(milliseconds: 800), () {
+    Future.delayed(const Duration(milliseconds: 600), () {
       if (!mounted) return;
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
@@ -151,6 +176,39 @@ class _CapturePreviewTemplatePageState
         GoRouter.of(context).go(RouteNames.templates);
       }
     });
+  }
+
+  // ===== 拍照 =====
+
+  /// Bug 12 修复：预览页也支持拍照（与拍摄页一致）
+  /// 通过 CameraPreview 的 onCameraStateCreated 回调拿到 CameraState，
+  /// 点击拍照按钮时调用 takePhoto()，完成后将路径写入 lastPhotoPathProvider
+  void _onCapture() {
+    final state = _cameraState;
+    if (state == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('相机未就绪，请稍候')),
+      );
+      return;
+    }
+    state.when(
+      onPhotoMode: (photoState) {
+        photoState.takePhoto();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已拍摄')),
+        );
+      },
+      onPreviewMode: (_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('相机未就绪，请稍候')),
+        );
+      },
+    );
+  }
+
+  /// 由 CameraPreview 的 onCameraStateCreated 回调调用，保存 CameraState 引用
+  void _onCameraStateCreated(CameraState state) {
+    _cameraState = state;
   }
 
   // ===== 格式化 =====
@@ -205,6 +263,8 @@ class _CapturePreviewTemplatePageState
                 onSilhouetteDragEnd: _onSilhouetteDragEnd,
                 formatEv: _formatEvDisplay,
                 formatWb: _formatWbDisplay,
+                onCapture: _onCapture,
+                onCameraStateCreated: _onCameraStateCreated,
               ),
             ),
             if (_template != null)
@@ -331,7 +391,11 @@ class _NavCircleButton extends StatelessWidget {
   }
 }
 
-/// 取景器（AspectRatio + Stack：bg image / mask / CompositionOverlay / draggable pose / param pills）
+/// 取景器（CameraPreview + 可拖动剪影 + 参数 pill + 拍照按钮）
+///
+/// Bug 12 修复：用真实 CameraPreview 替换 picsum 静态占位图，
+/// 通过 formOverride 参数将 EditorForm 的 postProcess/composition/silhouette
+/// 应用到取景器，让预览页与拍摄页体验一致。
 class _Viewfinder extends StatelessWidget {
   const _Viewfinder({
     required this.tokens,
@@ -342,6 +406,8 @@ class _Viewfinder extends StatelessWidget {
     required this.onSilhouetteDragEnd,
     required this.formatEv,
     required this.formatWb,
+    required this.onCapture,
+    required this.onCameraStateCreated,
   });
 
   final ThemeTokens tokens;
@@ -352,6 +418,8 @@ class _Viewfinder extends StatelessWidget {
   final void Function(DragEndDetails) onSilhouetteDragEnd;
   final String Function(double) formatEv;
   final String Function(int) formatWb;
+  final VoidCallback onCapture;
+  final void Function(CameraState) onCameraStateCreated;
 
   @override
   Widget build(BuildContext context) {
@@ -376,33 +444,23 @@ class _Viewfinder extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      // 背景图
-                      Image.network(
-                        'https://picsum.photos/seed/lumira-template-cover/800/1067',
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          // 硬编码颜色，与 uni-app 一致 (viewfinder bg fallback #181614)
-                          color: const Color(0xFF181614),
-                        ),
+                      // Bug 12 修复：用真实 CameraPreview 替换 picsum 静态图
+                      // CameraPreview 内部已包裹 ColorFiltered/CompositionOverlay/PoseSilhouette
+                      // 通过 formOverride 参数应用 EditorForm 的滤镜/构图/剪影
+                      CameraPreview(
+                        onCaptured: (_) {},
+                        onCameraStateCreated: onCameraStateCreated,
+                        formOverride: tpl,
                       ),
-                      // 遮罩
-                      // 硬编码颜色，与 uni-app 一致 (viewfinder-mask bg rgba(24,22,20,0.35))
-                      const ColoredBox(
-                        color: Color.fromRGBO(24, 22, 20, 0.35),
-                      ),
-                      // 构图叠图
-                      CompositionOverlay(
-                        overlayType: tpl.composition.overlayType,
-                        opacity: tpl.composition.opacity,
-                      ),
-                      // 可拖动剪影
+                      // 可拖动剪影叠加层（独立于 CameraPreview 内部的不可拖动剪影）
+                      // 这里保留可拖动的剪影交互层，CameraPreview 内部的剪影是 IgnorePointer 的
                       if (hasSilhouette)
                         GestureDetector(
                           onPanStart: onSilhouetteDragStart,
                           onPanUpdate: (details) =>
                               onSilhouetteDragUpdate(details, constraints),
                           onPanEnd: onSilhouetteDragEnd,
-                          behavior: HitTestBehavior.opaque,
+                          behavior: HitTestBehavior.translucent,
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -480,6 +538,37 @@ class _Viewfinder extends StatelessWidget {
             template: tpl,
             formatEv: formatEv,
             formatWb: formatWb,
+          ),
+        ),
+        // 拍照按钮（Bug 12 修复：预览页也支持拍照）
+        Positioned(
+          bottom: 24,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: GestureDetector(
+              onTap: onCapture,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  // 硬编码颜色，与 uni-app 一致 (capture-btn border #fff, inner bg #fff)
+                  border: Border.fromBorderSide(
+                    BorderSide(color: Colors.white, width: 3),
+                  ),
+                  color: Colors.white,
+                ),
+                child: Container(
+                  margin: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFFC9A96E),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/home_mock_data.dart';
 
 /// 今日灵感卡片
@@ -19,7 +20,9 @@ class HeroCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
 
     return Padding(
       padding: const EdgeInsets.only(
@@ -34,14 +37,20 @@ class HeroCard extends ConsumerWidget {
         ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20), // 40rpx → 20dp
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFFDF6EC),
-              Color(0xFFF5E6CC),
-            ],
-          ),
+          // neumorphic 风格：使用 surface 纯色 + 双向凸起阴影替代硬编码渐变背景
+          // 其他风格：保留原渐变效果
+          color: isNeumorphic ? tokens.surface : null,
+          gradient: isNeumorphic
+              ? null
+              : const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFFDF6EC),
+                    Color(0xFFF5E6CC),
+                  ],
+                ),
+          boxShadow: isNeumorphic ? tokens.shadowConvex : null,
         ),
         child: Stack(
           children: [
@@ -115,14 +124,21 @@ class HeroCard extends ConsumerWidget {
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          tokens.brand,
-                          tokens.brandDeep,
-                        ],
-                      ),
+                      // neumorphic 风格：使用 brand 纯色 + 双向阴影，避免渐变发光感
+                      // 其他风格：保留 brand→brandDeep 渐变
+                      color: isNeumorphic ? tokens.brand : null,
+                      gradient: isNeumorphic
+                          ? null
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                tokens.brand,
+                                tokens.brandDeep,
+                              ],
+                            ),
+                      boxShadow:
+                          isNeumorphic ? tokens.shadowConvex : null,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,

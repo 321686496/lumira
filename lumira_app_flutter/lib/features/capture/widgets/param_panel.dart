@@ -6,8 +6,20 @@ import '../domain/photo_template.dart';
 /// 底部抽屉式参数编辑面板。
 /// 5 个 Tab：相机 / 色彩 / 细节 / 构图 / 场景。
 /// 通过 panelExpandedProvider 控制展开/收起（AnimatedPositioned）。
+///
+/// 设计要点：
+/// - 自由拍摄模式（无模板）下也能调整所有参数，通过 CaptureState.update* 辅助方法
+///   自动路由到 freeMode*Provider 或 editableTemplateProvider
+/// - 拖动条可点击关闭，右上角有关闭按钮
+/// - 点击面板外部区域可关闭
+/// - 所有 Dropdown 用 PopupMenu 实现，避免 DropdownButton 触发 PopupRoute 路由变化
+///   （已被 route_observers 修复，但 PopupMenu 更轻量）
 class ParamPanel extends ConsumerWidget {
   const ParamPanel({super.key});
+
+  void _close(WidgetRef ref) {
+    ref.read(CaptureState.panelExpandedProvider.notifier).state = false;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -15,90 +27,247 @@ class ParamPanel extends ConsumerWidget {
     final editable = ref.watch(CaptureState.editableTemplateProvider);
     final original = ref.watch(CaptureState.originalTemplateProvider);
 
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-      left: 0,
-      right: 0,
-      bottom: expanded ? 0 : -400,
-      height: 400,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1C1C1E),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
-        child: Column(
-          children: [
-            // 拖动条
-            Container(
-              margin: const EdgeInsets.symmetric(vertical: 8),
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white38,
-                borderRadius: BorderRadius.circular(2),
-              ),
+    return Stack(
+      children: [
+        // 点击外部关闭（仅展开时显示）
+        if (expanded)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _close(ref),
+              child: Container(color: Colors.black54),
             ),
-            // Tab 切换 + 内容
-            Expanded(
-              child: DefaultTabController(
-                length: 5,
-                child: Column(
-                  children: [
-                    const TabBar(
-                      tabs: [
-                        Tab(text: '相机'),
-                        Tab(text: '色彩'),
-                        Tab(text: '细节'),
-                        Tab(text: '构图'),
-                        Tab(text: '场景'),
-                      ],
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.white54,
-                      indicatorColor: Colors.amber,
-                    ),
-                    Expanded(
-                      child: TabBarView(
-                        children: [
-                          _CameraTab(),
-                          _ColorTab(),
-                          _DetailTab(),
-                          _CompositionTab(),
-                          _SceneTab(),
-                        ],
-                      ),
-                    ),
-                  ],
+          ),
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          left: 0,
+          right: 0,
+          bottom: expanded ? 0 : -480,
+          height: 480,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                // 头部：拖动条 + 标题 + 关闭按钮
+                _PanelHeader(
+                  hasTemplate: editable != null,
+                  onClose: () => _close(ref),
                 ),
-              ),
-            ),
-            // 底部"应用模板参数"按钮：仅当有模板且 editable 与 original 不一致时显示
-            // （appliedProvider 为 true 时不显示，但这里简化为 editable != null && original != null）
-            if (editable != null && original != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      ref
-                          .read(CaptureState.editableTemplateProvider.notifier)
-                          .state = original.copyWith();
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-                    child: const Text(
-                      '应用模板参数',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w600,
-                      ),
+                // Tab 切换 + 内容
+                Expanded(
+                  child: DefaultTabController(
+                    length: 5,
+                    child: Column(
+                      children: [
+                        Container(
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.white12,
+                                width: 0.5,
+                              ),
+                            ),
+                          ),
+                          child: const TabBar(
+                            tabs: [
+                              Tab(text: '相机'),
+                              Tab(text: '色彩'),
+                              Tab(text: '细节'),
+                              Tab(text: '构图'),
+                              Tab(text: '场景'),
+                            ],
+                            labelColor: Colors.amber,
+                            unselectedLabelColor: Colors.white54,
+                            indicatorColor: Colors.amber,
+                            indicatorSize: TabBarIndicatorSize.label,
+                            labelStyle: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            unselectedLabelStyle: TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        Expanded(
+                          child: TabBarView(
+                            children: [
+                              _CameraTab(),
+                              _ColorTab(),
+                              _DetailTab(),
+                              _CompositionTab(),
+                              _SceneTab(),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-          ],
+                // 底部操作栏
+                _PanelFooter(
+                  hasTemplate: editable != null && original != null,
+                  isModified: editable != null && original != null && editable != original,
+                  onReset: () {
+                    if (original != null) {
+                      ref.read(CaptureState.editableTemplateProvider.notifier).state =
+                          original.copyWith();
+                    }
+                  },
+                  onDone: () => _close(ref),
+                ),
+              ],
+            ),
+          ),
         ),
+      ],
+    );
+  }
+}
+
+/// 面板头部：拖动条 + 标题 + 关闭按钮
+class _PanelHeader extends StatelessWidget {
+  const _PanelHeader({required this.hasTemplate, required this.onClose});
+
+  final bool hasTemplate;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Column(
+        children: [
+          // 拖动条
+          Container(
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(top: 8, bottom: 12),
+            decoration: BoxDecoration(
+              color: Colors.white38,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // 标题行
+          Row(
+            children: [
+              const Icon(Icons.tune, color: Colors.amber, size: 18),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  '参数调整',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              // 模式标识
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: hasTemplate
+                      ? Colors.amber.withOpacity(0.15)
+                      : Colors.white.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  hasTemplate ? '模板模式' : '自由模式',
+                  style: TextStyle(
+                    color: hasTemplate ? Colors.amber : Colors.white70,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // 关闭按钮
+              GestureDetector(
+                onTap: onClose,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white70,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 面板底部：重置 + 完成
+class _PanelFooter extends StatelessWidget {
+  const _PanelFooter({
+    required this.hasTemplate,
+    required this.isModified,
+    required this.onReset,
+    required this.onDone,
+  });
+
+  final bool hasTemplate;
+  final bool isModified;
+  final VoidCallback onReset;
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Colors.white12, width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (hasTemplate && isModified)
+            TextButton.icon(
+              onPressed: onReset,
+              icon: const Icon(Icons.refresh, size: 16, color: Colors.white70),
+              label: const Text(
+                '重置',
+                style: TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            )
+          else
+            const Spacer(),
+          const Spacer(),
+          SizedBox(
+            width: 96,
+            height: 36,
+            child: ElevatedButton(
+              onPressed: onDone,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: const Text(
+                '完成',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -110,12 +279,12 @@ class ParamPanel extends ConsumerWidget {
 class _CameraTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final editable = ref.watch(CaptureState.editableTemplateProvider);
-    final cam = editable?.camera ?? const CameraParams();
+    final cam = ref.watch(CaptureState.effectiveCameraProvider);
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
+        _SectionHeader(title: '曝光'),
         _SliderRow(
           label: 'EV',
           value: cam.exposureCompensation,
@@ -124,12 +293,8 @@ class _CameraTab extends ConsumerWidget {
           divisions: 120,
           display:
               '${cam.exposureCompensation >= 0 ? '+' : ''}${cam.exposureCompensation.toStringAsFixed(1)}',
-          onChanged: (v) {
-            final tpl = editable!.copyWith(
-              camera: cam.copyWith(exposureCompensation: v),
-            );
-            ref.read(CaptureState.editableTemplateProvider.notifier).state = tpl;
-          },
+          onChanged: (v) => CaptureState.updateCamera(
+              ref, (c) => c.copyWith(exposureCompensation: v)),
         ),
         _SliderRow(
           label: 'ISO',
@@ -137,26 +302,25 @@ class _CameraTab extends ConsumerWidget {
           min: 100,
           max: 6400,
           divisions: 63,
-          display: cam.iso.toString(),
-          onChanged: (v) {
-            final tpl = editable!.copyWith(camera: cam.copyWith(iso: v.round()));
-            ref.read(CaptureState.editableTemplateProvider.notifier).state = tpl;
-          },
+          display: cam.iso == 0 ? 'Auto' : cam.iso.toString(),
+          onChanged: (v) => CaptureState.updateCamera(
+              ref, (c) => c.copyWith(iso: v.round())),
         ),
-        _DropdownRow(
+        _PopupRow(
           label: '快门',
           value: cam.shutterSpeed,
-          items: const ['1/30', '1/60', '1/125', '1/200', '1/500', '1/1000'],
-          onChanged: (v) {
-            final tpl = editable!.copyWith(camera: cam.copyWith(shutterSpeed: v));
-            ref.read(CaptureState.editableTemplateProvider.notifier).state = tpl;
-          },
+          items: const ['auto', '1/30', '1/60', '1/125', '1/200', '1/500', '1/1000'],
+          onChanged: (v) => CaptureState.updateCamera(
+              ref, (c) => c.copyWith(shutterSpeed: v)),
         ),
-        _DropdownRow(
-          label: '白平衡',
+        const SizedBox(height: 12),
+        _SectionHeader(title: '白平衡'),
+        _PopupRow(
+          label: '预设',
           value: cam.whiteBalance,
-          items: const ['daylight', 'cloudy', 'shade', 'tungsten', 'fluorescent', 'custom'],
+          items: const ['auto', 'daylight', 'cloudy', 'shade', 'tungsten', 'fluorescent', 'custom'],
           displayLabels: const {
+            'auto': '自动',
             'daylight': '日光',
             'cloudy': '阴天',
             'shade': '阴影',
@@ -164,29 +328,37 @@ class _CameraTab extends ConsumerWidget {
             'fluorescent': '荧光',
             'custom': '自定义',
           },
-          onChanged: (v) {
-            final tpl = editable!.copyWith(camera: cam.copyWith(whiteBalance: v));
-            ref.read(CaptureState.editableTemplateProvider.notifier).state = tpl;
-          },
+          onChanged: (v) => CaptureState.updateCamera(
+              ref, (c) => c.copyWith(whiteBalance: v)),
         ),
-        _DropdownRow(
+        const SizedBox(height: 12),
+        _SectionHeader(title: '其他'),
+        _PopupRow(
           label: '闪光',
           value: cam.flashMode,
           items: const ['off', 'on', 'auto', 'torch'],
-          onChanged: (v) {
-            final tpl = editable!.copyWith(camera: cam.copyWith(flashMode: v));
-            ref.read(CaptureState.editableTemplateProvider.notifier).state = tpl;
+          displayLabels: const {
+            'off': '关闭',
+            'on': '常亮',
+            'auto': '自动',
+            'torch': '手电筒',
           },
+          onChanged: (v) => CaptureState.updateCamera(
+              ref, (c) => c.copyWith(flashMode: v)),
         ),
-        _DropdownRow(
+        _PopupRow(
           label: '对焦',
           value: cam.focusMode,
           items: const ['auto', 'manual', 'continuous'],
-          onChanged: (v) {
-            final tpl = editable!.copyWith(camera: cam.copyWith(focusMode: v));
-            ref.read(CaptureState.editableTemplateProvider.notifier).state = tpl;
+          displayLabels: const {
+            'auto': '自动对焦',
+            'manual': '手动对焦',
+            'continuous': '连续对焦',
           },
+          onChanged: (v) => CaptureState.updateCamera(
+              ref, (c) => c.copyWith(focusMode: v)),
         ),
+        const SizedBox(height: 16),
       ],
     );
   }
@@ -194,17 +366,16 @@ class _CameraTab extends ConsumerWidget {
 
 // ─────────────────────────────────────────────────────────────────────
 // 色彩 Tab：亮度 / 对比度 / 饱和度 / 色温 / 色调 / 高光 / 阴影 / 黑点 / 鲜明度 / 明度
-// 写入 PostProcessColor（通过 PostProcess.copyWith(color: ...)）
 // ─────────────────────────────────────────────────────────────────────
 class _ColorTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final editable = ref.watch(CaptureState.editableTemplateProvider);
-    final color = editable?.postProcess.color ?? const PostProcessColor();
+    final color = ref.watch(CaptureState.effectivePostProcessProvider).color;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
+        _SectionHeader(title: '基础调整'),
         _SliderRow(
           label: '亮度',
           value: color.brightness,
@@ -212,7 +383,7 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: color.brightness.toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(brightness: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(brightness: v)),
         ),
         _SliderRow(
           label: '对比度',
@@ -221,7 +392,7 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: color.contrast.toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(contrast: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(contrast: v)),
         ),
         _SliderRow(
           label: '饱和度',
@@ -230,7 +401,7 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: color.saturation.toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(saturation: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(saturation: v)),
         ),
         _SliderRow(
           label: '色温',
@@ -239,7 +410,7 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: color.temperature.toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(temperature: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(temperature: v)),
         ),
         _SliderRow(
           label: '色调',
@@ -248,8 +419,10 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: color.tint.toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(tint: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(tint: v)),
         ),
+        const SizedBox(height: 12),
+        _SectionHeader(title: '局部调整'),
         _SliderRow(
           label: '高光',
           value: color.highlights ?? 0,
@@ -257,7 +430,7 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: (color.highlights ?? 0).toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(highlights: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(highlights: v)),
         ),
         _SliderRow(
           label: '阴影',
@@ -266,7 +439,7 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: (color.shadows ?? 0).toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(shadows: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(shadows: v)),
         ),
         _SliderRow(
           label: '黑点',
@@ -275,7 +448,7 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: (color.blackPoint ?? 0).toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(blackPoint: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(blackPoint: v)),
         ),
         _SliderRow(
           label: '鲜明度',
@@ -284,7 +457,7 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: (color.vibrance ?? 0).toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(vibrance: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(vibrance: v)),
         ),
         _SliderRow(
           label: '明度',
@@ -293,39 +466,35 @@ class _ColorTab extends ConsumerWidget {
           max: 100,
           divisions: 200,
           display: (color.brilliance ?? 0).toStringAsFixed(0),
-          onChanged: (v) => _setColor(ref, editable, (c) => c.copyWith(brilliance: v)),
+          onChanged: (v) => _setColor(ref, (c) => c.copyWith(brilliance: v)),
         ),
+        const SizedBox(height: 16),
       ],
     );
   }
 
   static void _setColor(
-    WidgetRef ref,
-    PhotoTemplate? editable,
-    PostProcessColor Function(PostProcessColor) updater,
-  ) {
-    if (editable == null) return;
-    final newColor = updater(editable.postProcess.color);
-    final newPost = editable.postProcess.copyWith(color: newColor);
-    ref.read(CaptureState.editableTemplateProvider.notifier).state =
-        editable.copyWith(postProcess: newPost);
+      WidgetRef ref, PostProcessColor Function(PostProcessColor) updater) {
+    CaptureState.updatePostProcess(ref, (p) {
+      final newColor = updater(p.color);
+      return p.copyWith(color: newColor);
+    });
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 细节 Tab：清晰度 (clarity) / 锐化 (sharpen) / 磨皮 (smoothStrength) / 暗角 (vignette) / 颗粒 (grain)
-// clarity 在 PostProcessColor 上，其他 4 个在 PostProcess 上
+// 细节 Tab：清晰度 / 锐化 / 磨皮 / 暗角 / 颗粒
 // ─────────────────────────────────────────────────────────────────────
 class _DetailTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final editable = ref.watch(CaptureState.editableTemplateProvider);
-    final post = editable?.postProcess ?? const PostProcess(color: PostProcessColor());
+    final post = ref.watch(CaptureState.effectivePostProcessProvider);
     final color = post.color;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
+        _SectionHeader(title: '画质'),
         _SliderRow(
           label: '清晰度',
           value: color.clarity ?? 0,
@@ -333,13 +502,8 @@ class _DetailTab extends ConsumerWidget {
           max: 100,
           divisions: 100,
           display: (color.clarity ?? 0).toStringAsFixed(0),
-          onChanged: (v) {
-            if (editable == null) return;
-            final newColor = color.copyWith(clarity: v);
-            final newPost = editable.postProcess.copyWith(color: newColor);
-            ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                editable.copyWith(postProcess: newPost);
-          },
+          onChanged: (v) => CaptureState.updatePostProcess(ref,
+              (p) => p.copyWith(color: p.color.copyWith(clarity: v))),
         ),
         _SliderRow(
           label: '锐化',
@@ -348,12 +512,8 @@ class _DetailTab extends ConsumerWidget {
           max: 100,
           divisions: 100,
           display: post.sharpen.toString(),
-          onChanged: (v) {
-            if (editable == null) return;
-            final newPost = editable.postProcess.copyWith(sharpen: v.round());
-            ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                editable.copyWith(postProcess: newPost);
-          },
+          onChanged: (v) => CaptureState.updatePostProcess(
+              ref, (p) => p.copyWith(sharpen: v.round())),
         ),
         _SliderRow(
           label: '磨皮',
@@ -362,13 +522,11 @@ class _DetailTab extends ConsumerWidget {
           max: 100,
           divisions: 100,
           display: post.smoothStrength.toString(),
-          onChanged: (v) {
-            if (editable == null) return;
-            final newPost = editable.postProcess.copyWith(smoothStrength: v.round());
-            ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                editable.copyWith(postProcess: newPost);
-          },
+          onChanged: (v) => CaptureState.updatePostProcess(
+              ref, (p) => p.copyWith(smoothStrength: v.round())),
         ),
+        const SizedBox(height: 12),
+        _SectionHeader(title: '特效'),
         _SliderRow(
           label: '暗角',
           value: post.vignette.toDouble(),
@@ -376,12 +534,8 @@ class _DetailTab extends ConsumerWidget {
           max: 100,
           divisions: 100,
           display: post.vignette.toString(),
-          onChanged: (v) {
-            if (editable == null) return;
-            final newPost = editable.postProcess.copyWith(vignette: v.round());
-            ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                editable.copyWith(postProcess: newPost);
-          },
+          onChanged: (v) => CaptureState.updatePostProcess(
+              ref, (p) => p.copyWith(vignette: v.round())),
         ),
         _SliderRow(
           label: '颗粒',
@@ -390,13 +544,10 @@ class _DetailTab extends ConsumerWidget {
           max: 100,
           divisions: 100,
           display: post.grain.toString(),
-          onChanged: (v) {
-            if (editable == null) return;
-            final newPost = editable.postProcess.copyWith(grain: v.round());
-            ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                editable.copyWith(postProcess: newPost);
-          },
+          onChanged: (v) => CaptureState.updatePostProcess(
+              ref, (p) => p.copyWith(grain: v.round())),
         ),
+        const SizedBox(height: 16),
       ],
     );
   }
@@ -417,23 +568,19 @@ class _CompositionTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final editable = ref.watch(CaptureState.editableTemplateProvider);
-    final comp = editable?.composition ?? const Composition();
+    final comp = ref.watch(CaptureState.effectiveCompositionProvider);
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
-        _DropdownRow(
-          label: '构图类型',
+        _SectionHeader(title: '构图辅助线'),
+        _PopupRow(
+          label: '类型',
           value: comp.overlayType,
           items: _overlayTypes.keys.toList(),
           displayLabels: _overlayTypes,
-          onChanged: (v) {
-            if (editable == null) return;
-            final newComp = editable.composition.copyWith(overlayType: v);
-            ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                editable.copyWith(composition: newComp);
-          },
+          onChanged: (v) => CaptureState.updateComposition(
+              ref, (c) => c.copyWith(overlayType: v)),
         ),
         _SliderRow(
           label: '透明度',
@@ -442,20 +589,32 @@ class _CompositionTab extends ConsumerWidget {
           max: 1,
           divisions: 100,
           display: '${(comp.opacity * 100).round()}%',
-          onChanged: (v) {
-            if (editable == null) return;
-            final newComp = editable.composition.copyWith(opacity: v);
-            ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                editable.copyWith(composition: newComp);
-          },
+          onChanged: (v) => CaptureState.updateComposition(
+              ref, (c) => c.copyWith(opacity: v)),
         ),
-        Padding(
-          padding: const EdgeInsets.only(top: 16),
-          child: Text(
-            comp.description.isEmpty ? '（此模板无构图说明）' : comp.description,
-            style: const TextStyle(color: Colors.white54, fontSize: 12),
+        const SizedBox(height: 12),
+        if (comp.description.isNotEmpty)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline, color: Colors.amber, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    comp.description,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        const SizedBox(height: 16),
       ],
     );
   }
@@ -467,8 +626,7 @@ class _CompositionTab extends ConsumerWidget {
 class _SceneTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final editable = ref.watch(CaptureState.editableTemplateProvider);
-    final sg = editable?.sceneGuide ?? const SceneGuide();
+    final sg = ref.watch(CaptureState.effectiveSceneGuideProvider);
 
     final rows = <MapEntry<String, String>>[
       MapEntry('光线方向', sg.lightDirection),
@@ -482,26 +640,56 @@ class _SceneTab extends ConsumerWidget {
       if (sg.tips.isNotEmpty) MapEntry('拍摄贴士', sg.tips.join('\n• ')),
     ];
 
+    if (rows.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.info_outline, color: Colors.white24, size: 48),
+            const SizedBox(height: 12),
+            const Text(
+              '当前为自由模式，无场景指南',
+              style: TextStyle(color: Colors.white38, fontSize: 13),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              '选择场景预设或套用模板后可查看场景指南',
+              style: TextStyle(color: Colors.white24, fontSize: 11),
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
         for (final row in rows)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SizedBox(
-                  width: 80,
+                  width: 72,
                   child: Text(
                     row.key,
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    style: const TextStyle(
+                      color: Colors.amber,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 Expanded(
                   child: Text(
                     row.value.isEmpty ? '—' : row.value,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.5),
                   ),
                 ),
               ],
@@ -515,6 +703,41 @@ class _SceneTab extends ConsumerWidget {
 // ─────────────────────────────────────────────────────────────────────
 // Helper widgets
 // ─────────────────────────────────────────────────────────────────────
+
+/// 小节标题
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 12,
+            decoration: BoxDecoration(
+              color: Colors.amber,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SliderRow extends StatelessWidget {
   final String label;
   final double value;
@@ -536,12 +759,13 @@ class _SliderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
           SizedBox(
             width: 56,
-            child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            child: Text(label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
           ),
           Expanded(
             child: Slider(
@@ -569,13 +793,15 @@ class _SliderRow extends StatelessWidget {
   }
 }
 
-class _DropdownRow extends StatelessWidget {
+/// 用 PopupMenu 替代 DropdownButton，避免触发 PopupRoute 路由变化
+/// （虽然 route_observers 已修复，但 PopupMenu 更轻量、更可控）
+class _PopupRow extends StatelessWidget {
   final String label;
   final String value;
   final List<String> items;
   final Map<String, String>? displayLabels;
   final ValueChanged<String> onChanged;
-  const _DropdownRow({
+  const _PopupRow({
     required this.label,
     required this.value,
     required this.items,
@@ -583,32 +809,64 @@ class _DropdownRow extends StatelessWidget {
     required this.onChanged,
   });
 
+  String _display(String v) => displayLabels?[v] ?? v;
+
   @override
   Widget build(BuildContext context) {
+    final hasValue = items.contains(value);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
           SizedBox(
             width: 56,
-            child: Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            child: Text(label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12)),
           ),
           Expanded(
-            child: DropdownButton<String>(
-              value: items.contains(value) ? value : null,
-              dropdownColor: const Color(0xFF1C1C1E),
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              underline: Container(height: 1, color: Colors.white24),
-              isExpanded: true,
-              items: items
-                  .map((v) => DropdownMenuItem(
+            child: PopupMenuButton<String>(
+              tooltip: '选择$label',
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white12, width: 0.5),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        hasValue ? _display(value) : '请选择',
+                        style: TextStyle(
+                          color: hasValue ? Colors.white : Colors.white38,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.arrow_drop_down,
+                        color: Colors.white54, size: 18),
+                  ],
+                ),
+              ),
+              itemBuilder: (ctx) => items
+                  .map((v) => PopupMenuItem<String>(
                         value: v,
-                        child: Text(displayLabels?[v] ?? v),
+                        child: Row(
+                          children: [
+                            if (v == value)
+                              const Icon(Icons.check,
+                                  color: Colors.amber, size: 16)
+                            else
+                              const SizedBox(width: 16),
+                            const SizedBox(width: 8),
+                            Text(_display(v)),
+                          ],
+                        ),
                       ))
                   .toList(),
-              onChanged: (v) {
-                if (v != null) onChanged(v);
-              },
+              onSelected: (v) => onChanged(v),
             ),
           ),
         ],

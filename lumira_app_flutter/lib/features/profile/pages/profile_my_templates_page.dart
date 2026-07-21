@@ -9,6 +9,8 @@ import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../templates/data/imported_templates_provider.dart';
+import '../../templates/widgets/template_import_sheet.dart';
 import '../data/profile_content_mock_data.dart';
 
 /// 我的模板页
@@ -44,8 +46,9 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
   /// 当前激活的模板（用于 ActionSheet 标题）
   CustomTemplate? get _activeTpl => _activeTemplate;
 
-  List<CustomTemplate> get _filteredTemplates {
-    const all = ProfileContentMockData.customTemplates;
+  /// 合并 mock 自定义模板 + 运行时导入的模板，按当前 filter 过滤
+  List<CustomTemplate> _filteredTemplatesWith(List<CustomTemplate> imported) {
+    final all = [...ProfileContentMockData.customTemplates, ...imported];
     switch (_activeFilter) {
       case _FilterKey.all:
         return all;
@@ -124,9 +127,21 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
     _showSnack('已删除');
   }
 
+  void _showImportSheet() {
+    TemplateImportSheet.show(
+      context,
+      onImported: (_) {
+        // 导入后切换到"全部"以确保新模板可见
+        setState(() => _activeFilter = _FilterKey.all);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final importedCustom = ref.watch(importedCustomTemplatesProvider);
+    final filtered = _filteredTemplatesWith(importedCustom);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -136,7 +151,7 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
         transparent: true,
         leading: _BackButton(tokens: tokens),
         actions: [
-          _ImportButton(tokens: tokens),
+          _ImportButton(tokens: tokens, onTap: _showImportSheet),
         ],
       ),
       body: Stack(
@@ -157,17 +172,25 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _StatsBar(tokens: tokens),
-                    _ActionBar(tokens: tokens),
+                    _StatsBar(
+                      tokens: tokens,
+                      totalCount: filtered.length,
+                      totalUsage: importedCustom.isEmpty
+                          ? ProfileContentMockData.totalUsage
+                          : ProfileContentMockData.totalUsage +
+                              importedCustom.fold(0, (s, t) => s + t.usageCount),
+                      favoriteCount: ProfileContentMockData.favoriteCount,
+                    ),
+                    _ActionBar(tokens: tokens, onImport: _showImportSheet),
                     _FilterBar(
                       tokens: tokens,
                       activeFilter: _activeFilter,
                       onSelect: (f) => setState(() => _activeFilter = f),
                     ),
-                    if (_filteredTemplates.isNotEmpty)
+                    if (filtered.isNotEmpty)
                       _TplList(
                         tokens: tokens,
-                        templates: _filteredTemplates,
+                        templates: filtered,
                         onTap: (tpl) => GoRouter.of(context).push(
                           RouteNames.withTemplateId(RouteNames.templatesEditor, tpl.id),
                         ),
@@ -228,13 +251,14 @@ class _BackButton extends StatelessWidget {
 }
 
 class _ImportButton extends StatelessWidget {
-  const _ImportButton({required this.tokens});
+  const _ImportButton({required this.tokens, required this.onTap});
   final ThemeTokens tokens;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () => GoRouter.of(context).push(RouteNames.templatesEditor),
+      onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -249,8 +273,16 @@ class _ImportButton extends StatelessWidget {
 }
 
 class _StatsBar extends StatelessWidget {
-  const _StatsBar({required this.tokens});
+  const _StatsBar({
+    required this.tokens,
+    required this.totalCount,
+    required this.totalUsage,
+    required this.favoriteCount,
+  });
   final ThemeTokens tokens;
+  final int totalCount;
+  final int totalUsage;
+  final int favoriteCount;
 
   Widget _statItem(String num, String label) {
     return Column(
@@ -295,12 +327,12 @@ class _StatsBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _statItem('${ProfileContentMockData.customTemplates.length}', '自定义模板'),
+          _statItem('$totalCount', '自定义模板'),
           _divider(),
-          // 4+ 位数必须用 formatThousands（totalUsage = 1280+856+432+215+88 = 2871）
-          _statItem(formatThousands(ProfileContentMockData.totalUsage), '使用次数'),
+          // 4+ 位数必须用 formatThousands
+          _statItem(formatThousands(totalUsage), '使用次数'),
           _divider(),
-          _statItem('${ProfileContentMockData.favoriteCount}', '收藏'),
+          _statItem('$favoriteCount', '收藏'),
         ],
       ),
     );
@@ -308,89 +340,9 @@ class _StatsBar extends StatelessWidget {
 }
 
 class _ActionBar extends StatelessWidget {
-  const _ActionBar({required this.tokens});
+  const _ActionBar({required this.tokens, required this.onImport});
   final ThemeTokens tokens;
-
-  void _showImportSheet(BuildContext context, ThemeTokens tokens) {
-    // Forced fix: 之前"导入模板"按钮错误跳转到 templatesEditor（新建模板）。
-    // 正确行为：弹出导入方式选择 BottomSheet（文件 / 链接 / 扫码）。
-    // mock 阶段选择后显示 SnackBar 提示。
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: tokens.canvas,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetCtx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  '导入模板',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              _ImportOption(
-                icon: Icons.insert_drive_file_outlined,
-                title: '从文件导入',
-                subtitle: '支持 .json / .lumira 模板文件',
-                tokens: tokens,
-                onTap: () {
-                  Navigator.pop(sheetCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('文件导入功能即将上线'),
-                      duration: Duration(milliseconds: 1500),
-                    ),
-                  );
-                },
-              ),
-              _ImportOption(
-                icon: Icons.link_outlined,
-                title: '从链接导入',
-                subtitle: '粘贴分享链接',
-                tokens: tokens,
-                onTap: () {
-                  Navigator.pop(sheetCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('链接导入功能即将上线'),
-                      duration: Duration(milliseconds: 1500),
-                    ),
-                  );
-                },
-              ),
-              _ImportOption(
-                icon: Icons.qr_code_scanner_outlined,
-                title: '扫码导入',
-                subtitle: '扫描模板分享二维码',
-                tokens: tokens,
-                onTap: () {
-                  Navigator.pop(sheetCtx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('扫码导入功能即将上线'),
-                      duration: Duration(milliseconds: 1500),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  final VoidCallback onImport;
 
   @override
   Widget build(BuildContext context) {
@@ -413,78 +365,10 @@ class _ActionBar extends StatelessWidget {
               icon: Icons.download_outlined,
               variant: LumiraButtonVariant.ghost,
               expand: true,
-              onPressed: () => _showImportSheet(context, tokens),
+              onPressed: onImport,
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// 导入方式选项
-class _ImportOption extends StatelessWidget {
-  const _ImportOption({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.tokens,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: tokens.brand.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, size: 18, color: tokens.brand),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.textTertiary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 12,
-              color: tokens.textTertiary,
-            ),
-          ],
-        ),
       ),
     );
   }

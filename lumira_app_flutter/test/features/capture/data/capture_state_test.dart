@@ -95,7 +95,10 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       container.read(CaptureState.activeScenePresetIdProvider.notifier).state = 'cafe-window';
-      expect(container.read(CaptureState.activeSceneFilterProvider), 'warm_film');
+      // activeSceneFilterProvider returns a SceneFilter (lut + systemFilter)
+      final filter = container.read(CaptureState.activeSceneFilterProvider);
+      expect(filter, isNotNull);
+      expect(filter!.lut, 'warm_film');
     });
 
     test('levelEnabledProvider defaults to true', () {

@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,10 +22,23 @@ import 'package:lumira_app_flutter/features/capture/widgets/param_panel.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/param_pill_bar.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/template_strip.dart';
 
+import '../../../test/helpers/test_http_overrides.dart';
+
 void main() {
   late GoRouter router;
+  FlutterExceptionHandler? originalErrorHandler;
 
   setUp(() {
+    // TemplateStrip/ScenePresetStrip use Image.network(picsum.photos) for covers.
+    // Mock HTTP to avoid NetworkImageLoadException in tests.
+    HttpOverrides.global = TestHttpOverrides();
+    originalErrorHandler = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      if (details.exception.toString().contains('NetworkImageLoadException')) {
+        return;
+      }
+      originalErrorHandler?.call(details);
+    };
     router = GoRouter(
       initialLocation: '/capture',
       routes: [
@@ -57,6 +73,11 @@ void main() {
         ),
       ],
     );
+  });
+
+  tearDown(() {
+    HttpOverrides.global = null;
+    FlutterError.onError = originalErrorHandler;
   });
 
   Widget wrap(
@@ -157,13 +178,18 @@ void main() {
     await tester.tap(find.byIcon(Icons.fullscreen));
     await tester.pumpAndSettle();
 
-    // 全屏后：CaptureNav 隐藏
-    expect(find.byType(CaptureNav), findsNothing);
-    expect(find.text('自由调参'), findsNothing);
+    // 修复 Bug 10：全屏后 CaptureNav 仍然显示（含退出全屏按钮），
+    // 确保用户可以退出全屏。装饰性内容（ParamPillBar、模板条）会隐藏。
+    expect(find.byType(CaptureNav), findsOneWidget);
+    // 退出全屏按钮可见
+    expect(find.byIcon(Icons.fullscreen_exit), findsOneWidget);
 
-    // 再次点击退出全屏（按钮位置变化，需重新查找）
-    // 注：全屏后 nav 隐藏，无法点击，需通过 provider 直接验证
-    // 改为直接验证状态
+    // 点击退出全屏按钮
+    await tester.tap(find.byIcon(Icons.fullscreen_exit));
+    await tester.pumpAndSettle();
+
+    // 退出全屏后：恢复全屏按钮图标
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
   });
 
   testWidgets('renders across 4 UI styles', (tester) async {

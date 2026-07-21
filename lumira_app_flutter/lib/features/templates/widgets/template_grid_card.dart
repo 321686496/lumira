@@ -25,7 +25,8 @@ class TemplateGridCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
     final tpl = template;
 
     return GestureDetector(
@@ -34,6 +35,8 @@ class TemplateGridCard extends ConsumerWidget {
         decoration: BoxDecoration(
           color: tokens.surface,
           borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
+          boxShadow:
+              appTheme.style == UIStyle.neumorphic ? tokens.shadowConvex : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(

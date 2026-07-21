@@ -486,7 +486,7 @@ class _ParamItem extends StatelessWidget {
   }
 }
 
-class _DraftActions extends StatelessWidget {
+class _DraftActions extends ConsumerWidget {
   const _DraftActions({
     required this.tokens,
     required this.onResume,
@@ -498,7 +498,8 @@ class _DraftActions extends StatelessWidget {
   final VoidCallback onDelete;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return Container(
       padding: const EdgeInsets.only(top: 10),
       decoration: BoxDecoration(
@@ -515,10 +516,16 @@ class _DraftActions extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 // 硬编码颜色，与 uni-app 一致 (linear-gradient brand → brandDeep)
-                gradient:
-                    LinearGradient(colors: [tokens.brand, tokens.brandDeep]),
+                // neumorphic 风格下：移除渐变，用 brand 纯色 + shadowConvex
+                gradient: isNeumorphic
+                    ? null
+                    : LinearGradient(
+                        colors: [tokens.brand, tokens.brandDeep]),
+                color: isNeumorphic ? tokens.brand : null,
                 borderRadius: BorderRadius.circular(9999),
-                boxShadow: tokens.shadowConvexBrand,
+                boxShadow: isNeumorphic
+                    ? tokens.shadowConvex
+                    : tokens.shadowConvexBrand,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

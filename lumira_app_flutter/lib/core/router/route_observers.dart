@@ -34,6 +34,14 @@ class LumiraRouteObserver extends RouteObserver<PageRoute<dynamic>> {
   }
 
   void _handleRouteChange(Route<dynamic>? from, Route<dynamic>? to) {
+    // 关键修复：DropdownButton / showModalBottomSheet / showDialog 等弹出的 PopupRoute
+    // 不是 PageRoute，会被 _extractPath 返回 null，从而被误判为"离开拍摄页"，
+    // 触发 resetAll 清空 currentTemplateId 等状态，导致页面"重置"。
+    // 修复方法：只在 from 和 to 都是 PageRoute 时才判断是否真的离开了拍摄页。
+    if (from is! PageRoute || to is! PageRoute) {
+      return;
+    }
+
     final fromPath = _extractPath(from);
     final toPath = _extractPath(to);
 

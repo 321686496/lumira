@@ -29,28 +29,33 @@ void main() {
       expect(ThemeTokens.of(ThemeKey.ink).canvas.value, 0xFF1C1A17);
     });
 
-    test('retro brand should be #C4956A', () {
-      expect(ThemeTokens.of(ThemeKey.retro).brand.value, 0xFFC4956A);
+    test('retro brand should be #B8855A', () {
+      // Neumorphic fix: 调深以提升胶片复古质感
+      expect(ThemeTokens.of(ThemeKey.retro).brand.value, 0xFFB8855A);
     });
 
-    test('fresh brand should be #8BAD72', () {
-      expect(ThemeTokens.of(ThemeKey.fresh).brand.value, 0xFF8BAD72);
+    test('fresh brand should be #7BA068', () {
+      // Neumorphic fix: 调深以让绿色更有活力
+      expect(ThemeTokens.of(ThemeKey.fresh).brand.value, 0xFF7BA068);
     });
 
-    test('cozy brand should be #E8A0A0', () {
-      expect(ThemeTokens.of(ThemeKey.cozy).brand.value, 0xFFE8A0A0);
+    test('cozy brand should be #D89090', () {
+      // Neumorphic fix: 调深以提升温馨粉质感
+      expect(ThemeTokens.of(ThemeKey.cozy).brand.value, 0xFFD89090);
     });
 
-    test('macaron brand should be #A8D8C8', () {
-      expect(ThemeTokens.of(ThemeKey.macaron).brand.value, 0xFFA8D8C8);
+    test('macaron brand should be #7BC4AB', () {
+      // Neumorphic fix: 提升饱和度让薄荷绿更鲜活
+      expect(ThemeTokens.of(ThemeKey.macaron).brand.value, 0xFF7BC4AB);
     });
 
     test('morandi brand should be #8B9DAF', () {
       expect(ThemeTokens.of(ThemeKey.morandi).brand.value, 0xFF8B9DAF);
     });
 
-    test('rosegold brand should be #C9A0A0', () {
-      expect(ThemeTokens.of(ThemeKey.rosegold).brand.value, 0xFFC9A0A0);
+    test('rosegold brand should be #BC8888', () {
+      // Neumorphic fix: 调深以让玫瑰金特色更明显
+      expect(ThemeTokens.of(ThemeKey.rosegold).brand.value, 0xFFBC8888);
     });
   });
 

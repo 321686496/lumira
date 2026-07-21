@@ -26,7 +26,8 @@ class RecommendationCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
     final rec = recommendation;
 
     return GestureDetector(
@@ -36,6 +37,8 @@ class RecommendationCard extends ConsumerWidget {
         decoration: BoxDecoration(
           color: tokens.surface,
           borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
+          boxShadow:
+              appTheme.style == UIStyle.neumorphic ? tokens.shadowConvex : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(

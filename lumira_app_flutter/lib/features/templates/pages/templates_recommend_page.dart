@@ -319,7 +319,9 @@ class _GuessLikesSection extends StatelessWidget {
                 crossAxisCount: 2,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                childAspectRatio: 0.72,
+                // Forced fix: 0.72 在 360dp 小屏溢出 ~14dp
+                // cellWidth=154 → cellHeight(0.66)=233dp，内容=154(图 1:1)+20(padding)+54(3 行文字)=228dp ✓
+                childAspectRatio: 0.66,
               ),
               itemCount: TemplatesBrowseMockData.guessLikes.length,
               itemBuilder: (_, index) => _GuessLikeCard(
@@ -371,7 +373,8 @@ class _SimilarUsersSection extends StatelessWidget {
                 crossAxisCount: 2,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                childAspectRatio: 0.72,
+                // Forced fix: 0.72 在 360dp 小屏溢出（_SimilarUserCard 仅 2 行文字但接近边界）
+                childAspectRatio: 0.66,
               ),
               itemCount: TemplatesBrowseMockData.similarUsers.length,
               itemBuilder: (_, index) => _SimilarUserCard(
@@ -418,7 +421,8 @@ class _RecentShotSection extends StatelessWidget {
                 crossAxisCount: 2,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                childAspectRatio: 0.72,
+                // Forced fix: 0.72 在 360dp 小屏溢出 ~14dp（_RecentTemplateCard 3 行文字）
+                childAspectRatio: 0.66,
               ),
               itemCount: TemplatesBrowseMockData.recentTemplates.length,
               itemBuilder: (_, index) => _RecentTemplateCard(

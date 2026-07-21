@@ -73,6 +73,7 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final style = ref.watch(uiStyleProvider);
     final detail = ChallengeMockData.getDetailById(widget.challengeId);
 
     if (detail == null) {
@@ -104,7 +105,7 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
                     children: [
                       FadeUp(
-                        child: _HeroCard(detail: detail, tokens: tokens),
+                        child: _HeroCard(detail: detail, tokens: tokens, style: style),
                       ),
                       const SizedBox(height: 24),
                       // 完成的作品
@@ -113,7 +114,7 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                         const SizedBox(height: 12),
                         FadeUp(
                           delay: const Duration(milliseconds: 80),
-                          child: _WorkCard(work: detail.completedWork!, tokens: tokens),
+                          child: _WorkCard(work: detail.completedWork!, tokens: tokens, style: style),
                         ),
                         const SizedBox(height: 24),
                       ],
@@ -208,28 +209,34 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.detail, required this.tokens});
+  const _HeroCard({required this.detail, required this.tokens, required this.style});
 
   final ChallengeDetail detail;
   final ThemeTokens tokens;
+  final UIStyle style;
 
   @override
   Widget build(BuildContext context) {
     final progressPercent = detail.progressTotal == 0
         ? 0.0
         : detail.progressCurrent / detail.progressTotal;
+    // Forced fix: neumorphic 风格下移除硬编码金色渐变，改用 surface 纯色 + shadowConvex 双向阴影
+    final isNeumorphic = style == UIStyle.neumorphic;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24), // 40rpx 48rpx → 20 24
       decoration: BoxDecoration(
-        // 金色渐变背景（hardcoded，跨主题一致 — uni-app 也如此）
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFDF6EC), Color(0xFFF5E6CC)],
-        ),
+        color: isNeumorphic ? tokens.surface : null,
+        gradient: isNeumorphic
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFFDF6EC), Color(0xFFF5E6CC)],
+              ),
         borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
+        boxShadow: isNeumorphic ? tokens.shadowConvex : const [],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,25 +351,30 @@ class _HeroCard extends StatelessWidget {
 }
 
 class _WorkCard extends StatelessWidget {
-  const _WorkCard({required this.work, required this.tokens});
+  const _WorkCard({required this.work, required this.tokens, required this.style});
 
   final Work work;
   final ThemeTokens tokens;
+  final UIStyle style;
 
   @override
   Widget build(BuildContext context) {
+    // Forced fix: neumorphic 风格下移除 border，canvas→surface，boxShadow→shadowConvexSubtle
+    final isNeumorphic = style == UIStyle.neumorphic;
     return Container(
       decoration: BoxDecoration(
-        color: tokens.canvas,
+        color: isNeumorphic ? tokens.surface : tokens.canvas,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: tokens.divider, width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            offset: const Offset(0, 2),
-            blurRadius: 8,
-          ),
-        ],
+        border: isNeumorphic ? null : Border.all(color: tokens.divider, width: 1),
+        boxShadow: isNeumorphic
+            ? tokens.shadowConvexSubtle
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  offset: const Offset(0, 2),
+                  blurRadius: 8,
+                ),
+              ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),

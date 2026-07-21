@@ -21,25 +21,30 @@ class StreakCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
+    final style = ref.watch(uiStyleProvider);
+    // Forced fix: neumorphic 风格下使用 tokens.shadowConvexSubtle（主题派生色），canvas→surface
+    final isNeumorphic = style == UIStyle.neumorphic;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24), // 48rpx → 24dp
       decoration: BoxDecoration(
-        color: tokens.canvas,
+        color: isNeumorphic ? tokens.surface : tokens.canvas,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            offset: const Offset(3, 3),
-            blurRadius: 7,
-          ),
-          BoxShadow(
-            color: Colors.white.withOpacity(0.9),
-            offset: const Offset(-3, -3),
-            blurRadius: 7,
-          ),
-        ],
+        boxShadow: isNeumorphic
+            ? tokens.shadowConvexSubtle
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  offset: const Offset(3, 3),
+                  blurRadius: 7,
+                ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.9),
+                  offset: const Offset(-3, -3),
+                  blurRadius: 7,
+                ),
+              ],
       ),
       child: Column(
         children: [

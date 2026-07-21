@@ -44,34 +44,40 @@ class QuickActions extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+
+    // neumorphic 风格下：圆形按钮背景统一改为 surface（保留原图标颜色 brand/success/danger）
+    // 其他风格：保留原 brandSubtle/successSubtle/dangerSubtle 半透明背景
+    final circleBg = isNeumorphic ? tokens.surface : null;
 
     final actions = [
       _QuickAction(
         icon: Icons.camera_alt_outlined,
         label: '拍摄',
-        circleColor: tokens.brandSubtle,
+        circleColor: circleBg ?? tokens.brandSubtle,
         iconColor: tokens.brand,
         onTap: onCapture,
       ),
       _QuickAction(
         icon: Icons.menu_book_outlined,
         label: '模板',
-        circleColor: tokens.successSubtle,
+        circleColor: circleBg ?? tokens.successSubtle,
         iconColor: tokens.success,
         onTap: onTemplates,
       ),
       _QuickAction(
         icon: Icons.auto_awesome_outlined,
         label: '灵感',
-        circleColor: tokens.brandSubtle,
+        circleColor: circleBg ?? tokens.brandSubtle,
         iconColor: tokens.brand,
         onTap: onInspiration,
       ),
       _QuickAction(
         icon: Icons.photo_library_outlined,
         label: '相册',
-        circleColor: tokens.dangerSubtle,
+        circleColor: circleBg ?? tokens.dangerSubtle,
         iconColor: tokens.danger,
         onTap: onGallery,
       ),
@@ -86,7 +92,11 @@ class QuickActions extends ConsumerWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: actions
-            .map((action) => _QuickItem(action: action, tokens: tokens))
+            .map((action) => _QuickItem(
+                  action: action,
+                  tokens: tokens,
+                  isNeumorphic: isNeumorphic,
+                ))
             .toList(),
       ),
     );
@@ -94,10 +104,17 @@ class QuickActions extends ConsumerWidget {
 }
 
 class _QuickItem extends StatelessWidget {
-  const _QuickItem({required this.action, required this.tokens});
+  const _QuickItem({
+    required this.action,
+    required this.tokens,
+    this.isNeumorphic = false,
+  });
 
   final _QuickAction action;
   final ThemeTokens tokens;
+
+  /// 是否为 neumorphic 风格（影响圆形按钮阴影渲染）
+  final bool isNeumorphic;
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +130,11 @@ class _QuickItem extends StatelessWidget {
             decoration: BoxDecoration(
               color: action.circleColor,
               shape: BoxShape.circle,
+              // neumorphic 风格：添加轻量凸起阴影
+              // 其他风格：无阴影
+              boxShadow: isNeumorphic
+                  ? tokens.shadowConvexSubtle
+                  : null,
             ),
             child: Icon(
               action.icon,

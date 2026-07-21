@@ -21,13 +21,16 @@ class UserPreferenceCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14), // 32rpx 28rpx → 16 14
       decoration: BoxDecoration(
         color: tokens.surface,
         borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
+        boxShadow:
+            appTheme.style == UIStyle.neumorphic ? tokens.shadowConvex : null,
       ),
       child: Column(
         children: [

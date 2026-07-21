@@ -2,7 +2,7 @@
 
 > 项目根目录智能体指令文件
 > 开发范式：**Harness Engineering（马具工程）**
-> 最后更新：2026-07-21（新增第十三章 HarmonyOS 官方文档参考规范）
+> 最后更新：2026-07-21（更新第十二章 Flutter 三方库引入 Harmony 适配强制规则）
 
 ---
 
@@ -596,22 +596,23 @@ Agent 在完成任何工程或文档变更后，**必须自问并确认**：
 ## 十二、Flutter 工程开发规范（Harmony 适配强制阅读）
 
 > **核心原则**：Flutter 工程为后续主开发技术栈，所有 Flutter 代码必须同时兼容 **iOS / Android / HarmonyOS** 三大平台。
-> **每次开发 Flutter 工程前**，必须先读取以下 Harmony 版 Flutter 与三方库适配参考资源，确保所用 API、三方库均在 Harmony 适配清单内。
+>
+> **强制规则**：每次开发 Flutter 工程时，如果涉及使用或引入三方库的情况，**必须先阅读**以下指定的 Harmony 版 Flutter 引擎与三方库适配清单，以适配清单作为引入决策的依据，确保所用 API、三方库均在 Harmony 适配范围内，保证 Flutter 项目能够正确适配 HarmonyOS 端。
 
 ### 12.1 强制参考资源（开发前必读）
 
 | 资源 | 地址 | 用途 |
 |---|---|---|
-| Harmony 版 Flutter 引擎 | https://gitcode.com/CPF-Flutter/flutter_flutter | 华为 HarmonyOS 适配的 Flutter SDK 主仓 |
+| Harmony 版 Flutter 引擎（主仓） | https://gitcode.com/CPF-Flutter/flutter_flutter | 华为 HarmonyOS 适配的 Flutter SDK 主仓，引入三方库前须了解 Harmony 版 Flutter 的 API 支持范围 |
 | Harmony 版 Flutter 引擎（分支） | https://gitcode.com/CPF-Flutter/flutter_flutter/tree/br_3.7.12-ohos-1.1.3 | 当前项目使用的 Harmony 适配分支（3.7.12-ohos-1.1.3） |
-| 三方库适配清单 | https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md | 已适配 Harmony 的三方库查询清单 |
-| CPF-Flutter 文档总仓 | https://gitcode.com/CPF-Flutter/docs | Harmony 版 Flutter 适配文档总入口 |
+| 三方库适配清单 | https://gitcode.com/OpenHarmony-Flutter/docs/blob/main/ThirdpartyLibrarites.md | 已适配 Harmony 的三方库查询清单，**引入任何三方库前必须在此查证** |
+| OpenHarmony-Flutter 文档总仓 | https://gitcode.com/OpenHarmony-Flutter/docs | Harmony 版 Flutter 适配文档总入口 |
 
 ### 12.2 三方库引入强制流程（MUST FOLLOW）
 
 在 `lumira_app_flutter/`（或任何 Flutter 工程）中引入任何新的三方库之前，**必须**按以下流程执行：
 
-1. **查询适配清单**：访问 [三方库适配清单](https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md)，搜索目标库是否已适配 Harmony
+1. **查询适配清单**：访问 [三方库适配清单](https://gitcode.com/OpenHarmony-Flutter/docs/blob/main/ThirdpartyLibrarites.md)，搜索目标库是否已适配 Harmony
 2. **版本匹配**：确认适配清单中标注的库版本与 `pubspec.yaml` 中要引入的版本兼容
 3. **降级 / 替代方案**：若目标库未适配 Harmony，必须寻找替代库（同样需通过清单校验）或自行实现等价功能，**禁止**强行引入未适配库导致 Harmony 平台构建失败
 4. **平台测试**：库引入后，必须在 iOS / Android / HarmonyOS 三平台分别构建一次确认无平台报错
@@ -663,7 +664,7 @@ lumira_app_flutter/
 
 每次 Flutter 工程任务完成后，**必须**自问并确认：
 
-- [ ] 是否已先读取 12.1 中的 Harmony 适配参考资源？
+- [ ] 是否已先读取 [Harmony 版 Flutter 引擎](https://gitcode.com/CPF-Flutter/flutter_flutter) 与 [三方库适配清单](https://gitcode.com/OpenHarmony-Flutter/docs/blob/main/ThirdpartyLibrarites.md) 作为参考？
 - [ ] 新引入的三方库是否已通过 12.2 的适配清单校验？
 - [ ] 代码是否在 iOS / Android / HarmonyOS 三平台都能构建通过？
 - [ ] 是否使用了未适配 Harmony 的私有 API 或三方库？
