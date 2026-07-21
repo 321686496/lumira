@@ -2,7 +2,7 @@
 
 > 项目根目录智能体指令文件
 > 开发范式：**Harness Engineering（马具工程）**
-> 最后更新：2026-07-18（新增 Flutter Harmony 适配规则章节，明确 Flutter 工程为后续主开发技术栈）
+> 最后更新：2026-07-21（新增第十三章 HarmonyOS 官方文档参考规范）
 
 ---
 
@@ -669,6 +669,40 @@ lumira_app_flutter/
 - [ ] 是否使用了未适配 Harmony 的私有 API 或三方库？
 - [ ] 路由表是否与 uni-app 原路由表保持一致（迁移阶段）？
 - [ ] 是否同步更新了相关设计文档与测试文档？
+
+---
+
+## 十三、HarmonyOS / OHOS / ArkTS / ArkUI 开发规范（强制参考官方文档）
+
+> **核心原则**：当任务涉及 HarmonyOS / OHOS / ArkTS / ArkUI（包括但不限于 `.ets` 文件、`ohos/` 目录、桌面卡片、代理提醒、原生桥接等）开发时，**必须**参考以下华为官方文档，以官方 API、语法与最佳实践为准，不得凭记忆臆造 API。
+
+### 13.1 强制参考文档（开发前必读）
+
+| 文档 | 地址 | 用途 |
+|---|---|---|
+| 华为开发者文档总入口 | https://developer.huawei.com/consumer/cn/doc/ | 所有 HarmonyOS 开发文档的入口，遇到不确定的内容从此出发检索 |
+| ArkTS 快速入门 | https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/arkts-get-started | ArkTS 项目创建、目录结构、声明式 UI 基础、状态管理等入门必读 |
+| ArkTS 语言概述 | https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/arkts-overview | ArkTS 语言特性（类型系统、装饰器、UI 描述等）全面了解 |
+| ArkUI 框架概述 | https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/arkui-overview | ArkUI 组件体系、布局、动画、交互事件等框架级参考 |
+
+### 13.2 执行要求
+
+- **开发前**：阅读「ArkTS 快速入门」了解 ArkTS 项目结构与声明式 UI 开发模式
+- **开发中**：
+  - 涉及 ArkUI 组件时，查阅官方组件文档确认属性、事件、样式的正确用法
+  - 涉及 ArkTS 装饰器（`@Component`、`@State`、`@Prop`、`@Link`、`@Builder` 等）时，以官方文档的语法为准
+  - 涉及权限声明时，查阅官方权限说明文档
+  - 涉及生命周期时，查阅官方生命周期文档
+- **遇到不确定的 OHOS API / 组件 / 权限 / 生命周期时**：先查阅 13.1 中的官方文档再动手，**禁止**凭记忆或经验猜测 API 签名
+
+### 13.3 AI Agent 自检
+
+每次涉及 HarmonyOS 开发的任务完成后，**必须**自问并确认：
+
+- [ ] 开发过程中是否参考了华为官方文档而非凭记忆编写？
+- [ ] 使用的 ArkTS 装饰器、ArkUI 组件 API 是否与官方文档一致？
+- [ ] 权限声明是否符合官方规范？
+- [ ] 是否做到了「先查文档再动手」而非「先写代码再对文档」？
 
 ---
 
