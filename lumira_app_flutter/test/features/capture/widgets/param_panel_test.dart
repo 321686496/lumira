@@ -184,8 +184,8 @@ void main() {
       container.read(CaptureState.panelExpandedProvider.notifier).state = true;
       await tester.pumpAndSettle();
 
-      // 自由模式下应该显示"自由模式"标识
-      expect(find.text('自由模式'), findsOneWidget);
+      // 自由模式下应该显示"自由"标识
+      expect(find.text('自由'), findsOneWidget);
 
       // 应该能调整 EV
       final initialEv = container

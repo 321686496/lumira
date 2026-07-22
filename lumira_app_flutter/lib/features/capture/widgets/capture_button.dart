@@ -42,6 +42,7 @@ class _CaptureButtonState extends State<CaptureButton>
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTapDown: (_) {
         _pressing = true;
         _controller.forward();

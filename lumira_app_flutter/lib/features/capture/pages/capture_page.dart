@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' show sqrt;
 
 import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../data/capture_state.dart';
+import '../domain/photo_template.dart';
 import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
 import '../widgets/camera_preview.dart';
@@ -158,10 +160,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
   }
 
   /// 缩放：同步到相机引擎与 zoomProvider
-  void _onZoomChanged(double zoom) {
-    ref.read(CaptureState.zoomProvider.notifier).state = zoom;
+  ///
+  /// 滑块值 [0, 1] 通过平方根曲线映射到相机 zoom [0, 1]，
+  /// 使滑块前半段也能产生明显的缩放效果（camerawesome 的 setZoom 在低值段
+  /// 视觉变化很小，用 sqrt 曲线让 0.5 → 0.707 而非 0.5 → 0.5）。
+  void _onZoomChanged(double sliderValue) {
+    ref.read(CaptureState.zoomProvider.notifier).state = sliderValue;
+    final actualZoom = sqrt(sliderValue);
     final state = ref.read(CaptureState.cameraStateProvider);
-    state?.sensorConfig.setZoom(zoom);
+    state?.sensorConfig.setZoom(actualZoom);
   }
 
   @override
@@ -175,6 +182,21 @@ class _CapturePageState extends ConsumerState<CapturePage>
     ref.listen<CaptureFlashMode>(CaptureState.flashModeProvider, (prev, next) {
       final state = ref.read(CaptureState.cameraStateProvider);
       state?.sensorConfig.setFlashMode(_mapFlashMode(next));
+    });
+
+    // 监听相机参数变化，同步 EV 到 brightness（camerawesome 1.4.0 仅支持 brightness）
+    // EV 范围 [-3, +3] 映射到 brightness [0, 1]，0 EV → 0.5 brightness
+    ref.listen<CameraParams>(CaptureState.effectiveCameraProvider, (prev, next) {
+      if (prev?.exposureCompensation == next.exposureCompensation) return;
+      final state = ref.read(CaptureState.cameraStateProvider);
+      if (state == null) return;
+      // EV [-3, +3] → brightness [0, 1]：EV 0 = 0.5, EV +3 = 1.0, EV -3 = 0.0
+      final brightness = (next.exposureCompensation + 3.0) / 6.0;
+      try {
+        state.sensorConfig.setBrightness(brightness.clamp(0.0, 1.0));
+      } catch (_) {
+        // 某些设备可能不支持 brightness 调节
+      }
     });
 
     return Scaffold(
@@ -342,6 +364,9 @@ class _BottomControlArea extends StatelessWidget {
 }
 
 /// 缩放滑块：横向滑块 + 当前倍数显示
+///
+/// 滑块值 [0, 1] 经 sqrt 曲线映射到相机 zoom [0, 1]，
+/// 显示的倍数基于实际 zoom 值：1.0x (zoom=0) ~ 6.0x (zoom=1)。
 class _ZoomSlider extends StatelessWidget {
   const _ZoomSlider({required this.value, required this.onChanged});
 
@@ -350,7 +375,9 @@ class _ZoomSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayX = (1 + value * 9).toStringAsFixed(1);
+    // 实际相机 zoom = sqrt(sliderValue)，显示倍数 = 1 + zoom * 5
+    final actualZoom = sqrt(value);
+    final displayX = (1 + actualZoom * 5).toStringAsFixed(1);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       child: Row(

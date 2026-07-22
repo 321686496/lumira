@@ -1,37 +1,54 @@
 // lib/features/capture/services/lut_processor.dart
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-/// LUT 处理器：封装 gpu_image 包的 3D LUT 支持。
+import 'package:flutter/material.dart' show Color, Colors;
+import 'package:lumira_app_flutter/features/capture/domain/filter_recipe.dart';
+
+/// LUT 处理器
 ///
-/// **gpu_image 1.0.0 现状（已核实包源码）：**
-/// - 该包仅提供基于 Platform View 的 UI 组件（`GPUImageWidget`、`GPUCameraWidget`），
-///   通过原生 GPUImage 库（iOS）/ 自定义实现（Android）渲染。
-/// - 暴露的滤镜为基础色彩调整（brightness/contrast/sepia/saturation/hue/...），
-///   通过 `setFilter(GPUFilter)` 传递给 Platform View，无 3D LUT 文件加载能力。
-/// - 无 `ui.Image → ui.Image` 的纯数据处理 API；仅在 Android/iOS 工作，不支持 HarmonyOS。
+/// **回退策略说明**（符合 Global Constraints "LUT：优先 gpu_image 3D LUT，运行时检测
+/// 不可用时回退 ColorMatrix 近似"）：
 ///
-/// 因此 `apply3DLut` 当前抛出 `UnimplementedError`。
-/// 调用方（`ImageProcessingService`）应 catch 该异常并回退到 `fromPostProcess(params)`
-/// 中的 ColorMatrix 近似（`composeLutMatrix` 已实现 16 种 LUT 预设的矩阵近似）。
+/// `gpu_image 1.0.0` 仅提供 Platform View UI 组件，不支持 3D LUT 文件加载，且不支持
+/// HarmonyOS。因此 `apply3DLut` **不抛异常**，而是直接使用 `composeLutMatrix` 生成的
+/// 4x5 ColorMatrix 对输入图像进行一次 ColorFilter 绘制，返回处理后的 [ui.Image]。
 ///
-/// 未来实现方向：接入支持 3D LUT 的原生库（如 iOS GPUImage2 的 `GPUImageLookupFilter`），
-/// 或通过 `image` 包逐像素应用 .cube/.3dl 文件。
+/// 这使得 [ImageProcessingService.process] 中的 Step 1（LUT 处理）能够正常完成，
+/// 后续 Step 2 的组合 ColorMatrix 中会排除 LUT 分量（`params.copyWith(lut: 'none')`），
+/// 避免 LUT 被双重应用。
 class LutProcessor {
   LutProcessor._();
 
-  /// 对 [input] 应用名为 [lutName] 的 3D LUT，返回处理后的图像。
+  /// 对 [input] 应用名为 [lutName] 的 LUT 效果。
   ///
-  /// [lutName] 取值见 `filter_recipe.dart` 的 `composeLutMatrix`（如 'cinematic',
-  /// 'vintage', 'bw', 'warm_film', ... 共 16 种）。
+  /// 实现方式：使用 [composeLutMatrix] 将 LUT 转换为 4x5 色彩矩阵，
+  /// 然后通过 `ColorFilter.matrix` + `Canvas.drawImage` 绘制到新图像。
   ///
-  /// 当前实现抛出 `UnimplementedError`（见类文档说明）。
+  /// 返回值：处理后的新 [ui.Image]（与 [input] 同尺寸）。
+  /// 如果 [lutName] 为 `'none'` 或不在已知列表中，返回 [input] 原图（不复制）。
   static Future<ui.Image> apply3DLut({
     required ui.Image input,
     required String lutName,
   }) async {
-    throw UnimplementedError(
-      'gpu_image 1.0.0 does not support 3D LUT processing. '
-      'Falling back to ColorMatrix approximation via composeLutMatrix.',
+    if (lutName == 'none') return input;
+
+    final matrix = composeLutMatrix(lutName);
+    if (matrix == null) return input;
+
+    final width = input.width;
+    final height = input.height;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    canvas.drawImage(
+      input,
+      ui.Offset.zero,
+      ui.Paint()..colorFilter = ui.ColorFilter.matrix(matrix),
     );
+    final picture = recorder.endRecording();
+    final result = await picture.toImage(width, height);
+    picture.dispose();
+    return result;
   }
 }

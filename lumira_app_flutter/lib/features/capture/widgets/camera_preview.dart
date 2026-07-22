@@ -106,7 +106,10 @@ class CameraPreview extends ConsumerWidget {
     final flashMode = ref.watch(CaptureState.flashModeProvider);
     final facing = ref.watch(CaptureState.cameraFacingProvider);
     final showTemplate = hasOverride || ref.watch(CaptureState.showTemplateProvider);
-    final showSilhouette = hasOverride || ref.watch(CaptureState.showSilhouetteProvider);
+    // Bug fix: 当 formOverride 非空时，不在此处渲染剪影——
+    // 调用方（如 _Viewfinder）会自行渲染可拖动的剪影交互层。
+    // 否则会出现两个剪影叠加（中间一个不可拖 + 真实位置一个可拖）。
+    final showSilhouette = !hasOverride && ref.watch(CaptureState.showSilhouetteProvider);
     final rawMode = ref.watch(CaptureState.rawModeProvider);
 
     // 修复 Bug 2/3：自由模式下也应用滤镜（来自 freeModePostProcessProvider）
@@ -193,7 +196,7 @@ class CameraPreview extends ConsumerWidget {
             : const SizedBox.shrink();
 
     // 姿势剪影（仅在 silhouette.data != 'none' && showSilhouette 时显示）
-    // Bug 12 修复：formOverride 非空时使用 formOverride.pose.silhouette
+    // Bug fix: formOverride 非空时不渲染剪影（调用方自行渲染可拖动层）
     // 注意：EditorForm 和 PhotoTemplate 都有 SilhouetteResource 类（同名不同类），
     // 这里统一提取为基本类型（String/-double）避免类型冲突
     final String silhouetteType;
@@ -202,11 +205,12 @@ class CameraPreview extends ConsumerWidget {
     final double silhouetteRotation;
     final bool hasSilhouette;
     if (formOverride != null) {
-      silhouetteType = formOverride!.pose.silhouette.type;
-      silhouetteData = formOverride!.pose.silhouette.data;
-      silhouetteScale = formOverride!.pose.scale;
-      silhouetteRotation = formOverride!.pose.rotation;
-      hasSilhouette = silhouetteData != 'none';
+      // formOverride 模式下不渲染剪影（showSilhouette 已为 false，hasSilhouette 不影响）
+      silhouetteType = '';
+      silhouetteData = 'none';
+      silhouetteScale = 1.0;
+      silhouetteRotation = 0.0;
+      hasSilhouette = false;
     } else if (editable != null) {
       silhouetteType = editable.pose.silhouette.type;
       silhouetteData = editable.pose.silhouette.data;
