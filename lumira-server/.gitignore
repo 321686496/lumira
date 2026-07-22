@@ -1,0 +1,8 @@
+# lumira-server/.gitignore
+node_modules/
+dist/
+data/*.db
+data/*.db-journal
+.env
+*.log
+.DS_Store

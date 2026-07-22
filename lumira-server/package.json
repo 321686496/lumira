@@ -1,0 +1,14 @@
+{
+  "name": "lumira-server",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @lumira/shared",
+    "build:backend": "npm run build -w @lumira/backend",
+    "dev:backend": "npm run dev -w @lumira/backend",
+    "test:backend": "npm run test -w @lumira/backend"
+  }
+}
