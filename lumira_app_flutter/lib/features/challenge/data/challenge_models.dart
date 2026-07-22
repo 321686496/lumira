@@ -173,3 +173,162 @@ class Work {
   final String title;
   final List<ChallengeTag> tags;
 }
+
+// === 每日挑战增强模型 ===
+
+/// 挑战分类常量（与模板 category 对齐）
+class ChallengeCategory {
+  static const portrait = 'portrait';
+  static const landscape = 'landscape';
+  static const food = 'food';
+  static const street = 'street';
+  static const night = 'night';
+  static const macro = 'macro';
+  static const stillLife = 'still-life';
+
+  static const all = [portrait, landscape, food, street, night, macro, stillLife];
+
+  static String label(String category) {
+    switch (category) {
+      case portrait:
+        return '人像';
+      case landscape:
+        return '风光';
+      case food:
+        return '美食';
+      case street:
+        return '街拍';
+      case night:
+        return '夜景';
+      case macro:
+        return '微距';
+      case stillLife:
+        return '静物';
+      default:
+        return '未知';
+    }
+  }
+}
+
+/// 题库条目
+class ChallengePoolItem {
+  final String id;
+  final String category;
+  final String title;
+  final String description;
+  final int rewardXP;
+  final String tip;
+  final List<String> tags;
+
+  const ChallengePoolItem({
+    required this.id,
+    required this.category,
+    required this.title,
+    required this.description,
+    required this.rewardXP,
+    required this.tip,
+    this.tags = const [],
+  });
+}
+
+/// 历史记录
+class ChallengeHistoryRecord {
+  final String id;
+  final String date;
+  final String challengeId;
+  final String category;
+  final String title;
+  final int rewardXP;
+  final ChallengeStatus status;
+  final int selectedAt;
+  final int? completedAt;
+  final int? skippedAt;
+  final bool isDaily;
+
+  const ChallengeHistoryRecord({
+    required this.id,
+    required this.date,
+    required this.challengeId,
+    required this.category,
+    required this.title,
+    required this.rewardXP,
+    required this.status,
+    required this.selectedAt,
+    this.completedAt,
+    this.skippedAt,
+    this.isDaily = false,
+  });
+}
+
+/// 成就
+class ChallengeAchievement {
+  final String id;
+  final String title;
+  final String description;
+  final IconData icon;
+  final bool unlocked;
+  final double progress;
+
+  const ChallengeAchievement({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.unlocked,
+    this.progress = 0,
+  });
+}
+
+/// 本周日历
+class WeeklyCalendar {
+  final DateTime weekStart;
+  final List<DailyStatus> days;
+  const WeeklyCalendar({required this.weekStart, required this.days});
+}
+
+class DailyStatus {
+  final DateTime date;
+  final bool isToday;
+  final ChallengeStatus status;
+  const DailyStatus({required this.date, required this.isToday, required this.status});
+}
+
+/// 拍摄技巧
+class ChallengeTip {
+  final String title;
+  final String description;
+  final IconData icon;
+  final String category;
+  const ChallengeTip({required this.title, required this.description, required this.icon, required this.category});
+}
+
+/// 当日挑战状态
+class DailyChallengeState {
+  final bool needsFlip;
+  final List<ChallengePoolItem>? candidates;
+  final ChallengePoolItem? selected;
+
+  const DailyChallengeState({required this.needsFlip, this.candidates, this.selected});
+
+  factory DailyChallengeState.needsFlipState(List<ChallengePoolItem> candidates) =>
+      DailyChallengeState(needsFlip: true, candidates: candidates);
+  factory DailyChallengeState.revealedState(ChallengePoolItem selected) =>
+      DailyChallengeState(needsFlip: false, selected: selected);
+}
+
+/// 用户拍摄画像
+class UserShootingProfile {
+  final int totalPhotos;
+  final Map<String, int> categoryCounts;
+  final Set<String> triedCategories;
+  final Set<String> untriedCategories;
+  final String? topCategory;
+
+  const UserShootingProfile({
+    required this.totalPhotos,
+    required this.categoryCounts,
+    required this.triedCategories,
+    required this.untriedCategories,
+    this.topCategory,
+  });
+}

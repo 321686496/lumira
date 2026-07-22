@@ -140,4 +140,22 @@ class GalleryDao {
       ORDER BY month DESC
     ''');
   }
+
+  /// 按拍摄目标分类统计照片数（通过 scene_id JOIN scenes.related_category）
+  Future<Map<String, int>> countByCategory() async {
+    final rows = await _db.rawQuery('''
+      SELECT s.related_category AS category, COUNT(*) AS cnt
+      FROM gallery_items g
+      LEFT JOIN scenes s ON g.scene_id = s.id
+      WHERE s.related_category IS NOT NULL
+      GROUP BY s.related_category
+    ''');
+    final result = <String, int>{};
+    for (final row in rows) {
+      final cat = row['category'] as String?;
+      final cnt = row['cnt'] as int? ?? 0;
+      if (cat != null) result[cat] = cnt;
+    }
+    return result;
+  }
 }

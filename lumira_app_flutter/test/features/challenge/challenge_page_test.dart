@@ -10,6 +10,9 @@ import 'package:go_router/go_router.dart';
 
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/features/challenge/data/challenge_models.dart';
+import 'package:lumira_app_flutter/features/challenge/data/challenge_pool.dart';
+import 'package:lumira_app_flutter/features/challenge/data/challenge_providers.dart';
 import 'package:lumira_app_flutter/features/challenge/pages/challenge_page.dart';
 
 /// Forced fix: picsum.photos 在测试环境对部分 seed（如纯数字 733872）返回 400，
@@ -125,11 +128,60 @@ void main() {
     FlutterError.onError = originalErrorHandler;
   });
 
+  /// 测试用预选数据：已翻牌状态，使用题库第一项
+  final testSelectedItem = ChallengePool.all.first;
+  final testRevealedState = DailyChallengeState.revealedState(testSelectedItem);
+  final testTip = ChallengeTip(
+    title: '测试技巧',
+    description: '测试技巧描述',
+    icon: Icons.camera_alt_outlined,
+    category: testSelectedItem.category,
+  );
+  final testSubs = <SubChallenge>[
+    SubChallenge(
+      id: 'sub_test_1',
+      title: '测试附加挑战 1',
+      icon: Icons.face_outlined,
+      status: ChallengeStatus.pending,
+      progressCurrent: 0,
+      progressTotal: 1,
+      rewardXP: 30,
+      tags: [ChallengeTag(label: '+30 XP', color: ChallengeTagColor.gold)],
+    ),
+    SubChallenge(
+      id: 'sub_test_2',
+      title: '测试附加挑战 2',
+      icon: Icons.landscape_outlined,
+      status: ChallengeStatus.pending,
+      progressCurrent: 0,
+      progressTotal: 1,
+      rewardXP: 25,
+      tags: [ChallengeTag(label: '+25 XP', color: ChallengeTagColor.gold)],
+    ),
+  ];
+  final testAchievements = <ChallengeAchievement>[
+    ChallengeAchievement(
+      id: 'first_challenge',
+      title: '初出茅庐',
+      description: '完成第 1 个挑战',
+      icon: Icons.flag_outlined,
+      unlocked: false,
+      progress: 0,
+    ),
+  ];
+
   Widget wrap(ThemeKey themeKey, UIStyle uiStyle) {
     return ProviderScope(
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        // 直接覆盖依赖数据库的 providers
+        dailyChallengeStateProvider
+            .overrideWith((ref) async => testRevealedState),
+        subChallengesProvider.overrideWith((ref) async => testSubs),
+        weeklyHistoryProvider.overrideWith((ref) async => <ChallengeHistoryRecord>[]),
+        challengeAchievementsProvider.overrideWith((ref) async => testAchievements),
+        challengeTipProvider.overrideWith((ref) async => testTip),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
@@ -143,13 +195,10 @@ void main() {
     }
   }
 
-  testWidgets('renders all main sections', (tester) async {
+  testWidgets('renders all main sections after flip', (tester) async {
     // Forced fix: 默认 800x600 视口无法显示 ListView 全部 section（offstage 项不构建）。
-    // 设置较大视口，使所有 section 进入可视区，让 find.text(...) 能找到 '附加挑战' / '连续打卡 7 天' 等靠后内容。
-    // 计算依据：LumiraNav(56) + MainChallengeCard(~320) + 32 + 附加挑战标题(28) + 16
-    // + 2 × SubChallengeRow(~140 + 100) + 12 + 32 + 明日预览标题(28) + 16 + TomorrowPreviewCard(~120)
-    // + 32 + StreakCard(~240) ≈ 1300dp。视口设 1800dp 留缓冲。
-    tester.binding.window.physicalSizeTestValue = const Size(800, 1800);
+    // 设置较大视口，使所有 section 进入可视区。
+    tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
@@ -159,32 +208,32 @@ void main() {
 
     expect(find.byType(ChallengePage), findsOneWidget);
     expect(find.text('每日挑战'), findsOneWidget);
-    // 主挑战卡
-    expect(find.text('今日挑战已完成'), findsOneWidget);
-    expect(find.text('用模板拍一张人像照'), findsOneWidget);
+    // 主挑战卡：使用题库第一项的标题
+    expect(find.text(testSelectedItem.title), findsOneWidget);
     // 附加挑战区块
     expect(find.text('附加挑战'), findsOneWidget);
     expect(find.text('1+2 弹性模式'), findsOneWidget);
-    // 支线挑战 A
-    expect(find.text('3个不同模板分别拍一张'), findsOneWidget);
-    // 支线挑战 B
-    expect(find.text('拍一张照片完成调色并导出'), findsOneWidget);
-    expect(find.text('去完成'), findsOneWidget);
-    // 明日预览
-    expect(find.text('明日挑战预览'), findsOneWidget);
-    expect(find.text('全部'), findsOneWidget);
-    expect(find.text('明日揭晓'), findsOneWidget);
+    // 测试附加挑战
+    expect(find.text('测试附加挑战 1'), findsOneWidget);
+    expect(find.text('测试附加挑战 2'), findsOneWidget);
+    expect(find.text('去完成'), findsWidgets);
+    // 本周日历
+    expect(find.text('本周日历'), findsOneWidget);
+    expect(find.text('查看本周挑战进度'), findsOneWidget);
+    // 挑战成就
+    expect(find.text('荣誉墙'), findsOneWidget);
+    expect(find.text('挑战成就'), findsOneWidget);
+    expect(find.text('初出茅庐'), findsOneWidget);
+    // 拍摄技巧
+    expect(find.text('拍摄技巧'), findsOneWidget);
+    expect(find.text('测试技巧'), findsOneWidget);
     // 连续打卡
-    expect(find.text('连续打卡 7 天'), findsOneWidget);
-    expect(find.text('继续保持，解锁连续打卡奖励！'), findsOneWidget);
-    // tip
-    expect(find.text('再坚持 1 天获得额外 50 XP'), findsOneWidget);
+    expect(find.text('连续打卡 1 天'), findsOneWidget);
   });
 
   testWidgets('tapping "去完成" pushes /challenge/detail with challengeId',
       (tester) async {
-    // Forced fix: "去完成" 按钮在 SubChallengeRow B 中，位于 ListView 中部，超出默认 600 视口。
-    tester.binding.window.physicalSizeTestValue = const Size(800, 1800);
+    tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
@@ -192,7 +241,7 @@ void main() {
     await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('去完成'));
+    await tester.tap(find.text('去完成').first);
     await tester.pumpAndSettle();
 
     expect(find.text('detail'), findsOneWidget);
@@ -204,7 +253,7 @@ void main() {
       await settleOrPump(tester, style);
 
       expect(find.byType(ChallengePage), findsOneWidget);
-      expect(find.text('今日挑战已完成'), findsOneWidget);
+      expect(find.text(testSelectedItem.title), findsOneWidget);
 
       await tester.pumpWidget(Container());
     }
@@ -216,25 +265,29 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(ChallengePage), findsOneWidget);
-      expect(find.text('今日挑战已完成'), findsOneWidget);
+      expect(find.text(testSelectedItem.title), findsOneWidget);
 
       await tester.pumpWidget(Container());
     }
   });
 
-  testWidgets('tapping "全部" pushes /challenge/detail', (tester) async {
-    // Forced fix: "全部" 链接在明日挑战预览区块标题右侧，位于 ListView 中下部，超出默认 600 视口。
-    tester.binding.window.physicalSizeTestValue = const Size(800, 1800);
-    tester.binding.window.devicePixelRatioTestValue = 1.0;
-    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
-    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
-
-    await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+  testWidgets('renders flip view when needsFlip state', (tester) async {
+    // 覆盖为 needsFlip 状态
+    final flipState = DailyChallengeState.needsFlipState(ChallengePool.all.take(3).toList());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+          uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+          dailyChallengeStateProvider.overrideWith((ref) async => flipState),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('全部'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('detail'), findsOneWidget);
+    expect(find.text('今日挑战翻牌'), findsOneWidget);
+    expect(find.text('从 3 张卡牌中选 1 张作为你的今日挑战'), findsOneWidget);
+    expect(find.text('点击翻开'), findsWidgets);
   });
 }

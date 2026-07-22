@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/features/challenge/data/challenge_pool.dart';
 import 'package:lumira_app_flutter/features/challenge/pages/challenge_detail_page.dart';
 
 /// Forced fix: picsum.photos 在测试环境对部分 seed（如 challenge-work-1）返回 400，
@@ -95,9 +96,13 @@ void main() {
   late GoRouter router;
   FlutterExceptionHandler? originalErrorHandler;
 
+  // 使用题库中真实存在的 id
+  const testChallengeId = 'portrait_001';
+  final testItem = ChallengePool.byId(testChallengeId)!;
+
   setUp(() {
     router = GoRouter(
-      initialLocation: '/challenge/detail?challengeId=tpl_123',
+      initialLocation: '/challenge/detail?challengeId=$testChallengeId',
       routes: [
         GoRoute(
           path: '/challenge',
@@ -154,9 +159,6 @@ void main() {
   testWidgets('renders all detail sections', (tester) async {
     // Forced fix: 默认 800x600 视口无法显示 ListView 全部 section（offstage 项不构建）。
     // 设置较大视口，使所有 section 进入可视区。
-    // 计算依据：LumiraNav(56) + HeroCard(~340) + 24 + 完成的作品标题(28) + 12 + WorkCard(3:4 图 ~430 + 信息 ~120 = ~550)
-    // + 24 + 挑战要求标题(28) + 12 + NeuCard(3 req × ~60 = 180) + 24 + 拍摄建议标题(28) + 12
-    // + NeuCard(3 tip × ~60 = 180) + 28 + 底部按钮(48) ≈ 1700dp。视口设 2400dp 留缓冲。
     tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
@@ -167,25 +169,21 @@ void main() {
 
     expect(find.byType(ChallengeDetailPage), findsOneWidget);
     expect(find.text('挑战详情'), findsOneWidget);
-    // Hero 卡
-    expect(find.text('用三分法构图拍一张人像'), findsOneWidget);
-    expect(find.text('今日主挑战'), findsOneWidget);
-    expect(find.text('已完成'), findsOneWidget);
-    expect(find.text('奖励 +30 XP'), findsOneWidget);
-    expect(find.text('1/1 已完成'), findsOneWidget);
-    // 完成的作品
-    expect(find.text('完成的作品'), findsOneWidget);
-    expect(find.text('午后窗边人像'), findsOneWidget);
+    // Hero 卡：标题来自题库
+    expect(find.text(testItem.title), findsOneWidget);
+    expect(find.text('人像'), findsOneWidget); // badge = 分类 label
+    expect(find.text('奖励 +${testItem.rewardXP} XP'), findsOneWidget);
+    expect(find.text('0/1 已完成'), findsOneWidget);
     // 挑战要求
     expect(find.text('挑战要求'), findsOneWidget);
-    expect(find.text('使用三分法构图'), findsOneWidget);
-    expect(find.text('拍摄人像照片'), findsOneWidget);
-    expect(find.text('自然光线'), findsOneWidget);
+    expect(find.text('完成主题拍摄'), findsOneWidget);
+    expect(find.text('应用拍摄技巧'), findsOneWidget);
+    expect(find.text('保存到画廊'), findsOneWidget);
     // 拍摄建议
     expect(find.text('拍摄建议'), findsOneWidget);
-    expect(find.text('光线选择'), findsOneWidget);
-    expect(find.text('构图技巧'), findsOneWidget);
-    expect(find.text('推荐模板'), findsOneWidget);
+    expect(find.text('技巧提示'), findsOneWidget);
+    expect(find.text('分类标签'), findsOneWidget);
+    expect(find.text('奖励'), findsOneWidget);
     // 底部按钮
     expect(find.text('返回挑战'), findsOneWidget);
     expect(find.text('再拍一张'), findsOneWidget);
@@ -218,7 +216,7 @@ void main() {
     await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
     await tester.pumpAndSettle();
 
-    router.push('/challenge/detail?challengeId=tpl_123');
+    router.push('/challenge/detail?challengeId=$testChallengeId');
     await tester.pumpAndSettle();
 
     expect(find.byType(ChallengeDetailPage), findsOneWidget);
@@ -236,7 +234,7 @@ void main() {
       await settleOrPump(tester, style);
 
       expect(find.byType(ChallengeDetailPage), findsOneWidget);
-      expect(find.text('用三分法构图拍一张人像'), findsOneWidget);
+      expect(find.text(testItem.title), findsOneWidget);
 
       await tester.pumpWidget(Container());
     }
@@ -248,9 +246,30 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(ChallengeDetailPage), findsOneWidget);
-      expect(find.text('用三分法构图拍一张人像'), findsOneWidget);
+      expect(find.text(testItem.title), findsOneWidget);
 
       await tester.pumpWidget(Container());
     }
+  });
+
+  testWidgets('shows "挑战不存在" when challengeId is invalid', (tester) async {
+    router = GoRouter(
+      initialLocation: '/challenge/detail?challengeId=nonexistent_id',
+      routes: [
+        GoRoute(
+          path: '/challenge/detail',
+          name: 'challengeDetail',
+          builder: (_, state) {
+            final challengeId = state.queryParams['challengeId'];
+            return ChallengeDetailPage(challengeId: challengeId);
+          },
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+    await tester.pumpAndSettle();
+
+    expect(find.text('挑战不存在'), findsOneWidget);
   });
 }

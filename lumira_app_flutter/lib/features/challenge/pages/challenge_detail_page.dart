@@ -9,8 +9,8 @@ import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../data/challenge_mock_data.dart';
 import '../data/challenge_models.dart';
+import '../data/challenge_pool.dart';
 import '../widgets/challenge_tag.dart';
 
 /// Challenge 详情页
@@ -70,11 +70,69 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
 
   void _goCapture() => GoRouter.of(context).push(RouteNames.capture);
 
+  /// 从题库构建挑战详情
+  ChallengeDetail? _buildDetailFromPool(String? challengeId) {
+    if (challengeId == null) return null;
+    final item = ChallengePool.byId(challengeId);
+    if (item == null) return null;
+
+    return ChallengeDetail(
+      id: item.id,
+      badge: ChallengeCategory.label(item.category),
+      title: item.title,
+      description: item.description,
+      rewardXP: item.rewardXP,
+      progressCurrent: 0,
+      progressTotal: 1,
+      status: ChallengeStatus.pending,
+      requirements: [
+        Requirement(
+          index: 1,
+          title: '完成主题拍摄',
+          description: '根据挑战标题完成一张符合主题的照片',
+          done: false,
+        ),
+        Requirement(
+          index: 2,
+          title: '应用拍摄技巧',
+          description: item.tip,
+          done: false,
+        ),
+        Requirement(
+          index: 3,
+          title: '保存到画廊',
+          description: '将作品保存到画廊完成挑战',
+          done: false,
+        ),
+      ],
+      tips: [
+        Tip(
+          icon: Icons.tips_and_updates_outlined,
+          iconColor: ChallengeTagColor.gold,
+          title: '技巧提示',
+          description: item.tip,
+        ),
+        Tip(
+          icon: Icons.category_outlined,
+          iconColor: ChallengeTagColor.green,
+          title: '分类标签',
+          description: '本挑战属于「${ChallengeCategory.label(item.category)}」分类',
+        ),
+        Tip(
+          icon: Icons.emoji_events_outlined,
+          iconColor: ChallengeTagColor.red,
+          title: '奖励',
+          description: '完成可获得 ${item.rewardXP} XP 经验值',
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     final style = ref.watch(uiStyleProvider);
-    final detail = ChallengeMockData.getDetailById(widget.challengeId);
+    final detail = _buildDetailFromPool(widget.challengeId);
 
     if (detail == null) {
       return Scaffold(

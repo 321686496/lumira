@@ -77,3 +77,36 @@ class Tables {
   static const String colShutterSound = 'shutter_sound';
   static const String colWatermark = 'watermark';
 }
+
+class ChallengeHistoryTable {
+  static const name = 'challenge_history';
+  static const colId = 'id';
+  static const colDate = 'date';
+  static const colChallengeId = 'challenge_id';
+  static const colCategory = 'category';
+  static const colTitle = 'title';
+  static const colRewardXp = 'reward_xp';
+  static const colStatus = 'status';
+  static const colSelectedAt = 'selected_at';
+  static const colCompletedAt = 'completed_at';
+  static const colSkippedAt = 'skipped_at';
+  static const colIsDaily = 'is_daily';
+
+  static const createSql = '''
+    CREATE TABLE $name (
+      $colId TEXT PRIMARY KEY,
+      $colDate TEXT NOT NULL,
+      $colChallengeId TEXT NOT NULL,
+      $colCategory TEXT NOT NULL,
+      $colTitle TEXT NOT NULL,
+      $colRewardXp INTEGER NOT NULL,
+      $colStatus TEXT NOT NULL,
+      $colSelectedAt INTEGER NOT NULL,
+      $colCompletedAt INTEGER,
+      $colSkippedAt INTEGER,
+      $colIsDaily INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
+  static const indexDateSql = 'CREATE INDEX idx_challenge_history_date ON $name ($colDate DESC)';
+  static const indexCategorySql = 'CREATE INDEX idx_challenge_history_category ON $name ($colCategory)';
+}

@@ -8,9 +8,10 @@ import 'tables.dart';
 import 'dao/templates_dao.dart';
 import 'dao/scenes_dao.dart';
 import 'dao/gallery_dao.dart';
+import '../../features/challenge/data/challenge_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 1;
+const int _kDbVersion = 2;
 
 /// 数据库 Provider
 /// 在应用启动时首次 read 时初始化（lazy），后续 read 返回同一实例
@@ -55,6 +56,11 @@ final scenesDaoProvider = FutureProvider<ScenesDao>((ref) async {
 final galleryDaoProvider = FutureProvider<GalleryDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return GalleryDao(db);
+});
+
+final challengeDaoProvider = FutureProvider<ChallengeDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return ChallengeDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -181,9 +187,17 @@ Future<void> _onCreate(Database db, int version) async {
   });
 
   await batch.commit(noResult: true);
+
+  await db.execute(ChallengeHistoryTable.createSql);
+  await db.execute(ChallengeHistoryTable.indexDateSql);
+  await db.execute(ChallengeHistoryTable.indexCategorySql);
 }
 
 Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-  // 当前 v1，未来版本迁移在此扩展
   // 不做 destructive 迁移（不 DROP TABLE），保留用户数据
+  if (oldVersion < 2) {
+    await db.execute(ChallengeHistoryTable.createSql);
+    await db.execute(ChallengeHistoryTable.indexDateSql);
+    await db.execute(ChallengeHistoryTable.indexCategorySql);
+  }
 }

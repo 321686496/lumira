@@ -8,21 +8,24 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
-import '../data/challenge_mock_data.dart';
+import '../data/challenge_models.dart';
+import '../data/challenge_providers.dart';
+import '../widgets/achievement_wall_card.dart';
+import '../widgets/challenge_tip_card.dart';
+import '../widgets/daily_flip_card.dart';
 import '../widgets/main_challenge_card.dart';
-import '../widgets/sub_challenge_row.dart';
-import '../widgets/tomorrow_preview_card.dart';
 import '../widgets/streak_card.dart';
+import '../widgets/sub_challenge_row.dart';
+import '../widgets/weekly_calendar_card.dart';
 
 /// Challenge 列表页
 ///
-/// 视觉规格来源：lumira-app/src/pages/challenge/index.vue
 /// 5 个 section:
 /// 1. LumiraNav（标题"每日挑战" + 右侧 clipboard-text 图标）
-/// 2. MainChallengeCard（主挑战，已完成态）
-/// 3. 附加挑战区块（区块标题 + 2 个 SubChallengeRow）
-/// 4. 明日挑战预览（区块标题 + "全部" 链接 + TomorrowPreviewCard）
-/// 5. 连续打卡（StreakCard）
+/// 2. 翻牌流程（每天首次进入触发，3 张卡牌选 1）
+/// 3. 主挑战卡 + 附加挑战
+/// 4. 本周日历 / 挑战成就 / 拍摄技巧
+/// 5. 连续打卡
 class ChallengePage extends ConsumerStatefulWidget {
   const ChallengePage({super.key});
 
@@ -33,6 +36,7 @@ class ChallengePage extends ConsumerStatefulWidget {
 class _ChallengePageState extends ConsumerState<ChallengePage> {
   final ScrollController _scrollController = ScrollController();
   bool _scrolled = false;
+  bool _selecting = false;
 
   static const double _scrollThreshold = 10.0;
 
@@ -65,14 +69,29 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
     );
   }
 
-  void _goAllTomorrow() {
-    // mock 阶段无实际"全部"页，复用 detail 路由占位
-    GoRouter.of(context).push(RouteNames.challengeDetail);
+  Future<void> _onFlipSelected(ChallengePoolItem selected) async {
+    if (_selecting) return;
+    setState(() => _selecting = true);
+    try {
+      final repo = await ref.read(challengeRepositoryProvider.future);
+      await repo.recordDailySelection(selected);
+      // 刷新相关 providers
+      ref.invalidate(dailyChallengeStateProvider);
+      ref.invalidate(challengeTipProvider);
+      ref.invalidate(subChallengesProvider);
+      ref.invalidate(weeklyHistoryProvider);
+      ref.invalidate(challengeAchievementsProvider);
+    } finally {
+      if (mounted) {
+        setState(() => _selecting = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final asyncState = ref.watch(dailyChallengeStateProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -94,8 +113,10 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
               ),
             ),
           ),
-          // Forced fix: glass 风格彩色斑点背景
-          const Positioned.fill(child: GlassBackground(variant: GlassBackgroundVariant.challenge)),
+          // glass 风格彩色斑点背景
+          const Positioned.fill(
+            child: GlassBackground(variant: GlassBackgroundVariant.challenge),
+          ),
           // 主内容
           SafeArea(
             child: Column(
@@ -118,67 +139,39 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
                   ],
                 ),
                 Expanded(
-                  child: ListView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
-                    children: [
-                      // 1. 主挑战卡
-                      const FadeUp(
-                        child: MainChallengeCard(
-                          challenge: ChallengeMockData.mainChallenge,
-                        ),
+                  child: asyncState.when(
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                    error: (e, _) => Center(
+                      child: Text(
+                        '加载失败',
+                        style: TextStyle(color: tokens.textSecondary),
                       ),
-                      const SizedBox(height: 32), // margin-top 64rpx → 32dp
-                      // 2. 附加挑战区块
-                      const FadeUp(
-                        delay: Duration(milliseconds: 80),
-                        child: _SectionTitle(
-                          title: '附加挑战',
-                          subtitle: '1+2 弹性模式',
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ...ChallengeMockData.subChallenges.asMap().entries.map(
-                            (entry) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: FadeUp(
-                                delay: Duration(
-                                  milliseconds: 160 + entry.key * 80,
-                                ),
-                                child: SubChallengeRow(
-                                  challenge: entry.value,
-                                  onGoComplete: () =>
-                                      _goDetail(entry.value.id),
-                                ),
-                              ),
-                            ),
+                    ),
+                    data: (state) {
+                      if (state.needsFlip && state.candidates != null) {
+                        return _FlipView(
+                          candidates: state.candidates!,
+                          onSelected: _onFlipSelected,
+                          scrollController: _scrollController,
+                        );
+                      }
+                      final selected = state.selected;
+                      if (selected == null) {
+                        return Center(
+                          child: Text(
+                            '暂无挑战',
+                            style: TextStyle(color: tokens.textSecondary),
                           ),
-                      const SizedBox(height: 32),
-                      // 3. 明日挑战预览
-                      FadeUp(
-                        delay: const Duration(milliseconds: 320),
-                        child: _SectionTitle(
-                          title: '明日挑战预览',
-                          trailing: _SectionLink(
-                            text: '全部',
-                            onTap: _goAllTomorrow,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const FadeUp(
-                        delay: Duration(milliseconds: 320),
-                        child: TomorrowPreviewCard(
-                          preview: ChallengeMockData.tomorrowPreview,
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      // 4. 连续打卡
-                      const FadeUp(
-                        delay: Duration(milliseconds: 400),
-                        child: StreakCard(streak: ChallengeMockData.streak),
-                      ),
-                    ],
+                        );
+                      }
+                      return _RevealedView(
+                        selected: selected,
+                        scrollController: _scrollController,
+                        goDetail: _goDetail,
+                      );
+                    },
                   ),
                 ),
               ],
@@ -193,6 +186,222 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 翻牌视图：3 张卡牌翻面选 1
+class _FlipView extends StatelessWidget {
+  const _FlipView({
+    required this.candidates,
+    required this.onSelected,
+    required this.scrollController,
+  });
+
+  final List<ChallengePoolItem> candidates;
+  final void Function(ChallengePoolItem selected) onSelected;
+  final ScrollController scrollController;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 32, 20, 100),
+      children: [
+        FadeUp(
+          child: Column(
+            children: [
+              Icon(
+                Icons.casino_outlined,
+                size: 40,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '今日挑战翻牌',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '从 3 张卡牌中选 1 张作为你的今日挑战',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+        FadeUp(
+          delay: const Duration(milliseconds: 80),
+          child: DailyFlipCard(
+            candidates: candidates,
+            onSelected: onSelected,
+          ),
+        ),
+        const SizedBox(height: 32),
+        FadeUp(
+          delay: const Duration(milliseconds: 160),
+          child: Text(
+            '提示：挑战基于你的拍摄偏好智能推荐，每天首次进入触发翻牌',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.5),
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 翻牌完成后的正常视图
+class _RevealedView extends ConsumerWidget {
+  const _RevealedView({
+    required this.selected,
+    required this.scrollController,
+    required this.goDetail,
+  });
+
+  final ChallengePoolItem selected;
+  final ScrollController scrollController;
+  final void Function(String id) goDetail;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    final asyncSubs = ref.watch(subChallengesProvider);
+
+    final mainChallenge = MainChallenge(
+      title: selected.title,
+      description: selected.description,
+      rewardXP: selected.rewardXP,
+      status: ChallengeStatus.pending,
+      coverImage: 'https://picsum.photos/seed/${selected.id}/400/600',
+      tags: [
+        ChallengeTag(
+          label: '+${selected.rewardXP} XP',
+          color: ChallengeTagColor.gold,
+        ),
+        ChallengeTag(
+          label: ChallengeCategory.label(selected.category),
+          color: ChallengeTagColor.green,
+        ),
+      ],
+    );
+
+    return ListView(
+      controller: scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+      children: [
+        // 1. 主挑战卡
+        FadeUp(child: MainChallengeCard(challenge: mainChallenge)),
+        const SizedBox(height: 32),
+        // 2. 附加挑战
+        const FadeUp(
+          delay: Duration(milliseconds: 80),
+          child: _SectionTitle(
+            title: '附加挑战',
+            subtitle: '1+2 弹性模式',
+          ),
+        ),
+        const SizedBox(height: 16),
+        asyncSubs.when(
+          loading: () => const SizedBox(
+            height: 100,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => SizedBox(
+            height: 100,
+            child: Center(
+              child: Text(
+                '加载失败',
+                style: TextStyle(color: tokens.textSecondary),
+              ),
+            ),
+          ),
+          data: (subs) {
+            return Column(
+              children: subs.asMap().entries.map((entry) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: FadeUp(
+                    delay: Duration(milliseconds: 160 + entry.key * 80),
+                    child: SubChallengeRow(
+                      challenge: entry.value,
+                      onGoComplete: () => goDetail(entry.value.id),
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+        const SizedBox(height: 32),
+        // 3. 本周日历
+        const FadeUp(
+          delay: Duration(milliseconds: 240),
+          child: _SectionTitle(
+            title: '本周日历',
+            subtitle: '查看本周挑战进度',
+          ),
+        ),
+        const SizedBox(height: 16),
+        const FadeUp(
+          delay: Duration(milliseconds: 240),
+          child: WeeklyCalendarCard(),
+        ),
+        const SizedBox(height: 32),
+        // 4. 挑战成就墙
+        const FadeUp(
+          delay: Duration(milliseconds: 320),
+          child: _SectionTitle(
+            title: '荣誉墙',
+            subtitle: '解锁更多荣誉',
+          ),
+        ),
+        const SizedBox(height: 16),
+        const FadeUp(
+          delay: Duration(milliseconds: 320),
+          child: AchievementWallCard(),
+        ),
+        const SizedBox(height: 32),
+        // 5. 拍摄技巧
+        const FadeUp(
+          delay: Duration(milliseconds: 400),
+          child: _SectionTitle(
+            title: '拍摄技巧',
+            subtitle: '提升你的拍摄水平',
+          ),
+        ),
+        const SizedBox(height: 16),
+        const FadeUp(
+          delay: Duration(milliseconds: 400),
+          child: ChallengeTipCard(),
+        ),
+        const SizedBox(height: 32),
+        // 6. 连续打卡
+        const FadeUp(
+          delay: Duration(milliseconds: 480),
+          child: StreakCard(
+            streak: StreakInfo(
+              currentStreak: 1,
+              totalDays: 1,
+              nextRewardXP: 50,
+              tipMessage: '完成今日挑战获得 XP 奖励',
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -216,7 +425,7 @@ class _SectionTitle extends StatelessWidget {
                 child: Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 17, // 34rpx → 17dp
+                    fontSize: 17,
                     fontWeight: FontWeight.w600,
                     height: 1.2,
                   ),
@@ -231,7 +440,11 @@ class _SectionTitle extends StatelessWidget {
                     subtitle!,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                      color: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.color
+                          ?.withOpacity(0.5),
                       letterSpacing: 0.4,
                     ),
                     maxLines: 1,
@@ -244,37 +457,6 @@ class _SectionTitle extends StatelessWidget {
         ),
         if (trailing != null) trailing!,
       ],
-    );
-  }
-}
-
-class _SectionLink extends StatelessWidget {
-  const _SectionLink({required this.text, required this.onTap});
-
-  final String text;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
-            ),
-          ),
-          Icon(
-            Icons.arrow_forward_ios,
-            size: 10,
-            color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
-          ),
-        ],
-      ),
     );
   }
 }
