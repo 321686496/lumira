@@ -39,6 +39,8 @@ dependencies:
 
   # 本地数据库
   sqflite: ^2.2.6
+  # Forced fix: HarmonyOS 平台缺少 sqflite 原生插件，需用 FFI 实现
+  sqflite_common_ffi: ^2.2.0+1
 
   # 图像处理
   gpu_image: ^1.0.0
@@ -72,7 +74,7 @@ dev_dependencies:
   mocktail: ^0.3.0
   # sqflite 测试支持（in-memory 数据库，无需真实设备）
   # brief ^2.3.0 → 调整为兼容 Dart 2.19 的版本，2.3+ 需 Dart 3
-  sqflite_common_ffi: ^2.2.0+1
+  # 已移到 dependencies 中（HarmonyOS 生产环境也需要 FFI）
 
 # Harmony 3.7 适配版本依赖覆盖
 # 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md （3.7 推荐版本列）
@@ -122,3 +124,4 @@ flutter:
     - assets/images/
     - assets/images/templates/
     - assets/images/scenes/
+    - assets/native/

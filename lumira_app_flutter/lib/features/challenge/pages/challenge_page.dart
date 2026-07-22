@@ -144,9 +144,13 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
                       child: CircularProgressIndicator(),
                     ),
                     error: (e, _) => Center(
-                      child: Text(
-                        '加载失败',
-                        style: TextStyle(color: tokens.textSecondary),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          '加载失败: $e',
+                          style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
                     data: (state) {
