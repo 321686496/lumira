@@ -2,6 +2,7 @@ import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
 import 'package:lumira_app_flutter/features/capture/domain/filter_recipe.dart';
 import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
@@ -131,14 +132,26 @@ class CameraPreview extends ConsumerWidget {
       saveConfig: SaveConfig.photo(
         pathBuilder: () async {
           // 1.4.0: pathBuilder 返回 Future<String>（路径），由调用方决定保存位置
-          // 使用 path_provider 生成时间戳路径，确保 takePhoto() 能成功写入文件
-          final dir = await getTemporaryDirectory();
+          // 修复：HarmonyOS 平台缺少 path_provider 原生插件，
+          // getTemporaryDirectory() 会抛出 MissingPluginException。
+          // 回退到 getDatabasesPath()（sqflite_ffi 内置实现，不依赖原生插件）。
           final ts = DateTime.now().millisecondsSinceEpoch;
-          return '${dir.path}/capture_$ts.jpg';
+          try {
+            final dir = await getTemporaryDirectory();
+            return '${dir.path}/capture_$ts.jpg';
+          } catch (_) {
+            // HarmonyOS 回退：使用 getDatabasesPath() 获取可写目录
+            final dbPath = await getDatabasesPath();
+            return '$dbPath/capture_$ts.jpg';
+          }
         },
       ),
       sensor: facing == 'front' ? Sensors.front : Sensors.back,
       flashMode: _mapFlashMode(flashMode),
+      // 修复：恢复 cover 模式让取景器全屏无黑边。
+      // 拍照后的照片通过 PhotoPostProcessor 按 aspectRatio 裁剪，
+      // 保证照片与取景器显示内容一致。
+      previewFit: CameraPreviewFit.cover,
       // builder 返回空 widget，移除 camerawesome 自带的 AwesomeCameraLayout
       // （顶部闪光灯按钮、中间滤镜/模式选择器、底部拍摄按钮/摄像头切换/缩略图）
       // 所有 UI 由项目自定义组件通过 Stack 叠加在 CameraPreview 上

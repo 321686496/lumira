@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -50,7 +52,7 @@ class PhotoCell extends ConsumerWidget {
         ),
       );
     }
-    // 兼容 dataUrl (base64 / http) 和 filePath
+    // 兼容 dataUrl (http) 和 filePath (本地路径)
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return Image.network(
         url,
@@ -61,9 +63,9 @@ class PhotoCell extends ConsumerWidget {
         ),
       );
     }
-    // 本地文件路径（filePath）
-    return Image.asset(
-      url,
+    // 本地文件路径（filePath）— 修复：原代码用 Image.asset，应使用 Image.file
+    return Image.file(
+      File(url),
       fit: BoxFit.cover,
       errorBuilder: (context, error, stack) => Container(
         color: tokens.surfaceAlt,

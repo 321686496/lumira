@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -48,14 +51,27 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
   // 不解析。改为在 build() 的 daoAsync.when(data:) 分支中提取 dao 并传入。
   Future<void> _loadPhoto(GalleryDao dao) async {
     try {
-      final photo = widget.photoId == null ? null : await dao.getById(widget.photoId!);
+      debugPrint('[gallery-detail] _loadPhoto: photoId=${widget.photoId}');
+      if (widget.photoId == null) {
+        debugPrint('[gallery-detail] photoId 为 null');
+        if (mounted) {
+          setState(() {
+            _photo = null;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+      final photo = await dao.getById(widget.photoId!);
+      debugPrint('[gallery-detail] getById 结果: ${photo == null ? "null" : "id=${photo.id}, filePath=${photo.filePath}"}');
       if (mounted) {
         setState(() {
           _photo = photo;
           _isLoading = false;
         });
       }
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('[gallery-detail] _loadPhoto 异常: $e\n$st');
       if (mounted) {
         setState(() {
           _photo = null;
@@ -258,7 +274,7 @@ class _CanvasArea extends StatelessWidget {
               )
             : url.startsWith('http')
                 ? Image.network(url, fit: BoxFit.contain)
-                : Image.asset(url, fit: BoxFit.contain),
+                : Image.file(File(url), fit: BoxFit.contain),
       ),
     );
   }

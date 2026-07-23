@@ -19,6 +19,10 @@
     {
       "name": "permission_microphone_reason",
       "value": "Used for recording audio when capturing videos"
+    },
+    {
+      "name": "permission_write_imagevideo_reason",
+      "value": "Used for saving captured photos to the system album"
     }
   ]
 }

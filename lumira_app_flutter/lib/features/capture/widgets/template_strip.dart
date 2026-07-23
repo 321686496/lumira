@@ -27,9 +27,13 @@ class TemplateStrip extends ConsumerWidget {
           final tpl = templates[i];
           final active = tpl.meta.id == currentId;
           return GestureDetector(
-            onTap: () => ref
-                .read(CaptureState.currentTemplateIdProvider.notifier)
-                .state = tpl.meta.id,
+            onTap: () {
+              // toggle 行为：点击已选中模板则取消（回到自由拍摄），否则选中
+              final next = active ? null : tpl.meta.id;
+              ref
+                  .read(CaptureState.currentTemplateIdProvider.notifier)
+                  .state = next;
+            },
             child: Container(
               width: compact ? 60 : 72,
               margin: const EdgeInsets.only(right: 8),

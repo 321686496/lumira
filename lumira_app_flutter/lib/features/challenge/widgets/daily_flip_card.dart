@@ -120,13 +120,14 @@ class _DailyFlipCardState extends ConsumerState<DailyFlipCard>
     }
 
     // 翻牌前：3 张背面朝上的卡牌
+    // 修复 Row overflow：3*120=360 > 容器 333，缩小到 95 避免溢出
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         for (int i = 0; i < 3; i++)
           GestureDetector(
             onTap: () => _onCardTap(i),
-            child: _CardBack(tokens: tokens, size: 120, index: i),
+            child: _CardBack(tokens: tokens, size: 95, index: i),
           ),
       ],
     );

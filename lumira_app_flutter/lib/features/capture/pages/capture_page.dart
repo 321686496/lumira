@@ -6,10 +6,14 @@ import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/router/route_names.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
+import '../services/photo_post_processor.dart';
+import '../widgets/aspect_ratio_mask.dart';
+import '../widgets/aspect_ratio_selector.dart';
 import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
 import '../widgets/camera_preview.dart';
@@ -40,11 +44,24 @@ class CapturePage extends ConsumerStatefulWidget {
   ConsumerState<CapturePage> createState() => _CapturePageState();
 }
 
+/// 相机权限状态
+enum CameraPermissionStatus { unknown, granted, denied, permanentlyDenied }
+
 class _CapturePageState extends ConsumerState<CapturePage>
     with WidgetsBindingObserver {
   bool _isLandscape = false;
   StreamSubscription<MediaCapture?>? _captureSub;
   CameraState? _lastState;
+  CameraPermissionStatus _permissionStatus = CameraPermissionStatus.unknown;
+
+  /// 拍照处理中标志：防止用户快速连续拍照导致文件并发写入冲突
+  /// （之前的"照片只有一半/空白"问题的次要原因之一）
+  bool _isProcessing = false;
+
+  /// 相机重建 key：每次 app 从后台恢复时递增，
+  /// 强制 CameraAwesomeBuilder 销毁旧实例并创建新实例，
+  /// 确保原生相机被重新初始化（修复取景器一直转圈的问题）。
+  int _cameraRebuildKey = 0;
 
   @override
   void initState() {
@@ -53,12 +70,37 @@ class _CapturePageState extends ConsumerState<CapturePage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
           widget.templateId;
+      _requestCameraPermission();
+    });
+  }
+
+  /// 请求相机权限
+  /// 修复：原代码从未调用 permission_handler 请求运行时权限，
+  /// 导致 CameraAwesomeBuilder 无法初始化，cameraStateProvider 始终为 null，
+  /// _onCapture() 永远显示"相机正在初始化，请稍候..."
+  Future<void> _requestCameraPermission() async {
+    final status = await Permission.camera.request();
+    if (!mounted) return;
+    setState(() {
+      switch (status) {
+        case PermissionStatus.granted:
+          _permissionStatus = CameraPermissionStatus.granted;
+          break;
+        case PermissionStatus.permanentlyDenied:
+          _permissionStatus = CameraPermissionStatus.permanentlyDenied;
+          break;
+        default:
+          _permissionStatus = CameraPermissionStatus.denied;
+      }
     });
   }
 
   @override
   void dispose() {
     _captureSub?.cancel();
+    // 清除 cameraStateProvider 中的旧 CameraState 引用，
+    // 防止下次进入拍摄页时残留的旧状态影响新相机初始化
+    ref.read(CaptureState.cameraStateProvider.notifier).state = null;
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -70,6 +112,24 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final newIsLandscape = size.width > size.height;
     if (newIsLandscape != _isLandscape) {
       setState(() => _isLandscape = newIsLandscape);
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // App 从后台恢复时，原生相机已被释放并重新初始化（CameraAbilityLifecycle.ets），
+      // 但 Dart 侧的 AwesomeCameraPreview 仍持有旧的 textureId/previewSize，
+      // 且 _CameraWidgetBuilder.didChangeAppLifecycleState(resumed) 不做任何处理。
+      // 解决方案：递增 _cameraRebuildKey，通过 ValueKey 强制 CameraAwesomeBuilder
+      // 完全重建（旧实例 dispose → CamerawesomePlugin.stop()，新实例 init → setupCamera()），
+      // 确保取景器获取新的 textureId 和 previewSize。
+      debugPrint('[capture] App resumed, forcing camera re-initialization');
+      setState(() {
+        _cameraRebuildKey++;
+        _lastState = null;
+      });
     }
   }
 
@@ -86,19 +146,67 @@ class _CapturePageState extends ConsumerState<CapturePage>
     if (_lastState == state) return;
     _lastState = state;
     ref.read(CaptureState.cameraStateProvider.notifier).state = state;
+    debugPrint('[capture] CameraState created, cameraStateProvider set');
 
     _captureSub?.cancel();
-    _captureSub = state.captureState$.listen((media) {
+    _captureSub = state.captureState$.listen((media) async {
+      debugPrint('[capture] captureState\$ event: status=${media?.status}, path=${media?.filePath}');
       if (media != null &&
           media.status == MediaCaptureStatus.success &&
           media.filePath.isNotEmpty) {
+        // 并发保护：如果上一次拍照还在处理中，跳过本次（防止文件并发写入冲突）
+        if (_isProcessing) {
+          debugPrint('[capture] 上一次拍照处理中，跳过本次');
+          return;
+        }
+        _isProcessing = true;
+
         ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
             media.filePath;
+
+        // 应用后期参数（滤镜、色彩、锐化等）和 aspectRatio 裁剪到照片文件
+        final params = ref.read(CaptureState.effectivePostProcessProvider);
+        final rawMode = ref.read(CaptureState.rawModeProvider);
+        final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
+        // 获取屏幕宽高比，用于 fullscreen 模式按取景器裁剪
+        final screenSize = MediaQuery.of(context).size;
+        final screenRatio = screenSize.width / screenSize.height;
+        final processedPath = await PhotoPostProcessor.processFile(
+          inputPath: media.filePath,
+          params: params,
+          rawMode: rawMode,
+          aspectRatio: aspectRatio,
+          screenRatio: screenRatio,
+        );
+
+        _isProcessing = false;
+
+        // 拍照成功后自动导航到预览页
+        if (!mounted) return;
+        GoRouter.of(context).push(
+          '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(processedPath)}',
+        );
       }
     });
 
     final flashMode = ref.read(CaptureState.flashModeProvider);
     state.sensorConfig.setFlashMode(_mapFlashMode(flashMode));
+
+    // 修复：前置摄像头默认开启镜像，让预览与用户预期一致（像照镜子）
+    // 拍照保存的照片也会同步镜像，避免"拍出来与预览水平翻转"的问题
+    final facing = ref.read(CaptureState.cameraFacingProvider);
+    final isFront = facing == 'front';
+    state.sensorConfig.setMirrorFrontCamera(isFront);
+    debugPrint('[capture] setMirrorFrontCamera($isFront)');
+
+    // 修复：前置摄像头默认放大一点，避免画面看起来被缩小
+    // zoom 范围 [0.0, 1.0]，0.15 表示 1.5x 左右的缩放
+    if (isFront) {
+      try {
+        state.sensorConfig.setZoom(0.15);
+        ref.read(CaptureState.zoomProvider.notifier).state = 0.15;
+      } catch (_) {}
+    }
   }
 
   FlashMode _mapFlashMode(CaptureFlashMode mode) {
@@ -115,10 +223,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
   }
 
   /// 拍照：通过 CameraState.when 调用 PhotoCameraState.takePhoto()
-  /// 修复 Bug 1：添加错误反馈，避免静默失败
-  void _onCapture() {
+  /// 修复：加诊断日志 + async/await 捕获异步异常
+  Future<void> _onCapture() async {
+    debugPrint('[capture] _onCapture() called');
+
+    // 防抖：处理中或已导航到预览页时忽略新的拍照请求
+    if (_isProcessing) {
+      debugPrint('[capture] 处理中，忽略拍照请求');
+      return;
+    }
+
     final state = ref.read(CaptureState.cameraStateProvider);
     if (state == null) {
+      debugPrint('[capture] cameraState is null — CameraAwesomeBuilder 未初始化');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('相机正在初始化，请稍候...'),
@@ -127,11 +245,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
       );
       return;
     }
+    debugPrint('[capture] cameraState OK, calling takePhoto()...');
     try {
-      state.when(
+      await state.when(
         onPhotoMode: (photoState) => photoState.takePhoto(),
       );
-    } catch (e) {
+      debugPrint('[capture] takePhoto() completed (no exception)');
+    } catch (e, st) {
+      debugPrint('[capture] takePhoto() failed: $e\n$st');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('拍照失败：$e'),
@@ -156,6 +278,19 @@ class _CapturePageState extends ConsumerState<CapturePage>
       state.switchCameraSensor(
         flash: _mapFlashMode(ref.read(CaptureState.flashModeProvider)),
       );
+      // 切换后同步镜像设置：前置开启，后置关闭
+      final isFront = next == 'front';
+      state.sensorConfig.setMirrorFrontCamera(isFront);
+      debugPrint('[capture] switchCamera: setMirrorFrontCamera($isFront)');
+      // 前置摄像头默认放大一点
+      if (isFront) {
+        try {
+          state.sensorConfig.setZoom(0.15);
+          ref.read(CaptureState.zoomProvider.notifier).state = 0.15;
+        } catch (_) {}
+      } else {
+        ref.read(CaptureState.zoomProvider.notifier).state = 0.0;
+      }
     }
   }
 
@@ -199,15 +334,48 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
     });
 
+    // 权限未授予时显示权限引导 UI
+    if (_permissionStatus == CameraPermissionStatus.unknown ||
+        _permissionStatus == CameraPermissionStatus.denied) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: _CameraPermissionGuide(
+          status: _permissionStatus,
+          onRetry: _requestCameraPermission,
+          onBack: _onBack,
+        ),
+      );
+    }
+
+    if (_permissionStatus == CameraPermissionStatus.permanentlyDenied) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: _CameraPermissionGuide(
+          status: _permissionStatus,
+          onRetry: _requestCameraPermission,
+          onBack: _onBack,
+          onOpenSettings: () => openAppSettings(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
           // 1. 取景器 + 叠图
+          // key 绑定 _cameraRebuildKey：app 恢复时 key 变化，
+          // 强制 CameraPreview（及其内部的 CameraAwesomeBuilder）完全重建
           CameraPreview(
+            key: ValueKey('camera_preview_$_cameraRebuildKey'),
             onCaptured: _onCaptured,
             onCameraStateCreated: _onCameraStateCreated,
+          ),
+
+          // 1.5 比例遮罩（非全屏比例时显示上下/左右黑边遮罩）
+          const Positioned.fill(
+            child: AspectRatioMask(),
           ),
 
           // 2. 导航栏（始终保留：含返回 + 全屏切换 + 闪光灯）
@@ -218,10 +386,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: CaptureNav(onBack: _onBack),
           ),
 
-          // 3. 顶部参数 pill 栏（全屏模式下隐藏）
+          // 2.5 比例切换器（导航栏下方居中）
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 64,
+            left: 0,
+            right: 0,
+            child: const Center(child: AspectRatioSelector()),
+          ),
+
+          // 3. 顶部参数 pill 栏（全屏模式下隐藏，下移避开比例切换器）
           if (!isFullscreen)
             Positioned(
-              top: MediaQuery.of(context).padding.top + 72,
+              top: MediaQuery.of(context).padding.top + 112,
               left: 12,
               right: 12,
               child: const ParamPillBar(),
@@ -486,6 +662,115 @@ class _CaptureButtonRow extends ConsumerWidget {
                 Icons.cameraswitch_outlined,
                 color: Colors.white,
                 size: 24,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 相机权限引导页
+/// 在权限未授予时显示，提供重新请求/跳转系统设置的入口
+class _CameraPermissionGuide extends StatelessWidget {
+  const _CameraPermissionGuide({
+    required this.status,
+    required this.onRetry,
+    required this.onBack,
+    this.onOpenSettings,
+  });
+
+  final CameraPermissionStatus status;
+  final VoidCallback onRetry;
+  final VoidCallback onBack;
+  final VoidCallback? onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isPermanentlyDenied =
+        status == CameraPermissionStatus.permanentlyDenied;
+    final String message = isPermanentlyDenied
+        ? '相机权限已被永久拒绝，请在系统设置中手动开启相机权限后返回应用。'
+        : '需要相机权限才能进行拍摄，请授予相机权限。';
+    final String actionText = isPermanentlyDenied ? '前往设置' : '重新授权';
+
+    return SafeArea(
+      child: Stack(
+        children: [
+          // 返回按钮
+          Positioned(
+            top: 0,
+            left: 0,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+              onPressed: onBack,
+            ),
+          ),
+          // 居中引导内容
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.camera_alt_outlined,
+                    size: 64,
+                    color: Colors.white54,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    '相机权限未开启',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  // 主操作按钮
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFC9A96E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: isPermanentlyDenied
+                          ? onOpenSettings
+                          : onRetry,
+                      child: Text(actionText),
+                    ),
+                  ),
+                  if (isPermanentlyDenied) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white70,
+                        ),
+                        onPressed: onRetry,
+                        child: const Text('返回后重试'),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),

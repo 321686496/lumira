@@ -38,9 +38,14 @@ dependencies:
   path_provider: ^2.0.14
 
   # 本地数据库
-  sqflite: ^2.2.6
-  # Forced fix: HarmonyOS 平台缺少 sqflite 原生插件，需用 FFI 实现
-  sqflite_common_ffi: ^2.2.0+1
+  # CPF-Flutter 鸿蒙适配版 sqflite 2.2.8+4（对应 Flutter 3.7）
+  # 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md 第 49 行
+  # pub.dev 版本无 ohos 原生插件，FFI 方案因 .so 重定位类型不兼容已废弃
+  sqflite:
+    git:
+      url: https://gitcode.com/CPF-Flutter/flutter_sqflite.git
+      ref: master
+      path: sqflite
 
   # 图像处理
   gpu_image: ^1.0.0
@@ -73,8 +78,13 @@ dev_dependencies:
   # brief ^1.0.3 → 调整为兼容 Dart 2.19 的版本，1.x 需 Dart 3
   mocktail: ^0.3.0
   # sqflite 测试支持（in-memory 数据库，无需真实设备）
-  # brief ^2.3.0 → 调整为兼容 Dart 2.19 的版本，2.3+ 需 Dart 3
-  # 已移到 dependencies 中（HarmonyOS 生产环境也需要 FFI）
+  # 仅用于桌面测试环境，HarmonyOS 生产环境使用 CPF-Flutter sqflite 原生插件
+  # 必须与 sqflite 同源（git），否则 pub 会因 sqflite_common 来源冲突报错
+  sqflite_common_ffi:
+    git:
+      url: https://gitcode.com/CPF-Flutter/flutter_sqflite.git
+      ref: master
+      path: sqflite_common_ffi
 
 # Harmony 3.7 适配版本依赖覆盖
 # 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md （3.7 推荐版本列）
@@ -124,4 +134,3 @@ flutter:
     - assets/images/
     - assets/images/templates/
     - assets/images/scenes/
-    - assets/native/

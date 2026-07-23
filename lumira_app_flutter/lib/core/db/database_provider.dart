@@ -1,7 +1,5 @@
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'tables.dart';
@@ -14,25 +12,10 @@ const String _kDbName = 'lumira.db';
 const int _kDbVersion = 2;
 
 /// 数据库 Provider
-/// 在应用启动时首次 read 时初始化（lazy），后续 read 返回同一实例
-///
-/// Forced fix: HarmonyOS 平台缺少 path_provider 原生实现，
-/// 调用 getApplicationDocumentsDirectory() 会抛 MissingPluginException。
-/// 降级到 sqflite.getDatabasePath()（sqflite 内置的默认路径）。
+/// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
 final databaseProvider = FutureProvider<Database>((ref) async {
-  String dbPath;
-  try {
-    final docsDir = await getApplicationDocumentsDirectory();
-    dbPath = p.join(docsDir.path, _kDbName);
-  } on PlatformException catch (_) {
-    // Forced fix: HarmonyOS 降级 - 用 sqflite.getDatabasePath
-    final dbDir = await getDatabasesPath();
-    dbPath = p.join(dbDir, _kDbName);
-  } catch (_) {
-    // Forced fix: 其他平台异常时再次降级
-    final dbDir = await getDatabasesPath();
-    dbPath = p.join(dbDir, _kDbName);
-  }
+  final dbDir = await getDatabasesPath();
+  final dbPath = p.join(dbDir, _kDbName);
   final db = await openDatabase(
     dbPath,
     version: _kDbVersion,

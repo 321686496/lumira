@@ -1,12 +1,23 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/gallery_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_preview_mock_data.dart';
+import '../data/capture_state.dart';
+import '../domain/filter_recipe.dart';
+import '../services/photo_post_processor.dart';
+
+/// HarmonyOS 原生照片保存通道（PhotoSaverPlugin.ets）
+const _photoSaverChannel = MethodChannel('lumira/photo_saver');
 
 /// 照片预览页（Task 2.9A）
 ///
@@ -93,17 +104,120 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     });
   }
 
-  void _onSave() {
+  /// 保存到相册
+  /// 修复：
+  /// 1. saver_gallery 不支持 HarmonyOS，改用 MethodChannel 调用原生 photoAccessHelper
+  /// 2. 添加详细诊断日志，SnackBar 显示具体成功/失败信息
+  /// 3. 保存后使 galleryDaoProvider 失效，触发相册页刷新
+  /// 4. 保存前重新应用当前后期参数（用户可能在预览页调整了滑块）
+  Future<void> _onSave() async {
     if (_photoUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('无照片数据')),
       );
       return;
     }
+
+    final bool isLocalFile = !_photoUrl.startsWith('http');
+
+    // 保存前重新应用当前后期参数到照片文件
+    // （用户可能在预览页调整了亮度/对比度/饱和度滑块）
+    String savePath = _photoUrl;
+    if (isLocalFile) {
+      final params = ref.read(CaptureState.effectivePostProcessProvider);
+      final rawMode = ref.read(CaptureState.rawModeProvider);
+      final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
+      final screenSize = MediaQuery.of(context).size;
+      final screenRatio = screenSize.width / screenSize.height;
+      debugPrint('[save] 重新应用后期参数到照片...');
+      savePath = await PhotoPostProcessor.processFile(
+        inputPath: _photoUrl,
+        params: params,
+        rawMode: rawMode,
+        aspectRatio: aspectRatio,
+        screenRatio: screenRatio,
+      );
+    }
+
+    File? imageFile;
+    if (isLocalFile) {
+      imageFile = File(savePath);
+      if (!await imageFile.exists()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('照片文件不存在')),
+        );
+        return;
+      }
+    }
+
+    final messages = <String>[];
+
+    // 1. 保存到系统相册（通过 HarmonyOS 原生 photoAccessHelper）
+    bool systemAlbumSaved = false;
+    if (isLocalFile && imageFile != null) {
+      try {
+        debugPrint('[save] 调用原生保存到系统相册: ${imageFile.path}');
+        final result = await _photoSaverChannel.invokeMethod('saveToAlbum', {
+          'path': imageFile.path,
+        });
+        debugPrint('[save] 原生保存结果: $result');
+        systemAlbumSaved = result != null && result['success'] == true;
+        if (systemAlbumSaved) {
+          messages.add('系统相册✓');
+        } else {
+          final err = result != null ? result['error'] : '未知错误';
+          messages.add('系统相册✗($err)');
+          debugPrint('[save] 系统相册保存失败: $err');
+        }
+      } catch (e) {
+        messages.add('系统相册✗($e)');
+        debugPrint('[save] 系统相册异常: $e');
+      }
+    }
+
+    // 2. 保存到应用数据库（写入实际的 templateId 和 lut）
+    bool dbSaved = false;
+    try {
+      debugPrint('[save] 保存到应用数据库...');
+      final dao = await ref.read(galleryDaoProvider.future);
+      // 读取当前模板和后期参数
+      final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+      final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
+      final lut = postProcess.lut;
+      final record = GalleryItemRecord(
+        id: 'photo_${DateTime.now().millisecondsSinceEpoch}',
+        dataUrl: isLocalFile ? null : _photoUrl,
+        filePath: isLocalFile ? _photoUrl : null,
+        sceneId: _selectedSceneId,
+        templateId: templateId,
+        kitId: null,
+        mood: _moods.where((m) => m.active).map((m) => m.name).join(','),
+        lut: (lut == 'none' || lut.isEmpty) ? null : lut,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      );
+      await dao.insert(record);
+      dbSaved = true;
+      messages.add('应用记录✓');
+      debugPrint('[save] 应用数据库保存成功 templateId=$templateId lut=$lut');
+
+      // 使 provider 失效，触发相册页刷新
+      ref.invalidate(galleryDaoProvider);
+    } catch (e) {
+      messages.add('应用记录✗($e)');
+      debugPrint('[save] 应用数据库保存失败: $e');
+    }
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已保存')),
+      SnackBar(
+        content: Text(messages.join(' ')),
+        duration: const Duration(seconds: 2),
+      ),
     );
-    Future.delayed(const Duration(milliseconds: 800), () {
+
+    // 保存完成后延迟返回
+    Future.delayed(const Duration(milliseconds: 1000), () {
       if (!mounted) return;
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
@@ -276,8 +390,11 @@ class _CompareLink extends StatelessWidget {
   }
 }
 
-/// 照片预览框（3:4 AspectRatio + Image.network + 空态 placeholder）
-class _PhotoFrame extends StatelessWidget {
+/// 照片预览框
+/// 修复：
+/// 1. 原代码使用固定 3:4 AspectRatio + BoxFit.cover，改为自适应高度 + contain
+/// 2. 添加 ColorFiltered 实时应用 effectivePostProcess 参数，所见即所得
+class _PhotoFrame extends ConsumerWidget {
   const _PhotoFrame({
     required this.tokens,
     required this.photoUrl,
@@ -287,26 +404,39 @@ class _PhotoFrame extends StatelessWidget {
   final String photoUrl;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bool isNetworkUrl = photoUrl.startsWith('http');
+    // 读取当前后期参数，实时应用滤镜到预览
+    final postProcess = ref.watch(CaptureState.effectivePostProcessProvider);
+    final colorFilter = fromPostProcess(postProcess);
+
     return Padding(
       padding: const EdgeInsets.all(8),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: AspectRatio(
-          aspectRatio: 3 / 4,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (photoUrl.isNotEmpty)
-                Image.network(
-                  photoUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _PhotoEmptyState(tokens: tokens),
-                )
-              else
-                _PhotoEmptyState(tokens: tokens),
-            ],
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.width * 1.33,
           ),
+          color: const Color(0xFF1C1A17),
+          child: photoUrl.isNotEmpty
+              ? ColorFiltered(
+                  colorFilter: colorFilter,
+                  child: isNetworkUrl
+                      ? Image.network(
+                          photoUrl,
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) =>
+                              _PhotoEmptyState(tokens: tokens),
+                        )
+                      : Image.file(
+                          File(photoUrl),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) =>
+                              _PhotoEmptyState(tokens: tokens),
+                        ),
+                )
+              : _PhotoEmptyState(tokens: tokens),
         ),
       ),
     );
@@ -347,7 +477,7 @@ class _PhotoEmptyState extends StatelessWidget {
 }
 
 /// 底部白色 Sheet
-class _BottomSheet extends StatelessWidget {
+class _BottomSheet extends ConsumerWidget {
   const _BottomSheet({
     required this.tokens,
     required this.moods,
@@ -371,17 +501,17 @@ class _BottomSheet extends StatelessWidget {
   final VoidCallback onSave;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
-      // 硬编码颜色，与 uni-app 一致 (bottom-sheet bg #FFFFFF)
-      // 注：brief §3.1 列出的硬编码颜色不包含 bottom-sheet bg，但 uni-app 源码硬编码为 #FFFFFF。
-      // 此处遵循 uni-app 视觉规格，使用 Colors.white。
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _SheetHandle(tokens: tokens),
+          const SizedBox(height: 16),
+          // 后期参数调整区（亮度/对比度/饱和度滑块）
+          _AdjustSection(tokens: tokens),
           const SizedBox(height: 16),
           _MoodSection(
             tokens: tokens,
@@ -403,6 +533,113 @@ class _BottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _SaveButton(onTap: onSave),
+        ],
+      ),
+    );
+  }
+}
+
+/// 后期参数调整区：亮度/对比度/饱和度滑块
+/// 修改 effectivePostProcessProvider，_PhotoFrame 的 ColorFiltered 实时响应
+class _AdjustSection extends ConsumerWidget {
+  const _AdjustSection({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final post = ref.watch(CaptureState.effectivePostProcessProvider);
+    final isTemplate = ref.watch(CaptureState.currentTemplateIdProvider) != null;
+
+    void update(double brightness, double contrast, double saturation) {
+      final newColor = post.color.copyWith(
+        brightness: brightness,
+        contrast: contrast,
+        saturation: saturation,
+      );
+      final newPost = post.copyWith(color: newColor);
+      if (isTemplate) {
+        final editable = ref.read(CaptureState.editableTemplateProvider);
+        if (editable != null) {
+          ref.read(CaptureState.editableTemplateProvider.notifier).state =
+              editable.copyWith(postProcess: newPost);
+        }
+      } else {
+        ref.read(CaptureState.freeModePostProcessProvider.notifier).state =
+            newPost;
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('后期调整', style: TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w600, color: tokens.textPrimary,
+        )),
+        const SizedBox(height: 8),
+        _SliderRow(
+          label: '亮度',
+          value: post.color.brightness.toDouble(),
+          min: -100, max: 100,
+          onChanged: (v) => update(v, post.color.contrast.toDouble(), post.color.saturation.toDouble()),
+        ),
+        _SliderRow(
+          label: '对比度',
+          value: post.color.contrast.toDouble(),
+          min: -100, max: 100,
+          onChanged: (v) => update(post.color.brightness.toDouble(), v, post.color.saturation.toDouble()),
+        ),
+        _SliderRow(
+          label: '饱和度',
+          value: post.color.saturation.toDouble(),
+          min: -100, max: 100,
+          onChanged: (v) => update(post.color.brightness.toDouble(), post.color.contrast.toDouble(), v),
+        ),
+      ],
+    );
+  }
+}
+
+class _SliderRow extends StatelessWidget {
+  const _SliderRow({
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+  });
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 56,
+            child: Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          ),
+          Expanded(
+            child: Slider(
+              value: value.clamp(min, max),
+              min: min,
+              max: max,
+              onChanged: onChanged,
+              activeColor: const Color(0xFFC9A96E),
+            ),
+          ),
+          SizedBox(
+            width: 40,
+            child: Text(
+              value.toInt().toString(),
+              style: const TextStyle(fontSize: 11, color: Colors.black45),
+              textAlign: TextAlign.right,
+            ),
+          ),
         ],
       ),
     );

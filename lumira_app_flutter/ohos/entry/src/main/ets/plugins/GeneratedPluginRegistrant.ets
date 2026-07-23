@@ -2,6 +2,7 @@ import { FlutterEngine, Log } from '@ohos/flutter_ohos';
 import CamerawesomePlugin from 'camerawesome_ohos';
 import DeviceInfoPlusOhosPlugin from 'device_info_plus';
 import PermissionHandlerPlugin from 'permission_handler_ohos';
+import SqflitePlugin from 'sqflite';
 
 /**
  * Generated file. Do not edit.
@@ -18,6 +19,7 @@ export class GeneratedPluginRegistrant {
       flutterEngine.getPlugins()?.add(new CamerawesomePlugin());
       flutterEngine.getPlugins()?.add(new DeviceInfoPlusOhosPlugin());
       flutterEngine.getPlugins()?.add(new PermissionHandlerPlugin());
+      flutterEngine.getPlugins()?.add(new SqflitePlugin());
     } catch (e) {
       Log.e(
         TAG,

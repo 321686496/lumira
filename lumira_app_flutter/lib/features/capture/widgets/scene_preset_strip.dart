@@ -35,28 +35,48 @@ class ScenePresetStrip extends ConsumerWidget {
 
           return GestureDetector(
             onTap: () {
-              // 切换场景预设（activeSceneFilterProvider 会自动派生并应用到取景器）
+              // toggle 行为：点击已选中的场景则取消，否则选中
+              final nextId = active ? null : preset.id;
               ref.read(CaptureState.activeScenePresetIdProvider.notifier).state =
-                  preset.id;
-              // 选中场景后，把对应的 LUT 和 systemFilter 同步到 freeModePostProcess
-              // 这样即使无模板，取景器也会应用场景滤镜
-              final currentPost = ref.read(
-                  CaptureState.freeModePostProcessProvider);
-              ref.read(CaptureState.freeModePostProcessProvider.notifier).state =
-                  currentPost.copyWith(
-                lut: preset.filter.lut,
-                systemFilter: preset.filter.systemFilter,
-              );
-              // 如果有模板，也同步到 editableTemplate
-              final editable = ref.read(CaptureState.editableTemplateProvider);
-              if (editable != null) {
-                ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                    editable.copyWith(
-                  postProcess: editable.postProcess.copyWith(
-                    lut: preset.filter.lut,
-                    systemFilter: preset.filter.systemFilter,
-                  ),
+                  nextId;
+              if (nextId == null) {
+                // 取消选中：清除场景滤镜
+                final currentPost = ref.read(
+                    CaptureState.freeModePostProcessProvider);
+                ref.read(CaptureState.freeModePostProcessProvider.notifier).state =
+                    currentPost.copyWith(
+                  lut: null,
+                  systemFilter: null,
                 );
+                final editable = ref.read(CaptureState.editableTemplateProvider);
+                if (editable != null) {
+                  ref.read(CaptureState.editableTemplateProvider.notifier).state =
+                      editable.copyWith(
+                    postProcess: editable.postProcess.copyWith(
+                      lut: null,
+                      systemFilter: null,
+                    ),
+                  );
+                }
+              } else {
+                // 选中场景：同步 LUT 和 systemFilter
+                final currentPost = ref.read(
+                    CaptureState.freeModePostProcessProvider);
+                ref.read(CaptureState.freeModePostProcessProvider.notifier).state =
+                    currentPost.copyWith(
+                  lut: preset.filter.lut,
+                  systemFilter: preset.filter.systemFilter,
+                );
+                final editable = ref.read(CaptureState.editableTemplateProvider);
+                if (editable != null) {
+                  ref.read(CaptureState.editableTemplateProvider.notifier).state =
+                      editable.copyWith(
+                    postProcess: editable.postProcess.copyWith(
+                      lut: preset.filter.lut,
+                      systemFilter: preset.filter.systemFilter,
+                    ),
+                  );
+                }
               }
             },
             child: AnimatedContainer(

@@ -30,6 +30,13 @@ class CaptureState {
   /// 由双指缩放手势或自定义滑块更新，再同步到 [cameraStateProvider] 的 sensorConfig
   static final zoomProvider = StateProvider<double>((ref) => 0.0);
 
+  /// 照片比例（用户可切换）
+  /// 'fullscreen' = 与取景器全屏一致（9:16 或 16:9）
+  /// '4:3' = 标准 4:3 比例
+  /// '1:1' = 正方形
+  /// '3:4' = 竖版 3:4
+  static final aspectRatioProvider = StateProvider<String>((ref) => 'fullscreen');
+
   // ── 新增：模板编辑状态 ──
 
   /// 原始模板（只读，派生自 currentTemplateIdProvider）
@@ -196,6 +203,7 @@ class CaptureState {
     // 引擎状态与缩放
     container.read(cameraStateProvider.notifier).state = null;
     container.read(zoomProvider.notifier).state = 0.0;
+    container.read(aspectRatioProvider.notifier).state = 'fullscreen';
     // 自由模式参数
     container.read(freeModeCameraProvider.notifier).state = const CameraParams();
     container.read(freeModePostProcessProvider.notifier).state =
