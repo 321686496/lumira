@@ -123,6 +123,29 @@ describe('AdminController (e2e)', () => {
       .expect(200);
 
     expect(res.body.success).toBe(true);
+
+    // Verify the state was actually changed
+    const detail = await request(app.getHttpServer())
+      .get('/api/v1/admin/redeem-batches/1')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(detail.body.isActive).toBe(0);
+  });
+
+  it('GET /api/v1/admin/redeem-batches/:id — should return 404 for non-existent batch', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/admin/redeem-batches/9999')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(404);
+  });
+
+  it('PATCH /api/v1/admin/redeem-batches/:id — should return 404 for non-existent batch', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/v1/admin/redeem-batches/9999')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ isActive: true })
+      .expect(404);
   });
 
   it('GET /api/v1/admin/rewards — should return reward unlock records', async () => {

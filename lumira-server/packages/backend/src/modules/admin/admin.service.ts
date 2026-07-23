@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/src/modules/admin/admin.service.ts
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { eq, count, desc } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -92,36 +92,40 @@ export class AdminService {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    // 创建批次
-    const result = await db.insert(redemptionCodeBatches).values({
-      campaignName: dto.campaignName,
-      rewardTier: dto.rewardTier,
-      maxUsesPerCode: dto.maxUsesPerCode,
-      totalGenerated: dto.codes.length,
-      totalUsed: 0,
-      validFrom: dto.validFrom || null,
-      validUntil: dto.validUntil || null,
-      isActive: 1,
-      createdAt: now,
-    }).returning();
+    return db.transaction((tx) => {
+      // 创建批次
+      // Note: better-sqlite3 transaction callbacks must be synchronous (no async/await),
+      // so we use the synchronous .all() method on the QueryPromise instead of awaiting.
+      const result = tx.insert(redemptionCodeBatches).values({
+        campaignName: dto.campaignName,
+        rewardTier: dto.rewardTier,
+        maxUsesPerCode: dto.maxUsesPerCode,
+        totalGenerated: dto.codes.length,
+        totalUsed: 0,
+        validFrom: dto.validFrom || null,
+        validUntil: dto.validUntil || null,
+        isActive: 1,
+        createdAt: now,
+      }).returning().all();
 
-    const batchId = result[0].batchId;
+      const batchId = result[0].batchId;
 
-    // 批量插入码
-    const codeValues = dto.codes.map(code => ({
-      code,
-      batchId,
-      usedCount: 0,
-      maxUses: dto.maxUsesPerCode,
-    }));
+      // 批量插入码
+      const codeValues = dto.codes.map(code => ({
+        code,
+        batchId,
+        usedCount: 0,
+        maxUses: dto.maxUsesPerCode,
+      }));
 
-    await db.insert(redemptionCodes).values(codeValues);
+      tx.insert(redemptionCodes).values(codeValues).run();
 
-    return {
-      batchId,
-      campaignName: dto.campaignName,
-      totalGenerated: dto.codes.length,
-    };
+      return {
+        batchId,
+        campaignName: dto.campaignName,
+        totalGenerated: dto.codes.length,
+      };
+    });
   }
 
   // 兑换码批次列表
@@ -152,9 +156,13 @@ export class AdminService {
   // 启用/禁用批次
   async toggleBatch(batchId: number, isActive: boolean) {
     const db = this.dbService.getDb();
-    await db.update(redemptionCodeBatches)
+    const updated = await db.update(redemptionCodeBatches)
       .set({ isActive: isActive ? 1 : 0 })
-      .where(eq(redemptionCodeBatches.batchId, batchId));
+      .where(eq(redemptionCodeBatches.batchId, batchId))
+      .returning();
+    if (updated.length === 0) {
+      throw new NotFoundException('Batch not found');
+    }
     return { success: true };
   }
 

@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/src/modules/admin/admin.controller.ts
 
-import { Controller, Get, Post, Patch, Body, Param, Query, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, ParseIntPipe, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
@@ -42,7 +42,7 @@ export class AdminController {
   async getBatchDetail(@Param('id', ParseIntPipe) id: number) {
     const result = await this.adminService.getBatchDetail(id);
     if (!result) {
-      return { error: 'Batch not found' };
+      throw new NotFoundException('Batch not found');
     }
     return result;
   }
