@@ -79,6 +79,17 @@ describe('AdminController (e2e)', () => {
     expect(res.body.total).toBe(1);
   });
 
+  it('GET /api/v1/admin/invites — should filter total by deviceId', async () => {
+    // inviteeId has no invite records as inviter; filtered total must be 0 (not 1)
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/admin/invites?deviceId=77777777-7777-4777-8777-777777777777')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(res.body.data).toHaveLength(0);
+    expect(res.body.total).toBe(0);
+  });
+
   it('POST /api/v1/admin/redeem-batches — should create a new batch', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/admin/redeem-batches')
@@ -156,5 +167,16 @@ describe('AdminController (e2e)', () => {
 
     expect(res.body.data).toHaveLength(1);
     expect(res.body.total).toBe(1);
+  });
+
+  it('GET /api/v1/admin/rewards — should filter total by deviceId', async () => {
+    // inviteeId has no reward unlocks; filtered total must be 0 (not 1)
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/admin/rewards?deviceId=77777777-7777-4777-8777-777777777777')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(res.body.data).toHaveLength(0);
+    expect(res.body.total).toBe(0);
   });
 });

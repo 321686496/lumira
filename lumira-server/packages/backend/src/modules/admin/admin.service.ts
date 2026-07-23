@@ -70,7 +70,9 @@ export class AdminService {
 
     const offset = (page - 1) * pageSize;
     const records = await query.orderBy(desc(inviteRecords.activatedAt)).limit(pageSize).offset(offset);
-    const totalCount = await db.select({ value: count() }).from(inviteRecords);
+    const totalCount = deviceId
+      ? await db.select({ value: count() }).from(inviteRecords).where(eq(inviteRecords.inviterDeviceId, deviceId))
+      : await db.select({ value: count() }).from(inviteRecords);
 
     return {
       data: records,
@@ -178,7 +180,9 @@ export class AdminService {
 
     const offset = (page - 1) * pageSize;
     const records = await query.orderBy(desc(rewardUnlocks.unlockedAt)).limit(pageSize).offset(offset);
-    const totalCount = await db.select({ value: count() }).from(rewardUnlocks);
+    const totalCount = deviceId
+      ? await db.select({ value: count() }).from(rewardUnlocks).where(eq(rewardUnlocks.deviceId, deviceId))
+      : await db.select({ value: count() }).from(rewardUnlocks);
 
     return {
       data: records,
