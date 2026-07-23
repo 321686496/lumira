@@ -33,10 +33,11 @@ export class DatabaseService implements OnModuleInit {
 
   private runMigrations() {
     const migrationPath = path.join(__dirname, 'migrations', '001_init.sql');
-    if (fs.existsSync(migrationPath)) {
-      const sql = fs.readFileSync(migrationPath, 'utf-8');
-      this.sqlite.exec(sql);
+    if (!fs.existsSync(migrationPath)) {
+      throw new Error(`Migration file not found: ${migrationPath}. Ensure migrations are copied to dist/ during build.`);
     }
+    const sql = fs.readFileSync(migrationPath, 'utf-8');
+    this.sqlite.exec(sql);
   }
 
   getDb(): BetterSQLite3Database<typeof schema> {

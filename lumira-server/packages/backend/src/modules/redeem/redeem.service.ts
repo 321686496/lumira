@@ -79,36 +79,45 @@ export class RedeemService {
       throw new ConflictException('Daily redemption limit reached');
     }
 
-    // 8. 原子操作：增加使用次数
-    await db.update(redemptionCodes)
-      .set({ usedCount: codeRecord.usedCount + 1 })
-      .where(eq(redemptionCodes.code, code));
-
-    // 9. 更新批次总使用量
-    await db.update(redemptionCodeBatches)
-      .set({ totalUsed: batch.totalUsed + 1 })
-      .where(eq(redemptionCodeBatches.batchId, batch.batchId));
-
-    // 10. 写入兑换记录
-    await db.insert(redemptionRecords).values({
-      code,
-      deviceId,
-      redeemedAt: now,
-      ipAddress: ip,
-    });
-
-    // 11. 解锁奖励
+    // 8. 查找奖励阶梯（read，在事务前执行）
     const tier = await db.query.rewardTiers.findFirst({
       where: eq(rewardTiers.tier, batch.rewardTier),
     });
 
-    await db.insert(rewardUnlocks).values({
-      deviceId,
-      tier: batch.rewardTier,
-      source: 'redemption',
-      sourceDetail: code,
-      status: 'unlocked',
-      unlockedAt: now,
+    // 9-12. 事务写入：4 个写操作必须原子化，任一失败则全部回滚。
+    // Note: better-sqlite3 transaction callbacks must be synchronous (no async/await),
+    // so we use the synchronous .run() method on the QueryPromise instead of awaiting.
+    // Pattern mirrors admin.service.ts:createBatch.
+    db.transaction((tx) => {
+      // 9. 增加码使用次数
+      tx.update(redemptionCodes)
+        .set({ usedCount: codeRecord.usedCount + 1 })
+        .where(eq(redemptionCodes.code, code))
+        .run();
+
+      // 10. 更新批次总使用量
+      tx.update(redemptionCodeBatches)
+        .set({ totalUsed: batch.totalUsed + 1 })
+        .where(eq(redemptionCodeBatches.batchId, batch.batchId))
+        .run();
+
+      // 11. 写入兑换记录
+      tx.insert(redemptionRecords).values({
+        code,
+        deviceId,
+        redeemedAt: now,
+        ipAddress: ip,
+      }).run();
+
+      // 12. 解锁奖励
+      tx.insert(rewardUnlocks).values({
+        deviceId,
+        tier: batch.rewardTier,
+        source: 'redemption',
+        sourceDetail: code,
+        status: 'unlocked',
+        unlockedAt: now,
+      }).run();
     });
 
     return {

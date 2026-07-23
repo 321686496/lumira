@@ -93,6 +93,10 @@ export class InviteService {
       throw new ConflictException('This device has already activated an invite');
     }
 
+    // Anti-fraud check 4: 2-cycle detection (A→B then B→A).
+    // Note: Longer cycles (A→B→C→A) are NOT prevented by this check.
+    // This is an accepted MVP limitation — three colluding devices could mutually inflate counts.
+    // Extend to transitive closure if fraud becomes a problem at scale.
     // 4. 防回流：检查被邀请人是否曾邀请过当前邀请人
     const reverseRecord = await db.query.inviteRecords.findFirst({
       where: and(

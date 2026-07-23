@@ -159,6 +159,14 @@ describe('AdminController (e2e)', () => {
       .expect(404);
   });
 
+  it('PATCH /api/v1/admin/redeem-batches/:id — should reject invalid isActive', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/v1/admin/redeem-batches/1')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ isActive: 'not-a-boolean' })
+      .expect(400);
+  });
+
   it('GET /api/v1/admin/rewards — should return reward unlock records', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/admin/rewards')

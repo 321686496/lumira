@@ -3,6 +3,7 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, ParseIntPipe, UseGuards, NotFoundException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { CreateBatchDto } from './dto/create-batch.dto';
+import { ToggleBatchDto } from './dto/toggle-batch.dto';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 
 @Controller('admin')
@@ -50,9 +51,9 @@ export class AdminController {
   @Patch('redeem-batches/:id')
   async toggleBatch(
     @Param('id', ParseIntPipe) id: number,
-    @Body('isActive') isActive: boolean,
+    @Body() dto: ToggleBatchDto,
   ) {
-    return this.adminService.toggleBatch(id, isActive);
+    return this.adminService.toggleBatch(id, dto.isActive);
   }
 
   @Get('rewards')

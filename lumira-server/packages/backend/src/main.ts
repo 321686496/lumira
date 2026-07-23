@@ -3,7 +3,19 @@
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
-import { GlobalValidationPipe } from './common/pipes/global-validation.pipe';
+
+// Production fail-fast: refuse to boot if security env vars are missing or still
+// set to their dev defaults. Dev fallbacks remain in the guards/modules for tests/dev.
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret-change-me') {
+    console.error('FATAL: JWT_SECRET must be set to a non-default value in production');
+    process.exit(1);
+  }
+  if (!process.env.ADMIN_TOKEN || process.env.ADMIN_TOKEN === 'dev-admin-token') {
+    console.error('FATAL: ADMIN_TOKEN must be set to a non-default value in production');
+    process.exit(1);
+  }
+}
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -12,7 +24,6 @@ async function bootstrap() {
   );
 
   app.setGlobalPrefix('api/v1');
-  app.useGlobalPipes(GlobalValidationPipe);
 
   // CORS
   const corsOrigin = process.env.CORS_ORIGIN || '*';
