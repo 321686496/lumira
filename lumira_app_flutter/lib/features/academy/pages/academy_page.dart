@@ -35,7 +35,10 @@ class _AcademyPageState extends ConsumerState<AcademyPage> {
 
   void _goKnowledge(String cardId) {
     GoRouter.of(context).push(
-      RouteNames.profileAcademyKnowledge,
+      RouteNames.build(
+        RouteNames.profileAcademyKnowledge,
+        {RouteNames.paramAcademyId: cardId},
+      ),
     );
   }
 
