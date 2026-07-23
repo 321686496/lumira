@@ -17,11 +17,12 @@ export async function createBatchAction(formData: FormData) {
     return { error: '请至少输入一个兑换码' };
   }
 
+  let result;
   try {
     const validFrom = formData.get('validFrom') as string | null;
     const validUntil = formData.get('validUntil') as string | null;
 
-    const result = await api.createBatch({
+    result = await api.createBatch({
       campaignName: formData.get('campaignName') as string,
       codes,
       rewardTier: Number(formData.get('rewardTier')),
@@ -29,12 +30,12 @@ export async function createBatchAction(formData: FormData) {
       validFrom: validFrom ? toUnixSeconds(validFrom) : undefined,
       validUntil: validUntil ? toUnixSeconds(validUntil) : undefined,
     });
-
-    revalidatePath('/dashboard/redeem-batches');
-    redirect(`/dashboard/redeem-batches/${result.batchId}`);
   } catch (e) {
     return { error: (e as Error).message };
   }
+
+  revalidatePath('/dashboard/redeem-batches');
+  redirect(`/dashboard/redeem-batches/${result.batchId}`);
 }
 
 export async function toggleBatchAction(batchId: number, isActive: boolean) {
