@@ -36,6 +36,7 @@ class RouteNames {
   static const String profileInvite = '/profile/invite';
   static const String profileAcademy = '/profile/academy';
   static const String profileAcademyDetail = '/profile/academy-detail';
+  static const String profileAcademyKnowledge = '/profile/academy-knowledge';
   static const String profileCollections = '/profile/collections';
   static const String profileCollectionDetail = '/profile/collection-detail';
   static const String profileMyTemplates = '/profile/my-templates';
