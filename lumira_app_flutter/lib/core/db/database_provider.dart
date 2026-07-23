@@ -7,9 +7,10 @@ import 'dao/templates_dao.dart';
 import 'dao/scenes_dao.dart';
 import 'dao/gallery_dao.dart';
 import '../../features/challenge/data/challenge_dao.dart';
+import '../../features/academy/data/academy_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 2;
+const int _kDbVersion = 3;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -44,6 +45,11 @@ final galleryDaoProvider = FutureProvider<GalleryDao>((ref) async {
 final challengeDaoProvider = FutureProvider<ChallengeDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return ChallengeDao(db);
+});
+
+final academyDaoProvider = FutureProvider<AcademyDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return AcademyDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -174,6 +180,10 @@ Future<void> _onCreate(Database db, int version) async {
   await db.execute(ChallengeHistoryTable.createSql);
   await db.execute(ChallengeHistoryTable.indexDateSql);
   await db.execute(ChallengeHistoryTable.indexCategorySql);
+
+  await db.execute(AcademyTables.cpCreateSql);
+  await db.execute(AcademyTables.asCreateSql);
+  await db.execute(AcademyTables.kfCreateSql);
 }
 
 Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -182,5 +192,10 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     await db.execute(ChallengeHistoryTable.createSql);
     await db.execute(ChallengeHistoryTable.indexDateSql);
     await db.execute(ChallengeHistoryTable.indexCategorySql);
+  }
+  if (oldVersion < 3) {
+    await db.execute(AcademyTables.cpCreateSql);
+    await db.execute(AcademyTables.asCreateSql);
+    await db.execute(AcademyTables.kfCreateSql);
   }
 }
