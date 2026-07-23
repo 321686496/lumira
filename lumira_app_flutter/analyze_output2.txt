@@ -1,0 +1,88 @@
+﻿flutter : Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+At line:15 char:7964
++ ... pgrep\bin'; flutter analyze --no-pub > analyze_output2.txt 2>&1; echo ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Flutter assets ...st this source!:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Analyzing lumira_app_flutter...                                 
+
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\pages\capture_page.dart:599:19 - prefer_const_constructors
+  error - The named parameter 'androidExistNotSave' is required, but there's no corresponding argument - lib\features\capture\pages\capture_preview_page.dart:131:43 - missing_required_argument
+  error - The named parameter 'name' is required, but there's no corresponding argument - lib\features\capture\pages\capture_preview_page.dart:131:43 - missing_required_argument
+  error - The named parameter 'fileName' isn't defined - lib\features\capture\pages\capture_preview_page.dart:133:11 - undefined_named_parameter
+  error - The named parameter 'skipIfExists' isn't defined - lib\features\capture\pages\capture_preview_page.dart:134:11 - undefined_named_parameter
+   info - Unused import: 'dart:typed_data' - lib\features\capture\services\lut_processor.dart:2:8 - unused_import
+   info - Unused import: 'package:flutter/material.dart' - lib\features\capture\services\lut_processor.dart:5:8 - unused_import
+   info - The operand can't be null, so the condition is always false - lib\features\capture\services\lut_processor.dart:37:16 - unnecessary_null_comparison
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\filter_picker.dart:98:27 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\filter_picker.dart:99:36 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\filter_picker.dart:136:27 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\filter_picker.dart:137:36 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\param_panel.dart:64:21 - prefer_const_constructors
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\features\capture\widgets\param_panel.dart:459:23 - prefer_const_literals_to_create_immutables
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\param_panel.dart:460:15 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\param_panel.dart:462:15 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\param_panel.dart:463:24 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\param_panel.dart:465:26 - prefer_const_constructors
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\features\capture\widgets\param_panel.dart:783:21 - prefer_const_literals_to_create_immutables
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\param_panel.dart:784:13 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\capture\widgets\param_panel.dart:1026:21 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\challenge\data\challenge_repository.dart:124:7 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\challenge\data\challenge_repository.dart:125:7 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\challenge\pages\challenge_detail_page.dart:89:9 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\features\challenge\pages\challenge_detail_page.dart:101:9 - prefer_const_constructors
+   info - A value for optional parameter 'trailing' isn't ever given - lib\features\challenge\pages\challenge_page.dart:414:65 - unused_element
+   info - The declaration '_goChallenge' isn't referenced - lib\features\home\pages\home_page.dart:74:8 - unused_element
+   info - The imported package 'sqlite3' isn't a dependency of the importing package - lib\main.dart:10:8 - depend_on_referenced_packages
+   info - The imported package 'sqlite3' isn't a dependency of the importing package - lib\main.dart:11:8 - depend_on_referenced_packages
+   info - Use 'const' for final variables initialized to a constant value - test\features\capture\data\scene_presets_data_test.dart:18:7 - prefer_const_declarations
+   info - Use 'const' for final variables initialized to a constant value - test\features\capture\data\scene_presets_data_test.dart:19:7 - prefer_const_declarations
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\photo_template_test.dart:7:26 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\photo_template_test.dart:9:25 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\photo_template_test.dart:10:25 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\photo_template_test.dart:11:25 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\photo_template_test.dart:12:25 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\photo_template_test.dart:13:24 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\photo_template_test.dart:14:26 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\photo_template_test.dart:32:46 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\photo_template_test.dart:40:46 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\scene_preset_test.dart:9:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\scene_preset_test.dart:10:21 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\scene_preset_test.dart:20:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\scene_preset_test.dart:21:21 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\scene_preset_test.dart:31:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\scene_preset_test.dart:32:21 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\scene_preset_test.dart:42:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\domain\scene_preset_test.dart:43:21 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:89:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:89:41 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:108:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:109:16 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:145:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:146:16 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:167:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:168:16 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:189:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:190:16 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:212:30 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:212:49 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:213:31 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:214:16 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:251:30 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:251:49 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:252:27 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:253:16 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:286:30 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:286:49 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:287:29 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:288:16 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:320:22 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\capture\services\image_processing_service_test.dart:321:16 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\challenge\challenge_page_test.dart:141:5 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\challenge\challenge_page_test.dart:149:14 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\challenge\challenge_page_test.dart:151:5 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\challenge\challenge_page_test.dart:159:14 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - test\features\challenge\challenge_page_test.dart:163:5 - prefer_const_constructors
+
+77 issues found. (ran in 7.1s)
