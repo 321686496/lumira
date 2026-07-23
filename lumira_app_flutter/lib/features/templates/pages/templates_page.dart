@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -127,6 +128,9 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
                         delay: Duration(milliseconds: 200),
                         child: SceneCategoryOverview(compact: true),
                       ),
+                      const SizedBox(height: 28),
+                      // === 摄影美学院 section ===
+                      FadeUp(delay: const Duration(milliseconds: 240), child: _AcademyEntrySection()),
                       const SizedBox(height: 140), // bottom spacer 避开 FloatingTabBar
                     ],
                   ),
@@ -423,6 +427,132 @@ class _EmptyState extends StatelessWidget {
             style: TextStyle(
               fontSize: 13, // 26rpx → 13dp
               color: tokens.textTertiary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 摄影美学院入口卡片
+class _AcademyEntrySection extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 标题行
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Icon(Icons.school_outlined, size: 20, color: tokens.brand),
+                const SizedBox(width: 6),
+                Text(
+                  '摄影美学院',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: tokens.textPrimary,
+                    letterSpacing: -0.2,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 入口卡片（与模板网格卡片视觉一致）
+          NeuCard(
+            padding: EdgeInsets.zero,
+            shadowVariant: NeuShadowVariant.convex,
+            onTap: () => GoRouter.of(context).push(RouteNames.profileAcademy),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Stack(
+                children: [
+                  // 封面图
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image.network(
+                      'https://picsum.photos/seed/academy_entry/640/360',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: tokens.surfaceAlt,
+                        child: Icon(Icons.school_outlined, size: 40, color: tokens.textTertiary),
+                      ),
+                    ),
+                  ),
+                  // 渐变遮罩 + 文字
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.6),
+                          ],
+                          stops: const [0.4, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 标题 + 副标题
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 14,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          '系统学习摄影美学',
+                          style: TextStyle(
+                            fontFamily: 'Noto Serif SC',
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '16 节课程 · 8 张知识卡片 · 实战作业',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.85),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 右上角箭头
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.85),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.arrow_forward_ios,
+                        size: 12,
+                        color: tokens.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

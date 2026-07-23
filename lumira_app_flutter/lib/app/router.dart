@@ -20,8 +20,10 @@ import '../features/gallery/pages/gallery_page.dart';
 import '../features/gallery/pages/gallery_stats_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/inspiration/pages/inspiration_page.dart';
-import '../features/profile/pages/profile_academy_detail_page.dart';
-import '../features/profile/pages/profile_academy_page.dart';
+import '../features/academy/pages/academy_assignment_page.dart';
+import '../features/academy/pages/academy_detail_page.dart';
+import '../features/academy/pages/academy_knowledge_page.dart';
+import '../features/academy/pages/academy_page.dart';
 import '../features/profile/pages/profile_about_page.dart';
 import '../features/profile/pages/profile_collection_detail_page.dart';
 import '../features/profile/pages/profile_collections_page.dart';
@@ -254,14 +256,30 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.profileAcademy,
         name: 'profileAcademy',
-        builder: (context, state) => const ProfileAcademyPage(),
+        builder: (context, state) => const AcademyPage(),
       ),
       GoRoute(
         path: RouteNames.profileAcademyDetail,
         name: 'profileAcademyDetail',
         builder: (context, state) {
           final academyId = state.queryParams[RouteNames.paramAcademyId];
-          return ProfileAcademyDetailPage(academyId: academyId);
+          return AcademyDetailPage(academyId: academyId);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.profileAcademyAssignment,
+        name: 'profileAcademyAssignment',
+        builder: (context, state) {
+          final academyId = state.queryParams[RouteNames.paramAcademyId];
+          return AcademyAssignmentPage(academyId: academyId);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.profileAcademyKnowledge,
+        name: 'profileAcademyKnowledge',
+        builder: (context, state) {
+          final cardId = state.queryParams[RouteNames.paramAcademyId];
+          return AcademyKnowledgePage(cardId: cardId);
         },
       ),
       GoRoute(

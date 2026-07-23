@@ -58,6 +58,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// （之前的"照片只有一半/空白"问题的次要原因之一）
   bool _isProcessing = false;
 
+  /// 返回结果模式：当通过 ?mode=return 进入时，拍照完成后 pop 回上一页
+  /// （用于实战作业页的"去拍摄"流程，捕获路径作为 String 返回）
+  bool _returnResult = false;
+
   /// 相机重建 key：每次 app 从后台恢复时递增，
   /// 强制 CameraAwesomeBuilder 销毁旧实例并创建新实例，
   /// 确保原生相机被重新初始化（修复取景器一直转圈的问题）。
@@ -70,6 +74,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
           widget.templateId;
+      // 解析 returnResult 模式：?mode=return 时拍照完成后 pop 回上一页
+      final mode = GoRouterState.of(context).queryParams[RouteNames.paramMode];
+      _returnResult = mode == 'return';
       _requestCameraPermission();
     });
   }
@@ -183,9 +190,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
         // 拍照成功后自动导航到预览页
         if (!mounted) return;
-        GoRouter.of(context).push(
-          '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(processedPath)}',
-        );
+        if (_returnResult) {
+          context.pop(processedPath);
+        } else {
+          GoRouter.of(context).push(
+            '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(processedPath)}',
+          );
+        }
       }
     });
 
@@ -439,9 +450,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 修复 Bug 1：缩略图跳转，使用正确的参数名
   /// 路由配置 router.dart 读取 'photoUrl'，所以这里传 photoUrl
   void _onThumbnailTap(String path) {
-    GoRouter.of(context).push(
-      '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(path)}',
-    );
+    if (_returnResult) {
+      context.pop(path);
+    } else {
+      GoRouter.of(context).push(
+        '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(path)}',
+      );
+    }
   }
 }
 
