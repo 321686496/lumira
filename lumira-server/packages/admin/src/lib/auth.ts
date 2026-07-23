@@ -35,3 +35,16 @@ export async function verifyToken(token: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Thrown by adminFetch when the admin token is missing or rejected (HTTP 401).
+ * Callers must catch this and call redirect('/login') — do NOT let it surface as
+ * an error message, because redirect() inside adminFetch would be swallowed by
+ * the caller's try/catch (Next.js redirect() throws NEXT_REDIRECT internally).
+ */
+export class UnauthenticatedError extends Error {
+  constructor(message = 'Unauthorized') {
+    super(message);
+    this.name = 'UnauthenticatedError';
+  }
+}

@@ -1,5 +1,7 @@
 // src/app/(dashboard)/dashboard/page.tsx
+import { redirect } from 'next/navigation';
 import { api } from '@/lib/api';
+import { UnauthenticatedError } from '@/lib/auth';
 import { StatsCard } from '@/components/stats-card';
 import { ChartCard } from '@/components/chart-card';
 import { TrendChart } from '@/components/trend-chart';

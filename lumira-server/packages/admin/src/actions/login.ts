@@ -15,5 +15,9 @@ export async function loginAction(token: string, redirectTo?: string) {
   }
 
   setAuthToken(token);
-  redirect(redirectTo || '/dashboard');
+  const safeRedirect =
+    redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//')
+      ? redirectTo
+      : '/dashboard';
+  redirect(safeRedirect);
 }

@@ -1,6 +1,8 @@
 // src/app/dashboard/redeem-batches/page.tsx
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { api } from '@/lib/api';
+import { UnauthenticatedError } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Plus } from '@phosphor-icons/react/dist/ssr';
 import { BatchesTable } from '@/components/batches-table';
@@ -10,6 +12,7 @@ export default async function RedeemBatchesPage() {
   try {
     batches = await api.getBatches();
   } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
     return <div className="text-destructive">加载失败：{(e as Error).message}</div>;
   }
 

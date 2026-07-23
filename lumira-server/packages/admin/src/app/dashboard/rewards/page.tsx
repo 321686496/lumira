@@ -1,5 +1,7 @@
 // src/app/dashboard/rewards/page.tsx
+import { redirect } from 'next/navigation';
 import { api } from '@/lib/api';
+import { UnauthenticatedError } from '@/lib/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MagnifyingGlass } from '@phosphor-icons/react/dist/ssr';
@@ -19,6 +21,7 @@ export default async function RewardsPage({
   try {
     data = await api.getRewards({ page, pageSize, deviceId });
   } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
     return <div className="text-destructive">加载失败：{(e as Error).message}</div>;
   }
 

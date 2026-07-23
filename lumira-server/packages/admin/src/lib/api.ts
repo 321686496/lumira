@@ -1,7 +1,6 @@
 // src/lib/api.ts
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
-import { AUTH_COOKIE_NAME } from './auth';
+import { AUTH_COOKIE_NAME, UnauthenticatedError } from './auth';
 import type {
   StatsResponse,
   InviteListResponse,
@@ -17,7 +16,7 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
 async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = cookies().get(AUTH_COOKIE_NAME)?.value;
   if (!token) {
-    redirect('/login');
+    throw new UnauthenticatedError('No admin token');
   }
 
   const res = await fetch(`${BACKEND_URL}/api/v1/admin${path}`, {
@@ -31,7 +30,7 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (res.status === 401) {
-    redirect('/login');
+    throw new UnauthenticatedError('Token rejected by backend');
   }
   if (!res.ok) {
     throw new Error(`API_ERROR: ${res.status} ${res.statusText}`);

@@ -1,6 +1,7 @@
 // src/app/dashboard/redeem-batches/[id]/page.tsx
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { api } from '@/lib/api';
+import { UnauthenticatedError } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ export default async function BatchDetailPage({
   try {
     detail = await api.getBatchDetail(batchId);
   } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
     if ((e as Error).message.includes('404')) notFound();
     return <div className="text-destructive">加载失败：{(e as Error).message}</div>;
   }

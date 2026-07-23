@@ -4,6 +4,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { api } from '@/lib/api';
+import { UnauthenticatedError } from '@/lib/auth';
 import { toUnixSeconds } from '@/lib/utils';
 
 export async function createBatchAction(formData: FormData) {
@@ -45,6 +46,7 @@ export async function toggleBatchAction(batchId: number, isActive: boolean) {
     revalidatePath(`/dashboard/redeem-batches/${batchId}`);
     return { success: true };
   } catch (e) {
+    if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };
   }
 }
