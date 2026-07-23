@@ -32,9 +32,15 @@ export class DatabaseService implements OnModuleInit {
   }
 
   private runMigrations() {
-    const migrationPath = path.join(__dirname, 'migrations', '001_init.sql');
-    if (!fs.existsSync(migrationPath)) {
-      throw new Error(`Migration file not found: ${migrationPath}. Ensure migrations are copied to dist/ during build.`);
+    // dist/database/migrations/ (prod, copied by nest build assets)
+    // src/database/migrations/  (dev, nest start --watch doesn't copy assets)
+    const candidates = [
+      path.join(__dirname, 'migrations', '001_init.sql'),
+      path.join(__dirname, '..', '..', 'src', 'database', 'migrations', '001_init.sql'),
+    ];
+    const migrationPath = candidates.find((p) => fs.existsSync(p));
+    if (!migrationPath) {
+      throw new Error(`Migration file not found. Tried: ${candidates.join(', ')}`);
     }
     const sql = fs.readFileSync(migrationPath, 'utf-8');
     this.sqlite.exec(sql);

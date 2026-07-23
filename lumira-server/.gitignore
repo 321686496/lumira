@@ -10,3 +10,5 @@ data/*.db-shm
 .env
 *.log
 .DS_Store
+
+.idea/

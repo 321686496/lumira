@@ -6,9 +6,12 @@
     "packages/*"
   ],
   "scripts": {
-    "build:shared": "npm run build -w @lumira/shared",
-    "build:backend": "npm run build -w @lumira/backend",
-    "dev:backend": "npm run dev -w @lumira/backend",
-    "test:backend": "npm run test -w @lumira/backend"
-  }
+    "dev": "pnpm build:shared && pnpm --parallel --filter @lumira/shared --filter @lumira/backend --filter @lumira/admin run dev",
+    "dev:backend": "pnpm --filter @lumira/backend dev",
+    "dev:admin": "pnpm --filter @lumira/admin dev",
+    "build:shared": "pnpm --filter @lumira/shared build",
+    "build:backend": "pnpm --filter @lumira/backend build",
+    "test:backend": "pnpm --filter @lumira/backend test"
+  },
+  "packageManager": "pnpm@11.16.0+sha512.b767e9a98fc87aec0f42daefcd0e84941c2cdb45d73c4e1e68860fb2bdfdbe032ab592105479e5e05c237f740c8a5ffdbbb52385797ddc2296745a1bbb883e8d"
 }
