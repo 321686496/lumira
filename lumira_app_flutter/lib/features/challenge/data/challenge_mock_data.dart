@@ -133,4 +133,146 @@ class ChallengeMockData {
     // mock 阶段忽略 id，永远返回同一个详情
     return challengeDetail;
   }
+
+  // === 翻牌页下方摘要信息 mock ===
+
+  /// 翻牌页：连续打卡 mock
+  static const flipStreak = StreakInfo(
+    currentStreak: 3,
+    totalDays: 7,
+    nextRewardXP: 50,
+    tipMessage: '再坚持 4 天获得额外 50 XP',
+  );
+
+  /// 翻牌页：本周完成数 / 本周总数
+  static const int weeklyCompletedCount = 3;
+  static const int weeklyTotalCount = 7;
+
+  /// 翻牌页：用户成就摘要
+  static const UserChallengeSummary userSummary = UserChallengeSummary(
+    totalXP: 215,
+    completedCount: 12,
+    level: 3,
+    levelName: '探索者',
+  );
+
+  /// 翻牌页：最近完成记录（2 条，每条关联 picsum 缩略图）
+  static final List<ChallengeHistoryRecord> recentRecords = [
+    ChallengeHistoryRecord(
+      id: 'rec_001',
+      date: '2026-07-22',
+      challengeId: 'tpl_portrait_thirds',
+      category: ChallengeCategory.portrait,
+      title: '用三分法构图拍一张人像',
+      rewardXP: 30,
+      status: ChallengeStatus.done,
+      selectedAt: 1721600000000,
+      completedAt: 1721601000000,
+      isDaily: true,
+      photoIds: ['r1_p1', 'r1_p2'],
+    ),
+    ChallengeHistoryRecord(
+      id: 'rec_002',
+      date: '2026-07-21',
+      challengeId: 'tpl_night_neon',
+      category: ChallengeCategory.night,
+      title: '霓虹街角拍一张夜景人像',
+      rewardXP: 35,
+      status: ChallengeStatus.done,
+      selectedAt: 1721513600000,
+      completedAt: 1721514600000,
+      isDaily: true,
+      photoIds: ['r2_p1'],
+    ),
+  ];
+
+  /// 根据 photoId 获取 picsum 图片 URL（mock）
+  static String photoUrl(String photoId) {
+    return 'https://picsum.photos/seed/lumira_$photoId/200/200';
+  }
+
+  // === 挑战墙完整历史 mock（7 天）===
+  static final List<ChallengeHistoryRecord> fullHistoryRecords = [
+    ...recentRecords,
+    ChallengeHistoryRecord(
+      id: 'rec_003',
+      date: '2026-07-20',
+      challengeId: 'tpl_food_flatlay',
+      category: ChallengeCategory.food,
+      title: '俯拍一张美食平铺构图',
+      rewardXP: 25,
+      status: ChallengeStatus.done,
+      selectedAt: 1721427200000,
+      completedAt: 1721428200000,
+      isDaily: true,
+      photoIds: ['r3_p1', 'r3_p2', 'r3_p3'],
+    ),
+    ChallengeHistoryRecord(
+      id: 'rec_004',
+      date: '2026-07-19',
+      challengeId: 'tpl_landscape_golden',
+      category: ChallengeCategory.landscape,
+      title: '黄金时刻拍一张风光',
+      rewardXP: 30,
+      status: ChallengeStatus.done,
+      selectedAt: 1721340800000,
+      completedAt: 1721341800000,
+      isDaily: true,
+      photoIds: ['r4_p1', 'r4_p2'],
+    ),
+    ChallengeHistoryRecord(
+      id: 'rec_005',
+      date: '2026-07-18',
+      challengeId: 'tpl_street_bw',
+      category: ChallengeCategory.street,
+      title: '黑白街头纪实拍摄',
+      rewardXP: 28,
+      status: ChallengeStatus.skipped,
+      selectedAt: 1721254400000,
+      skippedAt: 1721340800000,
+      isDaily: true,
+      photoIds: const [],
+    ),
+    ChallengeHistoryRecord(
+      id: 'rec_006',
+      date: '2026-07-17',
+      challengeId: 'tpl_macro_dewdrop',
+      category: ChallengeCategory.macro,
+      title: '微距拍摄叶尖露珠',
+      rewardXP: 32,
+      status: ChallengeStatus.done,
+      selectedAt: 1721168000000,
+      completedAt: 1721169000000,
+      isDaily: true,
+      photoIds: ['r6_p1'],
+    ),
+    ChallengeHistoryRecord(
+      id: 'rec_007',
+      date: '2026-07-16',
+      challengeId: 'tpl_stilllife_coffee',
+      category: ChallengeCategory.stillLife,
+      title: '静物：咖啡馆时光',
+      rewardXP: 25,
+      status: ChallengeStatus.done,
+      selectedAt: 1721081600000,
+      completedAt: 1721082600000,
+      isDaily: true,
+      photoIds: ['r7_p1', 'r7_p2'],
+    ),
+  ];
+}
+
+/// 用户挑战成就摘要
+class UserChallengeSummary {
+  final int totalXP;
+  final int completedCount;
+  final int level;
+  final String levelName;
+
+  const UserChallengeSummary({
+    required this.totalXP,
+    required this.completedCount,
+    required this.level,
+    required this.levelName,
+  });
 }

@@ -173,6 +173,27 @@ class GalleryMockData {
     LutMock(img: 'https://picsum.photos/seed/1038002/400/400', name: ''),
     LutMock(img: 'https://picsum.photos/seed/51383/400/400', name: ''),
   ];
+
+  /// 画册统计 mock（gallery_stats_page 空数据时回退使用）
+  static const GalleryStats stats = GalleryStats(
+    totalCount: 42,
+    thisWeekCount: 8,
+    avgPerDay: 1.2,
+    dailyCounts: [1, 0, 2, 1, 3, 0, 1],
+    categoryRanks: [
+      CategoryRank(label: '城市', count: 14, percent: 0.33),
+      CategoryRank(label: '自然', count: 10, percent: 0.24),
+      CategoryRank(label: '室内', count: 8, percent: 0.19),
+      CategoryRank(label: '美食', count: 6, percent: 0.14),
+      CategoryRank(label: '街拍', count: 4, percent: 0.10),
+    ],
+    timeOfDayDistribution: [
+      TimeSlot(label: '上午', icon: Icons.wb_sunny_outlined, count: 10, percent: 0.24),
+      TimeSlot(label: '下午', icon: Icons.wb_cloudy_outlined, count: 14, percent: 0.33),
+      TimeSlot(label: '傍晚', icon: Icons.wb_twilight_outlined, count: 12, percent: 0.29),
+      TimeSlot(label: '夜晚', icon: Icons.nights_stay_outlined, count: 6, percent: 0.14),
+    ],
+  );
 }
 
 /// 详情页调色滑块 mock

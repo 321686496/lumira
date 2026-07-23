@@ -23,10 +23,12 @@ class RouteNames {
   static const String templatesRecommend = '/templates/recommend';
   static const String templatesAll = '/templates/all';
   static const String challengeDetail = '/challenge/detail';
+  static const String challengeHistory = '/challenge/history';
   static const String inspiration = '/inspiration';
   static const String gallery = '/gallery';
   static const String galleryDetail = '/gallery/detail';
   static const String galleryDiary = '/gallery/diary';
+  static const String galleryStats = '/gallery/stats';
   static const String galleryMonthlyDigest = '/gallery/monthly-digest';
   static const String profileSettings = '/profile/settings';
   static const String profileSettingsTheme = '/profile/settings/theme';
@@ -37,6 +39,7 @@ class RouteNames {
   static const String profileCollections = '/profile/collections';
   static const String profileCollectionDetail = '/profile/collection-detail';
   static const String profileMyTemplates = '/profile/my-templates';
+  static const String profileFragmentDetail = '/profile/fragment-detail';
   static const String profileAbout = '/profile/about';
   static const String scenes = '/scenes';
   static const String shootkitEditor = '/shootkit/editor';
@@ -52,6 +55,7 @@ class RouteNames {
   static const String paramAcademyId = 'academyId';
   static const String paramMode = 'mode';
   static const String paramKitId = 'kitId';
+  static const String paramCategory = 'category';
 
   // === 工具方法 ===
   /// 构建 templateId 查询参数 URL

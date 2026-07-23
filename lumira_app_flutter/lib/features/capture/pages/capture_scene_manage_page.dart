@@ -80,6 +80,13 @@ class _CaptureSceneManagePageState
     GoRouter.of(context).push(RouteNames.captureSceneGuide);
   }
 
+  /// 点击场景卡片跳转到场景详情页（带 sceneId）
+  void _goSceneDetail(String sceneId) {
+    GoRouter.of(context).push(
+      RouteNames.withSceneId(RouteNames.captureSceneDetail, sceneId),
+    );
+  }
+
   void _goCreateKit() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('新建组合（mock）')),
@@ -386,7 +393,7 @@ class _CaptureSceneManagePageState
                               customScenes: _customScenes,
                               onNew: _onNew,
                               onMore: _onMore,
-                              onTapScene: (_) => _goGuide(),
+                              onTapScene: _goSceneDetail,
                             )
                       : _KitTab(
                           kits: _kits,
@@ -547,26 +554,29 @@ class _TabsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 0), // 48rpx/32rpx
-      child: Row(
-        children: [
-          _TabPill(
-            label: '我的收藏',
-            active: current == _ManageTab.fav,
-            onTap: () => onSelect(_ManageTab.fav),
-          ),
-          const SizedBox(width: 8), // 16rpx → 8dp
-          _TabPill(
-            label: '自定义场景',
-            active: current == _ManageTab.custom,
-            onTap: () => onSelect(_ManageTab.custom),
-          ),
-          const SizedBox(width: 8),
-          _TabPill(
-            label: '我的组合',
-            active: current == _ManageTab.kit,
-            onTap: () => onSelect(_ManageTab.kit),
-          ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            _TabPill(
+              label: '我的收藏',
+              active: current == _ManageTab.fav,
+              onTap: () => onSelect(_ManageTab.fav),
+            ),
+            const SizedBox(width: 8), // 16rpx → 8dp
+            _TabPill(
+              label: '自定义场景',
+              active: current == _ManageTab.custom,
+              onTap: () => onSelect(_ManageTab.custom),
+            ),
+            const SizedBox(width: 8),
+            _TabPill(
+              label: '我的组合',
+              active: current == _ManageTab.kit,
+              onTap: () => onSelect(_ManageTab.kit),
+            ),
+          ],
+        ),
       ),
     );
   }

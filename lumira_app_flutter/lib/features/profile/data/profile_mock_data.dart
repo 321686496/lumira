@@ -36,11 +36,14 @@ class FragmentItem {
     required this.icon,
     required this.current,
     required this.max,
+    this.photoUrls = const [],
   });
   final String name;
   final IconData icon;
   final int current;
   final int max;
+  /// 构成此碎片的照片列表（mock：picsum.photos）
+  final List<String> photoUrls;
   int get percent => ((current / max) * 100).round();
 }
 
@@ -148,10 +151,48 @@ class ProfileMockData {
 
   /// 碎片收集（4 项，对应 uni-app fragments ref）
   static const List<FragmentItem> fragments = [
-    FragmentItem(name: '人像', icon: Icons.person_outline, current: 3, max: 5),
-    FragmentItem(name: '风光', icon: Icons.landscape_outlined, current: 2, max: 5),
-    FragmentItem(name: '美食', icon: Icons.restaurant_outlined, current: 4, max: 5),
-    FragmentItem(name: '街拍', icon: Icons.camera_alt_outlined, current: 1, max: 5),
+    FragmentItem(
+      name: '人像',
+      icon: Icons.person_outline,
+      current: 3,
+      max: 5,
+      photoUrls: [
+        'https://picsum.photos/seed/frag_portrait_1/300/300',
+        'https://picsum.photos/seed/frag_portrait_2/300/300',
+        'https://picsum.photos/seed/frag_portrait_3/300/300',
+      ],
+    ),
+    FragmentItem(
+      name: '风光',
+      icon: Icons.landscape_outlined,
+      current: 2,
+      max: 5,
+      photoUrls: [
+        'https://picsum.photos/seed/frag_landscape_1/300/300',
+        'https://picsum.photos/seed/frag_landscape_2/300/300',
+      ],
+    ),
+    FragmentItem(
+      name: '美食',
+      icon: Icons.restaurant_outlined,
+      current: 4,
+      max: 5,
+      photoUrls: [
+        'https://picsum.photos/seed/frag_food_1/300/300',
+        'https://picsum.photos/seed/frag_food_2/300/300',
+        'https://picsum.photos/seed/frag_food_3/300/300',
+        'https://picsum.photos/seed/frag_food_4/300/300',
+      ],
+    ),
+    FragmentItem(
+      name: '街拍',
+      icon: Icons.camera_alt_outlined,
+      current: 1,
+      max: 5,
+      photoUrls: [
+        'https://picsum.photos/seed/frag_street_1/300/300',
+      ],
+    ),
   ];
 
   /// 成就墙（6 项，对应 uni-app achievements ref）

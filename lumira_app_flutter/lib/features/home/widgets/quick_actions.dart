@@ -62,7 +62,7 @@ class QuickActions extends ConsumerWidget {
       ),
       _QuickAction(
         icon: Icons.menu_book_outlined,
-        label: '模板',
+        label: '发现',
         circleColor: circleBg ?? tokens.successSubtle,
         iconColor: tokens.success,
         onTap: onTemplates,

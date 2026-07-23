@@ -100,6 +100,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         transparent: true,
         leading: _BackButton(tokens: tokens),
         actions: [
+          _StatsAction(tokens: tokens),
           _CollectionsAction(tokens: tokens),
         ],
       ),
@@ -284,6 +285,27 @@ class _CollectionsAction extends StatelessWidget {
             color: tokens.brand,
             height: 1.3,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatsAction extends StatelessWidget {
+  const _StatsAction({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => GoRouter.of(context).push(RouteNames.galleryStats),
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          Icons.bar_chart_outlined,
+          size: 20,
+          color: tokens.textPrimary,
         ),
       ),
     );

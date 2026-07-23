@@ -9,6 +9,7 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
+import '../../scenes/widgets/scene_category_overview.dart';
 import '../data/templates_mock_data.dart';
 import '../widgets/recommendation_card.dart';
 import '../widgets/template_grid_card.dart';
@@ -83,7 +84,7 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
             child: Column(
               children: [
                 LumiraNav(
-                  title: '模板',
+                  title: '发现',
                   transparent: true,
                   scrolled: _scrolled,
                   showBackButton: false,
@@ -100,6 +101,10 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
                     controller: _scrollController,
                     padding: EdgeInsets.zero,
                     children: [
+                      // === 模板库 section（上）===
+                      FadeUp(
+                        child: _TemplateSectionHeader(),
+                      ),
                       _HeroSection(
                         onTap: _goDetail,
                       ),
@@ -109,8 +114,18 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
                           child: _PreferenceSection(),
                         ),
                       FadeUp(
-                        delay: const Duration(milliseconds: 160),
+                        delay: const Duration(milliseconds: 120),
                         child: _OtherSection(onTap: _goDetail),
+                      ),
+                      const SizedBox(height: 28),
+                      // === 场景 section（下）===
+                      FadeUp(
+                        delay: const Duration(milliseconds: 160),
+                        child: _SceneSectionHeader(),
+                      ),
+                      const FadeUp(
+                        delay: Duration(milliseconds: 200),
+                        child: SceneCategoryOverview(compact: true),
                       ),
                       const SizedBox(height: 140), // bottom spacer 避开 FloatingTabBar
                     ],
@@ -159,6 +174,68 @@ class _BackgroundDecoration extends StatelessWidget {
   }
 }
 
+/// 「场景」分区标题
+class _SceneSectionHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final tokens = ref.watch(appThemeProvider).tokens;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+          child: Row(
+            children: [
+              Icon(Icons.filter_drama_outlined, size: 20, color: tokens.brand),
+              const SizedBox(width: 6),
+              Text(
+                '场景',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary,
+                  letterSpacing: -0.2,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 「模板库」分区标题
+class _TemplateSectionHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final tokens = ref.watch(appThemeProvider).tokens;
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+          child: Row(
+            children: [
+              Icon(Icons.layers_outlined, size: 20, color: tokens.brand),
+              const SizedBox(width: 6),
+              Text(
+                '模板库',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary,
+                  letterSpacing: -0.2,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// Hero 推荐区
 class _HeroSection extends StatelessWidget {
   const _HeroSection({required this.onTap});
@@ -169,7 +246,7 @@ class _HeroSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return FadeUp(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(0, 12, 0, 16), // 24rpx 0 32rpx → 12 0 16
+        padding: const EdgeInsets.fromLTRB(0, 12, 0, 28), // 24rpx 0 32rpx → 12 0 28（增大底部留白避免阴影被下个 section 遮挡）
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -66,6 +66,25 @@ class ShootingTip {
   final String sub;
 }
 
+/// 首页 Banner 项
+class HomeBannerItem {
+  const HomeBannerItem({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.imageSeed,
+    required this.tag,
+    required this.route,
+  });
+  final String id;
+  final String title;
+  final String subtitle;
+  final String imageSeed;
+  final String tag;
+  /// 点击跳转路由（带查询参数）
+  final String route;
+}
+
 /// 首页 mock 数据
 /// 来源：lumira-app/src/pages/home/index.vue 的 weekDays / scenes / recents
 /// 以及 lumira-app/src/composables/useShootingTip.ts 的 FALLBACK_TIPS
@@ -208,4 +227,32 @@ class HomeMockData {
   static const int statsFavorites = 12;
   static const String statsLikes = '8.5k';
   static const int statsWorks = 47;
+
+  /// 首页 Banner 列表
+  static const List<HomeBannerItem> banners = [
+    HomeBannerItem(
+      id: 'banner_tpl_scene',
+      title: '咖啡馆 × 复古胶片',
+      subtitle: '模板与场景搭配，一键出片',
+      imageSeed: 'banner-cafe-film',
+      tag: '模板+场景',
+      route: '/templates/detail?templateId=tpl_film_vintage',
+    ),
+    HomeBannerItem(
+      id: 'banner_inspire',
+      title: '黄金时刻拍摄灵感',
+      subtitle: '日落前 1 小时，光线柔和暖黄',
+      imageSeed: 'banner-golden-hour',
+      tag: '拍摄灵感',
+      route: '/capture/scene-detail?sceneId=preset_sunset',
+    ),
+    HomeBannerItem(
+      id: 'banner_new_tpl',
+      title: '霓虹夜景人像',
+      subtitle: '全新模板上架，赛博朋克氛围',
+      imageSeed: 'banner-neon-portrait',
+      tag: '新模板',
+      route: '/templates/detail?templateId=tpl_neon_portrait',
+    ),
+  ];
 }

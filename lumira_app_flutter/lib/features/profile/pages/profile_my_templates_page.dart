@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -117,9 +122,39 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
     _showSnack('已复制');
   }
 
-  void _handleActionExport() {
+  void _handleActionExport(CustomTemplate tpl) {
     _closeActionSheet();
-    _showSnack('导出中...');
+    _exportTemplate(tpl);
+  }
+
+  /// 导出模板为 .lumira 文件并调用系统分享
+  Future<void> _exportTemplate(CustomTemplate tpl) async {
+    try {
+      final data = <String, dynamic>{
+        'name': tpl.name,
+        'category': tpl.category.name,
+        'tags': tpl.tags,
+        'exposureCompensation': tpl.exposureCompensation,
+        'iso': tpl.iso,
+        'shutterSpeed': tpl.shutterSpeed,
+        'coverUrl': tpl.coverUrl,
+        'exportedAt': DateTime.now().toIso8601String(),
+        'app': 'lumira',
+        'version': 1,
+      };
+      final json = const JsonEncoder.withIndent('  ').convert(data);
+      final safeName = tpl.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/lumira_template_$safeName.lumira');
+      await file.writeAsString(json);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: '如画模板：${tpl.name}',
+        text: '我创建了一个如画摄影模板「${tpl.name}」，用如画 App 导入即可使用。',
+      );
+    } catch (e) {
+      _showSnack('导出失败：$e');
+    }
   }
 
   void _handleActionDelete() {
@@ -192,7 +227,7 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
                         tokens: tokens,
                         templates: filtered,
                         onTap: (tpl) => GoRouter.of(context).push(
-                          RouteNames.withTemplateId(RouteNames.templatesEditor, tpl.id),
+                          RouteNames.withTemplateId(RouteNames.templatesDetail, tpl.id),
                         ),
                         onLongPress: _openActionSheet,
                         onApply: (tpl) => GoRouter.of(context).push(
@@ -836,7 +871,7 @@ class _ActionSheet extends StatelessWidget {
   final void Function(CustomTemplate) onEdit;
   final void Function(CustomTemplate) onApply;
   final VoidCallback onDuplicate;
-  final VoidCallback onExport;
+  final void Function(CustomTemplate) onExport;
   final VoidCallback onDelete;
 
   Widget _item({
@@ -934,9 +969,9 @@ class _ActionSheet extends StatelessWidget {
                     onTap: onDuplicate,
                   ),
                   _item(
-                    icon: Icons.upload_outlined,
-                    label: '导出 .pptpl',
-                    onTap: onExport,
+                    icon: Icons.ios_share_outlined,
+                    label: '导出模板',
+                    onTap: () => onExport(template),
                   ),
                   _item(
                     icon: Icons.delete_outline,

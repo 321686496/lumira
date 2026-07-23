@@ -152,3 +152,56 @@ class DigestSceneTag {
   final String label;
   final int count;
 }
+
+/// 画册统计聚合数据（gallery_stats_page）
+class GalleryStats {
+  const GalleryStats({
+    required this.totalCount,
+    required this.thisWeekCount,
+    required this.avgPerDay,
+    required this.dailyCounts,
+    required this.categoryRanks,
+    required this.timeOfDayDistribution,
+  });
+
+  /// 照片总数
+  final int totalCount;
+  /// 本周（近 7 天）拍摄数
+  final int thisWeekCount;
+  /// 日均拍摄数（保留 1 位小数）
+  final double avgPerDay;
+  /// 近 7 天每日计数（长度 7，索引 0 = 6 天前，索引 6 = 今天）
+  final List<int> dailyCounts;
+  /// 拍摄分类排行（按数量降序）
+  final List<CategoryRank> categoryRanks;
+  /// 拍摄时段分布（4 项：上午/下午/傍晚/夜晚）
+  final List<TimeSlot> timeOfDayDistribution;
+}
+
+/// 拍摄分类排行项
+class CategoryRank {
+  const CategoryRank({
+    required this.label,
+    required this.count,
+    required this.percent,
+  });
+  final String label;
+  final int count;
+  /// 占比 0.0 - 1.0
+  final double percent;
+}
+
+/// 拍摄时段分布项
+class TimeSlot {
+  const TimeSlot({
+    required this.label,
+    required this.icon,
+    required this.count,
+    required this.percent,
+  });
+  final String label;
+  final IconData icon;
+  final int count;
+  /// 占比 0.0 - 1.0
+  final double percent;
+}

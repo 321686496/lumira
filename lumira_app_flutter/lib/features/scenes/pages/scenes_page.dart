@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_scene_mock_data.dart';
 import '../data/scenes_mock_data.dart';
@@ -11,32 +13,51 @@ import '../data/scenes_mock_data.dart';
 ///
 /// 视觉规格来源：lumira-app/src/pages/scenes/index.vue (159 行)
 /// - 顶部导航：返回 + 标题「场景库」+ 右侧搜索按钮（toast 占位）
-/// - 分类 tab 横滑条：全部 / 光线 / 室外 / 室内 / 情绪（5 项 pill）
+/// - 分类概览：大卡片 + 瀑布流排版展示一级分类，点击进入二级分类
 /// - 场景 grid 2 列：封面图 + 名称 + vibe + 照片数 badge（>0 时显示）
 /// - FAB：右下角圆形 + 按钮 → /capture/scene-manage?tab=custom
-///
-/// 跳转：
-/// - 点击场景卡 → /capture/scene-detail?sceneId=xxx
-/// - 点击搜索按钮 → SnackBar「搜索功能开发中」（与 uni-app showToast 一致）
 class ScenesPage extends ConsumerStatefulWidget {
-  const ScenesPage({super.key});
+  const ScenesPage({super.key, this.category});
+
+  final String? category;
 
   @override
   ConsumerState<ScenesPage> createState() => _ScenesPageState();
 }
 
 class _ScenesPageState extends ConsumerState<ScenesPage> {
-  String _activeCategoryId = 'all';
+  /// null = 分类概览模式；非 null = 二级分类页面（显示该分类下的场景）
+  String? _activeCategoryId;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.category != null) {
+      _activeCategoryId = widget.category;
+    }
+  }
+
+  bool get _isOverview => _activeCategoryId == null;
 
   List<ScenePreset> get _filteredScenes {
     final allScenes = ref.read(scenesListProvider);
-    if (_activeCategoryId == 'all') return allScenes;
-    final pill =
-        scenesCategoryPills.firstWhere((p) => p.id == _activeCategoryId);
-    return allScenes.where((s) => s.category == pill.category).toList();
+    if (_activeCategoryId == null || _activeCategoryId == 'all') {
+      return allScenes;
+    }
+    // 找到对应的 SceneCategory
+    final group = CaptureSceneMockData.categories.firstWhere(
+      (g) => g.category.name == _activeCategoryId,
+      orElse: () => CaptureSceneMockData.categories.first,
+    );
+    return allScenes.where((s) => s.category == group.category).toList();
   }
 
   void _back() {
+    if (_activeCategoryId != null) {
+      // 从二级分类返回到分类概览
+      setState(() => _activeCategoryId = null);
+      return;
+    }
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
@@ -72,22 +93,29 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = ref.watch(themeTokensProvider);
+
     return Scaffold(
       // 硬编码颜色，与 uni-app scenes-container bg #FAF7F2 一致
       backgroundColor: const Color(0xFFFAF7F2),
       body: SafeArea(
         child: Column(
           children: [
-            _ScenesNav(onBack: _back, onSearch: _onSearch),
-            _CategoryBar(
-              activeId: _activeCategoryId,
-              onSelect: _onCategorySelect,
+            _ScenesNav(
+              title: _isOverview ? '场景库' : '全部场景',
+              onBack: _back,
+              onSearch: _onSearch,
             ),
             Expanded(
-              child: _SceneGrid(
-                scenes: _filteredScenes,
-                onTap: _goDetail,
-              ),
+              child: _isOverview
+                  ? _SceneCategoryOverview(
+                      tokens: tokens,
+                      onSelectCategory: _onCategorySelect,
+                    )
+                  : _SceneGrid(
+                      scenes: _filteredScenes,
+                      onTap: _goDetail,
+                    ),
             ),
           ],
         ),
@@ -97,24 +125,25 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 }
 
-/// 顶部导航：返回 + 标题「场景库」+ 搜索
+/// 顶部导航：返回 + 标题 + 搜索
 class _ScenesNav extends StatelessWidget {
-  const _ScenesNav({required this.onBack, required this.onSearch});
+  const _ScenesNav({required this.title, required this.onBack, required this.onSearch});
+  final String title;
   final VoidCallback onBack;
   final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
     return LumiraNav(
-      title: '场景库',
+      title: title,
       transparent: true,
       leading: _NavIconButton(
-        icon: Icons.arrow_back_ios_new, // ph-arrow-left → Icons.arrow_back_ios_new
+        icon: Icons.arrow_back_ios_new,
         onTap: onBack,
       ),
       actions: [
         _NavIconButton(
-          icon: Icons.search, // ph-magnifying-glass → Icons.search
+          icon: Icons.search,
           onTap: onSearch,
         ),
       ],
@@ -144,46 +173,187 @@ class _NavIconButton extends StatelessWidget {
   }
 }
 
-/// 分类 tab 横滑条（5 项 pill）
-class _CategoryBar extends StatelessWidget {
-  const _CategoryBar({required this.activeId, required this.onSelect});
+/// 分类概览：大卡片 + 瀑布流排版展示一级分类
+class _SceneCategoryOverview extends StatelessWidget {
+  const _SceneCategoryOverview({
+    required this.tokens,
+    required this.onSelectCategory,
+  });
 
-  final String activeId;
-  final ValueChanged<String> onSelect;
+  final ThemeTokens tokens;
+  final void Function(String category) onSelectCategory;
+
+  /// 4 个一级分类的展示元数据（id 与 SceneCategory.name 对应）
+  static const List<_SceneCategoryMeta> _categories = [
+    _SceneCategoryMeta(
+      id: 'light',
+      name: '光线氛围',
+      icon: Icons.wb_sunny_outlined,
+      desc: '窗光、日落逆光、霓虹与烛光',
+      gradient: [Color(0xFFE8B97A), Color(0xFFB8743D)],
+      height: 190,
+    ),
+    _SceneCategoryMeta(
+      id: 'outdoor',
+      name: '室外环境',
+      icon: Icons.landscape_outlined,
+      desc: '海边、森林、城市街景',
+      gradient: [Color(0xFF8FA06A), Color(0xFF5A7A48)],
+      height: 165,
+    ),
+    _SceneCategoryMeta(
+      id: 'indoor',
+      name: '室内空间',
+      icon: Icons.home_outlined,
+      desc: '居家、咖啡馆、影棚',
+      gradient: [Color(0xFFC9A96E), Color(0xFF8B7355)],
+      height: 175,
+    ),
+    _SceneCategoryMeta(
+      id: 'mood',
+      name: '情绪氛围',
+      icon: Icons.favorite_outline,
+      desc: '治愈、孤独、内心风景',
+      gradient: [Color(0xFFC9A0A8), Color(0xFF8C5A66)],
+      height: 200,
+    ),
+  ];
+
+  int _countForCategory(String categoryId) {
+    final group = CaptureSceneMockData.categories.firstWhere(
+      (g) => g.category.name == categoryId,
+      orElse: () => CaptureSceneMockData.categories.first,
+    );
+    return CaptureSceneMockData.allScenes
+        .where((s) => s.category == group.category)
+        .length;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8), // 16rpx → 8dp
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12), // 24rpx → 12dp
-        child: Row(
-          children: [
-            for (final pill in scenesCategoryPills) ...[
-              _CategoryPill(
-                label: pill.name,
-                active: activeId == pill.id,
-                onTap: () => onSelect(pill.id),
+    final totalScenes = CaptureSceneMockData.allScenes.length;
+
+    // 瀑布流：两列交替分布
+    final left = <Widget>[];
+    final right = <Widget>[];
+    for (var i = 0; i < _categories.length; i++) {
+      final cat = _categories[i];
+      final card = _SceneCategoryCard(
+        meta: cat,
+        count: _countForCategory(cat.id),
+        tokens: tokens,
+        onTap: () => onSelectCategory(cat.id),
+      );
+      if (i % 2 == 0) {
+        left.add(card);
+      } else {
+        right.add(card);
+      }
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 80),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 顶部摘要
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  tokens.brandSubtle,
+                  tokens.brand.withOpacity(0.08),
+                ],
               ),
-              const SizedBox(width: 8), // 16rpx → 8dp
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.filter_drama_outlined, size: 28, color: tokens.brand),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '场景库',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: tokens.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$totalScenes 个场景 · 4 个大类等你探索',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '浏览分类',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 瀑布流双列
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: Column(children: left)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(children: right)),
             ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _CategoryPill extends StatelessWidget {
-  const _CategoryPill({
-    required this.label,
-    required this.active,
+class _SceneCategoryMeta {
+  const _SceneCategoryMeta({
+    required this.id,
+    required this.name,
+    required this.icon,
+    required this.desc,
+    required this.gradient,
+    required this.height,
+  });
+  final String id;
+  final String name;
+  final IconData icon;
+  final String desc;
+  final List<Color> gradient;
+  final double height;
+}
+
+/// 分类大卡片：渐变背景 + 装饰圆 + 图标 + 名称 + 描述 + 数量
+class _SceneCategoryCard extends StatelessWidget {
+  const _SceneCategoryCard({
+    required this.meta,
+    required this.count,
+    required this.tokens,
     required this.onTap,
   });
 
-  final String label;
-  final bool active;
+  final _SceneCategoryMeta meta;
+  final int count;
+  final ThemeTokens tokens;
   final VoidCallback onTap;
 
   @override
@@ -192,21 +362,114 @@ class _CategoryPill extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14, // 28rpx → 14dp
-          vertical: 6, // 12rpx → 6dp
-        ),
+        margin: const EdgeInsets.only(bottom: 12),
+        height: meta.height,
         decoration: BoxDecoration(
-          // 与 uni-app 一致：active 用 brand-primary，inactive 用 card bg
-          color: active ? const Color(0xFFC9A876) : Colors.white,
-          borderRadius: BorderRadius.circular(9999),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: meta.gradient.last.withOpacity(0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13, // 26rpx → 13dp
-            color: active ? Colors.white : const Color(0xFF6B635A),
-          ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // 渐变背景
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: meta.gradient,
+                ),
+              ),
+            ),
+            // 装饰圆（右上角）
+            Positioned(
+              top: -24,
+              right: -24,
+              child: Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.18),
+                ),
+              ),
+            ),
+            // 装饰圆（左下角小）
+            Positioned(
+              bottom: -16,
+              left: -16,
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.12),
+                ),
+              ),
+            ),
+            // 内容
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.22),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(meta.icon, size: 22, color: Colors.white),
+                  ),
+                  const Spacer(),
+                  Text(
+                    meta.name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    meta.desc,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.92),
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.22),
+                      borderRadius: BorderRadius.circular(9999),
+                    ),
+                    child: Text(
+                      '$count 个场景',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

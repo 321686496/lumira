@@ -14,6 +14,7 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
+import '../../templates/widgets/template_import_sheet.dart';
 import '../data/profile_mock_data.dart';
 
 /// 个人中心主页
@@ -442,6 +443,19 @@ class _FragmentCard extends ConsumerWidget {
                   color: tokens.textTertiary,
                 ),
               ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => GoRouter.of(context).push(RouteNames.profileFragmentDetail),
+                behavior: HitTestBehavior.opaque,
+                child: Text(
+                  '查看全部 ›',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: tokens.brand,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16), // 32rpx → 16dp
@@ -768,7 +782,10 @@ class _MenuCard extends ConsumerWidget {
     } else if (title == '场景管理') {
       onNav(RouteNames.captureSceneManage);
     } else if (title == '导入模板') {
-      onNav(RouteNames.templatesAll);
+      TemplateImportSheet.show(
+        context,
+        onImported: (_) => onNav(RouteNames.profileMyTemplates),
+      );
     } else if (title == '设置') {
       onNav(RouteNames.profileSettings);
     } else if (title == '关于如画') {

@@ -8,6 +8,8 @@ enum ChallengeStatus {
   pending,
   /// 锁定（明日预览等）
   locked,
+  /// 已跳过
+  skipped,
 }
 
 /// 附加挑战标签色
@@ -244,6 +246,8 @@ class ChallengeHistoryRecord {
   final int? completedAt;
   final int? skippedAt;
   final bool isDaily;
+  /// 关联的照片 ID 列表（用于挑战墙溯源展示）
+  final List<String> photoIds;
 
   const ChallengeHistoryRecord({
     required this.id,
@@ -257,6 +261,7 @@ class ChallengeHistoryRecord {
     this.completedAt,
     this.skippedAt,
     this.isDaily = false,
+    this.photoIds = const [],
   });
 }
 

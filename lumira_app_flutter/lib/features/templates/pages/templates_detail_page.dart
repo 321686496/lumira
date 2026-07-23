@@ -52,6 +52,12 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
 
   bool get _canEditTags => _template?.id.startsWith('custom_') ?? false;
 
+  /// 是否为"我的模板"（自定义创建或导入的模板），详情页显示编辑入口
+  bool get _isMyTemplate {
+    final id = _template?.id ?? '';
+    return id.startsWith('custom_') || id.startsWith('imp_');
+  }
+
   String get _wbLabel =>
       TemplatesBrowseMockData.wbLabel(_template!.camera.whiteBalance);
   String get _flashLabel =>
@@ -88,6 +94,14 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     final id = _template?.id;
     if (id == null) return;
     GoRouter.of(context).push('/capture?templateId=$id');
+  }
+
+  void _goEdit() {
+    final id = _template?.id;
+    if (id == null) return;
+    GoRouter.of(context).push(
+      RouteNames.withTemplateId(RouteNames.templatesEditor, id),
+    );
   }
 
   void _back() {
@@ -127,6 +141,15 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                   title: '模板详情',
                   transparent: true,
                   leading: _BackButton(tokens: tokens, onTap: _back),
+                  actions: _isMyTemplate
+                      ? [
+                          IconButton(
+                            icon: Icon(Icons.edit_outlined, size: 20, color: tokens.textPrimary),
+                            onPressed: _goEdit,
+                            tooltip: '编辑模板',
+                          ),
+                        ]
+                      : null,
                 ),
                 Expanded(
                   child: Stack(

@@ -127,7 +127,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
                           ),
                           _TabItem(
                             icon: Icons.grid_view_outlined,
-                            label: '模板',
+                            label: '发现',
                             active: widget.active == 'templates',
                             onTap: () => context.go(RouteNames.templates),
                             tokens: tokens,

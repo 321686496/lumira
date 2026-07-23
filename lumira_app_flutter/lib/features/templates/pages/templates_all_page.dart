@@ -21,9 +21,10 @@ import '../widgets/template_import_sheet.dart';
 /// 3. ActionRow（仅 _showCustom=true 时显示：导入模板 + 新建模板）
 /// 4. TemplateGrid（2 列网格）或 EmptyState
 class TemplatesAllPage extends ConsumerStatefulWidget {
-  const TemplatesAllPage({super.key, this.scene});
+  const TemplatesAllPage({super.key, this.scene, this.category});
 
   final String? scene;
+  final String? category;
 
   @override
   ConsumerState<TemplatesAllPage> createState() => _TemplatesAllPageState();
@@ -43,6 +44,10 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     if (scene != null) {
       final cat = sceneToCategoryMap[scene];
       if (cat != null) _selectedType = cat;
+    }
+    // 或接收 category 参数直接作为 _selectedType
+    if (widget.category != null) {
+      _selectedType = widget.category;
     }
   }
 
@@ -107,11 +112,30 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     );
   }
 
+  /// 选中某个一级分类，进入二级分类页面
+  void _selectCategory(String category) {
+    setState(() {
+      _selectedType = category;
+      _selectedStyle = null;
+      _selectedMethod = null;
+    });
+  }
+
+  /// 返回分类概览
+  void _backToCategories() {
+    setState(() {
+      _selectedType = null;
+      _selectedStyle = null;
+      _selectedMethod = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     final importedAll = ref.watch(importedAllTemplatesProvider);
     final filtered = _filteredTemplatesWith(importedAll);
+    final isOverview = _selectedType == null;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -125,45 +149,55 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
             child: Column(
               children: [
                 LumiraNav(
-                  title: '全部模板',
+                  title: isOverview ? '模板库' : '全部模板',
                   transparent: true,
-                  leading: _BackButton(tokens: tokens, onTap: _back),
+                  leading: _BackButton(
+                    tokens: tokens,
+                    onTap: isOverview ? _back : _backToCategories,
+                  ),
                 ),
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.only(bottom: 32),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _HeroCard(
-                          tokens: tokens,
-                          allCount: _allTemplatesCount,
-                          unlockedCount: _unlockedCount,
-                        ),
-                        _FilterSection(
-                          tokens: tokens,
-                          selectedType: _selectedType,
-                          selectedStyle: _selectedStyle,
-                          selectedMethod: _selectedMethod,
-                          showCustom: _showCustom,
-                          onLayerSelect: _onLayerSelect,
-                          onToggleCustom: _toggleCustom,
-                        ),
-                        if (_showCustom)
-                          _ActionRow(
+                    child: isOverview
+                        ? _CategoryOverview(
                             tokens: tokens,
-                            onImport: _showImportSheet,
-                            onCreate: _goEditor,
+                            allCount: _allTemplatesCount,
+                            unlockedCount: _unlockedCount,
+                            onSelectCategory: _selectCategory,
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _HeroCard(
+                                tokens: tokens,
+                                allCount: _allTemplatesCount,
+                                unlockedCount: _unlockedCount,
+                              ),
+                              _FilterSection(
+                                tokens: tokens,
+                                selectedType: _selectedType,
+                                selectedStyle: _selectedStyle,
+                                selectedMethod: _selectedMethod,
+                                showCustom: _showCustom,
+                                onLayerSelect: _onLayerSelect,
+                                onToggleCustom: _toggleCustom,
+                              ),
+                              if (_showCustom)
+                                _ActionRow(
+                                  tokens: tokens,
+                                  onImport: _showImportSheet,
+                                  onCreate: _goEditor,
+                                ),
+                              if (filtered.isEmpty)
+                                _EmptyState(tokens: tokens)
+                              else
+                                _TemplateGrid(
+                                  tokens: tokens,
+                                  templates: filtered,
+                                ),
+                            ],
                           ),
-                        if (filtered.isEmpty)
-                          _EmptyState(tokens: tokens)
-                        else
-                          _TemplateGrid(
-                            tokens: tokens,
-                            templates: filtered,
-                          ),
-                      ],
-                    ),
                   ),
                 ),
               ],
@@ -915,6 +949,312 @@ class _PremiumBadge extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+/// 分类概览：大卡片 + 瀑布流排版展示一级分类
+class _CategoryOverview extends StatelessWidget {
+  const _CategoryOverview({
+    required this.tokens,
+    required this.allCount,
+    required this.unlockedCount,
+    required this.onSelectCategory,
+  });
+
+  final ThemeTokens tokens;
+  final int allCount;
+  final int unlockedCount;
+  final void Function(String category) onSelectCategory;
+
+  static const List<_TemplateCategoryMeta> _categories = [
+    _TemplateCategoryMeta(
+      id: 'portrait',
+      name: '人像',
+      icon: Icons.person_outline,
+      desc: '自然光、逆光、氛围感人像',
+      gradient: [Color(0xFFE8B4B8), Color(0xFFC97B84)],
+      height: 200,
+    ),
+    _TemplateCategoryMeta(
+      id: 'landscape',
+      name: '风光',
+      icon: Icons.landscape_outlined,
+      desc: '黄金时刻、城市天际线',
+      gradient: [Color(0xFF8FA06A), Color(0xFF5A7A48)],
+      height: 170,
+    ),
+    _TemplateCategoryMeta(
+      id: 'food',
+      name: '美食',
+      icon: Icons.restaurant_outlined,
+      desc: '平铺构图、暖色调美食',
+      gradient: [Color(0xFFD4A574), Color(0xFFB8860B)],
+      height: 190,
+    ),
+    _TemplateCategoryMeta(
+      id: 'street',
+      name: '街拍',
+      icon: Icons.camera_alt_outlined,
+      desc: '黑白街头、都市节奏',
+      gradient: [Color(0xFF6B7280), Color(0xFF374151)],
+      height: 160,
+    ),
+    _TemplateCategoryMeta(
+      id: 'night',
+      name: '夜景',
+      icon: Icons.nights_stay_outlined,
+      desc: '霓虹灯、城市夜景人像',
+      gradient: [Color(0xFF5B6CB5), Color(0xFF2D3561)],
+      height: 180,
+    ),
+    _TemplateCategoryMeta(
+      id: 'macro',
+      name: '微距',
+      icon: Icons.zoom_in_outlined,
+      desc: '花草微距、细节之美',
+      gradient: [Color(0xFF7BA87B), Color(0xFF4A7C59)],
+      height: 165,
+    ),
+    _TemplateCategoryMeta(
+      id: 'still-life',
+      name: '静物',
+      icon: Icons.collections_outlined,
+      desc: '室内静物、咖啡馆时光',
+      gradient: [Color(0xFFC9A96E), Color(0xFF8B7355)],
+      height: 175,
+    ),
+  ];
+
+  int _countForCategory(String categoryId) {
+    return TemplatesBrowseMockData.allTemplates
+        .where((t) => t.category == categoryId)
+        .length;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 瀑布流：两列交替分布
+    final left = <Widget>[];
+    final right = <Widget>[];
+    for (var i = 0; i < _categories.length; i++) {
+      final cat = _categories[i];
+      final card = _CategoryCard(
+        meta: cat,
+        count: _countForCategory(cat.id),
+        tokens: tokens,
+        onTap: () => onSelectCategory(cat.id),
+      );
+      if (i % 2 == 0) {
+        left.add(card);
+      } else {
+        right.add(card);
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 顶部摘要
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [tokens.brandSubtle, tokens.brand.withOpacity(0.08)],
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.layers_outlined, size: 28, color: tokens.brand),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '模板库',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: tokens.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$allCount 个模板等你探索 · 已解锁 $unlockedCount 个',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '浏览分类',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 瀑布流双列
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: Column(children: left)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(children: right)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TemplateCategoryMeta {
+  const _TemplateCategoryMeta({
+    required this.id,
+    required this.name,
+    required this.icon,
+    required this.desc,
+    required this.gradient,
+    required this.height,
+  });
+  final String id;
+  final String name;
+  final IconData icon;
+  final String desc;
+  final List<Color> gradient;
+  final double height;
+}
+
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({
+    required this.meta,
+    required this.count,
+    required this.tokens,
+    required this.onTap,
+  });
+  final _TemplateCategoryMeta meta;
+  final int count;
+  final ThemeTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        height: meta.height,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: meta.gradient.last.withOpacity(0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // 渐变背景
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: meta.gradient,
+                ),
+              ),
+            ),
+            // 装饰圆
+            Positioned(
+              top: -20,
+              right: -15,
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withOpacity(0.1),
+                ),
+              ),
+            ),
+            // 内容
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(meta.icon, size: 18, color: Colors.white),
+                  ),
+                  const Spacer(),
+                  Text(
+                    meta.name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    meta.desc,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.85),
+                      height: 1.4,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(9999),
+                    ),
+                    child: Text(
+                      '$count 个模板',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

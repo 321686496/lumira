@@ -11,6 +11,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/home_mock_data.dart';
 import '../widgets/hero_card.dart';
+import '../widgets/home_banner.dart';
 import '../widgets/quick_actions.dart';
 import '../widgets/recent_shot_card.dart';
 import '../widgets/scene_reco_card.dart';
@@ -123,6 +124,11 @@ class _HomePageState extends ConsumerState<HomePage> {
               controller: _scrollController,
               padding: const EdgeInsets.only(bottom: 100), // 给 FloatingTabBar 留空间
               children: [
+                // Section 0: Banner 轮播
+                FadeUp(
+                  child: HomeBanner(banners: HomeMockData.banners),
+                ),
+                const SizedBox(height: 20),
                 // Section 1: Hero
                 FadeUp(
                   child: HeroCard(onCapture: _goCapture),

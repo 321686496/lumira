@@ -11,11 +11,13 @@ import '../features/capture/pages/capture_scene_detail_page.dart';
 import '../features/capture/pages/capture_scene_guide_page.dart';
 import '../features/capture/pages/capture_scene_manage_page.dart';
 import '../features/challenge/pages/challenge_detail_page.dart';
+import '../features/challenge/pages/challenge_history_page.dart';
 import '../features/challenge/pages/challenge_page.dart';
 import '../features/gallery/pages/gallery_detail_page.dart';
 import '../features/gallery/pages/gallery_diary_page.dart';
 import '../features/gallery/pages/gallery_monthly_digest_page.dart';
 import '../features/gallery/pages/gallery_page.dart';
+import '../features/gallery/pages/gallery_stats_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/inspiration/pages/inspiration_page.dart';
 import '../features/profile/pages/profile_academy_detail_page.dart';
@@ -23,6 +25,7 @@ import '../features/profile/pages/profile_academy_page.dart';
 import '../features/profile/pages/profile_about_page.dart';
 import '../features/profile/pages/profile_collection_detail_page.dart';
 import '../features/profile/pages/profile_collections_page.dart';
+import '../features/profile/pages/profile_fragment_detail_page.dart';
 import '../features/profile/pages/profile_growth_page.dart';
 import '../features/profile/pages/profile_invite_page.dart';
 import '../features/profile/pages/profile_my_templates_page.dart';
@@ -162,7 +165,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'templatesAll',
         builder: (context, state) {
           final scene = state.queryParams[RouteNames.paramScene];
-          return TemplatesAllPage(scene: scene);
+          final category = state.queryParams[RouteNames.paramCategory];
+          return TemplatesAllPage(scene: scene, category: category);
         },
       ),
 
@@ -179,6 +183,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final challengeId = state.queryParams[RouteNames.paramChallengeId];
           return ChallengeDetailPage(challengeId: challengeId);
         },
+      ),
+      GoRoute(
+        path: RouteNames.challengeHistory,
+        name: 'challengeHistory',
+        builder: (context, state) => const ChallengeHistoryPage(),
       ),
 
       // === 灵感 / 相册 ===
@@ -204,6 +213,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.galleryDiary,
         name: 'galleryDiary',
         builder: (context, state) => const GalleryDiaryPage(),
+      ),
+      GoRoute(
+        path: RouteNames.galleryStats,
+        name: 'galleryStats',
+        builder: (context, state) => const GalleryStatsPage(),
       ),
       GoRoute(
         path: RouteNames.galleryMonthlyDigest,
@@ -267,6 +281,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileMyTemplates,
         name: 'profileMyTemplates',
         builder: (context, state) => const ProfileMyTemplatesPage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileFragmentDetail,
+        name: 'profileFragmentDetail',
+        builder: (context, state) => const ProfileFragmentDetailPage(),
       ),
       GoRoute(
         path: RouteNames.profileAbout,

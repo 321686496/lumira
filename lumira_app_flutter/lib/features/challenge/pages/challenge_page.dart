@@ -13,6 +13,7 @@ import '../data/challenge_providers.dart';
 import '../widgets/achievement_wall_card.dart';
 import '../widgets/challenge_tip_card.dart';
 import '../widgets/daily_flip_card.dart';
+import '../widgets/flip_summary_widgets.dart';
 import '../widgets/main_challenge_card.dart';
 import '../widgets/streak_card.dart';
 import '../widgets/sub_challenge_row.dart';
@@ -194,7 +195,7 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
   }
 }
 
-/// 翻牌视图：3 张卡牌翻面选 1
+/// 翻牌视图：3 张卡牌翻面选 1 + 下方挑战摘要
 class _FlipView extends StatelessWidget {
   const _FlipView({
     required this.candidates,
@@ -205,6 +206,10 @@ class _FlipView extends StatelessWidget {
   final List<ChallengePoolItem> candidates;
   final void Function(ChallengePoolItem selected) onSelected;
   final ScrollController scrollController;
+
+  void _goHistory(BuildContext context) {
+    GoRouter.of(context).push(RouteNames.challengeHistory);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -250,9 +255,29 @@ class _FlipView extends StatelessWidget {
             onSelected: onSelected,
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
+        // 打卡进度条
         FadeUp(
           delay: const Duration(milliseconds: 160),
+          child: const FlipStreakBar(),
+        ),
+        const SizedBox(height: 16),
+        // 用户成就摘要
+        FadeUp(
+          delay: const Duration(milliseconds: 240),
+          child: const FlipUserSummary(),
+        ),
+        const SizedBox(height: 24),
+        // 最近完成记录
+        FadeUp(
+          delay: const Duration(milliseconds: 320),
+          child: FlipRecentRecords(
+            onViewAll: () => _goHistory(context),
+          ),
+        ),
+        const SizedBox(height: 24),
+        FadeUp(
+          delay: const Duration(milliseconds: 400),
           child: Text(
             '提示：挑战基于你的拍摄偏好智能推荐，每天首次进入触发翻牌',
             textAlign: TextAlign.center,
