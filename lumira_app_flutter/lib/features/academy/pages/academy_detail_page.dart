@@ -57,7 +57,10 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
   void _goAssignment() {
     if (widget.academyId == null) return;
     GoRouter.of(context).push(
-      RouteNames.profileAcademyAssignment,
+      RouteNames.build(
+        RouteNames.profileAcademyAssignment,
+        {RouteNames.paramAcademyId: widget.academyId!},
+      ),
     );
   }
 
@@ -71,7 +74,7 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
     if (detail == null) {
       return Scaffold(
         backgroundColor: tokens.canvas,
-        appBar: LumiraNav(title: '教程', transparent: true),
+        appBar: const LumiraNav(title: '教程', transparent: true),
         body: Center(child: Text('课程不存在', style: TextStyle(color: tokens.textTertiary))),
       );
     }
