@@ -70,6 +70,10 @@ dependencies:
   path: ^1.8.2
   intl: ^0.18.0
 
+  # SVG 渲染（brief ^2.0.0 → 调整为兼容 Dart 2.19 的版本，2.x 需 Dart 3）
+  # 用于渲染如画品牌 logo（symbol / wordmark / primary 等矢量资源）
+  flutter_svg: ^1.1.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -134,3 +138,4 @@ flutter:
     - assets/images/
     - assets/images/templates/
     - assets/images/scenes/
+    - assets/logos/

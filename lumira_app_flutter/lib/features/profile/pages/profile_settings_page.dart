@@ -108,19 +108,22 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
               child: Row(
                 children: [
                   SizedBox(
-                    width: 200,
+                    width: 180,
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: HomeBrandTitle(preview: true, styleOverride: style),
                     ),
                   ),
                   const Spacer(),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: selected ? tokens.brand : tokens.textSecondary,
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: selected ? tokens.brand : tokens.textSecondary,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
