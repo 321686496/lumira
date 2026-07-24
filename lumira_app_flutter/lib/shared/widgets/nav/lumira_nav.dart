@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../brand/lumira_logo.dart';
 
 /// 如画应用统一顶部导航栏
 ///
@@ -14,6 +15,9 @@ import '../../../core/theme/theme_tokens.dart';
 /// - 标题居中（position absolute + left 50% + transform translate -50%）
 /// - 可选左侧返回按钮（圆形 neumorphic 背景）
 /// - 可选右侧操作按钮组
+///
+/// Logo 升级：新增 useWordmark 参数，启用后用品牌 SVG 文字标替换纯文本标题，
+/// 适用于首页等需要展示品牌标识的 tab 页。
 class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
   const LumiraNav({
     super.key,
@@ -24,6 +28,7 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
     this.scrolled = false,
     this.transparent = true,
     this.showBackButton = true,
+    this.useWordmark = false,
   });
 
   final String? title;
@@ -37,6 +42,11 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
   /// Tab 页（home/templates/challenge/profile）应传 false，
   /// 避免 go_router canPop 误判导致 tab 页显示返回按钮（点击退出应用）。
   final bool showBackButton;
+
+  /// 是否用品牌 SVG 文字标（Lumira wordmark）替换纯文本标题。
+  /// 启用时忽略 [title]，渲染 assets/logos/logo-lumira-wordmark.svg。
+  /// 适用于首页等需要展示品牌标识的场景。
+  final bool useWordmark;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -101,6 +111,29 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
         ? (widget.scrolled ? 28.0 : 20.0)
         : (widget.scrolled ? 14.0 : 0.0);
 
+    // Logo 升级：计算居中标题内容
+    // - useWordmark=true → 品牌 SVG 文字标
+    // - 否则若有 title → 纯文本标题
+    final Widget? centerWidget = widget.useWordmark
+        ? const LumiraLogo.wordmark(
+            height: 22, // 略大于原 19dp 文本，承载 SVG 描边
+            semanticsLabel: '如画文字标',
+          )
+        : (widget.title != null
+            ? Text(
+                widget.title!,
+                style: TextStyle(
+                  fontSize: 19, // 38rpx → 19dp
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                  letterSpacing: 0.04 * 19,
+                  height: 1.3,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              )
+            : null);
+
     return ClipRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
@@ -116,44 +149,49 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
             bottom: false,
             child: SizedBox(
               height: 48, // min-height 96rpx → 48dp
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // 左侧
-                  Positioned(
-                    left: 8,
-                    child: leadingWidget,
-                  ),
-                  // 居中标题
-                  if (widget.title != null)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: Text(
-                          widget.title!,
-                          style: TextStyle(
-                            fontSize: 19, // 38rpx → 19dp
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary,
-                            letterSpacing: 0.04 * 19,
-                            height: 1.3,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+              child: widget.centerTitle
+                  ? Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // 左侧
+                        Positioned(
+                          left: 8,
+                          child: leadingWidget,
                         ),
+                        // 居中标题 / wordmark
+                        if (centerWidget != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            child: Center(child: centerWidget),
+                          ),
+                        // 右侧
+                        Positioned(
+                          right: 8,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: widget.actions ?? [const SizedBox(width: 40)],
+                          ),
+                        ),
+                      ],
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          leadingWidget,
+                          if (centerWidget != null) ...[
+                            const SizedBox(width: 4),
+                            Flexible(child: centerWidget),
+                          ],
+                          const Spacer(),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: widget.actions ?? [const SizedBox(width: 40)],
+                          ),
+                        ],
                       ),
                     ),
-                  // 右侧
-                  Positioned(
-                    right: 8,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: widget.actions ?? [const SizedBox(width: 40)],
-                    ),
-                  ),
-                ],
-              ),
             ),
           ),
         ),
