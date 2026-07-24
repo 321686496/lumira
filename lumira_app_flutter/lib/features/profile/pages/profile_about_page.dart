@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/brand/lumira_logo.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/profile_mock_data.dart';
@@ -217,35 +218,33 @@ class _AppHeader extends StatelessWidget {
     return Column(
       children: [
         const SizedBox(height: 20),
-        Container(
-          width: 88,
-          height: 88,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [tokens.brand, tokens.brandLight],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: tokens.brand.withOpacity(0.30),
-                offset: const Offset(0, 10),
-                blurRadius: 24,
+        // 主题色光晕 + 品牌 logo（替换原白色 surface 容器 + box-shadow）
+        SizedBox(
+          width: 140,
+          height: 140,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      tokens.brandSubtle.withOpacity(0.45),
+                      tokens.brandLight.withOpacity(0.18),
+                      tokens.canvas.withOpacity(0),
+                    ],
+                    stops: const [0.0, 0.55, 1.0],
+                  ),
+                ),
+              ),
+              const LumiraLogo.symbol(
+                size: 80,
+                semanticsLabel: '如画品牌符号标',
               ),
             ],
-          ),
-          child: const Center(
-            child: Text(
-              '如',
-              style: TextStyle(
-                fontSize: 44,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-                fontFamily: 'Noto Serif SC',
-                height: 1,
-              ),
-            ),
           ),
         ),
         const SizedBox(height: 14),
