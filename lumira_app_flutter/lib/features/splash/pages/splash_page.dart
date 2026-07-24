@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../shared/widgets/brand/lumira_logo.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 
 /// Splash 启动页
@@ -16,6 +17,9 @@ import '../../../shared/widgets/common/fade_up.dart';
 /// - 标题 48rpx→24dp Noto Serif SC，600 字重
 /// - 副标题 26rpx→13dp，textTertiary 色，letter-spacing 0.04em
 /// - 1.8s 后 uni.reLaunch → home（Flutter 用 context.go 替换栈顶）
+///
+/// Logo 升级：原 Icons.camera_outlined 替换为设计好的品牌 SVG 符号标
+/// （Single Viewfinder + Diagonal Light Beam + Focus Dot），主色 #C9A96E
 class SplashPage extends ConsumerStatefulWidget {
   const SplashPage({super.key});
 
@@ -58,12 +62,41 @@ class _SplashPageState extends ConsumerState<SplashPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // logo
+              // 品牌 logo + 主题色光晕（logo 后方叠径向渐变圆形）
               FadeUp(
-                child: Icon(
-                  Icons.camera_outlined, // ph-aperture → Icons.camera_outlined
-                  size: 60, // 120rpx → 60dp
-                  color: tokens.brand,
+                child: SizedBox(
+                  width: 160,
+                  height: 160,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // 主题色光晕
+                      Container(
+                        width: 160,
+                        height: 160,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              tokens.brandSubtle.withOpacity(0.45),
+                              tokens.brandLight.withOpacity(0.18),
+                              tokens.canvas.withOpacity(0),
+                            ],
+                            stops: const [0.0, 0.55, 1.0],
+                          ),
+                        ),
+                      ),
+                      // 品牌 logo（设计好的取景器符号标 SVG）
+                      const SizedBox(
+                        width: 80, // 略放大承载 SVG 描边细节
+                        height: 80,
+                        child: LumiraLogo.symbol(
+                          size: 80,
+                          semanticsLabel: '如画品牌符号标',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 24), // margin-bottom 48rpx → 24dp
