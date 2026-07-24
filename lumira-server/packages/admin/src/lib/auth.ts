@@ -23,16 +23,33 @@ export function clearAuthToken(): void {
 }
 
 // 校验 token 有效性（调后端 /stats）
-export async function verifyToken(token: string): Promise<boolean> {
+// 返回结构化结果，区分「网络错误」「Token 无效」「后端异常状态」，避免把所有失败都误报成 Token 无效。
+export type VerifyTokenResult =
+  | { ok: true }
+  | { ok: false; reason: 'network' | 'unauthorized' | 'unknown'; message: string };
+
+export async function verifyToken(token: string): Promise<VerifyTokenResult> {
   const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
   try {
     const res = await fetch(`${backendUrl}/api/v1/admin/stats`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',
     });
-    return res.ok;
+    if (res.ok) return { ok: true };
+    if (res.status === 401) {
+      return { ok: false, reason: 'unauthorized', message: 'Token 无效，请检查后重试' };
+    }
+    return {
+      ok: false,
+      reason: 'unknown',
+      message: `后端返回异常状态：${res.status} ${res.statusText || ''}`.trim(),
+    };
   } catch {
-    return false;
+    return {
+      ok: false,
+      reason: 'network',
+      message: `无法连接到后端服务（${backendUrl}），请确认后端已启动`,
+    };
   }
 }
 

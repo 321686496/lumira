@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
+import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
 
@@ -27,12 +28,14 @@ class PhotoPostProcessor {
   /// 处理拍照后的照片文件
   ///
   /// [screenRatio] 屏幕宽高比（width/height），用于 fullscreen 模式按取景器裁剪
+  /// [isPortrait] 设备是否为竖屏，用于 '4:3' 等比例的方向自适应裁剪
   static Future<String> processFile({
     required String inputPath,
     required PostProcess params,
     bool rawMode = false,
     String aspectRatio = 'fullscreen',
     double screenRatio = 9.0 / 19.5,
+    bool isPortrait = true,
   }) async {
     if (rawMode) {
       debugPrint('[post-process] rawMode=true, 跳过处理');
@@ -41,7 +44,7 @@ class PhotoPostProcessor {
 
     final sw = Stopwatch()..start();
     try {
-      debugPrint('[post-process] 开始: ratio=$aspectRatio, screenRatio=$screenRatio');
+      debugPrint('[post-process] 开始: ratio=$aspectRatio, screenRatio=$screenRatio, isPortrait=$isPortrait');
 
       // 1. 读取并解码 JPEG（硬件加速，~50ms）
       final file = File(inputPath);
@@ -58,6 +61,7 @@ class PhotoPostProcessor {
         srcImage.width,
         srcImage.height,
         screenRatio,
+        isPortrait,
       );
       debugPrint('[post-process] 裁剪区域: $cropRect');
 
@@ -264,33 +268,24 @@ class PhotoPostProcessor {
 
   /// 计算裁剪区域 [x, y, width, height]
   ///
-  /// 关键：fullscreen 模式按 screenRatio 裁剪，与取景器 cover 显示完全一致
+  /// 关键：使用与取景器 [CaptureState.computeTargetRatio] 完全一致的比例计算逻辑，
+  /// 确保拍照裁剪区域与取景器显示区域一致（所见即所得）。
+  /// 'fullscreen' 模式按 screenRatio 裁剪，其他模式按方向自适应的目标比例裁剪。
   static List<int> _computeCropRect(
     String ratio,
     int imgW,
     int imgH,
     double screenRatio,
+    bool isPortrait,
   ) {
     // 不裁剪的情况
     if (ratio == 'free' || ratio == 'none') {
       return [0, 0, imgW, imgH];
     }
 
-    // 计算目标比例
-    double targetRatio;
-    if (ratio == 'fullscreen') {
-      // 全屏：按屏幕宽高比裁剪（与取景器 cover 一致）
-      targetRatio = screenRatio;
-    } else {
-      final parts = ratio.split(':');
-      if (parts.length != 2) return [0, 0, imgW, imgH];
-      final rw = double.tryParse(parts[0]);
-      final rh = double.tryParse(parts[1]);
-      if (rw == null || rh == null || rw <= 0 || rh <= 0) {
-        return [0, 0, imgW, imgH];
-      }
-      targetRatio = rw / rh;
-    }
+    // 计算目标比例（与取景器 _ViewfinderArea 使用同一逻辑）
+    final targetRatio =
+        CaptureState.computeTargetRatio(ratio, isPortrait) ?? screenRatio;
 
     // cover 裁剪算法：与 CameraPreviewFit.cover 完全一致
     final imgRatio = imgW / imgH;

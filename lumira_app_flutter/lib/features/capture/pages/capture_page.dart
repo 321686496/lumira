@@ -12,7 +12,6 @@ import '../../../core/router/route_names.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import '../services/photo_post_processor.dart';
-import '../widgets/aspect_ratio_mask.dart';
 import '../widgets/aspect_ratio_selector.dart';
 import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
@@ -108,6 +107,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 清除 cameraStateProvider 中的旧 CameraState 引用，
     // 防止下次进入拍摄页时残留的旧状态影响新相机初始化
     ref.read(CaptureState.cameraStateProvider.notifier).state = null;
+    // 显式停止原生相机，防止退出后系统仍提示"正在使用取景器"。
+    // 仅依赖 widget 树异步 dispose 不可靠（HarmonyOS 上 CameraAwesomeBuilder
+    // 的 dispose 可能延迟或被跳过），导致下次进入时相机无法初始化。
+    // CamerawesomePlugin.stop() 是幂等的，重复调用无副作用。
+    // 使用 unawaited + catchError：stop() 返回 Future，测试环境中无平台通道
+    // 会异步抛 MissingPluginException，直接调用会导致未捕获的 Future 错误。
+    CamerawesomePlugin.stop().catchError((_) => false);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -178,12 +184,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
         // 获取屏幕宽高比，用于 fullscreen 模式按取景器裁剪
         final screenSize = MediaQuery.of(context).size;
         final screenRatio = screenSize.width / screenSize.height;
+        final isPortrait = screenSize.height >= screenSize.width;
         final processedPath = await PhotoPostProcessor.processFile(
           inputPath: media.filePath,
           params: params,
           rawMode: rawMode,
           aspectRatio: aspectRatio,
           screenRatio: screenRatio,
+          isPortrait: isPortrait,
         );
 
         _isProcessing = false;
@@ -375,18 +383,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. 取景器 + 叠图
+          // 1. 取景器（按选定比例约束显示区域，所见即所得）
           // key 绑定 _cameraRebuildKey：app 恢复时 key 变化，
           // 强制 CameraPreview（及其内部的 CameraAwesomeBuilder）完全重建
-          CameraPreview(
-            key: ValueKey('camera_preview_$_cameraRebuildKey'),
+          _ViewfinderArea(
+            rebuildKey: _cameraRebuildKey,
             onCaptured: _onCaptured,
             onCameraStateCreated: _onCameraStateCreated,
-          ),
-
-          // 1.5 比例遮罩（非全屏比例时显示上下/左右黑边遮罩）
-          const Positioned.fill(
-            child: AspectRatioMask(),
           ),
 
           // 2. 导航栏（始终保留：含返回 + 全屏切换 + 闪光灯）
@@ -457,6 +460,77 @@ class _CapturePageState extends ConsumerState<CapturePage>
         '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(path)}',
       );
     }
+  }
+}
+
+/// 取景器区域：按用户选定的比例约束相机预览的显示范围。
+///
+/// 核心修复：旧方案使用半透明遮罩叠加在全屏 cover 预览上，用户仍能透过遮罩
+/// 看到完整画面，且遮罩区域与拍照裁剪区域不一致。
+/// 新方案使用 [AspectRatio] 真正约束相机预览的显示区域：
+/// - 'fullscreen' 模式：预览填满整个屏幕
+/// - 其他比例：预览居中显示在目标比例的矩形框内，框外为纯黑背景
+///
+/// 配合 [CameraPreviewFit.cover]，相机纹理会自动裁剪填充该矩形框，
+/// 确保取景器显示的内容与拍照后裁剪的照片完全一致（所见即所得）。
+class _ViewfinderArea extends ConsumerWidget {
+  const _ViewfinderArea({
+    required this.rebuildKey,
+    required this.onCaptured,
+    required this.onCameraStateCreated,
+  });
+
+  final int rebuildKey;
+  final void Function(String path) onCaptured;
+  final void Function(CameraState state)? onCameraStateCreated;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ratioId = ref.watch(CaptureState.aspectRatioProvider);
+    final screenSize = MediaQuery.of(context).size;
+    final isPortrait = screenSize.height >= screenSize.width;
+    final targetRatio =
+        CaptureState.computeTargetRatio(ratioId, isPortrait);
+
+    // 相机预览本体（内部使用 cover 模式，会自动裁剪填充父容器）
+    final cameraPreview = CameraPreview(
+      key: ValueKey('camera_preview_$rebuildKey'),
+      onCaptured: onCaptured,
+      onCameraStateCreated: onCameraStateCreated,
+    );
+
+    // fullscreen 模式：填满屏幕，无需约束
+    if (targetRatio == null) {
+      return cameraPreview;
+    }
+
+    // 非全屏比例：将预览约束到目标比例的矩形框内，居中显示
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Container(
+          // 使用 ConstrainedBox + AspectRatio 确保预览区域不超过屏幕
+          constraints: BoxConstraints(
+            maxWidth: screenSize.width,
+            maxHeight: screenSize.height,
+          ),
+          child: AspectRatio(
+            aspectRatio: targetRatio,
+            child: ClipRect(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.15),
+                    width: 0.5,
+                  ),
+                ),
+                child: cameraPreview,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

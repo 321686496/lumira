@@ -129,6 +129,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
       final screenSize = MediaQuery.of(context).size;
       final screenRatio = screenSize.width / screenSize.height;
+      final isPortrait = screenSize.height >= screenSize.width;
       debugPrint('[save] 重新应用后期参数到照片...');
       savePath = await PhotoPostProcessor.processFile(
         inputPath: _photoUrl,
@@ -136,6 +137,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         rawMode: rawMode,
         aspectRatio: aspectRatio,
         screenRatio: screenRatio,
+        isPortrait: isPortrait,
       );
     }
 

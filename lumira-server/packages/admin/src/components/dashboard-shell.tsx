@@ -24,7 +24,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const title = resolveTitle(pathname);
 
   return (
-    <>
+    <div className="flex h-screen overflow-hidden">
       <Sidebar activePath={pathname} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar title={title} />
@@ -32,6 +32,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
           {children}
         </main>
       </div>
-    </>
+    </div>
   );
 }

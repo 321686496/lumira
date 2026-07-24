@@ -37,6 +37,28 @@ class CaptureState {
   /// '3:4' = 竖版 3:4
   static final aspectRatioProvider = StateProvider<String>((ref) => 'fullscreen');
 
+  /// 计算目标宽高比（width / height），取景器显示与照片裁剪共用此逻辑以确保一致。
+  ///
+  /// 返回 null 表示 'fullscreen' 模式（应使用屏幕实际宽高比）。
+  /// 方向自适应：'4:3' 在竖屏下显示为 3:4（标准相机 App 行为），
+  /// '3:4' 始终为竖版 3:4（即使横屏也显示竖版长条）。
+  static double? computeTargetRatio(String ratioId, bool isPortrait) {
+    switch (ratioId) {
+      case 'fullscreen':
+        return null;
+      case '4:3':
+        // 标准相机比例，按设备方向自适应：竖屏→3:4，横屏→4:3
+        return isPortrait ? 3.0 / 4.0 : 4.0 / 3.0;
+      case '1:1':
+        return 1.0;
+      case '3:4':
+        // 始终竖版 3:4
+        return 3.0 / 4.0;
+      default:
+        return null;
+    }
+  }
+
   // ── 新增：模板编辑状态 ──
 
   /// 原始模板（只读，派生自 currentTemplateIdProvider）

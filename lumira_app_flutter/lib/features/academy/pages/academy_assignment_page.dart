@@ -3,6 +3,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -29,6 +31,62 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
   String _note = '';
   bool _submitting = false;
   AssignmentSubmission? _result;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadExistingSubmission());
+  }
+
+  /// 加载已有提交记录，让用户关闭页面后回来仍能看到上次的照片和评分
+  Future<void> _loadExistingSubmission() async {
+    if (widget.academyId == null) {
+      setState(() => _loading = false);
+      return;
+    }
+    final detail = AcademyMockData.getCourseDetail(widget.academyId!);
+    final assignment = detail?.assignment;
+    if (assignment == null) {
+      setState(() => _loading = false);
+      return;
+    }
+    try {
+      final repo = await ref.read(academyRepositoryProvider.future);
+      final existing = await repo.getSubmission(assignment.id);
+      if (mounted && existing != null) {
+        setState(() {
+          _result = existing;
+          _photoPath = existing.photoPath;
+          _photoUrl = existing.photoUrl;
+          _note = existing.note ?? '';
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// 将拍摄页返回的临时照片复制到持久化目录，防止 OS 清理临时文件后照片丢失
+  Future<String> _persistPhoto(String tempPath) async {
+    try {
+      final dbPath = await getDatabasesPath();
+      final photosDir = Directory(p.join(dbPath, 'assignment_photos'));
+      if (!await photosDir.exists()) {
+        await photosDir.create(recursive: true);
+      }
+      final ext = p.extension(tempPath).isNotEmpty ? p.extension(tempPath) : '.jpg';
+      final destPath = p.join(
+        photosDir.path,
+        'assign_${widget.academyId}_${DateTime.now().millisecondsSinceEpoch}$ext',
+      );
+      await File(tempPath).copy(destPath);
+      return destPath;
+    } catch (_) {
+      return tempPath;
+    }
+  }
 
   Future<void> _pickFromCamera() async {
     // 通过拍摄页拍摄，返回 photoPath
@@ -36,10 +94,14 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
       RouteNames.build(RouteNames.capture, {RouteNames.paramMode: 'return'}),
     );
     if (result != null && mounted) {
-      setState(() {
-        _photoPath = result;
-        _photoUrl = null;
-      });
+      final persistentPath = await _persistPhoto(result);
+      if (mounted) {
+        setState(() {
+          _photoPath = persistentPath;
+          _photoUrl = null;
+          _result = null;
+        });
+      }
     }
   }
 
@@ -115,6 +177,14 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
         backgroundColor: tokens.canvas,
         appBar: const LumiraNav(title: '实战作业', transparent: true),
         body: Center(child: Text('作业不存在', style: TextStyle(color: tokens.textTertiary))),
+      );
+    }
+
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: tokens.canvas,
+        appBar: const LumiraNav(title: '实战作业', transparent: true),
+        body: Center(child: CircularProgressIndicator(strokeWidth: 2, color: tokens.brand)),
       );
     }
 

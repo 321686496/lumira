@@ -128,7 +128,7 @@ class _AcademyPageState extends ConsumerState<AcademyPage> {
                   ),
                 ),
                 SizedBox(
-                  height: 180,
+                  height: 210,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.only(left: 20),
