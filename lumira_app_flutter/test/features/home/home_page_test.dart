@@ -102,9 +102,8 @@ void main() {
     await tester.pumpWidget(_wrapWithRouter());
     await tester.pumpAndSettle();
 
-    // Section 1: LumiraNav
-    expect(find.text('如画'), findsOneWidget);
-    expect(find.text('上海'), findsOneWidget);
+    // Section 1: LumiraNav（HomeBrandTitle 默认 logoEnglish 渲染 Lumira）
+    expect(find.text('Lumira'), findsOneWidget);
 
     // Section 2: HeroCard
     expect(find.text('今日灵感'), findsOneWidget);
@@ -188,7 +187,7 @@ void main() {
       await tester.pumpWidget(_wrapWithRouter(style: style));
       await settleOrPump(tester, style);
 
-      expect(find.text('如画'), findsOneWidget);
+      expect(find.text('Lumira'), findsOneWidget);
       expect(find.text('今日灵感'), findsOneWidget);
       expect(find.byType(FloatingTabBar), findsOneWidget);
     }
@@ -199,7 +198,7 @@ void main() {
       await tester.pumpWidget(_wrapWithRouter(theme: theme));
       await tester.pumpAndSettle();
 
-      expect(find.text('如画'), findsOneWidget);
+      expect(find.text('Lumira'), findsOneWidget);
       expect(find.text('今日灵感'), findsOneWidget);
     }
   });
@@ -221,6 +220,6 @@ void main() {
 
     // LumiraNav 应处于 scrolled 状态（border-bottom 显示）
     // 简化验证：未崩溃即可（具体视觉效果难以在 widget test 中断言）
-    expect(find.text('如画'), findsOneWidget);
+    expect(find.text('Lumira'), findsOneWidget);
   });
 }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -94,11 +95,13 @@ class _HomePageState extends ConsumerState<HomePage> {
     return Scaffold(
       backgroundColor: tokens.canvas,
       // 透明 LumiraNav 作为 appBar（PreferredSizeWidget）
+      // 首页使用可切换的艺术排版组件 HomeBrandTitle
       appBar: LumiraNav(
-        title: '如画',
+        centerTitle: false,
         transparent: true,
         scrolled: _scrolled,
-        leading: _NavLocation(tokens: tokens),
+        showBackButton: false,
+        leading: const HomeBrandTitle(),
         actions: [
           _NavAction(
             icon: Icons.notifications_outlined,
@@ -261,37 +264,6 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// 顶部导航左侧位置显示
-class _NavLocation extends StatelessWidget {
-  const _NavLocation({required this.tokens});
-
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          Icons.place_outlined,
-          size: 16, // 32rpx → 16dp
-          color: tokens.textSecondary,
-        ),
-        const SizedBox(width: 4), // 8rpx → 4dp
-        Text(
-          HomeMockData.location,
-          style: TextStyle(
-            fontSize: 14, // 28rpx → 14dp
-            fontWeight: FontWeight.w500,
-            color: tokens.textSecondary,
-            height: 1.3,
-          ),
-        ),
-      ],
     );
   }
 }
