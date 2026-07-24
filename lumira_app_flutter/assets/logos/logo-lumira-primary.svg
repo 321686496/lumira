@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 160">
+  <defs>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#C9A96E" stop-opacity="0.9"/>
+      <stop offset="35%" stop-color="#C9A96E" stop-opacity="0.5"/>
+      <stop offset="70%" stop-color="#C9A96E" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#C9A96E" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(20, 0)">
+    <!-- Viewfinder frame: four L-shaped corner marks -->
+    <!-- Top-left: from left edge going up, curve, then right along top. Break at corner apex -->
+    <path d="M 40 68 L 40 58" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 58 40 L 68 40" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Top-right -->
+    <path d="M 132 40 L 142 40 A 14 14 0 0 1 156 54 L 156 68" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Bottom-right: break at corner apex -->
+    <path d="M 156 132 L 156 142" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M 142 156 L 132 156" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Bottom-left -->
+    <path d="M 68 156 L 58 156 A 14 14 0 0 1 44 142 L 44 132" fill="none" stroke="#C9A96E" stroke-width="2.5" stroke-linecap="round"/>
+
+    <!-- Diagonal light beam polygon -->
+    <polygon points="24,16 38,16 162,140 148,144" fill="url(#beam)"/>
+
+    <!-- Focus dot (shutter) -->
+    <circle cx="150" cy="150" r="4.5" fill="#C9A96E"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="210" y="90" font-family="Georgia, 'Times New Roman', 'Noto Serif', serif" font-size="48" font-weight="normal" fill="#1A1A1A" letter-spacing="0.08em">Lumira</text>
+  <text x="212" y="118" font-family="'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif" font-size="15" font-weight="300" fill="#5C5852" letter-spacing="0.12em">如你所见，皆成画卷</text>
+</svg>
