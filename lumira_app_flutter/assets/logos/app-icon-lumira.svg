@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#C9A96E" stop-opacity="0.9"/>
+      <stop offset="35%" stop-color="#C9A96E" stop-opacity="0.5"/>
+      <stop offset="70%" stop-color="#C9A96E" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#C9A96E" stop-opacity="0"/>
+    </linearGradient>
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="224" ry="224"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="#FAF7F2"/>
+
+    <g transform="translate(242, 242)">
+      <!-- Frame corners scaled 5.2x: 120*5.2=624, rx=14*5.2≈73, stroke=2.5*5.2=13 -->
+      <path d="M 0 146 L 0 94" fill="none" stroke="#C9A96E" stroke-width="13" stroke-linecap="round"/>
+      <path d="M 94 0 L 146 0" fill="none" stroke="#C9A96E" stroke-width="13" stroke-linecap="round"/>
+
+      <path d="M 478 0 L 530 0 A 73 73 0 0 1 603 73 L 603 146" fill="none" stroke="#C9A96E" stroke-width="13" stroke-linecap="round"/>
+
+      <path d="M 603 478 L 603 530" fill="none" stroke="#C9A96E" stroke-width="13" stroke-linecap="round"/>
+      <path d="M 530 603 L 478 603" fill="none" stroke="#C9A96E" stroke-width="13" stroke-linecap="round"/>
+
+      <path d="M 146 603 L 94 603 A 73 73 0 0 1 21 530 L 21 478" fill="none" stroke="#C9A96E" stroke-width="13" stroke-linecap="round"/>
+
+      <!-- Light beam scaled: original points (24,16)(38,16)(162,140)(148,144), scale 5.2 on 40..160 → -83..520 range -->
+      <polygon points="-83,-83 -10,-83 634,520 562,541" fill="url(#beam)"/>
+
+      <!-- Focus dot r=4.5*5.2≈23 -->
+      <circle cx="572" cy="572" r="23" fill="#C9A96E"/>
+    </g>
+  </g>
+</svg>
