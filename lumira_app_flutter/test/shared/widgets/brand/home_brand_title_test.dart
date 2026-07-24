@@ -45,5 +45,15 @@ void main() {
       expect(find.text('Lumira'), findsOneWidget);
       expect(find.text('如画'), findsOneWidget);
     });
+
+    testWidgets('styleOverride takes precedence over provider', (tester) async {
+      await tester.pumpWidget(_wrap(
+        const HomeBrandTitle(styleOverride: HomeWordmarkStyle.englishChinese),
+        style: HomeWordmarkStyle.logoEnglish,
+      ));
+      expect(find.byType(LumiraLogo), findsNothing);
+      expect(find.text('Lumira'), findsOneWidget);
+      expect(find.text('如画'), findsOneWidget);
+    });
   });
 }

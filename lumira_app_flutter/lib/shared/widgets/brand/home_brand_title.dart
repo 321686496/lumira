@@ -17,14 +17,19 @@ import 'lumira_logo.dart';
 /// 中文用 Noto Serif SC w600，颜色取 `tokens.brand` 作艺术对比。
 ///
 /// [preview] 用于设置页预览卡片，使用更小尺寸。
+///
+/// [styleOverride] 用于设置页预览卡片强制展示指定 style（默认 null 时
+/// 走 [homeWordmarkStyleProvider]）。
 class HomeBrandTitle extends ConsumerWidget {
-  const HomeBrandTitle({super.key, this.preview = false});
+  const HomeBrandTitle({super.key, this.preview = false, this.styleOverride});
 
   final bool preview;
+  final HomeWordmarkStyle? styleOverride;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final style = ref.watch(homeWordmarkStyleProvider);
+    final HomeWordmarkStyle style =
+        styleOverride ?? ref.watch(homeWordmarkStyleProvider);
     final tokens = ref.watch(appThemeProvider).tokens;
 
     // 尺寸：preview 用更小尺寸适配卡片
