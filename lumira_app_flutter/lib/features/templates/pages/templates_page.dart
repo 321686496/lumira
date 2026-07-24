@@ -86,6 +86,7 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
               children: [
                 LumiraNav(
                   title: '发现',
+                  centerTitle: false,
                   transparent: true,
                   scrolled: _scrolled,
                   showBackButton: false,
