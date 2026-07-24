@@ -43,7 +43,12 @@ class ProfilePage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
-      appBar: const LumiraNav(title: '我的', transparent: true, showBackButton: false),
+      appBar: const LumiraNav(
+        title: '我的',
+        centerTitle: false,
+        transparent: true,
+        showBackButton: false,
+      ),
       body: Stack(
         children: [
           // Forced fix: glass 风格彩色斑点背景

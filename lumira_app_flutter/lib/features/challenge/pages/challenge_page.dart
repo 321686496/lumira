@@ -124,6 +124,7 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
               children: [
                 LumiraNav(
                   title: '每日挑战',
+                  centerTitle: false,
                   scrolled: _scrolled,
                   transparent: true,
                   showBackButton: false,
