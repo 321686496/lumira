@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/preferences/home_wordmark_style.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/profile_mock_data.dart';
@@ -71,6 +73,69 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
       SnackBar(content: Text('兑换码「$code」已提交'), duration: const Duration(milliseconds: 1000)),
     );
     _codeController.clear();
+  }
+
+  Widget _buildHomeWordmarkSection(ThemeTokens tokens) {
+    final currentStyle = ref.watch(homeWordmarkStyleProvider);
+    final options = <MapEntry<HomeWordmarkStyle, String>>[
+      const MapEntry(HomeWordmarkStyle.logoEnglish, 'Logo + 英文'),
+      const MapEntry(HomeWordmarkStyle.logoEnglishChinese, 'Logo + 英文 + 中文'),
+      const MapEntry(HomeWordmarkStyle.englishChinese, '英文 + 中文'),
+    ];
+
+    return Column(
+      children: options.map((option) {
+        final style = option.key;
+        final label = option.value;
+        final selected = style == currentStyle;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: GestureDetector(
+            onTap: () {
+              ref.read(homeWordmarkStyleProvider.notifier).state = style;
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: selected ? tokens.brandSubtle.withOpacity(0.30) : tokens.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: selected ? tokens.brand : tokens.divider,
+                  width: selected ? 1.5 : 1.0,
+                ),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 200,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: HomeBrandTitle(preview: true, styleOverride: style),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: selected ? tokens.brand : tokens.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                    size: 18,
+                    color: selected ? tokens.brand : tokens.textTertiary,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
   }
 
   @override
@@ -141,6 +206,10 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 20),
+                _GroupTitle(text: '首页标题样式', tokens: tokens),
+                const SizedBox(height: 8),
+                _buildHomeWordmarkSection(tokens),
                 const SizedBox(height: 20),
                 _GroupTitle(text: '显示', tokens: tokens),
                 const SizedBox(height: 8),
