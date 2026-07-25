@@ -10,7 +10,7 @@ import '../../features/challenge/data/challenge_dao.dart';
 import '../../features/academy/data/academy_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 3;
+const int _kDbVersion = 4;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -75,6 +75,8 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
@@ -167,6 +169,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colLevelEnabled} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colShutterSound} INTEGER NOT NULL DEFAULT 1,
       ${Tables.colWatermark} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colSeedV3Done} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
@@ -184,6 +187,9 @@ Future<void> _onCreate(Database db, int version) async {
   await db.execute(AcademyTables.cpCreateSql);
   await db.execute(AcademyTables.asCreateSql);
   await db.execute(AcademyTables.kfCreateSql);
+
+  await db.execute(CompositionKitsTable.createSql);
+  await db.execute(AcademyLearningTrajectoryTable.createSql);
 }
 
 Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -197,5 +203,44 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     await db.execute(AcademyTables.cpCreateSql);
     await db.execute(AcademyTables.asCreateSql);
     await db.execute(AcademyTables.kfCreateSql);
+  }
+  if (oldVersion < 4) {
+    // v4: 新增 composition_kits / academy_learning_trajectory 表
+    await db.execute(CompositionKitsTable.createSql);
+    await db.execute(AcademyLearningTrajectoryTable.createSql);
+
+    // custom_templates 新增列（ALTER TABLE ADD COLUMN，IF NOT EXISTS 兜底用 try/catch）
+    await _addColumnIfNotExists(
+      db,
+      Tables.customTemplates,
+      Tables.colIsBuiltin,
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfNotExists(
+      db,
+      Tables.customTemplates,
+      Tables.colIsRecommended,
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfNotExists(
+      db,
+      Tables.userSettings,
+      Tables.colSeedV3Done,
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+  }
+}
+
+/// 安全添加列：若列已存在则跳过（迁移幂等）
+Future<void> _addColumnIfNotExists(
+  Database db,
+  String table,
+  String column,
+  String typeClause,
+) async {
+  final cols = await db.rawQuery('PRAGMA table_info($table)');
+  final exists = cols.any((c) => c['name'] == column);
+  if (!exists) {
+    await db.execute('ALTER TABLE $table ADD COLUMN $column $typeClause');
   }
 }
