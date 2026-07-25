@@ -54,6 +54,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   bool _isComparing = false;
 
   /// 是否已生成对比图（用于"生成对比图"按钮的状态反馈）
+  // TODO(t12-followup): wire to button UI (e.g. ✓ indicator) once a read site is added;
+  // until then the field is write-only and suppresses `unused_field` lint.
+  // ignore: unused_field
   bool _compareCardGenerated = false;
 
   @override
