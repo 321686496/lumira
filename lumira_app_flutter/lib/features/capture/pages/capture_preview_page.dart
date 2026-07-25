@@ -49,6 +49,13 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   late List<MoodOption> _moods;
   String? _selectedSceneId;
 
+  /// 是否正在按住"对比"按钮显示原图
+  bool _isComparing = false;
+
+  /// 是否已生成对比图（用于"生成对比图"按钮的状态反馈）
+  // ignore: unused_field, prefer_final_fields
+  bool _compareCardGenerated = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,10 +76,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
-  void _onCompare() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('查看对比')),
-    );
+  void _onCompareStart() {
+    setState(() => _isComparing = true);
+  }
+
+  void _onCompareEnd() {
+    setState(() => _isComparing = false);
   }
 
   void _onSkip() {
@@ -242,7 +251,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                 _PreviewNav(
                   tokens: tokens,
                   onBack: _back,
-                  onCompare: _onCompare,
+                  onPressStart: _onCompareStart,
+                  onPressEnd: _onCompareEnd,
                 ),
                 Expanded(
                   child: SingleChildScrollView(
@@ -252,6 +262,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         _PhotoFrame(
                           tokens: tokens,
                           photoUrl: _photoUrl,
+                          isComparing: _isComparing,
                         ),
                         _BottomSheet(
                           tokens: tokens,
@@ -310,12 +321,14 @@ class _PreviewNav extends StatelessWidget {
   const _PreviewNav({
     required this.tokens,
     required this.onBack,
-    required this.onCompare,
+    required this.onPressStart,
+    required this.onPressEnd,
   });
 
   final ThemeTokens tokens;
   final VoidCallback onBack;
-  final VoidCallback onCompare;
+  final VoidCallback onPressStart;
+  final VoidCallback onPressEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -327,7 +340,11 @@ class _PreviewNav extends StatelessWidget {
         transparent: true,
         leading: _NavBackButton(onTap: onBack),
         actions: [
-          _CompareLink(onTap: onCompare),
+          _CompareLink(
+            onTap: () {},
+            onPressStart: onPressStart,
+            onPressEnd: onPressEnd,
+          ),
         ],
       ),
     );
@@ -357,29 +374,33 @@ class _NavBackButton extends StatelessWidget {
 }
 
 class _CompareLink extends StatelessWidget {
-  const _CompareLink({required this.onTap});
+  const _CompareLink({
+    required this.onTap,
+    required this.onPressStart,
+    required this.onPressEnd,
+  });
   final VoidCallback onTap;
+  final VoidCallback onPressStart;
+  final VoidCallback onPressEnd;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onTapDown: (_) => onPressStart(),
+      onTapUp: (_) => onPressEnd(),
+      onTapCancel: onPressEnd,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Text(
-              '对比 ›',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                // 硬编码颜色，与 uni-app 一致 (nav-compare color #C9A96E)
-                color: Color(0xFFC9A96E),
-              ),
-            ),
-          ],
+      child: const Padding(
+        padding: EdgeInsets.all(8),
+        child: Text(
+          '对比 ›',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            // 硬编码颜色，与 uni-app 一致 (nav-compare color #C9A96E)
+            color: Color(0xFFC9A96E),
+          ),
         ),
       ),
     );
@@ -394,17 +415,21 @@ class _PhotoFrame extends ConsumerWidget {
   const _PhotoFrame({
     required this.tokens,
     required this.photoUrl,
+    required this.isComparing,
   });
 
   final ThemeTokens tokens;
   final String photoUrl;
+  final bool isComparing;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bool isNetworkUrl = photoUrl.startsWith('http');
-    // 读取当前后期参数，实时应用滤镜到预览
     final postProcess = ref.watch(CaptureState.effectivePostProcessProvider);
-    final colorFilter = fromPostProcess(postProcess);
+    // 对比模式下不应用滤镜，显示原图
+    final colorFilter =
+        isComparing ? const ColorFilter.mode(Colors.transparent, BlendMode.dst)
+            : fromPostProcess(postProcess);
 
     return Padding(
       padding: const EdgeInsets.all(8),
