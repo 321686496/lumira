@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/scenes_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -40,6 +42,7 @@ class CaptureSceneDetailPage extends ConsumerStatefulWidget {
 class _CaptureSceneDetailPageState
     extends ConsumerState<CaptureSceneDetailPage> {
   ScenePreset? _scene;
+  SceneRecord? _sceneRecord;
   bool _isFav = false;
   List<String> _editableTagIds = [];
   bool _tagSheetVisible = false;
@@ -47,16 +50,37 @@ class _CaptureSceneDetailPageState
   @override
   void initState() {
     super.initState();
-    _loadScene();
+    _loadScene().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
-  void _loadScene() {
+  Future<void> _loadScene() async {
+    // 先尝试 DAO
+    try {
+      final dao = await ref.read(scenesDaoProvider.future);
+      final record = await dao.getById(widget.sceneId ?? '');
+      if (record != null) {
+        _sceneRecord = record;
+        _isFav = record.isFavorite;
+        // 仍用 mock ScenePreset 提供完整 UI 字段（icon/filter/sceneGuide 结构体）
+        final mockScene = CaptureSceneMockData.getSceneById(widget.sceneId);
+        _scene = mockScene;
+        if (mockScene != null && mockScene.isCustom) {
+          _editableTagIds =
+              List<String>.from((mockScene as CustomScenePreset).tagIds);
+        }
+        return;
+      }
+    } catch (_) {
+      // DAO 失败回退 mock
+    }
+    // 回退 mock
     final s = CaptureSceneMockData.getSceneById(widget.sceneId);
     _scene = s;
     _isFav = s != null ? CaptureSceneMockData.isFavorite(s.id) : false;
     if (s != null && s.isCustom) {
-      _editableTagIds = List<String>.from(
-          (s as CustomScenePreset).tagIds);
+      _editableTagIds = List<String>.from((s as CustomScenePreset).tagIds);
     }
   }
 
@@ -68,19 +92,29 @@ class _CaptureSceneDetailPageState
     }
   }
 
-  void _toggleFav() {
-    if (_scene == null) return;
-    setState(() {
-      _isFav = !_isFav;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(_isFav ? '已收藏场景' : '已取消收藏')),
-    );
+  Future<void> _toggleFav() async {
+    if (_scene == null && _sceneRecord == null) return;
+    final id = _scene?.id ?? _sceneRecord!.id;
+    final newFav = !_isFav;
+    setState(() => _isFav = newFav);
+    try {
+      final dao = await ref.read(scenesDaoProvider.future);
+      await dao.setFavorite(id, newFav);
+    } catch (_) {
+      // 静默失败
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(newFav ? '已收藏场景' : '已取消收藏')),
+      );
+    }
   }
 
   void _goCapture() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('用此场景拍照：${_scene?.name ?? ''}')),
+    final id = _scene?.id ?? _sceneRecord?.id;
+    if (id == null) return;
+    GoRouter.of(context).push(
+      RouteNames.build(RouteNames.capture, {RouteNames.paramScene: id}),
     );
   }
 
