@@ -254,7 +254,8 @@ void main() {
       expect(find.text('已跳过'), findsOneWidget);
     });
 
-    testWidgets('对比 › press-and-hold reveals original (no SnackBar)',
+    testWidgets(
+        '对比 › press-and-hold switches ColorFilter during hold (no SnackBar)',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
@@ -264,17 +265,32 @@ void main() {
       // Compare link is present
       expect(find.text('对比 ›'), findsOneWidget);
 
-      // Tapping no longer shows the old "查看对比" SnackBar
+      // Tapping no longer shows the old "查看对比" SnackBar (secondary check)
       await tester.tap(find.text('对比 ›'));
       await settleOrPump(tester, UIStyle.neumorphic);
       expect(find.text('查看对比'), findsNothing);
 
-      // Press-and-hold should not crash and should toggle compare state
+      // Press-and-hold should switch ColorFilter to the transparent
+      // (reveal-original) filter DURING the hold
       final gesture =
           await tester.startGesture(tester.getCenter(find.text('对比 ›')));
-      await tester.pump();
+      await tester.pump(); // allow setState to propagate
+
+      final colorFilteredDuring =
+          tester.widget<ColorFiltered>(find.byType(ColorFiltered));
+      expect(colorFilteredDuring.colorFilter,
+          const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+          reason: 'compare mode should reveal original (no filter)');
+
+      // Release — filter should revert to fromPostProcess(...) (NOT transparent)
       await gesture.up();
       await tester.pump();
+
+      final colorFilteredAfter =
+          tester.widget<ColorFiltered>(find.byType(ColorFiltered));
+      expect(colorFilteredAfter.colorFilter,
+          isNot(const ColorFilter.mode(Colors.transparent, BlendMode.dst)),
+          reason: 'release should restore the post-process filter');
     });
 
     testWidgets('tapping 生成对比图 shows SnackBar 生成对比图中', (tester) async {

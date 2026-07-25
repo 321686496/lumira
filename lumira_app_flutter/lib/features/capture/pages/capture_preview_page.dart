@@ -81,6 +81,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   }
 
   void _onCompareEnd() {
+    if (!mounted) return;
     setState(() => _isComparing = false);
   }
 
