@@ -5,22 +5,56 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:lumira_app_flutter/core/db/dao/scenes_dao.dart';
+import 'package:lumira_app_flutter/core/db/database_provider.dart';
+import 'package:lumira_app_flutter/core/db/seeders/builtin_data_seeder.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
-import 'package:lumira_app_flutter/features/scenes/data/scenes_mock_data.dart';
 import 'package:lumira_app_flutter/features/scenes/pages/scenes_page.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
 
-/// Task 2.11 — ScenesPage 测试
+/// Task 2.11 + Task A3 — ScenesPage 测试
 ///
-/// 覆盖 brief：≥10 项断言，含 UI 渲染 / 分类切换 / 路由跳转 / 空状态 / 照片数 badge /
+/// 覆盖 brief：≥10 项断言，含 UI 渲染 / 分类导航 / 路由跳转 / 照片数 badge /
 /// 搜索 toast / FAB 跳转 / 跨主题 smoke。
+///
+/// Task A3 适配：页面从 mock scenesListProvider 切换到 scenesDaoProvider，
+/// 默认显示分类概览（4 个大卡片），点击分类后才显示场景 grid。
+/// 测试使用 sqflite_ffi + BuiltinDataSeeder 在 setUpAll 中种入种子数据。
 void main() {
   FlutterExceptionHandler? originalErrorHandler;
+  // 共享 DB 实例：在 setUpAll 中创建并种入种子数据，所有测试通过 override 复用。
+  // 避免每个测试重新打开 DB 文件导致的文件锁 / 时序问题。
+  late Database sharedDb;
+  ProviderContainer? seedContainer;
+
+  setUpAll(() async {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    // 确保使用全新的 DB 文件并种入种子场景数据
+    final dbDir = await getDatabasesPath();
+    final dbPath = p.join(dbDir, 'lumira.db');
+    try {
+      await databaseFactory.deleteDatabase(dbPath);
+    } catch (_) {
+      // 文件可能不存在，忽略
+    }
+    // 通过临时 container 触发 databaseProvider.onCreate（建表），并种入数据。
+    // 不 dispose container，保持 DB 连接存活，供测试通过 override 复用。
+    seedContainer = ProviderContainer();
+    sharedDb = await seedContainer!.read(databaseProvider.future);
+    await BuiltinDataSeeder.seedAll(sharedDb);
+  });
+
+  tearDownAll(() {
+    seedContainer?.dispose();
+  });
 
   setUp(() {
     HttpOverrides.global = TestHttpOverrides();
@@ -42,7 +76,6 @@ void main() {
     required ThemeKey themeKey,
     required UIStyle uiStyle,
     String initialLocation = '/scenes',
-    List<Override> overrides = const [],
   }) {
     final goRouter = GoRouter(
       initialLocation: initialLocation,
@@ -79,18 +112,23 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
-        ...overrides,
+        // 复用 sharedDb，避免每个测试重新打开 DB 文件
+        databaseProvider.overrideWith((ref) async => sharedDb),
+        // 直接覆盖 scenesDaoProvider，避免 FutureProvider 异步解析时序问题
+        scenesDaoProvider.overrideWith((ref) async => ScenesDao(sharedDb)),
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
   }
 
   Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
-    if (style == UIStyle.female) {
-      await tester.pump(const Duration(milliseconds: 500));
-    } else {
-      await tester.pumpAndSettle();
-    }
+    // 使用 pump + runAsync：sqflite_common_ffi 的 DB 查询是真实 async 操作，
+    // 在 FakeAsync 环境下 pump(Duration) 无法让真实 Future 完成。
+    // 必须用 tester.runAsync 让真实 async 操作（DAO 查询）完成。
+    await tester.pump();
+    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
   }
 
   void setLargeViewport(WidgetTester tester) {
@@ -101,7 +139,7 @@ void main() {
   }
 
   // ============================================================
-  // 分类 1: 基本渲染
+  // 分类 1: 基本渲染（分类概览模式）
   // ============================================================
   group('ScenesPage — basic rendering', () {
     testWidgets('renders LumiraNav with title 场景库', (tester) async {
@@ -113,35 +151,33 @@ void main() {
       expect(find.widgetWithText(LumiraNav, '场景库'), findsOneWidget);
     });
 
-    testWidgets('renders 5 category pills: 全部/光线/室外/室内/情绪',
+    testWidgets(
+        'renders 4 category cards: 光线氛围/室外环境/室内空间/情绪氛围',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('全部'), findsOneWidget);
-      expect(find.text('光线'), findsOneWidget);
-      expect(find.text('室外'), findsOneWidget);
-      expect(find.text('室内'), findsOneWidget);
-      expect(find.text('情绪'), findsOneWidget);
+      // 4 个一级分类卡片名称
+      expect(find.text('光线氛围'), findsOneWidget);
+      expect(find.text('室外环境'), findsOneWidget);
+      expect(find.text('室内空间'), findsOneWidget);
+      expect(find.text('情绪氛围'), findsOneWidget);
     });
 
-    testWidgets('renders scene cards with names and vibes', (tester) async {
+    testWidgets('renders overview summary with total scene count',
+        (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 默认显示全部 7 个场景（1 自定义 + 6 预设）
-      expect(find.text('黄昏剪影'), findsOneWidget);
-      expect(find.text('霓虹街角'), findsOneWidget);
-      expect(find.text('海边沙滩'), findsOneWidget);
-      expect(find.text('竹海禅意'), findsOneWidget);
-      expect(find.text('雨窗静思'), findsOneWidget);
-      expect(find.text('我的咖啡馆'), findsOneWidget);
-      // vibe 文本（不与其它组件冲突）
-      expect(find.text('把人放进夕阳里，剪成一帧诗'), findsOneWidget);
+      // 摘要：7 个场景 · 4 个大类等你探索
+      expect(find.textContaining('7 个场景'), findsOneWidget);
+      expect(find.textContaining('4 个大类'), findsOneWidget);
+      // 浏览分类 标题
+      expect(find.text('浏览分类'), findsOneWidget);
     });
 
     testWidgets('renders nav back and search icons', (tester) async {
@@ -165,65 +201,64 @@ void main() {
   });
 
   // ============================================================
-  // 分类 2: 分类切换
+  // 分类 2: 分类导航（点击分类卡片进入二级页面）
   // ============================================================
-  group('ScenesPage — category filter', () {
-    testWidgets('tapping 室内 filters to indoor scenes only', (tester) async {
+  group('ScenesPage — category navigation', () {
+    testWidgets('tapping 室内空间 card shows indoor scenes', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 初始全部 7 个场景
-      expect(find.text('黄昏剪影'), findsOneWidget);
-      expect(find.text('海边沙滩'), findsOneWidget);
-
-      // 点击「室内」
-      await tester.tap(find.text('室内'));
+      // 点击「室内空间」分类卡片
+      await tester.tap(find.text('室内空间'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // indoor: cafe-window + custom_demo_001（共 2 个）
+      // indoor: cafe-window (咖啡馆) + custom_demo_001 (我的咖啡馆)
+      expect(find.text('咖啡馆'), findsOneWidget);
       expect(find.text('我的咖啡馆'), findsOneWidget);
-      // 室外 / 光线类被过滤
+      // 其他分类的场景不出现
       expect(find.text('黄昏剪影'), findsNothing);
       expect(find.text('海边沙滩'), findsNothing);
-      expect(find.text('竹海禅意'), findsNothing);
+      expect(find.text('雨窗静思'), findsNothing);
     });
 
-    testWidgets('tapping 全部 restores all scenes after filter',
-        (tester) async {
+    testWidgets('tapping 情绪氛围 card shows mood scenes', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 先点「光线」过滤
-      await tester.tap(find.text('光线'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      expect(find.text('海边沙滩'), findsNothing);
-
-      // 再点「全部」恢复
-      await tester.tap(find.text('全部'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.text('海边沙滩'), findsOneWidget);
-      expect(find.text('黄昏剪影'), findsOneWidget);
-    });
-
-    testWidgets('tapping 情绪 filters to mood scenes (rainy-window)',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      await tester.tap(find.text('情绪'));
+      await tester.tap(find.text('情绪氛围'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // mood 仅有「雨窗静思」
       expect(find.text('雨窗静思'), findsOneWidget);
       expect(find.text('黄昏剪影'), findsNothing);
-      expect(find.text('我的咖啡馆'), findsNothing);
+      expect(find.text('咖啡馆'), findsNothing);
+    });
+
+    testWidgets('tapping back from category returns to overview',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 进入二级分类
+      await tester.tap(find.text('光线氛围'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('黄昏剪影'), findsOneWidget);
+
+      // 点击返回按钮回到分类概览
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 回到概览：应再次看到分类卡片
+      expect(find.text('光线氛围'), findsOneWidget);
+      expect(find.text('室内空间'), findsOneWidget);
+      // 场景名不再显示
+      expect(find.text('黄昏剪影'), findsNothing);
     });
   });
 
@@ -231,11 +266,15 @@ void main() {
   // 分类 3: 路由跳转
   // ============================================================
   group('ScenesPage — navigation', () {
-    testWidgets('tapping a scene card navigates to detail page',
+    testWidgets('tapping a scene card in category navigates to detail page',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 先进入「光线氛围」分类
+      await tester.tap(find.text('光线氛围'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 点击「黄昏剪影」→ /capture/scene-detail?sceneId=sunset-silhouette
@@ -273,20 +312,23 @@ void main() {
   });
 
   // ============================================================
-  // 分类 4: 照片数 badge
+  // 分类 4: 照片数 badge（二级分类页面中）
   // ============================================================
   group('ScenesPage — photo count badge', () {
-    testWidgets('renders badge "N 张" for scenes with photos > 0',
+    testWidgets('renders badge "N 张" for scenes with photos > 0 in category',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // cafe-window: 8 张, rainy-window: 12 张, sunset-silhouette: 3 张
+      // 进入「室内空间」分类
+      await tester.tap(find.text('室内空间'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // cafe-window: 8 张, custom_demo_001: 1 张
       expect(find.text('8 张'), findsOneWidget);
-      expect(find.text('12 张'), findsOneWidget);
-      expect(find.text('3 张'), findsOneWidget);
+      expect(find.text('1 张'), findsOneWidget);
     });
 
     testWidgets('does not render badge for scene with 0 photos',
@@ -296,35 +338,19 @@ void main() {
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // seaside-beach: 0 张 → 无 badge
-      expect(find.text('0 张'), findsNothing);
-    });
-  });
-
-  // ============================================================
-  // 分类 5: 空状态
-  // ============================================================
-  group('ScenesPage — empty state', () {
-    testWidgets('renders 暂无场景 when scenesListProvider returns []',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(
-        themeKey: ThemeKey.warmWhite,
-        uiStyle: UIStyle.neumorphic,
-        overrides: [
-          scenesListProvider.overrideWith((ref) => const []),
-        ],
-      ));
+      // 进入「室外环境」分类
+      await tester.tap(find.text('室外环境'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('暂无场景'), findsOneWidget);
-      // 不应渲染任何场景卡
-      expect(find.text('黄昏剪影'), findsNothing);
+      // seaside-beach: 0 张 → 无 badge
+      expect(find.text('0 张'), findsNothing);
+      // forest-bamboo: 2 张 → 有 badge
+      expect(find.text('2 张'), findsOneWidget);
     });
   });
 
   // ============================================================
-  // 分类 6: 跨主题/跨风格 smoke
+  // 分类 5: 跨主题/跨风格 smoke
   // ============================================================
   group('ScenesPage — smoke tests', () {
     testWidgets('renders without FlutterError under 8 themes + 4 styles',
@@ -343,9 +369,10 @@ void main() {
             wrap(themeKey: combo.theme, uiStyle: combo.style));
         await settleOrPump(tester, combo.style);
 
-        expect(find.text('黄昏剪影'), findsOneWidget,
+        // 概览模式断言：分类卡片 + 标题
+        expect(find.text('光线氛围'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('全部'), findsOneWidget,
+        expect(find.text('室内空间'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
         expect(find.widgetWithText(LumiraNav, '场景库'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');

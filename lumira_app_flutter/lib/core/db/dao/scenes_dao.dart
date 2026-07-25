@@ -130,6 +130,43 @@ class ScenesDao {
     return rows.map(SceneRecord.fromRow).toList();
   }
 
+  /// 获取指定分类下的所有场景（含内置种子场景 + 用户自定义场景）
+  Future<List<SceneRecord>> getAllByCategory(String category) async {
+    final rows = await _db.query(
+      Tables.scenes,
+      where: '${Tables.colCategory} = ?',
+      whereArgs: [category],
+      orderBy: '${Tables.colCreatedAt} DESC',
+    );
+    return rows.map(SceneRecord.fromRow).toList();
+  }
+
+  /// 获取所有场景（含内置 + 自定义）
+  Future<List<SceneRecord>> getAll() async {
+    final rows = await _db.query(
+      Tables.scenes,
+      orderBy: '${Tables.colCreatedAt} DESC',
+    );
+    return rows.map(SceneRecord.fromRow).toList();
+  }
+
+  /// 按 ID 查询单个场景
+  Future<SceneRecord?> getById(String id) async {
+    final rows = await _db.query(
+      Tables.scenes,
+      where: '${Tables.colId} = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return SceneRecord.fromRow(rows.first);
+  }
+
+  /// 设置收藏状态（委托给 toggleFavorite）
+  Future<void> setFavorite(String id, bool favorite) async {
+    await toggleFavorite(id, favorite);
+  }
+
   Future<List<SceneRecord>> getFavorites() async {
     final rows = await _db.query(
       Tables.scenes,

@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/scenes_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_scene_mock_data.dart';
-import '../data/scenes_mock_data.dart';
 
 /// Scenes 独立场景库页（Task 2.11）
 ///
@@ -28,34 +29,56 @@ class ScenesPage extends ConsumerStatefulWidget {
 class _ScenesPageState extends ConsumerState<ScenesPage> {
   /// null = 分类概览模式；非 null = 二级分类页面（显示该分类下的场景）
   String? _activeCategoryId;
+  /// 已加载的场景列表
+  List<SceneRecord> _scenes = [];
+  /// 是否正在加载
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     if (widget.category != null) {
       _activeCategoryId = widget.category;
+      _loadScenes();
     }
   }
 
   bool get _isOverview => _activeCategoryId == null;
 
-  List<ScenePreset> get _filteredScenes {
-    final allScenes = ref.read(scenesListProvider);
-    if (_activeCategoryId == null || _activeCategoryId == 'all') {
-      return allScenes;
+  Future<void> _loadScenes() async {
+    setState(() => _isLoading = true);
+    try {
+      final dao = await ref.read(scenesDaoProvider.future);
+      final List<SceneRecord> scenes;
+      if (_activeCategoryId == null || _activeCategoryId == 'all') {
+        scenes = await dao.getAll();
+      } else {
+        scenes = await dao.getAllByCategory(_activeCategoryId!);
+      }
+      if (mounted) {
+        setState(() {
+          _scenes = scenes;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _scenes = [];
+          _isLoading = false;
+        });
+      }
     }
-    // 找到对应的 SceneCategory
-    final group = CaptureSceneMockData.categories.firstWhere(
-      (g) => g.category.name == _activeCategoryId,
-      orElse: () => CaptureSceneMockData.categories.first,
-    );
-    return allScenes.where((s) => s.category == group.category).toList();
   }
 
   void _back() {
     if (_activeCategoryId != null) {
       // 从二级分类返回到分类概览
-      setState(() => _activeCategoryId = null);
+      setState(() {
+        _activeCategoryId = null;
+        _scenes = [];
+        _isLoading = false;
+      });
       return;
     }
     if (Navigator.of(context).canPop()) {
@@ -88,7 +111,10 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   void _onCategorySelect(String id) {
     setState(() {
       _activeCategoryId = id;
+      _scenes = [];
+      _isLoading = false;
     });
+    _loadScenes();
   }
 
   @override
@@ -112,10 +138,9 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                       tokens: tokens,
                       onSelectCategory: _onCategorySelect,
                     )
-                  : _SceneGrid(
-                      scenes: _filteredScenes,
-                      onTap: _goDetail,
-                    ),
+                  : _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _SceneGrid(scenes: _scenes, onTap: _goDetail),
             ),
           ],
         ),
@@ -480,7 +505,7 @@ class _SceneCategoryCard extends StatelessWidget {
 class _SceneGrid extends StatelessWidget {
   const _SceneGrid({required this.scenes, required this.onTap});
 
-  final List<ScenePreset> scenes;
+  final List<SceneRecord> scenes;
   final ValueChanged<String> onTap;
 
   @override
@@ -525,7 +550,7 @@ class _SceneGrid extends StatelessWidget {
 class _SceneCard extends StatelessWidget {
   const _SceneCard({required this.scene, required this.onTap});
 
-  final ScenePreset scene;
+  final SceneRecord scene;
   final VoidCallback onTap;
 
   @override

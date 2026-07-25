@@ -53,6 +53,14 @@ void main() {
           },
         ),
         GoRoute(
+          path: RouteNames.capture,
+          name: 'capture',
+          builder: (context, state) {
+            final scene = state.queryParams[RouteNames.paramScene];
+            return _StubPage(text: 'CAPTURE_PAGE:scene=$scene');
+          },
+        ),
+        GoRoute(
           path: '/home',
           name: 'home',
           builder: (_, __) => const _StubPage(text: 'HOME_PAGE'),
@@ -197,7 +205,7 @@ void main() {
       expect(find.text('已取消收藏'), findsOneWidget);
     });
 
-    testWidgets('tapping 用此场景拍照 shows SnackBar', (tester) async {
+    testWidgets('tapping 用此场景拍照 navigates to capture page', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
@@ -206,7 +214,7 @@ void main() {
       await tester.tap(find.text('用此场景拍照'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.textContaining('用此场景拍照：咖啡馆'), findsOneWidget);
+      expect(find.text('CAPTURE_PAGE:scene=cafe-window'), findsOneWidget);
     });
 
     testWidgets('tapping 加入组合 shows SnackBar', (tester) async {
