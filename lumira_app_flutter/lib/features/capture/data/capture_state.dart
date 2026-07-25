@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/photo_template.dart';
@@ -29,6 +31,55 @@ class CaptureState {
   /// 当前缩放级别（0.0 = 无缩放，1.0 = 最大缩放）
   /// 由双指缩放手势或自定义滑块更新，再同步到 [cameraStateProvider] 的 sensorConfig
   static final zoomProvider = StateProvider<double>((ref) => 0.0);
+
+  /// 用户面对的"视觉缩放"（与取景器中显示的内容大小一致，跨比例切换保持稳定）。
+  /// 范围 [0.0, 1.0]，0 = 1x，1 = 最大缩放。
+  /// 切换比例时此值不变，但实际传给 sensorConfig.setZoom 的值会按比例补偿。
+  static final apparentZoomProvider = StateProvider<double>((ref) => 0.0);
+
+  /// 根据 aspectRatio 和屏幕比例计算"比例补偿系数"。
+  /// 全屏（不裁剪）时系数为 1.0；其他比例下，相机预览在更小的框内 cover 显示，
+  /// 实际看到的视野更窄，等效于放大了 (boxHeight/screenHeight) 倍。
+  /// 系数 = 视野缩放比 = 显示框的最短边 / 屏幕最短边。
+  static double ratioCompensationFactor(String ratioId, bool isPortrait) {
+    final target = computeTargetRatio(ratioId, isPortrait);
+    if (target == null) return 1.0; // fullscreen
+    // 这里只能给一个近似估计：3:4 框 vs 全屏框的差距
+    // 全屏框 ratio ≈ 9/19.5 = 0.46（竖屏），3:4 框 ratio = 0.75
+    // 假设屏幕短边固定，框短边 = 屏幕短边（竖屏即 width）
+    // 框长边 / 屏幕长边 = ratio 屏 / ratio 框 = 0.46/0.75 ≈ 0.61
+    // 即 3:4 框只显示屏幕全屏 61% 的高度 → 等效放大 1/0.61 ≈ 1.64
+    // 但这只是在 width 上的差距；为简化，使用 width 比作为补偿
+    if (isPortrait) {
+      switch (ratioId) {
+        case '4:3':
+        case '3:4':
+          return 0.75; // 3:4 框相对全屏框的宽度比
+        case '1:1':
+          return 1.0; // 1:1 框宽度等于屏宽
+        default:
+          return 1.0;
+      }
+    } else {
+      switch (ratioId) {
+        case '4:3':
+          return 0.75;
+        case '1:1':
+          return 1.0;
+        default:
+          return 1.0;
+      }
+    }
+  }
+
+  /// 实际传给 sensorConfig.setZoom 的值。
+  /// = sqrt(apparentZoom) * ratioCompensationFactor
+  /// （sqrt 沿用原有曲线；乘以补偿系数让 3:4 框下的实际 sensor zoom 更小，
+  /// 抵消框缩小带来的视觉放大）
+  static double computeSensorZoom(double apparentZoom, double factor) {
+    final sqrtZoom = math.sqrt(apparentZoom.clamp(0.0, 1.0));
+    return (sqrtZoom * factor).clamp(0.0, 1.0);
+  }
 
   /// 照片比例（用户可切换）
   /// 'fullscreen' = 与取景器全屏一致（9:16 或 16:9）
