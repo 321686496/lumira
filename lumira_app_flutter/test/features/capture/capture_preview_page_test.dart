@@ -151,13 +151,13 @@ void main() {
       expect(find.text('拍摄场景'), findsOneWidget);
     });
 
-    testWidgets('renders save button 保存到相册', (tester) async {
+    testWidgets('renders save button 保存到系统相册', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('保存到相册'), findsOneWidget);
+      expect(find.text('保存到系统相册'), findsOneWidget);
       expect(find.byIcon(Icons.save_outlined), findsOneWidget);
     });
 
@@ -292,7 +292,7 @@ void main() {
     });
 
     testWidgets(
-        'tapping 保存 shows SnackBar 已保存 and pops after 800ms',
+        'tapping 保存 shows SnackBar and pops after delay',
         (tester) async {
       setLargeViewport(tester);
       // 从 home push 到 preview，使 canPop() 为 true
@@ -329,15 +329,15 @@ void main() {
 
       expect(find.byType(CapturePreviewPage), findsOneWidget);
 
-      // 点击保存
-      await tester.tap(find.text('保存到相册'));
+      // 点击保存（mock URL 为网络图，预期显示"网络图片不支持保存到系统相册"）
+      await tester.tap(find.text('保存到系统相册'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // SnackBar 已保存 出现
-      expect(find.text('已保存'), findsOneWidget);
+      // SnackBar 出现
+      expect(find.text('网络图片不支持保存到系统相册'), findsOneWidget);
 
-      // 推进时间至 800ms 之后
-      await tester.pump(const Duration(milliseconds: 900));
+      // 推进时间至延迟之后（_onSave 内部使用 1000ms 延迟 pop）
+      await tester.pump(const Duration(milliseconds: 1100));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 已 pop：CapturePreviewPage 不存在，回到 home
@@ -407,7 +407,7 @@ void main() {
             reason: 'theme=${combo.theme}, style=${combo.style}');
         expect(find.text('拍摄场景'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('保存到相册'), findsOneWidget,
+        expect(find.text('保存到系统相册'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
         // 重置 viewport 为下一次迭代
         await tester.pumpWidget(const SizedBox.shrink());
