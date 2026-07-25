@@ -305,7 +305,8 @@ void main() {
       expect(find.text('生成对比图中'), findsOneWidget);
     });
 
-    testWidgets('tapping 生成 EXIF 卡片 shows SnackBar 生成 EXIF 卡片中',
+    testWidgets(
+        'tapping 生成 EXIF 卡片 with network URL shows SnackBar 网络图片无法生成 EXIF 卡片',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
@@ -315,7 +316,8 @@ void main() {
       await tester.tap(find.text('生成 EXIF 卡片'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('生成 EXIF 卡片中'), findsOneWidget);
+      // 默认 mock photoUrl 为网络图片（picsum），_onExifCard 应进入网络保护分支
+      expect(find.text('网络图片无法生成 EXIF 卡片'), findsOneWidget);
     });
 
     testWidgets(

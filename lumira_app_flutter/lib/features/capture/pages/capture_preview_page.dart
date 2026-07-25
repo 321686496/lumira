@@ -14,6 +14,8 @@ import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
 import '../services/compare_image_generator.dart';
+import '../services/exif_card_generator.dart';
+import '../services/photo_exif_reader.dart';
 import '../services/photo_post_processor.dart';
 
 /// HarmonyOS 原生照片保存通道（PhotoSaverPlugin.ets）
@@ -138,10 +140,54 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
-  void _onExifCard() {
+  Future<void> _onExifCard() async {
+    if (_photoUrl.isEmpty || _photoUrl.startsWith('http')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('网络图片无法生成 EXIF 卡片')),
+      );
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('生成 EXIF 卡片中')),
+      const SnackBar(
+          content: Text('生成 EXIF 卡片中...'), duration: Duration(seconds: 1)),
     );
+
+    try {
+      final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+      final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
+      final exif = await PhotoExifReader.read(
+        _photoUrl,
+        sceneName: sceneId,
+        template: templateId,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      );
+      final outputPath =
+          '${_photoUrl}_exif_${DateTime.now().millisecondsSinceEpoch}.png';
+      await ExifCardGenerator.generate(
+        photoPath: _photoUrl,
+        outputPath: outputPath,
+        exif: exif,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('EXIF 卡片已生成'),
+          action: SnackBarAction(
+            label: '查看',
+            onPressed: () {
+              GoRouter.of(context).push(
+                '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(outputPath)}',
+              );
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('生成失败：$e')),
+      );
+    }
   }
 
   void _selectMood(MoodOption selected) {
