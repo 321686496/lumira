@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
@@ -205,29 +206,34 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     await db.execute(AcademyTables.kfCreateSql);
   }
   if (oldVersion < 4) {
-    // v4: 新增 composition_kits / academy_learning_trajectory 表
-    await db.execute(CompositionKitsTable.createSql);
-    await db.execute(AcademyLearningTrajectoryTable.createSql);
+    try {
+      // v4: 新增 composition_kits / academy_learning_trajectory 表
+      await db.execute(CompositionKitsTable.createSql);
+      await db.execute(AcademyLearningTrajectoryTable.createSql);
 
-    // custom_templates 新增列（ALTER TABLE ADD COLUMN，IF NOT EXISTS 兜底用 try/catch）
-    await _addColumnIfNotExists(
-      db,
-      Tables.customTemplates,
-      Tables.colIsBuiltin,
-      'INTEGER NOT NULL DEFAULT 0',
-    );
-    await _addColumnIfNotExists(
-      db,
-      Tables.customTemplates,
-      Tables.colIsRecommended,
-      'INTEGER NOT NULL DEFAULT 0',
-    );
-    await _addColumnIfNotExists(
-      db,
-      Tables.userSettings,
-      Tables.colSeedV3Done,
-      'INTEGER NOT NULL DEFAULT 0',
-    );
+      // custom_templates 新增列（PRAGMA table_info 预检查保证幂等）
+      await _addColumnIfNotExists(
+        db,
+        Tables.customTemplates,
+        Tables.colIsBuiltin,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.customTemplates,
+        Tables.colIsRecommended,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colSeedV3Done,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+    } catch (e) {
+      // 静默回退：迁移失败不阻塞应用启动；缺失的表/列在 DAO 层以空列表兜底
+      debugPrint('v4 migration failed (silent fallback): $e');
+    }
   }
 }
 
