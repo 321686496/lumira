@@ -29,6 +29,8 @@ class GalleryPage extends ConsumerStatefulWidget {
 class _GalleryPageState extends ConsumerState<GalleryPage> {
   String _activeFilter = 'all';
   final String _viewTab = 'photo'; // 默认照片视图；切到 diary 直接跳页
+  bool _isMultiSelectMode = false;
+  final Set<String> _selectedIds = <String>{};
 
   // Forced fix: FutureBuilder 在测试环境下不会从 ConnectionState.waiting
   // 切到 done（即使 future 已解析），导致 pumpAndSettle timed out。
@@ -85,6 +87,38 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
       _isLoading = true;
     });
     _loadPhotos(dao);
+  }
+
+  Future<void> _deleteSelected() async {
+    final dao = ref.read(galleryDaoProvider).value;
+    if (dao == null) return;
+    try {
+      for (final id in _selectedIds) {
+        await dao.delete(id);
+      }
+      ref.invalidate(galleryDaoProvider);
+      setState(() {
+        _isMultiSelectMode = false;
+        _selectedIds.clear();
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已删除选中照片')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('删除失败：$e')),
+        );
+      }
+    }
+  }
+
+  void _exportSelected() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已选择 ${_selectedIds.length} 张照片导出')),
+    );
   }
 
   @override
@@ -183,35 +217,84 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
                       itemCount: photoViews.length,
                       itemBuilder: (_, i) {
                         final photo = photoViews[i];
+                        final isSelected = _selectedIds.contains(photo.id);
                         return FadeUp(
                           delay: Duration(milliseconds: (i % 6) * 50),
                           child: PhotoCell(
+                            key: ValueKey('photo_cell_$i'),
                             photo: photo,
-                            onTap: () => GoRouter.of(context).push(
-                              RouteNames.build(
-                                RouteNames.galleryDetail,
-                                {RouteNames.paramPhotoId: photo.id},
-                              ),
-                            ),
+                            isSelected: isSelected,
+                            isMultiSelectMode: _isMultiSelectMode,
+                            onTap: () {
+                              if (_isMultiSelectMode) {
+                                setState(() {
+                                  if (isSelected) {
+                                    _selectedIds.remove(photo.id);
+                                  } else {
+                                    _selectedIds.add(photo.id);
+                                  }
+                                });
+                              } else {
+                                GoRouter.of(context).push(
+                                  RouteNames.build(
+                                    RouteNames.galleryDetail,
+                                    {RouteNames.paramPhotoId: photo.id},
+                                  ),
+                                );
+                              }
+                            },
+                            onLongPress: () {
+                              setState(() {
+                                _isMultiSelectMode = true;
+                                _selectedIds.add(photo.id);
+                              });
+                            },
                           ),
                         );
                       },
                     ),
         ),
-        // 长按多选提示
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Center(
-            child: Text(
-              '长按照片进入多选模式 · 支持批量删除与导出',
-              style: TextStyle(
-                fontSize: 11,
-                color: tokens.textTertiary,
-                height: 1.3,
+        // 长按多选提示 / 多选操作栏
+        if (_isMultiSelectMode)
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _isMultiSelectMode = false;
+                      _selectedIds.clear();
+                    });
+                  },
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: _selectedIds.isEmpty ? null : _deleteSelected,
+                  child: Text('删除 (${_selectedIds.length})'),
+                ),
+                TextButton(
+                  onPressed: _selectedIds.isEmpty ? null : _exportSelected,
+                  child: Text('导出 (${_selectedIds.length})'),
+                ),
+              ],
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Center(
+              child: Text(
+                '长按照片进入多选模式 · 支持批量删除与导出',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.textTertiary,
+                  height: 1.3,
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

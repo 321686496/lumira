@@ -7,21 +7,21 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../data/gallery_models.dart';
 
-/// 相册主页 3 列网格单元
-///
-/// 视觉规格来源：lumira-app/src/pages/gallery/index.vue line 60-70
-/// - 1:1 aspect ratio
-/// - 12rpx→6dp 圆角
-/// - aspectFill 图片填充
 class PhotoCell extends ConsumerWidget {
   const PhotoCell({
     super.key,
     required this.photo,
     required this.onTap,
+    this.onLongPress,
+    this.isSelected = false,
+    this.isMultiSelectMode = false,
   });
 
   final GalleryPhoto photo;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final bool isSelected;
+  final bool isMultiSelectMode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -29,12 +29,42 @@ class PhotoCell extends ConsumerWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(6), // 12rpx → 6dp
+        borderRadius: BorderRadius.circular(6),
         child: AspectRatio(
           aspectRatio: 1 / 1,
-          child: _buildImage(tokens),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildImage(tokens),
+              if (isMultiSelectMode)
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFC9A96E)
+                          : Colors.black.withOpacity(0.4),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white70, width: 1.5),
+                    ),
+                    child: isSelected
+                        ? const Icon(Icons.check,
+                            size: 14, color: Colors.white)
+                        : null,
+                  ),
+                ),
+              if (isSelected)
+                Container(
+                  color: const Color(0xFFC9A96E).withOpacity(0.2),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -45,14 +75,9 @@ class PhotoCell extends ConsumerWidget {
     if (url == null || url.isEmpty) {
       return Container(
         color: tokens.surfaceAlt,
-        child: Icon(
-          Icons.image_outlined,
-          size: 32,
-          color: tokens.textTertiary,
-        ),
+        child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
       );
     }
-    // 兼容 dataUrl (http) 和 filePath (本地路径)
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return Image.network(
         url,
@@ -63,7 +88,6 @@ class PhotoCell extends ConsumerWidget {
         ),
       );
     }
-    // 本地文件路径（filePath）— 修复：原代码用 Image.asset，应使用 Image.file
     return Image.file(
       File(url),
       fit: BoxFit.cover,
