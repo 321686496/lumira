@@ -28,7 +28,11 @@ void main() {
     return File(path);
   }
 
-  test('generate produces a PNG wider than the input', () async {
+  test('generate produces a PNG with correct dimensions for equal inputs',
+      () async {
+    // 输入 400×600，两张相同 → targetH=600, origW=filtW=400
+    // totalW = 400 + 400 + 20*3 = 860
+    // totalH = 600 + 40 + 20*2 = 680
     final input = makeTestJpeg(400, 600, 200);
     final outputPath = '${tempDir.path}/compare_out.png';
 
@@ -41,11 +45,39 @@ void main() {
     expect(result, equals(outputPath));
     final outputFile = File(outputPath);
     expect(await outputFile.exists(), isTrue);
+    // 文件非空（PNG header + 实际像素数据）
+    expect((await outputFile.length()), greaterThan(1024));
 
     final bytes = await outputFile.readAsBytes();
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
-    expect(frame.image.width, greaterThan(400));
+    // 宽度 = 两张图宽 + 3×padding（左/中/右）
+    expect(frame.image.width, equals(860));
+    // 高度 = targetH + labelH + 2×padding（顶/底）
+    expect(frame.image.height, equals(680));
+    codec.dispose();
+  });
+
+  test('generate unifies height when inputs have different dimensions',
+      () async {
+    // orig 400×600, filt 300×450 → targetH = min(600, 450) = 450
+    // origW = 400 * 450 / 600 = 300, filtW = 300 * 450 / 450 = 300
+    // totalW = 300 + 300 + 60 = 660, totalH = 450 + 40 + 40 = 530
+    final orig = makeTestJpeg(400, 600, 200);
+    final filt = makeTestJpeg(300, 450, 100);
+    final outputPath = '${tempDir.path}/compare_diff.png';
+
+    await CompareImageGenerator.generate(
+      originalPath: orig.path,
+      filteredPath: filt.path,
+      outputPath: outputPath,
+    );
+
+    final bytes = await File(outputPath).readAsBytes();
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    expect(frame.image.width, equals(660));
+    expect(frame.image.height, equals(530));
     codec.dispose();
   });
 }
