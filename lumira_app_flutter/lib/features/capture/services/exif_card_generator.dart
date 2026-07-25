@@ -137,13 +137,17 @@ class ExifCardGenerator {
       final resultImage = await picture.toImage(cardW, cardH);
       picture.dispose();
 
-      final pngBytes =
-          await resultImage.toByteData(format: ui.ImageByteFormat.png);
-      if (pngBytes == null) {
-        throw StateError('toByteData(png) 返回 null');
+      // 编码 PNG 并保存（try/finally 确保 resultImage 释放，避免 toByteData 失败时泄漏）
+      try {
+        final pngBytes =
+            await resultImage.toByteData(format: ui.ImageByteFormat.png);
+        if (pngBytes == null) {
+          throw StateError('toByteData(png) 返回 null');
+        }
+        await File(outputPath).writeAsBytes(pngBytes.buffer.asUint8List());
+      } finally {
+        resultImage.dispose();
       }
-      await File(outputPath).writeAsBytes(pngBytes.buffer.asUint8List());
-      resultImage.dispose();
 
       debugPrint('[exif-card] 生成: ${sw.elapsedMilliseconds}ms');
       return outputPath;
