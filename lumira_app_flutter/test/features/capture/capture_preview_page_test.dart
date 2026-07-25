@@ -254,16 +254,27 @@ void main() {
       expect(find.text('已跳过'), findsOneWidget);
     });
 
-    testWidgets('tapping 对比 › shows SnackBar 查看对比', (tester) async {
+    testWidgets('对比 › press-and-hold reveals original (no SnackBar)',
+        (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
+      // Compare link is present
+      expect(find.text('对比 ›'), findsOneWidget);
+
+      // Tapping no longer shows the old "查看对比" SnackBar
       await tester.tap(find.text('对比 ›'));
       await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('查看对比'), findsNothing);
 
-      expect(find.text('查看对比'), findsOneWidget);
+      // Press-and-hold should not crash and should toggle compare state
+      final gesture =
+          await tester.startGesture(tester.getCenter(find.text('对比 ›')));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
     });
 
     testWidgets('tapping 生成对比图 shows SnackBar 生成对比图中', (tester) async {
