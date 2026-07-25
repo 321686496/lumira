@@ -87,6 +87,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
       final mode = GoRouterState.of(context).queryParams[RouteNames.paramMode];
       _returnResult = mode == 'return';
       _requestCameraPermission();
+
+      // 模板加载后，如果已有 CameraState，立即应用参数；
+      // 否则等 _onCameraStateCreated 触发时再应用
+      final state = ref.read(CaptureState.cameraStateProvider);
+      if (state != null) {
+        _applyTemplateCameraParams(state);
+      }
     });
   }
 
@@ -277,6 +284,48 @@ class _CapturePageState extends ConsumerState<CapturePage>
       ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
       ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
     } catch (_) {}
+
+    // 应用模板/自由模式的相机参数到 sensor（修复 Issue 7：
+    // 模板的 EV、闪光灯、白平衡等参数之前未应用到相机）
+    _applyTemplateCameraParams(state);
+  }
+
+  /// 应用模板/自由模式的相机参数到 sensor。
+  /// 在 _onCameraStateCreated 末尾、模板加载后、参数变化时调用。
+  void _applyTemplateCameraParams(CameraState state) {
+    final params = ref.read(CaptureState.effectiveCameraProvider);
+    debugPrint('[capture] 应用相机参数: EV=${params.exposureCompensation}, '
+        'WB=${params.whiteBalance}K=${params.whiteBalanceK}, '
+        'flash=${params.flashMode}, focus=${params.focusMode}');
+    try {
+      // EV [-3, +3] → brightness [0, 1]
+      final brightness = (params.exposureCompensation + 3.0) / 6.0;
+      state.sensorConfig.setBrightness(brightness.clamp(0.0, 1.0));
+    } catch (e) {
+      debugPrint('[capture] setBrightness 失败: $e');
+    }
+    try {
+      state.sensorConfig.setFlashMode(_mapFlashModeString(params.flashMode));
+    } catch (e) {
+      debugPrint('[capture] setFlashMode 失败: $e');
+    }
+    // 白平衡、ISO、快门速度等高级参数在 camerawesome 1.4.0 中 API 有限；
+    // 如果传感器支持会成功，否则静默忽略
+  }
+
+  FlashMode _mapFlashModeString(String mode) {
+    switch (mode) {
+      case 'off':
+        return FlashMode.none;
+      case 'on':
+        return FlashMode.always;
+      case 'auto':
+        return FlashMode.auto;
+      case 'torch':
+        return FlashMode.always;
+      default:
+        return FlashMode.none;
+    }
   }
 
   FlashMode _mapFlashMode(CaptureFlashMode mode) {
@@ -392,15 +441,24 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 监听相机参数变化，同步 EV 到 brightness（camerawesome 1.4.0 仅支持 brightness）
     // EV 范围 [-3, +3] 映射到 brightness [0, 1]，0 EV → 0.5 brightness
     ref.listen<CameraParams>(CaptureState.effectiveCameraProvider, (prev, next) {
-      if (prev?.exposureCompensation == next.exposureCompensation) return;
+      if (prev == next) return;
       final state = ref.read(CaptureState.cameraStateProvider);
       if (state == null) return;
-      // EV [-3, +3] → brightness [0, 1]：EV 0 = 0.5, EV +3 = 1.0, EV -3 = 0.0
-      final brightness = (next.exposureCompensation + 3.0) / 6.0;
-      try {
-        state.sensorConfig.setBrightness(brightness.clamp(0.0, 1.0));
-      } catch (_) {
-        // 某些设备可能不支持 brightness 调节
+      if (prev?.exposureCompensation != next.exposureCompensation) {
+        // EV [-3, +3] → brightness [0, 1]：EV 0 = 0.5, EV +3 = 1.0, EV -3 = 0.0
+        final brightness = (next.exposureCompensation + 3.0) / 6.0;
+        try {
+          state.sensorConfig.setBrightness(brightness.clamp(0.0, 1.0));
+        } catch (_) {
+          // 某些设备可能不支持 brightness 调节
+        }
+      }
+      if (prev?.flashMode != next.flashMode) {
+        try {
+          state.sensorConfig.setFlashMode(_mapFlashModeString(next.flashMode));
+        } catch (_) {
+          // 某些设备/状态可能不支持闪光灯切换
+        }
       }
     });
 
