@@ -334,14 +334,25 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 缩放：同步到相机引擎与 zoomProvider
   ///
-  /// 滑块值 [0, 1] 通过平方根曲线映射到相机 zoom [0, 1]，
-  /// 使滑块前半段也能产生明显的缩放效果（camerawesome 的 setZoom 在低值段
-  /// 视觉变化很小，用 sqrt 曲线让 0.5 → 0.707 而非 0.5 → 0.5）。
+  /// 滑块值 [0, 1] 是"视觉缩放"，跨比例切换保持稳定。
+  /// 实际传给 sensor 的 zoom 会按当前比例的补偿系数调整，保证视觉一致。
   void _onZoomChanged(double sliderValue) {
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = sliderValue;
     ref.read(CaptureState.zoomProvider.notifier).state = sliderValue;
-    final actualZoom = sqrt(sliderValue);
+    _applyZoomToSensor(ref);
+  }
+
+  /// 根据当前 apparentZoom 与比例补偿系数，计算实际 sensor zoom 并应用到相机引擎。
+  /// 切换比例或调节滑块时都会调用此方法，保证视觉缩放跨比例一致。
+  void _applyZoomToSensor(WidgetRef ref) {
+    final apparent = ref.read(CaptureState.apparentZoomProvider);
+    final ratioId = ref.read(CaptureState.aspectRatioProvider);
+    final screenSize = MediaQuery.of(context).size;
+    final isPortrait = screenSize.height >= screenSize.width;
+    final factor = CaptureState.ratioCompensationFactor(ratioId, isPortrait);
+    final sensorZoom = CaptureState.computeSensorZoom(apparent, factor);
     final state = ref.read(CaptureState.cameraStateProvider);
-    state?.sensorConfig.setZoom(actualZoom);
+    state?.sensorConfig.setZoom(sensorZoom);
   }
 
   @override
@@ -349,7 +360,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
     final bottomPanelExpanded =
         ref.watch(CaptureState.bottomPanelExpandedProvider);
-    final zoom = ref.watch(CaptureState.zoomProvider);
 
     // 监听闪光灯模式变化，同步到相机引擎
     ref.listen<CaptureFlashMode>(CaptureState.flashModeProvider, (prev, next) {
@@ -370,6 +380,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
       } catch (_) {
         // 某些设备可能不支持 brightness 调节
       }
+    });
+
+    // 监听比例变化，重新应用缩放以保持视觉一致
+    ref.listen<String>(CaptureState.aspectRatioProvider, (prev, next) {
+      if (prev == next) return;
+      _applyZoomToSensor(ref);
     });
 
     // 权限未授予时显示权限引导 UI
@@ -445,7 +461,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: _BottomControlArea(
               isFullscreen: isFullscreen,
               bottomPanelExpanded: bottomPanelExpanded,
-              zoom: zoom,
               onZoomChanged: _onZoomChanged,
               onTogglePanel: () => ref
                   .read(CaptureState.bottomPanelExpandedProvider.notifier)
@@ -560,7 +575,6 @@ class _BottomControlArea extends StatelessWidget {
   const _BottomControlArea({
     required this.isFullscreen,
     required this.bottomPanelExpanded,
-    required this.zoom,
     required this.onZoomChanged,
     required this.onTogglePanel,
     required this.onCapture,
@@ -570,7 +584,6 @@ class _BottomControlArea extends StatelessWidget {
 
   final bool isFullscreen;
   final bool bottomPanelExpanded;
-  final double zoom;
   final ValueChanged<double> onZoomChanged;
   final VoidCallback onTogglePanel;
   final VoidCallback onCapture;
@@ -596,7 +609,7 @@ class _BottomControlArea extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             // 缩放滑块（始终显示，便于用户主动缩放）
-            _ZoomSlider(value: zoom, onChanged: onZoomChanged),
+            _ZoomSlider(onChanged: onZoomChanged),
 
             // 装饰性内容（全屏模式下隐藏）
             if (!isFullscreen) ...[
@@ -651,14 +664,17 @@ class _BottomControlArea extends StatelessWidget {
 ///
 /// 滑块值 [0, 1] 经 sqrt 曲线映射到相机 zoom [0, 1]，
 /// 显示的倍数基于实际 zoom 值：1.0x (zoom=0) ~ 6.0x (zoom=1)。
-class _ZoomSlider extends StatelessWidget {
-  const _ZoomSlider({required this.value, required this.onChanged});
+///
+/// 滑块直接 watch [CaptureState.apparentZoomProvider]：跨比例切换时此值不变，
+/// 因此滑块位置在比例切换时不会跳变。
+class _ZoomSlider extends ConsumerWidget {
+  const _ZoomSlider({required this.onChanged});
 
-  final double value;
   final ValueChanged<double> onChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final value = ref.watch(CaptureState.apparentZoomProvider);
     // 实际相机 zoom = sqrt(sliderValue)，显示倍数 = 1 + zoom * 5
     final actualZoom = sqrt(value);
     final displayX = (1 + actualZoom * 5).toStringAsFixed(1);
