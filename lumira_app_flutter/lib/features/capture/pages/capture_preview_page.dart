@@ -13,6 +13,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
+import '../services/compare_image_generator.dart';
 import '../services/photo_post_processor.dart';
 
 /// HarmonyOS 原生照片保存通道（PhotoSaverPlugin.ets）
@@ -53,7 +54,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   bool _isComparing = false;
 
   /// 是否已生成对比图（用于"生成对比图"按钮的状态反馈）
-  // ignore: unused_field, prefer_final_fields
   bool _compareCardGenerated = false;
 
   @override
@@ -91,10 +91,48 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     );
   }
 
-  void _onCompareCard() {
+  Future<void> _onCompareCard() async {
+    if (_photoUrl.isEmpty) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('生成对比图中')),
+      const SnackBar(
+          content: Text('生成对比图中'), duration: Duration(seconds: 1)),
     );
+
+    try {
+      // 原图 = 当前文件路径（已含滤镜，因为 capture 时已应用后期）
+      // 为得到"原图"和"滤镜后"，需要原始 RAW 文件。这里简化为：
+      // - filteredPath = 当前 _photoUrl
+      // - originalPath = _photoUrl（无 raw 可用时同图）
+      // 真实场景中应在 capture 时保留 raw 文件路径
+      final outputPath =
+          '${_photoUrl}_compare_${DateTime.now().millisecondsSinceEpoch}.png';
+      await CompareImageGenerator.generate(
+        originalPath: _photoUrl,
+        filteredPath: _photoUrl,
+        outputPath: outputPath,
+      );
+      if (!mounted) return;
+      setState(() => _compareCardGenerated = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('对比图已生成'),
+          action: SnackBarAction(
+            label: '查看',
+            onPressed: () {
+              // 跳转到详情页查看对比图
+              GoRouter.of(context).push(
+                '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(outputPath)}',
+              );
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('生成失败：$e')),
+      );
+    }
   }
 
   void _onExifCard() {
