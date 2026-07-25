@@ -42,16 +42,16 @@ class PhotoExifReader {
     final dateTimeValue = imageIfd['DateTime'];
     final String? dtString = dateTimeValue?.toString();
 
-    // 焦距（FocalLength tag 0x920A，Rational）
+    // 焦距（FocalLength tag 0x920A，Rational）— 保留 1 位小数（相机通常报告到 0.1mm）
     final focalLengthValue = exifIfd['FocalLength'];
     final String? focalLength = focalLengthValue != null
-        ? '${focalLengthValue.toRational().toDouble()}mm'
+        ? '${focalLengthValue.toRational().toDouble().toStringAsFixed(1)}mm'
         : null;
 
-    // 光圈（FNumber tag 0x829D，Rational）
+    // 光圈（FNumber tag 0x829D，Rational）— 保留 1 位小数（标准 f/1.8、f/2.8 等）
     final fNumberValue = exifIfd['FNumber'];
     final String? fNumber = fNumberValue != null
-        ? 'f/${fNumberValue.toRational().toDouble()}'
+        ? 'f/${fNumberValue.toRational().toDouble().toStringAsFixed(1)}'
         : null;
 
     // ISO（ISOSpeed tag 0x8827，Long）
@@ -83,6 +83,10 @@ class PhotoExifReader {
   }
 
   static String _formatShutterSpeed(double seconds) {
+    // 整数秒（如 2s、5s）避免显示 "2.0s"
+    if (seconds >= 1 && seconds == seconds.toInt()) {
+      return '${seconds.toInt()}s';
+    }
     if (seconds >= 1) return '${seconds}s';
     return '1/${(1 / seconds).round()}s';
   }
