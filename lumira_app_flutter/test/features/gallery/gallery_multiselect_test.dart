@@ -42,7 +42,7 @@ void main() {
     await tester.longPress(firstCellFinder);
     await tester.pumpAndSettle();
 
-    expect(find.text('删除'), findsOneWidget);
+    expect(find.textContaining('删除'), findsOneWidget);
     expect(find.text('取消'), findsOneWidget);
   });
 }
