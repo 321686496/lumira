@@ -26,6 +26,8 @@ class TemplateRecord {
   final Map<String, dynamic> postProcess;
   final int createdAt;
   final int updatedAt;
+  final bool isBuiltin;
+  final bool isRecommended;
 
   TemplateRecord({
     required this.id,
@@ -47,6 +49,8 @@ class TemplateRecord {
     required this.postProcess,
     required this.createdAt,
     required this.updatedAt,
+    required this.isBuiltin,
+    required this.isRecommended,
   });
 
   Map<String, Object?> toRow() {
@@ -68,6 +72,8 @@ class TemplateRecord {
       Tables.colCameraJson: jsonEncode(camera),
       Tables.colSceneGuideJson: jsonEncode(sceneGuide),
       Tables.colPostProcessJson: jsonEncode(postProcess),
+      Tables.colIsBuiltin: isBuiltin ? 1 : 0,
+      Tables.colIsRecommended: isRecommended ? 1 : 0,
       Tables.colCreatedAt: createdAt,
       Tables.colUpdatedAt: updatedAt,
     };
@@ -94,6 +100,8 @@ class TemplateRecord {
       postProcess: _decodeJsonMap(row[Tables.colPostProcessJson]),
       createdAt: (row[Tables.colCreatedAt] as num).toInt(),
       updatedAt: (row[Tables.colUpdatedAt] as num).toInt(),
+      isBuiltin: (row[Tables.colIsBuiltin] as num?)?.toInt() == 1,
+      isRecommended: (row[Tables.colIsRecommended] as num?)?.toInt() == 1,
     );
   }
 
@@ -125,6 +133,51 @@ class TemplatesDao {
       Tables.customTemplates,
       where: where,
       whereArgs: whereArgs,
+      orderBy: '${Tables.colCreatedAt} DESC',
+    );
+    return rows.map(TemplateRecord.fromRow).toList();
+  }
+
+  /// 获取内置模板（可选筛选 recommended / price / paidOnly / category）
+  Future<List<TemplateRecord>> getBuiltin({
+    bool? isRecommended,
+    int? price,
+    bool paidOnly = false,
+    String? category,
+  }) async {
+    final where = <String>['${Tables.colIsBuiltin} = ?'];
+    final args = <Object>[1];
+    if (isRecommended != null) {
+      where.add('${Tables.colIsRecommended} = ?');
+      args.add(isRecommended ? 1 : 0);
+    }
+    if (price != null) {
+      where.add('${Tables.colPrice} = ?');
+      args.add(price);
+    }
+    if (paidOnly) {
+      where.add('${Tables.colPrice} > ?');
+      args.add(0);
+    }
+    if (category != null) {
+      where.add('${Tables.colCategory} = ?');
+      args.add(category);
+    }
+    final rows = await _db.query(
+      Tables.customTemplates,
+      where: where.join(' AND '),
+      whereArgs: args,
+      orderBy: '${Tables.colPrice} ASC, ${Tables.colName} ASC',
+    );
+    return rows.map(TemplateRecord.fromRow).toList();
+  }
+
+  /// 仅获取用户自定义模板（is_builtin=0）
+  Future<List<TemplateRecord>> getCustomOnly() async {
+    final rows = await _db.query(
+      Tables.customTemplates,
+      where: '${Tables.colIsBuiltin} = ?',
+      whereArgs: [0],
       orderBy: '${Tables.colCreatedAt} DESC',
     );
     return rows.map(TemplateRecord.fromRow).toList();

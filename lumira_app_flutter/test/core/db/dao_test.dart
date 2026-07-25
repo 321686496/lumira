@@ -51,6 +51,8 @@ void main() {
         postProcess: {'lut': 'warm_film'},
         createdAt: 1700000000000,
         updatedAt: 1700000000000,
+        isBuiltin: false,
+        isRecommended: false,
       );
 
       await dao.upsert(record);
@@ -299,6 +301,8 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
@@ -408,6 +412,8 @@ TemplateRecord _makeTemplate(String id, String category, {String name = '测试'
     postProcess: {},
     createdAt: DateTime.now().millisecondsSinceEpoch,
     updatedAt: DateTime.now().millisecondsSinceEpoch,
+    isBuiltin: false,
+    isRecommended: false,
   );
 }
 
