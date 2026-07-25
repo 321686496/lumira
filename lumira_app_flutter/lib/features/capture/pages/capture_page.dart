@@ -201,6 +201,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
         final screenSize = MediaQuery.of(context).size;
         final screenRatio = screenSize.width / screenSize.height;
         final isPortrait = screenSize.height >= screenSize.width;
+        debugPrint('[capture] 当前 aspectRatio=$aspectRatio, '
+            'screenRatio=$screenRatio, isPortrait=$isPortrait, '
+            'rawMode=$rawMode');
         final processedPath = await PhotoPostProcessor.processFile(
           inputPath: media.filePath,
           params: params,
