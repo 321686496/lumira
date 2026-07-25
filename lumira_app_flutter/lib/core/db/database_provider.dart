@@ -7,6 +7,7 @@ import 'tables.dart';
 import 'dao/templates_dao.dart';
 import 'dao/scenes_dao.dart';
 import 'dao/gallery_dao.dart';
+import 'seeders/builtin_data_seeder.dart';
 import '../../features/challenge/data/challenge_dao.dart';
 import '../../features/academy/data/academy_dao.dart';
 
@@ -230,6 +231,14 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
         Tables.colSeedV3Done,
         'INTEGER NOT NULL DEFAULT 0',
       );
+
+      // v4: 触发种子数据插入（失败时静默回退，spec §9）
+      try {
+        await BuiltinDataSeeder.seedAll(db);
+      } catch (e) {
+        // 忽略：DAO 查询返回空列表时由 UI 显示空状态
+        debugPrint('BuiltinDataSeeder failed: $e');
+      }
     } catch (e) {
       // 静默回退：迁移失败不阻塞应用启动；缺失的表/列在 DAO 层以空列表兜底
       debugPrint('v4 migration failed (silent fallback): $e');
