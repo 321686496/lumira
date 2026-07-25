@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -242,13 +244,14 @@ class _TemplateSectionHeader extends StatelessWidget {
 }
 
 /// Hero 推荐区
-class _HeroSection extends StatelessWidget {
+class _HeroSection extends ConsumerWidget {
   const _HeroSection({required this.onTap});
 
   final void Function(String templateId) onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncDao = ref.watch(templatesDaoProvider);
     return FadeUp(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(0, 12, 0, 28), // 24rpx 0 32rpx → 12 0 28（增大底部留白避免阴影被下个 section 遮挡）
@@ -269,18 +272,34 @@ class _HeroSection extends StatelessWidget {
             ),
             SizedBox(
               height: 244, // Forced fix: 220 不够容纳 130*4/3=173.33 图片 + 名字 + 2 行 reason (~241.73dp)；改为 244
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20), // 40rpx → 20dp
-                itemCount: TemplatesMockData.recommendations.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10), // gap 20rpx → 10dp
-                itemBuilder: (_, index) {
-                  final rec = TemplatesMockData.recommendations[index];
-                  return RecommendationCard(
-                    recommendation: rec,
-                    onTap: () => onTap(rec.id),
-                  );
-                },
+              child: asyncDao.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => const Center(child: Text('加载失败')),
+                data: (dao) => FutureBuilder<List<TemplateRecord>>(
+                  future: dao.getBuiltin(isRecommended: true),
+                  builder: (context, snap) {
+                    if (!snap.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final list = snap.data!;
+                    if (list.isEmpty) {
+                      return const Center(child: Text('暂无推荐'));
+                    }
+                    return ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 20), // 40rpx → 20dp
+                      itemCount: list.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10), // gap 20rpx → 10dp
+                      itemBuilder: (_, index) {
+                        final rec = _recordToRecommendation(list[index]);
+                        return RecommendationCard(
+                          recommendation: rec,
+                          onTap: () => onTap(rec.id),
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -327,56 +346,71 @@ class _PreferenceSection extends StatelessWidget {
 }
 
 /// 更多模板 section
-class _OtherSection extends StatelessWidget {
+class _OtherSection extends ConsumerWidget {
   const _OtherSection({required this.onTap});
 
   final void Function(String templateId) onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final tokens = ref.watch(appThemeProvider).tokens;
-        const others = TemplatesMockData.otherTemplates;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0), // 40rpx 16rpx 40rpx 0 → 20 8 20 0
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8), // margin-bottom: 16rpx → 8dp
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '更多模板',
-                      style: TextStyle(
-                        fontSize: 16, // 32rpx → 16dp
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                        letterSpacing: -0.01 * 16,
-                        height: 1.2,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () =>
-                          GoRouter.of(context).push(RouteNames.templatesAll),
-                      child: Text(
-                        '查看全部 ›',
-                        style: TextStyle(
-                          fontSize: 12, // 24rpx → 12dp
-                          fontWeight: FontWeight.w500,
-                          color: tokens.brand,
-                        ),
-                      ),
-                    ),
-                  ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    final asyncDao = ref.watch(templatesDaoProvider);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0), // 40rpx 16rpx 40rpx 0 → 20 8 20 0
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8), // margin-bottom: 16rpx → 8dp
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '更多模板',
+                  style: TextStyle(
+                    fontSize: 16, // 32rpx → 16dp
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                    letterSpacing: -0.01 * 16,
+                    height: 1.2,
+                  ),
                 ),
-              ),
-              if (others.isEmpty)
-                _EmptyState(tokens: tokens)
-              else
-                GridView.builder(
+                GestureDetector(
+                  onTap: () =>
+                      GoRouter.of(context).push(RouteNames.templatesAll),
+                  child: Text(
+                    '查看全部 ›',
+                    style: TextStyle(
+                      fontSize: 12, // 24rpx → 12dp
+                      fontWeight: FontWeight.w500,
+                      color: tokens.brand,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          asyncDao.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => _EmptyState(tokens: tokens),
+            data: (dao) => FutureBuilder<List<TemplateRecord>>(
+              future: dao.getBuiltin(price: 0),
+              builder: (context, snap) {
+                if (!snap.hasData) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 32),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                final others = snap.data!;
+                if (others.isEmpty) {
+                  return _EmptyState(tokens: tokens);
+                }
+                final visible = others.length > 6 ? others.sublist(0, 6) : others;
+                return GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -388,19 +422,20 @@ class _OtherSection extends StatelessWidget {
                     // 设 w=154: 0.70 → h=220dp，图 154 + 文字 47.6 = 201.6 ✓
                     childAspectRatio: 0.70,
                   ),
-                  itemCount: others.length > 6 ? 6 : others.length,
+                  itemCount: visible.length,
                   itemBuilder: (_, index) {
-                    final tpl = others[index];
+                    final tpl = _recordToItem(visible[index]);
                     return TemplateGridCard(
                       template: tpl,
                       onTap: () => onTap(tpl.id),
                     );
                   },
-                ),
-            ],
+                );
+              },
+            ),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
@@ -560,4 +595,29 @@ class _AcademyEntrySection extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// TemplateRecord → TemplateRecommendation 适配
+/// DAO 推荐模板数据 → RecommendationCard 所需类型
+TemplateRecommendation _recordToRecommendation(TemplateRecord r) {
+  return TemplateRecommendation(
+    id: r.id,
+    name: r.name,
+    reason: '系统精选推荐',
+    source: TemplateSource.systemPick,
+    imageSeed: r.id,
+    category: r.category,
+  );
+}
+
+/// TemplateRecord → TemplateItem 适配
+/// DAO 免费模板数据 → TemplateGridCard 所需类型
+TemplateItem _recordToItem(TemplateRecord r) {
+  return TemplateItem(
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    imageSeed: r.id,
+    price: r.price,
+  );
 }

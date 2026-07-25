@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -51,24 +53,49 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     }
   }
 
-  /// mock 阶段简化筛选 — 只按 _selectedType + _showCustom 过滤
-  /// brief 明确规定：_showCustom==true 只显示 isCustom==true；false 只显示 isCustom==false
+  /// 从 DAO 加载全部数据并按当前筛选条件计算过滤后的列表与计数。
   ///
-  /// 注意：导入的模板（来自 importedAllTemplatesProvider）始终合并到 isCustom=true 视图中
-  List<AllTemplateItem> _filteredTemplatesWith(
-      List<AllTemplateItem> imported) {
-    final all = [...TemplatesBrowseMockData.allTemplates, ...imported];
-    return all.where((t) {
-      if (_showCustom && !t.isCustom) return false;
-      if (!_showCustom && t.isCustom) return false;
-      if (_selectedType != null && t.category != _selectedType) return false;
-      return true;
-    }).toList();
-  }
+  /// brief 规定：
+  /// - _showCustom==true → 只显示 isCustom==true（DAO getCustomOnly + imported）
+  /// - _showCustom==false → 只显示 isCustom==false（DAO getBuiltin）
+  /// - _selectedType 非空时进一步按 category 过滤
+  ///
+  /// 计数（allCount / unlockedCount / categoryCounts）始终基于 builtin + custom + imported 全集，
+  /// 与原 mock 阶段 `TemplatesBrowseMockData.allTemplates` 行为一致。
+  Future<_AllPageData> _loadData(
+    TemplatesDao dao,
+    List<AllTemplateItem> imported,
+  ) async {
+    final builtins = await dao.getBuiltin();
+    final customs = await dao.getCustomOnly();
 
-  int get _allTemplatesCount => TemplatesBrowseMockData.allTemplates.length;
-  int get _unlockedCount =>
-      TemplatesBrowseMockData.allTemplates.where((t) => t.price == 0).length;
+    final builtinItems =
+        builtins.map((r) => _recordToItem(r, isCustom: false)).toList();
+    final customItems =
+        customs.map((r) => _recordToItem(r, isCustom: true)).toList();
+    final customWithImported = <AllTemplateItem>[...customItems, ...imported];
+
+    final allItems = <AllTemplateItem>[...builtinItems, ...customWithImported];
+    final allCount = allItems.length;
+    final unlockedCount = allItems.where((t) => t.price == 0).length;
+
+    final categoryCounts = <String, int>{};
+    for (final t in allItems) {
+      categoryCounts[t.category] = (categoryCounts[t.category] ?? 0) + 1;
+    }
+
+    final source = _showCustom ? customWithImported : builtinItems;
+    final filtered = _selectedType != null
+        ? source.where((t) => t.category == _selectedType).toList()
+        : source;
+
+    return _AllPageData(
+      allCount: allCount,
+      unlockedCount: unlockedCount,
+      categoryCounts: categoryCounts,
+      filtered: filtered,
+    );
+  }
 
   void _onLayerSelect(int layer, String? value) {
     setState(() {
@@ -134,7 +161,7 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     final importedAll = ref.watch(importedAllTemplatesProvider);
-    final filtered = _filteredTemplatesWith(importedAll);
+    final asyncDao = ref.watch(templatesDaoProvider);
     final isOverview = _selectedType == null;
 
     return Scaffold(
@@ -157,47 +184,65 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                   ),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.only(bottom: 32),
-                    child: isOverview
-                        ? _CategoryOverview(
-                            tokens: tokens,
-                            allCount: _allTemplatesCount,
-                            unlockedCount: _unlockedCount,
-                            onSelectCategory: _selectCategory,
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _HeroCard(
-                                tokens: tokens,
-                                allCount: _allTemplatesCount,
-                                unlockedCount: _unlockedCount,
-                              ),
-                              _FilterSection(
-                                tokens: tokens,
-                                selectedType: _selectedType,
-                                selectedStyle: _selectedStyle,
-                                selectedMethod: _selectedMethod,
-                                showCustom: _showCustom,
-                                onLayerSelect: _onLayerSelect,
-                                onToggleCustom: _toggleCustom,
-                              ),
-                              if (_showCustom)
-                                _ActionRow(
+                  child: asyncDao.when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => const Center(child: Text('加载失败')),
+                    data: (dao) => FutureBuilder<_AllPageData>(
+                      future: _loadData(dao, importedAll),
+                      builder: (context, snap) {
+                        if (!snap.hasData) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        final data = snap.data!;
+                        final filtered = data.filtered;
+                        return SingleChildScrollView(
+                          padding: const EdgeInsets.only(bottom: 32),
+                          child: isOverview
+                              ? _CategoryOverview(
                                   tokens: tokens,
-                                  onImport: _showImportSheet,
-                                  onCreate: _goEditor,
+                                  allCount: data.allCount,
+                                  unlockedCount: data.unlockedCount,
+                                  categoryCounts: data.categoryCounts,
+                                  onSelectCategory: _selectCategory,
+                                )
+                              : Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _HeroCard(
+                                      tokens: tokens,
+                                      allCount: data.allCount,
+                                      unlockedCount: data.unlockedCount,
+                                    ),
+                                    _FilterSection(
+                                      tokens: tokens,
+                                      selectedType: _selectedType,
+                                      selectedStyle: _selectedStyle,
+                                      selectedMethod: _selectedMethod,
+                                      showCustom: _showCustom,
+                                      onLayerSelect: _onLayerSelect,
+                                      onToggleCustom: _toggleCustom,
+                                    ),
+                                    if (_showCustom)
+                                      _ActionRow(
+                                        tokens: tokens,
+                                        onImport: _showImportSheet,
+                                        onCreate: _goEditor,
+                                      ),
+                                    if (filtered.isEmpty)
+                                      _EmptyState(tokens: tokens)
+                                    else
+                                      _TemplateGrid(
+                                        tokens: tokens,
+                                        templates: filtered,
+                                      ),
+                                  ],
                                 ),
-                              if (filtered.isEmpty)
-                                _EmptyState(tokens: tokens)
-                              else
-                                _TemplateGrid(
-                                  tokens: tokens,
-                                  templates: filtered,
-                                ),
-                            ],
-                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
               ],
@@ -961,12 +1006,14 @@ class _CategoryOverview extends StatelessWidget {
     required this.tokens,
     required this.allCount,
     required this.unlockedCount,
+    required this.categoryCounts,
     required this.onSelectCategory,
   });
 
   final ThemeTokens tokens;
   final int allCount;
   final int unlockedCount;
+  final Map<String, int> categoryCounts;
   final void Function(String category) onSelectCategory;
 
   static const List<_TemplateCategoryMeta> _categories = [
@@ -1028,12 +1075,6 @@ class _CategoryOverview extends StatelessWidget {
     ),
   ];
 
-  int _countForCategory(String categoryId) {
-    return TemplatesBrowseMockData.allTemplates
-        .where((t) => t.category == categoryId)
-        .length;
-  }
-
   @override
   Widget build(BuildContext context) {
     // 瀑布流：两列交替分布
@@ -1043,7 +1084,7 @@ class _CategoryOverview extends StatelessWidget {
       final cat = _categories[i];
       final card = _CategoryCard(
         meta: cat,
-        count: _countForCategory(cat.id),
+        count: categoryCounts[cat.id] ?? 0,
         tokens: tokens,
         onTap: () => onSelectCategory(cat.id),
       );
@@ -1259,4 +1300,36 @@ class _CategoryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 全部模板页加载的数据包（counts + filtered list）
+class _AllPageData {
+  const _AllPageData({
+    required this.allCount,
+    required this.unlockedCount,
+    required this.categoryCounts,
+    required this.filtered,
+  });
+
+  final int allCount;
+  final int unlockedCount;
+  final Map<String, int> categoryCounts;
+  final List<AllTemplateItem> filtered;
+}
+
+/// TemplateRecord → AllTemplateItem 适配
+/// DAO 模板数据 → TemplatesAllPage grid 所需类型
+///
+/// `isCustom` 由调用方根据 `r.isBuiltin` 决定：builtin=false 表示用户自定义模板。
+AllTemplateItem _recordToItem(TemplateRecord r, {required bool isCustom}) {
+  return AllTemplateItem(
+    id: r.id,
+    name: r.name,
+    category: r.category,
+    style: (r.classification['style'] as String?),
+    method: (r.classification['method'] as String?),
+    coverSeed: r.id,
+    price: r.price,
+    isCustom: isCustom,
+  );
 }
