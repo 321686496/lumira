@@ -65,7 +65,7 @@ class PhotoPostProcessor {
       );
       debugPrint('[post-process] 裁剪区域: $cropRect');
 
-      // 3. 计算降采样后的输出尺寸（长边 ≤ 1536）
+      // 3. 计算降采样后的输出尺寸（长边 ≤ 1536，严格保持裁剪区域比例）
       const maxDimension = 1536;
       var outW = cropRect[2];
       var outH = cropRect[3];
@@ -73,6 +73,13 @@ class PhotoPostProcessor {
         final scale = maxDimension / math.max(outW, outH);
         outW = (outW * scale).round();
         outH = (outH * scale).round();
+      }
+      // 严格保持目标比例（防止 round 引入的 ±1px 误差累积）
+      final targetRatio = outW / outH;
+      final intendedRatio = cropRect[2] / cropRect[3];
+      if ((targetRatio - intendedRatio).abs() > 0.005) {
+        // 重新计算 outH 让比例匹配
+        outH = (outW / intendedRatio).round();
       }
 
       // 4. 单次 Canvas 调用：降采样 + ColorMatrix + 裁剪 + Vignette
@@ -308,6 +315,10 @@ class PhotoPostProcessor {
     final offsetY = ((imgH - cropH) / 2.0).round().clamp(0, imgH - 1);
     final width = cropW.round().clamp(1, imgW - offsetX);
     final height = cropH.round().clamp(1, imgH - offsetY);
+
+    // 诊断日志：输出最终裁剪后的比例，便于与取景器对比
+    debugPrint('[post-process] 目标比例=$targetRatio, 图像比例=$imgRatio, '
+        '裁剪后比例=${width / height}');
 
     return [offsetX, offsetY, width, height];
   }
