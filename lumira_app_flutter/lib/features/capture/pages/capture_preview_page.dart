@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -31,10 +30,14 @@ const _photoSaverChannel = MethodChannel('lumira/photo_saver');
 /// - 保存到相册：mock SnackBar + pop，不接入 saver_gallery
 /// - 生成对比图 / EXIF 卡片：mock SnackBar，不接入图像生成
 class CapturePreviewPage extends ConsumerStatefulWidget {
-  const CapturePreviewPage({super.key, this.photoUrl});
+  const CapturePreviewPage({super.key, this.photoUrl, this.photoId});
 
   /// 路由参数：photoUrl（拍摄后的照片 URL）
   final String? photoUrl;
+
+  /// 路由参数：photoId（拍摄时自动保存到 DB 的记录 id）
+  /// 用于在预览页修改场景时同步更新 DB 记录
+  final String? photoId;
 
   @override
   ConsumerState<CapturePreviewPage> createState() =>
@@ -102,14 +105,27 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     setState(() {
       _selectedSceneId = id;
     });
+    // 同步更新数据库中的场景标记（拍摄时已落库，此处更新 scene_id 字段）
+    final photoId = widget.photoId;
+    if (photoId != null) {
+      ref.read(galleryDaoProvider.future).then((dao) async {
+        try {
+          await dao.updateScene(photoId, id);
+          ref.invalidate(galleryDaoProvider);
+        } catch (e) {
+          debugPrint('[preview] 更新场景失败: $e');
+        }
+      });
+    }
   }
 
-  /// 保存到相册
+  /// 保存到系统相册（应用相册已在拍摄时自动保存）
   /// 修复：
   /// 1. saver_gallery 不支持 HarmonyOS，改用 MethodChannel 调用原生 photoAccessHelper
   /// 2. 添加详细诊断日志，SnackBar 显示具体成功/失败信息
-  /// 3. 保存后使 galleryDaoProvider 失效，触发相册页刷新
-  /// 4. 保存前重新应用当前后期参数（用户可能在预览页调整了滑块）
+  /// 3. 保存前重新应用当前后期参数（用户可能在预览页调整了滑块）
+  ///    注意：DB 记录仍指向拍摄时的 processedPath，此处重处理的文件仅用于系统相册落盘，
+  ///    这是已知限制（详见 plan Task 5 说明）。
   Future<void> _onSave() async {
     if (_photoUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -153,10 +169,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       }
     }
 
-    final messages = <String>[];
-
-    // 1. 保存到系统相册（通过 HarmonyOS 原生 photoAccessHelper）
-    bool systemAlbumSaved = false;
+    // 调用原生保存到系统相册（应用相册已在拍摄时自动保存，此处不重复写 DB）
     if (isLocalFile && imageFile != null) {
       try {
         debugPrint('[save] 调用原生保存到系统相册: ${imageFile.path}');
@@ -164,59 +177,29 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
           'path': imageFile.path,
         });
         debugPrint('[save] 原生保存结果: $result');
-        systemAlbumSaved = result != null && result['success'] == true;
-        if (systemAlbumSaved) {
-          messages.add('系统相册✓');
-        } else {
-          final err = result != null ? result['error'] : '未知错误';
-          messages.add('系统相册✗($err)');
-          debugPrint('[save] 系统相册保存失败: $err');
-        }
+        final success = result != null && result['success'] == true;
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success
+                ? '已保存到系统相册'
+                : '保存失败：${result?['error'] ?? "未知错误"}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       } catch (e) {
-        messages.add('系统相册✗($e)');
         debugPrint('[save] 系统相册异常: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存失败：$e')),
+        );
       }
-    }
-
-    // 2. 保存到应用数据库（写入实际的 templateId 和 lut）
-    bool dbSaved = false;
-    try {
-      debugPrint('[save] 保存到应用数据库...');
-      final dao = await ref.read(galleryDaoProvider.future);
-      // 读取当前模板和后期参数
-      final templateId = ref.read(CaptureState.currentTemplateIdProvider);
-      final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
-      final lut = postProcess.lut;
-      final record = GalleryItemRecord(
-        id: 'photo_${DateTime.now().millisecondsSinceEpoch}',
-        dataUrl: isLocalFile ? null : _photoUrl,
-        filePath: isLocalFile ? _photoUrl : null,
-        sceneId: _selectedSceneId,
-        templateId: templateId,
-        kitId: null,
-        mood: _moods.where((m) => m.active).map((m) => m.name).join(','),
-        lut: (lut == 'none' || lut.isEmpty) ? null : lut,
-        createdAt: DateTime.now().millisecondsSinceEpoch,
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('网络图片不支持保存到系统相册')),
       );
-      await dao.insert(record);
-      dbSaved = true;
-      messages.add('应用记录✓');
-      debugPrint('[save] 应用数据库保存成功 templateId=$templateId lut=$lut');
-
-      // 使 provider 失效，触发相册页刷新
-      ref.invalidate(galleryDaoProvider);
-    } catch (e) {
-      messages.add('应用记录✗($e)');
-      debugPrint('[save] 应用数据库保存失败: $e');
     }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(messages.join(' ')),
-        duration: const Duration(seconds: 2),
-      ),
-    );
 
     // 保存完成后延迟返回
     Future.delayed(const Duration(milliseconds: 1000), () {
@@ -232,6 +215,17 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+
+    // 预选当前场景（修复 Issue 8：拍摄后自动选择该场景）
+    // 仅在首次构建且用户未手动改过时设置；通过 postFrameCallback 避免在 build 中调用 setState
+    final activeSceneId = ref.watch(CaptureState.activeScenePresetIdProvider);
+    if (_selectedSceneId == null && activeSceneId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _selectedSceneId == null) {
+          setState(() => _selectedSceneId = activeSceneId);
+        }
+      });
+    }
 
     return Scaffold(
       // 硬编码颜色，与 uni-app 一致 (preview-container bg #1C1A17)
@@ -1005,7 +999,7 @@ class _SaveButton extends StatelessWidget {
             ),
             SizedBox(width: 8),
             Text(
-              '保存到相册',
+              '保存到系统相册',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,

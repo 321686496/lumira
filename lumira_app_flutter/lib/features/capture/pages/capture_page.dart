@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../core/db/dao/gallery_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
@@ -214,13 +216,43 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
         _isProcessing = false;
 
+        // 自动保存到应用相册（数据库），用户在预览页可决定是否另存到系统相册
+        // 修复 Issue 4：原方案仅在用户点击预览页"保存"时写入 DB，
+        // 若用户返回则照片成为孤儿（文件存在但无 DB 记录）。此处捕获后立即落库。
+        final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+        try {
+          final dao = await ref.read(galleryDaoProvider.future);
+          final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+          final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
+          final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
+          final lut = postProcess.lut;
+          final record = GalleryItemRecord(
+            id: photoId,
+            filePath: processedPath,
+            dataUrl: null,
+            sceneId: sceneId,
+            templateId: templateId,
+            kitId: null,
+            mood: null,
+            lut: (lut == 'none' || lut.isEmpty) ? null : lut,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+          );
+          await dao.insert(record);
+          ref.invalidate(galleryDaoProvider);
+          debugPrint('[capture] 自动保存到应用相册: ${record.id}');
+        } catch (e) {
+          debugPrint('[capture] 自动保存失败: $e');
+        }
+
         // 拍照成功后自动导航到预览页
         if (!mounted) return;
         if (_returnResult) {
           context.pop(processedPath);
         } else {
           GoRouter.of(context).push(
-            '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(processedPath)}',
+            '${RouteNames.capturePreview}'
+            '?photoUrl=${Uri.encodeComponent(processedPath)}'
+            '&photoId=$photoId',
           );
         }
       }
