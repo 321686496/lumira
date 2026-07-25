@@ -80,7 +80,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'capturePreview',
         builder: (context, state) {
           final photoUrl = state.queryParams['photoUrl'];
-          return CapturePreviewPage(photoUrl: photoUrl);
+          final photoId = state.queryParams[RouteNames.paramPhotoId];
+          return CapturePreviewPage(photoUrl: photoUrl, photoId: photoId);
         },
       ),
       GoRoute(
