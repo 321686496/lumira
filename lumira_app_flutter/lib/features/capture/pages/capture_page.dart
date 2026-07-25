@@ -66,6 +66,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 确保原生相机被重新初始化（修复取景器一直转圈的问题）。
   int _cameraRebuildKey = 0;
 
+  /// 缓存的 ProviderContainer 引用。
+  /// 在 dispose() 中调用 ref.read 会触发 ProviderScope.containerOf(this)，
+  /// 它通过 getElementForInheritedWidgetOfExactType 查询 widget 树祖先；
+  /// 但 dispose() 执行时 element 已被 deactivate，断言 "Looking up a
+  /// deactivated widget's ancestor is unsafe" 会抛出。
+  /// 在 didChangeDependencies（element 仍 active）中缓存 container 引用，
+  /// dispose 时通过引用直接操作 provider，绕过 widget 树查询。
+  ProviderContainer? _container;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +87,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
       _returnResult = mode == 'return';
       _requestCameraPermission();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Element 仍 active 时缓存 container，供 dispose() 使用
+    _container = ProviderScope.containerOf(context);
   }
 
   /// 请求相机权限
@@ -104,9 +120,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
   @override
   void dispose() {
     _captureSub?.cancel();
-    // 清除 cameraStateProvider 中的旧 CameraState 引用，
-    // 防止下次进入拍摄页时残留的旧状态影响新相机初始化
-    ref.read(CaptureState.cameraStateProvider.notifier).state = null;
+    // 使用缓存的 container 引用清除 cameraStateProvider，
+    // 避免 ref.read 在 deactivated element 上查询 widget 树祖先
+    _container?.read(CaptureState.cameraStateProvider.notifier).state = null;
     // 显式停止原生相机，防止退出后系统仍提示"正在使用取景器"。
     // 仅依赖 widget 树异步 dispose 不可靠（HarmonyOS 上 CameraAwesomeBuilder
     // 的 dispose 可能延迟或被跳过），导致下次进入时相机无法初始化。
