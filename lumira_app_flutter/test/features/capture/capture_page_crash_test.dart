@@ -8,7 +8,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
-import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
 import 'package:lumira_app_flutter/features/capture/pages/capture_page.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/camera_preview.dart';
 
