@@ -42,6 +42,28 @@ class Tables {
   static const String colCreator = 'creator';
   static const String colIsFavorite = 'is_favorite';
 
+  // === custom_templates 扩展列（v4 迁移新增） ===
+  static const String colIsBuiltin = 'is_builtin';
+  static const String colIsRecommended = 'is_recommended';
+
+  // === user_settings 扩展列（v4 迁移新增） ===
+  static const String colSeedV3Done = 'seed_v3_done';
+
+  // === composition_kits 表（M2 用，v4 迁移同步创建） ===
+  // 注：colSceneId / colTemplateId 复用 gallery_items 段已声明的同名常量
+  static const String compositionKits = 'composition_kits';
+  static const String colCameraOverridesJson = 'camera_overrides_json';
+  static const String colNote = 'note';
+  static const String colCoverUrl = 'cover_url';
+  static const String colLastUsedAt = 'last_used_at';
+  static const String colUsageCount = 'usage_count';
+
+  // === academy_learning_trajectory 表（M6 用，v4 迁移同步创建） ===
+  static const String academyLearningTrajectory = 'academy_learning_trajectory';
+  static const String colCourseId = 'course_id';
+  static const String colCompletedAt = 'completed_at';
+  static const String colSequence = 'sequence';
+
   // === gallery_items ===
   static const String galleryItems = 'gallery_items';
   static const String colDataUrl = 'data_url';
@@ -109,4 +131,33 @@ class ChallengeHistoryTable {
   ''';
   static const indexDateSql = 'CREATE INDEX idx_challenge_history_date ON $name ($colDate DESC)';
   static const indexCategorySql = 'CREATE INDEX idx_challenge_history_category ON $name ($colCategory)';
+}
+
+class CompositionKitsTable {
+  static const name = Tables.compositionKits;
+  static const createSql = '''
+    CREATE TABLE IF NOT EXISTS $name (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colSceneId} TEXT NOT NULL,
+      ${Tables.colTemplateId} TEXT,
+      ${Tables.colCameraOverridesJson} TEXT,
+      ${Tables.colNote} TEXT,
+      ${Tables.colCoverUrl} TEXT,
+      ${Tables.colCreatedAt} INTEGER NOT NULL,
+      ${Tables.colLastUsedAt} INTEGER,
+      ${Tables.colUsageCount} INTEGER NOT NULL DEFAULT 0
+    )
+  ''';
+}
+
+class AcademyLearningTrajectoryTable {
+  static const name = Tables.academyLearningTrajectory;
+  static const createSql = '''
+    CREATE TABLE IF NOT EXISTS $name (
+      ${Tables.colCourseId} TEXT PRIMARY KEY,
+      ${Tables.colCompletedAt} INTEGER NOT NULL,
+      ${Tables.colSequence} INTEGER NOT NULL
+    )
+  ''';
 }
