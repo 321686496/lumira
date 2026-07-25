@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' show sqrt;
 
 import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
@@ -237,14 +236,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
     state.sensorConfig.setMirrorFrontCamera(isFront);
     debugPrint('[capture] setMirrorFrontCamera($isFront)');
 
-    // 修复：前置摄像头默认放大一点，避免画面看起来被缩小
-    // zoom 范围 [0.0, 1.0]，0.15 表示 1.5x 左右的缩放
-    if (isFront) {
-      try {
-        state.sensorConfig.setZoom(0.15);
-        ref.read(CaptureState.zoomProvider.notifier).state = 0.15;
-      } catch (_) {}
-    }
+    // 默认缩放为 1x（前摄和后摄都重置）
+    final range = CaptureState.zoomRangeForFacing(facing);
+    final normalized1x = CaptureState.zoomMultiplierToNormalized(
+        1.0, range.min, range.max);
+    try {
+      state.sensorConfig.setZoom(normalized1x);
+      ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
+      ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
+    } catch (_) {}
   }
 
   FlashMode _mapFlashMode(CaptureFlashMode mode) {
@@ -320,39 +320,29 @@ class _CapturePageState extends ConsumerState<CapturePage>
       final isFront = next == 'front';
       state.sensorConfig.setMirrorFrontCamera(isFront);
       debugPrint('[capture] switchCamera: setMirrorFrontCamera($isFront)');
-      // 前置摄像头默认放大一点
-      if (isFront) {
-        try {
-          state.sensorConfig.setZoom(0.15);
-          ref.read(CaptureState.zoomProvider.notifier).state = 0.15;
-        } catch (_) {}
-      } else {
-        ref.read(CaptureState.zoomProvider.notifier).state = 0.0;
-      }
+      // 切换摄像头后将缩放重置为 1x（新摄像头可能不支持当前倍数）
+      final range = CaptureState.zoomRangeForFacing(next);
+      final normalized1x = CaptureState.zoomMultiplierToNormalized(
+          1.0, range.min, range.max);
+      ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
+      ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
+      try {
+        state.sensorConfig.setZoom(normalized1x);
+      } catch (_) {}
     }
   }
 
-  /// 缩放：同步到相机引擎与 zoomProvider
-  ///
-  /// 滑块值 [0, 1] 是"视觉缩放"，跨比例切换保持稳定。
-  /// 实际传给 sensor 的 zoom 会按当前比例的补偿系数调整，保证视觉一致。
-  void _onZoomChanged(double sliderValue) {
-    ref.read(CaptureState.apparentZoomProvider.notifier).state = sliderValue;
-    ref.read(CaptureState.zoomProvider.notifier).state = sliderValue;
-    _applyZoomToSensor(ref);
-  }
-
-  /// 根据当前 apparentZoom 与比例补偿系数，计算实际 sensor zoom 并应用到相机引擎。
-  /// 切换比例或调节滑块时都会调用此方法，保证视觉缩放跨比例一致。
-  void _applyZoomToSensor(WidgetRef ref) {
-    final apparent = ref.read(CaptureState.apparentZoomProvider);
-    final ratioId = ref.read(CaptureState.aspectRatioProvider);
-    final screenSize = MediaQuery.of(context).size;
-    final isPortrait = screenSize.height >= screenSize.width;
-    final factor = CaptureState.ratioCompensationFactor(ratioId, isPortrait);
-    final sensorZoom = CaptureState.computeSensorZoom(apparent, factor);
+  /// 缩放：以"倍数"为单位（前摄 [0.5, 2.0]，后摄 [0.3, 10.0]）。
+  /// 默认 1x。通过 sensorConfig.setZoom 调用系统相机能力。
+  void _onZoomChanged(double multiplier) {
+    final facing = ref.read(CaptureState.cameraFacingProvider);
+    final range = CaptureState.zoomRangeForFacing(facing);
+    final normalized = CaptureState.zoomMultiplierToNormalized(
+        multiplier, range.min, range.max);
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized;
+    ref.read(CaptureState.zoomProvider.notifier).state = normalized;
     final state = ref.read(CaptureState.cameraStateProvider);
-    state?.sensorConfig.setZoom(sensorZoom);
+    state?.sensorConfig.setZoom(normalized);
   }
 
   @override
@@ -380,12 +370,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
       } catch (_) {
         // 某些设备可能不支持 brightness 调节
       }
-    });
-
-    // 监听比例变化，重新应用缩放以保持视觉一致
-    ref.listen<String>(CaptureState.aspectRatioProvider, (prev, next) {
-      if (prev == next) return;
-      _applyZoomToSensor(ref);
     });
 
     // 权限未授予时显示权限引导 UI
@@ -660,13 +644,12 @@ class _BottomControlArea extends StatelessWidget {
   }
 }
 
-/// 缩放滑块：横向滑块 + 当前倍数显示
+/// 缩放滑块：以倍数显示，根据 facing 切换范围
 ///
-/// 滑块值 [0, 1] 经 sqrt 曲线映射到相机 zoom [0, 1]，
-/// 显示的倍数基于实际 zoom 值：1.0x (zoom=0) ~ 6.0x (zoom=1)。
-///
-/// 滑块直接 watch [CaptureState.apparentZoomProvider]：跨比例切换时此值不变，
-/// 因此滑块位置在比例切换时不会跳变。
+/// 前摄 [0.5, 2.0]，后摄 [0.3, 10.0]，默认 1x。
+/// 滑块内部 watch [CaptureState.apparentZoomProvider]（归一化值），
+/// 通过 [CaptureState.zoomRangeForFacing] 与 [CaptureState.normalizedToZoomMultiplier]
+/// 还原为倍数显示与控制。
 class _ZoomSlider extends ConsumerWidget {
   const _ZoomSlider({required this.onChanged});
 
@@ -674,10 +657,13 @@ class _ZoomSlider extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final value = ref.watch(CaptureState.apparentZoomProvider);
-    // 实际相机 zoom = sqrt(sliderValue)，显示倍数 = 1 + zoom * 5
-    final actualZoom = sqrt(value);
-    final displayX = (1 + actualZoom * 5).toStringAsFixed(1);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    final normalized = ref.watch(CaptureState.apparentZoomProvider);
+    final range = CaptureState.zoomRangeForFacing(facing);
+    final multiplier = CaptureState.normalizedToZoomMultiplier(
+        normalized, range.min, range.max);
+    final displayX = multiplier.toStringAsFixed(1);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       child: Row(
@@ -685,10 +671,10 @@ class _ZoomSlider extends ConsumerWidget {
           const Icon(Icons.zoom_in, color: Colors.white70, size: 16),
           Expanded(
             child: Slider(
-              value: value.clamp(0.0, 1.0),
-              min: 0.0,
-              max: 1.0,
-              divisions: 100,
+              value: multiplier.clamp(range.min, range.max),
+              min: range.min,
+              max: range.max,
+              divisions: ((range.max - range.min) * 10).round(),
               label: '${displayX}x',
               activeColor: Colors.amber,
               inactiveColor: Colors.white24,
@@ -696,7 +682,7 @@ class _ZoomSlider extends ConsumerWidget {
             ),
           ),
           SizedBox(
-            width: 40,
+            width: 44,
             child: Text(
               '${displayX}x',
               style: const TextStyle(color: Colors.white, fontSize: 11),

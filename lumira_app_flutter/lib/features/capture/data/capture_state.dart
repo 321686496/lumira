@@ -81,6 +81,33 @@ class CaptureState {
     return (sqrtZoom * factor).clamp(0.0, 1.0);
   }
 
+  /// 默认缩放范围（前端：0.5x ~ 2x；后端：0.3x ~ 10x）
+  /// 真实设备的 minZoom/maxZoom 通过 SensorConfig 查询；这里作为 fallback。
+  static const double frontMinZoom = 0.5;
+  static const double frontMaxZoom = 2.0;
+  static const double backMinZoom = 0.3;
+  static const double backMaxZoom = 10.0;
+
+  /// 缩放倍数 → 归一化 [0, 1]（用于 sensorConfig.setZoom）
+  static double zoomMultiplierToNormalized(
+      double multiplier, double minZoom, double maxZoom) {
+    if (maxZoom <= minZoom) return 0.0;
+    return ((multiplier - minZoom) / (maxZoom - minZoom)).clamp(0.0, 1.0);
+  }
+
+  /// 归一化 [0, 1] → 缩放倍数（用于 UI 显示）
+  static double normalizedToZoomMultiplier(
+      double normalized, double minZoom, double maxZoom) {
+    return minZoom + (maxZoom - minZoom) * normalized.clamp(0.0, 1.0);
+  }
+
+  /// 根据当前 facing 获取缩放范围
+  static ZoomRange zoomRangeForFacing(String facing) {
+    return facing == 'front'
+        ? const ZoomRange(frontMinZoom, frontMaxZoom)
+        : const ZoomRange(backMinZoom, backMaxZoom);
+  }
+
   /// 照片比例（用户可切换）
   /// 'fullscreen' = 与取景器全屏一致（9:16 或 16:9）
   /// '4:3' = 标准 4:3 比例
@@ -286,4 +313,14 @@ class CaptureState {
     // （当 currentTemplateIdProvider 设为 null 时，originalTemplateProvider 返回 null，
     //  editableTemplateProvider 会自动重置为 null）
   }
+}
+
+/// 缩放范围（最小与最大倍数）
+/// 真实设备的 minZoom/maxZoom 通过 SensorConfig 查询；
+/// `CaptureState.zoomRangeForFacing` 提供默认 fallback 范围。
+class ZoomRange {
+  const ZoomRange(this.min, this.max);
+
+  final double min;
+  final double max;
 }
