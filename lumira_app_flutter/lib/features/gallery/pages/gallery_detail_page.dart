@@ -118,41 +118,44 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
   }
 
   Widget _buildContent(GalleryItemRecord photo) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 画布区
-          _CanvasArea(photo: photo),
-          // 场景信息行
-          _SceneInfoRow(
-            sceneName: photo.sceneId ?? '未分类',
-            onTap: () {},
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // 画布区（占屏幕 55%）
+        _CanvasArea(photo: photo),
+        // 滚动区：场景信息 + 工具 pills + 调色滑块 + LUT + EXIF
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _SceneInfoRow(
+                  sceneName: photo.sceneId ?? '未分类',
+                  onTap: () {},
+                ),
+                _ToolPillsRow(
+                  activeTool: _activeTool,
+                  onTap: (i) => setState(() => _activeTool = i),
+                ),
+                _SliderBlock(
+                  sliders: _sliders,
+                  onChanged: (i, v) => setState(() {
+                    _sliders[i].value = v;
+                    final delta = (v - 50).round();
+                    _sliders[i].display = delta >= 0 ? '+$delta' : '$delta';
+                  }),
+                ),
+                _LutBlock(
+                  activeLut: _activeLut,
+                  onTap: (i) => setState(() => _activeLut = i),
+                ),
+                const _ExifButton(),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
-          // 工具 pills
-          _ToolPillsRow(
-            activeTool: _activeTool,
-            onTap: (i) => setState(() => _activeTool = i),
-          ),
-          // 调色滑块
-          _SliderBlock(
-            sliders: _sliders,
-            onChanged: (i, v) => setState(() {
-              _sliders[i].value = v;
-              final delta = (v - 50).round();
-              _sliders[i].display = delta >= 0 ? '+$delta' : '$delta';
-            }),
-          ),
-          // LUT 缩略图
-          _LutBlock(
-            activeLut: _activeLut,
-            onTap: (i) => setState(() => _activeLut = i),
-          ),
-          // EXIF 按钮
-          const _ExifButton(),
-          const SizedBox(height: 24),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -260,11 +263,15 @@ class _CanvasArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = photo.dataUrl ?? photo.filePath;
+    final screenHeight = MediaQuery.of(context).size.height;
+    // 画布占屏幕高度的 55%，剩余空间给其他控件
+    final canvasHeight = screenHeight * 0.55;
+
     return Container(
-      padding: const EdgeInsets.all(16), // 32rpx → 16dp
-      height: 360,
+      padding: const EdgeInsets.all(16),
+      height: canvasHeight,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
+        borderRadius: BorderRadius.circular(12),
         child: url == null || url.isEmpty
             ? Container(
                 color: const Color(0xFF2A2724),
@@ -274,7 +281,26 @@ class _CanvasArea extends StatelessWidget {
               )
             : url.startsWith('http')
                 ? Image.network(url, fit: BoxFit.contain)
-                : Image.file(File(url), fit: BoxFit.contain),
+                : Image.file(
+                    File(url),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: const Color(0xFF2A2724),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.broken_image_outlined,
+                                size: 32, color: Colors.white38),
+                            SizedBox(height: 8),
+                            Text('图片加载失败',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.white38)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
       ),
     );
   }
