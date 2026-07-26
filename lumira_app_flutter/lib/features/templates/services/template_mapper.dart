@@ -418,4 +418,146 @@ class TemplateMapper {
       sizeKB: s.sizeKB,
     );
   }
+
+  // === 导入 JSON → TemplateRecord ===
+
+  /// 从导入的 JSON 构造 TemplateRecord
+  /// 自动嗅探格式：
+  ///   - json['format'] == 'pptpl' 或 json['composition']?.containsKey('subjectFrame') → 完整 pptpl
+  ///   - 否则 → 简化 lumira
+  /// 内置剪影 key 不存在于白名单时降级为 'none'，并记录 warning 日志
+  static TemplateRecord recordFromImportedJson(
+    Map<String, dynamic> json, {
+    required int createdAt,
+  }) {
+    final isPptpl = _sniffPptpl(json);
+    final meta = (json['meta'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+    final id = (meta['id'] as String?) ?? 'imported_$createdAt';
+    final name = (meta['name'] as String?) ?? '未命名模板';
+    final author = (meta['author'] as String?) ?? 'imported';
+    final category = (meta['category'] as String?) ?? 'still-life';
+    final tags = (meta['tags'] as List<dynamic>?)?.cast<String>() ?? <String>[];
+    final tagIds =
+        (meta['tagIds'] as List<dynamic>?)?.cast<String>() ?? <String>[];
+    final price = (meta['price'] as num?)?.toInt() ?? 0;
+    final cover = (meta['cover'] as String?) ?? '';
+    final description = (meta['description'] as String?) ?? '';
+    final referenceSource = (meta['referenceSource'] as String?) ?? '';
+
+    Map<String, dynamic> composition;
+    Map<String, dynamic> pose;
+    Map<String, dynamic> camera;
+    Map<String, dynamic> sceneGuide;
+    Map<String, dynamic> postProcess;
+
+    if (isPptpl) {
+      composition =
+          (json['composition'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+      pose = _normalizePose((json['pose'] as Map<String, dynamic>?) ?? {});
+      camera = (json['camera'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+      sceneGuide =
+          (json['sceneGuide'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+      postProcess = (json['postProcess'] as Map<String, dynamic>?) ??
+          <String, dynamic>{};
+    } else {
+      // lumira 简化格式：仅 meta + camera + composition.overlayType，其余填默认
+      final cam =
+          (json['camera'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+      final comp =
+          (json['composition'] as Map<String, dynamic>?) ?? <String, dynamic>{};
+      composition = {
+        'overlayType': comp['overlayType'] ?? 'rule_of_thirds',
+      };
+      pose = <String, dynamic>{
+        'silhouette': {'type': 'builtin', 'data': 'none'},
+        'position': {'x': 0.5, 'y': 0.5},
+        'scale': 1.0,
+        'rotation': 0,
+      };
+      camera = cam;
+      sceneGuide = <String, dynamic>{};
+      postProcess = <String, dynamic>{'cropRatio': '3:4', 'lut': 'none'};
+    }
+
+    // 剪影降级：builtin key 不在白名单 → 'none'
+    pose = _degradeSilhouetteIfNeeded(pose);
+
+    return TemplateRecord(
+      id: id,
+      name: name,
+      author: author,
+      version: '1.0.0',
+      category: category,
+      classification: <String, dynamic>{},
+      tags: tags,
+      tagIds: tagIds,
+      price: price,
+      cover: cover,
+      description: description,
+      referenceSource: referenceSource,
+      composition: composition,
+      pose: pose,
+      camera: camera,
+      sceneGuide: sceneGuide,
+      postProcess: postProcess,
+      createdAt: createdAt,
+      updatedAt: createdAt,
+      isBuiltin: false,
+      isRecommended: false,
+    );
+  }
+
+  /// 嗅探是否为完整 pptpl 格式
+  static bool _sniffPptpl(Map<String, dynamic> json) {
+    final format = json['format'] as String?;
+    if (format == 'pptpl') return true;
+    final comp = json['composition'];
+    if (comp is Map<String, dynamic> && comp.containsKey('subjectFrame')) {
+      return true;
+    }
+    return false;
+  }
+
+  /// 规范化 pose 字段，确保 silhouette / position / scale / rotation 存在
+  static Map<String, dynamic> _normalizePose(Map<String, dynamic> pose) {
+    final silhouette =
+        pose['silhouette'] as Map<String, dynamic>? ?? <String, dynamic>{
+      'type': 'builtin',
+      'data': 'none',
+    };
+    final position =
+        pose['position'] as Map<String, dynamic>? ?? <String, dynamic>{
+      'x': 0.5,
+      'y': 0.5,
+    };
+    return {
+      'silhouette': silhouette,
+      'position': position,
+      'scale': pose['scale'] ?? 1.0,
+      'rotation': pose['rotation'] ?? 0,
+    };
+  }
+
+  /// 内置剪影 key 不存在于白名单时降级为 'none'
+  /// 白名单来源：TemplatesEditorMockData.builtinSilhouetteKeys
+  /// 注意：当 Task 2.9 迁移完整 SVG 库后，应替换为真实剪影库的 key 列表
+  static Map<String, dynamic> _degradeSilhouetteIfNeeded(
+      Map<String, dynamic> pose) {
+    final silhouette = pose['silhouette'];
+    if (silhouette is! Map<String, dynamic>) return pose;
+    if (silhouette['type'] != 'builtin') return pose;
+
+    final key = silhouette['data'] as String?;
+    const whitelist = editor.TemplatesEditorMockData.builtinSilhouetteKeys;
+    if (key == null || !whitelist.contains(key)) {
+      // ignore: avoid_print
+      print('Warning: builtin silhouette key "$key" not found in whitelist, '
+          'degrading to "none"');
+      return {
+        ...pose,
+        'silhouette': {'type': 'builtin', 'data': 'none'},
+      };
+    }
+    return pose;
+  }
 }
