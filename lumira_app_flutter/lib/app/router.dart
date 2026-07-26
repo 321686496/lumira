@@ -24,6 +24,7 @@ import '../features/academy/pages/academy_assignment_page.dart';
 import '../features/academy/pages/academy_detail_page.dart';
 import '../features/academy/pages/academy_knowledge_page.dart';
 import '../features/academy/pages/academy_page.dart';
+import '../features/academy/pages/academy_trajectory_page.dart';
 import '../features/profile/pages/profile_about_page.dart';
 import '../features/profile/pages/profile_collection_detail_page.dart';
 import '../features/profile/pages/profile_collections_page.dart';
@@ -291,6 +292,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final cardId = state.queryParams[RouteNames.paramAcademyId];
           return AcademyKnowledgePage(cardId: cardId);
         },
+      ),
+      GoRoute(
+        path: RouteNames.academyTrajectory,
+        name: 'academyTrajectory',
+        builder: (context, state) => const AcademyTrajectoryPage(),
       ),
       GoRoute(
         path: RouteNames.profileCollections,

@@ -103,6 +103,36 @@ class AcademyOverviewCard extends ConsumerWidget {
                     ),
                   ),
                 ],
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: () {
+                    GoRouter.of(context).push(RouteNames.academyTrajectory);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: tokens.brandSubtle,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.timeline, size: 16, color: tokens.brandText),
+                        const SizedBox(width: 6),
+                        Text(
+                          '我的学习轨迹',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: tokens.brandText,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(Icons.chevron_right, size: 16, color: tokens.brandText),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

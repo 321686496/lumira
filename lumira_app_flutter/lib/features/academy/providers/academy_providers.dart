@@ -4,6 +4,7 @@ import '../../../core/db/database_provider.dart';
 import '../data/academy_repository.dart';
 import '../data/academy_models.dart';
 import '../data/academy_mock_data.dart';
+import '../data/academy_trajectory_models.dart';
 
 // === DAO & Repository ===
 
@@ -46,6 +47,13 @@ final courseFullyCompletedProvider =
     FutureProvider.family<bool, String>((ref, courseId) async {
   final repo = await ref.watch(academyRepositoryProvider.future);
   return repo.isCourseFullyCompleted(courseId);
+});
+
+/// 学习轨迹列表（按 sequence ASC）
+final academyTrajectoryProvider =
+    FutureProvider<List<AcademyTrajectoryRecord>>((ref) async {
+  final repo = await ref.watch(academyRepositoryProvider.future);
+  return repo.getAllTrajectory();
 });
 
 /// 排序后的课程列表
