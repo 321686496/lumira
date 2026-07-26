@@ -9,8 +9,9 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/images/adaptive_photo_grid.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/services/poster_generator.dart';
 import '../data/profile_mock_data.dart';
-import '../widgets/fragment_poster_generator.dart';
+import '../widgets/fragment_poster_generator.dart' show FragmentPosterContent;
 
 /// 碎片收集详情页
 ///
@@ -81,11 +82,20 @@ class _ProfileFragmentDetailPageState
                         item: entry.value,
                         posterKey: _keyFor(entry.key),
                         onSharePoster: () {
-                          FragmentPosterGenerator.showPoster(
-                            context,
+                          PosterGenerator.showPoster(
+                            context: context,
                             tokens: tokens,
-                            fragment: entry.value,
+                            title: '海报预览',
+                            content: FragmentPosterContent(
+                              tokens: tokens,
+                              fragment: entry.value,
+                            ),
                             posterKey: _keyFor(entry.key),
+                            shareSubject: '如画 · 碎片收集：${entry.value.name}',
+                            shareText:
+                                '我在如画收集了「${entry.value.name}」碎片 ${entry.value.current}/${entry.value.max}，快来一起收集吧！',
+                            fileNamePrefix:
+                                'lumira_fragment_${entry.value.name}',
                           );
                         },
                       ),
