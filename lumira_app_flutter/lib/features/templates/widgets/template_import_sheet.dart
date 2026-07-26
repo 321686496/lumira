@@ -4,9 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../data/imported_templates_provider.dart';
+import '../services/template_mapper.dart';
 
 /// 模板导入 BottomSheet
 ///
@@ -119,7 +122,7 @@ class TemplateImportSheet extends ConsumerWidget {
     );
   }
 
-  // ===== 文件导入 =====
+  // ===== 文件导入（DAO 持久化 + 双格式嗅探）=====
   Future<void> _handleFileImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -151,24 +154,56 @@ class TemplateImportSheet extends ConsumerWidget {
         return;
       }
 
-      final name = parsed['name'] as String;
-      final category = (parsed['category'] as String?) ?? 'still-life';
-      final tags = (parsed['tags'] as List<dynamic>?)?.cast<String>() ?? <String>[];
-      final coverSeed = parsed['coverSeed'] as String?;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      var record = TemplateMapper.recordFromImportedJson(
+        parsed,
+        createdAt: now,
+      );
 
-      final newId = ref.read(importedTemplatesProvider.notifier).addTemplate(
-            name: name,
-            category: category,
-            tags: tags,
-            source: 'file',
-            coverSeed: coverSeed,
-          );
+      // ID 冲突处理：已存在则追加 _imported_ 时间戳后缀
+      final dao = await ref.read(templatesDaoProvider.future);
+      var finalId = record.id;
+      while (await dao.getById(finalId) != null) {
+        finalId = '${finalId}_imported_$now';
+      }
+      if (finalId != record.id) {
+        record = _copyRecordWithId(record, finalId);
+      }
 
-      _showSnackMsg(messenger, '已导入模板：$name');
-      onImported(newId);
+      await dao.upsert(record);
+
+      _showSnackMsg(messenger, '已导入模板：${record.name}');
+      onImported(record.id);
     } catch (e) {
       _showSnackMsg(messenger, '导入失败：$e');
     }
+  }
+
+  /// 复制 TemplateRecord 并替换 id（用于 ID 冲突时生成新记录）
+  TemplateRecord _copyRecordWithId(TemplateRecord src, String newId) {
+    return TemplateRecord(
+      id: newId,
+      name: src.name,
+      author: src.author,
+      version: src.version,
+      category: src.category,
+      classification: src.classification,
+      tags: src.tags,
+      tagIds: src.tagIds,
+      price: src.price,
+      cover: src.cover,
+      description: src.description,
+      referenceSource: src.referenceSource,
+      composition: src.composition,
+      pose: src.pose,
+      camera: src.camera,
+      sceneGuide: src.sceneGuide,
+      postProcess: src.postProcess,
+      createdAt: src.createdAt,
+      updatedAt: src.updatedAt,
+      isBuiltin: src.isBuiltin,
+      isRecommended: src.isRecommended,
+    );
   }
 
   // ===== 链接导入 =====
@@ -266,14 +301,38 @@ class TemplateImportSheet extends ConsumerWidget {
 
   /// 解析模板 JSON（文件内容）
   /// 支持格式：
-  /// { "name": "...", "category": "portrait", "tags": ["..."], "coverSeed": "..." }
+  /// - .pptpl: { "format": "pptpl", "meta": {...}, "composition": {...}, ... }
+  /// - .lumira: { "format": "lumira", "meta": {...}, "camera": {...}, ... }
+  /// - 旧版扁平: { "name": "...", "category": "...", "tags": [...], "coverSeed": "..." }
+  /// 返回原始 JSON Map；具体格式嗅探由 TemplateMapper.recordFromImportedJson 完成
   Map<String, dynamic>? _parseTemplateJson(String content) {
     try {
       final data = jsonDecode(content);
       if (data is! Map<String, dynamic>) return null;
+
+      // 新格式：含 format 字段或 meta 字段 → 直接返回，交给 mapper 嗅探
+      if (data['format'] is String || data['meta'] is Map) {
+        return data;
+      }
+
+      // 旧版扁平格式：{ name, category, tags, coverSeed }
+      // 包装为 lumira 简化格式交给 mapper
       final name = data['name'];
-      if (name is! String || name.isEmpty) return null;
-      return data;
+      if (name is String && name.isNotEmpty) {
+        return {
+          'format': 'lumira',
+          'version': '1.0',
+          'meta': {
+            'id': data['id'] ?? 'imported_legacy_${DateTime.now().millisecondsSinceEpoch}',
+            'name': name,
+            'category': data['category'] ?? 'still-life',
+            'tags': data['tags'] ?? <String>[],
+          },
+          'camera': <String, dynamic>{},
+          'composition': {'overlayType': 'rule_of_thirds'},
+        };
+      }
+      return null;
     } catch (_) {
       return null;
     }
