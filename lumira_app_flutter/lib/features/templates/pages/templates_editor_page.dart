@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../profile/pages/profile_my_templates_page.dart' show customTemplatesProvider;
 import '../data/preview_form_provider.dart';
 import '../data/templates_editor_mock_data.dart';
 import '../widgets/composition_overlay.dart';
@@ -328,27 +331,116 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
   // ===== Footer 操作 =====
 
-  void _onSave() {
+  Future<void> _onSave() async {
     if (_form.meta.name.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请输入模板名称')),
       );
       return;
     }
-    // 简化：mock 保存（不接入真实 DAO，Task 2.9+ 替换）
-    _currentDraftId = '';
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('保存成功')),
+    final now = DateTime.now().millisecondsSinceEpoch;
+    // 编辑模式复用 templateId；新建模式生成 user_<timestamp> 作为持久化主键
+    final id = widget.templateId ?? 'user_$now';
+    final record = TemplateRecord(
+      id: id,
+      name: _form.meta.name.trim(),
+      author: 'user',
+      version: '1.0.0',
+      category: _form.meta.category,
+      classification: {
+        'type': _form.meta.category,
+      },
+      tags: _form.meta.tags,
+      tagIds: const [],
+      price: 0,
+      cover: '',
+      description: _form.meta.description,
+      referenceSource: _form.meta.referenceSource,
+      composition: {
+        'overlayType': _form.composition.overlayType,
+        'aspectRatio': _form.composition.aspectRatio,
+        'opacity': _form.composition.opacity,
+        'description': _form.composition.description,
+      },
+      pose: {
+        'silhouette': {
+          'type': _form.pose.silhouette.type,
+          'data': _form.pose.silhouette.data,
+          'filename': _form.pose.silhouette.filename,
+          'sizeKB': _form.pose.silhouette.sizeKB,
+        },
+        'position': {
+          'x': _form.pose.position.x,
+          'y': _form.pose.position.y,
+        },
+        'scale': _form.pose.scale,
+        'rotation': _form.pose.rotation,
+        'description': _form.pose.description,
+      },
+      camera: {
+        'exposureCompensation': _form.camera.exposureCompensation,
+        'isoMode': _form.camera.isoMode,
+        'iso': _form.camera.iso,
+        'shutterSpeed': _form.camera.shutterSpeed,
+        'whiteBalance': _form.camera.whiteBalance,
+        'whiteBalanceK': _form.camera.whiteBalanceK,
+        'flashMode': _form.camera.flashMode,
+        'focusMode': _form.camera.focusMode,
+        'lens': _form.camera.lensSuggestion,
+      },
+      sceneGuide: {
+        'lightDirection': _form.sceneGuide.lightDirection,
+        'shootingDistance': _form.sceneGuide.shootingDistance,
+        'background': _form.sceneGuide.background,
+        'props': _form.sceneGuide.props,
+        'bestTime': _form.sceneGuide.bestTime,
+        'tips': _form.sceneGuide.tips,
+      },
+      postProcess: {
+        'cropRatio': _form.postProcess.cropRatio,
+        'lut': _form.postProcess.lut,
+        'color': {
+          'brightness': _form.postProcess.color.brightness,
+          'contrast': _form.postProcess.color.contrast,
+          'saturation': _form.postProcess.color.saturation,
+          'temperature': _form.postProcess.color.temperature,
+          'tint': _form.postProcess.color.tint,
+        },
+        'smoothStrength': _form.postProcess.smoothStrength,
+        'sharpen': _form.postProcess.sharpen,
+        'vignette': _form.postProcess.vignette,
+        'grain': _form.postProcess.grain,
+      },
+      createdAt: now,
+      updatedAt: now,
+      isBuiltin: false,
+      isRecommended: false,
     );
-    // 800ms 后返回上一页（与 uni-app setTimeout 一致）
-    Future.delayed(const Duration(milliseconds: 800), () {
+
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      await dao.upsert(record);
+      // 刷新 My Templates 页数据源，使新保存的模板立即出现
+      ref.invalidate(customTemplatesProvider);
+      _currentDraftId = '';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('保存成功')),
+      );
+      // 800ms 后返回上一页（与 uni-app setTimeout 一致）
+      await Future.delayed(const Duration(milliseconds: 800));
       if (!mounted) return;
       if (Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       } else {
         GoRouter.of(context).go(RouteNames.templates);
       }
-    });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('保存失败：$e')),
+      );
+    }
   }
 
   void _onSaveDraft() {

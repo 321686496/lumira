@@ -5,14 +5,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
+import 'package:lumira_app_flutter/core/db/database_provider.dart';
+import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_editor_page.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
-/// Task 2.8C — TemplatesEditorPage 测试
+/// Task 2.8C + Task A5 — TemplatesEditorPage 测试
 ///
 /// 覆盖 brief 第 5.2 节 ≥25 项断言 + cross-theme/cross-style smoke test。
 /// 10 个分类（35 tests）：
@@ -26,10 +30,29 @@ import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 /// 8. Footer 操作（5）
 /// 9. 自动保存（1）
 /// 10. Cross-theme/cross-style smoke（1，12 组合）
+///
+/// Task A5 适配：`_onSave` 现通过 `templatesDaoProvider` 调用 DAO 持久化，
+/// 测试通过 sqflite_ffi + 共享内存 DB 覆盖 `templatesDaoProvider`，让
+/// "tapping 保存 with valid name" 测试在不依赖文件系统的情况下完成 upsert。
 void main() {
   FlutterExceptionHandler? originalErrorHandler;
+  // 共享 DB 实例：在 setUpAll 中创建，所有测试通过 override 复用。
+  // `_onSave` 测试会写入数据，每个测试前清空表保证隔离。
+  late Database sharedDb;
+
+  setUpAll(() async {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    sharedDb = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
+  });
+
+  tearDownAll(() async {
+    await sharedDb.close();
+  });
 
   setUp(() {
+    // 清空 custom_templates 表，保证 _onSave 测试间状态隔离
+    sharedDb.delete(Tables.customTemplates, where: '1=1');
     HttpOverrides.global = _TestHttpOverrides();
     originalErrorHandler = FlutterError.onError;
     FlutterError.onError = (FlutterErrorDetails details) {
@@ -98,16 +121,27 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        // 复用 sharedDb，避免每个测试重新打开 DB 文件
+        databaseProvider.overrideWith((ref) async => sharedDb),
+        // 直接覆盖 templatesDaoProvider，避免 FutureProvider 异步解析时序问题
+        templatesDaoProvider.overrideWith((ref) async => TemplatesDao(sharedDb)),
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
   }
 
   Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
+    // Task A5 适配：sqflite_common_ffi 的 DB 查询是真实 async 操作，
+    // 在 FakeAsync 环境下 pump(Duration) 无法让真实 Future 完成。
+    // 必须用 tester.runAsync 让真实 async 操作（DAO 查询 / 写入）完成。
     if (style == UIStyle.female) {
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
     } else {
       await tester.pumpAndSettle();
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
     }
   }
 
@@ -876,4 +910,37 @@ class _TestHttpOverrides extends HttpOverrides {
     final client = super.createHttpClient(context);
     return client;
   }
+}
+
+/// 创建 custom_templates 表（与 database_provider._onCreate 中对应部分一致）
+///
+/// Task A5：`_onSave` 通过 `templatesDaoProvider` 调用 `dao.upsert(record)`，
+/// 测试需要预先建表才能写入。仅创建 editor 实际使用的 `custom_templates` 表，
+/// 其他表（scenes/gallery/...）editor 不访问，省略以保持测试聚焦。
+Future<void> _onCreate(Database db, int version) async {
+  await db.execute('''
+    CREATE TABLE ${Tables.customTemplates} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colAuthor} TEXT NOT NULL DEFAULT '',
+      ${Tables.colVersion} TEXT NOT NULL DEFAULT '1.0.0',
+      ${Tables.colCategory} TEXT NOT NULL,
+      ${Tables.colClassificationJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colTagsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colPrice} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCover} TEXT NOT NULL DEFAULT '',
+      ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
+      ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colPoseJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCreatedAt} INTEGER NOT NULL,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL
+    )
+  ''');
 }
