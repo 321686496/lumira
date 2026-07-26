@@ -14,6 +14,8 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/pages/profile_my_templates_page.dart' show customTemplatesProvider;
 import '../data/preview_form_provider.dart';
 import '../data/templates_editor_mock_data.dart';
+import '../services/template_exporter.dart';
+import '../services/template_mapper.dart';
 import '../widgets/composition_overlay.dart';
 import '../widgets/pose_silhouette.dart';
 import '../widgets/silhouette_editor.dart';
@@ -454,11 +456,91 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     );
   }
 
-  void _onExport() {
-    // 简化：mock 导出（Task 2.9+ 接入真实导出 .pptpl）
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已导出（mock）')),
+  Future<void> _onExport() async {
+    if (_form.meta.name.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先填写模板名称')),
+      );
+      return;
+    }
+
+    // 将 EditorForm 转为 TemplateRecord
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final record = TemplateMapper.fromEditorForm(
+      _form,
+      id: _form.meta.id.isEmpty ? null : _form.meta.id,
+      createdAt: now,
     );
+
+    if (!mounted) return;
+    await _showExportFormatSheet(context, record);
+  }
+
+  Future<void> _showExportFormatSheet(
+      BuildContext context, TemplateRecord record) async {
+    final tokens = ref.watch(themeTokensProvider);
+
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text(
+                '选择导出格式',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.description_outlined, color: tokens.brand),
+              title: const Text('完整 .pptpl（推荐）'),
+              subtitle: const Text('含构图/姿势/相机/场景/后期全参数'),
+              onTap: () => Navigator.pop(ctx, 'pptpl'),
+            ),
+            ListTile(
+              leading: Icon(Icons.code_outlined, color: tokens.brand),
+              title: const Text('简化 .lumira'),
+              subtitle: const Text('仅元信息+相机核心参数'),
+              onTap: () => Navigator.pop(ctx, 'lumira'),
+            ),
+            ListTile(
+              title: Center(
+                child: Text('取消',
+                    style: TextStyle(color: tokens.textSecondary)),
+              ),
+              onTap: () => Navigator.pop(ctx, null),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == null) return;
+    if (!mounted) return;
+
+    final usePptpl = result == 'pptpl';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('正在导出 ${record.name}...')),
+    );
+
+    try {
+      await TemplateExporter.shareTemplate(record, usePptpl: usePptpl);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已分享 ${record.name}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('导出失败：$e')),
+      );
+    }
   }
 
   Future<void> _onPreview() async {
