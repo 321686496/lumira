@@ -111,6 +111,13 @@ class ProfileContentMockData {
   ];
 
   // === My Templates 自定义模板（5 个，覆盖 4 个分类）===
+  //
+  // Deprecated（Plan A Task A5）：My Templates 页已切换到 `customTemplatesProvider`
+  // 从 `TemplatesDao.getCustomOnly()` 读取持久化数据，此静态列表仅作为旧测试与
+  // `totalUsage` / `favoriteCount` getter 的向后兼容引用，不再驱动生产 UI。
+  // 计划在 Task A6+ 移除依赖后删除。
+  @Deprecated('My Templates 页已接入 TemplatesDao，请使用 customTemplatesProvider。'
+      '仅保留供向后兼容与测试种子使用。')
   static const customTemplates = <CustomTemplate>[
     CustomTemplate(
       id: 'tpl_001',
@@ -175,8 +182,12 @@ class ProfileContentMockData {
   ];
 
   // === My Templates 统计 ===
+  // 注：依赖已 deprecated 的 `customTemplates`，按 ignore 抑制内部警告；
+  // 生产 UI 已不再消费这两个 getter（Plan A Task A5 简化为 0 占位）。
   static int get totalUsage =>
+      // ignore: deprecated_member_use_from_same_package
       customTemplates.fold(0, (sum, t) => sum + t.usageCount);
   static int get favoriteCount =>
+      // ignore: deprecated_member_use_from_same_package
       customTemplates.where((t) => t.isFavorite).length;
 }

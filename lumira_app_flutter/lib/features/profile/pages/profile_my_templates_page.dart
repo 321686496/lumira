@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -14,9 +16,60 @@ import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../../templates/data/imported_templates_provider.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../data/profile_content_mock_data.dart';
+
+/// 用户自定义模板列表（is_builtin=0），从 DAO 读取
+///
+/// Plan A Task A5：替换 `ProfileContentMockData.customTemplates`（deprecated）
+/// 作为 My Templates 页的数据源。`TemplatesEditorPage._onSave` 保存模板后
+/// 通过 `ref.invalidate(customTemplatesProvider)` 触发刷新。
+final customTemplatesProvider = FutureProvider<List<CustomTemplate>>((ref) async {
+  final dao = await ref.watch(templatesDaoProvider.future);
+  final records = await dao.getCustomOnly();
+  return records.map(_recordToCustomTemplate).toList();
+});
+
+/// `TemplateRecord` → `CustomTemplate` 映射
+///
+/// 仅提取 My Templates 页渲染所需字段；usageCount / isFavorite 暂无持久化
+/// 字段，按 brief 简化方案置为 0 / false（后续如需追踪使用次数与收藏状态，
+/// 应扩展 `TemplateRecord` 而非在此处 hack）。
+CustomTemplate _recordToCustomTemplate(TemplateRecord r) {
+  return CustomTemplate(
+    id: r.id,
+    name: r.name,
+    coverUrl: r.cover.isEmpty ? null : r.cover,
+    category: _stringToCategory(r.category),
+    tags: r.tags,
+    exposureCompensation: (r.camera['exposureCompensation'] as num?)?.toInt() ?? 0,
+    iso: (r.camera['iso'] as num?)?.toInt() ?? 100,
+    shutterSpeed: (r.camera['shutterSpeed'] as String?) ?? '1/125',
+    usageCount: 0,
+    isFavorite: false,
+  );
+}
+
+TemplateCategory _stringToCategory(String s) {
+  switch (s) {
+    case 'portrait':
+      return TemplateCategory.portrait;
+    case 'landscape':
+      return TemplateCategory.landscape;
+    case 'food':
+      return TemplateCategory.food;
+    case 'street':
+      return TemplateCategory.street;
+    case 'night':
+      return TemplateCategory.night;
+    case 'macro':
+      return TemplateCategory.macro;
+    case 'still-life':
+      return TemplateCategory.stillLife;
+    default:
+      return TemplateCategory.portrait;
+  }
+}
 
 /// 我的模板页
 ///
@@ -51,9 +104,14 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
   /// 当前激活的模板（用于 ActionSheet 标题）
   CustomTemplate? get _activeTpl => _activeTemplate;
 
-  /// 合并 mock 自定义模板 + 运行时导入的模板，按当前 filter 过滤
-  List<CustomTemplate> _filteredTemplatesWith(List<CustomTemplate> imported) {
-    final all = [...ProfileContentMockData.customTemplates, ...imported];
+  /// 按 `_activeFilter` 过滤自定义模板
+  ///
+  /// Plan A Task A5：参数 `customs` 现为 DAO 返回的用户自定义模板列表
+  /// （`customTemplatesProvider`），不再合并 `ProfileContentMockData.customTemplates`。
+  /// 通过 .pptpl 文件运行时导入的模板仍由 `importedCustomTemplatesProvider`
+  /// 单独管理，但当前页面仅展示 DAO 持久化的自定义模板（与 brief Step 4 一致）。
+  List<CustomTemplate> _filteredTemplatesWith(List<CustomTemplate> customs) {
+    final all = customs;
     switch (_activeFilter) {
       case _FilterKey.all:
         return all;
@@ -157,9 +215,18 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
     }
   }
 
-  void _handleActionDelete() {
+  Future<void> _handleActionDelete() async {
+    final tpl = _activeTpl;
     _closeActionSheet();
-    _showSnack('已删除');
+    if (tpl == null) return;
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      await dao.delete(tpl.id);
+      ref.invalidate(customTemplatesProvider);
+      _showSnack('已删除');
+    } catch (e) {
+      _showSnack('删除失败：$e');
+    }
   }
 
   void _showImportSheet() {
@@ -175,8 +242,12 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
-    final importedCustom = ref.watch(importedCustomTemplatesProvider);
-    final filtered = _filteredTemplatesWith(importedCustom);
+    final customAsync = ref.watch(customTemplatesProvider);
+    final filtered = customAsync.when(
+      loading: () => const <CustomTemplate>[],
+      error: (_, __) => const <CustomTemplate>[],
+      data: (customs) => _filteredTemplatesWith(customs),
+    );
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -210,11 +281,10 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
                     _StatsBar(
                       tokens: tokens,
                       totalCount: filtered.length,
-                      totalUsage: importedCustom.isEmpty
-                          ? ProfileContentMockData.totalUsage
-                          : ProfileContentMockData.totalUsage +
-                              importedCustom.fold(0, (s, t) => s + t.usageCount),
-                      favoriteCount: ProfileContentMockData.favoriteCount,
+                      // Plan A Task A5：usageCount / isFavorite 暂未持久化到 DAO，
+                      // 按 brief 简化方案置为 0（后续扩展 TemplateRecord 时再恢复）
+                      totalUsage: 0,
+                      favoriteCount: 0,
                     ),
                     _ActionBar(tokens: tokens, onImport: _showImportSheet),
                     _FilterBar(
