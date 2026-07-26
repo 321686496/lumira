@@ -27,6 +27,7 @@ import '../features/academy/pages/academy_page.dart';
 import '../features/profile/pages/profile_about_page.dart';
 import '../features/profile/pages/profile_collection_detail_page.dart';
 import '../features/profile/pages/profile_collections_page.dart';
+import '../features/profile/pages/composition_kits_page.dart';
 import '../features/profile/pages/profile_fragment_detail_page.dart';
 import '../features/profile/pages/profile_growth_page.dart';
 import '../features/profile/pages/profile_notifications_page.dart';
@@ -307,6 +308,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileMyTemplates,
         name: 'profileMyTemplates',
         builder: (context, state) => const ProfileMyTemplatesPage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileCompositionKits,
+        name: 'profileCompositionKits',
+        builder: (context, state) => const CompositionKitsPage(),
       ),
       GoRoute(
         path: RouteNames.profileFragmentDetail,
