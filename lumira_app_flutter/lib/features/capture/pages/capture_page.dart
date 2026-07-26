@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../profile/providers/composition_kits_providers.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import '../services/photo_post_processor.dart';
@@ -35,10 +36,16 @@ import '../widgets/template_strip.dart';
 /// - 保留 CaptureNav（含退出全屏按钮）和底部核心交互（拍摄按钮、缩略图、切换摄像头）
 /// - 确保用户在全屏下仍能拍照、退出全屏
 class CapturePage extends ConsumerStatefulWidget {
-  const CapturePage({super.key, this.templateId});
+  const CapturePage({super.key, this.templateId, this.sceneId, this.kitId});
 
   /// 来自 URL ?templateId=xxx，null 表示自由拍摄
   final String? templateId;
+
+  /// 来自 URL ?scene=xxx，表示从场景详情页进入，需应用场景预设
+  final String? sceneId;
+
+  /// 来自 URL ?kitId=xxx，表示套用组合套件（含场景+模板+参数覆盖）
+  final String? kitId;
 
   @override
   ConsumerState<CapturePage> createState() => _CapturePageState();
@@ -62,6 +69,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// （用于实战作业页的"去拍摄"流程，捕获路径作为 String 返回）
   bool _returnResult = false;
 
+  /// 当前套用的 kit ID（用于拍照完成时 incrementUsage）
+  String? _activeKitId;
+
   /// 相机重建 key：每次 app 从后台恢复时递增，
   /// 强制 CameraAwesomeBuilder 销毁旧实例并创建新实例，
   /// 确保原生相机被重新初始化（修复取景器一直转圈的问题）。
@@ -81,6 +91,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyRouteParamsToState();
       ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
           widget.templateId;
       // 解析 returnResult 模式：?mode=return 时拍照完成后 pop 回上一页
@@ -102,6 +113,70 @@ class _CapturePageState extends ConsumerState<CapturePage>
     super.didChangeDependencies();
     // Element 仍 active 时缓存 container，供 dispose() 使用
     _container = ProviderScope.containerOf(context);
+  }
+
+  /// 读取路由参数（sceneId / templateId / kitId）并应用到 CaptureState
+  /// 优先级：kitId > templateId（套件已包含 templateId）；sceneId 独立设置
+  Future<void> _applyRouteParamsToState() async {
+    final kitId = widget.kitId;
+    final sceneId = widget.sceneId;
+
+    if (sceneId != null) {
+      ref.read(CaptureState.activeScenePresetIdProvider.notifier).state =
+          sceneId;
+    }
+
+    if (kitId == null) return;
+    _activeKitId = kitId;
+
+    try {
+      final dao = await ref.read(compositionKitsDaoProvider.future);
+      final kit = await dao.getById(kitId);
+      if (kit == null) return;
+
+      // 设置 sceneId（套件中的 sceneId 优先于 URL scene 参数）
+      ref.read(CaptureState.activeScenePresetIdProvider.notifier).state =
+          kit.sceneId;
+
+      // 设置 templateId（套件中的 templateId 优先）
+      if (kit.templateId != null) {
+        ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
+            kit.templateId;
+      }
+
+      // 应用相机参数覆盖到 freeModeCamera（无模板时）或 editableTemplate（有模板时）
+      final overrides = kit.cameraOverrides;
+      if (overrides.isNotEmpty) {
+        final editable = ref.read(CaptureState.editableTemplateProvider);
+        if (editable != null) {
+          // 有模板：基于模板相机参数叠加覆盖
+          final newCamera = editable.camera.copyWith(
+            exposureCompensation:
+                (overrides['exposureCompensation'] as num?)?.toDouble() ??
+                    editable.camera.exposureCompensation,
+            iso: (overrides['iso'] as num?)?.toInt() ?? editable.camera.iso,
+            shutterSpeed: (overrides['shutterSpeed'] as String?) ??
+                editable.camera.shutterSpeed,
+          );
+          ref.read(CaptureState.editableTemplateProvider.notifier).state =
+              editable.copyWith(camera: newCamera);
+        } else {
+          // 无模板：直接写 freeModeCamera
+          final current = ref.read(CaptureState.freeModeCameraProvider);
+          ref.read(CaptureState.freeModeCameraProvider.notifier).state =
+              current.copyWith(
+            exposureCompensation:
+                (overrides['exposureCompensation'] as num?)?.toDouble() ??
+                    current.exposureCompensation,
+            iso: (overrides['iso'] as num?)?.toInt() ?? current.iso,
+            shutterSpeed: (overrides['shutterSpeed'] as String?) ??
+                current.shutterSpeed,
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[capture] 加载套件失败: $e');
+    }
   }
 
   /// 请求相机权限
@@ -247,6 +322,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
           await dao.insert(record);
           ref.invalidate(galleryDaoProvider);
           debugPrint('[capture] 自动保存到应用相册: ${record.id}');
+
+          // 套件使用次数 +1（仅在套用 kit 进入时）
+          if (_activeKitId != null) {
+            try {
+              final kitsDao =
+                  await ref.read(compositionKitsDaoProvider.future);
+              await kitsDao.incrementUsage(_activeKitId!);
+              ref.invalidate(compositionKitsProvider);
+            } catch (e) {
+              debugPrint('[capture] 套件 usage 计数失败: $e');
+            }
+          }
         } catch (e) {
           debugPrint('[capture] 自动保存失败: $e');
         }
