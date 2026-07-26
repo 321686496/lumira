@@ -1,11 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -16,6 +11,7 @@ import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../templates/services/template_exporter.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../data/profile_content_mock_data.dart';
 
@@ -185,33 +181,87 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
     _exportTemplate(tpl);
   }
 
-  /// 导出模板为 .lumira 文件并调用系统分享
+  /// 导出模板：先从 DAO 加载 TemplateRecord，再弹出格式选择 Sheet
   Future<void> _exportTemplate(CustomTemplate tpl) async {
     try {
-      final data = <String, dynamic>{
-        'name': tpl.name,
-        'category': tpl.category.name,
-        'tags': tpl.tags,
-        'exposureCompensation': tpl.exposureCompensation,
-        'iso': tpl.iso,
-        'shutterSpeed': tpl.shutterSpeed,
-        'coverUrl': tpl.coverUrl,
-        'exportedAt': DateTime.now().toIso8601String(),
-        'app': 'lumira',
-        'version': 1,
-      };
-      final json = const JsonEncoder.withIndent('  ').convert(data);
-      final safeName = tpl.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/lumira_template_$safeName.lumira');
-      await file.writeAsString(json);
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        subject: '如画模板：${tpl.name}',
-        text: '我创建了一个如画摄影模板「${tpl.name}」，用如画 App 导入即可使用。',
-      );
+      final dao = await ref.read(templatesDaoProvider.future);
+      final record = await dao.getById(tpl.id);
+
+      if (record == null) {
+        // 自定义模板可能尚未持久化（来自 mock），构造一个最小 record
+        _showSnack('模板未持久化，请先保存到我的模板');
+        return;
+      }
+
+      if (!mounted) return;
+      await _showExportFormatSheet(record);
     } catch (e) {
       _showSnack('导出失败：$e');
+    }
+  }
+
+  Future<void> _showExportFormatSheet(TemplateRecord record) async {
+    final tokens = ref.watch(themeTokensProvider);
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text(
+                '选择导出格式',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.description_outlined, color: tokens.brand),
+              title: const Text('完整 .pptpl（推荐）'),
+              subtitle: const Text('含构图/姿势/相机/场景/后期全参数'),
+              onTap: () => Navigator.pop(ctx, 'pptpl'),
+            ),
+            ListTile(
+              leading: Icon(Icons.code_outlined, color: tokens.brand),
+              title: const Text('简化 .lumira'),
+              subtitle: const Text('仅元信息+相机核心参数'),
+              onTap: () => Navigator.pop(ctx, 'lumira'),
+            ),
+            ListTile(
+              title: Center(
+                child: Text('取消',
+                    style: TextStyle(color: tokens.textSecondary)),
+              ),
+              onTap: () => Navigator.pop(ctx, null),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == null) return;
+    if (!mounted) return;
+
+    final usePptpl = result == 'pptpl';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('正在导出 ${record.name}...')),
+    );
+
+    try {
+      await TemplateExporter.shareTemplate(record, usePptpl: usePptpl);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已分享 ${record.name}')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('导出失败：$e')),
+      );
     }
   }
 
