@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
+import '../../../shared/services/poster_generator.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -264,14 +265,19 @@ class _LevelCard extends StatelessWidget {
   }
 }
 
-class _AchievementCard extends StatelessWidget {
+class _AchievementCard extends ConsumerWidget {
   const _AchievementCard({required this.tokens, required this.achievements});
   final ThemeTokens tokens;
   final List<AchievementRecord> achievements;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final unlockedCount = achievements.where((a) => a.unlocked).length;
+    final levelAsync = ref.watch(growthLevelProvider);
+    final levelName = levelAsync.maybeWhen(
+      data: (s) => s.levelName,
+      orElse: () => '',
+    );
     return NeuCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -308,7 +314,11 @@ class _AchievementCard extends StatelessWidget {
             crossAxisSpacing: 10,
             childAspectRatio: 1.0,
             children: achievements
-                .map((a) => _AchievementCell(item: a, tokens: tokens))
+                .map((a) => _AchievementCell(
+                      item: a,
+                      tokens: tokens,
+                      levelName: levelName,
+                    ))
                 .toList(),
           ),
         ],
@@ -318,63 +328,106 @@ class _AchievementCard extends StatelessWidget {
 }
 
 class _AchievementCell extends StatelessWidget {
-  const _AchievementCell({required this.item, required this.tokens});
+  const _AchievementCell({
+    required this.item,
+    required this.tokens,
+    this.levelName = '',
+  });
+
   final AchievementRecord item;
   final ThemeTokens tokens;
+  final String levelName;
+
+  IconData _iconForKey(String key) {
+    switch (key) {
+      case 'camera':
+        return Icons.camera_alt;
+      case 'flame':
+        return Icons.local_fire_department;
+      case 'layers':
+        return Icons.layers;
+      case 'trophy':
+        return Icons.emoji_events;
+      case 'star':
+        return Icons.star;
+      default:
+        return Icons.emoji_events;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final locked = !item.unlocked;
     final cell = Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
         color: tokens.surfaceAlt,
-        borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: tokens.divider, width: 1),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Stack(
         children: [
-          Icon(
-            _iconForKey(item.iconKey),
-            size: 36, // 72rpx → 36dp
-            color: locked ? tokens.textTertiary : tokens.textPrimary,
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _iconForKey(item.iconKey),
+                size: 36,
+                color: item.unlocked ? tokens.textPrimary : tokens.textTertiary,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.name,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: item.unlocked
+                      ? tokens.textPrimary
+                      : tokens.textTertiary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            item.name,
-            style: TextStyle(
-              fontSize: 11, // 22rpx → 11dp
-              color: locked ? tokens.textTertiary : tokens.textPrimary,
+          // 已解锁成就右上角分享按钮
+          if (item.unlocked)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: GestureDetector(
+                onTap: () {
+                  final posterKey = GlobalKey();
+                  PosterGenerator.showPoster(
+                    context: context,
+                    tokens: tokens,
+                    title: '成就海报预览',
+                    content: _AchievementPosterContent(
+                      tokens: tokens,
+                      achievement: item,
+                      levelName: levelName,
+                    ),
+                    posterKey: posterKey,
+                    shareSubject: '如画 · 成就解锁：${item.name}',
+                    shareText: '我在如画解锁了「${item.name}」成就！快来一起挑战吧！',
+                    fileNamePrefix: 'lumira_achievement_${item.id}',
+                  );
+                },
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Icon(
+                    Icons.ios_share_outlined,
+                    size: 14,
+                    color: tokens.brand,
+                  ),
+                ),
+              ),
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
         ],
       ),
     );
 
-    if (locked) {
-      return Opacity(opacity: 0.5, child: cell);
-    }
-    return cell;
-  }
-}
-
-IconData _iconForKey(String key) {
-  switch (key) {
-    case 'camera':
-      return Icons.camera_alt_outlined;
-    case 'flame':
-      return Icons.local_fire_department_outlined;
-    case 'layers':
-      return Icons.layers_outlined;
-    case 'trophy':
-      return Icons.emoji_events_outlined;
-    case 'star':
-      return Icons.star_outline;
-    default:
-      return Icons.emoji_events_outlined;
+    if (item.unlocked) return cell;
+    return Opacity(opacity: 0.5, child: cell);
   }
 }
 
@@ -657,6 +710,161 @@ class _EmptyState extends StatelessWidget {
           ElevatedButton(
             onPressed: () => GoRouter.of(context).push(RouteNames.capture),
             child: const Text('去拍摄'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 成就海报内容 Widget
+class _AchievementPosterContent extends StatelessWidget {
+  const _AchievementPosterContent({
+    required this.tokens,
+    required this.achievement,
+    required this.levelName,
+  });
+
+  final ThemeTokens tokens;
+  final AchievementRecord achievement;
+  final String levelName;
+
+  IconData _iconForKey(String key) {
+    switch (key) {
+      case 'camera':
+        return Icons.camera_alt;
+      case 'flame':
+        return Icons.local_fire_department;
+      case 'layers':
+        return Icons.layers;
+      case 'trophy':
+        return Icons.emoji_events;
+      case 'star':
+        return Icons.star;
+      default:
+        return Icons.emoji_events;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = tokens;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [t.brandSubtle, t.canvas],
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.camera_alt_outlined, size: 18, color: t.brand),
+              const SizedBox(width: 6),
+              Text(
+                'LUMIRA · 如画',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 2,
+                  color: t.brand,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Center(
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [t.brand, t.brandDeep]),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                _iconForKey(achievement.iconKey),
+                size: 40,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              '成就解锁',
+              style: TextStyle(
+                fontSize: 12,
+                color: t.textTertiary,
+                letterSpacing: 1,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              achievement.name,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Noto Serif SC',
+                color: t.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Text(
+              achievement.description,
+              style: TextStyle(
+                fontSize: 14,
+                color: t.textSecondary,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: t.brand.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.star, size: 16, color: t.brand),
+                const SizedBox(width: 8),
+                Text(
+                  levelName.isNotEmpty
+                      ? '当前等级：$levelName'
+                      : '继续探索更多成就',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: t.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.center,
+            child: Text(
+              '如画 LUMIRA · 记录每一帧光影',
+              style: TextStyle(
+                fontSize: 10,
+                color: t.textTertiary,
+                letterSpacing: 1,
+              ),
+            ),
           ),
         ],
       ),
