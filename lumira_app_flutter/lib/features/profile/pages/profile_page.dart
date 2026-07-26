@@ -571,6 +571,11 @@ class _QuickActionsRow extends ConsumerWidget {
         onTap: () => onTap(RouteNames.profileGrowth),
       ),
       _QuickActionItem(
+        icon: Icons.layers_outlined,
+        label: '我的组合',
+        onTap: () => onTap(RouteNames.profileCompositionKits),
+      ),
+      _QuickActionItem(
         icon: Icons.card_giftcard_outlined,
         label: '邀请有礼',
         onTap: () => onTap(RouteNames.profileInvite),
@@ -588,7 +593,7 @@ class _QuickActionsRow extends ConsumerWidget {
         final isLast = entry.key == items.length - 1;
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(right: isLast ? 0 : 8),
+            padding: EdgeInsets.only(right: isLast ? 0 : 6),
             child: _QuickActionCard(item: item, tokens: tokens, appTheme: appTheme),
           ),
         );
