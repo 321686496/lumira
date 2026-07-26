@@ -50,9 +50,9 @@ void main() {
     await sharedDb.close();
   });
 
-  setUp(() {
+  setUp(() async {
     // 清空 custom_templates 表，保证 _onSave 测试间状态隔离
-    sharedDb.delete(Tables.customTemplates, where: '1=1');
+    await sharedDb.delete(Tables.customTemplates, where: '1=1');
     HttpOverrides.global = _TestHttpOverrides();
     originalErrorHandler = FlutterError.onError;
     FlutterError.onError = (FlutterErrorDetails details) {
