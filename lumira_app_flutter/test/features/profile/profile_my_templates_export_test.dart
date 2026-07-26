@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
+import 'package:lumira_app_flutter/core/db/database_provider.dart';
 import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/features/profile/data/profile_content_mock_data.dart';
 import 'package:lumira_app_flutter/features/profile/pages/profile_my_templates_page.dart';
@@ -44,18 +45,19 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
+  setUp(() async {
+    _testDb = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
+  });
+
   tearDown(() async {
     if (_testDb.isOpen) await _testDb.close();
   });
 
   testWidgets('长按模板卡片弹出 ActionSheet 含"导出模板"项', (tester) async {
-    _testDb = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
-    final dao = TemplatesDao(_testDb);
-
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          // 不依赖真实 provider，仅验证 UI 显示
+          templatesDaoProvider.overrideWith((ref) async => TemplatesDao(_testDb)),
         ],
         child: const MaterialApp(home: ProfileMyTemplatesPage()),
       ),
