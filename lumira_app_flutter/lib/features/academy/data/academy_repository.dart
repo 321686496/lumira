@@ -152,14 +152,28 @@ class LocalAcademyRepository implements AcademyRepository {
   Future<void> markCompleted(String courseId) async {
     final now = _now().millisecondsSinceEpoch;
     final existing = await _dao.getProgress(courseId);
+    final completedAt = existing?.completedAt ?? now;
     await _dao.upsertProgress(
       courseId,
       CourseStatus.completed,
       100,
       startedAt: existing?.startedAt ?? now,
-      completedAt: now,
+      completedAt: completedAt,
       lastViewedAt: now,
     );
+
+    // 维护学习轨迹：仅在完全完成且尚未有轨迹记录时插入
+    if (await _dao.isCourseFullyCompleted(courseId)) {
+      final existingTraj = await _dao.getTrajectory(courseId);
+      if (existingTraj == null) {
+        final maxSeq = await _dao.getMaxTrajectorySequence();
+        await _dao.upsertTrajectory(
+          courseId,
+          completedAt: completedAt,
+          sequence: maxSeq + 1,
+        );
+      }
+    }
   }
 
   @override
@@ -196,6 +210,10 @@ class LocalAcademyRepository implements AcademyRepository {
   @override
   Future<void> submitAssignment(AssignmentSubmission submission) async {
     await _dao.upsertSubmission(submission);
+    // 作业含照片时触发 markCompleted 重新校验是否完全完成
+    if (submission.photoPath != null) {
+      await markCompleted(submission.courseId);
+    }
   }
 
   @override
