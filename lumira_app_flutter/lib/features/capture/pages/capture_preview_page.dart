@@ -9,11 +9,15 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
+import '../domain/photo_template.dart';
 import '../services/compare_image_generator.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../../shared/services/poster_generator.dart';
 import '../services/exif_card_generator.dart';
 import '../services/photo_exif_reader.dart';
 import '../services/photo_post_processor.dart';
@@ -61,6 +65,18 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   // ignore: unused_field
   bool _compareCardGenerated = false;
 
+  /// 拍摄时的后期参数快照（用于计算 delta，避免重复处理）。
+  /// 在 initState 中从 CaptureState.effectivePostProcessProvider 读取一次，
+  /// 之后不再变化。保存时用 (_localPostProcess - _initialPostProcess) 作为 delta
+  /// 应用到已处理的照片上，避免参数被重复叠加。
+  late final PostProcess _initialPostProcess;
+
+  /// 预览页本地后期参数（仅影响当前照片，不回写 CaptureState）。
+  /// 修复参数泄漏：之前直接修改 CaptureState.editableTemplateProvider /
+  /// freeModePostProcessProvider，导致返回拍摄页后拍摄页参数也被改变。
+  /// 现在使用本地状态，保存时按 delta 应用到照片文件，拍摄页参数不受影响。
+  late PostProcess _localPostProcess;
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +85,17 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     _moods = CapturePreviewMockData.moods
         .map((m) => m.copyWith(active: m.active))
         .toList();
+    // 快照拍摄时参数，作为本地调整的初始值和 delta 基准。
+    // ConsumerState.initState 中 ref.read 是安全的（provider 已初始化）。
+    final initial = ref.read(CaptureState.effectivePostProcessProvider);
+    _initialPostProcess = initial;
+    _localPostProcess = initial;
+  }
+
+  /// 本地后期参数更新（仅影响预览和保存，不回写 CaptureState）
+  void _updateLocalPostProcess(PostProcess next) {
+    if (!mounted) return;
+    setState(() => _localPostProcess = next);
   }
 
   // ===== 事件处理 =====
@@ -91,17 +118,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   }
 
   void _onSkip() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已跳过')),
-    );
+    LumiraToast.show(context, '已跳过');
   }
 
   Future<void> _onCompareCard() async {
     if (_photoUrl.isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('生成对比图中'), duration: Duration(seconds: 1)),
-    );
+    LumiraToast.show(context, '生成对比图中', duration: const Duration(seconds: 1));
 
     try {
       // 原图 = 当前文件路径（已含滤镜，因为 capture 时已应用后期）
@@ -118,39 +140,31 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       );
       if (!mounted) return;
       setState(() => _compareCardGenerated = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('对比图已生成'),
-          action: SnackBarAction(
-            label: '查看',
-            onPressed: () {
-              // 跳转到详情页查看对比图
-              GoRouter.of(context).push(
-                '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(outputPath)}',
-              );
-            },
-          ),
+      LumiraToast.show(
+        context,
+        '对比图已生成',
+        action: ToastAction(
+          label: '查看',
+          onTap: () {
+            // 跳转到详情页查看对比图
+            GoRouter.of(context).push(
+              '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(outputPath)}',
+            );
+          },
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('生成失败：$e')),
-      );
+      LumiraToast.show(context, '生成失败：$e');
     }
   }
 
   Future<void> _onExifCard() async {
     if (_photoUrl.isEmpty || _photoUrl.startsWith('http')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('网络图片无法生成 EXIF 卡片')),
-      );
+      LumiraToast.show(context, '网络图片无法生成 EXIF 卡片');
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('生成 EXIF 卡片中...'), duration: Duration(seconds: 1)),
-    );
+    LumiraToast.show(context, '生成 EXIF 卡片中...', duration: const Duration(seconds: 1));
 
     try {
       final templateId = ref.read(CaptureState.currentTemplateIdProvider);
@@ -169,18 +183,153 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         exif: exif,
       );
       if (!mounted) return;
+      LumiraToast.show(
+        context,
+        'EXIF 卡片已生成',
+        action: ToastAction(
+          label: '查看',
+          onTap: () {
+            GoRouter.of(context).push(
+              '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(outputPath)}',
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      LumiraToast.show(context, '生成失败：$e');
+    }
+  }
+
+  /// 顶部 nav 分享按钮：弹出底部 Sheet
+  Future<void> _onShare() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 8, bottom: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5E0D8),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            _ShareOption(
+              icon: Icons.save_alt_outlined,
+              text: '保存到相册',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _onSave();
+              },
+            ),
+            _ShareOption(
+              icon: Icons.ios_share_outlined,
+              text: '分享到系统',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _onShareSystem();
+              },
+            ),
+            _ShareOption(
+              icon: Icons.content_paste_outlined,
+              text: '生成 EXIF 海报',
+              onTap: () {
+                Navigator.of(ctx).pop();
+                _onExifPoster();
+              },
+            ),
+            const SizedBox(height: 8),
+            _ShareOption(
+              icon: Icons.close,
+              text: '取消',
+              onTap: () => Navigator.of(ctx).pop(),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 分享原始照片到系统
+  Future<void> _onShareSystem() async {
+    if (_photoUrl.isEmpty) return;
+    try {
+      if (_photoUrl.startsWith('http')) {
+        await Share.share(_photoUrl, subject: '如画 LUMIRA · 拍摄作品');
+      } else {
+        await Share.shareXFiles(
+          [XFile(_photoUrl)],
+          subject: '如画 LUMIRA · 拍摄作品',
+          text: '我用如画拍了一张照片，快来看看吧！',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('EXIF 卡片已生成'),
-          action: SnackBarAction(
-            label: '查看',
-            onPressed: () {
-              GoRouter.of(context).push(
-                '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(outputPath)}',
-              );
-            },
+        SnackBar(content: Text('分享失败：$e')),
+      );
+    }
+  }
+
+  /// 生成 EXIF 海报并弹出 PosterGenerator 预览
+  Future<void> _onExifPoster() async {
+    if (_photoUrl.isEmpty || _photoUrl.startsWith('http')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('网络图片无法生成 EXIF 海报')),
+      );
+      return;
+    }
+
+    try {
+      final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+      final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
+      final exif = await PhotoExifReader.read(
+        _photoUrl,
+        sceneName: sceneId,
+        template: templateId,
+        timestamp: DateTime.now().millisecondsSinceEpoch,
+      );
+      final outputPath =
+          '${_photoUrl}_exif_${DateTime.now().millisecondsSinceEpoch}.png';
+      await ExifCardGenerator.generate(
+        photoPath: _photoUrl,
+        outputPath: outputPath,
+        exif: exif,
+      );
+      if (!mounted) return;
+
+      final tokens = ref.watch(themeTokensProvider);
+      final posterKey = GlobalKey();
+      await PosterGenerator.showPoster(
+        context: context,
+        tokens: tokens,
+        title: 'EXIF 海报预览',
+        content: Container(
+          key: posterKey,
+          color: const Color(0xFF1C1A17),
+          child: Image.file(
+            File(outputPath),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Container(
+              height: 200,
+              color: tokens.surfaceAlt,
+              child: Icon(Icons.image_outlined, color: tokens.textTertiary),
+            ),
           ),
         ),
+        posterKey: posterKey,
+        shareSubject: '如画 LUMIRA · EXIF 海报',
+        shareText: '我用如画拍了这张照片，附带了完整的 EXIF 信息！',
+        fileNamePrefix: 'lumira_exif',
       );
     } catch (e) {
       if (!mounted) return;
@@ -219,38 +368,44 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 保存到系统相册（应用相册已在拍摄时自动保存）
   /// 修复：
   /// 1. saver_gallery 不支持 HarmonyOS，改用 MethodChannel 调用原生 photoAccessHelper
-  /// 2. 添加详细诊断日志，SnackBar 显示具体成功/失败信息
-  /// 3. 保存前重新应用当前后期参数（用户可能在预览页调整了滑块）
-  ///    注意：DB 记录仍指向拍摄时的 processedPath，此处重处理的文件仅用于系统相册落盘，
-  ///    这是已知限制（详见 plan Task 5 说明）。
+  /// 2. 添加详细诊断日志，LumiraToast 显示具体成功/失败信息
+  /// 3. 参数隔离：仅应用预览页本地调整的 delta（_localPostProcess - _initialPostProcess）
+  ///    到已处理的照片上，避免参数被重复叠加，也不回写 CaptureState（不影响拍摄页）。
+  ///    delta 仅包含亮度/对比度/饱和度三个预览页可调字段，其他效果（锐化/暗角/颗粒/LUT）
+  ///    保留拍摄时的处理结果，不重复应用。
   Future<void> _onSave() async {
     if (_photoUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无照片数据')),
-      );
+      LumiraToast.show(context, '无照片数据');
       return;
     }
 
     final bool isLocalFile = !_photoUrl.startsWith('http');
 
-    // 保存前重新应用当前后期参数到照片文件
-    // （用户可能在预览页调整了亮度/对比度/饱和度滑块）
+    // 保存前应用预览页本地调整的 delta（亮度/对比度/饱和度）
+    // delta = _localPostProcess - _initialPostProcess，仅对预览页可调字段计算差值
     String savePath = _photoUrl;
     if (isLocalFile) {
-      final params = ref.read(CaptureState.effectivePostProcessProvider);
-      final rawMode = ref.read(CaptureState.rawModeProvider);
-      final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
-      final screenSize = MediaQuery.of(context).size;
-      final screenRatio = screenSize.width / screenSize.height;
-      final isPortrait = screenSize.height >= screenSize.width;
-      debugPrint('[save] 重新应用后期参数到照片...');
+      final deltaColor = PostProcessColor(
+        brightness:
+            _localPostProcess.color.brightness - _initialPostProcess.color.brightness,
+        contrast:
+            _localPostProcess.color.contrast - _initialPostProcess.color.contrast,
+        saturation:
+            _localPostProcess.color.saturation - _initialPostProcess.color.saturation,
+        // 其他字段（temperature/tint）预览页未暴露滑块，delta = 0
+        temperature: 0,
+        tint: 0,
+      );
+      final deltaParams = PostProcess(color: deltaColor);
+      debugPrint('[save] 应用预览页本地调整 delta: '
+          'b=${deltaColor.brightness}, c=${deltaColor.contrast}, s=${deltaColor.saturation}');
+      // aspectRatio='free' 跳过裁剪（照片在拍摄时已按选定比例裁剪）
+      // rawMode=false 让 delta color matrix 生效
       savePath = await PhotoPostProcessor.processFile(
         inputPath: _photoUrl,
-        params: params,
-        rawMode: rawMode,
-        aspectRatio: aspectRatio,
-        screenRatio: screenRatio,
-        isPortrait: isPortrait,
+        params: deltaParams,
+        rawMode: false,
+        aspectRatio: 'free',
       );
     }
 
@@ -259,9 +414,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       imageFile = File(savePath);
       if (!await imageFile.exists()) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('照片文件不存在')),
-        );
+        LumiraToast.show(context, '照片文件不存在');
         return;
       }
     }
@@ -276,26 +429,19 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         debugPrint('[save] 原生保存结果: $result');
         final success = result != null && result['success'] == true;
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(success
-                ? '已保存到系统相册'
-                : '保存失败：${result?['error'] ?? "未知错误"}'),
-            duration: const Duration(seconds: 2),
-          ),
+        LumiraToast.show(
+          context,
+          success ? '已保存到系统相册' : '保存失败：${result?['error'] ?? "未知错误"}',
+          duration: const Duration(seconds: 2),
         );
       } catch (e) {
         debugPrint('[save] 系统相册异常: $e');
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败：$e')),
-        );
+        LumiraToast.show(context, '保存失败：$e');
       }
     } else {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('网络图片不支持保存到系统相册')),
-      );
+      LumiraToast.show(context, '网络图片不支持保存到系统相册');
     }
 
     // 保存完成后延迟返回
@@ -341,6 +487,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                   onBack: _back,
                   onPressStart: _onCompareStart,
                   onPressEnd: _onCompareEnd,
+                  onShare: _onShare,
                 ),
                 Expanded(
                   child: SingleChildScrollView(
@@ -351,6 +498,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                           tokens: tokens,
                           photoUrl: _photoUrl,
                           isComparing: _isComparing,
+                          // 使用本地后期参数，避免回写 CaptureState 导致参数泄漏
+                          postProcess: _localPostProcess,
                         ),
                         _BottomSheet(
                           tokens: tokens,
@@ -362,6 +511,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                           onCompareCard: _onCompareCard,
                           onExifCard: _onExifCard,
                           onSave: _onSave,
+                          // 本地后期参数及更新回调，供 _AdjustSection 使用
+                          localPostProcess: _localPostProcess,
+                          onUpdateLocalPostProcess: _updateLocalPostProcess,
                         ),
                       ],
                     ),
@@ -411,12 +563,14 @@ class _PreviewNav extends StatelessWidget {
     required this.onBack,
     required this.onPressStart,
     required this.onPressEnd,
+    required this.onShare,
   });
 
   final ThemeTokens tokens;
   final VoidCallback onBack;
   final VoidCallback onPressStart;
   final VoidCallback onPressEnd;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -432,6 +586,18 @@ class _PreviewNav extends StatelessWidget {
             onTap: () {},
             onPressStart: onPressStart,
             onPressEnd: onPressEnd,
+          ),
+          GestureDetector(
+            onTap: onShare,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(
+                Icons.ios_share_outlined,
+                size: 22,
+                color: Colors.white,
+              ),
+            ),
           ),
         ],
       ),
@@ -498,22 +664,25 @@ class _CompareLink extends StatelessWidget {
 /// 照片预览框
 /// 修复：
 /// 1. 原代码使用固定 3:4 AspectRatio + BoxFit.cover，改为自适应高度 + contain
-/// 2. 添加 ColorFiltered 实时应用 effectivePostProcess 参数，所见即所得
-class _PhotoFrame extends ConsumerWidget {
+/// 2. 添加 ColorFiltered 实时应用后期参数，所见即所得
+/// 3. 参数隔离：postProcess 由父组件传入（本地状态），不直接 watch CaptureState，
+///    避免预览页调整影响拍摄页参数
+class _PhotoFrame extends StatelessWidget {
   const _PhotoFrame({
     required this.tokens,
     required this.photoUrl,
     required this.isComparing,
+    required this.postProcess,
   });
 
   final ThemeTokens tokens;
   final String photoUrl;
   final bool isComparing;
+  final PostProcess postProcess;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final bool isNetworkUrl = photoUrl.startsWith('http');
-    final postProcess = ref.watch(CaptureState.effectivePostProcessProvider);
     // 对比模式下不应用滤镜，显示原图
     final colorFilter =
         isComparing ? const ColorFilter.mode(Colors.transparent, BlendMode.dst)
@@ -586,7 +755,7 @@ class _PhotoEmptyState extends StatelessWidget {
 }
 
 /// 底部白色 Sheet
-class _BottomSheet extends ConsumerWidget {
+class _BottomSheet extends StatelessWidget {
   const _BottomSheet({
     required this.tokens,
     required this.moods,
@@ -597,6 +766,8 @@ class _BottomSheet extends ConsumerWidget {
     required this.onCompareCard,
     required this.onExifCard,
     required this.onSave,
+    required this.localPostProcess,
+    required this.onUpdateLocalPostProcess,
   });
 
   final ThemeTokens tokens;
@@ -609,8 +780,14 @@ class _BottomSheet extends ConsumerWidget {
   final VoidCallback onExifCard;
   final VoidCallback onSave;
 
+  /// 预览页本地后期参数（仅影响当前照片，不回写 CaptureState）
+  final PostProcess localPostProcess;
+
+  /// 本地后期参数更新回调（仅更新本地状态，不污染拍摄页）
+  final ValueChanged<PostProcess> onUpdateLocalPostProcess;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
@@ -620,7 +797,12 @@ class _BottomSheet extends ConsumerWidget {
           _SheetHandle(tokens: tokens),
           const SizedBox(height: 16),
           // 后期参数调整区（亮度/对比度/饱和度滑块）
-          _AdjustSection(tokens: tokens),
+          // 使用本地状态：仅影响当前照片预览和保存，不回写 CaptureState（避免参数泄漏到拍摄页）
+          _AdjustSection(
+            tokens: tokens,
+            postProcess: localPostProcess,
+            onUpdate: onUpdateLocalPostProcess,
+          ),
           const SizedBox(height: 16),
           _MoodSection(
             tokens: tokens,
@@ -649,15 +831,27 @@ class _BottomSheet extends ConsumerWidget {
 }
 
 /// 后期参数调整区：亮度/对比度/饱和度滑块
-/// 修改 effectivePostProcessProvider，_PhotoFrame 的 ColorFiltered 实时响应
-class _AdjustSection extends ConsumerWidget {
-  const _AdjustSection({required this.tokens});
+///
+/// 修复参数泄漏：
+/// 原代码 watch CaptureState.effectivePostProcessProvider 并直接修改
+/// editableTemplateProvider / freeModePostProcessProvider，导致返回拍摄页后
+/// 拍摄页参数也被改变。
+/// 现在使用父组件传入的本地 postProcess 和 onUpdate 回调，仅影响当前照片
+/// 预览和保存（保存时按 delta 应用到照片文件），不污染拍摄页状态。
+class _AdjustSection extends StatelessWidget {
+  const _AdjustSection({
+    required this.tokens,
+    required this.postProcess,
+    required this.onUpdate,
+  });
+
   final ThemeTokens tokens;
+  final PostProcess postProcess;
+  final ValueChanged<PostProcess> onUpdate;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final post = ref.watch(CaptureState.effectivePostProcessProvider);
-    final isTemplate = ref.watch(CaptureState.currentTemplateIdProvider) != null;
+  Widget build(BuildContext context) {
+    final post = postProcess;
 
     void update(double brightness, double contrast, double saturation) {
       final newColor = post.color.copyWith(
@@ -665,17 +859,7 @@ class _AdjustSection extends ConsumerWidget {
         contrast: contrast,
         saturation: saturation,
       );
-      final newPost = post.copyWith(color: newColor);
-      if (isTemplate) {
-        final editable = ref.read(CaptureState.editableTemplateProvider);
-        if (editable != null) {
-          ref.read(CaptureState.editableTemplateProvider.notifier).state =
-              editable.copyWith(postProcess: newPost);
-        }
-      } else {
-        ref.read(CaptureState.freeModePostProcessProvider.notifier).state =
-            newPost;
-      }
+      onUpdate(post.copyWith(color: newColor));
     }
 
     return Column(
@@ -1124,6 +1308,34 @@ class _SaveButton extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ShareOption extends StatelessWidget {
+  const _ShareOption({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, size: 22, color: const Color(0xFF1A1A1A)),
+      title: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF1A1A1A),
+        ),
+      ),
+      onTap: onTap,
     );
   }
 }
