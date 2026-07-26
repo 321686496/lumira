@@ -3,6 +3,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:lumira_app_flutter/features/academy/data/academy_dao.dart';
 import 'package:lumira_app_flutter/features/academy/data/academy_models.dart';
+import 'package:lumira_app_flutter/core/db/tables.dart';
 
 void main() {
   late Database db;
@@ -20,6 +21,118 @@ void main() {
 
   tearDown(() async {
     await db.close();
+  });
+
+  group('Trajectory', () {
+    test('getTrajectory returns null for non-existent course', () async {
+      final traj = await dao.getTrajectory('non_existent');
+      expect(traj, isNull);
+    });
+
+    test('getMaxTrajectorySequence returns 0 when empty', () async {
+      expect(await dao.getMaxTrajectorySequence(), 0);
+    });
+
+    test('upsertTrajectory inserts record', () async {
+      await dao.upsertTrajectory('c1', completedAt: 1000, sequence: 1);
+      final traj = await dao.getTrajectory('c1');
+      expect(traj, isNotNull);
+      expect(traj!.courseId, 'c1');
+      expect(traj.completedAt, 1000);
+      expect(traj.sequence, 1);
+    });
+
+    test('getMaxTrajectorySequence returns max sequence', () async {
+      await dao.upsertTrajectory('c1', completedAt: 1000, sequence: 1);
+      await dao.upsertTrajectory('c2', completedAt: 2000, sequence: 3);
+      await dao.upsertTrajectory('c3', completedAt: 3000, sequence: 2);
+      expect(await dao.getMaxTrajectorySequence(), 3);
+    });
+
+    test('getAllTrajectory returns all sorted by sequence ASC', () async {
+      await dao.upsertTrajectory('c3', completedAt: 3000, sequence: 3);
+      await dao.upsertTrajectory('c1', completedAt: 1000, sequence: 1);
+      await dao.upsertTrajectory('c2', completedAt: 2000, sequence: 2);
+      final all = await dao.getAllTrajectory();
+      expect(all.length, 3);
+      expect(all[0].courseId, 'c1');
+      expect(all[1].courseId, 'c2');
+      expect(all[2].courseId, 'c3');
+    });
+
+    test('upsertTrajectory replaces existing (idempotent on courseId)', () async {
+      await dao.upsertTrajectory('c1', completedAt: 1000, sequence: 1);
+      await dao.upsertTrajectory('c1', completedAt: 2000, sequence: 5);
+      final traj = await dao.getTrajectory('c1');
+      expect(traj!.completedAt, 2000);
+      expect(traj.sequence, 5);
+    });
+  });
+
+  group('isCourseFullyCompleted', () {
+    test('returns false when no progress record', () async {
+      expect(await dao.isCourseFullyCompleted('c1'), isFalse);
+    });
+
+    test('returns false when status is not completed', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await dao.upsertProgress('c1', CourseStatus.inProgress, 50,
+          startedAt: now, lastViewedAt: now);
+      expect(await dao.isCourseFullyCompleted('c1'), isFalse);
+    });
+
+    test('returns false when completed but no submission', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await dao.upsertProgress('c1', CourseStatus.completed, 100,
+          startedAt: now, completedAt: now, lastViewedAt: now);
+      expect(await dao.isCourseFullyCompleted('c1'), isFalse);
+    });
+
+    test('returns false when completed but submission has no photo', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await dao.upsertProgress('c1', CourseStatus.completed, 100,
+          startedAt: now, completedAt: now, lastViewedAt: now);
+      await dao.upsertSubmission(AssignmentSubmission(
+        id: 's1',
+        assignmentId: 'a1',
+        courseId: 'c1',
+        photoPath: null,
+        status: AssignmentStatus.submitted,
+        submittedAt: now,
+      ));
+      expect(await dao.isCourseFullyCompleted('c1'), isFalse);
+    });
+
+    test('returns true when completed and submission has photo', () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await dao.upsertProgress('c1', CourseStatus.completed, 100,
+          startedAt: now, completedAt: now, lastViewedAt: now);
+      await dao.upsertSubmission(AssignmentSubmission(
+        id: 's1',
+        assignmentId: 'a1',
+        courseId: 'c1',
+        photoPath: '/path/to/photo.jpg',
+        status: AssignmentStatus.submitted,
+        submittedAt: now,
+      ));
+      expect(await dao.isCourseFullyCompleted('c1'), isTrue);
+    });
+
+    test('returns true when completed and submission is reviewed with photo',
+        () async {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await dao.upsertProgress('c1', CourseStatus.completed, 100,
+          startedAt: now, completedAt: now, lastViewedAt: now);
+      await dao.upsertSubmission(AssignmentSubmission(
+        id: 's1',
+        assignmentId: 'a1',
+        courseId: 'c1',
+        photoPath: '/path/to/photo.jpg',
+        status: AssignmentStatus.reviewed,
+        submittedAt: now,
+      ));
+      expect(await dao.isCourseFullyCompleted('c1'), isTrue);
+    });
   });
 
   group('CourseProgress', () {
@@ -165,4 +278,5 @@ Future<void> _onCreate(Database db, int version) async {
   await db.execute(AcademyTables.cpCreateSql);
   await db.execute(AcademyTables.asCreateSql);
   await db.execute(AcademyTables.kfCreateSql);
+  await db.execute(AcademyLearningTrajectoryTable.createSql);
 }

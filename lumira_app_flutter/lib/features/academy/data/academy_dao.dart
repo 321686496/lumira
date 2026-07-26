@@ -1,6 +1,8 @@
 import 'package:sqflite/sqflite.dart';
 
+import '../../../core/db/tables.dart';
 import 'academy_models.dart';
+import 'academy_trajectory_models.dart';
 
 /// 学院相关表名与列名常量
 class AcademyTables {
@@ -65,6 +67,10 @@ class AcademyTables {
       $kfColFavoritedAt INTEGER NOT NULL
     )
   ''';
+
+  // === academy_learning_trajectory ===
+  // 注：表名与列名常量在 Tables 类中定义（Plan A v4 迁移添加）
+  // 这里仅引用，不重复声明
 }
 
 /// 学院 DAO
@@ -243,5 +249,69 @@ class AcademyDao {
       case AssignmentStatus.submitted: return 'submitted';
       case AssignmentStatus.reviewed: return 'reviewed';
     }
+  }
+
+  // === 学习轨迹 ===
+
+  /// 检查课程是否完全完成：
+  /// 1. status = completed
+  /// 2. 该课程有至少一条作业提交，且 status IN (submitted, reviewed) AND photoPath != null
+  Future<bool> isCourseFullyCompleted(String courseId) async {
+    final progress = await getProgress(courseId);
+    if (progress?.status != CourseStatus.completed) return false;
+    final submissions = await getCourseSubmissions(courseId);
+    return submissions.any((s) =>
+        s.status != AssignmentStatus.notSubmitted && s.photoPath != null);
+  }
+
+  /// 获取当前最大 sequence（无记录时返回 0）
+  Future<int> getMaxTrajectorySequence() async {
+    final rows = await _db.rawQuery(
+      'SELECT MAX(${Tables.colSequence}) AS max_seq FROM ${Tables.academyLearningTrajectory}',
+    );
+    return (rows.first['max_seq'] as int?) ?? 0;
+  }
+
+  /// 插入或更新轨迹记录（按 courseId 主键 replace）
+  Future<void> upsertTrajectory(String courseId,
+      {required int completedAt, required int sequence}) async {
+    await _db.insert(
+      Tables.academyLearningTrajectory,
+      {
+        Tables.colCourseId: courseId,
+        Tables.colCompletedAt: completedAt,
+        Tables.colSequence: sequence,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// 获取单条轨迹记录
+  Future<AcademyTrajectoryRecord?> getTrajectory(String courseId) async {
+    final rows = await _db.query(
+      Tables.academyLearningTrajectory,
+      where: '${Tables.colCourseId} = ?',
+      whereArgs: [courseId],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _rowToTrajectory(rows.first);
+  }
+
+  /// 获取所有轨迹记录（按 sequence ASC 排序）
+  Future<List<AcademyTrajectoryRecord>> getAllTrajectory() async {
+    final rows = await _db.query(
+      Tables.academyLearningTrajectory,
+      orderBy: '${Tables.colSequence} ASC',
+    );
+    return rows.map(_rowToTrajectory).toList();
+  }
+
+  AcademyTrajectoryRecord _rowToTrajectory(Map<String, Object?> row) {
+    return AcademyTrajectoryRecord(
+      courseId: row[Tables.colCourseId] as String,
+      completedAt: row[Tables.colCompletedAt] as int,
+      sequence: row[Tables.colSequence] as int,
+    );
   }
 }

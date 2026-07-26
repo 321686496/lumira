@@ -1,6 +1,7 @@
 import 'academy_dao.dart';
 import 'academy_mock_data.dart';
 import 'academy_models.dart';
+import 'academy_trajectory_models.dart';
 
 abstract class AcademyRepository {
   // 课程数据
@@ -28,6 +29,10 @@ abstract class AcademyRepository {
   Future<bool> isCardFavorited(String cardId);
   Future<void> toggleFavorite(String cardId);
   Future<Set<String>> getFavoriteCardIds();
+
+  // 学习轨迹
+  Future<bool> isCourseFullyCompleted(String courseId);
+  Future<List<AcademyTrajectoryRecord>> getAllTrajectory();
 }
 
 class LocalAcademyRepository implements AcademyRepository {
@@ -223,4 +228,14 @@ class LocalAcademyRepository implements AcademyRepository {
 
   @override
   Future<Set<String>> getFavoriteCardIds() => _dao.getFavoriteCardIds();
+
+  // === 学习轨迹 ===
+
+  @override
+  Future<bool> isCourseFullyCompleted(String courseId) =>
+      _dao.isCourseFullyCompleted(courseId);
+
+  @override
+  Future<List<AcademyTrajectoryRecord>> getAllTrajectory() =>
+      _dao.getAllTrajectory();
 }
