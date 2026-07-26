@@ -29,6 +29,7 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
     this.transparent = true,
     this.showBackButton = true,
     this.useWordmark = false,
+    this.horizontalPadding = 24.0,
   });
 
   final String? title;
@@ -47,6 +48,11 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
   /// 启用时忽略 [title]，渲染 assets/logos/logo-lumira-wordmark.svg。
   /// 适用于首页等需要展示品牌标识的场景。
   final bool useWordmark;
+
+  /// nav 左右内容与屏幕边缘的水平间距。
+  /// Tab 页（home/templates/challenge/profile）传 24 与 body padding 对齐；
+  /// 详情页保持默认或传 12。
+  final double horizontalPadding;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -155,7 +161,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
                       children: [
                         // 左侧
                         Positioned(
-                          left: 8,
+                          left: widget.horizontalPadding,
                           child: leadingWidget,
                         ),
                         // 居中标题 / wordmark
@@ -167,7 +173,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
                           ),
                         // 右侧
                         Positioned(
-                          right: 8,
+                          right: widget.horizontalPadding,
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: widget.actions ?? [const SizedBox(width: 40)],
@@ -176,7 +182,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
                       ],
                     )
                   : Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: EdgeInsets.symmetric(horizontal: widget.horizontalPadding),
                       child: Row(
                         children: [
                           leadingWidget,

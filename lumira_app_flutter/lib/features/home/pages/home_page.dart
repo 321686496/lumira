@@ -101,6 +101,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         transparent: true,
         scrolled: _scrolled,
         showBackButton: false,
+        horizontalPadding: 24,
         leading: const HomeBrandTitle(),
         actions: [
           _NavAction(

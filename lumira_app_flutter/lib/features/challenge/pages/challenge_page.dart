@@ -128,6 +128,7 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
                   scrolled: _scrolled,
                   transparent: true,
                   showBackButton: false,
+                  horizontalPadding: 24,
                   actions: [
                     IconButton(
                       icon: Icon(

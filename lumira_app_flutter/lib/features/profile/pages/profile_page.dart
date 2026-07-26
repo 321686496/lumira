@@ -48,6 +48,7 @@ class ProfilePage extends ConsumerWidget {
         centerTitle: false,
         transparent: true,
         showBackButton: false,
+        horizontalPadding: 24,
       ),
       body: Stack(
         children: [

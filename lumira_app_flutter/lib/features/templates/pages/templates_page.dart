@@ -92,6 +92,7 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
                   transparent: true,
                   scrolled: _scrolled,
                   showBackButton: false,
+                  horizontalPadding: 24,
                   actions: [
                     IconButton(
                       icon: const Icon(Icons.apps_outlined, size: 20),
