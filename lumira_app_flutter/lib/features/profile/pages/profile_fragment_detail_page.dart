@@ -7,6 +7,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/images/adaptive_photo_grid.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/profile_mock_data.dart';
 import '../widgets/fragment_poster_generator.dart';
@@ -235,6 +236,27 @@ class _FragmentDetailCard extends StatelessWidget {
     }
   }
 
+  void _showFullGrid(BuildContext context, List<String> urls) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('全部图片')),
+        body: GridView.builder(
+          padding: const EdgeInsets.all(8),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
+          ),
+          itemCount: urls.length,
+          itemBuilder: (_, i) => ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.network(urls[i], fit: BoxFit.cover),
+          ),
+        ),
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final done = item.current >= item.max;
@@ -329,7 +351,10 @@ class _FragmentDetailCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            _PhotoGrid(tokens: tokens, urls: item.photoUrls),
+            AdaptivePhotoGrid(
+              urls: item.photoUrls,
+              onTapOverflow: () => _showFullGrid(context, item.photoUrls),
+            ),
             const SizedBox(height: 12),
             // 分享海报按钮
             Align(
@@ -364,63 +389,6 @@ class _FragmentDetailCard extends StatelessWidget {
               ),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-/// 自适应图片网格（1-9 张）
-class _PhotoGrid extends StatelessWidget {
-  const _PhotoGrid({required this.tokens, required this.urls});
-  final ThemeTokens tokens;
-  final List<String> urls;
-
-  @override
-  Widget build(BuildContext context) {
-    final count = urls.length;
-    int crossCount;
-    if (count <= 1) {
-      crossCount = 1;
-    } else if (count <= 4) {
-      crossCount = 2;
-    } else {
-      crossCount = 3;
-    }
-
-    final rows = (count / crossCount).ceil();
-    final cellHeight = crossCount == 1 ? 160.0 : 80.0;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        children: [
-          for (var r = 0; r < rows; r++)
-            Row(
-              children: [
-                for (var c = 0; c < crossCount; c++)
-                  Expanded(
-                    child: (r * crossCount + c) < count
-                        ? Container(
-                            height: cellHeight,
-                            margin: EdgeInsets.only(
-                              right: c < crossCount - 1 ? 2 : 0,
-                              bottom: r < rows - 1 ? 2 : 0,
-                            ),
-                            child: Image.network(
-                              urls[r * crossCount + c],
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
-                                color: tokens.brandSubtle,
-                                child: Icon(Icons.image_outlined,
-                                    size: 20, color: tokens.brand),
-                              ),
-                            ),
-                          )
-                        : SizedBox(height: cellHeight),
-                  ),
-              ],
-            ),
         ],
       ),
     );
