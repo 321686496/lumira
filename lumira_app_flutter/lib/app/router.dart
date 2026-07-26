@@ -73,7 +73,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'capture',
         builder: (context, state) {
           final templateId = state.queryParams[RouteNames.paramTemplateId];
-          return CapturePage(templateId: templateId);
+          final sceneId = state.queryParams[RouteNames.paramScene];
+          final kitId = state.queryParams[RouteNames.paramKitId];
+          return CapturePage(
+            templateId: templateId,
+            sceneId: sceneId,
+            kitId: kitId,
+          );
         },
       ),
       GoRoute(
