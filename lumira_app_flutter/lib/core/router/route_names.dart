@@ -46,6 +46,8 @@ class RouteNames {
   static const String profileAbout = '/profile/about';
   static const String scenes = '/scenes';
   static const String shootkitEditor = '/shootkit/editor';
+  static const String profileCompositionKits = '/profile/composition-kits';
+  static const String profileCompositionKitDetail = '/profile/composition-kit-detail';
 
   // === 查询参数键名 ===
   static const String paramTemplateId = 'templateId';

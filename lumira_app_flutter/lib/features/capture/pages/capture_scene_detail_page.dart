@@ -11,6 +11,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
 import '../widgets/scene_achievement_card.dart';
 import '../widgets/scene_filter_badge.dart';
+import '../widgets/add_to_composition_sheet.dart';
 
 /// 场景详情页（Task 2.10）
 ///
@@ -111,16 +112,25 @@ class _CaptureSceneDetailPageState
   }
 
   void _goCapture() {
-    final id = _scene?.id ?? _sceneRecord?.id;
-    if (id == null) return;
+    final scene = _scene;
+    if (scene == null) return;
     GoRouter.of(context).push(
-      RouteNames.build(RouteNames.capture, {RouteNames.paramScene: id}),
+      RouteNames.build(RouteNames.capture, {
+        RouteNames.paramScene: scene.id,
+      }),
     );
   }
 
   void _goCreateKit() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('加入组合：${_scene?.name ?? ''}')),
+    final scene = _scene;
+    if (scene == null) return;
+    final coverUrl =
+        scene.exampleImages.isNotEmpty ? scene.exampleImages.first : null;
+    AddToCompositionSheet.show(
+      context,
+      sceneId: scene.id,
+      sceneName: scene.name,
+      sceneCoverUrl: coverUrl,
     );
   }
 
