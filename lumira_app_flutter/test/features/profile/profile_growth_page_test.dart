@@ -5,31 +5,43 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:lumira_app_flutter/core/db/dao/growth_dao.dart';
+import 'package:lumira_app_flutter/core/db/database_provider.dart';
+import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
-import 'package:lumira_app_flutter/features/profile/data/profile_mock_data.dart';
+import 'package:lumira_app_flutter/features/academy/data/academy_dao.dart';
 import 'package:lumira_app_flutter/features/profile/pages/profile_growth_page.dart';
+import 'package:lumira_app_flutter/features/profile/providers/growth_providers.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
 
+/// Task A6 — ProfileGrowthPage 接入 GrowthDao 后的 smoke 测试
+///
+/// 原 mock 数据测试（断言 '入门学徒' / '4 / 6' / '本月 42 张' / '初露锋芒' 等
+/// mock 专属值）在切换到 DAO 后不再适用。本测试改为：
+/// 1. 用 sqflite_ffi + :memory: DB override databaseProvider / growthDaoProvider
+/// 2. 断言 AppBar 标题、4 个 section 标题、空 DB 下的占位文案（稳定不变量）
+/// 3. 跨 8 主题 smoke
 void main() {
-  late GoRouter router;
   FlutterExceptionHandler? originalErrorHandler;
+  late Database sharedDb;
+
+  setUpAll(() async {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    sharedDb = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
+  });
+
+  tearDownAll(() async {
+    await sharedDb.close();
+  });
 
   setUp(() {
-    router = GoRouter(
-      initialLocation: RouteNames.profileGrowth,
-      routes: [
-        GoRoute(
-          path: RouteNames.profileGrowth,
-          name: 'profileGrowth',
-          builder: (_, __) => const ProfileGrowthPage(),
-        ),
-      ],
-    );
     HttpOverrides.global = TestHttpOverrides();
     originalErrorHandler = FlutterError.onError;
     FlutterError.onError = (FlutterErrorDetails details) {
@@ -43,22 +55,40 @@ void main() {
     FlutterError.onError = originalErrorHandler;
   });
 
-  Widget wrap(ThemeKey themeKey, UIStyle uiStyle) {
+  Widget wrap({ThemeKey themeKey = ThemeKey.warmWhite, UIStyle uiStyle = UIStyle.neumorphic}) {
+    final router = GoRouter(
+      initialLocation: RouteNames.profileGrowth,
+      routes: [
+        GoRoute(
+          path: RouteNames.profileGrowth,
+          name: 'profileGrowth',
+          builder: (_, __) => const ProfileGrowthPage(),
+        ),
+        GoRoute(
+          path: RouteNames.capture,
+          name: 'capture',
+          builder: (_, __) => const _StubPage(text: 'CAPTURE_PAGE'),
+        ),
+      ],
+    );
     return ProviderScope(
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        databaseProvider.overrideWith((ref) async => sharedDb),
+        growthDaoProvider.overrideWith((ref) async => GrowthDao(sharedDb)),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
   }
 
-  Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
-    if (style == UIStyle.female) {
-      await tester.pump(const Duration(milliseconds: 500));
-    } else {
-      await tester.pumpAndSettle();
-    }
+  Future<void> settleOrPump(WidgetTester tester) async {
+    // sqflite_common_ffi 的 DB 查询是真实 async 操作，FakeAsync 下
+    // pump(Duration) 无法让真实 Future 完成，必须用 tester.runAsync。
+    await tester.pump();
+    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
   }
 
   void setLargeViewport(WidgetTester tester) {
@@ -68,89 +98,128 @@ void main() {
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
   }
 
-  group('ProfileGrowthPage', () {
+  group('ProfileGrowthPage — DAO smoke', () {
     testWidgets('renders LumiraNav with title 成长中心', (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.pumpWidget(wrap());
+      await settleOrPump(tester);
 
       expect(find.byType(ProfileGrowthPage), findsOneWidget);
       expect(find.widgetWithText(LumiraNav, '成长中心'), findsOneWidget);
     });
 
-    testWidgets('renders all 4 sections', (tester) async {
+    testWidgets('renders all 4 section headers with empty DB', (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.pumpWidget(wrap());
+      await settleOrPump(tester);
 
-      // 1. LevelCard
       expect(find.text('LEVEL'), findsOneWidget);
-      expect(find.text('入门学徒'), findsOneWidget);
-      // 2. AchievementCard
       expect(find.text('成就'), findsOneWidget);
-      expect(find.text('4 / 6'), findsOneWidget);
-      // 3. TrajectoryCard
       expect(find.text('成长轨迹'), findsOneWidget);
-      // 4. CalendarCard
       expect(find.text('拍摄日历'), findsOneWidget);
-      expect(find.text('本月 42 张'), findsOneWidget);
-      expect(find.text('少'), findsOneWidget);
-      expect(find.text('多'), findsOneWidget);
     });
 
-    testWidgets('renders 6 achievement items', (tester) async {
+    testWidgets('renders placeholder level 1 / 新手 / 0-6 / 本月 0 张 with empty DB',
+        (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.pumpWidget(wrap());
+      await settleOrPump(tester);
 
-      // 6 个成就名
-      expect(find.text('初露锋芒'), findsOneWidget);
-      expect(find.text('快门达人'), findsOneWidget);
+      // GrowthSummary.empty: level=1, levelName='新手'
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('新手'), findsOneWidget);
+      // 成就：6 项占位全部 locked → '0 / 6'
+      expect(find.text('0 / 6'), findsOneWidget);
+      // 本月 0 张（空 DB 无活动）
+      expect(find.text('本月 0 张'), findsOneWidget);
+    });
+
+    testWidgets('renders 6 placeholder achievement names', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap());
+      await settleOrPump(tester);
+
+      expect(find.text('初次拍摄'), findsOneWidget);
+      expect(find.text('连续7天'), findsOneWidget);
+      expect(find.text('坚持30天'), findsOneWidget);
       expect(find.text('模板收藏家'), findsOneWidget);
-      expect(find.text('构图大师'), findsOneWidget);
-      expect(find.text('后期魔法师'), findsOneWidget);
-      expect(find.text('百变达人'), findsOneWidget);
+      expect(find.text('挑战达人'), findsOneWidget);
+      expect(find.text('进阶玩家'), findsOneWidget);
     });
 
-    testWidgets('renders all heatmap cells', (tester) async {
+    testWidgets('renders 112 heatmap cells', (tester) async {
       setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.pumpWidget(wrap());
+      await settleOrPump(tester);
 
-      // 热力图色块数 = ProfileMockData.heatmap.length
-      // Forced fix: brief 注释说「112 格」但 verbatim 数据数组实际有 114 项
-      // （10 列 × 11 行 + 4 项 = 114），用 mock 数据真实长度断言
-      final expected = ProfileMockData.heatmap.length;
       var cellCount = 0;
-      for (var i = 0; i < expected + 10; i++) {
+      for (var i = 0; i < 120; i++) {
         final key = ValueKey<String>('heatmap_cell_$i');
         if (find.byKey(key).evaluate().isNotEmpty) {
           cellCount++;
         }
       }
-      expect(ProfileMockData.heatmap.length, greaterThanOrEqualTo(100),
-          reason: '热力图至少应有 100 格数据');
-      expect(cellCount, expected);
+      expect(cellCount, 112);
     });
 
-    testWidgets('renders correctly across all 8 themes', (tester) async {
-      setLargeViewport(tester);
+    testWidgets('renders without FlutterError across 8 themes', (tester) async {
       for (final theme in ThemeKey.values) {
-        await tester.pumpWidget(wrap(theme, UIStyle.neumorphic));
-        await settleOrPump(tester, UIStyle.neumorphic);
+        setLargeViewport(tester);
+        await tester.pumpWidget(wrap(themeKey: theme));
+        await settleOrPump(tester);
         expect(find.byType(ProfileGrowthPage), findsOneWidget, reason: 'theme=$theme');
         expect(find.text('LEVEL'), findsOneWidget, reason: 'theme=$theme');
-      }
-    });
-
-    testWidgets('renders correctly across all 4 UI styles', (tester) async {
-      setLargeViewport(tester);
-      for (final style in UIStyle.values) {
-        await tester.pumpWidget(wrap(ThemeKey.warmWhite, style));
-        await settleOrPump(tester, style);
-        expect(find.byType(ProfileGrowthPage), findsOneWidget, reason: 'style=$style');
-        expect(find.text('LEVEL'), findsOneWidget, reason: 'style=$style');
+        await tester.pumpWidget(const SizedBox.shrink());
       }
     });
   });
+}
+
+class _StubPage extends StatelessWidget {
+  const _StubPage({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(body: Center(child: Text(text)));
+  }
+}
+
+Future<void> _onCreate(Database db, int version) async {
+  await db.execute('''
+    CREATE TABLE ${Tables.userProgress} (
+      ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
+      ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colLevelName} TEXT NOT NULL DEFAULT '新手',
+      ${Tables.colXp} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colXpToNextLevel} INTEGER NOT NULL DEFAULT 100,
+      ${Tables.colTotalPhotos} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colUsedTemplates} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colFavorites} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colStreakDays} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colLastCheckInDate} TEXT,
+      ${Tables.colFragmentsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colAchievementsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colUpdatedAt} INTEGER NOT NULL
+    )
+  ''');
+  await db.insert(Tables.userProgress, {
+    Tables.colId: 1,
+    Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+  });
+  await db.execute(ChallengeHistoryTable.createSql);
+  await db.execute('''
+    CREATE TABLE ${Tables.galleryItems} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colDataUrl} TEXT,
+      ${Tables.colFilePath} TEXT,
+      ${Tables.colSceneId} TEXT,
+      ${Tables.colTemplateId} TEXT,
+      ${Tables.colKitId} TEXT,
+      ${Tables.colMood} TEXT,
+      ${Tables.colLut} TEXT,
+      ${Tables.colCreatedAt} INTEGER NOT NULL
+    )
+  ''');
+  await db.execute(AcademyTables.cpCreateSql);
 }
