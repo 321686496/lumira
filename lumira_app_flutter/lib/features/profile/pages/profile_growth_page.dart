@@ -9,7 +9,8 @@ import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../data/profile_mock_data.dart';
+import '../data/growth_models.dart';
+import '../providers/growth_providers.dart';
 
 /// 成长中心页
 ///
@@ -19,12 +20,26 @@ import '../data/profile_mock_data.dart';
 /// 2. AchievementCard（6 项成就墙）
 /// 3. TrajectoryCard（4 项成长轨迹时间线）
 /// 4. CalendarCard（112 格热力图 + 图例）
+///
+/// 数据来源：GrowthDao 聚合 user_progress / challenge_history / gallery_items 表。
+/// 4 个 FutureProvider 通过 maybeWhen 提供加载兜底，避免 UI 闪烁。
 class ProfileGrowthPage extends ConsumerWidget {
   const ProfileGrowthPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
+
+    final levelAsync = ref.watch(growthLevelProvider);
+    final achievementsAsync = ref.watch(growthAchievementsProvider);
+    final trajectoryAsync = ref.watch(growthTrajectoryProvider);
+    final heatmapAsync = ref.watch(growthHeatmapProvider);
+
+    // 所有 provider 都在加载中时显示空状态（防御性，实际各 section 已有 orElse 兜底）
+    final allLoading = levelAsync.isLoading &&
+        achievementsAsync.isLoading &&
+        trajectoryAsync.isLoading &&
+        heatmapAsync.isLoading;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -46,31 +61,59 @@ class ProfileGrowthPage extends ConsumerWidget {
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FadeUp(child: _LevelCard(user: ProfileMockData.userProfile, tokens: tokens)),
-                const SizedBox(height: 20),
-                FadeUp(
-                  delay: const Duration(milliseconds: 100),
-                  child: _AchievementCard(tokens: tokens),
+          child: allLoading
+              ? const _EmptyState()
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      FadeUp(
+                        child: _LevelCard(
+                          tokens: tokens,
+                          summary: levelAsync.maybeWhen(
+                            data: (s) => s,
+                            orElse: () => GrowthSummary.empty,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      FadeUp(
+                        delay: const Duration(milliseconds: 100),
+                        child: _AchievementCard(
+                          tokens: tokens,
+                          achievements: achievementsAsync.maybeWhen(
+                            data: (a) => a,
+                            orElse: () => kPlaceholderAchievements,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      FadeUp(
+                        delay: const Duration(milliseconds: 200),
+                        child: _TrajectoryCard(
+                          tokens: tokens,
+                          trajectory: trajectoryAsync.maybeWhen(
+                            data: (t) => t,
+                            orElse: () => const [],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      FadeUp(
+                        delay: const Duration(milliseconds: 300),
+                        child: _CalendarCard(
+                          tokens: tokens,
+                          heatmap: heatmapAsync.maybeWhen(
+                            data: (h) => h,
+                            orElse: () => const {},
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 20),
-                FadeUp(
-                  delay: const Duration(milliseconds: 200),
-                  child: _TrajectoryCard(tokens: tokens),
-                ),
-                const SizedBox(height: 20),
-                FadeUp(
-                  delay: const Duration(milliseconds: 300),
-                  child: _CalendarCard(tokens: tokens),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -102,12 +145,19 @@ class _BackButton extends StatelessWidget {
 }
 
 class _LevelCard extends StatelessWidget {
-  const _LevelCard({required this.user, required this.tokens});
-  final UserProfile user;
+  const _LevelCard({required this.summary, required this.tokens});
+  final GrowthSummary summary;
   final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
+    // 当前等级上限（level * 500）：作为右栏展示与进度条分母。
+    final levelMaxXp = summary.level * 500;
+    // 等级内进度：((currentXp - (level-1)*500) / 500 * 100).clamp(0, 100)
+    // 解释：level = xp ~/ 500 + 1，所以 (level-1)*500 是当前等级下界。
+    final xpIntoLevel = summary.currentXp - (summary.level - 1) * 500;
+    final xpPercent = ((xpIntoLevel / 500) * 100).round().clamp(0, 100);
+
     return NeuCard(
       child: Column(
         children: [
@@ -123,7 +173,7 @@ class _LevelCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '${user.level}',
+            '${summary.level}',
             style: TextStyle(
               fontFamily: 'Noto Serif SC',
               fontSize: 48,
@@ -134,7 +184,7 @@ class _LevelCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            user.levelName,
+            summary.levelName,
             style: TextStyle(
               fontSize: 15,
               color: tokens.textSecondary,
@@ -150,7 +200,7 @@ class _LevelCard extends StatelessWidget {
                 children: [
                   Container(color: tokens.brand.withOpacity(0.18)),
                   FractionallySizedBox(
-                    widthFactor: user.xpPercent / 100.0,
+                    widthFactor: xpPercent / 100.0,
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -171,7 +221,7 @@ class _LevelCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${formatThousands(user.currentXp)} XP',
+                  '${formatThousands(summary.currentXp)} XP',
                   style: TextStyle(
                     fontFamily: 'Courier New',
                     fontSize: 12,
@@ -183,7 +233,7 @@ class _LevelCard extends StatelessWidget {
               Expanded(
                 child: Center(
                   child: Text(
-                    '还差 ${formatThousands(user.xpRemaining)} XP 升级',
+                    '还差 ${formatThousands(summary.xpToNextLevel)} XP 升级',
                     style: TextStyle(
                       fontFamily: 'Courier New',
                       fontSize: 11,
@@ -196,7 +246,7 @@ class _LevelCard extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  '${formatThousands(user.maxXp)} XP',
+                  '${formatThousands(levelMaxXp)} XP',
                   textAlign: TextAlign.right,
                   style: TextStyle(
                     fontFamily: 'Courier New',
@@ -215,12 +265,13 @@ class _LevelCard extends StatelessWidget {
 }
 
 class _AchievementCard extends StatelessWidget {
-  const _AchievementCard({required this.tokens});
+  const _AchievementCard({required this.tokens, required this.achievements});
   final ThemeTokens tokens;
+  final List<AchievementRecord> achievements;
 
   @override
   Widget build(BuildContext context) {
-    final unlockedCount = ProfileMockData.achievements.where((a) => !a.locked).length;
+    final unlockedCount = achievements.where((a) => a.unlocked).length;
     return NeuCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -238,7 +289,7 @@ class _AchievementCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '$unlockedCount / ${ProfileMockData.achievements.length}',
+                '$unlockedCount / ${achievements.length}',
                 style: TextStyle(
                   fontSize: 13,
                   color: tokens.textTertiary,
@@ -256,7 +307,9 @@ class _AchievementCard extends StatelessWidget {
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
             childAspectRatio: 1.0,
-            children: ProfileMockData.achievements.map((a) => _AchievementCell(item: a, tokens: tokens)).toList(),
+            children: achievements
+                .map((a) => _AchievementCell(item: a, tokens: tokens))
+                .toList(),
           ),
         ],
       ),
@@ -266,11 +319,12 @@ class _AchievementCard extends StatelessWidget {
 
 class _AchievementCell extends StatelessWidget {
   const _AchievementCell({required this.item, required this.tokens});
-  final Achievement item;
+  final AchievementRecord item;
   final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
+    final locked = !item.unlocked;
     final cell = Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
@@ -282,16 +336,16 @@ class _AchievementCell extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            item.icon,
+            _iconForKey(item.iconKey),
             size: 36, // 72rpx → 36dp
-            color: item.locked ? tokens.textTertiary : tokens.textPrimary,
+            color: locked ? tokens.textTertiary : tokens.textPrimary,
           ),
           const SizedBox(height: 4),
           Text(
             item.name,
             style: TextStyle(
               fontSize: 11, // 22rpx → 11dp
-              color: item.locked ? tokens.textTertiary : tokens.textPrimary,
+              color: locked ? tokens.textTertiary : tokens.textPrimary,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -300,16 +354,34 @@ class _AchievementCell extends StatelessWidget {
       ),
     );
 
-    if (item.locked) {
+    if (locked) {
       return Opacity(opacity: 0.5, child: cell);
     }
     return cell;
   }
 }
 
+IconData _iconForKey(String key) {
+  switch (key) {
+    case 'camera':
+      return Icons.camera_alt_outlined;
+    case 'flame':
+      return Icons.local_fire_department_outlined;
+    case 'layers':
+      return Icons.layers_outlined;
+    case 'trophy':
+      return Icons.emoji_events_outlined;
+    case 'star':
+      return Icons.star_outline;
+    default:
+      return Icons.emoji_events_outlined;
+  }
+}
+
 class _TrajectoryCard extends StatelessWidget {
-  const _TrajectoryCard({required this.tokens});
+  const _TrajectoryCard({required this.tokens, required this.trajectory});
   final ThemeTokens tokens;
+  final List<GrowthTrajectoryRecord> trajectory;
 
   @override
   Widget build(BuildContext context) {
@@ -330,10 +402,10 @@ class _TrajectoryCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (var i = 0; i < ProfileMockData.trajectory.length; i++)
+              for (var i = 0; i < trajectory.length; i++)
                 _TrajectoryRow(
-                  entry: ProfileMockData.trajectory[i],
-                  isLast: i == ProfileMockData.trajectory.length - 1,
+                  entry: trajectory[i],
+                  isLast: i == trajectory.length - 1,
                   tokens: tokens,
                 ),
             ],
@@ -346,12 +418,15 @@ class _TrajectoryCard extends StatelessWidget {
 
 class _TrajectoryRow extends StatelessWidget {
   const _TrajectoryRow({required this.entry, required this.isLast, required this.tokens});
-  final TrajectoryEntry entry;
+  final GrowthTrajectoryRecord entry;
   final bool isLast;
   final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
+    final dateStr = DateTime.fromMillisecondsSinceEpoch(entry.timestamp)
+        .toString()
+        .substring(0, 10);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -402,7 +477,7 @@ class _TrajectoryRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  entry.date,
+                  dateStr,
                   style: TextStyle(
                     fontSize: 12,
                     fontFamily: 'Courier New',
@@ -419,8 +494,9 @@ class _TrajectoryRow extends StatelessWidget {
 }
 
 class _CalendarCard extends StatelessWidget {
-  const _CalendarCard({required this.tokens});
+  const _CalendarCard({required this.tokens, required this.heatmap});
   final ThemeTokens tokens;
+  final Map<String, int> heatmap;
 
   /// 热力图色块颜色（硬编码，与 uni-app 一致）
   Color _heatColor(int level) {
@@ -440,8 +516,45 @@ class _CalendarCard extends StatelessWidget {
     }
   }
 
+  /// 将每日活动数映射为 0-4 等级：
+  /// 0 活动 → 0（空）；1 → 2；2-3 → 3；4+ → 4。
+  /// level 1 未使用（保持阈值简单）。
+  int _countToLevel(int count) {
+    if (count == 0) return 0;
+    if (count == 1) return 2;
+    if (count <= 3) return 3;
+    return 4;
+  }
+
+  String _formatDate(DateTime d) {
+    final y = d.year.toString();
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '$y-$m-$day';
+  }
+
   @override
   Widget build(BuildContext context) {
+    // 112 格热力图：从今天往前数 112 天。
+    // index 0 = 111 天前（最旧），index 111 = 今天（最新）。
+    // 使用 UTC 以与 DAO 中 SQLite date(ts/1000,'unixepoch') 的 UTC 日期对齐。
+    final today = DateTime.now().toUtc();
+    final cells = List<int>.generate(112, (i) {
+      final date = today.subtract(Duration(days: 111 - i));
+      final dateStr = _formatDate(date);
+      final count = heatmap[dateStr] ?? 0;
+      return _countToLevel(count);
+    });
+
+    // 本月拍摄数：当前 YYYY-MM 内所有日期的活动数之和
+    final currentMonth = _formatDate(today).substring(0, 7);
+    var monthlyPhotos = 0;
+    heatmap.forEach((dateStr, count) {
+      if (dateStr.startsWith(currentMonth)) {
+        monthlyPhotos += count;
+      }
+    });
+
     return NeuCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,7 +572,7 @@ class _CalendarCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '本月 ${ProfileMockData.monthlyPhotos} 张',
+                '本月 $monthlyPhotos 张',
                 style: TextStyle(
                   fontSize: 13,
                   color: tokens.textTertiary,
@@ -483,12 +596,12 @@ class _CalendarCard extends StatelessWidget {
                   crossAxisSpacing: 2,
                   childAspectRatio: 1,
                 ),
-                itemCount: ProfileMockData.heatmap.length,
+                itemCount: cells.length,
                 itemBuilder: (context, i) {
                   return Container(
                     key: ValueKey('heatmap_cell_$i'),
                     decoration: BoxDecoration(
-                      color: _heatColor(ProfileMockData.heatmap[i]),
+                      color: _heatColor(cells[i]),
                       borderRadius: BorderRadius.circular(2), // 4rpx → 2dp
                     ),
                   );
@@ -523,6 +636,27 @@ class _CalendarCard extends StatelessWidget {
                 style: TextStyle(fontSize: 11, color: tokens.textTertiary),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('暂无数据，去完成第一次拍摄解锁成长记录'),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: () => GoRouter.of(context).push(RouteNames.capture),
+            child: const Text('去拍摄'),
           ),
         ],
       ),
