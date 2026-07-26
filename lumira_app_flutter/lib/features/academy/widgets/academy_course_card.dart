@@ -12,11 +12,13 @@ class AcademyCourseCard extends ConsumerWidget {
     required this.course,
     required this.status,
     required this.onTap,
+    this.isFullyCompleted = false,
   });
 
   final AcademyCourse course;
   final CourseStatus status;
   final VoidCallback onTap;
+  final bool isFullyCompleted;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,33 +48,61 @@ class AcademyCourseCard extends ConsumerWidget {
                     ),
                   ),
                 ),
-                // 状态角标
-                if (status != CourseStatus.notStarted)
+                // 已学完徽章（完全完成时显示绿色徽章）
+                if (isFullyCompleted)
                   Positioned(
                     top: 8,
                     right: 8,
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: status == CourseStatus.completed
-                            ? tokens.success
-                            : tokens.brand,
+                        color: tokens.success,
                         borderRadius: BorderRadius.circular(9999),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: [
+                        children: const [
                           Icon(
-                            status == CourseStatus.completed
-                                ? Icons.check_circle
-                                : Icons.play_circle_outline,
+                            Icons.check_circle,
                             size: 12,
                             color: Colors.white,
                           ),
-                          const SizedBox(width: 3),
+                          SizedBox(width: 3),
                           Text(
-                            status == CourseStatus.completed ? '已完成' : '学习中',
-                            style: const TextStyle(
+                            '已学完',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                // 学习中徽章（未完全完成但已开始学习）
+                else if (status != CourseStatus.notStarted)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: tokens.brand,
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(
+                            Icons.play_circle_outline,
+                            size: 12,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 3),
+                          Text(
+                            '学习中',
+                            style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w500,
                               color: Colors.white,
