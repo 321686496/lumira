@@ -41,6 +41,76 @@ final courseProgressProvider = FutureProvider.family<CourseProgress?, String>((r
   return repo.getProgress(courseId);
 });
 
+/// 课程是否完全完成（status=completed 且作业有 photoPath）
+final courseFullyCompletedProvider =
+    FutureProvider.family<bool, String>((ref, courseId) async {
+  final repo = await ref.watch(academyRepositoryProvider.future);
+  return repo.isCourseFullyCompleted(courseId);
+});
+
+/// 排序后的课程列表
+/// 规则：
+/// 1. 先按 level 升序（beginner → intermediate → advanced）
+/// 2. 同 level 内：未完全完成的在前（按 lastViewedAt DESC），
+///    已完全完成的沉底（按 completedAt ASC）
+final sortedCoursesProvider = FutureProvider.family<List<AcademyCourse>, AcademyLevel?>(
+    (ref, level) async {
+  final repo = await ref.watch(academyRepositoryProvider.future);
+  final allCourses = AcademyMockData.courses
+      .where((c) => level == null || c.level == level)
+      .toList();
+
+  // 获取每门课的进度和完全完成状态
+  final courseData = <_CourseSortData>[];
+  for (final course in allCourses) {
+    final progress = await repo.getProgress(course.id);
+    final isFullyCompleted = await repo.isCourseFullyCompleted(course.id);
+    courseData.add(_CourseSortData(
+      course: course,
+      progress: progress,
+      isFullyCompleted: isFullyCompleted,
+    ));
+  }
+
+  // 排序
+  courseData.sort((a, b) {
+    // 1. level 升序
+    final levelCompare = a.course.level.index.compareTo(b.course.level.index);
+    if (levelCompare != 0) return levelCompare;
+
+    // 2. 同 level 内：未完成在前，已完成沉底
+    if (a.isFullyCompleted != b.isFullyCompleted) {
+      return a.isFullyCompleted ? 1 : -1;
+    }
+
+    if (a.isFullyCompleted) {
+      // 都已完成：按 completedAt ASC
+      final aCompletedAt = a.progress?.completedAt ?? 0;
+      final bCompletedAt = b.progress?.completedAt ?? 0;
+      return aCompletedAt.compareTo(bCompletedAt);
+    } else {
+      // 都未完成：按 lastViewedAt DESC
+      final aLastViewed = a.progress?.lastViewedAt ?? 0;
+      final bLastViewed = b.progress?.lastViewedAt ?? 0;
+      return bLastViewed.compareTo(aLastViewed);
+    }
+  });
+
+  return courseData.map((d) => d.course).toList();
+});
+
+class _CourseSortData {
+  final AcademyCourse course;
+  final CourseProgress? progress;
+  final bool isFullyCompleted;
+
+  const _CourseSortData({
+    required this.course,
+    required this.progress,
+    required this.isFullyCompleted,
+  });
+}
+
 // === 作业 ===
 
 /// 作业提交记录

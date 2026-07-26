@@ -168,7 +168,7 @@ class _AcademyPageState extends ConsumerState<AcademyPage> {
   }
 }
 
-/// 课程网格（2 列）
+/// 课程网格（2 列，排序后）
 class _CourseGrid extends ConsumerWidget {
   const _CourseGrid(
       {required this.level, required this.actionVersion, required this.onTap});
@@ -181,31 +181,45 @@ class _CourseGrid extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // watch actionVersion to trigger rebuild after status changes
     ref.watch(academyActionsProvider);
-    final courses = ref.watch(coursesProvider(level));
+    final coursesAsync = ref.watch(sortedCoursesProvider(level));
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: courses.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.52,
+    return coursesAsync.when(
+      loading: () => const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
-      itemBuilder: (context, index) {
-        final course = courses[index];
-        final progressAsync = ref.watch(courseProgressProvider(course.id));
-        final status = progressAsync.maybeWhen(
-          data: (p) => p?.status ?? CourseStatus.notStarted,
-          orElse: () => CourseStatus.notStarted,
-        );
-        return AcademyCourseCard(
-          course: course,
-          status: status,
-          onTap: () => onTap(course.id),
-        );
-      },
+      error: (_, __) => const SizedBox(height: 200),
+      data: (courses) => GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: courses.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.52,
+        ),
+        itemBuilder: (context, index) {
+          final course = courses[index];
+          final progressAsync = ref.watch(courseProgressProvider(course.id));
+          final fullyCompletedAsync =
+              ref.watch(courseFullyCompletedProvider(course.id));
+          final status = progressAsync.maybeWhen(
+            data: (p) => p?.status ?? CourseStatus.notStarted,
+            orElse: () => CourseStatus.notStarted,
+          );
+          final isFullyCompleted = fullyCompletedAsync.maybeWhen(
+            data: (v) => v,
+            orElse: () => false,
+          );
+          return AcademyCourseCard(
+            course: course,
+            status: status,
+            isFullyCompleted: isFullyCompleted,
+            onTap: () => onTap(course.id),
+          );
+        },
+      ),
     );
   }
 }
