@@ -29,6 +29,7 @@ import '../features/profile/pages/profile_collection_detail_page.dart';
 import '../features/profile/pages/profile_collections_page.dart';
 import '../features/profile/pages/profile_fragment_detail_page.dart';
 import '../features/profile/pages/profile_growth_page.dart';
+import '../features/profile/pages/profile_notifications_page.dart';
 import '../features/profile/pages/profile_invite_page.dart';
 import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_page.dart';
@@ -305,6 +306,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileFragmentDetail,
         name: 'profileFragmentDetail',
         builder: (context, state) => const ProfileFragmentDetailPage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileNotifications,
+        name: 'profileNotifications',
+        builder: (context, state) => const ProfileNotificationsPage(),
       ),
       GoRoute(
         path: RouteNames.profileAbout,
