@@ -87,6 +87,43 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  void _showScanDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('输入分享码'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: 'LUMIRA-{category}-{name}',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () {
+              final code = controller.text.trim();
+              Navigator.pop(ctx);
+              if (code.startsWith('LUMIRA-')) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('分享码已识别：$code')),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('分享码格式无效')),
+                );
+              }
+            },
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -107,12 +144,12 @@ class _HomePageState extends ConsumerState<HomePage> {
           _NavAction(
             icon: Icons.notifications_outlined,
             tokens: tokens,
-            onTap: () {}, // 占位：通知中心
+            onTap: () => GoRouter.of(context).push(RouteNames.profileNotifications),
           ),
           _NavAction(
             icon: Icons.qr_code_outlined,
             tokens: tokens,
-            onTap: () {}, // 占位：扫一扫
+            onTap: _showScanDialog,
           ),
         ],
       ),
