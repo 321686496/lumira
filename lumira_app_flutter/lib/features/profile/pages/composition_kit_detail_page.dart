@@ -69,7 +69,7 @@ class _KitDetailContent extends ConsumerWidget {
           const SizedBox(height: 16),
           _TitleSection(tokens: tokens, kit: kit),
           const SizedBox(height: 16),
-          _MetaSection(tokens: tokens, kit: kit, ref: ref),
+          _MetaSection(tokens: tokens, kit: kit),
           const SizedBox(height: 16),
           if (kit.cameraOverrides.isNotEmpty) ...[
             _ParamsSection(tokens: tokens, kit: kit),
@@ -159,10 +159,9 @@ class _TitleSection extends StatelessWidget {
 }
 
 class _MetaSection extends ConsumerWidget {
-  const _MetaSection({required this.tokens, required this.kit, required this.ref});
+  const _MetaSection({required this.tokens, required this.kit});
   final ThemeTokens tokens;
   final CompositionKit kit;
-  final WidgetRef ref;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
