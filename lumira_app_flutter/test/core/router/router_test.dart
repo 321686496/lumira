@@ -7,8 +7,8 @@ import 'package:lumira_app_flutter/app/router.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/router/route_observers.dart';
 
-/// 所有 35 个路径常量，按 RouteNames 中声明顺序排列。
-/// （uni-app pages.json 34 个页面 + Flutter 新增 profileAbout = 35）
+/// 所有 44 个路径常量，按 RouteNames 中声明顺序排列。
+/// （uni-app pages.json 34 个页面 + Flutter 新增 10 条 = 44）
 List<String> get _allPaths => <String>[
       RouteNames.splash,
       RouteNames.home,
@@ -28,10 +28,12 @@ List<String> get _allPaths => <String>[
       RouteNames.templatesRecommend,
       RouteNames.templatesAll,
       RouteNames.challengeDetail,
+      RouteNames.challengeHistory,
       RouteNames.inspiration,
       RouteNames.gallery,
       RouteNames.galleryDetail,
       RouteNames.galleryDiary,
+      RouteNames.galleryStats,
       RouteNames.galleryMonthlyDigest,
       RouteNames.profileSettings,
       RouteNames.profileSettingsTheme,
@@ -39,15 +41,22 @@ List<String> get _allPaths => <String>[
       RouteNames.profileInvite,
       RouteNames.profileAcademy,
       RouteNames.profileAcademyDetail,
+      RouteNames.profileAcademyKnowledge,
+      RouteNames.profileAcademyAssignment,
       RouteNames.profileCollections,
       RouteNames.profileCollectionDetail,
       RouteNames.profileMyTemplates,
+      RouteNames.profileFragmentDetail,
+      RouteNames.profileNotifications,
       RouteNames.profileAbout,
       RouteNames.scenes,
       RouteNames.shootkitEditor,
+      RouteNames.academyTrajectory,
+      RouteNames.profileCompositionKits,
+      RouteNames.profileCompositionKitDetail,
     ];
 
-/// 所有 35 个路由名，按 router.dart 中声明顺序排列。
+/// 所有 44 个路由名，按 router.dart 中声明顺序排列。
 List<String> get _allNames => <String>[
       'splash',
       'home',
@@ -66,10 +75,12 @@ List<String> get _allNames => <String>[
       'templatesAll',
       'challenge',
       'challengeDetail',
+      'challengeHistory',
       'inspiration',
       'gallery',
       'galleryDetail',
       'galleryDiary',
+      'galleryStats',
       'galleryMonthlyDigest',
       'profile',
       'profileSettings',
@@ -78,9 +89,16 @@ List<String> get _allNames => <String>[
       'profileInvite',
       'profileAcademy',
       'profileAcademyDetail',
+      'profileAcademyAssignment',
+      'profileAcademyKnowledge',
+      'academyTrajectory',
       'profileCollections',
       'profileCollectionDetail',
       'profileMyTemplates',
+      'profileCompositionKits',
+      'profileCompositionKitDetail',
+      'profileFragmentDetail',
+      'profileNotifications',
       'profileAbout',
       'scenes',
       'shootkitEditor',
@@ -103,16 +121,19 @@ GoRoute? _findRouteForPath(GoRouter router, String path) {
 
 void main() {
   group('RouteNames', () {
-    test('should define 35 unique route paths', () {
+    test('should define 44 unique route paths', () {
       // 注意：brief 文案多处声称 "33 路由"，但 uni-app pages.json
       // source of truth 实际有 34 个页面，brief 自身的 route_names.dart
       // 与 router.dart 代码也定义了 34 条。此处以 source of truth 为准。
-      // Forced fix: 加上 Flutter 新增的 profileAbout 后变为 35 条。
+      // Forced fix: 加上 Flutter 新增的 10 条 (profileAbout, challengeHistory,
+      // galleryStats, profileAcademyKnowledge, profileAcademyAssignment,
+      // profileFragmentDetail, profileNotifications, academyTrajectory,
+      // profileCompositionKits, profileCompositionKitDetail) 后变为 44 条。
       final allPaths = _allPaths;
-      expect(allPaths.length, 35,
-          reason: 'must have 35 routes (34 from uni-app + profileAbout)');
+      expect(allPaths.length, 44,
+          reason: 'must have 44 routes (34 from uni-app + 10 Flutter additions)');
       final unique = allPaths.toSet();
-      expect(unique.length, 35, reason: 'all route paths must be unique');
+      expect(unique.length, 44, reason: 'all route paths must be unique');
     });
 
     test('all paths start with /', () {
@@ -187,11 +208,11 @@ void main() {
           reason: '/splash must be a declared route (it is the initial location)');
     });
 
-    test('router configuration has 35 routes', () {
+    test('router configuration has 44 routes', () {
       final router = container.read(routerProvider);
       // Count routes by traversing the configuration.
       // 本任务所有路由均为顶层 GoRoute（无 ShellRoute、无子路由），
-      // Forced fix: 加上 Flutter 新增的 profileAbout 后变为 35 条。
+      // Forced fix: 加上 Flutter 新增的 10 条后变为 44 条。
       int count = 0;
       void countRoutes(List<RouteBase> routes) {
         for (final route in routes) {
@@ -202,11 +223,11 @@ void main() {
         }
       }
       countRoutes(router.routeConfiguration.routes);
-      expect(count, 35,
-          reason: 'router must declare 35 top-level GoRoute entries (34 from uni-app + profileAbout)');
+      expect(count, 44,
+          reason: 'router must declare 44 top-level GoRoute entries (34 from uni-app + 10 Flutter additions)');
     });
 
-    test('router resolves all 35 paths without error', () {
+    test('router resolves all 44 paths without error', () {
       final router = container.read(routerProvider);
       for (final path in _allPaths) {
         final match = _findRouteForPath(router, path);
@@ -225,7 +246,7 @@ void main() {
           reason: 'URL $urlWithQuery must resolve to a route');
     });
 
-    test('all 35 route names are registered for named navigation', () {
+    test('all 44 route names are registered for named navigation', () {
       final router = container.read(routerProvider);
       for (final name in _allNames) {
         // namedLocation 会对未注册的名字抛出 assert 错误；

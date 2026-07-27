@@ -217,7 +217,7 @@ void main() {
       expect(find.text('CAPTURE_PAGE:scene=cafe-window'), findsOneWidget);
     });
 
-    testWidgets('tapping 加入组合 shows SnackBar', (tester) async {
+    testWidgets('tapping 加入组合 opens AddToCompositionSheet', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
@@ -226,7 +226,13 @@ void main() {
       await tester.tap(find.text('加入组合'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.textContaining('加入组合：咖啡馆'), findsOneWidget);
+      // 加入组合 现在打开 AddToCompositionSheet 模态底部弹层（之前是 mock
+      // SnackBar 显示 "加入组合：${sceneName}"）。验证 sheet 内容已渲染：
+      // - sheet 标题 "加入组合" + 表单标签 "套件名称" + 保存按钮 "保存套件"
+      // - 默认套件名称 "${sceneName}-自由拍摄" = "咖啡馆-自由拍摄"
+      expect(find.text('套件名称'), findsOneWidget);
+      expect(find.text('保存套件'), findsOneWidget);
+      expect(find.text('咖啡馆-自由拍摄'), findsOneWidget);
     });
 
     testWidgets(

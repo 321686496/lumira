@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -39,6 +40,27 @@ void main() {
       }
       originalErrorHandler?.call(details);
     };
+    // Mock permission_handler method channel so Permission.camera.request()
+    // does not throw MissingPluginException under tester.runAsync.
+    // Returns granted (1) so CapturePage renders its full capture UI instead
+    // of _CameraPermissionGuide. Without this, the page is stuck on the
+    // permission guide and all capture UI assertions fail.
+    const permChannel =
+        MethodChannel('flutter.baseflow.com/permissions/methods');
+    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
+        .setMockMethodCallHandler(permChannel, (MethodCall call) async {
+      if (call.method == 'requestPermissions') {
+        final permissions = call.arguments as List;
+        // 1 = PermissionStatus.granted for all requested permissions
+        return {for (final p in permissions) p: 1};
+      }
+      if (call.method == 'checkPermissionStatus' ||
+          call.method == 'shouldShowRequestPermissionRationale') {
+        // 1 = granted; for shouldShowRationale, returns int bool 1 (true)
+        return 1;
+      }
+      return null;
+    });
     router = GoRouter(
       initialLocation: '/capture',
       routes: [
@@ -78,6 +100,10 @@ void main() {
   tearDown(() {
     HttpOverrides.global = null;
     FlutterError.onError = originalErrorHandler;
+    const permChannel =
+        MethodChannel('flutter.baseflow.com/permissions/methods');
+    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
+        .setMockMethodCallHandler(permChannel, null);
   });
 
   Widget wrap(
@@ -103,7 +129,26 @@ void main() {
     child: SizedBox.expand(),
   );
 
-  Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
+  /// Pump that allows CapturePage's async _requestCameraPermission() to
+  /// complete by pumping inside tester.runAsync (FakeAsync otherwise blocks
+  /// platform channel calls). After permission is granted, settles normally.
+  /// For UIStyle.female, uses a bounded pump because some animations never
+  /// settle.
+  Future<void> pumpWithPermission(
+    WidgetTester tester, {
+    UIStyle? style,
+  }) async {
+    // First pump triggers addPostFrameCallback which invokes
+    // _requestCameraPermission() (async, fire-and-forget).
+    await tester.pump();
+    // runAsync lets the platform channel permission request complete.
+    await tester.runAsync(() async {
+      await tester.pump();
+      await Future.delayed(const Duration(milliseconds: 100));
+    });
+    // Render the post-permission state (permission granted).
+    await tester.pump();
+    // Settle any remaining animations.
     if (style == UIStyle.female) {
       await tester.pump(const Duration(milliseconds: 500));
     } else {
@@ -115,7 +160,7 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     expect(find.byType(CapturePage), findsOneWidget);
     expect(find.byKey(const Key('camera_placeholder')), findsOneWidget);
@@ -128,7 +173,7 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     expect(find.text('模板拍摄'), findsOneWidget);
     expect(find.text('点击调整参数'), findsOneWidget);
@@ -142,7 +187,7 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     expect(find.byIcon(Icons.crop_free), findsNothing);
     expect(find.byIcon(Icons.accessibility_new), findsNothing);
@@ -152,7 +197,7 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     // 初始 off
     expect(find.byIcon(Icons.flash_off), findsOneWidget);
@@ -168,14 +213,20 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     // 初始非全屏：CaptureNav 可见
     expect(find.byType(CaptureNav), findsOneWidget);
     expect(find.text('自由调参'), findsOneWidget);
 
     // 点击全屏按钮
-    await tester.tap(find.byIcon(Icons.fullscreen));
+    // 用 descendant 限定到 CaptureNav 内的全屏切换按钮；
+    // AspectRatioSelector 也用 Icons.fullscreen 作为"全屏"比例选项的图标，
+    // 直接 find.byIcon 会找到两个，tap() 会因歧义报错。
+    await tester.tap(find.descendant(
+      of: find.byType(CaptureNav),
+      matching: find.byIcon(Icons.fullscreen),
+    ));
     await tester.pumpAndSettle();
 
     // 修复 Bug 10：全屏后 CaptureNav 仍然显示（含退出全屏按钮），
@@ -188,8 +239,15 @@ void main() {
     await tester.tap(find.byIcon(Icons.fullscreen_exit));
     await tester.pumpAndSettle();
 
-    // 退出全屏后：恢复全屏按钮图标
-    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+    // 退出全屏后：恢复全屏按钮图标（限定到 CaptureNav 内，
+    // AspectRatioSelector 中也有一个 Icons.fullscreen 图标）
+    expect(
+      find.descendant(
+        of: find.byType(CaptureNav),
+        matching: find.byIcon(Icons.fullscreen),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('renders across 4 UI styles', (tester) async {
@@ -197,7 +255,7 @@ void main() {
       await tester.pumpWidget(
         wrap(ThemeKey.warmWhite, style, cameraOverride: cameraPlaceholder),
       );
-      await settleOrPump(tester, style);
+      await pumpWithPermission(tester, style: style);
 
       expect(find.byType(CapturePage), findsOneWidget);
       expect(find.byKey(const Key('camera_placeholder')), findsOneWidget);
@@ -211,7 +269,7 @@ void main() {
       await tester.pumpWidget(
         wrap(theme, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
       );
-      await tester.pumpAndSettle();
+      await pumpWithPermission(tester);
 
       expect(find.byType(CapturePage), findsOneWidget);
       expect(find.byKey(const Key('camera_placeholder')), findsOneWidget);
@@ -225,7 +283,7 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     await tester.tap(find.byIcon(Icons.help_outline));
     await tester.pumpAndSettle();
@@ -238,7 +296,7 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     // 导航到 capture
     router.push('/capture');
@@ -258,7 +316,7 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     final container = ProviderScope.containerOf(
       tester.element(find.byType(CapturePage)),
@@ -278,7 +336,7 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     expect(find.byType(ParamPillBar), findsOneWidget);
     expect(find.byType(TemplateStrip), findsWidgets); // compact + expanded (if toggled)
@@ -291,7 +349,7 @@ void main() {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
-    await tester.pumpAndSettle();
+    await pumpWithPermission(tester);
 
     // The toggle button shows keyboard_arrow_up when collapsed (default state)
     expect(find.byIcon(Icons.keyboard_arrow_up), findsOneWidget);

@@ -93,11 +93,24 @@ void main() {
 
   // Helper: pump + runAsync，sqflite_common_ffi 的 DB 查询是真实 async 操作，
   // 在 FakeAsync 环境下 pumpAndSettle 会超时。必须用 tester.runAsync 让真实 async 操作完成。
+  //
+  // Forced fix: 原 50ms 单次延迟在全套测试压力下不够稳定——
+  // 页面有多次 async 屏障（templatesDaoProvider + dao.getBuiltin），
+  // 累积 GC 压力或 DB 锁等待时容易让 '系统精选' badge 未渲染就断言。
+  // 改为多轮 pump+runAsync 让真实 async 推进，并在末尾按风格区分收尾：
+  // - 非 female: pumpAndSettle 处理 FadeUp 等帧动画（FloatingTabBar 在非 female 无 repeat）
+  // - female: 用 pump 避免 FloatingTabBar._CenterCaptureButton 的 repeat 动画导致 pumpAndSettle 超时
   Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
     await tester.pump();
-    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 100)));
+    await tester.pump();
+    if (style == UIStyle.female) {
+      await tester.pump(const Duration(milliseconds: 200));
+    } else {
+      await tester.pumpAndSettle();
+    }
   }
 
   // Forced fix: 默认 800x600 视口下 "查看全部 ›" link 在屏幕外，
