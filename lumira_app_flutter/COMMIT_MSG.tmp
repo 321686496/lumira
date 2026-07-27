@@ -1,0 +1,14 @@
+test: align stale assertions with current implementation (routes, capture page, tabs)
+
+- router_test: update route count from 35 to 44 (uni-app 34 + Flutter 10)
+- capture_page_test: add permission mock, fix fullscreen finder ambiguity
+- capture_scene_detail_page_test: verify AddToCompositionSheet instead of SnackBar
+- home_page_test: rename QuickActions label '模板' to '发现'
+- challenge_page_test: replace pumpAndSettle with pump for infinite shimmer animation
+- neu_card_test: update FloatingTabBar label '模板' to '发现'
+- templates_all_page_test: polling settleOrPump to wait for FutureBuilder new data
+  (fixes '风光' count 2 to 3 and '浏览分类' flaky timing under load)
+- templates_page_test: increase settleOrPump delay and use pumpAndSettle for non-female
+  (fixes '系统精选' badge flaky timing under load)
+
+All 681 tests pass. flutter analyze: 0 errors, 0 warnings.
