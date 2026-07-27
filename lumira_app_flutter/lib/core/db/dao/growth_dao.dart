@@ -122,6 +122,7 @@ class GrowthDao {
       UNION ALL
       SELECT date(${Tables.colCreatedAt} / 1000, 'unixepoch') AS d, COUNT(*) AS c
       FROM ${Tables.galleryItems}
+      WHERE ${Tables.colCreatedAt} IS NOT NULL AND ${Tables.colCreatedAt} > 0
       GROUP BY d
     ''', ['completed']);
     final result = <String, int>{};
