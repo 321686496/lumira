@@ -182,5 +182,18 @@ class AcademyActionNotifier extends StateNotifier<AcademyActionState> {
 
   void _refresh() {
     state = AcademyActionState(state.version + 1);
+    // 失效所有依赖 DAO 数据的 provider，确保下次读取时重新计算。
+    // 仅靠 state.version 自增只会触发 watch academyActionsProvider 的 widget 重建，
+    // 但 FutureProvider 自身的缓存仍是旧值（如 sortedCoursesProvider /
+    // courseFullyCompletedProvider / academyTrajectoryProvider），
+    // 必须显式 invalidate 才能让 markCompleted / submitAssignment 后的
+    // 「已学完徽章」「课程排序沉底」「学习轨迹列表」立即可见。
+    _ref.invalidate(academyOverviewProvider);
+    _ref.invalidate(courseProgressProvider);
+    _ref.invalidate(courseFullyCompletedProvider);
+    _ref.invalidate(academyTrajectoryProvider);
+    _ref.invalidate(sortedCoursesProvider);
+    _ref.invalidate(assignmentSubmissionProvider);
+    _ref.invalidate(favoriteCardIdsProvider);
   }
 }

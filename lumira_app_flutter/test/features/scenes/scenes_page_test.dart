@@ -11,6 +11,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:lumira_app_flutter/core/db/dao/scenes_dao.dart';
 import 'package:lumira_app_flutter/core/db/database_provider.dart';
 import 'package:lumira_app_flutter/core/db/seeders/builtin_data_seeder.dart';
+import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
@@ -378,6 +379,98 @@ void main() {
             reason: 'theme=${combo.theme}, style=${combo.style}');
         await tester.pumpWidget(const SizedBox.shrink());
       }
+    });
+  });
+
+  // ============================================================
+  // 分类 6: 空状态（DAO 返回空列表时的渲染）
+  // ============================================================
+  // 回归覆盖：Task A3 review 指出原 group('ScenesPage — empty state')
+  // 被移除后未补回。此处通过空 DB 验证 _SceneGrid 在 scenes.isEmpty
+  // 时渲染 '暂无场景'（scenes_page.dart §513-526）。
+  group('ScenesPage — empty state', () {
+    testWidgets('renders 暂无场景 when scenes table has no rows',
+        (tester) async {
+      setLargeViewport(tester);
+
+      // 创建独立的空 DB（不复用 sharedDb，因其已种入种子数据）。
+      // 仅建 scenes 表，不调用 BuiltinDataSeeder，保证 DAO 查询返回空列表。
+      // 使用 tester.runAsync：sqflite_ffi 的真实 async I/O 无法在 FakeAsync 下完成。
+      late Database emptyDb;
+      await tester.runAsync(() async {
+        final dbDir = await getDatabasesPath();
+        final emptyPath = p.join(dbDir, 'lumira_empty_test.db');
+        try {
+          await databaseFactory.deleteDatabase(emptyPath);
+        } catch (_) {
+          // 文件可能不存在，忽略
+        }
+        emptyDb = await openDatabase(
+          emptyPath,
+          version: 1,
+          onCreate: (db, _) async {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS ${Tables.scenes} (
+                ${Tables.colId} TEXT PRIMARY KEY,
+                ${Tables.colName} TEXT NOT NULL,
+                ${Tables.colIcon} TEXT NOT NULL DEFAULT '',
+                ${Tables.colCategory} TEXT NOT NULL,
+                ${Tables.colStyle} TEXT NOT NULL DEFAULT '',
+                ${Tables.colFilterJson} TEXT NOT NULL DEFAULT '{}',
+                ${Tables.colVibe} TEXT NOT NULL DEFAULT '',
+                ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
+                ${Tables.colExampleImagesJson} TEXT NOT NULL DEFAULT '[]',
+                ${Tables.colTipsJson} TEXT NOT NULL DEFAULT '[]',
+                ${Tables.colWhereToShoot} TEXT NOT NULL DEFAULT '',
+                ${Tables.colBestTime} TEXT NOT NULL DEFAULT '',
+                ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
+                ${Tables.colRelatedCategory} TEXT NOT NULL DEFAULT '',
+                ${Tables.colRecommendedTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+                ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+                ${Tables.colCreator} TEXT NOT NULL DEFAULT 'user',
+                ${Tables.colIsFavorite} INTEGER NOT NULL DEFAULT 0,
+                ${Tables.colCreatedAt} INTEGER NOT NULL,
+                ${Tables.colUpdatedAt} INTEGER NOT NULL
+              )
+            ''');
+          },
+        );
+      });
+      addTearDown(() => emptyDb.close());
+
+      final goRouter = GoRouter(
+        initialLocation: '/scenes',
+        routes: [
+          GoRoute(
+            path: RouteNames.scenes,
+            name: 'scenes',
+            builder: (_, __) => const ScenesPage(),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+            uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+            databaseProvider.overrideWith((ref) async => emptyDb),
+            scenesDaoProvider.overrideWith((ref) async => ScenesDao(emptyDb)),
+          ],
+          child: MaterialApp.router(routerConfig: goRouter),
+        ),
+      );
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 概览模式：分类卡片为静态元数据，不依赖 DB，仍正常渲染
+      expect(find.text('光线氛围'), findsOneWidget);
+
+      // 点击「光线氛围」分类 → DAO.getAllByCategory('light') 返回空列表
+      // → _SceneGrid 检测 scenes.isEmpty，渲染空状态文案
+      await tester.tap(find.text('光线氛围'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('暂无场景'), findsOneWidget);
     });
   });
 }
