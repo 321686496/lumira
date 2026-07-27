@@ -213,8 +213,9 @@ void main() {
       ));
 
       // 5 个 tab：4 个 _TabItem + 1 个 _CenterCaptureButton
+      // Forced fix: '模板' tab 已重命名为 '发现'（templates 入口对应发现/灵感页）。
       expect(find.text('首页'), findsOneWidget);
-      expect(find.text('模板'), findsOneWidget);
+      expect(find.text('发现'), findsOneWidget);
       expect(find.text('挑战'), findsOneWidget);
       expect(find.text('我的'), findsOneWidget);
       expect(find.byIcon(Icons.camera_alt_outlined), findsOneWidget);

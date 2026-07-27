@@ -107,11 +107,40 @@ void main() {
   // 使用 pump + runAsync：sqflite_common_ffi 的 DB 查询是真实 async 操作，
   // 在 FakeAsync 环境下 pump(Duration) 无法让真实 Future 完成。
   // 必须用 tester.runAsync 让真实 async 操作（DAO 查询）完成。
+  //
+  // Forced fix: 原 50ms 单次延迟在跨主题/风格循环测试中不够稳定——
+  // 页面有两次 async 屏障（templatesDaoProvider + _loadData DAO 查询），
+  // 累积 GC 压力或 DB 锁等待时容易让"浏览分类"未渲染就断言。
+  // 改为轮询方式：每轮 pump+runAsync 让真实 async 推进，检测内容已渲染后退出。
+  //
+  // 关键问题：点击分类卡片后，_selectedType 改变触发 setState 重建，
+  // 但 FutureBuilder 在新 _loadData future 完成前仍会渲染旧数据
+  // （旧数据包含全部 7 个 builtin 模板，而非仅 portrait 1 个），
+  // 导致 '风光' 出现 3 次（pill + tag + landscape 卡片）而非 2 次。
+  // 解决：在内容出现后，再轮询等待数据稳定（widget 数量不再变化）。
+  // 本页不含 FloatingTabBar / DailyFlipCard，无 repeat() 动画，pumpAndSettle 安全。
   Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
-    await tester.pump();
-    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+    // 阶段 1：轮询等待内容渲染（最多 ~1.5s）。
+    // 内容出现的标志：找到 '浏览分类' 文本（overview 模式）、
+    // '全部模板' LumiraNav（category 模式）、或 '加载失败'（error 状态）。
+    for (var i = 0; i < 15; i++) {
+      await tester.pump();
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      final loaded = find.text('浏览分类').evaluate().isNotEmpty ||
+          find.widgetWithText(LumiraNav, '全部模板').evaluate().isNotEmpty ||
+          find.text('加载失败').evaluate().isNotEmpty;
+      if (loaded) break;
+    }
+    // 阶段 2：等待 FutureBuilder 用新 _loadData 结果重建。
+    // 点击分类卡片后，FutureBuilder 仍持有旧 future 的快照（snapshot.inState(waiting) + 旧 data），
+    // 会先用旧数据渲染 category view，直到新 future 完成。
+    // 这里再轮询若干轮，让新 future 完成并触发重建。
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
   }
 
   void setLargeViewport(WidgetTester tester) {

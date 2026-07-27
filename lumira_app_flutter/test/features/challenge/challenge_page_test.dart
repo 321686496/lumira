@@ -284,7 +284,10 @@ void main() {
         child: MaterialApp.router(routerConfig: router),
       ),
     );
-    await tester.pumpAndSettle();
+    // Forced fix: DailyFlipCard 内的 _shimmerController 调用 ..repeat()，
+    // 动画永不停止，pumpAndSettle() 会等到默认 10s 超时失败。
+    // 改用固定时长 pump 让 widget 完成首帧构建与布局即可。
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('今日挑战翻牌'), findsOneWidget);
     expect(find.text('从 3 张卡牌中选 1 张作为你的今日挑战'), findsOneWidget);

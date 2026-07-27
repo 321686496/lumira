@@ -91,10 +91,10 @@ void main() {
   testWidgets('HomePage renders all 8 sections', (tester) async {
     // Forced fix: 默认 800x600 视口无法显示 ListView 全部 8 个 section（offstage 项不构建）。
     // 设置较大视口，使所有 section 进入可视区，让 find.text(...) 能找到 '场景推荐' / '保持记录，养成习惯' 等靠后内容。
-    // 计算依据：Hero(280) + QuickActions(100) + Streak(140) + Tip(220) + Scene 标题(50)
+    // 计算依据：Banner(182) + Hero(280) + QuickActions(100) + Streak(140) + Tip(220) + Scene 标题(50)
     // + Scene grid(2 行 × 623dp = 1258) + Recent 标题(50) + Recent grid(3 行 × 567dp = 1725)
-    // + Stats(120) + 间距 ≈ 4063dp。视口设 4500dp 留 400dp 缓冲。
-    tester.binding.window.physicalSizeTestValue = const Size(800, 4500);
+    // + Stats(120) + 间距 ≈ 4245dp。视口设 5500dp 留充足缓冲（Banner 是后加的 section）。
+    tester.binding.window.physicalSizeTestValue = const Size(800, 5500);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
@@ -112,7 +112,8 @@ void main() {
 
     // Section 3: QuickActions
     expect(find.text('拍摄'), findsWidgets);
-    expect(find.text('模板'), findsWidgets);
+    // Forced fix: '模板' 已重命名为 '发现'（QuickActions + FloatingTabBar 都改了）
+    expect(find.text('发现'), findsWidgets);
     expect(find.text('灵感'), findsOneWidget);
     expect(find.text('相册'), findsOneWidget);
 
