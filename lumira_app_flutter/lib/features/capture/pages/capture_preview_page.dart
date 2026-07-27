@@ -308,13 +308,14 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       if (!mounted) return;
 
       final tokens = ref.watch(themeTokensProvider);
+      // posterKey 仅传给 PosterGenerator 内部的 RepaintBoundary；
+      // 不要同时挂到外层 Container，否则「Multiple widgets used the same GlobalKey」
       final posterKey = GlobalKey();
       await PosterGenerator.showPoster(
         context: context,
         tokens: tokens,
         title: 'EXIF 海报预览',
         content: Container(
-          key: posterKey,
           color: const Color(0xFF1C1A17),
           child: Image.file(
             File(outputPath),

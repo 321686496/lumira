@@ -242,7 +242,7 @@ void main() {
           reason: '点击 咖啡馆 后：不标记 pill 应为 inactive（gradient 应为 null）');
     });
 
-    testWidgets('tapping 跳过 shows SnackBar 已跳过', (tester) async {
+    testWidgets('tapping 跳过 shows LumiraToast 已跳过', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
@@ -255,7 +255,7 @@ void main() {
     });
 
     testWidgets(
-        '对比 › press-and-hold switches ColorFilter during hold (no SnackBar)',
+        '对比 › press-and-hold switches ColorFilter during hold (no LumiraToast)',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
@@ -265,7 +265,7 @@ void main() {
       // Compare link is present
       expect(find.text('对比 ›'), findsOneWidget);
 
-      // Tapping no longer shows the old "查看对比" SnackBar (secondary check)
+      // Tapping no longer shows the old "查看对比" LumiraToast (secondary check)
       await tester.tap(find.text('对比 ›'));
       await settleOrPump(tester, UIStyle.neumorphic);
       expect(find.text('查看对比'), findsNothing);
@@ -293,7 +293,7 @@ void main() {
           reason: 'release should restore the post-process filter');
     });
 
-    testWidgets('tapping 生成对比图 shows SnackBar 生成对比图中', (tester) async {
+    testWidgets('tapping 生成对比图 shows LumiraToast 生成对比图中', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
@@ -306,7 +306,7 @@ void main() {
     });
 
     testWidgets(
-        'tapping 生成 EXIF 卡片 with network URL shows SnackBar 网络图片无法生成 EXIF 卡片',
+        'tapping 生成 EXIF 卡片 with network URL shows LumiraToast 网络图片无法生成 EXIF 卡片',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
@@ -321,7 +321,7 @@ void main() {
     });
 
     testWidgets(
-        'tapping 保存 shows SnackBar and pops after delay',
+        'tapping 保存 shows LumiraToast and pops after delay',
         (tester) async {
       setLargeViewport(tester);
       // 从 home push 到 preview，使 canPop() 为 true
@@ -362,7 +362,7 @@ void main() {
       await tester.tap(find.text('保存到系统相册'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // SnackBar 出现
+      // LumiraToast 出现
       expect(find.text('网络图片不支持保存到系统相册'), findsOneWidget);
 
       // 推进时间至延迟之后（_onSave 内部使用 1000ms 延迟 pop）

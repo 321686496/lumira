@@ -11,6 +11,7 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../profile/providers/composition_kits_providers.dart';
+import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import '../services/photo_post_processor.dart';
@@ -363,11 +364,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
     debugPrint('[capture] setMirrorFrontCamera($isFront)');
 
     // 默认缩放为 1x（前摄和后摄都重置）
+    // 修复：直接调用 CamerawesomePlugin.setZoom(1.0)，原生期望真实倍数。
     final range = CaptureState.zoomRangeForFacing(facing);
     final normalized1x = CaptureState.zoomMultiplierToNormalized(
         1.0, range.min, range.max);
     try {
-      state.sensorConfig.setZoom(normalized1x);
+      CamerawesomePlugin.setZoom(1.0);
       ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
       ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
     } catch (_) {}
@@ -443,11 +445,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
     if (state == null) {
       debugPrint('[capture] cameraState is null — CameraAwesomeBuilder 未初始化');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('相机正在初始化，请稍候...'),
-          duration: Duration(seconds: 1),
-        ),
+      // 替换 SnackBar 为 LumiraToast，与项目深色 + 金色主题高度匹配
+      LumiraToast.show(
+        context,
+        '相机正在初始化，请稍候...',
+        duration: const Duration(seconds: 1),
       );
       return;
     }
@@ -460,11 +462,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
     } catch (e, st) {
       debugPrint('[capture] takePhoto() failed: $e\n$st');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('拍照失败：$e'),
-          duration: const Duration(seconds: 2),
-        ),
+      // 替换 SnackBar 为 LumiraToast，与项目深色 + 金色主题高度匹配
+      LumiraToast.show(
+        context,
+        '拍照失败：$e',
+        duration: const Duration(seconds: 2),
       );
     }
   }
@@ -489,28 +491,44 @@ class _CapturePageState extends ConsumerState<CapturePage>
       state.sensorConfig.setMirrorFrontCamera(isFront);
       debugPrint('[capture] switchCamera: setMirrorFrontCamera($isFront)');
       // 切换摄像头后将缩放重置为 1x（新摄像头可能不支持当前倍数）
+      // 修复：直接调用 CamerawesomePlugin.setZoom(1.0)，原生期望真实倍数。
       final range = CaptureState.zoomRangeForFacing(next);
       final normalized1x = CaptureState.zoomMultiplierToNormalized(
           1.0, range.min, range.max);
       ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
       ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
       try {
-        state.sensorConfig.setZoom(normalized1x);
+        CamerawesomePlugin.setZoom(1.0);
       } catch (_) {}
     }
   }
 
   /// 缩放：以"倍数"为单位（前摄 [0.5, 2.0]，后摄 [0.3, 10.0]）。
   /// 默认 1x。通过 sensorConfig.setZoom 调用系统相机能力。
+  ///
+  /// 修复：HarmonyOS 原生 `session.setZoomRatio(zoom)` 期望"真实倍数"
+  /// （1.0 = 1x，2.0 = 2x，0.5 = 0.5x），而 Flutter 侧 `SensorConfig.setZoom`
+  /// 强制把入参归一化到 [0, 1]，导致 0.5–1.5x 区间被原生 clamp 到 1.0x 无变化。
+  /// 这里直接调用 `CamerawesomePlugin.setZoom(multiplier)`，绕过 SensorConfig 的归一化校验，
+  /// 把用户选择的倍数原样下发到原生相机。
   void _onZoomChanged(double multiplier) {
     final facing = ref.read(CaptureState.cameraFacingProvider);
     final range = CaptureState.zoomRangeForFacing(facing);
+    final clamped = multiplier.clamp(range.min, range.max);
+
+    // 仅用于 UI 显示的归一化值（apparentZoomProvider 仍为 [0,1]）
     final normalized = CaptureState.zoomMultiplierToNormalized(
-        multiplier, range.min, range.max);
+        clamped, range.min, range.max);
     ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized;
     ref.read(CaptureState.zoomProvider.notifier).state = normalized;
-    final state = ref.read(CaptureState.cameraStateProvider);
-    state?.sensorConfig.setZoom(normalized);
+
+    // 直接把"真实倍数"传给原生相机（1.0=1x，2.0=2x，0.5=0.5x）
+    // 不走 sensorConfig.setZoom，因为它会 throw >1 的值并归一化。
+    try {
+      CamerawesomePlugin.setZoom(clamped);
+    } catch (e) {
+      debugPrint('[capture] CamerawesomePlugin.setZoom($clamped) 失败: $e');
+    }
   }
 
   @override
@@ -660,14 +678,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
 /// 取景器区域：按用户选定的比例约束相机预览的显示范围。
 ///
-/// 核心修复：旧方案使用半透明遮罩叠加在全屏 cover 预览上，用户仍能透过遮罩
-/// 看到完整画面，且遮罩区域与拍照裁剪区域不一致。
-/// 新方案使用 [AspectRatio] 真正约束相机预览的显示区域：
-/// - 'fullscreen' 模式：预览填满整个屏幕
-/// - 其他比例：预览居中显示在目标比例的矩形框内，框外为纯黑背景
+/// 修复（用户反馈）：
+/// 之前全屏模式使用 contain 模式，会把 3:4 的传感器图像完整显示在 9:19.5 的屏幕里
+/// （留黑边），但拍照后却按屏幕比例 9:19.5 裁剪。预览和照片不一致（非 WYSIWYG），
+/// 导致用户看到全身预览，照片却只有脸部。
 ///
-/// 配合 [CameraPreviewFit.cover]，相机纹理会自动裁剪填充该矩形框，
-/// 确保取景器显示的内容与拍照后裁剪的照片完全一致（所见即所得）。
+/// 现行方案（WYSIWYG，与系统相机一致）：
+/// - 所有比例（包括 'fullscreen'）都使用 [CameraPreviewFit.cover]，预览 = 照片
+/// - 'fullscreen' 模式：目标比例 = 屏幕比例，预览填满屏幕，照片按屏幕比例裁剪
+/// - 其他比例：将预览约束到目标比例的矩形框内，cover 裁剪填充
+/// - 取景器所见即所得，切换比例时主体大小变化仅来自裁剪区域差异（与系统相机一致）
 class _ViewfinderArea extends ConsumerWidget {
   const _ViewfinderArea({
     required this.rebuildKey,
@@ -684,22 +704,11 @@ class _ViewfinderArea extends ConsumerWidget {
     final ratioId = ref.watch(CaptureState.aspectRatioProvider);
     final screenSize = MediaQuery.of(context).size;
     final isPortrait = screenSize.height >= screenSize.width;
+    final screenRatio = screenSize.width / screenSize.height;
+    // fullscreen 模式：目标比例 = 屏幕比例；其他模式：按 ratioId 计算
     final targetRatio =
-        CaptureState.computeTargetRatio(ratioId, isPortrait);
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
 
-    // 相机预览本体（内部使用 cover 模式，会自动裁剪填充父容器）
-    final cameraPreview = CameraPreview(
-      key: ValueKey('camera_preview_$rebuildKey'),
-      onCaptured: onCaptured,
-      onCameraStateCreated: onCameraStateCreated,
-    );
-
-    // fullscreen 模式：填满屏幕，无需约束
-    if (targetRatio == null) {
-      return cameraPreview;
-    }
-
-    // 非全屏比例：将预览约束到目标比例的矩形框内，居中显示
     return Container(
       color: Colors.black,
       child: Center(
@@ -715,11 +724,18 @@ class _ViewfinderArea extends ConsumerWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: Colors.white.withOpacity(0.15),
+                    // fullscreen 模式下边框与屏幕几乎重合，仍保留极细边框作为视觉边界
+                    color: Colors.white.withOpacity(
+                        ratioId == 'fullscreen' ? 0.0 : 0.15),
                     width: 0.5,
                   ),
                 ),
-                child: cameraPreview,
+                child: CameraPreview(
+                  key: ValueKey('camera_preview_$rebuildKey'),
+                  onCaptured: onCaptured,
+                  onCameraStateCreated: onCameraStateCreated,
+                  previewFit: CameraPreviewFit.cover,
+                ),
               ),
             ),
           ),
@@ -1007,9 +1023,9 @@ class _CameraPermissionGuide extends StatelessWidget {
                     color: Colors.white54,
                   ),
                   const SizedBox(height: 24),
-                  Text(
+                  const Text(
                     '相机权限未开启',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.w600,

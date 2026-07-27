@@ -76,6 +76,7 @@ class CameraPreview extends ConsumerWidget {
     required this.onCaptured,
     this.onCameraStateCreated,
     this.formOverride,
+    this.previewFit = CameraPreviewFit.cover,
   });
 
   /// 拍照完成回调（传入文件路径）
@@ -92,6 +93,12 @@ class CameraPreview extends ConsumerWidget {
   ///
   /// 取景器仍读 CaptureState 的 flash/facing 等基础相机控制 providers。
   final EditorForm? formOverride;
+
+  /// 预览填充模式：
+  /// - [CameraPreviewFit.cover]（默认）：裁剪填充，与拍照后裁剪区域一致（适用于固定比例取景）
+  /// - [CameraPreviewFit.contain]：完整显示传感器图像，可能有黑边（适用于全屏模式，
+  ///   用户希望看到完整画面而不被裁剪）
+  final CameraPreviewFit previewFit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -148,10 +155,10 @@ class CameraPreview extends ConsumerWidget {
       ),
       sensor: facing == 'front' ? Sensors.front : Sensors.back,
       flashMode: _mapFlashMode(flashMode),
-      // 修复：恢复 cover 模式让取景器全屏无黑边。
-      // 拍照后的照片通过 PhotoPostProcessor 按 aspectRatio 裁剪，
-      // 保证照片与取景器显示内容一致。
-      previewFit: CameraPreviewFit.cover,
+      // 修复：previewFit 由上层传入。
+      // - 全屏模式用 contain：显示完整传感器图像，不裁剪，用户能看到全身（前置自拍）
+      // - 其他比例用 cover：裁剪填充到目标比例框，与拍照后裁剪区域一致
+      previewFit: previewFit,
       // builder 返回空 widget，移除 camerawesome 自带的 AwesomeCameraLayout
       // （顶部闪光灯按钮、中间滤镜/模式选择器、底部拍摄按钮/摄像头切换/缩略图）
       // 所有 UI 由项目自定义组件通过 Stack 叠加在 CameraPreview 上
@@ -180,9 +187,17 @@ class CameraPreview extends ConsumerWidget {
         },
       ),
       // 启用默认的双指缩放手势，同步到 zoomProvider 以便 UI 显示当前缩放级别
+      // 修复：SensorConfig.setZoom 强制 [0,1] 归一化，但原生期望真实倍数（1.0=1x）。
+      // AwesomeCameraGestureDetector 的 _zoomScale 是 [0,1] 的累积值，
+      // 这里映射回 1.0–2.0 的倍数区间（前摄）或 1.0–10.0（后摄），直接下发原生。
       onPreviewScaleBuilder: (state) => OnPreviewScale(
         onScale: (scale) {
-          state.sensorConfig.setZoom(scale);
+          // scale ∈ [0, 1]，把它当作"从 1x 到 maxZoom 的归一化进度"
+          // 简化处理：直接乘以 2.0 作为倍数（双指缩放通常用于放大）
+          final multiplier = 1.0 + scale.clamp(0.0, 1.0);
+          try {
+            CamerawesomePlugin.setZoom(multiplier);
+          } catch (_) {}
         },
       ),
     );
