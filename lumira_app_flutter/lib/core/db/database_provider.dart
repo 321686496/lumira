@@ -11,6 +11,7 @@ import 'seeders/builtin_data_seeder.dart';
 import '../../features/challenge/data/challenge_dao.dart';
 import '../../features/academy/data/academy_dao.dart';
 import 'dao/composition_kits_dao.dart';
+import '../../core/auth/auth_dao.dart';
 
 const String _kDbName = 'lumira.db';
 const int _kDbVersion = 5;
@@ -58,6 +59,11 @@ final academyDaoProvider = FutureProvider<AcademyDao>((ref) async {
 final compositionKitsDaoProvider = FutureProvider<CompositionKitsDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return CompositionKitsDao(db);
+});
+
+final authDaoProvider = FutureProvider<AuthDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return AuthDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
