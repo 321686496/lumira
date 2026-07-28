@@ -130,9 +130,23 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
+  /// 只读模式下提示用户无法编辑
+  void _showReadOnlyToast() {
+    if (!mounted) return;
+    LumiraToast.show(
+      context,
+      '原图未保留，无法再次编辑',
+      duration: const Duration(seconds: 2),
+    );
+  }
+
   /// 本地后期参数更新（仅影响预览和保存，不回写 CaptureState）
   void _updateLocalPostProcess(PostProcess next) {
     if (!mounted) return;
+    if (_isReadOnly) {
+      _showReadOnlyToast();
+      return;
+    }
     setState(() => _localPostProcess = next);
   }
 
@@ -616,6 +630,28 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // 只读模式横幅：原图未保留时显示
+                        if (_isReadOnly)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            color: const Color(0xFFFFB74D).withOpacity(0.15),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.lock_outline, size: 16, color: Color(0xFFFFB74D)),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '此照片未保留原图，仅可查看，无法编辑',
+                                    style: TextStyle(fontSize: 12, color: Color(0xFFFFB74D)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         _PhotoFrame(
                           tokens: tokens,
                           photoUrl: _photoUrl,
@@ -637,6 +673,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                           onCompareCard: _onCompareCard,
                           onExifCard: _onExifCard,
                           onSave: _onSave,
+                          isSaving: _isSaving,
                           // 本地后期参数及更新回调，供 PreviewEditPanel 使用
                           localPostProcess: _localPostProcess,
                           onUpdateLocalPostProcess: _updateLocalPostProcess,
@@ -644,6 +681,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                           localTransform: _localTransform,
                           onUpdateLocalTransform: (t) {
                             if (!mounted) return;
+                            if (_isReadOnly) {
+                              _showReadOnlyToast();
+                              return;
+                            }
                             setState(() => _localTransform = t);
                           },
                         ),
@@ -924,6 +965,7 @@ class _BottomSheet extends StatelessWidget {
     required this.onCompareCard,
     required this.onExifCard,
     required this.onSave,
+    required this.isSaving,
     required this.localPostProcess,
     required this.onUpdateLocalPostProcess,
     required this.localTransform,
@@ -939,6 +981,9 @@ class _BottomSheet extends StatelessWidget {
   final VoidCallback onCompareCard;
   final VoidCallback onExifCard;
   final VoidCallback onSave;
+
+  /// 保存进行中标志（用于禁用保存按钮 + 显示进度指示器）
+  final bool isSaving;
 
   /// 预览页本地后期参数（仅影响当前照片，不回写 CaptureState）
   final PostProcess localPostProcess;
@@ -990,7 +1035,7 @@ class _BottomSheet extends StatelessWidget {
             onExifCard: onExifCard,
           ),
           const SizedBox(height: 16),
-          _SaveButton(onTap: onSave),
+          _SaveButton(onTap: onSave, isSaving: isSaving),
         ],
       ),
     );
@@ -1330,13 +1375,14 @@ class _ActionButton extends StatelessWidget {
 
 /// 保存到相册主按钮
 class _SaveButton extends StatelessWidget {
-  const _SaveButton({required this.onTap});
+  const _SaveButton({required this.onTap, required this.isSaving});
   final VoidCallback onTap;
+  final bool isSaving;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: isSaving ? null : onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -1347,25 +1393,36 @@ class _SaveButton extends StatelessWidget {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(
-              Icons.save_outlined,
-              size: 16,
-              // 硬编码颜色，与 uni-app 一致 (save-icon color #FAF7F2)
-              color: Color(0xFFFAF7F2),
-            ),
-            SizedBox(width: 8),
-            Text(
-              '保存到系统相册',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                // 硬编码颜色，与 uni-app 一致 (save-text color #FAF7F2)
-                color: Color(0xFFFAF7F2),
-                height: 1,
-              ),
-            ),
-          ],
+          children: isSaving
+              ? const [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFFFAF7F2),
+                    ),
+                  ),
+                ]
+              : const [
+                  Icon(
+                    Icons.save_outlined,
+                    size: 16,
+                    // 硬编码颜色，与 uni-app 一致 (save-icon color #FAF7F2)
+                    color: Color(0xFFFAF7F2),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    '保存到系统相册',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      // 硬编码颜色，与 uni-app 一致 (save-text color #FAF7F2)
+                      color: Color(0xFFFAF7F2),
+                      height: 1,
+                    ),
+                  ),
+                ],
         ),
       ),
     );
