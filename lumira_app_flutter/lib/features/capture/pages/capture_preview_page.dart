@@ -471,6 +471,17 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       });
     }
 
+    // 计算照片的目标比例（与拍摄页 _ViewfinderArea 使用同一逻辑），
+    // 用于 _PhotoFrame 的 AspectRatio，确保预览页显示比例 = 拍摄页取景器比例 = 照片实际比例。
+    // 修复 Bug：原代码使用 maxHeight: screenWidth * 1.33（3:4）强制容器比例，
+    // 导致全屏 9:19.5 照片被信箱模式压缩为 3:4 显示。
+    final ratioId = ref.watch(CaptureState.aspectRatioProvider);
+    final screenSize = MediaQuery.of(context).size;
+    final isPortrait = screenSize.height >= screenSize.width;
+    final screenRatio = screenSize.width / screenSize.height;
+    final photoTargetRatio =
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+
     return Scaffold(
       // 硬编码颜色，与 uni-app 一致 (preview-container bg #1C1A17)
       backgroundColor: const Color(0xFF1C1A17),
@@ -499,6 +510,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                           tokens: tokens,
                           photoUrl: _photoUrl,
                           isComparing: _isComparing,
+                          // 照片目标比例：与拍摄页取景器一致，确保 WYSIWYG
+                          targetRatio: photoTargetRatio,
                           // 使用本地后期参数，避免回写 CaptureState 导致参数泄漏
                           postProcess: _localPostProcess,
                         ),
@@ -668,18 +681,28 @@ class _CompareLink extends StatelessWidget {
 /// 2. 添加 ColorFiltered 实时应用后期参数，所见即所得
 /// 3. 参数隔离：postProcess 由父组件传入（本地状态），不直接 watch CaptureState，
 ///    避免预览页调整影响拍摄页参数
+/// 4. 修复 WYSIWYG：使用传入的 targetRatio（与拍摄页取景器一致）作为 AspectRatio，
+///    替代之前的 maxHeight: screenWidth * 1.33（3:4）约束。
+///    旧约束会将 9:19.5 全屏照片强制压缩到 3:4 容器内，导致用户看到 4:3 比例。
+///    新方案：AspectRatio(targetRatio) + BoxFit.contain，
+///    - 若裁剪成功（照片已是 targetRatio）：填满容器，无信箱
+///    - 若裁剪失败（照片仍为 4:3）：在 targetRatio 容器内信箱显示，便于诊断
 class _PhotoFrame extends StatelessWidget {
   const _PhotoFrame({
     required this.tokens,
     required this.photoUrl,
     required this.isComparing,
     required this.postProcess,
+    required this.targetRatio,
   });
 
   final ThemeTokens tokens;
   final String photoUrl;
   final bool isComparing;
   final PostProcess postProcess;
+
+  /// 照片目标比例（width/height），与拍摄页取景器使用同一逻辑计算
+  final double targetRatio;
 
   @override
   Widget build(BuildContext context) {
@@ -693,29 +716,29 @@ class _PhotoFrame extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.width * 1.33,
+        child: AspectRatio(
+          aspectRatio: targetRatio,
+          child: Container(
+            color: const Color(0xFF1C1A17),
+            child: photoUrl.isNotEmpty
+                ? ColorFiltered(
+                    colorFilter: colorFilter,
+                    child: isNetworkUrl
+                        ? Image.network(
+                            photoUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) =>
+                                _PhotoEmptyState(tokens: tokens),
+                          )
+                        : Image.file(
+                            File(photoUrl),
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, __, ___) =>
+                                _PhotoEmptyState(tokens: tokens),
+                          ),
+                  )
+                : _PhotoEmptyState(tokens: tokens),
           ),
-          color: const Color(0xFF1C1A17),
-          child: photoUrl.isNotEmpty
-              ? ColorFiltered(
-                  colorFilter: colorFilter,
-                  child: isNetworkUrl
-                      ? Image.network(
-                          photoUrl,
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) =>
-                              _PhotoEmptyState(tokens: tokens),
-                        )
-                      : Image.file(
-                          File(photoUrl),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) =>
-                              _PhotoEmptyState(tokens: tokens),
-                        ),
-                )
-              : _PhotoEmptyState(tokens: tokens),
         ),
       ),
     );

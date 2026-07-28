@@ -31,12 +31,13 @@ void main() {
     required String aspectRatio,
     required double screenRatio,
     required bool isPortrait,
+    bool rawMode = false,
   }) async {
     final input = makeSensorJpeg();
     final output = await PhotoPostProcessor.processFile(
       inputPath: input.path,
       params: const PostProcess(color: PostProcessColor()),
-      rawMode: false,
+      rawMode: rawMode,
       aspectRatio: aspectRatio,
       screenRatio: screenRatio,
       isPortrait: isPortrait,
@@ -103,5 +104,46 @@ void main() {
     final ratio = size[0] / size[1];
     expect(ratio, closeTo(4.0 / 3.0, 0.02),
         reason: '4:3 landscape output must be 4:3');
+  });
+
+  // ── 回归测试：rawMode 下裁剪必须仍然应用（WYSIWYG）──
+  // 之前的 bug：rawMode=true 时直接返回原图（4:3 传感器比例），
+  // 导致全屏取景器看到 9:16 但照片为 4:3，破坏所见即所得。
+  // 修复后：rawMode 仅跳过滤镜效果，裁剪始终应用。
+
+  test('REGRESSION: rawMode=true fullscreen still crops to screenRatio', () async {
+    final size = await processAndDecodeSize(
+      aspectRatio: 'fullscreen',
+      screenRatio: 9.0 / 19.5,
+      isPortrait: true,
+      rawMode: true,
+    );
+    final ratio = size[0] / size[1];
+    expect(ratio, closeTo(9.0 / 19.5, 0.02),
+        reason: 'rawMode 不应跳过裁剪：fullscreen 输出仍须匹配屏幕比例');
+  });
+
+  test('REGRESSION: rawMode=true 1:1 still crops to square', () async {
+    final size = await processAndDecodeSize(
+      aspectRatio: '1:1',
+      screenRatio: 9.0 / 19.5,
+      isPortrait: true,
+      rawMode: true,
+    );
+    final ratio = size[0] / size[1];
+    expect(ratio, closeTo(1.0, 0.02),
+        reason: 'rawMode 不应跳过裁剪：1:1 输出仍须为正方形');
+  });
+
+  test('REGRESSION: rawMode=true 4:3 portrait still crops to 3:4', () async {
+    final size = await processAndDecodeSize(
+      aspectRatio: '4:3',
+      screenRatio: 9.0 / 19.5,
+      isPortrait: true,
+      rawMode: true,
+    );
+    final ratio = size[0] / size[1];
+    expect(ratio, closeTo(0.75, 0.02),
+        reason: 'rawMode 不应跳过裁剪：4:3 竖屏输出仍须为 3:4');
   });
 }
