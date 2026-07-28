@@ -33,11 +33,13 @@ class PhotoPostProcessor {
   static Future<String> processFile({
     required String inputPath,
     required PostProcess params,
+    String? outputPath,
     bool rawMode = false,
     String aspectRatio = 'fullscreen',
     double screenRatio = 9.0 / 19.5,
     bool isPortrait = true,
     bool autoDeblur = false,
+    TransformParams? transform,
   }) async {
     // 注意：rawMode 不再跳过裁剪。裁剪是 WYSIWYG 的保证（取景器所见即所得），
     // rawMode 仅跳过滤镜效果（ColorMatrix / Vignette / Sharpen / Clarity / Grain）。
@@ -55,11 +57,22 @@ class PhotoPostProcessor {
       codec.dispose();
       debugPrint('[post-process] 解码: ${srcImage.width}x${srcImage.height}, ${sw.elapsedMilliseconds}ms');
 
+      // 1.5. 应用变换（旋转/翻转/拉直）via Canvas（GPU）
+      var workingImage = srcImage;
+      if (transform != null && !transform.isIdentity) {
+        workingImage = await _applyTransform(srcImage, transform);
+        srcImage.dispose();  // dispose original after transform
+        debugPrint('[post-process] 变换: rotation=${transform.rotation}, '
+            'flipH=${transform.flipH}, flipV=${transform.flipV}, '
+            'straighten=${transform.straighten}, '
+            '${sw.elapsedMilliseconds}ms');
+      }
+
       // 2. 计算裁剪区域（基于 aspectRatio 和 screenRatio）—— 始终应用
       final cropRect = _computeCropRect(
         aspectRatio,
-        srcImage.width,
-        srcImage.height,
+        workingImage.width,
+        workingImage.height,
         screenRatio,
         isPortrait,
       );
@@ -96,7 +109,7 @@ class PhotoPostProcessor {
         paint.colorFilter = ui.ColorFilter.matrix(matrix);
       }
       canvas.drawImageRect(
-        srcImage,
+        workingImage,
         ui.Rect.fromLTWH(
           cropRect[0].toDouble(),
           cropRect[1].toDouble(),
@@ -133,7 +146,7 @@ class PhotoPostProcessor {
       final picture = recorder.endRecording();
       var resultImage = await picture.toImage(outW, outH);
       picture.dispose();
-      srcImage.dispose();
+      workingImage.dispose();
       debugPrint('[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
 
       // 4b. 自动去模糊（若开启且检测到模糊）
@@ -203,18 +216,19 @@ class PhotoPostProcessor {
 
       // 6. 编码 JPEG 并保存
       final jpegBytes = await _encodeJpeg(resultImage);
-      await file.writeAsBytes(jpegBytes);
+      final finalPath = outputPath ?? inputPath;
+      await File(finalPath).writeAsBytes(jpegBytes);
       resultImage.dispose();
 
       sw.stop();
       debugPrint('[post-process] 完成: ${sw.elapsedMilliseconds}ms');
-      return inputPath;
+      return finalPath;
     } catch (e, st) {
       sw.stop();
       // 裁剪/处理失败时返回原图（4:3 传感器比例），但明确警告 WYSIWYG 已破坏。
       // 之前的版本静默返回原图，用户无法察觉裁剪未应用，导致"取景器 9:16 但照片 4:3"。
       debugPrint('[post-process] ⚠️ 失败 (${sw.elapsedMilliseconds}ms), WYSIWYG 已破坏: $e\n$st');
-      return inputPath;
+      return outputPath ?? inputPath;
     }
   }
 
@@ -323,6 +337,43 @@ class PhotoPostProcessor {
       if (m[i * 5 + 4].abs() > 0.001) return false;
     }
     return true;
+  }
+
+  /// 应用变换（旋转/翻转/拉直）via GPU Canvas
+  static Future<ui.Image> _applyTransform(
+    ui.Image src,
+    TransformParams transform,
+  ) async {
+    final radians = transform.rotation * math.pi / 180.0;
+    final straightenRad = transform.straighten * math.pi / 180.0;
+    final totalRotation = radians + straightenRad;
+
+    // For 90/270 rotations, swap dimensions
+    final swapDims = transform.rotation == 90 || transform.rotation == 270;
+    final outW = swapDims ? src.height : src.width;
+    final outH = swapDims ? src.width : src.height;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+
+    // For straighten, we need a larger canvas and crop later
+    // For pure 90/180/270 + flip, use exact dimensions
+    canvas.translate(outW / 2, outH / 2);
+    canvas.rotate(totalRotation);
+    canvas.scale(
+      transform.flipH ? -1.0 : 1.0,
+      transform.flipV ? -1.0 : 1.0,
+    );
+    canvas.drawImage(
+      src,
+      ui.Offset(-src.width / 2, -src.height / 2),
+      ui.Paint(),
+    );
+
+    final picture = recorder.endRecording();
+    final result = await picture.toImage(outW, outH);
+    picture.dispose();
+    return result;
   }
 
   /// 计算裁剪区域 [x, y, width, height]
