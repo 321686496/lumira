@@ -508,6 +508,65 @@ class PostProcess {
   int get hashCode => Object.hash(cropRatio, color, smoothStrength, sharpen, vignette, grain, lut, systemFilter);
 }
 
+/// 照片变换参数（旋转/翻转/拉直）
+/// 用于非破坏性编辑：保存时从原图重新应用变换
+class TransformParams {
+  final int rotation;        // 0, 90, 180, 270
+  final bool flipH;
+  final bool flipV;
+  final double straighten;   // -15.0 到 +15.0 度
+
+  const TransformParams({
+    this.rotation = 0,
+    this.flipH = false,
+    this.flipV = false,
+    this.straighten = 0.0,
+  });
+
+  /// 是否为恒等变换（无需应用）
+  bool get isIdentity =>
+      rotation == 0 && !flipH && !flipV && straighten.abs() < 0.01;
+
+  TransformParams copyWith({
+    int? rotation,
+    bool? flipH,
+    bool? flipV,
+    double? straighten,
+  }) =>
+      TransformParams(
+        rotation: rotation ?? this.rotation,
+        flipH: flipH ?? this.flipH,
+        flipV: flipV ?? this.flipV,
+        straighten: straighten ?? this.straighten,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'rotation': rotation,
+        'flipH': flipH,
+        'flipV': flipV,
+        'straighten': straighten,
+      };
+
+  factory TransformParams.fromJson(Map<String, dynamic> json) => TransformParams(
+        rotation: (json['rotation'] as num?)?.toInt() ?? 0,
+        flipH: json['flipH'] as bool? ?? false,
+        flipV: json['flipV'] as bool? ?? false,
+        straighten: (json['straighten'] as num?)?.toDouble() ?? 0.0,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TransformParams &&
+          rotation == other.rotation &&
+          flipH == other.flipH &&
+          flipV == other.flipV &&
+          straighten == other.straighten;
+
+  @override
+  int get hashCode => Object.hash(rotation, flipH, flipV, straighten);
+}
+
 class PostProcessColor {
   final double brightness;
   final double contrast;
