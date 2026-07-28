@@ -47,7 +47,8 @@ class PhotoPostProcessor {
     // 之前的 `if (rawMode) return inputPath;` 会导致全屏取景 9:16 但照片为 4:3。
     final sw = Stopwatch()..start();
     try {
-      debugPrint('[post-process] 开始: ratio=$aspectRatio, screenRatio=$screenRatio, isPortrait=$isPortrait, rawMode=$rawMode');
+      debugPrint(
+          '[post-process] 开始: ratio=$aspectRatio, screenRatio=$screenRatio, isPortrait=$isPortrait, rawMode=$rawMode');
 
       // 1. 读取并解码 JPEG（硬件加速，~50ms）
       final file = File(inputPath);
@@ -56,13 +57,14 @@ class PhotoPostProcessor {
       final frame = await codec.getNextFrame();
       final srcImage = frame.image;
       codec.dispose();
-      debugPrint('[post-process] 解码: ${srcImage.width}x${srcImage.height}, ${sw.elapsedMilliseconds}ms');
+      debugPrint(
+          '[post-process] 解码: ${srcImage.width}x${srcImage.height}, ${sw.elapsedMilliseconds}ms');
 
       // 1.5. 应用变换（旋转/翻转/拉直）via Canvas（GPU）
       var workingImage = srcImage;
       if (transform != null && !transform.isIdentity) {
         workingImage = await _applyTransform(srcImage, transform);
-        srcImage.dispose();  // dispose original after transform
+        srcImage.dispose(); // dispose original after transform
         debugPrint('[post-process] 变换: rotation=${transform.rotation}, '
             'flipH=${transform.flipH}, flipV=${transform.flipV}, '
             'straighten=${transform.straighten}, '
@@ -148,7 +150,8 @@ class PhotoPostProcessor {
       var resultImage = await picture.toImage(outW, outH);
       picture.dispose();
       workingImage.dispose();
-      debugPrint('[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
+      debugPrint(
+          '[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
 
       // 4b. 自动去模糊（若开启且检测到模糊）
       // 性能：清晰图（blurScore ≥ 600）直接跳过，省 200ms
@@ -194,14 +197,15 @@ class PhotoPostProcessor {
             }
           }
         } catch (e) {
-        debugPrint('[post-process] 去模糊失败（静默跳过）: $e');
+          debugPrint('[post-process] 去模糊失败（静默跳过）: $e');
+        }
       }
-    }
 
       // 4.5. 皮肤平滑（受 smoothStrength 控制）
       if (!rawMode && params.smoothStrength > 0) {
         try {
-          final byteData = await resultImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+          final byteData =
+              await resultImage.toByteData(format: ui.ImageByteFormat.rawRgba);
           if (byteData != null) {
             final imgImage = img.Image.fromBytes(
               width: resultImage.width,
@@ -210,7 +214,8 @@ class PhotoPostProcessor {
               numChannels: 4,
               order: img.ChannelOrder.rgba,
             );
-            final smoothed = SkinSmoother.smooth(imgImage, params.smoothStrength);
+            final smoothed =
+                SkinSmoother.smooth(imgImage, params.smoothStrength);
             // Convert back to ui.Image
             final completer = ui.PictureRecorder();
             final canvas = ui.Canvas(completer);
@@ -221,20 +226,22 @@ class PhotoPostProcessor {
             final frame = await codec.getNextFrame();
             canvas.drawImage(frame.image, ui.Offset.zero, paint);
             final picture = completer.endRecording();
-            final newImage = await picture.toImage(smoothed.width, smoothed.height);
+            final newImage =
+                await picture.toImage(smoothed.width, smoothed.height);
             resultImage.dispose();
             resultImage = newImage;
             frame.image.dispose();
             codec.dispose();
             picture.dispose();
-            debugPrint('[post-process] 皮肤平滑: smoothStrength=${params.smoothStrength}, ${sw.elapsedMilliseconds}ms');
+            debugPrint(
+                '[post-process] 皮肤平滑: smoothStrength=${params.smoothStrength}, ${sw.elapsedMilliseconds}ms');
           }
         } catch (e) {
           debugPrint('[post-process] 皮肤平滑失败（静默跳过）: $e');
         }
       }
 
-    // 5. 逐像素效果（rawMode 跳过；仅在启用时用 img 包处理）
+      // 5. 逐像素效果（rawMode 跳过；仅在启用时用 img 包处理）
       if (!rawMode) {
         final clarityVal = params.color.clarity;
         final needsPerPixel = params.sharpen > 0 ||
@@ -264,7 +271,8 @@ class PhotoPostProcessor {
       sw.stop();
       // 裁剪/处理失败时返回原图（4:3 传感器比例），但明确警告 WYSIWYG 已破坏。
       // 之前的版本静默返回原图，用户无法察觉裁剪未应用，导致"取景器 9:16 但照片 4:3"。
-      debugPrint('[post-process] ⚠️ 失败 (${sw.elapsedMilliseconds}ms), WYSIWYG 已破坏: $e\n$st');
+      debugPrint(
+          '[post-process] ⚠️ 失败 (${sw.elapsedMilliseconds}ms), WYSIWYG 已破坏: $e\n$st');
       return outputPath ?? inputPath;
     }
   }
@@ -496,12 +504,15 @@ class PhotoPostProcessor {
     }
 
     // 计算最终裁剪区域在原图中的位置
-    final offsetX = (visOffsetX + (visW - cropW) / 2.0).round().clamp(0, imgW - 1);
-    final offsetY = (visOffsetY + (visH - cropH) / 2.0).round().clamp(0, imgH - 1);
+    final offsetX =
+        (visOffsetX + (visW - cropW) / 2.0).round().clamp(0, imgW - 1);
+    final offsetY =
+        (visOffsetY + (visH - cropH) / 2.0).round().clamp(0, imgH - 1);
     final width = cropW.round().clamp(1, imgW - offsetX);
     final height = cropH.round().clamp(1, imgH - offsetY);
 
-    debugPrint('[post-process] 两步裁剪: imgRatio=$imgRatio, screenRatio=$screenRatio, '
+    debugPrint(
+        '[post-process] 两步裁剪: imgRatio=$imgRatio, screenRatio=$screenRatio, '
         'targetRatio=$targetRatio, 裁剪后比例=${width / height}');
 
     return [offsetX, offsetY, width, height];
