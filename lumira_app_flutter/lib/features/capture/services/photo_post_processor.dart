@@ -13,13 +13,13 @@ import '../domain/photo_template.dart';
 
 /// 拍照后照片处理器（GPU 加速 + 单次 Canvas 合并版）
 ///
-/// 第 4 次优化：解决速度慢、照片内容与取景器不一致、变形三个问题。
+/// 第 5 次优化：修复 RAW 模式下跳过裁剪导致非 WYSIWYG 的问题。
 ///
-/// 核心优化：
-/// 1. **合并所有 GPU 操作到一次 Canvas 调用**（降采样+ColorMatrix+裁剪+Vignette）
-///    原方案 5 次 picture.toImage() → 新方案 1 次，节省 150-200ms
-/// 2. **按屏幕比例裁剪 fullscreen 模式**：照片与取景器 cover 显示完全一致
-/// 3. **降采样到 1536px**（从 2048px 降低，平衡质量和速度）
+/// 核心原则：
+/// - **裁剪始终应用**（保证取景器所见即所得，与 rawMode 无关）
+/// - **rawMode 仅跳过滤镜效果**（ColorMatrix / Vignette / Sharpen / Clarity / Grain）
+/// - 之前的版本在 rawMode=true 时直接返回原图，导致 4:3 传感器照片未被裁剪，
+///   用户在全屏取景器看到 9:16 但拍出 4:3 照片
 ///
 /// 性能预期：无逐像素效果 ~200ms，有逐像素效果 ~400ms
 class PhotoPostProcessor {
@@ -37,14 +37,12 @@ class PhotoPostProcessor {
     double screenRatio = 9.0 / 19.5,
     bool isPortrait = true,
   }) async {
-    if (rawMode) {
-      debugPrint('[post-process] rawMode=true, 跳过处理');
-      return inputPath;
-    }
-
+    // 注意：rawMode 不再跳过裁剪。裁剪是 WYSIWYG 的保证（取景器所见即所得），
+    // rawMode 仅跳过滤镜效果（ColorMatrix / Vignette / Sharpen / Clarity / Grain）。
+    // 之前的 `if (rawMode) return inputPath;` 会导致全屏取景 9:16 但照片为 4:3。
     final sw = Stopwatch()..start();
     try {
-      debugPrint('[post-process] 开始: ratio=$aspectRatio, screenRatio=$screenRatio, isPortrait=$isPortrait');
+      debugPrint('[post-process] 开始: ratio=$aspectRatio, screenRatio=$screenRatio, isPortrait=$isPortrait, rawMode=$rawMode');
 
       // 1. 读取并解码 JPEG（硬件加速，~50ms）
       final file = File(inputPath);
@@ -55,7 +53,7 @@ class PhotoPostProcessor {
       codec.dispose();
       debugPrint('[post-process] 解码: ${srcImage.width}x${srcImage.height}, ${sw.elapsedMilliseconds}ms');
 
-      // 2. 计算裁剪区域（基于 aspectRatio 和 screenRatio）
+      // 2. 计算裁剪区域（基于 aspectRatio 和 screenRatio）—— 始终应用
       final cropRect = _computeCropRect(
         aspectRatio,
         srcImage.width,
@@ -82,10 +80,10 @@ class PhotoPostProcessor {
         outH = (outW / intendedRatio).round();
       }
 
-      // 4. 单次 Canvas 调用：降采样 + ColorMatrix + 裁剪 + Vignette
-      final matrix = composePostProcessMatrix(params);
-      final hasMatrix = !_isIdentityMatrix(matrix);
-      final hasVignette = params.vignette > 0;
+      // 4. 单次 Canvas 调用：降采样 + 裁剪 + (rawMode 时跳过 ColorMatrix/Vignette)
+      final matrix = rawMode ? null : composePostProcessMatrix(params);
+      final hasMatrix = matrix != null && !_isIdentityMatrix(matrix);
+      final hasVignette = !rawMode && params.vignette > 0;
 
       final recorder = ui.PictureRecorder();
       final canvas = ui.Canvas(recorder);
@@ -107,7 +105,7 @@ class PhotoPostProcessor {
         paint,
       );
 
-      // 4b. Vignette（在同一 Canvas 上叠加）
+      // 4b. Vignette（在同一 Canvas 上叠加，rawMode 跳过）
       if (hasVignette) {
         final centerX = outW / 2.0;
         final centerY = outH / 2.0;
@@ -136,19 +134,21 @@ class PhotoPostProcessor {
       srcImage.dispose();
       debugPrint('[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
 
-      // 5. 逐像素效果（仅在启用时，用 img 包处理）
-      final clarityVal = params.color.clarity;
-      final needsPerPixel = params.sharpen > 0 ||
-          (clarityVal != null && clarityVal != 0) ||
-          params.grain > 0;
-      if (needsPerPixel) {
-        resultImage = await _applyPerPixelEffects(
-          resultImage,
-          sharpen: params.sharpen,
-          clarity: clarityVal,
-          grain: params.grain,
-        );
-        debugPrint('[post-process] 逐像素: ${sw.elapsedMilliseconds}ms');
+      // 5. 逐像素效果（rawMode 跳过；仅在启用时用 img 包处理）
+      if (!rawMode) {
+        final clarityVal = params.color.clarity;
+        final needsPerPixel = params.sharpen > 0 ||
+            (clarityVal != null && clarityVal != 0) ||
+            params.grain > 0;
+        if (needsPerPixel) {
+          resultImage = await _applyPerPixelEffects(
+            resultImage,
+            sharpen: params.sharpen,
+            clarity: clarityVal,
+            grain: params.grain,
+          );
+          debugPrint('[post-process] 逐像素: ${sw.elapsedMilliseconds}ms');
+        }
       }
 
       // 6. 编码 JPEG 并保存
@@ -161,7 +161,9 @@ class PhotoPostProcessor {
       return inputPath;
     } catch (e, st) {
       sw.stop();
-      debugPrint('[post-process] 失败 (${sw.elapsedMilliseconds}ms): $e\n$st');
+      // 裁剪/处理失败时返回原图（4:3 传感器比例），但明确警告 WYSIWYG 已破坏。
+      // 之前的版本静默返回原图，用户无法察觉裁剪未应用，导致"取景器 9:16 但照片 4:3"。
+      debugPrint('[post-process] ⚠️ 失败 (${sw.elapsedMilliseconds}ms), WYSIWYG 已破坏: $e\n$st');
       return inputPath;
     }
   }
