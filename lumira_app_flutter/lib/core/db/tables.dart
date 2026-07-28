@@ -98,6 +98,20 @@ class Tables {
   static const String colLevelEnabled = 'level_enabled';
   static const String colShutterSound = 'shutter_sound';
   static const String colWatermark = 'watermark';
+
+  // === auth 表（v5） ===
+  static const String auth = 'auth';
+  static const String colDeviceId = 'device_id';
+  static const String colOs = 'os';
+  static const String colToken = 'token';
+  static const String colIsNewDevice = 'is_new_device';
+  static const String colRegisteredAt = 'registered_at';
+
+  // === api_cache 表（v5） ===
+  static const String apiCache = 'api_cache';
+  static const String colKey = 'key';
+  static const String colPayload = 'payload';
+  static const String colCachedAt = 'cached_at';
 }
 
 class ChallengeHistoryTable {

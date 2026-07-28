@@ -74,6 +74,10 @@ dependencies:
   # 用于渲染如画品牌 logo（symbol / wordmark / primary 等矢量资源）
   flutter_svg: ^1.1.6
 
+  # HTTP 客户端（4.x 末版兼容 Dart 2.19；5.x 需 Dart 3）
+  # 纯 Dart 库，无原生代码，鸿蒙无需 fork
+  dio: 4.0.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
