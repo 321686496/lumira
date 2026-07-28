@@ -1,0 +1,45 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'lumira_app_flutter/**'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'lumira_app_flutter/**'
+
+defaults:
+  run:
+    working-directory: lumira_app_flutter
+
+jobs:
+  ci:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # 锁定 3.7.12：对应 Dart 2.19.6，匹配 pubspec.yaml sdk: '>=2.19.6 <3.0.0'
+          # 3.7.0 自带 Dart 2.19.0 不满足约束；3.7.12 是 3.7.x 末版（Harmony 兼容）
+          flutter-version: '3.7.12'
+          channel: stable
+          cache: true
+
+      - name: Verify Flutter version
+        run: flutter --version
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test

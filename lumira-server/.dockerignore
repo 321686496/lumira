@@ -1,0 +1,43 @@
+# Dependencies — installed fresh inside Docker
+**/node_modules
+
+# Build artifacts — built inside Docker
+**/dist
+
+# Environment files (never bake secrets into image)
+.env
+.env.local
+.env.*.local
+
+# Logs
+**/*.log
+
+# Git
+.git
+.gitignore
+
+# Data directories (runtime state, mounted via volume)
+**/data
+
+# Test files
+**/test
+**/__tests__
+**/*.spec.ts
+**/*.test.ts
+**/coverage
+
+# IDE
+.vscode
+.idea
+
+# Documentation
+**/*.md
+
+# Docker files (avoid recursive context)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# OS files
+.DS_Store
+Thumbs.db
