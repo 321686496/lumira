@@ -19,8 +19,8 @@ class ApiClient {
   static Future<ApiClient> create(AuthController auth) async {
     final dio = Dio(BaseOptions(
       baseUrl: AppConfig.baseUrl,
-      connectTimeout: Duration(milliseconds: AppConfig.connectTimeoutMs),
-      receiveTimeout: Duration(milliseconds: AppConfig.receiveTimeoutMs),
+      connectTimeout: AppConfig.connectTimeoutMs,
+      receiveTimeout: AppConfig.receiveTimeoutMs,
       headers: {'Content-Type': 'application/json'},
     ));
     dio.interceptors.add(AuthInterceptor(auth));
