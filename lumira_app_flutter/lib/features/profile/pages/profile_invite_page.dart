@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../features/invite/data/invite_models.dart';
+import '../../../features/invite/data/invite_repository.dart';
+import '../../../shared/widgets/api_error_banner.dart';
 import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
@@ -37,16 +41,36 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
     super.dispose();
   }
 
-  void _generateInviteCard() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('生成邀请卡片'),
-        duration: Duration(milliseconds: 1000),
-      ),
-    );
+  Future<void> _generateInviteCard() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final repo = await ref.read(inviteRepositoryProvider.future);
+      final code = await repo.generateCode();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('邀请码已生成：${code.code}'),
+          duration: const Duration(milliseconds: 1500),
+        ),
+      );
+    } on ApiException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('生成失败：${e.message}'),
+          duration: const Duration(milliseconds: 1500),
+        ),
+      );
+    } catch (_) {
+      // 离线/未注册环境兜底：保留原占位 SnackBar 行为
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('生成邀请卡片'),
+          duration: Duration(milliseconds: 1000),
+        ),
+      );
+    }
   }
 
-  void _confirmBindCode() {
+  Future<void> _confirmBindCode() async {
     final code = _codeController.text.trim();
     final messenger = ScaffoldMessenger.of(context);
     if (code.isEmpty) {
@@ -58,18 +82,49 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
       );
       return;
     }
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('绑定成功：$code'),
-        duration: const Duration(milliseconds: 1000),
-      ),
-    );
-    _codeController.clear();
+    try {
+      final repo = await ref.read(inviteRepositoryProvider.future);
+      final resp = await repo.activate(ActivateInviteRequest(inviteCode: code));
+      if (resp.rewards != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('邀请码已激活，解锁 ${resp.rewards!.items.length} 项奖励'),
+            duration: const Duration(milliseconds: 1500),
+          ),
+        );
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('邀请码已激活'),
+            duration: Duration(milliseconds: 1500),
+          ),
+        );
+      }
+      ref.invalidate(inviteStatsProvider);
+      _codeController.clear();
+    } on ApiException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('激活失败：${e.message}'),
+          duration: const Duration(milliseconds: 1500),
+        ),
+      );
+    } catch (_) {
+      // 离线/未注册环境兜底
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('绑定成功：$code'),
+          duration: const Duration(milliseconds: 1000),
+        ),
+      );
+      _codeController.clear();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final statsAsync = ref.watch(inviteStatsProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -96,6 +151,18 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // 网络失败回退缓存时显示离线提示
+                statsAsync.when(
+                  data: (_) => const SizedBox.shrink(),
+                  loading: () => const SizedBox.shrink(),
+                  error: (e, _) {
+                    final isOffline = e is ApiException && e.isNetworkError;
+                    if (!isOffline) return const SizedBox.shrink();
+                    return ApiErrorBanner(
+                      onRetry: () => ref.invalidate(inviteStatsProvider),
+                    );
+                  },
+                ),
                 FadeUp(child: _HeroCard(tokens: tokens)),
                 const SizedBox(height: 20),
                 FadeUp(

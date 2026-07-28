@@ -49,6 +49,8 @@ class RouteNames {
   static const String academyTrajectory = '/academy/trajectory';
   static const String profileCompositionKits = '/profile/composition-kits';
   static const String profileCompositionKitDetail = '/profile/composition-kit-detail';
+  static const String profileRewards = '/profile/rewards';
+  static const String profileRedeem = '/profile/redeem';
 
   // === 查询参数键名 ===
   static const String paramTemplateId = 'templateId';

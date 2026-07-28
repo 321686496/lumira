@@ -38,6 +38,8 @@ import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
+import '../features/redeem/pages/redeem_page.dart';
+import '../features/rewards/pages/rewards_page.dart';
 import '../features/scenes/pages/scenes_page.dart';
 import '../features/shootkit/pages/shootkit_editor_page.dart';
 import '../features/splash/pages/splash_page.dart';
@@ -343,6 +345,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileAbout,
         name: 'profileAbout',
         builder: (context, state) => const ProfileAboutPage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileRewards,
+        name: 'profileRewards',
+        builder: (context, state) => const RewardsPage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileRedeem,
+        name: 'profileRedeem',
+        builder: (context, state) => const RedeemPage(),
       ),
 
       // === 场景 ===

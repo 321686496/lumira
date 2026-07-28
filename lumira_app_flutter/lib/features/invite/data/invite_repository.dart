@@ -81,3 +81,9 @@ final inviteRepositoryProvider = FutureProvider<InviteRepository>((ref) async {
   final cache = await ref.watch(apiCacheDaoProvider.future);
   return RemoteInviteRepository(api: api, cache: cache);
 });
+
+/// InviteStats FutureProvider（带自动刷新）
+final inviteStatsProvider = FutureProvider<InviteStats>((ref) async {
+  final repo = await ref.watch(inviteRepositoryProvider.future);
+  return repo.getStats();
+});
