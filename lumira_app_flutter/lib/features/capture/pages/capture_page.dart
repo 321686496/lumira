@@ -287,6 +287,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
         debugPrint('[capture] 当前 aspectRatio=$aspectRatio, '
             'screenRatio=$screenRatio, isPortrait=$isPortrait, '
             'rawMode=$rawMode');
+        // [非破坏性编辑] 复制原始文件，供后续编辑时重新处理
+        // 复制到 <filePath>.original.jpg，与处理后的文件并存
+        // 失败不阻塞拍摄流程（originalPath 为 null 时预览页降级为只读）
+        String? originalPath;
+        try {
+          originalPath = '${media.filePath}.original.jpg';
+          await File(media.filePath).copy(originalPath);
+          debugPrint('[capture] 原图已保留: $originalPath');
+        } catch (e) {
+          debugPrint('[capture] 原图保留失败（不阻塞）: $e');
+          originalPath = null;
+        }
         final processedPath = await PhotoPostProcessor.processFile(
           inputPath: media.filePath,
           params: params,
@@ -340,6 +352,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
           final record = GalleryItemRecord(
             id: photoId,
             filePath: processedPath,
+            originalPath: originalPath,
+            postProcess: params,
             dataUrl: null,
             sceneId: sceneId,
             templateId: templateId,
@@ -375,7 +389,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
           GoRouter.of(context).push(
             '${RouteNames.capturePreview}'
             '?photoUrl=${Uri.encodeComponent(processedPath)}'
-            '&photoId=$photoId',
+            '&photoId=$photoId'
+            '&aspectRatio=${Uri.encodeComponent(aspectRatio)}',
           );
         }
       }
