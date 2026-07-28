@@ -1,0 +1,30 @@
+# 生产环境部署用的 docker-compose 配置
+# 通过 GitHub Actions SSH 部署时使用：docker compose -f docker-compose.prod.yml --env-file .env up -d
+# 构建上下文指向仓库的 lumira-server/ 目录，使用多阶段 Dockerfile 构建后端镜像
+version: "3.8"
+
+services:
+  lumira-backend:
+    build:
+      # 部署目录结构：/opt/lumira/backend/{repo, docker-compose.prod.yml, .env, data}
+      # repo/ 是 git clone 的仓库
+      context: ./repo/lumira-server
+      dockerfile: packages/backend/Dockerfile
+    image: lumira-backend:latest
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - DB_PATH=/app/data/lumira.db
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/api/v1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
