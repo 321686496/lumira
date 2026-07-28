@@ -758,6 +758,8 @@ class _MenuCard extends ConsumerWidget {
       _MenuItem(icon: Icons.layers_outlined, title: '我的模板'),
       _MenuItem(icon: Icons.map_outlined, title: '场景管理'),
       _MenuItem(icon: Icons.download_outlined, title: '导入模板'),
+      _MenuItem(icon: Icons.card_giftcard_outlined, title: '我的奖励'),
+      _MenuItem(icon: Icons.redeem_outlined, title: '兑换码'),
       _MenuItem(icon: Icons.settings_outlined, title: '设置'),
       _MenuItem(icon: Icons.info_outline, title: '关于如画'),
     ];
@@ -797,6 +799,10 @@ class _MenuCard extends ConsumerWidget {
         context,
         onImported: (_) => onNav(RouteNames.profileMyTemplates),
       );
+    } else if (title == '我的奖励') {
+      onNav(RouteNames.profileRewards);
+    } else if (title == '兑换码') {
+      onNav(RouteNames.profileRedeem);
     } else if (title == '设置') {
       onNav(RouteNames.profileSettings);
     } else if (title == '关于如画') {

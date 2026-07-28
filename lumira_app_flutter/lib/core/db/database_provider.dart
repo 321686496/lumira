@@ -11,9 +11,11 @@ import 'seeders/builtin_data_seeder.dart';
 import '../../features/challenge/data/challenge_dao.dart';
 import '../../features/academy/data/academy_dao.dart';
 import 'dao/composition_kits_dao.dart';
+import 'dao/api_cache_dao.dart';
+import '../../core/auth/auth_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 4;
+const int _kDbVersion = 5;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -58,6 +60,16 @@ final academyDaoProvider = FutureProvider<AcademyDao>((ref) async {
 final compositionKitsDaoProvider = FutureProvider<CompositionKitsDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return CompositionKitsDao(db);
+});
+
+final authDaoProvider = FutureProvider<AuthDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return AuthDao(db);
+});
+
+final apiCacheDaoProvider = FutureProvider<ApiCacheDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return ApiCacheDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -198,6 +210,25 @@ Future<void> _onCreate(Database db, int version) async {
 
   await db.execute(CompositionKitsTable.createSql);
   await db.execute(AcademyLearningTrajectoryTable.createSql);
+
+  // === v5: auth + api_cache 表 ===
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.auth} (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      ${Tables.colDeviceId} TEXT NOT NULL,
+      ${Tables.colOs} TEXT NOT NULL,
+      ${Tables.colToken} TEXT NOT NULL,
+      ${Tables.colIsNewDevice} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colRegisteredAt} INTEGER NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.apiCache} (
+      ${Tables.colKey} TEXT PRIMARY KEY,
+      ${Tables.colPayload} TEXT NOT NULL,
+      ${Tables.colCachedAt} INTEGER NOT NULL
+    )
+  ''');
 }
 
 Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -248,6 +279,29 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     } catch (e) {
       // 静默回退：迁移失败不阻塞应用启动；缺失的表/列在 DAO 层以空列表兜底
       debugPrint('v4 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 5) {
+    try {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.auth} (
+          id INTEGER PRIMARY KEY DEFAULT 1,
+          ${Tables.colDeviceId} TEXT NOT NULL,
+          ${Tables.colOs} TEXT NOT NULL,
+          ${Tables.colToken} TEXT NOT NULL,
+          ${Tables.colIsNewDevice} INTEGER NOT NULL DEFAULT 0,
+          ${Tables.colRegisteredAt} INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.apiCache} (
+          ${Tables.colKey} TEXT PRIMARY KEY,
+          ${Tables.colPayload} TEXT NOT NULL,
+          ${Tables.colCachedAt} INTEGER NOT NULL
+        )
+      ''');
+    } catch (e) {
+      debugPrint('v5 migration failed (silent fallback): $e');
     }
   }
 }
