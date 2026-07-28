@@ -39,7 +39,12 @@ const _photoSaverChannel = MethodChannel('lumira/photo_saver');
 /// - 保存到相册：mock SnackBar + pop，不接入 saver_gallery
 /// - 生成对比图 / EXIF 卡片：mock SnackBar，不接入图像生成
 class CapturePreviewPage extends ConsumerStatefulWidget {
-  const CapturePreviewPage({super.key, this.photoUrl, this.photoId});
+  const CapturePreviewPage({
+    super.key,
+    this.photoUrl,
+    this.photoId,
+    this.aspectRatio,
+  });
 
   /// 路由参数：photoUrl（拍摄后的照片 URL）
   final String? photoUrl;
@@ -47,6 +52,10 @@ class CapturePreviewPage extends ConsumerStatefulWidget {
   /// 路由参数：photoId（拍摄时自动保存到 DB 的记录 id）
   /// 用于在预览页修改场景时同步更新 DB 记录
   final String? photoId;
+
+  /// 路由参数：aspectRatio（拍摄时使用的取景器比例 id，如 'fullscreen' / '3:4'）
+  /// Task 10 起作为非破坏性重新处理时的裁剪比例传入 processFile。
+  final String? aspectRatio;
 
   @override
   ConsumerState<CapturePreviewPage> createState() =>
@@ -67,21 +76,26 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   // ignore: unused_field
   bool _compareCardGenerated = false;
 
-  /// 拍摄时的后期参数快照（用于计算 delta，避免重复处理）。
-  /// 在 initState 中从 CaptureState.effectivePostProcessProvider 读取一次，
-  /// 之后不再变化。保存时用 (_localPostProcess - _initialPostProcess) 作为 delta
-  /// 应用到已处理的照片上，避免参数被重复叠加。
-  late final PostProcess _initialPostProcess;
-
   /// 预览页本地后期参数（仅影响当前照片，不回写 CaptureState）。
   /// 修复参数泄漏：之前直接修改 CaptureState.editableTemplateProvider /
   /// freeModePostProcessProvider，导致返回拍摄页后拍摄页参数也被改变。
-  /// 现在使用本地状态，保存时按 delta 应用到照片文件，拍摄页参数不受影响。
+  /// 现在使用本地状态，保存时由 Task 10 从原图全量重新处理，拍摄页参数不受影响。
   late PostProcess _localPostProcess;
 
   /// 预览页本地变换参数（旋转/翻转/拉直）。
   /// 仅影响当前照片预览，保存时由 Task 10 通过非破坏性编辑管线应用。
   TransformParams _localTransform = const TransformParams();
+
+  /// 原图路径（从 GalleryItemRecord.originalPath 读取）。
+  /// null 表示原图未保留 → 只读模式，不允许编辑/重新保存。
+  String? _originalPath;
+
+  /// 只读模式标志（originalPath == null 时为 true）。
+  /// Task 11 会基于此标志在 UI 上显示横幅 + 禁用编辑控件。
+  bool _isReadOnly = false;
+
+  /// 保存进行中标志（避免重复点击保存按钮）
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -91,11 +105,29 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     _moods = CapturePreviewMockData.moods
         .map((m) => m.copyWith(active: m.active))
         .toList();
-    // 快照拍摄时参数，作为本地调整的初始值和 delta 基准。
+    // 快照拍摄时参数，作为本地调整的初始值。
     // ConsumerState.initState 中 ref.read 是安全的（provider 已初始化）。
     final initial = ref.read(CaptureState.effectivePostProcessProvider);
-    _initialPostProcess = initial;
     _localPostProcess = initial;
+    _loadOriginalPath(); // fire-and-forget; sets _originalPath + _isReadOnly
+  }
+
+  /// 从数据库加载原图路径，确定只读模式
+  Future<void> _loadOriginalPath() async {
+    if (widget.photoId == null) return;
+    try {
+      final dao = await ref.read(galleryDaoProvider.future);
+      final record = await dao.getById(widget.photoId!);
+      if (!mounted) return;
+      if (record != null) {
+        setState(() {
+          _originalPath = record.originalPath;
+          _isReadOnly = record.originalPath == null;
+        });
+      }
+    } catch (e) {
+      debugPrint('[preview] 加载原图路径失败: $e');
+    }
   }
 
   /// 本地后期参数更新（仅影响预览和保存，不回写 CaptureState）
@@ -372,79 +404,140 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
-  /// 保存到系统相册（应用相册已在拍摄时自动保存）
-  /// 修复：
-  /// 1. saver_gallery 不支持 HarmonyOS，改用 MethodChannel 调用原生 photoAccessHelper
-  /// 2. 添加详细诊断日志，LumiraToast 显示具体成功/失败信息
-  /// 3. 参数隔离：仅应用预览页本地调整的 delta（_localPostProcess - _initialPostProcess）
-  ///    到已处理的照片上，避免参数被重复叠加，也不回写 CaptureState（不影响拍摄页）。
-  ///    delta 仅包含亮度/对比度/饱和度三个预览页可调字段，其他效果（锐化/暗角/颗粒/LUT）
-  ///    保留拍摄时的处理结果，不重复应用。
+  /// 显示保存对话框，返回是否保留原图（null = 用户取消）
+  Future<bool?> _showSaveDialog() async {
+    bool keepOriginal = true;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setState) {
+          return AlertDialog(
+            title: const Text('保存到相册'),
+            content: CheckboxListTile(
+              title: const Text('保留原图（可再次编辑）'),
+              value: keepOriginal,
+              onChanged: (v) => setState(() => keepOriginal = v ?? true),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, keepOriginal),
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+  }
+
+  /// 保存到系统相册（非破坏性编辑：从原图重新应用完整参数）
+  ///
+  /// 流程：
+  /// 1. 检查只读模式（originalPath == null）→ 提示并返回
+  /// 2. 显示保存对话框，让用户选择是否保留原图
+  /// 3. 从 originalPath 重新处理（应用 _localPostProcess + _localTransform 全量参数）
+  /// 4. 输出到原 processedPath（覆盖当前显示的照片）
+  /// 5. evict FileImage 缓存（避免显示旧版本）
+  /// 6. 更新 GalleryItemRecord（filePath / originalPath / transform / postProcess）
+  /// 7. 调用原生通道保存到系统相册
+  /// 8. 延迟返回相册页
   Future<void> _onSave() async {
-    if (_photoUrl.isEmpty) {
-      LumiraToast.show(context, '无照片数据');
+    if (_isSaving) return;
+
+    // 只读模式：原图未保留，无法重新处理
+    if (_isReadOnly || _originalPath == null) {
+      LumiraToast.show(context, '原图未保留，无法再次编辑');
       return;
     }
 
-    final bool isLocalFile = !_photoUrl.startsWith('http');
-
-    // 保存前应用预览页本地调整的 delta（亮度/对比度/饱和度）
-    // delta = _localPostProcess - _initialPostProcess，仅对预览页可调字段计算差值
-    String savePath = _photoUrl;
-    if (isLocalFile) {
-      final deltaColor = PostProcessColor(
-        brightness:
-            _localPostProcess.color.brightness - _initialPostProcess.color.brightness,
-        contrast:
-            _localPostProcess.color.contrast - _initialPostProcess.color.contrast,
-        saturation:
-            _localPostProcess.color.saturation - _initialPostProcess.color.saturation,
-        // 其他字段（temperature/tint）预览页未暴露滑块，delta = 0
-        temperature: 0,
-        tint: 0,
-      );
-      final deltaParams = PostProcess(color: deltaColor);
-      debugPrint('[save] 应用预览页本地调整 delta: '
-          'b=${deltaColor.brightness}, c=${deltaColor.contrast}, s=${deltaColor.saturation}');
-      // aspectRatio='free' 跳过裁剪（照片在拍摄时已按选定比例裁剪）
-      // rawMode=false 让 delta color matrix 生效
-      savePath = await PhotoPostProcessor.processFile(
-        inputPath: _photoUrl,
-        params: deltaParams,
-        rawMode: false,
-        aspectRatio: 'free',
-      );
-
-      // 修复：二次处理覆盖文件后 evict FileImage 缓存，避免预览页和
-      // 后续相册页显示旧版本解码图（与 capture_page.dart 的修复同理）。
-      try {
-        PaintingBinding.instance.imageCache.evict(FileImage(File(savePath)));
-      } catch (_) {}
+    // 网络图片不支持保存
+    final photoPath = widget.photoUrl ?? '';
+    if (photoPath.isEmpty || photoPath.startsWith('http')) {
+      LumiraToast.show(context, '网络图片不支持保存到系统相册');
+      return;
     }
 
-    File? imageFile;
-    if (isLocalFile) {
-      imageFile = File(savePath);
-      if (!await imageFile.exists()) {
+    // 弹出保存对话框
+    final keepOriginal = await _showSaveDialog();
+    if (keepOriginal == null) return; // 用户取消
+
+    setState(() => _isSaving = true);
+
+    try {
+      final originalPath = _originalPath!;
+      final captureAspectRatio = widget.aspectRatio ?? 'fullscreen';
+
+      // 检查原图是否存在
+      if (!await File(originalPath).exists()) {
         if (!mounted) return;
-        LumiraToast.show(context, '照片文件不存在');
+        LumiraToast.show(context, '原图文件不存在，无法重新处理');
         return;
       }
-    }
 
-    // 调用原生保存到系统相册（应用相册已在拍摄时自动保存，此处不重复写 DB）
-    if (isLocalFile && imageFile != null) {
+      // 从原图重新处理（全量参数，非 delta）
+      // - autoDeblur=false：去模糊已在拍摄时应用过，不重复
+      // - outputPath=photoPath：覆盖当前显示的照片文件
+      final processedPath = await PhotoPostProcessor.processFile(
+        inputPath: originalPath,
+        params: _localPostProcess,
+        transform: _localTransform,
+        aspectRatio: captureAspectRatio,
+        outputPath: photoPath,
+        autoDeblur: false,
+      );
+
+      // Evict FileImage 缓存（避免显示旧版本）
       try {
-        debugPrint('[save] 调用原生保存到系统相册: ${imageFile.path}');
+        PaintingBinding.instance.imageCache.evict(FileImage(File(processedPath)));
+        PaintingBinding.instance.imageCache.evict(FileImage(File(originalPath)));
+      } catch (_) {}
+
+      // 更新数据库记录
+      if (widget.photoId != null) {
+        try {
+          final dao = await ref.read(galleryDaoProvider.future);
+          final newOriginalPath = keepOriginal ? originalPath : null;
+          // 不保留原图时，删除原图文件
+          if (!keepOriginal) {
+            try {
+              await File(originalPath).delete();
+            } catch (_) {}
+          }
+          await dao.updateEdit(
+            id: widget.photoId!,
+            filePath: processedPath,
+            originalPath: newOriginalPath,
+            transform: _localTransform,
+            postProcess: _localPostProcess,
+          );
+          ref.invalidate(galleryDaoProvider);
+          if (mounted) {
+            setState(() {
+              _originalPath = newOriginalPath;
+              _isReadOnly = newOriginalPath == null;
+            });
+          }
+        } catch (e) {
+          debugPrint('[save] 更新数据库记录失败: $e');
+        }
+      }
+
+      // 调用原生保存到系统相册
+      try {
+        debugPrint('[save] 调用原生保存到系统相册: $processedPath');
         final result = await _photoSaverChannel.invokeMethod('saveToAlbum', {
-          'path': imageFile.path,
+          'path': processedPath,
         });
         debugPrint('[save] 原生保存结果: $result');
         final success = result != null && result['success'] == true;
         if (!mounted) return;
         LumiraToast.show(
           context,
-          success ? '已保存到系统相册' : '保存失败：${result?['error'] ?? "未知错误"}',
+          success ? '已保存到相册' : '保存失败：${result?['error'] ?? "未知错误"}',
           duration: const Duration(seconds: 2),
         );
       } catch (e) {
@@ -452,20 +545,25 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         if (!mounted) return;
         LumiraToast.show(context, '保存失败：$e');
       }
-    } else {
+    } catch (e) {
+      debugPrint('[save] 保存流程异常: $e');
       if (!mounted) return;
-      LumiraToast.show(context, '网络图片不支持保存到系统相册');
+      LumiraToast.show(context, '保存失败：$e');
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
 
     // 保存完成后延迟返回
-    Future.delayed(const Duration(milliseconds: 1000), () {
-      if (!mounted) return;
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      } else {
-        GoRouter.of(context).go(RouteNames.gallery);
-      }
-    });
+    if (mounted) {
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        if (!mounted) return;
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          GoRouter.of(context).go(RouteNames.gallery);
+        }
+      });
+    }
   }
 
   @override
