@@ -1,65 +1,63 @@
 name: Backend Deploy
 
+# 部署模式：服务器直接构建
+# GitHub Actions → SSH 登录服务器 → git pull → docker build → docker compose up -d
+# 无需 Docker Hub 或任何容器镜像仓库依赖
+#
+# 触发条件：push 到 master 且修改了后端相关文件
+# 服务器目录结构：见 deploy/docker-compose.prod.yml 注释
+
 on:
   push:
     branches: [master]
     paths:
       - 'lumira-server/packages/backend/**'
       - 'lumira-server/packages/shared/**'
+      - 'lumira-server/pnpm-lock.yaml'
+      - 'lumira-server/pnpm-workspace.yaml'
+      - 'lumira-server/package.json'
+      - 'deploy/docker-compose.prod.yml'
+      - '.github/workflows/backend-deploy.yml'
 
 jobs:
   deploy:
-    name: Build & Deploy
+    name: SSH Build & Deploy
     runs-on: ubuntu-latest
     environment: production
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ secrets.DOCKER_IMAGE }}
-          tags: |
-            type=sha
-            type=raw,value=latest
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: lumira-server
-          file: lumira-server/packages/backend/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ secrets.DOCKER_IMAGE }}:latest
-          cache-to: type=inline
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         env:
-          DOCKER_IMAGE: ${{ secrets.DOCKER_IMAGE }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/opt/lumira/backend' }}
+          GIT_REMOTE: ${{ secrets.GIT_REMOTE || 'origin' }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: DOCKER_IMAGE,DEPLOY_PATH
+          envs: DEPLOY_PATH,GIT_REMOTE
+          # 首次构建可能需要 5-15 分钟（pnpm install + tsc build），给足超时
+          script_timeout: 30m
           script: |
-            docker pull $DOCKER_IMAGE:latest
+            set -e
+            echo "==> [1/5] 拉取最新代码"
+            cd $DEPLOY_PATH/repo
+            git pull $GIT_REMOTE master
+
+            echo "==> [2/5] 同步部署用 docker-compose 文件"
+            cp deploy/docker-compose.prod.yml $DEPLOY_PATH/docker-compose.prod.yml
+
+            echo "==> [3/5] 确保数据目录存在"
+            mkdir -p $DEPLOY_PATH/data
+
+            echo "==> [4/5] 构建后端镜像（多阶段构建：base → builder → runner）"
             cd $DEPLOY_PATH
-            docker compose down
-            docker compose up -d
+            docker compose -f docker-compose.prod.yml --env-file .env build
+
+            echo "==> [5/5] 重启容器"
+            docker compose -f docker-compose.prod.yml --env-file .env up -d
             docker image prune -f
+
+            echo "==> 部署完成，查看日志："
+            docker compose -f docker-compose.prod.yml logs --tail=20

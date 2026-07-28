@@ -6,9 +6,27 @@ Lumira 项目包含三个组件，部署方式各不相同：
 
 | 组件 | 类型 | 部署方式 |
 |------|------|----------|
-| **Backend**（NestJS） | Docker 容器 | GitHub Actions → Docker Hub → SSH 部署到私有服务器 |
+| **Backend**（NestJS） | Docker 容器 | GitHub Actions → SSH → 服务器直接 `docker build` 部署 |
 | **Admin**（Next.js） | Vercel 应用 | Vercel 自动监听 GitHub push 部署 |
 | **Flutter App** | 移动应用 | 仅 CI 验证，不自动部署（需手动构建发布） |
+
+**后端部署架构（服务器直接构建模式）：**
+
+```
+GitHub Push (master)
+    ↓ 触发 backend-deploy.yml
+GitHub Actions Runner
+    ↓ SSH 登录服务器
+私有服务器
+    ├─ git pull origin master        # 拉取最新代码
+    ├─ docker compose build          # 多阶段构建镜像
+    └─ docker compose up -d          # 重启容器
+```
+
+**为什么不用 Docker Hub：**
+- 无需任何外部容器镜像仓库账号
+- 国内服务器部署快（不依赖境外网络拉取镜像）
+- 构建产物直接在服务器本地，无中转
 
 ---
 
@@ -25,13 +43,16 @@ Lumira 项目包含三个组件，部署方式各不相同：
 | `SSH_PRIVATE_KEY` | SSH 私钥完整内容 | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
 | `SSH_PORT` | SSH 端口（可选，默认 22） | `22` |
 | `DEPLOY_PATH` | 服务器部署目录（可选，默认 `/opt/lumira/backend`） | `/opt/lumira/backend` |
-| `DOCKER_USERNAME` | Docker Hub 用户名 | `lumira` |
-| `DOCKER_PASSWORD` | Docker Hub 密码或 Access Token | `dckr_xxxx...` |
-| `DOCKER_IMAGE` | 完整 Docker 镜像名（含仓库前缀） | `lumira/backend` |
-| `JWT_SECRET` | JWT 签名密钥（生产环境） | `a-very-long-random-string` |
-| `ADMIN_TOKEN` | Admin API 令牌（生产环境） | `another-long-random-string` |
+| `GIT_REMOTE` | 服务器上 git remote 名称（可选，默认 `origin`） | `origin` |
 
-> **注意**：`JWT_SECRET` 和 `ADMIN_TOKEN` 同时需要在服务器的 `.env` 文件中配置（docker-compose.yml 通过变量注入）。
+### 后端环境变量（在服务器 .env 中配置，不在 GitHub Secrets 中）
+
+| 变量 | 说明 |
+|------|------|
+| `JWT_SECRET` | JWT 签名密钥（生产环境） |
+| `ADMIN_TOKEN` | Admin API 令牌（生产环境） |
+
+> 这两个变量通过服务器的 `.env` 文件注入（docker-compose 通过 `--env-file .env` 加载），**不要**放在 GitHub Secrets 中。
 
 ---
 
@@ -45,7 +66,47 @@ sudo usermod -aG docker $USER
 # 重新登录以使 docker 组生效
 ```
 
-### 2. 创建部署目录
+### 2. 安装 Git（如未安装）
+
+```bash
+# Ubuntu/Debian
+sudo apt update && sudo apt install -y git
+
+# CentOS/RHEL
+sudo yum install -y git
+```
+
+### 3. 配置服务器访问 GitHub 仓库
+
+服务器需要能 `git pull` 仓库。两种方式任选其一：
+
+**方式 A：仓库为 Public** — 直接 clone，无需凭证
+```bash
+git clone https://github.com/<your-username>/lumira.git
+```
+
+**方式 B：仓库为 Private** — 使用 Deploy Key（推荐）
+```bash
+# 在服务器上生成专用 SSH key
+ssh-keygen -t ed25519 -f ~/.ssh/lumira_deploy_key -N ""
+
+# 打印公钥，添加到 GitHub 仓库 Settings → Deploy keys（勾选 Allow write access 不需要）
+cat ~/.ssh/lumira_deploy_key.pub
+
+# 配置 SSH 使用该 key 访问 GitHub
+cat >> ~/.ssh/config <<EOF
+Host github.com-lumira
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/lumira_deploy_key
+    IdentitiesOnly yes
+EOF
+
+# 用专用 host clone
+git clone git@github.com-lumira:<your-username>/lumira.git
+```
+
+### 4. 创建部署目录结构
 
 ```bash
 sudo mkdir -p /opt/lumira/backend
@@ -53,49 +114,98 @@ sudo chown -R $USER:$USER /opt/lumira/backend
 cd /opt/lumira/backend
 ```
 
-### 3. 放置 docker-compose.yml
+目录结构如下：
 
-将 `lumira-server/packages/backend/docker-compose.yml` 复制到服务器 `/opt/lumira/backend/docker-compose.yml`：
-
-```bash
-# 方式一：从本地 scp 上传
-scp lumira-server/packages/backend/docker-compose.yml user@server:/opt/lumira/backend/
-
-# 方式二：手动创建（内容相同）
-nano docker-compose.yml
+```
+/opt/lumira/backend/
+├── repo/                    # git clone 的仓库
+├── docker-compose.prod.yml  # 从 repo/deploy/ 同步的部署配置
+├── .env                     # 环境变量（手动创建）
+└── data/                    # 数据卷（SQLite 数据库持久化）
 ```
 
-### 4. 创建 .env 文件
-
-在 `/opt/lumira/backend/` 下创建 `.env`：
-
-```env
-DOCKER_IMAGE=<docker-hub-用户名>/lumira-backend
-JWT_SECRET=<生产环境-JWT-密钥>
-ADMIN_TOKEN=<生产环境-Admin-令牌>
-```
-
-### 5. 登录 Docker Hub（如镜像为私有）
+### 5. Clone 仓库到 repo/ 子目录
 
 ```bash
-docker login -u <username> -p <password-or-token>
+cd /opt/lumira/backend
+
+# Public 仓库
+git clone https://github.com/<your-username>/lumira.git repo
+
+# 或 Private 仓库（使用方式 B 配置的 deploy key）
+git clone git@github.com-lumira:<your-username>/lumira.git repo
 ```
 
-### 6. 创建数据目录
+### 6. 创建 .env 文件
 
 ```bash
+cat > /opt/lumira/backend/.env <<EOF
+JWT_SECRET=$(openssl rand -hex 32)
+ADMIN_TOKEN=$(openssl rand -hex 32)
+EOF
+
+# 查看并记下这些值（用于客户端配置）
+cat /opt/lumira/backend/.env
+```
+
+### 7. 首次构建并启动
+
+```bash
+cd /opt/lumira/backend
+
+# 同步部署用 compose 文件
+cp repo/deploy/docker-compose.prod.yml docker-compose.prod.yml
+
+# 创建数据目录
 mkdir -p data
+
+# 构建镜像（首次会拉取 node:20-alpine 基础镜像，需要 3-10 分钟）
+docker compose -f docker-compose.prod.yml --env-file .env build
+
+# 启动容器
+docker compose -f docker-compose.prod.yml --env-file .env up -d
+
+# 查看启动日志
+docker compose -f docker-compose.prod.yml logs -f
 ```
 
-### 7. 首次拉取并启动
+### 8. 验证部署
 
 ```bash
-docker compose pull
-docker compose up -d
-docker compose logs -f   # 查看启动日志
+# 健康检查
+curl http://localhost:3000/api/v1
+
+# 查看容器状态
+docker compose -f docker-compose.prod.yml ps
 ```
 
-后续部署由 GitHub Actions 自动执行 `docker pull → docker compose down → docker compose up -d`。
+### 9. 配置反向代理（可选，推荐使用 Nginx + HTTPS）
+
+```bash
+sudo apt install -y nginx certbot python3-certbot-nginx
+
+sudo tee /etc/nginx/conf.d/lumira-api.conf <<'EOF'
+server {
+    listen 80;
+    server_name api.your-domain.com;  # 替换为你的域名
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+
+sudo nginx -t && sudo systemctl reload nginx
+
+# 配置 HTTPS
+sudo certbot --nginx -d api.your-domain.com
+```
+
+后续部署由 GitHub Actions 自动执行：`git pull → docker build → docker compose up -d`。
 
 ---
 
@@ -121,10 +231,18 @@ Admin 后台通过 Vercel 自动部署，无需手动操作。
 
 - **Install Command**：`cd ../.. && pnpm install --frozen-lockfile`
   - 从 monorepo 根安装依赖（包含 shared 包）
-- **Build Command**：`cd ../.. && pnpm --filter @lumira/admin build`
+- **Build Command**：`cd ../.. && pnpm --filter @lumira/shared build && pnpm --filter @lumira/admin build`
   - 先构建 shared 包，再构建 admin
 
-### 4. 自动部署
+### 4. 配置环境变量
+
+在 Vercel 项目设置 → Environment Variables 中添加：
+
+| 变量 | 说明 |
+|------|------|
+| `NEXT_PUBLIC_API_BASE_URL` | 后端 API 地址，如 `https://api.your-domain.com` |
+
+### 5. 自动部署
 
 配置完成后，每次 push 到 `master` 分支且修改了以下路径时，Vercel 自动触发部署：
 
@@ -140,7 +258,7 @@ GitHub Actions 的 `admin-deploy.yml` 会并行运行构建验证，提前发现
 | Workflow | 触发条件 | 用途 |
 |----------|----------|------|
 | `backend-ci.yml` | Push/PR 到 master（`lumira-server/**`） | Lint、类型检查、单元测试 |
-| `backend-deploy.yml` | Push 到 master（`backend/**` 或 `shared/**`） | 构建 Docker 镜像 → 推送 Docker Hub → SSH 部署 |
+| `backend-deploy.yml` | Push 到 master（`backend/**` 或 `shared/**`） | SSH 登录服务器执行 git pull + docker build + compose up |
 | `admin-deploy.yml` | Push 到 master（`admin/**` 或 `shared/**`） | 构建验证（实际部署由 Vercel 处理） |
 | `flutter-ci.yml` | Push/PR 到 master（`lumira_app_flutter/**`） | Flutter analyze + test |
 
@@ -150,11 +268,17 @@ GitHub Actions 的 `admin-deploy.yml` 会并行运行构建验证，提前发现
 
 Dockerfile 位于 `lumira-server/packages/backend/Dockerfile`，构建上下文（context）为 `lumira-server/` 根目录（因依赖 monorepo 中的 shared 包）。
 
+**多阶段构建**（`Dockerfile`）：
+
+1. `base` — 安装全部依赖（含 devDependencies，用于编译 TypeScript）
+2. `builder` — 构建 shared + backend，然后 prune 到生产依赖
+3. `runner` — 最终镜像，仅含 production 依赖 + dist 产物
+
+本地手动构建（在仓库根目录执行）：
+
 ```bash
-# 本地构建（在仓库根目录执行）
 docker build -f lumira-server/packages/backend/Dockerfile -t lumira-backend lumira-server/
 
-# 本地运行
 docker run -p 3000:3000 \
   -e JWT_SECRET=test-secret \
   -e ADMIN_TOKEN=test-token \
@@ -162,18 +286,22 @@ docker run -p 3000:3000 \
   lumira-backend
 ```
 
-**多阶段构建**：
-1. `base` — 安装全部依赖（含 devDependencies，用于编译 TypeScript）
-2. `builder` — 构建 shared + backend，然后 prune 到生产依赖
-3. `runner` — 最终镜像，仅含 production 依赖 + dist 产物
-
 ---
 
 ## 常见问题
 
 ### Q: 后端部署后健康检查失败？
 
-确认容器内 `/api/v1` 路由可访问。healthcheck 使用 `wget --spider http://localhost:3000/api/v1`。
+确认容器内 `/api/v1` 路由可访问：
+```bash
+docker compose -f docker-compose.prod.yml logs
+curl http://localhost:3000/api/v1
+```
+healthcheck 使用 `wget --spider http://localhost:3000/api/v1`。
+
+### Q: GitHub Actions SSH 部署超时？
+
+首次构建镜像可能需要 5-15 分钟（拉取基础镜像 + pnpm install + tsc build）。`backend-deploy.yml` 已设置 `script_timeout: 30m`，若仍超时，可拆分为两步：先手动 SSH 构建镜像，再让 CI 仅做 `docker compose up -d`。
 
 ### Q: Vercel 构建失败提示找不到 `@lumira/shared`？
 
@@ -181,4 +309,16 @@ docker run -p 3000:3000 \
 
 ### Q: Flutter CI 报 Dart SDK 版本不兼容？
 
-项目 `pubspec.yaml` 要求 `sdk: '>=2.19.6 <3.0.0'`，Flutter 3.7.0 自带 Dart 2.19.0。如遇版本冲突，将 `flutter-ci.yml` 中的 `flutter-version` 改为 `3.7.12`（对应 Dart 2.19.6）。
+项目 `pubspec.yaml` 要求 `sdk: '>=2.19.6 <3.0.0'`，CI 已锁定 Flutter 3.7.12（对应 Dart 2.19.6）。如版本冲突，检查 `flutter-ci.yml` 中的 `flutter-version`。
+
+### Q: 服务器 git pull 失败提示认证失败？
+
+如果仓库是 Private，需要按"方式 B"配置 Deploy Key。Public 仓库无需认证。
+
+### Q: 如何查看后端运行日志？
+
+```bash
+cd /opt/lumira/backend
+docker compose -f docker-compose.prod.yml logs -f          # 实时日志
+docker compose -f docker-compose.prod.yml logs --tail=100  # 最近 100 行
+```
