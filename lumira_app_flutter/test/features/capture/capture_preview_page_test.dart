@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
 import 'package:lumira_app_flutter/features/capture/pages/capture_preview_page.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
@@ -75,6 +76,9 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        // 固定为 1:1 比例，避免 fullscreen 模式下照片占满整个视口，
+        // 导致底部 Sheet（mood/scene/按钮）被推出 800x2400 视口而无法 tap。
+        CaptureState.aspectRatioProvider.overrideWith((ref) => '1:1'),
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
@@ -347,6 +351,8 @@ void main() {
         overrides: [
           themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
           uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+          // 固定为 1:1 比例，避免 fullscreen 模式下照片占满视口导致保存按钮被推出 800x2400 视口
+          CaptureState.aspectRatioProvider.overrideWith((ref) => '1:1'),
         ],
         child: MaterialApp.router(routerConfig: goRouter),
       ));

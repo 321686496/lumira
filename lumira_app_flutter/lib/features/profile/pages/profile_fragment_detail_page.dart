@@ -37,7 +37,7 @@ class _ProfileFragmentDetailPageState
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
-    final fragments = ProfileMockData.fragments;
+    const fragments = ProfileMockData.fragments;
     final collected = fragments.fold<int>(0, (s, f) => s + f.current);
     final total = fragments.fold<int>(0, (s, f) => s + f.max);
 

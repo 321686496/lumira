@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/auth/auth_controller.dart';
+import '../../../core/auth/auth_state.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/brand/lumira_logo.dart';
@@ -20,6 +22,11 @@ import '../../../shared/widgets/common/fade_up.dart';
 ///
 /// Logo 升级：原 Icons.camera_outlined 替换为设计好的品牌 SVG 符号标
 /// （Single Viewfinder + Diagonal Light Beam + Focus Dot），主色 #C9A96E
+///
+/// 后端接入后：监听 authControllerProvider 状态
+/// - loading：底部显示 CircularProgressIndicator
+/// - failed：底部显示「网络连接失败」+ 重试按钮
+/// - registered/fresh：1.8s 后跳转 home
 class SplashPage extends ConsumerStatefulWidget {
   const SplashPage({super.key});
 
@@ -31,14 +38,18 @@ class _SplashPageState extends ConsumerState<SplashPage> {
   static const Duration _redirectDelay = Duration(milliseconds: 1800);
 
   Timer? _redirectTimer;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
     // 1.8s 后跳转 home（用 context.go 替换路由栈，对齐 uni-app 的 reLaunch 语义）
-    _redirectTimer = Timer(_redirectDelay, () {
-      if (mounted) {
-        context.go(RouteNames.home);
+    _redirectTimer = Timer(_redirectDelay, _maybeNavigate);
+    // 监听 auth 状态：重试成功（registered）时自动跳转
+    // 注意：ref.listen 只能在 build 中使用，initState 中需用 ref.listenManual
+    ref.listenManual<AuthState>(authControllerProvider, (previous, next) {
+      if (!_navigated && mounted && next.status == AuthStatus.registered) {
+        _maybeNavigate();
       }
     });
   }
@@ -49,9 +60,23 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     super.dispose();
   }
 
+  void _maybeNavigate() {
+    if (_navigated || !mounted) return;
+    final auth = ref.read(authControllerProvider);
+    // failed 时不跳转，留在 splash 显示重试按钮
+    if (auth.status == AuthStatus.failed) return;
+    _navigated = true;
+    context.go(RouteNames.home);
+  }
+
+  void _retryRegistration() {
+    ref.read(authControllerProvider.notifier).registerIfNeeded();
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(appThemeProvider).tokens;
+    final auth = ref.watch(authControllerProvider);
 
     return Scaffold(
       // #FAF7F2 默认主题 canvas；用 tokens.canvas 让所有主题都对齐
@@ -129,6 +154,24 @@ class _SplashPageState extends ConsumerState<SplashPage> {
                   ],
                 ),
               ),
+              // 状态指示器（loading / failed）
+              const SizedBox(height: 32),
+              if (auth.status == AuthStatus.loading)
+                const CircularProgressIndicator()
+              else if (auth.status == AuthStatus.failed) ...[
+                Text(
+                  '网络连接失败',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: tokens.textTertiary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _retryRegistration,
+                  child: const Text('重试'),
+                ),
+              ],
             ],
           ),
         ),

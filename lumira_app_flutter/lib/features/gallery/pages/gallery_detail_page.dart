@@ -558,71 +558,82 @@ class _ExifButton extends StatelessWidget {
   }
 }
 
-class _BottomBar extends StatelessWidget {
+class _BottomBar extends StatelessWidget implements PreferredSizeWidget {
   const _BottomBar({required this.onReset, required this.onExport});
   final VoidCallback onReset;
   final VoidCallback onExport;
 
+  // 实现 PreferredSizeWidget + SizedBox 双重限制高度：
+  // Scaffold 在 bottomNavigationBar 不实现 PreferredSizeWidget 时，
+  // 给的约束是 maxHeight = 视口高度（loose），而 Row 中的 Expanded 会让
+  // Row 在垂直方向撑开到 maxHeight，导致 _BottomBar 覆盖整个屏幕，
+  // 遮挡 body 内容（用户报告"只有两个占满全屏的按钮"）。
+  @override
+  Size get preferredSize => const Size.fromHeight(62);
+
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        decoration: const BoxDecoration(
-          color: Color(0xFF1C1A17),
-          border: Border(top: BorderSide(color: Colors.white12, width: 1)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: onReset,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white24, width: 1),
-                    borderRadius: BorderRadius.circular(1000),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '重置',
-                      style: TextStyle(fontSize: 14, color: Colors.white70),
+    return SizedBox(
+      height: preferredSize.height,
+      child: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          decoration: const BoxDecoration(
+            color: Color(0xFF1C1A17),
+            border: Border(top: BorderSide(color: Colors.white12, width: 1)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: onReset,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.white24, width: 1),
+                      borderRadius: BorderRadius.circular(1000),
                     ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: GestureDetector(
-                onTap: onExport,
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(1000),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      '导出',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1C1A17),
+                    child: const Center(
+                      child: Text(
+                        '重置',
+                        style: TextStyle(fontSize: 14, color: Colors.white70),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: onExport,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(1000),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        '导出',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1C1A17),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
