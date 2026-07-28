@@ -77,6 +77,11 @@ class Tables {
   static const String colMood = 'mood';
   static const String colLut = 'lut';
 
+  // === gallery_items 扩展列（v7 迁移新增） ===
+  static const String colOriginalPath = 'original_path';
+  static const String colTransform = 'transform';
+  static const String colPostProcess = 'post_process';
+
   // === user_progress ===
   static const String userProgress = 'user_progress';
   static const String colLevel = 'level';

@@ -16,7 +16,7 @@ import 'dao/settings_dao.dart';
 import '../../core/auth/auth_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 6;
+const int _kDbVersion = 7;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -142,11 +142,15 @@ Future<void> _onCreate(Database db, int version) async {
 
   // === gallery_items ===
   // 图片本体优先存文件路径（file_path），data_url 保留兼容旧数据
+  // v7: 新增 original_path / transform / post_process 列（非破坏性编辑支持）
   batch.execute('''
     CREATE TABLE IF NOT EXISTS ${Tables.galleryItems} (
       ${Tables.colId} TEXT PRIMARY KEY,
       ${Tables.colDataUrl} TEXT,
       ${Tables.colFilePath} TEXT,
+      ${Tables.colOriginalPath} TEXT,
+      ${Tables.colTransform} TEXT,
+      ${Tables.colPostProcess} TEXT,
       ${Tables.colSceneId} TEXT,
       ${Tables.colTemplateId} TEXT,
       ${Tables.colKitId} TEXT,
@@ -322,6 +326,31 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v6 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 7) {
+    try {
+      // v7: 新增 original_path / transform / post_process 列（非破坏性编辑支持）
+      await _addColumnIfNotExists(
+        db,
+        Tables.galleryItems,
+        Tables.colOriginalPath,
+        'TEXT',
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.galleryItems,
+        Tables.colTransform,
+        'TEXT',
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.galleryItems,
+        Tables.colPostProcess,
+        'TEXT',
+      );
+    } catch (e) {
+      debugPrint('v7 migration failed (silent fallback): $e');
     }
   }
 }
