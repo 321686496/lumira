@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/database_provider.dart';
 import '../../../core/preferences/home_wordmark_style.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -12,6 +13,7 @@ import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/profile_mock_data.dart';
+import '../providers/settings_providers.dart';
 
 /// 设置页
 ///
@@ -35,11 +37,30 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   late bool _levelOn = ProfileMockData.defaultLevelOn;
   late bool _shutterOn = ProfileMockData.defaultShutterOn;
   late bool _watermarkOn = ProfileMockData.defaultWatermarkOn;
+  late bool _autoDeblurOn = true;
 
   int _tapCount = 0;
   Timer? _tapTimer;
   bool _showRedemption = false;
   final TextEditingController _codeController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // 启动时从 DB 异步加载 autoDeblur 历史值
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final dao = await ref.read(settingsDaoProvider.future);
+        final value = await dao.getAutoDeblur();
+        if (mounted) {
+          setState(() => _autoDeblurOn = value);
+          ref.read(autoDeblurProvider.notifier).state = value;
+        }
+      } catch (_) {
+        // 加载失败保持默认值 true
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -273,6 +294,25 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         trailing: Switch(
                           value: _shutterOn,
                           onChanged: (v) => setState(() => _shutterOn = v),
+                          activeColor: tokens.brand,
+                        ),
+                        tokens: tokens,
+                      ),
+                      _SettingItem(
+                        icon: Icons.blur_on,
+                        label: '自动去模糊',
+                        trailing: Switch(
+                          value: _autoDeblurOn,
+                          onChanged: (v) async {
+                            setState(() => _autoDeblurOn = v);
+                            ref.read(autoDeblurProvider.notifier).state = v;
+                            try {
+                              final dao = await ref.read(settingsDaoProvider.future);
+                              await dao.setAutoDeblur(v);
+                            } catch (e) {
+                              debugPrint('保存自动去模糊设置失败: $e');
+                            }
+                          },
                           activeColor: tokens.brand,
                         ),
                         tokens: tokens,

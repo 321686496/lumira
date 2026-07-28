@@ -74,6 +74,10 @@ class CaptureState {
   /// 返回 null 表示 'fullscreen' 模式（应使用屏幕实际宽高比）。
   /// 方向自适应：'4:3' 在竖屏下显示为 3:4（标准相机 App 行为），
   /// '3:4' 始终为竖版 3:4（即使横屏也显示竖版长条）。
+  ///
+  /// 支持任意 "W:H" 格式（如 '4:5'、'16:9'、'9:16'、'2:3'），
+  /// 用于模板的 cropRatio 字段。'W:H' 始终按字面比例计算（不做方向自适应），
+  /// 因为模板的 cropRatio 已经表达了作者期望的最终画面方向。
   static double? computeTargetRatio(String ratioId, bool isPortrait) {
     switch (ratioId) {
       case 'fullscreen':
@@ -87,6 +91,15 @@ class CaptureState {
         // 始终竖版 3:4
         return 3.0 / 4.0;
       default:
+        // 解析任意 "W:H" 格式（如 '4:5'、'16:9'、'9:16'、'2:3'）
+        final parts = ratioId.split(':');
+        if (parts.length == 2) {
+          final w = double.tryParse(parts[0]);
+          final h = double.tryParse(parts[1]);
+          if (w != null && h != null && w > 0 && h > 0) {
+            return w / h;
+          }
+        }
         return null;
     }
   }

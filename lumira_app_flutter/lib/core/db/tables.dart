@@ -49,6 +49,9 @@ class Tables {
   // === user_settings 扩展列（v4 迁移新增） ===
   static const String colSeedV3Done = 'seed_v3_done';
 
+  // === user_settings 扩展列（v6 迁移新增） ===
+  static const String colAutoDeblur = 'auto_deblur';
+
   // === composition_kits 表（M2 用，v4 迁移同步创建） ===
   // 注：colSceneId / colTemplateId 复用 gallery_items 段已声明的同名常量
   static const String compositionKits = 'composition_kits';

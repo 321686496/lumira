@@ -12,10 +12,11 @@ import '../../features/challenge/data/challenge_dao.dart';
 import '../../features/academy/data/academy_dao.dart';
 import 'dao/composition_kits_dao.dart';
 import 'dao/api_cache_dao.dart';
+import 'dao/settings_dao.dart';
 import '../../core/auth/auth_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 5;
+const int _kDbVersion = 6;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -70,6 +71,11 @@ final authDaoProvider = FutureProvider<AuthDao>((ref) async {
 final apiCacheDaoProvider = FutureProvider<ApiCacheDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return ApiCacheDao(db);
+});
+
+final settingsDaoProvider = FutureProvider<SettingsDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return SettingsDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -190,6 +196,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colShutterSound} INTEGER NOT NULL DEFAULT 1,
       ${Tables.colWatermark} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colSeedV3Done} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colAutoDeblur} INTEGER NOT NULL DEFAULT 1,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
@@ -302,6 +309,19 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       ''');
     } catch (e) {
       debugPrint('v5 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 6) {
+    try {
+      // v6: 新增 auto_deblur 列（自动去模糊开关，默认 1=开启）
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colAutoDeblur,
+        'INTEGER NOT NULL DEFAULT 1',
+      );
+    } catch (e) {
+      debugPrint('v6 migration failed (silent fallback): $e');
     }
   }
 }

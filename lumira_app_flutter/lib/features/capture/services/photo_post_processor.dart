@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
+import 'deblur_processor.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
@@ -36,6 +37,7 @@ class PhotoPostProcessor {
     String aspectRatio = 'fullscreen',
     double screenRatio = 9.0 / 19.5,
     bool isPortrait = true,
+    bool autoDeblur = false,
   }) async {
     // 注意：rawMode 不再跳过裁剪。裁剪是 WYSIWYG 的保证（取景器所见即所得），
     // rawMode 仅跳过滤镜效果（ColorMatrix / Vignette / Sharpen / Clarity / Grain）。
@@ -133,6 +135,54 @@ class PhotoPostProcessor {
       picture.dispose();
       srcImage.dispose();
       debugPrint('[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
+
+      // 4b. 自动去模糊（若开启且检测到模糊）
+      // 性能：清晰图（blurScore ≥ 600）直接跳过，省 200ms
+      if (autoDeblur) {
+        try {
+          final rgba = await resultImage.toByteData(
+            format: ui.ImageByteFormat.rawRgba,
+          );
+          if (rgba != null) {
+            final imgForDeblur = img.Image.fromBytes(
+              width: resultImage.width,
+              height: resultImage.height,
+              bytes: rgba.buffer.asUint8List().buffer,
+              numChannels: 4,
+              order: img.ChannelOrder.rgba,
+            );
+            final blurScore = DeblurProcessor.estimateBlur(imgForDeblur);
+            debugPrint('[post-process] 模糊度: $blurScore');
+            if (blurScore < DeblurProcessor.kClearThreshold) {
+              final strength = DeblurProcessor.strengthForScore(blurScore);
+              final deblurred = await DeblurProcessor.deblur(
+                imgForDeblur,
+                strength: strength,
+              );
+              final outBytes = deblurred.getBytes(order: img.ChannelOrder.rgba);
+              final buffer = await ui.ImmutableBuffer.fromUint8List(outBytes);
+              final descriptor = ui.ImageDescriptor.raw(
+                buffer,
+                width: deblurred.width,
+                height: deblurred.height,
+                pixelFormat: ui.PixelFormat.rgba8888,
+              );
+              final codec = await descriptor.instantiateCodec();
+              final frame = await codec.getNextFrame();
+              resultImage.dispose();
+              resultImage = frame.image;
+              buffer.dispose();
+              descriptor.dispose();
+              codec.dispose();
+              debugPrint('[post-process] 去模糊完成: strength=$strength');
+            } else {
+              debugPrint('[post-process] 图像清晰，跳过去模糊');
+            }
+          }
+        } catch (e) {
+          debugPrint('[post-process] 去模糊失败（静默跳过）: $e');
+        }
+      }
 
       // 5. 逐像素效果（rawMode 跳过；仅在启用时用 img 包处理）
       if (!rawMode) {
@@ -279,7 +329,13 @@ class PhotoPostProcessor {
   ///
   /// 关键：使用与取景器 [CaptureState.computeTargetRatio] 完全一致的比例计算逻辑，
   /// 确保拍照裁剪区域与取景器显示区域一致（所见即所得）。
-  /// 'fullscreen' 模式按 screenRatio 裁剪，其他模式按方向自适应的目标比例裁剪。
+  ///
+  /// 两种模式：
+  /// - 'fullscreen'：单步 cover 裁剪到 screenRatio（与之前一致）
+  /// - 其他比例：两步裁剪保证 WYSIWYG
+  ///   1. 先按 screenRatio 模拟 cover 裁剪（匹配相机流 cover 行为，
+  ///      因为相机流铺满全屏时传感器会被裁剪以匹配屏幕比例）
+  ///   2. 再在可见区域内按 targetRatio 裁剪（匹配 _CropGuideOverlay 框线区域）
   static List<int> _computeCropRect(
     String ratio,
     int imgW,
@@ -296,31 +352,69 @@ class PhotoPostProcessor {
     final targetRatio =
         CaptureState.computeTargetRatio(ratio, isPortrait) ?? screenRatio;
 
-    // cover 裁剪算法：与 CameraPreviewFit.cover 完全一致
     final imgRatio = imgW / imgH;
-    double cropW, cropH;
-    if (imgRatio > targetRatio) {
-      // 图片比目标更宽 → 裁剪左右
-      cropH = imgH.toDouble();
-      cropW = cropH * targetRatio;
-    } else {
-      // 图片比目标更高 → 裁剪上下
-      cropW = imgW.toDouble();
-      cropH = cropW / targetRatio;
+
+    // fullscreen 模式：直接按 screenRatio cover 裁剪（与之前一致）
+    if (ratio == 'fullscreen') {
+      double cropW, cropH;
+      if (imgRatio > screenRatio) {
+        // 图片比屏幕更宽 → 裁剪左右
+        cropH = imgH.toDouble();
+        cropW = cropH * screenRatio;
+      } else {
+        // 图片比屏幕更高 → 裁剪上下
+        cropW = imgW.toDouble();
+        cropH = cropW / screenRatio;
+      }
+      cropW = cropW.clamp(1.0, imgW.toDouble());
+      cropH = cropH.clamp(1.0, imgH.toDouble());
+      final offsetX = ((imgW - cropW) / 2.0).round().clamp(0, imgW - 1);
+      final offsetY = ((imgH - cropH) / 2.0).round().clamp(0, imgH - 1);
+      final width = cropW.round().clamp(1, imgW - offsetX);
+      final height = cropH.round().clamp(1, imgH - offsetY);
+      debugPrint('[post-process] fullscreen 单步裁剪: imgRatio=$imgRatio, '
+          'screenRatio=$screenRatio, 裁剪后比例=${width / height}');
+      return [offsetX, offsetY, width, height];
     }
 
-    // 严格 clamp 到图像边界内
-    cropW = cropW.clamp(1.0, imgW.toDouble());
-    cropH = cropH.clamp(1.0, imgH.toDouble());
+    // 非 fullscreen 模式：两步裁剪保证 WYSIWYG
+    // 第 1 步：模拟相机流 cover 到屏幕比例（裁剪传感器以匹配屏幕）
+    double visW, visH, visOffsetX, visOffsetY;
+    if (imgRatio > screenRatio) {
+      // 传感器比屏幕更宽 → 裁左右
+      visH = imgH.toDouble();
+      visW = visH * screenRatio;
+      visOffsetX = (imgW - visW) / 2.0;
+      visOffsetY = 0.0;
+    } else {
+      // 传感器比屏幕更窄 → 裁上下
+      visW = imgW.toDouble();
+      visH = visW / screenRatio;
+      visOffsetX = 0.0;
+      visOffsetY = (imgH - visH) / 2.0;
+    }
 
-    final offsetX = ((imgW - cropW) / 2.0).round().clamp(0, imgW - 1);
-    final offsetY = ((imgH - cropH) / 2.0).round().clamp(0, imgH - 1);
+    // 第 2 步：在可见区域内按 targetRatio 裁剪（对应辅助线框区域）
+    final visRatio = visW / visH;
+    double cropW, cropH;
+    if (visRatio > targetRatio) {
+      // 可见区域比目标更宽 → 裁左右
+      cropH = visH;
+      cropW = visH * targetRatio;
+    } else {
+      // 可见区域比目标更窄 → 裁上下
+      cropW = visW;
+      cropH = visW / targetRatio;
+    }
+
+    // 计算最终裁剪区域在原图中的位置
+    final offsetX = (visOffsetX + (visW - cropW) / 2.0).round().clamp(0, imgW - 1);
+    final offsetY = (visOffsetY + (visH - cropH) / 2.0).round().clamp(0, imgH - 1);
     final width = cropW.round().clamp(1, imgW - offsetX);
     final height = cropH.round().clamp(1, imgH - offsetY);
 
-    // 诊断日志：输出最终裁剪后的比例，便于与取景器对比
-    debugPrint('[post-process] 目标比例=$targetRatio, 图像比例=$imgRatio, '
-        '裁剪后比例=${width / height}');
+    debugPrint('[post-process] 两步裁剪: imgRatio=$imgRatio, screenRatio=$screenRatio, '
+        'targetRatio=$targetRatio, 裁剪后比例=${width / height}');
 
     return [offsetX, offsetY, width, height];
   }
