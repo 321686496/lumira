@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,7 @@ import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
+import '../widgets/preview_edit_panel.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
 import '../services/compare_image_generator.dart';
@@ -76,6 +78,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// freeModePostProcessProvider，导致返回拍摄页后拍摄页参数也被改变。
   /// 现在使用本地状态，保存时按 delta 应用到照片文件，拍摄页参数不受影响。
   late PostProcess _localPostProcess;
+
+  /// 预览页本地变换参数（旋转/翻转/拉直）。
+  /// 仅影响当前照片预览，保存时由 Task 10 通过非破坏性编辑管线应用。
+  TransformParams _localTransform = const TransformParams();
 
   @override
   void initState() {
@@ -520,6 +526,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                           targetRatio: photoTargetRatio,
                           // 使用本地后期参数，避免回写 CaptureState 导致参数泄漏
                           postProcess: _localPostProcess,
+                          // 本地变换参数（旋转/翻转/拉直），仅影响预览
+                          transform: _localTransform,
                         ),
                         _BottomSheet(
                           tokens: tokens,
@@ -531,9 +539,15 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                           onCompareCard: _onCompareCard,
                           onExifCard: _onExifCard,
                           onSave: _onSave,
-                          // 本地后期参数及更新回调，供 _AdjustSection 使用
+                          // 本地后期参数及更新回调，供 PreviewEditPanel 使用
                           localPostProcess: _localPostProcess,
                           onUpdateLocalPostProcess: _updateLocalPostProcess,
+                          // 本地变换参数及更新回调，供 PreviewEditPanel 裁剪旋转标签使用
+                          localTransform: _localTransform,
+                          onUpdateLocalTransform: (t) {
+                            if (!mounted) return;
+                            setState(() => _localTransform = t);
+                          },
                         ),
                       ],
                     ),
@@ -699,6 +713,7 @@ class _PhotoFrame extends StatelessWidget {
     required this.photoUrl,
     required this.isComparing,
     required this.postProcess,
+    required this.transform,
     required this.targetRatio,
   });
 
@@ -706,6 +721,7 @@ class _PhotoFrame extends StatelessWidget {
   final String photoUrl;
   final bool isComparing;
   final PostProcess postProcess;
+  final TransformParams transform;
 
   /// 照片目标比例（width/height），与拍摄页取景器使用同一逻辑计算
   final double targetRatio;
@@ -713,10 +729,18 @@ class _PhotoFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isNetworkUrl = photoUrl.startsWith('http');
-    // 对比模式下不应用滤镜，显示原图
-    final colorFilter =
-        isComparing ? const ColorFilter.mode(Colors.transparent, BlendMode.dst)
-            : fromPostProcess(postProcess);
+
+    Widget buildImage() => isNetworkUrl
+        ? Image.network(
+            photoUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _PhotoEmptyState(tokens: tokens),
+          )
+        : Image.file(
+            File(photoUrl),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _PhotoEmptyState(tokens: tokens),
+          );
 
     return Padding(
       padding: const EdgeInsets.all(8),
@@ -727,22 +751,28 @@ class _PhotoFrame extends StatelessWidget {
           child: Container(
             color: const Color(0xFF1C1A17),
             child: photoUrl.isNotEmpty
-                ? ColorFiltered(
-                    colorFilter: colorFilter,
-                    child: isNetworkUrl
-                        ? Image.network(
-                            photoUrl,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) =>
-                                _PhotoEmptyState(tokens: tokens),
-                          )
-                        : Image.file(
-                            File(photoUrl),
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) =>
-                                _PhotoEmptyState(tokens: tokens),
+                ? (isComparing
+                    // 对比模式：显示原图，不应用任何变换或滤镜
+                    ? buildImage()
+                    : RotatedBox(
+                        quarterTurns: transform.rotation ~/ 90,
+                        child: Transform(
+                          alignment: Alignment.center,
+                          transform: Matrix4.identity()
+                            ..scale(
+                              transform.flipH ? -1.0 : 1.0,
+                              transform.flipV ? -1.0 : 1.0,
+                              1.0,
+                            ),
+                          child: Transform.rotate(
+                            angle: transform.straighten * math.pi / 180.0,
+                            child: ColorFiltered(
+                              colorFilter: fromPostProcess(postProcess),
+                              child: buildImage(),
+                            ),
                           ),
-                  )
+                        ),
+                      ))
                 : _PhotoEmptyState(tokens: tokens),
           ),
         ),
@@ -798,6 +828,8 @@ class _BottomSheet extends StatelessWidget {
     required this.onSave,
     required this.localPostProcess,
     required this.onUpdateLocalPostProcess,
+    required this.localTransform,
+    required this.onUpdateLocalTransform,
   });
 
   final ThemeTokens tokens;
@@ -816,6 +848,12 @@ class _BottomSheet extends StatelessWidget {
   /// 本地后期参数更新回调（仅更新本地状态，不污染拍摄页）
   final ValueChanged<PostProcess> onUpdateLocalPostProcess;
 
+  /// 预览页本地变换参数（旋转/翻转/拉直，仅影响当前照片预览）
+  final TransformParams localTransform;
+
+  /// 本地变换参数更新回调
+  final ValueChanged<TransformParams> onUpdateLocalTransform;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -826,12 +864,13 @@ class _BottomSheet extends StatelessWidget {
         children: [
           _SheetHandle(tokens: tokens),
           const SizedBox(height: 16),
-          // 后期参数调整区（亮度/对比度/饱和度滑块）
+          // 后期参数调整区（4 标签编辑面板：色彩/细节/滤镜/裁剪旋转）
           // 使用本地状态：仅影响当前照片预览和保存，不回写 CaptureState（避免参数泄漏到拍摄页）
-          _AdjustSection(
-            tokens: tokens,
+          PreviewEditPanel(
             postProcess: localPostProcess,
-            onUpdate: onUpdateLocalPostProcess,
+            transform: localTransform,
+            onPostProcessChanged: onUpdateLocalPostProcess,
+            onTransformChanged: onUpdateLocalTransform,
           ),
           const SizedBox(height: 16),
           _MoodSection(
@@ -860,115 +899,8 @@ class _BottomSheet extends StatelessWidget {
   }
 }
 
-/// 后期参数调整区：亮度/对比度/饱和度滑块
-///
-/// 修复参数泄漏：
-/// 原代码 watch CaptureState.effectivePostProcessProvider 并直接修改
-/// editableTemplateProvider / freeModePostProcessProvider，导致返回拍摄页后
-/// 拍摄页参数也被改变。
-/// 现在使用父组件传入的本地 postProcess 和 onUpdate 回调，仅影响当前照片
-/// 预览和保存（保存时按 delta 应用到照片文件），不污染拍摄页状态。
-class _AdjustSection extends StatelessWidget {
-  const _AdjustSection({
-    required this.tokens,
-    required this.postProcess,
-    required this.onUpdate,
-  });
-
-  final ThemeTokens tokens;
-  final PostProcess postProcess;
-  final ValueChanged<PostProcess> onUpdate;
-
-  @override
-  Widget build(BuildContext context) {
-    final post = postProcess;
-
-    void update(double brightness, double contrast, double saturation) {
-      final newColor = post.color.copyWith(
-        brightness: brightness,
-        contrast: contrast,
-        saturation: saturation,
-      );
-      onUpdate(post.copyWith(color: newColor));
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('后期调整', style: TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w600, color: tokens.textPrimary,
-        )),
-        const SizedBox(height: 8),
-        _SliderRow(
-          label: '亮度',
-          value: post.color.brightness.toDouble(),
-          min: -100, max: 100,
-          onChanged: (v) => update(v, post.color.contrast.toDouble(), post.color.saturation.toDouble()),
-        ),
-        _SliderRow(
-          label: '对比度',
-          value: post.color.contrast.toDouble(),
-          min: -100, max: 100,
-          onChanged: (v) => update(post.color.brightness.toDouble(), v, post.color.saturation.toDouble()),
-        ),
-        _SliderRow(
-          label: '饱和度',
-          value: post.color.saturation.toDouble(),
-          min: -100, max: 100,
-          onChanged: (v) => update(post.color.brightness.toDouble(), post.color.contrast.toDouble(), v),
-        ),
-      ],
-    );
-  }
-}
-
-class _SliderRow extends StatelessWidget {
-  const _SliderRow({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-  });
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 56,
-            child: Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          ),
-          Expanded(
-            child: Slider(
-              value: value.clamp(min, max),
-              min: min,
-              max: max,
-              onChanged: onChanged,
-              activeColor: const Color(0xFFC9A96E),
-            ),
-          ),
-          SizedBox(
-            width: 40,
-            child: Text(
-              value.toInt().toString(),
-              style: const TextStyle(fontSize: 11, color: Colors.black45),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
+/// 后期参数调整区已迁移至 `PreviewEditPanel`（4 标签编辑面板），
+/// 见 `../widgets/preview_edit_panel.dart`。原 `_AdjustSection` / `_SliderRow` 已删除。
 class _SheetHandle extends StatelessWidget {
   const _SheetHandle({required this.tokens});
   final ThemeTokens tokens;
