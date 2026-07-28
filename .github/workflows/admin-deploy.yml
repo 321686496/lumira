@@ -10,6 +10,15 @@ on:
     paths:
       - 'lumira-server/packages/admin/**'
       - 'lumira-server/packages/shared/**'
+  # 手动触发：在 GitHub Actions 页面点击 "Run workflow" 按钮即可
+  # 用于在不依赖 push 的情况下验证 admin 构建（实际部署仍由 Vercel 处理）
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '触发原因（可选，仅用于日志记录）'
+        required: false
+        default: 'manual'
+        type: string
 
 jobs:
   verify:
@@ -17,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Print trigger info
+        run: |
+          echo "Trigger reason: ${{ github.event.inputs.reason || github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+
       - name: Checkout
         uses: actions/checkout@v4
 
