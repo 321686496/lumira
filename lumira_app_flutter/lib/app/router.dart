@@ -93,7 +93,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final photoUrl = state.queryParams['photoUrl'];
           final photoId = state.queryParams[RouteNames.paramPhotoId];
-          return CapturePreviewPage(photoUrl: photoUrl, photoId: photoId);
+          final aspectRatio = state.queryParams['aspectRatio'];
+          return CapturePreviewPage(
+            photoUrl: photoUrl,
+            photoId: photoId,
+            aspectRatio: aspectRatio,
+          );
         },
       ),
       GoRoute(
