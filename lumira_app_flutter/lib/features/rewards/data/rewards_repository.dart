@@ -67,3 +67,8 @@ final rewardsRepositoryProvider = FutureProvider<RewardsRepository>((ref) async 
   final cache = await ref.watch(apiCacheDaoProvider.future);
   return RemoteRewardsRepository(api: api, cache: cache);
 });
+
+final rewardsListProvider = FutureProvider<RewardsList>((ref) async {
+  final repo = await ref.watch(rewardsRepositoryProvider.future);
+  return repo.list();
+});
