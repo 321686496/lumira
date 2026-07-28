@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import 'deblur_processor.dart';
+import 'skin_smoother.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
@@ -193,11 +194,47 @@ class PhotoPostProcessor {
             }
           }
         } catch (e) {
-          debugPrint('[post-process] 去模糊失败（静默跳过）: $e');
+        debugPrint('[post-process] 去模糊失败（静默跳过）: $e');
+      }
+    }
+
+      // 4.5. 皮肤平滑（受 smoothStrength 控制）
+      if (!rawMode && params.smoothStrength > 0) {
+        try {
+          final byteData = await resultImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+          if (byteData != null) {
+            final imgImage = img.Image.fromBytes(
+              width: resultImage.width,
+              height: resultImage.height,
+              bytes: byteData.buffer.asUint8List().buffer,
+              numChannels: 4,
+              order: img.ChannelOrder.rgba,
+            );
+            final smoothed = SkinSmoother.smooth(imgImage, params.smoothStrength);
+            // Convert back to ui.Image
+            final completer = ui.PictureRecorder();
+            final canvas = ui.Canvas(completer);
+            final paint = ui.Paint();
+            // Encode smoothed image to bytes and decode back
+            final smoothedBytes = img.encodePng(smoothed);
+            final codec = await ui.instantiateImageCodec(smoothedBytes);
+            final frame = await codec.getNextFrame();
+            canvas.drawImage(frame.image, ui.Offset.zero, paint);
+            final picture = completer.endRecording();
+            final newImage = await picture.toImage(smoothed.width, smoothed.height);
+            resultImage.dispose();
+            resultImage = newImage;
+            frame.image.dispose();
+            codec.dispose();
+            picture.dispose();
+            debugPrint('[post-process] 皮肤平滑: smoothStrength=${params.smoothStrength}, ${sw.elapsedMilliseconds}ms');
+          }
+        } catch (e) {
+          debugPrint('[post-process] 皮肤平滑失败（静默跳过）: $e');
         }
       }
 
-      // 5. 逐像素效果（rawMode 跳过；仅在启用时用 img 包处理）
+    // 5. 逐像素效果（rawMode 跳过；仅在启用时用 img 包处理）
       if (!rawMode) {
         final clarityVal = params.color.clarity;
         final needsPerPixel = params.sharpen > 0 ||
