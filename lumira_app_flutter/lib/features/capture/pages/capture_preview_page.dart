@@ -408,6 +408,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         rawMode: false,
         aspectRatio: 'free',
       );
+
+      // 修复：二次处理覆盖文件后 evict FileImage 缓存，避免预览页和
+      // 后续相册页显示旧版本解码图（与 capture_page.dart 的修复同理）。
+      try {
+        PaintingBinding.instance.imageCache.evict(FileImage(File(savePath)));
+      } catch (_) {}
     }
 
     File? imageFile;

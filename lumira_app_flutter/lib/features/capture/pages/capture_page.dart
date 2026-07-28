@@ -11,6 +11,7 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../profile/providers/composition_kits_providers.dart';
+import '../../profile/providers/settings_providers.dart';
 import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
@@ -274,13 +275,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
         }
         _isProcessing = true;
 
-        ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
-            media.filePath;
-
         // 应用后期参数（滤镜、色彩、锐化等）和 aspectRatio 裁剪到照片文件
         final params = ref.read(CaptureState.effectivePostProcessProvider);
         final rawMode = ref.read(CaptureState.rawModeProvider);
         final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
+        final autoDeblur = ref.read(autoDeblurProvider);
         // 获取屏幕宽高比，用于 fullscreen 模式按取景器裁剪
         final screenSize = MediaQuery.of(context).size;
         final screenRatio = screenSize.width / screenSize.height;
@@ -295,9 +294,38 @@ class _CapturePageState extends ConsumerState<CapturePage>
           aspectRatio: aspectRatio,
           screenRatio: screenRatio,
           isPortrait: isPortrait,
+          autoDeblur: autoDeblur,
         );
 
+        // 修复 Bug：拍照后预览页/相册显示带黑边、比例错，多次进入后才变对。
+        //
+        // 根因：原代码在 processFile 之前就把 media.filePath 写入
+        // lastPhotoPathProvider，拍摄按钮缩略图的 Image.file 立即读取了
+        // 4:3 传感器原图并缓存到 FileImage。processFile 完成后文件被覆盖为
+        // 目标比例（如 9:16），但 OHOS 文件系统 stat 缓存延迟可能导致
+        // FileImage 误判 cache hit，预览页和首次进入相册都拿到 4:3 解码图，
+        // 在 9:16 容器内 contain 显示 → 上下黑边。多次进出后 imageCache LRU
+        // 驱逐该条目，重新解码读到目标比例字节 → 显示正确。
+        //
+        // 修复：
+        // 1. 延后设置 lastPhotoPathProvider 到 processFile 完成之后，
+        //    确保缩略图第一次访问就是目标比例的字节。
+        // 2. processFile 完成后主动 evict FileImage 缓存，清除任何可能在
+        //    processFile 期间被其他 widget（如取景器残留帧）缓存的旧解码图。
+        //    FileImage 的 key 是 (path, mtime, size)，writeAsBytes 后 mtime
+        //    和 size 都变了，理论上应该 cache miss，evict 是双保险。
+        try {
+          PaintingBinding.instance.imageCache
+              .evict(FileImage(File(processedPath)));
+        } catch (e) {
+          debugPrint('[capture] evict FileImage 缓存失败: $e');
+        }
+
         _isProcessing = false;
+
+        // processFile 完成后再设置缩略图路径，确保缩略图显示的是处理后的照片
+        ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
+            processedPath;
 
         // 自动保存到应用相册（数据库），用户在预览页可决定是否另存到系统相册
         // 修复 Issue 4：原方案仅在用户点击预览页"保存"时写入 DB，
@@ -543,6 +571,24 @@ class _CapturePageState extends ConsumerState<CapturePage>
       state?.sensorConfig.setFlashMode(_mapFlashMode(next));
     });
 
+    // 模板切换时同步 aspectRatioProvider 为模板的 cropRatio
+    // 修复：之前模板的 cropRatio 字段被完全忽略，导致不同模板拍出来比例都一样
+    // （永远使用 aspectRatioProvider 的默认值 'fullscreen'）。
+    // 现在模板加载/切换时自动套用其 cropRatio，取景器、比例切换器、拍照裁剪
+    // 三者都跟随模板比例，保证 WYSIWYG。用户仍可手动点比例切换器覆盖，
+    // 直到下次切换模板。
+    // 切到自由模式（next == null）时不主动改比例，保留用户上一次的选择。
+    ref.listen<PhotoTemplate?>(CaptureState.originalTemplateProvider, (prev, next) {
+      if (next != null && next.postProcess.cropRatio.isNotEmpty) {
+        final cropRatio = next.postProcess.cropRatio;
+        final current = ref.read(CaptureState.aspectRatioProvider);
+        if (current != cropRatio) {
+          ref.read(CaptureState.aspectRatioProvider.notifier).state = cropRatio;
+          debugPrint('[capture] 模板切换，同步比例: $cropRatio');
+        }
+      }
+    });
+
     // 监听相机参数变化，同步 EV 到 brightness（camerawesome 1.4.0 仅支持 brightness）
     // EV 范围 [-3, +3] 映射到 brightness [0, 1]，0 EV → 0.5 brightness
     ref.listen<CameraParams>(CaptureState.effectiveCameraProvider, (prev, next) {
@@ -708,38 +754,99 @@ class _ViewfinderArea extends ConsumerWidget {
     // fullscreen 模式：目标比例 = 屏幕比例；其他模式：按 ratioId 计算
     final targetRatio =
         CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+    final isFullscreen = ratioId == 'fullscreen';
 
     return Container(
       color: Colors.black,
-      child: Center(
-        child: Container(
-          // 使用 ConstrainedBox + AspectRatio 确保预览区域不超过屏幕
-          constraints: BoxConstraints(
-            maxWidth: screenSize.width,
-            maxHeight: screenSize.height,
-          ),
-          child: AspectRatio(
-            aspectRatio: targetRatio,
-            child: ClipRect(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    // fullscreen 模式下边框与屏幕几乎重合，仍保留极细边框作为视觉边界
-                    color: Colors.white.withOpacity(
-                        ratioId == 'fullscreen' ? 0.0 : 0.15),
-                    width: 0.5,
-                  ),
-                ),
-                child: CameraPreview(
-                  key: ValueKey('camera_preview_$rebuildKey'),
-                  onCaptured: onCaptured,
-                  onCameraStateCreated: onCameraStateCreated,
-                  previewFit: CameraPreviewFit.cover,
-                ),
+      child: SizedBox(
+        width: screenSize.width,
+        height: screenSize.height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // 相机流铺满全屏（所有模式都一样），与 iPhone 系统相机 4:3 模式一致
+            CameraPreview(
+              key: ValueKey('camera_preview_$rebuildKey'),
+              onCaptured: onCaptured,
+              onCameraStateCreated: onCameraStateCreated,
+              previewFit: CameraPreviewFit.cover,
+            ),
+            // 非 fullscreen 模式叠加裁剪辅助线，指示实际裁剪区域
+            if (!isFullscreen)
+              _CropGuideOverlay(
+                aspectRatio: targetRatio,
+                screenSize: screenSize,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 裁剪辅助线 overlay：非 fullscreen 模式下叠加在相机流上
+/// 显示实际裁剪区域（框线）+ 框外半透明遮罩
+/// 与 iPhone 系统相机 4:3 模式一致
+class _CropGuideOverlay extends StatelessWidget {
+  const _CropGuideOverlay({
+    required this.aspectRatio,
+    required this.screenSize,
+  });
+
+  final double aspectRatio; // 裁剪框宽高比 (w/h)
+  final Size screenSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final sw = screenSize.width;
+    final sh = screenSize.height;
+
+    // 计算裁剪框尺寸：在屏幕内居中，尽可能大，宽高比 = aspectRatio
+    double cropW, cropH;
+    if (sw / sh > aspectRatio) {
+      // 屏幕比目标更宽 → 高度铺满，宽度按比例
+      cropH = sh;
+      cropW = sh * aspectRatio;
+    } else {
+      // 屏幕比目标更窄 → 宽度铺满，高度按比例
+      cropW = sw;
+      cropH = sw / aspectRatio;
+    }
+
+    final left = (sw - cropW) / 2;
+    final top = (sh - cropH) / 2;
+    const maskColor = Color(0x80000000); // 框外遮罩：黑色 50% 透明
+    const borderColor = Color(0x99FFFFFF); // 框线：白色 60% 透明
+
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          // 框外遮罩（四块）
+          // 上
+          Positioned(left: 0, top: 0, right: 0, height: top,
+            child: ColoredBox(color: maskColor)),
+          // 下
+          Positioned(left: 0, top: top + cropH, right: 0, bottom: 0,
+            child: ColoredBox(color: maskColor)),
+          // 左
+          Positioned(left: 0, top: top, width: left, height: cropH,
+            child: ColoredBox(color: maskColor)),
+          // 右
+          Positioned(left: left + cropW, top: top, right: 0, height: cropH,
+            child: ColoredBox(color: maskColor)),
+          // 裁剪框线
+          Positioned(
+            left: left,
+            top: top,
+            width: cropW,
+            height: cropH,
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: borderColor, width: 1.0),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
