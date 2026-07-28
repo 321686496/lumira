@@ -1,0 +1,51 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'lumira-server/**'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'lumira-server/**'
+
+defaults:
+  run:
+    working-directory: lumira-server/packages/backend
+
+jobs:
+  ci:
+    name: Lint · Typecheck · Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: lumira-server/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: lumira-server
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        # backend 暂未配置 lint 脚本；若后续添加则自动生效
+        run: pnpm --filter @lumira/backend run lint
+        continue-on-error: true
+
+      - name: Typecheck
+        run: pnpm --filter @lumira/backend exec tsc --noEmit
+
+      - name: Test
+        run: pnpm --filter @lumira/backend test

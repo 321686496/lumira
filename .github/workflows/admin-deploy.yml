@@ -1,0 +1,45 @@
+name: Admin Build Verification
+
+# 实际部署由 Vercel 自动监听 GitHub push 触发。
+# 此 workflow 仅做 build 验证，确保 monorepo 依赖变更不会破坏 admin 构建。
+# Vercel 控制台配置：Import 项目时设置 Root Directory = lumira-server/packages/admin
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'lumira-server/packages/admin/**'
+      - 'lumira-server/packages/shared/**'
+
+jobs:
+  verify:
+    name: Verify Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: lumira-server/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: lumira-server
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared
+        working-directory: lumira-server
+        run: pnpm --filter @lumira/shared build
+
+      - name: Build admin
+        working-directory: lumira-server
+        run: pnpm --filter @lumira/admin build
