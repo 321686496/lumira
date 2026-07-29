@@ -43,11 +43,12 @@ services:
     networks:
       - lumira-net
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/api/v1 || exit 1"]
+      # /api/v1/health 是后端新增的公开健康检查端点，不需要鉴权
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/api/v1/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
 
 networks:
   lumira-net:
