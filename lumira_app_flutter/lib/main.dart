@@ -89,7 +89,9 @@ Future<RegisterResult> _doRegister({
   ));
   final resp = await dio.post('/device/register', data: {
     'deviceId': deviceId,
-    'os': os,
+    // 后端 RegisterDeviceDto 只接受 deviceId 和 alias，os 字段会被 forbidNonWhitelisted 拒绝
+    // 后端通过 IP 推断地域，不需要 os 信息
+    // 如未来后端需要 os，在此处重新添加 'os': os
   });
   final body = resp.data as Map<String, dynamic>;
   return RegisterResult(
