@@ -11,7 +11,11 @@ RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
 
 # 配置 pnpm 使用淘宝 npm 镜像加速（国内服务器拉取 npm 包更快）
 RUN npm install -g pnpm@9 \
-    && pnpm config set registry https://registry.npmmirror.com
+    && pnpm config set registry https://registry.npmmirror.com \
+    && pnpm config set fetch-retries 5 \
+    && pnpm config set fetch-retry-factor 2 \
+    && pnpm config set fetch-retry-mintimeout 20000 \
+    && pnpm config set fetch-timeout 120000
 WORKDIR /app
 
 # Copy workspace manifests first for better layer caching
