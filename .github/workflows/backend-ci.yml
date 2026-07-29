@@ -9,17 +9,26 @@ on:
     branches: [master]
     paths:
       - 'lumira-server/**'
-
-defaults:
-  run:
-    working-directory: lumira-server/packages/backend
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '触发原因（可选，仅用于日志记录）'
+        required: false
+        default: 'manual'
+        type: string
 
 jobs:
   ci:
-    name: Lint · Typecheck · Test
+    name: Typecheck · Test
     runs-on: ubuntu-latest
 
     steps:
+      - name: Print trigger info
+        run: |
+          echo "Trigger reason: ${{ github.event.inputs.reason || github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -39,13 +48,14 @@ jobs:
         working-directory: lumira-server
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        # backend 暂未配置 lint 脚本；若后续添加则自动生效
-        run: pnpm --filter @lumira/backend run lint
-        continue-on-error: true
+      - name: Build shared
+        working-directory: lumira-server
+        run: pnpm --filter @lumira/shared build
 
       - name: Typecheck
+        working-directory: lumira-server
         run: pnpm --filter @lumira/backend exec tsc --noEmit
 
       - name: Test
+        working-directory: lumira-server
         run: pnpm --filter @lumira/backend test

@@ -48,10 +48,28 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           envs: DEPLOY_PATH,GIT_REMOTE,TRIGGER_REASON
           # 首次构建可能需要 5-15 分钟（pnpm install + tsc build），给足超时
-          script_timeout: 30m
+          command_timeout: 30m
           script: |
             set -e
             echo "==> 触发原因：$TRIGGER_REASON"
+
+            # 检查部署目录是否已初始化
+            if [ ! -d "$DEPLOY_PATH/repo/.git" ]; then
+              echo "::error::部署目录 $DEPLOY_PATH/repo 未初始化"
+              echo "::error::请先在服务器上执行以下命令完成初始化："
+              echo "::error::  sudo mkdir -p $DEPLOY_PATH && sudo chown \$USER:\$USER $DEPLOY_PATH"
+              echo "::error::  cd $DEPLOY_PATH"
+              echo "::error::  git clone <仓库URL> repo"
+              echo "::error::  cp repo/deploy/docker-compose.prod.yml ."
+              echo "::error::  mkdir -p data"
+              echo "::error::  cat > .env <<EOF"
+              echo "::error::  JWT_SECRET=\$(openssl rand -hex 32)"
+              echo "::error::  ADMIN_TOKEN=\$(openssl rand -hex 32)"
+              echo "::error::  EOF"
+              echo "::error::详细步骤见 .github/DEPLOY.md"
+              exit 1
+            fi
+
             echo "==> [1/5] 拉取最新代码"
             cd $DEPLOY_PATH/repo
             git pull $GIT_REMOTE master
