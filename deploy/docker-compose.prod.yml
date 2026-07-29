@@ -43,8 +43,9 @@ services:
     networks:
       - lumira-net
     healthcheck:
-      # /api/v1/health 是后端新增的公开健康检查端点，不需要鉴权
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/api/v1/health || exit 1"]
+      # /api/v1/health 是后端公开健康检查端点，不需要鉴权
+      # busybox wget 不支持 --quiet 长格式，用 -q -O /dev/null 代替 --spider
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/v1/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
