@@ -142,19 +142,34 @@ git clone git@github.com-lumira:<your-username>/lumira.git repo
 cat > /opt/lumira/backend/.env <<EOF
 JWT_SECRET=$(openssl rand -hex 32)
 ADMIN_TOKEN=$(openssl rand -hex 32)
+NGINX_NETWORK=lumira-net
 EOF
 
 # 查看并记下这些值（用于客户端配置）
 cat /opt/lumira/backend/.env
 ```
 
-### 7. 首次构建并启动
+### 7. 创建 docker 网络（用于 nginx 与后端容器通信）
+
+```bash
+# 如果还没有网络
+docker network create lumira-net
+
+# 如果你的 nginx 容器已在另一个网络中（如 nginx-proxy 网络），
+# 把 .env 中的 NGINX_NETWORK 改为该网络名
+# 查询现有网络：docker network ls
+```
+
+> 后端容器会加入此网络，nginx 容器也必须加入同一网络才能通过容器名 `lumira-backend` 反向代理。
+> 如果你的 nginx 是独立的 docker compose 项目，在那边的 networks 配置中 `external: true` 引用此网络即可。
+
+### 8. 首次构建并启动
 
 ```bash
 cd /opt/lumira/backend
 
 # 同步部署用 compose 文件
-cp repo/deploy/docker-compose.prod.yml docker-compose.prod.yml
+cp repo/deploy/docker-compose.prod.yml .
 
 # 创建数据目录
 mkdir -p data
@@ -169,41 +184,49 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d
 docker compose -f docker-compose.prod.yml logs -f
 ```
 
-### 8. 验证部署
+### 9. 验证部署
+
+容器未暴露端口到宿主机，需通过 nginx 反向代理访问，或在容器内验证：
 
 ```bash
-# 健康检查
-curl http://localhost:3000/api/v1
-
 # 查看容器状态
 docker compose -f docker-compose.prod.yml ps
+
+# 进入容器验证健康检查
+docker compose -f docker-compose.prod.yml exec lumira-backend wget -qO- http://localhost:3000/api/v1
 ```
 
-### 9. 配置反向代理（可选，推荐使用 Nginx + HTTPS）
+### 10. 配置 Nginx 反向代理（必需）
+
+将 [deploy/nginx-lumira.conf.example](file:///d:/app/projects/photo_post/deploy/nginx-lumira.conf.example) 复制到你的 nginx 配置目录，按注释替换占位符：
 
 ```bash
-sudo apt install -y nginx certbot python3-certbot-nginx
+# 示例（nginx 容器挂载的配置目录）
+cp /opt/lumira/backend/repo/deploy/nginx-lumira.conf.example /etc/nginx/conf.d/lumira-api.conf
 
-sudo tee /etc/nginx/conf.d/lumira-api.conf <<'EOF'
-server {
-    listen 80;
-    server_name api.your-domain.com;  # 替换为你的域名
+# 替换 <<YOUR_API_DOMAIN>> 为你的域名
+nano /etc/nginx/conf.d/lumira-api.conf
 
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-EOF
+# 测试 + 重载
+nginx -t && nginx -s reload
+```
 
-sudo nginx -t && sudo systemctl reload nginx
+**关键参数对照**（nginx 配置中需要替换的占位符）：
 
-# 配置 HTTPS
+| 占位符 | 说明 | 示例 |
+|---|---|---|
+| `<<YOUR_API_DOMAIN>>` | 后端 API 域名 | `api.lumira.example.com` |
+| `lumira-backend` | 后端容器服务名（已在 docker-compose.prod.yml 中固定） | 无需修改 |
+| `3000` | 后端容器内端口（已在 docker-compose.prod.yml 中固定） | 无需修改 |
+
+**申请 HTTPS 证书**（如果 nginx 在宿主机直接运行）：
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d api.your-domain.com
 ```
+
+**如果 nginx 也是 docker 容器**：建议用 [nginx-proxy](https://github.com/nginx-proxy/nginx-proxy) + [acme-companion](https://github.com/nginx-proxy/acme-companion) 自动处理证书，或用 [Caddy](https://caddyserver.com/) 替代 nginx（自动 HTTPS）。
 
 后续部署由 GitHub Actions 自动执行：`git pull → docker build → docker compose up -d`。
 
@@ -240,7 +263,11 @@ Admin 后台通过 Vercel 自动部署，无需手动操作。
 
 | 变量 | 说明 |
 |------|------|
-| `NEXT_PUBLIC_API_BASE_URL` | 后端 API 地址，如 `https://api.your-domain.com` |
+| `BACKEND_URL` | 后端 API 内网或公网地址（Vercel 服务器需可访问），如 `https://api.your-domain.com` 或 `http://203.0.113.50:3000` |
+
+> Admin 是 Next.js 服务端渲染（用了 `next/headers` 的 `cookies()`），fetch 发生在服务端而非浏览器，所以变量名是 `BACKEND_URL`，不需要 `NEXT_PUBLIC_` 前缀。
+>
+> 如果后端 HTTPS 证书是自签的，建议配置正规证书（Let's Encrypt），否则 Vercel 服务端 fetch 会因证书校验失败而报错。
 
 ### 5. 自动部署
 

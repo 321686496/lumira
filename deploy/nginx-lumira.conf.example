@@ -1,0 +1,101 @@
+# =============================================================================
+# Lumira 后端 Nginx 反向代理配置示例
+# =============================================================================
+#
+# 使用方式：
+# 1. 复制此文件并重命名为你的站点配置（如 /etc/nginx/conf.d/lumira-api.conf）
+# 2. 替换下面 <<...>> 占位符为你自己的值
+# 3. nginx -t && nginx -s reload
+#
+# 前置条件：
+# - nginx 容器与 lumira-backend 容器必须在同一个 docker network 中
+#   （docker-compose.prod.yml 已配置 external network，见 NGINX_NETWORK 环境变量）
+# - 后端容器在该网络中的主机名为 "lumira-backend"（docker-compose 服务名）
+# =============================================================================
+
+# 上游：后端容器（通过 docker 网络直接访问，无需暴露端口到宿主机）
+upstream lumira_backend_upstream {
+    # docker compose 服务名 "lumira-backend" 会自动在指定网络中解析为容器 IP
+    server lumira-backend:3000;
+
+    # 可选：长连接保持（减少每次请求的 TCP 握手开销）
+    keepalive 32;
+    keepalive_timeout 60s;
+}
+
+# HTTP -> HTTPS 强制跳转（推荐生产开启）
+server {
+    listen 80;
+    # 替换为你的域名或 IP
+    server_name <<YOUR_API_DOMAIN>>;
+
+    # 健康检查端点（用于 Docker healthcheck 或监控）
+    location /healthz {
+        proxy_pass http://lumira_backend_upstream/api/v1;
+        access_log off;
+    }
+
+    # 其他所有请求跳转到 HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS 主服务
+server {
+    listen 443 ssl;
+    # 替换为你的域名
+    server_name <<YOUR_API_DOMAIN>>;
+
+    # === SSL 证书 ===
+    # 推荐使用 certbot 自动申请 Let's Encrypt 免费证书
+    # certbot --nginx -d <<YOUR_API_DOMAIN>>
+    # 申请完成后 certbot 会自动填充下面两行
+    ssl_certificate     /etc/letsencrypt/live/<<YOUR_API_DOMAIN>>/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/<<YOUR_API_DOMAIN>>/privkey.pem;
+
+    # === SSL 安全配置 ===
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # === HSTS ===
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # === 请求体大小限制 ===
+    # 后端目前主要是 JSON API，10MB 足够
+    client_max_body_size 10m;
+
+    # === 反向代理到后端容器 ===
+    location / {
+        proxy_pass http://lumira_backend_upstream;
+
+        # 传递真实客户端信息给后端
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP        $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket 支持（如未来需要）
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # 超时设置（后端 SQLite 操作应很快，给足余量）
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    60s;
+        proxy_read_timeout    60s;
+
+        # 长连接复用（配合 upstream keepalive）
+        proxy_buffering off;
+    }
+
+    # === 健康检查端点（不记日志，方便监控频繁探活） ===
+    location = /healthz {
+        proxy_pass http://lumira_backend_upstream/api/v1;
+        access_log off;
+    }
+}

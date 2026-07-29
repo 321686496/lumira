@@ -1,6 +1,22 @@
 # 生产环境部署用的 docker-compose 配置
 # 通过 GitHub Actions SSH 部署时使用：docker compose -f docker-compose.prod.yml --env-file .env up -d
 # 构建上下文指向仓库的 lumira-server/ 目录，使用多阶段 Dockerfile 构建后端镜像
+#
+# 部署目录结构：/opt/lumira/backend/{repo, docker-compose.prod.yml, .env, data}
+# repo/ 是 git clone 的仓库
+#
+# 与 nginx 通信方式：
+#   后端容器加入 external network（你已有的 nginx 容器所在网络）
+#   nginx 通过容器名 "lumira-backend" 反向代理到 http://lumira-backend:3000
+#   无需将 3000 端口暴露到宿主机（更安全）
+#
+# .env 文件需要包含：
+#   JWT_SECRET=...        （必填，JWT 签名密钥）
+#   ADMIN_TOKEN=...       （必填，Admin API 令牌）
+#   NGINX_NETWORK=...     （必填，nginx 容器所在的 docker network 名）
+#                          查询方式：docker network ls
+#                          如果还没创建：docker network create lumira-net
+
 version: "3.8"
 
 services:
@@ -12,8 +28,10 @@ services:
       dockerfile: packages/backend/Dockerfile
     image: lumira-backend:latest
     restart: always
-    ports:
-      - "3000:3000"
+    # 不暴露端口到宿主机（通过 docker network 与 nginx 通信，更安全）
+    # 如需在宿主机直接访问调试，取消注释下面两行
+    # ports:
+    #   - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -22,9 +40,20 @@ services:
       - DB_PATH=/app/data/lumira.db
     volumes:
       - ./data:/app/data
+    networks:
+      - lumira-net
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:3000/api/v1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+networks:
+  lumira-net:
+    # external: true 表示使用已存在的外部网络（你的 nginx 容器所在的网络）
+    # 在 .env 中设置 NGINX_NETWORK=<网络名>
+    # 查询现有网络：docker network ls
+    # 创建新网络：docker network create lumira-net
+    external: true
+    name: ${NGINX_NETWORK}

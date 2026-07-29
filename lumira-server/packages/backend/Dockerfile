@@ -35,6 +35,10 @@ COPY packages/backend/ packages/backend/
 RUN pnpm --filter @lumira/shared build
 RUN pnpm --filter @lumira/backend build
 
+# tsc 不会处理 nest-cli.json 的 assets 配置，手动复制非 TS 资源到 dist
+# migrations/*.sql 被 database.service.ts 在运行时读取
+RUN cp -r packages/backend/src/database/migrations packages/backend/dist/database/
+
 # Re-install with --prod to remove devDependencies from node_modules
 RUN pnpm install --prod --frozen-lockfile
 
