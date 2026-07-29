@@ -72,7 +72,10 @@ jobs:
 
             echo "==> [1/5] 拉取最新代码"
             cd $DEPLOY_PATH/repo
-            git pull $GIT_REMOTE master
+            git fetch --all
+            git reset --hard $GIT_REMOTE/master
+            echo "当前代码版本："
+            git log --oneline -1
 
             echo "==> [2/5] 同步部署用 docker-compose 文件"
             cp deploy/docker-compose.prod.yml $DEPLOY_PATH/docker-compose.prod.yml
@@ -80,13 +83,14 @@ jobs:
             echo "==> [3/5] 确保数据目录存在"
             mkdir -p $DEPLOY_PATH/data
 
-            echo "==> [4/5] 构建后端镜像（多阶段构建：base → builder → runner）"
+            echo "==> [4/5] 构建后端镜像（--no-cache 强制全量重建，避免缓存导致代码不更新）"
             cd $DEPLOY_PATH
-            docker compose -f docker-compose.prod.yml --env-file .env build
+            docker compose -f docker-compose.prod.yml --env-file .env build --no-cache
 
-            echo "==> [5/5] 重启容器"
-            docker compose -f docker-compose.prod.yml --env-file .env up -d
+            echo "==> [5/5] 重启容器（--force-recreate 强制重建容器，确保新镜像生效）"
+            docker compose -f docker-compose.prod.yml --env-file .env up -d --force-recreate
             docker image prune -f
 
-            echo "==> 部署完成，查看日志："
-            docker compose -f docker-compose.prod.yml logs --tail=20
+            echo "==> 部署完成，等待 15 秒后查看日志："
+            sleep 15
+            docker compose -f docker-compose.prod.yml logs --tail=30
