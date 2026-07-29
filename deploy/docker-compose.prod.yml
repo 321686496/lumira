@@ -43,9 +43,9 @@ services:
     networks:
       - lumira-net
     healthcheck:
-      # /api/v1/health 是后端公开健康检查端点，不需要鉴权
-      # busybox wget 不支持 --quiet 长格式，用 -q -O /dev/null 代替 --spider
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/v1/health || exit 1"]
+      # 用 node 执行 HTTP 请求做健康检查（node:20-alpine 镜像一定有 node）
+      # 避免 busybox wget 的各种兼容性问题（不支持 --spider、--quiet 长格式等）
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/api/v1/health',(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
       interval: 30s
       timeout: 10s
       retries: 3
