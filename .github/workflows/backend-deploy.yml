@@ -83,9 +83,9 @@ jobs:
             echo "==> [3/5] 确保数据目录存在"
             mkdir -p $DEPLOY_PATH/data
 
-            echo "==> [4/5] 构建后端镜像（--no-cache 强制全量重建，避免缓存导致代码不更新）"
+            echo "==> [4/5] 构建后端镜像（git reset 已确保代码最新，Docker 会自动失效受影响的缓存层）"
             cd $DEPLOY_PATH
-            docker compose -f docker-compose.prod.yml --env-file .env build --no-cache
+            docker compose -f docker-compose.prod.yml --env-file .env build
 
             echo "==> [5/5] 重启容器（--force-recreate 强制重建容器，确保新镜像生效）"
             docker compose -f docker-compose.prod.yml --env-file .env up -d --force-recreate
