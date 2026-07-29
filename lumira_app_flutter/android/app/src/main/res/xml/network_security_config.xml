@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置
+  后端当前使用 HTTP（无 HTTPS），Android 9+ 默认禁止明文流量。
+  此配置显式允许指定 IP/域名走明文 HTTP。
+
+  生产环境部署 HTTPS 后，可删除此文件并移除 AndroidManifest 中
+  的 android:usesCleartextTraffic 和 android:networkSecurityConfig。
+-->
+<network-security-config>
+    <!-- 允许特定主机的明文 HTTP 流量 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- 后端服务器 IP（部署 HTTPS 后可移除此条） -->
+        <domain includeSubdomains="true">124.71.61.105</domain>
+        <!-- 本地开发用：Android 模拟器访问宿主机 -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- 本地开发用：局域网设备访问开发机（替换为你的实际 IP） -->
+        <domain includeSubdomains="true">192.168.1.100</domain>
+    </domain-config>
+</network-security-config>
