@@ -66,12 +66,25 @@
         mode="aspectFill"
         :style="viewfinderFilterStyle"
       />
-      <!-- 场景滤镜已套用 badge -->
-      <view v-if="activeSceneFilter" class="scene-filter-badge">
-        <text class="ph ph-magic-wand"></text>
-        <text class="badge-text">{{ activeSceneFilter }}</text>
+      <!-- 顶部 badge 组（场景滤镜 / 补光） -->
+      <view class="viewfinder-badges" v-if="activeSceneFilter || fillLightEnabled">
+        <view v-if="activeSceneFilter" class="scene-filter-badge">
+          <text class="ph ph-magic-wand"></text>
+          <text class="badge-text">{{ activeSceneFilter }}</text>
+        </view>
+        <view v-if="fillLightEnabled" class="fill-light-badge">
+          <view class="fill-light-badge-dot" :style="{ backgroundColor: fillLightColor }" />
+          <text class="badge-text">补光</text>
+        </view>
       </view>
       <view class="viewfinder-mask" />
+
+      <!-- 补光叠层：高亮度透明色块，前置摄像头自拍时将颜色映射到人脸 -->
+      <view
+        v-if="fillLightEnabled"
+        class="fill-light-overlay"
+        :style="fillLightOverlayStyle"
+      />
 
       <!-- 权限错误提示 -->
       <view v-if="cameraApi.error.value" class="camera-error">
@@ -138,23 +151,111 @@
 
     <!-- 底部控制区 -->
     <view class="capture-bottom" :style="landscapeZoomStyle">
-      <view class="shutter-row">
-        <view class="last-photo" @click="goPreview">
-          <image v-if="lastPhoto" class="last-photo-img" :src="lastPhoto" mode="aspectFill" />
-          <view v-else class="last-photo-empty">
-            <text class="ph ph-image"></text>
+      <!-- 工具栏：模板 / 场景 / 参数 / 补光 / 滤镜 -->
+      <view class="capture-toolbar">
+        <view
+          v-for="tool in tools"
+          :key="tool.key"
+          class="tool-btn"
+          :class="{ active: activeTool === tool.key, 'has-dot': tool.key === 'fill' && fillLightEnabled }"
+          @click="toggleTool(tool.key)"
+        >
+          <text class="ph" :class="tool.icon"></text>
+          <text class="tool-label">{{ tool.label }}</text>
+        </view>
+      </view>
+
+      <!-- 模板面板 -->
+      <view v-if="activeTool === 'template'" class="tool-panel">
+        <scroll-view class="horizontal-scroll" scroll-x>
+          <view class="strip-list">
+            <view
+              v-for="tpl in recentTemplates"
+              :key="tpl.meta.id"
+              class="strip-item"
+              :class="{ active: currentTemplateId === tpl.meta.id }"
+              @click="switchTemplate(tpl.meta.id)"
+            >
+              <image
+                class="strip-img"
+                :src="tpl.meta.cover || `https://picsum.photos/seed/${tpl.meta.id}/100/100`"
+                mode="aspectFill"
+              />
+              <text class="strip-name">{{ tpl.meta.name }}</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <!-- 场景面板 -->
+      <view v-if="activeTool === 'scene'" class="tool-panel">
+        <scroll-view class="horizontal-scroll" scroll-x>
+          <view class="strip-list">
+            <view
+              v-for="scene in sceneStripList"
+              :key="scene.id"
+              class="strip-item"
+              :class="{ active: activeScenePresetId === scene.id }"
+              @click="applyScene(scene.id)"
+            >
+              <image
+                class="strip-img"
+                :src="scene.exampleImages[0] || `https://picsum.photos/seed/${scene.id}/100/100`"
+                mode="aspectFill"
+              />
+              <text class="strip-name">{{ scene.name }}</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <!-- 补光面板 -->
+      <view v-if="activeTool === 'fill'" class="tool-panel fill-panel">
+        <view class="fill-header">
+          <text class="fill-title">屏幕补光</text>
+          <view
+            class="fill-toggle"
+            :class="{ active: fillLightEnabled }"
+            @click="fillLightEnabled = !fillLightEnabled"
+          >
+            <view class="fill-toggle-knob" />
           </view>
         </view>
-        <view class="shutter-btn" :class="{ capturing: isCapturing }" @click="onShutter">
-          <view class="shutter-inner" />
+        <view class="fill-colors">
+          <view
+            v-for="preset in fillLightPresets"
+            :key="preset.id"
+            class="fill-color-item"
+            :class="{ active: fillLightColor === preset.color }"
+            @click="selectFillLight(preset)"
+          >
+            <view class="fill-color-swatch" :style="{ backgroundColor: preset.color }" />
+            <text class="fill-color-name">{{ preset.name }}</text>
+          </view>
         </view>
-        <view class="flip-btn" @click="flipCamera">
-          <text class="ph ph-arrows-clockwise" />
+        <view class="fill-slider-row">
+          <text class="fill-slider-label">亮度</text>
+          <slider
+            class="fill-slider"
+            :value="Math.round(fillLightIntensity * 100)"
+            :min="20"
+            :max="90"
+            :step="5"
+            activeColor="#C9A96E"
+            backgroundColor="rgba(255,255,255,0.15)"
+            block-color="#C9A96E"
+            @change="onFillIntensityChange"
+          />
+          <text class="fill-slider-value">{{ Math.round(fillLightIntensity * 100) }}%</text>
+        </view>
+        <view class="fill-hint" v-if="cameraApi.facing.value !== 'front'">
+          <text class="ph ph-info"></text>
+          <text class="fill-hint-text">建议切换至前置摄像头使用补光功能</text>
         </view>
       </view>
 
       <!-- 我的组合 快速入口 -->
-      <view class="kit-bar" v-if="kits.length > 0">
+      <view class="kit-bar" v-if="kits.length > 0 && !activeTool">
         <text class="kit-bar-title">我的组合</text>
         <scroll-view scroll-x class="kit-scroll" :show-scrollbar="false">
           <view class="kit-scroll-inner">
@@ -170,75 +271,20 @@
         </scroll-view>
       </view>
 
-      <scroll-view class="template-strip" :scroll-x="!isLandscape" :scroll-y="isLandscape">
-        <view class="strip-list">
-          <view
-            v-for="tpl in recentTemplates"
-            :key="tpl.meta.id"
-            class="strip-item"
-            :class="{ active: tpl.meta.id === currentTemplateId }"
-            @click="switchTemplate(tpl.meta.id)"
-          >
-            <image class="strip-img" :src="tpl.meta.cover" mode="aspectFill" />
-            <text class="strip-name">{{ tpl.meta.name }}</text>
+      <!-- 快门 -->
+      <view class="shutter-row">
+        <view class="last-photo" @click="goPreview">
+          <image v-if="lastPhoto" class="last-photo-img" :src="lastPhoto" mode="aspectFill" />
+          <view v-else class="last-photo-empty">
+            <text class="ph ph-image"></text>
           </view>
         </view>
-      </scroll-view>
-
-      <!-- 可折叠面板：模板 + 场景横滑 -->
-      <view v-if="bottomPanelExpanded" class="expandable-panel">
-        <view class="panel-section">
-          <view class="panel-section-title">
-            <text class="ph ph-squares-four"></text>
-            <text>模板</text>
-          </view>
-          <scroll-view class="horizontal-scroll" scroll-x>
-            <view class="strip-list">
-              <view
-                v-for="tpl in recentTemplates"
-                :key="tpl.meta.id"
-                class="strip-item"
-                :class="{ active: currentTemplateId === tpl.meta.id }"
-                @click="switchTemplate(tpl.meta.id)"
-              >
-                <image
-                  class="strip-img"
-                  :src="tpl.meta.cover || `https://picsum.photos/seed/${tpl.meta.id}/100/100`"
-                  mode="aspectFill"
-                />
-                <text class="strip-name">{{ tpl.meta.name }}</text>
-              </view>
-            </view>
-          </scroll-view>
+        <view class="shutter-btn" :class="{ capturing: isCapturing }" @click="onShutter">
+          <view class="shutter-inner" />
         </view>
-        <view class="panel-section">
-          <view class="panel-section-title">
-            <text class="ph ph-map-pin"></text>
-            <text>场景</text>
-          </view>
-          <scroll-view class="horizontal-scroll" scroll-x>
-            <view class="strip-list">
-              <view
-                v-for="scene in sceneStripList"
-                :key="scene.id"
-                class="strip-item"
-                :class="{ active: activeScenePresetId === scene.id }"
-                @click="applyScene(scene.id)"
-              >
-                <image
-                  class="strip-img"
-                  :src="scene.exampleImages[0] || `https://picsum.photos/seed/${scene.id}/100/100`"
-                  mode="aspectFill"
-                />
-                <text class="strip-name">{{ scene.name }}</text>
-              </view>
-            </view>
-          </scroll-view>
+        <view class="flip-btn" @click="flipCamera">
+          <text class="ph ph-arrows-clockwise" />
         </view>
-      </view>
-
-      <view class="toggle-btn" @click="bottomPanelExpanded = !bottomPanelExpanded">
-        <text :class="bottomPanelExpanded ? 'ph ph-caret-down' : 'ph ph-caret-up'"></text>
       </view>
     </view>
 
@@ -320,8 +366,69 @@ function toggleFullscreen() {
   uni.setStorageSync('lumira_capture_fullscreen', String(isFullscreen.value))
 }
 
-// 底部模板/场景折叠面板展开状态
-const bottomPanelExpanded = ref(false)
+// ===== 工具栏状态 =====
+type ToolKey = 'template' | 'scene' | 'param' | 'fill' | 'filter'
+const activeTool = ref<ToolKey | null>(null)
+const tools: { key: ToolKey; label: string; icon: string }[] = [
+  { key: 'template', label: '模板', icon: 'ph-squares-four' },
+  { key: 'scene', label: '场景', icon: 'ph-map-pin' },
+  { key: 'param', label: '参数', icon: 'ph-camera' },
+  { key: 'fill', label: '补光', icon: 'ph-sun' },
+  { key: 'filter', label: '滤镜', icon: 'ph-funnel' }
+]
+
+function toggleTool(tool: ToolKey) {
+  // 参数 / 滤镜 触发各自的浮层，不占用工具面板
+  if (tool === 'param') {
+    panelExpanded.value = true
+    activeTool.value = null
+    return
+  }
+  if (tool === 'filter') {
+    if (rawMode.value) {
+      uni.showToast({ title: '已切换至原相机模式，请先退出', icon: 'none' })
+      return
+    }
+    filterPickerVisible.value = true
+    activeTool.value = null
+    return
+  }
+  // 模板 / 场景 / 补光：内联面板，点击同一项收起
+  activeTool.value = activeTool.value === tool ? null : tool
+}
+
+// ===== 屏幕补光 =====
+// 在取景器上方覆盖一个高亮度透明色块，前置摄像头自拍时将颜色映射到人脸
+const fillLightEnabled = ref(false)
+const fillLightColor = ref('#FFE5CC')
+const fillLightIntensity = ref(0.6)
+const fillLightPresets = [
+  { id: 'warm-white', name: '暖白', color: '#FFE5CC' },
+  { id: 'cool-white', name: '冷白', color: '#E5F0FF' },
+  { id: 'golden', name: '金色', color: '#FFB85C' },
+  { id: 'pink', name: '粉嫩', color: '#FFB3D1' },
+  { id: 'blue', name: '蓝调', color: '#9EC9FF' },
+  { id: 'rose', name: '玫瑰', color: '#FF8FA3' },
+  { id: 'green', name: '翠绿', color: '#A8FFB8' },
+  { id: 'violet', name: '紫罗兰', color: '#D1A8FF' }
+]
+
+const fillLightOverlayStyle = computed(() => ({
+  backgroundColor: fillLightColor.value,
+  opacity: fillLightIntensity.value
+}))
+
+function selectFillLight(preset: { color: string }) {
+  fillLightColor.value = preset.color
+  if (!fillLightEnabled.value) {
+    fillLightEnabled.value = true
+  }
+}
+
+function onFillIntensityChange(e: any) {
+  fillLightIntensity.value = e.detail.value / 100
+}
+
 const sceneStripList = computed(() => SCENE_PRESETS.slice(0, 8))
 
 // 应用场景预设：仅叠加滤镜到当前可编辑模板
@@ -566,6 +673,9 @@ onUnload(() => {
   rawMode.value = false
   showTemplate.value = true
   showSilhouette.value = true
+  // 关闭补光与工具栏
+  fillLightEnabled.value = false
+  activeTool.value = null
   // 释放相机资源
   cameraApi.release()
   if (resizeListener) {
@@ -989,24 +1099,61 @@ const onViewfinderTap = () => {
   pointer-events: none;
 }
 
-/* ===== 场景滤镜 badge ===== */
-.scene-filter-badge {
+/* ===== 顶部 badge 组 ===== */
+.viewfinder-badges {
   position: absolute;
   top: calc(env(safe-area-inset-top) + 80rpx);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(12px);
-  padding: 8rpx 20rpx;
-  border-radius: 9999rpx;
   display: flex;
   align-items: center;
   gap: 8rpx;
   z-index: 20;
 }
-.scene-filter-badge .badge-text {
+
+.scene-filter-badge,
+.fill-light-badge {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 8rpx 20rpx;
+  border-radius: 9999rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.scene-filter-badge .ph {
+  font-size: 24rpx;
+  color: #C9A96E;
+}
+
+.fill-light-badge-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  box-shadow: 0 0 8rpx rgba(255, 255, 255, 0.4);
+}
+
+.badge-text {
   color: #ffffff;
   font-size: 22rpx;
+  white-space: nowrap;
+}
+
+/* ===== 补光叠层 ===== */
+.fill-light-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  transition: background-color 0.3s ease, opacity 0.3s ease;
+  animation: fillLightFadeIn 0.25s ease-out;
+}
+
+@keyframes fillLightFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ===== 相机错误提示 ===== */
@@ -1237,46 +1384,113 @@ const onViewfinderTap = () => {
   flex-shrink: 0;
 }
 
-.template-strip {
-  margin-top: 24rpx;
+/* ===== 工具栏 ===== */
+.capture-toolbar {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 8rpx 0 16rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
+}
+
+.tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  padding: 8rpx 12rpx;
+  position: relative;
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.2s ease;
+  flex: 1;
+}
+
+.tool-btn .ph {
+  font-size: 36rpx;
+  line-height: 1;
+}
+
+.tool-label {
+  font-size: 20rpx;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.tool-btn.active {
+  color: #C9A96E;
+}
+
+.tool-btn.has-dot::after {
+  content: '';
+  position: absolute;
+  top: 6rpx;
+  right: 50%;
+  margin-right: -32rpx;
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #C9A96E;
+  box-shadow: 0 0 8rpx rgba(201, 169, 110, 0.6);
+}
+
+/* ===== 工具面板 ===== */
+.tool-panel {
+  padding: 16rpx 0;
+  animation: toolPanelIn 0.25s ease-out;
+}
+
+@keyframes toolPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(8rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.horizontal-scroll {
+  width: 100%;
   white-space: nowrap;
 }
 
 .strip-list {
   display: inline-flex;
-  gap: 16rpx;
+  gap: 12rpx;
+  padding: 0 4rpx;
 }
 
 .strip-item {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 20rpx;
-  overflow: hidden;
-  position: relative;
-  border: 3rpx solid rgba(255, 255, 255, 0.15);
   flex-shrink: 0;
+  width: 112rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  padding: 8rpx;
+  border-radius: 12rpx;
+  border: 3rpx solid transparent;
 }
 
 .strip-item.active {
-  border: 4rpx solid var(--color-brand);
-  box-shadow: 0 0 24rpx rgba(var(--color-brand-rgb), 0.4);
+  border-color: var(--color-brand);
 }
 
 .strip-img {
-  width: 100%;
-  height: 100%;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 8rpx;
 }
 
 .strip-name {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
-  padding: 16rpx 0 6rpx;
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.9);
   text-align: center;
-  color: #fff;
-  font-size: 16rpx;
+  max-width: 100rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ===== 我的组合 横滑区 ===== */
@@ -1350,8 +1564,7 @@ const onViewfinderTap = () => {
   gap: 24rpx;
 }
 
-.capture-page.is-landscape .template-strip {
-  margin-top: 24rpx;
+.capture-page.is-landscape .tool-panel {
   height: 300rpx;
   white-space: normal;
 }
@@ -1408,90 +1621,138 @@ const onViewfinderTap = () => {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* ===== 底部可折叠面板 ===== */
-.expandable-panel {
-  padding: 24rpx 24rpx 8rpx;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+/* ===== 补光面板 ===== */
+.fill-panel {
+  padding: 16rpx 24rpx;
 }
 
-.panel-section {
+.fill-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 16rpx;
 }
 
-.panel-section-title {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  margin-bottom: 8rpx;
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.7);
+.fill-title {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
 }
 
-.panel-section-title .ph {
-  font-size: 24rpx;
-}
-
-.horizontal-scroll {
-  width: 100%;
-  white-space: nowrap;
-}
-
-.expandable-panel .strip-list {
-  display: inline-flex;
-  gap: 12rpx;
-  padding-bottom: 4rpx;
-}
-
-.expandable-panel .strip-item {
+.fill-toggle {
+  width: 80rpx;
+  height: 44rpx;
+  border-radius: 9999rpx;
+  background: rgba(255, 255, 255, 0.15);
+  position: relative;
+  transition: background 0.2s ease;
   flex-shrink: 0;
-  width: 96rpx;
+}
+
+.fill-toggle.active {
+  background: #C9A96E;
+}
+
+.fill-toggle-knob {
+  position: absolute;
+  top: 4rpx;
+  left: 4rpx;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.3);
+}
+
+.fill-toggle.active .fill-toggle-knob {
+  transform: translateX(36rpx);
+}
+
+.fill-colors {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.fill-color-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4rpx;
-  padding: 8rpx;
+  gap: 8rpx;
+  padding: 12rpx 8rpx;
   border-radius: 12rpx;
-  border: 3rpx solid transparent;
-  height: auto;
-  overflow: visible;
-  position: static;
+  border: 2rpx solid transparent;
+  background: rgba(255, 255, 255, 0.04);
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 
-.expandable-panel .strip-item.active {
-  border-color: var(--color-brand);
-  box-shadow: none;
+.fill-color-item.active {
+  border-color: #C9A96E;
+  background: rgba(201, 169, 110, 0.12);
 }
 
-.expandable-panel .strip-img {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 8rpx;
+.fill-color-swatch {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.4);
 }
 
-.expandable-panel .strip-name {
-  position: static;
-  background: none;
-  padding: 0;
+.fill-color-name {
   font-size: 20rpx;
-  color: rgba(255, 255, 255, 0.9);
-  text-align: center;
-  max-width: 96rpx;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.toggle-btn {
-  display: flex;
-  justify-content: center;
-  padding: 8rpx;
-  background: rgba(0, 0, 0, 0.3);
-}
-
-.toggle-btn .ph {
-  font-size: 32rpx;
   color: rgba(255, 255, 255, 0.7);
+  line-height: 1;
+}
+
+.fill-color-item.active .fill-color-name {
+  color: #C9A96E;
+}
+
+.fill-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.fill-slider-label {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.7);
+  flex-shrink: 0;
+}
+
+.fill-slider {
+  flex: 1;
+}
+
+.fill-slider-value {
+  font-size: 24rpx;
+  color: #fff;
+  min-width: 60rpx;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.fill-hint {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  background: rgba(201, 169, 110, 0.1);
+  border-radius: 12rpx;
+}
+
+.fill-hint .ph {
+  font-size: 28rpx;
+  color: #C9A96E;
+  flex-shrink: 0;
+}
+
+.fill-hint-text {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
 }
 </style>
