@@ -7,15 +7,19 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../data/home_mock_data.dart';
+import '../providers/banner_recommendation_provider.dart';
 
 /// 首页 Banner 轮播
 ///
 /// 展示与用户相关的推荐信息：模板与场景搭配、拍摄灵感、新模板等。
 /// 自动轮播 5 秒一切，支持手动滑动，点击跳转对应路由。
+///
+/// 数据源：[bannerRecommendationProvider] 基于用户真实拍摄历史生成 5 条 banner。
+/// - loading 态：占位卡（surfaceAlt 色 Container）
+/// - error 态：fallback 到 [HomeMockData.banners] 第 1 条（保证不空白）
+/// - data 态：真实推荐数据
 class HomeBanner extends ConsumerStatefulWidget {
-  const HomeBanner({super.key, required this.banners});
-
-  final List<HomeBannerItem> banners;
+  const HomeBanner({super.key});
 
   @override
   ConsumerState<HomeBanner> createState() => _HomeBannerState();
@@ -25,14 +29,26 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
   final PageController _controller = PageController();
   int _current = 0;
   Timer? _timer;
+  int _lastBannerCount = 0;
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.banners.length > 1) {
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// banner 数量变化时重启定时器（避免越界 / 旧索引残留）
+  void _ensureTimer(int count) {
+    if (count == _lastBannerCount) return;
+    _lastBannerCount = count;
+    _timer?.cancel();
+    _timer = null;
+    if (count > 1) {
       _timer = Timer.periodic(const Duration(seconds: 5), (_) {
         if (!_controller.hasClients) return;
-        final next = (_current + 1) % widget.banners.length;
+        if (_current >= count) _current = 0;
+        final next = (_current + 1) % count;
         _controller.animateToPage(
           next,
           duration: const Duration(milliseconds: 400),
@@ -43,16 +59,28 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
   }
 
   @override
-  void dispose() {
-    _timer?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final asyncBanners = ref.watch(bannerRecommendationProvider);
 
+    return asyncBanners.when(
+      loading: () => _LoadingPlaceholder(tokens: tokens),
+      error: (_, __) {
+        // fallback 到 mock 数据第 1 条，保证不空白
+        final banners = <HomeBannerItem>[HomeMockData.banners.first];
+        _ensureTimer(banners.length);
+        return _buildCarousel(banners, tokens);
+      },
+      data: (banners) {
+        final list =
+            banners.isEmpty ? <HomeBannerItem>[HomeMockData.banners.first] : banners;
+        _ensureTimer(list.length);
+        return _buildCarousel(list, tokens);
+      },
+    );
+  }
+
+  Widget _buildCarousel(List<HomeBannerItem> banners, ThemeTokens tokens) {
     return Column(
       children: [
         SizedBox(
@@ -60,9 +88,9 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
           child: PageView.builder(
             controller: _controller,
             onPageChanged: (i) => setState(() => _current = i),
-            itemCount: widget.banners.length,
+            itemCount: banners.length,
             itemBuilder: (_, index) {
-              final banner = widget.banners[index];
+              final banner = banners[index];
               return _BannerCard(
                 banner: banner,
                 tokens: tokens,
@@ -75,7 +103,7 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            for (int i = 0; i < widget.banners.length; i++)
+            for (int i = 0; i < banners.length; i++)
               Container(
                 width: i == _current ? 16 : 6,
                 height: 4,
@@ -84,6 +112,46 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
                   color: i == _current
                       ? tokens.brand
                       : tokens.brand.withOpacity(0.25),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Loading 占位卡（surfaceAlt 色容器，宽屏 280x140 风格）
+class _LoadingPlaceholder extends StatelessWidget {
+  const _LoadingPlaceholder({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 150,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            decoration: BoxDecoration(
+              color: tokens.surfaceAlt,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (int i = 0; i < 3; i++)
+              Container(
+                width: i == 0 ? 16 : 6,
+                height: 4,
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                decoration: BoxDecoration(
+                  color: tokens.brand.withOpacity(0.25),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

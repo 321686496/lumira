@@ -82,6 +82,9 @@ class Tables {
   static const String colTransform = 'transform';
   static const String colPostProcess = 'post_process';
 
+  // === gallery_items 扩展列（v8 迁移新增） ===
+  static const String colGalleryItemIsFavorite = 'is_favorite';
+
   // === user_progress ===
   static const String userProgress = 'user_progress';
   static const String colLevel = 'level';
@@ -120,6 +123,25 @@ class Tables {
   static const String colKey = 'key';
   static const String colPayload = 'payload';
   static const String colCachedAt = 'cached_at';
+
+  // === collections 表（v8 迁移新增，精选集主表） ===
+  static const String tableCollections = 'collections';
+  static const String colCollectionId = 'id';
+  static const String colCollectionName = 'name';
+  static const String colCollectionDescription = 'description';
+  static const String colCollectionCoverPhotoId = 'cover_photo_id';
+  static const String colCollectionType = 'type';
+  static const String colCollectionSourceMeta = 'source_meta';
+  static const String colCollectionPhotoCount = 'photo_count';
+  static const String colCollectionCreatedAt = 'created_at';
+  static const String colCollectionUpdatedAt = 'updated_at';
+
+  // === collection_photos 表（v8 迁移新增，精选集-照片关联表） ===
+  static const String tableCollectionPhotos = 'collection_photos';
+  static const String colCollectionPhotoCollectionId = 'collection_id';
+  static const String colCollectionPhotoPhotoId = 'photo_id';
+  static const String colCollectionPhotoSortOrder = 'sort_order';
+  static const String colCollectionPhotoAddedAt = 'added_at';
 }
 
 class ChallengeHistoryTable {

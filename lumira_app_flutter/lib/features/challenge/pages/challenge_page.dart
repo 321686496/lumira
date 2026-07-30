@@ -39,7 +39,7 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
   bool _scrolled = false;
   bool _selecting = false;
 
-  static const double _scrollThreshold = 10.0;
+  static const double _scrollThreshold = 12.0;
 
   @override
   void initState() {
@@ -96,6 +96,28 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
+      // Forced fix: 统一 tab 页用 Scaffold.appBar——LumiraNav 作为 appBar
+      // extendBodyBehindAppBar=true 让 body 滚动内容延伸到 nav 下方（毛玻璃可见性）
+      extendBodyBehindAppBar: true,
+      appBar: LumiraNav(
+        title: '每日挑战',
+        centerTitle: false,
+        scrolled: _scrolled,
+        transparent: true,
+        showBackButton: false,
+        horizontalPadding: 24,
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.assignment_outlined,
+              size: 20,
+              color: tokens.textPrimary,
+            ),
+            onPressed: () {},
+            tooltip: '挑战记录',
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           // 径向渐变背景装饰（glass 风格可见性）
@@ -118,71 +140,44 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
           const Positioned.fill(
             child: GlassBackground(variant: GlassBackgroundVariant.challenge),
           ),
-          // 主内容
-          SafeArea(
-            child: Column(
-              children: [
-                LumiraNav(
-                  title: '每日挑战',
-                  centerTitle: false,
-                  scrolled: _scrolled,
-                  transparent: true,
-                  showBackButton: false,
-                  horizontalPadding: 24,
-                  actions: [
-                    IconButton(
-                      icon: Icon(
-                        Icons.assignment_outlined,
-                        size: 20,
-                        color: tokens.textPrimary,
-                      ),
-                      onPressed: () {},
-                      tooltip: '挑战记录',
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: asyncState.when(
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                    error: (e, _) => Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          '加载失败: $e',
-                          style: TextStyle(color: tokens.textSecondary, fontSize: 12),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                    data: (state) {
-                      if (state.needsFlip && state.candidates != null) {
-                        return _FlipView(
-                          candidates: state.candidates!,
-                          onSelected: _onFlipSelected,
-                          scrollController: _scrollController,
-                        );
-                      }
-                      final selected = state.selected;
-                      if (selected == null) {
-                        return Center(
-                          child: Text(
-                            '暂无挑战',
-                            style: TextStyle(color: tokens.textSecondary),
-                          ),
-                        );
-                      }
-                      return _RevealedView(
-                        selected: selected,
-                        scrollController: _scrollController,
-                        goDetail: _goDetail,
-                      );
-                    },
-                  ),
-                ),
-              ],
+          // 主内容（extendBodyBehindAppBar 让内容延伸到 nav 下方）
+          asyncState.when(
+            loading: () => const Center(
+              child: CircularProgressIndicator(),
             ),
+            error: (e, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  '加载失败: $e',
+                  style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+            data: (state) {
+              if (state.needsFlip && state.candidates != null) {
+                return _FlipView(
+                  candidates: state.candidates!,
+                  onSelected: _onFlipSelected,
+                  scrollController: _scrollController,
+                );
+              }
+              final selected = state.selected;
+              if (selected == null) {
+                return Center(
+                  child: Text(
+                    '暂无挑战',
+                    style: TextStyle(color: tokens.textSecondary),
+                  ),
+                );
+              }
+              return _RevealedView(
+                selected: selected,
+                scrollController: _scrollController,
+                goDetail: _goDetail,
+              );
+            },
           ),
           // FloatingTabBar
           const Positioned(

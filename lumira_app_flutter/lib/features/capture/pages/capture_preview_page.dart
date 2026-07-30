@@ -27,6 +27,12 @@ import '../services/photo_post_processor.dart';
 /// HarmonyOS 原生照片保存通道（PhotoSaverPlugin.ets）
 const _photoSaverChannel = MethodChannel('lumira/photo_saver');
 
+/// 抽屉栏 closed 档位高度（拖拽条 + 折叠操作按钮组）
+const double _kClosedHeight = 120;
+
+/// 抽屉栏模式：hidden=完全隐藏（只显示悬浮按钮组），expanded=展开（1/4 或 3/4）
+enum _SheetMode { hidden, expanded }
+
 /// 照片预览页（Task 2.9A）
 ///
 /// 视觉规格来源：lumira-app/src/pages/capture/preview.vue (399 行)
@@ -97,6 +103,32 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 保存进行中标志（避免重复点击保存按钮）
   bool _isSaving = false;
 
+  /// 抽屉栏实时高度（拖拽时直接更新，实现跟手效果）
+  late final ValueNotifier<double> _sheetHeightNotifier;
+
+  /// 拖拽起始时的高度（用于 onDragUpdate 计算偏移）
+  double _dragStartHeight = 0;
+
+  /// 拖拽起始时手指全局 Y 坐标（用于 onDragUpdate 计算偏移）
+  double _dragStartGlobalY = 0;
+
+  /// UI 显隐状态：true=显示导航栏和操作栏，false=全屏纯净查看
+  bool _uiVisible = true;
+
+  /// 抽屉栏模式：hidden（默认，只显示悬浮按钮组）或 expanded（展开抽屉栏）
+  _SheetMode _sheetMode = _SheetMode.hidden;
+
+  /// 是否已编辑过图片（用于折叠操作栏的"保存"按钮显隐）
+  bool _isEdited = false;
+
+  /// quarter 档位高度（屏幕高度的 35%）
+  static double _quarterHeight(BuildContext c) =>
+      MediaQuery.of(c).size.height * 0.35;
+
+  /// threeQuarter 档位高度（屏幕高度的 75%）
+  static double _threeQuarterHeight(BuildContext c) =>
+      MediaQuery.of(c).size.height * 0.75;
+
   @override
   void initState() {
     super.initState();
@@ -109,7 +141,14 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     // ConsumerState.initState 中 ref.read 是安全的（provider 已初始化）。
     final initial = ref.read(CaptureState.effectivePostProcessProvider);
     _localPostProcess = initial;
+    _sheetHeightNotifier = ValueNotifier<double>(_kClosedHeight);
     _loadOriginalPath(); // fire-and-forget; sets _originalPath + _isReadOnly
+  }
+
+  @override
+  void dispose() {
+    _sheetHeightNotifier.dispose();
+    super.dispose();
   }
 
   /// 从数据库加载原图路径，确定只读模式
@@ -147,7 +186,71 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       _showReadOnlyToast();
       return;
     }
-    setState(() => _localPostProcess = next);
+    setState(() {
+      _localPostProcess = next;
+      _isEdited = true;
+    });
+  }
+
+  /// 本地变换参数更新（旋转/翻转/拉直）
+  void _updateLocalTransform(TransformParams t) {
+    if (!mounted) return;
+    if (_isReadOnly) {
+      _showReadOnlyToast();
+      return;
+    }
+    setState(() {
+      _localTransform = t;
+      _isEdited = true;
+    });
+  }
+
+  // ===== 抽屉栏拖拽 =====
+
+  /// 拖拽起始：记录当前高度和手指全局 Y 坐标
+  void _onSheetDragStart(DragStartDetails details) {
+    _dragStartHeight = _sheetHeightNotifier.value;
+    _dragStartGlobalY = details.globalPosition.dy;
+  }
+
+  /// 拖拽更新：实时更新抽屉栏高度（跟手效果）
+  /// 手指上滑 deltaY < 0 → 高度增加；手指下滑 deltaY > 0 → 高度减少
+  void _onSheetDragUpdate(DragUpdateDetails details) {
+    final deltaY = details.globalPosition.dy - _dragStartGlobalY;
+    final newHeight = (_dragStartHeight - deltaY)
+        .clamp(_kClosedHeight, _threeQuarterHeight(context));
+    _sheetHeightNotifier.value = newHeight;
+  }
+
+  /// 拖拽结束：吸附到最近档位（280ms 动画）
+  /// 接近 closed 高度时折叠为 hidden（显示悬浮按钮组）
+  void _onSheetDragEnd(BuildContext context, DragEndDetails _) {
+    _snapToNearest(context);
+  }
+
+  /// 吸附到最近档位
+  /// - 接近 closed 高度 → 折叠为 hidden（_sheetMode = hidden）
+  /// - 否则吸附到 quarter 或 threeQuarter
+  void _snapToNearest(BuildContext context) {
+    final current = _sheetHeightNotifier.value;
+    final h1 = _kClosedHeight;
+    final h2 = _quarterHeight(context);
+    final h3 = _threeQuarterHeight(context);
+
+    // 接近 closed 高度 → 折叠为 hidden
+    if ((current - h1).abs() < 50) {
+      setState(() => _sheetMode = _SheetMode.hidden);
+      _sheetHeightNotifier.value = h1;
+      return;
+    }
+
+    // 否则吸附到 quarter 或 threeQuarter
+    final distances = [
+      (h2 - current).abs(),
+      (h3 - current).abs(),
+    ];
+    final minIdx = distances.indexOf(distances.reduce((a, b) => a < b ? a : b));
+    _sheetHeightNotifier.value = [h2, h3][minIdx];
   }
 
   // ===== 事件处理 =====
@@ -493,7 +596,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       }
 
       // 从原图重新处理（全量参数，非 delta）
-      // - autoDeblur=false：去模糊已在拍摄时应用过，不重复
       // - outputPath=photoPath：覆盖当前显示的照片文件
       final processedPath = await PhotoPostProcessor.processFile(
         inputPath: originalPath,
@@ -501,7 +603,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         transform: _localTransform,
         aspectRatio: captureAspectRatio,
         outputPath: photoPath,
-        autoDeblur: false,
       );
 
       // Evict FileImage 缓存（避免显示旧版本）
@@ -595,106 +696,195 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       });
     }
 
-    // 计算照片的目标比例（与拍摄页 _ViewfinderArea 使用同一逻辑），
-    // 用于 _PhotoFrame 的 AspectRatio，确保预览页显示比例 = 拍摄页取景器比例 = 照片实际比例。
-    // 修复 Bug：原代码使用 maxHeight: screenWidth * 1.33（3:4）强制容器比例，
-    // 导致全屏 9:19.5 照片被信箱模式压缩为 3:4 显示。
-    final ratioId = ref.watch(CaptureState.aspectRatioProvider);
-    final screenSize = MediaQuery.of(context).size;
-    final isPortrait = screenSize.height >= screenSize.width;
-    final screenRatio = screenSize.width / screenSize.height;
-    final photoTargetRatio =
-        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
-
     return Scaffold(
-      // 硬编码颜色，与 uni-app 一致 (preview-container bg #1C1A17)
-      backgroundColor: const Color(0xFF1C1A17),
+      // 照片全屏显示，背景纯黑
+      backgroundColor: Colors.black,
       extendBodyBehindAppBar: true,
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          _BackgroundDecoration(tokens: tokens),
-          SafeArea(
-            top: false,
-            bottom: false,
-            child: Column(
-              children: [
-                _PreviewNav(
-                  tokens: tokens,
-                  onBack: _back,
-                  onPressStart: _onCompareStart,
-                  onPressEnd: _onCompareEnd,
-                  onShare: _onShare,
+          // 1. 照片区域（底部留出抽屉栏空间，避免被遮挡）
+          // - _uiVisible=false 时照片铺满全屏（纯净模式）
+          // - _sheetMode == expanded 时底部留出抽屉栏高度
+          // - _sheetMode == hidden 时照片铺满全屏（仅悬浮按钮组浮在上方）
+          ValueListenableBuilder<double>(
+            valueListenable: _sheetHeightNotifier,
+            builder: (context, sheetHeight, _) {
+              return Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom:
+                    _uiVisible && _sheetMode == _SheetMode.expanded
+                        ? sheetHeight
+                        : 0,
+                child: GestureDetector(
+                  // 点击照片切换 UI 显隐
+                  onTap: () => setState(() => _uiVisible = !_uiVisible),
+                  child: _FullScreenPhoto(
+                    photoUrl: _photoUrl,
+                    isComparing: _isComparing,
+                    postProcess: _localPostProcess,
+                    transform: _localTransform,
+                  ),
                 ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // 只读模式横幅：原图未保留时显示
-                        if (_isReadOnly)
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
+              );
+            },
+          ),
+          // 2. 顶部导航 + 只读横幅（仅 _uiVisible 时显示）
+          if (_uiVisible)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _PreviewNav(
+                      tokens: tokens,
+                      onBack: _back,
+                      onShare: _onShare,
+                    ),
+                    // 只读模式横幅：原图未保留时显示（位于导航栏下方）
+                    if (_isReadOnly)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        color: const Color(0xFFFFB74D).withOpacity(0.15),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.lock_outline,
+                                size: 16, color: Color(0xFFFFB74D)),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '此照片未保留原图，仅可查看，无法编辑',
+                                style: TextStyle(
+                                    fontSize: 12, color: Color(0xFFFFB74D)),
+                              ),
                             ),
-                            color: const Color(0xFFFFB74D).withOpacity(0.15),
-                            child: Row(
-                              children: const [
-                                Icon(Icons.lock_outline, size: 16, color: Color(0xFFFFB74D)),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    '此照片未保留原图，仅可查看，无法编辑',
-                                    style: TextStyle(fontSize: 12, color: Color(0xFFFFB74D)),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          // 3. 底部抽屉栏（仅 _uiVisible && _sheetMode == expanded 时显示）
+          // 通过 ValueNotifier 驱动实时高度，AnimatedContainer 在松手后吸附
+          // 抽屉栏展开后用两段式拖拽（1/4 ↔ 3/4），拖拽到 closed 高度时折叠为 hidden
+          if (_uiVisible && _sheetMode == _SheetMode.expanded)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ValueListenableBuilder<double>(
+                valueListenable: _sheetHeightNotifier,
+                builder: (context, height, _) {
+                  final quarter = _quarterHeight(context);
+                  final threeQuarter = _threeQuarterHeight(context);
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeOutCubic,
+                    height: height,
+                    child: SafeArea(
+                      top: false,
+                      child: _BottomSheet(
+                        tokens: tokens,
+                        moods: _moods,
+                        selectedSceneId: _selectedSceneId,
+                        onSelectMood: _selectMood,
+                        onSelectScene: _selectScene,
+                        onSkip: _onSkip,
+                        onCompareCard: _onCompareCard,
+                        onExifCard: _onExifCard,
+                        onSave: _onSave,
+                        isSaving: _isSaving,
+                        localPostProcess: _localPostProcess,
+                        onUpdateLocalPostProcess: _updateLocalPostProcess,
+                        localTransform: _localTransform,
+                        onUpdateLocalTransform: _updateLocalTransform,
+                        // 折叠操作栏相关
+                        isEdited: _isEdited,
+                        onCompareStart: _onCompareStart,
+                        onCompareEnd: _onCompareEnd,
+                        onExpandToQuarter: () {
+                          _sheetHeightNotifier.value = _quarterHeight(context);
+                        },
+                        // 抽屉栏拖拽相关
+                        currentHeight: height,
+                        closedHeight: _kClosedHeight,
+                        quarterHeight: quarter,
+                        threeQuarterHeight: threeQuarter,
+                        isExpanded: height > _kClosedHeight + 20,
+                        isFullExpanded: height > quarter + 20,
+                        onDragStart: _onSheetDragStart,
+                        onDragUpdate: _onSheetDragUpdate,
+                        onDragEnd: (details) =>
+                            _onSheetDragEnd(context, details),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          // 4. 悬浮圆角按钮组（仅 _uiVisible && _sheetMode == hidden 时显示）
+          // 包含：对比 / 保存到相册 / 编辑
+          // 点击"编辑"展开抽屉栏到 1/4
+          if (_uiVisible && _sheetMode == _SheetMode.hidden)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 32),
+                  child: Center(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        // 半透明深色背景（80% 不透明）
+                        color: const Color(0xCC333333),
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _FloatingActionButton(
+                            icon: Icons.compare,
+                            label: '对比',
+                            onPressStart: _onCompareStart,
+                            onPressEnd: _onCompareEnd,
                           ),
-                        _PhotoFrame(
-                          tokens: tokens,
-                          photoUrl: _photoUrl,
-                          isComparing: _isComparing,
-                          // 照片目标比例：与拍摄页取景器一致，确保 WYSIWYG
-                          targetRatio: photoTargetRatio,
-                          // 使用本地后期参数，避免回写 CaptureState 导致参数泄漏
-                          postProcess: _localPostProcess,
-                          // 本地变换参数（旋转/翻转/拉直），仅影响预览
-                          transform: _localTransform,
-                        ),
-                        _BottomSheet(
-                          tokens: tokens,
-                          moods: _moods,
-                          selectedSceneId: _selectedSceneId,
-                          onSelectMood: _selectMood,
-                          onSelectScene: _selectScene,
-                          onSkip: _onSkip,
-                          onCompareCard: _onCompareCard,
-                          onExifCard: _onExifCard,
-                          onSave: _onSave,
-                          isSaving: _isSaving,
-                          // 本地后期参数及更新回调，供 PreviewEditPanel 使用
-                          localPostProcess: _localPostProcess,
-                          onUpdateLocalPostProcess: _updateLocalPostProcess,
-                          // 本地变换参数及更新回调，供 PreviewEditPanel 裁剪旋转标签使用
-                          localTransform: _localTransform,
-                          onUpdateLocalTransform: (t) {
-                            if (!mounted) return;
-                            if (_isReadOnly) {
-                              _showReadOnlyToast();
-                              return;
-                            }
-                            setState(() => _localTransform = t);
-                          },
-                        ),
-                      ],
+                          const SizedBox(width: 24),
+                          _FloatingActionButton(
+                            icon: Icons.save_alt,
+                            label: '保存到相册',
+                            onTap: _onSave,
+                          ),
+                          const SizedBox(width: 24),
+                          _FloatingActionButton(
+                            icon: Icons.tune,
+                            label: '编辑',
+                            onTap: () {
+                              setState(() => _sheetMode = _SheetMode.expanded);
+                              _sheetHeightNotifier.value =
+                                  _quarterHeight(context);
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -729,37 +919,29 @@ class _BackgroundDecoration extends StatelessWidget {
   }
 }
 
-/// 顶部导航（LumiraNav transparent: true + 自定义返回按钮 + 对比链接）
+/// 顶部导航（LumiraNav transparent: true + 自定义返回按钮 + 分享按钮）
+/// 对比按钮已移至底部折叠操作栏
 class _PreviewNav extends StatelessWidget {
   const _PreviewNav({
     required this.tokens,
     required this.onBack,
-    required this.onPressStart,
-    required this.onPressEnd,
     required this.onShare,
   });
 
   final ThemeTokens tokens;
   final VoidCallback onBack;
-  final VoidCallback onPressStart;
-  final VoidCallback onPressEnd;
   final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      // 硬编码颜色，与 uni-app 一致 (preview-nav bg rgba(28,26,23,0.9))
-      color: const Color.fromRGBO(28, 26, 23, 0.9),
+      // 透明背景：浮在照片上方
+      color: Colors.transparent,
       child: LumiraNav(
         title: '照片预览',
         transparent: true,
         leading: _NavBackButton(onTap: onBack),
         actions: [
-          _CompareLink(
-            onTap: () {},
-            onPressStart: onPressStart,
-            onPressEnd: onPressEnd,
-          ),
           GestureDetector(
             onTap: onShare,
             behavior: HitTestBehavior.opaque,
@@ -800,36 +982,86 @@ class _NavBackButton extends StatelessWidget {
   }
 }
 
-class _CompareLink extends StatelessWidget {
-  const _CompareLink({
-    required this.onTap,
-    required this.onPressStart,
-    required this.onPressEnd,
+/// 全屏照片显示（预览页用）
+///
+/// 照片铺满整个屏幕，BoxFit.contain 居中显示。
+/// 支持对比模式、旋转/翻转/拉直变换、后期滤镜实时预览。
+class _FullScreenPhoto extends StatelessWidget {
+  const _FullScreenPhoto({
+    required this.photoUrl,
+    required this.isComparing,
+    required this.postProcess,
+    required this.transform,
   });
-  final VoidCallback onTap;
-  final VoidCallback onPressStart;
-  final VoidCallback onPressEnd;
+
+  final String photoUrl;
+  final bool isComparing;
+  final PostProcess postProcess;
+  final TransformParams transform;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      onTapDown: (_) => onPressStart(),
-      onTapUp: (_) => onPressEnd(),
-      onTapCancel: onPressEnd,
-      behavior: HitTestBehavior.opaque,
-      child: const Padding(
-        padding: EdgeInsets.all(8),
-        child: Text(
-          '对比 ›',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            // 硬编码颜色，与 uni-app 一致 (nav-compare color #C9A96E)
-            color: Color(0xFFC9A96E),
-          ),
-        ),
-      ),
+    final bool isNetworkUrl = photoUrl.startsWith('http');
+
+    Widget buildImage() => isNetworkUrl
+        ? Image.network(
+            photoUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Center(
+              child: Icon(Icons.broken_image, color: Colors.white38, size: 64),
+            ),
+          )
+        : Image.file(
+            File(photoUrl),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Center(
+              child: Icon(Icons.broken_image, color: Colors.white38, size: 64),
+            ),
+          );
+
+    return Container(
+      color: Colors.black,
+      child: photoUrl.isNotEmpty
+          // InteractiveViewer：支持双指缩放与拖拽（放大后查看细节）
+          // minScale=1.0 不允许缩小（避免照片变小留黑边），maxScale=4.0 最大放大 4 倍
+          // boundaryMargin=zero：放大后不能拖出图片可见区域
+          ? InteractiveViewer(
+              minScale: 1.0,
+              maxScale: 4.0,
+              panEnabled: true,
+              scaleEnabled: true,
+              boundaryMargin: EdgeInsets.zero,
+              child: isComparing
+                  // 对比模式：显示原图色彩（透明滤镜 = 无后期），不应用变换
+                  // 保留 ColorFiltered 在树中以便测试验证滤镜切换
+                  ? ColorFiltered(
+                      colorFilter: const ColorFilter.mode(
+                          Colors.transparent, BlendMode.dst),
+                      child: buildImage(),
+                    )
+                  : RotatedBox(
+                      quarterTurns: transform.rotation ~/ 90,
+                      child: Transform(
+                        alignment: Alignment.center,
+                        transform: Matrix4.identity()
+                          ..scale(
+                            transform.flipH ? -1.0 : 1.0,
+                            transform.flipV ? -1.0 : 1.0,
+                            1.0,
+                          ),
+                        child: Transform.rotate(
+                          angle: transform.straighten * math.pi / 180.0,
+                          child: ColorFiltered(
+                            colorFilter: fromPostProcess(postProcess),
+                            child: buildImage(),
+                          ),
+                        ),
+                      ),
+                    ),
+            )
+          : const Center(
+              child: Icon(Icons.photo, color: Colors.white38, size: 64),
+            ),
     );
   }
 }
@@ -953,7 +1185,15 @@ class _PhotoEmptyState extends StatelessWidget {
   }
 }
 
-/// 底部白色 Sheet
+/// 底部抽屉栏（跟手拖动 + 三档吸附）
+///
+/// 通过 [currentHeight] / [isExpanded] / [isFullExpanded] 控制内容可见性：
+/// - closed（!isExpanded）：拖拽条 + 折叠操作按钮组（对比/保存到相册/编辑/保存*）
+/// - quarter（isExpanded && !isFullExpanded）：拖拽条 + PreviewEditPanel + 保存按钮
+/// - threeQuarter（isFullExpanded）：拖拽条 + PreviewEditPanel + 心情 + 场景 + 操作行 + 保存按钮
+///
+/// 顶部拖拽手势区由父级通过 [onDragStart] / [onDragUpdate] / [onDragEnd] 处理，
+/// 实时更新 [_sheetHeightNotifier] 实现跟手效果，松手后吸附到最近档位。
 class _BottomSheet extends StatelessWidget {
   const _BottomSheet({
     required this.tokens,
@@ -970,6 +1210,21 @@ class _BottomSheet extends StatelessWidget {
     required this.onUpdateLocalPostProcess,
     required this.localTransform,
     required this.onUpdateLocalTransform,
+    // 折叠操作栏相关
+    required this.isEdited,
+    required this.onCompareStart,
+    required this.onCompareEnd,
+    required this.onExpandToQuarter,
+    // 抽屉栏拖拽相关
+    required this.currentHeight,
+    required this.closedHeight,
+    required this.quarterHeight,
+    required this.threeQuarterHeight,
+    required this.isExpanded,
+    required this.isFullExpanded,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
   });
 
   final ThemeTokens tokens;
@@ -997,45 +1252,197 @@ class _BottomSheet extends StatelessWidget {
   /// 本地变换参数更新回调
   final ValueChanged<TransformParams> onUpdateLocalTransform;
 
+  /// 是否已编辑过图片（控制折叠操作栏的"保存"按钮显隐）
+  final bool isEdited;
+
+  /// 对比按钮按下开始（按住显示原图）
+  final VoidCallback onCompareStart;
+
+  /// 对比按钮按下结束（恢复滤镜）
+  final VoidCallback onCompareEnd;
+
+  /// 点击"编辑"按钮：展开抽屉栏到 quarter
+  final VoidCallback onExpandToQuarter;
+
+  // ===== 抽屉栏拖拽相关 =====
+
+  /// 当前抽屉栏高度（由父级 ValueNotifier 驱动）
+  final double currentHeight;
+
+  /// closed 档位高度
+  final double closedHeight;
+
+  /// quarter 档位高度
+  final double quarterHeight;
+
+  /// threeQuarter 档位高度
+  final double threeQuarterHeight;
+
+  /// 是否展开到 quarter 或更高（currentHeight > closedHeight + 20）
+  final bool isExpanded;
+
+  /// 是否展开到 threeQuarter（currentHeight > quarterHeight + 20）
+  final bool isFullExpanded;
+
+  /// 拖拽起始回调
+  final void Function(DragStartDetails) onDragStart;
+
+  /// 拖拽更新回调（实时更新高度）
+  final void Function(DragUpdateDetails) onDragUpdate;
+
+  /// 拖拽结束回调（吸附到最近档位）
+  final void Function(DragEndDetails) onDragEnd;
+
   @override
   Widget build(BuildContext context) {
+    // 半透明深色背景（抽屉栏风格，浮在照片上方）
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: const Color(0xF0303030), // 深色 94% 不透明
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SheetHandle(tokens: tokens),
-          const SizedBox(height: 16),
-          // 后期参数调整区（4 标签编辑面板：色彩/细节/滤镜/裁剪旋转）
-          // 使用本地状态：仅影响当前照片预览和保存，不回写 CaptureState（避免参数泄漏到拍摄页）
-          PreviewEditPanel(
-            postProcess: localPostProcess,
-            transform: localTransform,
-            onPostProcessChanged: onUpdateLocalPostProcess,
-            onTransformChanged: onUpdateLocalTransform,
+          // 拖拽手势区 + 拖拽条（绑定 onVerticalDrag 系列回调，跟手拖动）
+          GestureDetector(
+            onVerticalDragStart: onDragStart,
+            onVerticalDragUpdate: onDragUpdate,
+            onVerticalDragEnd: onDragEnd,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              // 增大点击区域，便于拖拽
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: _SheetHandle(
+                tokens: tokens,
+                handleKey: const ValueKey('sheet_handle'),
+              ),
+            ),
           ),
-          const SizedBox(height: 16),
-          _MoodSection(
-            tokens: tokens,
-            moods: moods,
-            onSelectMood: onSelectMood,
-            onSkip: onSkip,
+          // 内容区（根据 isExpanded / isFullExpanded 条件渲染）
+          Expanded(
+            child: _buildContent(),
           ),
-          const SizedBox(height: 24),
-          _SceneSection(
-            tokens: tokens,
-            selectedSceneId: selectedSceneId,
-            onSelectScene: onSelectScene,
+        ],
+      ),
+    );
+  }
+
+  /// 根据 isExpanded / isFullExpanded 构建内容区。
+  ///
+  /// 使用 LayoutBuilder 检测可用高度：
+  /// - AnimatedContainer 在吸附动画过程中高度会从旧值渐变到新值，
+  ///   此时 isExpanded/isFullExpanded 已基于最终高度判定，但物理高度尚未到位，
+  ///   PreviewEditPanel 在过小空间中渲染会触发 RenderFlex overflow。
+  /// - 当可用高度 < 200px 时（动画过程中或 closed 状态），降级为折叠操作栏。
+  Widget _buildContent() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableHeight = constraints.maxHeight;
+        // 动画过程中或 closed 状态下高度不足时，显示折叠操作栏避免溢出
+        if (availableHeight < 200) {
+          return _buildCollapsedActions();
+        }
+        if (!isExpanded) {
+          // closed：折叠操作按钮组
+          return _buildCollapsedActions();
+        }
+        if (!isFullExpanded) {
+          // quarter：PreviewEditPanel + 保存按钮
+          return Column(
+            children: [
+              Expanded(
+                child: PreviewEditPanel(
+                  postProcess: localPostProcess,
+                  transform: localTransform,
+                  onPostProcessChanged: onUpdateLocalPostProcess,
+                  onTransformChanged: onUpdateLocalTransform,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _SaveButton(onTap: onSave, isSaving: isSaving),
+            ],
+          );
+        }
+        // threeQuarter：PreviewEditPanel + 心情 + 场景 + 操作行 + 保存按钮
+        // 全部内容用 SingleChildScrollView 包裹避免溢出
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 280,
+                child: PreviewEditPanel(
+                  postProcess: localPostProcess,
+                  transform: localTransform,
+                  onPostProcessChanged: onUpdateLocalPostProcess,
+                  onTransformChanged: onUpdateLocalTransform,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _MoodSection(
+                tokens: tokens,
+                moods: moods,
+                onSelectMood: onSelectMood,
+                onSkip: onSkip,
+              ),
+              const SizedBox(height: 16),
+              _SceneSection(
+                tokens: tokens,
+                selectedSceneId: selectedSceneId,
+                onSelectScene: onSelectScene,
+              ),
+              const SizedBox(height: 16),
+              _ActionRow(
+                tokens: tokens,
+                onCompareCard: onCompareCard,
+                onExifCard: onExifCard,
+              ),
+              const SizedBox(height: 12),
+              _SaveButton(onTap: onSave, isSaving: isSaving),
+            ],
           ),
-          const SizedBox(height: 24),
-          _ActionRow(
-            tokens: tokens,
-            onCompareCard: onCompareCard,
-            onExifCard: onExifCard,
+        );
+      },
+    );
+  }
+
+  /// 折叠操作按钮组（closed 状态下显示）
+  /// [对比] [保存到相册] [编辑] [保存*]
+  Widget _buildCollapsedActions() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          // 对比按钮（按住生效）
+          _CollapsedActionButton(
+            icon: Icons.compare,
+            label: '对比',
+            onPressStart: onCompareStart,
+            onPressEnd: onCompareEnd,
           ),
-          const SizedBox(height: 16),
-          _SaveButton(onTap: onSave, isSaving: isSaving),
+          // 保存到系统相册
+          _CollapsedActionButton(
+            icon: Icons.save_alt,
+            label: '保存到相册',
+            onTap: onSave,
+          ),
+          // 编辑（展开抽屉栏到 quarter）
+          _CollapsedActionButton(
+            icon: Icons.tune,
+            label: '编辑',
+            onTap: onExpandToQuarter,
+          ),
+          // 保存（仅编辑过时显示）
+          if (isEdited)
+            _CollapsedActionButton(
+              icon: Icons.check,
+              label: '保存',
+              onTap: onSave,
+            ),
         ],
       ),
     );
@@ -1045,18 +1452,20 @@ class _BottomSheet extends StatelessWidget {
 /// 后期参数调整区已迁移至 `PreviewEditPanel`（4 标签编辑面板），
 /// 见 `../widgets/preview_edit_panel.dart`。原 `_AdjustSection` / `_SliderRow` 已删除。
 class _SheetHandle extends StatelessWidget {
-  const _SheetHandle({required this.tokens});
+  const _SheetHandle({required this.tokens, this.handleKey});
   final ThemeTokens tokens;
+  final Key? handleKey;
 
   @override
   Widget build(BuildContext context) {
     return Center(
+      key: handleKey,
       child: Container(
         width: 36,
         height: 4,
         decoration: BoxDecoration(
-          // 硬编码颜色，与 uni-app 一致 (sheet-handle bg #E5E0D8)
-          color: const Color(0xFFE5E0D8),
+          // 拖拽指示器：浅色（适配深色背景）
+          color: Colors.white.withOpacity(0.4),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -1316,6 +1725,89 @@ class _ActionRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 折叠操作栏的紧凑按钮（圆形图标 + 文字）
+/// 用于 closed 状态下底部操作栏：对比 / 保存到相册 / 编辑 / 保存*
+class _CollapsedActionButton extends StatelessWidget {
+  const _CollapsedActionButton({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.onPressStart,
+    this.onPressEnd,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final VoidCallback? onPressStart;
+  final VoidCallback? onPressEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onTapDown: onPressStart == null ? null : (_) => onPressStart!(),
+      onTapUp: onPressEnd == null ? null : (_) => onPressEnd!(),
+      onTapCancel: onPressEnd,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 22, color: Colors.white),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 10, color: Colors.white70),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 悬浮圆角按钮组中的按钮（图标 + 文字垂直排列）
+/// 用于 _sheetMode == hidden 时底部悬浮按钮组：对比 / 保存到相册 / 编辑
+class _FloatingActionButton extends StatelessWidget {
+  const _FloatingActionButton({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.onPressStart,
+    this.onPressEnd,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final VoidCallback? onPressStart;
+  final VoidCallback? onPressEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onTapDown: (_) => onPressStart?.call(),
+      onTapUp: (_) => onPressEnd?.call(),
+      onTapCancel: () => onPressEnd?.call(),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 24, color: Colors.white),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: Colors.white),
+          ),
+        ],
+      ),
     );
   }
 }

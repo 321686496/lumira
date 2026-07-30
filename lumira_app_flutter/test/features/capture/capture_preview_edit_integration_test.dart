@@ -43,7 +43,6 @@ void main() {
         params: const PostProcess(color: PostProcessColor()),
         outputPath: outputPath,
         aspectRatio: 'fullscreen',
-        autoDeblur: false,
       );
 
       // 3. Verify output path matches
@@ -171,6 +170,7 @@ Future<Database> _openInMemoryDbWithV7Schema() async {
           ${Tables.colKitId} TEXT,
           ${Tables.colMood} TEXT,
           ${Tables.colLut} TEXT,
+          ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
           ${Tables.colCreatedAt} INTEGER NOT NULL
         )
       ''');

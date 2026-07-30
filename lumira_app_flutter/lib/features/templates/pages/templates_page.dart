@@ -53,7 +53,7 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
   }
 
   void _onScroll() {
-    final scrolled = _scrollController.offset > 8;
+    final scrolled = _scrollController.offset > 12;
     if (scrolled != _scrolled) {
       setState(() => _scrolled = scrolled);
     }
@@ -76,71 +76,66 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
+      // Forced fix: 统一 tab 页用 Scaffold.appBar——LumiraNav 作为 appBar
+      // extendBodyBehindAppBar=true 让 body 滚动内容延伸到 nav 下方（毛玻璃可见性）
+      extendBodyBehindAppBar: true,
+      appBar: LumiraNav(
+        title: '发现',
+        centerTitle: false,
+        transparent: true,
+        scrolled: _scrolled,
+        showBackButton: false,
+        horizontalPadding: 24,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.apps_outlined, size: 20),
+            onPressed: _goAll,
+            tooltip: '查看全部',
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           // 背景装饰（glass 风格可见性）
           _BackgroundDecoration(tokens: tokens),
           // Forced fix: glass 风格彩色斑点背景
           const Positioned.fill(child: GlassBackground(variant: GlassBackgroundVariant.templates)),
-          // 主内容
-          SafeArea(
-            child: Column(
-              children: [
-                LumiraNav(
-                  title: '发现',
-                  centerTitle: false,
-                  transparent: true,
-                  scrolled: _scrolled,
-                  showBackButton: false,
-                  horizontalPadding: 24,
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.apps_outlined, size: 20),
-                      onPressed: _goAll,
-                      tooltip: '查看全部',
-                    ),
-                  ],
+          // 主内容（ListView 顶部不再需要额外 padding，extendBodyBehindAppBar 让内容延伸到 nav 下方）
+          ListView(
+            controller: _scrollController,
+            padding: EdgeInsets.zero,
+            children: [
+              // === 模板库 section（上）===
+              FadeUp(
+                child: _TemplateSectionHeader(),
+              ),
+              _HeroSection(
+                onTap: _goDetail,
+              ),
+              if (TemplatesMockData.userPreference.totalPhotos > 0)
+                FadeUp(
+                  delay: const Duration(milliseconds: 80),
+                  child: _PreferenceSection(),
                 ),
-                Expanded(
-                  child: ListView(
-                    controller: _scrollController,
-                    padding: EdgeInsets.zero,
-                    children: [
-                      // === 模板库 section（上）===
-                      FadeUp(
-                        child: _TemplateSectionHeader(),
-                      ),
-                      _HeroSection(
-                        onTap: _goDetail,
-                      ),
-                      if (TemplatesMockData.userPreference.totalPhotos > 0)
-                        FadeUp(
-                          delay: const Duration(milliseconds: 80),
-                          child: _PreferenceSection(),
-                        ),
-                      FadeUp(
-                        delay: const Duration(milliseconds: 120),
-                        child: _OtherSection(onTap: _goDetail),
-                      ),
-                      const SizedBox(height: 28),
-                      // === 场景 section（下）===
-                      FadeUp(
-                        delay: const Duration(milliseconds: 160),
-                        child: _SceneSectionHeader(),
-                      ),
-                      const FadeUp(
-                        delay: Duration(milliseconds: 200),
-                        child: SceneCategoryOverview(compact: true),
-                      ),
-                      const SizedBox(height: 28),
-                      // === 摄影美学院 section ===
-                      FadeUp(delay: const Duration(milliseconds: 240), child: _AcademyEntrySection()),
-                      const SizedBox(height: 140), // bottom spacer 避开 FloatingTabBar
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              FadeUp(
+                delay: const Duration(milliseconds: 120),
+                child: _OtherSection(onTap: _goDetail),
+              ),
+              const SizedBox(height: 28),
+              // === 场景 section（下）===
+              FadeUp(
+                delay: const Duration(milliseconds: 160),
+                child: _SceneSectionHeader(),
+              ),
+              const FadeUp(
+                delay: Duration(milliseconds: 200),
+                child: SceneCategoryOverview(compact: true),
+              ),
+              const SizedBox(height: 28),
+              // === 摄影美学院 section ===
+              FadeUp(delay: const Duration(milliseconds: 240), child: _AcademyEntrySection()),
+              const SizedBox(height: 140), // bottom spacer 避开 FloatingTabBar
+            ],
           ),
           // FloatingTabBar
           const Positioned(

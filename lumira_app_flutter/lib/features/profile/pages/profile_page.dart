@@ -29,24 +29,58 @@ import '../data/profile_mock_data.dart';
 ///
 /// Forced fix: 之前注释说"Flutter 版 ProfilePage 不渲染 FloatingTabBar"是错的。
 /// 与 HomePage / TemplatesPage / ChallengePage 一致，profile 作为 tab 页必须渲染 FloatingTabBar。
-class ProfilePage extends ConsumerWidget {
+///
+/// Forced fix: 改为 ConsumerStatefulWidget，添加 ScrollController + _scrolled 状态，
+/// 传 scrolled: _scrolled 给 LumiraNav（之前永远透明，未联动滚动）。
+class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({super.key});
 
-  void _goPage(BuildContext context, String path) {
+  @override
+  ConsumerState<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends ConsumerState<ProfilePage> {
+  final ScrollController _scrollController = ScrollController();
+  bool _scrolled = false;
+
+  static const double _scrollThreshold = 12.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final newScrolled = _scrollController.offset > _scrollThreshold;
+    if (newScrolled != _scrolled) {
+      setState(() => _scrolled = newScrolled);
+    }
+  }
+
+  void _goPage(String path) {
     GoRouter.of(context).push(path);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
-      appBar: const LumiraNav(
+      appBar: LumiraNav(
         title: '我的',
         centerTitle: false,
         transparent: true,
+        scrolled: _scrolled,
         showBackButton: false,
         horizontalPadding: 24,
       ),
@@ -69,6 +103,7 @@ class ProfilePage extends ConsumerWidget {
             ),
             child: SafeArea(
               child: SingleChildScrollView(
+                controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -91,13 +126,13 @@ class ProfilePage extends ConsumerWidget {
                     // 4. QuickActionsRow
                     FadeUp(
                       delay: const Duration(milliseconds: 300),
-                      child: _QuickActionsRow(onTap: (p) => _goPage(context, p)),
+                      child: _QuickActionsRow(onTap: (p) => _goPage(p)),
                     ),
                     const SizedBox(height: 20),
                     // 5. MenuCard
                     FadeUp(
                       delay: const Duration(milliseconds: 400),
-                      child: _MenuCard(onTap: (p) => _goPage(context, p)),
+                      child: _MenuCard(onTap: (p) => _goPage(p)),
                     ),
                     const SizedBox(height: 16),
                   ],

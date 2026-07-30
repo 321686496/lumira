@@ -10,8 +10,8 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../home/providers/banner_recommendation_provider.dart';
 import '../../profile/providers/composition_kits_providers.dart';
-import '../../profile/providers/settings_providers.dart';
 import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
@@ -274,124 +274,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
           return;
         }
         _isProcessing = true;
-
-        // 应用后期参数（滤镜、色彩、锐化等）和 aspectRatio 裁剪到照片文件
-        final params = ref.read(CaptureState.effectivePostProcessProvider);
-        final rawMode = ref.read(CaptureState.rawModeProvider);
-        final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
-        final autoDeblur = ref.read(autoDeblurProvider);
-        // 获取屏幕宽高比，用于 fullscreen 模式按取景器裁剪
-        final screenSize = MediaQuery.of(context).size;
-        final screenRatio = screenSize.width / screenSize.height;
-        final isPortrait = screenSize.height >= screenSize.width;
-        debugPrint('[capture] 当前 aspectRatio=$aspectRatio, '
-            'screenRatio=$screenRatio, isPortrait=$isPortrait, '
-            'rawMode=$rawMode');
-        // [非破坏性编辑] 复制原始文件，供后续编辑时重新处理
-        // 复制到 <filePath>.original.jpg，与处理后的文件并存
-        // 失败不阻塞拍摄流程（originalPath 为 null 时预览页降级为只读）
-        String? originalPath;
         try {
-          originalPath = '${media.filePath}.original.jpg';
-          await File(media.filePath).copy(originalPath);
-          debugPrint('[capture] 原图已保留: $originalPath');
-        } catch (e) {
-          debugPrint('[capture] 原图保留失败（不阻塞）: $e');
-          originalPath = null;
-        }
-        final processedPath = await PhotoPostProcessor.processFile(
-          inputPath: media.filePath,
-          params: params,
-          rawMode: rawMode,
-          aspectRatio: aspectRatio,
-          screenRatio: screenRatio,
-          isPortrait: isPortrait,
-          autoDeblur: autoDeblur,
-        );
-
-        // 修复 Bug：拍照后预览页/相册显示带黑边、比例错，多次进入后才变对。
-        //
-        // 根因：原代码在 processFile 之前就把 media.filePath 写入
-        // lastPhotoPathProvider，拍摄按钮缩略图的 Image.file 立即读取了
-        // 4:3 传感器原图并缓存到 FileImage。processFile 完成后文件被覆盖为
-        // 目标比例（如 9:16），但 OHOS 文件系统 stat 缓存延迟可能导致
-        // FileImage 误判 cache hit，预览页和首次进入相册都拿到 4:3 解码图，
-        // 在 9:16 容器内 contain 显示 → 上下黑边。多次进出后 imageCache LRU
-        // 驱逐该条目，重新解码读到目标比例字节 → 显示正确。
-        //
-        // 修复：
-        // 1. 延后设置 lastPhotoPathProvider 到 processFile 完成之后，
-        //    确保缩略图第一次访问就是目标比例的字节。
-        // 2. processFile 完成后主动 evict FileImage 缓存，清除任何可能在
-        //    processFile 期间被其他 widget（如取景器残留帧）缓存的旧解码图。
-        //    FileImage 的 key 是 (path, mtime, size)，writeAsBytes 后 mtime
-        //    和 size 都变了，理论上应该 cache miss，evict 是双保险。
-        try {
-          PaintingBinding.instance.imageCache
-              .evict(FileImage(File(processedPath)));
-        } catch (e) {
-          debugPrint('[capture] evict FileImage 缓存失败: $e');
-        }
-
-        _isProcessing = false;
-
-        // processFile 完成后再设置缩略图路径，确保缩略图显示的是处理后的照片
-        ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
-            processedPath;
-
-        // 自动保存到应用相册（数据库），用户在预览页可决定是否另存到系统相册
-        // 修复 Issue 4：原方案仅在用户点击预览页"保存"时写入 DB，
-        // 若用户返回则照片成为孤儿（文件存在但无 DB 记录）。此处捕获后立即落库。
-        final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
-        try {
-          final dao = await ref.read(galleryDaoProvider.future);
-          final templateId = ref.read(CaptureState.currentTemplateIdProvider);
-          final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
-          final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
-          final lut = postProcess.lut;
-          final record = GalleryItemRecord(
-            id: photoId,
-            filePath: processedPath,
-            originalPath: originalPath,
-            postProcess: params,
-            dataUrl: null,
-            sceneId: sceneId,
-            templateId: templateId,
-            kitId: null,
-            mood: null,
-            lut: (lut == 'none' || lut.isEmpty) ? null : lut,
-            createdAt: DateTime.now().millisecondsSinceEpoch,
-          );
-          await dao.insert(record);
-          ref.invalidate(galleryDaoProvider);
-          debugPrint('[capture] 自动保存到应用相册: ${record.id}');
-
-          // 套件使用次数 +1（仅在套用 kit 进入时）
-          if (_activeKitId != null) {
-            try {
-              final kitsDao =
-                  await ref.read(compositionKitsDaoProvider.future);
-              await kitsDao.incrementUsage(_activeKitId!);
-              ref.invalidate(compositionKitsProvider);
-            } catch (e) {
-              debugPrint('[capture] 套件 usage 计数失败: $e');
-            }
-          }
-        } catch (e) {
-          debugPrint('[capture] 自动保存失败: $e');
-        }
-
-        // 拍照成功后自动导航到预览页
-        if (!mounted) return;
-        if (_returnResult) {
-          context.pop(processedPath);
-        } else {
-          GoRouter.of(context).push(
-            '${RouteNames.capturePreview}'
-            '?photoUrl=${Uri.encodeComponent(processedPath)}'
-            '&photoId=$photoId'
-            '&aspectRatio=${Uri.encodeComponent(aspectRatio)}',
-          );
+          await _processSingleFrame(media.filePath);
+        } finally {
+          _isProcessing = false;
         }
       }
     });
@@ -474,11 +360,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
   }
 
   /// 拍照：通过 CameraState.when 调用 PhotoCameraState.takePhoto()
-  /// 修复：加诊断日志 + async/await 捕获异步异常
+  ///
+  /// 单帧拍照流程：点击拍摄 → takePhoto → captureState$ 监听器中
+  /// 进行后期处理 → 保存到 DB → 导航到预览页。
   Future<void> _onCapture() async {
     debugPrint('[capture] _onCapture() called');
 
-    // 防抖：处理中或已导航到预览页时忽略新的拍照请求
     if (_isProcessing) {
       debugPrint('[capture] 处理中，忽略拍照请求');
       return;
@@ -488,7 +375,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
     if (state == null) {
       debugPrint('[capture] cameraState is null — CameraAwesomeBuilder 未初始化');
       if (!mounted) return;
-      // 替换 SnackBar 为 LumiraToast，与项目深色 + 金色主题高度匹配
       LumiraToast.show(
         context,
         '相机正在初始化，请稍候...',
@@ -496,6 +382,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
       );
       return;
     }
+
+    _isProcessing = true;
     debugPrint('[capture] cameraState OK, calling takePhoto()...');
     try {
       await state.when(
@@ -503,13 +391,136 @@ class _CapturePageState extends ConsumerState<CapturePage>
       );
       debugPrint('[capture] takePhoto() completed (no exception)');
     } catch (e, st) {
-      debugPrint('[capture] takePhoto() failed: $e\n$st');
+      debugPrint('[capture] takePhoto() exception: $e\n$st');
+      _isProcessing = false;
       if (!mounted) return;
-      // 替换 SnackBar 为 LumiraToast，与项目深色 + 金色主题高度匹配
       LumiraToast.show(
         context,
         '拍照失败：$e',
         duration: const Duration(seconds: 2),
+      );
+    }
+    // 注意：实际照片处理在 _captureSub 监听器中进行
+  }
+
+  /// 处理单张照片：复制原图 → processFile → evict 缓存 → 保存到 DB → 导航
+  ///
+  /// [filePath] 相机拍摄的原始 JPEG 文件路径。处理完成后自动导航到预览页。
+  Future<void> _processSingleFrame(String filePath) async {
+    // 应用后期参数（滤镜、色彩、锐化等）和 aspectRatio 裁剪到照片文件
+    final params = ref.read(CaptureState.effectivePostProcessProvider);
+    final rawMode = ref.read(CaptureState.rawModeProvider);
+    final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
+    // 获取屏幕宽高比，用于 fullscreen 模式按取景器裁剪
+    final screenSize = MediaQuery.of(context).size;
+    final screenRatio = screenSize.width / screenSize.height;
+    final isPortrait = screenSize.height >= screenSize.width;
+    debugPrint('[capture] 当前 aspectRatio=$aspectRatio, '
+        'screenRatio=$screenRatio, isPortrait=$isPortrait, '
+        'rawMode=$rawMode');
+    // [非破坏性编辑] 复制原始文件，供后续编辑时重新处理
+    // 复制到 <filePath>.original.jpg，与处理后的文件并存
+    // 失败不阻塞拍摄流程（originalPath 为 null 时预览页降级为只读）
+    String? originalPath;
+    try {
+      originalPath = '$filePath.original.jpg';
+      await File(filePath).copy(originalPath);
+      debugPrint('[capture] 原图已保留: $originalPath');
+    } catch (e) {
+      debugPrint('[capture] 原图保留失败（不阻塞）: $e');
+      originalPath = null;
+    }
+    final processedPath = await PhotoPostProcessor.processFile(
+      inputPath: filePath,
+      params: params,
+      rawMode: rawMode,
+      aspectRatio: aspectRatio,
+      screenRatio: screenRatio,
+      isPortrait: isPortrait,
+    );
+
+    // 修复 Bug：拍照后预览页/相册显示带黑边、比例错，多次进入后才变对。
+    //
+    // 根因：原代码在 processFile 之前就把 media.filePath 写入
+    // lastPhotoPathProvider，拍摄按钮缩略图的 Image.file 立即读取了
+    // 4:3 传感器原图并缓存到 FileImage。processFile 完成后文件被覆盖为
+    // 目标比例（如 9:16），但 OHOS 文件系统 stat 缓存延迟可能导致
+    // FileImage 误判 cache hit，预览页和首次进入相册都拿到 4:3 解码图，
+    // 在 9:16 容器内 contain 显示 → 上下黑边。多次进出后 imageCache LRU
+    // 驱逐该条目，重新解码读到目标比例字节 → 显示正确。
+    //
+    // 修复：
+    // 1. 延后设置 lastPhotoPathProvider 到 processFile 完成之后，
+    //    确保缩略图第一次访问就是目标比例的字节。
+    // 2. processFile 完成后主动 evict FileImage 缓存，清除任何可能在
+    //    processFile 期间被其他 widget（如取景器残留帧）缓存的旧解码图。
+    //    FileImage 的 key 是 (path, mtime, size)，writeAsBytes 后 mtime
+    //    和 size 都变了，理论上应该 cache miss，evict 是双保险。
+    try {
+      PaintingBinding.instance.imageCache
+          .evict(FileImage(File(processedPath)));
+    } catch (e) {
+      debugPrint('[capture] evict FileImage 缓存失败: $e');
+    }
+
+    // processFile 完成后再设置缩略图路径，确保缩略图显示的是处理后的照片
+    ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
+        processedPath;
+
+    // 自动保存到应用相册（数据库），用户在预览页可决定是否另存到系统相册
+    // 修复 Issue 4：原方案仅在用户点击预览页"保存"时写入 DB，
+    // 若用户返回则照片成为孤儿（文件存在但无 DB 记录）。此处捕获后立即落库。
+    final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+    try {
+      final dao = await ref.read(galleryDaoProvider.future);
+      final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+      final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
+      final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
+      final lut = postProcess.lut;
+      final record = GalleryItemRecord(
+        id: photoId,
+        filePath: processedPath,
+        originalPath: originalPath,
+        postProcess: params,
+        dataUrl: null,
+        sceneId: sceneId,
+        templateId: templateId,
+        kitId: null,
+        mood: null,
+        lut: (lut == 'none' || lut.isEmpty) ? null : lut,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      );
+      await dao.insert(record);
+      ref.invalidate(galleryDaoProvider);
+      // Forced fix: 让首页 banner 推荐失效，下次进入首页刷新（基于最新拍摄历史）
+      ref.invalidate(bannerRecommendationProvider);
+      debugPrint('[capture] 自动保存到应用相册: ${record.id}');
+
+      // 套件使用次数 +1（仅在套用 kit 进入时）
+      if (_activeKitId != null) {
+        try {
+          final kitsDao =
+              await ref.read(compositionKitsDaoProvider.future);
+          await kitsDao.incrementUsage(_activeKitId!);
+          ref.invalidate(compositionKitsProvider);
+        } catch (e) {
+          debugPrint('[capture] 套件 usage 计数失败: $e');
+        }
+      }
+    } catch (e) {
+      debugPrint('[capture] 自动保存失败: $e');
+    }
+
+    // 拍照成功后自动导航到预览页
+    if (!mounted) return;
+    if (_returnResult) {
+      context.pop(processedPath);
+    } else {
+      GoRouter.of(context).push(
+        '${RouteNames.capturePreview}'
+        '?photoUrl=${Uri.encodeComponent(processedPath)}'
+        '&photoId=$photoId'
+        '&aspectRatio=${Uri.encodeComponent(aspectRatio)}',
       );
     }
   }

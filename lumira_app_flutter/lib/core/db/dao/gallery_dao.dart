@@ -16,6 +16,7 @@ class GalleryItemRecord {
   final String? kitId;
   final String? mood;
   final String? lut;
+  final bool isFavorite;
   final int createdAt;
 
   GalleryItemRecord({
@@ -30,6 +31,7 @@ class GalleryItemRecord {
     this.kitId,
     this.mood,
     this.lut,
+    this.isFavorite = false,
     required this.createdAt,
   });
 
@@ -46,6 +48,7 @@ class GalleryItemRecord {
       Tables.colKitId: kitId,
       Tables.colMood: mood,
       Tables.colLut: lut,
+      Tables.colGalleryItemIsFavorite: isFavorite ? 1 : 0,
       Tables.colCreatedAt: createdAt,
     };
   }
@@ -63,6 +66,7 @@ class GalleryItemRecord {
       kitId: row[Tables.colKitId] as String?,
       mood: row[Tables.colMood] as String?,
       lut: row[Tables.colLut] as String?,
+      isFavorite: (row[Tables.colGalleryItemIsFavorite] as num?)?.toInt() == 1,
       createdAt: (row[Tables.colCreatedAt] as num).toInt(),
     );
   }
@@ -264,5 +268,132 @@ class GalleryDao {
       if (cat != null) result[cat] = cnt;
     }
     return result;
+  }
+
+  /// 按模板 ID 统计照片数（用于分析用户常拍模板）
+  /// 实现：参考 countByCategory()，按 template_id 分组
+  Future<Map<String, int>> countByTemplate() async {
+    final rows = await _db.rawQuery('''
+      SELECT ${Tables.colTemplateId} AS tid, COUNT(*) AS cnt
+      FROM ${Tables.galleryItems}
+      WHERE ${Tables.colTemplateId} IS NOT NULL
+      GROUP BY ${Tables.colTemplateId}
+    ''');
+    final result = <String, int>{};
+    for (final row in rows) {
+      final tid = row['tid'] as String?;
+      final cnt = row['cnt'] as int? ?? 0;
+      if (tid != null) result[tid] = cnt;
+    }
+    return result;
+  }
+
+  /// 按场景风格统计照片数（通过 scene_id JOIN scenes.style）
+  /// 实现：参考 countByCategory()，按 scenes.style 分组
+  Future<Map<String, int>> countByStyle() async {
+    final rows = await _db.rawQuery('''
+      SELECT s.style AS style, COUNT(*) AS cnt
+      FROM gallery_items g
+      LEFT JOIN scenes s ON g.scene_id = s.id
+      WHERE s.style IS NOT NULL AND s.style != ''
+      GROUP BY s.style
+    ''');
+    final result = <String, int>{};
+    for (final row in rows) {
+      final style = row['style'] as String?;
+      final cnt = row['cnt'] as int? ?? 0;
+      if (style != null) result[style] = cnt;
+    }
+    return result;
+  }
+
+  /// 获取最近拍摄的照片（最新在前，limit 控制数量）
+  /// 实现：参考 getAll()，强制 DESC 排序与 limit
+  Future<List<GalleryItemRecord>> getRecent({int limit = 10}) async {
+    final rows = await _db.query(
+      Tables.galleryItems,
+      orderBy: '${Tables.colCreatedAt} DESC',
+      limit: limit,
+    );
+    return rows.map(GalleryItemRecord.fromRow).toList();
+  }
+
+  /// 切换收藏标记（is_favorite 0↔1）
+  Future<void> toggleFavorite(String id) async {
+    final row = await _db.query(
+      Tables.galleryItems,
+      columns: [Tables.colGalleryItemIsFavorite],
+      where: '${Tables.colId} = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    final current = (row.isNotEmpty ? (row.first[Tables.colGalleryItemIsFavorite] as num?)?.toInt() : 0) ?? 0;
+    await _db.update(
+      Tables.galleryItems,
+      {Tables.colGalleryItemIsFavorite: current == 1 ? 0 : 1},
+      where: '${Tables.colId} = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// 显式设置收藏标记
+  Future<void> setFavorite(String id, bool favorite) async {
+    await _db.update(
+      Tables.galleryItems,
+      {Tables.colGalleryItemIsFavorite: favorite ? 1 : 0},
+      where: '${Tables.colId} = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// 获取所有收藏照片（is_favorite=1，最新在前）
+  Future<List<GalleryItemRecord>> getFavorites({int? limit}) async {
+    final rows = await _db.query(
+      Tables.galleryItems,
+      where: '${Tables.colGalleryItemIsFavorite} = ?',
+      whereArgs: [1],
+      orderBy: '${Tables.colCreatedAt} DESC',
+      limit: limit,
+    );
+    return rows.map(GalleryItemRecord.fromRow).toList();
+  }
+
+  /// 按拍摄目标分类筛选照片（JOIN scenes ON scene_id 筛选 related_category）
+  /// 实现：参考 countByCategory() 的 JOIN 模式
+  Future<List<GalleryItemRecord>> getByCategory(String category, {int? limit}) async {
+    final rows = await _db.rawQuery('''
+      SELECT g.* FROM ${Tables.galleryItems} g
+      LEFT JOIN ${Tables.scenes} s ON g.${Tables.colSceneId} = s.${Tables.colId}
+      WHERE s.${Tables.colRelatedCategory} = ?
+      ORDER BY g.${Tables.colCreatedAt} DESC
+      ${limit != null ? 'LIMIT ?' : ''}
+    ''', limit != null ? [category, limit] : [category]);
+    return rows.map(GalleryItemRecord.fromRow).toList();
+  }
+
+  /// 按模板 ID 筛选照片
+  Future<List<GalleryItemRecord>> getByTemplate(String templateId, {int? limit}) async {
+    final rows = await _db.query(
+      Tables.galleryItems,
+      where: '${Tables.colTemplateId} = ?',
+      whereArgs: [templateId],
+      orderBy: '${Tables.colCreatedAt} DESC',
+      limit: limit,
+    );
+    return rows.map(GalleryItemRecord.fromRow).toList();
+  }
+
+  /// 按年份月份筛选照片（created_at 的 YYYY-MM，使用 localtime 与 monthlyCounts 对齐）
+  Future<List<GalleryItemRecord>> getByMonth(int year, int month, {int? limit}) async {
+    final yearStr = year.toString();
+    final monthStr = month.toString().padLeft(2, '0');
+    final rows = await _db.rawQuery('''
+      SELECT * FROM ${Tables.galleryItems}
+      WHERE strftime('%Y', ${Tables.colCreatedAt} / 1000, 'unixepoch', 'localtime') = ?
+        AND strftime('%m', ${Tables.colCreatedAt} / 1000, 'unixepoch', 'localtime') = ?
+      ORDER BY ${Tables.colCreatedAt} DESC
+      ${limit != null ? 'LIMIT ?' : ''}
+    ''', limit != null ? [yearStr, monthStr, limit] : [yearStr, monthStr]);
+    return rows.map(GalleryItemRecord.fromRow).toList();
   }
 }
