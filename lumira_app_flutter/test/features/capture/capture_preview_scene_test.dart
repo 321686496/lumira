@@ -1,0 +1,156 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
+import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
+import 'package:lumira_app_flutter/features/capture/pages/capture_preview_page.dart';
+
+void main() {
+  /// 设置大视口，避免内容被推出可视区域
+  void setLargeViewport(WidgetTester tester) {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+  }
+
+  /// 把底部抽屉栏展开到 threeQuarter 状态（hidden → quarter → threeQuarter）。
+  ///
+  /// 新版抽屉栏默认 hidden（只显示悬浮按钮组），不显示拖拽条。
+  /// 展开流程：
+  ///   1. 点击悬浮按钮组中的"编辑"按钮，展开抽屉栏到 quarter（1/4）
+  ///   2. drag 拖拽条上拉到 threeQuarter（3/4）高度，松手后自动吸附
+  Future<void> expandSheetToThreeQuarter(WidgetTester tester) async {
+    // 1. 点击悬浮按钮组中的"编辑"按钮，展开抽屉栏到 quarter
+    final editButton = find.text('编辑');
+    expect(editButton, findsOneWidget, reason: '悬浮按钮组中应存在"编辑"按钮');
+    await tester.tap(editButton);
+    await tester.pumpAndSettle();
+    // 等待 AnimatedContainer 280ms 动画完成（quarter 高度展开）
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    // 2. drag 拖拽条上拉到 threeQuarter 高度
+    final handle = find.byKey(const ValueKey('sheet_handle'));
+    expect(handle, findsOneWidget, reason: '拖拽条应存在');
+    // 屏幕高度 2400，threeQuarter = 2400 * 0.75 = 1800
+    // quarter = 2400 * 0.35 = 840，需要上拉 1800 - 840 = 960
+    // drag 上拉 dy 为负，多拖一点确保越过 quarter 档位
+    await tester.drag(handle, const Offset(0, -1000));
+    await tester.pumpAndSettle();
+    // 确保吸附动画完成（AnimatedContainer 280ms）
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('preview page pre-selects active scene from capture state',
+      (tester) async {
+    setLargeViewport(tester);
+    // 使用 mock 数据中真实存在的场景 ID（'cafe' → '咖啡馆'）
+    // 之前的 'scene_portrait' 在 CapturePreviewMockData.sceneOptions 中不存在，
+    // 无法验证 _selectedSceneId 是否真正驱动了 UI。
+    final container = ProviderContainer(overrides: [
+      themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+      uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+      CaptureState.activeScenePresetIdProvider
+          .overrideWith((ref) => 'cafe'),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: GoRouter(
+            initialLocation: '/preview',
+            routes: [
+              GoRoute(
+                path: '/preview',
+                builder: (_, __) =>
+                    const CapturePreviewPage(photoUrl: '', photoId: 'p1'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    // pumpAndSettle 确保 addPostFrameCallback 执行，_selectedSceneId 被赋值并触发重建
+    await tester.pumpAndSettle();
+    // 展开抽屉栏到 threeQuarter（默认 closed 仅显示拖拽条 + 保存按钮）
+    await expandSheetToThreeQuarter(tester);
+
+    // 观察点 1：override 仍然生效
+    expect(container.read(CaptureState.activeScenePresetIdProvider), 'cafe');
+
+    // 观察点 2：UI 层 — '咖啡馆' pill 应处于 active 状态
+    // _Pill active 时 Text 颜色为白色 (Colors.white)，inactive 时为 0xFF666666
+    final cafeTextFinder = find.text('咖啡馆');
+    expect(cafeTextFinder, findsOneWidget);
+
+    final Text cafeText = tester.widget(cafeTextFinder) as Text;
+    expect(cafeText.style?.color, isNotNull);
+    // active pill 文字为白色
+    expect(cafeText.style!.color, equals(Colors.white),
+        reason: 'active 场景 pill 文字应为白色，实际为 ${cafeText.style!.color}');
+
+    // 观察点 3：其他场景 pill（如 '街头'）应处于 inactive 状态
+    final streetTextFinder = find.text('街头');
+    expect(streetTextFinder, findsOneWidget);
+    final Text streetText = tester.widget(streetTextFinder) as Text;
+    expect(streetText.style?.color, isNotNull);
+    expect(streetText.style!.color, equals(const Color(0xFF666666)),
+        reason: 'inactive 场景 pill 文字应为灰色 #666666，实际为 ${streetText.style!.color}');
+  });
+
+  testWidgets(
+      'preview page defaults to "不标记" when no active scene is set',
+      (tester) async {
+    setLargeViewport(tester);
+    // 无 override 时 activeScenePresetIdProvider 应为 null，
+    // _selectedSceneId 保持 null → '不标记' pill 为 active
+    final container = ProviderContainer(overrides: [
+      themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+      uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(
+          routerConfig: GoRouter(
+            initialLocation: '/preview',
+            routes: [
+              GoRoute(
+                path: '/preview',
+                builder: (_, __) =>
+                    const CapturePreviewPage(photoUrl: '', photoId: 'p1'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // 展开抽屉栏到 threeQuarter
+    await expandSheetToThreeQuarter(tester);
+
+    expect(container.read(CaptureState.activeScenePresetIdProvider), isNull);
+
+    // '不标记' pill 应为 active（白色文字）
+    final noneTextFinder = find.text('不标记');
+    expect(noneTextFinder, findsOneWidget);
+    final Text noneText = tester.widget(noneTextFinder) as Text;
+    expect(noneText.style?.color, equals(Colors.white),
+        reason: '无 active scene 时 "不标记" 应为白色（active），实际为 ${noneText.style?.color}');
+
+    // 第一个场景 '咖啡馆' 应为 inactive（灰色）
+    final cafeTextFinder = find.text('咖啡馆');
+    expect(cafeTextFinder, findsOneWidget);
+    final Text cafeText = tester.widget(cafeTextFinder) as Text;
+    expect(cafeText.style?.color, equals(const Color(0xFF666666)));
+  });
+}
