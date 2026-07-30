@@ -345,14 +345,17 @@ void main() {
     expect(find.byType(LevelIndicator), findsOneWidget);
   });
 
-  testWidgets('bottom panel expand toggle button is present', (tester) async {
+  testWidgets('capture toolbar with 4 tools is present', (tester) async {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
     await pumpWithPermission(tester);
 
-    // The toggle button shows keyboard_arrow_up when collapsed (default state)
-    expect(find.byIcon(Icons.keyboard_arrow_up), findsOneWidget);
-    expect(find.byIcon(Icons.keyboard_arrow_down), findsNothing);
+    // 底部工具栏包含 4 个工具：模板/场景/参数/补光
+    // 默认 activeTool='templates'，模板抽屉展开
+    // 仅断言工具栏独有的图标（避免与其他 widget 的图标/文字冲突）
+    expect(find.byIcon(Icons.dashboard), findsOneWidget); // 模板激活态
+    expect(find.byIcon(Icons.palette_outlined), findsOneWidget); // 场景未激活态
+    expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget); // 补光未激活态
   });
 }
