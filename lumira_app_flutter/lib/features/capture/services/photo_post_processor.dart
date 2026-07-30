@@ -39,6 +39,7 @@ class PhotoPostProcessor {
     double screenRatio = 9.0 / 19.5,
     bool isPortrait = true,
     TransformParams? transform,
+    FillLightState? fillLight,
   }) async {
     // 注意：rawMode 不再跳过裁剪。裁剪是 WYSIWYG 的保证（取景器所见即所得），
     // rawMode 仅跳过滤镜效果（ColorMatrix / Vignette / Sharpen / Clarity / Grain）。
@@ -208,6 +209,19 @@ class PhotoPostProcessor {
         }
       }
 
+      // 5.5. 应用补光（rawMode 也跳过补光，与跳过滤镜语义一致）
+      if (!rawMode && fillLight != null) {
+        try {
+          final lightedImage = await _applyFillLight(resultImage, fillLight);
+          resultImage.dispose();
+          resultImage = lightedImage;
+          debugPrint('[post-process] 补光应用: color=${fillLight.color}, '
+              'intensity=${fillLight.intensity}, ${sw.elapsedMilliseconds}ms');
+        } catch (e) {
+          debugPrint('[post-process] 补光应用失败（不阻塞）: $e');
+        }
+      }
+
       // 6. 编码 JPEG 并保存
       final jpegBytes = await _encodeJpeg(resultImage);
       final finalPath = outputPath ?? inputPath;
@@ -225,6 +239,39 @@ class PhotoPostProcessor {
           '[post-process] ⚠️ 失败 (${sw.elapsedMilliseconds}ms), WYSIWYG 已破坏: $e\n$st');
       return outputPath ?? inputPath;
     }
+  }
+
+  /// 应用补光：用 BlendMode.multiply 把补光颜色叠加到图像上
+  ///
+  /// 模拟前置摄像头自拍时屏幕反射光落到脸上的效果。
+  /// multiply 会让亮部轻微带色、暗部几乎不变，与实际屏幕补光的视觉一致。
+  ///
+  /// 强度系数：实际 alpha = intensity * 0.5（与前置自拍时屏幕反射光的实际衰减一致）
+  static Future<ui.Image> _applyFillLight(
+      ui.Image src, FillLightState state) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final srcRect = ui.Rect.fromLTWH(
+        0, 0, src.width.toDouble(), src.height.toDouble());
+    final dstRect = ui.Rect.fromLTWH(
+        0, 0, src.width.toDouble(), src.height.toDouble());
+
+    // 1. 绘制原图
+    canvas.drawImageRect(src, srcRect, dstRect, ui.Paint());
+
+    // 2. 用 multiply 混合模式叠加补光色
+    final alpha = (state.intensity * 0.5).clamp(0.0, 1.0);
+    canvas.drawRect(
+      dstRect,
+      ui.Paint()
+        ..color = state.color.withOpacity(alpha)
+        ..blendMode = ui.BlendMode.multiply,
+    );
+
+    final picture = recorder.endRecording();
+    final result = await picture.toImage(src.width, src.height);
+    picture.dispose();
+    return result;
   }
 
   /// 逐像素效果：Sharpen + Clarity + Grain

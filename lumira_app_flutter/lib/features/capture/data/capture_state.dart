@@ -1,5 +1,6 @@
 import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/material.dart';
 import '../domain/photo_template.dart';
 import '../domain/scene_preset.dart';
 import '../data/template_registry.dart';
@@ -244,6 +245,35 @@ class CaptureState {
   static final levelEnabledProvider = StateProvider<bool>((ref) => true);
   static final levelAngleProvider = StateProvider<double>((ref) => 0.0);
 
+  // ── 新增：工具栏状态 ──
+
+  /// 当前激活的工具栏 tab：null=收起, 'templates'|'scenes'|'params'|'fillLight'
+  /// 默认 'templates'：进入拍摄页时默认展开模板抽屉
+  static final activeToolProvider = StateProvider<String?>((ref) => 'templates');
+
+  // ── 新增：补光（Fill Light）状态 ──
+
+  /// 补光是否启用（默认关闭）
+  static final fillLightEnabledProvider = StateProvider<bool>((ref) => false);
+
+  /// 补光颜色（默认暖白 #FFE5B4）
+  static final fillLightColorProvider =
+      StateProvider<Color>((ref) => const Color(0xFFFFE5B4));
+
+  /// 补光强度 [0.1, 1.0]，默认 0.6
+  static final fillLightIntensityProvider =
+      StateProvider<double>((ref) => 0.6);
+
+  /// 统一的补光状态快照，供 PhotoPostProcessor 消费
+  /// 当 fillLightEnabled=false 时返回 null
+  static final fillLightStateProvider = Provider<FillLightState?>((ref) {
+    if (!ref.watch(fillLightEnabledProvider)) return null;
+    return FillLightState(
+      color: ref.watch(fillLightColorProvider),
+      intensity: ref.watch(fillLightIntensityProvider),
+    );
+  });
+
   // ── 新增：拍摄组合（内存态，Phase 1 不持久化）──
 
   static final kitsProvider = StateProvider<List<Object>>((ref) => []);
@@ -280,6 +310,12 @@ class CaptureState {
     // editableTemplateProvider 和 appliedProvider 是派生的，不需要显式重置
     // （当 currentTemplateIdProvider 设为 null 时，originalTemplateProvider 返回 null，
     //  editableTemplateProvider 会自动重置为 null）
+    // 工具栏与补光状态
+    container.read(activeToolProvider.notifier).state = 'templates';
+    container.read(fillLightEnabledProvider.notifier).state = false;
+    container.read(fillLightColorProvider.notifier).state =
+        const Color(0xFFFFE5B4);
+    container.read(fillLightIntensityProvider.notifier).state = 0.6;
   }
 }
 
@@ -291,4 +327,29 @@ class ZoomRange {
 
   final double min;
   final double max;
+}
+
+/// 补光状态快照
+/// 由 [CaptureState.fillLightStateProvider] 提供，供 [PhotoPostProcessor] 消费
+class FillLightState {
+  const FillLightState({required this.color, required this.intensity});
+
+  final Color color;
+
+  /// 强度 [0.1, 1.0]
+  final double intensity;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FillLightState &&
+          runtimeType == other.runtimeType &&
+          color.value == other.color.value &&
+          intensity == other.intensity;
+
+  @override
+  int get hashCode => color.value.hashCode ^ intensity.hashCode;
+
+  @override
+  String toString() => 'FillLightState(color=$color, intensity=$intensity)';
 }
