@@ -1,21 +1,28 @@
 import 'dart:io';
+import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../capture/domain/filter_recipe.dart';
+import '../../capture/domain/photo_template.dart';
+import '../../capture/services/photo_post_processor.dart';
+import '../../capture/widgets/preview_edit_panel.dart';
 import '../../profile/providers/collection_providers.dart';
-import '../data/gallery_mock_data.dart';
 
 /// 相册详情页（暗色主题）
 ///
 /// 视觉规格来源：lumira-app/src/pages/gallery/detail.vue（550 行）
 /// - 暗色硬编码背景（#1C1A17）— 与 uni-app 一致，不接主题
-/// - 画布区 + 场景信息行 + 工具 pills + 调色滑块 + LUT 缩略图 + EXIF 按钮 + 底部操作栏 + 场景选择 sheet
+/// - 画布区（实时 ColorFiltered + 变换预览）+ 场景信息行 + PreviewEditPanel
+///   （色彩/细节/滤镜/裁剪旋转 4 标签）+ 底部操作栏
 /// - 数据：通过 galleryDaoProvider.getById(photoId) 读取
+/// - 编辑：复用 PreviewEditPanel，本地维护 PostProcess + TransformParams，
+///   实时通过 ColorFiltered 预览；导出时从原图重新处理并写回 DB（非破坏性）
 class GalleryDetailPage extends ConsumerStatefulWidget {
   const GalleryDetailPage({super.key, this.photoId});
 
@@ -26,9 +33,10 @@ class GalleryDetailPage extends ConsumerStatefulWidget {
 }
 
 class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
-  int _activeTool = 0;
-  int _activeLut = 0;
-  late List<_SliderState> _sliders;
+  /// 本地编辑状态（从照片记录初始化，编辑时实时更新预览，保存时写回 DB）
+  PostProcess _localPostProcess = const PostProcess(color: PostProcessColor());
+  TransformParams _localTransform = const TransformParams();
+  bool _isExporting = false;
 
   // Forced fix: FutureBuilder 在测试环境下不会从 ConnectionState.waiting
   // 切到 done（即使 future 已解析），导致 pumpAndSettle timed out。
@@ -38,14 +46,6 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
   GalleryItemRecord? _photo;
   bool _isLoading = true;
   bool _isInitialLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _sliders = GalleryMockData.detailSliders
-        .map((s) => _SliderState(label: s.label, value: s.value.toDouble(), display: s.display))
-        .toList();
-  }
 
   // Forced fix: 直接接收 GalleryDao 参数，避免在 _loadPhoto 内调用
   // `ref.read(galleryDaoProvider.future)`。在测试环境中，该 future 可能
@@ -68,6 +68,8 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
       if (mounted) {
         setState(() {
           _photo = photo;
+          _localPostProcess = photo?.postProcess ?? const PostProcess(color: PostProcessColor());
+          _localTransform = photo?.transform ?? const TransformParams();
           _isLoading = false;
         });
       }
@@ -141,7 +143,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
       ),
       bottomNavigationBar: _BottomBar(
         onReset: _reset,
-        onExport: _export,
+        onExport: _isExporting ? () {} : () { _export(); },
       ),
     );
   }
@@ -150,9 +152,13 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 画布区（占屏幕 55%）
-        _CanvasArea(photo: photo),
-        // 滚动区：场景信息 + 工具 pills + 调色滑块 + LUT + EXIF
+        // 画布区（占屏幕 55%）—— 实时应用 PostProcess + TransformParams
+        _CanvasArea(
+          photo: photo,
+          postProcess: _localPostProcess,
+          transform: _localTransform,
+        ),
+        // 滚动区：场景信息 + PreviewEditPanel（4 标签编辑面板）
         Expanded(
           child: SingleChildScrollView(
             child: Column(
@@ -162,23 +168,18 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
                   sceneName: photo.sceneId ?? '未分类',
                   onTap: () {},
                 ),
-                _ToolPillsRow(
-                  activeTool: _activeTool,
-                  onTap: (i) => setState(() => _activeTool = i),
+                // PreviewEditPanel 内部使用 Expanded，需要 bounded-height 父级
+                // （原始设计用于底部抽屉）。用 SizedBox 给定高度让 4 标签
+                // 内容可在滚动视图中正常展开。
+                SizedBox(
+                  height: 420,
+                  child: PreviewEditPanel(
+                    postProcess: _localPostProcess,
+                    transform: _localTransform,
+                    onPostProcessChanged: (p) => setState(() => _localPostProcess = p),
+                    onTransformChanged: (t) => setState(() => _localTransform = t),
+                  ),
                 ),
-                _SliderBlock(
-                  sliders: _sliders,
-                  onChanged: (i, v) => setState(() {
-                    _sliders[i].value = v;
-                    final delta = (v - 50).round();
-                    _sliders[i].display = delta >= 0 ? '+$delta' : '$delta';
-                  }),
-                ),
-                _LutBlock(
-                  activeLut: _activeLut,
-                  onTap: (i) => setState(() => _activeLut = i),
-                ),
-                const _ExifButton(),
                 const SizedBox(height: 24),
               ],
             ),
@@ -190,25 +191,109 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
 
   void _reset() {
     setState(() {
-      for (final s in _sliders) {
-        s.value = 50;
-        s.display = '0';
-      }
+      _localPostProcess = const PostProcess(color: PostProcessColor());
+      _localTransform = const TransformParams();
     });
   }
 
-  void _export() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已导出'), duration: Duration(seconds: 1)),
-    );
-  }
-}
+  Future<void> _export() async {
+    if (_photo == null) return;
 
-class _SliderState {
-  _SliderState({required this.label, required this.value, required this.display});
-  String label;
-  double value;
-  String display;
+    // 优先从 originalPath 重新处理（非破坏性编辑），fallback 到 filePath
+    final originalPath = _photo!.originalPath ?? _photo!.filePath;
+    final photoPath = _photo!.filePath;
+
+    if (originalPath == null || originalPath.isEmpty) {
+      LumiraToast.show(context, '原图未保留，无法重新编辑');
+      return;
+    }
+    if (photoPath == null || photoPath.isEmpty) {
+      LumiraToast.show(context, '照片路径无效');
+      return;
+    }
+    if (originalPath.startsWith('http') || photoPath.startsWith('http')) {
+      LumiraToast.show(context, '网络图片不支持编辑');
+      return;
+    }
+
+    // 在任何 await 之前捕获屏幕尺寸与裁剪比例（避免 use_build_context_synchronously）
+    final screenSize = MediaQuery.of(context).size;
+    final screenRatio = screenSize.width / screenSize.height;
+    final isPortrait = screenSize.height >= screenSize.width;
+    final aspectRatio = _localPostProcess.cropRatio.isNotEmpty
+        ? _localPostProcess.cropRatio
+        : 'fullscreen';
+
+    // 检查原图文件是否存在
+    if (!await File(originalPath).exists()) {
+      if (!mounted) return;
+      LumiraToast.show(context, '原图文件不存在，无法重新处理');
+      return;
+    }
+
+    setState(() => _isExporting = true);
+
+    try {
+      // 从原图重新处理（覆盖当前显示的照片文件，保留原图）
+      final processedPath = await PhotoPostProcessor.processFile(
+        inputPath: originalPath,
+        params: _localPostProcess,
+        transform: _localTransform,
+        aspectRatio: aspectRatio,
+        screenRatio: screenRatio,
+        isPortrait: isPortrait,
+        outputPath: photoPath,
+      );
+
+      // Evict FileImage 缓存（避免显示旧版本）
+      try {
+        PaintingBinding.instance.imageCache.evict(FileImage(File(processedPath)));
+        PaintingBinding.instance.imageCache.evict(FileImage(File(originalPath)));
+      } catch (_) {}
+
+      // 更新数据库记录
+      final dao = await ref.read(galleryDaoProvider.future);
+      await dao.updateEdit(
+        id: _photo!.id,
+        filePath: processedPath,
+        originalPath: originalPath,
+        transform: _localTransform,
+        postProcess: _localPostProcess,
+      );
+      ref.invalidate(galleryDaoProvider);
+      ref.invalidate(collectionsListProvider);
+
+      // 更新本地照片记录（重建 GalleryItemRecord，非 const 构造）
+      setState(() {
+        _photo = GalleryItemRecord(
+          id: _photo!.id,
+          dataUrl: _photo!.dataUrl,
+          filePath: processedPath,
+          originalPath: originalPath,
+          transform: _localTransform,
+          postProcess: _localPostProcess,
+          sceneId: _photo!.sceneId,
+          templateId: _photo!.templateId,
+          kitId: _photo!.kitId,
+          mood: _photo!.mood,
+          lut: _photo!.lut,
+          isFavorite: _photo!.isFavorite,
+          createdAt: _photo!.createdAt,
+        );
+      });
+
+      if (mounted) {
+        LumiraToast.show(context, '已保存', duration: const Duration(seconds: 1));
+      }
+    } catch (e, st) {
+      debugPrint('[gallery-detail] 导出失败: $e\n$st');
+      if (mounted) {
+        LumiraToast.show(context, '保存失败：$e', duration: const Duration(seconds: 2));
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
 }
 
 // === 私有 widget ===
@@ -281,20 +366,18 @@ class _FavoriteButton extends ConsumerWidget {
           await dao.toggleFavorite(photo.id);
           onToggled(!photo.isFavorite);
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(photo.isFavorite ? '已取消收藏' : '已收藏'),
-                duration: const Duration(milliseconds: 1000),
-              ),
+            LumiraToast.show(
+              context,
+              photo.isFavorite ? '已取消收藏' : '已收藏',
+              duration: const Duration(milliseconds: 1000),
             );
           }
         } catch (e) {
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('操作失败：$e'),
-                duration: const Duration(milliseconds: 1500),
-              ),
+            LumiraToast.show(
+              context,
+              '操作失败：$e',
+              duration: const Duration(milliseconds: 1500),
             );
           }
         }
@@ -331,9 +414,17 @@ class _EmptyCanvas extends StatelessWidget {
   }
 }
 
+/// 画布区：实时应用 PostProcess（ColorFiltered）+ TransformParams（旋转/翻转/拉直）
+/// 模式与 capture_preview_page.dart 的 _PhotoFrame 一致
 class _CanvasArea extends StatelessWidget {
-  const _CanvasArea({required this.photo});
+  const _CanvasArea({
+    required this.photo,
+    required this.postProcess,
+    required this.transform,
+  });
   final GalleryItemRecord photo;
+  final PostProcess postProcess;
+  final TransformParams transform;
 
   @override
   Widget build(BuildContext context) {
@@ -354,30 +445,63 @@ class _CanvasArea extends StatelessWidget {
                   child: Icon(Icons.image_outlined, size: 32, color: Colors.white38),
                 ),
               )
-            : url.startsWith('http')
-                ? Image.network(url, fit: BoxFit.contain)
-                : Image.file(
-                    File(url),
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: const Color(0xFF2A2724),
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(Icons.broken_image_outlined,
-                                size: 32, color: Colors.white38),
-                            SizedBox(height: 8),
-                            Text('图片加载失败',
-                                style: TextStyle(
-                                    fontSize: 12, color: Colors.white38)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+            : _buildImage(url),
       ),
     );
+  }
+
+  Widget _buildImage(String url) {
+    Widget imageWidget = url.startsWith('http')
+        ? Image.network(url, fit: BoxFit.contain)
+        : Image.file(
+            File(url),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Container(
+              color: const Color(0xFF2A2724),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.broken_image_outlined,
+                        size: 32, color: Colors.white38),
+                    SizedBox(height: 8),
+                    Text('图片加载失败',
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.white38)),
+                  ],
+                ),
+              ),
+            ),
+          );
+
+    // 实时应用变换（旋转/翻转/拉直）+ 色彩滤镜
+    if (!transform.isIdentity) {
+      imageWidget = RotatedBox(
+        quarterTurns: transform.rotation ~/ 90,
+        child: Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..scale(
+              transform.flipH ? -1.0 : 1.0,
+              transform.flipV ? -1.0 : 1.0,
+              1.0,
+            ),
+          child: Transform.rotate(
+            angle: transform.straighten * math.pi / 180.0,
+            child: ColorFiltered(
+              colorFilter: fromPostProcess(postProcess),
+              child: imageWidget,
+            ),
+          ),
+        ),
+      );
+    } else {
+      imageWidget = ColorFiltered(
+        colorFilter: fromPostProcess(postProcess),
+        child: imageWidget,
+      );
+    }
+    return imageWidget;
   }
 }
 
@@ -431,202 +555,6 @@ class _SceneInfoRow extends StatelessWidget {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ToolPillsRow extends StatelessWidget {
-  const _ToolPillsRow({required this.activeTool, required this.onTap});
-  final int activeTool;
-  final void Function(int) onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
-        itemCount: GalleryMockData.detailTools.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) {
-          final active = i == activeTool;
-          return GestureDetector(
-            onTap: () => onTap(i),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-              decoration: BoxDecoration(
-                gradient: active
-                    ? const LinearGradient(
-                        colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                color: active ? null : Colors.transparent,
-                border: active ? null : Border.all(color: Colors.white24, width: 1.5),
-                borderRadius: BorderRadius.circular(1000),
-              ),
-              child: Center(
-                child: Text(
-                  GalleryMockData.detailTools[i],
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: active ? const Color(0xFF1C1A17) : Colors.white70,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _SliderBlock extends StatelessWidget {
-  const _SliderBlock({required this.sliders, required this.onChanged});
-  final List<_SliderState> sliders;
-  final void Function(int, double) onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Column(
-        children: List.generate(sliders.length, (i) {
-          final s = sliders[i];
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 60,
-                  child: Text(
-                    s.label,
-                    style: const TextStyle(fontSize: 13, color: Colors.white60),
-                  ),
-                ),
-                Expanded(
-                  child: Slider(
-                    value: s.value,
-                    min: 0,
-                    max: 100,
-                    activeColor: const Color(0xFFC9A96E),
-                    inactiveColor: Colors.white.withOpacity(0.15),
-                    onChanged: (v) => onChanged(i, v),
-                  ),
-                ),
-                SizedBox(
-                  width: 40,
-                  child: Text(
-                    s.display,
-                    style: const TextStyle(fontSize: 12, color: Colors.white70),
-                    textAlign: TextAlign.right,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ),
-    );
-  }
-}
-
-class _LutBlock extends StatelessWidget {
-  const _LutBlock({required this.activeLut, required this.onTap});
-  final int activeLut;
-  final void Function(int) onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 96,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        itemCount: GalleryMockData.detailLuts.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) {
-          final lut = GalleryMockData.detailLuts[i];
-          final active = i == activeLut;
-          return GestureDetector(
-            onTap: () => onTap(i),
-            behavior: HitTestBehavior.opaque,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: active
-                        ? Border.all(color: const Color(0xFFC9A96E), width: 2)
-                        : Border.all(color: Colors.white24, width: 1),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(7),
-                    child: Image.network(
-                      lut.img,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(color: Colors.white12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                if (lut.name.isNotEmpty)
-                  Text(
-                    lut.name,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: active ? const Color(0xFFC9A96E) : Colors.white60,
-                    ),
-                  )
-                else
-                  const SizedBox(height: 14),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _ExifButton extends StatelessWidget {
-  const _ExifButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: GestureDetector(
-        onTap: () {},
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white12, width: 1),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.assignment_outlined, size: 16, color: Color(0xFFC9A96E)),
-              SizedBox(width: 8),
-              Text(
-                '生成 EXIF 卡片',
-                style: TextStyle(fontSize: 13, color: Colors.white),
-              ),
-            ],
-          ),
         ),
       ),
     );
