@@ -60,8 +60,8 @@ void main() {
     test('toolbar and fillLight providers have correct defaults', () {
       final container = ProviderContainer();
 
-      // 工具栏默认激活 'templates'
-      expect(container.read(CaptureState.activeToolProvider), 'templates');
+      // 工具栏默认收起（null）
+      expect(container.read(CaptureState.activeToolProvider), isNull);
 
       // 补光默认关闭
       expect(container.read(CaptureState.fillLightEnabledProvider), isFalse);
@@ -102,8 +102,8 @@ void main() {
     test('activeToolProvider toggles between tools', () {
       final container = ProviderContainer();
 
-      // 默认 'templates'
-      expect(container.read(CaptureState.activeToolProvider), 'templates');
+      // 默认 null（收起）
+      expect(container.read(CaptureState.activeToolProvider), isNull);
 
       // 切换到 'fillLight'
       container.read(CaptureState.activeToolProvider.notifier).state =
@@ -133,8 +133,8 @@ void main() {
       // 重置
       CaptureState.resetAll(container);
 
-      // 验证恢复默认
-      expect(container.read(CaptureState.activeToolProvider), 'templates');
+      // 验证恢复默认（activeTool=null）
+      expect(container.read(CaptureState.activeToolProvider), isNull);
       expect(container.read(CaptureState.fillLightEnabledProvider), isFalse);
       expect(container.read(CaptureState.fillLightColorProvider),
           const Color(0xFFFFE5B4));

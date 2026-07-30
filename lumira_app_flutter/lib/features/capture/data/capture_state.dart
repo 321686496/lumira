@@ -248,8 +248,8 @@ class CaptureState {
   // ── 新增：工具栏状态 ──
 
   /// 当前激活的工具栏 tab：null=收起, 'templates'|'scenes'|'params'|'fillLight'
-  /// 默认 'templates'：进入拍摄页时默认展开模板抽屉
-  static final activeToolProvider = StateProvider<String?>((ref) => 'templates');
+  /// 默认 null：进入拍摄页时抽屉收起，仅显示一排工具栏
+  static final activeToolProvider = StateProvider<String?>((ref) => null);
 
   // ── 新增：补光（Fill Light）状态 ──
 
@@ -311,7 +311,7 @@ class CaptureState {
     // （当 currentTemplateIdProvider 设为 null 时，originalTemplateProvider 返回 null，
     //  editableTemplateProvider 会自动重置为 null）
     // 工具栏与补光状态
-    container.read(activeToolProvider.notifier).state = 'templates';
+    container.read(activeToolProvider.notifier).state = null;
     container.read(fillLightEnabledProvider.notifier).state = false;
     container.read(fillLightColorProvider.notifier).state =
         const Color(0xFFFFE5B4);
