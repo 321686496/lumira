@@ -16,7 +16,7 @@ import 'dao/settings_dao.dart';
 import '../../core/auth/auth_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 7;
+const int _kDbVersion = 8;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -143,6 +143,7 @@ Future<void> _onCreate(Database db, int version) async {
   // === gallery_items ===
   // 图片本体优先存文件路径（file_path），data_url 保留兼容旧数据
   // v7: 新增 original_path / transform / post_process 列（非破坏性编辑支持）
+  // v8: 新增 is_favorite 列（精选集"我的收藏"派生用）
   batch.execute('''
     CREATE TABLE IF NOT EXISTS ${Tables.galleryItems} (
       ${Tables.colId} TEXT PRIMARY KEY,
@@ -156,11 +157,13 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colKitId} TEXT,
       ${Tables.colMood} TEXT,
       ${Tables.colLut} TEXT,
+      ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCreatedAt} INTEGER NOT NULL
     )
   ''');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_gallery_items_created_at ON ${Tables.galleryItems}(${Tables.colCreatedAt} DESC)');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_gallery_items_scene_id ON ${Tables.galleryItems}(${Tables.colSceneId})');
+  batch.execute('CREATE INDEX IF NOT EXISTS idx_gallery_items_is_favorite ON ${Tables.galleryItems}(${Tables.colGalleryItemIsFavorite})');
 
   // === user_progress (单行表，id=1) ===
   // uni-app 中未持久化，Flutter 端新增
@@ -240,6 +243,35 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colCachedAt} INTEGER NOT NULL
     )
   ''');
+
+  // === v8: collections / collection_photos 表（精选集功能） ===
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.tableCollections} (
+      ${Tables.colCollectionId} TEXT PRIMARY KEY,
+      ${Tables.colCollectionName} TEXT NOT NULL,
+      ${Tables.colCollectionDescription} TEXT,
+      ${Tables.colCollectionCoverPhotoId} TEXT,
+      ${Tables.colCollectionType} TEXT NOT NULL,
+      ${Tables.colCollectionSourceMeta} TEXT,
+      ${Tables.colCollectionPhotoCount} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCollectionCreatedAt} INTEGER NOT NULL,
+      ${Tables.colCollectionUpdatedAt} INTEGER NOT NULL
+    )
+  ''');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_collections_type ON ${Tables.tableCollections}(${Tables.colCollectionType})');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_collections_updated_at ON ${Tables.tableCollections}(${Tables.colCollectionUpdatedAt})');
+
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.tableCollectionPhotos} (
+      ${Tables.colCollectionPhotoCollectionId} TEXT NOT NULL,
+      ${Tables.colCollectionPhotoPhotoId} TEXT NOT NULL,
+      ${Tables.colCollectionPhotoSortOrder} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCollectionPhotoAddedAt} INTEGER NOT NULL,
+      PRIMARY KEY (${Tables.colCollectionPhotoCollectionId}, ${Tables.colCollectionPhotoPhotoId}),
+      FOREIGN KEY (${Tables.colCollectionPhotoCollectionId}) REFERENCES ${Tables.tableCollections}(${Tables.colCollectionId}) ON DELETE CASCADE
+    )
+  ''');
+  await db.execute('CREATE INDEX IF NOT EXISTS idx_collection_photos_collection ON ${Tables.tableCollectionPhotos}(${Tables.colCollectionPhotoCollectionId})');
 }
 
 Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -351,6 +383,52 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v7 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 8) {
+    try {
+      // v8: gallery_items 新增 is_favorite 列（精选集"我的收藏"派生用）
+      await _addColumnIfNotExists(
+        db,
+        Tables.galleryItems,
+        Tables.colGalleryItemIsFavorite,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_gallery_items_is_favorite ON ${Tables.galleryItems}(${Tables.colGalleryItemIsFavorite})',
+      );
+
+      // v8: collections 精选集主表
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.tableCollections} (
+          ${Tables.colCollectionId} TEXT PRIMARY KEY,
+          ${Tables.colCollectionName} TEXT NOT NULL,
+          ${Tables.colCollectionDescription} TEXT,
+          ${Tables.colCollectionCoverPhotoId} TEXT,
+          ${Tables.colCollectionType} TEXT NOT NULL,
+          ${Tables.colCollectionSourceMeta} TEXT,
+          ${Tables.colCollectionPhotoCount} INTEGER NOT NULL DEFAULT 0,
+          ${Tables.colCollectionCreatedAt} INTEGER NOT NULL,
+          ${Tables.colCollectionUpdatedAt} INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_collections_type ON ${Tables.tableCollections}(${Tables.colCollectionType})');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_collections_updated_at ON ${Tables.tableCollections}(${Tables.colCollectionUpdatedAt})');
+
+      // v8: collection_photos 精选集-照片关联表（仅 manual 类型使用）
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.tableCollectionPhotos} (
+          ${Tables.colCollectionPhotoCollectionId} TEXT NOT NULL,
+          ${Tables.colCollectionPhotoPhotoId} TEXT NOT NULL,
+          ${Tables.colCollectionPhotoSortOrder} INTEGER NOT NULL DEFAULT 0,
+          ${Tables.colCollectionPhotoAddedAt} INTEGER NOT NULL,
+          PRIMARY KEY (${Tables.colCollectionPhotoCollectionId}, ${Tables.colCollectionPhotoPhotoId}),
+          FOREIGN KEY (${Tables.colCollectionPhotoCollectionId}) REFERENCES ${Tables.tableCollections}(${Tables.colCollectionId}) ON DELETE CASCADE
+        )
+      ''');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_collection_photos_collection ON ${Tables.tableCollectionPhotos}(${Tables.colCollectionPhotoCollectionId})');
+    } catch (e) {
+      debugPrint('v8 migration failed (silent fallback): $e');
     }
   }
 }

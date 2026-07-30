@@ -92,6 +92,37 @@ void main() {
     }
   }
 
+  /// 把底部抽屉栏展开到 threeQuarter 状态（hidden → quarter → threeQuarter）。
+  ///
+  /// 新版抽屉栏默认 hidden（只显示悬浮按钮组），不显示拖拽条。
+  /// 展开流程：
+  ///   1. 点击悬浮按钮组中的"编辑"按钮，展开抽屉栏到 quarter（1/4）
+  ///   2. drag 拖拽条上拉到 threeQuarter（3/4）高度，松手后自动吸附
+  Future<void> expandSheetToThreeQuarter(WidgetTester tester,
+      {UIStyle style = UIStyle.neumorphic}) async {
+    // 1. 点击悬浮按钮组中的"编辑"按钮，展开抽屉栏到 quarter
+    final editButton = find.text('编辑');
+    expect(editButton, findsOneWidget, reason: '悬浮按钮组中应存在"编辑"按钮');
+    await tester.tap(editButton);
+    await settleOrPump(tester, style);
+    // 等待 AnimatedContainer 280ms 动画完成（quarter 高度展开）
+    await tester.pump(const Duration(milliseconds: 400));
+    await settleOrPump(tester, style);
+
+    // 2. drag 拖拽条上拉到 threeQuarter 高度
+    final handle = find.byKey(const ValueKey('sheet_handle'));
+    expect(handle, findsOneWidget, reason: '拖拽条应存在');
+    // 屏幕高度 2400，threeQuarter = 2400 * 0.75 = 1800
+    // quarter = 2400 * 0.35 = 840，需要上拉 1800 - 840 = 960
+    // drag 上拉 dy 为负，多拖一点确保越过 quarter 档位
+    await tester.drag(handle, const Offset(0, -1000));
+    await settleOrPump(tester, style);
+    // 确保吸附动画完成（AnimatedContainer 280ms）
+    // female 风格下 settleOrPump 只 pump 500ms，可能不足以让内容渲染完成
+    await tester.pump(const Duration(milliseconds: 400));
+    await settleOrPump(tester, style);
+  }
+
   void setLargeViewport(WidgetTester tester) {
     tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
@@ -112,8 +143,8 @@ void main() {
 
       expect(find.widgetWithText(LumiraNav, '照片预览'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back_ios_new), findsOneWidget);
-      // 对比 › 链接
-      expect(find.text('对比 ›'), findsOneWidget);
+      // 折叠操作栏的对比按钮（顶部导航不再有对比按钮）
+      expect(find.text('对比'), findsOneWidget);
     });
 
     testWidgets('renders 7 mood pills', (tester) async {
@@ -121,6 +152,8 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      // 展开抽屉栏到 threeQuarter（默认 closed 仅显示拖拽条 + 保存按钮）
+      await expandSheetToThreeQuarter(tester);
 
       // 7 个心情标签
       expect(find.text('开心'), findsOneWidget);
@@ -139,6 +172,8 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      // 展开抽屉栏到 threeQuarter
+      await expandSheetToThreeQuarter(tester);
 
       // 8 个场景标签
       expect(find.text('咖啡馆'), findsOneWidget);
@@ -155,14 +190,16 @@ void main() {
       expect(find.text('拍摄场景'), findsOneWidget);
     });
 
-    testWidgets('renders save button 保存到系统相册', (tester) async {
+    testWidgets('renders save button 保存到相册 (collapsed action bar)',
+        (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('保存到系统相册'), findsOneWidget);
-      expect(find.byIcon(Icons.save_outlined), findsOneWidget);
+      // closed 状态下底部折叠操作栏显示"保存到相册"（_CollapsedActionButton）
+      expect(find.text('保存到相册'), findsOneWidget);
+      expect(find.byIcon(Icons.save_alt), findsOneWidget);
     });
 
     testWidgets('renders 2 action buttons (生成对比图 / 生成 EXIF 卡片)',
@@ -171,6 +208,8 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      // 展开抽屉栏到 threeQuarter
+      await expandSheetToThreeQuarter(tester);
 
       expect(find.text('生成对比图'), findsOneWidget);
       expect(find.text('生成 EXIF 卡片'), findsOneWidget);
@@ -187,6 +226,8 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      // 展开抽屉栏到 threeQuarter
+      await expandSheetToThreeQuarter(tester);
 
       // 初始：开心 active（mock 默认 _moods[0].active = true）
       // 点击 甜酷 切换 active
@@ -219,6 +260,8 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      // 展开抽屉栏到 threeQuarter
+      await expandSheetToThreeQuarter(tester);
 
       // 初始：不标记 active（_selectedSceneId == null）
       // 点击 咖啡馆 场景
@@ -251,6 +294,8 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      // 展开抽屉栏到 threeQuarter
+      await expandSheetToThreeQuarter(tester);
 
       await tester.tap(find.text('跳过'));
       await settleOrPump(tester, UIStyle.neumorphic);
@@ -259,25 +304,20 @@ void main() {
     });
 
     testWidgets(
-        '对比 › press-and-hold switches ColorFilter during hold (no LumiraToast)',
+        '对比 press-and-hold switches ColorFilter during hold (collapsed action bar)',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // Compare link is present
-      expect(find.text('对比 ›'), findsOneWidget);
-
-      // Tapping no longer shows the old "查看对比" LumiraToast (secondary check)
-      await tester.tap(find.text('对比 ›'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      expect(find.text('查看对比'), findsNothing);
+      // 折叠操作栏的对比按钮（closed 状态下显示）
+      expect(find.text('对比'), findsOneWidget);
 
       // Press-and-hold should switch ColorFilter to the transparent
       // (reveal-original) filter DURING the hold
       final gesture =
-          await tester.startGesture(tester.getCenter(find.text('对比 ›')));
+          await tester.startGesture(tester.getCenter(find.text('对比')));
       await tester.pump(); // allow setState to propagate
 
       final colorFilteredDuring =
@@ -302,6 +342,8 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      // 展开抽屉栏到 threeQuarter
+      await expandSheetToThreeQuarter(tester);
 
       await tester.tap(find.text('生成对比图'));
       await settleOrPump(tester, UIStyle.neumorphic);
@@ -316,6 +358,8 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      // 展开抽屉栏到 threeQuarter
+      await expandSheetToThreeQuarter(tester);
 
       await tester.tap(find.text('生成 EXIF 卡片'));
       await settleOrPump(tester, UIStyle.neumorphic);
@@ -364,20 +408,21 @@ void main() {
 
       expect(find.byType(CapturePreviewPage), findsOneWidget);
 
-      // 点击保存（mock URL 为网络图，预期显示"网络图片不支持保存到系统相册"）
-      await tester.tap(find.text('保存到系统相册'));
+      // 点击保存（无 photoId，_originalPath 为 null，预期显示"原图未保留，无法再次编辑"）
+      // closed 状态下底部折叠操作栏显示"保存到相册"
+      await tester.tap(find.text('保存到相册'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // LumiraToast 出现
-      expect(find.text('网络图片不支持保存到系统相册'), findsOneWidget);
+      expect(find.text('原图未保留，无法再次编辑'), findsOneWidget);
 
-      // 推进时间至延迟之后（_onSave 内部使用 1000ms 延迟 pop）
+      // 推进时间（_onSave 因 _originalPath 为 null 提前返回，不执行延迟 pop）
       await tester.pump(const Duration(milliseconds: 1100));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 已 pop：CapturePreviewPage 不存在，回到 home
-      expect(find.byType(CapturePreviewPage), findsNothing);
-      expect(find.text('HOME_PAGE'), findsOneWidget);
+      // 未 pop：CapturePreviewPage 仍在
+      expect(find.byType(CapturePreviewPage), findsOneWidget);
+      expect(find.text('HOME_PAGE'), findsNothing);
     });
   });
 
@@ -434,6 +479,8 @@ void main() {
         await tester.pumpWidget(
             wrap(themeKey: combo.theme, uiStyle: combo.style));
         await settleOrPump(tester, combo.style);
+        // 展开抽屉栏到 threeQuarter（默认 closed 仅显示拖拽条 + 保存按钮）
+        await expandSheetToThreeQuarter(tester, style: combo.style);
 
         // 验证关键元素渲染
         expect(find.widgetWithText(LumiraNav, '照片预览'), findsOneWidget,

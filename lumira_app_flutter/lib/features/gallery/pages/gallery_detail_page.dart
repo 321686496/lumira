@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../profile/providers/collection_providers.dart';
 import '../data/gallery_mock_data.dart';
 
 /// 相册详情页（暗色主题）
@@ -90,7 +91,35 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         title: '照片详情',
         transparent: true,
         leading: _DarkBackButton(),
-        actions: const [_CompareAction(), _MoreAction()],
+        actions: [
+          const _CompareAction(),
+          if (_photo != null)
+            _FavoriteButton(
+              photo: _photo!,
+              onToggled: (next) {
+                setState(() {
+                  _photo = GalleryItemRecord(
+                    id: _photo!.id,
+                    dataUrl: _photo!.dataUrl,
+                    filePath: _photo!.filePath,
+                    originalPath: _photo!.originalPath,
+                    transform: _photo!.transform,
+                    postProcess: _photo!.postProcess,
+                    sceneId: _photo!.sceneId,
+                    templateId: _photo!.templateId,
+                    kitId: _photo!.kitId,
+                    mood: _photo!.mood,
+                    lut: _photo!.lut,
+                    isFavorite: next,
+                    createdAt: _photo!.createdAt,
+                  );
+                });
+                // 刷新精选集列表（autoFavorite 派生会重新同步）
+                ref.invalidate(collectionsListProvider);
+              },
+            ),
+          const _MoreAction(),
+        ],
       ),
       body: daoAsync.when(
         loading: () => const Center(child: CircularProgressIndicator(color: Color(0xFFC9A96E))),
@@ -232,6 +261,52 @@ class _MoreAction extends StatelessWidget {
       child: const Padding(
         padding: EdgeInsets.all(8),
         child: Icon(Icons.more_horiz, size: 20, color: Colors.white60),
+      ),
+    );
+  }
+}
+
+/// 收藏按钮：点击切换 is_favorite，刷新精选集"我的收藏"派生
+class _FavoriteButton extends ConsumerWidget {
+  const _FavoriteButton({required this.photo, required this.onToggled});
+  final GalleryItemRecord photo;
+  final void Function(bool next) onToggled;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () async {
+        try {
+          final dao = await ref.read(galleryDaoProvider.future);
+          await dao.toggleFavorite(photo.id);
+          onToggled(!photo.isFavorite);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(photo.isFavorite ? '已取消收藏' : '已收藏'),
+                duration: const Duration(milliseconds: 1000),
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('操作失败：$e'),
+                duration: const Duration(milliseconds: 1500),
+              ),
+            );
+          }
+        }
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          photo.isFavorite ? Icons.favorite : Icons.favorite_border,
+          size: 20,
+          color: photo.isFavorite ? const Color(0xFFE57373) : Colors.white60,
+        ),
       ),
     );
   }

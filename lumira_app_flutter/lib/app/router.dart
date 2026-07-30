@@ -27,6 +27,7 @@ import '../features/academy/pages/academy_page.dart';
 import '../features/academy/pages/academy_trajectory_page.dart';
 import '../features/profile/pages/profile_about_page.dart';
 import '../features/profile/pages/profile_collection_detail_page.dart';
+import '../features/profile/pages/profile_collection_edit_page.dart';
 import '../features/profile/pages/profile_collections_page.dart';
 import '../features/profile/pages/composition_kit_detail_page.dart';
 import '../features/profile/pages/composition_kits_page.dart';
@@ -34,6 +35,7 @@ import '../features/profile/pages/profile_fragment_detail_page.dart';
 import '../features/profile/pages/profile_growth_page.dart';
 import '../features/profile/pages/profile_notifications_page.dart';
 import '../features/profile/pages/profile_invite_page.dart';
+import '../features/profile/pages/profile_share_code_page.dart';
 import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
@@ -272,6 +274,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ProfileInvitePage(),
       ),
       GoRoute(
+        path: RouteNames.profileShareCode,
+        name: 'profileShareCode',
+        builder: (context, state) => const ProfileShareCodePage(),
+      ),
+      GoRoute(
         path: RouteNames.profileAcademy,
         name: 'profileAcademy',
         builder: (context, state) => const AcademyPage(),
@@ -316,6 +323,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final collectionId = state.queryParams[RouteNames.paramCollectionId];
           return ProfileCollectionDetailPage(collectionId: collectionId);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.profileCollectionEdit,
+        name: 'profileCollectionEdit',
+        builder: (context, state) {
+          final collectionId =
+              state.queryParams[RouteNames.paramCollectionId];
+          return ProfileCollectionEditPage(collectionId: collectionId);
         },
       ),
       GoRoute(

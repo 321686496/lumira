@@ -7,8 +7,8 @@ import 'package:lumira_app_flutter/app/router.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/router/route_observers.dart';
 
-/// 所有 46 个路径常量，按 RouteNames 中声明顺序排列。
-/// （uni-app pages.json 34 个页面 + Flutter 新增 12 条 = 46）
+/// 所有 47 个路径常量，按 RouteNames 中声明顺序排列。
+/// （uni-app pages.json 34 个页面 + Flutter 新增 13 条 = 47）
 List<String> get _allPaths => <String>[
       RouteNames.splash,
       RouteNames.home,
@@ -39,6 +39,7 @@ List<String> get _allPaths => <String>[
       RouteNames.profileSettingsTheme,
       RouteNames.profileGrowth,
       RouteNames.profileInvite,
+      RouteNames.profileShareCode,
       RouteNames.profileAcademy,
       RouteNames.profileAcademyDetail,
       RouteNames.profileAcademyKnowledge,
@@ -58,7 +59,7 @@ List<String> get _allPaths => <String>[
       RouteNames.profileRedeem,
     ];
 
-/// 所有 46 个路由名，按 router.dart 中声明顺序排列。
+/// 所有 47 个路由名，按 router.dart 中声明顺序排列。
 List<String> get _allNames => <String>[
       'splash',
       'home',
@@ -89,6 +90,7 @@ List<String> get _allNames => <String>[
       'profileSettingsTheme',
       'profileGrowth',
       'profileInvite',
+      'profileShareCode',
       'profileAcademy',
       'profileAcademyDetail',
       'profileAcademyAssignment',
@@ -125,20 +127,20 @@ GoRoute? _findRouteForPath(GoRouter router, String path) {
 
 void main() {
   group('RouteNames', () {
-    test('should define 46 unique route paths', () {
+    test('should define 47 unique route paths', () {
       // 注意：brief 文案多处声称 "33 路由"，但 uni-app pages.json
       // source of truth 实际有 34 个页面，brief 自身的 route_names.dart
       // 与 router.dart 代码也定义了 34 条。此处以 source of truth 为准。
-      // Forced fix: 加上 Flutter 新增的 12 条 (profileAbout, challengeHistory,
+      // Forced fix: 加上 Flutter 新增的 13 条 (profileAbout, challengeHistory,
       // galleryStats, profileAcademyKnowledge, profileAcademyAssignment,
       // profileFragmentDetail, profileNotifications, academyTrajectory,
       // profileCompositionKits, profileCompositionKitDetail,
-      // profileRewards, profileRedeem) 后变为 46 条。
+      // profileRewards, profileRedeem, profileShareCode) 后变为 47 条。
       final allPaths = _allPaths;
-      expect(allPaths.length, 46,
-          reason: 'must have 46 routes (34 from uni-app + 12 Flutter additions)');
+      expect(allPaths.length, 47,
+          reason: 'must have 47 routes (34 from uni-app + 13 Flutter additions)');
       final unique = allPaths.toSet();
-      expect(unique.length, 46, reason: 'all route paths must be unique');
+      expect(unique.length, 47, reason: 'all route paths must be unique');
     });
 
     test('all paths start with /', () {
@@ -213,11 +215,11 @@ void main() {
           reason: '/splash must be a declared route (it is the initial location)');
     });
 
-    test('router configuration has 46 routes', () {
+    test('router configuration has 47 routes', () {
       final router = container.read(routerProvider);
       // Count routes by traversing the configuration.
       // 本任务所有路由均为顶层 GoRoute（无 ShellRoute、无子路由），
-      // Forced fix: 加上 Flutter 新增的 12 条后变为 46 条。
+      // Forced fix: 加上 Flutter 新增的 13 条后变为 47 条。
       int count = 0;
       void countRoutes(List<RouteBase> routes) {
         for (final route in routes) {
@@ -228,11 +230,11 @@ void main() {
         }
       }
       countRoutes(router.routeConfiguration.routes);
-      expect(count, 46,
-          reason: 'router must declare 46 top-level GoRoute entries (34 from uni-app + 12 Flutter additions)');
+      expect(count, 47,
+          reason: 'router must declare 47 top-level GoRoute entries (34 from uni-app + 13 Flutter additions)');
     });
 
-    test('router resolves all 46 paths without error', () {
+    test('router resolves all 47 paths without error', () {
       final router = container.read(routerProvider);
       for (final path in _allPaths) {
         final match = _findRouteForPath(router, path);
@@ -251,7 +253,7 @@ void main() {
           reason: 'URL $urlWithQuery must resolve to a route');
     });
 
-    test('all 46 route names are registered for named navigation', () {
+    test('all 47 route names are registered for named navigation', () {
       final router = container.read(routerProvider);
       for (final name in _allNames) {
         // namedLocation 会对未注册的名字抛出 assert 错误；

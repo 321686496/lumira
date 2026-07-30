@@ -9,8 +9,46 @@ import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
 import 'package:lumira_app_flutter/features/capture/pages/capture_preview_page.dart';
 
 void main() {
+  /// 设置大视口，避免内容被推出可视区域
+  void setLargeViewport(WidgetTester tester) {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+  }
+
+  /// 把底部抽屉栏展开到 threeQuarter 状态（hidden → quarter → threeQuarter）。
+  ///
+  /// 新版抽屉栏默认 hidden（只显示悬浮按钮组），不显示拖拽条。
+  /// 展开流程：
+  ///   1. 点击悬浮按钮组中的"编辑"按钮，展开抽屉栏到 quarter（1/4）
+  ///   2. drag 拖拽条上拉到 threeQuarter（3/4）高度，松手后自动吸附
+  Future<void> expandSheetToThreeQuarter(WidgetTester tester) async {
+    // 1. 点击悬浮按钮组中的"编辑"按钮，展开抽屉栏到 quarter
+    final editButton = find.text('编辑');
+    expect(editButton, findsOneWidget, reason: '悬浮按钮组中应存在"编辑"按钮');
+    await tester.tap(editButton);
+    await tester.pumpAndSettle();
+    // 等待 AnimatedContainer 280ms 动画完成（quarter 高度展开）
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    // 2. drag 拖拽条上拉到 threeQuarter 高度
+    final handle = find.byKey(const ValueKey('sheet_handle'));
+    expect(handle, findsOneWidget, reason: '拖拽条应存在');
+    // 屏幕高度 2400，threeQuarter = 2400 * 0.75 = 1800
+    // quarter = 2400 * 0.35 = 840，需要上拉 1800 - 840 = 960
+    // drag 上拉 dy 为负，多拖一点确保越过 quarter 档位
+    await tester.drag(handle, const Offset(0, -1000));
+    await tester.pumpAndSettle();
+    // 确保吸附动画完成（AnimatedContainer 280ms）
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('preview page pre-selects active scene from capture state',
       (tester) async {
+    setLargeViewport(tester);
     // 使用 mock 数据中真实存在的场景 ID（'cafe' → '咖啡馆'）
     // 之前的 'scene_portrait' 在 CapturePreviewMockData.sceneOptions 中不存在，
     // 无法验证 _selectedSceneId 是否真正驱动了 UI。
@@ -41,6 +79,8 @@ void main() {
     );
     // pumpAndSettle 确保 addPostFrameCallback 执行，_selectedSceneId 被赋值并触发重建
     await tester.pumpAndSettle();
+    // 展开抽屉栏到 threeQuarter（默认 closed 仅显示拖拽条 + 保存按钮）
+    await expandSheetToThreeQuarter(tester);
 
     // 观察点 1：override 仍然生效
     expect(container.read(CaptureState.activeScenePresetIdProvider), 'cafe');
@@ -68,6 +108,7 @@ void main() {
   testWidgets(
       'preview page defaults to "不标记" when no active scene is set',
       (tester) async {
+    setLargeViewport(tester);
     // 无 override 时 activeScenePresetIdProvider 应为 null，
     // _selectedSceneId 保持 null → '不标记' pill 为 active
     final container = ProviderContainer(overrides: [
@@ -94,6 +135,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // 展开抽屉栏到 threeQuarter
+    await expandSheetToThreeQuarter(tester);
 
     expect(container.read(CaptureState.activeScenePresetIdProvider), isNull);
 

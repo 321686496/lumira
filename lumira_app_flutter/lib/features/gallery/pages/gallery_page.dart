@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../profile/providers/collection_providers.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/gallery_models.dart';
@@ -119,6 +121,62 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('已选择 ${_selectedIds.length} 张照片导出')),
     );
+  }
+
+  /// 将选中照片加入精选集：弹出底部 Sheet 显示所有 manual 类型精选集 + "新建精选集"按钮。
+  ///
+  /// 设计文档 6.7：gallery_page 多选模式下底部操作栏增加"加入精选集"按钮。
+  Future<void> _addToCollection() async {
+    final tokens = ref.read(themeTokensProvider);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final result = await showModalBottomSheet<_CollectionPickResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: tokens.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => _AddToCollectionSheet(tokens: tokens),
+    );
+
+    if (result == null || !mounted) return;
+
+    try {
+      final service = await ref.read(collectionServiceProvider.future);
+      if (result.isNew) {
+        // 跳转新建精选集页（用户可在编辑页选择照片，这里不自动添加）
+        if (mounted) {
+          GoRouter.of(context).push(RouteNames.profileCollectionEdit);
+        }
+        return;
+      }
+      final collectionId = result.collectionId;
+      if (collectionId == null) return;
+      for (final pid in _selectedIds) {
+        await service.addPhotoToCollection(collectionId, pid);
+      }
+      ref.invalidate(collectionsListProvider);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('已将 ${_selectedIds.length} 张照片加入精选集'),
+          duration: const Duration(milliseconds: 1500),
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _isMultiSelectMode = false;
+          _selectedIds.clear();
+        });
+      }
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('加入精选集失败：$e'),
+          duration: const Duration(milliseconds: 1500),
+        ),
+      );
+    }
   }
 
   @override
@@ -277,6 +335,10 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
                 TextButton(
                   onPressed: _selectedIds.isEmpty ? null : _exportSelected,
                   child: Text('导出 (${_selectedIds.length})'),
+                ),
+                TextButton(
+                  onPressed: _selectedIds.isEmpty ? null : _addToCollection,
+                  child: const Text('加入精选集'),
                 ),
               ],
             ),
@@ -442,6 +504,188 @@ class _BackgroundDecoration extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 加入精选集 Sheet 的选择结果
+class _CollectionPickResult {
+  const _CollectionPickResult({this.collectionId, this.isNew = false});
+  final String? collectionId;
+  final bool isNew;
+}
+
+/// 加入精选集底部 Sheet：显示所有 manual 类型精选集 + "新建精选集"按钮
+class _AddToCollectionSheet extends ConsumerStatefulWidget {
+  const _AddToCollectionSheet({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  ConsumerState<_AddToCollectionSheet> createState() =>
+      _AddToCollectionSheetState();
+}
+
+class _AddToCollectionSheetState extends ConsumerState<_AddToCollectionSheet> {
+  List<CollectionRecord> _manuals = const [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadManuals();
+  }
+
+  Future<void> _loadManuals() async {
+    try {
+      final service = await ref.read(collectionServiceProvider.future);
+      final all = await service.listCollections();
+      if (mounted) {
+        setState(() {
+          _manuals = all.where((c) => c.type == CollectionType.manual).toList();
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _manuals = const [];
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = widget.tokens;
+    final height = MediaQuery.of(context).size.height * 0.6;
+    return SizedBox(
+      height: height,
+      child: Column(
+        children: [
+          // drag handle
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 8, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: tokens.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                Text(
+                  '加入精选集',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text(
+                    '取消',
+                    style: TextStyle(color: tokens.textTertiary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          // 新建精选集入口
+          ListTile(
+            leading: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: tokens.brandSubtle,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.add, color: tokens.brand, size: 20),
+            ),
+            title: Text(
+              '新建精选集',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: tokens.textPrimary,
+              ),
+            ),
+            onTap: () => Navigator.of(context).pop(
+              const _CollectionPickResult(isNew: true),
+            ),
+          ),
+          const Divider(height: 1),
+          // manual 精选集列表
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _manuals.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            '暂无手动精选集\n点击上方"新建精选集"创建',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: tokens.textTertiary,
+                              height: 1.5,
+                            ),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        itemCount: _manuals.length,
+                        separatorBuilder: (_, __) =>
+                            Divider(height: 1, color: tokens.divider),
+                        itemBuilder: (_, i) {
+                          final c = _manuals[i];
+                          return ListTile(
+                            leading: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: tokens.surfaceAlt,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(Icons.photo_library_outlined,
+                                  color: tokens.textTertiary, size: 18),
+                            ),
+                            title: Text(
+                              c.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: tokens.textPrimary,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '${c.photoCount} 张照片',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: tokens.textTertiary,
+                              ),
+                            ),
+                            onTap: () => Navigator.of(context).pop(
+                              _CollectionPickResult(collectionId: c.id),
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

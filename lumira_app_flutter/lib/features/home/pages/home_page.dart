@@ -48,7 +48,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   final ScrollController _scrollController = ScrollController();
   bool _scrolled = false;
 
-  static const double _scrollThreshold = 10.0; // uni-app 用 20px → 10dp
+  static const double _scrollThreshold = 12.0; // 滚动阈值统一 12dp
 
   @override
   void initState() {
@@ -87,43 +87,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  void _showScanDialog() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('输入分享码'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'LUMIRA-{category}-{name}',
-            border: OutlineInputBorder(),
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          TextButton(
-            onPressed: () {
-              final code = controller.text.trim();
-              Navigator.pop(ctx);
-              if (code.startsWith('LUMIRA-')) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('分享码已识别：$code')),
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('分享码格式无效')),
-                );
-              }
-            },
-            child: const Text('导入'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -147,9 +110,9 @@ class _HomePageState extends ConsumerState<HomePage> {
             onTap: () => GoRouter.of(context).push(RouteNames.profileNotifications),
           ),
           _NavAction(
-            icon: Icons.qr_code_outlined,
+            icon: Icons.card_giftcard_outlined,
             tokens: tokens,
-            onTap: _showScanDialog,
+            onTap: () => GoRouter.of(context).push(RouteNames.profileShareCode),
           ),
         ],
       ),
@@ -160,14 +123,20 @@ class _HomePageState extends ConsumerState<HomePage> {
           // Forced fix: glass 风格彩色斑点背景（让毛玻璃效果可见）
           const Positioned.fill(child: GlassBackground()),
           // 2. 主内容层（可滚动）
+          // Forced fix: appBar 已处理顶部 inset，body 内 SafeArea 顶部对 ListView 无实际效果，
+          // 仅保留 bottom（系统导航栏 inset）
           SafeArea(
+            top: false,
+            bottom: true,
             child: ListView(
               controller: _scrollController,
               padding: const EdgeInsets.only(bottom: 100), // 给 FloatingTabBar 留空间
               children: [
                 // Section 0: Banner 轮播
-                FadeUp(
-                  child: HomeBanner(banners: HomeMockData.banners),
+                // Forced fix: 改为 const HomeBanner()，由 widget 内部 watch
+                // bannerRecommendationProvider 获取真实推荐数据
+                const FadeUp(
+                  child: HomeBanner(),
                 ),
                 const SizedBox(height: 20),
                 // Section 1: Hero

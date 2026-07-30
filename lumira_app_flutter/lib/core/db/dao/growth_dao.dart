@@ -28,6 +28,29 @@ class GrowthDao {
     return Sqflite.firstIntValue(sumRows) ?? 0;
   }
 
+  /// 获取用户累计拍摄照片数（user_progress.total_photos）。
+  /// 用于首页 Banner 推荐算法的新老用户分层判断（< 3 视为新用户）。
+  /// 降级：若 user_progress 表无记录或读取失败，返回 gallery_items 表实际行数。
+  Future<int> getTotalPhotos() async {
+    final rows = await _db.query(
+      Tables.userProgress,
+      where: '${Tables.colId} = ?',
+      whereArgs: [1],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) {
+      final v = rows.first[Tables.colTotalPhotos];
+      if (v != null) {
+        return (v as num).toInt();
+      }
+    }
+    // 降级：直接 COUNT gallery_items
+    final cntRows = await _db.rawQuery(
+      'SELECT COUNT(*) AS cnt FROM ${Tables.galleryItems}',
+    );
+    return Sqflite.firstIntValue(cntRows) ?? 0;
+  }
+
   /// 等级 = XP / 500 + 1
   Future<int> getLevel() async {
     final xp = await getTotalXP();

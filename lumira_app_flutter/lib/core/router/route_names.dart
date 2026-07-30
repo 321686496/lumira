@@ -34,12 +34,14 @@ class RouteNames {
   static const String profileSettingsTheme = '/profile/settings/theme';
   static const String profileGrowth = '/profile/growth';
   static const String profileInvite = '/profile/invite';
+  static const String profileShareCode = '/profile/share-code';
   static const String profileAcademy = '/profile/academy';
   static const String profileAcademyDetail = '/profile/academy-detail';
   static const String profileAcademyKnowledge = '/profile/academy-knowledge';
   static const String profileAcademyAssignment = '/profile/academy-assignment';
   static const String profileCollections = '/profile/collections';
   static const String profileCollectionDetail = '/profile/collection-detail';
+  static const String profileCollectionEdit = '/profile/collection-edit';
   static const String profileMyTemplates = '/profile/my-templates';
   static const String profileFragmentDetail = '/profile/fragment-detail';
   static const String profileNotifications = '/profile/notifications';

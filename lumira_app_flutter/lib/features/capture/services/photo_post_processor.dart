@@ -7,7 +7,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
-import 'deblur_processor.dart';
 import 'skin_smoother.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
@@ -39,7 +38,6 @@ class PhotoPostProcessor {
     String aspectRatio = 'fullscreen',
     double screenRatio = 9.0 / 19.5,
     bool isPortrait = true,
-    bool autoDeblur = false,
     TransformParams? transform,
   }) async {
     // 注意：rawMode 不再跳过裁剪。裁剪是 WYSIWYG 的保证（取景器所见即所得），
@@ -152,54 +150,6 @@ class PhotoPostProcessor {
       workingImage.dispose();
       debugPrint(
           '[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
-
-      // 4b. 自动去模糊（若开启且检测到模糊）
-      // 性能：清晰图（blurScore ≥ 600）直接跳过，省 200ms
-      if (autoDeblur) {
-        try {
-          final rgba = await resultImage.toByteData(
-            format: ui.ImageByteFormat.rawRgba,
-          );
-          if (rgba != null) {
-            final imgForDeblur = img.Image.fromBytes(
-              width: resultImage.width,
-              height: resultImage.height,
-              bytes: rgba.buffer.asUint8List().buffer,
-              numChannels: 4,
-              order: img.ChannelOrder.rgba,
-            );
-            final blurScore = DeblurProcessor.estimateBlur(imgForDeblur);
-            debugPrint('[post-process] 模糊度: $blurScore');
-            if (blurScore < DeblurProcessor.kClearThreshold) {
-              final strength = DeblurProcessor.strengthForScore(blurScore);
-              final deblurred = await DeblurProcessor.deblur(
-                imgForDeblur,
-                strength: strength,
-              );
-              final outBytes = deblurred.getBytes(order: img.ChannelOrder.rgba);
-              final buffer = await ui.ImmutableBuffer.fromUint8List(outBytes);
-              final descriptor = ui.ImageDescriptor.raw(
-                buffer,
-                width: deblurred.width,
-                height: deblurred.height,
-                pixelFormat: ui.PixelFormat.rgba8888,
-              );
-              final codec = await descriptor.instantiateCodec();
-              final frame = await codec.getNextFrame();
-              resultImage.dispose();
-              resultImage = frame.image;
-              buffer.dispose();
-              descriptor.dispose();
-              codec.dispose();
-              debugPrint('[post-process] 去模糊完成: strength=$strength');
-            } else {
-              debugPrint('[post-process] 图像清晰，跳过去模糊');
-            }
-          }
-        } catch (e) {
-          debugPrint('[post-process] 去模糊失败（静默跳过）: $e');
-        }
-      }
 
       // 4.5. 皮肤平滑（受 smoothStrength 控制）
       if (!rawMode && params.smoothStrength > 0) {

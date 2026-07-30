@@ -169,6 +169,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colKitId} TEXT,
       ${Tables.colMood} TEXT,
       ${Tables.colLut} TEXT,
+      ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCreatedAt} INTEGER NOT NULL
     )
   ''');

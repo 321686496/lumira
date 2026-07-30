@@ -61,12 +61,55 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
   ConsumerState<LumiraNav> createState() => _LumiraNavState();
 }
 
-class _LumiraNavState extends ConsumerState<LumiraNav> {
+class _LumiraNavState extends ConsumerState<LumiraNav>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _sigmaCurve;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    // Forced fix: 初始 scrolled=true 时直接跳到终态，避免首帧 sigma=0 闪烁
+    if (widget.scrolled) {
+      _controller.value = 1.0;
+    }
+    _sigmaCurve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void didUpdateWidget(LumiraNav oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Forced fix: sigma 与颜色动画同步——监听 scrolled 变化时 forward/reverse
+    // 让 BackdropFilter 的 sigma 平滑过渡（不再瞬变），消除视觉撕裂
+    if (widget.scrolled != oldWidget.scrolled) {
+      if (widget.scrolled) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final isGlass = appTheme.style == UIStyle.glass;
+    // Forced fix: 目标 sigma——非 glass 14, glass 28；与颜色动画同步 400ms easeOut
+    final double targetSigma = isGlass ? 28.0 : 14.0;
 
     // Forced fix: glass 风格默认就启用半透明 + blur（不只 scrolled 时），
     // 让导航栏在 glass 风格下也有毛玻璃效果。
@@ -105,17 +148,12 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
     // Forced fix: 计算 leading widget
     // - 如果显式传了 leading，用它
     // - 否则如果 showBackButton=true 且 canPop=true，显示返回按钮
-    // - 否则占位 SizedBox（保持标题居中）
+    // - 否则用 SizedBox.shrink()（不再占位 40dp，避免 tab 页左侧死区与右侧不对称）
     // Tab 页传 showBackButton=false，避免 canPop 误判导致 tab 页显示返回按钮
     final Widget leadingWidget = widget.leading ??
         (widget.showBackButton && Navigator.of(context).canPop()
             ? _NavBackButton()
-            : const SizedBox(width: 40));
-
-    // Forced fix: glass 风格默认 blur 20，scrolled 时 blur 28
-    final double blurSigma = isGlass
-        ? (widget.scrolled ? 28.0 : 20.0)
-        : (widget.scrolled ? 14.0 : 0.0);
+            : const SizedBox.shrink());
 
     // Logo 升级：计算居中标题内容
     // - useWordmark=true → 品牌 SVG 文字标
@@ -140,65 +178,74 @@ class _LumiraNavState extends ConsumerState<LumiraNav> {
               )
             : null);
 
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            border: border,
-            boxShadow: shadow,
+    // Forced fix: 用 AnimatedBuilder 包裹 BackdropFilter，让 sigma 实时跟随动画值。
+    // child（AnimatedContainer + 内部布局）是静态的，不随 sigma 重绘。
+    return AnimatedBuilder(
+      animation: _sigmaCurve,
+      builder: (context, child) => ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(
+            sigmaX: targetSigma * _sigmaCurve.value,
+            sigmaY: targetSigma * _sigmaCurve.value,
           ),
-          child: SafeArea(
-            bottom: false,
-            child: SizedBox(
-              height: 48, // min-height 96rpx → 48dp
-              child: widget.centerTitle
-                  ? Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // 左侧
+          child: child,
+        ),
+      ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          border: border,
+          boxShadow: shadow,
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: SizedBox(
+            height: 48, // min-height 96rpx → 48dp
+            child: widget.centerTitle
+                ? Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // 左侧
+                      Positioned(
+                        left: widget.horizontalPadding,
+                        child: leadingWidget,
+                      ),
+                      // 居中标题 / wordmark
+                      if (centerWidget != null)
                         Positioned(
-                          left: widget.horizontalPadding,
-                          child: leadingWidget,
+                          left: 0,
+                          right: 0,
+                          child: Center(child: centerWidget),
                         ),
-                        // 居中标题 / wordmark
-                        if (centerWidget != null)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            child: Center(child: centerWidget),
-                          ),
-                        // 右侧
-                        Positioned(
-                          right: widget.horizontalPadding,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: widget.actions ?? [const SizedBox(width: 40)],
-                          ),
+                      // 右侧
+                      Positioned(
+                        right: widget.horizontalPadding,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: widget.actions ?? [const SizedBox(width: 40)],
+                        ),
+                      ),
+                    ],
+                  )
+                : Padding(
+                    padding: EdgeInsets.symmetric(horizontal: widget.horizontalPadding),
+                    child: Row(
+                      children: [
+                        leadingWidget,
+                        if (centerWidget != null) ...[
+                          const SizedBox(width: 4),
+                          Flexible(child: centerWidget),
+                        ],
+                        const Spacer(),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: widget.actions ?? [const SizedBox(width: 40)],
                         ),
                       ],
-                    )
-                  : Padding(
-                      padding: EdgeInsets.symmetric(horizontal: widget.horizontalPadding),
-                      child: Row(
-                        children: [
-                          leadingWidget,
-                          if (centerWidget != null) ...[
-                            const SizedBox(width: 4),
-                            Flexible(child: centerWidget),
-                          ],
-                          const Spacer(),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: widget.actions ?? [const SizedBox(width: 40)],
-                          ),
-                        ],
-                      ),
                     ),
-            ),
+                  ),
           ),
         ),
       ),
