@@ -4,20 +4,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
-import '../data/home_mock_data.dart';
+import '../data/home_providers.dart';
 
 /// 统计卡片
 ///
 /// 视觉规格来源：lumira-app/src/pages/home/index.vue line 192-213 + style line 806-846
 /// - 标题行：图标 + "保持记录，养成习惯"
-/// - 3 列等宽统计：收藏/获赞/作品，中间列有左右 divider
+/// - 3 列等宽统计：收藏/总经验/作品，中间列有左右 divider
 /// - 数字 56rpx→28dp，标签 lumira-stat-label
+///
+/// 数据来源：homeStatsProvider
+/// 注意：原"获赞"功能因涉及 UGC 审核限制，已替换为"总经验"（XP）
 class StatsCard extends ConsumerWidget {
   const StatsCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
+    final asyncStats = ref.watch(homeStatsProvider);
+
+    // 真实数据：loading/error 时用 empty 兜底
+    final stats = asyncStats.valueOrNull ?? HomeStats.empty;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -52,22 +59,22 @@ class StatsCard extends ConsumerWidget {
               children: [
                 Expanded(
                   child: _StatItem(
-                    value: '${HomeMockData.statsFavorites}',
+                    value: '${stats.favorites}',
                     label: '收藏',
                     tokens: tokens,
                   ),
                 ),
                 Expanded(
                   child: _StatItem(
-                    value: HomeMockData.statsLikes,
-                    label: '获赞',
+                    value: '${stats.totalXp}',
+                    label: '总经验',
                     tokens: tokens,
                     showBorders: true,
                   ),
                 ),
                 Expanded(
                   child: _StatItem(
-                    value: '${HomeMockData.statsWorks}',
+                    value: '${stats.totalPhotos}',
                     label: '作品',
                     tokens: tokens,
                   ),

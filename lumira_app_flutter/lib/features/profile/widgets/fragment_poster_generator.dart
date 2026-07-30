@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_tokens.dart';
@@ -207,15 +209,7 @@ class _PhotoGrid extends StatelessWidget {
                             right: c < crossCount - 1 ? 3 : 0,
                             bottom: r < rows - 1 ? 3 : 0,
                           ),
-                          child: Image.network(
-                            urls[r * crossCount + c],
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: tokens.brandSubtle,
-                              child: Icon(Icons.image_outlined,
-                                  size: 24, color: tokens.brand),
-                            ),
-                          ),
+                          child: _buildImage(urls[r * crossCount + c]),
                         )
                       : SizedBox(height: cellHeight),
                 ),
@@ -223,6 +217,19 @@ class _PhotoGrid extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  Widget _buildImage(String url) {
+    final fallback = Container(
+      color: tokens.brandSubtle,
+      child: Icon(Icons.image_outlined, size: 24, color: tokens.brand),
+    );
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(url, fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback);
+    }
+    return Image.file(File(url), fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback);
   }
 }
 

@@ -17,6 +17,17 @@
         </view>
         <text class="hero-title">邀请好友，获得奖励</text>
         <text class="hero-desc">邀请好友一起记录美好，解锁专属模板</text>
+        <!-- 我的邀请码 -->
+        <view class="my-code-wrap">
+          <text class="my-code-label">我的邀请码</text>
+          <view class="my-code-row">
+            <text class="my-code-value">{{ myCode }}</text>
+            <view class="my-code-copy" @click="copyCode">
+              <text class="ph ph-copy"></text>
+              <text class="my-code-copy-text">复制</text>
+            </view>
+          </view>
+        </view>
       </view>
 
       <!-- 奖励阶梯 -->
@@ -33,7 +44,7 @@
           >
             <text class="ph reward-icon" :class="r.icon"></text>
             <view class="reward-body">
-              <text class="reward-count">{{ r.count }}</text>
+              <text class="reward-count">{{ r.count }} 人</text>
               <text class="reward-name">{{ r.name }}</text>
             </view>
             <text
@@ -51,12 +62,12 @@
       <view class="lumira-card progress-card fade-up fade-up-d2">
         <view class="progress-head">
           <text class="progress-label">当前进度</text>
-          <text class="progress-count">已邀请 3 位</text>
+          <text class="progress-count">已邀请 {{ confirmedCount }} 位</text>
         </view>
         <view class="lumira-progress">
-          <view class="lumira-progress-fill" style="width: 60%;"></view>
+          <view class="lumira-progress-fill" :style="{ width: progressPercent + '%' }"></view>
         </view>
-        <text class="progress-tip">再邀请 2 人可解锁「氛围感包」</text>
+        <text class="progress-tip">{{ progressTip }}</text>
       </view>
 
       <!-- 生成邀请卡片按钮 -->
@@ -69,16 +80,19 @@
       <view class="lumira-card code-card fade-up fade-up-d4">
         <view class="lumira-section-title section-title-row">
           <text class="section-title-text">输入好友邀请码</text>
+          <text v-if="boundCode" class="bound-code-text">已绑定：{{ boundCode }}</text>
         </view>
         <input
+          v-if="!boundCode"
           class="code-input"
-          v-model="inviteCode"
+          v-model="inviteCodeInput"
           placeholder="粘贴好友的邀请码..."
           placeholder-class="code-placeholder"
         />
-        <view class="lumira-btn-outline code-btn" @click="bindCode">
+        <view v-if="!boundCode" class="lumira-btn-outline code-btn" @click="handleBindCode">
           <text>确认绑定</text>
         </view>
+        <text v-else class="bound-tip">邀请码绑定后不可更换</text>
       </view>
 
       <!-- 邀请记录 -->
@@ -86,15 +100,15 @@
         <view class="lumira-section-title section-title-row">
           <text class="section-title-text">邀请记录</text>
         </view>
-        <view class="record-list">
+        <view v-if="records.length > 0" class="record-list">
           <view
             class="record-item"
             :class="{ 'record-last': i === records.length - 1 }"
             v-for="(r, i) in records"
             :key="i"
           >
-            <view class="record-avatar" :class="{ 'record-avatar-pending': r.pending }">
-              <text class="ph" :class="r.icon"></text>
+            <view class="record-avatar" :class="{ 'record-avatar-pending': r.status === 'pending' }">
+              <text class="ph" :class="r.avatar"></text>
             </view>
             <view class="record-body">
               <text class="record-name">{{ r.name }}</text>
@@ -102,9 +116,14 @@
             </view>
             <text
               class="lumira-tag"
-              :class="{ 'lumira-tag-green': !r.pending, 'record-tag-pending': r.pending }"
-            >{{ r.status }}</text>
+              :class="{ 'lumira-tag-green': r.status === 'confirmed', 'record-tag-pending': r.status === 'pending' }"
+            >{{ r.status === 'confirmed' ? '已确认' : '待确认' }}</text>
           </view>
+        </view>
+        <view v-else class="empty-records">
+          <text class="ph ph-users empty-records-icon"></text>
+          <text class="empty-records-text">还没有邀请记录</text>
+          <text class="empty-records-sub">分享邀请码给好友开始吧</text>
         </view>
       </view>
     </view>
@@ -112,38 +131,50 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useInvite } from '@/composables/useInvite'
 
 const goBack = () => uni.navigateBack()
 
-const inviteCode = ref('')
+const {
+  myCode,
+  boundCode,
+  records,
+  confirmedCount,
+  progressPercent,
+  rewards,
+  nextReward,
+  bindCode,
+} = useInvite()
 
-const rewards = ref([
-  { icon: 'ph-film-strip', count: '1 分享', name: '日系胶片模板', done: true, locked: false, status: '已达成' },
-  { icon: 'ph-flag', count: '3 分享', name: '法式复古包', done: true, locked: false, status: '已达成' },
-  { icon: 'ph-stars', count: '5 分享', name: '氛围感包', done: false, locked: false, status: '进行中' },
-  { icon: 'ph-medal', count: '10 分享', name: '分享达人成就', done: false, locked: true, status: '' },
-  { icon: 'ph-crown', count: '15 分享', name: '全部精选模板', done: false, locked: true, status: '' },
-  { icon: 'ph-lightning', count: '20 分享', name: '裂变之神', done: false, locked: true, status: '' }
-])
+const inviteCodeInput = ref('')
 
-const records = ref([
-  { icon: 'ph-user-circle-gear', name: '小雅', date: '2026-07-05', status: '已确认', pending: false },
-  { icon: 'ph-user-circle', name: '小琳', date: '2026-07-07', status: '已确认', pending: false },
-  { icon: 'ph-user', name: '小悦', date: '2026-07-08', status: '待确认', pending: true }
-])
+const progressTip = computed(() => {
+  if (!nextReward.value) return '已达成所有奖励'
+  const diff = nextReward.value.count - confirmedCount.value
+  return `再邀请 ${diff} 人可解锁「${nextReward.value.name}」`
+})
 
-const genInviteCard = () => {
-  uni.showToast({ title: '生成邀请卡片', icon: 'none' })
+function copyCode() {
+  uni.setClipboardData({
+    data: myCode.value,
+    success: () => uni.showToast({ title: '邀请码已复制', icon: 'success' }),
+  })
 }
 
-const bindCode = () => {
-  if (!inviteCode.value) {
-    uni.showToast({ title: '请输入邀请码', icon: 'none' })
-    return
+function genInviteCard() {
+  uni.setClipboardData({
+    data: `一起来如画 Lumira 记录美好！使用我的邀请码 ${myCode.value} 注册，解锁专属模板。`,
+    success: () => uni.showToast({ title: '邀请文案已复制，去分享吧', icon: 'none' }),
+  })
+}
+
+function handleBindCode() {
+  const result = bindCode(inviteCodeInput.value)
+  uni.showToast({ title: result.message, icon: result.success ? 'success' : 'none' })
+  if (result.success) {
+    inviteCodeInput.value = ''
   }
-  uni.showToast({ title: '绑定成功', icon: 'success' })
-  inviteCode.value = ''
 }
 </script>
 
@@ -194,6 +225,97 @@ const bindCode = () => {
   display: block;
   font-size: 26rpx;
   color: $color-text-secondary;
+}
+
+/* 我的邀请码 */
+.my-code-wrap {
+  margin-top: 32rpx;
+  padding: 24rpx 32rpx;
+  border-radius: 20rpx;
+  background-color: rgba(201, 169, 110, 0.08);
+  border: 2rpx dashed rgba(201, 169, 110, 0.3);
+}
+
+.my-code-label {
+  display: block;
+  font-size: 22rpx;
+  color: $color-text-tertiary;
+  margin-bottom: 12rpx;
+  letter-spacing: 0.04em;
+}
+
+.my-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.my-code-value {
+  font-family: 'Courier New', monospace;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: $color-brand-primary;
+  letter-spacing: 0.12em;
+}
+
+.my-code-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 9999rpx;
+  background-color: $color-brand-primary;
+}
+
+.my-code-copy .ph {
+  font-size: 24rpx;
+  color: #fff;
+}
+
+.my-code-copy-text {
+  font-size: 22rpx;
+  color: #fff;
+  font-weight: 500;
+}
+
+/* 已绑定邀请码提示 */
+.bound-code-text {
+  font-size: 24rpx;
+  color: $color-brand-primary;
+  font-family: 'Courier New', monospace;
+}
+
+.bound-tip {
+  display: block;
+  font-size: 24rpx;
+  color: $color-text-tertiary;
+  margin-top: 8rpx;
+}
+
+/* 空邀请记录 */
+.empty-records {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48rpx 32rpx;
+  gap: 8rpx;
+}
+
+.empty-records-icon {
+  font-size: 72rpx;
+  color: $color-text-tertiary;
+  opacity: 0.4;
+  margin-bottom: 8rpx;
+}
+
+.empty-records-text {
+  font-size: 28rpx;
+  color: $color-text-secondary;
+}
+
+.empty-records-sub {
+  font-size: 24rpx;
+  color: $color-text-tertiary;
 }
 
 /* 区块标题 */

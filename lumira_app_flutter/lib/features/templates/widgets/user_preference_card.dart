@@ -42,8 +42,9 @@ class UserPreferenceCard extends ConsumerWidget {
           const SizedBox(height: 8), // gap: 16rpx → 8dp
           _PrefRow(
             label: '最常用分类',
-            value:
-                '${TemplatesMockData.categoryLabel(preference.topCategory)} · ${preference.topCategoryPercentage}%',
+            value: preference.topCategory.isEmpty
+                ? '暂无数据'
+                : '${TemplatesMockData.categoryLabel(preference.topCategory)} · ${preference.topCategoryPercentage}%',
             tokens: tokens,
           ),
         ],

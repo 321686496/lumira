@@ -16,6 +16,8 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../data/profile_mock_data.dart';
+import '../providers/fragments_providers.dart';
+import '../providers/growth_providers.dart';
 
 /// 个人中心主页
 ///
@@ -102,6 +104,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               ),
             ),
             child: SafeArea(
+              top: false,
+              bottom: false,
               child: SingleChildScrollView(
                 controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
@@ -109,18 +113,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // 1. HeroCard
-                    const FadeUp(child: _HeroCard(user: ProfileMockData.userProfile)),
+                    const FadeUp(child: _HeroCard()),
                     const SizedBox(height: 20),
                     // 2. StatsCard
                     const FadeUp(
                       delay: Duration(milliseconds: 100),
-                      child: _StatsCard(user: ProfileMockData.userProfile),
+                      child: _StatsCard(),
                     ),
                     const SizedBox(height: 20),
                     // 3. FragmentCard
                     const FadeUp(
                       delay: Duration(milliseconds: 200),
-                      child: _FragmentCard(fragments: ProfileMockData.fragments),
+                      child: _FragmentCard(),
                     ),
                     const SizedBox(height: 20),
                     // 4. QuickActionsRow
@@ -155,14 +159,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
 /// HeroCard：用户头像 + 名字 + 等级徽章 + 经验进度
 class _HeroCard extends ConsumerWidget {
-  const _HeroCard({required this.user});
-  final UserProfile user;
+  const _HeroCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final isNeu = appTheme.style == UIStyle.neumorphic;
+    final user = ref.watch(userProfileProvider).valueOrNull ?? ProfileMockData.userProfile;
+    final nextLevelName = ref.watch(nextLevelNameProvider).valueOrNull ?? '进阶学徒';
     // 硬编码颜色，与 uni-app 一致
     return Container(
       padding: const EdgeInsets.fromLTRB(32, 32, 24, 24), // 64rpx/48rpx/48rpx → 32/24/24dp
@@ -358,7 +363,7 @@ class _HeroCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '还差 ${formatThousands(user.xpRemaining)} XP 升级至${ProfileMockData.nextLevelName}',
+                  '还差 ${formatThousands(user.xpRemaining)} XP 升级至$nextLevelName',
                   style: TextStyle(
                     fontSize: 11, // 22rpx → 11dp
                     // neumorphic 风格：tokens.textSecondary
@@ -377,12 +382,12 @@ class _HeroCard extends ConsumerWidget {
 
 /// StatsCard：3 列等宽 Bento（作品 / 模板 / 收藏）
 class _StatsCard extends ConsumerWidget {
-  const _StatsCard({required this.user});
-  final UserProfile user;
+  const _StatsCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
+    final user = ref.watch(userProfileProvider).valueOrNull ?? ProfileMockData.userProfile;
 
     return NeuCard(
       padding: EdgeInsets.zero,
@@ -450,14 +455,16 @@ class _StatsCell extends StatelessWidget {
 
 /// FragmentCard：4 项碎片收集
 class _FragmentCard extends ConsumerWidget {
-  const _FragmentCard({required this.fragments});
-  final List<FragmentItem> fragments;
+  const _FragmentCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
+    final fragments = ref.watch(fragmentsProvider).valueOrNull ??
+        const <FragmentItem>[];
 
     final collected = fragments.fold<int>(0, (s, f) => s + f.current);
+    final total = fragments.fold<int>(0, (s, f) => s + f.max);
     return NeuCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -478,7 +485,7 @@ class _FragmentCard extends ConsumerWidget {
               ),
               const Spacer(),
               Text(
-                '$collected/20 已集',
+                '$collected/$total 已集',
                 style: TextStyle(
                   fontSize: 12,
                   color: tokens.textTertiary,

@@ -73,7 +73,7 @@
             <text class="streak-title">连续打卡</text>
           </view>
           <view class="streak-num-wrap">
-            <text class="streak-num">7</text>
+            <text class="streak-num">{{ streak }}</text>
             <text class="streak-unit">天</text>
           </view>
         </view>
@@ -155,15 +155,15 @@
       <view class="lumira-section-title section-pad">
         <view class="section-title-left">
           <text class="section-title-text">最近拍摄</text>
-          <text class="lumira-tag lumira-tag-gold">
+          <text v-if="recents.length > 0" class="lumira-tag lumira-tag-gold">
             <text class="ph ph-sparkle"></text>
-            <text>为你甄选</text>
+            <text>{{ recents.length }} 张作品</text>
           </text>
         </view>
         <text class="lumira-section-link" @click="goPage('/pages/gallery/index')">全部</text>
       </view>
-      <view class="recent-grid section-pad">
-        <view class="recent-card lumira-card-hover" v-for="r in recents" :key="r.name" @click="goPage('/pages/gallery/detail')">
+      <view v-if="recents.length > 0" class="recent-grid section-pad">
+        <view class="recent-card lumira-card-hover" v-for="r in recents" :key="r.name + r.img" @click="goPage('/pages/gallery/index')">
           <view class="recent-img-wrap">
             <image class="recent-img" :src="r.img" mode="aspectFill" />
             <view class="recent-tag">
@@ -186,6 +186,15 @@
           </view>
         </view>
       </view>
+      <view v-else class="recent-empty section-pad">
+        <text class="ph ph-camera empty-icon"></text>
+        <text class="empty-title">还没有作品</text>
+        <text class="empty-desc">点击下方拍摄按钮，记录你的第一张作品</text>
+        <view class="lumira-btn-brand empty-btn" @click="goCapture">
+          <text class="ph ph-camera"></text>
+          <text>开始拍摄</text>
+        </view>
+      </view>
     </view>
 
     <!-- 统计 -->
@@ -197,15 +206,15 @@
         </view>
         <view class="stats-grid">
           <view class="stats-item">
-            <text class="lumira-stat-num">12</text>
+            <text class="lumira-stat-num">{{ favoriteCount }}</text>
             <text class="lumira-stat-label">收藏</text>
           </view>
           <view class="stats-item stats-item-mid">
-            <text class="lumira-stat-num">8.5k</text>
-            <text class="lumira-stat-label">获赞</text>
+            <text class="lumira-stat-num">{{ totalXp }}</text>
+            <text class="lumira-stat-label">总经验</text>
           </view>
           <view class="stats-item">
-            <text class="lumira-stat-num">47</text>
+            <text class="lumira-stat-num">{{ totalPhotos }}</text>
             <text class="lumira-stat-label">作品</text>
           </view>
         </view>
@@ -218,15 +227,18 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
 import ScenePresetView from '@/components/ScenePresetView.vue'
 import { SCENE_PRESETS } from '@/data/scenePresets'
 import { useSceneManager } from '@/composables/useSceneManager'
 import { useShootingTip, type ShootingTip } from '@/composables/useShootingTip'
-import type { AnyScene } from '@/types/template'
+import { useChallenge } from '@/composables/useChallenge'
+import { useGrowth } from '@/composables/useGrowth'
+import { useTemplate } from '@/composables/useTemplate'
+import type { AnyScene, SceneCategory, Target } from '@/types/template'
 
-const { customScenes, isCustomScene, getPhotoCountByScene } = useSceneManager()
-
+const { customScenes, isCustomScene, getPhotoCountByScene, photos, allScenes } = useSceneManager()
 const { getShootingTip, getNextShootingTip } = useShootingTip()
 const currentTip = ref<ShootingTip>(getShootingTip())
 
@@ -234,36 +246,112 @@ function refreshTip() {
   currentTip.value = getNextShootingTip(currentTip.value)
 }
 
-const weekDays = ref([
-  { label: '一', done: true, today: false },
-  { label: '二', done: true, today: false },
-  { label: '三', done: true, today: false },
-  { label: '四', done: true, today: false },
-  { label: '五', done: true, today: false },
-  { label: '六', done: true, today: false },
-  { label: '日', done: false, today: true }
-])
+// 连续打卡：使用 useChallenge 的真实数据
+const { streak, weeklyStatus, autoCheckChallenge } = useChallenge()
+
+// 成长数据：用于底部统计卡
+const { totalPhotos, favoriteCount, totalXp } = useGrowth()
+
+// 模板数据：用于最近拍摄分类映射
+const { getAllTemplates } = useTemplate()
+
+// 每次显示页面时自动检查挑战完成情况
+onShow(() => {
+  const usedTemplateIds = [...new Set(photos.value.map(p => p.templateId).filter(Boolean) as string[])]
+  const usedSceneIds = [...new Set(photos.value.map(p => p.sceneId).filter(Boolean) as string[])]
+  autoCheckChallenge(photos.value.length, usedTemplateIds, usedSceneIds)
+})
+
+const weekDays = computed(() => weeklyStatus.value)
 
 const scenes = computed<AnyScene[]>(() => {
+  // 优先展示用户已拍过照片的场景（按拍摄数排序），不足 4 个再用预设补
+  const shotScenes = allScenes.value
+    .map(s => ({ scene: s, count: getPhotoCountByScene(s.id) }))
+    .filter(x => x.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .map(x => x.scene)
   const customs = customScenes.value.slice(0, 4)
   const presets = SCENE_PRESETS.slice(0, 4)
-  return [...customs, ...presets].slice(0, 4)
+  return [...shotScenes, ...customs, ...presets].slice(0, 4)
 })
 
 const getSceneBadge = (s: AnyScene, index: number): string => {
   if (isCustomScene(s)) return '我的场景'
-  if (index === 0) return '你最常去'
+  const count = getPhotoCountByScene(s.id)
+  if (count > 0 && index === 0) return '你最常去'
   if (index === 2) return '新场景推荐'
   return `${s.name}拍摄`
 }
 
-const recents = ref([
-  { name: '自然光人像', cat: '人像', icon: 'ph-user', img: 'https://picsum.photos/seed/recent-portrait/400/600', steps: 12, match: '98% 匹配', progress: '' },
-  { name: '复古胶片感', cat: '胶片', icon: 'ph-film-strip', img: 'https://picsum.photos/seed/recent-film/400/600', steps: 8, match: '', progress: '' },
-  { name: '窗边咖啡时光', cat: '咖啡馆半身', icon: 'ph-coffee', img: 'https://picsum.photos/seed/recent-cafe/400/600', steps: 15, match: '', progress: '' },
-  { name: '氛围感人像', cat: '人像氛围', icon: 'ph-sparkle', img: 'https://picsum.photos/seed/recent-mood/400/600', steps: 15, match: '', progress: '进行中' },
-  { name: '黄金时刻风光', cat: '风光', icon: 'ph-mountain', img: 'https://picsum.photos/seed/recent-landscape/400/600', steps: 10, match: '', progress: '' }
-])
+// 场景分类标签映射
+const sceneCategoryLabelMap: Record<SceneCategory, string> = {
+  light: '光线氛围',
+  outdoor: '室外环境',
+  indoor: '室内空间',
+  mood: '情绪氛围',
+}
+
+const sceneCategoryLabel = (cat: SceneCategory): string => {
+  return sceneCategoryLabelMap[cat] || '场景'
+}
+
+// 模板分类标签映射
+const categoryLabelMap: Record<Target, string> = {
+  portrait: '人像',
+  landscape: '风光',
+  food: '美食',
+  night: '夜景',
+  street: '街拍',
+  macro: '微距',
+  'still-life': '静物'
+}
+
+// 最近拍摄：基于真实照片数据
+const recents = computed(() => {
+  const allTpls = getAllTemplates()
+  const sceneMap = new Map<string, AnyScene>()
+  allScenes.value.forEach(s => sceneMap.set(s.id, s))
+
+  return photos.value.slice(0, 5).map((p, idx) => {
+    // 优先用模板分类，其次场景分类
+    let cat = '作品'
+    let icon = 'ph-image'
+    let name = `作品 ${idx + 1}`
+    let steps = 0
+
+    if (p.templateId) {
+      const tpl = allTpls.find(t => t.meta.id === p.templateId)
+      if (tpl) {
+        name = tpl.meta.name
+        cat = categoryLabelMap[tpl.meta.category] || '作品'
+        icon = 'ph-palette'
+        steps = (tpl.sceneGuide?.tips || []).length || 8
+      }
+    } else if (p.sceneId) {
+      const scene = sceneMap.get(p.sceneId)
+      if (scene) {
+        name = scene.name
+        cat = sceneCategoryLabel(scene.category)
+        icon = 'ph-mountains'
+        steps = (scene.tips || []).length || 6
+      }
+    }
+
+    // 第一张展示匹配度徽标，进行中的概念以最近 3 天内的照片标记
+    const isLatest = idx === 0
+    const isRecent = Date.now() - p.createdAt < 3 * 24 * 3600 * 1000
+    return {
+      name,
+      cat,
+      icon,
+      img: p.dataUrl || `https://picsum.photos/seed/photo-${p.id}/400/600`,
+      steps,
+      match: isLatest ? '最新' : '',
+      progress: isRecent && !isLatest ? '新作品' : '',
+    }
+  })
+})
 
 const goTab = (url: string) => uni.reLaunch({ url })
 const goPage = (url: string) => uni.navigateTo({ url })
@@ -842,5 +930,49 @@ const goSceneFav = () => uni.navigateTo({ url: '/pages/capture/scene-manage?tab=
 
 .stats-item .lumira-stat-num {
   font-size: 56rpx;
+}
+
+/* 最近拍摄空状态 */
+.recent-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 56rpx;
+  padding-bottom: 56rpx;
+  gap: 16rpx;
+}
+
+.empty-icon {
+  font-size: 96rpx;
+  color: var(--color-text-tertiary);
+  opacity: 0.4;
+}
+
+.empty-title {
+  display: block;
+  font-family: 'Noto Serif SC', serif;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.empty-desc {
+  display: block;
+  font-size: 24rpx;
+  color: var(--color-text-tertiary);
+  margin-bottom: 16rpx;
+}
+
+.empty-btn {
+  padding: 20rpx 48rpx;
+  border-radius: 16rpx;
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  font-size: 28rpx;
+}
+
+.empty-btn .ph {
+  font-size: 32rpx;
 }
 </style>

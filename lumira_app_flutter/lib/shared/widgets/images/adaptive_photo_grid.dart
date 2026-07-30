@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 /// 自适应九宫格图片展示
@@ -86,14 +88,27 @@ class _ImageCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
-      child: Image.network(
+      child: _buildImage(),
+    );
+  }
+
+  Widget _buildImage() {
+    final fallback = Container(
+      color: Colors.grey.shade300,
+      child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+    );
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
         url,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
-          color: Colors.grey.shade300,
-          child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
-        ),
-      ),
+        errorBuilder: (_, __, ___) => fallback,
+      );
+    }
+    // 本地文件路径
+    return Image.file(
+      File(url),
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => fallback,
     );
   }
 }

@@ -13,7 +13,6 @@ import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../data/profile_mock_data.dart';
 
 /// 邀请有礼页
 ///
@@ -277,12 +276,14 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _RewardCard extends StatelessWidget {
+class _RewardCard extends ConsumerWidget {
   const _RewardCard({required this.tokens});
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(inviteStatsProvider).valueOrNull;
+    final rewards = _buildRewardLadder(stats);
     return NeuCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,12 +299,70 @@ class _RewardCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Column(
-            children: ProfileMockData.rewards.map((r) => _RewardRow(item: r, tokens: tokens)).toList(),
+            children: rewards.map((r) => _RewardRow(item: r, tokens: tokens)).toList(),
           ),
         ],
       ),
     );
   }
+}
+
+/// 奖励阶梯定义项（阈值 / icon / 名称）
+class _RewardLadderItem {
+  const _RewardLadderItem({
+    required this.threshold,
+    required this.icon,
+    required this.name,
+  });
+  final int threshold;
+  final IconData icon;
+  final String name;
+}
+
+/// 奖励阶梯定义（阈值 / icon / 名称）
+/// 状态（done/locked/进行中）由真实 InviteStats.totalInvites 和 nextTier 派生
+const _rewardLadder = <_RewardLadderItem>[
+  _RewardLadderItem(threshold: 1, icon: Icons.movie_outlined, name: '日系胶片模板'),
+  _RewardLadderItem(threshold: 3, icon: Icons.flag_outlined, name: '法式复古包'),
+  _RewardLadderItem(threshold: 5, icon: Icons.star_outline, name: '氛围感包'),
+  _RewardLadderItem(threshold: 10, icon: Icons.emoji_events_outlined, name: '分享达人成就'),
+  _RewardLadderItem(threshold: 15, icon: Icons.workspace_premium_outlined, name: '全部精选模板'),
+  _RewardLadderItem(threshold: 20, icon: Icons.bolt_outlined, name: '裂变之神'),
+];
+
+/// 奖励阶梯条目（用于 UI 渲染）
+class RewardEntry {
+  const RewardEntry({
+    required this.icon,
+    required this.countLabel,
+    required this.name,
+    required this.done,
+    required this.locked,
+    required this.status,
+  });
+  final IconData icon;
+  final String countLabel;
+  final String name;
+  final bool done;
+  final bool locked;
+  final String status;
+}
+
+List<RewardEntry> _buildRewardLadder(InviteStats? stats) {
+  final invited = stats?.totalInvites ?? 0;
+  final nextRequired = stats?.nextTier?.requiredInvites;
+  return _rewardLadder.map((t) {
+    final done = invited >= t.threshold;
+    final isNext = nextRequired == t.threshold;
+    return RewardEntry(
+      icon: t.icon,
+      countLabel: '${t.threshold} 分享',
+      name: t.name,
+      done: done,
+      locked: !done && !isNext,
+      status: done ? '已达成' : (isNext ? '进行中' : ''),
+    );
+  }).toList();
 }
 
 class _RewardRow extends StatelessWidget {
@@ -397,13 +456,20 @@ class _RewardRow extends StatelessWidget {
   }
 }
 
-class _ProgressCard extends StatelessWidget {
+class _ProgressCard extends ConsumerWidget {
   const _ProgressCard({required this.tokens});
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
-    const remaining = ProfileMockData.totalInvitedForNext - ProfileMockData.invitedCount;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(inviteStatsProvider).valueOrNull;
+    final invited = stats?.totalInvites ?? 0;
+    final nextRequired = stats?.nextTier?.requiredInvites ?? 0;
+    final nextRewardName = stats?.nextTier?.rewards.isNotEmpty == true
+        ? stats!.nextTier!.rewards.map((r) => r.label).join('、')
+        : '';
+    final remaining = nextRequired > invited ? nextRequired - invited : 0;
+    final percent = nextRequired > 0 ? (invited / nextRequired * 100).clamp(0, 100) : 100.0;
     return NeuCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -420,7 +486,7 @@ class _ProgressCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '已邀请 ${ProfileMockData.invitedCount} 位',
+                '已邀请 $invited 位',
                 style: TextStyle(
                   fontSize: 13,
                   fontFamily: 'Courier New',
@@ -439,7 +505,7 @@ class _ProgressCard extends StatelessWidget {
                 children: [
                   Container(color: tokens.brand.withOpacity(0.18)),
                   FractionallySizedBox(
-                    widthFactor: ProfileMockData.inviteProgressPercent / 100.0,
+                    widthFactor: percent / 100.0,
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -455,7 +521,9 @@ class _ProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '再邀请 $remaining 人可解锁「${ProfileMockData.nextRewardName}」',
+            nextRewardName.isEmpty
+                ? '暂无下一档奖励'
+                : '再邀请 $remaining 人可解锁「$nextRewardName」',
             style: TextStyle(
               fontSize: 12,
               color: tokens.textTertiary,
@@ -531,12 +599,14 @@ class _CodeCard extends StatelessWidget {
   }
 }
 
-class _RecordCard extends StatelessWidget {
+class _RecordCard extends ConsumerWidget {
   const _RecordCard({required this.tokens});
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(inviteStatsProvider).valueOrNull;
+    final records = _buildInviteRecords(stats);
     return NeuCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -550,20 +620,70 @@ class _RecordCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Column(
-            children: [
-              for (var i = 0; i < ProfileMockData.inviteRecords.length; i++)
-                _RecordRow(
-                  record: ProfileMockData.inviteRecords[i],
-                  isLast: i == ProfileMockData.inviteRecords.length - 1,
-                  tokens: tokens,
+          if (records.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Text(
+                  '暂无邀请记录，邀请好友即可解锁奖励',
+                  style: TextStyle(fontSize: 13, color: tokens.textTertiary),
                 ),
-            ],
-          ),
+              ),
+            )
+          else
+            Column(
+              children: [
+                for (var i = 0; i < records.length; i++)
+                  _RecordRow(
+                    record: records[i],
+                    isLast: i == records.length - 1,
+                    tokens: tokens,
+                  ),
+              ],
+            ),
         ],
       ),
     );
   }
+}
+
+/// 邀请记录条目（用于 UI 渲染）
+class InviteRecord {
+  const InviteRecord({
+    required this.icon,
+    required this.name,
+    required this.date,
+    required this.status,
+    required this.pending,
+  });
+  final IconData icon;
+  final String name;
+  final String date;
+  final String status;
+  final bool pending;
+}
+
+/// 从 InviteStats.unlockedRewards 构建 InviteRecord 列表
+List<InviteRecord> _buildInviteRecords(InviteStats? stats) {
+  if (stats == null || stats.unlockedRewards.isEmpty) return const [];
+  return stats.unlockedRewards.map((r) {
+    final name = r.rewardItems.isNotEmpty
+        ? r.rewardItems.map((e) => e.label).join('、')
+        : (r.sourceDetail ?? '奖励');
+    final date = _formatTimestamp(r.unlockedAt);
+    return InviteRecord(
+      icon: Icons.card_giftcard,
+      name: name,
+      date: date,
+      status: '已确认',
+      pending: false,
+    );
+  }).toList();
+}
+
+String _formatTimestamp(int ms) {
+  final d = DateTime.fromMillisecondsSinceEpoch(ms);
+  return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }
 
 class _RecordRow extends StatelessWidget {

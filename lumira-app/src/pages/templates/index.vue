@@ -1,7 +1,7 @@
 <template>
   <view class="lumira-container">
     <!-- NAVBAR (Tab 页，无返回按钮，右上角导航入口) -->
-    <view class="lumira-nav">
+    <view class="lumira-nav nav-solid">
       <view class="lumira-nav-left"></view>
       <text class="lumira-nav-title">模板</text>
       <view class="lumira-nav-right" @click="goAll">
@@ -159,9 +159,14 @@ function goTemplateDetail(id: string) {
   color: var(--color-text-primary);
 }
 
+/* 固定标题栏背景，防止内容透出 */
+.nav-solid {
+  background-color: var(--color-canvas);
+}
+
 /* Hero 推荐区 */
 .hero-wrap {
-  padding: 24rpx 0 32rpx;
+  padding: 16rpx 0 24rpx;
 }
 
 .hero-title {
@@ -177,14 +182,13 @@ function goTemplateDetail(id: string) {
 .rec-scroll {
   width: 100%;
   white-space: nowrap;
-  padding: 0 40rpx;
+  padding: 12rpx 40rpx 20rpx;
   box-sizing: border-box;
 }
 
 .rec-list {
   display: inline-flex;
   gap: 20rpx;
-  padding-bottom: 8rpx;
 }
 
 .rec-card {
@@ -195,6 +199,7 @@ function goTemplateDetail(id: string) {
   overflow: hidden;
   display: inline-flex;
   flex-direction: column;
+  box-shadow: var(--shadow-convex);
 }
 
 .rec-img-wrap {
@@ -299,14 +304,14 @@ function goTemplateDetail(id: string) {
 
 /* 更多模板 */
 .other-section {
-  padding: 16rpx 40rpx 0;
+  padding: 8rpx 40rpx 0;
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16rpx;
+  margin-bottom: 24rpx;
 }
 
 .section-link {

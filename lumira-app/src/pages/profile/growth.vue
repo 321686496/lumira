@@ -13,15 +13,15 @@
       <!-- 等级进度卡 -->
       <view class="lumira-card level-card fade-up">
         <text class="level-label">LEVEL</text>
-        <text class="level-num">12</text>
-        <text class="level-name">入门学徒</text>
+        <text class="level-num">{{ growthData.level }}</text>
+        <text class="level-name">{{ growthData.levelName }}</text>
         <view class="lumira-progress level-progress">
-          <view class="lumira-progress-fill" style="width: 64%;"></view>
+          <view class="lumira-progress-fill" :style="{ width: growthData.progressPercent + '%' }"></view>
         </view>
         <view class="level-meta">
-          <text class="level-meta-text">1,280 XP</text>
-          <text class="level-meta-mid">还差 720 XP 升级</text>
-          <text class="level-meta-text">2,000 XP</text>
+          <text class="level-meta-text">{{ growthData.currentXp }} XP</text>
+          <text class="level-meta-mid">还差 {{ growthData.remainingXp }} XP 升级</text>
+          <text class="level-meta-text">{{ growthData.nextLevelXp }} XP</text>
         </view>
       </view>
 
@@ -29,7 +29,7 @@
       <view class="lumira-card achievement-card fade-up fade-up-d1">
         <view class="lumira-section-title section-title-row">
           <text class="section-title-text">成就</text>
-          <text class="section-title-count">4 / 6</text>
+          <text class="section-title-count">{{ unlockedAchievementCount }} / {{ achievements.length }}</text>
         </view>
         <view class="achievement-grid">
           <view class="achievement-item" v-for="(a, i) in achievements" :key="i" :class="{ locked: a.locked }">
@@ -44,7 +44,7 @@
         <view class="lumira-section-title section-title-row">
           <text class="section-title-text">成长轨迹</text>
         </view>
-        <view class="trajectory-list">
+        <view v-if="trajectory.length > 0" class="trajectory-list">
           <view class="trajectory-item" v-for="(t, i) in trajectory" :key="i" :class="{ last: i === trajectory.length - 1 }">
             <view class="trajectory-line-col">
               <view class="trajectory-dot"></view>
@@ -56,13 +56,17 @@
             </view>
           </view>
         </view>
+        <view v-else class="empty-trajectory">
+          <text class="ph ph-path empty-trajectory-icon"></text>
+          <text class="empty-trajectory-text">开始拍摄，记录你的成长轨迹</text>
+        </view>
       </view>
 
       <!-- 拍摄日历 -->
       <view class="lumira-card calendar-card fade-up fade-up-d3">
         <view class="lumira-section-title section-title-row">
           <text class="section-title-text">拍摄日历</text>
-          <text class="section-title-count">本月 42 张</text>
+          <text class="section-title-count">本月 {{ monthPhotoCount }} 张</text>
         </view>
         <scroll-view scroll-x class="heatmap-scroll">
           <view class="heatmap-grid">
@@ -89,40 +93,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { useGrowth } from '@/composables/useGrowth'
 
 const goBack = () => uni.navigateBack()
 
-const achievements = ref([
-  { icon: 'ph-sunrise', name: '初露锋芒', locked: false },
-  { icon: 'ph-camera', name: '快门达人', locked: false },
-  { icon: 'ph-trophy', name: '模板收藏家', locked: false },
-  { icon: 'ph-paint-brush', name: '构图大师', locked: true },
-  { icon: 'ph-sparkle', name: '后期魔法师', locked: true },
-  { icon: 'ph-moon-stars', name: '百变达人', locked: false }
-])
-
-const trajectory = ref([
-  { title: '首张照片', date: '2026-05-01' },
-  { title: '10张照片', date: '2026-05-20' },
-  { title: '升至 Lv.5', date: '2026-06-01' },
-  { title: '100张照片', date: '2026-06-15' }
-])
-
-const heatmap = ref<number[]>([
-  0,1,0,2,3,0,1,0,4,2,
-  0,1,2,0,3,1,0,2,4,0,
-  1,0,3,2,1,0,4,0,2,3,
-  0,1,1,0,2,4,1,0,3,0,
-  2,1,0,1,0,3,0,4,2,0,
-  0,1,2,0,3,1,0,2,0,4,
-  1,0,2,0,1,0,3,2,0,1,
-  0,4,0,2,1,0,0,3,0,2,
-  1,0,4,0,2,0,1,0,0,3,
-  1,0,2,0,1,0,4,2,0,1,
-  0,4,0,1,2,0,0,4,0,1,
-  2,0,0,4
-])
+const {
+  growthData,
+  achievements,
+  unlockedAchievementCount,
+  trajectory,
+  heatmap,
+  monthPhotoCount,
+} = useGrowth()
 
 const heatClass = (level: number) => {
   if (level === 0) return ''
@@ -228,7 +210,10 @@ const heatClass = (level: number) => {
   border: 2rpx solid $color-border;
   border-radius: 28rpx;
   padding: 32rpx 16rpx;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .achievement-item.locked {
@@ -237,10 +222,14 @@ const heatClass = (level: number) => {
 }
 
 .achievement-icon {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 72rpx;
   margin-bottom: 12rpx;
   color: $color-text-primary;
+  width: 100%;
+  text-align: center;
 }
 
 .achievement-name {
@@ -248,6 +237,8 @@ const heatClass = (level: number) => {
   font-size: 22rpx;
   font-weight: 500;
   color: $color-text-primary;
+  text-align: center;
+  width: 100%;
 }
 
 .achievement-item.locked .achievement-name {
@@ -298,6 +289,26 @@ const heatClass = (level: number) => {
 
 .trajectory-item.last .trajectory-body {
   padding-bottom: 0;
+}
+
+/* 空轨迹状态 */
+.empty-trajectory {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48rpx 32rpx;
+  gap: 12rpx;
+}
+
+.empty-trajectory-icon {
+  font-size: 72rpx;
+  color: $color-text-tertiary;
+  opacity: 0.4;
+}
+
+.empty-trajectory-text {
+  font-size: 26rpx;
+  color: $color-text-tertiary;
 }
 
 .trajectory-title {
