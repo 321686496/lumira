@@ -1478,7 +1478,7 @@ class _FillLightOverlay extends ConsumerWidget {
 
     final color = ref.watch(CaptureState.fillLightColorProvider);
     final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
-    final alpha = (intensity * 0.5).clamp(0.0, 1.0);
+    final alpha = (intensity * 0.7).clamp(0.0, 1.0);
 
     return IgnorePointer(
       child: Positioned.fill(
@@ -1497,13 +1497,28 @@ class _FillLightOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. 全屏底色（屏幕发光）
+    // 1. 计算中心镂空区域：1/2 宽 × 1/2 高，居中 = 1/4 面积
+    final hollowWidth = size.width * 0.5;
+    final hollowHeight = size.height * 0.5;
+    final hollowLeft = (size.width - hollowWidth) / 2;
+    final hollowTop = (size.height - hollowHeight) / 2;
+    final hollowRect = Rect.fromLTWH(hollowLeft, hollowTop, hollowWidth, hollowHeight);
+
+    // 2. 全屏底色（屏幕发光）—— 用 evenOdd 路径实现中心镂空
+    final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final fillPath = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(fullRect)
+      ..addRect(hollowRect);
+
     final basePaint = Paint()
       ..color = color.withOpacity(alpha)
-      ..blendMode = BlendMode.screen;
-    canvas.drawRect(Offset.zero & size, basePaint);
+      ..blendMode = BlendMode.screen
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(fillPath, basePaint);
 
-    // 2. 径向渐变（中心亮、边缘暗），模拟屏幕光源中心衰减
+    // 3. 径向渐变（中心亮、边缘暗），模拟屏幕光源中心衰减
+    //    渐变中心设在镂空区域上方 1/3 处（模拟面部补光方向）
     final center = Offset(size.width / 2, size.height / 3);
     final gradient = RadialGradient(
       center: Alignment(
@@ -1517,9 +1532,14 @@ class _FillLightOverlayPainter extends CustomPainter {
       ],
     );
     final rect = Offset.zero & size;
-    final shaderPaint = Paint()..blendMode = BlendMode.screen;
+    final shaderPaint = Paint()
+      ..blendMode = BlendMode.screen
+      ..style = PaintingStyle.fill;
     shaderPaint.shader = gradient.createShader(rect);
-    canvas.drawRect(rect, shaderPaint);
+
+    // 渐变层也用镂空路径，避免渐变覆盖中心区域
+    // 注意：径向渐变 + evenOdd 路径组合，中心镂空区域不会被绘制
+    canvas.drawPath(fillPath, shaderPaint);
   }
 
   @override
