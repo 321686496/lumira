@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
@@ -415,9 +416,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final screenSize = MediaQuery.of(context).size;
     final screenRatio = screenSize.width / screenSize.height;
     final isPortrait = screenSize.height >= screenSize.width;
+    // 读取补光状态快照（fillLightEnabled=false 时为 null，processFile 会跳过）
+    final fillLight = ref.read(CaptureState.fillLightStateProvider);
     debugPrint('[capture] 当前 aspectRatio=$aspectRatio, '
         'screenRatio=$screenRatio, isPortrait=$isPortrait, '
-        'rawMode=$rawMode');
+        'rawMode=$rawMode, fillLight=${fillLight != null}');
     // [非破坏性编辑] 复制原始文件，供后续编辑时重新处理
     // 复制到 <filePath>.original.jpg，与处理后的文件并存
     // 失败不阻塞拍摄流程（originalPath 为 null 时预览页降级为只读）
@@ -437,6 +440,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
       aspectRatio: aspectRatio,
       screenRatio: screenRatio,
       isPortrait: isPortrait,
+      fillLight: fillLight,
     );
 
     // 修复 Bug：拍照后预览页/相册显示带黑边、比例错，多次进入后才变对。
@@ -588,8 +592,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
   @override
   Widget build(BuildContext context) {
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
-    final bottomPanelExpanded =
-        ref.watch(CaptureState.bottomPanelExpandedProvider);
 
     // 监听闪光灯模式变化，同步到相机引擎
     ref.listen<CaptureFlashMode>(CaptureState.flashModeProvider, (prev, next) {
@@ -678,6 +680,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
             onCameraStateCreated: _onCameraStateCreated,
           ),
 
+          // 1.5 补光叠层（仅在取景器上方、ParamPillBar 之下）
+          const _FillLightOverlay(),
+
           // 2. 导航栏（始终保留：含返回 + 全屏切换 + 闪光灯）
           Positioned(
             top: 0,
@@ -704,18 +709,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
             ),
 
           // 4. 底部控制区（始终保留：含拍摄按钮 + 缩略图 + 切换摄像头）
-          //    全屏模式下仅隐藏模板/场景条等装饰性内容（在 _BottomControlArea 内部处理）
+          //    全屏模式下仅隐藏工具栏与抽屉（在 _BottomControlArea 内部处理）
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: _BottomControlArea(
               isFullscreen: isFullscreen,
-              bottomPanelExpanded: bottomPanelExpanded,
               onZoomChanged: _onZoomChanged,
-              onTogglePanel: () => ref
-                  .read(CaptureState.bottomPanelExpandedProvider.notifier)
-                  .state = !bottomPanelExpanded,
               onCapture: _onCapture,
               onSwitchCamera: _switchCamera,
               onThumbnailTap: _onThumbnailTap,
@@ -878,24 +879,20 @@ class _CropGuideOverlay extends StatelessWidget {
   }
 }
 
-/// 底部控制区：缩放滑块 + 模板横滑条 + 折叠按钮 + 可折叠面板 + 拍摄按钮行
-/// 修复 Bug 10：全屏模式下隐藏模板/场景条，保留拍摄按钮、缩略图、切换摄像头
-/// 修复 Bug 4：紧凑模板条和展开面板互斥，避免重叠
+/// 底部控制区：缩放滑块 + 工具栏 + 抽屉 + 拍摄按钮行
+/// 修复 Bug 10：全屏模式下隐藏工具栏与抽屉，保留拍摄按钮、缩略图、切换摄像头
+/// 改造：原"紧凑模板条+折叠按钮+展开面板"已替换为一排图标工具栏 + 底部抽屉
 class _BottomControlArea extends StatelessWidget {
   const _BottomControlArea({
     required this.isFullscreen,
-    required this.bottomPanelExpanded,
     required this.onZoomChanged,
-    required this.onTogglePanel,
     required this.onCapture,
     required this.onSwitchCamera,
     required this.onThumbnailTap,
   });
 
   final bool isFullscreen;
-  final bool bottomPanelExpanded;
   final ValueChanged<double> onZoomChanged;
-  final VoidCallback onTogglePanel;
   final VoidCallback onCapture;
   final VoidCallback onSwitchCamera;
   final void Function(String path) onThumbnailTap;
@@ -921,40 +918,10 @@ class _BottomControlArea extends StatelessWidget {
             // 缩放滑块（始终显示，便于用户主动缩放）
             _ZoomSlider(onChanged: onZoomChanged),
 
-            // 装饰性内容（全屏模式下隐藏）
+            // 工具栏 + 抽屉（全屏模式下隐藏）
             if (!isFullscreen) ...[
-              // 紧凑模板条（仅在抽屉收起时显示，修复 Bug 4 重叠问题）
-              if (!bottomPanelExpanded)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8),
-                  child: TemplateStrip(compact: true),
-                ),
-              // 折叠/展开按钮
-              GestureDetector(
-                onTap: onTogglePanel,
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Icon(
-                    bottomPanelExpanded
-                        ? Icons.keyboard_arrow_down
-                        : Icons.keyboard_arrow_up,
-                    color: Colors.white70,
-                    size: 24,
-                  ),
-                ),
-              ),
-              // 展开时显示完整模板条 + 场景预设条（与紧凑条互斥）
-              if (bottomPanelExpanded)
-                SizedBox(
-                  height: 220,
-                  child: Column(
-                    children: const [
-                      Expanded(child: TemplateStrip(compact: false)),
-                      Expanded(child: ScenePresetStrip()),
-                    ],
-                  ),
-                ),
+              const _CaptureToolbar(),
+              const _AnimatedToolDrawer(),
             ],
 
             // 拍摄按钮行（始终显示，确保全屏下也能拍照）
@@ -968,6 +935,592 @@ class _BottomControlArea extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 底部工具栏：一排图标按钮（模板/场景/参数/补光）
+/// 点击未激活的工具 → 激活并展开抽屉
+/// 点击已激活的工具 → 收起抽屉
+/// 点击"参数" → 直接打开 ParamPanel
+class _CaptureToolbar extends ConsumerWidget {
+  const _CaptureToolbar();
+
+  static const _tools = [
+    _ToolDef('templates', Icons.dashboard_outlined, Icons.dashboard, '模板'),
+    _ToolDef('scenes', Icons.palette_outlined, Icons.palette, '场景'),
+    _ToolDef('params', Icons.tune, Icons.tune, '参数'),
+    _ToolDef('fillLight', Icons.lightbulb_outline, Icons.lightbulb, '补光'),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeTool = ref.watch(CaptureState.activeToolProvider);
+    final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    if (isFullscreen) return const SizedBox.shrink();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
+        border: Border(
+          top: BorderSide(color: Colors.white.withOpacity(0.08), width: 0.5),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: _tools.map((tool) {
+          final active = activeTool == tool.id;
+          return _ToolButton(
+            tool: tool,
+            active: active,
+            onTap: () => _onTap(ref, tool.id, active),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  void _onTap(WidgetRef ref, String toolId, bool active) {
+    if (toolId == 'params') {
+      // 参数 tab：直接打开 ParamPanel，同时高亮 params tab
+      final panelExpanded = ref.read(CaptureState.panelExpandedProvider);
+      if (active && panelExpanded) {
+        // 已激活且面板展开 → 关闭面板并收起抽屉
+        ref.read(CaptureState.panelExpandedProvider.notifier).state = false;
+        ref.read(CaptureState.activeToolProvider.notifier).state = null;
+      } else {
+        ref.read(CaptureState.panelExpandedProvider.notifier).state = true;
+        ref.read(CaptureState.activeToolProvider.notifier).state = 'params';
+      }
+      return;
+    }
+    // 其他 tab：toggle 行为
+    final next = active ? null : toolId;
+    ref.read(CaptureState.activeToolProvider.notifier).state = next;
+  }
+}
+
+class _ToolDef {
+  const _ToolDef(this.id, this.icon, this.activeIcon, this.label);
+  final String id;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+}
+
+class _ToolButton extends StatelessWidget {
+  const _ToolButton({required this.tool, required this.active, required this.onTap});
+  final _ToolDef tool;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? const Color(0xFFC9A96E) : Colors.white70;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 选中指示器（2dp 金色短横线）
+            Container(
+              width: 16,
+              height: 2,
+              margin: const EdgeInsets.only(bottom: 4),
+              decoration: BoxDecoration(
+                color: active ? const Color(0xFFC9A96E) : Colors.transparent,
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+            Icon(active ? tool.activeIcon : tool.icon, color: color, size: 22),
+            const SizedBox(height: 2),
+            Text(
+              tool.label,
+              style: TextStyle(color: color, fontSize: 11),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 工具栏下方的抽屉：根据 activeToolProvider 渲染对应内容
+/// 高度固定 220，收起时高度 0（AnimatedSize 动画）
+class _AnimatedToolDrawer extends ConsumerWidget {
+  const _AnimatedToolDrawer();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeTool = ref.watch(CaptureState.activeToolProvider);
+    final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    if (isFullscreen) return const SizedBox.shrink();
+
+    final hasContent = activeTool != null;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: Container(
+        height: hasContent ? 220 : 0,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.4),
+        ),
+        child: hasContent ? _buildContent(activeTool, ref) : null,
+      ),
+    );
+  }
+
+  Widget _buildContent(String toolId, WidgetRef ref) {
+    switch (toolId) {
+      case 'templates':
+        return const TemplateStrip(compact: false);
+      case 'scenes':
+        return const ScenePresetStrip();
+      case 'params':
+        return _buildParamsHint(ref);
+      case 'fillLight':
+        return const _FillLightPanel();
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildParamsHint(WidgetRef ref) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            '参数面板已展开',
+            style: TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () {
+              ref.read(CaptureState.panelExpandedProvider.notifier).state = false;
+              ref.read(CaptureState.activeToolProvider.notifier).state = null;
+            },
+            child: const Text(
+              '关闭参数面板',
+              style: TextStyle(color: Color(0xFFC9A96E)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 补光控制面板：预设色行 + 亮度滑块 + 可展开色环
+class _FillLightPanel extends ConsumerWidget {
+  const _FillLightPanel();
+
+  static const _presets = [
+    _FillLightPreset('暖白', Color(0xFFFFE5B4), 0.6),
+    _FillLightPreset('冷白', Color(0xFFE0F0FF), 0.6),
+    _FillLightPreset('黄金', Color(0xFFFFB347), 0.7),
+    _FillLightPreset('柔粉', Color(0xFFFFC0CB), 0.6),
+    _FillLightPreset('青蓝', Color(0xFF8FD3F4), 0.5),
+    _FillLightPreset('紫', Color(0xFFD8BFD8), 0.5),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled = ref.watch(CaptureState.fillLightEnabledProvider);
+    final color = ref.watch(CaptureState.fillLightColorProvider);
+    final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
+    final ringExpanded = ref.watch(_ringExpandedProvider);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 提示行
+          Row(
+            children: [
+              const Text(
+                '补光',
+                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  enabled ? '已启用 · 仅前置显示叠层' : '点击颜色开启',
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // 预设色行
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                ..._presets.map((p) => _PresetColorDot(
+                  preset: p,
+                  selected: enabled && _colorMatches(color, p.color),
+                  onTap: () {
+                    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+                    ref.read(CaptureState.fillLightColorProvider.notifier).state = p.color;
+                    ref.read(CaptureState.fillLightIntensityProvider.notifier).state = p.intensity;
+                    ref.read(_ringExpandedProvider.notifier).state = false;
+                  },
+                )),
+                // 自定义按钮
+                _ActionDot(
+                  icon: Icons.color_lens,
+                  label: '自定义',
+                  selected: ringExpanded,
+                  onTap: () {
+                    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+                    ref.read(_ringExpandedProvider.notifier).state = !ringExpanded;
+                  },
+                ),
+                // 关闭按钮
+                _ActionDot(
+                  icon: Icons.close,
+                  label: '关闭',
+                  selected: false,
+                  onTap: () {
+                    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = false;
+                    ref.read(_ringExpandedProvider.notifier).state = false;
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          // 亮度滑块
+          Row(
+            children: [
+              const Icon(Icons.brightness_6, color: Colors.white54, size: 16),
+              Expanded(
+                child: Slider(
+                  value: intensity.clamp(0.1, 1.0),
+                  min: 0.1,
+                  max: 1.0,
+                  divisions: 18,
+                  activeColor: const Color(0xFFC9A96E),
+                  inactiveColor: Colors.white24,
+                  onChanged: enabled
+                      ? (v) => ref.read(CaptureState.fillLightIntensityProvider.notifier).state = v
+                      : null,
+                ),
+              ),
+              SizedBox(
+                width: 36,
+                child: Text(
+                  '${(intensity * 100).round()}%',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          // 可展开色环
+          if (ringExpanded)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: _HueRingPicker(
+                onColorChanged: (c) {
+                  ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  bool _colorMatches(Color a, Color b) => a.value == b.value;
+}
+
+class _FillLightPreset {
+  const _FillLightPreset(this.label, this.color, this.intensity);
+  final String label;
+  final Color color;
+  final double intensity;
+}
+
+class _PresetColorDot extends StatelessWidget {
+  const _PresetColorDot({required this.preset, required this.selected, required this.onTap});
+  final _FillLightPreset preset;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        margin: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: preset.color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                  width: selected ? 2 : 1,
+                ),
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              preset.label,
+              style: TextStyle(
+                color: selected ? const Color(0xFFC9A96E) : Colors.white54,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionDot extends StatelessWidget {
+  const _ActionDot({required this.icon, required this.label, required this.selected, required this.onTap});
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        margin: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: Colors.white12,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                  width: selected ? 2 : 1,
+                ),
+              ),
+              child: Icon(icon, color: Colors.white70, size: 16),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? const Color(0xFFC9A96E) : Colors.white54,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 色环展开状态（仅 capture_page 内部使用）
+final _ringExpandedProvider = StateProvider<bool>((ref) => false);
+
+/// 简易 HSV 色环（自实现，无外部依赖）
+/// 外环：色相（0-360°）
+/// 内部：当前选中色相对应的纯色填充
+class _HueRingPicker extends StatefulWidget {
+  const _HueRingPicker({required this.onColorChanged});
+  final ValueChanged<Color> onColorChanged;
+
+  @override
+  State<_HueRingPicker> createState() => _HueRingPickerState();
+}
+
+class _HueRingPickerState extends State<_HueRingPicker> {
+  double _hue = 30.0; // 默认暖白附近
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 200,
+      height: 200,
+      child: GestureDetector(
+        onPanUpdate: _onPanUpdate,
+        onTapDown: _onTapDown,
+        child: CustomPaint(
+          painter: _HueRingPainter(hue: _hue),
+          child: Center(
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: HSVColor.fromAHSV(1.0, _hue, 0.6, 1.0).toColor(),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white38, width: 2),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) => _handleTouch(details.localPosition);
+
+  void _onTapDown(TapDownDetails details) => _handleTouch(details.localPosition);
+
+  void _handleTouch(Offset localPos) {
+    const center = Offset(100, 100);
+    final dx = localPos.dx - center.dx;
+    final dy = localPos.dy - center.dy;
+    final distance = dx * dx + dy * dy;
+    // 仅在外环区域（半径 70-95）内响应
+    if (distance < 70 * 70 || distance > 95 * 95) return;
+    var angle = math.atan2(dy, dx) * 180 / math.pi;
+    if (angle < 0) angle += 360;
+    setState(() => _hue = angle);
+    widget.onColorChanged(HSVColor.fromAHSV(1.0, _hue, 0.6, 1.0).toColor());
+  }
+}
+
+class _HueRingPainter extends CustomPainter {
+  const _HueRingPainter({required this.hue});
+  final double hue;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final outerRadius = size.width / 2 - 5;
+    final innerRadius = outerRadius - 25;
+
+    // 绘制色相环
+    const segments = 60;
+    for (var i = 0; i < segments; i++) {
+      final startAngle = (i / segments) * 2 * math.pi - math.pi / 2;
+      final endAngle = ((i + 1) / segments) * 2 * math.pi - math.pi / 2;
+      final hueAngle = (i / segments) * 360;
+      final paint = Paint()
+        ..color = HSVColor.fromAHSV(1.0, hueAngle, 1.0, 1.0).toColor()
+        ..style = PaintingStyle.fill;
+      final path = Path()
+        ..moveTo(center.dx + innerRadius * math.cos(startAngle),
+            center.dy + innerRadius * math.sin(startAngle))
+        ..arcTo(
+            Rect.fromCircle(center: center, radius: outerRadius),
+            startAngle,
+            endAngle - startAngle,
+            false)
+        ..arcTo(
+            Rect.fromCircle(center: center, radius: innerRadius),
+            endAngle,
+            startAngle - endAngle,
+            false)
+        ..close();
+      canvas.drawPath(path, paint);
+    }
+
+    // 绘制当前色相指示器
+    final indicatorAngle = hue * math.pi / 180 - math.pi / 2;
+    final indicatorRadius = (outerRadius + innerRadius) / 2;
+    final indicatorPos = Offset(
+      center.dx + indicatorRadius * math.cos(indicatorAngle),
+      center.dy + indicatorRadius * math.sin(indicatorAngle),
+    );
+    canvas.drawCircle(
+        indicatorPos,
+        6,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.fill);
+    canvas.drawCircle(
+        indicatorPos,
+        6,
+        Paint()
+          ..color = Colors.black87
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5);
+  }
+
+  @override
+  bool shouldRepaint(covariant _HueRingPainter old) => old.hue != hue;
+}
+
+/// 取景器上方的补光叠层
+/// 仅在 fillLightEnabled && cameraFacing=='front' 时渲染
+/// 用 BlendMode.screen 模拟屏幕发光的视觉效果
+class _FillLightOverlay extends ConsumerWidget {
+  const _FillLightOverlay();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final enabled = ref.watch(CaptureState.fillLightEnabledProvider);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    if (!enabled || facing != 'front') return const SizedBox.shrink();
+
+    final color = ref.watch(CaptureState.fillLightColorProvider);
+    final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
+    final alpha = (intensity * 0.5).clamp(0.0, 1.0);
+
+    return IgnorePointer(
+      child: Positioned.fill(
+        child: CustomPaint(
+          painter: _FillLightOverlayPainter(color: color, alpha: alpha),
+        ),
+      ),
+    );
+  }
+}
+
+class _FillLightOverlayPainter extends CustomPainter {
+  const _FillLightOverlayPainter({required this.color, required this.alpha});
+  final Color color;
+  final double alpha;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. 全屏底色（屏幕发光）
+    final basePaint = Paint()
+      ..color = color.withOpacity(alpha)
+      ..blendMode = BlendMode.screen;
+    canvas.drawRect(Offset.zero & size, basePaint);
+
+    // 2. 径向渐变（中心亮、边缘暗），模拟屏幕光源中心衰减
+    final center = Offset(size.width / 2, size.height / 3);
+    final gradient = RadialGradient(
+      center: Alignment(
+        (center.dx / size.width) * 2 - 1,
+        (center.dy / size.height) * 2 - 1,
+      ),
+      radius: 0.8,
+      colors: [
+        color.withOpacity(alpha),
+        color.withOpacity(alpha * 0.3),
+      ],
+    );
+    final rect = Offset.zero & size;
+    final shaderPaint = Paint()..blendMode = BlendMode.screen;
+    shaderPaint.shader = gradient.createShader(rect);
+    canvas.drawRect(rect, shaderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FillLightOverlayPainter old) =>
+      old.color != color || old.alpha != alpha;
 }
 
 /// 缩放滑块：以倍数显示，根据 facing 切换范围
