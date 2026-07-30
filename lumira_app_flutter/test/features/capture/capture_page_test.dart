@@ -339,7 +339,7 @@ void main() {
     await pumpWithPermission(tester);
 
     expect(find.byType(ParamPillBar), findsOneWidget);
-    expect(find.byType(TemplateStrip), findsWidgets); // compact + expanded (if toggled)
+    // 默认抽屉收起，TemplateStrip 不渲染；展开后才会渲染
     expect(find.byType(ParamPanel), findsOneWidget);
     expect(find.byType(FilterPicker), findsOneWidget);
     expect(find.byType(LevelIndicator), findsOneWidget);
@@ -352,10 +352,11 @@ void main() {
     await pumpWithPermission(tester);
 
     // 底部工具栏包含 4 个工具：模板/场景/参数/补光
-    // 默认 activeTool='templates'，模板抽屉展开
-    // 仅断言工具栏独有的图标（避免与其他 widget 的图标/文字冲突）
-    expect(find.byIcon(Icons.dashboard), findsOneWidget); // 模板激活态
-    expect(find.byIcon(Icons.palette_outlined), findsOneWidget); // 场景未激活态
-    expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget); // 补光未激活态
+    // 默认 activeTool=null（收起），所有工具显示未激活态图标
+    // 仅断言工具栏独有的图标（tune 在 FilterPicker 中也用，故从宽断言）
+    expect(find.byIcon(Icons.dashboard_outlined), findsOneWidget); // 模板
+    expect(find.byIcon(Icons.palette_outlined), findsOneWidget); // 场景
+    expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget); // 补光
+    expect(find.text('参数'), findsOneWidget); // 参数 tab 文字
   });
 }

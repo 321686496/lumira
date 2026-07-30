@@ -1048,7 +1048,7 @@ class _ToolButton extends StatelessWidget {
 }
 
 /// 工具栏下方的抽屉：根据 activeToolProvider 渲染对应内容
-/// 高度固定 220，收起时高度 0（AnimatedSize 动画）
+/// 高度根据内容自适应（child 自然撑开），收起时高度 0（AnimatedSize 动画）
 class _AnimatedToolDrawer extends ConsumerWidget {
   const _AnimatedToolDrawer();
 
@@ -1063,14 +1063,15 @@ class _AnimatedToolDrawer extends ConsumerWidget {
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOutCubic,
       alignment: Alignment.topCenter,
-      child: Container(
-        height: hasContent ? 220 : 0,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.4),
-        ),
-        child: hasContent ? _buildContent(activeTool, ref) : null,
-      ),
+      child: hasContent
+          ? Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.4),
+              ),
+              child: _buildContent(activeTool, ref),
+            )
+          : const SizedBox(height: 0, width: double.infinity),
     );
   }
 
@@ -1090,7 +1091,8 @@ class _AnimatedToolDrawer extends ConsumerWidget {
   }
 
   Widget _buildParamsHint(WidgetRef ref) {
-    return Center(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1224,14 +1226,16 @@ class _FillLightPanel extends ConsumerWidget {
               ),
             ],
           ),
-          // 可展开色环
+          // 可展开色环（水平居中显示）
           if (ringExpanded)
             Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: _HueRingPicker(
-                onColorChanged: (c) {
-                  ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
-                },
+              padding: const EdgeInsets.only(top: 8, bottom: 4),
+              child: Center(
+                child: _HueRingPicker(
+                  onColorChanged: (c) {
+                    ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
+                  },
+                ),
               ),
             ),
         ],
