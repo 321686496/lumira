@@ -1,40 +1,48 @@
 <template>
   <view class="lumira-container">
     <!-- 顶部导航 -->
-    <view class="lumira-nav">
+    <view class="lumira-nav nav-solid">
       <view class="lumira-nav-left"></view>
       <text class="lumira-nav-title">每日挑战</text>
-      <view class="lumira-nav-right">
+      <view class="lumira-nav-right" @click="goHistory">
         <text class="ph ph-clipboard-text nav-icon"></text>
       </view>
     </view>
 
     <!-- 内容区 -->
     <view class="page-body">
-      <!-- 主挑战卡（已完成） -->
-      <view class="lumira-card main-card fade-up">
+      <!-- 主挑战卡 -->
+      <view class="lumira-card main-card fade-up" :class="{ 'main-card-done': mainCompleted }">
         <view class="main-head">
-          <view class="challenge-check">
-            <text class="ph ph-check"></text>
+          <view class="challenge-check" :class="{ 'challenge-check-done': mainCompleted }">
+            <text v-if="mainCompleted" class="ph ph-check"></text>
+            <text v-else class="ph ph-target"></text>
           </view>
           <view class="main-head-body">
             <view class="main-title-row">
-              <text class="ph ph-check main-title-icon"></text>
-              <text class="main-title">今日挑战已完成</text>
+              <text class="ph main-title-icon" :class="mainCompleted ? 'ph-check' : 'ph-circle-half'"></text>
+              <text class="main-title">{{ mainCompleted ? '今日挑战已完成' : '今日挑战' }}</text>
             </view>
-            <text class="main-desc">用模板拍一张人像照</text>
+            <text class="main-desc">{{ mainChallenge.desc }}</text>
             <view class="main-tags">
-              <text class="lumira-tag lumira-tag-gold">+30 XP</text>
-              <text class="lumira-tag lumira-tag-green">
+              <text class="lumira-tag lumira-tag-gold">+{{ mainChallenge.xp }} XP</text>
+              <text v-if="mainCompleted" class="lumira-tag lumira-tag-green">
                 <text class="ph ph-check"></text>
                 <text>已完成</text>
               </text>
+              <text v-else class="lumira-tag lumira-tag-red">进行中</text>
             </view>
           </view>
         </view>
         <view class="main-divider"></view>
         <view class="main-img-wrap">
-          <image class="main-img" src="https://picsum.photos/seed/733872/400/600" mode="aspectFill" />
+          <image class="main-img" :src="`https://picsum.photos/seed/challenge-${today}/400/600`" mode="aspectFill" />
+        </view>
+        <view v-if="!mainCompleted" class="main-btn-wrap">
+          <view class="lumira-btn-brand sub-btn" @click="goComplete">
+            <text class="ph ph-camera"></text>
+            <text>去完成</text>
+          </view>
         </view>
       </view>
 
@@ -42,40 +50,31 @@
       <view class="section-block fade-up fade-up-d1">
         <view class="lumira-section-title section-title-row">
           <text class="section-title-text">附加挑战</text>
-          <text class="section-title-sub">1+2 弹性模式</text>
+          <text class="section-title-sub">{{ completedCount }}/{{ totalChallenges }} 弹性模式</text>
         </view>
       </view>
 
-      <!-- 支线挑战 A（已完成） -->
-      <view class="lumira-card sub-card sub-card-done fade-up fade-up-d2">
-        <view class="sub-row">
-          <view class="lumira-list-icon list-icon-green">
-            <text class="ph ph-check"></text>
-          </view>
-          <view class="list-text">
-            <text class="list-title">3个不同模板分别拍一张</text>
-            <text class="list-desc">已完成 · 3/3</text>
-          </view>
-          <text class="lumira-tag lumira-tag-gold list-tag">+15 XP</text>
-        </view>
-      </view>
-
-      <!-- 支线挑战 B（可完成） -->
-      <view class="lumira-card sub-card fade-up fade-up-d3">
+      <!-- 附加挑战列表 -->
+      <view
+        v-for="s in subStatuses"
+        :key="s.challenge.id"
+        class="lumira-card sub-card fade-up fade-up-d2"
+        :class="{ 'sub-card-done': s.done }"
+      >
         <view class="sub-row sub-row-top">
-          <view class="lumira-list-icon">
-            <text class="ph ph-palette"></text>
+          <view class="lumira-list-icon" :class="{ 'list-icon-green': s.done }">
+            <text class="ph" :class="s.done ? 'ph-check' : 'ph-palette'"></text>
           </view>
           <view class="list-text">
-            <text class="list-title">拍一张照片完成调色并导出</text>
-            <text class="list-desc">未完成 · 0/1</text>
+            <text class="list-title">{{ s.challenge.title }}</text>
+            <text class="list-desc">{{ s.done ? '已完成' : s.challenge.condition }}</text>
           </view>
         </view>
         <view class="sub-tags">
-          <text class="lumira-tag lumira-tag-gold">+20 XP</text>
-          <text class="lumira-tag lumira-tag-red">碎片机会</text>
+          <text class="lumira-tag lumira-tag-gold">+{{ s.challenge.xp }} XP</text>
+          <text v-if="s.challenge.hasFragment" class="lumira-tag lumira-tag-red">碎片机会</text>
         </view>
-        <view class="lumira-btn-brand sub-btn" @click="goComplete">
+        <view v-if="!s.done" class="lumira-btn-brand sub-btn" @click="goComplete">
           <text>去完成</text>
         </view>
       </view>
@@ -84,16 +83,11 @@
       <view class="section-block fade-up fade-up-d4">
         <view class="lumira-section-title section-title-row">
           <text class="section-title-text">明日挑战预览</text>
-          <text class="lumira-section-link">
-            <text>全部</text>
-            <text class="ph ph-arrow-right link-arrow"></text>
-          </text>
         </view>
         <view class="lumira-card preview-card">
           <view class="blur-layer">
-            <text class="blur-title">在日落时分拍一张剪影照</text>
-            <text class="blur-desc">附加挑战：使用「黄金时刻」模板</text>
-            <text class="blur-sub">附加挑战：完成一次胶片调色导出</text>
+            <text class="blur-title">{{ tomorrowPreview.title }}</text>
+            <text class="blur-desc">{{ tomorrowPreview.desc }}</text>
           </view>
           <view class="preview-mask">
             <text class="lumira-badge lumira-badge-brand">明日揭晓</text>
@@ -105,17 +99,17 @@
       <view class="section-block fade-up fade-up-d5">
         <view class="lumira-card streak-card">
           <text class="ph ph-flame streak-flame"></text>
-          <text class="streak-title">连续打卡 7 天</text>
-          <text class="streak-sub">继续保持，解锁连续打卡奖励！</text>
+          <text class="streak-title">连续打卡 {{ streak }} 天</text>
+          <text class="streak-sub">{{ streak > 0 ? '继续保持，解锁连续打卡奖励！' : '今天就开始你的拍摄之旅吧' }}</text>
           <view class="streak-dots">
-            <view class="streak-dot streak-dot-done" v-for="n in 7" :key="n">
+            <view v-for="n in Math.max(streak, 1)" :key="n" class="streak-dot streak-dot-done">
               <text class="ph ph-check streak-check"></text>
             </view>
             <view class="streak-dot streak-dot-next">
-              <text class="streak-dot-num">8</text>
+              <text class="streak-dot-num">{{ streak + 1 }}</text>
             </view>
           </view>
-          <text class="streak-tip">再坚持 1 天获得额外 50 XP</text>
+          <text class="streak-tip">再坚持 {{ streak >= 7 ? 30 - streak : 7 - streak }} 天获得额外 {{ streak >= 7 ? 100 : 50 }} XP</text>
         </view>
       </view>
 
@@ -127,16 +121,40 @@
 </template>
 
 <script setup lang="ts">
+import { onShow } from '@dcloudio/uni-app'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import { useChallenge } from '@/composables/useChallenge'
+import { useSceneManager } from '@/composables/useSceneManager'
 
-const goBack = () => uni.navigateBack()
-const goComplete = () => uni.navigateTo({ url: '/pages/challenge/detail' })
+const {
+  mainChallenge,
+  tomorrowPreview,
+  mainCompleted,
+  subStatuses,
+  totalChallenges,
+  completedCount,
+  streak,
+  today,
+  autoCheckChallenge,
+} = useChallenge()
+
+const { photos } = useSceneManager()
+
+// 每次显示页面时自动检查挑战完成情况
+onShow(() => {
+  const usedTemplateIds = [...new Set(photos.value.map(p => p.templateId).filter(Boolean) as string[])]
+  const usedSceneIds = [...new Set(photos.value.map(p => p.sceneId).filter(Boolean) as string[])]
+  autoCheckChallenge(photos.value.length, usedTemplateIds, usedSceneIds)
+})
+
+const goComplete = () => uni.navigateTo({ url: '/pages/capture/index' })
+const goHistory = () => uni.navigateTo({ url: '/pages/challenge/detail' })
 </script>
 
 <style lang="scss" scoped>
-.nav-back-icon {
-  font-size: 40rpx;
-  color: var(--color-text-primary);
+/* 固定标题栏背景，防止内容透出 */
+.nav-solid {
+  background-color: var(--color-canvas);
 }
 
 .nav-icon {
@@ -152,6 +170,10 @@ const goComplete = () => uni.navigateTo({ url: '/pages/challenge/detail' })
 .main-card {
   padding: 48rpx;
   border-color: var(--color-brand);
+}
+
+.main-card-done {
+  border-color: var(--color-success);
 }
 
 .main-head {
@@ -171,9 +193,17 @@ const goComplete = () => uni.navigateTo({ url: '/pages/challenge/detail' })
   flex-shrink: 0;
 }
 
+.challenge-check-done {
+  background-color: var(--color-success-subtle);
+}
+
 .challenge-check .ph {
   font-size: 44rpx;
   color: var(--color-brand-text);
+}
+
+.challenge-check-done .ph {
+  color: var(--color-success);
 }
 
 .main-head-body {
@@ -235,6 +265,10 @@ const goComplete = () => uni.navigateTo({ url: '/pages/challenge/detail' })
   height: 100%;
 }
 
+.main-btn-wrap {
+  margin-top: 32rpx;
+}
+
 /* 区块标题 */
 .section-block {
   margin-top: 64rpx;
@@ -255,10 +289,6 @@ const goComplete = () => uni.navigateTo({ url: '/pages/challenge/detail' })
   font-size: 24rpx;
   color: var(--color-text-tertiary);
   letter-spacing: 0.04em;
-}
-
-.link-arrow {
-  font-size: 24rpx;
 }
 
 /* 支线挑战 */
@@ -324,10 +354,6 @@ const goComplete = () => uni.navigateTo({ url: '/pages/challenge/detail' })
   margin-top: 6rpx;
 }
 
-.list-tag {
-  margin-left: auto;
-}
-
 .sub-tags {
   display: flex;
   align-items: center;
@@ -368,13 +394,6 @@ const goComplete = () => uni.navigateTo({ url: '/pages/challenge/detail' })
   display: block;
   font-size: 26rpx;
   color: var(--color-text-secondary);
-}
-
-.blur-sub {
-  display: block;
-  font-size: 24rpx;
-  color: var(--color-text-tertiary);
-  margin-top: 16rpx;
 }
 
 .preview-mask {
@@ -421,6 +440,7 @@ const goComplete = () => uni.navigateTo({ url: '/pages/challenge/detail' })
 .streak-dots {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 12rpx;
   margin-top: 32rpx;
 }

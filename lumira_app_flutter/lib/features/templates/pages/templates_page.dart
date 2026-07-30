@@ -14,6 +14,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../../scenes/widgets/scene_category_overview.dart';
 import '../data/templates_mock_data.dart';
+import '../data/templates_providers.dart';
 import '../widgets/recommendation_card.dart';
 import '../widgets/template_grid_card.dart';
 import '../widgets/user_preference_card.dart';
@@ -87,10 +88,13 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
         showBackButton: false,
         horizontalPadding: 24,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.apps_outlined, size: 20),
-            onPressed: _goAll,
-            tooltip: '查看全部',
+          GestureDetector(
+            onTap: _goAll,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Icon(Icons.apps_outlined, size: 20),
+            ),
           ),
         ],
       ),
@@ -100,42 +104,10 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
           _BackgroundDecoration(tokens: tokens),
           // Forced fix: glass 风格彩色斑点背景
           const Positioned.fill(child: GlassBackground(variant: GlassBackgroundVariant.templates)),
-          // 主内容（ListView 顶部不再需要额外 padding，extendBodyBehindAppBar 让内容延伸到 nav 下方）
-          ListView(
-            controller: _scrollController,
-            padding: EdgeInsets.zero,
-            children: [
-              // === 模板库 section（上）===
-              FadeUp(
-                child: _TemplateSectionHeader(),
-              ),
-              _HeroSection(
-                onTap: _goDetail,
-              ),
-              if (TemplatesMockData.userPreference.totalPhotos > 0)
-                FadeUp(
-                  delay: const Duration(milliseconds: 80),
-                  child: _PreferenceSection(),
-                ),
-              FadeUp(
-                delay: const Duration(milliseconds: 120),
-                child: _OtherSection(onTap: _goDetail),
-              ),
-              const SizedBox(height: 28),
-              // === 场景 section（下）===
-              FadeUp(
-                delay: const Duration(milliseconds: 160),
-                child: _SceneSectionHeader(),
-              ),
-              const FadeUp(
-                delay: Duration(milliseconds: 200),
-                child: SceneCategoryOverview(compact: true),
-              ),
-              const SizedBox(height: 28),
-              // === 摄影美学院 section ===
-              FadeUp(delay: const Duration(milliseconds: 240), child: _AcademyEntrySection()),
-              const SizedBox(height: 140), // bottom spacer 避开 FloatingTabBar
-            ],
+          // 主内容（extendBodyBehindAppBar 让内容延伸到 nav 下方，需 top padding 占位避免被遮挡）
+          _BodyContent(
+            scrollController: _scrollController,
+            onTap: _goDetail,
           ),
           // FloatingTabBar
           const Positioned(
@@ -146,6 +118,64 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 页面主体内容（ConsumerWidget，watch userPreferenceProvider 决定是否显示偏好 section）
+class _BodyContent extends ConsumerWidget {
+  const _BodyContent({required this.scrollController, required this.onTap});
+
+  final ScrollController scrollController;
+  final void Function(String templateId) onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 真实数据：用户拍摄偏好（totalPhotos > 0 且 topCategory 非空时显示）
+    final asyncPref = ref.watch(userPreferenceProvider);
+    final showPreference = asyncPref.maybeWhen(
+      data: (p) => p.totalPhotos > 0,
+      orElse: () => false,
+    );
+
+    return ListView(
+      controller: scrollController,
+      // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
+      // 用 viewPadding.top（不被 widget 消费）+ nav 内容高度 48dp 精确占位
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).viewPadding.top + 48,
+      ),
+      children: [
+        // === 模板库 section（上）===
+        FadeUp(child: _TemplateSectionHeader()),
+        _HeroSection(onTap: onTap),
+        if (showPreference)
+          FadeUp(
+            delay: const Duration(milliseconds: 80),
+            child: _PreferenceSection(),
+          ),
+        FadeUp(
+          delay: const Duration(milliseconds: 120),
+          child: _OtherSection(onTap: onTap),
+        ),
+        const SizedBox(height: 28),
+        // === 场景 section（下）===
+        FadeUp(
+          delay: const Duration(milliseconds: 160),
+          child: _SceneSectionHeader(),
+        ),
+        const FadeUp(
+          delay: Duration(milliseconds: 200),
+          child: SceneCategoryOverview(compact: true),
+        ),
+        const SizedBox(height: 28),
+        // === 摄影美学院 section ===
+        FadeUp(
+          delay: const Duration(milliseconds: 240),
+          child: _AcademyEntrySection(),
+        ),
+        const SizedBox(height: 140), // bottom spacer 避开 FloatingTabBar
+      ],
     );
   }
 }
@@ -216,7 +246,7 @@ class _TemplateSectionHeader extends StatelessWidget {
       builder: (context, ref, _) {
         final tokens = ref.watch(appThemeProvider).tokens;
         return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
           child: Row(
             children: [
               Icon(Icons.layers_outlined, size: 20, color: tokens.brand),
@@ -250,7 +280,7 @@ class _HeroSection extends ConsumerWidget {
     final asyncDao = ref.watch(templatesDaoProvider);
     return FadeUp(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(0, 12, 0, 28), // 24rpx 0 32rpx → 12 0 28（增大底部留白避免阴影被下个 section 遮挡）
+        padding: const EdgeInsets.fromLTRB(0, 4, 0, 12), // 减小底部留白避免与"更多模板"间距过大
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -305,38 +335,38 @@ class _HeroSection extends ConsumerWidget {
   }
 }
 
-/// 拍摄偏好 section
-class _PreferenceSection extends StatelessWidget {
+/// 拍摄偏好 section（真实数据：来自 userPreferenceProvider）
+class _PreferenceSection extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
-    return Consumer(
-      builder: (context, ref, _) {
-        final tokens = ref.watch(appThemeProvider).tokens;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12), // 40rpx 16rpx 40rpx 24rpx → 20 8 20 12
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8), // margin-bottom: 16rpx → 8dp
-                child: Text(
-                  '你的拍摄偏好',
-                  style: TextStyle(
-                    fontSize: 16, // 32rpx → 16dp
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                    letterSpacing: -0.01 * 16,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-              const UserPreferenceCard(
-                preference: TemplatesMockData.userPreference,
-              ),
-            ],
-          ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    final preference = ref.watch(userPreferenceProvider).valueOrNull ??
+        const UserPreference(
+          totalPhotos: 0,
+          topCategory: '',
+          topCategoryPercentage: 0,
         );
-      },
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '你的拍摄偏好',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+                letterSpacing: -0.01 * 16,
+                height: 1.2,
+              ),
+            ),
+          ),
+          UserPreferenceCard(preference: preference),
+        ],
+      ),
     );
   }
 }
@@ -352,19 +382,19 @@ class _OtherSection extends ConsumerWidget {
     final tokens = ref.watch(appThemeProvider).tokens;
     final asyncDao = ref.watch(templatesDaoProvider);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0), // 40rpx 16rpx 40rpx 0 → 20 8 20 0
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(bottom: 8), // margin-bottom: 16rpx → 8dp
+            padding: const EdgeInsets.only(bottom: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
                   '更多模板',
                   style: TextStyle(
-                    fontSize: 16, // 32rpx → 16dp
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: tokens.textPrimary,
                     letterSpacing: -0.01 * 16,

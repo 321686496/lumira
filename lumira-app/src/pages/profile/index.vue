@@ -27,19 +27,19 @@
         <!-- 等级徽章 -->
         <view class="level-badge">
           <text class="ph ph-medal level-badge-icon"></text>
-          <text class="level-badge-text">Lv.12 入门学徒</text>
+          <text class="level-badge-text">Lv.{{ growthData.level }} {{ growthData.levelName }}</text>
         </view>
 
         <!-- 经验进度 -->
         <view class="xp-wrap">
           <view class="xp-head">
             <text class="xp-label">经验</text>
-            <text class="xp-value">1,280 / 2,000 XP</text>
+            <text class="xp-value">{{ growthData.currentXp }} / {{ growthData.nextLevelXp }} XP</text>
           </view>
           <view class="xp-track">
-            <view class="xp-fill" style="width: 64%;"></view>
+            <view class="xp-fill" :style="{ width: growthData.progressPercent + '%' }"></view>
           </view>
-          <text class="xp-tip">还差 720 XP 升级至进阶学徒</text>
+          <text class="xp-tip">还差 {{ growthData.remainingXp }} XP 升级</text>
         </view>
       </view>
 
@@ -47,28 +47,28 @@
       <view class="lumira-card stats-card fade-up fade-up-d1">
         <view class="stats-grid">
           <view class="stats-cell stats-cell-mid">
-            <text class="stats-num">128</text>
+            <text class="stats-num">{{ totalPhotos }}</text>
             <text class="stats-label">拍摄作品</text>
           </view>
           <view class="stats-cell stats-cell-mid">
-            <text class="stats-num">36</text>
+            <text class="stats-num">{{ usedTemplateCount }}</text>
             <text class="stats-label">使用模板</text>
           </view>
           <view class="stats-cell">
-            <text class="stats-num">12</text>
+            <text class="stats-num">{{ favoriteCount }}</text>
             <text class="stats-label">收藏</text>
           </view>
         </view>
       </view>
 
       <!-- 碎片收集 -->
-      <view class="lumira-card fragment-card fade-up fade-up-d2">
+      <view class="lumira-card fragment-card fade-up fade-up-d2" @click="goFragments">
         <view class="lumira-section-title">
           <view class="fragment-title-wrap">
             <text class="ph ph-puzzle-piece fragment-title-icon"></text>
             <text class="fragment-title">碎片收集</text>
           </view>
-          <text class="fragment-count">3/20 已集</text>
+          <text class="fragment-count">{{ fragmentCollected }}/{{ fragmentTotal }} 已集</text>
         </view>
         <view class="fragment-list">
           <view class="fragment-item" v-for="f in fragments" :key="f.name">
@@ -85,6 +85,10 @@
               <view class="lumira-progress-fill" :style="{ width: f.percent + '%' }"></view>
             </view>
           </view>
+        </view>
+        <view class="fragment-footer">
+          <text class="fragment-footer-text">查看全部 · 导出海报</text>
+          <text class="ph ph-caret-right fragment-footer-arrow"></text>
         </view>
       </view>
 
@@ -170,17 +174,69 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed } from 'vue'
 import FloatingTabBar from '@/components/FloatingTabBar.vue'
+import { useGrowth } from '@/composables/useGrowth'
+import { useSceneManager } from '@/composables/useSceneManager'
+import { SCENE_PRESETS } from '@/data/scenePresets'
+import type { SceneCategory } from '@/types/template'
 
-const fragments = ref([
-  { name: '人像', icon: 'ph-user', cur: 3, percent: 60 },
-  { name: '风光', icon: 'ph-mountain', cur: 2, percent: 40 },
-  { name: '美食', icon: 'ph-fork-knife', cur: 4, percent: 80 },
-  { name: '街拍', icon: 'ph-camera', cur: 1, percent: 20 }
-])
+const {
+  growthData,
+  totalPhotos,
+  usedTemplateCount,
+  favoriteCount,
+} = useGrowth()
+
+const { photos } = useSceneManager()
+
+/** 场景分类碎片定义 */
+const FRAGMENT_DEFS: { category: SceneCategory; name: string; icon: string }[] = [
+  { category: 'light', name: '光线', icon: 'ph-sun' },
+  { category: 'outdoor', name: '室外', icon: 'ph-mountains' },
+  { category: 'indoor', name: '室内', icon: 'ph-house' },
+  { category: 'mood', name: '情绪', icon: 'ph-heart' },
+]
+
+/** 每个分类下有多个场景，拍摄 5 张解锁该分类碎片 */
+const FRAGMENT_TARGET = 5
+
+/** 计算各分类碎片进度 */
+const fragments = computed(() => {
+  const sceneCategoryMap = new Map<string, SceneCategory>()
+  SCENE_PRESETS.forEach(s => {
+    sceneCategoryMap.set(s.id, s.category)
+  })
+
+  const counts: Record<string, number> = {}
+  photos.value.forEach(p => {
+    if (p.sceneId) {
+      const cat = sceneCategoryMap.get(p.sceneId)
+      if (cat) {
+        counts[cat] = (counts[cat] || 0) + 1
+      }
+    }
+  })
+
+  return FRAGMENT_DEFS.map(def => {
+    const cur = Math.min(counts[def.category] || 0, FRAGMENT_TARGET)
+    return {
+      name: def.name,
+      icon: def.icon,
+      cur,
+      percent: Math.round((cur / FRAGMENT_TARGET) * 100),
+    }
+  })
+})
+
+/** 已集齐的碎片数 */
+const fragmentCollected = computed(() => fragments.value.filter(f => f.cur >= FRAGMENT_TARGET).length)
+
+/** 总碎片数 */
+const fragmentTotal = FRAGMENT_DEFS.length
 
 const goPage = (url: string) => uni.navigateTo({ url })
+const goFragments = () => uni.navigateTo({ url: '/pages/profile/fragments' })
 </script>
 
 <style lang="scss" scoped>

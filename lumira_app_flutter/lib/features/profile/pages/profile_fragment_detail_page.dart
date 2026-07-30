@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +13,7 @@ import '../../../shared/widgets/images/adaptive_photo_grid.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/services/poster_generator.dart';
 import '../data/profile_mock_data.dart';
+import '../providers/fragments_providers.dart';
 import '../widgets/fragment_poster_generator.dart' show FragmentPosterContent;
 
 /// 碎片收集详情页
@@ -37,7 +40,8 @@ class _ProfileFragmentDetailPageState
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
-    const fragments = ProfileMockData.fragments;
+    final asyncFragments = ref.watch(fragmentsProvider);
+    final fragments = asyncFragments.valueOrNull ?? const <FragmentItem>[];
     final collected = fragments.fold<int>(0, (s, f) => s + f.current);
     final total = fragments.fold<int>(0, (s, f) => s + f.max);
 
@@ -105,7 +109,7 @@ class _ProfileFragmentDetailPageState
                 const SizedBox(height: 8),
                 FadeUp(
                   delay: Duration(milliseconds: 80 * (fragments.length + 1)),
-                  child: _RewardCard(tokens: tokens, allDone: collected >= total),
+                  child: _RewardCard(tokens: tokens, allDone: collected >= total && total > 0),
                 ),
               ],
             ),
@@ -233,14 +237,14 @@ class _FragmentDetailCard extends StatelessWidget {
 
   String get _howToEarn {
     switch (item.name) {
-      case '人像':
-        return '使用人像分类模板完成拍摄，每次获得 1 枚碎片';
-      case '风光':
-        return '使用风光分类模板完成拍摄，每次获得 1 枚碎片';
-      case '美食':
-        return '使用美食分类模板完成拍摄，每次获得 1 枚碎片';
-      case '街拍':
-        return '使用街拍分类模板完成拍摄，每次获得 1 枚碎片';
+      case '光线碎片':
+        return '在光线氛围类场景中拍摄，每次获得 1 枚碎片';
+      case '室外碎片':
+        return '在室外环境类场景中拍摄，每次获得 1 枚碎片';
+      case '室内碎片':
+        return '在室内空间类场景中拍摄，每次获得 1 枚碎片';
+      case '情绪碎片':
+        return '在情绪氛围类场景中拍摄，每次获得 1 枚碎片';
       default:
         return '完成对应分类拍摄挑战即可获得碎片';
     }
@@ -260,11 +264,26 @@ class _FragmentDetailCard extends StatelessWidget {
           itemCount: urls.length,
           itemBuilder: (_, i) => ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: Image.network(urls[i], fit: BoxFit.cover),
+            child: _buildGridImage(urls[i]),
           ),
         ),
       ),
     ));
+  }
+
+  Widget _buildGridImage(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(url, fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+                color: Colors.grey.shade300,
+                child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+              ));
+    }
+    return Image.file(File(url), fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+              color: Colors.grey.shade300,
+              child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+            ));
   }
 
   @override

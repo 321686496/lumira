@@ -11,6 +11,7 @@ import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/home_mock_data.dart';
+import '../data/home_providers.dart';
 import '../widgets/hero_card.dart';
 import '../widgets/home_banner.dart';
 import '../widgets/quick_actions.dart';
@@ -127,7 +128,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           // 仅保留 bottom（系统导航栏 inset）
           SafeArea(
             top: false,
-            bottom: true,
+            bottom: false,
             child: ListView(
               controller: _scrollController,
               padding: const EdgeInsets.only(bottom: 100), // 给 FloatingTabBar 留空间
@@ -199,24 +200,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   delay: const Duration(milliseconds: 400),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: GridView.count(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12, // 24rpx → 12dp
-                      crossAxisSpacing: 12,
-                      // Forced fix: SceneRecoCard 文字区需要 ~101dp（12+14+4+33+6+14+14）
-                      // + 图片 3:4 占 0.75w。设 w=152.7dp：
-                      //   0.50 → h=305.4dp，图 203.6 + 文字 101 = 304.6dp ✓
-                      //   0.60 → h=254.5dp，图 203.6 + 文字 101 = 304.6dp ✗ 溢出 50dp（原报错 49px）
-                      childAspectRatio: 0.50,
-                      children: HomeMockData.scenes
-                          .map((scene) => SceneRecoCard(
-                                scene: scene,
-                                onTap: () => _goSceneGuide(scene.id),
-                              ))
-                          .toList(),
-                    ),
+                    child: _SceneRecoGrid(onTap: _goSceneGuide),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -236,21 +220,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                 FadeUp(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: GridView.count(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 0.56,
-                      children: HomeMockData.recents
-                          .map((recent) => RecentShotCard(
-                                recent: recent,
-                                onTap: () => GoRouter.of(context)
-                                    .push(RouteNames.gallery),
-                              ))
-                          .toList(),
-                    ),
+                    child: _RecentShotsGrid(onTap: () => _goGallery(), onCapture: _goCapture),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -426,6 +396,184 @@ class _BackgroundDecoration extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 场景推荐网格（真实数据）
+///
+/// 数据来源：homeSceneRecosProvider（按用户拍摄数排序的场景列表）
+/// loading 时显示占位骨架，无数据时显示内置预设兜底
+class _SceneRecoGrid extends ConsumerWidget {
+  const _SceneRecoGrid({required this.onTap});
+
+  final void Function(String sceneId) onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final asyncScenes = ref.watch(homeSceneRecosProvider);
+
+    return asyncScenes.when(
+      loading: () => _buildSkeleton(),
+      error: (_, __) => _buildSkeleton(),
+      data: (scenes) {
+        if (scenes.isEmpty) return _buildSkeleton();
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.50,
+          children: scenes
+              .map((scene) => SceneRecoCard(
+                    scene: scene,
+                    onTap: () => onTap(scene.id),
+                  ))
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildSkeleton() {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 0.50,
+      children: HomeMockData.scenes
+          .map((scene) => SceneRecoCard(
+                scene: scene,
+                onTap: () => onTap(scene.id),
+              ))
+          .toList(),
+    );
+  }
+}
+
+/// 最近拍摄网格（真实数据）
+///
+/// 数据来源：homeRecentShotsProvider（来自 GalleryDao.getRecent）
+/// 无照片时显示空状态引导拍摄
+class _RecentShotsGrid extends ConsumerWidget {
+  const _RecentShotsGrid({required this.onTap, required this.onCapture});
+
+  final VoidCallback onTap;
+  final VoidCallback onCapture;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    final asyncRecents = ref.watch(homeRecentShotsProvider);
+
+    return asyncRecents.when(
+      loading: () => _buildSkeleton(),
+      error: (_, __) => _buildSkeleton(),
+      data: (recents) {
+        if (recents.isEmpty) {
+          return _buildEmpty(tokens);
+        }
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.56,
+          children: recents
+              .map((recent) => RecentShotCard(
+                    recent: recent,
+                    onTap: onTap,
+                  ))
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildSkeleton() {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 0.56,
+      children: HomeMockData.recents
+          .map((recent) => RecentShotCard(
+                recent: recent,
+                onTap: onTap,
+              ))
+          .toList(),
+    );
+  }
+
+  Widget _buildEmpty(ThemeTokens tokens) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.camera_alt_outlined,
+            size: 48,
+            color: tokens.textTertiary.withOpacity(0.4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '还没有作品',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: tokens.textSecondary,
+              fontFamily: 'Noto Serif SC',
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '点击下方拍摄按钮，记录你的第一张作品',
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.textTertiary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: onCapture,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              decoration: BoxDecoration(
+                color: tokens.brand,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.camera_alt_outlined, size: 16, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text(
+                    '开始拍摄',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

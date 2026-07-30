@@ -5,18 +5,25 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../data/home_mock_data.dart';
+import '../data/home_providers.dart';
 
 /// 连续打卡卡片
 ///
 /// 视觉规格来源：lumira-app/src/pages/home/index.vue line 68-90 + style line 484-569
 /// - streak-head: title (icon+text) + num (大数字+单位)
 /// - streak-week: 7 个圆点（done 实心+对号；today 虚线圆+日期数字）
+///
+/// 数据来源：homeStreakProvider（基于挑战历史记录真实计算）
 class StreakCard extends ConsumerWidget {
   const StreakCard({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
+    final asyncStreak = ref.watch(homeStreakProvider);
+
+    // 真实数据：loading/error 时用 empty 兜底（避免空白）
+    final streak = asyncStreak.valueOrNull ?? HomeStreakStatus.empty;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20), // 40rpx → 20dp
@@ -57,7 +64,7 @@ class StreakCard extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '${HomeMockData.streakDays}',
+                      '${streak.streakDays}',
                       style: TextStyle(
                         fontSize: 22, // 44rpx → 22dp
                         fontWeight: FontWeight.w700,
@@ -82,7 +89,7 @@ class StreakCard extends ConsumerWidget {
             // streak-week
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: HomeMockData.weekDays
+              children: streak.weekDays
                   .map((day) => _StreakDay(day: day, tokens: tokens))
                   .toList(),
             ),

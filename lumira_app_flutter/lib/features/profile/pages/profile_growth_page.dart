@@ -368,6 +368,7 @@ class _AchievementCell extends StatelessWidget {
         children: [
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Icon(
                 _iconForKey(item.iconKey),
@@ -377,6 +378,7 @@ class _AchievementCell extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 item.name,
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 11,
                   color: item.unlocked

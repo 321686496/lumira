@@ -109,6 +109,10 @@
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},
 		{
+			"path": "pages/profile/fragments",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
 			"path": "pages/profile/invite",
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},

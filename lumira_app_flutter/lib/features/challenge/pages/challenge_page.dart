@@ -107,14 +107,17 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
         showBackButton: false,
         horizontalPadding: 24,
         actions: [
-          IconButton(
-            icon: Icon(
-              Icons.assignment_outlined,
-              size: 20,
-              color: tokens.textPrimary,
+          GestureDetector(
+            onTap: () => GoRouter.of(context).push(RouteNames.challengeHistory),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Icon(
+                Icons.assignment_outlined,
+                size: 20,
+                color: tokens.textPrimary,
+              ),
             ),
-            onPressed: () {},
-            tooltip: '挑战记录',
           ),
         ],
       ),
@@ -213,7 +216,8 @@ class _FlipView extends StatelessWidget {
     final theme = Theme.of(context);
     return ListView(
       controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(20, 32, 20, 100),
+      // Forced fix: extendBodyBehindAppBar=true 需 top padding 占位避免被标题栏遮挡
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).viewPadding.top + 48, 20, 100),
       children: [
         FadeUp(
           child: Column(
@@ -327,7 +331,8 @@ class _RevealedView extends ConsumerWidget {
 
     return ListView(
       controller: scrollController,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+      // Forced fix: extendBodyBehindAppBar=true 需 top padding 占位避免被标题栏遮挡
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).viewPadding.top + 48, 20, 100),
       children: [
         // 1. 主挑战卡
         FadeUp(child: MainChallengeCard(challenge: mainChallenge)),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/growth_dao.dart';
 import '../data/growth_models.dart';
+import '../data/profile_mock_data.dart';
 
 final growthDaoProvider = FutureProvider<GrowthDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
@@ -43,3 +44,36 @@ String _levelName(int level) {
   if (level >= 2) return '进阶';
   return '新手';
 }
+
+/// 个人中心 UserProfile Provider
+/// 聚合 GrowthDao（等级/XP）+ GalleryDao（作品数/收藏数）+ TemplatesDao（模板数）
+/// 对照：lumira-app/src/pages/profile/index.vue 的 userProfile computed
+final userProfileProvider = FutureProvider<UserProfile>((ref) async {
+  final growth = await ref.watch(growthLevelProvider.future);
+  final galleryDao = await ref.watch(galleryDaoProvider.future);
+  final templatesDao = await ref.watch(templatesDaoProvider.future);
+
+  final photosCount = await galleryDao.count();
+  final favorites = await galleryDao.getFavorites();
+  final templatesCount = await templatesDao.count();
+
+  final maxXp = growth.level * 500;
+
+  return UserProfile(
+    name: '如画用户',
+    avatarSeed: 'lumira-user-001',
+    level: growth.level,
+    levelName: growth.levelName,
+    currentXp: growth.currentXp,
+    maxXp: maxXp,
+    photosCount: photosCount,
+    templatesCount: templatesCount,
+    collectionsCount: favorites.length,
+  );
+});
+
+/// 下一等级名称（用于 _HeroCard 底部「升级至 XX」文案）
+final nextLevelNameProvider = FutureProvider<String>((ref) async {
+  final growth = await ref.watch(growthLevelProvider.future);
+  return _levelName(growth.level + 1);
+});
