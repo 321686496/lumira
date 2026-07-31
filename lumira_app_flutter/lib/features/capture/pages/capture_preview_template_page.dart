@@ -1,4 +1,3 @@
-import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +9,8 @@ import '../../templates/data/preview_form_provider.dart';
 import '../../templates/data/templates_editor_mock_data.dart';
 import '../../templates/widgets/pose_silhouette.dart';
 import '../data/capture_preview_mock_data.dart';
+import '../services/camera_service.dart';
+import '../services/camera_service_provider.dart';
 import '../widgets/camera_preview.dart';
 
 /// 模板预览页（Task 2.9A）
@@ -50,11 +51,6 @@ class _CapturePreviewTemplatePageState
   bool _panelExpanded = false;
   bool _flashOn = false;
   bool _isDraggingSilhouette = false;
-
-  // Bug 12 修复：CameraState 引用，用于拍照按钮
-  // 由 CameraPreview 的 onCameraStateCreated 回调注入
-  // 在测试环境中为 null（cameraPreviewOverrideProvider 注入占位 widget）
-  CameraState? _cameraState;
 
   @override
   void initState() {
@@ -180,35 +176,27 @@ class _CapturePreviewTemplatePageState
 
   // ===== 拍照 =====
 
-  /// Bug 12 修复：预览页也支持拍照（与拍摄页一致）
-  /// 通过 CameraPreview 的 onCameraStateCreated 回调拿到 CameraState，
-  /// 点击拍照按钮时调用 takePhoto()，完成后将路径写入 lastPhotoPathProvider
-  void _onCapture() {
-    final state = _cameraState;
-    if (state == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('相机未就绪，请稍候')),
+  /// Bug 12 修复：预览页也支持拍照。
+  /// 通过 CameraService 抽象层调用 capture()，与拍摄页一致。
+  Future<void> _onCapture() async {
+    try {
+      await ref.read(cameraServiceProvider).capture(
+        config: CaptureConfig(
+          facing: 'back',
+          zoomMultiplier: 1.0,
+          flashMode: _flashOn ? CameraFlashMode.on : CameraFlashMode.off,
+        ),
       );
-      return;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已拍摄')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('拍摄失败：$e')),
+      );
     }
-    state.when(
-      onPhotoMode: (photoState) {
-        photoState.takePhoto();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已拍摄')),
-        );
-      },
-      onPreviewMode: (_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('相机未就绪，请稍候')),
-        );
-      },
-    );
-  }
-
-  /// 由 CameraPreview 的 onCameraStateCreated 回调调用，保存 CameraState 引用
-  void _onCameraStateCreated(CameraState state) {
-    _cameraState = state;
   }
 
   // ===== 格式化 =====
@@ -264,7 +252,6 @@ class _CapturePreviewTemplatePageState
                 formatEv: _formatEvDisplay,
                 formatWb: _formatWbDisplay,
                 onCapture: _onCapture,
-                onCameraStateCreated: _onCameraStateCreated,
               ),
             ),
             if (_template != null)
@@ -407,7 +394,6 @@ class _Viewfinder extends StatelessWidget {
     required this.formatEv,
     required this.formatWb,
     required this.onCapture,
-    required this.onCameraStateCreated,
   });
 
   final ThemeTokens tokens;
@@ -419,7 +405,6 @@ class _Viewfinder extends StatelessWidget {
   final String Function(double) formatEv;
   final String Function(int) formatWb;
   final VoidCallback onCapture;
-  final void Function(CameraState) onCameraStateCreated;
 
   @override
   Widget build(BuildContext context) {
@@ -447,9 +432,9 @@ class _Viewfinder extends StatelessWidget {
                       // Bug 12 修复：用真实 CameraPreview 替换 picsum 静态图
                       // CameraPreview 内部已包裹 ColorFiltered/CompositionOverlay/PoseSilhouette
                       // 通过 formOverride 参数应用 EditorForm 的滤镜/构图/剪影
+                      // 改造说明：移除 onCaptured/onCameraStateCreated 参数（CameraService 抽象层已封装），
+                      // 仅保留 formOverride。拍照由 _onCapture 通过 CameraService.capture() 实现。
                       CameraPreview(
-                        onCaptured: (_) {},
-                        onCameraStateCreated: onCameraStateCreated,
                         formOverride: tpl,
                       ),
                       // 可拖动剪影叠加层（独立于 CameraPreview 内部的不可拖动剪影）

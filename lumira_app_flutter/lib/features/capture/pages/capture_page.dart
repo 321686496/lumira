@@ -1,8 +1,6 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,17 +13,22 @@ import '../../home/providers/banner_recommendation_provider.dart';
 import '../../profile/providers/composition_kits_providers.dart';
 import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../data/capture_state.dart';
+import '../data/capture_thumbnail_state.dart';
 import '../domain/photo_template.dart';
-import '../services/photo_post_processor.dart';
+import '../services/camera_service.dart';
+import '../services/camera_service_provider.dart';
+import '../services/photo_pipeline.dart';
 import '../widgets/aspect_ratio_selector.dart';
 import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
 import '../widgets/camera_preview.dart';
+import '../widgets/capture_thumbnail.dart';
 import '../widgets/filter_picker.dart';
 import '../widgets/level_indicator.dart';
 import '../widgets/param_panel.dart';
 import '../widgets/param_pill_bar.dart';
 import '../widgets/scene_preset_strip.dart';
+import '../widgets/shutter_feedback.dart';
 import '../widgets/template_strip.dart';
 
 /// 拍摄页（Phase 2 MVP）
@@ -60,13 +63,14 @@ enum CameraPermissionStatus { unknown, granted, denied, permanentlyDenied }
 class _CapturePageState extends ConsumerState<CapturePage>
     with WidgetsBindingObserver {
   bool _isLandscape = false;
-  StreamSubscription<MediaCapture?>? _captureSub;
-  CameraState? _lastState;
   CameraPermissionStatus _permissionStatus = CameraPermissionStatus.unknown;
 
-  /// 拍照处理中标志：防止用户快速连续拍照导致文件并发写入冲突
-  /// （之前的"照片只有一半/空白"问题的次要原因之一）
-  bool _isProcessing = false;
+  /// quickProcess 窗口阻塞标志：仅在 quickProcess 主 Isolate 处理期间为 true，
+  /// 完成后立即恢复 false 以支持连拍。fullProcess 在后台 Isolate 执行，不阻塞。
+  bool _isQuickProcessing = false;
+
+  /// 白闪动画触发器：每次拍照时递增，ShutterFeedback widget 监听变化播放动画。
+  int _shutterTrigger = 0;
 
   /// 返回结果模式：当通过 ?mode=return 进入时，拍照完成后 pop 回上一页
   /// （用于实战作业页的"去拍摄"流程，捕获路径作为 String 返回）
@@ -101,13 +105,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
       final mode = GoRouterState.of(context).queryParams[RouteNames.paramMode];
       _returnResult = mode == 'return';
       _requestCameraPermission();
-
-      // 模板加载后，如果已有 CameraState，立即应用参数；
-      // 否则等 _onCameraStateCreated 触发时再应用
-      final state = ref.read(CaptureState.cameraStateProvider);
-      if (state != null) {
-        _applyTemplateCameraParams(state);
-      }
     });
   }
 
@@ -205,17 +202,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   @override
   void dispose() {
-    _captureSub?.cancel();
-    // 使用缓存的 container 引用清除 cameraStateProvider，
-    // 避免 ref.read 在 deactivated element 上查询 widget 树祖先
-    _container?.read(CaptureState.cameraStateProvider.notifier).state = null;
-    // 显式停止原生相机，防止退出后系统仍提示"正在使用取景器"。
-    // 仅依赖 widget 树异步 dispose 不可靠（HarmonyOS 上 CameraAwesomeBuilder
-    // 的 dispose 可能延迟或被跳过），导致下次进入时相机无法初始化。
-    // CamerawesomePlugin.stop() 是幂等的，重复调用无副作用。
-    // 使用 unawaited + catchError：stop() 返回 Future，测试环境中无平台通道
-    // 会异步抛 MissingPluginException，直接调用会导致未捕获的 Future 错误。
-    CamerawesomePlugin.stop().catchError((_) => false);
+    // 通过 CameraService 抽象层释放原生相机资源（替代 CamerawesomePlugin.stop）。
+    // 使用缓存的 container 引用，避免 ref.read 在 deactivated element 上查询 widget 树祖先。
+    // dispose() 返回 Future，测试环境中无平台通道会异步抛 MissingPluginException，
+    // 用 catchError 吞掉错误避免未捕获的 Future 异常。
+    final service = _container?.read(cameraServiceProvider);
+    service?.dispose().catchError((_) {});
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -234,16 +226,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      // App 从后台恢复时，原生相机已被释放并重新初始化（CameraAbilityLifecycle.ets），
-      // 但 Dart 侧的 AwesomeCameraPreview 仍持有旧的 textureId/previewSize，
-      // 且 _CameraWidgetBuilder.didChangeAppLifecycleState(resumed) 不做任何处理。
-      // 解决方案：递增 _cameraRebuildKey，通过 ValueKey 强制 CameraAwesomeBuilder
-      // 完全重建（旧实例 dispose → CamerawesomePlugin.stop()，新实例 init → setupCamera()），
+      // App 从后台恢复时，原生相机已被释放并重新初始化，
+      // 但 Dart 侧的 AwesomeCameraPreview 仍持有旧的 textureId/previewSize。
+      // 解决方案：递增 _cameraRebuildKey，通过 ValueKey 强制 CameraPreview
+      // （及其内部的 CameraAwesomeBuilder）完全重建，
       // 确保取景器获取新的 textureId 和 previewSize。
       debugPrint('[capture] App resumed, forcing camera re-initialization');
       setState(() {
         _cameraRebuildKey++;
-        _lastState = null;
       });
     }
   }
@@ -256,144 +246,100 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
-  /// 由 CameraPreview 回调：拿到 CameraState 后，订阅拍照结果流并同步闪光灯
-  void _onCameraStateCreated(CameraState state) {
-    if (_lastState == state) return;
-    _lastState = state;
-    ref.read(CaptureState.cameraStateProvider.notifier).state = state;
-    debugPrint('[capture] CameraState created, cameraStateProvider set');
-
-    _captureSub?.cancel();
-    _captureSub = state.captureState$.listen((media) async {
-      debugPrint('[capture] captureState\$ event: status=${media?.status}, path=${media?.filePath}');
-      if (media != null &&
-          media.status == MediaCaptureStatus.success &&
-          media.filePath.isNotEmpty) {
-        // 并发保护：如果上一次拍照还在处理中，跳过本次（防止文件并发写入冲突）
-        if (_isProcessing) {
-          debugPrint('[capture] 上一次拍照处理中，跳过本次');
-          return;
-        }
-        _isProcessing = true;
-        try {
-          await _processSingleFrame(media.filePath);
-        } finally {
-          _isProcessing = false;
-        }
-      }
-    });
-
-    final flashMode = ref.read(CaptureState.flashModeProvider);
-    state.sensorConfig.setFlashMode(_mapFlashMode(flashMode));
-
-    // 修复：前置摄像头默认开启镜像，让预览与用户预期一致（像照镜子）
-    // 拍照保存的照片也会同步镜像，避免"拍出来与预览水平翻转"的问题
-    final facing = ref.read(CaptureState.cameraFacingProvider);
-    final isFront = facing == 'front';
-    state.sensorConfig.setMirrorFrontCamera(isFront);
-    debugPrint('[capture] setMirrorFrontCamera($isFront)');
-
-    // 默认缩放为 1x（前摄和后摄都重置）
-    // 修复：直接调用 CamerawesomePlugin.setZoom(1.0)，原生期望真实倍数。
-    final range = CaptureState.zoomRangeForFacing(facing);
-    final normalized1x = CaptureState.zoomMultiplierToNormalized(
-        1.0, range.min, range.max);
-    try {
-      CamerawesomePlugin.setZoom(1.0);
-      ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
-      ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
-    } catch (_) {}
-
-    // 应用模板/自由模式的相机参数到 sensor（修复 Issue 7：
-    // 模板的 EV、闪光灯、白平衡等参数之前未应用到相机）
-    _applyTemplateCameraParams(state);
-  }
-
-  /// 应用模板/自由模式的相机参数到 sensor。
-  /// 在 _onCameraStateCreated 末尾、模板加载后、参数变化时调用。
-  void _applyTemplateCameraParams(CameraState state) {
-    final params = ref.read(CaptureState.effectiveCameraProvider);
-    debugPrint('[capture] 应用相机参数: EV=${params.exposureCompensation}, '
-        'WB=${params.whiteBalance}K=${params.whiteBalanceK}, '
-        'flash=${params.flashMode}, focus=${params.focusMode}');
-    try {
-      // EV [-3, +3] → brightness [0, 1]
-      final brightness = (params.exposureCompensation + 3.0) / 6.0;
-      state.sensorConfig.setBrightness(brightness.clamp(0.0, 1.0));
-    } catch (e) {
-      debugPrint('[capture] setBrightness 失败: $e');
-    }
-    try {
-      state.sensorConfig.setFlashMode(_mapFlashModeString(params.flashMode));
-    } catch (e) {
-      debugPrint('[capture] setFlashMode 失败: $e');
-    }
-    // 白平衡、ISO、快门速度等高级参数在 camerawesome 1.4.0 中 API 有限；
-    // 如果传感器支持会成功，否则静默忽略
-  }
-
-  FlashMode _mapFlashModeString(String mode) {
-    switch (mode) {
-      case 'off':
-        return FlashMode.none;
-      case 'on':
-        return FlashMode.always;
-      case 'auto':
-        return FlashMode.auto;
-      case 'torch':
-        return FlashMode.always;
-      default:
-        return FlashMode.none;
-    }
-  }
-
-  FlashMode _mapFlashMode(CaptureFlashMode mode) {
+  /// 将 CaptureState 的 CaptureFlashMode 映射为 CameraService 的 CameraFlashMode。
+  /// CameraService 实现内部会再映射到各平台 camerawesome 的 FlashMode 枚举。
+  CameraFlashMode _mapFlashMode(CaptureFlashMode mode) {
     switch (mode) {
       case CaptureFlashMode.off:
-        return FlashMode.none;
+        return CameraFlashMode.off;
       case CaptureFlashMode.on:
-        return FlashMode.always;
+        return CameraFlashMode.on;
       case CaptureFlashMode.auto:
-        return FlashMode.auto;
+        return CameraFlashMode.auto;
       case CaptureFlashMode.torch:
-        return FlashMode.always;
+        return CameraFlashMode.torch;
     }
   }
 
-  /// 拍照：通过 CameraState.when 调用 PhotoCameraState.takePhoto()
+  /// 拍照入口：双管线（quickProcess + fullProcess）+ 角标缩略图模式。
   ///
-  /// 单帧拍照流程：点击拍摄 → takePhoto → captureState$ 监听器中
-  /// 进行后期处理 → 保存到 DB → 导航到预览页。
+  /// 流程：
+  /// 1. 检查 `_isQuickProcessing`，true 则 return（防止 quickProcess 窗口并发）
+  /// 2. 读取 CameraService + 闪光灯/facing/zoom 状态快照
+  /// 3. 设置 `_isQuickProcessing = true`
+  /// 4. 立即反馈：`_shutterTrigger++` 触发白闪动画 + `startCapture()` 角标转 processing 态
+  /// 5. 调用 `cameraService.capture()` 获取原始 JPEG 路径
+  /// 6. 读取后处理参数快照（params/rawMode/aspectRatio/screenRatio/isPortrait）
+  /// 7. 调用 `photoPipelineProvider.quickProcess(...)` → 若成功，角标 setQuickResult
+  /// 8. `_isQuickProcessing = false`（恢复可拍，支持连拍）
+  /// 9. 调用 `_runFullProcess(...)`（不 await，后台 Isolate 执行）
   Future<void> _onCapture() async {
     debugPrint('[capture] _onCapture() called');
 
-    if (_isProcessing) {
-      debugPrint('[capture] 处理中，忽略拍照请求');
+    if (_isQuickProcessing) {
+      debugPrint('[capture] quickProcess 处理中，忽略拍照请求');
       return;
     }
 
-    final state = ref.read(CaptureState.cameraStateProvider);
-    if (state == null) {
-      debugPrint('[capture] cameraState is null — CameraAwesomeBuilder 未初始化');
-      if (!mounted) return;
-      LumiraToast.show(
-        context,
-        '相机正在初始化，请稍候...',
-        duration: const Duration(seconds: 1),
-      );
-      return;
-    }
+    final cameraService = ref.read(cameraServiceProvider);
+    final flashMode = ref.read(CaptureState.flashModeProvider);
+    final facing = ref.read(CaptureState.cameraFacingProvider);
+    final zoom = ref.read(CaptureState.zoomProvider);
+    final zoomRange = CaptureState.zoomRangeForFacing(facing);
+    final zoomMultiplier = CaptureState.normalizedToZoomMultiplier(
+        zoom, zoomRange.min, zoomRange.max);
 
-    _isProcessing = true;
-    debugPrint('[capture] cameraState OK, calling takePhoto()...');
+    // 在 await 之前读取 BuildContext 相关数据，避免 use_build_context_synchronously
+    final screenSize = MediaQuery.of(context).size;
+    final screenRatio = screenSize.width / screenSize.height;
+    final isPortrait = screenSize.height >= screenSize.width;
+
+    _isQuickProcessing = true;
+    // 立即反馈：白闪 + 角标 processing 态
+    setState(() => _shutterTrigger++);
+    ref.read(captureThumbnailProvider.notifier).startCapture();
+
     try {
-      await state.when(
-        onPhotoMode: (photoState) => photoState.takePhoto(),
+      final result = await cameraService.capture(
+        config: CaptureConfig(
+          facing: facing,
+          zoomMultiplier: zoomMultiplier,
+          flashMode: _mapFlashMode(flashMode),
+        ),
       );
-      debugPrint('[capture] takePhoto() completed (no exception)');
+
+      // quickProcess（主 Isolate，< 100ms）
+      final params = ref.read(CaptureState.effectivePostProcessProvider);
+      final rawMode = ref.read(CaptureState.rawModeProvider);
+      final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
+
+      final quick = await ref.read(photoPipelineProvider).quickProcess(
+            inputPath: result.filePath,
+            params: params,
+            aspectRatio: aspectRatio,
+            screenRatio: screenRatio,
+            isPortrait: isPortrait,
+            rawMode: rawMode,
+          );
+
+      if (quick != null) {
+        ref.read(captureThumbnailProvider.notifier).setQuickResult(quick.bytes);
+      }
+      // quickProcess 完成，恢复可拍（支持连拍）
+      _isQuickProcessing = false;
+
+      // fullProcess（后台 Isolate，不阻塞，不 await）
+      _runFullProcess(
+        inputPath: result.filePath,
+        params: params,
+        rawMode: rawMode,
+        aspectRatio: aspectRatio,
+        screenRatio: screenRatio,
+        isPortrait: isPortrait,
+      );
     } catch (e, st) {
-      debugPrint('[capture] takePhoto() exception: $e\n$st');
-      _isProcessing = false;
+      _isQuickProcessing = false;
+      debugPrint('[capture] capture failed: $e\n$st');
       if (!mounted) return;
       LumiraToast.show(
         context,
@@ -401,174 +347,144 @@ class _CapturePageState extends ConsumerState<CapturePage>
         duration: const Duration(seconds: 2),
       );
     }
-    // 注意：实际照片处理在 _captureSub 监听器中进行
   }
 
-  /// 处理单张照片：复制原图 → processFile → evict 缓存 → 保存到 DB → 导航
+  /// 后台完整处理管线（在 worker Isolate 中执行 image 包逐像素效果）。
   ///
-  /// [filePath] 相机拍摄的原始 JPEG 文件路径。处理完成后自动导航到预览页。
-  Future<void> _processSingleFrame(String filePath) async {
-    // 应用后期参数（滤镜、色彩、锐化等）和 aspectRatio 裁剪到照片文件
-    final params = ref.read(CaptureState.effectivePostProcessProvider);
-    final rawMode = ref.read(CaptureState.rawModeProvider);
-    final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
-    // 获取屏幕宽高比，用于 fullscreen 模式按取景器裁剪
-    final screenSize = MediaQuery.of(context).size;
-    final screenRatio = screenSize.width / screenSize.height;
-    final isPortrait = screenSize.height >= screenSize.width;
-    // 读取补光状态快照（fillLightEnabled=false 时为 null，processFile 会跳过）
+  /// 流程：
+  /// 1. 原图备份（File.copy 到 .original.jpg）供非破坏性编辑使用
+  /// 2. 调用 `photoPipelineProvider.fullProcess(...)`（Isolate 执行）
+  /// 3. evict FileImage 缓存（防止旧解码图残留）
+  /// 4. 落库（GalleryItemRecord → dao.insert → invalidate providers）
+  /// 5. `captureThumbnailProvider.notifier.setFinalResult` 角标 swap 最终图
+  /// 6. 更新 `lastPhotoPathProvider`
+  /// 7. catch：降级提示"图像增强失败，已保存基础图"
+  Future<void> _runFullProcess({
+    required String inputPath,
+    required PostProcess params,
+    required bool rawMode,
+    required String aspectRatio,
+    required double screenRatio,
+    required bool isPortrait,
+  }) async {
     final fillLight = ref.read(CaptureState.fillLightStateProvider);
-    debugPrint('[capture] 当前 aspectRatio=$aspectRatio, '
-        'screenRatio=$screenRatio, isPortrait=$isPortrait, '
-        'rawMode=$rawMode, fillLight=${fillLight != null}');
+
     // [非破坏性编辑] 复制原始文件，供后续编辑时重新处理
-    // 复制到 <filePath>.original.jpg，与处理后的文件并存
+    // 复制到 <inputPath>.original.jpg，与处理后的文件并存
     // 失败不阻塞拍摄流程（originalPath 为 null 时预览页降级为只读）
     String? originalPath;
     try {
-      originalPath = '$filePath.original.jpg';
-      await File(filePath).copy(originalPath);
+      originalPath = '$inputPath.original.jpg';
+      await File(inputPath).copy(originalPath);
       debugPrint('[capture] 原图已保留: $originalPath');
     } catch (e) {
       debugPrint('[capture] 原图保留失败（不阻塞）: $e');
       originalPath = null;
     }
-    final processedPath = await PhotoPostProcessor.processFile(
-      inputPath: filePath,
-      params: params,
-      rawMode: rawMode,
-      aspectRatio: aspectRatio,
-      screenRatio: screenRatio,
-      isPortrait: isPortrait,
-      fillLight: fillLight,
-    );
 
-    // 修复 Bug：拍照后预览页/相册显示带黑边、比例错，多次进入后才变对。
-    //
-    // 根因：原代码在 processFile 之前就把 media.filePath 写入
-    // lastPhotoPathProvider，拍摄按钮缩略图的 Image.file 立即读取了
-    // 4:3 传感器原图并缓存到 FileImage。processFile 完成后文件被覆盖为
-    // 目标比例（如 9:16），但 OHOS 文件系统 stat 缓存延迟可能导致
-    // FileImage 误判 cache hit，预览页和首次进入相册都拿到 4:3 解码图，
-    // 在 9:16 容器内 contain 显示 → 上下黑边。多次进出后 imageCache LRU
-    // 驱逐该条目，重新解码读到目标比例字节 → 显示正确。
-    //
-    // 修复：
-    // 1. 延后设置 lastPhotoPathProvider 到 processFile 完成之后，
-    //    确保缩略图第一次访问就是目标比例的字节。
-    // 2. processFile 完成后主动 evict FileImage 缓存，清除任何可能在
-    //    processFile 期间被其他 widget（如取景器残留帧）缓存的旧解码图。
-    //    FileImage 的 key 是 (path, mtime, size)，writeAsBytes 后 mtime
-    //    和 size 都变了，理论上应该 cache miss，evict 是双保险。
     try {
-      PaintingBinding.instance.imageCache
-          .evict(FileImage(File(processedPath)));
-    } catch (e) {
-      debugPrint('[capture] evict FileImage 缓存失败: $e');
-    }
+      final result = await ref.read(photoPipelineProvider).fullProcess(
+            inputPath: inputPath,
+            params: params,
+            aspectRatio: aspectRatio,
+            screenRatio: screenRatio,
+            isPortrait: isPortrait,
+            rawMode: rawMode,
+            fillLight: fillLight,
+          );
 
-    // processFile 完成后再设置缩略图路径，确保缩略图显示的是处理后的照片
-    ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
-        processedPath;
-
-    // 自动保存到应用相册（数据库），用户在预览页可决定是否另存到系统相册
-    // 修复 Issue 4：原方案仅在用户点击预览页"保存"时写入 DB，
-    // 若用户返回则照片成为孤儿（文件存在但无 DB 记录）。此处捕获后立即落库。
-    final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
-    try {
-      final dao = await ref.read(galleryDaoProvider.future);
-      final templateId = ref.read(CaptureState.currentTemplateIdProvider);
-      final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
-      final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
-      final lut = postProcess.lut;
-      final record = GalleryItemRecord(
-        id: photoId,
-        filePath: processedPath,
-        originalPath: originalPath,
-        postProcess: params,
-        dataUrl: null,
-        sceneId: sceneId,
-        templateId: templateId,
-        kitId: null,
-        mood: null,
-        lut: (lut == 'none' || lut.isEmpty) ? null : lut,
-        createdAt: DateTime.now().millisecondsSinceEpoch,
-      );
-      await dao.insert(record);
-      ref.invalidate(galleryDaoProvider);
-      // Forced fix: 让首页 banner 推荐失效，下次进入首页刷新（基于最新拍摄历史）
-      ref.invalidate(bannerRecommendationProvider);
-      debugPrint('[capture] 自动保存到应用相册: ${record.id}');
-
-      // 套件使用次数 +1（仅在套用 kit 进入时）
-      if (_activeKitId != null) {
-        try {
-          final kitsDao =
-              await ref.read(compositionKitsDaoProvider.future);
-          await kitsDao.incrementUsage(_activeKitId!);
-          ref.invalidate(compositionKitsProvider);
-        } catch (e) {
-          debugPrint('[capture] 套件 usage 计数失败: $e');
-        }
+      // evict FileImage 缓存，防止 fullProcess 写入新字节后旧解码图残留
+      try {
+        PaintingBinding.instance.imageCache
+            .evict(FileImage(File(result.filePath)));
+      } catch (e) {
+        debugPrint('[capture] evict FileImage 缓存失败: $e');
       }
-    } catch (e) {
-      debugPrint('[capture] 自动保存失败: $e');
-    }
 
-    // 拍照成功后自动导航到预览页
-    if (!mounted) return;
-    if (_returnResult) {
-      context.pop(processedPath);
-    } else {
-      GoRouter.of(context).push(
-        '${RouteNames.capturePreview}'
-        '?photoUrl=${Uri.encodeComponent(processedPath)}'
-        '&photoId=$photoId'
-        '&aspectRatio=${Uri.encodeComponent(aspectRatio)}',
-      );
+      // 落库（修复 Issue 4：拍照后立即写入 DB，避免孤儿文件）
+      final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+      try {
+        final dao = await ref.read(galleryDaoProvider.future);
+        final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+        final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
+        final lut = params.lut;
+        final record = GalleryItemRecord(
+          id: photoId,
+          filePath: result.filePath,
+          originalPath: originalPath,
+          postProcess: params,
+          dataUrl: null,
+          sceneId: sceneId,
+          templateId: templateId,
+          kitId: null,
+          mood: null,
+          lut: (lut == 'none' || lut.isEmpty) ? null : lut,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+        );
+        await dao.insert(record);
+        ref.invalidate(galleryDaoProvider);
+        // 让首页 banner 推荐失效，下次进入首页刷新（基于最新拍摄历史）
+        ref.invalidate(bannerRecommendationProvider);
+        debugPrint('[capture] 自动保存到应用相册: ${record.id}');
+
+        // 套件使用次数 +1（仅在套用 kit 进入时）
+        if (_activeKitId != null) {
+          try {
+            final kitsDao =
+                await ref.read(compositionKitsDaoProvider.future);
+            await kitsDao.incrementUsage(_activeKitId!);
+            ref.invalidate(compositionKitsProvider);
+          } catch (e) {
+            debugPrint('[capture] 套件 usage 计数失败: $e');
+          }
+        }
+      } catch (e) {
+        debugPrint('[capture] 落库失败: $e');
+      }
+
+      // 角标 swap 最终图 + 更新 lastPhotoPathProvider
+      if (mounted) {
+        ref
+            .read(captureThumbnailProvider.notifier)
+            .setFinalResult(result.filePath, photoId);
+        ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
+            result.filePath;
+      }
+    } catch (e, st) {
+      debugPrint('[capture] fullProcess failed: $e\n$st');
+      // 降级：角标保持 preview 态，Toast 提示
+      if (mounted) {
+        LumiraToast.show(
+          context,
+          '图像增强失败，已保存基础图',
+          duration: const Duration(seconds: 2),
+        );
+      }
     }
   }
 
-  void _onCaptured(String path) {
-    ref.read(CaptureState.lastPhotoPathProvider.notifier).state = path;
-  }
-
-  /// 切换摄像头：同步更新 provider 与相机引擎
+  /// 切换摄像头：仅切换 `cameraFacingProvider` 状态。
+  /// CameraPreview widget 会 watch 此 provider 并通过 CameraService 重建预览，
+  /// onReady 回调中重新应用闪光灯/缩放/镜像等参数。
   void _switchCamera() {
     final current = ref.read(CaptureState.cameraFacingProvider);
     final next = current == 'back' ? 'front' : 'back';
     ref.read(CaptureState.cameraFacingProvider.notifier).state = next;
 
-    final state = ref.read(CaptureState.cameraStateProvider);
-    if (state != null) {
-      state.switchCameraSensor(
-        flash: _mapFlashMode(ref.read(CaptureState.flashModeProvider)),
-      );
-      // 切换后同步镜像设置：前置开启，后置关闭
-      final isFront = next == 'front';
-      state.sensorConfig.setMirrorFrontCamera(isFront);
-      debugPrint('[capture] switchCamera: setMirrorFrontCamera($isFront)');
-      // 切换摄像头后将缩放重置为 1x（新摄像头可能不支持当前倍数）
-      // 修复：直接调用 CamerawesomePlugin.setZoom(1.0)，原生期望真实倍数。
-      final range = CaptureState.zoomRangeForFacing(next);
-      final normalized1x = CaptureState.zoomMultiplierToNormalized(
-          1.0, range.min, range.max);
-      ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
-      ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
-      try {
-        CamerawesomePlugin.setZoom(1.0);
-      } catch (_) {}
-    }
+    // 切换摄像头后将缩放重置为 1x（新摄像头可能不支持当前倍数）
+    final range = CaptureState.zoomRangeForFacing(next);
+    final normalized1x = CaptureState.zoomMultiplierToNormalized(
+        1.0, range.min, range.max);
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
+    ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
   }
 
   /// 缩放：以"倍数"为单位（前摄 [0.5, 2.0]，后摄 [0.3, 10.0]）。
-  /// 默认 1x。通过 sensorConfig.setZoom 调用系统相机能力。
+  /// 默认 1x。通过 CameraService.setZoom 下发到原生相机。
   ///
-  /// 修复：HarmonyOS 原生 `session.setZoomRatio(zoom)` 期望"真实倍数"
-  /// （1.0 = 1x，2.0 = 2x，0.5 = 0.5x），而 Flutter 侧 `SensorConfig.setZoom`
-  /// 强制把入参归一化到 [0, 1]，导致 0.5–1.5x 区间被原生 clamp 到 1.0x 无变化。
-  /// 这里直接调用 `CamerawesomePlugin.setZoom(multiplier)`，绕过 SensorConfig 的归一化校验，
-  /// 把用户选择的倍数原样下发到原生相机。
+  /// CameraService 实现内部按平台差异处理：
+  /// - OHOS：直接传真实倍数（CamerawesomePlugin.setZoom）
+  /// - iOS/Android：归一化到 [0,1]（SensorConfig.setZoom）
   void _onZoomChanged(double multiplier) {
     final facing = ref.read(CaptureState.cameraFacingProvider);
     final range = CaptureState.zoomRangeForFacing(facing);
@@ -580,23 +496,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
     ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized;
     ref.read(CaptureState.zoomProvider.notifier).state = normalized;
 
-    // 直接把"真实倍数"传给原生相机（1.0=1x，2.0=2x，0.5=0.5x）
-    // 不走 sensorConfig.setZoom，因为它会 throw >1 的值并归一化。
-    try {
-      CamerawesomePlugin.setZoom(clamped);
-    } catch (e) {
-      debugPrint('[capture] CamerawesomePlugin.setZoom($clamped) 失败: $e');
-    }
+    // 通过 CameraService 抽象层下发到原生相机
+    ref.read(cameraServiceProvider).setZoom(clamped);
   }
 
   @override
   Widget build(BuildContext context) {
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
 
-    // 监听闪光灯模式变化，同步到相机引擎
+    // 监听闪光灯模式变化，通过 CameraService 同步到相机引擎
     ref.listen<CaptureFlashMode>(CaptureState.flashModeProvider, (prev, next) {
-      final state = ref.read(CaptureState.cameraStateProvider);
-      state?.sensorConfig.setFlashMode(_mapFlashMode(next));
+      ref.read(cameraServiceProvider).setFlashMode(_mapFlashMode(next));
     });
 
     // 模板切换时同步 aspectRatioProvider 为模板的 cropRatio
@@ -617,29 +527,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
     });
 
-    // 监听相机参数变化，同步 EV 到 brightness（camerawesome 1.4.0 仅支持 brightness）
-    // EV 范围 [-3, +3] 映射到 brightness [0, 1]，0 EV → 0.5 brightness
-    ref.listen<CameraParams>(CaptureState.effectiveCameraProvider, (prev, next) {
-      if (prev == next) return;
-      final state = ref.read(CaptureState.cameraStateProvider);
-      if (state == null) return;
-      if (prev?.exposureCompensation != next.exposureCompensation) {
-        // EV [-3, +3] → brightness [0, 1]：EV 0 = 0.5, EV +3 = 1.0, EV -3 = 0.0
-        final brightness = (next.exposureCompensation + 3.0) / 6.0;
-        try {
-          state.sensorConfig.setBrightness(brightness.clamp(0.0, 1.0));
-        } catch (_) {
-          // 某些设备可能不支持 brightness 调节
-        }
-      }
-      if (prev?.flashMode != next.flashMode) {
-        try {
-          state.sensorConfig.setFlashMode(_mapFlashModeString(next.flashMode));
-        } catch (_) {
-          // 某些设备/状态可能不支持闪光灯切换
-        }
-      }
-    });
+    // 注：原 effectiveCameraProvider 监听器（EV→brightness、flashMode 同步）已移除。
+    // CameraService 抽象接口当前未暴露 setBrightness，EV 调整的实时预览
+    // 依赖 camera_preview.dart 的 onReady 回调在相机重建时应用初始值。
+    // 闪光灯模式变化已由上方 flashModeProvider 监听器通过 CameraService.setFlashMode 处理。
 
     // 权限未授予时显示权限引导 UI
     if (_permissionStatus == CameraPermissionStatus.unknown ||
@@ -676,8 +567,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           // 强制 CameraPreview（及其内部的 CameraAwesomeBuilder）完全重建
           _ViewfinderArea(
             rebuildKey: _cameraRebuildKey,
-            onCaptured: _onCaptured,
-            onCameraStateCreated: _onCameraStateCreated,
+            onZoomChanged: _onZoomChanged,
           ),
 
           // 1.5 补光叠层（仅在取景器上方、ParamPillBar 之下）
@@ -731,19 +621,33 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
           // 7. 水平仪（使用 Positioned，必须在 Stack 内）
           const LevelIndicator(),
+
+          // 8. 快门白闪反馈 overlay（最顶层，IgnorePointer 不拦截手势）
+          Positioned.fill(
+            child: ShutterFeedback(trigger: _shutterTrigger),
+          ),
         ],
       ),
     );
   }
 
-  /// 修复 Bug 1：缩略图跳转，使用正确的参数名
-  /// 路由配置 router.dart 读取 'photoUrl'，所以这里传 photoUrl
-  void _onThumbnailTap(String path) {
+  /// 角标缩略图点击跳预览页。
+  /// 从 `captureThumbnailProvider` 读取最终图路径和 photoId，
+  /// 仅在 fullProcess 完成（finalPath/photoId 非 null）时响应。
+  void _onThumbnailTap() {
+    final state = ref.read(captureThumbnailProvider);
+    final path = state.finalPath;
+    final photoId = state.photoId;
+    if (path == null || photoId == null) return;
+    final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
     if (_returnResult) {
       context.pop(path);
     } else {
       GoRouter.of(context).push(
-        '${RouteNames.capturePreview}?photoUrl=${Uri.encodeComponent(path)}',
+        '${RouteNames.capturePreview}'
+        '?photoUrl=${Uri.encodeComponent(path)}'
+        '&photoId=$photoId'
+        '&aspectRatio=${Uri.encodeComponent(aspectRatio)}',
       );
     }
   }
@@ -764,13 +668,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
 class _ViewfinderArea extends ConsumerWidget {
   const _ViewfinderArea({
     required this.rebuildKey,
-    required this.onCaptured,
-    required this.onCameraStateCreated,
+    required this.onZoomChanged,
   });
 
   final int rebuildKey;
-  final void Function(String path) onCaptured;
-  final void Function(CameraState state)? onCameraStateCreated;
+  final ValueChanged<double>? onZoomChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -794,8 +696,7 @@ class _ViewfinderArea extends ConsumerWidget {
             // 相机流铺满全屏（所有模式都一样），与 iPhone 系统相机 4:3 模式一致
             CameraPreview(
               key: ValueKey('camera_preview_$rebuildKey'),
-              onCaptured: onCaptured,
-              onCameraStateCreated: onCameraStateCreated,
+              onZoomChanged: onZoomChanged,
               previewFit: CameraPreviewFit.cover,
             ),
             // 非 fullscreen 模式叠加裁剪辅助线，指示实际裁剪区域
@@ -895,7 +796,7 @@ class _BottomControlArea extends StatelessWidget {
   final ValueChanged<double> onZoomChanged;
   final VoidCallback onCapture;
   final VoidCallback onSwitchCamera;
-  final void Function(String path) onThumbnailTap;
+  final VoidCallback onThumbnailTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1605,7 +1506,7 @@ class _ZoomSlider extends ConsumerWidget {
   }
 }
 
-/// 拍摄按钮行：缩略图 + 拍摄按钮 + 翻转摄像头
+/// 拍摄按钮行：角标缩略图 + 拍摄按钮 + 翻转摄像头
 class _CaptureButtonRow extends ConsumerWidget {
   const _CaptureButtonRow({
     required this.onCapture,
@@ -1615,53 +1516,17 @@ class _CaptureButtonRow extends ConsumerWidget {
 
   final VoidCallback onCapture;
   final VoidCallback onSwitchCamera;
-  final void Function(String path) onThumbnailTap;
+  final VoidCallback onThumbnailTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final lastPhotoPath = ref.watch(CaptureState.lastPhotoPathProvider);
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          // 缩略图（左）
-          GestureDetector(
-            onTap: lastPhotoPath != null
-                ? () => onThumbnailTap(lastPhotoPath)
-                : null,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1.5,
-                ),
-              ),
-              child: lastPhotoPath != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(6.75),
-                      child: Image.file(
-                        File(lastPhotoPath),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.photo,
-                          color: Colors.white54,
-                          size: 24,
-                        ),
-                      ),
-                    )
-                  : const Icon(
-                      Icons.photo_camera,
-                      color: Colors.white54,
-                      size: 24,
-                    ),
-            ),
-          ),
+          // 角标缩略图（左）：四态状态机驱动（idle/processing/preview/final）
+          CaptureThumbnail(onTap: onThumbnailTap),
           // 拍摄按钮（中）
           CaptureButton(onTap: onCapture),
           // 翻转摄像头（右）
