@@ -1,6 +1,10 @@
 // lib/features/capture/domain/photo_template.dart
 import 'package:flutter/foundation.dart';
 
+/// 内部哨兵常量，用于区分 copyWith 中"未传入参数"与"显式传入 null"。
+/// 解决 `systemFilter ?? this.systemFilter` 无法将 nullable 字段清空的问题。
+const _unset = Object();
+
 class PhotoTemplate {
   final TemplateMeta meta;
   final Composition composition;
@@ -470,6 +474,9 @@ class PostProcess {
     this.systemFilter,
   });
 
+  /// copyWith 的 systemFilter 参数使用 [_unset] 哨兵区分两种情况：
+  /// - 未传入（使用 `_unset`）→ 保留原值
+  /// - 显式传入 null → 清空为 null（用于"原图"按钮）
   PostProcess copyWith({
     String? cropRatio,
     PostProcessColor? color,
@@ -478,7 +485,7 @@ class PostProcess {
     int? vignette,
     int? grain,
     String? lut,
-    String? systemFilter,
+    Object? systemFilter = _unset,
   }) =>
       PostProcess(
         cropRatio: cropRatio ?? this.cropRatio,
@@ -488,7 +495,9 @@ class PostProcess {
         vignette: vignette ?? this.vignette,
         grain: grain ?? this.grain,
         lut: lut ?? this.lut,
-        systemFilter: systemFilter ?? this.systemFilter,
+        systemFilter: identical(systemFilter, _unset)
+            ? this.systemFilter
+            : systemFilter as String?,
       );
 
   @override

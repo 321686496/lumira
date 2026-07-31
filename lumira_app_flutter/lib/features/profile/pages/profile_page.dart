@@ -79,7 +79,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
       appBar: LumiraNav(
-        title: '我的',
+        leading: const NavPageTitle(title: '我的'),
         centerTitle: false,
         transparent: true,
         scrolled: _scrolled,
@@ -108,7 +108,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               bottom: false,
               child: SingleChildScrollView(
                 controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
+                // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
+                // 用 viewPadding.top（不被 widget 消费）+ nav 内容高度 48dp 精确占位
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  MediaQuery.of(context).viewPadding.top + 48,
+                  24,
+                  100,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

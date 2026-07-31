@@ -84,6 +84,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 确保原生相机被重新初始化（修复取景器一直转圈的问题）。
   int _cameraRebuildKey = 0;
 
+  /// 取景器原始帧捕获 key：包裹 CameraPreview 的原始相机流（ColorFiltered 之前），
+  /// FilterPicker 抽屉展开时通过此 key 调用 `boundary.toImage()` 捕获当前帧，
+  /// 在滤镜卡片中套用各滤镜的 ColorFilter 显示实时效果预览。
+  final GlobalKey _viewfinderCaptureKey = GlobalKey();
+
   /// 缓存的 ProviderContainer 引用。
   /// 在 dispose() 中调用 ref.read 会触发 ProviderScope.containerOf(this)，
   /// 它通过 getElementForInheritedWidgetOfExactType 查询 widget 树祖先；
@@ -568,6 +573,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           _ViewfinderArea(
             rebuildKey: _cameraRebuildKey,
             onZoomChanged: _onZoomChanged,
+            rawCaptureKey: _viewfinderCaptureKey,
           ),
 
           // 1.5 补光叠层（仅在取景器上方、ParamPillBar 之下）
@@ -610,16 +616,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
               onCapture: _onCapture,
               onSwitchCamera: _switchCamera,
               onThumbnailTap: _onThumbnailTap,
+              rawCaptureKey: _viewfinderCaptureKey,
             ),
           ),
 
           // 5. 参数面板（底部滑入，使用 AnimatedPositioned，必须在 Stack 内）
           const ParamPanel(),
 
-          // 6. 滤镜选择器（不可见触发器，showModalBottomSheet）
-          const FilterPicker(),
-
-          // 7. 水平仪（使用 Positioned，必须在 Stack 内）
+          // 6. 水平仪（使用 Positioned，必须在 Stack 内）
           const LevelIndicator(),
 
           // 8. 快门白闪反馈 overlay（最顶层，IgnorePointer 不拦截手势）
@@ -669,10 +673,12 @@ class _ViewfinderArea extends ConsumerWidget {
   const _ViewfinderArea({
     required this.rebuildKey,
     required this.onZoomChanged,
+    this.rawCaptureKey,
   });
 
   final int rebuildKey;
   final ValueChanged<double>? onZoomChanged;
+  final GlobalKey? rawCaptureKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -698,6 +704,7 @@ class _ViewfinderArea extends ConsumerWidget {
               key: ValueKey('camera_preview_$rebuildKey'),
               onZoomChanged: onZoomChanged,
               previewFit: CameraPreviewFit.cover,
+              rawCaptureKey: rawCaptureKey,
             ),
             // 非 fullscreen 模式叠加裁剪辅助线，指示实际裁剪区域
             if (!isFullscreen)
@@ -790,6 +797,7 @@ class _BottomControlArea extends StatelessWidget {
     required this.onCapture,
     required this.onSwitchCamera,
     required this.onThumbnailTap,
+    this.rawCaptureKey,
   });
 
   final bool isFullscreen;
@@ -797,6 +805,7 @@ class _BottomControlArea extends StatelessWidget {
   final VoidCallback onCapture;
   final VoidCallback onSwitchCamera;
   final VoidCallback onThumbnailTap;
+  final GlobalKey? rawCaptureKey;
 
   @override
   Widget build(BuildContext context) {
@@ -822,7 +831,7 @@ class _BottomControlArea extends StatelessWidget {
             // 工具栏 + 抽屉（全屏模式下隐藏）
             if (!isFullscreen) ...[
               const _CaptureToolbar(),
-              const _AnimatedToolDrawer(),
+              _AnimatedToolDrawer(rawCaptureKey: rawCaptureKey),
             ],
 
             // 拍摄按钮行（始终显示，确保全屏下也能拍照）
@@ -849,6 +858,7 @@ class _CaptureToolbar extends ConsumerWidget {
     _ToolDef('templates', Icons.dashboard_outlined, Icons.dashboard, '模板'),
     _ToolDef('scenes', Icons.palette_outlined, Icons.palette, '场景'),
     _ToolDef('params', Icons.tune, Icons.tune, '参数'),
+    _ToolDef('filter', Icons.filter_alt_outlined, Icons.filter_alt, '滤镜'),
     _ToolDef('fillLight', Icons.lightbulb_outline, Icons.lightbulb, '补光'),
   ];
 
@@ -951,7 +961,9 @@ class _ToolButton extends StatelessWidget {
 /// 工具栏下方的抽屉：根据 activeToolProvider 渲染对应内容
 /// 高度根据内容自适应（child 自然撑开），收起时高度 0（AnimatedSize 动画）
 class _AnimatedToolDrawer extends ConsumerWidget {
-  const _AnimatedToolDrawer();
+  const _AnimatedToolDrawer({this.rawCaptureKey});
+
+  final GlobalKey? rawCaptureKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -984,6 +996,8 @@ class _AnimatedToolDrawer extends ConsumerWidget {
         return const ScenePresetStrip();
       case 'params':
         return _buildParamsHint(ref);
+      case 'filter':
+        return FilterPicker(rawCaptureKey: rawCaptureKey);
       case 'fillLight':
         return const _FillLightPanel();
       default:

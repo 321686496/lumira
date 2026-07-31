@@ -321,3 +321,32 @@ class LumiraNavButton extends ConsumerWidget {
     );
   }
 }
+
+/// Tab 页顶部导航标题
+///
+/// 参考首页 [HomeBrandTitle] 的艺术排版，但不带 logo 符号标。
+/// 使用 Noto Serif SC 衬线字体 + letter-spacing，与首页品牌标题的中文排版
+/// （如画）保持视觉一致，用于挑战/发现/我的等 tab 页的 LumiraNav.leading。
+class NavPageTitle extends ConsumerWidget {
+  const NavPageTitle({super.key, required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 20, // 与 HomeBrandTitle 的 Lumira 英文同尺寸
+        fontWeight: FontWeight.w600,
+        color: tokens.textPrimary,
+        letterSpacing: 0.04 * 20, // 与 HomeBrandTitle 中文 letter-spacing 一致
+        height: 1.2,
+        fontFamily: 'Noto Serif SC',
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+}

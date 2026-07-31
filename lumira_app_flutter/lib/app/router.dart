@@ -15,6 +15,7 @@ import '../features/challenge/pages/challenge_history_page.dart';
 import '../features/challenge/pages/challenge_page.dart';
 import '../features/gallery/pages/gallery_detail_page.dart';
 import '../features/gallery/pages/gallery_diary_page.dart';
+import '../features/gallery/pages/gallery_edit_page.dart';
 import '../features/gallery/pages/gallery_monthly_digest_page.dart';
 import '../features/gallery/pages/gallery_page.dart';
 import '../features/gallery/pages/gallery_stats_page.dart';
@@ -229,6 +230,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final photoId = state.queryParams[RouteNames.paramPhotoId];
           return GalleryDetailPage(photoId: photoId);
+        },
+      ),
+      GoRoute(
+        path: RouteNames.galleryEdit,
+        name: 'galleryEdit',
+        builder: (context, state) {
+          final photoId = state.queryParams[RouteNames.paramPhotoId];
+          return GalleryEditPage(photoId: photoId);
         },
       ),
       GoRoute(

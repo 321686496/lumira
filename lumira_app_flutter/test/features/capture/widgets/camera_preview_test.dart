@@ -25,7 +25,7 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: const MaterialApp(
-            home: Scaffold(body: CameraPreview(onCaptured: _noop)),
+            home: Scaffold(body: CameraPreview()),
           ),
         ),
       );
@@ -48,7 +48,7 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: const MaterialApp(
-            home: Scaffold(body: CameraPreview(onCaptured: _noop)),
+            home: Scaffold(body: CameraPreview()),
           ),
         ),
       );
@@ -69,7 +69,7 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: const MaterialApp(
-            home: Scaffold(body: CameraPreview(onCaptured: _noop)),
+            home: Scaffold(body: CameraPreview()),
           ),
         ),
       );
@@ -91,7 +91,7 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: const MaterialApp(
-            home: Scaffold(body: CameraPreview(onCaptured: _noop)),
+            home: Scaffold(body: CameraPreview()),
           ),
         ),
       );
@@ -112,7 +112,7 @@ void main() {
         UncontrolledProviderScope(
           container: container,
           child: const MaterialApp(
-            home: Scaffold(body: CameraPreview(onCaptured: _noop)),
+            home: Scaffold(body: CameraPreview()),
           ),
         ),
       );
@@ -121,5 +121,3 @@ void main() {
     });
   });
 }
-
-void _noop(String _) {}

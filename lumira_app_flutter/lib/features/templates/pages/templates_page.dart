@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
-import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -77,11 +76,10 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      // Forced fix: 统一 tab 页用 Scaffold.appBar——LumiraNav 作为 appBar
-      // extendBodyBehindAppBar=true 让 body 滚动内容延伸到 nav 下方（毛玻璃可见性）
-      extendBodyBehindAppBar: true,
+      // 参考首页结构：不使用 extendBodyBehindAppBar，Scaffold 自动留出 appBar 高度，
+      // body 从 appBar 下方开始，无需手动添加 viewPadding.top + 48 的 top padding。
       appBar: LumiraNav(
-        title: '发现',
+        leading: const NavPageTitle(title: '发现'),
         centerTitle: false,
         transparent: true,
         scrolled: _scrolled,
@@ -140,11 +138,8 @@ class _BodyContent extends ConsumerWidget {
 
     return ListView(
       controller: scrollController,
-      // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
-      // 用 viewPadding.top（不被 widget 消费）+ nav 内容高度 48dp 精确占位
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).viewPadding.top + 48,
-      ),
+      // body 从 appBar 下方开始，无需 top padding 占位。
+      padding: EdgeInsets.zero,
       children: [
         // === 模板库 section（上）===
         FadeUp(child: _TemplateSectionHeader()),
@@ -277,7 +272,10 @@ class _HeroSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncDao = ref.watch(templatesDaoProvider);
+    // Forced fix: 用 recommendedBuiltinTemplatesProvider 替代 templatesDaoProvider + FutureBuilder，
+    // 缓存查询结果避免每次 build 反复进入 loading 状态导致 SizedBox(244) 持续显示 loading 圈。
+    // loading/error/空数据时不渲染 SizedBox(244)，避免标题下方出现大空白。
+    final asyncList = ref.watch(recommendedBuiltinTemplatesProvider);
     return FadeUp(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(0, 4, 0, 12), // 减小底部留白避免与"更多模板"间距过大
@@ -296,37 +294,28 @@ class _HeroSection extends ConsumerWidget {
                 ),
               ),
             ),
-            SizedBox(
-              height: 244, // Forced fix: 220 不够容纳 130*4/3=173.33 图片 + 名字 + 2 行 reason (~241.73dp)；改为 244
-              child: asyncDao.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, _) => const Center(child: Text('加载失败')),
-                data: (dao) => FutureBuilder<List<TemplateRecord>>(
-                  future: dao.getBuiltin(isRecommended: true),
-                  builder: (context, snap) {
-                    if (!snap.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final list = snap.data!;
-                    if (list.isEmpty) {
-                      return const Center(child: Text('暂无推荐'));
-                    }
-                    return ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 20), // 40rpx → 20dp
-                      itemCount: list.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 10), // gap 20rpx → 10dp
-                      itemBuilder: (_, index) {
-                        final rec = _recordToRecommendation(list[index]);
-                        return RecommendationCard(
-                          recommendation: rec,
-                          onTap: () => onTap(rec.id),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
+            asyncList.when(
+              loading: () => const SizedBox.shrink(),
+              error: (e, _) => const SizedBox.shrink(),
+              data: (list) {
+                if (list.isEmpty) return const SizedBox.shrink();
+                return SizedBox(
+                  height: 244, // Forced fix: 220 不够容纳 130*4/3=173.33 图片 + 名字 + 2 行 reason (~241.73dp)；改为 244
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20), // 40rpx → 20dp
+                    itemCount: list.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10), // gap 20rpx → 10dp
+                    itemBuilder: (_, index) {
+                      final rec = _recordToRecommendation(list[index]);
+                      return RecommendationCard(
+                        recommendation: rec,
+                        onTap: () => onTap(rec.id),
+                      );
+                    },
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -380,14 +369,14 @@ class _OtherSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
-    final asyncDao = ref.watch(templatesDaoProvider);
+    final asyncOthers = ref.watch(freeBuiltinTemplatesProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.only(bottom: 12), // 24rpx → 12dp，标题与卡片间距
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -416,49 +405,39 @@ class _OtherSection extends ConsumerWidget {
               ],
             ),
           ),
-          asyncDao.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.symmetric(vertical: 32),
-              child: Center(child: CircularProgressIndicator()),
-            ),
+          // Forced fix: 用 freeBuiltinTemplatesProvider 替代 FutureBuilder，
+          // 缓存查询结果避免每次 build 反复进入 loading 状态导致标题下方出现大空白。
+          // loading 时用 SizedBox.shrink() 避免占位空白，数据到达后自然填充。
+          asyncOthers.when(
+            loading: () => const SizedBox.shrink(),
             error: (e, _) => _EmptyState(tokens: tokens),
-            data: (dao) => FutureBuilder<List<TemplateRecord>>(
-              future: dao.getBuiltin(price: 0),
-              builder: (context, snap) {
-                if (!snap.hasData) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
-                    child: Center(child: CircularProgressIndicator()),
+            data: (others) {
+              if (others.isEmpty) {
+                return _EmptyState(tokens: tokens);
+              }
+              final visible = others.length > 6 ? others.sublist(0, 6) : others;
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12, // 24rpx → 12dp
+                  crossAxisSpacing: 12,
+                  // Forced fix: 原 0.78 导致 33px 溢出。
+                  // 文字区 = 8+13*1.2+3+11+10 = 47.6dp，图 1:1 = w
+                  // 设 w=154: 0.70 → h=220dp，图 154 + 文字 47.6 = 201.6 ✓
+                  childAspectRatio: 0.70,
+                ),
+                itemCount: visible.length,
+                itemBuilder: (_, index) {
+                  final tpl = _recordToItem(visible[index]);
+                  return TemplateGridCard(
+                    template: tpl,
+                    onTap: () => onTap(tpl.id),
                   );
-                }
-                final others = snap.data!;
-                if (others.isEmpty) {
-                  return _EmptyState(tokens: tokens);
-                }
-                final visible = others.length > 6 ? others.sublist(0, 6) : others;
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12, // 24rpx → 12dp
-                    crossAxisSpacing: 12,
-                    // Forced fix: 原 0.78 导致 33px 溢出。
-                    // 文字区 = 8+13*1.2+3+11+10 = 47.6dp，图 1:1 = w
-                    // 设 w=154: 0.70 → h=220dp，图 154 + 文字 47.6 = 201.6 ✓
-                    childAspectRatio: 0.70,
-                  ),
-                  itemCount: visible.length,
-                  itemBuilder: (_, index) {
-                    final tpl = _recordToItem(visible[index]);
-                    return TemplateGridCard(
-                      template: tpl,
-                      onTap: () => onTap(tpl.id),
-                    );
-                  },
-                );
-              },
-            ),
+                },
+              );
+            },
           ),
         ],
       ),
