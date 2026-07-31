@@ -30,6 +30,9 @@ dependencies:
       ref: master
       path: ohos
 
+  # 原版 camerawesome（iOS/Android 用，包名不同于 camerawesome_ohos）
+  camerawesome: ^1.4.0
+
   # 权限（brief ^12.0.1 → CPF-Flutter 3.7 Harmony 适配版本 10.3.2，11+ 需 Dart 3；未回合上游，见 dependency_overrides）
   permission_handler: 10.3.2  # Harmony 3.7 适配版本 (CPF-Flutter)
 
