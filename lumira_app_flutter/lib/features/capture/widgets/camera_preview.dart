@@ -1,8 +1,5 @@
-import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
 import 'package:lumira_app_flutter/features/capture/domain/filter_recipe.dart';
 import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
@@ -12,6 +9,8 @@ import 'package:lumira_app_flutter/features/templates/widgets/composition_overla
 import 'package:lumira_app_flutter/features/templates/widgets/pose_silhouette.dart';
 
 import '../data/capture_state.dart';
+import '../services/camera_service.dart';
+import '../services/camera_service_provider.dart';
 
 /// 将 EditorFormPostProcess 转换为 domain PostProcess（用于 fromPostProcess）
 ///
@@ -48,43 +47,35 @@ Composition _editorFormCompositionToDomain(EditorFormComposition src) {
 
 /// 相机预览组件
 ///
-/// 使用 camerawesome_ohos 1.0.2（CPF-Flutter Harmony 适配版本，对应原 camerawesome 1.4.0）实现。
-/// 在真实设备上渲染相机预览；在 widget 测试中通过 cameraPreviewOverrideProvider 覆盖为占位 widget。
+/// 通过 [CameraService] 抽象层构建原生相机预览（三端适配），
+/// 并叠加项目自定义的滤镜（ColorFiltered）、构图辅助线（CompositionOverlay）、
+/// 姿势剪影（PoseSilhouette）。
 ///
 /// 视觉规格来源：lumira-app/src/pages/capture/index.vue line 44-68
 ///
-/// 改造说明（移除 camerawesome 自带 UI）：
-/// 早期版本使用 `CameraAwesomeBuilder.awesome(...)`，该工厂会自动加载 `AwesomeCameraLayout`，
-/// 包含自带的顶部闪光灯/宽高比按钮、中间滤镜/模式选择器、底部拍摄按钮/摄像头切换/缩略图，
-/// 与项目自定义 UI（CaptureNav/ParamPillBar/CaptureButton/ParamPanel 等）完全重叠。
-/// 现改为 `CameraAwesomeBuilder.custom(...)`，传入返回 `SizedBox.shrink()` 的 builder，
-/// 让 camerawesome 不渲染任何自带 UI，仅保留纯粹的相机预览 + 点击对焦 + 双指缩放手势。
-/// 所有拍摄/缩放/摄像头切换/滤镜/参数功能均由项目自定义 UI 通过 [CameraState] 实现。
+/// 改造说明（从 camerawesome 直连改为 CameraService 抽象层）：
+/// 原版本直接调用 `CameraAwesomeBuilder.custom(...)` 并通过 `onCameraStateCreated`
+/// 回调把 camerawesome 的 `CameraState` 暴露给上层。新版本通过
+/// `ref.read(cameraServiceProvider).buildPreview(config: ...)` 构建预览，
+/// CameraService 实现内部处理 camerawesome 的初始化、闪光灯、缩放、对焦等细节，
+/// 上层不再接触 camerawesome 类型。相机就绪后通过 `onReady` 回调通知本 widget，
+/// 由 [_onCameraReady] 应用初始闪光灯/缩放参数。
 ///
-/// Forced fix: brief 原代码使用 camerawesome 1.5+ 的 API（sensorConfig / SingleCaptureRequest /
-/// CaptureRequestType / mediaCapture.capture(onSuccess:, onImage:) / builder:），与已锁定的
-/// camerawesome 1.4.0 实际 API 不匹配。1.4.0 的 `.custom()` 工厂接受 `builder:` 参数，
-/// builder 签名为 `Widget Function(CameraState, PreviewSize, Rect)`；
-/// `SaveConfig.photo(pathBuilder:)` 的 pathBuilder 返回 `Future<String>`；
-/// `onPreviewTapBuilder` / `onPreviewScaleBuilder` 用于启用默认的点击对焦和双指缩放手势。
-///
-/// Harmony 适配：pub.dev 上的 camerawesome 无 ohos 实现，平台通道无人响应会导致取景器一直转圈。
-/// 改用 CPF-Flutter fork 的 camerawesome_ohos 包（gitcode.com/CPF-Flutter/fluttertpc_camerawesome）。
+/// 模板叠加层（formOverride / editableTemplate）逻辑保留不变：
+/// - ColorFiltered 包裹相机流，应用 fromPostProcess 调色矩阵
+/// - CompositionOverlay 叠加构图辅助线（三分法、黄金螺旋等）
+/// - PoseSilhouette 叠加姿势剪影
 class CameraPreview extends ConsumerWidget {
   const CameraPreview({
     super.key,
-    required this.onCaptured,
-    this.onCameraStateCreated,
+    this.onZoomChanged,
     this.formOverride,
     this.previewFit = CameraPreviewFit.cover,
   });
 
-  /// 拍照完成回调（传入文件路径）
-  final void Function(String path) onCaptured;
-
-  /// CameraState 创建回调（首次进入 PhotoCameraState 时触发）
-  /// 上层通过此回调拿到 CameraState，用于实现拍照/缩放/摄像头切换等功能
-  final void Function(CameraState state)? onCameraStateCreated;
+  /// 双指缩放手势回调（传入真实倍数，1.0 = 1x）。
+  /// 由 CameraService 的 onScaleZoom 触发，透传给上层 _onZoomChanged 同步 provider 状态。
+  final ValueChanged<double>? onZoomChanged;
 
   /// 表单覆盖参数（Bug 12 修复：模板预览页使用）
   ///
@@ -133,71 +124,20 @@ class CameraPreview extends ConsumerWidget {
     // 滤镜仅在 !rawMode 时应用（无论是否有模板）
     final applyFilter = !rawMode;
 
-    // 相机预览本体：测试中由 override 替换 CameraAwesomeBuilder 部分，
+    // 相机预览本体：测试中由 override 替换 CameraService.buildPreview 部分，
     // 但保留滤镜和构图叠图逻辑（让测试可以验证 ColorFiltered/CompositionOverlay 包裹）
-    final cameraWidget = overrideWidget ?? CameraAwesomeBuilder.custom(
-      saveConfig: SaveConfig.photo(
-        pathBuilder: () async {
-          // 1.4.0: pathBuilder 返回 Future<String>（路径），由调用方决定保存位置
-          // 修复：HarmonyOS 平台缺少 path_provider 原生插件，
-          // getTemporaryDirectory() 会抛出 MissingPluginException。
-          // 回退到 getDatabasesPath()（sqflite_ffi 内置实现，不依赖原生插件）。
-          final ts = DateTime.now().millisecondsSinceEpoch;
-          try {
-            final dir = await getTemporaryDirectory();
-            return '${dir.path}/capture_$ts.jpg';
-          } catch (_) {
-            // HarmonyOS 回退：使用 getDatabasesPath() 获取可写目录
-            final dbPath = await getDatabasesPath();
-            return '$dbPath/capture_$ts.jpg';
-          }
+    final cameraService = ref.read(cameraServiceProvider);
+    final cameraWidget = overrideWidget ?? cameraService.buildPreview(
+      config: CameraPreviewConfig(
+        facing: facing,
+        fit: previewFit,
+        onReady: () => _onCameraReady(ref, flashMode, facing),
+        onTapFocus: (position, previewSize) {
+          cameraService.focusOnPoint(position, previewSize);
         },
-      ),
-      sensor: facing == 'front' ? Sensors.front : Sensors.back,
-      flashMode: _mapFlashMode(flashMode),
-      // 修复：previewFit 由上层传入。
-      // - 全屏模式用 contain：显示完整传感器图像，不裁剪，用户能看到全身（前置自拍）
-      // - 其他比例用 cover：裁剪填充到目标比例框，与拍照后裁剪区域一致
-      previewFit: previewFit,
-      // builder 返回空 widget，移除 camerawesome 自带的 AwesomeCameraLayout
-      // （顶部闪光灯按钮、中间滤镜/模式选择器、底部拍摄按钮/摄像头切换/缩略图）
-      // 所有 UI 由项目自定义组件通过 Stack 叠加在 CameraPreview 上
-      builder: (cameraState, previewSize, previewRect) {
-        // 首次拿到 CameraState 时通知上层（用于实现拍照/缩放/切换等功能）
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          onCameraStateCreated?.call(cameraState);
-        });
-        return const SizedBox.shrink();
-      },
-      // 启用默认的点击对焦手势（AwesomeCameraGestureDetector 内部处理）
-      onPreviewTapBuilder: (state) => OnPreviewTap(
-        onTap: (position, flutterPreviewSize, pixelPreviewSize) {
-          state.when(
-            onPhotoMode: (photoState) => photoState.focusOnPoint(
-              flutterPosition: position,
-              pixelPreviewSize: pixelPreviewSize,
-              flutterPreviewSize: flutterPreviewSize,
-            ),
-            onPreviewMode: (previewState) => previewState.focusOnPoint(
-              flutterPosition: position,
-              pixelPreviewSize: pixelPreviewSize,
-              flutterPreviewSize: flutterPreviewSize,
-            ),
-          );
-        },
-      ),
-      // 启用默认的双指缩放手势，同步到 zoomProvider 以便 UI 显示当前缩放级别
-      // 修复：SensorConfig.setZoom 强制 [0,1] 归一化，但原生期望真实倍数（1.0=1x）。
-      // AwesomeCameraGestureDetector 的 _zoomScale 是 [0,1] 的累积值，
-      // 这里映射回 1.0–2.0 的倍数区间（前摄）或 1.0–10.0（后摄），直接下发原生。
-      onPreviewScaleBuilder: (state) => OnPreviewScale(
-        onScale: (scale) {
-          // scale ∈ [0, 1]，把它当作"从 1x 到 maxZoom 的归一化进度"
-          // 简化处理：直接乘以 2.0 作为倍数（双指缩放通常用于放大）
-          final multiplier = 1.0 + scale.clamp(0.0, 1.0);
-          try {
-            CamerawesomePlugin.setZoom(multiplier);
-          } catch (_) {}
+        onScaleZoom: (scale) {
+          // 透传给上层 _onZoomChanged，由其同步 provider 状态并下发原生相机
+          onZoomChanged?.call(scale);
         },
       ),
     );
@@ -275,16 +215,36 @@ class CameraPreview extends ConsumerWidget {
     );
   }
 
-  FlashMode _mapFlashMode(CaptureFlashMode mode) {
+  /// 相机就绪回调：应用初始闪光灯模式 + 重置缩放为 1x。
+  /// 由 CameraService.buildPreview 的 onReady 触发（首次初始化和重建时）。
+  ///
+  /// 注：原 _onCameraStateCreated 中的 setMirrorFrontCamera（前置镜像）和
+  /// setBrightness（EV 补偿）逻辑未迁移——CameraService 抽象接口当前未暴露
+  /// 这些方法，依赖 camerawesome 默认行为。后续如需恢复可扩展 CameraService。
+  void _onCameraReady(WidgetRef ref, CaptureFlashMode flashMode, String facing) {
+    final cameraService = ref.read(cameraServiceProvider);
+    // 应用闪光灯模式
+    cameraService.setFlashMode(_mapFlashMode(flashMode));
+    // 重置缩放为 1x
+    cameraService.setZoom(1.0);
+    final range = CaptureState.zoomRangeForFacing(facing);
+    final normalized1x = CaptureState.zoomMultiplierToNormalized(
+        1.0, range.min, range.max);
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
+    ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
+  }
+
+  /// 将 CaptureState 的 CaptureFlashMode 映射为 CameraService 的 CameraFlashMode。
+  CameraFlashMode _mapFlashMode(CaptureFlashMode mode) {
     switch (mode) {
       case CaptureFlashMode.off:
-        return FlashMode.none;
+        return CameraFlashMode.off;
       case CaptureFlashMode.on:
-        return FlashMode.always;
+        return CameraFlashMode.on;
       case CaptureFlashMode.auto:
-        return FlashMode.auto;
+        return CameraFlashMode.auto;
       case CaptureFlashMode.torch:
-        return FlashMode.always;
+        return CameraFlashMode.torch;
     }
   }
 }
