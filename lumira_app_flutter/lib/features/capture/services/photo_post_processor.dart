@@ -71,7 +71,7 @@ class PhotoPostProcessor {
       }
 
       // 2. 计算裁剪区域（基于 aspectRatio 和 screenRatio）—— 始终应用
-      final cropRect = _computeCropRect(
+      final cropRect = computeCropRect(
         aspectRatio,
         workingImage.width,
         workingImage.height,
@@ -430,7 +430,7 @@ class PhotoPostProcessor {
   ///   1. 先按 screenRatio 模拟 cover 裁剪（匹配相机流 cover 行为，
   ///      因为相机流铺满全屏时传感器会被裁剪以匹配屏幕比例）
   ///   2. 再在可见区域内按 targetRatio 裁剪（匹配 _CropGuideOverlay 框线区域）
-  static List<int> _computeCropRect(
+  static List<int> computeCropRect(
     String ratio,
     int imgW,
     int imgH,
