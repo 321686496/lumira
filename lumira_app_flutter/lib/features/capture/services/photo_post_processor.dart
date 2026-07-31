@@ -260,7 +260,8 @@ class PhotoPostProcessor {
     canvas.drawImageRect(src, srcRect, dstRect, ui.Paint());
 
     // 2. 用 multiply 混合模式叠加补光色
-    final alpha = (state.intensity * 0.5).clamp(0.0, 1.0);
+    // 系数 0.7：与取景器叠层亮度提升后的视觉一致
+    final alpha = (state.intensity * 0.7).clamp(0.0, 1.0);
     canvas.drawRect(
       dstRect,
       ui.Paint()

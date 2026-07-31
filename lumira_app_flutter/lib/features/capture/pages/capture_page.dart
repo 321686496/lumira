@@ -1478,7 +1478,8 @@ class _FillLightOverlay extends ConsumerWidget {
 
     final color = ref.watch(CaptureState.fillLightColorProvider);
     final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
-    final alpha = (intensity * 0.7).clamp(0.0, 1.0);
+    // 直接用 intensity 作为 alpha（最大 1.0），提升屏幕补光亮度
+    final alpha = intensity.clamp(0.0, 1.0);
 
     return IgnorePointer(
       child: Positioned.fill(
@@ -1497,14 +1498,14 @@ class _FillLightOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. 计算中心镂空区域：1/2 宽 × 1/2 高，居中 = 1/4 面积
-    final hollowWidth = size.width * 0.5;
-    final hollowHeight = size.height * 0.5;
+    // 1. 中心可见区域：1/3 宽 × 1/3 高（缩小镂空范围，让更多区域被补光照亮）
+    final hollowWidth = size.width * 0.33;
+    final hollowHeight = size.height * 0.33;
     final hollowLeft = (size.width - hollowWidth) / 2;
     final hollowTop = (size.height - hollowHeight) / 2;
     final hollowRect = Rect.fromLTWH(hollowLeft, hollowTop, hollowWidth, hollowHeight);
 
-    // 2. 全屏底色（屏幕发光）—— 用 evenOdd 路径实现中心镂空
+    // 2. 外圈全屏底色（屏幕发光）—— evenOdd 路径实现中心镂空
     final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
     final fillPath = Path()
       ..fillType = PathFillType.evenOdd
@@ -1525,10 +1526,10 @@ class _FillLightOverlayPainter extends CustomPainter {
         (center.dx / size.width) * 2 - 1,
         (center.dy / size.height) * 2 - 1,
       ),
-      radius: 0.8,
+      radius: 0.85,
       colors: [
         color.withOpacity(alpha),
-        color.withOpacity(alpha * 0.3),
+        color.withOpacity(alpha * 0.55),
       ],
     );
     final rect = Offset.zero & size;
@@ -1537,9 +1538,15 @@ class _FillLightOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
     shaderPaint.shader = gradient.createShader(rect);
 
-    // 渐变层也用镂空路径，避免渐变覆盖中心区域
-    // 注意：径向渐变 + evenOdd 路径组合，中心镂空区域不会被绘制
+    // 渐变层也用镂空路径
     canvas.drawPath(fillPath, shaderPaint);
+
+    // 4. 中心镂空区域加一层低 alpha 补光（不完全镂空，既补光又能看到面部）
+    final centerPaint = Paint()
+      ..color = color.withOpacity(alpha * 0.35)
+      ..blendMode = BlendMode.screen
+      ..style = PaintingStyle.fill;
+    canvas.drawRect(hollowRect, centerPaint);
   }
 
   @override
