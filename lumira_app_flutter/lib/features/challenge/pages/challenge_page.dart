@@ -96,11 +96,10 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      // Forced fix: 统一 tab 页用 Scaffold.appBar——LumiraNav 作为 appBar
-      // extendBodyBehindAppBar=true 让 body 滚动内容延伸到 nav 下方（毛玻璃可见性）
-      extendBodyBehindAppBar: true,
+      // 参考首页结构：不使用 extendBodyBehindAppBar，Scaffold 自动留出 appBar 高度，
+      // body 从 appBar 下方开始，无需手动添加 viewPadding.top + 48 的 top padding。
       appBar: LumiraNav(
-        title: '每日挑战',
+        leading: const NavPageTitle(title: '每日挑战'),
         centerTitle: false,
         scrolled: _scrolled,
         transparent: true,
@@ -216,8 +215,8 @@ class _FlipView extends StatelessWidget {
     final theme = Theme.of(context);
     return ListView(
       controller: scrollController,
-      // Forced fix: extendBodyBehindAppBar=true 需 top padding 占位避免被标题栏遮挡
-      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).viewPadding.top + 48, 20, 100),
+      // body 从 appBar 下方开始，无需 top padding 占位。
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
       children: [
         FadeUp(
           child: Column(
@@ -331,8 +330,8 @@ class _RevealedView extends ConsumerWidget {
 
     return ListView(
       controller: scrollController,
-      // Forced fix: extendBodyBehindAppBar=true 需 top padding 占位避免被标题栏遮挡
-      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).viewPadding.top + 48, 20, 100),
+      // body 从 appBar 下方开始，无需 top padding 占位。
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
       children: [
         // 1. 主挑战卡
         FadeUp(child: MainChallengeCard(challenge: mainChallenge)),

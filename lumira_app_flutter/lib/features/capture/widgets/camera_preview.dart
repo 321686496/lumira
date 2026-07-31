@@ -71,6 +71,7 @@ class CameraPreview extends ConsumerWidget {
     this.onZoomChanged,
     this.formOverride,
     this.previewFit = CameraPreviewFit.cover,
+    this.rawCaptureKey,
   });
 
   /// 双指缩放手势回调（传入真实倍数，1.0 = 1x）。
@@ -90,6 +91,12 @@ class CameraPreview extends ConsumerWidget {
   /// - [CameraPreviewFit.contain]：完整显示传感器图像，可能有黑边（适用于全屏模式，
   ///   用户希望看到完整画面而不被裁剪）
   final CameraPreviewFit previewFit;
+
+  /// 用于捕获原始相机帧（未经 ColorFiltered 处理）的 RepaintBoundary key。
+  /// FilterPicker 抽屉展开时，通过此 key 调用 `boundary.toImage()` 捕获当前帧，
+  /// 然后在每张滤镜卡片中套用对应 ColorFilter 显示效果预览。
+  /// 为 null 时不包裹 RepaintBoundary（兼容不需要捕获的场景）。
+  final GlobalKey? rawCaptureKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -142,13 +149,20 @@ class CameraPreview extends ConsumerWidget {
       ),
     );
 
+    // 原始相机流（未经 ColorFiltered 处理），用 RepaintBoundary 包裹以支持帧捕获。
+    // rawCaptureKey 非 null 时，FilterPicker 可通过 boundary.toImage() 捕获当前帧，
+    // 在滤镜卡片中套用各滤镜的 ColorFilter 显示实时效果预览。
+    final rawCamera = rawCaptureKey != null
+        ? RepaintBoundary(key: rawCaptureKey, child: cameraWidget)
+        : cameraWidget;
+
     // 滤镜包裹（修复 Bug 2/3：使用 effectivePost，自由模式也应用）
     final filteredCamera = applyFilter
         ? ColorFiltered(
             colorFilter: fromPostProcess(effectivePost),
-            child: cameraWidget,
+            child: rawCamera,
           )
-        : cameraWidget;
+        : rawCamera;
 
     // 构图叠图（修复 Bug 2：使用 effectiveComp，自由模式也显示构图辅助线）
     final compositionOverlay =

@@ -2,11 +2,13 @@
 //
 // 模板页真实数据 Provider：
 // - userPreferenceProvider：累计作品数 + 最常用分类及占比（来自 GalleryDao + TemplatesDao）
+// - freeBuiltinTemplatesProvider：免费内置模板列表（缓存，避免 FutureBuilder 反复加载）
 //
 // 对照：lumira-app/src/composables/useRecommendation.ts 中的 userPreference computed
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../data/templates_mock_data.dart';
 
@@ -57,4 +59,23 @@ final userPreferenceProvider = FutureProvider<UserPreference>((ref) async {
     topCategory: topCategory,
     topCategoryPercentage: percentage,
   );
+});
+
+/// 免费内置模板列表 Provider（"更多模板" section 数据源）
+///
+/// 用 FutureProvider 缓存查询结果，避免 FutureBuilder 在每次 build 时
+/// 重新调用 dao.getBuiltin(price: 0) 导致反复进入 loading 状态。
+final freeBuiltinTemplatesProvider =
+    FutureProvider<List<TemplateRecord>>((ref) async {
+  final dao = await ref.watch(templatesDaoProvider.future);
+  return dao.getBuiltin(price: 0);
+});
+
+/// 推荐内置模板列表 Provider（"今日为你推荐" section 数据源）
+///
+/// 同上，缓存查询结果避免 FutureBuilder 反复 loading。
+final recommendedBuiltinTemplatesProvider =
+    FutureProvider<List<TemplateRecord>>((ref) async {
+  final dao = await ref.watch(templatesDaoProvider.future);
+  return dao.getBuiltin(isRecommended: true);
 });

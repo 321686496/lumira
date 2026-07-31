@@ -48,12 +48,6 @@ class ParamPillBar extends ConsumerWidget {
           _Pill(text: _isoDisplay(cam), onTap: () => _openPanel(ref)),
           const ApplyButton(),
           const RawModeToggle(),
-          _Pill(
-            icon: Icons.filter_alt_outlined,
-            text: '滤镜',
-            onTap: () =>
-                ref.read(CaptureState.filterPickerVisibleProvider.notifier).state = true,
-          ),
         ].map((w) => Padding(padding: const EdgeInsets.only(right: 8), child: w)).toList(),
       ),
     );

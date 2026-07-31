@@ -24,12 +24,18 @@ class ParamPanel extends ConsumerWidget {
 
     return Stack(
       children: [
+        // 透明抽屉：不使用全屏遮罩，取景器可见
+        // 仅在展开时用透明 GestureDetector 拦截顶部点击以关闭面板
         if (expanded)
-          Positioned.fill(
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 520,
             child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
+              behavior: HitTestBehavior.translucent,
               onTap: () => _close(ref),
-              child: Container(color: Colors.black54),
+              child: const SizedBox.expand(),
             ),
           ),
         AnimatedPositioned(
@@ -40,10 +46,11 @@ class ParamPanel extends ConsumerWidget {
           bottom: expanded ? 0 : -520,
           height: 520,
           child: Container(
-            decoration: const BoxDecoration(
-              color: Color(0xFF1A1A1C),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              boxShadow: [
+            decoration: BoxDecoration(
+              // 半透明背景：取景器隐约可见，同时保证文字可读性
+              color: Colors.black.withOpacity(0.78),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: const [
                 BoxShadow(
                   color: Color(0x66000000),
                   blurRadius: 20,

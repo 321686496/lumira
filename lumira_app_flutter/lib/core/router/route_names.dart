@@ -27,6 +27,7 @@ class RouteNames {
   static const String inspiration = '/inspiration';
   static const String gallery = '/gallery';
   static const String galleryDetail = '/gallery/detail';
+  static const String galleryEdit = '/gallery/edit';
   static const String galleryDiary = '/gallery/diary';
   static const String galleryStats = '/gallery/stats';
   static const String galleryMonthlyDigest = '/gallery/monthly-digest';

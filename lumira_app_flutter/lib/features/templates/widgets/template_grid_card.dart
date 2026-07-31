@@ -33,8 +33,8 @@ class TemplateGridCard extends ConsumerWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: tokens.surface,
           borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
+          // 保留新拟态凸起阴影，仅移除 surface 背景填充（让卡片透明融入页面）
           boxShadow:
               appTheme.style == UIStyle.neumorphic ? tokens.shadowConvex : null,
         ),

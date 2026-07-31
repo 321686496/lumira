@@ -6,7 +6,7 @@ import 'package:lumira_app_flutter/features/capture/widgets/filter_picker.dart';
 
 void main() {
   group('FilterPicker', () {
-    testWidgets('renders nothing when filterPickerVisibleProvider is false',
+    testWidgets('renders nothing when activeTool is not filter',
         (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -20,12 +20,12 @@ void main() {
         ),
       );
 
-      // No modal sheet content should be present.
+      // No content should be present when activeTool is null.
       expect(find.text('系统滤镜'), findsNothing);
       expect(find.text('LUT 预设'), findsNothing);
     });
 
-    testWidgets('shows modal sheet with system filters and LUTs when visible becomes true',
+    testWidgets('shows system filters and LUTs when activeTool is filter',
         (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -43,23 +43,15 @@ void main() {
         ),
       );
 
-      // Trigger the sheet.
-      container.read(CaptureState.filterPickerVisibleProvider.notifier).state = true;
-      await tester.pump(); // run build + schedule post-frame callback
-      await tester.pumpAndSettle(); // run post-frame callback + show sheet + animate
+      // Activate the filter tool.
+      container.read(CaptureState.activeToolProvider.notifier).state = 'filter';
+      await tester.pump();
+      await tester.pumpAndSettle();
 
-      // Sheet content should be visible.
+      // Content should be visible.
       expect(find.text('系统滤镜'), findsOneWidget);
       // A known system filter label from systemFilterLabel() in filter_recipe.dart.
       expect(find.text('鲜明'), findsOneWidget);
-
-      // Scroll down to reveal LUT section (lazy SliverGrid).
-      await tester.scrollUntilVisible(
-        find.text('LUT 预设'),
-        300.0,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
       expect(find.text('LUT 预设'), findsOneWidget);
       // A known LUT label from lutLabel() in filter_recipe.dart.
       expect(find.text('电影感'), findsOneWidget);
@@ -82,7 +74,7 @@ void main() {
         ),
       );
 
-      container.read(CaptureState.filterPickerVisibleProvider.notifier).state = true;
+      container.read(CaptureState.activeToolProvider.notifier).state = 'filter';
       await tester.pump();
       await tester.pumpAndSettle();
 
@@ -90,14 +82,6 @@ void main() {
           .read(CaptureState.editableTemplateProvider)!
           .postProcess
           .lut;
-
-      // Scroll down to reveal LUT section (lazy SliverGrid).
-      await tester.scrollUntilVisible(
-        find.text('电影感'),
-        300.0,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
 
       // Tap the "电影感" chip (LUT 'cinematic').
       await tester.tap(find.text('电影感'));
@@ -129,7 +113,7 @@ void main() {
         ),
       );
 
-      container.read(CaptureState.filterPickerVisibleProvider.notifier).state = true;
+      container.read(CaptureState.activeToolProvider.notifier).state = 'filter';
       await tester.pump();
       await tester.pumpAndSettle();
 
@@ -145,7 +129,46 @@ void main() {
       expect(newFilter, 'vivid');
     });
 
-    testWidgets('raw mode disables chips and shows RAW warning', (tester) async {
+    testWidgets('tapping 原图 after selecting a filter clears systemFilter',
+        (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container
+          .read(CaptureState.currentTemplateIdProvider.notifier)
+          .state = 'soft_portrait';
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: FilterPicker()),
+          ),
+        ),
+      );
+
+      container.read(CaptureState.activeToolProvider.notifier).state = 'filter';
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      // First select 'vivid'
+      await tester.tap(find.text('鲜明'));
+      await tester.pumpAndSettle();
+      expect(
+        container.read(CaptureState.editableTemplateProvider)!.postProcess.systemFilter,
+        'vivid',
+      );
+
+      // Now tap '原图' (none) — should clear systemFilter to null
+      await tester.tap(find.text('原图').first);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(CaptureState.editableTemplateProvider)!.postProcess.systemFilter,
+        isNull,
+        reason: '原图 should clear systemFilter to null',
+      );
+    });
+
+    testWidgets('raw mode shows RAW warning', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       container
@@ -162,30 +185,30 @@ void main() {
         ),
       );
 
-      container.read(CaptureState.filterPickerVisibleProvider.notifier).state = true;
+      // 记录进入 RAW 模式前的 LUT（soft_portrait 模板默认 'pastel'）
+      final initialLut = container
+          .read(CaptureState.editableTemplateProvider)!
+          .postProcess
+          .lut;
+
+      container.read(CaptureState.activeToolProvider.notifier).state = 'filter';
       await tester.pump();
       await tester.pumpAndSettle();
 
       // RAW warning text should appear.
       expect(find.text('RAW 模式已启用'), findsOneWidget);
 
-      // Tapping a chip should NOT update the template (chips are disabled).
-      final initialLut = container
-          .read(CaptureState.editableTemplateProvider)!
-          .postProcess
-          .lut;
-
-      // In RAW mode, the entire scrollable area is replaced by _RawModePlaceholder,
-      // so '电影感' is NOT present at all. Verify absence and skip the tap.
+      // In RAW mode, the filter content is replaced by _RawModePlaceholder,
+      // so '电影感' is NOT present at all.
       expect(find.text('电影感'), findsNothing);
-      await tester.pumpAndSettle();
 
       final newLut = container
           .read(CaptureState.editableTemplateProvider)!
           .postProcess
           .lut;
 
-      expect(newLut, equals(initialLut));
+      // LUT should be unchanged (RAW 模式不修改后期参数).
+      expect(newLut, initialLut);
     });
   });
 }

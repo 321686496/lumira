@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
@@ -142,6 +144,11 @@ class CaptureState {
 
   /// 滤镜选择器可见状态
   static final filterPickerVisibleProvider = StateProvider<bool>((ref) => false);
+
+  /// 滤镜预览图（取景器实时帧的 PNG 字节）
+  /// 由 FilterPicker 在抽屉展开时通过 RepaintBoundary 捕获并周期性更新，
+  /// 每张滤镜卡片读取此字节并套用对应 ColorFilter 显示效果预览。
+  static final filterPreviewImageProvider = StateProvider<Uint8List?>((ref) => null);
 
   /// 底部可折叠面板展开状态
   static final bottomPanelExpandedProvider = StateProvider<bool>((ref) => false);
@@ -292,6 +299,7 @@ class CaptureState {
     container.read(rawModeProvider.notifier).state = false;
     container.read(panelExpandedProvider.notifier).state = false;
     container.read(filterPickerVisibleProvider.notifier).state = false;
+    container.read(filterPreviewImageProvider.notifier).state = null;
     container.read(bottomPanelExpandedProvider.notifier).state = false;
     container.read(activeScenePresetIdProvider.notifier).state = null;
     container.read(levelEnabledProvider.notifier).state = true;
