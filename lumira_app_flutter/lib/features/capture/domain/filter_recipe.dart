@@ -61,17 +61,24 @@ List<double> _contrastMatrix(double v) {
 
 /// Saturation matrix: saturate(1 + v/100) in CSS
 /// v: -100 ~ 100 (0 = no change, -100 = grayscale, +100 = double saturation)
+///
+/// 使用 Rec.709 亮度权重（sRGB 标准），
+/// 替代老式 NTSC 权重（0.3086/0.6094/0.0820）以避免饱和度调整时的色偏。
+///
+/// 矩阵结构：每行使用三个亮度权重（sr/sg/sb）作为非对角项，
+/// 对应 W3C saturate() 公式 newC = s·C + (1-s)·L。
+/// 这样灰像素（R=G=B）饱和度调整后仍为灰，无色偏。
 List<double> _saturationMatrix(double v) {
   final s = 1 + v / 100;
-  // Standard luminance weights: R*0.3086, G*0.6094, B*0.0820
-  const lumR = 0.3086, lumG = 0.6094, lumB = 0.0820;
+  // Rec.709 亮度权重（sRGB 标准）
+  const lumR = 0.2126, lumG = 0.7152, lumB = 0.0722;
   final sr = (1 - s) * lumR;
   final sg = (1 - s) * lumG;
   final sb = (1 - s) * lumB;
   return [
-    s + sr, sr, sr, 0, 0,
-    sg, s + sg, sg, 0, 0,
-    sb, sb, s + sb, 0, 0,
+    s + sr, sg, sb, 0, 0,
+    sr, s + sg, sb, 0, 0,
+    sr, sg, s + sb, 0, 0,
     0, 0, 0, 1, 0,
   ];
 }
