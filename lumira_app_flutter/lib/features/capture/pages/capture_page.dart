@@ -2164,25 +2164,7 @@ Future<String> _processCaptureInIsolate(_CaptureProcessParams params) async {
       result = img.flip(result, direction: img.FlipDirection.horizontal);
     }
 
-    // 4. 应用色彩矩阵（亮度/对比度/饱和度/色温/色调等）
-    final matrix = composePostProcessMatrix(params.postProcess);
-    result = applyColorMatrixImg(result, matrix);
-
-    // 5. 细节效果：锐化 + 清晰度 + 颗粒
-    applyPerPixelEffectsImg(
-      result,
-      sharpen: params.postProcess.sharpen,
-      clarity: params.postProcess.color.clarity,
-      grain: params.postProcess.grain,
-    );
-
-    // 6. 磨皮
-    applySmoothSkinImg(result, smoothStrength: params.postProcess.smoothStrength);
-
-    // 7. 暗角
-    applyVignetteImg(result, vignette: params.postProcess.vignette);
-
-    // 8. 限制最大边长到 2048px（减少编码时间，手机显示足够）
+    // 4. 限制最大边长到 2048px（先 resize 再应用效果，确保效果运行在 2048px 图像上，避免在 12MP 原图上做纯 Dart 逐像素运算导致耗时 >500ms）
     const maxDim = 2048;
     if (result.width > maxDim || result.height > maxDim) {
       final scale = maxDim / (result.width > result.height ? result.width : result.height);
@@ -2192,6 +2174,24 @@ Future<String> _processCaptureInIsolate(_CaptureProcessParams params) async {
         height: (result.height * scale).round(),
       );
     }
+
+    // 5. 应用色彩矩阵（亮度/对比度/饱和度/色温/色调等）
+    final matrix = composePostProcessMatrix(params.postProcess);
+    result = applyColorMatrixImg(result, matrix);
+
+    // 6. 细节效果：锐化 + 清晰度 + 颗粒
+    applyPerPixelEffectsImg(
+      result,
+      sharpen: params.postProcess.sharpen,
+      clarity: params.postProcess.color.clarity,
+      grain: params.postProcess.grain,
+    );
+
+    // 7. 磨皮
+    applySmoothSkinImg(result, smoothStrength: params.postProcess.smoothStrength);
+
+    // 8. 暗角
+    applyVignetteImg(result, vignette: params.postProcess.vignette);
 
     // 9. 编码保存（quality 90，视觉无明显差异，编码快约 30%）
     final encoded = img.encodeJpg(result, quality: 90);
