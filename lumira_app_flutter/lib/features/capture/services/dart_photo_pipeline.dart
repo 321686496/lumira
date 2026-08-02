@@ -56,9 +56,9 @@ class DartPhotoPipeline implements PhotoPipeline {
       final needMirror = facing == 'front';
       // 用户变换（如果有，则在方向对齐之上叠加）
       final hasTransform = transform != null && !transform.isIdentity;
-      final userRotation = hasTransform ? transform!.rotation : 0;
-      final userFlipH = hasTransform ? transform!.flipH : false;
-      final userFlipV = hasTransform ? transform!.flipV : false;
+      final userRotation = hasTransform ? transform.rotation : 0;
+      final userFlipH = hasTransform ? transform.flipH : false;
+      final userFlipV = hasTransform ? transform.flipV : false;
 
       // 3. 计算输出尺寸（基于 screenRatio，角标缩略图长边 ≤ 256）
       const maxDimension = 256;

@@ -9,6 +9,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/db/database_provider.dart';
+import '../../../core/db/dao/gallery_dao.dart';
+import '../../home/providers/banner_recommendation_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../data/capture_state.dart';
@@ -355,13 +357,71 @@ class _CapturePageState extends ConsumerState<CapturePage>
     if (_isProcessingCapture || _processCaptureQueue.isEmpty) return;
     _isProcessingCapture = true;
     final params = _processCaptureQueue.removeAt(0);
+
+    // [非破坏性编辑] 在 isolate 处理前备份原图（isolate 会覆写 inputPath）
+    String? originalPath;
+    try {
+      originalPath = '${params.inputPath}.original.jpg';
+      await File(params.inputPath).copy(originalPath);
+    } catch (e) {
+      debugPrint('[capture] 原图保留失败（不阻塞）: $e');
+      originalPath = null;
+    }
+
     try {
       final processedPath = await compute(_processCaptureInIsolate, params);
       if (!mounted) {
         _isProcessingCapture = false;
         return;
       }
+
+      // evict FileImage 缓存，防止 isolate 覆写后旧解码图残留
+      try {
+        PaintingBinding.instance.imageCache
+            .evict(FileImage(File(processedPath)));
+      } catch (e) {
+        debugPrint('[capture] evict FileImage 缓存失败: $e');
+      }
+
       final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+
+      // 落库到相册（原图备份 + GalleryItemRecord + provider 失效）
+      try {
+        final dao = await ref.read(galleryDaoProvider.future);
+        final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+        final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
+        final lut = params.postProcess.lut;
+        final record = GalleryItemRecord(
+          id: photoId,
+          filePath: processedPath,
+          originalPath: originalPath,
+          postProcess: params.postProcess,
+          dataUrl: null,
+          sceneId: sceneId,
+          templateId: templateId,
+          kitId: widget.kitId,
+          mood: null,
+          lut: (lut == 'none' || lut.isEmpty) ? null : lut,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+        );
+        await dao.insert(record);
+        ref.invalidate(galleryDaoProvider);
+        ref.invalidate(bannerRecommendationProvider);
+        debugPrint('[capture] 自动保存到应用相册: ${record.id}');
+
+        // 套件使用次数 +1（仅在套用 kit 进入时）
+        if (widget.kitId != null) {
+          try {
+            final kitsDao = await ref.read(compositionKitsDaoProvider.future);
+            await kitsDao.incrementUsage(widget.kitId!);
+          } catch (e) {
+            debugPrint('[capture] 套件 usage 计数失败: $e');
+          }
+        }
+      } catch (e) {
+        debugPrint('[capture] 落库失败: $e');
+      }
+
       ref.read(captureThumbnailProvider.notifier)
           .setFinalResult(processedPath, photoId);
       ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
