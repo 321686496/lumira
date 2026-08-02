@@ -16,7 +16,7 @@ import 'dao/settings_dao.dart';
 import '../../core/auth/auth_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 8;
+const int _kDbVersion = 9;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -204,6 +204,9 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colWatermark} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colSeedV3Done} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colAutoDeblur} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colFreeModeCamera} TEXT,
+      ${Tables.colFreeModePostProcess} TEXT,
+      ${Tables.colFreeModeComposition} TEXT,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
@@ -429,6 +432,31 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_collection_photos_collection ON ${Tables.tableCollectionPhotos}(${Tables.colCollectionPhotoCollectionId})');
     } catch (e) {
       debugPrint('v8 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 9) {
+    try {
+      // v9: 自由模式参数持久化（相机/后期/构图 JSON）
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colFreeModeCamera,
+        'TEXT',
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colFreeModePostProcess,
+        'TEXT',
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colFreeModeComposition,
+        'TEXT',
+      );
+    } catch (e) {
+      debugPrint('v9 migration failed (silent fallback): $e');
     }
   }
 }
