@@ -241,16 +241,19 @@ void main() {
     test('vivid system filter has expected R diagonal and translation after B·S·C', () {
       // vivid: contrast(1.1) saturate(1.25) brightness(1.02) → B·S·C
       final m = composeSystemFilterMatrix('vivid');
-      // R diagonal = 1.02 * (1.25 + (1-1.25)*0.3086) * 1.1 = 1.02 * 1.17285 * 1.1
-      //            ≈ 1.315938
+      // Rec.709 luminance weights: lumR=0.2126, lumG=0.7152, lumB=0.0722
+      // S row 0 = [s + (1-s)*lumR, (1-s)*lumG, (1-s)*lumB] with s=1.25
+      //   = [1.19685, -0.1788, -0.01805]
+      // R diagonal = 1.02 * 1.19685 * 1.1 ≈ 1.3428657
       // (Same in either order — diagonal is order-independent.)
-      expect(m[0], closeTo(1.02 * 1.17285 * 1.1, 1e-6));
+      expect(m[0], closeTo(1.02 * 1.19685 * 1.1, 1e-6));
       // R translation distinguishes the order:
-      //   Correct (B·S·C): 1.02 * (-12.75 * 1.01855) ≈ -13.246
-      //     where 1.01855 = sum of S row 0 first 3 elements (1.17285 - 0.07715 - 0.07715)
+      //   Correct (B·S·C): 1.02 * (-12.75 * 1.0) = -13.005
+      //     where 1.0 = sum of S row 0 first 3 elements
+      //     (s + (1-s)*(lumR+lumG+lumB) = s + (1-s) = 1)
       //   Reversed (C·S·B): -12.75 (just C's translation; B and S have no translation)
-      expect(m[4], closeTo(1.02 * -12.75 * 1.01855, 1e-3),
-          reason: 'Got ${m[4]}; correct (B·S·C) ≈ -13.246, reversed (C·S·B) = -12.75');
+      expect(m[4], closeTo(1.02 * -12.75 * 1.0, 1e-3),
+          reason: 'Got ${m[4]}; correct (B·S·C) = -13.005, reversed (C·S·B) = -12.75');
     });
 
     test('alpha row is preserved as [0,0,0,1,0] across compositions', () {
