@@ -1,8 +1,10 @@
-import 'dart:typed_data';
+import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:camerawesome_ohos/camerawesome_plugin.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
+import '../../../core/db/database_provider.dart';
 import '../domain/photo_template.dart';
 import '../domain/scene_preset.dart';
 import '../data/template_registry.dart';
@@ -29,40 +31,26 @@ class CaptureState {
   // 测试环境中为 null（cameraPreviewOverrideProvider 注入占位 widget，不创建真实 CameraState）。
   static final cameraStateProvider = StateProvider<CameraState?>((ref) => null);
 
-  /// 当前缩放级别（0.0 = 无缩放，1.0 = 最大缩放）
-  /// 由双指缩放手势或自定义滑块更新，再同步到 [cameraStateProvider] 的 sensorConfig
-  static final zoomProvider = StateProvider<double>((ref) => 0.0);
+  /// 当前缩放倍数（真实倍数，1.0 = 1x 无缩放）。由 UI 控件或双指缩放手势更新。
+  static final zoomProvider = StateProvider<double>((ref) => 1.0);
 
-  /// 用户面对的"视觉缩放"（与取景器中显示的内容大小一致，跨比例切换保持稳定）。
-  /// 范围 [0.0, 1.0]，0 = 1x，1 = 最大缩放。
-  /// 由拍摄页 _onZoomChanged 同步写入，与 [zoomProvider] 保持一致。
-  static final apparentZoomProvider = StateProvider<double>((ref) => 0.0);
+  /// UI 显示用的缩放倍数（与 [zoomProvider] 保持一致，用于跨比例切换时保持视觉稳定）。
+  static final apparentZoomProvider = StateProvider<double>((ref) => 1.0);
 
-  /// 默认缩放范围（前端：0.5x ~ 2x；后端：0.3x ~ 10x）
-  /// 真实设备的 minZoom/maxZoom 通过 SensorConfig 查询；这里作为 fallback。
-  static const double frontMinZoom = 0.5;
-  static const double frontMaxZoom = 2.0;
-  static const double backMinZoom = 0.3;
-  static const double backMaxZoom = 10.0;
+  /// 设备最大缩放倍数（真实倍数），相机就绪时写入，null 表示未查询
+  static final deviceMaxZoomProvider = StateProvider<double?>((ref) => null);
 
-  /// 缩放倍数 → 归一化 [0, 1]（用于 sensorConfig.setZoom）
-  static double zoomMultiplierToNormalized(
-      double multiplier, double minZoom, double maxZoom) {
-    if (maxZoom <= minZoom) return 0.0;
-    return ((multiplier - minZoom) / (maxZoom - minZoom)).clamp(0.0, 1.0);
-  }
+  /// 设备最小缩放倍数（真实倍数），相机就绪时写入，null 表示未查询
+  static final deviceMinZoomProvider = StateProvider<double?>((ref) => null);
 
-  /// 归一化 [0, 1] → 缩放倍数（用于 UI 显示）
-  static double normalizedToZoomMultiplier(
-      double normalized, double minZoom, double maxZoom) {
-    return minZoom + (maxZoom - minZoom) * normalized.clamp(0.0, 1.0);
-  }
+  /// 是否支持超广角（minZoom < 1.0），相机就绪时写入
+  static final supportsUltraWideProvider = StateProvider<bool>((ref) => false);
 
-  /// 根据当前 facing 获取缩放范围
+  /// 返回设备支持的缩放倍数范围（真实倍数）。
+  /// 优先用查询到的设备值，否则用 fallback。
   static ZoomRange zoomRangeForFacing(String facing) {
-    return facing == 'front'
-        ? const ZoomRange(frontMinZoom, frontMaxZoom)
-        : const ZoomRange(backMinZoom, backMaxZoom);
+    final maxFallback = facing == 'front' ? 2.0 : 10.0;
+    return ZoomRange(1.0, maxFallback);
   }
 
   /// 照片比例（用户可切换）
@@ -90,9 +78,6 @@ class CaptureState {
         return isPortrait ? 3.0 / 4.0 : 4.0 / 3.0;
       case '1:1':
         return 1.0;
-      case '3:4':
-        // 始终竖版 3:4
-        return 3.0 / 4.0;
       default:
         // 解析任意 "W:H" 格式（如 '4:5'、'16:9'、'9:16'、'2:3'）
         final parts = ratioId.split(':');
@@ -104,6 +89,36 @@ class CaptureState {
           }
         }
         return null;
+    }
+  }
+
+  /// 计算指定比例相对于 4:3 传感器基准的裁切系数。
+  ///
+  /// 原生相机行为模型（参考 harmonyos 相机缩放比调研）：
+  /// - 4:3 = 基准 (1.0x)，传感器全区域输出，无裁切
+  /// - 其他比例 = 裁切 + Zoom 补偿，使预览主体大小与原生相机一致
+  ///
+  /// 裁切系数计算：
+  /// - 目标比例 <= 传感器比例（更窄/瘦长）→ 左右裁切，cropFactor = sensorRatio / targetRatio
+  /// - 目标比例 > 传感器比例（更宽/扁平）→ 上下裁切，cropFactor = targetRatio / sensorRatio
+  ///
+  /// 示例（竖屏，传感器 3:4 = 0.75）：
+  /// - 4:3 (0.75) → 1.0（基准）
+  /// - 1:1 (1.0) → 1.333（上下裁切）
+  /// - 全屏 9:19.5 (0.46) → 1.625（左右裁切）
+  ///
+  /// 此系数用于在切换比例时调整 zoom，始终基于 4:3 = 1.0 基准计算，避免累积漂移。
+  static double computeCropFactor(String ratioId, bool isPortrait, double screenRatio) {
+    // 传感器物理比例 4:3，竖屏下为 3:4
+    final sensorRatio = isPortrait ? 3.0 / 4.0 : 4.0 / 3.0;
+    final targetRatio = computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+
+    if (targetRatio <= sensorRatio) {
+      // 目标比例比传感器"窄"（更瘦长）→ 左右裁切
+      return sensorRatio / targetRatio;
+    } else {
+      // 目标比例比传感器"宽"（更扁平）→ 上下裁切
+      return targetRatio / sensorRatio;
     }
   }
 
@@ -145,10 +160,10 @@ class CaptureState {
   /// 滤镜选择器可见状态
   static final filterPickerVisibleProvider = StateProvider<bool>((ref) => false);
 
-  /// 滤镜预览图（取景器实时帧的 PNG 字节）
-  /// 由 FilterPicker 在抽屉展开时通过 RepaintBoundary 捕获并周期性更新，
-  /// 每张滤镜卡片读取此字节并套用对应 ColorFilter 显示效果预览。
-  static final filterPreviewImageProvider = StateProvider<Uint8List?>((ref) => null);
+  /// 滤镜预览图（取景器实时帧的 ui.Image）
+  /// 由 FilterPicker 在抽屉展开时通过 RepaintBoundary 高频捕获并直接存储 ui.Image，
+  /// 每张滤镜卡片通过 RawImage 显示，跳过 PNG 编码/解码，实现流畅实时预览。
+  static final filterPreviewImageProvider = StateProvider<ui.Image?>((ref) => null);
 
   /// 底部可折叠面板展开状态
   static final bottomPanelExpandedProvider = StateProvider<bool>((ref) => false);
@@ -181,6 +196,77 @@ class CaptureState {
   /// 自由拍摄模式下的构图参数（无模板时使用）
   static final freeModeCompositionProvider =
       StateProvider<Composition>((ref) => const Composition());
+
+  // ── 自由模式参数持久化（防抖写入 DAO）──
+
+  /// 防抖 Timer：参数变更后 500ms 无新变更才写入 DAO
+  static Timer? _cameraPersistTimer;
+  static Timer? _postProcessPersistTimer;
+  static Timer? _compositionPersistTimer;
+
+  /// 从 DAO 加载自由模式参数到对应 provider（拍摄页 initState 调用）
+  static Future<void> loadFreeModeParams(ProviderContainer container) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      final camera = await dao.getFreeModeCamera();
+      final postProcess = await dao.getFreeModePostProcess();
+      final composition = await dao.getFreeModeComposition();
+      if (camera != null) {
+        container.read(freeModeCameraProvider.notifier).state = camera;
+      }
+      if (postProcess != null) {
+        container.read(freeModePostProcessProvider.notifier).state = postProcess;
+      }
+      if (composition != null) {
+        container.read(freeModeCompositionProvider.notifier).state = composition;
+      }
+    } catch (e) {
+      // 加载失败静默降级，使用默认值
+      debugPrint('[capture] loadFreeModeParams failed: $e');
+    }
+  }
+
+  /// 防抖持久化相机参数（500ms 内多次变更只写一次）
+  static void _scheduleCameraPersist(ProviderContainer container) {
+    _cameraPersistTimer?.cancel();
+    _cameraPersistTimer = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final dao = await container.read(settingsDaoProvider.future);
+        final value = container.read(freeModeCameraProvider);
+        await dao.setFreeModeCamera(value);
+      } catch (e) {
+        debugPrint('[capture] persist camera failed: $e');
+      }
+    });
+  }
+
+  /// 防抖持久化后期参数
+  static void _schedulePostProcessPersist(ProviderContainer container) {
+    _postProcessPersistTimer?.cancel();
+    _postProcessPersistTimer = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final dao = await container.read(settingsDaoProvider.future);
+        final value = container.read(freeModePostProcessProvider);
+        await dao.setFreeModePostProcess(value);
+      } catch (e) {
+        debugPrint('[capture] persist postProcess failed: $e');
+      }
+    });
+  }
+
+  /// 防抖持久化构图参数
+  static void _scheduleCompositionPersist(ProviderContainer container) {
+    _compositionPersistTimer?.cancel();
+    _compositionPersistTimer = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        final dao = await container.read(settingsDaoProvider.future);
+        final value = container.read(freeModeCompositionProvider);
+        await dao.setFreeModeComposition(value);
+      } catch (e) {
+        debugPrint('[capture] persist composition failed: $e');
+      }
+    });
+  }
 
   /// 统一的可编辑相机参数（无论是否有模板，都返回当前生效的 CameraParams）
   /// ParamPanel 等组件通过此 provider 读取，避免 editable==null 时无法调参
@@ -220,6 +306,8 @@ class CaptureState {
     } else {
       final current = ref.read(freeModeCameraProvider);
       ref.read(freeModeCameraProvider.notifier).state = updater(current);
+      _scheduleCameraPersist(
+          ProviderScope.containerOf(ref.context, listen: false));
     }
   }
 
@@ -232,6 +320,8 @@ class CaptureState {
     } else {
       final current = ref.read(freeModePostProcessProvider);
       ref.read(freeModePostProcessProvider.notifier).state = updater(current);
+      _schedulePostProcessPersist(
+          ProviderScope.containerOf(ref.context, listen: false));
     }
   }
 
@@ -244,7 +334,24 @@ class CaptureState {
     } else {
       final current = ref.read(freeModeCompositionProvider);
       ref.read(freeModeCompositionProvider.notifier).state = updater(current);
+      _scheduleCompositionPersist(
+          ProviderScope.containerOf(ref.context, listen: false));
     }
+  }
+
+  /// 重置自由模式所有参数为默认值并立即持久化
+  static void resetFreeModeParams(WidgetRef ref) {
+    ref.read(freeModeCameraProvider.notifier).state = const CameraParams();
+    ref.read(freeModePostProcessProvider.notifier).state =
+        const PostProcess(color: PostProcessColor());
+    ref.read(freeModeCompositionProvider.notifier).state = const Composition();
+    _cameraPersistTimer?.cancel();
+    _postProcessPersistTimer?.cancel();
+    _compositionPersistTimer?.cancel();
+    final container = ProviderScope.containerOf(ref.context, listen: false);
+    _scheduleCameraPersist(container);
+    _schedulePostProcessPersist(container);
+    _scheduleCompositionPersist(container);
   }
 
   // ── 新增：水平仪 ──
@@ -267,9 +374,19 @@ class CaptureState {
   static final fillLightColorProvider =
       StateProvider<Color>((ref) => const Color(0xFFFFE5B4));
 
-  /// 补光强度 [0.1, 1.0]，默认 0.6
+  /// 补光强度 [0.1, 1.5]，默认 0.8（>1.0 时颜色向白色混合，更亮）
   static final fillLightIntensityProvider =
-      StateProvider<double>((ref) => 0.6);
+      StateProvider<double>((ref) => 0.8);
+
+  /// 悬浮取景器窗口缩放比例 [0.3, 1.0]，默认 0.5
+  /// 补光开启时取景器缩小为悬浮窗口，用户可在控制面板中调整大小
+  static final fillLightViewfinderScaleProvider =
+      StateProvider<double>((ref) => 0.5);
+
+  /// 悬浮取景器窗口位置偏移（相对于屏幕中心的偏移量）
+  /// 用户可拖动窗口调整位置
+  static final fillLightViewfinderOffsetProvider =
+      StateProvider<Offset>((ref) => Offset.zero);
 
   /// 统一的补光状态快照，供 PhotoPostProcessor 消费
   /// 当 fillLightEnabled=false 时返回 null
@@ -307,8 +424,8 @@ class CaptureState {
     container.read(kitsProvider.notifier).state = [];
     // 引擎状态与缩放
     container.read(cameraStateProvider.notifier).state = null;
-    container.read(zoomProvider.notifier).state = 0.0;
-    container.read(apparentZoomProvider.notifier).state = 0.0;
+    container.read(zoomProvider.notifier).state = 1.0;
+    container.read(apparentZoomProvider.notifier).state = 1.0;
     container.read(aspectRatioProvider.notifier).state = 'fullscreen';
     // 自由模式参数
     container.read(freeModeCameraProvider.notifier).state = const CameraParams();
@@ -323,13 +440,14 @@ class CaptureState {
     container.read(fillLightEnabledProvider.notifier).state = false;
     container.read(fillLightColorProvider.notifier).state =
         const Color(0xFFFFE5B4);
-    container.read(fillLightIntensityProvider.notifier).state = 0.6;
+    container.read(fillLightIntensityProvider.notifier).state = 0.8;
+    container.read(fillLightViewfinderScaleProvider.notifier).state = 0.5;
+    container.read(fillLightViewfinderOffsetProvider.notifier).state =
+        Offset.zero;
   }
 }
 
 /// 缩放范围（最小与最大倍数）
-/// 真实设备的 minZoom/maxZoom 通过 SensorConfig 查询；
-/// `CaptureState.zoomRangeForFacing` 提供默认 fallback 范围。
 class ZoomRange {
   const ZoomRange(this.min, this.max);
 
