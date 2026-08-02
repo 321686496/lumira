@@ -199,6 +199,37 @@ class Composition {
 
   @override
   int get hashCode => Object.hash(overlayType, gridType, subjectFrame, opacity, aspectRatio, description);
+
+  Map<String, dynamic> toJson() => {
+        'overlayType': overlayType,
+        if (gridType != null) 'gridType': gridType,
+        if (subjectFrame != null)
+          'subjectFrame': {
+            'x': subjectFrame!.x,
+            'y': subjectFrame!.y,
+            'w': subjectFrame!.w,
+            'h': subjectFrame!.h,
+          },
+        'opacity': opacity,
+        'aspectRatio': aspectRatio,
+        'description': description,
+      };
+
+  factory Composition.fromJson(Map<String, dynamic> json) => Composition(
+        overlayType: json['overlayType'] as String? ?? 'rule_of_thirds',
+        gridType: json['gridType'] as String?,
+        subjectFrame: (json['subjectFrame'] as Map<String, dynamic>?) != null
+            ? SubjectFrame(
+                x: (json['subjectFrame']['x'] as num).toDouble(),
+                y: (json['subjectFrame']['y'] as num).toDouble(),
+                w: (json['subjectFrame']['w'] as num).toDouble(),
+                h: (json['subjectFrame']['h'] as num).toDouble(),
+              )
+            : null,
+        opacity: (json['opacity'] as num?)?.toDouble() ?? 0.5,
+        aspectRatio: json['aspectRatio'] as String? ?? '3:4',
+        description: json['description'] as String? ?? '',
+      );
 }
 
 class SubjectFrame {
@@ -377,6 +408,32 @@ class CameraParams {
   @override
   int get hashCode => Object.hash(exposureCompensation, iso, shutterSpeed, whiteBalance,
       whiteBalanceK, flashMode, focusMode, lensType, isoMode, lensSuggestion);
+
+  Map<String, dynamic> toJson() => {
+        'exposureCompensation': exposureCompensation,
+        'iso': iso,
+        'shutterSpeed': shutterSpeed,
+        'whiteBalance': whiteBalance,
+        'whiteBalanceK': whiteBalanceK,
+        'flashMode': flashMode,
+        'focusMode': focusMode,
+        if (lensType != null) 'lensType': lensType,
+        if (isoMode != null) 'isoMode': isoMode,
+        if (lensSuggestion != null) 'lensSuggestion': lensSuggestion,
+      };
+
+  factory CameraParams.fromJson(Map<String, dynamic> json) => CameraParams(
+        exposureCompensation: (json['exposureCompensation'] as num?)?.toDouble() ?? 0.0,
+        iso: (json['iso'] as num?)?.toInt() ?? 200,
+        shutterSpeed: json['shutterSpeed'] as String? ?? '1/200',
+        whiteBalance: json['whiteBalance'] as String? ?? 'daylight',
+        whiteBalanceK: (json['whiteBalanceK'] as num?)?.toInt() ?? 5500,
+        flashMode: json['flashMode'] as String? ?? 'off',
+        focusMode: json['focusMode'] as String? ?? 'auto',
+        lensType: json['lensType'] as String?,
+        isoMode: json['isoMode'] as String?,
+        lensSuggestion: json['lensSuggestion'] as String?,
+      );
 }
 
 class SceneGuide {
@@ -515,6 +572,28 @@ class PostProcess {
 
   @override
   int get hashCode => Object.hash(cropRatio, color, smoothStrength, sharpen, vignette, grain, lut, systemFilter);
+
+  Map<String, dynamic> toJson() => {
+        'cropRatio': cropRatio,
+        'color': color.toJson(),
+        'smoothStrength': smoothStrength,
+        'sharpen': sharpen,
+        'vignette': vignette,
+        'grain': grain,
+        'lut': lut,
+        if (systemFilter != null) 'systemFilter': systemFilter,
+      };
+
+  factory PostProcess.fromJson(Map<String, dynamic> json) => PostProcess(
+        cropRatio: json['cropRatio'] as String? ?? '3:4',
+        color: PostProcessColor.fromJson(json['color'] as Map<String, dynamic>? ?? {}),
+        smoothStrength: (json['smoothStrength'] as num?)?.toInt() ?? 0,
+        sharpen: (json['sharpen'] as num?)?.toInt() ?? 0,
+        vignette: (json['vignette'] as num?)?.toInt() ?? 0,
+        grain: (json['grain'] as num?)?.toInt() ?? 0,
+        lut: json['lut'] as String? ?? 'none',
+        systemFilter: json['systemFilter'] as String?,
+      );
 }
 
 /// 照片变换参数（旋转/翻转/拉直）
@@ -648,4 +727,32 @@ class PostProcessColor {
   @override
   int get hashCode => Object.hash(brightness, contrast, saturation, temperature, tint,
       highlights, shadows, blackPoint, clarity, vibrance, brilliance);
+
+  Map<String, dynamic> toJson() => {
+        'brightness': brightness,
+        'contrast': contrast,
+        'saturation': saturation,
+        'temperature': temperature,
+        'tint': tint,
+        if (highlights != null) 'highlights': highlights,
+        if (shadows != null) 'shadows': shadows,
+        if (blackPoint != null) 'blackPoint': blackPoint,
+        if (clarity != null) 'clarity': clarity,
+        if (vibrance != null) 'vibrance': vibrance,
+        if (brilliance != null) 'brilliance': brilliance,
+      };
+
+  factory PostProcessColor.fromJson(Map<String, dynamic> json) => PostProcessColor(
+        brightness: (json['brightness'] as num?)?.toDouble() ?? 0,
+        contrast: (json['contrast'] as num?)?.toDouble() ?? 0,
+        saturation: (json['saturation'] as num?)?.toDouble() ?? 0,
+        temperature: (json['temperature'] as num?)?.toDouble() ?? 0,
+        tint: (json['tint'] as num?)?.toDouble() ?? 0,
+        highlights: (json['highlights'] as num?)?.toDouble(),
+        shadows: (json['shadows'] as num?)?.toDouble(),
+        blackPoint: (json['blackPoint'] as num?)?.toDouble(),
+        clarity: (json['clarity'] as num?)?.toDouble(),
+        vibrance: (json['vibrance'] as num?)?.toDouble(),
+        brilliance: (json['brilliance'] as num?)?.toDouble(),
+      );
 }
