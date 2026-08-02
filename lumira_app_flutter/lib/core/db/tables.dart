@@ -52,6 +52,11 @@ class Tables {
   // === user_settings 扩展列（v6 迁移新增） ===
   static const String colAutoDeblur = 'auto_deblur';
 
+  // === user_settings 扩展列（v9 迁移新增，自由模式参数持久化） ===
+  static const String colFreeModeCamera = 'free_mode_camera';
+  static const String colFreeModePostProcess = 'free_mode_post_process';
+  static const String colFreeModeComposition = 'free_mode_composition';
+
   // === composition_kits 表（M2 用，v4 迁移同步创建） ===
   // 注：colSceneId / colTemplateId 复用 gallery_items 段已声明的同名常量
   static const String compositionKits = 'composition_kits';
