@@ -47,14 +47,15 @@ class ParamPanel extends ConsumerWidget {
           height: 520,
           child: Container(
             decoration: BoxDecoration(
-              // 半透明背景：取景器隐约可见，同时保证文字可读性
-              color: Colors.black.withOpacity(0.78),
+              // 透明背景弹出样式：与其他工具一致（0.4 透明度），
+              // 取景器可见，backdrop-filter 模糊增强文字可读性
+              color: Colors.black.withOpacity(0.4),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               boxShadow: const [
                 BoxShadow(
-                  color: Color(0x66000000),
-                  blurRadius: 20,
-                  offset: Offset(0, -4),
+                  color: Color(0x44000000),
+                  blurRadius: 12,
+                  offset: Offset(0, -2),
                 ),
               ],
             ),
@@ -88,10 +89,14 @@ class ParamPanel extends ConsumerWidget {
                           original != null &&
                           editable != original,
                       onReset: () {
-                        if (original != null) {
+                        if (editable != null && original != null) {
+                          // 模板模式：重置为模板原始值
                           ref
                               .read(CaptureState.editableTemplateProvider.notifier)
                               .state = original.copyWith();
+                        } else {
+                          // 自由模式：重置为默认值并持久化
+                          CaptureState.resetFreeModeParams(ref);
                         }
                       },
                       onDone: () => _close(ref),
@@ -281,29 +286,28 @@ class _PanelFooter extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (hasTemplate && isModified)
-            GestureDetector(
-              onTap: onReset,
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.refresh, size: 14, color: Colors.white70),
-                    SizedBox(width: 4),
-                    Text('重置', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  ],
-                ),
+          // 始终显示重置按钮（模板模式仅在已修改时有意义，但保留可点；
+          // 自由模式重置为默认值并持久化）
+          GestureDetector(
+            onTap: onReset,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(20),
               ),
-            )
-          else
-            const Spacer(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.refresh, size: 14, color: Colors.white70),
+                  SizedBox(width: 4),
+                  Text('重置', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
           const Spacer(),
           GestureDetector(
             onTap: onDone,
@@ -368,60 +372,6 @@ class _CameraTab extends ConsumerWidget {
               onChanged: (v) => CaptureState.updateCamera(
                   ref, (c) => c.copyWith(exposureCompensation: v)),
             ),
-            _SliderRow(
-              label: 'ISO',
-              value: cam.iso.toDouble(),
-              min: 100,
-              max: 6400,
-              divisions: 63,
-              display: cam.iso == 0 ? 'Auto' : cam.iso.toString(),
-              onChanged: (v) => CaptureState.updateCamera(
-                  ref, (c) => c.copyWith(iso: v.round())),
-            ),
-            _PopupRow(
-              label: '快门',
-              value: cam.shutterSpeed,
-              items: const [
-                'auto',
-                '1/30',
-                '1/60',
-                '1/125',
-                '1/200',
-                '1/500',
-                '1/1000'
-              ],
-              onChanged: (v) => CaptureState.updateCamera(
-                  ref, (c) => c.copyWith(shutterSpeed: v)),
-            ),
-          ],
-        ),
-        _SectionCard(
-          title: '白平衡',
-          children: [
-            _PopupRow(
-              label: '预设',
-              value: cam.whiteBalance,
-              items: const [
-                'auto',
-                'daylight',
-                'cloudy',
-                'shade',
-                'tungsten',
-                'fluorescent',
-                'custom'
-              ],
-              displayLabels: const {
-                'auto': '自动',
-                'daylight': '日光',
-                'cloudy': '阴天',
-                'shade': '阴影',
-                'tungsten': '白炽灯',
-                'fluorescent': '荧光',
-                'custom': '自定义',
-              },
-              onChanged: (v) => CaptureState.updateCamera(
-                  ref, (c) => c.copyWith(whiteBalance: v)),
-            ),
           ],
         ),
         _SectionCard(
@@ -440,22 +390,9 @@ class _CameraTab extends ConsumerWidget {
               onChanged: (v) => CaptureState.updateCamera(
                   ref, (c) => c.copyWith(flashMode: v)),
             ),
-            _PopupRow(
-              label: '对焦',
-              value: cam.focusMode,
-              items: const ['auto', 'manual', 'continuous'],
-              displayLabels: const {
-                'auto': '自动对焦',
-                'manual': '手动对焦',
-                'continuous': '连续对焦',
-              },
-              onChanged: (v) => CaptureState.updateCamera(
-                  ref, (c) => c.copyWith(focusMode: v)),
-            ),
           ],
         ),
         const SizedBox(height: 12),
-        // 提示：ISO/快门/白平衡为推荐值
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
@@ -468,7 +405,7 @@ class _CameraTab extends ConsumerWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'EV 可实时影响取景器亮度；ISO/快门/白平衡为推荐参考值',
+                  'EV 可实时影响取景器亮度',
                   style: TextStyle(color: Colors.white24, fontSize: 10, height: 1.4),
                 ),
               ),

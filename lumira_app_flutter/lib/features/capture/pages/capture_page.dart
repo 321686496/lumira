@@ -1,23 +1,21 @@
-import 'dart:io';
-import 'dart:math' as math;
+import 'dart:io' show File;
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image/image.dart' as img;
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
-import '../../home/providers/banner_recommendation_provider.dart';
-import '../../profile/providers/composition_kits_providers.dart';
 import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../data/capture_state.dart';
 import '../data/capture_thumbnail_state.dart';
+import '../data/custom_fill_light_colors.dart';
 import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
-import '../services/photo_pipeline.dart';
 import '../widgets/aspect_ratio_selector.dart';
 import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
@@ -65,19 +63,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
   bool _isLandscape = false;
   CameraPermissionStatus _permissionStatus = CameraPermissionStatus.unknown;
 
-  /// quickProcess 窗口阻塞标志：仅在 quickProcess 主 Isolate 处理期间为 true，
-  /// 完成后立即恢复 false 以支持连拍。fullProcess 在后台 Isolate 执行，不阻塞。
-  bool _isQuickProcessing = false;
-
   /// 白闪动画触发器：每次拍照时递增，ShutterFeedback widget 监听变化播放动画。
   int _shutterTrigger = 0;
 
   /// 返回结果模式：当通过 ?mode=return 进入时，拍照完成后 pop 回上一页
   /// （用于实战作业页的"去拍摄"流程，捕获路径作为 String 返回）
   bool _returnResult = false;
-
-  /// 当前套用的 kit ID（用于拍照完成时 incrementUsage）
-  String? _activeKitId;
 
   /// 相机重建 key：每次 app 从后台恢复时递增，
   /// 强制 CameraAwesomeBuilder 销毁旧实例并创建新实例，
@@ -87,7 +78,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 取景器原始帧捕获 key：包裹 CameraPreview 的原始相机流（ColorFiltered 之前），
   /// FilterPicker 抽屉展开时通过此 key 调用 `boundary.toImage()` 捕获当前帧，
   /// 在滤镜卡片中套用各滤镜的 ColorFilter 显示实时效果预览。
-  final GlobalKey _viewfinderCaptureKey = GlobalKey();
+  ///
+  /// 修复 Bug：之前用固定 GlobalKey，切换摄像头时 Flutter reparent 复用旧
+  /// RepaintBoundary 及其子树（CameraAwesomeBuilder），导致 sensor 不切换。
+  /// 现在改为在 facing 变化时重建 key，强制 RepaintBoundary + CameraAwesomeBuilder 重建。
+  GlobalKey _viewfinderCaptureKey = GlobalKey(debugLabel: 'viewfinder');
+
+  /// 上一次构建时的 facing，用于检测 facing 变化并重建 captureKey
+  String? _lastFacingForKey;
 
   /// 缓存的 ProviderContainer 引用。
   /// 在 dispose() 中调用 ref.read 会触发 ProviderScope.containerOf(this)，
@@ -110,6 +108,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       final mode = GoRouterState.of(context).queryParams[RouteNames.paramMode];
       _returnResult = mode == 'return';
       _requestCameraPermission();
+      _loadLastPhotoForThumbnail();
+      // 异步加载持久化的自由模式参数（仅在自由模式生效，模板模式由 currentTemplateId 覆盖）
+      CaptureState.loadFreeModeParams(
+          ProviderScope.containerOf(context, listen: false));
     });
   }
 
@@ -132,7 +134,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
 
     if (kitId == null) return;
-    _activeKitId = kitId;
 
     try {
       final dao = await ref.read(compositionKitsDaoProvider.future);
@@ -205,6 +206,24 @@ class _CapturePageState extends ConsumerState<CapturePage>
     });
   }
 
+  /// 从数据库加载最近一张照片，显示在左下角缩略图（与原生相机行为一致）。
+  /// 修复 Bug：之前缩略图仅在拍摄后显示，进入拍摄页时为空白。
+  Future<void> _loadLastPhotoForThumbnail() async {
+    try {
+      final dao = await ref.read(galleryDaoProvider.future);
+      final recent = await dao.getRecent(limit: 1);
+      if (!mounted || recent.isEmpty) return;
+      final photo = recent.first;
+      final path = photo.filePath;
+      if (path == null || path.isEmpty) return;
+      ref
+          .read(captureThumbnailProvider.notifier)
+          .setFinalResult(path, photo.id);
+    } catch (e) {
+      debugPrint('[capture] 加载最近照片失败: $e');
+    }
+  }
+
   @override
   void dispose() {
     // 通过 CameraService 抽象层释放原生相机资源（替代 CamerawesomePlugin.stop）。
@@ -266,84 +285,50 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
-  /// 拍照入口：双管线（quickProcess + fullProcess）+ 角标缩略图模式。
+  /// 拍照入口：调用 CameraService 拿到原始 JPEG，后处理后显示到角标。
   ///
-  /// 流程：
-  /// 1. 检查 `_isQuickProcessing`，true 则 return（防止 quickProcess 窗口并发）
-  /// 2. 读取 CameraService + 闪光灯/facing/zoom 状态快照
-  /// 3. 设置 `_isQuickProcessing = true`
-  /// 4. 立即反馈：`_shutterTrigger++` 触发白闪动画 + `startCapture()` 角标转 processing 态
-  /// 5. 调用 `cameraService.capture()` 获取原始 JPEG 路径
-  /// 6. 读取后处理参数快照（params/rawMode/aspectRatio/screenRatio/isPortrait）
-  /// 7. 调用 `photoPipelineProvider.quickProcess(...)` → 若成功，角标 setQuickResult
-  /// 8. `_isQuickProcessing = false`（恢复可拍，支持连拍）
-  /// 9. 调用 `_runFullProcess(...)`（不 await，后台 Isolate 执行）
+  /// 连拍优化：capture（相机拍照）和后处理解耦。
+  /// - capture 调用立即返回（camerawesome 内部排队 takePhoto，每次返回独立文件）
+  /// - 后处理在独立 isolate 中串行执行，不阻塞 UI 和下次 capture 调用
+  /// - 角标显示最新完成的一张
   Future<void> _onCapture() async {
     debugPrint('[capture] _onCapture() called');
-
-    if (_isQuickProcessing) {
-      debugPrint('[capture] quickProcess 处理中，忽略拍照请求');
-      return;
-    }
 
     final cameraService = ref.read(cameraServiceProvider);
     final flashMode = ref.read(CaptureState.flashModeProvider);
     final facing = ref.read(CaptureState.cameraFacingProvider);
     final zoom = ref.read(CaptureState.zoomProvider);
-    final zoomRange = CaptureState.zoomRangeForFacing(facing);
-    final zoomMultiplier = CaptureState.normalizedToZoomMultiplier(
-        zoom, zoomRange.min, zoomRange.max);
 
-    // 在 await 之前读取 BuildContext 相关数据，避免 use_build_context_synchronously
-    final screenSize = MediaQuery.of(context).size;
-    final screenRatio = screenSize.width / screenSize.height;
-    final isPortrait = screenSize.height >= screenSize.width;
-
-    _isQuickProcessing = true;
     // 立即反馈：白闪 + 角标 processing 态
     setState(() => _shutterTrigger++);
     ref.read(captureThumbnailProvider.notifier).startCapture();
+
+    // 快照当前比例参数（避免连拍中切换比例导致参数不一致）
+    final ratioId = ref.read(CaptureState.aspectRatioProvider);
+    final winSize = WidgetsBinding.instance.window.physicalSize;
+    final isPortrait = winSize.height >= winSize.width;
+    final screenRatio = winSize.width / winSize.height;
+    final targetRatio =
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
 
     try {
       final result = await cameraService.capture(
         config: CaptureConfig(
           facing: facing,
-          zoomMultiplier: zoomMultiplier,
+          zoomMultiplier: zoom,
           flashMode: _mapFlashMode(flashMode),
         ),
       );
 
-      // quickProcess（主 Isolate，< 100ms）
-      final params = ref.read(CaptureState.effectivePostProcessProvider);
-      final rawMode = ref.read(CaptureState.rawModeProvider);
-      final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
-
-      final quick = await ref.read(photoPipelineProvider).quickProcess(
-            inputPath: result.filePath,
-            params: params,
-            aspectRatio: aspectRatio,
-            screenRatio: screenRatio,
-            isPortrait: isPortrait,
-            rawMode: rawMode,
-          );
-
-      if (quick != null) {
-        ref.read(captureThumbnailProvider.notifier).setQuickResult(quick.bytes);
-      }
-      // quickProcess 完成，恢复可拍（支持连拍）
-      _isQuickProcessing = false;
-
-      // fullProcess（后台 Isolate，不阻塞，不 await）
-      _runFullProcess(
+      // 后处理异步执行，不阻塞下次 capture 调用（支持连拍）
+      _processCaptureQueue.add(_CaptureProcessParams(
         inputPath: result.filePath,
-        params: params,
-        rawMode: rawMode,
-        aspectRatio: aspectRatio,
-        screenRatio: screenRatio,
+        targetRatio: targetRatio,
         isPortrait: isPortrait,
-      );
+        isFront: facing == 'front',
+      ));
+      _processCaptureQueueItem();
     } catch (e, st) {
-      _isQuickProcessing = false;
       debugPrint('[capture] capture failed: $e\n$st');
       if (!mounted) return;
       LumiraToast.show(
@@ -354,116 +339,35 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
-  /// 后台完整处理管线（在 worker Isolate 中执行 image 包逐像素效果）。
-  ///
-  /// 流程：
-  /// 1. 原图备份（File.copy 到 .original.jpg）供非破坏性编辑使用
-  /// 2. 调用 `photoPipelineProvider.fullProcess(...)`（Isolate 执行）
-  /// 3. evict FileImage 缓存（防止旧解码图残留）
-  /// 4. 落库（GalleryItemRecord → dao.insert → invalidate providers）
-  /// 5. `captureThumbnailProvider.notifier.setFinalResult` 角标 swap 最终图
-  /// 6. 更新 `lastPhotoPathProvider`
-  /// 7. catch：降级提示"图像增强失败，已保存基础图"
-  Future<void> _runFullProcess({
-    required String inputPath,
-    required PostProcess params,
-    required bool rawMode,
-    required String aspectRatio,
-    required double screenRatio,
-    required bool isPortrait,
-  }) async {
-    final fillLight = ref.read(CaptureState.fillLightStateProvider);
+  /// 拍照后处理队列（串行消费，避免 isolate 并发创建开销和内存峰值）
+  final _processCaptureQueue = <_CaptureProcessParams>[];
+  bool _isProcessingCapture = false;
 
-    // [非破坏性编辑] 复制原始文件，供后续编辑时重新处理
-    // 复制到 <inputPath>.original.jpg，与处理后的文件并存
-    // 失败不阻塞拍摄流程（originalPath 为 null 时预览页降级为只读）
-    String? originalPath;
+  /// 串行处理拍照后处理队列。
+  /// 每张照片在独立 isolate 中处理（方向对齐 + 前置镜像 + 比例裁切），
+  /// 处理完成后更新角标为最新一张。
+  Future<void> _processCaptureQueueItem() async {
+    if (_isProcessingCapture || _processCaptureQueue.isEmpty) return;
+    _isProcessingCapture = true;
+    final params = _processCaptureQueue.removeAt(0);
     try {
-      originalPath = '$inputPath.original.jpg';
-      await File(inputPath).copy(originalPath);
-      debugPrint('[capture] 原图已保留: $originalPath');
-    } catch (e) {
-      debugPrint('[capture] 原图保留失败（不阻塞）: $e');
-      originalPath = null;
-    }
-
-    try {
-      final result = await ref.read(photoPipelineProvider).fullProcess(
-            inputPath: inputPath,
-            params: params,
-            aspectRatio: aspectRatio,
-            screenRatio: screenRatio,
-            isPortrait: isPortrait,
-            rawMode: rawMode,
-            fillLight: fillLight,
-          );
-
-      // evict FileImage 缓存，防止 fullProcess 写入新字节后旧解码图残留
-      try {
-        PaintingBinding.instance.imageCache
-            .evict(FileImage(File(result.filePath)));
-      } catch (e) {
-        debugPrint('[capture] evict FileImage 缓存失败: $e');
+      final processedPath = await compute(_processCaptureInIsolate, params);
+      if (!mounted) {
+        _isProcessingCapture = false;
+        return;
       }
-
-      // 落库（修复 Issue 4：拍照后立即写入 DB，避免孤儿文件）
       final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
-      try {
-        final dao = await ref.read(galleryDaoProvider.future);
-        final templateId = ref.read(CaptureState.currentTemplateIdProvider);
-        final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
-        final lut = params.lut;
-        final record = GalleryItemRecord(
-          id: photoId,
-          filePath: result.filePath,
-          originalPath: originalPath,
-          postProcess: params,
-          dataUrl: null,
-          sceneId: sceneId,
-          templateId: templateId,
-          kitId: null,
-          mood: null,
-          lut: (lut == 'none' || lut.isEmpty) ? null : lut,
-          createdAt: DateTime.now().millisecondsSinceEpoch,
-        );
-        await dao.insert(record);
-        ref.invalidate(galleryDaoProvider);
-        // 让首页 banner 推荐失效，下次进入首页刷新（基于最新拍摄历史）
-        ref.invalidate(bannerRecommendationProvider);
-        debugPrint('[capture] 自动保存到应用相册: ${record.id}');
-
-        // 套件使用次数 +1（仅在套用 kit 进入时）
-        if (_activeKitId != null) {
-          try {
-            final kitsDao =
-                await ref.read(compositionKitsDaoProvider.future);
-            await kitsDao.incrementUsage(_activeKitId!);
-            ref.invalidate(compositionKitsProvider);
-          } catch (e) {
-            debugPrint('[capture] 套件 usage 计数失败: $e');
-          }
-        }
-      } catch (e) {
-        debugPrint('[capture] 落库失败: $e');
-      }
-
-      // 角标 swap 最终图 + 更新 lastPhotoPathProvider
-      if (mounted) {
-        ref
-            .read(captureThumbnailProvider.notifier)
-            .setFinalResult(result.filePath, photoId);
-        ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
-            result.filePath;
-      }
-    } catch (e, st) {
-      debugPrint('[capture] fullProcess failed: $e\n$st');
-      // 降级：角标保持 preview 态，Toast 提示
-      if (mounted) {
-        LumiraToast.show(
-          context,
-          '图像增强失败，已保存基础图',
-          duration: const Duration(seconds: 2),
-        );
+      ref.read(captureThumbnailProvider.notifier)
+          .setFinalResult(processedPath, photoId);
+      ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
+          processedPath;
+    } catch (e) {
+      debugPrint('[capture] process failed: $e');
+    } finally {
+      _isProcessingCapture = false;
+      // 队列中还有则继续处理
+      if (_processCaptureQueue.isNotEmpty && mounted) {
+        _processCaptureQueueItem();
       }
     }
   }
@@ -476,42 +380,79 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final next = current == 'back' ? 'front' : 'back';
     ref.read(CaptureState.cameraFacingProvider.notifier).state = next;
 
-    // 切换摄像头后将缩放重置为 1x（新摄像头可能不支持当前倍数）
-    final range = CaptureState.zoomRangeForFacing(next);
-    final normalized1x = CaptureState.zoomMultiplierToNormalized(
-        1.0, range.min, range.max);
-    ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
-    ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
+    // 切换到前置摄像头时关闭闪光灯（前置无闪光灯硬件）
+    if (next == 'front' &&
+        ref.read(CaptureState.flashModeProvider) != CaptureFlashMode.off) {
+      ref.read(CaptureState.flashModeProvider.notifier).state =
+          CaptureFlashMode.off;
+    }
+
+    // 切换到后置摄像头时自动关闭补光灯（补光仅前置有效）
+    // 同时重置悬浮取景器的位置和大小，以便下次开启时恢复初始状态
+    if (next == 'back' &&
+        ref.read(CaptureState.fillLightEnabledProvider)) {
+      ref.read(CaptureState.fillLightEnabledProvider.notifier).state = false;
+      ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state =
+          0.5;
+      ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
+          Offset.zero;
+    }
+    // 切换到后置时收起补光抽屉（工具已被隐藏）
+    if (next == 'back' &&
+        ref.read(CaptureState.activeToolProvider) == 'fillLight') {
+      ref.read(CaptureState.activeToolProvider.notifier).state = null;
+    }
+
+    // 切换摄像头后将缩放重置为 1x
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = 1.0;
+    ref.read(CaptureState.zoomProvider.notifier).state = 1.0;
   }
 
-  /// 缩放：以"倍数"为单位（前摄 [0.5, 2.0]，后摄 [0.3, 10.0]）。
-  /// 默认 1x。通过 CameraService.setZoom 下发到原生相机。
-  ///
-  /// CameraService 实现内部按平台差异处理：
-  /// - OHOS：直接传真实倍数（CamerawesomePlugin.setZoom）
-  /// - iOS/Android：归一化到 [0,1]（SensorConfig.setZoom）
+  /// 缩放回调：接收真实倍数，clamp 到设备支持范围后下发到相机。
+  /// 由 _ZoomTabBar 倍数切换或水平拖动触发。
+  /// 比例切换的视觉效果由取景器容器大小变化 + cover 裁切自动实现，无需 zoom 补偿。
   void _onZoomChanged(double multiplier) {
-    final facing = ref.read(CaptureState.cameraFacingProvider);
-    final range = CaptureState.zoomRangeForFacing(facing);
-    final clamped = multiplier.clamp(range.min, range.max);
-
-    // 仅用于 UI 显示的归一化值（apparentZoomProvider 仍为 [0,1]）
-    final normalized = CaptureState.zoomMultiplierToNormalized(
-        clamped, range.min, range.max);
-    ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized;
-    ref.read(CaptureState.zoomProvider.notifier).state = normalized;
-
-    // 通过 CameraService 抽象层下发到原生相机
-    ref.read(cameraServiceProvider).setZoom(clamped);
+    final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
+    final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final clamped = multiplier.clamp(minZoom, maxZoom);
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = clamped;
+    ref.read(CaptureState.zoomProvider.notifier).state = clamped;
+    ref.read(cameraServiceProvider).setZoomMultiplier(clamped);
   }
 
   @override
   Widget build(BuildContext context) {
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    // 修复 Bug：watch facing 以在 facing 变化时重建 _viewfinderCaptureKey，
+    // 强制 RepaintBoundary + CameraAwesomeBuilder 重建（切换 sensor）
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    if (_lastFacingForKey != facing) {
+      _viewfinderCaptureKey = GlobalKey(debugLabel: 'viewfinder_$facing');
+      _lastFacingForKey = facing;
+    }
 
     // 监听闪光灯模式变化，通过 CameraService 同步到相机引擎
     ref.listen<CaptureFlashMode>(CaptureState.flashModeProvider, (prev, next) {
       ref.read(cameraServiceProvider).setFlashMode(_mapFlashMode(next));
+    });
+
+    // EV 补偿 → 取景器亮度：将 EV [-3, +3] 映射到 brightness [0, 1]
+    // EV=0 → brightness=0.5（中性），EV=+3 → brightness=1.0（最亮），EV=-3 → brightness=0.0（最暗）
+    ref.listen<CameraParams>(CaptureState.effectiveCameraProvider, (prev, next) {
+      if (prev?.exposureCompensation != next.exposureCompensation) {
+        final ev = next.exposureCompensation;
+        final brightness = (0.5 + ev / 6.0).clamp(0.0, 1.0);
+        ref.read(cameraServiceProvider).setBrightness(brightness);
+      }
+    });
+
+    // 比例切换时重新下发当前缩放（真实倍数不变，直接下发）
+    // 比例切换的视觉效果由取景器容器大小变化 + cover 裁切自动实现
+    ref.listen<String>(CaptureState.aspectRatioProvider, (prev, next) {
+      if (prev != next) {
+        final multiplier = ref.read(CaptureState.zoomProvider);
+        ref.read(cameraServiceProvider).setZoomMultiplier(multiplier);
+      }
     });
 
     // 模板切换时同步 aspectRatioProvider 为模板的 cropRatio
@@ -532,10 +473,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
     });
 
-    // 注：原 effectiveCameraProvider 监听器（EV→brightness、flashMode 同步）已移除。
-    // CameraService 抽象接口当前未暴露 setBrightness，EV 调整的实时预览
-    // 依赖 camera_preview.dart 的 onReady 回调在相机重建时应用初始值。
-    // 闪光灯模式变化已由上方 flashModeProvider 监听器通过 CameraService.setFlashMode 处理。
+    // EV 补偿通过上方 effectiveCameraProvider 监听器实时下发到取景器。
+    // 闪光灯模式变化由 flashModeProvider 监听器通过 CameraService.setFlashMode 处理。
+    // ISO/快门/白平衡为推荐参考值（camerawesome SDK 不支持手动设置这些参数）。
 
     // 权限未授予时显示权限引导 UI
     if (_permissionStatus == CameraPermissionStatus.unknown ||
@@ -567,17 +507,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. 取景器（按选定比例约束显示区域，所见即所得）
-          // key 绑定 _cameraRebuildKey：app 恢复时 key 变化，
-          // 强制 CameraPreview（及其内部的 CameraAwesomeBuilder）完全重建
+          // 1. 取景器 + 补光背景
+          // 补光开启时：取景器缩小为悬浮窗口，背景显示补光色
+          // 补光关闭时：取景器全屏铺满
           _ViewfinderArea(
             rebuildKey: _cameraRebuildKey,
             onZoomChanged: _onZoomChanged,
             rawCaptureKey: _viewfinderCaptureKey,
           ),
-
-          // 1.5 补光叠层（仅在取景器上方、ParamPillBar 之下）
-          const _FillLightOverlay(),
 
           // 2. 导航栏（始终保留：含返回 + 全屏切换 + 闪光灯）
           Positioned(
@@ -683,113 +620,197 @@ class _ViewfinderArea extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ratioId = ref.watch(CaptureState.aspectRatioProvider);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    final fillLightEnabled = ref.watch(CaptureState.fillLightEnabledProvider);
     final screenSize = MediaQuery.of(context).size;
     final isPortrait = screenSize.height >= screenSize.width;
     final screenRatio = screenSize.width / screenSize.height;
-    // fullscreen 模式：目标比例 = 屏幕比例；其他模式：按 ratioId 计算
     final targetRatio =
         CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
     final isFullscreen = ratioId == 'fullscreen';
 
-    return Container(
-      color: Colors.black,
-      child: SizedBox(
-        width: screenSize.width,
-        height: screenSize.height,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // 相机流铺满全屏（所有模式都一样），与 iPhone 系统相机 4:3 模式一致
-            CameraPreview(
-              key: ValueKey('camera_preview_$rebuildKey'),
+    // 补光悬浮模式：仅前置摄像头 + 补光开启时激活
+    final isFloating = fillLightEnabled && facing == 'front';
+
+    if (!isFloating) {
+      // 取景器容器大小变化方案（原生相机行为）：
+      // 容器比例 = 目标比例时，cover 不额外裁切传感器图像，
+      // 4:3 显示传感器全视角（最广），全屏 cover 裁切左右（视野变窄）。
+      // 容器外为纯黑背景，居中对称黑边。
+      double vfW, vfH;
+      if (isFullscreen) {
+        vfW = screenSize.width;
+        vfH = screenSize.height;
+      } else {
+        if (screenRatio > targetRatio) {
+          // 屏幕比目标宽 → 容器按高度填满，左右留黑边
+          vfH = screenSize.height;
+          vfW = vfH * targetRatio;
+        } else {
+          // 屏幕比目标窄 → 容器按宽度填满，上下留黑边
+          vfW = screenSize.width;
+          vfH = vfW / targetRatio;
+        }
+      }
+
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            width: vfW,
+            height: vfH,
+            child: CameraPreview(
+              key: ValueKey('camera_preview_${rebuildKey}_$facing'),
               onZoomChanged: onZoomChanged,
               previewFit: CameraPreviewFit.cover,
               rawCaptureKey: rawCaptureKey,
             ),
-            // 非 fullscreen 模式叠加裁剪辅助线，指示实际裁剪区域
-            if (!isFullscreen)
-              _CropGuideOverlay(
-                aspectRatio: targetRatio,
-                screenSize: screenSize,
-              ),
-          ],
+          ),
         ),
-      ),
+      );
+    }
+
+    // 补光悬浮模式：取景器缩小为可拖动窗口，背景显示补光色
+    return _FloatingViewfinder(
+      rebuildKey: rebuildKey,
+      facing: facing,
+      onZoomChanged: onZoomChanged,
+      rawCaptureKey: rawCaptureKey,
+      screenSize: screenSize,
     );
   }
 }
 
-/// 裁剪辅助线 overlay：非 fullscreen 模式下叠加在相机流上
-/// 显示实际裁剪区域（框线）+ 框外半透明遮罩
-/// 与 iPhone 系统相机 4:3 模式一致
-class _CropGuideOverlay extends StatelessWidget {
-  const _CropGuideOverlay({
-    required this.aspectRatio,
+/// 悬浮取景器：补光开启时显示，可拖动、可缩放
+/// 背景为补光色（模拟屏幕发光），取景器窗口浮在上方
+class _FloatingViewfinder extends ConsumerStatefulWidget {
+  const _FloatingViewfinder({
+    required this.rebuildKey,
+    required this.facing,
+    required this.onZoomChanged,
+    required this.rawCaptureKey,
     required this.screenSize,
   });
 
-  final double aspectRatio; // 裁剪框宽高比 (w/h)
+  final int rebuildKey;
+  final String facing;
+  final ValueChanged<double>? onZoomChanged;
+  final GlobalKey? rawCaptureKey;
   final Size screenSize;
 
   @override
+  ConsumerState<_FloatingViewfinder> createState() => _FloatingViewfinderState();
+}
+
+class _FloatingViewfinderState extends ConsumerState<_FloatingViewfinder> {
+  Offset _dragOffset = Offset.zero;
+  // 当前活跃的指针数量，用于区分单指拖动 vs 多指缩放
+  int _activePointers = 0;
+
+  @override
   Widget build(BuildContext context) {
-    final sw = screenSize.width;
-    final sh = screenSize.height;
+    final color = ref.watch(CaptureState.fillLightColorProvider);
+    final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
+    final scale = ref.watch(CaptureState.fillLightViewfinderScaleProvider);
+    final savedOffset =
+        ref.watch(CaptureState.fillLightViewfinderOffsetProvider);
+    final ratioId = ref.watch(CaptureState.aspectRatioProvider);
 
-    // 计算裁剪框尺寸：在屏幕内居中，尽可能大，宽高比 = aspectRatio
-    double cropW, cropH;
-    if (sw / sh > aspectRatio) {
-      // 屏幕比目标更宽 → 高度铺满，宽度按比例
-      cropH = sh;
-      cropW = sh * aspectRatio;
-    } else {
-      // 屏幕比目标更窄 → 宽度铺满，高度按比例
-      cropW = sw;
-      cropH = sw / aspectRatio;
-    }
+    final sw = widget.screenSize.width;
+    final sh = widget.screenSize.height;
+    final isPortrait = sh >= sw;
+    final screenRatio = sw / sh;
+    // 窗口宽高比：与用户选择的成像比例一致
+    final windowRatio =
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+    // 窗口宽 = 屏幕宽 * scale；窗口高 = 宽 / windowRatio
+    final windowW = sw * scale;
+    final windowH = windowW / windowRatio;
 
-    final left = (sw - cropW) / 2;
-    final top = (sh - cropH) / 2;
-    const maskColor = Color(0x80000000); // 框外遮罩：黑色 50% 透明
-    const borderColor = Color(0x99FFFFFF); // 框线：白色 60% 透明
+    // 窗口中心点的绝对位置 = 屏幕中心 + 保存的偏移 + 当前拖动偏移
+    final centerX = sw / 2 + savedOffset.dx + _dragOffset.dx;
+    final centerY = sh * 0.42 + savedOffset.dy + _dragOffset.dy;
+    // 窗口左上角坐标
+    final left = centerX - windowW / 2;
+    final top = centerY - windowH / 2;
 
-    return IgnorePointer(
-      child: Stack(
-        children: [
-          // 框外遮罩（四块）
-          // 上
-          Positioned(left: 0, top: 0, right: 0, height: top,
-            child: ColoredBox(color: maskColor)),
-          // 下
-          Positioned(left: 0, top: top + cropH, right: 0, bottom: 0,
-            child: ColoredBox(color: maskColor)),
-          // 左
-          Positioned(left: 0, top: top, width: left, height: cropH,
-            child: ColoredBox(color: maskColor)),
-          // 右
-          Positioned(left: left + cropW, top: top, right: 0, height: cropH,
-            child: ColoredBox(color: maskColor)),
-          // 裁剪框线
-          Positioned(
-            left: left,
-            top: top,
-            width: cropW,
-            height: cropH,
+    // 补光色：整个屏幕都是补光色（无黑色背景）
+    // intensity > 1.0 时，将颜色向白色混合，让补光更亮
+    final bgFull = intensity > 1.0
+        ? Color.lerp(color, Colors.white, (intensity - 1.0).clamp(0.0, 0.5))!
+        : color.withOpacity(intensity.clamp(0.0, 1.0));
+
+    // clipBehavior: Clip.none 让窗口可溢出屏幕边缘（拖动时部分超出仍可见）
+    return Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        // 1. 全屏补光色背景（整个屏幕都是补光色，无黑色）
+        Positioned.fill(child: ColoredBox(color: bgFull)),
+
+        // 2. 悬浮取景器窗口：独立小窗，可拖动，浮在补光色背景之上
+        //    用 Listener（而非 GestureDetector）直接处理指针事件，
+        //    绕过手势竞技场——CameraPreview 内部的缩放/对焦手势不会抢走拖动事件。
+        //    translucent 让 CameraPreview 也能收到事件，缩放/对焦仍可用。
+        Positioned(
+          left: left,
+          top: top,
+          width: windowW,
+          height: windowH,
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) {
+              _activePointers++;
+            },
+            onPointerMove: (event) {
+              // 仅单指时拖动窗口；多指（双指缩放）交给 CameraPreview 处理
+              if (_activePointers == 1) {
+                setState(() => _dragOffset += event.delta);
+              }
+            },
+            onPointerUp: (_) {
+              _activePointers = (_activePointers - 1).clamp(0, 99);
+              if (_activePointers == 0 && _dragOffset != Offset.zero) {
+                ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
+                    savedOffset + _dragOffset;
+                _dragOffset = Offset.zero;
+              }
+            },
+            onPointerCancel: (_) {
+              _activePointers = (_activePointers - 1).clamp(0, 99);
+              if (_activePointers == 0) {
+                _dragOffset = Offset.zero;
+              }
+            },
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: borderColor, width: 1.0),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white54, width: 2),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: CameraPreview(
+                  key: ValueKey(
+                      'camera_preview_${widget.rebuildKey}_${widget.facing}'),
+                  onZoomChanged: widget.onZoomChanged,
+                  previewFit: CameraPreviewFit.cover,
+                  rawCaptureKey: widget.rawCaptureKey,
+                ),
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-/// 底部控制区：缩放滑块 + 工具栏 + 抽屉 + 拍摄按钮行
+/// 底部控制区：缩放Tab栏 + 工具栏 + 抽屉 + 拍摄按钮行
 /// 修复 Bug 10：全屏模式下隐藏工具栏与抽屉，保留拍摄按钮、缩略图、切换摄像头
 /// 改造：原"紧凑模板条+折叠按钮+展开面板"已替换为一排图标工具栏 + 底部抽屉
+/// 修复：操作栏背景完全覆盖到底部（不使用 SafeArea，手动处理 bottom padding）
 class _BottomControlArea extends StatelessWidget {
   const _BottomControlArea({
     required this.isFullscreen,
@@ -809,24 +830,25 @@ class _BottomControlArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.black.withOpacity(0.6),
-            ],
-          ),
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withOpacity(0.7),
+          ],
         ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomPadding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 缩放滑块（始终显示，便于用户主动缩放）
-            _ZoomSlider(onChanged: onZoomChanged),
+            // 缩放Tab栏（始终显示，便于用户主动缩放）
+            _ZoomTabBar(onChanged: onZoomChanged),
 
             // 工具栏 + 抽屉（全屏模式下隐藏）
             if (!isFullscreen) ...[
@@ -866,7 +888,13 @@ class _CaptureToolbar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final activeTool = ref.watch(CaptureState.activeToolProvider);
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
     if (isFullscreen) return const SizedBox.shrink();
+
+    // 补光工具仅在前置摄像头时显示（屏幕补光仅对前摄自拍摄影有效）
+    final tools = facing == 'front'
+        ? _tools
+        : _tools.where((t) => t.id != 'fillLight').toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -878,7 +906,7 @@ class _CaptureToolbar extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: _tools.map((tool) {
+        children: tools.map((tool) {
           final active = activeTool == tool.id;
           return _ToolButton(
             tool: tool,
@@ -904,6 +932,8 @@ class _CaptureToolbar extends ConsumerWidget {
       }
       return;
     }
+    // 补光 tab：仅切换控制面板开合，不关闭补光灯本身
+    // 补光灯的关闭由用户在面板中点击已选中的预设色来完成
     // 其他 tab：toggle 行为
     final next = active ? null : toolId;
     ref.read(CaptureState.activeToolProvider.notifier).state = next;
@@ -995,7 +1025,8 @@ class _AnimatedToolDrawer extends ConsumerWidget {
       case 'scenes':
         return const ScenePresetStrip();
       case 'params':
-        return _buildParamsHint(ref);
+        // 参数面板由 ParamPanel（底部滑入）处理，抽屉不显示额外内容
+        return const SizedBox.shrink();
       case 'filter':
         return FilterPicker(rawCaptureKey: rawCaptureKey);
       case 'fillLight':
@@ -1003,32 +1034,6 @@ class _AnimatedToolDrawer extends ConsumerWidget {
       default:
         return const SizedBox.shrink();
     }
-  }
-
-  Widget _buildParamsHint(WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            '参数面板已展开',
-            style: TextStyle(color: Colors.white70, fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () {
-              ref.read(CaptureState.panelExpandedProvider.notifier).state = false;
-              ref.read(CaptureState.activeToolProvider.notifier).state = null;
-            },
-            child: const Text(
-              '关闭参数面板',
-              style: TextStyle(color: Color(0xFFC9A96E)),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -1050,6 +1055,7 @@ class _FillLightPanel extends ConsumerWidget {
     final enabled = ref.watch(CaptureState.fillLightEnabledProvider);
     final color = ref.watch(CaptureState.fillLightColorProvider);
     final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
+    final viewfinderScale = ref.watch(CaptureState.fillLightViewfinderScaleProvider);
     final ringExpanded = ref.watch(_ringExpandedProvider);
 
     return Padding(
@@ -1067,7 +1073,7 @@ class _FillLightPanel extends ConsumerWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  enabled ? '已启用 · 仅前置显示叠层' : '点击颜色开启',
+                  enabled ? '已启用 · 再次点击选中色关闭' : '点击颜色开启',
                   style: const TextStyle(color: Colors.white54, fontSize: 11),
                 ),
               ),
@@ -1080,16 +1086,24 @@ class _FillLightPanel extends ConsumerWidget {
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                ..._presets.map((p) => _PresetColorDot(
-                  preset: p,
-                  selected: enabled && _colorMatches(color, p.color),
-                  onTap: () {
-                    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
-                    ref.read(CaptureState.fillLightColorProvider.notifier).state = p.color;
-                    ref.read(CaptureState.fillLightIntensityProvider.notifier).state = p.intensity;
-                    ref.read(_ringExpandedProvider.notifier).state = false;
-                  },
-                )),
+                ..._presets.map((p) {
+                  final isSelected = enabled && _colorMatches(color, p.color);
+                  return _PresetColorDot(
+                    preset: p,
+                    selected: isSelected,
+                    onTap: () {
+                      if (isSelected) {
+                        // 已选中 → 关闭补光，恢复取景器原状
+                        _turnOffFillLight(ref);
+                      } else {
+                        // 未选中 → 切换补光色，保留当前亮度（不重置）
+                        ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+                        ref.read(CaptureState.fillLightColorProvider.notifier).state = p.color;
+                        ref.read(_ringExpandedProvider.notifier).state = false;
+                      }
+                    },
+                  );
+                }),
                 // 自定义按钮
                 _ActionDot(
                   icon: Icons.color_lens,
@@ -1100,30 +1114,20 @@ class _FillLightPanel extends ConsumerWidget {
                     ref.read(_ringExpandedProvider.notifier).state = !ringExpanded;
                   },
                 ),
-                // 关闭按钮
-                _ActionDot(
-                  icon: Icons.close,
-                  label: '关闭',
-                  selected: false,
-                  onTap: () {
-                    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = false;
-                    ref.read(_ringExpandedProvider.notifier).state = false;
-                  },
-                ),
               ],
             ),
           ),
           const SizedBox(height: 4),
-          // 亮度滑块
+          // 亮度滑块（0.1 ~ 1.5，可超过 100% 让补光更亮）
           Row(
             children: [
               const Icon(Icons.brightness_6, color: Colors.white54, size: 16),
               Expanded(
                 child: Slider(
-                  value: intensity.clamp(0.1, 1.0),
+                  value: intensity.clamp(0.1, 1.5),
                   min: 0.1,
-                  max: 1.0,
-                  divisions: 18,
+                  max: 1.5,
+                  divisions: 28,
                   activeColor: const Color(0xFFC9A96E),
                   inactiveColor: Colors.white24,
                   onChanged: enabled
@@ -1132,7 +1136,7 @@ class _FillLightPanel extends ConsumerWidget {
                 ),
               ),
               SizedBox(
-                width: 36,
+                width: 42,
                 child: Text(
                   '${(intensity * 100).round()}%',
                   style: const TextStyle(color: Colors.white70, fontSize: 11),
@@ -1141,24 +1145,71 @@ class _FillLightPanel extends ConsumerWidget {
               ),
             ],
           ),
-          // 可展开色环（水平居中显示）
-          if (ringExpanded)
+          // 取景器窗口大小滑块（仅补光开启时可用）
+          Row(
+            children: [
+              const Icon(Icons.crop_free, color: Colors.white54, size: 16),
+              Expanded(
+                child: Slider(
+                  value: viewfinderScale.clamp(0.3, 1.0),
+                  min: 0.3,
+                  max: 1.0,
+                  divisions: 14,
+                  activeColor: const Color(0xFFC9A96E),
+                  inactiveColor: Colors.white24,
+                  onChanged: enabled
+                      ? (v) => ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state = v
+                      : null,
+                ),
+              ),
+              SizedBox(
+                width: 36,
+                child: Text(
+                  '${(viewfinderScale * 100).round()}%',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          // 可展开方形取色盘 + 收藏的颜色
+          if (ringExpanded) ...[
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),
               child: Center(
-                child: _HueRingPicker(
+                child: _SquareColorPicker(
                   onColorChanged: (c) {
                     ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
                   },
                 ),
               ),
             ),
+            // 收藏的自定义颜色行
+            _CustomColorsRow(
+              onPick: (c) {
+                ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
+                ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
+              },
+              onAdd: (name, c) {
+                ref.read(customFillLightColorsProvider.notifier).add(name, c);
+              },
+            ),
+          ],
         ],
       ),
     );
   }
 
   bool _colorMatches(Color a, Color b) => a.value == b.value;
+
+  /// 关闭补光并重置悬浮取景器到初始状态（位置、大小）
+  void _turnOffFillLight(WidgetRef ref) {
+    ref.read(CaptureState.fillLightEnabledProvider.notifier).state = false;
+    ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state = 0.5;
+    ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
+        Offset.zero;
+    ref.read(_ringExpandedProvider.notifier).state = false;
+  }
 }
 
 class _FillLightPreset {
@@ -1259,259 +1310,617 @@ class _ActionDot extends StatelessWidget {
 /// 色环展开状态（仅 capture_page 内部使用）
 final _ringExpandedProvider = StateProvider<bool>((ref) => false);
 
-/// 简易 HSV 色环（自实现，无外部依赖）
-/// 外环：色相（0-360°）
-/// 内部：当前选中色相对应的纯色填充
-class _HueRingPicker extends StatefulWidget {
-  const _HueRingPicker({required this.onColorChanged});
+/// 方形 HSV 取色盘（色相 + 饱和度/亮度二维面板）
+/// 顶部：色相条（水平滑动选色相）
+/// 下方：SV 方形面板（X=饱和度，Y=亮度，左下黑、右下灰、右上纯色、左上白）
+class _SquareColorPicker extends StatefulWidget {
+  const _SquareColorPicker({required this.onColorChanged});
   final ValueChanged<Color> onColorChanged;
 
   @override
-  State<_HueRingPicker> createState() => _HueRingPickerState();
+  State<_SquareColorPicker> createState() => _SquareColorPickerState();
 }
 
-class _HueRingPickerState extends State<_HueRingPicker> {
-  double _hue = 30.0; // 默认暖白附近
+class _SquareColorPickerState extends State<_SquareColorPicker> {
+  double _hue = 40.0; // 默认暖白附近
+  double _saturation = 0.6;
+  double _value = 1.0;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 200,
-      height: 200,
-      child: GestureDetector(
-        onPanUpdate: _onPanUpdate,
-        onTapDown: _onTapDown,
-        child: CustomPaint(
-          painter: _HueRingPainter(hue: _hue),
-          child: Center(
-            child: Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: HSVColor.fromAHSV(1.0, _hue, 0.6, 1.0).toColor(),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white38, width: 2),
+    const panelSize = 220.0;
+    const hueBarHeight = 24.0;
+    final currentColor =
+        HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // SV 方形面板
+        SizedBox(
+          width: panelSize,
+          height: panelSize,
+          child: GestureDetector(
+            onPanDown: (d) => _handleSv(d.localPosition, panelSize),
+            onPanUpdate: (d) => _handleSv(d.localPosition, panelSize),
+            child: CustomPaint(
+              painter: _SvPanelPainter(
+                hue: _hue,
+                saturation: _saturation,
+                value: _value,
               ),
             ),
           ),
         ),
-      ),
+        const SizedBox(height: 8),
+        // 色相条
+        SizedBox(
+          width: panelSize,
+          height: hueBarHeight,
+          child: GestureDetector(
+            onPanDown: (d) => _handleHue(d.localPosition, panelSize),
+            onPanUpdate: (d) => _handleHue(d.localPosition, panelSize),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(hueBarHeight / 2),
+              child: CustomPaint(
+                painter: _HueBarPainter(hue: _hue),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // 当前色预览
+        Container(
+          width: panelSize,
+          height: 28,
+          decoration: BoxDecoration(
+            color: currentColor,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: Colors.white24, width: 1),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            '#${currentColor.red.toRadixString(16).padLeft(2, '0').toUpperCase()}'
+            '${currentColor.green.toRadixString(16).padLeft(2, '0').toUpperCase()}'
+            '${currentColor.blue.toRadixString(16).padLeft(2, '0').toUpperCase()}',
+            style: TextStyle(
+              color: _value > 0.5 ? Colors.black54 : Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  void _onPanUpdate(DragUpdateDetails details) => _handleTouch(details.localPosition);
+  void _handleSv(Offset localPos, double size) {
+    final s = (localPos.dx / size).clamp(0.0, 1.0);
+    // Y 轴反向：顶部=亮度1.0，底部=亮度0.0
+    final v = (1.0 - localPos.dy / size).clamp(0.0, 1.0);
+    setState(() {
+      _saturation = s;
+      _value = v;
+    });
+    widget.onColorChanged(
+        HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor());
+  }
 
-  void _onTapDown(TapDownDetails details) => _handleTouch(details.localPosition);
-
-  void _handleTouch(Offset localPos) {
-    const center = Offset(100, 100);
-    final dx = localPos.dx - center.dx;
-    final dy = localPos.dy - center.dy;
-    final distance = dx * dx + dy * dy;
-    // 仅在外环区域（半径 70-95）内响应
-    if (distance < 70 * 70 || distance > 95 * 95) return;
-    var angle = math.atan2(dy, dx) * 180 / math.pi;
-    if (angle < 0) angle += 360;
-    setState(() => _hue = angle);
-    widget.onColorChanged(HSVColor.fromAHSV(1.0, _hue, 0.6, 1.0).toColor());
+  void _handleHue(Offset localPos, double width) {
+    final h = (localPos.dx / width * 360.0).clamp(0.0, 360.0);
+    setState(() => _hue = h);
+    widget.onColorChanged(
+        HSVColor.fromAHSV(1.0, _hue, _saturation, _value).toColor());
   }
 }
 
-class _HueRingPainter extends CustomPainter {
-  const _HueRingPainter({required this.hue});
+/// SV 面板绘制器：横向饱和度，纵向亮度
+class _SvPanelPainter extends CustomPainter {
+  const _SvPanelPainter({
+    required this.hue,
+    required this.saturation,
+    required this.value,
+  });
+  final double hue;
+  final double saturation;
+  final double value;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    // 基色：当前色相的纯色
+    final baseColor = HSVColor.fromAHSV(1.0, hue, 1.0, 1.0).toColor();
+
+    // 横向：白→纯色（饱和度）
+    final saturatePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [Colors.white, baseColor],
+      ).createShader(rect);
+    canvas.drawRect(rect, saturatePaint);
+
+    // 纵向：透明→黑（亮度）
+    final valuePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Colors.transparent, Colors.black],
+      ).createShader(rect);
+    canvas.drawRect(rect, valuePaint);
+
+    // 指示器圆圈
+    final cx = saturation * size.width;
+    final cy = (1.0 - value) * size.height;
+    final indicator = Offset(cx, cy);
+    canvas.drawCircle(indicator, 8, Paint()..color = Colors.white);
+    canvas.drawCircle(indicator, 8,
+        Paint()..color = Colors.black38..style = PaintingStyle.stroke..strokeWidth = 1.5);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SvPanelPainter old) =>
+      old.hue != hue ||
+      old.saturation != saturation ||
+      old.value != value;
+}
+
+/// 色相条绘制器
+class _HueBarPainter extends CustomPainter {
+  const _HueBarPainter({required this.hue});
   final double hue;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final outerRadius = size.width / 2 - 5;
-    final innerRadius = outerRadius - 25;
+    final rect = Offset.zero & size;
+    final paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          for (var h = 0; h <= 360; h += 30)
+            HSVColor.fromAHSV(1.0, h.toDouble(), 1.0, 1.0).toColor(),
+        ],
+      ).createShader(rect);
+    canvas.drawRect(rect, paint);
 
-    // 绘制色相环
-    const segments = 60;
-    for (var i = 0; i < segments; i++) {
-      final startAngle = (i / segments) * 2 * math.pi - math.pi / 2;
-      final endAngle = ((i + 1) / segments) * 2 * math.pi - math.pi / 2;
-      final hueAngle = (i / segments) * 360;
-      final paint = Paint()
-        ..color = HSVColor.fromAHSV(1.0, hueAngle, 1.0, 1.0).toColor()
-        ..style = PaintingStyle.fill;
-      final path = Path()
-        ..moveTo(center.dx + innerRadius * math.cos(startAngle),
-            center.dy + innerRadius * math.sin(startAngle))
-        ..arcTo(
-            Rect.fromCircle(center: center, radius: outerRadius),
-            startAngle,
-            endAngle - startAngle,
-            false)
-        ..arcTo(
-            Rect.fromCircle(center: center, radius: innerRadius),
-            endAngle,
-            startAngle - endAngle,
-            false)
-        ..close();
-      canvas.drawPath(path, paint);
-    }
-
-    // 绘制当前色相指示器
-    final indicatorAngle = hue * math.pi / 180 - math.pi / 2;
-    final indicatorRadius = (outerRadius + innerRadius) / 2;
-    final indicatorPos = Offset(
-      center.dx + indicatorRadius * math.cos(indicatorAngle),
-      center.dy + indicatorRadius * math.sin(indicatorAngle),
+    // 指示器
+    final x = (hue / 360.0) * size.width;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset(x, size.height / 2), width: 6, height: size.height + 4),
+        const Radius.circular(3),
+      ),
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill,
     );
-    canvas.drawCircle(
-        indicatorPos,
-        6,
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.fill);
-    canvas.drawCircle(
-        indicatorPos,
-        6,
-        Paint()
-          ..color = Colors.black87
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5);
   }
 
   @override
-  bool shouldRepaint(covariant _HueRingPainter old) => old.hue != hue;
+  bool shouldRepaint(covariant _HueBarPainter old) => old.hue != hue;
 }
 
-/// 取景器上方的补光叠层
-/// 仅在 fillLightEnabled && cameraFacing=='front' 时渲染
-/// 用 BlendMode.screen 模拟屏幕发光的视觉效果
-class _FillLightOverlay extends ConsumerWidget {
-  const _FillLightOverlay();
+/// 收藏的自定义颜色行：显示已收藏颜色 + "收藏当前色"按钮
+class _CustomColorsRow extends ConsumerStatefulWidget {
+  const _CustomColorsRow({
+    required this.onPick,
+    required this.onAdd,
+  });
+  final ValueChanged<Color> onPick;
+  final void Function(String name, Color color) onAdd;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final enabled = ref.watch(CaptureState.fillLightEnabledProvider);
-    final facing = ref.watch(CaptureState.cameraFacingProvider);
-    if (!enabled || facing != 'front') return const SizedBox.shrink();
+  ConsumerState<_CustomColorsRow> createState() => _CustomColorsRowState();
+}
 
-    final color = ref.watch(CaptureState.fillLightColorProvider);
-    final intensity = ref.watch(CaptureState.fillLightIntensityProvider);
-    // 直接用 intensity 作为 alpha（最大 1.0），提升屏幕补光亮度
-    final alpha = intensity.clamp(0.0, 1.0);
+class _CustomColorsRowState extends ConsumerState<_CustomColorsRow> {
+  bool _showNameInput = false;
+  final _nameController = TextEditingController();
 
-    return IgnorePointer(
-      child: Positioned.fill(
-        child: CustomPaint(
-          painter: _FillLightOverlayPainter(color: color, alpha: alpha),
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final customColors = ref.watch(customFillLightColorsProvider);
+    final currentColor = ref.watch(CaptureState.fillLightColorProvider);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 标题行 + 收藏按钮
+          Row(
+            children: [
+              const Text(
+                '收藏颜色',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => setState(() => _showNameInput = !_showNameInput),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white12,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.star, size: 12, color: const Color(0xFFC9A96E)),
+                      const SizedBox(width: 3),
+                      Text(
+                        '收藏当前',
+                        style: TextStyle(color: const Color(0xFFC9A96E), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // 命名输入框
+          if (_showNameInput) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                // 当前色预览
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: currentColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24, width: 1),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _nameController,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: '为该颜色命名（如：日落金）',
+                      hintStyle: TextStyle(color: Colors.white30, fontSize: 11),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: Colors.white24, width: 1),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: BorderSide(color: const Color(0xFFC9A96E), width: 1),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () {
+                    final name = _nameController.text.trim();
+                    if (name.isEmpty) return;
+                    widget.onAdd(name, currentColor);
+                    _nameController.clear();
+                    setState(() => _showNameInput = false);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFC9A96E),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      '保存',
+                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          // 已收藏颜色列表
+          if (customColors.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: customColors.map((c) {
+                  final isSelected = _colorMatch(currentColor, c.color);
+                  return _CustomColorDot(
+                    name: c.name,
+                    color: c.color,
+                    selected: isSelected,
+                    onTap: () => widget.onPick(c.color),
+                    onDelete: () => ref
+                        .read(customFillLightColorsProvider.notifier)
+                        .remove(c.name),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  bool _colorMatch(Color a, Color b) => a.value == b.value;
+}
+
+/// 自定义颜色圆点（带删除按钮）
+class _CustomColorDot extends StatelessWidget {
+  const _CustomColorDot({
+    required this.name,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+    required this.onDelete,
+  });
+  final String name;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onDelete,
+      child: Container(
+        width: 44,
+        margin: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                ),
+                // 删除按钮（右上角小×）
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: GestureDetector(
+                    onTap: onDelete,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: const BoxDecoration(
+                        color: Colors.black87,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close, size: 8, color: Colors.white70),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? const Color(0xFFC9A96E) : Colors.white54,
+                fontSize: 9,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _FillLightOverlayPainter extends CustomPainter {
-  const _FillLightOverlayPainter({required this.color, required this.alpha});
-  final Color color;
-  final double alpha;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // 1. 中心可见区域：1/3 宽 × 1/3 高（缩小镂空范围，让更多区域被补光照亮）
-    final hollowWidth = size.width * 0.33;
-    final hollowHeight = size.height * 0.33;
-    final hollowLeft = (size.width - hollowWidth) / 2;
-    final hollowTop = (size.height - hollowHeight) / 2;
-    final hollowRect = Rect.fromLTWH(hollowLeft, hollowTop, hollowWidth, hollowHeight);
-
-    // 2. 外圈全屏底色（屏幕发光）—— evenOdd 路径实现中心镂空
-    final fullRect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final fillPath = Path()
-      ..fillType = PathFillType.evenOdd
-      ..addRect(fullRect)
-      ..addRect(hollowRect);
-
-    final basePaint = Paint()
-      ..color = color.withOpacity(alpha)
-      ..blendMode = BlendMode.screen
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(fillPath, basePaint);
-
-    // 3. 径向渐变（中心亮、边缘暗），模拟屏幕光源中心衰减
-    //    渐变中心设在镂空区域上方 1/3 处（模拟面部补光方向）
-    final center = Offset(size.width / 2, size.height / 3);
-    final gradient = RadialGradient(
-      center: Alignment(
-        (center.dx / size.width) * 2 - 1,
-        (center.dy / size.height) * 2 - 1,
-      ),
-      radius: 0.85,
-      colors: [
-        color.withOpacity(alpha),
-        color.withOpacity(alpha * 0.55),
-      ],
-    );
-    final rect = Offset.zero & size;
-    final shaderPaint = Paint()
-      ..blendMode = BlendMode.screen
-      ..style = PaintingStyle.fill;
-    shaderPaint.shader = gradient.createShader(rect);
-
-    // 渐变层也用镂空路径
-    canvas.drawPath(fillPath, shaderPaint);
-
-    // 4. 中心镂空区域加一层低 alpha 补光（不完全镂空，既补光又能看到面部）
-    final centerPaint = Paint()
-      ..color = color.withOpacity(alpha * 0.35)
-      ..blendMode = BlendMode.screen
-      ..style = PaintingStyle.fill;
-    canvas.drawRect(hollowRect, centerPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _FillLightOverlayPainter old) =>
-      old.color != color || old.alpha != alpha;
-}
-
-/// 缩放滑块：以倍数显示，根据 facing 切换范围
+/// 缩放Tab栏：快捷倍数切换 + 水平拖动展开轮盘精细调整
 ///
-/// 前摄 [0.5, 2.0]，后摄 [0.3, 10.0]，默认 1x。
-/// 滑块内部 watch [CaptureState.apparentZoomProvider]（归一化值），
-/// 通过 [CaptureState.zoomRangeForFacing] 与 [CaptureState.normalizedToZoomMultiplier]
-/// 还原为倍数显示与控制。
-class _ZoomSlider extends ConsumerWidget {
-  const _ZoomSlider({required this.onChanged});
+/// 预设倍数根据设备能力动态生成（deviceMaxZoomProvider /
+/// supportsUltraWideProvider）。默认 1x。点击 Tab 快速切换到对应倍数。
+/// 水平拖动时显示轮盘 overlay，可精细调整缩放（0.1x 步进）。
+class _ZoomTabBar extends ConsumerStatefulWidget {
+  const _ZoomTabBar({required this.onChanged});
 
   final ValueChanged<double> onChanged;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final facing = ref.watch(CaptureState.cameraFacingProvider);
-    final normalized = ref.watch(CaptureState.apparentZoomProvider);
-    final range = CaptureState.zoomRangeForFacing(facing);
-    final multiplier = CaptureState.normalizedToZoomMultiplier(
-        normalized, range.min, range.max);
-    final displayX = multiplier.toStringAsFixed(1);
+  ConsumerState<_ZoomTabBar> createState() => _ZoomTabBarState();
+}
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-      child: Row(
+class _ZoomTabBarState extends ConsumerState<_ZoomTabBar> {
+  /// 是否正在显示轮盘（水平拖动中）
+  bool _showWheel = false;
+
+  /// 轮盘拖动起始时的倍数
+  double _dragStartMultiplier = 1.0;
+
+  /// 轮盘拖动起始的水平位置
+  double _dragStartX = 0;
+
+  /// 根据设备能力动态生成预设倍数列表。
+  ///
+  /// 前置摄像头通常 maxZoom 较小（多数机型 1.5x-2x），且数字变焦画质差，
+  /// 故前置不生成 2x/3x/5x 预设，避免显示用户点击后无明显变化的 Tab。
+  /// 仅后置摄像头根据 maxZoom 动态生成多档预设。
+  List<double> _getZoomPresets(String facing, double maxZoom, bool supportsUltraWide) {
+    final base = <double>[1.0];
+    if (facing == 'back') {
+      if (maxZoom >= 2.0) base.add(2.0);
+      if (maxZoom >= 3.0) base.add(3.0);
+      if (maxZoom >= 5.0) base.add(5.0);
+    }
+    if (supportsUltraWide) base.insert(0, 0.5);
+    return base;
+  }
+
+  /// 找到最接近当前倍数的预设索引
+  int _nearestPresetIndex(double multiplier, List<double> presets) {
+    int nearest = 0;
+    double minDiff = double.infinity;
+    for (var i = 0; i < presets.length; i++) {
+      final diff = (presets[i] - multiplier).abs();
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearest = i;
+      }
+    }
+    return nearest;
+  }
+
+  void _onHorizontalDragStart(DragStartDetails details) {
+    _dragStartMultiplier = ref.read(CaptureState.apparentZoomProvider);
+    _dragStartX = details.globalPosition.dx;
+    setState(() => _showWheel = true);
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
+    final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final deltaX = details.globalPosition.dx - _dragStartX;
+    // 每 40px 像素 = 0.1x 倍数变化（向右增加，向左减少）
+    final deltaMultiplier = (deltaX / 40).round() * 0.1;
+    var newMultiplier = _dragStartMultiplier + deltaMultiplier;
+    newMultiplier = newMultiplier.clamp(minZoom, maxZoom);
+    widget.onChanged(newMultiplier);
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails _) {
+    setState(() => _showWheel = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    final multiplier = ref.watch(CaptureState.apparentZoomProvider);
+    final maxZoom = ref.watch(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final supportsUltraWide = ref.watch(CaptureState.supportsUltraWideProvider);
+    final presets = _getZoomPresets(facing, maxZoom, supportsUltraWide);
+    final activeIndex = _nearestPresetIndex(multiplier, presets);
+
+    return GestureDetector(
+      onHorizontalDragStart: _onHorizontalDragStart,
+      onHorizontalDragUpdate: _onHorizontalDragUpdate,
+      onHorizontalDragEnd: _onHorizontalDragEnd,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
         children: [
-          const Icon(Icons.zoom_in, color: Colors.white70, size: 16),
-          Expanded(
-            child: Slider(
-              value: multiplier.clamp(range.min, range.max),
-              min: range.min,
-              max: range.max,
-              divisions: ((range.max - range.min) * 10).round(),
-              label: '${displayX}x',
-              activeColor: Colors.amber,
-              inactiveColor: Colors.white24,
-              onChanged: onChanged,
+          // Tab 栏
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < presets.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 6),
+                  _ZoomTab(
+                    label: '${presets[i].toStringAsFixed(presets[i] == presets[i].toInt() ? 0 : 1)}x',
+                    active: i == activeIndex && !_showWheel,
+                    onTap: () {
+                      widget.onChanged(presets[i]);
+                    },
+                  ),
+                ],
+              ],
             ),
           ),
-          SizedBox(
-            width: 44,
-            child: Text(
-              '${displayX}x',
-              style: const TextStyle(color: Colors.white, fontSize: 11),
-              textAlign: TextAlign.right,
+          // 轮盘 overlay（水平拖动时显示）
+          if (_showWheel)
+            Positioned(
+              top: -50,
+              child: _ZoomWheelIndicator(multiplier: multiplier),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 单个缩放 Tab 按钮
+class _ZoomTab extends StatelessWidget {
+  const _ZoomTab({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xFFC9A96E).withOpacity(0.25)
+              : Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: active
+                ? const Color(0xFFC9A96E)
+                : Colors.white.withOpacity(0.12),
+            width: active ? 1.2 : 0.5,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: active ? const Color(0xFFC9A96E) : Colors.white70,
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 缩放轮盘指示器（水平拖动时显示当前精细倍数）
+class _ZoomWheelIndicator extends StatelessWidget {
+  const _ZoomWheelIndicator({required this.multiplier});
+  final double multiplier;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFC9A96E), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.unfold_more, color: Color(0xFFC9A96E), size: 14),
+          const SizedBox(width: 6),
+          Text(
+            '${multiplier.toStringAsFixed(1)}x',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -1676,5 +2085,88 @@ class _CameraPermissionGuide extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// 拍照后处理参数（传给 worker isolate）。
+class _CaptureProcessParams {
+  const _CaptureProcessParams({
+    required this.inputPath,
+    required this.targetRatio,
+    required this.isPortrait,
+    required this.isFront,
+  });
+  final String inputPath;
+  final double targetRatio; // 目标宽高比（正向像素）
+  final bool isPortrait;
+  final bool isFront;
+}
+
+/// 在 worker isolate 中对拍照 JPEG 做后处理：
+/// 1. 方向对齐（竖屏拍照 JPEG 横向存储，需旋转到正向）
+/// 2. 前置摄像头水平翻转（camerawesome 预览镜像但保存不镜像）
+/// 3. 按目标比例 cover 居中裁切（使照片比例与取景器一致）
+///
+/// 性能优化（目标 <300ms）：
+/// - 限制最大边长到 2048px（手机屏幕显示足够，大幅减少编码时间）
+/// - JPEG quality 降到 90（视觉无明显差异，编码快约 30%）
+/// - 旋转和翻转合并到裁切后的图上（减少大图操作次数）
+///
+/// 失败时返回原路径（不阻塞拍照流程）。
+/// 方向对齐逻辑与 dart_photo_pipeline.dart 的 _alignOrientationImg 一致。
+Future<String> _processCaptureInIsolate(_CaptureProcessParams params) async {
+  try {
+    final bytes = await File(params.inputPath).readAsBytes();
+    var image = img.decodeImage(bytes);
+    if (image == null) return params.inputPath;
+
+    // 1. 方向对齐
+    final jpegIsLandscape = image.width > image.height;
+    final needRotate = (params.isPortrait && jpegIsLandscape) ||
+        (!params.isPortrait && !jpegIsLandscape);
+    if (needRotate) {
+      final angle = params.isPortrait ? 90 : 270;
+      image = img.copyRotate(image, angle: angle);
+    }
+
+    // 2. cover 裁切到目标比例（先裁切，再对结果做镜像和缩放，减少大图操作）
+    final imgRatio = image.width / image.height;
+    int cropW, cropH, cropX, cropY;
+    if (imgRatio > params.targetRatio) {
+      cropH = image.height;
+      cropW = (cropH * params.targetRatio).round();
+      cropX = ((image.width - cropW) / 2).round();
+      cropY = 0;
+    } else {
+      cropW = image.width;
+      cropH = (cropW / params.targetRatio).round();
+      cropX = 0;
+      cropY = ((image.height - cropH) / 2).round();
+    }
+    var result = img.copyCrop(image,
+        x: cropX, y: cropY, width: cropW, height: cropH);
+
+    // 3. 前置镜像（在裁切后的小图上做，更快）
+    if (params.isFront) {
+      result = img.flip(result, direction: img.FlipDirection.horizontal);
+    }
+
+    // 4. 限制最大边长到 2048px（减少编码时间，手机显示足够）
+    const maxDim = 2048;
+    if (result.width > maxDim || result.height > maxDim) {
+      final scale = maxDim / (result.width > result.height ? result.width : result.height);
+      result = img.copyResize(
+        result,
+        width: (result.width * scale).round(),
+        height: (result.height * scale).round(),
+      );
+    }
+
+    // 5. 编码保存（quality 90，视觉无明显差异，编码快约 30%）
+    final encoded = img.encodeJpg(result, quality: 90);
+    await File(params.inputPath).writeAsBytes(encoded);
+    return params.inputPath;
+  } catch (_) {
+    return params.inputPath;
   }
 }
