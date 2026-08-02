@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/db/database_provider.dart';
@@ -1188,8 +1189,8 @@ class _FillLightPanel extends ConsumerWidget {
                 ),
               ),
             ),
-            // 收藏的自定义颜色行
-            _CustomColorsRow(
+            // 保存颜色行（合并系统预设与用户保存颜色）
+            _SaveColorsRow(
               onPick: (c) {
                 ref.read(CaptureState.fillLightEnabledProvider.notifier).state = true;
                 ref.read(CaptureState.fillLightColorProvider.notifier).state = c;
@@ -1505,9 +1506,10 @@ class _HueBarPainter extends CustomPainter {
   bool shouldRepaint(covariant _HueBarPainter old) => old.hue != hue;
 }
 
-/// 收藏的自定义颜色行：显示已收藏颜色 + "收藏当前色"按钮
-class _CustomColorsRow extends ConsumerStatefulWidget {
-  const _CustomColorsRow({
+/// 保存颜色行：合并系统预设与用户保存颜色为一个列表，
+/// 用户保存的颜色可长按修改或删除。
+class _SaveColorsRow extends ConsumerStatefulWidget {
+  const _SaveColorsRow({
     required this.onPick,
     required this.onAdd,
   });
@@ -1515,17 +1517,156 @@ class _CustomColorsRow extends ConsumerStatefulWidget {
   final void Function(String name, Color color) onAdd;
 
   @override
-  ConsumerState<_CustomColorsRow> createState() => _CustomColorsRowState();
+  ConsumerState<_SaveColorsRow> createState() => _SaveColorsRowState();
 }
 
-class _CustomColorsRowState extends ConsumerState<_CustomColorsRow> {
+class _SaveColorsRowState extends ConsumerState<_SaveColorsRow> {
   bool _showNameInput = false;
   final _nameController = TextEditingController();
+  bool _hintShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHintState();
+  }
+
+  Future<void> _loadHintState() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/lumira_fill_light_hint.json');
+      if (await file.exists()) {
+        if (mounted) setState(() => _hintShown = true);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _markHintShown() async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/lumira_fill_light_hint.json');
+      await file.writeAsString('{"shown":true}');
+      if (mounted) setState(() => _hintShown = true);
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  // 系统预设颜色（与 _FillLightPanel._presets 一致）
+  static const _presets = [
+    _FillLightPreset('暖白', Color(0xFFFFE5B4), 0.6),
+    _FillLightPreset('冷白', Color(0xFFE0F0FF), 0.6),
+    _FillLightPreset('黄金', Color(0xFFFFB347), 0.7),
+    _FillLightPreset('柔粉', Color(0xFFFFC0CB), 0.6),
+    _FillLightPreset('青蓝', Color(0xFF8FD3F4), 0.5),
+    _FillLightPreset('紫', Color(0xFFD8BFD8), 0.5),
+  ];
+
+  void _showEditSheet(String name, Color color) {
+    _markHintShown();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF2A2A2C),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white24),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    name,
+                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit, color: Color(0xFFC9A96E), size: 20),
+              title: const Text('修改名称', style: TextStyle(color: Colors.white70, fontSize: 14)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showRenameDialog(name);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.color_lens, color: Color(0xFFC9A96E), size: 20),
+              title: const Text('修改颜色', style: TextStyle(color: Colors.white70, fontSize: 14)),
+              onTap: () {
+                Navigator.pop(ctx);
+                // 用当前颜色打开色环
+                ref.read(CaptureState.fillLightColorProvider.notifier).state = color;
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+              title: const Text('删除', style: TextStyle(color: Colors.redAccent, fontSize: 14)),
+              onTap: () {
+                ref.read(customFillLightColorsProvider.notifier).remove(name);
+                Navigator.pop(ctx);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRenameDialog(String oldName) {
+    final controller = TextEditingController(text: oldName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2A2A2C),
+        title: const Text('修改名称', style: TextStyle(color: Colors.white, fontSize: 16)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          decoration: InputDecoration(
+            hintText: '输入新名称',
+            hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+            focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFC9A96E))),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消', style: TextStyle(color: Colors.white54)),
+          ),
+          TextButton(
+            onPressed: () {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty && newName != oldName) {
+                ref.read(customFillLightColorsProvider.notifier).update(oldName, newName: newName);
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('确定', style: TextStyle(color: Color(0xFFC9A96E))),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1539,11 +1680,11 @@ class _CustomColorsRowState extends ConsumerState<_CustomColorsRow> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 标题行 + 收藏按钮
+          // 标题行 + 保存按钮
           Row(
             children: [
               const Text(
-                '收藏颜色',
+                '保存颜色',
                 style: TextStyle(color: Colors.white54, fontSize: 11),
               ),
               const Spacer(),
@@ -1558,10 +1699,10 @@ class _CustomColorsRowState extends ConsumerState<_CustomColorsRow> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.star, size: 12, color: const Color(0xFFC9A96E)),
+                      Icon(Icons.bookmark_add_outlined, size: 12, color: const Color(0xFFC9A96E)),
                       const SizedBox(width: 3),
                       Text(
-                        '收藏当前',
+                        '保存当前',
                         style: TextStyle(color: const Color(0xFFC9A96E), fontSize: 10),
                       ),
                     ],
@@ -1575,7 +1716,6 @@ class _CustomColorsRowState extends ConsumerState<_CustomColorsRow> {
             const SizedBox(height: 6),
             Row(
               children: [
-                // 当前色预览
                 Container(
                   width: 28,
                   height: 28,
@@ -1614,6 +1754,7 @@ class _CustomColorsRowState extends ConsumerState<_CustomColorsRow> {
                     widget.onAdd(name, currentColor);
                     _nameController.clear();
                     setState(() => _showNameInput = false);
+                    _markHintShown();
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1630,28 +1771,60 @@ class _CustomColorsRowState extends ConsumerState<_CustomColorsRow> {
               ],
             ),
           ],
-          // 已收藏颜色列表
-          if (customColors.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 44,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: customColors.map((c) {
+          // 合并的颜色列表：系统预设 + 用户保存
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                // 系统预设颜色（不可删改）
+                ..._presets.map((p) {
+                  final isSelected = _colorMatch(currentColor, p.color);
+                  return _PresetColorDot(
+                    preset: p,
+                    selected: isSelected,
+                    onTap: () => widget.onPick(p.color),
+                  );
+                }),
+                // 分隔符
+                if (customColors.isNotEmpty)
+                  Container(
+                    width: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                    color: Colors.white12,
+                  ),
+                // 用户保存颜色（可长按删改）
+                ...customColors.map((c) {
                   final isSelected = _colorMatch(currentColor, c.color);
-                  return _CustomColorDot(
+                  return _SavedColorDot(
                     name: c.name,
                     color: c.color,
                     selected: isSelected,
                     onTap: () => widget.onPick(c.color),
-                    onDelete: () => ref
-                        .read(customFillLightColorsProvider.notifier)
-                        .remove(c.name),
+                    onLongPress: () => _showEditSheet(c.name, c.color),
                   );
-                }).toList(),
+                }),
+              ],
+            ),
+          ),
+          // 操作提示（首次显示，用户长按或保存后消失）
+          if (!_hintShown)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.white30, size: 12),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '长按保存的颜色可修改或删除',
+                      style: TextStyle(color: Colors.white30, fontSize: 10),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
         ],
       ),
     );
@@ -1660,64 +1833,43 @@ class _CustomColorsRowState extends ConsumerState<_CustomColorsRow> {
   bool _colorMatch(Color a, Color b) => a.value == b.value;
 }
 
-/// 自定义颜色圆点（带删除按钮）
-class _CustomColorDot extends StatelessWidget {
-  const _CustomColorDot({
+/// 用户保存的颜色圆点（支持长按）
+class _SavedColorDot extends StatelessWidget {
+  const _SavedColorDot({
     required this.name,
     required this.color,
     required this.selected,
     required this.onTap,
-    required this.onDelete,
+    required this.onLongPress,
   });
   final String name;
   final Color color;
   final bool selected;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      onLongPress: onDelete,
+      onLongPress: onLongPress,
       child: Container(
         width: 44,
         margin: const EdgeInsets.only(right: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Stack(
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: selected ? const Color(0xFFC9A96E) : Colors.white24,
-                      width: selected ? 2 : 1,
-                    ),
-                  ),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selected ? const Color(0xFFC9A96E) : Colors.white24,
+                  width: selected ? 2 : 1,
                 ),
-                // 删除按钮（右上角小×）
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: GestureDetector(
-                    onTap: onDelete,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: const BoxDecoration(
-                        color: Colors.black87,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.close, size: 8, color: Colors.white70),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
             const SizedBox(height: 2),
             Text(
