@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/domain/filter_recipe.dart';
@@ -215,6 +216,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
                     transform: _localTransform,
                     onPostProcessChanged: _onPostProcessChanged,
                     onTransformChanged: _onTransformChanged,
+                    previewImagePath: _photo?.dataUrl ?? _photo?.filePath,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -544,11 +546,38 @@ class _CanvasArea extends StatelessWidget {
         child: imageWidget,
       );
     }
+
+    // 晕影预览：通过 Stack + RadialGradient 叠加在图片上方
+    // （smoothStrength/sharpen 为逐像素效果，仅导出时生效，无法用 ColorFilter 模拟）
+    if (postProcess.vignette > 0) {
+      imageWidget = Stack(
+        fit: StackFit.passthrough,
+        children: [
+          imageWidget,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(
+                          postProcess.vignette / 100 * 0.5),
+                    ],
+                    stops: const [0.4, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     return imageWidget;
   }
 }
 
-class _BottomBar extends StatelessWidget implements PreferredSizeWidget {
+class _BottomBar extends ConsumerWidget implements PreferredSizeWidget {
   const _BottomBar({
     required this.isReadOnly,
     required this.onReset,
@@ -559,19 +588,21 @@ class _BottomBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onExport;
 
   @override
-  Size get preferredSize => const Size.fromHeight(62);
+  Size get preferredSize => const Size.fromHeight(72);
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: preferredSize.height,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    return Material(
+      color: tokens.canvasDeep,
       child: SafeArea(
         top: false,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          decoration: const BoxDecoration(
-            color: Color(0xFF1C1A17),
-            border: Border(top: BorderSide(color: Colors.white12, width: 1)),
+          padding: const EdgeInsets.fromLTRB(24, 10, 24, 10),
+          decoration: BoxDecoration(
+            color: tokens.canvasDeep,
+            border: Border(
+                top: BorderSide(color: tokens.divider, width: 1)),
           ),
           child: Row(
             children: [
@@ -580,15 +611,23 @@ class _BottomBar extends StatelessWidget implements PreferredSizeWidget {
                   onTap: onReset,
                   behavior: HitTestBehavior.opaque,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    height: 44,
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.white24, width: 1),
+                      border: Border.all(color: tokens.divider, width: 1),
                       borderRadius: BorderRadius.circular(1000),
                     ),
-                    child: const Center(
-                      child: Text(
-                        '重置',
-                        style: TextStyle(fontSize: 14, color: Colors.white70),
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.refresh, size: 16, color: tokens.textSecondary),
+                          const SizedBox(width: 6),
+                          Text(
+                            '重置',
+                            style: TextStyle(
+                                fontSize: 14, color: tokens.textPrimary),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -600,28 +639,39 @@ class _BottomBar extends StatelessWidget implements PreferredSizeWidget {
                   onTap: isReadOnly ? null : onExport,
                   behavior: HitTestBehavior.opaque,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    height: 44,
                     decoration: BoxDecoration(
                       gradient: isReadOnly
                           ? null
-                          : const LinearGradient(
-                              colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
+                          : LinearGradient(
+                              colors: [tokens.brand, tokens.brandDeep],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
-                      color: isReadOnly ? const Color(0xFF3A3530) : null,
+                      color: isReadOnly ? tokens.surfaceAlt : null,
                       borderRadius: BorderRadius.circular(1000),
                     ),
                     child: Center(
-                      child: Text(
-                        '导出',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: isReadOnly
-                              ? const Color(0xFF888888)
-                              : const Color(0xFF1C1A17),
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.download_outlined,
+                              size: 16,
+                              color: isReadOnly
+                                  ? tokens.textTertiary
+                                  : tokens.textInverse),
+                          const SizedBox(width: 6),
+                          Text(
+                            '导出',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: isReadOnly
+                                  ? tokens.textTertiary
+                                  : tokens.textInverse,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

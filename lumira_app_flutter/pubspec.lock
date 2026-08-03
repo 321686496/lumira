@@ -654,6 +654,15 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "3.0.6"
+  screen:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: master
+      resolved-ref: "70b66a5fa8ce3b34dd7da2a204505a86dd6385e8"
+      url: "https://gitcode.com/CPF-Flutter/fluttertpc_screen.git"
+    source: git
+    version: "0.0.5"
   share_plus:
     dependency: "direct main"
     description:

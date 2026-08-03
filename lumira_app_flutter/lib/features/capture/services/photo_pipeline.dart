@@ -30,6 +30,7 @@ abstract class PhotoPipeline {
     required bool isPortrait,
     bool rawMode = false,
     TransformParams? transform,
+    String facing = 'back',
   });
 
   /// 异步完整处理（worker Isolate）。
@@ -47,6 +48,7 @@ abstract class PhotoPipeline {
     TransformParams? transform,
     FillLightState? fillLight,
     String? outputPath,
+    String facing = 'back',
   });
 }
 

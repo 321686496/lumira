@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database_provider.dart';
+import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -88,6 +89,18 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 现在使用本地状态，保存时由 Task 10 从原图全量重新处理，拍摄页参数不受影响。
   late PostProcess _localPostProcess;
 
+  /// 照片已烘焙的后期参数（拍照时烘焙进 JPEG 的参数）。
+  ///
+  /// 修复"2x 参数"bug：拍照时色彩矩阵已烘焙进 JPEG（_processCaptureInIsolate
+  /// 调用 applyColorMatrixImg），预览页若再次应用完整参数会导致效果叠加
+  /// （例如亮度 20 烘焙 + 亮度 20 ColorFiltered = 1.2×1.2=1.44 ≈ 亮度 44）。
+  ///
+  /// 现跟踪烘焙参数，预览页仅应用 delta（current - baked）：
+  /// - 初始状态（未编辑）：_bakedPostProcess == _localPostProcess → delta=0 → 无 ColorFiltered
+  /// - 用户调整后：delta≠0 → 在烘焙基础上叠加增量
+  /// - 保存后：从原图重新处理全量参数 → 更新 _bakedPostProcess = _localPostProcess
+  late PostProcess _bakedPostProcess;
+
   /// 预览页本地变换参数（旋转/翻转/拉直）。
   /// 仅影响当前照片预览，保存时由 Task 10 通过非破坏性编辑管线应用。
   TransformParams _localTransform = const TransformParams();
@@ -121,6 +134,21 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 是否已编辑过图片（用于折叠操作栏的"保存"按钮显隐）
   bool _isEdited = false;
 
+  // ===== 历史照片左右滑动查看（问题7）=====
+
+  /// 历史照片列表（从数据库加载，最新在前）。
+  /// 空列表表示无 DB 记录（mock/网络图模式），退化为单张预览。
+  List<GalleryItemRecord> _historyPhotos = [];
+
+  /// 当前查看的照片在 _historyPhotos 中的索引
+  int _currentIndex = 0;
+
+  /// PageView 控制器
+  late final PageController _pageController;
+
+  /// 当前查看的照片 ID（随左右滑动更新，替代 widget.photoId 的只读限制）
+  String? _currentPhotoId;
+
   /// quarter 档位高度（屏幕高度的 35%）
   static double _quarterHeight(BuildContext c) =>
       MediaQuery.of(c).size.height * 0.35;
@@ -139,24 +167,113 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         .toList();
     // 快照拍摄时参数，作为本地调整的初始值。
     // ConsumerState.initState 中 ref.read 是安全的（provider 已初始化）。
+    // 拍照时这些参数已烘焙进 JPEG（_processCaptureInIsolate → applyColorMatrixImg），
+    // 所以 _bakedPostProcess 与 _localPostProcess 初始值相同 → delta=0 → 预览页无 ColorFiltered。
     final initial = ref.read(CaptureState.effectivePostProcessProvider);
     _localPostProcess = initial;
+    _bakedPostProcess = initial;
     _sheetHeightNotifier = ValueNotifier<double>(_kClosedHeight);
-    _loadOriginalPath(); // fire-and-forget; sets _originalPath + _isReadOnly
+    _currentPhotoId = widget.photoId;
+    _pageController = PageController(initialPage: 0);
+    _loadHistoryPhotos(); // fire-and-forget; loads DB history + original path
   }
 
   @override
   void dispose() {
     _sheetHeightNotifier.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
-  /// 从数据库加载原图路径，确定只读模式
-  Future<void> _loadOriginalPath() async {
-    if (widget.photoId == null) return;
+  // ===== 历史照片加载与滑动切换（问题7）=====
+
+  /// 从数据库加载历史照片列表，定位当前照片索引。
+  ///
+  /// - 若 photoId 为 null 或数据库无记录：退化为单张预览（_historyPhotos 为空）。
+  /// - 若找到当前照片：加载全部历史照片到 _historyPhotos，定位到当前索引，
+  ///   并从 DB 记录恢复 originalPath / postProcess / transform / sceneId。
+  Future<void> _loadHistoryPhotos() async {
+    if (widget.photoId == null) {
+      // 无 photoId（mock/网络图模式）：退化为单张预览
+      _loadOriginalPath();
+      return;
+    }
     try {
       final dao = await ref.read(galleryDaoProvider.future);
-      final record = await dao.getById(widget.photoId!);
+      final allPhotos = await dao.getAll();
+      if (!mounted) return;
+
+      if (allPhotos.isEmpty) {
+        _loadOriginalPath();
+        return;
+      }
+
+      // 定位当前照片在历史列表中的索引
+      final idx = allPhotos.indexWhere((p) => p.id == widget.photoId);
+      if (idx < 0) {
+        // 当前照片不在 DB 中（可能尚未落库）：退化为单张预览
+        _loadOriginalPath();
+        return;
+      }
+
+      setState(() {
+        _historyPhotos = allPhotos;
+        _currentIndex = idx;
+      });
+      // 从 DB 记录恢复当前照片的状态
+      _applyPhotoFromHistory(allPhotos[idx]);
+      // PageView 首次构建后跳转到当前照片索引
+      //（PageController 在 initState 中以 initialPage:0 创建，
+      // 此处异步加载完历史后需手动跳转到正确页）
+      if (idx != 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _pageController.hasClients) {
+            _pageController.jumpToPage(idx);
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[preview] 加载历史照片失败: $e');
+      _loadOriginalPath();
+    }
+  }
+
+  /// 从历史照片记录恢复所有预览状态（滑动切换时调用）。
+  ///
+  /// 更新：photoUrl / originalPath / isReadOnly / localPostProcess /
+  /// localTransform / selectedSceneId / isEdited
+  void _applyPhotoFromHistory(GalleryItemRecord record) {
+    final initial = ref.read(CaptureState.effectivePostProcessProvider);
+    setState(() {
+      _currentPhotoId = record.id;
+      _photoUrl = record.filePath ?? record.dataUrl ?? _photoUrl;
+      _originalPath = record.originalPath;
+      _isReadOnly = record.originalPath == null;
+      // 从 DB 记录恢复后期参数；若无记录则使用默认参数
+      _localPostProcess = record.postProcess ?? initial;
+      // 历史照片的 JPEG 已烘焙了 record.postProcess 参数，
+      // 所以 _bakedPostProcess = _localPostProcess → delta=0 → 预览页无 ColorFiltered。
+      _bakedPostProcess = record.postProcess ?? initial;
+      _localTransform = record.transform ?? const TransformParams();
+      _selectedSceneId = record.sceneId;
+      _isEdited = false;
+    });
+  }
+
+  /// PageView 页面切换回调：更新当前索引并恢复该照片的状态
+  void _onPageChanged(int index) {
+    if (index < 0 || index >= _historyPhotos.length) return;
+    _currentIndex = index;
+    _applyPhotoFromHistory(_historyPhotos[index]);
+  }
+
+  /// 从数据库加载原图路径，确定只读模式（fallback：无历史照片列表时使用）
+  Future<void> _loadOriginalPath() async {
+    final pid = _currentPhotoId ?? widget.photoId;
+    if (pid == null) return;
+    try {
+      final dao = await ref.read(galleryDaoProvider.future);
+      final record = await dao.getById(pid);
       if (!mounted) return;
       if (record != null) {
         setState(() {
@@ -203,6 +320,50 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       _localTransform = t;
       _isEdited = true;
     });
+  }
+
+  /// 计算预览页显示用的增量参数（current - baked）。
+  ///
+  /// 修复"2x 参数"bug：拍照时色彩矩阵已烘焙进 JPEG，预览页若再次应用完整
+  /// 参数会导致效果叠加（亮度 20+20≈44）。本方法计算用户调整的增量部分，
+  /// 预览页仅应用增量到已烘焙的照片上。
+  ///
+  /// 正确性说明：
+  /// - delta=0（未编辑）：composePostProcessMatrix 返回单位矩阵 → 无效果 ✓
+  /// - delta≠0（已调整）：simple subtraction 是近似值（矩阵乘法非线性），
+  ///   但对小调整视觉差异不可感知；保存时从原图全量重新处理（准确）
+  PostProcess _computeDeltaPostProcess() {
+    final c = _localPostProcess.color;
+    final b = _bakedPostProcess.color;
+    return PostProcess(
+      color: PostProcessColor(
+        brightness: c.brightness - b.brightness,
+        contrast: c.contrast - b.contrast,
+        saturation: c.saturation - b.saturation,
+        temperature: c.temperature - b.temperature,
+        tint: c.tint - b.tint,
+        highlights: (c.highlights ?? 0) - (b.highlights ?? 0),
+        shadows: (c.shadows ?? 0) - (b.shadows ?? 0),
+        blackPoint: (c.blackPoint ?? 0) - (b.blackPoint ?? 0),
+        clarity: (c.clarity ?? 0) - (b.clarity ?? 0),
+        vibrance: (c.vibrance ?? 0) - (b.vibrance ?? 0),
+        brilliance: (c.brilliance ?? 0) - (b.brilliance ?? 0),
+      ),
+      // 非色彩矩阵参数不影响 ColorFiltered（sharpen/smoothStrength/vignette/grain
+      // 仅在保存时从原图重新处理时应用）
+      smoothStrength: 0,
+      sharpen: 0,
+      vignette: 0,
+      grain: 0,
+      // systemFilter / LUT：未更改时用 'none'/null（无附加滤镜）；
+      // 已更改时无法通过 ColorFiltered 精确"撤销"烘焙的滤镜，但保存时会从原图重新处理
+      systemFilter: (_localPostProcess.systemFilter != _bakedPostProcess.systemFilter)
+          ? _localPostProcess.systemFilter
+          : null,
+      lut: (_localPostProcess.lut != _bakedPostProcess.lut)
+          ? _localPostProcess.lut
+          : 'none',
+    );
   }
 
   // ===== 抽屉栏拖拽 =====
@@ -508,7 +669,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       _selectedSceneId = id;
     });
     // 同步更新数据库中的场景标记（拍摄时已落库，此处更新 scene_id 字段）
-    final photoId = widget.photoId;
+    final photoId = _currentPhotoId ?? widget.photoId;
     if (photoId != null) {
       ref.read(galleryDaoProvider.future).then((dao) async {
         try {
@@ -571,8 +732,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       return;
     }
 
-    // 网络图片不支持保存
-    final photoPath = widget.photoUrl ?? '';
+    // 网络图片不支持保存（使用 _photoUrl 以支持滑动切换后的当前照片）
+    final photoPath = _photoUrl;
     if (photoPath.isEmpty || photoPath.startsWith('http')) {
       LumiraToast.show(context, '网络图片不支持保存到系统相册');
       return;
@@ -611,8 +772,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         PaintingBinding.instance.imageCache.evict(FileImage(File(originalPath)));
       } catch (_) {}
 
-      // 更新数据库记录
-      if (widget.photoId != null) {
+      // 更新数据库记录（使用 _currentPhotoId 以支持滑动切换后的当前照片）
+      final currentPhotoId = _currentPhotoId ?? widget.photoId;
+      if (currentPhotoId != null) {
         try {
           final dao = await ref.read(galleryDaoProvider.future);
           final newOriginalPath = keepOriginal ? originalPath : null;
@@ -623,7 +785,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
             } catch (_) {}
           }
           await dao.updateEdit(
-            id: widget.photoId!,
+            id: currentPhotoId,
             filePath: processedPath,
             originalPath: newOriginalPath,
             transform: _localTransform,
@@ -634,6 +796,29 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
             setState(() {
               _originalPath = newOriginalPath;
               _isReadOnly = newOriginalPath == null;
+              // 保存后照片已用 _localPostProcess 重新处理（烘焙），
+              // 更新 _bakedPostProcess 使 delta 归零，避免下次显示时叠加滤镜。
+              _bakedPostProcess = _localPostProcess;
+              _isEdited = false;
+              // 同步更新历史列表中的记录
+              if (_currentIndex < _historyPhotos.length) {
+                final old = _historyPhotos[_currentIndex];
+                _historyPhotos[_currentIndex] = GalleryItemRecord(
+                  id: currentPhotoId,
+                  dataUrl: old.dataUrl,
+                  filePath: processedPath,
+                  originalPath: newOriginalPath,
+                  transform: _localTransform,
+                  postProcess: _localPostProcess,
+                  sceneId: _selectedSceneId,
+                  templateId: old.templateId,
+                  kitId: old.kitId,
+                  mood: old.mood,
+                  lut: old.lut,
+                  isFavorite: old.isFavorite,
+                  createdAt: old.createdAt,
+                );
+              }
             });
           }
         } catch (e) {
@@ -707,6 +892,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
           // - _uiVisible=false 时照片铺满全屏（纯净模式）
           // - _sheetMode == expanded 时底部留出抽屉栏高度
           // - _sheetMode == hidden 时照片铺满全屏（仅悬浮按钮组浮在上方）
+          // - 问题7：有历史照片时使用 PageView 左右滑动查看，无历史时退化为单张预览
           ValueListenableBuilder<double>(
             valueListenable: _sheetHeightNotifier,
             builder: (context, sheetHeight, _) {
@@ -719,14 +905,48 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         ? sheetHeight
                         : 0,
                 child: GestureDetector(
-                  // 点击照片切换 UI 显隐
+                  // 点击照片切换 UI 显隐（不影响 PageView 水平滑动）
                   onTap: () => setState(() => _uiVisible = !_uiVisible),
-                  child: _FullScreenPhoto(
-                    photoUrl: _photoUrl,
-                    isComparing: _isComparing,
-                    postProcess: _localPostProcess,
-                    transform: _localTransform,
-                  ),
+                  child: _historyPhotos.isEmpty
+                      ? _FullScreenPhoto(
+                          photoUrl: _photoUrl,
+                          isComparing: _isComparing,
+                          // 修复 2x 参数 bug：照片已烘焙 _bakedPostProcess，
+                          // 预览页仅应用增量 delta（current - baked）。
+                          postProcess: _computeDeltaPostProcess(),
+                          transform: _localTransform,
+                        )
+                      : PageView.builder(
+                          controller: _pageController,
+                          itemCount: _historyPhotos.length,
+                          onPageChanged: _onPageChanged,
+                          // 允许首尾弹性回弹（与原生相机一致）
+                          physics: const BouncingScrollPhysics(),
+                          itemBuilder: (context, index) {
+                            final record = _historyPhotos[index];
+                            final url =
+                                record.filePath ?? record.dataUrl ?? '';
+                            // 当前页使用增量参数（delta = local - baked），
+                            // 其他页照片已烘焙各自的 record.postProcess，直接显示无需叠加滤镜。
+                            if (index == _currentIndex) {
+                              return _FullScreenPhoto(
+                                photoUrl: _photoUrl,
+                                isComparing: _isComparing,
+                                postProcess: _computeDeltaPostProcess(),
+                                transform: _localTransform,
+                              );
+                            }
+                            return _FullScreenPhoto(
+                              photoUrl: url,
+                              isComparing: false,
+                              // 非当前页：照片已烘焙参数，不叠加 ColorFiltered
+                              postProcess: const PostProcess(
+                                  color: PostProcessColor()),
+                              transform: record.transform ??
+                                  const TransformParams(),
+                            );
+                          },
+                        ),
                 ),
               );
             },

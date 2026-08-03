@@ -23,6 +23,10 @@ abstract class CameraService {
   /// 设置闪光灯模式
   void setFlashMode(CameraFlashMode mode);
 
+  /// 设置亮度校正（0.0~1.0，0.5 为中性）
+  /// 用于将 EV 补偿映射到取景器亮度预览
+  void setBrightness(double brightness);
+
   /// 点击对焦
   void focusOnPoint(Offset flutterPosition, Size flutterPreviewSize);
 
@@ -31,6 +35,22 @@ abstract class CameraService {
 
   /// 相机就绪状态流（用于 UI 显示"正在初始化"提示）
   Stream<bool> get readyStream;
+
+  /// 设置缩放倍数（真实倍数，如 0.5/1.0/2.0）。
+  /// 内部按平台转换：OHOS 传真实倍数，iOS/Android 转归一化 [0,1]。
+  void setZoomMultiplier(double multiplier);
+
+  /// 获取设备最大缩放倍数（真实倍数）。
+  /// 失败时返回 fallback 值 10.0。
+  Future<double> getMaxZoomMultiplier();
+
+  /// 获取设备最小缩放倍数（真实倍数）。
+  /// iOS 固定 1.0，OHOS/Android 可 < 1.0（支持超广角时）。
+  /// 失败时返回 fallback 值 1.0。
+  Future<double> getMinZoomMultiplier();
+
+  /// 是否支持超广角（minZoom < 1.0）。
+  Future<bool> supportsUltraWide();
 }
 
 /// 拍照结果（平台无关，不携带 camerawesome 的 MediaCapture）

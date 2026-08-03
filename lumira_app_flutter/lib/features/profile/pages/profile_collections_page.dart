@@ -58,7 +58,7 @@ class ProfileCollectionsPage extends ConsumerWidget {
               ),
               data: (collections) => collections.isEmpty
                   ? _EmptyState(tokens: tokens)
-                  : _buildList(tokens, collections),
+                  : _buildList(context, tokens, collections),
             ),
           ),
         ],
@@ -66,11 +66,14 @@ class ProfileCollectionsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildList(ThemeTokens tokens, List<CollectionRecord> collections) {
+  Widget _buildList(BuildContext context, ThemeTokens tokens, List<CollectionRecord> collections) {
     final totalPhotos = collections.fold<int>(0, (s, c) => s + c.photoCount);
+    // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
+    // 用 viewPadding.top（状态栏） + 48（nav 内容高度） 精确占位
+    final topPadding = MediaQuery.of(context).viewPadding.top + 48;
     return CustomScrollView(
       slivers: [
-        const SliverToBoxAdapter(child: SizedBox(height: 8)),
+        SliverToBoxAdapter(child: SizedBox(height: topPadding)),
         SliverToBoxAdapter(
           child: _StatsCard(
             tokens: tokens,

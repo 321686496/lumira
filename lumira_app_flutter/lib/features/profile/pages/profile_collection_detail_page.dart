@@ -122,8 +122,11 @@ class _DetailContent extends ConsumerWidget {
       DateTime.fromMillisecondsSinceEpoch(collection.createdAt),
     );
 
+    // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
+    // 用 viewPadding.top（状态栏） + 48（nav 内容高度） 精确占位
+    final topPadding = MediaQuery.of(context).viewPadding.top + 48;
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      padding: EdgeInsets.fromLTRB(24, topPadding, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

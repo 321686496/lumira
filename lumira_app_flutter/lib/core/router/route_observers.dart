@@ -84,8 +84,10 @@ class LumiraRouteObserver extends RouteObserver<PageRoute<dynamic>> {
   }
 
   void _clearCaptureState() {
-    // Forced fix: CaptureState.resetAll 接收 ProviderContainer（见 capture_state.dart 注释）
-    CaptureState.resetAll(_ref.container);
+    // 延迟到下一帧执行，避免在 widget tree build 期间修改 provider。
+    // didPush 等路由回调在 build 阶段触发，直接调用 resetAll 修改 provider 会抛出
+    // "Tried to modify a provider while the widget tree was building" 错误。
+    Future.microtask(() => CaptureState.resetAll(_ref.container));
   }
 }
 

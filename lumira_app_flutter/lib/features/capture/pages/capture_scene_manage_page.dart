@@ -10,21 +10,22 @@ import '../data/capture_scene_mock_data.dart';
 ///
 /// 视觉规格来源：lumira-app/src/pages/capture/scene-manage.vue (1012 行)
 /// - 顶部导航：返回 + 标题（场景管理）
-/// - Tab 栏：我的收藏 / 自定义场景 / 我的组合
+/// - Tab 栏：我的收藏 / 自定义场景
 /// - Tab 1（我的收藏）：收藏场景列表 + 取消收藏按钮 / 空状态
 /// - Tab 2（自定义场景）：列表 + 新建场景按钮 / 新建-编辑表单
-/// - Tab 3（我的组合）：组合列表 + 新建组合按钮 / 空状态
 ///
 /// 简化决策（brief §8）：
 /// - TagSelector：用内嵌 chip 多选列表代替
 /// - ScenePresetView：直接渲染行内卡片，复用 mock 数据
-/// - KitCard：简化为列表项（只展示名称 + sceneId + templateId）
 /// - addCustomScene / updateCustomScene / deleteCustomScene：mock 内存修改，不持久化
 /// - showActionSheet / showModal：用 AlertDialog + SnackBar 代替
+///
+/// 注：组合套件功能已迁移至独立的 CompositionKitsPage（lib/features/profile/pages/composition_kits_page.dart），
+/// 由 DB 持久化，本页不再承载 "我的组合" Tab。
 class CaptureSceneManagePage extends ConsumerStatefulWidget {
   const CaptureSceneManagePage({super.key, this.initialTab});
 
-  /// 路由参数：tab（fav / custom / kit）
+  /// 路由参数：tab（fav / custom）
   final String? initialTab;
 
   @override
@@ -32,7 +33,7 @@ class CaptureSceneManagePage extends ConsumerStatefulWidget {
       _CaptureSceneManagePageState();
 }
 
-enum _ManageTab { fav, custom, kit }
+enum _ManageTab { fav, custom }
 
 class _CaptureSceneManagePageState
     extends ConsumerState<CaptureSceneManagePage> {
@@ -45,7 +46,6 @@ class _CaptureSceneManagePageState
   // 内存中的自定义场景与收藏（mock）
   late List<CustomScenePreset> _customScenes;
   late List<String> _favoriteIds;
-  late List<ShootKit> _kits;
 
   @override
   void initState() {
@@ -54,15 +54,12 @@ class _CaptureSceneManagePageState
     _formData = _SceneFormData.empty();
     _customScenes = [CaptureSceneMockData.customSceneExample];
     _favoriteIds = List<String>.from(CaptureSceneMockData.favoritePresetIds);
-    _kits = List<ShootKit>.from(CaptureSceneMockData.shootKits);
   }
 
   _ManageTab _parseTab(String? tab) {
     switch (tab) {
       case 'custom':
         return _ManageTab.custom;
-      case 'kit':
-        return _ManageTab.kit;
       default:
         return _ManageTab.fav;
     }
@@ -84,12 +81,6 @@ class _CaptureSceneManagePageState
   void _goSceneDetail(String sceneId) {
     GoRouter.of(context).push(
       RouteNames.withSceneId(RouteNames.captureSceneDetail, sceneId),
-    );
-  }
-
-  void _goCreateKit() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('新建组合（mock）')),
     );
   }
 
@@ -319,34 +310,6 @@ class _CaptureSceneManagePageState
     );
   }
 
-  void _onKitClick(ShootKit kit) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除组合'),
-        content: const Text('确定删除这个组合吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              setState(() {
-                _kits.removeWhere((k) => k.id == kit.id);
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('已删除')),
-              );
-            },
-            child: const Text('删除', style: TextStyle(color: Color(0xFFC9453D))),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _onFormChange() {
     if (_formVisible && !_formDirty) {
       setState(() {
@@ -376,29 +339,23 @@ class _CaptureSceneManagePageState
                       onGoGuide: _goGuide,
                       onTapScene: (_) => _goGuide(),
                     )
-                  : _tab == _ManageTab.custom
-                      ? _formVisible
-                          ? _CustomForm(
-                              formData: _formData,
-                              editingId: _editingId,
-                              onChange: _onFormChange,
-                              onCancel: _onCancelForm,
-                              onSave: _onSaveForm,
-                              onMutate: (fn) {
-                                setState(fn);
-                                _onFormChange();
-                              },
-                            )
-                          : _CustomTab(
-                              customScenes: _customScenes,
-                              onNew: _onNew,
-                              onMore: _onMore,
-                              onTapScene: _goSceneDetail,
-                            )
-                      : _KitTab(
-                          kits: _kits,
-                          onKitClick: _onKitClick,
-                          onCreateKit: _goCreateKit,
+                  : _formVisible
+                      ? _CustomForm(
+                          formData: _formData,
+                          editingId: _editingId,
+                          onChange: _onFormChange,
+                          onCancel: _onCancelForm,
+                          onSave: _onSaveForm,
+                          onMutate: (fn) {
+                            setState(fn);
+                            _onFormChange();
+                          },
+                        )
+                      : _CustomTab(
+                          customScenes: _customScenes,
+                          onNew: _onNew,
+                          onMore: _onMore,
+                          onTapScene: _goSceneDetail,
                         ),
             ),
             const SizedBox(height: 24), // bottom-spacer
@@ -568,12 +525,6 @@ class _TabsRow extends StatelessWidget {
               label: '自定义场景',
               active: current == _ManageTab.custom,
               onTap: () => onSelect(_ManageTab.custom),
-            ),
-            const SizedBox(width: 8),
-            _TabPill(
-              label: '我的组合',
-              active: current == _ManageTab.kit,
-              onTap: () => onSelect(_ManageTab.kit),
             ),
           ],
         ),
@@ -1548,132 +1499,6 @@ class _TagPicker extends StatelessWidget {
                 ),
               );
             }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Tab 3：我的组合
-class _KitTab extends StatelessWidget {
-  const _KitTab({
-    required this.kits,
-    required this.onKitClick,
-    required this.onCreateKit,
-  });
-
-  final List<ShootKit> kits;
-  final ValueChanged<ShootKit> onKitClick;
-  final VoidCallback onCreateKit;
-
-  @override
-  Widget build(BuildContext context) {
-    if (kits.isEmpty) {
-      return const SingleChildScrollView(
-        child: _EmptyState(
-          icon: Icons.layers_outlined, // ph-stack → Icons.layers_outlined
-          title: '还没有组合',
-          desc: '点击下方按钮新建一个吧',
-        ),
-      );
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-      child: Column(
-        children: [
-          for (var i = 0; i < kits.length; i++) ...[
-            if (i > 0) const SizedBox(height: 8), // 16rpx → 8dp
-            GestureDetector(
-              onTap: () => onKitClick(kits[i]),
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color.fromRGBO(0, 0, 0, 0.04),
-                  borderRadius: BorderRadius.circular(10), // 20rpx → 10dp
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.layers_outlined,
-                      size: 20,
-                      color: Color(0xFFC9A96E),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            kits[i].name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1A1A1A),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '场景 ${kits[i].sceneId} · 模板 ${kits[i].templateId}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF9C9690),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right,
-                      size: 18,
-                      color: Color(0xFF9C9690),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 16), // 32rpx → 16dp
-          // 新建组合按钮
-          GestureDetector(
-            onTap: onCreateKit,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.all(12), // 24rpx → 12dp
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: const Color(0xFFC9A96E),
-                  width: 1, // 2rpx → 1dp
-                ),
-                color: const Color.fromRGBO(201, 169, 110, 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(
-                    Icons.add,
-                    size: 16, // 32rpx → 16dp
-                    color: Color(0xFFC9A96E),
-                  ),
-                  SizedBox(width: 6),
-                  Text(
-                    '新建组合',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Color(0xFFC9A96E),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),

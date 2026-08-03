@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -9,9 +11,12 @@ import '../data/gallery_models.dart';
 ///
 /// 视觉规格来源：lumira-app/src/pages/gallery/diary.vue line 56-103
 class DiaryTimelineEntry extends ConsumerWidget {
-  const DiaryTimelineEntry({super.key, required this.entry});
+  const DiaryTimelineEntry({super.key, required this.entry, this.onPhotoTap});
 
   final DiaryEntry entry;
+
+  /// 点击照片回调，参数为照片 ID（用于跳转详情页）
+  final void Function(String photoId)? onPhotoTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -60,7 +65,10 @@ class DiaryTimelineEntry extends ConsumerWidget {
                           padding: EdgeInsets.only(
                             right: entry.photos.last == p ? 0 : 8,
                           ),
-                          child: _PhotoCard(photo: p),
+                          child: _PhotoCard(
+                            photo: p,
+                            onTap: onPhotoTap == null ? null : () => onPhotoTap!(p.id),
+                          ),
                         ),
                       ))
                   .toList(),
@@ -73,38 +81,65 @@ class DiaryTimelineEntry extends ConsumerWidget {
 }
 
 class _PhotoCard extends ConsumerWidget {
-  const _PhotoCard({required this.photo});
+  const _PhotoCard({required this.photo, this.onTap});
   final DiaryPhoto photo;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
-          child: AspectRatio(
-            aspectRatio: 2 / 3, // 400×600
-            child: Image.network(
-              photo.img,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: tokens.surfaceAlt,
-                child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
-              ),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
+            child: AspectRatio(
+              aspectRatio: 2 / 3, // 400×600
+              child: _buildImage(tokens),
             ),
           ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: photo.tags.map((t) => _DiaryTagChip(tag: t)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 图片源可能是网络 URL 或本地文件路径（与 PhotoCell 一致）
+  Widget _buildImage(ThemeTokens tokens) {
+    final url = photo.img;
+    if (url.isEmpty) {
+      return Container(
+        color: tokens.surfaceAlt,
+        child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
+      );
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: tokens.surfaceAlt,
+          child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
         ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 4,
-          runSpacing: 4,
-          children: photo.tags.map((t) => _DiaryTagChip(tag: t)).toList(),
-        ),
-      ],
+      );
+    }
+    return Image.file(
+      File(url),
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        color: tokens.surfaceAlt,
+        child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
+      ),
     );
   }
 }

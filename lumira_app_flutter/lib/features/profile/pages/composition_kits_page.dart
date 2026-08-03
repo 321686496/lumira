@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/scenes_dao.dart';
+import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -36,7 +39,7 @@ class CompositionKitsPage extends ConsumerWidget {
         leading: _BackButton(tokens: tokens),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => GoRouter.of(context).push(RouteNames.captureSceneManage),
+        onPressed: () => _showCreateKitSheet(context, ref),
         backgroundColor: tokens.brand,
         child: Icon(Icons.add, color: tokens.canvas),
       ),
@@ -118,6 +121,20 @@ class CompositionKitsPage extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// 弹出"新建组合"底部表单：选择场景（必选）+ 模板（可选）+ 名称
+  void _showCreateKitSheet(BuildContext context, WidgetRef ref) {
+    final tokens = ref.read(themeTokensProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: tokens.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _CreateKitSheet(tokens: tokens),
     );
   }
 }
@@ -392,6 +409,431 @@ class _EmptyState extends StatelessWidget {
             child: const Text('去逛逛场景'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "新建组合"底部表单
+///
+/// 字段：
+/// - 名称（必填，≤30 字）
+/// - 关联场景（必选，来源 scenesDaoProvider → ScenesDao.getAll）
+/// - 关联模板（可选，来源 templatesDaoProvider → TemplatesDao.getAll）
+///
+/// 保存：构造 CompositionKit → compositionKitsDaoProvider.insert →
+/// ref.invalidate(compositionKitsProvider) 刷新列表 → 关闭表单 + 成功 toast
+class _CreateKitSheet extends ConsumerStatefulWidget {
+  const _CreateKitSheet({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  ConsumerState<_CreateKitSheet> createState() => _CreateKitSheetState();
+}
+
+class _CreateKitSheetState extends ConsumerState<_CreateKitSheet> {
+  final _nameController = TextEditingController();
+  String? _selectedSceneId;
+  String? _selectedTemplateId;
+  bool _saving = false;
+  List<SceneRecord>? _scenes;
+  List<TemplateRecord>? _templates;
+  bool _loadError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final scenesDao = await ref.read(scenesDaoProvider.future);
+      final templatesDao = await ref.read(templatesDaoProvider.future);
+      final scenes = await scenesDao.getAll();
+      final templates = await templatesDao.getAll();
+      if (!mounted) return;
+      setState(() {
+        _scenes = scenes;
+        _templates = templates;
+        // 默认选中第一个场景，避免用户必须手动选择
+        _selectedSceneId = scenes.isEmpty ? null : scenes.first.id;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadError = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入组合名称')),
+      );
+      return;
+    }
+    if (_selectedSceneId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请选择关联场景')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      final dao = await ref.read(compositionKitsDaoProvider.future);
+      final kit = CompositionKit(
+        id: 'kit_${DateTime.now().millisecondsSinceEpoch}',
+        name: name,
+        sceneId: _selectedSceneId!,
+        templateId: _selectedTemplateId,
+        cameraOverrides: const {},
+        note: '',
+        coverUrl: null,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+        lastUsedAt: null,
+        usageCount: 0,
+      );
+      await dao.insert(kit);
+      ref.invalidate(compositionKitsProvider);
+      if (!mounted) return;
+      navigator.pop();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('已创建组合')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('创建失败：$e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = widget.tokens;
+    return Padding(
+      // 跟随键盘上推
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Grabber(tokens: tokens),
+            const SizedBox(height: 8),
+            Text(
+              '新建组合',
+              style: TextStyle(
+                fontFamily: 'Noto Serif SC',
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '将场景和模板组合成一套拍摄参数',
+              style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+            ),
+            const SizedBox(height: 18),
+            _FieldLabel(text: '组合名称', required: true, tokens: tokens),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _nameController,
+              maxLength: 30,
+              textInputAction: TextInputAction.done,
+              decoration: _inputDecoration(tokens, '如：咖啡馆+柔光人像'),
+              style: TextStyle(fontSize: 14, color: tokens.textPrimary),
+            ),
+            const SizedBox(height: 14),
+            _FieldLabel(text: '关联场景', required: true, tokens: tokens),
+            const SizedBox(height: 6),
+            _buildSceneField(tokens),
+            const SizedBox(height: 14),
+            _FieldLabel(text: '关联模板', required: false, tokens: tokens),
+            const SizedBox(height: 6),
+            _buildTemplateField(tokens),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _PillButton(
+                    tokens: tokens,
+                    label: '取消',
+                    onTap: _saving ? null : () => Navigator.of(context).pop(),
+                    primary: false,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _PillButton(
+                    tokens: tokens,
+                    label: '保存',
+                    onTap: _saving ? null : _save,
+                    primary: true,
+                    loading: _saving,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSceneField(ThemeTokens tokens) {
+    if (_loadError) {
+      return _HintBox(tokens: tokens, text: '加载场景失败');
+    }
+    if (_scenes == null) {
+      return _LoadingBox(tokens: tokens);
+    }
+    if (_scenes!.isEmpty) {
+      return _HintBox(tokens: tokens, text: '暂无可用场景，请先创建场景');
+    }
+    return DropdownButtonFormField<String>(
+      value: _selectedSceneId,
+      decoration: _inputDecoration(tokens, '选择场景'),
+      style: TextStyle(fontSize: 14, color: tokens.textPrimary),
+      dropdownColor: tokens.surface,
+      icon: Icon(Icons.arrow_drop_down, color: tokens.textTertiary),
+      items: _scenes!
+          .map((s) => DropdownMenuItem<String>(
+                value: s.id,
+                child: Text(
+                  s.name.isEmpty ? s.id : s.name,
+                  style: TextStyle(color: tokens.textPrimary),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ))
+          .toList(),
+      onChanged: (v) => setState(() => _selectedSceneId = v),
+    );
+  }
+
+  Widget _buildTemplateField(ThemeTokens tokens) {
+    if (_loadError) {
+      return _HintBox(tokens: tokens, text: '加载模板失败');
+    }
+    if (_templates == null) {
+      return _LoadingBox(tokens: tokens);
+    }
+    return DropdownButtonFormField<String?>(
+      value: _selectedTemplateId,
+      decoration: _inputDecoration(tokens, '选择模板'),
+      style: TextStyle(fontSize: 14, color: tokens.textPrimary),
+      dropdownColor: tokens.surface,
+      icon: Icon(Icons.arrow_drop_down, color: tokens.textTertiary),
+      items: [
+        DropdownMenuItem<String?>(
+          value: null,
+          child: Text(
+            '不绑定模板',
+            style: TextStyle(color: tokens.textTertiary),
+          ),
+        ),
+        ..._templates!.map((t) => DropdownMenuItem<String?>(
+              value: t.id,
+              child: Text(
+                t.name,
+                style: TextStyle(color: tokens.textPrimary),
+                overflow: TextOverflow.ellipsis,
+              ),
+            )),
+      ],
+      onChanged: (v) => setState(() => _selectedTemplateId = v),
+    );
+  }
+
+  InputDecoration _inputDecoration(ThemeTokens tokens, String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(fontSize: 14, color: tokens.textTertiary),
+      filled: true,
+      fillColor: tokens.surfaceAlt,
+      counterText: '',
+      isDense: true,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: tokens.divider),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: tokens.divider),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: tokens.brand, width: 1.5),
+      ),
+    );
+  }
+}
+
+/// 顶部小抓手装饰
+class _Grabber extends StatelessWidget {
+  const _Grabber({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: tokens.divider,
+          borderRadius: BorderRadius.circular(9999),
+        ),
+      ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel({
+    required this.text,
+    required this.required,
+    required this.tokens,
+  });
+  final String text;
+  final bool required;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: tokens.textSecondary,
+        ),
+        children: [
+          if (required)
+            TextSpan(
+              text: ' *',
+              style: TextStyle(color: tokens.danger),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LoadingBox extends StatelessWidget {
+  const _LoadingBox({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: tokens.surfaceAlt,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(tokens.brand),
+        ),
+      ),
+    );
+  }
+}
+
+class _HintBox extends StatelessWidget {
+  const _HintBox({required this.tokens, required this.text});
+  final ThemeTokens tokens;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: tokens.surfaceAlt,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 13, color: tokens.textTertiary),
+      ),
+    );
+  }
+}
+
+/// 胶囊状按钮（取消 / 保存）
+class _PillButton extends StatelessWidget {
+  const _PillButton({
+    required this.tokens,
+    required this.label,
+    required this.onTap,
+    required this.primary,
+    this.loading = false,
+  });
+  final ThemeTokens tokens;
+  final String label;
+  final VoidCallback? onTap;
+  final bool primary;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    final bg = primary ? tokens.brand : tokens.surfaceAlt;
+    final fg = primary
+        ? tokens.canvas
+        : (disabled ? tokens.textTertiary : tokens.textPrimary);
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: disabled ? tokens.surfaceAlt : bg,
+          borderRadius: BorderRadius.circular(9999),
+        ),
+        alignment: Alignment.center,
+        child: loading
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(fg),
+                ),
+              )
+            : Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: fg,
+                ),
+              ),
       ),
     );
   }
