@@ -1,4 +1,4 @@
-import 'dart:io' show File;
+import 'dart:io' show File, stderr;
 
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:screen/screen.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
@@ -92,6 +93,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 上一次构建时的 facing，用于检测 facing 变化并重建 captureKey
   String? _lastFacingForKey;
+
+  /// 补光开启前的原始屏幕亮度（0.0~1.0）。
+  /// 补光关闭或页面退出时恢复此值；null 表示未保存（补光未开启或已恢复）。
+  double? _originalScreenBrightness;
 
   /// 缓存的 ProviderContainer 引用。
   /// 在 dispose() 中调用 ref.read 会触发 ProviderScope.containerOf(this)，
@@ -232,6 +237,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   @override
   void dispose() {
+    // 退出页面时恢复屏幕亮度（安全网：补光仍开启时退出）
+    _restoreBrightness();
     // 通过 CameraService 抽象层释放原生相机资源（替代 CamerawesomePlugin.stop）。
     // 使用缓存的 container 引用，避免 ref.read 在 deactivated element 上查询 widget 树祖先。
     // dispose() 返回 Future，测试环境中无平台通道会异步抛 MissingPluginException，
@@ -240,6 +247,32 @@ class _CapturePageState extends ConsumerState<CapturePage>
     service?.dispose().catchError((_) {});
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  /// 补光开启：保存当前屏幕亮度，然后调至最高（1.0）。
+  void _enableMaxBrightness() {
+    () async {
+      try {
+        _originalScreenBrightness = await Screen.brightness;
+        await Screen.setBrightness(1.0);
+      } catch (e) {
+        debugPrint('[capture] set max brightness failed: $e');
+      }
+    }();
+  }
+
+  /// 补光关闭或页面退出：恢复原始屏幕亮度。
+  void _restoreBrightness() {
+    final saved = _originalScreenBrightness;
+    if (saved == null) return;
+    _originalScreenBrightness = null;
+    () async {
+      try {
+        await Screen.setBrightness(saved);
+      } catch (e) {
+        debugPrint('[capture] restore brightness failed: $e');
+      }
+    }();
   }
 
   @override
@@ -311,9 +344,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
     // 快照当前比例参数（避免连拍中切换比例导致参数不一致）
     final ratioId = ref.read(CaptureState.aspectRatioProvider);
-    final winSize = WidgetsBinding.instance.window.physicalSize;
-    final isPortrait = winSize.height >= winSize.width;
-    final screenRatio = winSize.width / winSize.height;
+    // 使用 MediaQuery（与取景器一致）而非已废弃的 WidgetsBinding.instance.window.physicalSize，
+    // 后者在部分平台返回 Size.zero 导致 screenRatio=NaN，isolate 裁切失败后 catch 返回原始 4:3 图像。
+    final screenSize = MediaQuery.of(context).size;
+    final isPortrait = screenSize.height >= screenSize.width;
+    var screenRatio = screenSize.width / screenSize.height;
+    if (!screenRatio.isFinite || screenRatio <= 0) {
+      // Fallback：典型手机屏幕比例（竖屏 9:19.5，横屏 19.5:9）
+      screenRatio = isPortrait ? 9.0 / 19.5 : 19.5 / 9.0;
+    }
     final targetRatio =
         CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
 
@@ -327,12 +366,22 @@ class _CapturePageState extends ConsumerState<CapturePage>
       );
 
       // 后处理异步执行，不阻塞下次 capture 调用（支持连拍）
+      final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
+      debugPrint('[capture] postProcess for isolate: '
+          'brightness=${postProcess.color.brightness}, '
+          'sharpen=${postProcess.sharpen}, '
+          'smooth=${postProcess.smoothStrength}, '
+          'vignette=${postProcess.vignette}, '
+          'grain=${postProcess.grain}, '
+          'clarity=${postProcess.color.clarity}, '
+          'brilliance=${postProcess.color.brilliance}, '
+          'vibrance=${postProcess.color.vibrance}');
       _processCaptureQueue.add(_CaptureProcessParams(
         inputPath: result.filePath,
         targetRatio: targetRatio,
         isPortrait: isPortrait,
         isFront: facing == 'front',
-        postProcess: ref.read(CaptureState.effectivePostProcessProvider),
+        postProcess: postProcess,
       ));
       _processCaptureQueueItem();
     } catch (e, st) {
@@ -517,6 +566,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
       if (prev != next) {
         final multiplier = ref.read(CaptureState.zoomProvider);
         ref.read(cameraServiceProvider).setZoomMultiplier(multiplier);
+      }
+    });
+
+    // 补光灯开关 → 屏幕亮度：开启时调至最高（1.0），关闭时恢复原值。
+    // 监听 fillLightEnabledProvider 以覆盖所有开关路径（颜色选择、关闭按钮、切后置摄像头、退出页面）。
+    ref.listen<bool>(CaptureState.fillLightEnabledProvider, (prev, next) {
+      if (prev == next) return;
+      if (next) {
+        _enableMaxBrightness();
+      } else {
+        _restoreBrightness();
       }
     });
 
@@ -862,6 +922,7 @@ class _FloatingViewfinderState extends ConsumerState<_FloatingViewfinder> {
                   onZoomChanged: widget.onZoomChanged,
                   previewFit: CameraPreviewFit.cover,
                   rawCaptureKey: widget.rawCaptureKey,
+                  applyColorFilter: false,
                 ),
               ),
             ),
@@ -2409,7 +2470,10 @@ Future<String> _processCaptureInIsolate(_CaptureProcessParams params) async {
     final encoded = img.encodeJpg(result, quality: 90);
     await File(params.inputPath).writeAsBytes(encoded);
     return params.inputPath;
-  } catch (_) {
+  } catch (e, st) {
+    // 写入 stderr 以便在设备日志中定位后处理失败原因
+    // （isolate 中无法使用 debugPrint，但 stdout/stderr 可用）。
+    stderr.writeln('[capture-isolate] postProcess failed: $e\n$st');
     return params.inputPath;
   }
 }

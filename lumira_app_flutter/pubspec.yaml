@@ -60,6 +60,10 @@ dependencies:
   # 屏幕常亮（CPF-Flutter 3.7 Harmony 适配版本 1.1.6；未回合上游，见 dependency_overrides）
   wakelock_plus: 1.1.6  # Harmony 3.7 适配版本 (CPF-Flutter)
 
+  # 屏幕亮度控制（补光功能：开启时调至最高亮度，关闭时恢复原值）
+  # CPF-Flutter 3.7 Harmony 适配版本 0.0.5；未回合上游，见 dependency_overrides
+  screen: 0.0.5  # Harmony 3.7 适配版本 (CPF-Flutter)
+
   # 启动屏（brief ^2.4.7 → CPF-Flutter 3.7 Harmony 适配版本 2.3.13；未回合上游，见 dependency_overrides）
   flutter_native_splash: 2.3.13  # Harmony 3.7 适配版本 (CPF-Flutter)
 
@@ -114,6 +118,10 @@ dependency_overrides:
   mime: '1.0.4'
   path_provider: '2.0.14'
   uuid: '4.2.2'
+  screen:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_screen.git
+      ref: master
   permission_handler:
     git:
       url: https://gitcode.com/CPF-Flutter/flutter_permission_handler.git

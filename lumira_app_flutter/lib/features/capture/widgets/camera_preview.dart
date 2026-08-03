@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -75,7 +76,7 @@ class CameraPreview extends ConsumerWidget {
   });
 
   /// 双指缩放手势回调（传入真实倍数，1.0 = 1x）。
-  /// 由 CameraService 的 onScaleZoom 触发，透传给上层 _onZoomChanged 同步 provider 状态。
+  /// 注意：双指缩放现在直接同步 provider 状态，此字段保留供其他子组件复用回调。
   final ValueChanged<double>? onZoomChanged;
 
   /// 表单覆盖参数（Bug 12 修复：模板预览页使用）
@@ -134,18 +135,23 @@ class CameraPreview extends ConsumerWidget {
     // 相机预览本体：测试中由 override 替换 CameraService.buildPreview 部分，
     // 但保留滤镜和构图叠图逻辑（让测试可以验证 ColorFiltered/CompositionOverlay 包裹）
     final cameraService = ref.read(cameraServiceProvider);
-    final cameraWidget = overrideWidget ?? cameraService.buildPreview(
-      config: CameraPreviewConfig(
-        facing: facing,
-        fit: previewFit,
-        onReady: () => _onCameraReady(ref, flashMode, facing),
-        onTapFocus: (position, previewSize) {
-          cameraService.focusOnPoint(position, previewSize);
-        },
-        onScaleZoom: (scale) {
-          // 透传给上层 _onZoomChanged，由其同步 provider 状态并下发原生相机
-          onZoomChanged?.call(scale);
-        },
+    // 用 SizedBox.expand 包裹，强制 CameraAwesomeBuilder 填满父容器，
+    // 避免 camerawesome 内部根据 previewSize 计算尺寸时留下黑边
+    final cameraWidget = overrideWidget ?? SizedBox.expand(
+      child: cameraService.buildPreview(
+        config: CameraPreviewConfig(
+          facing: facing,
+          fit: previewFit,
+          onReady: () => _onCameraReady(ref, flashMode, facing),
+          onTapFocus: (position, previewSize) {
+            cameraService.focusOnPoint(position, previewSize);
+          },
+          onScaleZoom: (multiplier) {
+            // multiplier 已是真实倍数（service 层已按平台转换）
+            ref.read(CaptureState.apparentZoomProvider.notifier).state = multiplier;
+            ref.read(CaptureState.zoomProvider.notifier).state = multiplier;
+          },
+        ),
       ),
     );
 
@@ -229,23 +235,46 @@ class CameraPreview extends ConsumerWidget {
     );
   }
 
-  /// 相机就绪回调：应用初始闪光灯模式 + 重置缩放为 1x。
+  /// 相机就绪回调：应用初始闪光灯模式 + EV 补偿 + 查询设备缩放能力 + 恢复当前缩放。
   /// 由 CameraService.buildPreview 的 onReady 触发（首次初始化和重建时）。
   ///
-  /// 注：原 _onCameraStateCreated 中的 setMirrorFrontCamera（前置镜像）和
-  /// setBrightness（EV 补偿）逻辑未迁移——CameraService 抽象接口当前未暴露
-  /// 这些方法，依赖 camerawesome 默认行为。后续如需恢复可扩展 CameraService。
+  /// 注意：不重置缩放为 1x，而是恢复 zoomProvider 中保存的当前值。
+  /// 这样拍照后 CameraPreview 重建（_cameraRebuildKey 递增）触发 onReady 时，
+  // 不会丢失用户已调整的缩放比例。
   void _onCameraReady(WidgetRef ref, CaptureFlashMode flashMode, String facing) {
     final cameraService = ref.read(cameraServiceProvider);
     // 应用闪光灯模式
     cameraService.setFlashMode(_mapFlashMode(flashMode));
-    // 重置缩放为 1x
-    cameraService.setZoom(1.0);
-    final range = CaptureState.zoomRangeForFacing(facing);
-    final normalized1x = CaptureState.zoomMultiplierToNormalized(
-        1.0, range.min, range.max);
-    ref.read(CaptureState.apparentZoomProvider.notifier).state = normalized1x;
-    ref.read(CaptureState.zoomProvider.notifier).state = normalized1x;
+
+    // 应用初始 EV 补偿（从 effectiveCameraProvider 读取）
+    final cam = ref.read(CaptureState.effectiveCameraProvider);
+    final ev = cam.exposureCompensation;
+    final brightness = (0.5 + ev / 6.0).clamp(0.0, 1.0);
+    cameraService.setBrightness(brightness);
+
+    // 异步查询设备缩放能力（不阻塞相机就绪）
+    _queryZoomCapabilities(ref, cameraService);
+
+    // 恢复当前缩放（不重置为 1x，保留用户已调整的值）
+    final currentZoom = ref.read(CaptureState.zoomProvider);
+    cameraService.setZoomMultiplier(currentZoom);
+  }
+
+  /// 异步查询设备缩放能力（最大/最小倍数、是否支持超广角），
+  /// 结果写入对应 provider 供上层 UI（如变焦滑块范围）使用。
+  /// 失败时仅打印日志，不阻塞相机就绪流程。
+  Future<void> _queryZoomCapabilities(
+      WidgetRef ref, CameraService service) async {
+    try {
+      final maxZoom = await service.getMaxZoomMultiplier();
+      final minZoom = await service.getMinZoomMultiplier();
+      final ultraWide = await service.supportsUltraWide();
+      ref.read(CaptureState.deviceMaxZoomProvider.notifier).state = maxZoom;
+      ref.read(CaptureState.deviceMinZoomProvider.notifier).state = minZoom;
+      ref.read(CaptureState.supportsUltraWideProvider.notifier).state = ultraWide;
+    } catch (e) {
+      debugPrint('[camera] query zoom capabilities failed: $e');
+    }
   }
 
   /// 将 CaptureState 的 CaptureFlashMode 映射为 CameraService 的 CameraFlashMode。

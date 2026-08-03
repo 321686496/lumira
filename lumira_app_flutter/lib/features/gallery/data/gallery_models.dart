@@ -71,10 +71,13 @@ class DiaryEntry {
 /// 日记 entry 中的照片
 class DiaryPhoto {
   const DiaryPhoto({
+    required this.id,
     required this.img,
     required this.tags,
   });
 
+  /// 照片 ID，用于点击跳转详情页
+  final String id;
   final String img;
   final List<DiaryTag> tags;
 }

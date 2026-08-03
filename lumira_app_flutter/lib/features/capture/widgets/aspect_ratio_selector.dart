@@ -9,7 +9,6 @@ import '../data/capture_state.dart';
 /// - 全屏（与取景器显示一致，9:16 或 16:9）
 /// - 4:3（标准相机比例）
 /// - 1:1（正方形）
-/// - 3:4（竖版）
 ///
 /// 切换后取景器会显示对应比例的遮罩区域，
 /// 拍照后的照片按此比例裁剪。
@@ -20,7 +19,6 @@ class AspectRatioSelector extends ConsumerWidget {
     _AspectRatioOption(id: 'fullscreen', label: '全屏', icon: Icons.fullscreen),
     _AspectRatioOption(id: '4:3', label: '4:3', icon: Icons.crop_3_2),
     _AspectRatioOption(id: '1:1', label: '1:1', icon: Icons.crop_square),
-    _AspectRatioOption(id: '3:4', label: '3:4', icon: Icons.crop_portrait),
   ];
 
   @override

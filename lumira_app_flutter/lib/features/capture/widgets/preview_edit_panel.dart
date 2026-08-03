@@ -1,6 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
+import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
 
 /// 预览页编辑面板（4 标签底部抽屉）
@@ -17,12 +22,16 @@ class PreviewEditPanel extends ConsumerStatefulWidget {
   final ValueChanged<PostProcess> onPostProcessChanged;
   final ValueChanged<TransformParams> onTransformChanged;
 
+  /// 预览图路径（用于滤镜缩略图）。可为空（此时滤镜页降级为文字 Chip）。
+  final String? previewImagePath;
+
   const PreviewEditPanel({
     super.key,
     required this.postProcess,
     required this.transform,
     required this.onPostProcessChanged,
     required this.onTransformChanged,
+    this.previewImagePath,
   });
 
   @override
@@ -76,6 +85,7 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
 
   /// 根据 _tabController.index 显示当前 Tab 内容（点击切换，非滑动）
   Widget _buildCurrentTab() {
+    final tokens = ref.watch(themeTokensProvider);
     switch (_tabController.index) {
       case 0:
         return _ColorTab(
@@ -91,11 +101,16 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
         return _FilterTab(
           postProcess: widget.postProcess,
           onChanged: _updatePost,
+          previewImagePath: widget.previewImagePath,
+          tokens: tokens,
         );
       case 3:
         return _CropTab(
           transform: widget.transform,
           onChanged: _updateTransform,
+          postProcess: widget.postProcess,
+          onPostProcessChanged: _updatePost,
+          tokens: tokens,
         );
       default:
         return _ColorTab(
@@ -308,6 +323,7 @@ class _DetailTab extends StatelessWidget {
           value: postProcess.sharpen.toDouble(),
           min: 0,
           max: 100,
+          hint: '导出后生效',
           onChanged: (v) =>
               onChanged(postProcess.copyWith(sharpen: v.round())),
         ),
@@ -316,6 +332,7 @@ class _DetailTab extends StatelessWidget {
           value: postProcess.smoothStrength.toDouble(),
           min: 0,
           max: 100,
+          hint: '导出后生效',
           onChanged: (v) =>
               onChanged(postProcess.copyWith(smoothStrength: v.round())),
         ),
@@ -373,84 +390,191 @@ class _FilterTab extends StatelessWidget {
   final PostProcess postProcess;
   final ValueChanged<PostProcess> onChanged;
 
-  const _FilterTab({required this.postProcess, required this.onChanged});
+  /// 预览图路径。为空时降级为文字 Chip。
+  final String? previewImagePath;
+
+  /// 主题色板
+  final ThemeTokens tokens;
+
+  const _FilterTab({
+    required this.postProcess,
+    required this.onChanged,
+    required this.previewImagePath,
+    required this.tokens,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final systemFilters = [
+      'none',
+      'vivid',
+      'vivid_warm',
+      'vivid_cool',
+      'mono',
+      'silver',
+      'noir',
+    ];
+    final luts = [
+      'none',
+      'cinematic',
+      'vintage',
+      'bw',
+      'warm_film',
+      'cool_film',
+      'pastel',
+      'fuji',
+      'portrait',
+      'japanese',
+      'cyberpunk',
+      'sepia_classic',
+      'mist',
+      'rouge',
+      'twilight',
+      'cyan',
+    ];
+
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        const Text(
+        Text(
           '系统滤镜',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: tokens.textPrimary,
           ),
         ),
         const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            'none',
-            'vivid',
-            'vivid_warm',
-            'vivid_cool',
-            'mono',
-            'silver',
-            'noir'
-          ].map((name) {
-            final selected = postProcess.systemFilter == name;
-            return _CustomChip(
-              label: _systemFilterLabels[name] ?? name,
-              selected: selected,
-              onTap: () => onChanged(postProcess.copyWith(
-                systemFilter: name == 'none' ? null : name,
-              )),
-            );
-          }).toList(),
+        SizedBox(
+          height: 104,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: systemFilters.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final name = systemFilters[i];
+              final selected = postProcess.systemFilter == name;
+              return _FilterThumbnail(
+                label: _systemFilterLabels[name] ?? name,
+                selected: selected,
+                tokens: tokens,
+                matrix: composeSystemFilterMatrix(name),
+                previewImagePath: previewImagePath,
+                onTap: () => onChanged(postProcess.copyWith(
+                  systemFilter: name == 'none' ? null : name,
+                )),
+              );
+            },
+          ),
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'LUT 预设',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: tokens.textPrimary,
           ),
         ),
         const SizedBox(height: 6),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            'none',
-            'cinematic',
-            'vintage',
-            'bw',
-            'warm_film',
-            'cool_film',
-            'pastel',
-            'fuji',
-            'portrait',
-            'japanese',
-            'cyberpunk',
-            'sepia_classic',
-            'mist',
-            'rouge',
-            'twilight',
-            'cyan'
-          ].map((name) {
-            final selected = postProcess.lut == name;
-            return _CustomChip(
-              label: _lutLabels[name] ?? name,
-              selected: selected,
-              onTap: () => onChanged(postProcess.copyWith(lut: name)),
-            );
-          }).toList(),
+        SizedBox(
+          height: 104,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: luts.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final name = luts[i];
+              final selected = postProcess.lut == name;
+              return _FilterThumbnail(
+                label: _lutLabels[name] ?? name,
+                selected: selected,
+                tokens: tokens,
+                matrix: composeLutMatrix(name),
+                previewImagePath: previewImagePath,
+                onTap: () => onChanged(postProcess.copyWith(lut: name)),
+              );
+            },
+          ),
         ),
       ],
+    );
+  }
+}
+
+/// 滤镜缩略图卡片：64x80 预览图 + 滤镜名 + 选中边框
+class _FilterThumbnail extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final ThemeTokens tokens;
+  final List<double> matrix;
+  final String? previewImagePath;
+  final VoidCallback onTap;
+
+  const _FilterThumbnail({
+    required this.label,
+    required this.selected,
+    required this.tokens,
+    required this.matrix,
+    required this.previewImagePath,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = previewImagePath != null && previewImagePath!.isNotEmpty;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 64,
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 80,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: selected ? tokens.brand : tokens.divider,
+                  width: selected ? 2 : 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(7),
+                child: hasImage
+                    ? ColorFiltered(
+                        colorFilter: ColorFilter.matrix(matrix),
+                        child: previewImagePath!.startsWith('http')
+                            ? Image.network(previewImagePath!,
+                                fit: BoxFit.cover)
+                            : Image.file(File(previewImagePath!),
+                                fit: BoxFit.cover),
+                      )
+                    : Container(
+                        color: tokens.surfaceAlt,
+                        alignment: Alignment.center,
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                              fontSize: 9, color: tokens.textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: selected ? tokens.brand : tokens.textSecondary,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -460,13 +584,100 @@ class _CropTab extends StatelessWidget {
   final TransformParams transform;
   final ValueChanged<TransformParams> onChanged;
 
-  const _CropTab({required this.transform, required this.onChanged});
+  /// 后期参数（用于裁剪比例 cropRatio）
+  final PostProcess postProcess;
+
+  /// 后期参数更新回调（用于裁剪比例）
+  final ValueChanged<PostProcess> onPostProcessChanged;
+
+  /// 主题色板
+  final ThemeTokens tokens;
+
+  const _CropTab({
+    required this.transform,
+    required this.onChanged,
+    required this.postProcess,
+    required this.onPostProcessChanged,
+    required this.tokens,
+  });
+
+  /// 裁剪比例选择器：自由 / 1:1 / 4:3 / 3:4 / 16:9 / 全屏
+  Widget _buildRatioSelector() {
+    const ratios = <MapEntry<String, String>>[
+      MapEntry('free', '自由'),
+      MapEntry('1:1', '1:1'),
+      MapEntry('4:3', '4:3'),
+      MapEntry('3:4', '3:4'),
+      MapEntry('16:9', '16:9'),
+      MapEntry('fullscreen', '全屏'),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text(
+            '裁剪比例',
+            style: TextStyle(
+                fontSize: 13,
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w500),
+          ),
+        ),
+        SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            itemCount: ratios.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final ratio = ratios[i].key;
+              final label = ratios[i].value;
+              final selected = postProcess.cropRatio == ratio;
+              return GestureDetector(
+                onTap: () =>
+                    onPostProcessChanged(postProcess.copyWith(cropRatio: ratio)),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: selected ? tokens.brand : tokens.surfaceAlt,
+                    borderRadius: BorderRadius.circular(1000),
+                    border: Border.all(
+                        color: selected ? tokens.brand : tokens.divider,
+                        width: 1),
+                  ),
+                  child: Center(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: selected
+                            ? tokens.textInverse
+                            : tokens.textPrimary,
+                        fontWeight:
+                            selected ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       children: [
+        _buildRatioSelector(),
         const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -546,7 +757,10 @@ class _CropTab extends StatelessWidget {
 
 // === 自定义滑块 ===
 /// 细线轨道（3px）+ 圆形把手（16px，命中区域 24x24）+ 品牌色填充
-/// 用 LayoutBuilder + Stack 实现，支持拖拽（onPanUpdate）
+/// 用 LayoutBuilder + Stack 实现，支持拖拽（onPanStart + onPanUpdate）
+///
+/// 修复要点：使用绝对位置（details.localPosition.dx）而非增量（delta.dx），
+/// 避免多次 pan 事件共用过时 t 导致拖拽不灵敏；移除重复的轨道 GestureDetector。
 class _SliderRow extends StatelessWidget {
   final String label;
   final double value;
@@ -554,17 +768,21 @@ class _SliderRow extends StatelessWidget {
   final double max;
   final ValueChanged<double> onChanged;
 
+  /// 可选提示文字（如"导出后生效"），显示在滑块下方。
+  final String? hint;
+
   const _SliderRow({
     required this.label,
     required this.value,
     required this.min,
     required this.max,
     required this.onChanged,
+    this.hint,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final slider = Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -576,136 +794,129 @@ class _SliderRow extends StatelessWidget {
           final t = ((value - min) / (max - min)).clamp(0.0, 1.0);
           final thumbX = labelWidth + (trackWidth * t);
 
-          // 整体高度 32，把手命中区域 24x24，垂直居中
-          // 轨道 3px 高，居中在 32px 容器内（top = (32-3)/2 = 14.5）
+          // 整体高度 32，把手 16px，垂直居中
           const rowHeight = 32.0;
-          const hitSize = 24.0;
           const thumbSize = 16.0;
           const trackHeight = 3.0;
-          // 轨道中心 y = rowHeight / 2 = 16
-          // 轨道 top = 16 - trackHeight / 2 ≈ 14.5
-          final trackTop = (rowHeight - trackHeight) / 2;
-          // 把手 top：命中区域垂直居中（top = (rowHeight - hitSize) / 2 = 4）
-          const thumbTop = (rowHeight - hitSize) / 2;
+          const trackTop = (rowHeight - trackHeight) / 2;
+
+          // 绝对位置计算：将 localPosition.dx（相对 Stack 左上角）映射到轨道比例
+          void updateFromLocal(double localDx) {
+            if (trackWidth <= 0) return;
+            final localX = localDx - labelWidth;
+            final newT = (localX / trackWidth).clamp(0.0, 1.0);
+            onChanged(min + newT * (max - min));
+          }
 
           return SizedBox(
             height: rowHeight,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // 标签
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: labelWidth,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      label,
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.white70),
-                    ),
-                  ),
-                ),
-                // 轨道背景
-                Positioned(
-                  left: labelWidth,
-                  right: valueWidth,
-                  top: trackTop,
-                  height: trackHeight,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                // 已填充部分
-                Positioned(
-                  left: labelWidth,
-                  top: trackTop,
-                  width: (trackWidth * t).clamp(0.0, trackWidth),
-                  height: trackHeight,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5C07B),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                // 把手（增大命中区域 24x24，内部 16x16 白色圆）
-                Positioned(
-                  left: thumbX - hitSize / 2,
-                  top: thumbTop,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onPanUpdate: (details) {
-                      if (trackWidth <= 0) return;
-                      final newT = (t + details.delta.dx / trackWidth)
-                          .clamp(0.0, 1.0);
-                      onChanged(min + newT * (max - min));
-                    },
-                    child: SizedBox(
-                      width: hitSize,
-                      height: hitSize,
-                      child: Center(
-                        child: Container(
-                          width: thumbSize,
-                          height: thumbSize,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Color(0x44000000),
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                        ),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onPanStart: (details) =>
+                  updateFromLocal(details.localPosition.dx),
+              onPanUpdate: (details) =>
+                  updateFromLocal(details.localPosition.dx),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // 标签
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: labelWidth,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.white70),
                       ),
                     ),
                   ),
-                ),
-                // 数值
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  width: valueWidth,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      value.toStringAsFixed(0),
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.white54),
+                  // 轨道背景
+                  Positioned(
+                    left: labelWidth,
+                    right: valueWidth,
+                    top: trackTop,
+                    height: trackHeight,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                ),
-                // 手势区（覆盖轨道范围，支持拖拽）
-                Positioned(
-                  left: labelWidth,
-                  right: valueWidth,
-                  top: 0,
-                  bottom: 0,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onPanUpdate: (details) {
-                      if (trackWidth <= 0) return;
-                      final newT =
-                          (t + details.delta.dx / trackWidth).clamp(0.0, 1.0);
-                      onChanged(min + newT * (max - min));
-                    },
-                    child: Container(color: Colors.transparent),
+                  // 已填充部分
+                  Positioned(
+                    left: labelWidth,
+                    top: trackTop,
+                    width: (trackWidth * t).clamp(0.0, trackWidth),
+                    height: trackHeight,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE5C07B),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  // 把手（纯视觉，手势由外层 GestureDetector 统一处理）
+                  Positioned(
+                    left: thumbX - thumbSize / 2,
+                    top: (rowHeight - thumbSize) / 2,
+                    child: Container(
+                      width: thumbSize,
+                      height: thumbSize,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0x44000000),
+                            blurRadius: 4,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // 数值
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: valueWidth,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        value.toStringAsFixed(0),
+                        style: const TextStyle(
+                            fontSize: 11, color: Colors.white54),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
       ),
+    );
+
+    if (hint == null) return slider;
+    // 有 hint 时在滑块下方显示提示文字
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        slider,
+        Padding(
+          padding: const EdgeInsets.only(left: 64, bottom: 2),
+          child: Text(
+            hint!,
+            style: const TextStyle(fontSize: 9, color: Colors.white38),
+          ),
+        ),
+      ],
     );
   }
 }

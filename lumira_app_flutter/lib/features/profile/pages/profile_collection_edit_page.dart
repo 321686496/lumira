@@ -318,9 +318,12 @@ class _ProfileCollectionEditPageState
   }
 
   Widget _buildForm(ThemeTokens tokens) {
+    // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
+    // 用 viewPadding.top（状态栏） + 48（nav 内容高度） 精确占位
+    final topPadding = MediaQuery.of(context).viewPadding.top + 48;
     return SingleChildScrollView(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 80),
+      padding: EdgeInsets.fromLTRB(24, topPadding, 24, 80),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -573,7 +576,7 @@ class _PhotosSection extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 8, left: 4),
             child: Text(
-              '点击照片设为封面，长按删除',
+              '点击照片设为封面，点击右上角 × 删除',
               style: TextStyle(
                 fontSize: 11,
                 color: tokens.textTertiary,

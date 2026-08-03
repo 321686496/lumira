@@ -2,111 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'gallery_models.dart';
 
-/// Gallery mock 数据（仅用于 diary 和 monthly-digest 页）
+/// Gallery mock 数据（仅用于 monthly-digest / stats / detail 页）
 ///
-/// 相册主页和详情页已接入 GalleryDao，不再使用 mock。
-/// diary 和 monthly-digest 在 uni-app 中也是硬编码 mock。
+/// 相册主页、详情页、拍摄日记页已接入 GalleryDao，不再使用 mock。
+/// monthly-digest / gallery_stats / detail 在 uni-app 中也是硬编码 mock。
 class GalleryMockData {
   GalleryMockData._();
-
-  /// 拍摄日记时间轴（5 篇）
-  static const List<DiaryEntry> diaryEntries = [
-    DiaryEntry(
-      weekday: '周日',
-      date: '07/08',
-      isToday: true,
-      photos: [
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/414628/400/600',
-          tags: [
-            DiaryTag(label: '咖啡馆', color: DiaryTagColor.gold, icon: Icons.coffee_outlined),
-            DiaryTag(label: '放松', color: DiaryTagColor.green, icon: Icons.sentiment_satisfied_outlined),
-          ],
-        ),
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/1239291/400/600',
-          tags: [
-            DiaryTag(label: '清新自然', color: DiaryTagColor.red, icon: Icons.eco_outlined),
-          ],
-        ),
-      ],
-    ),
-    DiaryEntry(
-      weekday: '周六',
-      date: '07/07',
-      photos: [
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/774909/400/600',
-          tags: [
-            DiaryTag(label: '咖啡馆', color: DiaryTagColor.gold, icon: Icons.coffee_outlined),
-            DiaryTag(label: '放松', color: DiaryTagColor.green, icon: Icons.sentiment_satisfied_outlined),
-          ],
-        ),
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/2074130/400/600',
-          tags: [
-            DiaryTag(label: '咖啡日记', color: DiaryTagColor.red, icon: Icons.coffee_outlined),
-          ],
-        ),
-      ],
-    ),
-    DiaryEntry(
-      weekday: '周五',
-      date: '07/06',
-      photos: [
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/733872/400/600',
-          tags: [
-            DiaryTag(label: '夜晚出行', color: DiaryTagColor.gold, icon: Icons.location_city_outlined),
-            DiaryTag(label: '自信', color: DiaryTagColor.green, icon: Icons.sentiment_satisfied_outlined),
-          ],
-        ),
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/774095/400/600',
-          tags: [
-            DiaryTag(label: '都市夜景', color: DiaryTagColor.red, icon: Icons.location_city_outlined),
-          ],
-        ),
-      ],
-    ),
-    DiaryEntry(
-      weekday: '周四',
-      date: '07/05',
-      photos: [
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/414628/400/600',
-          tags: [
-            DiaryTag(label: '运动装', color: DiaryTagColor.gold, icon: Icons.directions_run_outlined),
-            DiaryTag(label: '元气', color: DiaryTagColor.green, icon: Icons.flash_on_outlined),
-          ],
-        ),
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/1926773/400/600',
-          tags: [
-            DiaryTag(label: '公园随拍', color: DiaryTagColor.red, icon: Icons.park_outlined),
-          ],
-        ),
-      ],
-    ),
-    DiaryEntry(
-      weekday: '周三',
-      date: '07/04',
-      photos: [
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/1926769/400/600',
-          tags: [
-            DiaryTag(label: '午后', color: DiaryTagColor.gold, icon: Icons.wb_sunny_outlined),
-          ],
-        ),
-        DiaryPhoto(
-          img: 'https://picsum.photos/seed/1038002/400/600',
-          tags: [
-            DiaryTag(label: '静物', color: DiaryTagColor.red, icon: Icons.brush_outlined),
-          ],
-        ),
-      ],
-    ),
-  ];
 
   /// 月度手帐封面统计
   static const List<CoverStat> coverStats = [

@@ -40,6 +40,7 @@ class PhotoPostProcessor {
     bool isPortrait = true,
     TransformParams? transform,
     FillLightState? fillLight,
+    String facing = 'back',
   }) async {
     // 注意：rawMode 不再跳过裁剪。裁剪是 WYSIWYG 的保证（取景器所见即所得），
     // rawMode 仅跳过滤镜效果（ColorMatrix / Vignette / Sharpen / Clarity / Grain）。
@@ -57,13 +58,24 @@ class PhotoPostProcessor {
       final srcImage = frame.image;
       codec.dispose();
       debugPrint(
-          '[post-process] 解码: ${srcImage.width}x${srcImage.height}, ${sw.elapsedMilliseconds}ms');
+          '[post-process] 解码: ${srcImage.width}x${srcImage.height}, facing=$facing, isPortrait=$isPortrait, ${sw.elapsedMilliseconds}ms');
 
-      // 1.5. 应用变换（旋转/翻转/拉直）via Canvas（GPU）
-      var workingImage = srcImage;
+      // 1.5. 方向对齐：把 JPEG 旋转到与取景器显示方向一致（WYSIWYG）
+      // camerawesome 预览自动旋转 sensor，但 JPEG 保存为 sensor 原生方向。
+      // 必须先旋转 JPEG 到显示方向，裁剪区域才能与取景器一致。
+      // 前置摄像头额外水平翻转（预览是镜像的，照片也要镜像保持一致）。
+      var alignedImage = await _alignOrientation(srcImage, isPortrait, facing);
+      if (alignedImage != srcImage) {
+        srcImage.dispose();
+        debugPrint('[post-process] 方向对齐: '
+            '${alignedImage.width}x${alignedImage.height}, ${sw.elapsedMilliseconds}ms');
+      }
+
+      // 1.6. 应用用户变换（旋转/翻转/拉直）via Canvas（GPU）
+      var workingImage = alignedImage;
       if (transform != null && !transform.isIdentity) {
-        workingImage = await _applyTransform(srcImage, transform);
-        srcImage.dispose(); // dispose original after transform
+        workingImage = await _applyTransform(alignedImage, transform);
+        alignedImage.dispose();
         debugPrint('[post-process] 变换: rotation=${transform.rotation}, '
             'flipH=${transform.flipH}, flipV=${transform.flipV}, '
             'straighten=${transform.straighten}, '
@@ -209,18 +221,8 @@ class PhotoPostProcessor {
         }
       }
 
-      // 5.5. 应用补光（rawMode 也跳过补光，与跳过滤镜语义一致）
-      if (!rawMode && fillLight != null) {
-        try {
-          final lightedImage = await _applyFillLight(resultImage, fillLight);
-          resultImage.dispose();
-          resultImage = lightedImage;
-          debugPrint('[post-process] 补光应用: color=${fillLight.color}, '
-              'intensity=${fillLight.intensity}, ${sw.elapsedMilliseconds}ms');
-        } catch (e) {
-          debugPrint('[post-process] 补光应用失败（不阻塞）: $e');
-        }
-      }
+      // 5.5. 补光效果不应用到照片
+      // 补光是屏幕发光照亮被摄物（物理光源），不应作为颜色滤镜叠加到照片上。
 
       // 6. 编码 JPEG 并保存
       final jpegBytes = await _encodeJpeg(resultImage);
@@ -239,40 +241,6 @@ class PhotoPostProcessor {
           '[post-process] ⚠️ 失败 (${sw.elapsedMilliseconds}ms), WYSIWYG 已破坏: $e\n$st');
       return outputPath ?? inputPath;
     }
-  }
-
-  /// 应用补光：用 BlendMode.multiply 把补光颜色叠加到图像上
-  ///
-  /// 模拟前置摄像头自拍时屏幕反射光落到脸上的效果。
-  /// multiply 会让亮部轻微带色、暗部几乎不变，与实际屏幕补光的视觉一致。
-  ///
-  /// 强度系数：实际 alpha = intensity * 0.5（与前置自拍时屏幕反射光的实际衰减一致）
-  static Future<ui.Image> _applyFillLight(
-      ui.Image src, FillLightState state) async {
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(recorder);
-    final srcRect = ui.Rect.fromLTWH(
-        0, 0, src.width.toDouble(), src.height.toDouble());
-    final dstRect = ui.Rect.fromLTWH(
-        0, 0, src.width.toDouble(), src.height.toDouble());
-
-    // 1. 绘制原图
-    canvas.drawImageRect(src, srcRect, dstRect, ui.Paint());
-
-    // 2. 用 multiply 混合模式叠加补光色
-    // 系数 0.7：与取景器叠层亮度提升后的视觉一致
-    final alpha = (state.intensity * 0.7).clamp(0.0, 1.0);
-    canvas.drawRect(
-      dstRect,
-      ui.Paint()
-        ..color = state.color.withOpacity(alpha)
-        ..blendMode = ui.BlendMode.multiply,
-    );
-
-    final picture = recorder.endRecording();
-    final result = await picture.toImage(src.width, src.height);
-    picture.dispose();
-    return result;
   }
 
   /// 逐像素效果：Sharpen + Clarity + Grain
@@ -380,6 +348,39 @@ class PhotoPostProcessor {
       if (m[i * 5 + 4].abs() > 0.001) return false;
     }
     return true;
+  }
+
+  /// 把 JPEG 像素旋转到与取景器显示方向一致（WYSIWYG）。
+  /// 与 DartPhotoPipeline._alignOrientationUi 逻辑一致。
+  static Future<ui.Image> _alignOrientation(
+      ui.Image src, bool isPortrait, String facing) async {
+    final jpegIsLandscape = src.width > src.height;
+    final deviceIsPortrait = isPortrait;
+    final needRotate = (deviceIsPortrait && jpegIsLandscape) ||
+        (!deviceIsPortrait && !jpegIsLandscape);
+    final needMirror = facing == 'front';
+    if (!needRotate && !needMirror) return src;
+
+    final rotation = deviceIsPortrait ? 90 : 270;
+    final outW = needRotate ? src.height : src.width;
+    final outH = needRotate ? src.width : src.height;
+    final radians = rotation * math.pi / 180.0;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    canvas.translate(outW / 2.0, outH / 2.0);
+    canvas.rotate(radians);
+    canvas.scale(needMirror ? -1.0 : 1.0, 1.0);
+    canvas.drawImage(
+      src,
+      ui.Offset(-src.width / 2.0, -src.height / 2.0),
+      ui.Paint()..filterQuality = ui.FilterQuality.medium,
+    );
+
+    final picture = recorder.endRecording();
+    final result = await picture.toImage(outW, outH);
+    picture.dispose();
+    return result;
   }
 
   /// 应用变换（旋转/翻转/拉直）via GPU Canvas
@@ -502,10 +503,10 @@ class PhotoPostProcessor {
     }
 
     // 计算最终裁剪区域在原图中的位置
+    // 水平方向居中，垂直方向顶部对齐（与取景器 _AnimatedCropOverlay 竖屏顶部对齐一致）
     final offsetX =
         (visOffsetX + (visW - cropW) / 2.0).round().clamp(0, imgW - 1);
-    final offsetY =
-        (visOffsetY + (visH - cropH) / 2.0).round().clamp(0, imgH - 1);
+    final offsetY = visOffsetY.round().clamp(0, imgH - 1);
     final width = cropW.round().clamp(1, imgW - offsetX);
     final height = cropH.round().clamp(1, imgH - offsetY);
 

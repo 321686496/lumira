@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../data/gallery_mock_data.dart';
+import '../providers/gallery_diary_providers.dart';
 import '../widgets/diary_timeline_entry.dart';
 
-/// 拍摄日记页（mock 数据）
+/// 拍摄日记页（接入 GalleryDao）
 ///
 /// 视觉规格来源：lumira-app/src/pages/gallery/diary.vue（433 行）
-/// - LumiraNav + 视图切换 + 连续打卡 banner + 时间轴（5 篇）+ FAB
+/// - LumiraNav + 视图切换 + 连续打卡 banner + 时间轴 + FAB
+/// - 数据：通过 diaryEntriesProvider 异步读取近 50 张照片并按天分组
 class GalleryDiaryPage extends ConsumerStatefulWidget {
   const GalleryDiaryPage({super.key});
 
@@ -20,91 +24,138 @@ class GalleryDiaryPage extends ConsumerStatefulWidget {
 }
 
 class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
-  String _viewTab = 'outfit'; // 'outfit' / 'shoot'
+  String _viewTab = kDiaryTabOutfit; // 'outfit' / 'shoot'
+
+  void _navigateToPhoto(String photoId) {
+    GoRouter.of(context).push(
+      RouteNames.build(
+        RouteNames.galleryDetail,
+        {RouteNames.paramPhotoId: photoId},
+      ),
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked == null || !mounted) return;
+    final label = DateFormat('M月d日').format(picked);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已选择 $label'),
+        duration: const Duration(milliseconds: 1200),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    final entriesAsync = ref.watch(diaryEntriesProvider(_viewTab));
+    final streak = ref.watch(diaryStreakProvider).valueOrNull ?? 0;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
       appBar: LumiraNav(
-        // Forced fix: brief File 9 把 title 硬编码为 '穿搭日记'，但 brief File 15
-        // Test 3「toggles between outfit and shoot tabs」期望切换 shoot tab 后
-        // '穿搭日记' 文字仅出现 1 次（findsOneWidget）。改为动态 title：outfit→
-        // '穿搭日记'，shoot→'拍摄日记'，与 active tab 同步。
-        title: _viewTab == 'outfit' ? '穿搭日记' : '拍摄日记',
+        // title 与 active tab 同步：outfit→'穿搭日记'，shoot→'拍摄日记'
+        title: _viewTab == kDiaryTabOutfit ? '穿搭日记' : '拍摄日记',
         transparent: true,
         leading: _BackButton(tokens: tokens),
         actions: [
-          _CalendarAction(tokens: tokens),
+          _CalendarAction(tokens: tokens, onTap: _pickDate),
         ],
       ),
       body: Stack(
         children: [
           _BackgroundDecoration(tokens: tokens),
           SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 100),
-              children: [
-                // 视图切换
-                FadeUp(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    child: _DiaryViewToggle(
-                      activeTab: _viewTab,
-                      onTap: (t) => setState(() => _viewTab = t),
-                      tokens: tokens,
+            child: entriesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(
+                child: Text(
+                  '加载失败：$e',
+                  style: TextStyle(color: tokens.textSecondary),
+                ),
+              ),
+              data: (entries) => ListView(
+                padding: const EdgeInsets.only(bottom: 100),
+                children: [
+                  // 视图切换
+                  FadeUp(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      child: _DiaryViewToggle(
+                        activeTab: _viewTab,
+                        onTap: (t) => setState(() => _viewTab = t),
+                        tokens: tokens,
+                      ),
                     ),
                   ),
-                ),
-                // 连续打卡 banner
-                FadeUp(
-                  delay: const Duration(milliseconds: 100),
-                  child: _StreakBanner(tokens: tokens),
-                ),
-                // 时间轴标题
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '时间轴',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.textPrimary,
-                          height: 1.3,
-                        ),
-                      ),
-                      Text(
-                        '5篇',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.textSecondary,
-                          fontFamily: 'Courier New',
-                        ),
-                      ),
-                    ],
+                  // 连续打卡 banner
+                  FadeUp(
+                    delay: const Duration(milliseconds: 100),
+                    child: _StreakBanner(tokens: tokens, streak: streak),
                   ),
-                ),
-                // 时间轴 entries
-                ...GalleryMockData.diaryEntries.asMap().entries.map((e) {
-                  return FadeUp(
-                    delay: Duration(milliseconds: (e.key % 5) * 60),
-                    child: DiaryTimelineEntry(entry: e.value),
-                  );
-                }),
-              ],
+                  // 时间轴标题
+                  if (entries.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 80),
+                      child: _EmptyState(tokens: tokens),
+                    )
+                  else ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '时间轴',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.textPrimary,
+                              height: 1.3,
+                            ),
+                          ),
+                          Text(
+                            '${entries.length}篇',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: tokens.textSecondary,
+                              fontFamily: 'Courier New',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 时间轴 entries
+                    ...entries.asMap().entries.map((e) {
+                      return FadeUp(
+                        delay: Duration(milliseconds: (e.key % 5) * 60),
+                        child: DiaryTimelineEntry(
+                          entry: e.value,
+                          onPhotoTap: _navigateToPhoto,
+                        ),
+                      );
+                    }),
+                  ],
+                ],
+              ),
             ),
           ),
           // FAB
           Positioned(
             right: 24,
             bottom: 32,
-            child: _DiaryFab(tokens: tokens),
+            child: _DiaryFab(
+              tokens: tokens,
+              onTap: () => GoRouter.of(context).push(RouteNames.capture),
+            ),
           ),
         ],
       ),
@@ -130,13 +181,14 @@ class _BackButton extends StatelessWidget {
 }
 
 class _CalendarAction extends StatelessWidget {
-  const _CalendarAction({required this.tokens});
+  const _CalendarAction({required this.tokens, required this.onTap});
   final ThemeTokens tokens;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+      onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -167,8 +219,8 @@ class _DiaryViewToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _item('穿搭日记', 'outfit', activeTab == 'outfit'),
-          _item('拍摄日记', 'shoot', activeTab == 'shoot'),
+          _item('穿搭日记', kDiaryTabOutfit, activeTab == kDiaryTabOutfit),
+          _item('拍摄日记', kDiaryTabShoot, activeTab == kDiaryTabShoot),
         ],
       ),
     );
@@ -201,8 +253,9 @@ class _DiaryViewToggle extends StatelessWidget {
 }
 
 class _StreakBanner extends StatelessWidget {
-  const _StreakBanner({required this.tokens});
+  const _StreakBanner({required this.tokens, required this.streak});
   final ThemeTokens tokens;
+  final int streak;
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +280,7 @@ class _StreakBanner extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '连续打卡 7 ',
+                      '连续打卡 $streak ',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -255,13 +308,14 @@ class _StreakBanner extends StatelessWidget {
 }
 
 class _DiaryFab extends StatelessWidget {
-  const _DiaryFab({required this.tokens});
+  const _DiaryFab({required this.tokens, required this.onTap});
   final ThemeTokens tokens;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+      onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         width: 56,
@@ -278,6 +332,32 @@ class _DiaryFab extends StatelessWidget {
           ],
         ),
         child: const Icon(Icons.add, color: Colors.white, size: 28),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.photo_outlined, size: 48, color: tokens.textTertiary),
+          const SizedBox(height: 12),
+          Text(
+            '还没有照片，去拍一张吧',
+            style: TextStyle(
+              fontSize: 13,
+              color: tokens.textTertiary,
+              height: 1.3,
+            ),
+          ),
+        ],
       ),
     );
   }

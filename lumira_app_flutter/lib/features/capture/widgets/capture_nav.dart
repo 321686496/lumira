@@ -27,8 +27,11 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
     final showTemplate = ref.watch(CaptureState.showTemplateProvider);
     final showSilhouette = ref.watch(CaptureState.showSilhouetteProvider);
     final flashMode = ref.watch(CaptureState.flashModeProvider);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
 
     final hasTemplate = currentTemplateId != null;
+    // 前置摄像头无闪光灯硬件，隐藏闪光灯按钮
+    final showFlashButton = facing == 'back';
 
     return Container(
       decoration: BoxDecoration(
@@ -111,22 +114,23 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                 onPressed: () =>
                     GoRouter.of(context).push(RouteNames.captureSceneGuide),
               ),
-              _NavIcon(
-                icon: flashMode == CaptureFlashMode.off
-                    ? Icons.flash_off
-                    : flashMode == CaptureFlashMode.torch
-                        ? Icons.flashlight_on
-                        : Icons.flash_on,
-                iconColor: flashMode != CaptureFlashMode.off
-                    ? Colors.amber
-                    : Colors.white,
-                onPressed: () {
-                  final next = flashMode == CaptureFlashMode.off
-                      ? CaptureFlashMode.torch
-                      : CaptureFlashMode.off;
-                  ref.read(CaptureState.flashModeProvider.notifier).state = next;
-                },
-              ),
+              if (showFlashButton)
+                _NavIcon(
+                  icon: flashMode == CaptureFlashMode.off
+                      ? Icons.flash_off
+                      : flashMode == CaptureFlashMode.torch
+                          ? Icons.flashlight_on
+                          : Icons.flash_on,
+                  iconColor: flashMode != CaptureFlashMode.off
+                      ? Colors.amber
+                      : Colors.white,
+                  onPressed: () {
+                    final next = flashMode == CaptureFlashMode.off
+                        ? CaptureFlashMode.torch
+                        : CaptureFlashMode.off;
+                    ref.read(CaptureState.flashModeProvider.notifier).state = next;
+                  },
+                ),
             ],
           ),
         ),
