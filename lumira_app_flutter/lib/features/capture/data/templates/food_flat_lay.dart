@@ -14,7 +14,7 @@ const PhotoTemplate foodFlatLayTemplate = PhotoTemplate(
     tags: ['美食', '俯拍', 'flat-lay', '静物'],
     tagIds: [],
     price: 0,
-    cover: 'https://picsum.photos/seed/template-food-flat-lay/400/600',
+    cover: 'assets/images/templates/food_flat_lay.jpg',
     description: '90 度俯拍美食 flat-lay，突出摆盘与桌面构成',
     referenceSource: '样片 EXIF: 食物摄影教程；参数参考 YouTube 频道 The Bite Shot',
   ),

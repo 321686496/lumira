@@ -14,7 +14,7 @@ const PhotoTemplate sunsetSilhouetteTemplate = PhotoTemplate(
     tags: ['逆光', '剪影', '黄昏', '人像'],
     tagIds: [],
     price: 0,
-    cover: 'https://picsum.photos/seed/template-sunset-silhouette/400/600',
+    cover: 'assets/images/templates/sunset_silhouette.jpg',
     description: '日落时分逆光拍摄人像剪影，突出轮廓与氛围',
     referenceSource: '样片 EXIF: Pexels #12345；参数参考摄影教学网站 Photzy 逆光人像指南',
   ),

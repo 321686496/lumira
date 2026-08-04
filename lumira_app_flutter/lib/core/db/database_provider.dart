@@ -490,6 +490,8 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
         Tables.colCoverData,
         'TEXT',
       );
+      // v11: 修复 12 款原始模板的 cover 路径（picsum URL → 本地 asset）
+      await BuiltinDataSeeder.reseedBuiltinCovers(db);
     } catch (e) {
       debugPrint('v11 migration failed (silent fallback): $e');
     }

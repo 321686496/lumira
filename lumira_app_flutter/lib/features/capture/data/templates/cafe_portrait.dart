@@ -14,7 +14,7 @@ const PhotoTemplate cafePortraitTemplate = PhotoTemplate(
     tags: ['咖啡馆', '人像', '柔光', '生活'],
     tagIds: [],
     price: 0,
-    cover: 'https://picsum.photos/seed/template-cafe-portrait/400/600',
+    cover: 'assets/images/templates/cafe_portrait.jpg',
     description: '咖啡馆室内自然光人像，氛围温暖柔和，适合生活感肖像',
     referenceSource: '样片 EXIF: Unsplash #67890；参数参考 Unsplash 咖啡馆人像摄影合集',
   ),
