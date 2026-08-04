@@ -131,4 +131,151 @@ class ScenePreset {
     whereToShoot, bestTime, sceneGuide, relatedCategory,
     Object.hashAll(recommendedTagIds),
   );
+
+  /// 是否为自定义场景（id 以 'custom_' 开头）
+  bool get isCustom => id.startsWith('custom_');
+}
+
+/// 拍摄目标（对应 TS Target: 'portrait' | 'landscape' | 'food' | 'street' | 'night' | 'macro' | 'still-life'）
+class Target {
+  static const portrait = 'portrait';
+  static const landscape = 'landscape';
+  static const food = 'food';
+  static const street = 'street';
+  static const night = 'night';
+  static const macro = 'macro';
+  static const stillLife = 'still-life';
+
+  static const all = <String>[portrait, landscape, food, street, night, macro, stillLife];
+
+  static String label(String value) {
+    const map = {
+      'portrait': '人像',
+      'landscape': '风光',
+      'food': '美食',
+      'street': '街拍',
+      'night': '夜景',
+      'macro': '微距',
+      'still-life': '静物',
+    };
+    return map[value] ?? value;
+  }
+}
+
+/// 场景风格（对应 TS SceneStyle）
+class SceneStyle {
+  const SceneStyle({required this.id, required this.name, required this.category});
+  final String id;
+  final String name;
+  final String category; // SceneCategory 字符串
+}
+
+/// 场景大类聚合（对应 TS SceneCategoryGroup）
+class SceneCategoryGroup {
+  const SceneCategoryGroup({
+    required this.category,
+    required this.name,
+    required this.icon,
+    required this.styles,
+  });
+  final String category; // SceneCategory 字符串
+  final String name;
+  final String icon; // phosphor 图标名字符串
+  final List<SceneStyle> styles;
+}
+
+/// 自定义场景预设（对应 TS CustomScenePreset）
+class CustomScenePreset extends ScenePreset {
+  const CustomScenePreset({
+    required super.id,
+    required super.name,
+    super.icon = '',
+    super.category = SceneCategory.light,
+    super.style = '',
+    required super.filter,
+    super.vibe = '',
+    super.description = '',
+    super.exampleImages = const [],
+    super.tips = const [],
+    super.whereToShoot = '',
+    super.bestTime = '',
+    required super.sceneGuide,
+    super.relatedCategory = Target.portrait,
+    super.recommendedTagIds = const [],
+    required this.tagIds,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final List<String> tagIds;
+  final int createdAt;
+  final int updatedAt;
+}
+
+/// 场景成就（对应 TS SceneAchievement）
+class SceneAchievement {
+  const SceneAchievement({
+    required this.sceneId,
+    required this.level,
+    required this.levelName,
+    required this.photoCount,
+    required this.nextLevelCount,
+  });
+  final String sceneId;
+  final int level;
+  final String levelName;
+  final int photoCount;
+  final int nextLevelCount;
+
+  SceneAchievement copyWith({int? level, String? levelName, int? photoCount, int? nextLevelCount}) =>
+      SceneAchievement(
+        sceneId: sceneId,
+        level: level ?? this.level,
+        levelName: levelName ?? this.levelName,
+        photoCount: photoCount ?? this.photoCount,
+        nextLevelCount: nextLevelCount ?? this.nextLevelCount,
+      );
+}
+
+/// 周排行条目
+class SceneRankingEntry {
+  const SceneRankingEntry({required this.scene, required this.photoCount, required this.rank});
+  final ScenePreset scene;
+  final int photoCount;
+  final int rank;
+}
+
+/// 标签
+class SceneTag {
+  const SceneTag({required this.id, required this.name});
+  final String id;
+  final String name;
+}
+
+/// 拍摄套件（简化）
+class ShootKit {
+  const ShootKit({
+    required this.id,
+    required this.sceneId,
+    required this.templateId,
+    required this.name,
+  });
+  final String id;
+  final String sceneId;
+  final String templateId;
+  final String name;
+}
+
+/// LUT 选项
+class LutOption {
+  const LutOption({required this.value, required this.label});
+  final String value;
+  final String label;
+}
+
+/// 系统滤镜选项
+class SystemFilterOption {
+  const SystemFilterOption({required this.value, required this.label});
+  final String value;
+  final String label;
 }

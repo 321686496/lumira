@@ -361,11 +361,11 @@ class _CaptureSceneManagePageState
 /// 表单数据
 class _SceneFormData {
   String name;
-  IconData icon;
+  String icon;
   String description;
   String vibe;
-  Target relatedCategory;
-  SceneCategory category;
+  String relatedCategory;
+  String category;
   String style;
   String lightDirection;
   String shootingDistance;
@@ -402,7 +402,7 @@ class _SceneFormData {
 
   factory _SceneFormData.empty() => _SceneFormData(
         name: '',
-        icon: Icons.camera_alt_outlined,
+        icon: 'ph-camera',
         description: '',
         vibe: '',
         relatedCategory: Target.portrait,
@@ -936,15 +936,12 @@ class _CustomForm extends StatelessWidget {
             ),
             _PillPicker(
               label: '关联分类',
-              options: Target.values
-                  .map((t) => _PillOption(value: t.value, label: t.label))
+              options: Target.all
+                  .map((t) => _PillOption(value: t, label: Target.label(t)))
                   .toList(),
-              selected: formData.relatedCategory.value,
+              selected: formData.relatedCategory,
               onSelect: (v) => onMutate(() {
-                formData.relatedCategory = Target.values.firstWhere(
-                  (t) => t.value == v,
-                  orElse: () => Target.portrait,
-                );
+                formData.relatedCategory = v;
               }),
             ),
             _FormTextField(
@@ -1157,8 +1154,8 @@ class _FormTextFieldState extends State<_FormTextField> {
 
 class _IconPicker extends StatelessWidget {
   const _IconPicker({required this.selected, required this.onSelect});
-  final IconData selected;
-  final ValueChanged<IconData> onSelect;
+  final String selected;
+  final ValueChanged<String> onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -1203,7 +1200,7 @@ class _IconPicker extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
-                        icons[i],
+                        CaptureSceneMockData.iconFromString(icons[i]),
                         size: 18,
                         color: selected == icons[i]
                             ? const Color(0xFFC9A96E)

@@ -11,3 +11,22 @@ export 'night_cityscape.dart';
 export 'street_bw.dart';
 export 'sunset_silhouette.dart';
 export 'urban_architecture.dart';
+
+// 新增 17 款人像拍照模板（2026-08-04 重构）
+export 'ccd_retro_portrait.dart';
+export 'hk_noir_portrait.dart';
+export 'japanese_fresh_portrait.dart';
+export 'cream_healing_portrait.dart';
+export 'chinese_classical_portrait.dart';
+export 'french_lazy_portrait.dart';
+export 'morandi_minimal_portrait.dart';
+export 'dark_indoor_portrait.dart';
+export 'neon_city_portrait.dart';
+export 'fresh_green_portrait.dart';
+export 'y2k_portrait.dart';
+export 'anime_dream_portrait.dart';
+export 'blue_night_portrait.dart';
+export 'purple_dusk_portrait.dart';
+export 'foodie_portrait.dart';
+export 'sweet_girl_portrait.dart';
+export 'elegant_lady_portrait.dart';

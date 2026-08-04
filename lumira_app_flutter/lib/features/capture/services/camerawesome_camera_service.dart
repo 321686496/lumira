@@ -203,12 +203,9 @@ class CamerawesomeCameraService implements CameraService {
     if (_cachedMinZoom != null) return _cachedMinZoom!;
     try {
       if (_delegate.platformTag == 'ohos') {
-        // OHOS: 调用 fork 新增的 getMinZoom
-        final raw = await ohos.CamerawesomePlugin.getMinZoom();
-        // OHOS fork 返回 int（如 0.5 可能返回 0 或 1），需安全转为 double
-        final minZoom = raw is num ? raw.toDouble() : (double.tryParse(raw.toString()) ?? 0.5);
-        // fork 返回 0 表示 session 未就绪，fallback 0.5
-        _cachedMinZoom = (minZoom <= 0 || minZoom >= 1.0) ? 0.5 : minZoom;
+        // OHOS fork 的 CamerawesomePlugin 未暴露 getMinZoom（仅 getMaxZoom），
+        // 统一按 0.5 兜底（等价于原有「查询失败/未就绪」的 fallback 分支）
+        _cachedMinZoom = 0.5;
         return _cachedMinZoom!;
       }
       if (Platform.isIOS) {

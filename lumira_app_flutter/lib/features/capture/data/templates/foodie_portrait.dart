@@ -1,0 +1,77 @@
+// lib/features/capture/data/templates/foodie_portrait.dart
+import '../../domain/photo_template.dart';
+
+/// 探店美食人像模板
+/// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 15
+const PhotoTemplate foodiePortraitTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'foodie_portrait',
+    name: '探店美食人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', style: 'foodie_portrait', method: 'half_body'),
+    tags: ['人像', '探店', '美食', '对角线', '下午茶'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/foodie_portrait.png',
+    description: '美食+人物对角线暖调，下午茶探店的诱人时光。',
+    referenceSource: '小红书探店下午茶拍照；Foodie 滤镜风格；咖啡馆人像教程',
+  ),
+  composition: Composition(
+    overlayType: 'diagonal',
+    subjectFrame: SubjectFrame(x: 0.2, y: 0.2, w: 0.6, h: 0.6),
+    opacity: 0.25,
+    aspectRatio: '1:1',
+    description: '对角线构图，人物与美食呈对角',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/foodie_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.75,
+    rotation: 0,
+    description: '侧身坐姿，一手举杯/餐具，一手托腮，低头看桌面食物，微笑',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 200,
+    shutterSpeed: '1/100',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '顺光/侧光（室内灯）',
+    lightDirectionAngle: 45,
+    shootingDistance: '0.8-1.2m',
+    background: '咖啡馆桌面/餐厅/美食',
+    props: ['咖啡杯', '蛋糕', '餐具'],
+    bestTime: '全天（室内）',
+    tips: [
+      '美食与人物呈对角线构图',
+      '俯拍 45 度角',
+      '暖调让食物更诱人',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '1:1',
+    color: PostProcessColor(
+      brightness: 10,
+      contrast: -5,
+      saturation: 10,
+      temperature: 10,
+      tint: 0,
+      highlights: 0,
+      shadows: 8,
+      clarity: 0,
+      vibrance: 5,
+    ),
+    smoothStrength: 12,
+    sharpen: 10,
+    vignette: 5,
+    grain: 0,
+    lut: 'warm_film',
+  ),
+);

@@ -1,241 +1,41 @@
 import 'package:flutter/material.dart';
 
-/// 场景大类（对应 uni-app SceneCategory）
-enum SceneCategory {
-  light('light', '光线氛围'),
-  outdoor('outdoor', '室外环境'),
-  indoor('indoor', '室内空间'),
-  mood('mood', '情绪氛围');
+import '../domain/scene_preset.dart';
+import '../domain/photo_template.dart' show SceneGuide;
 
-  const SceneCategory(this.value, this.name);
-  final String value;
-  final String name;
-}
-
-/// 场景风格（对应 uni-app SceneStyle）
-class SceneStyle {
-  const SceneStyle({
-    required this.id,
-    required this.name,
-    required this.category,
-  });
-  final String id;
-  final String name;
-  final SceneCategory category;
-}
-
-/// 场景大类聚合（对应 uni-app SceneCategoryGroup）
-class SceneCategoryGroup {
-  const SceneCategoryGroup({
-    required this.category,
-    required this.name,
-    required this.icon,
-    required this.styles,
-  });
-  final SceneCategory category;
-  final String name;
-  final IconData icon;
-  final List<SceneStyle> styles;
-}
-
-/// 场景滤镜（对应 uni-app SceneFilter）
-class SceneFilter {
-  const SceneFilter({
-    required this.lut,
-    this.systemFilter,
-    required this.reason,
-  });
-  final String lut;
-  final String? systemFilter;
-  final String reason;
-}
-
-/// 场景指南（对应 uni-app SceneGuide）
-class SceneGuide {
-  const SceneGuide({
-    required this.lightDirection,
-    required this.shootingDistance,
-    required this.background,
-    this.props = const [],
-    required this.bestTime,
-    this.tips = const [],
-  });
-  final String lightDirection;
-  final String shootingDistance;
-  final String background;
-  final List<String> props;
-  final String bestTime;
-  final List<String> tips;
-}
-
-/// 拍摄目标（对应 uni-app Target）
-enum Target {
-  portrait('portrait', '人像'),
-  landscape('landscape', '风光'),
-  food('food', '美食'),
-  street('street', '街拍'),
-  night('night', '夜景'),
-  macro('macro', '微距'),
-  stillLife('still-life', '静物');
-
-  const Target(this.value, this.label);
-  final String value;
-  final String label;
-}
-
-/// 场景预设（对应 uni-app ScenePreset）
-class ScenePreset {
-  const ScenePreset({
-    required this.id,
-    required this.name,
-    required this.icon,
-    required this.category,
-    required this.style,
-    required this.filter,
-    required this.vibe,
-    required this.description,
-    required this.exampleImages,
-    required this.tips,
-    required this.whereToShoot,
-    required this.bestTime,
-    required this.sceneGuide,
-    required this.relatedCategory,
-    this.recommendedTagIds = const [],
-  });
-
-  final String id;
-  final String name;
-  final IconData icon;
-  final SceneCategory category;
-  final String style;
-  final SceneFilter filter;
-  final String vibe;
-  final String description;
-  final List<String> exampleImages;
-  final List<String> tips;
-  final String whereToShoot;
-  final String bestTime;
-  final SceneGuide sceneGuide;
-  final Target relatedCategory;
-  final List<String> recommendedTagIds;
-
-  /// 是否为自定义场景（id 以 'custom_' 开头）
-  bool get isCustom => id.startsWith('custom_');
-}
-
-/// 自定义场景预设（对应 uni-app CustomScenePreset）
-class CustomScenePreset extends ScenePreset {
-  const CustomScenePreset({
-    required super.id,
-    required super.name,
-    required super.icon,
-    required super.category,
-    required super.style,
-    required super.filter,
-    required super.vibe,
-    required super.description,
-    required super.exampleImages,
-    required super.tips,
-    required super.whereToShoot,
-    required super.bestTime,
-    required super.sceneGuide,
-    required super.relatedCategory,
-    super.recommendedTagIds = const [],
-    required this.tagIds,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  final List<String> tagIds;
-  final int createdAt;
-  final int updatedAt;
-}
-
-/// 场景成就（对应 uni-app SceneAchievement）
-class SceneAchievement {
-  const SceneAchievement({
-    required this.sceneId,
-    required this.level,
-    required this.levelName,
-    required this.photoCount,
-    required this.nextLevelCount,
-  });
-  final String sceneId;
-  final int level;
-  final String levelName;
-  final int photoCount;
-  final int nextLevelCount;
-
-  SceneAchievement copyWith({
-    int? level,
-    String? levelName,
-    int? photoCount,
-    int? nextLevelCount,
-  }) =>
-      SceneAchievement(
-        sceneId: sceneId,
-        level: level ?? this.level,
-        levelName: levelName ?? this.levelName,
-        photoCount: photoCount ?? this.photoCount,
-        nextLevelCount: nextLevelCount ?? this.nextLevelCount,
-      );
-}
-
-/// 周排行条目（对应 uni-app weeklyRanking 项）
-class SceneRankingEntry {
-  const SceneRankingEntry({
-    required this.scene,
-    required this.photoCount,
-    required this.rank,
-  });
-  final ScenePreset scene;
-  final int photoCount;
-  final int rank;
-}
-
-/// 标签（对应 uni-app Tag）
-class SceneTag {
-  const SceneTag({required this.id, required this.name});
-  final String id;
-  final String name;
-}
-
-/// 拍摄套件 mock（对应 uni-app ShootKit 简化）
-class ShootKit {
-  const ShootKit({
-    required this.id,
-    required this.sceneId,
-    required this.templateId,
-    required this.name,
-  });
-  final String id;
-  final String sceneId;
-  final String templateId;
-  final String name;
-}
-
-/// LUT 选项
-class LutOption {
-  const LutOption({required this.value, required this.label});
-  final String value;
-  final String label;
-}
-
-/// 系统滤镜选项
-class SystemFilterOption {
-  const SystemFilterOption({required this.value, required this.label});
-  final String value;
-  final String label;
-}
+// Re-export 统一类型定义，使用方 import 本文件仍能访问这些类型
+export '../domain/scene_preset.dart'
+    show
+        SceneCategory,
+        Target,
+        SceneStyle,
+        SceneCategoryGroup,
+        SceneFilter,
+        ScenePreset,
+        CustomScenePreset,
+        SceneAchievement,
+        SceneRankingEntry,
+        SceneTag,
+        ShootKit,
+        LutOption,
+        SystemFilterOption;
+// SceneGuide 定义在 photo_template.dart，re-export 以维持使用方对 SceneGuide 的访问
+export '../domain/photo_template.dart' show SceneGuide;
 
 /// Capture 场景子页 mock 数据（Task 2.10）
 ///
 /// 数据来源：lumira-app/src/data/scenePresets.ts 与 lumira-app/src/composables/useSceneManager.ts
-/// - 18 个预设场景（与 SCENE_PRESETS 一致，但 mock 阶段精简为 6 个，覆盖 4 个大类）
+/// - 6 个预设场景（与 SCENE_PRESETS 子集一致，覆盖 4 个大类）
 /// - 4 个大类（与 SCENE_CATEGORIES 一致）
 /// - 7 个标签
-/// - 8 个 LUT 选项
+/// - 10 个 LUT 选项
 /// - 5 个系统滤镜选项
+///
+/// 类型定义已统一至 lib/features/capture/domain/scene_preset.dart（版本 A：字符串常量）。
+/// - SceneCategory / Target：字符串常量（非 enum）
+/// - ScenePreset.icon：String（'ph-xxx' phosphor 图标名，非 IconData）
+/// - ScenePreset.category / relatedCategory：String（字符串常量）
+/// - SceneGuide：使用 photo_template.dart 中的版本（含扩展字段 lightDirectionAngle/shootingDistanceM/bestTimeFrom/bestTimeTo）
 class CaptureSceneMockData {
   CaptureSceneMockData._();
 
@@ -244,7 +44,7 @@ class CaptureSceneMockData {
     SceneCategoryGroup(
       category: SceneCategory.light,
       name: '光线氛围',
-      icon: Icons.wb_sunny_outlined,
+      icon: 'ph-sun',
       styles: [
         SceneStyle(id: 'window-light', name: '窗光', category: SceneCategory.light),
         SceneStyle(id: 'sunset-backlight', name: '日落逆光', category: SceneCategory.light),
@@ -255,7 +55,7 @@ class CaptureSceneMockData {
     SceneCategoryGroup(
       category: SceneCategory.outdoor,
       name: '室外环境',
-      icon: Icons.landscape_outlined,
+      icon: 'ph-mountains',
       styles: [
         SceneStyle(id: 'seaside', name: '海边', category: SceneCategory.outdoor),
         SceneStyle(id: 'forest', name: '森林', category: SceneCategory.outdoor),
@@ -265,7 +65,7 @@ class CaptureSceneMockData {
     SceneCategoryGroup(
       category: SceneCategory.indoor,
       name: '室内空间',
-      icon: Icons.home_outlined,
+      icon: 'ph-house',
       styles: [
         SceneStyle(id: 'home', name: '居家', category: SceneCategory.indoor),
         SceneStyle(id: 'cafe', name: '咖啡馆店铺', category: SceneCategory.indoor),
@@ -275,7 +75,7 @@ class CaptureSceneMockData {
     SceneCategoryGroup(
       category: SceneCategory.mood,
       name: '情绪氛围',
-      icon: Icons.favorite_outline,
+      icon: 'ph-heart',
       styles: [
         SceneStyle(id: 'healing', name: '治愈', category: SceneCategory.mood),
         SceneStyle(id: 'lonely', name: '孤独', category: SceneCategory.mood),
@@ -284,11 +84,13 @@ class CaptureSceneMockData {
   ];
 
   // ===== 预设场景（mock：6 个覆盖 4 大类，源数据为 18 个） =====
+  // sceneGuide 扩展字段（lightDirectionAngle/shootingDistanceM/bestTimeFrom/bestTimeTo）
+  // 对齐 lib/features/capture/data/scene_presets_data.dart 中同 id 场景。
   static const List<ScenePreset> presetScenes = [
     ScenePreset(
       id: 'cafe-window',
       name: '咖啡馆',
-      icon: Icons.coffee_outlined,
+      icon: 'ph-coffee',
       category: SceneCategory.indoor,
       style: 'cafe',
       filter: SceneFilter(
@@ -317,13 +119,17 @@ class CaptureSceneMockData {
         props: ['咖啡杯', '书本', '绿植盆栽'],
         bestTime: '下午 14:00-17:00',
         tips: ['让模特面朝窗户', '大光圈虚化背景', '咖啡杯做前景'],
+        lightDirectionAngle: 90,
+        shootingDistanceM: 2,
+        bestTimeFrom: '14:00',
+        bestTimeTo: '17:00',
       ),
       relatedCategory: Target.portrait,
     ),
     ScenePreset(
       id: 'sunset-silhouette',
       name: '黄昏剪影',
-      icon: Icons.wb_twilight_outlined,
+      icon: 'ph-sunset',
       category: SceneCategory.light,
       style: 'sunset-backlight',
       filter: SceneFilter(
@@ -350,13 +156,17 @@ class CaptureSceneMockData {
         props: ['草帽', '气球', '雨伞'],
         bestTime: '黄昏 17:30-19:00',
         tips: ['对天空测光锁定', '利用前景增加纵深', '黄金时刻色温最暖'],
+        lightDirectionAngle: 180,
+        shootingDistanceM: 5,
+        bestTimeFrom: '17:30',
+        bestTimeTo: '19:00',
       ),
       relatedCategory: Target.portrait,
     ),
     ScenePreset(
       id: 'night-street',
       name: '霓虹街角',
-      icon: Icons.nights_stay_outlined,
+      icon: 'ph-moon-stars',
       category: SceneCategory.light,
       style: 'neon',
       filter: SceneFilter(
@@ -382,13 +192,17 @@ class CaptureSceneMockData {
         props: ['透明雨伞', '反光镜面', '发光道具'],
         bestTime: '夜晚 19:00-23:00',
         tips: ['霓虹招牌做轮廓光', '雨后路面反光增色', '注意快门速度避免手抖'],
+        lightDirectionAngle: 180,
+        shootingDistanceM: 3,
+        bestTimeFrom: '19:00',
+        bestTimeTo: '23:00',
       ),
       relatedCategory: Target.night,
     ),
     ScenePreset(
       id: 'seaside-beach',
       name: '海边沙滩',
-      icon: Icons.beach_access_outlined,
+      icon: 'ph-waves',
       category: SceneCategory.outdoor,
       style: 'seaside',
       filter: SceneFilter(
@@ -415,13 +229,17 @@ class CaptureSceneMockData {
         props: ['草帽', '丝巾', '沙滩裙'],
         bestTime: '黄金时刻 06:00-08:00 或 17:00-19:00',
         tips: ['海风让头发飘动', '低角度拉长身形', '注意镜头防沙防水'],
+        lightDirectionAngle: 45,
+        shootingDistanceM: 3,
+        bestTimeFrom: '17:00',
+        bestTimeTo: '19:00',
       ),
       relatedCategory: Target.landscape,
     ),
     ScenePreset(
       id: 'forest-bamboo',
       name: '竹海禅意',
-      icon: Icons.park_outlined,
+      icon: 'ph-tree',
       category: SceneCategory.outdoor,
       style: 'forest',
       filter: SceneFilter(
@@ -447,13 +265,17 @@ class CaptureSceneMockData {
         props: ['油纸伞', '竹篮', '汉服'],
         bestTime: '上午 08:00-11:00',
         tips: ['寻找光斑穿透竹叶', '低角度仰拍竹林', '利用雾气增加层次'],
+        lightDirectionAngle: 90,
+        shootingDistanceM: 3,
+        bestTimeFrom: '08:00',
+        bestTimeTo: '11:00',
       ),
       relatedCategory: Target.landscape,
     ),
     ScenePreset(
       id: 'rainy-window',
       name: '雨窗静思',
-      icon: Icons.water_drop_outlined,
+      icon: 'ph-drop',
       category: SceneCategory.mood,
       style: 'healing',
       filter: SceneFilter(
@@ -479,6 +301,10 @@ class CaptureSceneMockData {
         props: ['热茶杯', '旧书', '绿植', '毛毯'],
         bestTime: '雨天全天',
         tips: ['对焦玻璃水珠虚化窗外', '利用窗外色彩透过滤镜', '加入热饮或书本'],
+        lightDirectionAngle: 90,
+        shootingDistanceM: 0.3,
+        bestTimeFrom: '08:00',
+        bestTimeTo: '18:00',
       ),
       relatedCategory: Target.stillLife,
     ),
@@ -488,7 +314,7 @@ class CaptureSceneMockData {
   static const CustomScenePreset customSceneExample = CustomScenePreset(
     id: 'custom_demo_001',
     name: '我的咖啡馆',
-    icon: Icons.coffee_outlined,
+    icon: 'ph-coffee',
     category: SceneCategory.indoor,
     style: 'cafe',
     filter: SceneFilter(
@@ -668,7 +494,31 @@ class CaptureSceneMockData {
   ];
 
   // ===== 图标选项（scene-manage 表单） =====
-  static const List<IconData> iconOptions = [
+  // 'ph-xxx' phosphor 图标名字符串（与 uni-app 表单一致）。
+  // 顺序与 _iconDataOptions 一一对应，用于 iconFromString 索引映射。
+  static const List<String> iconOptions = [
+    'ph-camera',
+    'ph-coffee',
+    'ph-sun',
+    'ph-flower',
+    'ph-building',
+    'ph-car',
+    'ph-paw-print',
+    'ph-fork-knife',
+    'ph-mountains',
+    'ph-snowflake',
+    'ph-lightning',
+    'ph-leaf',
+    'ph-moon',
+    'ph-house',
+    'ph-tree',
+    'ph-waves',
+    'ph-sunset',
+    'ph-building-office',
+  ];
+
+  // 与 iconOptions 平行的 IconData 列表，用于在 Flutter 中渲染图标
+  static const List<IconData> _iconDataOptions = [
     Icons.camera_alt_outlined,
     Icons.coffee_outlined,
     Icons.wb_sunny_outlined,
@@ -689,23 +539,25 @@ class CaptureSceneMockData {
     Icons.business_outlined,
   ];
 
-  /// 图标 → phosphor 名称映射（用于回写 form.icon）
-  /// uni-app 表单使用 'ph-xxx' 字符串，Flutter 改用 IconData
-  static String iconToString(IconData icon) {
-    final idx = iconOptions.indexOf(icon);
-    return idx >= 0 ? 'icon_$idx' : 'icon_0';
-  }
-
-  /// 字符串 → 图标（编辑场景回填用）
+  /// 字符串 → 图标（编辑场景回填、Icon 渲染用）
+  ///
+  /// 支持：
+  /// - 'ph-xxx' phosphor 名（优先匹配 iconOptions）
+  /// - 旧格式 'icon_x'（按索引兼容历史 DB 数据）
+  /// - 其它未知值：回退 Icons.camera_alt_outlined
   static IconData iconFromString(String? s) {
-    if (s == null) return Icons.camera_alt_outlined;
+    if (s == null || s.isEmpty) return Icons.camera_alt_outlined;
+    final idx = iconOptions.indexOf(s);
+    if (idx >= 0) return _iconDataOptions[idx];
+    // 兼容旧格式 'icon_x'（按索引映射到 _iconDataOptions）
     if (s.startsWith('icon_')) {
-      final idx = int.tryParse(s.substring(5));
-      if (idx != null && idx >= 0 && idx < iconOptions.length) {
-        return iconOptions[idx];
+      final legacyIdx = int.tryParse(s.substring(5));
+      if (legacyIdx != null &&
+          legacyIdx >= 0 &&
+          legacyIdx < _iconDataOptions.length) {
+        return _iconDataOptions[legacyIdx];
       }
     }
-    // 兼容 uni-app 字符串 'ph-camera' → 默认 camera
     return Icons.camera_alt_outlined;
   }
 

@@ -14,10 +14,10 @@ class ScenesCategoryPill {
     this.category,
   });
 
-  /// 'all' 或 SceneCategory.value
+  /// 'all' 或 SceneCategory 字符串常量
   final String id;
   final String name;
-  final SceneCategory? category;
+  final String? category;
 }
 
 const List<ScenesCategoryPill> scenesCategoryPills = [

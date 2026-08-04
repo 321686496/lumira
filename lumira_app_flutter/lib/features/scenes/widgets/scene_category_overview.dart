@@ -53,7 +53,7 @@ class SceneCategoryOverview extends ConsumerWidget {
 
   int _countForCategory(String categoryId) {
     final group = CaptureSceneMockData.categories.firstWhere(
-      (g) => g.category.name == categoryId,
+      (g) => g.category == categoryId,
       orElse: () => CaptureSceneMockData.categories.first,
     );
     return CaptureSceneMockData.allScenes

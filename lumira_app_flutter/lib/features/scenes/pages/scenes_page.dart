@@ -187,7 +187,7 @@ class _SceneCategoryOverview extends StatelessWidget {
   final ThemeTokens tokens;
   final void Function(String category) onSelectCategory;
 
-  /// 4 个一级分类的展示元数据（id 与 SceneCategory.name 对应）
+  /// 4 个一级分类的展示元数据（id 与 SceneCategory 字符串常量对应）
   static const List<_SceneCategoryMeta> _categories = [
     _SceneCategoryMeta(
       id: 'light',
@@ -225,7 +225,7 @@ class _SceneCategoryOverview extends StatelessWidget {
 
   int _countForCategory(String categoryId) {
     final group = CaptureSceneMockData.categories.firstWhere(
-      (g) => g.category.name == categoryId,
+      (g) => g.category == categoryId,
       orElse: () => CaptureSceneMockData.categories.first,
     );
     return CaptureSceneMockData.allScenes
