@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
@@ -312,9 +314,10 @@ class _CaptureSceneManagePageState
 
   @override
   Widget build(BuildContext context) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
     return Scaffold(
-      // 硬编码颜色，与 uni-app 一致 (lumira-container bg #FAF7F2)
-      backgroundColor: const Color(0xFFFAF7F2),
+      backgroundColor: tokens.canvas,
       body: SafeArea(
         child: Column(
           children: [
@@ -504,7 +507,7 @@ class _TabsRow extends StatelessWidget {
   }
 }
 
-class _TabPill extends StatelessWidget {
+class _TabPill extends ConsumerWidget {
   const _TabPill({
     required this.label,
     required this.active,
@@ -516,32 +519,27 @@ class _TabPill extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), // 40rpx/16rpx
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         decoration: BoxDecoration(
-          gradient: active
-              ? const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
-                )
-              : null,
-          color: active ? null : Colors.white,
-          border: active
-              ? Border.all(color: Colors.transparent, width: 1.5)
-              : Border.all(color: const Color(0xFFEAE5DC), width: 1.5),
+          color: active ? tokens.brand : tokens.surface,
           borderRadius: BorderRadius.circular(9999),
+          boxShadow: isNeu && !active ? tokens.shadowConvexSubtle : null,
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 14, // 28rpx → 14dp
+            fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: active ? Colors.white : const Color(0xFF5C5852),
+            color: active ? tokens.textInverse : tokens.textSecondary,
           ),
         ),
       ),

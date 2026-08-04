@@ -121,8 +121,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     final tokens = ref.watch(themeTokensProvider);
 
     return Scaffold(
-      // 硬编码颜色，与 uni-app scenes-container bg #FAF7F2 一致
-      backgroundColor: const Color(0xFFFAF7F2),
+      backgroundColor: tokens.canvas,
       body: SafeArea(
         child: Column(
           children: [
@@ -481,23 +480,25 @@ class _SceneCategoryCard extends StatelessWidget {
 }
 
 /// 场景 grid 2 列
-class _SceneGrid extends StatelessWidget {
+class _SceneGrid extends ConsumerWidget {
   const _SceneGrid({required this.scenes, required this.onTap});
 
   final List<SceneRecord> scenes;
   final ValueChanged<String> onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+
     if (scenes.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 40), // 80rpx → 40dp
+          padding: const EdgeInsets.symmetric(vertical: 40), // 80rpx → 40dp
           child: Text(
             '暂无场景',
             style: TextStyle(
               fontSize: 13,
-              color: Color(0xFF6B635A),
+              color: tokens.textTertiary,
             ),
           ),
         ),
@@ -526,14 +527,18 @@ class _SceneGrid extends StatelessWidget {
 }
 
 /// 场景卡片（对应 uni-app ScenePresetView variant="card"）
-class _SceneCard extends StatelessWidget {
+class _SceneCard extends ConsumerWidget {
   const _SceneCard({required this.scene, required this.onTap});
 
   final SceneRecord scene;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
+
     final photoCount = CaptureSceneMockData.getPhotoCountByScene(scene.id);
     final hasBadge = photoCount > 0;
     final firstImage =
@@ -544,12 +549,10 @@ class _SceneCard extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: tokens.surface,
           borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
-          border: Border.all(
-            color: const Color(0xFFEAE5DC),
-            width: 1, // 2rpx → 1dp
-          ),
+          border: isNeu ? null : Border.all(color: tokens.divider, width: 1),
+          boxShadow: isNeu ? tokens.shadowConvex : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -607,10 +610,10 @@ class _SceneCard extends StatelessWidget {
                     scene.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14, // 28rpx → 14dp
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF2A2520),
+                      color: tokens.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4), // 8rpx → 4dp
@@ -618,10 +621,10 @@ class _SceneCard extends StatelessWidget {
                     scene.vibe,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12, // 24rpx → 12dp
                       fontStyle: FontStyle.italic,
-                      color: Color(0xFFC9A876),
+                      color: tokens.brand,
                     ),
                   ),
                 ],
@@ -635,18 +638,20 @@ class _SceneCard extends StatelessWidget {
 }
 
 /// 图片占位（网络图加载失败 / 无图时）
-class _ImgPlaceholder extends StatelessWidget {
+class _ImgPlaceholder extends ConsumerWidget {
   const _ImgPlaceholder();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+
     return Container(
-      color: const Color.fromRGBO(201, 168, 118, 0.12),
-      child: const Center(
+      color: tokens.brandSubtle,
+      child: Center(
         child: Icon(
           Icons.image_outlined,
           size: 28, // 56rpx → 28dp
-          color: Color(0xFFC9A876),
+          color: tokens.brand,
         ),
       ),
     );
@@ -654,29 +659,24 @@ class _ImgPlaceholder extends StatelessWidget {
 }
 
 /// 右下角 FAB（+ 创建自定义场景）
-class _Fab extends StatelessWidget {
+class _Fab extends ConsumerWidget {
   const _Fab({required this.onTap});
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         width: 48, // 96rpx → 48dp
         height: 48,
-        decoration: const BoxDecoration(
-          color: Color(0xFFC9A876), // $color-brand-primary
+        decoration: BoxDecoration(
+          color: tokens.brand,
           shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              // 0 8rpx 24rpx rgba(0,0,0,0.15) → 0 4dp 12dp
-              color: Color(0x26000000), // 0.15*255 ≈ 38 = 0x26
-              offset: Offset(0, 4),
-              blurRadius: 12,
-            ),
-          ],
+          boxShadow: tokens.shadowFloat,
         ),
         child: const Icon(
           Icons.add,

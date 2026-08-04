@@ -564,19 +564,21 @@ class _Pill extends ConsumerWidget {
   }
 }
 
-class _TagChip extends StatelessWidget {
+class _TagChip extends ConsumerWidget {
   const _TagChip(this.label, {required this.tokens});
   final String label;
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return Container(
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
+        color: isNeu ? tokens.surface : tokens.surfaceAlt,
         borderRadius: BorderRadius.circular(9999),
+        boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
       ),
       child: Center(
         child: Text(
@@ -1002,7 +1004,7 @@ class _PremiumBadge extends StatelessWidget {
 }
 
 /// 分类概览：大卡片 + 瀑布流排版展示一级分类
-class _CategoryOverview extends StatelessWidget {
+class _CategoryOverview extends ConsumerWidget {
   const _CategoryOverview({
     required this.tokens,
     required this.allCount,
@@ -1077,7 +1079,8 @@ class _CategoryOverview extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     // 瀑布流：两列交替分布
     final left = <Widget>[];
     final right = <Widget>[];
@@ -1105,12 +1108,19 @@ class _CategoryOverview extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [tokens.brandSubtle, tokens.brand.withOpacity(0.08)],
-              ),
+              color: isNeu ? tokens.surface : null,
+              gradient: isNeu
+                  ? null
+                  : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        tokens.brandSubtle,
+                        tokens.brand.withOpacity(0.08)
+                      ],
+                    ),
               borderRadius: BorderRadius.circular(16),
+              boxShadow: isNeu ? tokens.shadowConvex : null,
             ),
             child: Row(
               children: [

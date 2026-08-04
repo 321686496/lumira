@@ -362,9 +362,9 @@ class _AchievementCell extends StatelessWidget {
     final cell = Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
+        color: tokens.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: tokens.divider, width: 1),
+        boxShadow: tokens.shadowConvexSubtle,
       ),
       child: Stack(
         children: [

@@ -1595,7 +1595,7 @@ class _BuiltinSilhouetteThumbnails extends ConsumerWidget {
   }
 }
 
-class _GhostActionButton extends StatelessWidget {
+class _GhostActionButton extends ConsumerWidget {
   const _GhostActionButton({
     required this.tokens,
     required this.icon,
@@ -1609,15 +1609,17 @@ class _GhostActionButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: tokens.surfaceAlt,
+          color: isNeu ? tokens.surface : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(8),
+          boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

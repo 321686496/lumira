@@ -18,9 +18,9 @@ void main() {
   tearDown(() async => db.close());
 
   // 适配说明：
-  // brief 假设 CaptureSceneMockData.allScenes 有 12 项、templatesBrowseMockData 有 12 项（8 免费 + 4 付费）。
-  // 实际：allScenes 7 项（1 custom + 6 preset），TemplatesBrowseMockData.allTemplates 10 项（6 免费 + 4 付费）。
-  // 测试计数已按实际数据调整，覆盖的语义不变（验证插入数量、creator='system'、is_builtin=1、free/paid 拆分等）。
+  // v10 重构后 seeder 数据源从 TemplatesBrowseMockData.allTemplates (10 项)
+  // 改为 TemplateRegistry.allTemplates (29 项：16 免费 + 13 付费)。
+  // 测试计数已按 TemplateRegistry 实际数据调整。
   test('seedAll returns true and inserts 7 scenes', () async {
     final inserted = await BuiltinDataSeeder.seedAll(db);
     expect(inserted, isTrue);
@@ -31,14 +31,14 @@ void main() {
     expect(scenes.every((s) => s[Tables.colCreator] == 'system'), isTrue);
   });
 
-  test('seedAll inserts 10 templates with 6 free + 4 paid', () async {
+  test('seedAll inserts 29 templates with 16 free + 13 paid', () async {
     await BuiltinDataSeeder.seedAll(db);
     final all = await db.query(Tables.customTemplates);
-    expect(all.length, 10);
+    expect(all.length, 29);
     final free = all.where((t) => (t[Tables.colPrice] as num) == 0).length;
     final paid = all.where((t) => (t[Tables.colPrice] as num) > 0).length;
-    expect(free, 6);
-    expect(paid, 4);
+    expect(free, 16);
+    expect(paid, 13);
     // 全部标记为 builtin
     expect(all.every((t) => t[Tables.colIsBuiltin] == 1), isTrue);
   });
@@ -77,6 +77,33 @@ void main() {
     });
     final inserted = await BuiltinDataSeeder.seedAll(db);
     expect(inserted, isFalse);
+  });
+
+  test('reseedBuiltinTemplates replaces builtin templates preserving custom', () async {
+    // 先正常种子化
+    await BuiltinDataSeeder.seedAll(db);
+    // 插入 1 条用户自定义模板
+    await db.insert(Tables.customTemplates, {
+      Tables.colId: 'user_custom_1',
+      Tables.colName: '用户自定义',
+      Tables.colCategory: 'portrait',
+      Tables.colIsBuiltin: 0,
+      Tables.colIsRecommended: 0,
+      Tables.colCreatedAt: 1700000000000,
+      Tables.colUpdatedAt: 1700000000000,
+    });
+    // 强制重新种子化内置模板
+    await BuiltinDataSeeder.reseedBuiltinTemplates(db);
+    final all = await db.query(Tables.customTemplates);
+    // 29 builtin + 1 custom = 30
+    expect(all.length, 30);
+    // 用户自定义模板保留
+    final custom = all.where((t) => t[Tables.colIsBuiltin] == 0).toList();
+    expect(custom.length, 1);
+    expect(custom.first[Tables.colId], 'user_custom_1');
+    // 内置模板数量正确
+    final builtin = all.where((t) => t[Tables.colIsBuiltin] == 1).toList();
+    expect(builtin.length, 29);
   });
 }
 

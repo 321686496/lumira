@@ -591,19 +591,21 @@ class _TagSelector extends StatelessWidget {
   }
 }
 
-class _TagChip extends StatelessWidget {
+class _TagChip extends ConsumerWidget {
   const _TagChip(this.label, {required this.tokens});
   final String label;
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return Container(
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
+        color: isNeu ? tokens.surface : tokens.surfaceAlt,
         borderRadius: BorderRadius.circular(9999),
+        boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
       ),
       child: Text(
         label,

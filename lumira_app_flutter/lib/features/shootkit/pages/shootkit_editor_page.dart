@@ -529,7 +529,7 @@ class _TemplateGridSection extends StatelessWidget {
   }
 }
 
-class _TemplateCard extends StatelessWidget {
+class _TemplateCard extends ConsumerWidget {
   const _TemplateCard({
     required this.tokens,
     required this.template,
@@ -543,7 +543,8 @@ class _TemplateCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     final coverUrl =
         'https://picsum.photos/seed/${template.imageSeed}/200/200';
     return GestureDetector(
@@ -553,10 +554,10 @@ class _TemplateCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: tokens.surface,
           borderRadius: BorderRadius.circular(6), // 12rpx → 6dp
-          border: Border.all(
-            color: selected ? tokens.brand : Colors.transparent,
-            width: 1.5, // 3rpx → 1.5dp
-          ),
+          border: selected
+              ? Border.all(color: tokens.brand, width: 1.5)
+              : (isNeu ? null : Border.all(color: Colors.transparent, width: 1.5)),
+          boxShadow: isNeu && !selected ? tokens.shadowConvexSubtle : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -669,8 +670,9 @@ class _OverridesSection extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: tokens.surfaceAlt,
+                  color: tokens.surface,
                   borderRadius: BorderRadius.circular(9999),
+                  boxShadow: tokens.shadowConvexSubtle,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

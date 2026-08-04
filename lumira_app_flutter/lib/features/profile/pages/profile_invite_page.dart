@@ -338,26 +338,30 @@ List<RewardEntry> _buildRewardLadder(InviteStats? stats) {
   }).toList();
 }
 
-class _RewardRow extends StatelessWidget {
+class _RewardRow extends ConsumerWidget {
   const _RewardRow({required this.item, required this.tokens});
   final RewardEntry item;
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final isNeu = appTheme.style == UIStyle.neumorphic;
     final bool done = item.done;
     final bool locked = item.locked;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        // 硬编码颜色：done 项背景 #F5EDDB
-        color: done ? const Color(0xFFF5EDDB) : tokens.canvas,
+        color: done ? tokens.brandSubtle : (isNeu ? tokens.surface : tokens.canvas),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: done ? tokens.brand.withOpacity(0.3) : tokens.divider,
-          width: 1,
-        ),
+        boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
+        border: isNeu
+            ? null
+            : Border.all(
+                color: done ? tokens.brand.withOpacity(0.3) : tokens.divider,
+                width: 1,
+              ),
       ),
       child: Row(
         children: [
@@ -662,8 +666,7 @@ class _RecordRow extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              // 硬编码颜色：pending 用 tokens.surface，非 pending 用 #F5EDDB
-              color: record.pending ? tokens.surface : const Color(0xFFF5EDDB),
+              color: record.pending ? tokens.surface : tokens.brandSubtle,
               shape: BoxShape.circle,
             ),
             child: Icon(record.icon, size: 20, color: tokens.brand),

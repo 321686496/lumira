@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/capture_state.dart';
 
 /// 按钮：有模板且未应用时显示"应用参数"，点击重置 editableTemplate 为 original 副本。
@@ -12,6 +15,11 @@ class ApplyButton extends ConsumerWidget {
     final original = ref.watch(CaptureState.originalTemplateProvider);
     final applied = ref.watch(CaptureState.appliedProvider);
     if (original == null || applied) return const SizedBox.shrink();
+
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
+
     return GestureDetector(
       onTap: () {
         ref.read(CaptureState.editableTemplateProvider.notifier).state =
@@ -20,13 +28,14 @@ class ApplyButton extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.amber,
+          color: tokens.brand,
           borderRadius: BorderRadius.circular(16),
+          boxShadow: isNeu ? tokens.shadowConvexBrand : null,
         ),
-        child: const Text(
+        child: Text(
           '应用',
           style: TextStyle(
-            color: Colors.black,
+            color: tokens.textInverse,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),

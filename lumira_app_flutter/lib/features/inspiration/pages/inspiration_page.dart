@@ -250,17 +250,17 @@ class _SceneTagFooter extends ConsumerWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.photo_library_outlined, // ph-images-square 替代
               size: 12, // 24rpx → 12dp
-              color: Color(0xFFC9A876), // scene-stat-icon 色（硬编码，与 SceneRecoCard 一致）
+              color: tokens.brand,
             ),
-            const SizedBox(width: 4), // 8rpx → 4dp... 实际 6rpx→3dp，但与 SceneRecoCard 一致用 4dp
+            const SizedBox(width: 4), // 8rpx → 4dp
             Text(
               '$photoCount',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11, // 22rpx → 11dp
-                color: Color(0xFF6B635A), // scene-stat-num 色（硬编码）
+                color: tokens.textSecondary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -283,8 +283,9 @@ class _LoadMoreButton extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10), // 32rpx/20rpx → 16dp/10dp
         decoration: BoxDecoration(
-          color: tokens.surfaceAlt,
+          color: tokens.surface,
           borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
+          boxShadow: tokens.shadowConvexSubtle,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
