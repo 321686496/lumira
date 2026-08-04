@@ -584,6 +584,21 @@ class PostProcess {
         if (systemFilter != null) 'systemFilter': systemFilter,
       };
 
+  /// 将另一个 PostProcess（增量）合并到当前参数上，返回全量参数。
+  ///
+  /// 用于预览页保存：照片已烘焙 [_bakedPostProcess]，用户在编辑页调整了 [_localPostProcess]（增量），
+  /// 保存时需要全量参数 = baked + local（增量）从原图重新处理。
+  PostProcess merge(PostProcess delta) => PostProcess(
+        cropRatio: cropRatio,
+        color: color.merge(delta.color),
+        smoothStrength: smoothStrength + delta.smoothStrength,
+        sharpen: sharpen + delta.sharpen,
+        vignette: vignette + delta.vignette,
+        grain: grain + delta.grain,
+        lut: delta.lut != 'none' ? delta.lut : lut,
+        systemFilter: delta.systemFilter ?? systemFilter,
+      );
+
   factory PostProcess.fromJson(Map<String, dynamic> json) => PostProcess(
         cropRatio: json['cropRatio'] as String? ?? '3:4',
         color: PostProcessColor.fromJson(json['color'] as Map<String, dynamic>? ?? {}),
@@ -723,6 +738,21 @@ class PostProcessColor {
           clarity == other.clarity &&
           vibrance == other.vibrance &&
           brilliance == other.brilliance;
+
+  /// 将增量参数合并到当前参数上（用于预览页保存时计算全量参数）。
+  PostProcessColor merge(PostProcessColor delta) => PostProcessColor(
+        brightness: brightness + delta.brightness,
+        contrast: contrast + delta.contrast,
+        saturation: saturation + delta.saturation,
+        temperature: temperature + delta.temperature,
+        tint: tint + delta.tint,
+        highlights: (highlights ?? 0) + (delta.highlights ?? 0),
+        shadows: (shadows ?? 0) + (delta.shadows ?? 0),
+        blackPoint: (blackPoint ?? 0) + (delta.blackPoint ?? 0),
+        clarity: (clarity ?? 0) + (delta.clarity ?? 0),
+        vibrance: (vibrance ?? 0) + (delta.vibrance ?? 0),
+        brilliance: (brilliance ?? 0) + (delta.brilliance ?? 0),
+      );
 
   @override
   int get hashCode => Object.hash(brightness, contrast, saturation, temperature, tint,

@@ -552,6 +552,9 @@ img.Image _alignOrientationImg(img.Image src, bool isPortrait, String facing) {
 ///   A' = m[15]*R + m[16]*G + m[17]*B + m[18]*A + m[19]
 ///
 /// 像素值范围 0-255（与 dart:ui ColorFilter.matrix 一致）。
+///
+/// 注意：此函数仅在无法使用 dart:ui GPU 路径时作为 fallback。
+/// 主流程应使用 [applyColorMatrixOnGpu] 以保证与取景器所见即所得。
 img.Image applyColorMatrixImg(img.Image image, List<double> m) {
   for (final p in image) {
     final r = p.r;

@@ -1,4 +1,7 @@
 import 'dart:io' show File, stderr;
+import 'dart:math' as math;
+import 'dart:typed_data' show Uint8List;
+import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, ImageByteFormat, Paint, PictureRecorder, Offset, instantiateImageCodec;
 
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
@@ -22,7 +25,7 @@ import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
 import '../services/dart_photo_pipeline.dart'
-    show applyColorMatrixImg, applyPerPixelEffectsImg, applySmoothSkinImg, applyVignetteImg;
+    show applyPerPixelEffectsImg, applySmoothSkinImg, applyVignetteImg;
 import '../widgets/aspect_ratio_selector.dart';
 import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
@@ -418,7 +421,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
 
     try {
-      final processedPath = await compute(_processCaptureInIsolate, params);
+      // 【所见即所得修复】先在主 isolate 中用 dart:ui GPU 管线应用色彩矩阵，
+      // 与取景器 ColorFiltered 使用完全相同的渲染管线。
+      // 然后传 rawRgba 给 worker isolate 做后续 CPU 处理（锐化/磨皮/暗角/JPEG 编码）。
+      final gpuData = await _applyColorMatrixOnGpu(params);
+      if (gpuData == null) {
+        // GPU 处理失败，跳过后续处理（不阻塞拍照流程）
+        debugPrint('[capture] GPU 处理失败，使用原始照片');
+        _isProcessingCapture = false;
+        return;
+      }
+      final processedPath = await compute(_processCaptureInIsolate, gpuData);
       if (!mounted) {
         _isProcessingCapture = false;
         return;
@@ -922,7 +935,6 @@ class _FloatingViewfinderState extends ConsumerState<_FloatingViewfinder> {
                   onZoomChanged: widget.onZoomChanged,
                   previewFit: CameraPreviewFit.cover,
                   rawCaptureKey: widget.rawCaptureKey,
-                  applyColorFilter: false,
                 ),
               ),
             ),
@@ -2381,99 +2393,174 @@ class _CaptureProcessParams {
   final PostProcess postProcess;
 }
 
-/// 在 worker isolate 中对拍照 JPEG 做后处理：
-/// 1. 方向对齐（竖屏拍照 JPEG 横向存储，需旋转到正向）
-/// 2. 按目标比例 cover 居中裁切（使照片比例与取景器一致）
-/// 3. 前置摄像头水平翻转（camerawesome 预览镜像但保存不镜像）
-/// 4. 应用色彩矩阵（亮度/对比度/饱和度/色温/色调等）
-/// 5. 细节效果：锐化 + 清晰度 + 颗粒
-/// 6. 磨皮
-/// 7. 暗角
-/// 8. 限制最大边长到 2048px
-/// 9. JPEG 编码保存
+/// GPU 处理后的 rawRgba 数据 + 尺寸，传给 worker isolate 做后续 CPU 处理。
+class _GpuProcessedData {
+  const _GpuProcessedData({
+    required this.rgbaBytes,
+    required this.width,
+    required this.height,
+    required this.outputPath,
+    required this.sharpen,
+    required this.clarity,
+    required this.grain,
+    required this.smoothStrength,
+    required this.vignette,
+  });
+  final Uint8List rgbaBytes;
+  final int width;
+  final int height;
+  final String outputPath;
+  final int sharpen;
+  final double? clarity;
+  final int grain;
+  final int smoothStrength;
+  final int vignette;
+}
+
+/// 在主 isolate 中用 dart:ui GPU 管线处理照片：
+/// 1. 解码 JPEG
+/// 2. 方向对齐 + cover 裁切 + 前置镜像 + 缩放到 2048px
+/// 3. 应用色彩矩阵（与取景器 ColorFiltered 使用完全相同的 GPU 渲染管线）
+/// 4. 导出 rawRgba 给 worker isolate 做后续 CPU 处理（锐化/磨皮/暗角/JPEG 编码）
 ///
-/// 性能优化（目标 <500ms）：
-/// - 限制最大边长到 2048px（手机屏幕显示足够，大幅减少编码时间）
-/// - JPEG quality 降到 90（视觉无明显差异，编码快约 30%）
-/// - 旋转和翻转合并到裁切后的图上（减少大图操作次数）
-/// - 色彩/锐化/磨皮/暗角逐像素操作 O(n)，在 2048px 上可接受
-///
-/// 失败时返回原路径（不阻塞拍照流程）。
-/// 方向对齐逻辑与 dart_photo_pipeline.dart 的 _alignOrientationImg 一致。
-Future<String> _processCaptureInIsolate(_CaptureProcessParams params) async {
+/// 【所见即所得修复】
+/// 之前在 worker isolate 中用 image 包的 applyColorMatrixImg 逐像素应用色彩矩阵，
+/// 与取景器 GPU 渲染管线（dart:ui ColorFilter.matrix）存在色彩空间差异，
+/// 导致拍照后效果与取景器不一致。
+/// 现在改为在主 isolate 中用 dart:ui 的 Canvas + ColorFilter.matrix 处理，
+/// 与取景器使用完全相同的渲染管线，保证所见即所得。
+Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params) async {
   try {
     final bytes = await File(params.inputPath).readAsBytes();
-    var image = img.decodeImage(bytes);
-    if (image == null) return params.inputPath;
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final srcImage = frame.image;
+    codec.dispose();
 
-    // 1. 方向对齐
-    final jpegIsLandscape = image.width > image.height;
+    // 计算方向对齐参数
+    final jpegIsLandscape = srcImage.width > srcImage.height;
     final needRotate = (params.isPortrait && jpegIsLandscape) ||
         (!params.isPortrait && !jpegIsLandscape);
-    if (needRotate) {
-      final angle = params.isPortrait ? 90 : 270;
-      image = img.copyRotate(image, angle: angle);
-    }
+    final needMirror = params.isFront;
+    final alignRotation = needRotate ? (params.isPortrait ? 90 : 270) : 0;
 
-    // 2. cover 裁切到目标比例
-    final imgRatio = image.width / image.height;
-    int cropW, cropH, cropX, cropY;
-    if (imgRatio > params.targetRatio) {
-      cropH = image.height;
-      cropW = (cropH * params.targetRatio).round();
-      cropX = ((image.width - cropW) / 2).round();
-      cropY = 0;
-    } else {
-      cropW = image.width;
-      cropH = (cropW / params.targetRatio).round();
-      cropX = 0;
-      cropY = ((image.height - cropH) / 2).round();
-    }
-    var result = img.copyCrop(image,
-        x: cropX, y: cropY, width: cropW, height: cropH);
-
-    // 3. 前置镜像
-    if (params.isFront) {
-      result = img.flip(result, direction: img.FlipDirection.horizontal);
-    }
-
-    // 4. 限制最大边长到 2048px（先 resize 再应用效果，确保效果运行在 2048px 图像上，避免在 12MP 原图上做纯 Dart 逐像素运算导致耗时 >500ms）
+    // 计算输出尺寸（基于 targetRatio，限制最大边 2048px）
     const maxDim = 2048;
-    if (result.width > maxDim || result.height > maxDim) {
-      final scale = maxDim / (result.width > result.height ? result.width : result.height);
-      result = img.copyResize(
-        result,
-        width: (result.width * scale).round(),
-        height: (result.height * scale).round(),
-      );
+    double outW, outH;
+    if (params.isPortrait) {
+      outH = maxDim.toDouble();
+      outW = maxDim * params.targetRatio;
+      if (outW > maxDim) {
+        outW = maxDim.toDouble();
+        outH = maxDim / params.targetRatio;
+      }
+    } else {
+      outW = maxDim.toDouble();
+      outH = maxDim / params.targetRatio;
+      if (outH > maxDim) {
+        outH = maxDim.toDouble();
+        outW = maxDim * params.targetRatio;
+      }
     }
+    final iOutW = outW.round();
+    final iOutH = outH.round();
 
-    // 5. 应用色彩矩阵（亮度/对比度/饱和度/色温/色调等）
+    // 旋转后图像在画布空间中的有效宽高
+    final swapDims = alignRotation == 90 || alignRotation == 270;
+    final effImgW = swapDims ? srcImage.height.toDouble() : srcImage.width.toDouble();
+    final effImgH = swapDims ? srcImage.width.toDouble() : srcImage.height.toDouble();
+
+    // cover 缩放：让图像完全覆盖输出区域
+    final coverScale = math.max(outW / effImgW, outH / effImgH);
+
+    // 构造色彩矩阵
     final matrix = composePostProcessMatrix(params.postProcess);
-    result = applyColorMatrixImg(result, matrix);
 
-    // 6. 细节效果：锐化 + 清晰度 + 颗粒
-    applyPerPixelEffectsImg(
-      result,
+    // 单次 Canvas：方向对齐 + cover 裁剪 + 镜像 + 缩放 + ColorMatrix（一步完成）
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+
+    final paint = ui.Paint()..filterQuality = ui.FilterQuality.low;
+    paint.colorFilter = ui.ColorFilter.matrix(matrix);
+
+    canvas.translate(outW / 2.0, outH / 2.0);
+    canvas.rotate(alignRotation * math.pi / 180.0);
+    canvas.scale(
+      (needMirror ? -1.0 : 1.0) * coverScale,
+      coverScale,
+    );
+    canvas.drawImage(
+      srcImage,
+      ui.Offset(-srcImage.width / 2.0, -srcImage.height / 2.0),
+      paint,
+    );
+
+    final picture = recorder.endRecording();
+    final outImage = await picture.toImage(iOutW, iOutH);
+    picture.dispose();
+    srcImage.dispose();
+
+    // 导出 rawRgba
+    final byteData = await outImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+    outImage.dispose();
+    if (byteData == null) return null;
+
+    return _GpuProcessedData(
+      rgbaBytes: byteData.buffer.asUint8List(),
+      width: iOutW,
+      height: iOutH,
+      outputPath: params.inputPath,
       sharpen: params.postProcess.sharpen,
       clarity: params.postProcess.color.clarity,
       grain: params.postProcess.grain,
+      smoothStrength: params.postProcess.smoothStrength,
+      vignette: params.postProcess.vignette,
+    );
+  } catch (e, st) {
+    debugPrint('[capture] GPU 色彩矩阵处理失败: $e\n$st');
+    return null;
+  }
+}
+
+/// 在 worker isolate 中对 GPU 处理后的 rawRgba 做后续 CPU 处理：
+/// 1. 从 rawRgba 创建 img.Image
+/// 2. 细节效果：锐化 + 清晰度 + 颗粒
+/// 3. 磨皮
+/// 4. 暗角
+/// 5. JPEG 编码保存
+///
+/// 色彩矩阵已在主 isolate 中由 dart:ui GPU 管线应用（所见即所得）。
+Future<String> _processCaptureInIsolate(_GpuProcessedData data) async {
+  try {
+    // 1. 从 rawRgba 创建 img.Image
+    final result = img.Image.fromBytes(
+      width: data.width,
+      height: data.height,
+      bytes: data.rgbaBytes.buffer,
+      numChannels: 4,
+      order: img.ChannelOrder.rgba,
     );
 
-    // 7. 磨皮
-    applySmoothSkinImg(result, smoothStrength: params.postProcess.smoothStrength);
+    // 2. 细节效果：锐化 + 清晰度 + 颗粒
+    applyPerPixelEffectsImg(
+      result,
+      sharpen: data.sharpen,
+      clarity: data.clarity,
+      grain: data.grain,
+    );
 
-    // 8. 暗角
-    applyVignetteImg(result, vignette: params.postProcess.vignette);
+    // 3. 磨皮
+    applySmoothSkinImg(result, smoothStrength: data.smoothStrength);
 
-    // 9. 编码保存（quality 90，视觉无明显差异，编码快约 30%）
+    // 4. 暗角
+    applyVignetteImg(result, vignette: data.vignette);
+
+    // 5. 编码保存（quality 90）
     final encoded = img.encodeJpg(result, quality: 90);
-    await File(params.inputPath).writeAsBytes(encoded);
-    return params.inputPath;
+    await File(data.outputPath).writeAsBytes(encoded);
+    return data.outputPath;
   } catch (e, st) {
-    // 写入 stderr 以便在设备日志中定位后处理失败原因
-    // （isolate 中无法使用 debugPrint，但 stdout/stderr 可用）。
     stderr.writeln('[capture-isolate] postProcess failed: $e\n$st');
-    return params.inputPath;
+    return data.outputPath;
   }
 }
