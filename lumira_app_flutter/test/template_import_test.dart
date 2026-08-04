@@ -331,4 +331,84 @@ void main() {
       await db.close();
     });
   });
+
+  group('TemplateMapper.recordFromImportedJson — coverData', () {
+    test('coverData field is read into record', () {
+      final json = <String, dynamic>{
+        'format': 'pptpl',
+        'version': '1.0',
+        'meta': {
+          'id': 'tpl-with-cover',
+          'name': '带封面',
+          'category': 'portrait',
+          'cover': 'assets/images/templates/test.jpg',
+          'coverData': 'data:image/jpeg;base64,abc123',
+        },
+        'composition': {'overlayType': 'rule_of_thirds'},
+        'pose': <String, dynamic>{},
+        'camera': <String, dynamic>{},
+        'sceneGuide': <String, dynamic>{},
+        'postProcess': <String, dynamic>{},
+      };
+
+      final record = TemplateMapper.recordFromImportedJson(
+        json,
+        createdAt: 1700000000000,
+      );
+
+      expect(record.cover, 'assets/images/templates/test.jpg');
+      expect(record.coverData, 'data:image/jpeg;base64,abc123');
+    });
+
+    test('cover as data: URL is migrated to coverData', () {
+      final json = <String, dynamic>{
+        'format': 'pptpl',
+        'version': '1.0',
+        'meta': {
+          'id': 'tpl-data-url',
+          'name': 'dataURL封面',
+          'category': 'portrait',
+          'cover': 'data:image/png;base64,xyz789',
+        },
+        'composition': {'overlayType': 'center'},
+        'pose': <String, dynamic>{},
+        'camera': <String, dynamic>{},
+        'sceneGuide': <String, dynamic>{},
+        'postProcess': <String, dynamic>{},
+      };
+
+      final record = TemplateMapper.recordFromImportedJson(
+        json,
+        createdAt: 1700000000000,
+      );
+
+      expect(record.coverData, 'data:image/png;base64,xyz789');
+    });
+
+    test('cover as asset path leaves coverData null', () {
+      final json = <String, dynamic>{
+        'format': 'pptpl',
+        'version': '1.0',
+        'meta': {
+          'id': 'tpl-asset-cover',
+          'name': 'asset封面',
+          'category': 'portrait',
+          'cover': 'assets/images/templates/test.jpg',
+        },
+        'composition': {'overlayType': 'center'},
+        'pose': <String, dynamic>{},
+        'camera': <String, dynamic>{},
+        'sceneGuide': <String, dynamic>{},
+        'postProcess': <String, dynamic>{},
+      };
+
+      final record = TemplateMapper.recordFromImportedJson(
+        json,
+        createdAt: 1700000000000,
+      );
+
+      expect(record.cover, 'assets/images/templates/test.jpg');
+      expect(record.coverData, isNull);
+    });
+  });
 }
