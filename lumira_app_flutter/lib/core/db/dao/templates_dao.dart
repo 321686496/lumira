@@ -17,6 +17,7 @@ class TemplateRecord {
   final List<String> tagIds;
   final int price;
   final String cover;
+  final String? coverData;
   final String description;
   final String referenceSource;
   final Map<String, dynamic> composition;
@@ -40,6 +41,7 @@ class TemplateRecord {
     required this.tagIds,
     required this.price,
     required this.cover,
+    this.coverData,
     required this.description,
     required this.referenceSource,
     required this.composition,
@@ -65,6 +67,7 @@ class TemplateRecord {
       Tables.colTagIdsJson: jsonEncode(tagIds),
       Tables.colPrice: price,
       Tables.colCover: cover,
+      Tables.colCoverData: coverData,
       Tables.colDescription: description,
       Tables.colReferenceSource: referenceSource,
       Tables.colCompositionJson: jsonEncode(composition),
@@ -91,6 +94,7 @@ class TemplateRecord {
       tagIds: _decodeJsonList(row[Tables.colTagIdsJson]),
       price: (row[Tables.colPrice] as num?)?.toInt() ?? 0,
       cover: (row[Tables.colCover] as String?) ?? '',
+      coverData: row[Tables.colCoverData] as String?,
       description: (row[Tables.colDescription] as String?) ?? '',
       referenceSource: (row[Tables.colReferenceSource] as String?) ?? '',
       composition: _decodeJsonMap(row[Tables.colCompositionJson]),
