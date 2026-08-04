@@ -109,6 +109,56 @@ class TemplateRecord {
     );
   }
 
+  TemplateRecord copyWith({
+    String? id,
+    String? name,
+    String? author,
+    String? version,
+    String? category,
+    Map<String, dynamic>? classification,
+    List<String>? tags,
+    List<String>? tagIds,
+    int? price,
+    String? cover,
+    String? coverData,
+    String? description,
+    String? referenceSource,
+    Map<String, dynamic>? composition,
+    Map<String, dynamic>? pose,
+    Map<String, dynamic>? camera,
+    Map<String, dynamic>? sceneGuide,
+    Map<String, dynamic>? postProcess,
+    int? createdAt,
+    int? updatedAt,
+    bool? isBuiltin,
+    bool? isRecommended,
+  }) {
+    return TemplateRecord(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      author: author ?? this.author,
+      version: version ?? this.version,
+      category: category ?? this.category,
+      classification: classification ?? this.classification,
+      tags: tags ?? this.tags,
+      tagIds: tagIds ?? this.tagIds,
+      price: price ?? this.price,
+      cover: cover ?? this.cover,
+      coverData: coverData ?? this.coverData,
+      description: description ?? this.description,
+      referenceSource: referenceSource ?? this.referenceSource,
+      composition: composition ?? this.composition,
+      pose: pose ?? this.pose,
+      camera: camera ?? this.camera,
+      sceneGuide: sceneGuide ?? this.sceneGuide,
+      postProcess: postProcess ?? this.postProcess,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isBuiltin: isBuiltin ?? this.isBuiltin,
+      isRecommended: isRecommended ?? this.isRecommended,
+    );
+  }
+
   static Map<String, dynamic> _decodeJsonMap(Object? raw) {
     if (raw is String && raw.isNotEmpty) {
       return jsonDecode(raw) as Map<String, dynamic>;
