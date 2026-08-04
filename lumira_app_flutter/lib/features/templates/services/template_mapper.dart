@@ -1,5 +1,6 @@
 import '../../../core/db/dao/templates_dao.dart';
 import '../../capture/domain/photo_template.dart';
+import '../data/builtin_silhouettes.dart';
 import '../data/templates_editor_mock_data.dart' as editor;
 
 /// 模板领域对象与 [TemplateRecord] / [editor.EditorForm] 之间的双向映射。
@@ -551,8 +552,7 @@ class TemplateMapper {
   }
 
   /// 内置剪影 key 不存在于白名单时降级为 'none'
-  /// 白名单来源：TemplatesEditorMockData.builtinSilhouetteKeys
-  /// 注意：当 Task 2.9 迁移完整 SVG 库后，应替换为真实剪影库的 key 列表
+  /// 白名单来源：BuiltinSilhouettes.keys（真实剪影库 12 key）
   static Map<String, dynamic> _degradeSilhouetteIfNeeded(
       Map<String, dynamic> pose) {
     final silhouette = pose['silhouette'];
@@ -560,10 +560,10 @@ class TemplateMapper {
     if (silhouette['type'] != 'builtin') return pose;
 
     final key = silhouette['data'] as String?;
-    const whitelist = editor.TemplatesEditorMockData.builtinSilhouetteKeys;
-    if (key == null || !whitelist.contains(key)) {
+    if (key == null || key == 'none') return pose;
+    if (!kBuiltinSilhouetteKeys.contains(key)) {
       // ignore: avoid_print
-      print('Warning: builtin silhouette key "$key" not found in whitelist, '
+      print('Warning: builtin silhouette key "$key" not found in library, '
           'degrading to "none"');
       return {
         ...pose,

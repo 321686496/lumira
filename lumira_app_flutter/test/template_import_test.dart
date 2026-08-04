@@ -136,6 +136,36 @@ void main() {
       expect(record.pose['silhouette']['type'], 'builtin');
       expect(record.pose['silhouette']['data'], 'none');
     });
+
+    test('剪影 builtin key 存在于完整库时应保留（不降级）', () {
+      final json = <String, dynamic>{
+        'format': 'pptpl',
+        'version': '1.0',
+        'meta': {
+          'id': 'tpl-neon-pose',
+          'name': '霓虹剪影',
+          'category': 'portrait',
+        },
+        'composition': {'overlayType': 'rule_of_thirds'},
+        'pose': {
+          'silhouette': {
+            'type': 'builtin',
+            'data': 'neon-pose',
+          },
+        },
+        'camera': <String, dynamic>{},
+        'sceneGuide': <String, dynamic>{},
+        'postProcess': <String, dynamic>{},
+      };
+
+      final record = TemplateMapper.recordFromImportedJson(
+        json,
+        createdAt: 1700000000000,
+      );
+
+      expect(record.pose['silhouette']['type'], 'builtin');
+      expect(record.pose['silhouette']['data'], 'neon-pose');
+    });
   });
 
   group('TemplateMapper.recordFromImportedJson — lumira 格式', () {
