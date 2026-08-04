@@ -300,7 +300,7 @@ class _Header extends StatelessWidget {
           Row(
             children: [
               Icon(
-                scene.icon,
+                CaptureSceneMockData.iconFromString(scene.icon),
                 size: 24, // 48rpx → 24dp
                 color: const Color(0xFF2A2520),
               ),

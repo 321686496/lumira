@@ -17,8 +17,8 @@ import '../../../features/templates/data/templates_browse_mock_data.dart';
 /// - brief 假设存在顶层 templatesBrowseMockData 变量且有 12 项（8 免费 + 4 付费），
 ///   实际数据源为 TemplatesBrowseMockData.allTemplates，共 10 项（6 免费 + 4 付费）。
 /// - ScenePreset.style 为 String（非对象，无 .id），直接使用。
-/// - ScenePreset.icon 为 IconData（非 String），通过 CaptureSceneMockData.iconToString 转换。
-/// - ScenePreset.relatedCategory 为非空 Target（非 nullable），直接 .value。
+/// - ScenePreset.icon 为 String（'ph-xxx' phosphor 图标名），直接存储。
+/// - ScenePreset.category / relatedCategory 为 String（字符串常量），直接存储。
 /// - ScenePreset 无 tagIds 字段（仅 CustomScenePreset 有），按类型判断取值。
 class BuiltinDataSeeder {
   BuiltinDataSeeder._();
@@ -53,9 +53,9 @@ class BuiltinDataSeeder {
         {
           Tables.colId: s.id,
           Tables.colName: s.name,
-          // ScenePreset.icon 为 IconData，转为可存储的字符串标识
-          Tables.colIcon: CaptureSceneMockData.iconToString(s.icon),
-          Tables.colCategory: s.category.value,
+          // ScenePreset.icon 为 String（'ph-xxx' phosphor 图标名），直接存储
+          Tables.colIcon: s.icon,
+          Tables.colCategory: s.category,
           // ScenePreset.style 为 String（非 SceneStyle 对象，无 .id）
           Tables.colStyle: s.style,
           Tables.colFilterJson: jsonEncode({
@@ -77,8 +77,8 @@ class BuiltinDataSeeder {
             'bestTime': s.sceneGuide.bestTime,
             'tips': s.sceneGuide.tips,
           }),
-          // ScenePreset.relatedCategory 为非空 Target（非 nullable）
-          Tables.colRelatedCategory: s.relatedCategory.value,
+          // ScenePreset.relatedCategory 为 String（字符串常量）
+          Tables.colRelatedCategory: s.relatedCategory,
           Tables.colRecommendedTagIdsJson: jsonEncode(s.recommendedTagIds),
           // ScenePreset 基类无 tagIds，仅 CustomScenePreset 有
           Tables.colTagIdsJson: jsonEncode(s is CustomScenePreset ? s.tagIds : <String>[]),

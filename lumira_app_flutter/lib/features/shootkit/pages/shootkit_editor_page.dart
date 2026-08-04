@@ -207,7 +207,10 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
               ),
               for (final scene in scenes)
                 LumiraListTile(
-                  leading: Icon(scene.icon, color: tokens.brand),
+                  leading: Icon(
+                    CaptureSceneMockData.iconFromString(scene.icon),
+                    color: tokens.brand,
+                  ),
                   title: Text(scene.name),
                   trailing: _sceneId == scene.id
                       ? Icon(Icons.check, color: tokens.brand)
@@ -455,7 +458,9 @@ class _BoundSceneSection extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                scene?.icon ?? Icons.help_outline,
+                scene == null
+                    ? Icons.help_outline
+                    : CaptureSceneMockData.iconFromString(scene!.icon),
                 size: 18, // 32rpx → 16dp（实际 18 视觉更平衡）
                 color: tokens.brand,
               ),

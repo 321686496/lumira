@@ -34,7 +34,7 @@ class CaptureSceneGuidePage extends ConsumerStatefulWidget {
 
 class _CaptureSceneGuidePageState
     extends ConsumerState<CaptureSceneGuidePage> {
-  SceneCategory? _selectedCategory;
+  String? _selectedCategory;
   String? _selectedStyle;
   final List<String> _selectedTagIds = [];
 
@@ -84,7 +84,7 @@ class _CaptureSceneGuidePageState
     GoRouter.of(context).push(RouteNames.captureSceneManage);
   }
 
-  void _onCategorySelect(SceneCategory? cat) {
+  void _onCategorySelect(String? cat) {
     setState(() {
       _selectedCategory = cat;
       _selectedStyle = null;
@@ -188,9 +188,9 @@ class _CategoryNav extends StatelessWidget {
   });
 
   final ThemeTokens tokens;
-  final SceneCategory? selectedCategory;
+  final String? selectedCategory;
   final String? selectedStyle;
-  final ValueChanged<SceneCategory?> onCategorySelect;
+  final ValueChanged<String?> onCategorySelect;
   final ValueChanged<String?> onStyleSelect;
 
   @override

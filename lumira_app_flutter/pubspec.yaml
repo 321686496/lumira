@@ -12,6 +12,9 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # iOS 风格图标（CupertinoIcons 字体）
+  cupertino_icons: ^1.0.6
+
   # 状态管理（brief ^2.5.1 → 调整为兼容 Dart 2.19 的版本）
   # Fix: 钉定到 2.3.6，避免解析到 2.4.10（其硬依赖 riverpod 2.5.0，2.5.0 使用 @mustBeOverridden 注解，
   # 需 meta 1.12.0+，与 Harmony 3.7 / Dart 2.19.6 必需的 meta 1.8.0 冲突）
@@ -152,5 +155,6 @@ flutter:
   assets:
     - assets/images/
     - assets/images/templates/
+    - assets/images/silhouettes/
     - assets/images/scenes/
     - assets/logos/
