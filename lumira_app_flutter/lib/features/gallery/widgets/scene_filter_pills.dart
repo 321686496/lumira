@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/gallery_models.dart';
 
 /// 场景筛选 pills（横向滚动）
@@ -21,7 +22,9 @@ class SceneFilterPills extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
 
     return SizedBox(
       height: 36, // 72rpx → 36dp
@@ -41,10 +44,13 @@ class SceneFilterPills extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: isActive ? tokens.brand : tokens.surface,
                 borderRadius: BorderRadius.circular(1000),
-                border: Border.all(
-                  color: isActive ? tokens.brand : tokens.divider,
-                  width: 1,
-                ),
+                border: isNeu
+                    ? null
+                    : Border.all(
+                        color: isActive ? tokens.brand : tokens.divider,
+                        width: 1,
+                      ),
+                boxShadow: isNeu && !isActive ? tokens.shadowConvexSubtle : null,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

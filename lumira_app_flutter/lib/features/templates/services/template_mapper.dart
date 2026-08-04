@@ -12,9 +12,15 @@ class TemplateMapper {
   // === PhotoTemplate ↔ TemplateRecord ===
 
   /// PhotoTemplate → TemplateRecord。
-  /// 注意：新建记录的 [TemplateRecord.isBuiltin] / [TemplateRecord.isRecommended]
-  /// 均默认为 false（导入或用户自建模板均不是内置模板）。
-  static TemplateRecord toRecord(PhotoTemplate tpl, {required int createdAt}) {
+  /// 注意：新建记录默认 [TemplateRecord.isBuiltin] / [TemplateRecord.isRecommended]
+  /// 均为 false（导入或用户自建模板均不是内置模板）。
+  /// 内置模板种子化时通过 [isBuiltin] / [isRecommended] 参数覆盖。
+  static TemplateRecord toRecord(
+    PhotoTemplate tpl, {
+    required int createdAt,
+    bool isBuiltin = false,
+    bool isRecommended = false,
+  }) {
     return TemplateRecord(
       id: tpl.meta.id,
       name: tpl.meta.name,
@@ -39,8 +45,8 @@ class TemplateMapper {
       postProcess: _postProcessToJson(tpl.postProcess),
       createdAt: createdAt,
       updatedAt: createdAt,
-      isBuiltin: false,
-      isRecommended: false,
+      isBuiltin: isBuiltin,
+      isRecommended: isRecommended,
     );
   }
 

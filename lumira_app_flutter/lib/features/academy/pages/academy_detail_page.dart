@@ -540,13 +540,8 @@ class _TipsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return NeuCard(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-      decoration: BoxDecoration(
-        color: tokens.canvas,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: tokens.divider, width: 0.5),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

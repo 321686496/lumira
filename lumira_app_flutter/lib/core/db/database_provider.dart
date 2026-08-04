@@ -16,7 +16,7 @@ import 'dao/settings_dao.dart';
 import '../../core/auth/auth_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 9;
+const int _kDbVersion = 10;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -275,6 +275,16 @@ Future<void> _onCreate(Database db, int version) async {
     )
   ''');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_collection_photos_collection ON ${Tables.tableCollectionPhotos}(${Tables.colCollectionPhotoCollectionId})');
+
+  // === 种子化预置数据（修复：fresh install 时不触发 _onUpgrade，需在 _onCreate 中显式调用 seeder） ===
+  // _onUpgrade 仅在 oldVersion < 4 时调用 BuiltinDataSeeder.seedAll，
+  // 但 fresh install 直接创建 v10 数据库不会触发 _onUpgrade，导致模板表为空。
+  // 此处显式调用 seeder 确保新安装也能看到内置模板。
+  try {
+    await BuiltinDataSeeder.seedAll(db);
+  } catch (e) {
+    debugPrint('BuiltinDataSeeder in onCreate failed: $e');
+  }
 }
 
 Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -457,6 +467,17 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v9 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 10) {
+    try {
+      // v10: 重新种子化内置模板
+      // 修复：将内置模板从旧的 10 个（TemplatesBrowseMockData.allTemplates）
+      // 更新为全量 29 个（TemplateRegistry.allTemplates，含 17 个新增人像模板）。
+      // 不影响用户自定义模板（is_builtin=0）。
+      await BuiltinDataSeeder.reseedBuiltinTemplates(db);
+    } catch (e) {
+      debugPrint('v10 migration failed (silent fallback): $e');
     }
   }
 }

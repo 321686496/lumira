@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/academy_models.dart';
 
 /// 难度等级横向选择器（pill 样式）
@@ -17,7 +18,9 @@ class AcademyLevelSelector extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(themeTokensProvider);
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
 
     final items = <_LevelItem>[
       const _LevelItem(level: null, label: '全部'),
@@ -43,10 +46,7 @@ class AcademyLevelSelector extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: isSelected ? tokens.brand : tokens.surface,
                 borderRadius: BorderRadius.circular(9999),
-                border: Border.all(
-                  color: isSelected ? tokens.brand : tokens.divider,
-                  width: 1,
-                ),
+                boxShadow: isNeu && !isSelected ? tokens.shadowConvexSubtle : null,
               ),
               child: Text(
                 item.label,

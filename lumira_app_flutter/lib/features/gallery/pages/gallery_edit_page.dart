@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/domain/filter_recipe.dart';
@@ -622,6 +623,7 @@ class _BottomBar extends ConsumerWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return Material(
       color: tokens.canvasDeep,
       child: SafeArea(
@@ -642,8 +644,10 @@ class _BottomBar extends ConsumerWidget implements PreferredSizeWidget {
                   child: Container(
                     height: 44,
                     decoration: BoxDecoration(
-                      border: Border.all(color: tokens.divider, width: 1),
+                      color: isNeu ? tokens.surface : null,
+                      border: isNeu ? null : Border.all(color: tokens.divider, width: 1),
                       borderRadius: BorderRadius.circular(1000),
+                      boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
                     ),
                     child: Center(
                       child: Row(

@@ -343,7 +343,7 @@ class _CoverPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: tokens.surfaceAlt,
+      color: tokens.surface,
       child: Icon(Icons.layers_outlined, color: tokens.textTertiary, size: 28),
     );
   }
@@ -678,8 +678,9 @@ class _LoadingBox extends StatelessWidget {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
+        color: tokens.surface,
         borderRadius: BorderRadius.circular(8),
+        boxShadow: tokens.shadowConvexSubtle,
       ),
       alignment: Alignment.center,
       child: SizedBox(
@@ -701,8 +702,9 @@ class _HintBox extends StatelessWidget {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
+        color: tokens.surface,
         borderRadius: BorderRadius.circular(8),
+        boxShadow: tokens.shadowConvexSubtle,
       ),
       alignment: Alignment.center,
       child: Text(

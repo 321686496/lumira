@@ -156,8 +156,7 @@ class _CaptureSceneDetailPageState
     final scene = _scene;
 
     return Scaffold(
-      // 硬编码颜色，与 uni-app 一致 (scene-detail-page bg #FAF7F2)
-      backgroundColor: const Color(0xFFFAF7F2),
+      backgroundColor: tokens.canvas,
       body: SafeArea(
         child: Column(
           children: [

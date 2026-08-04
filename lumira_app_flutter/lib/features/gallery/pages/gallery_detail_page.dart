@@ -819,6 +819,7 @@ class _MetaInfoSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surface,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: tokens.shadowConvex,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -906,9 +907,8 @@ class _MoodChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
+        color: tokens.brandSubtle,
         borderRadius: BorderRadius.circular(1000),
-        border: Border.all(color: tokens.brand.withOpacity(0.3), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -952,6 +952,7 @@ class _CategorySection extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surface,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: tokens.shadowConvex,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1217,6 +1218,7 @@ class _SourceChipsSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surface,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: tokens.shadowConvex,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1284,9 +1286,8 @@ class _SourceChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: tokens.surfaceAlt,
+          color: tokens.brandSubtle,
           borderRadius: BorderRadius.circular(1000),
-          border: Border.all(color: tokens.brand, width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

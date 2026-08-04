@@ -117,7 +117,7 @@ class _CoverFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: tokens.surfaceAlt,
+      color: tokens.surface,
       child: Center(
         child: Icon(Icons.layers_outlined, size: 56, color: tokens.textTertiary),
       ),
@@ -269,19 +269,22 @@ class _ParamsSection extends StatelessWidget {
   }
 }
 
-class _ParamChip extends StatelessWidget {
+class _ParamChip extends ConsumerWidget {
   const _ParamChip({required this.tokens, required this.label, required this.value});
   final ThemeTokens tokens;
   final String label;
   final String value;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final isNeu = appTheme.style == UIStyle.neumorphic;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
+        color: isNeu ? tokens.surface : tokens.surfaceAlt,
         borderRadius: BorderRadius.circular(8),
+        boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

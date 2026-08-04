@@ -122,7 +122,7 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
   }
 }
 
-/// Loading 占位卡（surfaceAlt 色容器，宽屏 280x140 风格）
+/// Loading 占位卡（surface 色容器 + 新拟态凸起阴影）
 class _LoadingPlaceholder extends StatelessWidget {
   const _LoadingPlaceholder({required this.tokens});
   final ThemeTokens tokens;
@@ -136,8 +136,9 @@ class _LoadingPlaceholder extends StatelessWidget {
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 20),
             decoration: BoxDecoration(
-              color: tokens.surfaceAlt,
+              color: tokens.surface,
               borderRadius: BorderRadius.circular(16),
+              boxShadow: tokens.shadowConvexSubtle,
             ),
           ),
         ),

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 
 /// 剪影编辑器对话框（简化版）
@@ -12,17 +15,17 @@ import '../../../shared/widgets/lumira/lumira.dart';
 /// - ✅ 画笔/橡皮/撤销/重做/清空/画笔粗细滑块
 /// - ❌ 参考线配置（Task 2.9+ 补全）
 /// - ❌ 参考图上传（Task 2.9+ 补全）
-class SilhouetteEditorDialog extends StatefulWidget {
+class SilhouetteEditorDialog extends ConsumerStatefulWidget {
   const SilhouetteEditorDialog({super.key, this.onComplete});
 
   /// 完成回调，参数为生成的 SVG 字符串
   final void Function(String svg)? onComplete;
 
   @override
-  State<SilhouetteEditorDialog> createState() => _SilhouetteEditorDialogState();
+  ConsumerState<SilhouetteEditorDialog> createState() => _SilhouetteEditorDialogState();
 }
 
-class _SilhouetteEditorDialogState extends State<SilhouetteEditorDialog> {
+class _SilhouetteEditorDialogState extends ConsumerState<SilhouetteEditorDialog> {
   String _tool = 'brush'; // 'brush' / 'eraser'
   double _brushSize = 8.0; // 2.0 ~ 30.0
   final List<_DrawPath> _paths = [];
@@ -159,15 +162,15 @@ class _SilhouetteEditorDialogState extends State<SilhouetteEditorDialog> {
   }
 
   Widget _buildCanvas() {
+    final tokens = ref.watch(appThemeProvider).tokens;
     return AspectRatio(
       aspectRatio: 300 / 480,
       child: Container(
-        // 硬编码颜色，与 uni-app 一致（preview-bg: linear-gradient(135deg, #3A3631 0%, #2A2622 100%)）
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF3A3631), Color(0xFF2A2622)],
+            colors: [tokens.canvasDeep, tokens.canvasDeep],
           ),
         ),
         child: GestureDetector(
@@ -177,8 +180,8 @@ class _SilhouetteEditorDialogState extends State<SilhouetteEditorDialog> {
           child: CustomPaint(
             painter: _DrawPainter(
               paths: _paths,
-              // 硬编码颜色，与 uni-app 一致（canvas-bg: #2A2622）
-              canvasBgColor: const Color(0xFF2A2622),
+              canvasBgColor: tokens.canvasDeep,
+              brushColor: tokens.textPrimary,
             ),
             child: const SizedBox.expand(),
           ),
@@ -188,10 +191,11 @@ class _SilhouetteEditorDialogState extends State<SilhouetteEditorDialog> {
   }
 
   Widget _buildHint() {
-    return const Text(
+    final tokens = ref.watch(appThemeProvider).tokens;
+    return Text(
       '在画布上绘制轮廓，完成后将自动保存为 SVG 矢量剪影',
       textAlign: TextAlign.center,
-      style: TextStyle(fontSize: 12, color: Colors.black54),
+      style: TextStyle(fontSize: 12, color: tokens.textSecondary),
     );
   }
 
@@ -283,15 +287,17 @@ class _DrawPainter extends CustomPainter {
   _DrawPainter({
     required this.paths,
     required this.canvasBgColor,
+    required this.brushColor,
   });
 
   final List<_DrawPath> paths;
   final Color canvasBgColor;
+  final Color brushColor;
 
   @override
   void paint(Canvas canvas, Size size) {
     for (final p in paths) {
-      final color = p.eraser ? canvasBgColor : Colors.white;
+      final color = p.eraser ? canvasBgColor : brushColor;
       if (p.points.length < 2) {
         // 单点：用圆点表示
         final paint = Paint()
@@ -319,9 +325,10 @@ class _DrawPainter extends CustomPainter {
     // 始终重绘：paths 是可变列表，引用相同但内容可能已变更
     return true;
   }
+
 }
 
-class _ToolButton extends StatelessWidget {
+class _ToolButton extends ConsumerWidget {
   const _ToolButton({
     required this.label,
     required this.icon,
@@ -335,26 +342,34 @@ class _ToolButton extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? Theme.of(context).primaryColor : Colors.black12,
+          color: active
+              ? tokens.brand
+              : (isNeu ? tokens.surface : tokens.surfaceAlt),
           borderRadius: BorderRadius.circular(8),
+          boxShadow: isNeu
+              ? (active ? tokens.shadowConvex : tokens.shadowConvexSubtle)
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: active ? Colors.white : Colors.black87),
+            Icon(icon, size: 16, color: active ? tokens.textInverse : tokens.textSecondary),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
-                color: active ? Colors.white : Colors.black87,
+                color: active ? tokens.textInverse : tokens.textSecondary,
               ),
             ),
           ],

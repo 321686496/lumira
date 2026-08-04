@@ -518,6 +518,7 @@ class _RecentShotsGrid extends ConsumerWidget {
       decoration: BoxDecoration(
         color: tokens.surface,
         borderRadius: BorderRadius.circular(14),
+        boxShadow: tokens.shadowConvex,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -555,17 +556,18 @@ class _RecentShotsGrid extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: tokens.brand,
                 borderRadius: BorderRadius.circular(8),
+                boxShadow: tokens.shadowConvexBrand,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.camera_alt_outlined, size: 16, color: Colors.white),
+                  Icon(Icons.camera_alt_outlined, size: 16, color: tokens.textInverse),
                   const SizedBox(width: 6),
                   Text(
                     '开始拍摄',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.white,
+                      color: tokens.textInverse,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

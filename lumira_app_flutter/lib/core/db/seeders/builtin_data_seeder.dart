@@ -4,7 +4,8 @@ import 'package:sqflite/sqflite.dart';
 
 import '../tables.dart';
 import '../../../features/capture/data/capture_scene_mock_data.dart';
-import '../../../features/templates/data/templates_browse_mock_data.dart';
+import '../../../features/capture/data/template_registry.dart';
+import '../../../features/templates/services/template_mapper.dart';
 
 /// 预置数据 Seeder
 /// 在数据库 v4 迁移时插入预置场景 + 预置模板。
@@ -12,10 +13,13 @@ import '../../../features/templates/data/templates_browse_mock_data.dart';
 /// 触发条件：user_settings.seed_v3_done != 1 且 custom_templates 中无 is_builtin=0 的用户自定义模板。
 /// 失败时静默回退（spec §9），调用方应 try/catch。
 ///
+/// v10 迁移新增 [reseedBuiltinTemplates]：强制重新种子化内置模板（从 [TemplateRegistry]
+/// 获取全量 29 个模板），不影响用户自定义模板。
+///
 /// 适配说明（与 brief 的偏差）：
 /// - brief 假设 allScenes 有 12 项，实际 CaptureSceneMockData.allScenes 返回 7 项（1 custom + 6 preset）。
 /// - brief 假设存在顶层 templatesBrowseMockData 变量且有 12 项（8 免费 + 4 付费），
-///   实际数据源为 TemplatesBrowseMockData.allTemplates，共 10 项（6 免费 + 4 付费）。
+///   实际数据源为 TemplateRegistry.allTemplates，共 29 项（含 12 原始 + 17 新增人像模板）。
 /// - ScenePreset.style 为 String（非对象，无 .id），直接使用。
 /// - ScenePreset.icon 为 String（'ph-xxx' phosphor 图标名），直接存储。
 /// - ScenePreset.category / relatedCategory 为 String（字符串常量），直接存储。
@@ -45,6 +49,40 @@ class BuiltinDataSeeder {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     // 3. 插入预置场景（来自 CaptureSceneMockData.allScenes）
+    await _seedScenes(db, now);
+
+    // 4. 插入预置模板（来自 TemplateRegistry.allTemplates）
+    await _seedBuiltinTemplates(db, now);
+
+    // 5. 标记 seed_v3_done = 1
+    await _markSeedDone(db);
+    return true;
+  }
+
+  /// 强制重新种子化内置模板（v10 迁移用）。
+  ///
+  /// 与 [seedAll] 的区别：
+  /// - 不检查 seed_v3_done 标志
+  /// - 不检查用户自定义模板
+  /// - 先删除现有内置模板（is_builtin=1），再插入全量 [TemplateRegistry.allTemplates]
+  /// - 不重新插入场景数据（场景已在 v4 种子化，无需重复）
+  /// - 不修改 seed_v3_done 标志
+  ///
+  /// 用于 v10 迁移：将内置模板从旧的 10 个更新为全量 29 个（含 17 个新人像模板）。
+  static Future<void> reseedBuiltinTemplates(Database db) async {
+    // 删除现有内置模板（保留用户自定义模板 is_builtin=0）
+    await db.delete(
+      Tables.customTemplates,
+      where: '${Tables.colIsBuiltin} = ?',
+      whereArgs: [1],
+    );
+    // 重新插入全量内置模板
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await _seedBuiltinTemplates(db, now);
+  }
+
+  /// 插入预置场景数据
+  static Future<void> _seedScenes(Database db, int now) async {
     final scenes = CaptureSceneMockData.allScenes;
     final batch = db.batch();
     for (final s in scenes) {
@@ -90,50 +128,33 @@ class BuiltinDataSeeder {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
+    await batch.commit(noResult: true);
+  }
 
-    // 4. 插入预置模板（来自 TemplatesBrowseMockData.allTemplates）
-    const items = TemplatesBrowseMockData.allTemplates;
+  /// 插入预置模板数据（来自 [TemplateRegistry.allTemplates]）
+  ///
+  /// 数据源：[TemplateRegistry] 是模板的唯一真相源（source of truth），
+  /// 包含全量 29 个模板（12 原始 + 17 新增人像模板）。
+  /// 前 3 个模板标记为 recommended（用于首页 Hero 推荐区）。
+  static Future<void> _seedBuiltinTemplates(Database db, int now) async {
+    final templates = TemplateRegistry.allTemplates;
     // 前 3 个标记为 recommended（用于 Hero 区）
-    final recommendedIds = items.take(3).map((t) => t.id).toSet();
-    for (final t in items) {
+    final recommendedIds = templates.take(3).map((t) => t.meta.id).toSet();
+    final batch = db.batch();
+    for (final t in templates) {
+      final record = TemplateMapper.toRecord(
+        t,
+        createdAt: now,
+        isBuiltin: true,
+        isRecommended: recommendedIds.contains(t.meta.id),
+      );
       batch.insert(
         Tables.customTemplates,
-        {
-          Tables.colId: t.id,
-          Tables.colName: t.name,
-          Tables.colAuthor: 'Lumira',
-          Tables.colVersion: '1.0.0',
-          Tables.colCategory: t.category,
-          Tables.colClassificationJson: jsonEncode({
-            'type': t.category,
-            'style': t.style,
-            'method': t.method,
-          }),
-          Tables.colTagsJson: jsonEncode(<String>[]),
-          Tables.colTagIdsJson: jsonEncode(<String>[]),
-          Tables.colPrice: t.price,
-          Tables.colCover: 'assets/images/templates/${t.id}.jpg',
-          Tables.colDescription: '',
-          Tables.colReferenceSource: '',
-          Tables.colCompositionJson: jsonEncode({'overlayType': 'rule_of_thirds'}),
-          Tables.colPoseJson: jsonEncode(<String, dynamic>{}),
-          Tables.colCameraJson: jsonEncode(<String, dynamic>{}),
-          Tables.colSceneGuideJson: jsonEncode(<String, dynamic>{}),
-          Tables.colPostProcessJson: jsonEncode(<String, dynamic>{}),
-          Tables.colIsBuiltin: 1,
-          Tables.colIsRecommended: recommendedIds.contains(t.id) ? 1 : 0,
-          Tables.colCreatedAt: now,
-          Tables.colUpdatedAt: now,
-        },
+        record.toRow(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
-
     await batch.commit(noResult: true);
-
-    // 5. 标记 seed_v3_done = 1
-    await _markSeedDone(db);
-    return true;
   }
 
   static Future<void> _markSeedDone(Database db) async {

@@ -21,12 +21,15 @@ class ViewToggle extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
 
     return Container(
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
+        color: isNeu ? tokens.surface : tokens.surfaceAlt,
         borderRadius: BorderRadius.circular(1000),
+        boxShadow: isNeu ? tokens.shadowConcaveSubtle : null,
       ),
       padding: const EdgeInsets.all(3), // 6rpx → 3dp
       child: Row(
@@ -48,9 +51,7 @@ class ViewToggle extends ConsumerWidget {
         decoration: BoxDecoration(
           color: active ? tokens.canvas : Colors.transparent,
           borderRadius: BorderRadius.circular(1000),
-          boxShadow: active
-              ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 3, offset: const Offset(0, 1))]
-              : null,
+          boxShadow: active ? tokens.shadowConvexSubtle : null,
         ),
         child: Text(
           label,

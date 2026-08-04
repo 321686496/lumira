@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/theme_controller.dart';
 import '../data/capture_state.dart';
 
 /// 照片比例切换器
@@ -24,6 +25,7 @@ class AspectRatioSelector extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = ref.watch(CaptureState.aspectRatioProvider);
+    final tokens = ref.watch(themeTokensProvider);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -43,7 +45,7 @@ class AspectRatioSelector extends ConsumerWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: active ? Colors.amber.withOpacity(0.9) : Colors.transparent,
+                color: active ? tokens.brand.withOpacity(0.9) : Colors.transparent,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
@@ -52,7 +54,7 @@ class AspectRatioSelector extends ConsumerWidget {
                   Icon(
                     opt.icon,
                     size: 14,
-                    color: active ? Colors.black : Colors.white,
+                    color: active ? tokens.textInverse : Colors.white,
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -60,7 +62,7 @@ class AspectRatioSelector extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
-                      color: active ? Colors.black : Colors.white,
+                      color: active ? tokens.textInverse : Colors.white,
                     ),
                   ),
                 ],

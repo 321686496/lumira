@@ -1,6 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 
 /// 自适应九宫格图片展示
 ///
@@ -80,22 +84,23 @@ class AdaptivePhotoGrid extends StatelessWidget {
   }
 }
 
-class _ImageCell extends StatelessWidget {
+class _ImageCell extends ConsumerWidget {
   const _ImageCell({required this.url});
   final String url;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
-      child: _buildImage(),
+      child: _buildImage(tokens),
     );
   }
 
-  Widget _buildImage() {
+  Widget _buildImage(ThemeTokens tokens) {
     final fallback = Container(
-      color: Colors.grey.shade300,
-      child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
+      color: tokens.divider,
+      child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary),
     );
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return Image.network(
@@ -113,30 +118,31 @@ class _ImageCell extends StatelessWidget {
   }
 }
 
-class _OverflowCell extends StatelessWidget {
+class _OverflowCell extends ConsumerWidget {
   const _OverflowCell({required this.count, required this.onTap});
   final int count;
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.black54,
+          color: tokens.surface.withOpacity(0.6),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.more_horiz, color: Colors.white, size: 20),
+            Icon(Icons.more_horiz, color: tokens.textInverse, size: 20),
             const SizedBox(height: 4),
             Text(
               '+$count',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: tokens.textInverse,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),

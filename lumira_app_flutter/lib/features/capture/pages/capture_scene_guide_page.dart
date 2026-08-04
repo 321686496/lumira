@@ -112,8 +112,7 @@ class _CaptureSceneGuidePageState
     final tokens = ref.watch(themeTokensProvider);
 
     return Scaffold(
-      // 硬编码颜色，与 uni-app 一致 (scene-guide-page bg #FAF7F2)
-      backgroundColor: const Color(0xFFFAF7F2),
+      backgroundColor: tokens.canvas,
       body: SafeArea(
         child: Column(
           children: [
@@ -262,7 +261,7 @@ class _CategoryNav extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
+class _Pill extends ConsumerWidget {
   const _Pill({
     required this.label,
     required this.active,
@@ -276,7 +275,11 @@ class _Pill extends StatelessWidget {
   final bool subtle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -284,24 +287,17 @@ class _Pill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFFC9A876)
-              : (subtle
-                  ? const Color.fromRGBO(0, 0, 0, 0.04)
-                  : Colors.white),
-          border: Border.all(
-            color: active
-                ? const Color(0xFFC9A876)
-                : const Color(0xFFEAE5DC),
-            width: 1,
-          ),
+              ? tokens.brand
+              : (subtle ? tokens.surfaceAlt : tokens.surface),
           borderRadius: BorderRadius.circular(9999),
+          boxShadow: isNeu && !active ? tokens.shadowConvexSubtle : null,
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: active ? Colors.white : const Color(0xFF2A2520),
+            color: active ? tokens.textInverse : tokens.textSecondary,
           ),
         ),
       ),
@@ -343,7 +339,7 @@ class _TagFilter extends StatelessWidget {
   }
 }
 
-class _TagChip extends StatelessWidget {
+class _TagChip extends ConsumerWidget {
   const _TagChip({
     required this.label,
     required this.active,
@@ -355,30 +351,27 @@ class _TagChip extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: active
-              ? const Color(0xFFC9A876)
-              : const Color.fromRGBO(0, 0, 0, 0.04),
+          color: active ? tokens.brand : tokens.surface,
           borderRadius: BorderRadius.circular(9999),
-          border: Border.all(
-            color: active
-                ? const Color(0xFFC9A876)
-                : const Color(0xFFEAE5DC),
-            width: 1,
-          ),
+          boxShadow: isNeu && !active ? tokens.shadowConvexSubtle : null,
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: active ? Colors.white : const Color(0xFF2A2520),
+            color: active ? tokens.textInverse : tokens.textSecondary,
           ),
         ),
       ),
@@ -424,13 +417,16 @@ class _SceneList extends StatelessWidget {
   }
 }
 
-class _SceneCard extends StatelessWidget {
+class _SceneCard extends ConsumerWidget {
   const _SceneCard({required this.scene, required this.onTap});
   final ScenePreset scene;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+
     final photoCount = CaptureSceneMockData.getPhotoCountByScene(scene.id);
     final achievement = CaptureSceneMockData.getSceneAchievement(scene.id);
     final firstImage = scene.exampleImages.isNotEmpty
@@ -442,18 +438,19 @@ class _SceneCard extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          color: const Color.fromRGBO(0, 0, 0, 0.04),
-          borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
+          color: tokens.surface,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: tokens.shadowConvex,
         ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
-          height: 100, // 200rpx → 100dp（固定行高，避免在 ScrollView 中 stretch 导致无限高度）
+          height: 100,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // 缩略图
               SizedBox(
-                width: 100, // 200rpx → 100dp
+                width: 100,
                 height: 100,
               child: firstImage != null
                   ? Image.network(
@@ -466,7 +463,7 @@ class _SceneCard extends StatelessWidget {
             // 信息区
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12), // 24rpx → 12dp
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -475,10 +472,10 @@ class _SceneCard extends StatelessWidget {
                       scene.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15, // 30rpx → 15dp
+                      style: TextStyle(
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF2A2520),
+                        color: tokens.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -486,41 +483,41 @@ class _SceneCard extends StatelessWidget {
                       scene.vibe,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
-                        color: Color(0xFF6B635A),
+                        color: tokens.textSecondary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.photo_library_outlined,
-                          size: 12, // 22rpx → 11dp
-                          color: Color(0xFF6B635A),
+                          size: 12,
+                          color: tokens.textTertiary,
                         ),
                         const SizedBox(width: 3),
                         Text(
                           '$photoCount',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11,
-                            color: Color(0xFF6B635A),
+                            color: tokens.textTertiary,
                           ),
                         ),
                         if (achievement.level > 0) ...[
-                          const SizedBox(width: 10), // 20rpx → 10dp
-                          const Icon(
+                          const SizedBox(width: 10),
+                          Icon(
                             Icons.emoji_events_outlined,
                             size: 12,
-                            color: Color(0xFFC9A876),
+                            color: tokens.brand,
                           ),
                           const SizedBox(width: 3),
                           Text(
                             'Lv.${achievement.level}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
-                              color: Color(0xFF6B635A),
+                              color: tokens.textTertiary,
                             ),
                           ),
                         ],

@@ -97,8 +97,8 @@ class _CheckinItem extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12), // 24rpx → 12dp
       decoration: showTopBorder
-          ? const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFFEAE5DC), width: 1)), // 2rpx → 1dp，divider 硬编码
+          ? BoxDecoration(
+              border: Border(top: BorderSide(color: tokens.divider, width: 1)),
             )
           : null,
       child: Row(
@@ -137,7 +137,7 @@ class _CheckinItem extends ConsumerWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, size: 16, color: Color(0xFF9C9690)), // ph-caret-right 32rpx → 16dp
+          Icon(Icons.chevron_right, size: 16, color: tokens.textTertiary), // ph-caret-right 32rpx → 16dp
         ],
       ),
     );

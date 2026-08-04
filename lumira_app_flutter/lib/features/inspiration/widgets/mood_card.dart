@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/inspiration_mock_data.dart';
 
 /// 今日心情卡片
@@ -15,17 +16,22 @@ class MoodCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
 
     return Container(
-      // 硬编码渐变背景（uni-app line 217-218）
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight, // 135deg
-          colors: [Color(0xFFFDF6EC), Color(0xFFF8EDD8)],
-        ),
+        color: isNeu ? tokens.surface : null,
+        gradient: isNeu
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight, // 135deg
+                colors: [Color(0xFFFDF6EC), Color(0xFFF8EDD8)],
+              ),
         borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
+        boxShadow: isNeu ? tokens.shadowConvex : null,
       ),
       padding: const EdgeInsets.all(20), // 40rpx → 20dp
       child: Column(

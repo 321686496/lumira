@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../capture/data/template_registry.dart';
+import '../../capture/domain/photo_template.dart';
+
 /// 模板浏览页（detail / all / recommend）共享 mock 数据
 ///
 /// 视觉规格来源：lumira-app/src/pages/templates/detail.vue / all.vue / recommend.vue
@@ -1264,11 +1267,81 @@ class TemplatesBrowseMockData {
   ];
 
   /// 标签查询：通过 id 查询 TemplateDetail（detail 页用）
+  ///
+  /// 查找顺序：
+  /// 1. 先在 mock [details] 列表中查找（14 个预置详情）
+  /// 2. 若未找到，回退到 [TemplateRegistry.getTemplate] 查找（覆盖全量 29 个模板）
+  ///    并通过 [_fromPhotoTemplate] 转换为 [TemplateDetail] 格式
   static TemplateDetail? findDetailById(String id) {
     for (final t in details) {
       if (t.id == id) return t;
     }
+    // 回退：从 TemplateRegistry 查找（覆盖 17 个新增人像模板）
+    final tpl = TemplateRegistry.getTemplate(id);
+    if (tpl != null) {
+      return _fromPhotoTemplate(tpl);
+    }
     return null;
+  }
+
+  /// PhotoTemplate → TemplateDetail 转换
+  ///
+  /// 用于 [findDetailById] 回退路径：当模板不在 mock [details] 列表中时，
+  /// 从 [TemplateRegistry] 获取完整 [PhotoTemplate] 并转换为详情页所需格式。
+  static TemplateDetail _fromPhotoTemplate(PhotoTemplate tpl) {
+    return TemplateDetail(
+      id: tpl.meta.id,
+      name: tpl.meta.name,
+      category: tpl.meta.category,
+      coverSeed: tpl.meta.id,
+      tags: List<String>.from(tpl.meta.tags),
+      tagIds: List<String>.from(tpl.meta.tagIds),
+      price: tpl.meta.price,
+      referenceSource: tpl.meta.referenceSource,
+      aspectRatio: tpl.composition.aspectRatio,
+      composition: CompositionData(
+        type: tpl.composition.overlayType,
+        description: tpl.composition.description,
+      ),
+      camera: CameraData(
+        iso: tpl.camera.iso,
+        shutterSpeed: tpl.camera.shutterSpeed,
+        whiteBalance: tpl.camera.whiteBalance,
+        whiteBalanceK: tpl.camera.whiteBalanceK,
+        exposureCompensation: tpl.camera.exposureCompensation.round(),
+        flashMode: tpl.camera.flashMode,
+        focusMode: tpl.camera.focusMode,
+        lensSuggestion: tpl.camera.lensSuggestion ?? 'main',
+      ),
+      postProcess: PostProcessData(
+        cropRatio: tpl.postProcess.cropRatio,
+        lut: tpl.postProcess.lut,
+        brightness: tpl.postProcess.color.brightness.round(),
+        contrast: tpl.postProcess.color.contrast.round(),
+        saturation: tpl.postProcess.color.saturation.round(),
+        temperature: tpl.postProcess.color.temperature.round(),
+        tint: tpl.postProcess.color.tint.round(),
+        smoothStrength: tpl.postProcess.smoothStrength,
+        sharpen: tpl.postProcess.sharpen,
+        vignette: tpl.postProcess.vignette,
+        grain: tpl.postProcess.grain,
+      ),
+      sceneGuide: SceneGuideData(
+        lightDirection: tpl.sceneGuide.lightDirection,
+        shootingDistance: tpl.sceneGuide.shootingDistance,
+        background: tpl.sceneGuide.background,
+        props: List<String>.from(tpl.sceneGuide.props),
+        bestTime: tpl.sceneGuide.bestTime,
+        tips: List<String>.from(tpl.sceneGuide.tips),
+      ),
+      pose: PoseData(
+        silhouetteType: tpl.pose.silhouette.type,
+        silhouetteData: tpl.pose.silhouette.data,
+        positionX: tpl.pose.position.x,
+        positionY: tpl.pose.position.y,
+        description: tpl.pose.description,
+      ),
+    );
   }
 
   /// 6 个 enum label 静态方法（detail 页用）

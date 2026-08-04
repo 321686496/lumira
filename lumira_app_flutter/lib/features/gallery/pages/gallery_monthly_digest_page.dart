@@ -96,12 +96,14 @@ class _BackButton extends StatelessWidget {
   }
 }
 
-class _ExportAction extends StatelessWidget {
+class _ExportAction extends ConsumerWidget {
   const _ExportAction({required this.tokens});
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+
     return GestureDetector(
       onTap: () {},
       behavior: HitTestBehavior.opaque,
@@ -109,8 +111,10 @@ class _ExportAction extends StatelessWidget {
         margin: const EdgeInsets.all(4),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          border: Border.all(color: tokens.divider, width: 1),
+          color: isNeu ? tokens.surface : null,
+          border: isNeu ? null : Border.all(color: tokens.divider, width: 1),
           borderRadius: BorderRadius.circular(1000),
+          boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
         ),
         child: Text(
           '导出',
@@ -384,7 +388,7 @@ class _SummarySection extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: tokens.divider, width: 1),
+        boxShadow: tokens.shadowConvex,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -476,9 +480,8 @@ class _SceneTagsSection extends StatelessWidget {
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: tokens.surface,
+                color: tokens.brandSubtle,
                 borderRadius: BorderRadius.circular(1000),
-                border: Border.all(color: tokens.divider, width: 1),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -510,12 +513,14 @@ class _SceneTagsSection extends StatelessWidget {
   }
 }
 
-class _CtaSection extends StatelessWidget {
+class _CtaSection extends ConsumerWidget {
   const _CtaSection({required this.tokens});
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+
     return Column(
       children: [
         GestureDetector(
@@ -551,8 +556,10 @@ class _CtaSection extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: tokens.divider, width: 1),
+              color: isNeu ? tokens.surface : null,
+              border: isNeu ? null : Border.all(color: tokens.divider, width: 1),
               borderRadius: BorderRadius.circular(1000),
+              boxShadow: isNeu ? tokens.shadowConvexBrand : null,
             ),
             child: Text(
               '分享手帐',

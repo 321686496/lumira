@@ -537,11 +537,7 @@ class _AddPhotoPrompt extends StatelessWidget {
         decoration: BoxDecoration(
           color: tokens.surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: tokens.divider,
-            width: 1.2,
-            style: BorderStyle.solid,
-          ),
+          boxShadow: tokens.shadowConvexSubtle,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -575,13 +571,9 @@ class _AddPhotoCell extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          color: tokens.surfaceAlt,
+          color: tokens.surface,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: tokens.divider,
-            width: 1,
-            style: BorderStyle.solid,
-          ),
+          boxShadow: tokens.shadowConvexSubtle,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,

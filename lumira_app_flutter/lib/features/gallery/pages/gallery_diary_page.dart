@@ -198,7 +198,7 @@ class _CalendarAction extends StatelessWidget {
   }
 }
 
-class _DiaryViewToggle extends StatelessWidget {
+class _DiaryViewToggle extends ConsumerWidget {
   const _DiaryViewToggle({
     required this.activeTab,
     required this.onTap,
@@ -209,11 +209,14 @@ class _DiaryViewToggle extends StatelessWidget {
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+
     return Container(
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
+        color: isNeu ? tokens.surface : tokens.surfaceAlt,
         borderRadius: BorderRadius.circular(1000),
+        boxShadow: isNeu ? tokens.shadowConcaveSubtle : null,
       ),
       padding: const EdgeInsets.all(3),
       child: Row(
@@ -235,9 +238,7 @@ class _DiaryViewToggle extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? tokens.canvas : Colors.transparent,
           borderRadius: BorderRadius.circular(1000),
-          boxShadow: active
-              ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 3, offset: const Offset(0, 1))]
-              : null,
+          boxShadow: active ? tokens.shadowConvexSubtle : null,
         ),
         child: Text(
           label,
