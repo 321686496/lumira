@@ -9,10 +9,12 @@ import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../providers/collection_providers.dart';
 
@@ -50,7 +52,7 @@ class ProfileCollectionsPage extends ConsumerWidget {
           SafeArea(
             top: false,
             child: asyncList.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => Center(child: LumiraProgress.circular()),
               error: (e, _) => _ErrorState(
                 tokens: tokens,
                 message: '加载失败：$e',
@@ -440,7 +442,11 @@ class _ErrorState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
-          TextButton(onPressed: onRetry, child: const Text('重试')),
+          LumiraButton(
+            variant: ButtonVariant.secondary,
+            onPressed: onRetry,
+            child: const Text('重试'),
+          ),
         ],
       ),
     );

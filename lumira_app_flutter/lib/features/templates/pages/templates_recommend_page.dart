@@ -8,6 +8,7 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/templates_browse_mock_data.dart';
 
@@ -261,14 +262,9 @@ class _StyleAnalysisCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: s.percent / 100,
-                          backgroundColor: tokens.surfaceAlt,
-                          color: tokens.brand,
-                          minHeight: 6,
-                        ),
+                      LumiraProgress.linear(
+                        value: s.percent / 100,
+                        minHeight: 6,
                       ),
                     ],
                   ),
@@ -288,11 +284,10 @@ class _GuessLikesSection extends StatelessWidget {
   final ThemeTokens tokens;
 
   void _showSnack(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('换一换功能即将上线'),
-        duration: Duration(milliseconds: 1000),
-      ),
+    LumiraToast.show(
+      context,
+      '换一换功能即将上线',
+      duration: const Duration(milliseconds: 1000),
     );
   }
 
@@ -342,11 +337,10 @@ class _SimilarUsersSection extends StatelessWidget {
   final ThemeTokens tokens;
 
   void _showSnack(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('查看全部功能即将上线'),
-        duration: Duration(milliseconds: 1000),
-      ),
+    LumiraToast.show(
+      context,
+      '查看全部功能即将上线',
+      duration: const Duration(milliseconds: 1000),
     );
   }
 
@@ -757,7 +751,7 @@ class _LevelBadge extends StatelessWidget {
       decoration: BoxDecoration(
         // 硬编码颜色，与 uni-app 一致 (lumira-tag-gold / lumira-tag-green)
         color: isGold
-            ? const Color(0xFFC9A96E).withOpacity(0.92)
+            ? tokens.brand.withOpacity(0.92)
             : const Color(0xFF5A7A48).withOpacity(0.92),
         borderRadius: BorderRadius.circular(9999),
       ),

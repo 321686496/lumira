@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/challenge_models.dart';
 import 'challenge_tag.dart';
 
@@ -124,10 +124,9 @@ class SubChallengeRow extends ConsumerWidget {
                 child: SizedBox(
                   width: 100, // 自适应内容宽度
                   child: LumiraButton(
-                    label: '去完成',
+                    variant: ButtonVariant.primary,
                     onPressed: onGoComplete,
-                    variant: LumiraButtonVariant.brand,
-                    expand: false,
+                    child: const Text('去完成'),
                   ),
                 ),
               ),

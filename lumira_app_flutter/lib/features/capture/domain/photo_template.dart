@@ -520,6 +520,12 @@ class PostProcess {
   final int grain;
   final String lut;
   final String? systemFilter;
+
+  /// 自定义裁剪矩形（相对坐标 0.0-1.0）。
+  /// 为 null 时使用默认居中按比例裁剪（向后兼容）。
+  /// 由可拖拽裁剪框设置，导出时传入 [PhotoPostProcessor.processFile]。
+  final CropRect? customCropRect;
+
   const PostProcess({
     this.cropRatio = '3:4',
     required this.color,
@@ -529,11 +535,12 @@ class PostProcess {
     this.grain = 0,
     this.lut = 'none',
     this.systemFilter,
+    this.customCropRect,
   });
 
-  /// copyWith 的 systemFilter 参数使用 [_unset] 哨兵区分两种情况：
+  /// copyWith 的 systemFilter 和 customCropRect 参数使用 [_unset] 哨兵区分两种情况：
   /// - 未传入（使用 `_unset`）→ 保留原值
-  /// - 显式传入 null → 清空为 null（用于"原图"按钮）
+  /// - 显式传入 null → 清空为 null（用于"原图"按钮或重置裁剪框）
   PostProcess copyWith({
     String? cropRatio,
     PostProcessColor? color,
@@ -543,6 +550,7 @@ class PostProcess {
     int? grain,
     String? lut,
     Object? systemFilter = _unset,
+    Object? customCropRect = _unset,
   }) =>
       PostProcess(
         cropRatio: cropRatio ?? this.cropRatio,
@@ -555,6 +563,9 @@ class PostProcess {
         systemFilter: identical(systemFilter, _unset)
             ? this.systemFilter
             : systemFilter as String?,
+        customCropRect: identical(customCropRect, _unset)
+            ? this.customCropRect
+            : customCropRect as CropRect?,
       );
 
   @override
@@ -568,10 +579,12 @@ class PostProcess {
           vignette == other.vignette &&
           grain == other.grain &&
           lut == other.lut &&
-          systemFilter == other.systemFilter;
+          systemFilter == other.systemFilter &&
+          customCropRect == other.customCropRect;
 
   @override
-  int get hashCode => Object.hash(cropRatio, color, smoothStrength, sharpen, vignette, grain, lut, systemFilter);
+  int get hashCode => Object.hash(cropRatio, color, smoothStrength, sharpen,
+      vignette, grain, lut, systemFilter, customCropRect);
 
   Map<String, dynamic> toJson() => {
         'cropRatio': cropRatio,
@@ -582,12 +595,16 @@ class PostProcess {
         'grain': grain,
         'lut': lut,
         if (systemFilter != null) 'systemFilter': systemFilter,
+        if (customCropRect != null) 'customCropRect': customCropRect!.toJson(),
       };
 
   /// 将另一个 PostProcess（增量）合并到当前参数上，返回全量参数。
   ///
   /// 用于预览页保存：照片已烘焙 [_bakedPostProcess]，用户在编辑页调整了 [_localPostProcess]（增量），
   /// 保存时需要全量参数 = baked + local（增量）从原图重新处理。
+  ///
+  /// customCropRect 合并规则：如果增量中设置了自定义裁剪（用户拖拽过），使用增量值；
+  /// 否则保留烘焙值（向后兼容，未调整时使用之前的裁剪）。
   PostProcess merge(PostProcess delta) => PostProcess(
         cropRatio: cropRatio,
         color: color.merge(delta.color),
@@ -597,6 +614,7 @@ class PostProcess {
         grain: grain + delta.grain,
         lut: delta.lut != 'none' ? delta.lut : lut,
         systemFilter: delta.systemFilter ?? systemFilter,
+        customCropRect: delta.customCropRect ?? customCropRect,
       );
 
   factory PostProcess.fromJson(Map<String, dynamic> json) => PostProcess(
@@ -608,6 +626,9 @@ class PostProcess {
         grain: (json['grain'] as num?)?.toInt() ?? 0,
         lut: json['lut'] as String? ?? 'none',
         systemFilter: json['systemFilter'] as String?,
+        customCropRect: (json['customCropRect'] as Map<String, dynamic>?) != null
+            ? CropRect.fromJson(json['customCropRect'] as Map<String, dynamic>)
+            : null,
       );
 }
 
@@ -668,6 +689,57 @@ class TransformParams {
 
   @override
   int get hashCode => Object.hash(rotation, flipH, flipV, straighten);
+}
+
+/// 自定义裁剪矩形（相对坐标 0.0-1.0）
+///
+/// 用于可拖拽裁剪框方案（方案 6.2）：
+/// - x, y, w, h 均为相对值（0.0-1.0），表示裁剪区域在图片中的位置和大小
+/// - 跨不同图片尺寸通用，导出时由 [PhotoPostProcessor.computeCustomCropRect] 转为像素坐标
+/// - null 表示未自定义（使用默认居中按比例裁剪）
+class CropRect {
+  final double x;
+  final double y;
+  final double w;
+  final double h;
+
+  const CropRect({
+    required this.x,
+    required this.y,
+    required this.w,
+    required this.h,
+  });
+
+  CropRect copyWith({double? x, double? y, double? w, double? h}) => CropRect(
+        x: x ?? this.x,
+        y: y ?? this.y,
+        w: w ?? this.w,
+        h: h ?? this.h,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CropRect &&
+          x == other.x &&
+          y == other.y &&
+          w == other.w &&
+          h == other.h;
+
+  @override
+  int get hashCode => Object.hash(x, y, w, h);
+
+  Map<String, dynamic> toJson() => {'x': x, 'y': y, 'w': w, 'h': h};
+
+  factory CropRect.fromJson(Map<String, dynamic> json) => CropRect(
+        x: (json['x'] as num?)?.toDouble() ?? 0,
+        y: (json['y'] as num?)?.toDouble() ?? 0,
+        w: (json['w'] as num?)?.toDouble() ?? 1,
+        h: (json['h'] as num?)?.toDouble() ?? 1,
+      );
+
+  @override
+  String toString() => 'CropRect(x=$x, y=$y, w=$w, h=$h)';
 }
 
 class PostProcessColor {

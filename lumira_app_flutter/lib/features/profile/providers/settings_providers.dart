@@ -1,5 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 /// 用户设置相关的 Riverpod providers
 ///
 /// 历史说明：

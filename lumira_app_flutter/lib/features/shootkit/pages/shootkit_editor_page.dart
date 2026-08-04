@@ -7,6 +7,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../features/capture/data/capture_scene_mock_data.dart';
 import '../../../features/templates/data/templates_mock_data.dart';
+import '../../../shared/widgets/lumira/lumira.dart' show LumiraListTile, LumiraSlider, LumiraTextField, LumiraToast, showLumiraBottomSheet;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/shootkit_mock_data.dart';
 
@@ -163,9 +164,7 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
       );
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('保存成功')),
-    );
+    LumiraToast.show(context, '保存成功');
 
     // 对应 uni-app setTimeout(() => uni.navigateBack(), 600)
     Future.delayed(const Duration(milliseconds: 600), () {
@@ -182,13 +181,12 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
     setState(() {
       _overrides = const CameraOverrides();
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('参数已重置')),
-    );
+    LumiraToast.show(context, '参数已重置');
   }
 
   void _openScenePicker() {
-    showModalBottomSheet<void>(
+    final tokens = ref.read(themeTokensProvider);
+    showLumiraBottomSheet<void>(
       context: context,
       builder: (ctx) {
         final scenes = CaptureSceneMockData.allScenes;
@@ -197,22 +195,22 @@ class _ShootkitEditorPageState extends ConsumerState<ShootkitEditorPage> {
             shrinkWrap: true,
             children: [
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   '选择场景',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Theme.of(ctx).textTheme.titleMedium?.color,
+                    color: tokens.textPrimary,
                   ),
                 ),
               ),
               for (final scene in scenes)
-                ListTile(
-                  leading: Icon(scene.icon, color: const Color(0xFFC9A96E)),
+                LumiraListTile(
+                  leading: Icon(scene.icon, color: tokens.brand),
                   title: Text(scene.name),
                   trailing: _sceneId == scene.id
-                      ? const Icon(Icons.check, color: Color(0xFFC9A96E))
+                      ? Icon(Icons.check, color: tokens.brand)
                       : null,
                   onTap: () {
                     setState(() {
@@ -419,29 +417,9 @@ class _NameSection extends StatelessWidget {
     return _FormSection(
       tokens: tokens,
       label: '组合名称',
-      child: TextField(
+      child: LumiraTextField(
         controller: controller,
-        decoration: InputDecoration(
-          hintText: '给这个组合起个名字',
-          hintStyle: TextStyle(fontSize: 14, color: tokens.textTertiary),
-          filled: true,
-          fillColor: tokens.canvasDeep,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6), // 12rpx → 6dp
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide.none,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(6),
-            borderSide: BorderSide(color: tokens.brand, width: 1),
-          ),
-        ),
-        style: TextStyle(fontSize: 14, color: tokens.textPrimary),
+        hintText: '给这个组合起个名字',
         onChanged: onChanged,
       ),
     );
@@ -754,12 +732,11 @@ class _SliderRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Slider(
+            child: LumiraSlider(
               value: value,
               min: min,
               max: max,
               divisions: divisions,
-              activeColor: tokens.brand,
               onChanged: onChanged,
             ),
           ),

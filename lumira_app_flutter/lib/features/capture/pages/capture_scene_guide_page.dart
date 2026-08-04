@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
 
@@ -160,38 +161,18 @@ class _GuideNav extends StatelessWidget {
     return LumiraNav(
       title: '场景灵感',
       transparent: true,
-      leading: _NavIconButton(
+      leading: LumiraIconButton(
         icon: Icons.arrow_back_ios_new,
-        onTap: onBack,
+        onPressed: onBack,
+        size: 20,
       ),
       actions: [
-        _NavIconButton(
+        LumiraIconButton(
           icon: Icons.settings_outlined, // ph-gear-six → Icons.settings_outlined
-          onTap: onManage,
+          onPressed: onManage,
+          size: 20,
         ),
       ],
-    );
-  }
-}
-
-class _NavIconButton extends StatelessWidget {
-  const _NavIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          icon,
-          size: 20,
-          color: const Color(0xFF2A2520),
-        ),
-      ),
     );
   }
 }

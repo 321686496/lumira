@@ -7,6 +7,14 @@
 ///
 /// 设计文档：docs/superpowers/specs/2026-08-04-lumira-component-foundation-design.md
 
+// 主题枚举与视觉规格类（re-export，避免调用方单独 import app_theme.dart）
+export '../../../core/theme/app_theme.dart'
+    show
+        ButtonVariant,
+        ButtonVisual,
+        InputState,
+        InputVisual;
+
 // 内部工具（仅供组件实现使用，不对外暴露）
 // export '_internal/lumira_theme_resolver.dart';
 

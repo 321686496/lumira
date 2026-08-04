@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/challenge_providers.dart';
 import '../data/challenge_models.dart';
 
@@ -18,7 +19,7 @@ class AchievementWallCard extends ConsumerWidget {
     return NeuCard(
       padding: const EdgeInsets.all(20),
       child: asyncAchievements.when(
-        loading: () => const SizedBox(height: 200, child: Center(child: CircularProgressIndicator())),
+        loading: () => SizedBox(height: 200, child: Center(child: LumiraProgress.circular())),
         error: (e, _) => SizedBox(height: 200, child: Center(child: Text('加载失败', style: TextStyle(color: tokens.textSecondary)))),
         data: (achievements) {
           return Column(

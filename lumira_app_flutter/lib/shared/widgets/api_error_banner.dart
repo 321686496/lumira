@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
+import 'lumira/lumira.dart';
+
 /// 离线模式提示横幅
 ///
 /// 当 Repository 因网络失败回退缓存时显示
@@ -36,7 +39,8 @@ class ApiErrorBanner extends StatelessWidget {
             ),
           ),
           if (onRetry != null)
-            TextButton(
+            LumiraButton(
+              variant: ButtonVariant.secondary,
               onPressed: onRetry,
               child: const Text('重试'),
             ),

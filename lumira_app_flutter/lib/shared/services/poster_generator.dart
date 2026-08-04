@@ -9,6 +9,7 @@ import 'package:saver_gallery/saver_gallery.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/theme_tokens.dart';
+import '../widgets/lumira/lumira.dart' show LumiraProgress, LumiraToast, showLumiraBottomSheet;
 
 /// 通用海报生成器
 ///
@@ -38,10 +39,9 @@ class PosterGenerator {
     required String shareText,
     required String fileNamePrefix,
   }) async {
-    await showModalBottomSheet<void>(
+    await showLumiraBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => _PosterSheet(
         tokens: tokens,
         title: title,
@@ -178,9 +178,7 @@ class _PosterSheetState extends State<_PosterSheet> {
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
-    );
+    LumiraToast.show(context, msg);
   }
 
   @override
@@ -188,30 +186,14 @@ class _PosterSheetState extends State<_PosterSheet> {
     final t = widget.tokens;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: t.canvas,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+    return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: screenHeight * 0.85),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 顶部拖把
-          Padding(
-            padding: const EdgeInsets.only(top: 8, bottom: 4),
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: t.surfaceAlt,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
           // 标题行
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: Row(
               children: [
                 Text(
@@ -233,7 +215,7 @@ class _PosterSheetState extends State<_PosterSheet> {
           // 海报内容
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: RepaintBoundary(
                 key: widget.posterKey,
                 child: widget.content,
@@ -242,7 +224,7 @@ class _PosterSheetState extends State<_PosterSheet> {
           ),
           // 底部三按钮
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            padding: const EdgeInsets.only(top: 8, bottom: 24),
             child: Row(
               children: [
                 Expanded(
@@ -324,14 +306,7 @@ class _PosterButton extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (loading)
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: textColor,
-                ),
-              )
+              LumiraProgress.circular(strokeWidth: 2, size: 18)
             else if (icon != null)
               Icon(icon, size: 18, color: textColor),
             const SizedBox(height: 4),

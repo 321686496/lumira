@@ -5,10 +5,11 @@ import '../../../core/network/api_error.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/api_error_banner.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/lumira/lumira.dart'
+    show ButtonVariant, LumiraButton, LumiraProgress, LumiraToast;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/rewards_models.dart';
 import '../data/rewards_repository.dart';
@@ -72,7 +73,7 @@ class _RewardsPageState extends ConsumerState<RewardsPage> {
             child: rewardsAsync.when(
               data: (list) => _buildList(tokens, list.rewards),
               loading: () => Center(
-                child: CircularProgressIndicator(color: tokens.brand),
+                child: LumiraProgress.circular(),
               ),
               error: (e, _) {
                 final isOffline = e is ApiException && e.isNetworkError;
@@ -262,15 +263,11 @@ class _RewardCardState extends ConsumerState<_RewardCard> {
       await repo.claim(widget.reward.id);
       ref.invalidate(rewardsListProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('奖励已领取')),
-        );
+        LumiraToast.show(context, '奖励已领取');
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('领取失败：${e.message}')),
-        );
+        LumiraToast.show(context, '领取失败：${e.message}');
       }
     } finally {
       if (mounted) setState(() => _claiming = false);
@@ -359,11 +356,9 @@ class _RewardCardState extends ConsumerState<_RewardCard> {
                   children: [
                     if (canClaim)
                       LumiraButton(
-                        label: _claiming ? '领取中...' : '领取',
-                        variant: LumiraButtonVariant.brand,
-                        expand: false,
-                        enabled: !_claiming,
-                        onPressed: _onClaim,
+                        variant: ButtonVariant.primary,
+                        onPressed: _claiming ? null : _onClaim,
+                        child: Text(_claiming ? '领取中...' : '领取'),
                       )
                     else
                       Container(

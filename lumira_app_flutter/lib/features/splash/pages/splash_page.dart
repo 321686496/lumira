@@ -7,9 +7,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/brand/lumira_logo.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 
 /// Splash 启动页
 ///
@@ -157,7 +159,7 @@ class _SplashPageState extends ConsumerState<SplashPage> {
               // 状态指示器（loading / failed）
               const SizedBox(height: 32),
               if (auth.status == AuthStatus.loading)
-                const CircularProgressIndicator()
+                LumiraProgress.circular()
               else if (auth.status == AuthStatus.failed) ...[
                 Text(
                   '网络连接失败',
@@ -167,7 +169,8 @@ class _SplashPageState extends ConsumerState<SplashPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                ElevatedButton(
+                LumiraButton(
+                  variant: ButtonVariant.primary,
                   onPressed: _retryRegistration,
                   child: const Text('重试'),
                 ),

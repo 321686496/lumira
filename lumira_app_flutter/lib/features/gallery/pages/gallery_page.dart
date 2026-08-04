@@ -6,10 +6,12 @@ import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../profile/providers/collection_providers.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/gallery_models.dart';
 import '../widgets/photo_cell.dart';
@@ -104,23 +106,17 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         _selectedIds.clear();
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已删除选中照片')),
-        );
+        LumiraToast.show(context, '已删除选中照片');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('删除失败：$e')),
-        );
+        LumiraToast.show(context, '删除失败：$e');
       }
     }
   }
 
   void _exportSelected() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已选择 ${_selectedIds.length} 张照片导出')),
-    );
+    LumiraToast.show(context, '已选择 ${_selectedIds.length} 张照片导出');
   }
 
   /// 将选中照片加入精选集：弹出底部 Sheet 显示所有 manual 类型精选集 + "新建精选集"按钮。
@@ -128,15 +124,10 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   /// 设计文档 6.7：gallery_page 多选模式下底部操作栏增加"加入精选集"按钮。
   Future<void> _addToCollection() async {
     final tokens = ref.read(themeTokensProvider);
-    final messenger = ScaffoldMessenger.of(context);
 
-    final result = await showModalBottomSheet<_CollectionPickResult>(
+    final result = await showLumiraBottomSheet<_CollectionPickResult>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: tokens.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (ctx) => _AddToCollectionSheet(tokens: tokens),
     );
 
@@ -157,12 +148,13 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         await service.addPhotoToCollection(collectionId, pid);
       }
       ref.invalidate(collectionsListProvider);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('已将 ${_selectedIds.length} 张照片加入精选集'),
+      if (mounted) {
+        LumiraToast.show(
+          context,
+          '已将 ${_selectedIds.length} 张照片加入精选集',
           duration: const Duration(milliseconds: 1500),
-        ),
-      );
+        );
+      }
       if (mounted) {
         setState(() {
           _isMultiSelectMode = false;
@@ -170,12 +162,13 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         });
       }
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('加入精选集失败：$e'),
+      if (mounted) {
+        LumiraToast.show(
+          context,
+          '加入精选集失败：$e',
           duration: const Duration(milliseconds: 1500),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -203,7 +196,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
           // 2. 主内容层
           SafeArea(
             child: daoAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => Center(child: LumiraProgress.circular()),
               error: (e, _) => Center(
                 child: Text('加载失败：$e', style: TextStyle(color: tokens.textSecondary)),
               ),
@@ -262,7 +255,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         // 网格或空状态
         Expanded(
           child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? Center(child: LumiraProgress.circular())
               : photoViews.isEmpty
                   ? _EmptyState(tokens: tokens)
                   : GridView.builder(
@@ -319,7 +312,8 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                TextButton(
+                LumiraButton(
+                  variant: ButtonVariant.ghost,
                   onPressed: () {
                     setState(() {
                       _isMultiSelectMode = false;
@@ -328,15 +322,18 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
                   },
                   child: const Text('取消'),
                 ),
-                TextButton(
+                LumiraButton(
+                  variant: ButtonVariant.ghost,
                   onPressed: _selectedIds.isEmpty ? null : _deleteSelected,
                   child: Text('删除 (${_selectedIds.length})'),
                 ),
-                TextButton(
+                LumiraButton(
+                  variant: ButtonVariant.ghost,
                   onPressed: _selectedIds.isEmpty ? null : _exportSelected,
                   child: Text('导出 (${_selectedIds.length})'),
                 ),
-                TextButton(
+                LumiraButton(
+                  variant: ButtonVariant.ghost,
                   onPressed: _selectedIds.isEmpty ? null : _addToCollection,
                   child: const Text('加入精选集'),
                 ),
@@ -589,7 +586,8 @@ class _AddToCollectionSheetState extends ConsumerState<_AddToCollectionSheet> {
                   ),
                 ),
                 const Spacer(),
-                TextButton(
+                LumiraButton(
+                  variant: ButtonVariant.ghost,
                   onPressed: () => Navigator.of(context).pop(),
                   child: Text(
                     '取消',
@@ -601,7 +599,7 @@ class _AddToCollectionSheetState extends ConsumerState<_AddToCollectionSheet> {
           ),
           const Divider(height: 1),
           // 新建精选集入口
-          ListTile(
+          LumiraListTile(
             leading: Container(
               width: 36,
               height: 36,
@@ -627,7 +625,7 @@ class _AddToCollectionSheetState extends ConsumerState<_AddToCollectionSheet> {
           // manual 精选集列表
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(child: LumiraProgress.circular())
                 : _manuals.isEmpty
                     ? Center(
                         child: Padding(
@@ -650,7 +648,7 @@ class _AddToCollectionSheetState extends ConsumerState<_AddToCollectionSheet> {
                             Divider(height: 1, color: tokens.divider),
                         itemBuilder: (_, i) {
                           final c = _manuals[i];
-                          return ListTile(
+                          return LumiraListTile(
                             leading: Container(
                               width: 36,
                               height: 36,

@@ -5,9 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_pool.dart';
@@ -216,19 +216,31 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                           children: [
                             Expanded(
                               child: LumiraButton(
-                                label: '返回挑战',
+                                variant: ButtonVariant.secondary,
                                 onPressed: _back,
-                                variant: LumiraButtonVariant.outline,
-                                icon: Icons.arrow_back,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.arrow_back),
+                                    SizedBox(width: 8),
+                                    Text('返回挑战'),
+                                  ],
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: LumiraButton(
-                                label: '再拍一张',
+                                variant: ButtonVariant.primary,
                                 onPressed: _goCapture,
-                                variant: LumiraButtonVariant.brand,
-                                icon: Icons.camera_alt_outlined,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.camera_alt_outlined),
+                                    SizedBox(width: 8),
+                                    Text('再拍一张'),
+                                  ],
+                                ),
                               ),
                             ),
                           ],
@@ -382,14 +394,9 @@ class _HeroCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progressPercent,
-                    minHeight: 8,
-                    backgroundColor: tokens.brand.withOpacity(0.2),
-                    valueColor: AlwaysStoppedAnimation<Color>(tokens.brand),
-                  ),
+                child: LumiraProgress.linear(
+                  value: progressPercent,
+                  minHeight: 8,
                 ),
               ),
               const SizedBox(width: 10),

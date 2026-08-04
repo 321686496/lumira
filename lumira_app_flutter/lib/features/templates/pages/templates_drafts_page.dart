@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../data/templates_management_mock_data.dart';
@@ -72,60 +73,54 @@ class _TemplatesDraftsPageState extends ConsumerState<TemplatesDraftsPage> {
   }
 
   void _onDelete(String draftId, String name) {
-    final tokens = ref.read(themeTokensProvider);
-    showDialog<void>(
+    lumira.LumiraAlertDialog.show<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除草稿'),
-        content: Text('确定删除草稿"$name"吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() {
-                _drafts.removeWhere((d) => d.id == draftId);
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('已删除')),
-              );
-            },
-            child: Text('确认', style: TextStyle(color: tokens.danger)),
-          ),
-        ],
-      ),
+      title: const Text('删除草稿'),
+      content: Text('确定删除草稿"$name"吗？'),
+      actions: [
+        lumira.LumiraButton(
+          variant: ButtonVariant.ghost,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        lumira.LumiraButton(
+          variant: ButtonVariant.danger,
+          onPressed: () {
+            Navigator.pop(context);
+            setState(() {
+              _drafts.removeWhere((d) => d.id == draftId);
+            });
+            lumira.LumiraToast.show(context, '已删除');
+          },
+          child: const Text('确认'),
+        ),
+      ],
     );
   }
 
   void _onClearAll() {
-    final tokens = ref.read(themeTokensProvider);
-    showDialog<void>(
+    lumira.LumiraAlertDialog.show<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('清空草稿箱'),
-        content: const Text('确定删除所有草稿吗？此操作不可恢复。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() {
-                _drafts.clear();
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('已清空')),
-              );
-            },
-            child: Text('确认', style: TextStyle(color: tokens.danger)),
-          ),
-        ],
-      ),
+      title: const Text('清空草稿箱'),
+      content: const Text('确定删除所有草稿吗？此操作不可恢复。'),
+      actions: [
+        lumira.LumiraButton(
+          variant: ButtonVariant.ghost,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        lumira.LumiraButton(
+          variant: ButtonVariant.danger,
+          onPressed: () {
+            Navigator.pop(context);
+            setState(() {
+              _drafts.clear();
+            });
+            lumira.LumiraToast.show(context, '已清空');
+          },
+          child: const Text('确认'),
+        ),
+      ],
     );
   }
 
@@ -613,11 +608,20 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: LumiraButton(
-                variant: LumiraButtonVariant.brand,
-                label: '新建模板',
-                icon: Icons.add,
+              child: lumira.LumiraButton(
+                variant: ButtonVariant.primary,
                 onPressed: onCreate,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.add),
+                      SizedBox(width: 8),
+                      Text('新建模板'),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],

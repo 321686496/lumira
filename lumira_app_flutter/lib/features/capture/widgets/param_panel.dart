@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 
@@ -185,36 +186,15 @@ class _PanelHeader extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              _CircleIconButton(
+              LumiraIconButton(
                 icon: Icons.close,
-                onTap: onClose,
+                onPressed: onClose,
+                color: Colors.white70,
+                size: 16,
               ),
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.08),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: Colors.white70, size: 16),
       ),
     );
   }

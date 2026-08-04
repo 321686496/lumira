@@ -40,6 +40,8 @@ class EditorFormMeta {
     this.tags = const [],
     this.description = '',
     this.referenceSource = '',
+    this.style,
+    this.method,
   });
 
   String id;
@@ -48,6 +50,9 @@ class EditorFormMeta {
   List<String> tags;
   String description;
   String referenceSource;
+  // 三层分类的二、三层：风格 / 方式（可选，未选择时为 null）
+  String? style;
+  String? method;
 
   EditorFormMeta copy() => EditorFormMeta(
         id: id,
@@ -56,6 +61,8 @@ class EditorFormMeta {
         tags: List<String>.from(tags),
         description: description,
         referenceSource: referenceSource,
+        style: style,
+        method: method,
       );
 }
 

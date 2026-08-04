@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../templates/data/preview_form_provider.dart';
 import '../../templates/data/templates_editor_mock_data.dart';
 import '../../templates/widgets/pose_silhouette.dart';
@@ -80,12 +81,10 @@ class _CapturePreviewTemplatePageState
     if (loaded != null) {
       _template = loaded;
     } else {
-      // 加载失败：SnackBar + 1000ms 后 pop（brief §3.2 + §6.3 mounted 检查）
+      // 加载失败：Toast + 1000ms 后 pop（brief §3.2 + §6.3 mounted 检查）
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('模板加载失败')),
-        );
+        LumiraToast.show(context, '模板加载失败');
         Future.delayed(const Duration(milliseconds: 1000), () {
           if (!mounted) return;
           if (Navigator.of(context).canPop()) {
@@ -161,9 +160,7 @@ class _CapturePreviewTemplatePageState
     if (tpl != null) {
       ref.read(previewEditorFormProvider.notifier).state = tpl;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已同步到编辑器')),
-    );
+    LumiraToast.show(context, '已同步到编辑器');
     Future.delayed(const Duration(milliseconds: 600), () {
       if (!mounted) return;
       if (Navigator.of(context).canPop()) {
@@ -188,14 +185,10 @@ class _CapturePreviewTemplatePageState
         ),
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已拍摄')),
-      );
+      LumiraToast.show(context, '已拍摄');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('拍摄失败：$e')),
-      );
+      LumiraToast.show(context, '拍摄失败：$e');
     }
   }
 
@@ -1030,12 +1023,11 @@ class _SliderRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Slider(
+            child: LumiraSlider(
               value: value,
               min: min,
               max: max,
               divisions: divisions,
-              activeColor: const Color(0xFFC9A96E),
               onChanged: onChanged,
             ),
           ),

@@ -5,9 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/templates_browse_mock_data.dart';
 
@@ -113,11 +114,10 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   }
 
   void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(milliseconds: 1000),
-      ),
+    LumiraToast.show(
+      context,
+      msg,
+      duration: const Duration(milliseconds: 1000),
     );
   }
 
@@ -143,10 +143,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                   leading: _BackButton(tokens: tokens, onTap: _back),
                   actions: _isMyTemplate
                       ? [
-                          IconButton(
-                            icon: Icon(Icons.edit_outlined, size: 20, color: tokens.textPrimary),
+                          LumiraIconButton(
+                            icon: Icons.edit_outlined,
                             onPressed: _goEdit,
-                            tooltip: '编辑模板',
+                            color: tokens.textPrimary,
+                            size: 20,
                           ),
                         ]
                       : null,
@@ -1076,12 +1077,20 @@ class _FixedCta extends StatelessWidget {
           stops: const [0, 0.4, 1],
         ),
       ),
-      child: LumiraButton(
-        label: '套用此模板拍摄',
-        variant: LumiraButtonVariant.brand,
-        icon: Icons.camera_alt_outlined,
-        expand: true,
-        onPressed: onPressed,
+      child: SizedBox(
+        width: double.infinity,
+        child: LumiraButton(
+          variant: ButtonVariant.primary,
+          onPressed: onPressed,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.camera_alt_outlined),
+              SizedBox(width: 8),
+              Text('套用此模板拍摄'),
+            ],
+          ),
+        ),
       ),
     );
   }

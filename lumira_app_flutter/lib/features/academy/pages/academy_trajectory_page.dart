@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/academy_mock_data.dart';
 import '../data/academy_trajectory_models.dart';
@@ -35,7 +37,7 @@ class AcademyTrajectoryPage extends ConsumerWidget {
       ),
       body: SafeArea(
         child: trajectoryAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          loading: () => Center(child: LumiraProgress.circular(strokeWidth: 2)),
           error: (_, __) => Center(
             child: Text('加载失败', style: TextStyle(color: tokens.textTertiary)),
           ),
@@ -421,7 +423,8 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            ElevatedButton.icon(
+            LumiraButton(
+              variant: ButtonVariant.primary,
               onPressed: () {
                 if (Navigator.of(context).canPop()) {
                   Navigator.of(context).pop();
@@ -429,17 +432,14 @@ class _EmptyState extends StatelessWidget {
                   GoRouter.of(context).go(RouteNames.profileAcademy);
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: tokens.brand,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.menu_book_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('去学习'),
+                ],
               ),
-              icon: const Icon(Icons.menu_book_outlined, size: 18),
-              label: const Text('去学习'),
             ),
           ],
         ),

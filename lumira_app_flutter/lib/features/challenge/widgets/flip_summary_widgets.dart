@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/challenge_mock_data.dart';
 import '../data/challenge_models.dart';
 
@@ -48,14 +49,9 @@ class FlipStreakBar extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(9999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
-              backgroundColor: tokens.brandSubtle,
-              valueColor: AlwaysStoppedAnimation<Color>(tokens.brand),
-            ),
+          LumiraProgress.linear(
+            value: progress,
+            minHeight: 6,
           ),
           const SizedBox(height: 8),
           Text(

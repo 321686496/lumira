@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
 import '../../../shared/services/poster_generator.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/growth_models.dart';
 import '../providers/growth_providers.dart';
@@ -709,7 +711,8 @@ class _EmptyState extends StatelessWidget {
         children: [
           const Text('暂无数据，去完成第一次拍摄解锁成长记录'),
           const SizedBox(height: 12),
-          ElevatedButton(
+          LumiraButton(
+            variant: ButtonVariant.primary,
             onPressed: () => GoRouter.of(context).push(RouteNames.capture),
             child: const Text('去拍摄'),
           ),

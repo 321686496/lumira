@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/lumira/lumira.dart' show LumiraProgress;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/academy_models.dart';
@@ -184,9 +185,9 @@ class _CourseGrid extends ConsumerWidget {
     final coursesAsync = ref.watch(sortedCoursesProvider(level));
 
     return coursesAsync.when(
-      loading: () => const SizedBox(
+      loading: () => SizedBox(
         height: 200,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        child: Center(child: LumiraProgress.circular(strokeWidth: 2)),
       ),
       error: (_, __) => const SizedBox(height: 200),
       data: (courses) => GridView.builder(

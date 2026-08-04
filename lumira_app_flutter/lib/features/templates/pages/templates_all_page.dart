@@ -9,6 +9,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/imported_templates_provider.dart';
 import '../data/templates_browse_mock_data.dart';
@@ -186,14 +187,14 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                 Expanded(
                   child: asyncDao.when(
                     loading: () =>
-                        const Center(child: CircularProgressIndicator()),
+                        Center(child: LumiraProgress.circular()),
                     error: (e, _) => const Center(child: Text('加载失败')),
                     data: (dao) => FutureBuilder<_AllPageData>(
                       future: _loadData(dao, importedAll),
                       builder: (context, snap) {
                         if (!snap.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
+                          return Center(
+                              child: LumiraProgress.circular());
                         }
                         final data = snap.data!;
                         final filtered = data.filtered;

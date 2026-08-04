@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../shared/widgets/feedback/lumira_toast.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/domain/filter_recipe.dart';
 import '../../capture/domain/photo_template.dart';
@@ -159,7 +159,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
       ),
       body: daoAsync.when(
         loading: () =>
-            const Center(child: CircularProgressIndicator(color: Color(0xFFC9A96E))),
+            Center(child: LumiraProgress.circular()),
         error: (e, _) => Center(
           child: Text('加载失败：$e', style: const TextStyle(color: Colors.white60)),
         ),
@@ -169,8 +169,8 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
             _loadPhoto(dao);
           }
           if (_isLoading) {
-            return const Center(
-                child: CircularProgressIndicator(color: Color(0xFFC9A96E)));
+            return Center(
+                child: LumiraProgress.circular());
           }
           return _photo == null ? const _EmptyCanvas() : _buildContent(_photo!);
         },
@@ -299,6 +299,9 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
         screenRatio: screenRatio,
         isPortrait: isPortrait,
         outputPath: photoPath,
+        // 如果用户调整了裁剪框，传入自定义裁剪 Rect；
+        // 如果未调整（customCropRect 为 null），保持原有按比例裁剪逻辑
+        customCropRect: fullParams.customCropRect,
       );
 
       try {
@@ -376,22 +379,23 @@ class _DarkBackButton extends StatelessWidget {
   }
 }
 
-class _CompareAction extends StatelessWidget {
+class _CompareAction extends ConsumerWidget {
   const _CompareAction();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
     return GestureDetector(
       onTap: () {},
       behavior: HitTestBehavior.opaque,
-      child: const Padding(
-        padding: EdgeInsets.all(8),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
         child: Text(
           '对比',
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: Color(0xFFC9A96E),
+            color: tokens.brand,
           ),
         ),
       ),
@@ -481,6 +485,7 @@ class _EmptyCanvas extends StatelessWidget {
 }
 
 /// 画布区：实时应用 PostProcess（ColorFiltered）+ TransformParams（旋转/翻转/拉直）
+/// 支持 InteractiveViewer 双指缩放查看细节（不影响参数编辑）。
 class _CanvasArea extends StatelessWidget {
   const _CanvasArea({
     required this.photo,
@@ -509,7 +514,14 @@ class _CanvasArea extends StatelessWidget {
                   child: Icon(Icons.image_outlined, size: 32, color: Colors.white38),
                 ),
               )
-            : _buildImage(url),
+            : InteractiveViewer(
+                minScale: 1.0,
+                maxScale: 4.0,
+                panEnabled: true,
+                scaleEnabled: true,
+                boundaryMargin: EdgeInsets.zero,
+                child: _buildImage(url),
+              ),
       ),
     );
   }

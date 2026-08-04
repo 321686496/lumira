@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 
 /// 通知中心页（占位实现）
@@ -61,9 +62,7 @@ class _ProfileNotificationsPageState extends ConsumerState<ProfileNotificationsP
     setState(() {
       _items.removeAt(index);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已清除'), duration: Duration(milliseconds: 800)),
-    );
+    LumiraToast.show(context, '已清除', duration: const Duration(milliseconds: 800));
   }
 
   @override

@@ -7,11 +7,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../providers/collection_providers.dart';
 
@@ -130,13 +131,9 @@ class _ProfileCollectionEditPageState
 
   Future<void> _openPhotoPicker() async {
     final tokens = ref.read(themeTokensProvider);
-    final picked = await showModalBottomSheet<List<GalleryItemRecord>>(
+    final picked = await showLumiraBottomSheet<List<GalleryItemRecord>>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: tokens.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (ctx) => _PhotoPickerSheet(
         tokens: tokens,
         excludeIds: _photoIds.toSet(),
@@ -165,25 +162,17 @@ class _ProfileCollectionEditPageState
       _photoIds.remove(id);
       _photoIds.insert(0, id);
     });
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('已设为封面'),
-        duration: Duration(milliseconds: 1200),
-      ),
-    );
+    LumiraToast.show(context, '已设为封面', duration: const Duration(milliseconds: 1200));
   }
 
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入精选集名称')),
-      );
+      LumiraToast.show(context, '请输入精选集名称');
       return;
     }
     setState(() => _isSaving = true);
-    final messenger = ScaffoldMessenger.of(context);
+    final toastContext = context;
     try {
       final service = await ref.read(collectionServiceProvider.future);
       final coverPhotoId =
@@ -243,22 +232,12 @@ class _ProfileCollectionEditPageState
       }
       // 刷新列表
       ref.invalidate(collectionsListProvider);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(_existing == null ? '已创建精选集' : '已保存修改'),
-          duration: const Duration(milliseconds: 1500),
-        ),
-      );
-      if (mounted) {
-        context.pop();
-      }
+      if (!mounted) return;
+      LumiraToast.show(toastContext, _existing == null ? '已创建精选集' : '已保存修改', duration: const Duration(milliseconds: 1500));
+      context.pop();
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('保存失败：$e'),
-          duration: const Duration(milliseconds: 1500),
-        ),
-      );
+      if (!mounted) return;
+      LumiraToast.show(toastContext, '保存失败：$e', duration: const Duration(milliseconds: 1500));
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -288,7 +267,7 @@ class _ProfileCollectionEditPageState
           SafeArea(
             top: false,
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(child: LumiraProgress.circular())
                 : _loadError != null
                     ? _ErrorState(
                         tokens: tokens,
@@ -306,11 +285,16 @@ class _ProfileCollectionEditPageState
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
                 child: LumiraButton(
-                  label: _isSaving ? '保存中…' : '保存',
-                  variant: LumiraButtonVariant.brand,
-                  icon: Icons.check_outlined,
-                  enabled: !_isSaving,
-                  onPressed: _save,
+                  variant: ButtonVariant.primary,
+                  onPressed: _isSaving ? null : _save,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_outlined, size: 18),
+                      const SizedBox(width: 8),
+                      Text(_isSaving ? '保存中…' : '保存'),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -333,10 +317,9 @@ class _ProfileCollectionEditPageState
               tokens: tokens,
               label: '精选集名称',
               required_: true,
-              child: _TextField(
+              child: LumiraTextField(
                 controller: _nameController,
-                tokens: tokens,
-                placeholder: '给精选集起个名字',
+                hintText: '给精选集起个名字',
                 maxLength: 30,
               ),
             ),
@@ -348,10 +331,9 @@ class _ProfileCollectionEditPageState
             child: _LabelField(
               tokens: tokens,
               label: '描述',
-              child: _TextField(
+              child: LumiraTextField(
                 controller: _descController,
-                tokens: tokens,
-                placeholder: '写点什么（可选）',
+                hintText: '写点什么（可选）',
                 maxLength: 100,
                 maxLines: 3,
               ),
@@ -416,54 +398,6 @@ class _LabelField extends StatelessWidget {
         ),
         child,
       ],
-    );
-  }
-}
-
-class _TextField extends StatelessWidget {
-  const _TextField({
-    required this.controller,
-    required this.tokens,
-    required this.placeholder,
-    this.maxLength = 30,
-    this.maxLines = 1,
-  });
-  final TextEditingController controller;
-  final ThemeTokens tokens;
-  final String placeholder;
-  final int maxLength;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: tokens.shadowConvexSubtle,
-      ),
-      child: TextField(
-        controller: controller,
-        maxLength: maxLength,
-        maxLines: maxLines,
-        style: TextStyle(
-          fontSize: 14,
-          color: tokens.textPrimary,
-        ),
-        decoration: InputDecoration(
-          hintText: placeholder,
-          hintStyle: TextStyle(
-            fontSize: 14,
-            color: tokens.textTertiary,
-          ),
-          border: InputBorder.none,
-          counterStyle: TextStyle(
-            fontSize: 11,
-            color: tokens.textTertiary,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -794,7 +728,11 @@ class _ErrorState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
-          TextButton(onPressed: onRetry, child: const Text('重试')),
+          LumiraButton(
+            variant: ButtonVariant.secondary,
+            onPressed: onRetry,
+            child: const Text('重试'),
+          ),
         ],
       ),
     );
@@ -853,21 +791,9 @@ class _PhotoPickerSheetState extends ConsumerState<_PhotoPickerSheet> {
       height: height,
       child: Column(
         children: [
-          // 顶部 drag handle
-          Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 8, bottom: 8),
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: tokens.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
           // 标题栏
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
             child: Row(
               children: [
                 Text(
@@ -887,16 +813,14 @@ class _PhotoPickerSheetState extends ConsumerState<_PhotoPickerSheet> {
                   ),
                 ),
                 const Spacer(),
-                TextButton(
+                LumiraButton(
+                  variant: ButtonVariant.ghost,
                   onPressed: _selected.isEmpty
                       ? null
                       : () => Navigator.of(context).pop(_selected
                           .map((id) => _photos.firstWhere((p) => p.id == id))
                           .toList()),
-                  child: Text(
-                    '确定',
-                    style: TextStyle(color: tokens.brand),
-                  ),
+                  child: const Text('确定'),
                 ),
               ],
             ),
@@ -905,7 +829,7 @@ class _PhotoPickerSheetState extends ConsumerState<_PhotoPickerSheet> {
           // 内容
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(child: LumiraProgress.circular())
                 : _photos.isEmpty
                     ? Center(
                         child: Text(

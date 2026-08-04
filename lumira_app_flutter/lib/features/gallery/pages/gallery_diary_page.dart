@@ -7,6 +7,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../providers/gallery_diary_providers.dart';
 import '../widgets/diary_timeline_entry.dart';
@@ -36,7 +37,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+    final picked = await showLumiraDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime(2020),
@@ -44,11 +45,10 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     );
     if (picked == null || !mounted) return;
     final label = DateFormat('M月d日').format(picked);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('已选择 $label'),
-        duration: const Duration(milliseconds: 1200),
-      ),
+    LumiraToast.show(
+      context,
+      '已选择 $label',
+      duration: const Duration(milliseconds: 1200),
     );
   }
 
@@ -75,7 +75,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
           _BackgroundDecoration(tokens: tokens),
           SafeArea(
             child: entriesAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => Center(child: LumiraProgress.circular()),
               error: (e, _) => Center(
                 child: Text(
                   '加载失败：$e',

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/shared/widgets/cards/neu_card.dart';
-import 'package:lumira_app_flutter/shared/widgets/buttons/lumira_buttons.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/lumira.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 import 'package:lumira_app_flutter/shared/widgets/tabbar/floating_tabbar.dart';
 
@@ -130,12 +130,12 @@ void main() {
 
   group('LumiraButton', () {
     testWidgets('renders label for all 4 variants', (tester) async {
-      for (final variant in LumiraButtonVariant.values) {
+      for (final variant in ButtonVariant.values) {
         await tester.pumpWidget(wrapWithTheme(
           LumiraButton(
-            label: 'Click me',
             variant: variant,
             onPressed: () {},
+            child: const Text('Click me'),
           ),
         ));
         expect(find.text('Click me'), findsOneWidget);
@@ -147,8 +147,9 @@ void main() {
       var pressed = 0;
       await tester.pumpWidget(wrapWithTheme(
         LumiraButton(
-          label: 'Tap',
+          variant: ButtonVariant.primary,
           onPressed: () => pressed++,
+          child: const Text('Tap'),
         ),
       ));
 
@@ -161,9 +162,9 @@ void main() {
       var pressed = 0;
       await tester.pumpWidget(wrapWithTheme(
         LumiraButton(
-          label: 'Tap',
-          onPressed: () => pressed++,
-          enabled: false,
+          variant: ButtonVariant.primary,
+          onPressed: null,
+          child: const Text('Tap'),
         ),
       ));
 
@@ -251,7 +252,7 @@ void main() {
             children: [
               const LumiraNav(title: '测试'),
               const NeuCard(child: Text('card')),
-              LumiraButton(label: 'btn', onPressed: () {}),
+              LumiraButton(variant: ButtonVariant.primary, onPressed: () {}, child: const Text('btn')),
               const FloatingTabBar(active: 'home'),
             ],
           ),

@@ -8,8 +8,9 @@ import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/lumira.dart'
+    show ButtonVariant, LumiraButton, LumiraProgress, LumiraTextField;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/academy_mock_data.dart';
 import '../data/academy_models.dart';
@@ -32,11 +33,19 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
   bool _submitting = false;
   AssignmentSubmission? _result;
   bool _loading = true;
+  late final TextEditingController _noteController;
 
   @override
   void initState() {
     super.initState();
+    _noteController = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadExistingSubmission());
+  }
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
   }
 
   /// 加载已有提交记录，让用户关闭页面后回来仍能看到上次的照片和评分
@@ -184,7 +193,7 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
       return Scaffold(
         backgroundColor: tokens.canvas,
         appBar: const LumiraNav(title: '实战作业', transparent: true),
-        body: Center(child: CircularProgressIndicator(strokeWidth: 2, color: tokens.brand)),
+        body: Center(child: LumiraProgress.circular(strokeWidth: 2)),
       );
     }
 
@@ -239,50 +248,84 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
                 const SizedBox(height: 12),
                 Row(children: [
                   Expanded(child: LumiraButton(
-                    label: '重新拍摄', icon: Icons.camera_alt_outlined,
+                    variant: ButtonVariant.primary,
                     onPressed: _pickFromCamera,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.camera_alt_outlined),
+                        SizedBox(width: 8),
+                        Text('重新拍摄'),
+                      ],
+                    ),
                   )),
                   const SizedBox(width: 12),
                   Expanded(child: LumiraButton(
-                    label: '重新选择', icon: Icons.photo_library_outlined,
+                    variant: ButtonVariant.primary,
                     onPressed: _pickFromAlbum,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.photo_library_outlined),
+                        SizedBox(width: 8),
+                        Text('重新选择'),
+                      ],
+                    ),
                   )),
                 ]),
               ] else ...[
                 Row(children: [
                   Expanded(child: LumiraButton(
-                    label: '去拍摄', icon: Icons.camera_alt_outlined,
+                    variant: ButtonVariant.primary,
                     onPressed: _pickFromCamera,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.camera_alt_outlined),
+                        SizedBox(width: 8),
+                        Text('去拍摄'),
+                      ],
+                    ),
                   )),
                   const SizedBox(width: 12),
                   Expanded(child: LumiraButton(
-                    label: '从相册选择', icon: Icons.photo_library_outlined,
+                    variant: ButtonVariant.primary,
                     onPressed: _pickFromAlbum,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.photo_library_outlined),
+                        SizedBox(width: 8),
+                        Text('从相册选择'),
+                      ],
+                    ),
                   )),
                 ]),
               ],
               const SizedBox(height: 20),
               // 备注
-              TextField(
-                decoration: InputDecoration(
-                  labelText: '备注（可选）',
-                  labelStyle: TextStyle(color: tokens.textTertiary, fontSize: 13),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: tokens.divider)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: tokens.divider)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: tokens.brand)),
-                ),
+              LumiraTextField(
+                controller: _noteController,
+                labelText: '备注（可选）',
                 maxLines: 3,
-                style: TextStyle(fontSize: 14, color: tokens.textPrimary),
                 onChanged: (v) => _note = v,
               ),
               const SizedBox(height: 24),
               // 提交按钮
               if (_result == null)
                 LumiraButton(
-                  label: _submitting ? '提交中...' : '提交作业',
-                  icon: Icons.send,
-                  onPressed: (_photoPath != null || _photoUrl != null) && !_submitting ? _submit : null,
-                  enabled: (_photoPath != null || _photoUrl != null) && !_submitting,
+                  variant: ButtonVariant.primary,
+                  onPressed: (_photoPath != null || _photoUrl != null) && !_submitting
+                      ? _submit
+                      : null,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.send),
+                      const SizedBox(width: 8),
+                      Text(_submitting ? '提交中...' : '提交作业'),
+                    ],
+                  ),
                 )
               else ...[
                 // 评分结果

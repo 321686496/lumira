@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
 
@@ -18,7 +20,7 @@ import '../data/capture_scene_mock_data.dart';
 /// - TagSelector：用内嵌 chip 多选列表代替
 /// - ScenePresetView：直接渲染行内卡片，复用 mock 数据
 /// - addCustomScene / updateCustomScene / deleteCustomScene：mock 内存修改，不持久化
-/// - showActionSheet / showModal：用 AlertDialog + SnackBar 代替
+/// - showActionSheet / showModal：用 LumiraAlertDialog + LumiraToast 代替
 ///
 /// 注：组合套件功能已迁移至独立的 CompositionKitsPage（lib/features/profile/pages/composition_kits_page.dart），
 /// 由 DB 持久化，本页不再承载 "我的组合" Tab。
@@ -93,9 +95,9 @@ class _CaptureSceneManagePageState
         _favoriteIds.add(id);
       }
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(_favoriteIds.contains(id) ? '已收藏场景' : '已取消收藏')),
+    LumiraToast.show(
+      context,
+      _favoriteIds.contains(id) ? '已收藏场景' : '已取消收藏',
     );
   }
 
@@ -120,29 +122,29 @@ class _CaptureSceneManagePageState
 
   void _onCancelForm() {
     if (_formDirty) {
-      showDialog<void>(
+      LumiraAlertDialog.show<void>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('确认离开'),
-          content: const Text('当前表单有未保存的变更，确定要离开吗？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                setState(() {
-                  _formVisible = false;
-                  _editingId = null;
-                  _formDirty = false;
-                });
-              },
-              child: const Text('确定'),
-            ),
-          ],
-        ),
+        title: const Text('确认离开'),
+        content: const Text('当前表单有未保存的变更，确定要离开吗？'),
+        actions: [
+          LumiraButton(
+            variant: ButtonVariant.ghost,
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          LumiraButton(
+            variant: ButtonVariant.primary,
+            onPressed: () {
+              Navigator.of(context).pop();
+              setState(() {
+                _formVisible = false;
+                _editingId = null;
+                _formDirty = false;
+              });
+            },
+            child: const Text('确定'),
+          ),
+        ],
       );
     } else {
       setState(() {
@@ -154,9 +156,7 @@ class _CaptureSceneManagePageState
 
   void _onSaveForm() {
     if (_formData.name.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入场景名称')),
-      );
+      LumiraToast.show(context, '请输入场景名称');
       return;
     }
     final exampleImages = _formData.exampleImageSeeds
@@ -206,9 +206,7 @@ class _CaptureSceneManagePageState
           updatedAt: DateTime.now().millisecondsSinceEpoch,
         );
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已保存')),
-      );
+      LumiraToast.show(context, '已保存');
     } else {
       // 新建
       final newScene = CustomScenePreset(
@@ -242,9 +240,7 @@ class _CaptureSceneManagePageState
         updatedAt: DateTime.now().millisecondsSinceEpoch,
       );
       _customScenes.add(newScene);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已创建')),
-      );
+      LumiraToast.show(context, '已创建');
     }
     setState(() {
       _formVisible = false;
@@ -254,59 +250,55 @@ class _CaptureSceneManagePageState
   }
 
   void _onMore(CustomScenePreset scene) {
-    showModalBottomSheet<void>(
+    showLumiraBottomSheet<void>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('编辑'),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _onEdit(scene);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Color(0xFFC9453D)),
-              title: const Text('删除', style: TextStyle(color: Color(0xFFC9453D))),
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _confirmDelete(scene);
-              },
-            ),
-          ],
-        ),
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LumiraListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('编辑'),
+            onTap: () {
+              Navigator.of(ctx).pop();
+              _onEdit(scene);
+            },
+          ),
+          LumiraListTile(
+            leading: const Icon(Icons.delete_outline, color: Color(0xFFC9453D)),
+            title: const Text('删除', style: TextStyle(color: Color(0xFFC9453D))),
+            onTap: () {
+              Navigator.of(ctx).pop();
+              _confirmDelete(scene);
+            },
+          ),
+        ],
       ),
     );
   }
 
   void _confirmDelete(CustomScenePreset scene) {
-    showDialog<void>(
+    LumiraAlertDialog.show<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除场景'),
-        content: Text('确定删除「${scene.name}」吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              setState(() {
-                _customScenes.removeWhere((s) => s.id == scene.id);
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('已删除')),
-              );
-            },
-            child: const Text('删除', style: TextStyle(color: Color(0xFFC9453D))),
-          ),
-        ],
-      ),
+      title: const Text('删除场景'),
+      content: Text('确定删除「${scene.name}」吗？'),
+      actions: [
+        LumiraButton(
+          variant: ButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        LumiraButton(
+          variant: ButtonVariant.danger,
+          onPressed: () {
+            Navigator.of(context).pop();
+            setState(() {
+              _customScenes.removeWhere((s) => s.id == scene.id);
+            });
+            LumiraToast.show(context, '已删除');
+          },
+          child: const Text('删除'),
+        ),
+      ],
     );
   }
 
@@ -471,31 +463,10 @@ class _Nav extends StatelessWidget {
     return LumiraNav(
       title: '场景管理',
       transparent: true,
-      leading: _NavIconButton(
+      leading: LumiraIconButton(
         icon: Icons.arrow_back_ios_new,
-        onTap: onBack,
-      ),
-    );
-  }
-}
-
-class _NavIconButton extends StatelessWidget {
-  const _NavIconButton({required this.icon, required this.onTap});
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          icon,
-          size: 20,
-          color: const Color(0xFF2A2520),
-        ),
+        onPressed: onBack,
+        size: 20,
       ),
     );
   }
@@ -945,14 +916,14 @@ class _CustomForm extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16), // 32rpx → 16dp
-            _TextField(
+            _FormTextField(
               label: '场景名称',
               value: formData.name,
               placeholder: '如：夕阳人像',
               maxLength: 20,
               onChanged: (v) => onMutate(() => formData.name = v),
             ),
-            _TextField(
+            _FormTextField(
               label: '情绪主标题',
               value: formData.vibe,
               placeholder: '如：慵懒午后，把光调成蜜糖色',
@@ -976,31 +947,31 @@ class _CustomForm extends StatelessWidget {
                 );
               }),
             ),
-            _TextField(
+            _FormTextField(
               label: '光线方向',
               value: formData.lightDirection,
               placeholder: '如：侧光 45°',
               onChanged: (v) => onMutate(() => formData.lightDirection = v),
             ),
-            _TextField(
+            _FormTextField(
               label: '拍摄距离',
               value: formData.shootingDistance,
               placeholder: '如：1.5-2.5m',
               onChanged: (v) => onMutate(() => formData.shootingDistance = v),
             ),
-            _TextField(
+            _FormTextField(
               label: '背景建议',
               value: formData.background,
               placeholder: '如：简洁背景',
               onChanged: (v) => onMutate(() => formData.background = v),
             ),
-            _TextField(
+            _FormTextField(
               label: '出片地点',
               value: formData.whereToShoot,
               placeholder: '如：咖啡馆 / 图书馆',
               onChanged: (v) => onMutate(() => formData.whereToShoot = v),
             ),
-            _TextField(
+            _FormTextField(
               label: '最佳拍摄时间',
               value: formData.bestTime,
               placeholder: '如：下午 14:00-17:00',
@@ -1026,7 +997,7 @@ class _CustomForm extends StatelessWidget {
                     formData.filterSystemFilter == v ? null : v;
               }),
             ),
-            _TextField(
+            _FormTextField(
               label: '滤镜理由',
               value: formData.filterReason,
               placeholder: '如：让画面像被夕阳包住一样温柔',
@@ -1119,72 +1090,66 @@ class _PillOption {
   final String label;
 }
 
-class _TextField extends StatelessWidget {
-  const _TextField({
-    required this.label,
+class _FormTextField extends StatefulWidget {
+  const _FormTextField({
     required this.value,
     required this.placeholder,
     required this.onChanged,
+    this.label,
     this.maxLength,
+    this.maxLines = 1,
+    this.padding,
   });
 
-  final String label;
+  final String? label;
   final String value;
   final String placeholder;
   final ValueChanged<String> onChanged;
   final int? maxLength;
+  final int maxLines;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  State<_FormTextField> createState() => _FormTextFieldState();
+}
+
+class _FormTextFieldState extends State<_FormTextField> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(_FormTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_controller.text != widget.value) {
+      _controller.text = widget.value;
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF5C5852),
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: TextEditingController(text: value)
-              ..selection = TextSelection.fromPosition(
-                  TextPosition(offset: value.length)),
-            maxLength: maxLength,
-            decoration: InputDecoration(
-              hintText: placeholder,
-              hintStyle: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF9C9690),
-              ),
-              filled: true,
-              fillColor: const Color(0xFFF2EEE6),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFEAE5DC)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFEAE5DC)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFC9A96E)),
-              ),
-            ),
-            style: const TextStyle(
-              fontSize: 14,
-              color: Color(0xFF1A1A1A),
-            ),
-            onChanged: onChanged,
-          ),
-        ],
+      padding: widget.padding ?? const EdgeInsets.only(bottom: 16),
+      child: LumiraTextField(
+        controller: _controller,
+        labelText: widget.label,
+        hintText: widget.placeholder,
+        maxLength: widget.maxLength,
+        maxLines: widget.maxLines,
+        onChanged: widget.onChanged,
       ),
     );
   }
@@ -1352,35 +1317,11 @@ class _ExampleImagesEditor extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           for (var idx = 0; idx < seeds.length; idx++)
-            Padding(
+            _FormTextField(
+              value: seeds[idx],
+              placeholder: '图 ${idx + 1} 关键词（如：cat）',
+              onChanged: (v) => onChange(idx, v),
               padding: const EdgeInsets.only(bottom: 8),
-              child: TextField(
-                controller: TextEditingController(text: seeds[idx])
-                  ..selection = TextSelection.fromPosition(
-                      TextPosition(offset: seeds[idx].length)),
-                decoration: InputDecoration(
-                  hintText: '图 ${idx + 1} 关键词（如：cat）',
-                  hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF9C9690)),
-                  filled: true,
-                  fillColor: const Color(0xFFF2EEE6),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFFEAE5DC)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFFEAE5DC)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFFC9A96E)),
-                  ),
-                ),
-                style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
-                onChanged: (v) => onChange(idx, v),
-              ),
             ),
         ],
       ),
@@ -1409,33 +1350,10 @@ class _TipsEditor extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: TextEditingController(text: tipsText)
-              ..selection = TextSelection.fromPosition(
-                  TextPosition(offset: tipsText.length)),
+          _FormTextField(
+            value: tipsText,
+            placeholder: '如：\n让模特侧对窗户\n白平衡偏暖一档',
             maxLines: 4,
-            minLines: 3,
-            decoration: InputDecoration(
-              hintText: '如：\n让模特侧对窗户\n白平衡偏暖一档',
-              hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF9C9690)),
-              filled: true,
-              fillColor: const Color(0xFFF2EEE6),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFEAE5DC)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFEAE5DC)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Color(0xFFC9A96E)),
-              ),
-            ),
-            style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
             onChanged: onChanged,
           ),
         ],
