@@ -15,6 +15,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/pages/profile_my_templates_page.dart' show customTemplatesProvider;
 import '../data/preview_form_provider.dart';
 import '../data/templates_browse_mock_data.dart' show LabelValue, styleMap, methodMap;
+import '../data/builtin_silhouettes.dart';
 import '../data/templates_editor_mock_data.dart';
 import '../services/template_exporter.dart';
 import '../services/template_mapper.dart';
@@ -1535,10 +1536,10 @@ class _BuiltinSilhouetteThumbnails extends ConsumerWidget {
       height: 110,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: TemplatesEditorMockData.builtinSilhouetteKeys.length,
+        itemCount: kBuiltinSilhouetteKeys.length + 1, // +1 for 'none' at front
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final key = TemplatesEditorMockData.builtinSilhouetteKeys[index];
+          final key = index == 0 ? 'none' : kBuiltinSilhouetteKeys[index - 1];
           final active = selectedKey == key;
           return GestureDetector(
             onTap: () => onSelect(key),

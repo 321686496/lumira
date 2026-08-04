@@ -386,29 +386,6 @@ class TemplatesEditorMockData {
     ),
   );
 
-  /// 内置剪影 key 列表（子集，5 个，用于剪影缩略图横向滚动）
-  /// 来源：lumira-app/src/data/silhouettes/index.ts 的 BUILTIN_SILHOUETTE_KEYS
-  /// 注意：完整库有更多 key（standing-profile / sitting-cafe / walking-street / soft-portrait / neon-pose / 等）
-  /// 本任务只 mock 5 个用于编辑器缩略图展示，Task 2.9 接入真实数据时替换
-  static const List<String> builtinSilhouetteKeys = [
-    'none',
-    'standing-profile',
-    'sitting-cafe',
-    'walking-street',
-    'soft-portrait',
-  ];
-
-  /// 内置剪影 SVG 字符串（简化版 — 仅 mock 数据）
-  /// 实际剪影 SVG 来自 lumira-app/src/data/silhouettes/index.ts，Task 2.9 接入时迁移完整 SVG 库
-  /// 当前 mock：返回空 SVG 字符串（占位），PoseSilhouette 组件用 Icon 替代渲染
-  static const Map<String, String> builtinSilhouettes = {
-    'none': '',
-    'standing-profile': '', // TODO: Task 2.9 迁移完整 SVG
-    'sitting-cafe': '',
-    'walking-street': '',
-    'soft-portrait': '',
-  };
-
   /// 通过 templateId 加载模板（mock：返回 existingTemplateForm 或 null）
   /// 来源：editor.vue 的 useTemplate().loadTemplate(id)
   static EditorForm? loadTemplateById(String? templateId) {
