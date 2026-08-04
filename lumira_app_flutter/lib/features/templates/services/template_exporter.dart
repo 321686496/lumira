@@ -152,10 +152,9 @@ class TemplateExporter {
     // .pptpl 导出时嵌入封面图（自包含）
     final recordWithCover = usePptpl ? await embedCoverData(record) : record;
     final json = usePptpl ? exportToPptpl(recordWithCover) : exportToLumira(recordWithCover);
-    final ext = usePptpl ? 'pptpl' : 'lumira';
-    final safeName = _sanitizeFileName(record.name);
+    final fileName = buildFileName(record, usePptpl: usePptpl);
     final tempDir = await getTemporaryDirectory();
-    final file = File('${tempDir.path}/lumira_template_$safeName.$ext');
+    final file = File('${tempDir.path}/$fileName');
     await file.writeAsString(json);
     await Share.shareXFiles(
       [XFile(file.path)],
@@ -168,14 +167,24 @@ class TemplateExporter {
   /// [usePptpl] 为 true 时使用 .pptpl 完整格式，否则使用 .lumira 简化格式。
   static Future<void> saveToFile(TemplateRecord record, {required bool usePptpl, required String dirPath}) async {
     final json = usePptpl ? exportToPptpl(record) : exportToLumira(record);
-    final ext = usePptpl ? 'pptpl' : 'lumira';
-    final safeName = _sanitizeFileName(record.name);
-    final file = File('$dirPath/lumira_template_$safeName.$ext');
+    final fileName = buildFileName(record, usePptpl: usePptpl);
+    final file = File('$dirPath/$fileName');
     await file.writeAsString(json);
   }
 
   /// 替换文件名中的非法字符（Windows 非法字符集合）。
   static String _sanitizeFileName(String name) {
     return name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+  }
+
+  /// 构建唯一文件名：`{sanitized_name}_{template_id}.{ext}`
+  ///
+  /// 模板 ID 在 DAO 中唯一，保证文件名不冲突。
+  /// 名称截断至 30 字符，移除文件系统非法字符。
+  static String buildFileName(TemplateRecord record, {required bool usePptpl}) {
+    final ext = usePptpl ? 'pptpl' : 'lumira';
+    final safeName = _sanitizeFileName(record.name);
+    final trimmed = safeName.length > 30 ? safeName.substring(0, 30) : safeName;
+    return '${trimmed}_${record.id}.$ext';
   }
 }
