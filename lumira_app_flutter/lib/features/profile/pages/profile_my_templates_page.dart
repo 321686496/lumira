@@ -105,8 +105,8 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
   ///
   /// Plan A Task A5：参数 `customs` 现为 DAO 返回的用户自定义模板列表
   /// （`customTemplatesProvider`），不再合并 `ProfileContentMockData.customTemplates`。
-  /// 通过 .pptpl 文件运行时导入的模板仍由 `importedCustomTemplatesProvider`
-  /// 单独管理，但当前页面仅展示 DAO 持久化的自定义模板（与 brief Step 4 一致）。
+  /// 所有导入的模板（文件/链接/扫码）均持久化到 DAO，当前页面展示 DAO 中
+  /// 的全部用户自定义模板（与 brief Step 4 一致）。
   List<CustomTemplate> _filteredTemplatesWith(List<CustomTemplate> customs) {
     final all = customs;
     switch (_activeFilter) {

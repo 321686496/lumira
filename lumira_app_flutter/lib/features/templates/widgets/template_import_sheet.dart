@@ -10,7 +10,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
-import '../data/imported_templates_provider.dart';
+import '../../capture/data/template_registry.dart';
+import '../services/pptpl_format.dart';
 import '../services/template_mapper.dart';
 
 /// 模板导入 BottomSheet
@@ -155,6 +156,12 @@ class TemplateImportSheet extends ConsumerWidget {
 
       await dao.upsert(record);
 
+      // 版本兼容性校验
+      final warnings = PptplFormat.validate(parsed);
+      if (warnings.isNotEmpty) {
+        _showWarningsDialog(navigator, warnings);
+      }
+
       _showToast(navigator, '已导入模板：${record.name}');
       onImported(record.id);
     } catch (e) {
@@ -189,7 +196,7 @@ class TemplateImportSheet extends ConsumerWidget {
     );
   }
 
-  // ===== 链接导入 =====
+  // ===== 链接导入（DAO 持久化）=====
   Future<void> _handleLinkImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
     navigator.pop(); // 先关闭 BottomSheet
@@ -209,37 +216,47 @@ class TemplateImportSheet extends ConsumerWidget {
       return;
     }
 
-    _showLoadingWithNavigator(navigator, '正在导入...');
+    // 轻量形式（无完整 JSON）→ 不支持
+    if (parsed['name'] is String && parsed.containsKey('coverSeed') && !parsed.containsKey('meta')) {
+      _showToast(navigator, '该分享链接不包含完整模板参数，请使用文件导入');
+      return;
+    }
 
-    // 模拟网络延迟
-    await Future.delayed(const Duration(milliseconds: 800));
+    // 完整 JSON 形式 → 走 DAO 持久化
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final warnings = PptplFormat.validate(parsed);
+      var record = TemplateMapper.recordFromImportedJson(
+        parsed,
+        createdAt: now,
+      );
 
-    navigator.pop(); // 关闭 loading
+      final dao = await ref.read(templatesDaoProvider.future);
+      var finalId = record.id;
+      while (await dao.getById(finalId) != null) {
+        finalId = '${finalId}_imported_$now';
+      }
+      if (finalId != record.id) {
+        record = _copyRecordWithId(record, finalId);
+      }
 
-    final name = parsed['name'] as String;
-    final category = (parsed['category'] as String?) ?? 'still-life';
-    final tags = (parsed['tags'] as List<dynamic>?)?.cast<String>() ?? <String>[];
-    final coverSeed = parsed['coverSeed'] as String?;
+      await dao.upsert(record);
 
-    final newId = ref.read(importedTemplatesProvider.notifier).addTemplate(
-          name: name,
-          category: category,
-          tags: tags,
-          source: 'link',
-          coverSeed: coverSeed,
-        );
-
-    _showToast(navigator, '已导入模板：$name');
-    onImported(newId);
+      _showToast(navigator, '已导入模板：${record.name}');
+      if (warnings.isNotEmpty) {
+        _showWarningsDialog(navigator, warnings);
+      }
+      onImported(record.id);
+    } catch (e) {
+      _showToast(navigator, '导入失败：$e');
+    }
   }
 
-  // ===== 扫码导入 =====
+  // ===== 扫码导入（DAO 持久化）=====
   Future<void> _handleQrImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
     navigator.pop(); // 先关闭 BottomSheet
 
-    // 无相机 QR 扫描库依赖，使用手动输入码作为简化实现
-    // 用户可以输入分享码（如 LUMIRA-XXX-名称）
     final code = await _showInputDialog(
       context: context,
       title: '扫码导入',
@@ -255,27 +272,40 @@ class TemplateImportSheet extends ConsumerWidget {
       return;
     }
 
-    _showLoadingWithNavigator(navigator, '正在解析二维码...');
+    try {
+      final name = parsed['name'] as String;
+      final category = parsed['category'] as String;
+      final now = DateTime.now().millisecondsSinceEpoch;
 
-    await Future.delayed(const Duration(milliseconds: 600));
+      // 从内置模板取该 category 首个模板的参数作为默认值
+      final builtinForCategory = TemplateRegistry.allTemplates
+          .where((t) => t.meta.category == category)
+          .toList();
+      final defaultTpl = builtinForCategory.isNotEmpty
+          ? builtinForCategory.first
+          : TemplateRegistry.allTemplates.first;
 
-    navigator.pop(); // 关闭 loading
+      final record = TemplateMapper.toRecord(
+        defaultTpl,
+        createdAt: now,
+        isBuiltin: false,
+      ).copyWith(
+        id: 'qr_${category}_$now',
+        name: name,
+        category: category,
+        cover: '',
+        isBuiltin: false,
+        isRecommended: false,
+      );
 
-    final name = parsed['name'] as String;
-    final category = (parsed['category'] as String?) ?? 'still-life';
-    final tags = (parsed['tags'] as List<dynamic>?)?.cast<String>() ?? <String>[];
-    final coverSeed = parsed['coverSeed'] as String?;
+      final dao = await ref.read(templatesDaoProvider.future);
+      await dao.upsert(record);
 
-    final newId = ref.read(importedTemplatesProvider.notifier).addTemplate(
-          name: name,
-          category: category,
-          tags: tags,
-          source: 'qr',
-          coverSeed: coverSeed,
-        );
-
-    _showToast(navigator, '已导入模板：$name');
-    onImported(newId);
+      _showToast(navigator, '已导入模板：$name');
+      onImported(record.id);
+    } catch (e) {
+      _showToast(navigator, '导入失败：$e');
+    }
   }
 
   // ===== 解析逻辑 =====
@@ -409,25 +439,35 @@ class TemplateImportSheet extends ConsumerWidget {
     lumira.LumiraToast.show(navigator.context, msg);
   }
 
-  void _showLoadingWithNavigator(NavigatorState navigator, String msg) {
-    navigator.push(
-      DialogRoute(
-        context: navigator.context,
-        barrierDismissible: false,
-        builder: (ctx) => SafeArea(
-          child: Center(
-            child: lumira.LumiraDialogContainer(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  lumira.LumiraProgress.circular(),
-                  const SizedBox(width: 16),
-                  Text(msg),
-                ],
-              ),
+  void _showWarningsDialog(NavigatorState navigator, List<TemplateImportWarning> warnings) {
+    if (!navigator.context.mounted) return;
+    final messages = warnings.map((w) {
+      switch (w) {
+        case TemplateImportWarning.legacyFormat:
+          return '该模板为旧版格式，缺少版本信息，部分参数可能不兼容';
+        case TemplateImportWarning.unsupportedVersion:
+          return '该模板来自不支持的格式版本，部分参数可能不兼容';
+      }
+    }).join('\n');
+    lumira.showLumiraDialog(
+      context: navigator.context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('导入提示', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          Text(messages, style: const TextStyle(fontSize: 14, height: 1.5)),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerRight,
+            child: lumira.LumiraButton(
+              variant: ButtonVariant.primary,
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('知道了'),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
