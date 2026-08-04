@@ -154,4 +154,40 @@ void main() {
       expect(TemplateExporter.resolveCoverUrl(record), 'assets/images/templates/test.jpg');
     });
   });
+
+  group('TemplateExporter.buildFileName', () {
+    test('includes template ID for uniqueness', () {
+      final record = _makeRecord(); // id='r1', name='测试模板'
+      final filename = TemplateExporter.buildFileName(record, usePptpl: true);
+      expect(filename, contains('r1'));
+      expect(filename, contains('测试模板'));
+      expect(filename, endsWith('.pptpl'));
+    });
+
+    test('lumira format uses .lumira extension', () {
+      final record = _makeRecord();
+      final filename = TemplateExporter.buildFileName(record, usePptpl: false);
+      expect(filename, endsWith('.lumira'));
+    });
+
+    test('sanitizes illegal characters in name', () {
+      final record = _makeRecord().copyWith(
+        name: 'test/template:with*illegal',
+        id: 'r2',
+      );
+      final filename = TemplateExporter.buildFileName(record, usePptpl: true);
+      expect(filename, isNot(contains('/')));
+      expect(filename, isNot(contains(':')));
+      expect(filename, isNot(contains('*')));
+      expect(filename, contains('r2'));
+    });
+
+    test('two templates with same name have different filenames', () {
+      final r1 = _makeRecord().copyWith(name: 'same', id: 'id1');
+      final r2 = _makeRecord().copyWith(name: 'same', id: 'id2');
+      final f1 = TemplateExporter.buildFileName(r1, usePptpl: true);
+      final f2 = TemplateExporter.buildFileName(r2, usePptpl: true);
+      expect(f1, isNot(equals(f2)));
+    });
+  });
 }
