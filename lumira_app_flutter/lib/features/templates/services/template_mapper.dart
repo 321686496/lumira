@@ -456,6 +456,8 @@ class TemplateMapper {
         (meta['tagIds'] as List<dynamic>?)?.cast<String>() ?? <String>[];
     final price = (meta['price'] as num?)?.toInt() ?? 0;
     final cover = (meta['cover'] as String?) ?? '';
+    final coverData = (meta['coverData'] as String?) ??
+        (cover.startsWith('data:') ? cover : null);
     final description = (meta['description'] as String?) ?? '';
     final referenceSource = (meta['referenceSource'] as String?) ?? '';
 
@@ -508,6 +510,7 @@ class TemplateMapper {
       tagIds: tagIds,
       price: price,
       cover: cover,
+      coverData: coverData,
       description: description,
       referenceSource: referenceSource,
       composition: composition,
