@@ -10,9 +10,11 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/pages/profile_my_templates_page.dart' show customTemplatesProvider;
 import '../data/preview_form_provider.dart';
+import '../data/templates_browse_mock_data.dart' show LabelValue, styleMap, methodMap;
 import '../data/templates_editor_mock_data.dart';
 import '../services/template_exporter.dart';
 import '../services/template_mapper.dart';
@@ -256,28 +258,28 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         sizeKB: 24,
       );
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('图片已导入（mock）')),
-    );
+    lumira.LumiraToast.show(context, '图片已导入（mock）');
     _scheduleAutoSave();
   }
 
   void _openSilhouetteEditor() {
     showDialog<void>(
       context: context,
-      builder: (ctx) => SilhouetteEditorDialog(
-        onComplete: (svg) {
-          setState(() {
-            _form.pose.silhouette =
-                SilhouetteResource(type: 'svg', data: svg);
-          });
-          if (!mounted) return;
-          Navigator.pop(ctx);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('剪影已保存')),
-          );
-          _scheduleAutoSave();
-        },
+      builder: (ctx) => SafeArea(
+        child: Center(
+          child: SilhouetteEditorDialog(
+            onComplete: (svg) {
+              setState(() {
+                _form.pose.silhouette =
+                    SilhouetteResource(type: 'svg', data: svg);
+              });
+              if (!mounted) return;
+              Navigator.pop(ctx);
+              lumira.LumiraToast.show(context, '剪影已保存');
+              _scheduleAutoSave();
+            },
+          ),
+        ),
       ),
     );
   }
@@ -335,9 +337,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
   Future<void> _onSave() async {
     if (_form.meta.name.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入模板名称')),
-      );
+      lumira.LumiraToast.show(context, '请输入模板名称');
       return;
     }
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -426,9 +426,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       ref.invalidate(customTemplatesProvider);
       _currentDraftId = '';
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('保存成功')),
-      );
+      lumira.LumiraToast.show(context, '保存成功');
       // 800ms 后返回上一页（与 uni-app setTimeout 一致）
       await Future.delayed(const Duration(milliseconds: 800));
       if (!mounted) return;
@@ -439,9 +437,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存失败：$e')),
-      );
+      lumira.LumiraToast.show(context, '保存失败：$e');
     }
   }
 
@@ -451,16 +447,12 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       _currentDraftId =
           'draft-editor-${DateTime.now().millisecondsSinceEpoch}';
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('草稿已保存')),
-    );
+    lumira.LumiraToast.show(context, '草稿已保存');
   }
 
   Future<void> _onExport() async {
     if (_form.meta.name.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先填写模板名称')),
-      );
+      lumira.LumiraToast.show(context, '请先填写模板名称');
       return;
     }
 
@@ -480,44 +472,43 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       BuildContext context, TemplateRecord record) async {
     final tokens = ref.watch(themeTokensProvider);
 
-    final result = await showModalBottomSheet<String>(
+    final result = await lumira.showLumiraBottomSheet<String>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(
-                '选择导出格式',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '选择导出格式',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
               ),
             ),
-            ListTile(
-              leading: Icon(Icons.description_outlined, color: tokens.brand),
-              title: const Text('完整 .pptpl（推荐）'),
-              subtitle: const Text('含构图/姿势/相机/场景/后期全参数'),
-              onTap: () => Navigator.pop(ctx, 'pptpl'),
+          ),
+          lumira.LumiraListTile(
+            leading: Icon(Icons.description_outlined, color: tokens.brand),
+            title: const Text('完整 .pptpl（推荐）'),
+            subtitle: const Text('含构图/姿势/相机/场景/后期全参数'),
+            onTap: () => Navigator.pop(ctx, 'pptpl'),
+          ),
+          lumira.LumiraListTile(
+            leading: Icon(Icons.code_outlined, color: tokens.brand),
+            title: const Text('简化 .lumira'),
+            subtitle: const Text('仅元信息+相机核心参数'),
+            onTap: () => Navigator.pop(ctx, 'lumira'),
+          ),
+          lumira.LumiraListTile(
+            title: Center(
+              child: Text('取消',
+                  style: TextStyle(color: tokens.textSecondary)),
             ),
-            ListTile(
-              leading: Icon(Icons.code_outlined, color: tokens.brand),
-              title: const Text('简化 .lumira'),
-              subtitle: const Text('仅元信息+相机核心参数'),
-              onTap: () => Navigator.pop(ctx, 'lumira'),
-            ),
-            ListTile(
-              title: Center(
-                child: Text('取消',
-                    style: TextStyle(color: tokens.textSecondary)),
-              ),
-              onTap: () => Navigator.pop(ctx, null),
-            ),
-          ],
-        ),
+            onTap: () => Navigator.pop(ctx, null),
+          ),
+        ],
       ),
     );
 
@@ -525,21 +516,15 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     if (!mounted) return;
 
     final usePptpl = result == 'pptpl';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('正在导出 ${record.name}...')),
-    );
+    lumira.LumiraToast.show(context, '正在导出 ${record.name}...');
 
     try {
       await TemplateExporter.shareTemplate(record, usePptpl: usePptpl);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已分享 ${record.name}')),
-      );
+      lumira.LumiraToast.show(context, '已分享 ${record.name}');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('导出失败：$e')),
-      );
+      lumira.LumiraToast.show(context, '导出失败：$e');
     }
   }
 
@@ -577,9 +562,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       ref.read(previewEditorFormProvider.notifier).state = null;
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已从预览页同步参数')),
-        );
+        lumira.LumiraToast.show(context, '已从预览页同步参数');
       }
     }
   }
@@ -875,7 +858,7 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-class _FieldInput extends ConsumerStatefulWidget {
+class _FieldInput extends StatefulWidget {
   const _FieldInput({
     required this.tokens,
     this.controller,
@@ -895,97 +878,44 @@ class _FieldInput extends ConsumerStatefulWidget {
   final ValueChanged<String>? onChanged;
 
   @override
-  ConsumerState<_FieldInput> createState() => _FieldInputState();
+  State<_FieldInput> createState() => _FieldInputState();
 }
 
-class _FieldInputState extends ConsumerState<_FieldInput> {
-  final FocusNode _focusNode = FocusNode();
-  bool _focused = false;
+class _FieldInputState extends State<_FieldInput> {
+  late TextEditingController _internalController;
+  bool _ownsController = false;
 
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(_onFocusChange);
+    if (widget.controller != null) {
+      _internalController = widget.controller!;
+      _ownsController = false;
+    } else {
+      _internalController = TextEditingController(text: widget.initialValue);
+      _ownsController = true;
+    }
   }
 
   @override
   void dispose() {
-    _focusNode.removeListener(_onFocusChange);
-    _focusNode.dispose();
+    if (_ownsController) _internalController.dispose();
     super.dispose();
-  }
-
-  void _onFocusChange() {
-    setState(() => _focused = _focusNode.hasFocus);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
-    final tokens = widget.tokens;
-
-    // neumorphic 风格下：聚焦时通过更深的 fillColor 表达"内凹"感
-    // 其他风格：聚焦时用 brand 边框（原逻辑保持不变）
-    final Color fillColor = isNeumorphic && _focused
-        ? tokens.canvas // 聚焦时变浅，与 canvas 背景接近，制造"凹陷"对比
-        : tokens.canvasDeep;
-
-    final InputDecoration decoration = InputDecoration(
+    return lumira.LumiraTextField(
+      controller: _internalController,
       hintText: widget.placeholder,
-      filled: true,
-      fillColor: fillColor,
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: widget.multiline ? 12 : 10,
-      ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide.none,
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        // neumorphic 风格下：聚焦时不显示 brand border，靠 fillColor 变化表达聚焦
-        borderSide: isNeumorphic
-            ? BorderSide.none
-            : BorderSide(color: tokens.brand, width: 1),
-      ),
-    );
-
-    final style = TextStyle(
-      fontSize: 14,
-      color: tokens.textPrimary,
-    );
-
-    if (widget.controller != null) {
-      return TextField(
-        controller: widget.controller,
-        focusNode: _focusNode,
-        decoration: decoration,
-        style: style,
-        maxLines: widget.multiline ? null : 1,
-        minLines: widget.multiline ? 3 : 1,
-        keyboardType: widget.keyboardType,
-        onChanged: widget.onChanged,
-      );
-    }
-    return TextFormField(
-      initialValue: widget.initialValue,
-      focusNode: _focusNode,
-      decoration: decoration,
-      style: style,
-      maxLines: widget.multiline ? null : 1,
-      minLines: widget.multiline ? 3 : 1,
       keyboardType: widget.keyboardType,
       onChanged: widget.onChanged,
+      maxLines: widget.multiline ? 8 : 1,
     );
   }
 }
 
-class _FieldDropdown extends ConsumerWidget {
+class _FieldDropdown extends StatelessWidget {
   const _FieldDropdown({
     required this.tokens,
     required this.value,
@@ -999,42 +929,18 @@ class _FieldDropdown extends ConsumerWidget {
   final ValueChanged<String> onChanged;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: tokens.canvasDeep,
-        borderRadius: BorderRadius.circular(8),
-        // neumorphic 风格下：添加 shadowConcaveSubtle 内凹阴影
-        boxShadow:
-            isNeumorphic ? tokens.shadowConcaveSubtle : null,
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          icon: Icon(
-            Icons.keyboard_arrow_down_rounded,
-            size: 18,
-            color: tokens.textTertiary,
-          ),
-          style: TextStyle(
-            fontSize: 14,
-            color: tokens.textPrimary,
-          ),
-          dropdownColor: tokens.surface,
-          items: options
-              .map((o) => DropdownMenuItem<String>(
-                    value: o.value,
-                    child: Text(o.label),
-                  ))
-              .toList(),
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
-        ),
-      ),
+  Widget build(BuildContext context) {
+    return lumira.LumiraDropdown<String>(
+      value: value,
+      items: options
+          .map((o) => DropdownMenuItem<String>(
+                value: o.value,
+                child: Text(o.label),
+              ))
+          .toList(),
+      onChanged: (v) {
+        if (v != null) onChanged(v);
+      },
     );
   }
 }
@@ -1138,12 +1044,11 @@ class _SliderRow extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: Slider(
+            child: lumira.LumiraSlider(
               value: value,
               min: min,
               max: max,
               divisions: divisions,
-              activeColor: tokens.brand,
               onChanged: onChanged,
             ),
           ),
@@ -1204,7 +1109,9 @@ class _Step1TemplateInfo extends StatelessWidget {
             tokens: tokens,
             value: form.meta.category,
             options: categoryOptions,
-            onChanged: (v) => onChange(() => form.meta.category = v),
+            onChanged: (v) => onChange(() {
+              form.meta.category = v;
+            }),
           ),
           const SizedBox(height: 14),
           _FieldLabel(tokens: tokens, text: '标签'),

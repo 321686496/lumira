@@ -10,6 +10,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/profile_mock_data.dart';
 
@@ -62,16 +63,11 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 
   void _confirmRedemption() {
     final code = _codeController.text.trim();
-    final messenger = ScaffoldMessenger.of(context);
     if (code.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('请输入兑换码'), duration: Duration(milliseconds: 1000)),
-      );
+      LumiraToast.show(context, '请输入兑换码', duration: const Duration(milliseconds: 1000));
       return;
     }
-    messenger.showSnackBar(
-      SnackBar(content: Text('兑换码「$code」已提交'), duration: const Duration(milliseconds: 1000)),
-    );
+    LumiraToast.show(context, '兑换码「$code」已提交', duration: const Duration(milliseconds: 1000));
     _codeController.clear();
   }
 
@@ -223,20 +219,18 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                       _SettingItem(
                         icon: Icons.grid_on_outlined,
                         label: '网格显示',
-                        trailing: Switch(
+                        trailing: LumiraSwitch(
                           value: _gridOn,
                           onChanged: (v) => setState(() => _gridOn = v),
-                          activeColor: tokens.brand,
                         ),
                         tokens: tokens,
                       ),
                       _SettingItem(
                         icon: Icons.straighten_outlined,
                         label: '水平仪',
-                        trailing: Switch(
+                        trailing: LumiraSwitch(
                           value: _levelOn,
                           onChanged: (v) => setState(() => _levelOn = v),
-                          activeColor: tokens.brand,
                         ),
                         tokens: tokens,
                         isLast: true,
@@ -260,20 +254,18 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                       _SettingItem(
                         icon: Icons.branding_watermark_outlined,
                         label: '水印',
-                        trailing: Switch(
+                        trailing: LumiraSwitch(
                           value: _watermarkOn,
                           onChanged: (v) => setState(() => _watermarkOn = v),
-                          activeColor: tokens.brand,
                         ),
                         tokens: tokens,
                       ),
                       _SettingItem(
                         icon: Icons.graphic_eq_outlined,
                         label: '快门声音',
-                        trailing: Switch(
+                        trailing: LumiraSwitch(
                           value: _shutterOn,
                           onChanged: (v) => setState(() => _shutterOn = v),
-                          activeColor: tokens.brand,
                         ),
                         tokens: tokens,
                         isLast: true,
@@ -302,28 +294,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                           child: Row(
                             children: [
                               Expanded(
-                                child: TextField(
+                                child: LumiraTextField(
                                   controller: _codeController,
-                                  decoration: InputDecoration(
-                                    hintText: '请输入兑换码',
-                                    hintStyle: TextStyle(color: tokens.textTertiary, fontSize: 14),
-                                    filled: true,
-                                    fillColor: tokens.canvas,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: tokens.divider, width: 1),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: tokens.divider, width: 1),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: tokens.brand, width: 1.5),
-                                    ),
-                                  ),
-                                  style: TextStyle(color: tokens.textPrimary, fontSize: 14),
+                                  hintText: '请输入兑换码',
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -353,11 +326,10 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         icon: Icons.cleaning_services_outlined,
                         label: '清除缓存',
                         value: '0.0 MB',
-                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('已清除缓存'),
-                            duration: Duration(milliseconds: 1000),
-                          ),
+                        onTap: () => LumiraToast.show(
+                          context,
+                          '已清除缓存',
+                          duration: const Duration(milliseconds: 1000),
                         ),
                         tokens: tokens,
                       ),

@@ -16,7 +16,8 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../home/providers/banner_recommendation_provider.dart';
 import '../../../core/router/route_names.dart';
-import '../../../shared/widgets/feedback/lumira_toast.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_state.dart';
 import '../data/capture_thumbnail_state.dart';
 import '../data/custom_fill_light_colors.dart';
@@ -1261,16 +1262,14 @@ class _FillLightPanel extends ConsumerWidget {
             children: [
               const Icon(Icons.brightness_6, color: Colors.white54, size: 16),
               Expanded(
-                child: Slider(
+                child: LumiraSlider(
                   value: intensity.clamp(0.1, 1.5),
                   min: 0.1,
                   max: 1.5,
                   divisions: 28,
-                  activeColor: const Color(0xFFC9A96E),
-                  inactiveColor: Colors.white24,
                   onChanged: enabled
                       ? (v) => ref.read(CaptureState.fillLightIntensityProvider.notifier).state = v
-                      : null,
+                      : (double _) {},
                 ),
               ),
               SizedBox(
@@ -1288,16 +1287,14 @@ class _FillLightPanel extends ConsumerWidget {
             children: [
               const Icon(Icons.crop_free, color: Colors.white54, size: 16),
               Expanded(
-                child: Slider(
+                child: LumiraSlider(
                   value: viewfinderScale.clamp(0.3, 1.0),
                   min: 0.3,
                   max: 1.0,
                   divisions: 14,
-                  activeColor: const Color(0xFFC9A96E),
-                  inactiveColor: Colors.white24,
                   onChanged: enabled
                       ? (v) => ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state = v
-                      : null,
+                      : (double _) {},
                 ),
               ),
               SizedBox(
@@ -1701,93 +1698,81 @@ class _SaveColorsRowState extends ConsumerState<_SaveColorsRow> {
 
   void _showEditSheet(String name, Color color) {
     _markHintShown();
-    showModalBottomSheet(
+    showLumiraBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF2A2A2C),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white24),
-                    ),
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24),
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    name,
-                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  name,
+                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.edit, color: Color(0xFFC9A96E), size: 20),
-              title: const Text('修改名称', style: TextStyle(color: Colors.white70, fontSize: 14)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showRenameDialog(name);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.color_lens, color: Color(0xFFC9A96E), size: 20),
-              title: const Text('修改颜色', style: TextStyle(color: Colors.white70, fontSize: 14)),
-              onTap: () {
-                Navigator.pop(ctx);
-                // 用当前颜色打开色环
-                ref.read(CaptureState.fillLightColorProvider.notifier).state = color;
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-              title: const Text('删除', style: TextStyle(color: Colors.redAccent, fontSize: 14)),
-              onTap: () {
-                ref.read(customFillLightColorsProvider.notifier).remove(name);
-                Navigator.pop(ctx);
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
+          ),
+          LumiraListTile(
+            leading: const Icon(Icons.edit, color: Color(0xFFC9A96E), size: 20),
+            title: const Text('修改名称', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            onTap: () {
+              Navigator.pop(ctx);
+              _showRenameDialog(name);
+            },
+          ),
+          LumiraListTile(
+            leading: const Icon(Icons.color_lens, color: Color(0xFFC9A96E), size: 20),
+            title: const Text('修改颜色', style: TextStyle(color: Colors.white70, fontSize: 14)),
+            onTap: () {
+              Navigator.pop(ctx);
+              // 用当前颜色打开色环
+              ref.read(CaptureState.fillLightColorProvider.notifier).state = color;
+            },
+          ),
+          LumiraListTile(
+            leading: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+            title: const Text('删除', style: TextStyle(color: Colors.redAccent, fontSize: 14)),
+            onTap: () {
+              ref.read(customFillLightColorsProvider.notifier).remove(name);
+              Navigator.pop(ctx);
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
 
   void _showRenameDialog(String oldName) {
     final controller = TextEditingController(text: oldName);
-    showDialog(
+    showLumiraDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF2A2A2C),
-        title: const Text('修改名称', style: TextStyle(color: Colors.white, fontSize: 16)),
-        content: TextField(
+      builder: (ctx) => LumiraAlertDialog(
+        title: const Text('修改名称'),
+        content: LumiraTextField(
           controller: controller,
-          autofocus: true,
-          style: const TextStyle(color: Colors.white, fontSize: 14),
-          decoration: InputDecoration(
-            hintText: '输入新名称',
-            hintStyle: const TextStyle(color: Colors.white30, fontSize: 13),
-            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-            focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFC9A96E))),
-          ),
+          hintText: '输入新名称',
         ),
         actions: [
-          TextButton(
+          LumiraButton(
+            variant: ButtonVariant.ghost,
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消', style: TextStyle(color: Colors.white54)),
+            child: const Text('取消'),
           ),
-          TextButton(
+          LumiraButton(
+            variant: ButtonVariant.primary,
             onPressed: () {
               final newName = controller.text.trim();
               if (newName.isNotEmpty && newName != oldName) {
@@ -1795,7 +1780,7 @@ class _SaveColorsRowState extends ConsumerState<_SaveColorsRow> {
               }
               Navigator.pop(ctx);
             },
-            child: const Text('确定', style: TextStyle(color: Color(0xFFC9A96E))),
+            child: const Text('确定'),
           ),
         ],
       ),
@@ -1860,23 +1845,9 @@ class _SaveColorsRowState extends ConsumerState<_SaveColorsRow> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: TextField(
+                  child: LumiraTextField(
                     controller: _nameController,
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                    decoration: InputDecoration(
-                      hintText: '为该颜色命名（如：日落金）',
-                      hintStyle: TextStyle(color: Colors.white30, fontSize: 11),
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(color: Colors.white24, width: 1),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(6),
-                        borderSide: BorderSide(color: const Color(0xFFC9A96E), width: 1),
-                      ),
-                    ),
+                    hintText: '为该颜色命名（如：日落金）',
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -2299,8 +2270,9 @@ class _CameraPermissionGuide extends StatelessWidget {
           Positioned(
             top: 0,
             left: 0,
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+            child: LumiraIconButton(
+              icon: Icons.arrow_back_ios_new,
+              color: Colors.white,
               onPressed: onBack,
             ),
           ),
@@ -2339,15 +2311,8 @@ class _CameraPermissionGuide extends StatelessWidget {
                   // 主操作按钮
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFC9A96E),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
+                    child: LumiraButton(
+                      variant: ButtonVariant.primary,
                       onPressed: isPermanentlyDenied
                           ? onOpenSettings
                           : onRetry,
@@ -2358,10 +2323,8 @@ class _CameraPermissionGuide extends StatelessWidget {
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white70,
-                        ),
+                      child: LumiraButton(
+                        variant: ButtonVariant.ghost,
                         onPressed: onRetry,
                         child: const Text('返回后重试'),
                       ),

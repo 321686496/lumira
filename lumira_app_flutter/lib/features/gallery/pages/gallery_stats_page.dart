@@ -9,6 +9,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/gallery_mock_data.dart';
 import '../data/gallery_models.dart';
@@ -43,7 +44,7 @@ class _GalleryStatsPageState extends ConsumerState<GalleryStatsPage> {
       ),
       body: SafeArea(
         child: daoAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => Center(child: LumiraProgress.circular()),
           error: (e, _) => Center(
             child: Text('加载失败：$e',
                 style: TextStyle(color: tokens.textSecondary)),
@@ -116,7 +117,7 @@ class _StatsContentState extends State<_StatsContent> {
     final tokens = widget.tokens;
 
     if (!_loaded) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(child: LumiraProgress.circular());
     }
 
     // 如果真实数据为空，使用 mock 数据展示统计效果

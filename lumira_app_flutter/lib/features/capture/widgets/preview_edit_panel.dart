@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
+import '../../gallery/widgets/crop_overlay.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
 
@@ -111,6 +113,7 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
           postProcess: widget.postProcess,
           onPostProcessChanged: _updatePost,
           tokens: tokens,
+          previewImagePath: widget.previewImagePath,
         );
       default:
         return _ColorTab(
@@ -169,20 +172,13 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
   }
 
   Widget _buildTabBar() {
-    return TabBar(
+    return LumiraTabBar(
       controller: _tabController,
-      labelColor: Colors.white,
-      unselectedLabelColor: Colors.white54,
-      labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-      unselectedLabelStyle: const TextStyle(fontSize: 12),
-      indicatorColor: const Color(0xFFE5C07B),
-      indicatorSize: TabBarIndicatorSize.label,
-      indicatorWeight: 2,
       tabs: const [
-        Tab(text: '色彩'),
-        Tab(text: '细节'),
-        Tab(text: '滤镜'),
-        Tab(text: '裁剪旋转'),
+        Text('色彩'),
+        Text('细节'),
+        Text('滤镜'),
+        Text('裁剪旋转'),
       ],
     );
   }
@@ -584,14 +580,17 @@ class _CropTab extends StatelessWidget {
   final TransformParams transform;
   final ValueChanged<TransformParams> onChanged;
 
-  /// 后期参数（用于裁剪比例 cropRatio）
+  /// 后期参数（用于裁剪比例 cropRatio 和自定义裁剪框 customCropRect）
   final PostProcess postProcess;
 
-  /// 后期参数更新回调（用于裁剪比例）
+  /// 后期参数更新回调（用于裁剪比例和裁剪框）
   final ValueChanged<PostProcess> onPostProcessChanged;
 
   /// 主题色板
   final ThemeTokens tokens;
+
+  /// 预览图路径（用于裁剪框预览区）
+  final String? previewImagePath;
 
   const _CropTab({
     required this.transform,
@@ -599,7 +598,25 @@ class _CropTab extends StatelessWidget {
     required this.postProcess,
     required this.onPostProcessChanged,
     required this.tokens,
+    required this.previewImagePath,
   });
+
+  /// 将裁剪比例字符串解析为数值宽高比（width/height）
+  /// 返回 null 表示自由裁剪（不锁定比例）
+  double? _parseCropAspectRatio(String ratio, bool isPortrait) {
+    if (ratio == 'free' || ratio == 'none' || ratio == 'fullscreen') {
+      return null;
+    }
+    if (ratio == '4:3') return isPortrait ? 3.0 / 4.0 : 4.0 / 3.0;
+    if (ratio == '1:1') return 1.0;
+    final parts = ratio.split(':');
+    if (parts.length == 2) {
+      final w = double.tryParse(parts[0]);
+      final h = double.tryParse(parts[1]);
+      if (w != null && h != null && w > 0 && h > 0) return w / h;
+    }
+    return null;
+  }
 
   /// 裁剪比例选择器：自由 / 1:1 / 4:3 / 3:4 / 16:9 / 全屏
   Widget _buildRatioSelector() {
@@ -636,8 +653,13 @@ class _CropTab extends StatelessWidget {
               final label = ratios[i].value;
               final selected = postProcess.cropRatio == ratio;
               return GestureDetector(
-                onTap: () =>
-                    onPostProcessChanged(postProcess.copyWith(cropRatio: ratio)),
+                onTap: () {
+                  // 切换比例时重置自定义裁剪框（null = 使用默认居中）
+                  onPostProcessChanged(postProcess.copyWith(
+                    cropRatio: ratio,
+                    customCropRect: null,
+                  ));
+                },
                 behavior: HitTestBehavior.opaque,
                 child: Container(
                   padding:
@@ -674,10 +696,31 @@ class _CropTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPortrait =
+        MediaQuery.of(context).size.height >= MediaQuery.of(context).size.width;
+    final cropAspect = _parseCropAspectRatio(postProcess.cropRatio, isPortrait);
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       children: [
         _buildRatioSelector(),
+        // 裁剪框预览区
+        _CropPreview(
+          imagePath: previewImagePath,
+          cropRect: postProcess.customCropRect,
+          aspectRatio: cropAspect,
+          tokens: tokens,
+          onCropChanged: (rect) {
+            onPostProcessChanged(postProcess.copyWith(
+              customCropRect: CropRect(
+                x: rect.left,
+                y: rect.top,
+                w: rect.width,
+                h: rect.height,
+              ),
+            ));
+          },
+        ),
         const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -688,19 +731,21 @@ class _CropTab extends StatelessWidget {
             ),
             Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.rotate_left,
-                      size: 18, color: Colors.white70),
+                LumiraIconButton(
+                  icon: Icons.rotate_left,
                   onPressed: () => onChanged(transform.copyWith(
                     rotation: (transform.rotation - 90) % 360,
                   )),
+                  color: Colors.white70,
+                  size: 18,
                 ),
-                IconButton(
-                  icon: const Icon(Icons.rotate_right,
-                      size: 18, color: Colors.white70),
+                LumiraIconButton(
+                  icon: Icons.rotate_right,
                   onPressed: () => onChanged(transform.copyWith(
                     rotation: (transform.rotation + 90) % 360,
                   )),
+                  color: Colors.white70,
+                  size: 18,
                 ),
                 SizedBox(
                   width: 48,
@@ -751,6 +796,187 @@ class _CropTab extends StatelessWidget {
           onChanged: (v) => onChanged(transform.copyWith(straighten: v)),
         ),
       ],
+    );
+  }
+}
+
+/// 裁剪框预览区
+///
+/// 加载图片获取宽高比，按比例显示图片 + 可拖拽裁剪框叠加层。
+/// 使用 ImageStream 监听图片加载完成，获取 intrinsic 尺寸。
+class _CropPreview extends StatefulWidget {
+  /// 图片路径（文件路径或 URL）
+  final String? imagePath;
+
+  /// 当前裁剪框（相对坐标），null = 使用默认居中
+  final CropRect? cropRect;
+
+  /// 锁定宽高比（null = 自由）
+  final double? aspectRatio;
+
+  /// 主题色板
+  final ThemeTokens tokens;
+
+  /// 裁剪框变化回调
+  final ValueChanged<Rect> onCropChanged;
+
+  const _CropPreview({
+    required this.imagePath,
+    required this.cropRect,
+    required this.aspectRatio,
+    required this.tokens,
+    required this.onCropChanged,
+  });
+
+  @override
+  State<_CropPreview> createState() => _CropPreviewState();
+}
+
+class _CropPreviewState extends State<_CropPreview> {
+  /// 图片宽高比（width / height），加载前为 null
+  double? _imageAspect;
+
+  /// 图片流和监听器（用于 dispose 时移除）
+  ImageStream? _imageStream;
+  ImageStreamListener? _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImage();
+  }
+
+  @override
+  void didUpdateWidget(_CropPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.imagePath != oldWidget.imagePath) {
+      _loadImage();
+    }
+  }
+
+  @override
+  void dispose() {
+    _imageStream?.removeListener(_listener!);
+    super.dispose();
+  }
+
+  /// 加载图片获取宽高比
+  void _loadImage() {
+    if (widget.imagePath == null || widget.imagePath!.isEmpty) {
+      if (mounted) setState(() => _imageAspect = null);
+      return;
+    }
+    // 移除旧监听
+    _imageStream?.removeListener(_listener!);
+    // 分别处理网络图片和本地文件，避免泛型类型推断问题
+    if (widget.imagePath!.startsWith('http')) {
+      _imageStream =
+          NetworkImage(widget.imagePath!).resolve(const ImageConfiguration());
+    } else {
+      _imageStream =
+          FileImage(File(widget.imagePath!)).resolve(const ImageConfiguration());
+    }
+    _listener = ImageStreamListener((info, _) {
+      if (mounted) {
+        setState(() {
+          _imageAspect = info.image.width / info.image.height;
+        });
+      }
+    });
+    _imageStream!.addListener(_listener!);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.imagePath == null || widget.imagePath!.isEmpty) {
+      return _buildPlaceholder('无图片');
+    }
+    if (_imageAspect == null) {
+      return const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 在可用空间内按图片宽高比计算显示尺寸（最大高度 200）
+        const maxH = 200.0;
+        final maxW = constraints.maxWidth;
+        final ratio = _imageAspect!;
+        double w, h;
+        if (maxW / maxH > ratio) {
+          // 受高度约束
+          h = maxH;
+          w = h * ratio;
+        } else {
+          // 受宽度约束
+          w = maxW;
+          h = w / ratio;
+        }
+        return Center(
+          child: SizedBox(
+            width: w,
+            height: h,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // 图片（BoxFit.fill 填满整个区域，与裁剪框坐标对齐）
+                  widget.imagePath!.startsWith('http')
+                      ? Image.network(widget.imagePath!,
+                          fit: BoxFit.fill,
+                          errorBuilder: (_, __, ___) => _buildErrorWidget())
+                      : Image.file(File(widget.imagePath!),
+                          fit: BoxFit.fill,
+                          errorBuilder: (_, __, ___) => _buildErrorWidget()),
+                  // 裁剪框叠加层
+                  CropOverlay(
+                    initialRect: widget.cropRect != null
+                        ? Rect.fromLTWH(
+                            widget.cropRect!.x,
+                            widget.cropRect!.y,
+                            widget.cropRect!.w,
+                            widget.cropRect!.h,
+                          )
+                        : null,
+                    aspectRatio: widget.aspectRatio,
+                    onChanged: widget.onCropChanged,
+                    tokens: widget.tokens,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPlaceholder(String text) {
+    return SizedBox(
+      height: 200,
+      child: Center(
+        child: Text(text,
+            style: const TextStyle(fontSize: 12, color: Colors.white38)),
+      ),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Container(
+      color: const Color(0xFF2A2724),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.broken_image_outlined, size: 32, color: Colors.white38),
+            SizedBox(height: 8),
+            Text('图片加载失败',
+                style: TextStyle(fontSize: 12, color: Colors.white38)),
+          ],
+        ),
+      ),
     );
   }
 }

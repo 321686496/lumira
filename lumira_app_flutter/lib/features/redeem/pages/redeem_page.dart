@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/lumira/lumira.dart'
+    show ButtonVariant, LumiraButton, LumiraTextField;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/redeem_models.dart';
 import '../data/redeem_repository.dart';
@@ -194,36 +195,15 @@ class _CodeCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          TextField(
+          LumiraTextField(
             controller: controller,
-            decoration: InputDecoration(
-              hintText: '请输入兑换码...',
-              hintStyle: TextStyle(color: tokens.textTertiary, fontSize: 14),
-              filled: true,
-              fillColor: tokens.canvas,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.divider, width: 1),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.divider, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.brand, width: 1.5),
-              ),
-            ),
-            style: TextStyle(color: tokens.textPrimary, fontSize: 14),
+            hintText: '请输入兑换码...',
           ),
           const SizedBox(height: 14),
           LumiraButton(
-            label: submitting ? '兑换中...' : '立即兑换',
-            variant: LumiraButtonVariant.brand,
-            enabled: !submitting,
-            onPressed: onSubmit,
+            variant: ButtonVariant.primary,
+            onPressed: submitting ? null : onSubmit,
+            child: Text(submitting ? '兑换中...' : '立即兑换'),
           ),
         ],
       ),

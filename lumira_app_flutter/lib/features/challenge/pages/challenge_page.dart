@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/challenge_models.dart';
@@ -144,8 +145,8 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
           ),
           // 主内容（extendBodyBehindAppBar 让内容延伸到 nav 下方）
           asyncState.when(
-            loading: () => const Center(
-              child: CircularProgressIndicator(),
+            loading: () => Center(
+              child: LumiraProgress.circular(),
             ),
             error: (e, _) => Center(
               child: Padding(
@@ -346,9 +347,9 @@ class _RevealedView extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         asyncSubs.when(
-          loading: () => const SizedBox(
+          loading: () => SizedBox(
             height: 100,
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: LumiraProgress.circular()),
           ),
           error: (e, _) => SizedBox(
             height: 100,

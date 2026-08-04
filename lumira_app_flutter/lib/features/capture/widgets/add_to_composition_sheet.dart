@@ -6,6 +6,7 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../profile/data/composition_kit_models.dart';
 import '../../profile/providers/composition_kits_providers.dart';
 
@@ -31,12 +32,9 @@ class AddToCompositionSheet extends ConsumerStatefulWidget {
     required String sceneName,
     String? sceneCoverUrl,
   }) {
-    return showModalBottomSheet(
+    return showLumiraBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (sheetCtx) => AddToCompositionSheet(
         sceneId: sceneId,
         sceneName: sceneName,
@@ -100,9 +98,7 @@ class _AddToCompositionSheetState extends ConsumerState<AddToCompositionSheet> {
     if (_saving) return;
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入套件名称')),
-      );
+      LumiraToast.show(context, '请输入套件名称');
       return;
     }
 
@@ -128,23 +124,20 @@ class _AddToCompositionSheetState extends ConsumerState<AddToCompositionSheet> {
       Navigator.of(context).pop();
 
       // Toast + "查看组合"快捷入口
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('已加入组合'),
-          duration: const Duration(seconds: 3),
-          action: SnackBarAction(
-            label: '查看组合',
-            onPressed: () {
-              GoRouter.of(context).push(RouteNames.profileCompositionKits);
-            },
-          ),
+      LumiraToast.show(
+        context,
+        '已加入组合',
+        duration: const Duration(seconds: 3),
+        action: ToastAction(
+          label: '查看组合',
+          onTap: () {
+            GoRouter.of(context).push(RouteNames.profileCompositionKits);
+          },
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存失败：$e')),
-      );
+      LumiraToast.show(context, '保存失败：$e');
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -170,42 +163,29 @@ class _AddToCompositionSheetState extends ConsumerState<AddToCompositionSheet> {
               _Header(tokens: tokens, title: '加入组合'),
               const SizedBox(height: 16),
               _Label(tokens: tokens, text: '套件名称'),
-              TextField(
+              LumiraTextField(
                 controller: _nameController,
-                decoration: InputDecoration(
-                  hintText: '如：咖啡馆+柔光人像',
-                  filled: true,
-                  fillColor: tokens.canvasDeep,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                style: TextStyle(color: tokens.textPrimary, fontSize: 14),
+                hintText: '如：咖啡馆+柔光人像',
               ),
               const SizedBox(height: 14),
               _Label(tokens: tokens, text: '关联模板（可选）'),
-              _TemplateDropdown(
-                tokens: tokens,
+              LumiraDropdown<String?>(
                 value: _selectedTemplateId,
-                options: _templateOptions,
+                items: _templateOptions
+                    .map((o) => DropdownMenuItem<String?>(
+                          value: o.id,
+                          child: Text(o.name),
+                        ))
+                    .toList(),
                 onChanged: (v) => setState(() => _selectedTemplateId = v),
+                hintText: '选择模板',
               ),
               const SizedBox(height: 14),
               _Label(tokens: tokens, text: '备注'),
-              TextField(
+              LumiraTextField(
                 controller: _noteController,
+                hintText: '记录拍摄要点（可选）',
                 maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: '记录拍摄要点（可选）',
-                  filled: true,
-                  fillColor: tokens.canvasDeep,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                style: TextStyle(color: tokens.textPrimary, fontSize: 14),
               ),
               const SizedBox(height: 20),
               _SaveButton(
@@ -279,48 +259,6 @@ class _Label extends StatelessWidget {
   }
 }
 
-class _TemplateDropdown extends StatelessWidget {
-  const _TemplateDropdown({
-    required this.tokens,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final ThemeTokens tokens;
-  final String? value;
-  final List<_TemplateOption> options;
-  final void Function(String?) onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: tokens.canvasDeep,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String?>(
-          value: value,
-          isExpanded: true,
-          icon: Icon(Icons.keyboard_arrow_down_rounded,
-              size: 18, color: tokens.textTertiary),
-          style: TextStyle(fontSize: 14, color: tokens.textPrimary),
-          dropdownColor: tokens.surface,
-          items: options
-              .map((o) => DropdownMenuItem<String?>(
-                    value: o.id,
-                    child: Text(o.name),
-                  ))
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
 class _SaveButton extends StatelessWidget {
   const _SaveButton({
     required this.tokens,
@@ -345,14 +283,7 @@ class _SaveButton extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: saving
-            ? SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: tokens.canvas,
-                ),
-              )
+            ? LumiraProgress.circular(strokeWidth: 2, size: 18)
             : Text(
                 '保存套件',
                 style: TextStyle(

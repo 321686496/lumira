@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
 import '../widgets/scene_achievement_card.dart';
@@ -105,9 +107,7 @@ class _CaptureSceneDetailPageState
       // 静默失败
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(newFav ? '已收藏场景' : '已取消收藏')),
-      );
+      LumiraToast.show(context, newFav ? '已收藏场景' : '已取消收藏');
     }
   }
 
@@ -224,45 +224,18 @@ class _DetailNav extends StatelessWidget {
     return LumiraNav(
       title: title,
       transparent: true,
-      leading: _NavIconButton(
+      leading: LumiraIconButton(
         icon: Icons.arrow_back_ios_new,
-        onTap: onBack,
+        onPressed: onBack,
+        size: 20,
       ),
       actions: [
-        _NavIconButton(
+        LumiraIconButton(
           icon: isFav ? Icons.favorite : Icons.favorite_border,
-          onTap: onToggleFav,
-          iconColor: const Color(0xFFC9A876),
+          onPressed: onToggleFav,
+          size: 20,
         ),
       ],
-    );
-  }
-}
-
-class _NavIconButton extends StatelessWidget {
-  const _NavIconButton({
-    required this.icon,
-    required this.onTap,
-    this.iconColor,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final Color? iconColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          icon,
-          size: 20, // 40rpx → 20dp
-          color: iconColor ?? const Color(0xFF2A2520),
-        ),
-      ),
     );
   }
 }
@@ -759,7 +732,8 @@ class _EmptyState extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          TextButton(
+          LumiraButton(
+            variant: ButtonVariant.ghost,
             onPressed: onBack,
             child: const Text('返回'),
           ),

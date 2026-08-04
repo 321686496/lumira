@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -99,11 +100,14 @@ class FragmentPosterContent extends StatelessWidget {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    CircularProgressIndicator(
-                      value: percent / 100.0,
-                      strokeWidth: 4,
-                      backgroundColor: t.brandSubtle,
-                      valueColor: AlwaysStoppedAnimation<Color>(t.brand),
+                    CustomPaint(
+                      size: const Size(48, 48),
+                      painter: _DeterminateProgressRing(
+                        progress: percent / 100.0,
+                        strokeWidth: 4,
+                        trackColor: t.brandSubtle,
+                        progressColor: t.brand,
+                      ),
                     ),
                     Text(
                       '$percent%',
@@ -256,4 +260,54 @@ class FragmentPosterGenerator {
       fileNamePrefix: 'lumira_fragment_${fragment.name}',
     );
   }
+}
+
+/// 确定性圆形进度环（替代 Material CircularProgressIndicator 的 determinate 模式）
+///
+/// LumiraProgress.circular() 仅支持 indeterminate 模式，
+/// 此 painter 用于海报中展示静态进度百分比。
+class _DeterminateProgressRing extends CustomPainter {
+  const _DeterminateProgressRing({
+    required this.progress,
+    required this.strokeWidth,
+    required this.trackColor,
+    required this.progressColor,
+  });
+
+  final double progress;
+  final double strokeWidth;
+  final Color trackColor;
+  final Color progressColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (math.min(size.width, size.height) - strokeWidth) / 2;
+    if (radius <= 0) return;
+
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    // 背景圆环
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, trackPaint);
+
+    // 进度弧（从顶部开始，顺时针）
+    final progressPaint = Paint()
+      ..color = progressColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    final sweepAngle = 2 * math.pi * progress.clamp(0.0, 1.0);
+    canvas.drawArc(rect, -math.pi / 2, sweepAngle, false, progressPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DeterminateProgressRing oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.trackColor != trackColor ||
+      oldDelegate.progressColor != progressColor ||
+      oldDelegate.strokeWidth != strokeWidth;
 }

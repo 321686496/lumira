@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
@@ -12,7 +13,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/time_format.dart';
-import '../../../shared/widgets/feedback/lumira_toast.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/providers/collection_providers.dart';
 
@@ -50,6 +51,10 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
 
   /// 所有可用场景列表（用于分类更换选择器）
   List<SceneRecord> _allScenes = const [];
+
+  /// 是否处于"对比"模式（点击 AppBar "对比"按钮切换）。
+  /// 为 true 时 _ReadOnlyCanvas 显示原图（originalPath），为 false 时显示已烘焙的成品。
+  bool _isComparing = false;
 
   Future<void> _loadPhoto(GalleryDao dao) async {
     try {
@@ -152,13 +157,9 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     if (photo == null) return;
     final tokens = ref.read(themeTokensProvider);
 
-    final result = await showModalBottomSheet<String?>(
+    final result = await showLumiraBottomSheet<String?>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: tokens.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
       builder: (ctx) => _CategoryPickerSheet(
         tokens: tokens,
         scenes: _allScenes,
@@ -210,6 +211,124 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     }
   }
 
+  /// 点击 AppBar "对比"按钮：切换显示原图 / 成品。
+  /// 若原图未保留，提示并保持原状。
+  void _onCompareToggle() {
+    final photo = _photo;
+    if (photo == null) return;
+    final hasOriginal =
+        photo.originalPath != null && photo.originalPath!.isNotEmpty;
+    if (!hasOriginal) {
+      LumiraToast.show(
+        context,
+        '原图未保留，无法对比',
+        duration: const Duration(milliseconds: 1500),
+      );
+      return;
+    }
+    setState(() => _isComparing = !_isComparing);
+  }
+
+  /// 分享当前照片：优先分享本地文件；网络图（dataUrl 以 http 开头）暂不支持。
+  Future<void> _onShare() async {
+    final photo = _photo;
+    if (photo == null) return;
+    final filePath = photo.filePath;
+    final dataUrl = photo.dataUrl;
+    // 选取第一个可用的本地路径
+    final localPath = (filePath != null && filePath.isNotEmpty && !filePath.startsWith('http'))
+        ? filePath
+        : null;
+    if (localPath == null) {
+      final isNetwork = (dataUrl != null && dataUrl.startsWith('http')) ||
+          (filePath != null && filePath.startsWith('http'));
+      if (isNetwork) {
+        LumiraToast.show(
+          context,
+          '网络图片暂不支持分享',
+          duration: const Duration(milliseconds: 1500),
+        );
+      } else {
+        LumiraToast.show(
+          context,
+          '未找到可分享的照片文件',
+          duration: const Duration(milliseconds: 1500),
+        );
+      }
+      return;
+    }
+    try {
+      await Share.shareXFiles(
+        [XFile(localPath)],
+        subject: '如画 LUMIRA · 摄影作品',
+        text: '我用如画拍了一张照片，快来看看吧！',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      LumiraToast.show(
+        context,
+        '分享失败：$e',
+        duration: const Duration(seconds: 2),
+      );
+    }
+  }
+
+  /// 删除当前照片：先弹出确认对话框，确认后调用 DAO 删除并返回上一页。
+  Future<void> _onDelete() async {
+    final photo = _photo;
+    if (photo == null) return;
+    final tokens = ref.read(themeTokensProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: tokens.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '删除照片',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
+        ),
+        content: Text(
+          '确定删除这张照片吗？此操作不可撤销。',
+          style: TextStyle(fontSize: 14, color: tokens.textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('取消', style: TextStyle(color: tokens.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('删除', style: TextStyle(color: tokens.danger, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final dao = await ref.read(galleryDaoProvider.future);
+      await dao.delete(photo.id);
+      ref.invalidate(collectionsListProvider);
+      if (!mounted) return;
+      LumiraToast.show(
+        context,
+        '已删除',
+        duration: const Duration(milliseconds: 1000),
+      );
+      context.pop();
+    } catch (e) {
+      if (!mounted) return;
+      LumiraToast.show(
+        context,
+        '删除失败：$e',
+        duration: const Duration(seconds: 2),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -222,7 +341,14 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         transparent: true,
         leading: _DarkBackButton(tokens: tokens),
         actions: [
-          _CompareAction(tokens: tokens),
+          _CompareAction(
+            tokens: tokens,
+            isComparing: _isComparing,
+            enabled: _photo != null &&
+                _photo!.originalPath != null &&
+                _photo!.originalPath!.isNotEmpty,
+            onTap: _onCompareToggle,
+          ),
           if (_photo != null)
             _FavoriteButton(
               photo: _photo!,
@@ -248,12 +374,17 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
                 ref.invalidate(collectionsListProvider);
               },
             ),
-          _MoreAction(tokens: tokens),
+          if (_photo != null)
+            _MoreAction(
+              tokens: tokens,
+              onShare: _onShare,
+              onDelete: _onDelete,
+            ),
         ],
       ),
       body: daoAsync.when(
         loading: () =>
-            Center(child: CircularProgressIndicator(color: tokens.brand)),
+            Center(child: LumiraProgress.circular()),
         error: (e, _) => Center(
           child: Text('加载失败：$e', style: TextStyle(color: tokens.textSecondary)),
         ),
@@ -264,7 +395,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
           }
           if (_isLoading) {
             return Center(
-                child: CircularProgressIndicator(color: tokens.brand));
+                child: LumiraProgress.circular());
           }
           return _photo == null ? _EmptyCanvas(tokens: tokens) : _buildContent(_photo!, tokens);
         },
@@ -283,7 +414,12 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 1. 照片预览区（应用 photo.postProcess 滤镜，只读）
-          _ReadOnlyCanvas(photo: photo, tokens: tokens),
+          // _isComparing 为 true 时切换显示原图
+          _ReadOnlyCanvas(
+            photo: photo,
+            tokens: tokens,
+            isComparing: _isComparing,
+          ),
           // 2. 元信息 section
           _MetaInfoSection(photo: photo, tokens: tokens),
           // 3. 分类（场景）section —— 可查看并更换
@@ -328,42 +464,159 @@ class _DarkBackButton extends StatelessWidget {
   }
 }
 
+/// AppBar "对比"按钮：点击切换 _ReadOnlyCanvas 显示原图 / 成品。
+/// isComparing 为 true 时高亮显示，提示当前正在对比。
+/// enabled 为 false 时（原图未保留）按钮置灰，点击会触发外层提示。
 class _CompareAction extends StatelessWidget {
-  const _CompareAction({required this.tokens});
+  const _CompareAction({
+    required this.tokens,
+    required this.isComparing,
+    required this.enabled,
+    required this.onTap,
+  });
+
   final ThemeTokens tokens;
+  final bool isComparing;
+  final bool enabled;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final color = isComparing
+        ? tokens.brandDeep
+        : (enabled ? tokens.brand : tokens.textTertiary);
     return GestureDetector(
-      onTap: () {},
+      onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Text(
-          '对比',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: tokens.brand,
-          ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        margin: const EdgeInsets.all(2),
+        decoration: isComparing
+            ? BoxDecoration(
+                color: tokens.brandSubtle,
+                borderRadius: BorderRadius.circular(1000),
+              )
+            : null,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isComparing ? Icons.compare : Icons.compare_outlined,
+              size: 14,
+              color: color,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              isComparing ? '原图' : '对比',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"分享照片" / "删除照片"操作。
 class _MoreAction extends StatelessWidget {
-  const _MoreAction({required this.tokens});
+  const _MoreAction({
+    required this.tokens,
+    required this.onShare,
+    required this.onDelete,
+  });
+
   final ThemeTokens tokens;
+  final Future<void> Function() onShare;
+  final Future<void> Function() onDelete;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+      onTap: () => _showSheet(context),
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Icon(Icons.more_horiz, size: 20, color: tokens.textSecondary),
+      ),
+    );
+  }
+
+  Future<void> _showSheet(BuildContext context) async {
+    final result = await showLumiraBottomSheet<String>(
+      context: context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _MoreSheetOption(
+            tokens: tokens,
+            icon: Icons.ios_share_outlined,
+            label: '分享照片',
+            onTap: () => Navigator.of(ctx).pop('share'),
+          ),
+          Divider(height: 1, color: tokens.divider),
+          _MoreSheetOption(
+            tokens: tokens,
+            icon: Icons.delete_outline,
+            label: '删除照片',
+            isDanger: true,
+            onTap: () => Navigator.of(ctx).pop('delete'),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+    if (result == null) return;
+    if (result == 'share') {
+      await onShare();
+    } else if (result == 'delete') {
+      await onDelete();
+    }
+  }
+}
+
+/// _MoreAction BottomSheet 中的单行选项
+class _MoreSheetOption extends StatelessWidget {
+  const _MoreSheetOption({
+    required this.tokens,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.isDanger = false,
+  });
+
+  final ThemeTokens tokens;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool isDanger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDanger ? tokens.danger : tokens.textPrimary;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 15,
+                color: color,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -438,31 +691,83 @@ class _EmptyCanvas extends StatelessWidget {
 
 /// 只读照片预览区：直接显示已烘焙的 JPEG（filePath 已含 postProcess 色彩矩阵 +
 /// transform 变换）。不再叠加 ColorFiltered，避免"2x 参数"效果。
+/// 支持 InteractiveViewer 双指缩放与拖拽查看细节。
+///
+/// 当 isComparing 为 true 且 photo.originalPath 存在时，切换显示原图
+/// （未应用后期参数的原始照片），便于与编辑后效果对比。
 class _ReadOnlyCanvas extends StatelessWidget {
-  const _ReadOnlyCanvas({required this.photo, required this.tokens});
+  const _ReadOnlyCanvas({
+    required this.photo,
+    required this.tokens,
+    this.isComparing = false,
+  });
+
   final GalleryItemRecord photo;
   final ThemeTokens tokens;
+  final bool isComparing;
 
   @override
   Widget build(BuildContext context) {
-    final url = photo.dataUrl ?? photo.filePath;
+    // 对比模式优先显示原图；否则显示已烘焙的成品（filePath 优先，回退 dataUrl）
+    final String? url;
+    if (isComparing &&
+        photo.originalPath != null &&
+        photo.originalPath!.isNotEmpty) {
+      url = photo.originalPath;
+    } else {
+      url = photo.dataUrl ?? photo.filePath;
+    }
     final screenHeight = MediaQuery.of(context).size.height;
     final canvasHeight = screenHeight * 0.45;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      height: canvasHeight,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: url == null || url.isEmpty
-            ? Container(
-                color: tokens.surfaceAlt,
-                child: Center(
-                  child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
+    return Stack(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          height: canvasHeight,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: url == null || url.isEmpty
+                ? Container(
+                    color: tokens.surfaceAlt,
+                    child: Center(
+                      child: Icon(Icons.image_outlined,
+                          size: 32, color: tokens.textTertiary),
+                    ),
+                  )
+                : InteractiveViewer(
+                    minScale: 1.0,
+                    maxScale: 4.0,
+                    panEnabled: true,
+                    scaleEnabled: true,
+                    boundaryMargin: EdgeInsets.zero,
+                    child: _buildImage(url),
+                  ),
+          ),
+        ),
+        // 对比模式右上角标记
+        if (isComparing && url != null && url.isNotEmpty)
+          Positioned(
+            top: 24,
+            right: 24,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: tokens.brandDeep,
+                borderRadius: BorderRadius.circular(1000),
+              ),
+              child: Text(
+                '原图',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.textInverse,
+                  fontWeight: FontWeight.w600,
                 ),
-              )
-            : _buildImage(url),
-      ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

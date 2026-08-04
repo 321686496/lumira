@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 
 /// 解锁模板页
@@ -18,7 +19,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 /// 3. OptionsList 5 个解锁选项（锁定态）
 /// 4. BottomNote（锁定态）
 /// 5. SuccessCard（解锁态）
-/// 6. PayPopup（showDialog，购买时弹出）
+/// 6. PayPopup（showLumiraDialog，购买时弹出）
 class TemplatesUnlockPage extends ConsumerStatefulWidget {
   const TemplatesUnlockPage({super.key, this.templateId});
 
@@ -42,22 +43,16 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
   }
 
   void _onWatchAd() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('广告播放中…')),
-    );
+    lumira.LumiraToast.show(context, '广告播放中…');
     Future.delayed(const Duration(milliseconds: 1200), () {
       if (!mounted) return;
       setState(() => _unlocked = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('解锁成功')),
-      );
+      lumira.LumiraToast.show(context, '解锁成功');
     });
   }
 
   void _onShare() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('分享成功 +1')),
-    );
+    lumira.LumiraToast.show(context, '分享成功 +1');
   }
 
   void _onGoCapture() {
@@ -65,53 +60,46 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
   }
 
   Future<void> _onInputCode() async {
-    final code = await showDialog<String>(
+    final controller = TextEditingController();
+    final code = await lumira.showLumiraDialog<String>(
       context: context,
-      builder: (ctx) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('输入兑换码'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(hintText: '请输入兑换码'),
-            autofocus: true,
+      builder: (ctx) => lumira.LumiraAlertDialog(
+        title: const Text('输入兑换码'),
+        content: lumira.LumiraTextField(
+          controller: controller,
+          hintText: '请输入兑换码',
+        ),
+        actions: [
+          lumira.LumiraButton(
+            variant: ButtonVariant.ghost,
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, controller.text),
-              child: const Text('确认'),
-            ),
-          ],
-        );
-      },
+          lumira.LumiraButton(
+            variant: ButtonVariant.primary,
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
     );
     if (code != null && code.isNotEmpty) {
       if (!mounted) return;
       setState(() => _unlocked = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('解锁成功')),
-      );
+      lumira.LumiraToast.show(context, '解锁成功');
     }
   }
 
   void _onPurchase() {
-    final tokens = ref.read(themeTokensProvider);
-    showDialog<void>(
+    lumira.showLumiraDialog<void>(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => _PayPopupDialog(
-        tokens: tokens,
-        onCancel: () => Navigator.pop(ctx),
+      builder: (ctx) => _PayPopupContent(
+        onCancel: () => Navigator.pop(context),
         onConfirm: () {
-          Navigator.pop(ctx);
+          Navigator.pop(context);
           setState(() => _unlocked = true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('解锁成功')),
-          );
+          lumira.LumiraToast.show(context, '解锁成功');
         },
       ),
     );
@@ -656,14 +644,9 @@ class _OptionCard extends ConsumerWidget {
           ),
           if (progress != null) ...[
             const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(9999),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 6,
-                backgroundColor: tokens.surfaceAlt,
-                valueColor: AlwaysStoppedAnimation<Color>(tokens.brand),
-              ),
+            lumira.LumiraProgress.linear(
+              value: progress,
+              minHeight: 6,
             ),
           ],
         ],
@@ -824,10 +807,13 @@ class _SuccessCard extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 28),
-            LumiraButton(
-              variant: LumiraButtonVariant.brand,
-              label: '开始使用',
+            lumira.LumiraButton(
+              variant: ButtonVariant.primary,
               onPressed: onStartUse,
+              child: const SizedBox(
+                width: double.infinity,
+                child: Text('开始使用'),
+              ),
             ),
           ],
         ),
@@ -836,125 +822,116 @@ class _SuccessCard extends StatelessWidget {
   }
 }
 
-class _PayPopupDialog extends ConsumerWidget {
-  const _PayPopupDialog({
-    required this.tokens,
+class _PayPopupContent extends ConsumerWidget {
+  const _PayPopupContent({
     required this.onCancel,
     required this.onConfirm,
   });
 
-  final ThemeTokens tokens;
   final VoidCallback onCancel;
   final VoidCallback onConfirm;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
-    return Dialog(
-      backgroundColor: tokens.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '确认支付',
+          style: TextStyle(
+            fontFamily: 'Noto Serif SC',
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          '¥3.00',
+          style: TextStyle(
+            fontSize: 36,
+            fontWeight: FontWeight.w700,
+            color: tokens.brand,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '日系胶片 · 精选模板 · 永久使用',
+          style: TextStyle(
+            fontSize: 12,
+            color: tokens.textTertiary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+        Row(
           children: [
-            Text(
-              '确认支付',
-              style: TextStyle(
-                fontFamily: 'Noto Serif SC',
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '¥3.00',
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.w700,
-                color: tokens.brand,
-                height: 1,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '日系胶片 · 精选模板 · 永久使用',
-              style: TextStyle(
-                fontSize: 12,
-                color: tokens.textTertiary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: onCancel,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        // neumorphic 风格下：移除 border，用 canvasDeep + shadowConcaveSubtle
-                        color: isNeumorphic
-                            ? tokens.canvasDeep
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                        border: isNeumorphic
-                            ? null
-                            : Border.all(color: tokens.divider, width: 1),
-                        boxShadow: isNeumorphic
-                            ? tokens.shadowConcaveSubtle
-                            : null,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '取消',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: tokens.textSecondary,
-                            height: 1,
-                          ),
-                        ),
+            Expanded(
+              child: GestureDetector(
+                onTap: onCancel,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    // neumorphic 风格下：移除 border，用 canvasDeep + shadowConcaveSubtle
+                    color: isNeumorphic
+                        ? tokens.canvasDeep
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    border: isNeumorphic
+                        ? null
+                        : Border.all(color: tokens.divider, width: 1),
+                    boxShadow: isNeumorphic
+                        ? tokens.shadowConcaveSubtle
+                        : null,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.textSecondary,
+                        height: 1,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: onConfirm,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: tokens.brand,
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: tokens.shadowConvexBrand,
-                      ),
-                      child: Center(
-                        child: Text(
-                          '确认支付',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: tokens.textInverse,
-                            height: 1,
-                          ),
-                        ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: GestureDetector(
+                onTap: onConfirm,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: tokens.brand,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: tokens.shadowConvexBrand,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '确认支付',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.textInverse,
+                        height: 1,
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 }

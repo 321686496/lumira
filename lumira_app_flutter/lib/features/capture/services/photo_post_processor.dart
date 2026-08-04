@@ -30,6 +30,9 @@ class PhotoPostProcessor {
   ///
   /// [screenRatio] 屏幕宽高比（width/height），用于 fullscreen 模式按取景器裁剪
   /// [isPortrait] 设备是否为竖屏，用于 '4:3' 等比例的方向自适应裁剪
+  /// [customCropRect] 自定义裁剪框（相对坐标 0.0-1.0，相对比例裁剪后的可见区域）。
+  ///   为 null 时使用默认居中按比例裁剪（向后兼容）；
+  ///   不为 null 时在比例裁剪的基础上进一步裁剪（两步裁剪保证 WYSIWYG）。
   static Future<String> processFile({
     required String inputPath,
     required PostProcess params,
@@ -41,6 +44,7 @@ class PhotoPostProcessor {
     TransformParams? transform,
     FillLightState? fillLight,
     String facing = 'back',
+    CropRect? customCropRect,
   }) async {
     // 注意：rawMode 不再跳过裁剪。裁剪是 WYSIWYG 的保证（取景器所见即所得），
     // rawMode 仅跳过滤镜效果（ColorMatrix / Vignette / Sharpen / Clarity / Grain）。
@@ -83,14 +87,33 @@ class PhotoPostProcessor {
       }
 
       // 2. 计算裁剪区域（基于 aspectRatio 和 screenRatio）—— 始终应用
-      final cropRect = computeCropRect(
+      var cropRect = computeCropRect(
         aspectRatio,
         workingImage.width,
         workingImage.height,
         screenRatio,
         isPortrait,
       );
-      debugPrint('[post-process] 裁剪区域: $cropRect');
+      debugPrint('[post-process] 裁剪区域（比例）: $cropRect');
+
+      // 2.5. 如果有自定义裁剪框，在比例裁剪的基础上进一步裁剪（两步裁剪）
+      // 自定义裁剪框的相对坐标是相对于"比例裁剪后的可见区域"（即用户在编辑页看到的图片）
+      // 因此先按比例裁剪得到可见区域，再在可见区域内按自定义 Rect 裁剪
+      if (customCropRect != null) {
+        final innerCrop = computeCustomCropRect(
+          customCropRect,
+          cropRect[2], // 比例裁剪后的宽度
+          cropRect[3], // 比例裁剪后的高度
+        );
+        // 合并：在原图中的绝对位置 = 比例裁剪偏移 + 自定义裁剪偏移
+        cropRect = [
+          cropRect[0] + innerCrop[0],
+          cropRect[1] + innerCrop[1],
+          innerCrop[2],
+          innerCrop[3],
+        ];
+        debugPrint('[post-process] 裁剪区域（自定义）: $cropRect');
+      }
 
       // 3. 计算降采样后的输出尺寸（长边 ≤ 1536，严格保持裁剪区域比例）
       const maxDimension = 1536;
@@ -515,5 +538,28 @@ class PhotoPostProcessor {
         'targetRatio=$targetRatio, 裁剪后比例=${width / height}');
 
     return [offsetX, offsetY, width, height];
+  }
+
+  /// 计算自定义裁剪区域 [x, y, width, height]（像素坐标）
+  ///
+  /// 将相对坐标（0.0-1.0）的自定义裁剪框转换为像素坐标。
+  /// 用于可拖拽裁剪框方案：用户在编辑页拖拽调整裁剪框后，导出时转为像素裁剪区域。
+  ///
+  /// 参数：
+  /// - [relativeRect] 自定义裁剪框（相对坐标 0.0-1.0）
+  /// - [imgW] 图片宽度（像素）
+  /// - [imgH] 图片高度（像素）
+  ///
+  /// 返回：[x, y, width, height] 像素坐标，已 clamp 到合法范围
+  static List<int> computeCustomCropRect(
+    CropRect relativeRect,
+    int imgW,
+    int imgH,
+  ) {
+    final x = (relativeRect.x * imgW).round().clamp(0, imgW - 1);
+    final y = (relativeRect.y * imgH).round().clamp(0, imgH - 1);
+    final w = (relativeRect.w * imgW).round().clamp(1, imgW - x);
+    final h = (relativeRect.h * imgH).round().clamp(1, imgH - y);
+    return [x, y, w, h];
   }
 }

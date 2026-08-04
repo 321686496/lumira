@@ -9,9 +9,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/feedback/lumira_toast.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
@@ -517,58 +518,43 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
   /// 顶部 nav 分享按钮：弹出底部 Sheet
   Future<void> _onShare() async {
-    await showModalBottomSheet<void>(
+    await showLumiraBottomSheet<void>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(top: 8, bottom: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE5E0D8),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            _ShareOption(
-              icon: Icons.save_alt_outlined,
-              text: '保存到相册',
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _onSave();
-              },
-            ),
-            _ShareOption(
-              icon: Icons.ios_share_outlined,
-              text: '分享到系统',
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _onShareSystem();
-              },
-            ),
-            _ShareOption(
-              icon: Icons.content_paste_outlined,
-              text: '生成 EXIF 海报',
-              onTap: () {
-                Navigator.of(ctx).pop();
-                _onExifPoster();
-              },
-            ),
-            const SizedBox(height: 8),
-            _ShareOption(
-              icon: Icons.close,
-              text: '取消',
-              onTap: () => Navigator.of(ctx).pop(),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ShareOption(
+            icon: Icons.save_alt_outlined,
+            text: '保存到相册',
+            onTap: () {
+              Navigator.of(ctx).pop();
+              _onSave();
+            },
+          ),
+          _ShareOption(
+            icon: Icons.ios_share_outlined,
+            text: '分享到系统',
+            onTap: () {
+              Navigator.of(ctx).pop();
+              _onShareSystem();
+            },
+          ),
+          _ShareOption(
+            icon: Icons.content_paste_outlined,
+            text: '生成 EXIF 海报',
+            onTap: () {
+              Navigator.of(ctx).pop();
+              _onExifPoster();
+            },
+          ),
+          const SizedBox(height: 8),
+          _ShareOption(
+            icon: Icons.close,
+            text: '取消',
+            onTap: () => Navigator.of(ctx).pop(),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
@@ -588,18 +574,14 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('分享失败：$e')),
-      );
+      LumiraToast.show(context, '分享失败：$e');
     }
   }
 
   /// 生成 EXIF 海报并弹出 PosterGenerator 预览
   Future<void> _onExifPoster() async {
     if (_photoUrl.isEmpty || _photoUrl.startsWith('http')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('网络图片无法生成 EXIF 海报')),
-      );
+      LumiraToast.show(context, '网络图片无法生成 EXIF 海报');
       return;
     }
 
@@ -648,9 +630,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('生成失败：$e')),
-      );
+      LumiraToast.show(context, '生成失败：$e');
     }
   }
 
@@ -683,23 +663,25 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 显示保存对话框，返回是否保留原图（null = 用户取消）
   Future<bool?> _showSaveDialog() async {
     bool keepOriginal = true;
-    return showDialog<bool>(
+    return showLumiraDialog<bool>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setState) {
-          return AlertDialog(
+          return LumiraAlertDialog(
             title: const Text('保存到相册'),
-            content: CheckboxListTile(
-              title: const Text('保留原图（可再次编辑）'),
+            content: LumiraCheckboxListTile(
               value: keepOriginal,
               onChanged: (v) => setState(() => keepOriginal = v ?? true),
+              title: const Text('保留原图（可再次编辑）'),
             ),
             actions: [
-              TextButton(
+              LumiraButton(
+                variant: ButtonVariant.ghost,
                 onPressed: () => Navigator.pop(ctx, null),
                 child: const Text('取消'),
               ),
-              TextButton(
+              LumiraButton(
+                variant: ButtonVariant.primary,
                 onPressed: () => Navigator.pop(ctx, keepOriginal),
                 child: const Text('保存'),
               ),
@@ -2105,14 +2087,11 @@ class _SaveButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: isSaving
-              ? const [
+              ? [
                   SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFFFAF7F2),
-                    ),
+                    child: LumiraProgress.circular(strokeWidth: 2),
                   ),
                 ]
               : const [
@@ -2153,7 +2132,7 @@ class _ShareOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
+    return LumiraListTile(
       leading: Icon(icon, size: 22, color: const Color(0xFF1A1A1A)),
       title: Text(
         text,

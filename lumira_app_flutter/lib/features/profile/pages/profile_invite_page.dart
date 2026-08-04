@@ -4,14 +4,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../features/invite/data/invite_models.dart';
 import '../../../features/invite/data/invite_repository.dart';
 import '../../../shared/widgets/api_error_banner.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 
 /// 邀请有礼页
@@ -41,81 +42,47 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
   }
 
   Future<void> _generateInviteCard() async {
-    final messenger = ScaffoldMessenger.of(context);
+    final toastContext = context;
     try {
       final repo = await ref.read(inviteRepositoryProvider.future);
       final code = await repo.generateCode();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('邀请码已生成：${code.code}'),
-          duration: const Duration(milliseconds: 1500),
-        ),
-      );
+      if (!mounted) return;
+      LumiraToast.show(toastContext, '邀请码已生成：${code.code}', duration: const Duration(milliseconds: 1500));
     } on ApiException catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('生成失败：${e.message}'),
-          duration: const Duration(milliseconds: 1500),
-        ),
-      );
+      if (!mounted) return;
+      LumiraToast.show(toastContext, '生成失败：${e.message}', duration: const Duration(milliseconds: 1500));
     } catch (_) {
       // 离线/未注册环境兜底：保留原占位 SnackBar 行为
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('生成邀请卡片'),
-          duration: Duration(milliseconds: 1000),
-        ),
-      );
+      if (!mounted) return;
+      LumiraToast.show(toastContext, '生成邀请卡片', duration: const Duration(milliseconds: 1000));
     }
   }
 
   Future<void> _confirmBindCode() async {
     final code = _codeController.text.trim();
-    final messenger = ScaffoldMessenger.of(context);
+    final toastContext = context;
     if (code.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('请输入邀请码'),
-          duration: Duration(milliseconds: 1000),
-        ),
-      );
+      LumiraToast.show(toastContext, '请输入邀请码', duration: const Duration(milliseconds: 1000));
       return;
     }
     try {
       final repo = await ref.read(inviteRepositoryProvider.future);
       final resp = await repo.activate(ActivateInviteRequest(inviteCode: code));
+      if (!mounted) return;
       if (resp.rewards != null) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('邀请码已激活，解锁 ${resp.rewards!.items.length} 项奖励'),
-            duration: const Duration(milliseconds: 1500),
-          ),
-        );
+        LumiraToast.show(toastContext, '邀请码已激活，解锁 ${resp.rewards!.items.length} 项奖励', duration: const Duration(milliseconds: 1500));
       } else {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('邀请码已激活'),
-            duration: Duration(milliseconds: 1500),
-          ),
-        );
+        LumiraToast.show(toastContext, '邀请码已激活', duration: const Duration(milliseconds: 1500));
       }
       ref.invalidate(inviteStatsProvider);
       _codeController.clear();
     } on ApiException catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('激活失败：${e.message}'),
-          duration: const Duration(milliseconds: 1500),
-        ),
-      );
+      if (!mounted) return;
+      LumiraToast.show(toastContext, '激活失败：${e.message}', duration: const Duration(milliseconds: 1500));
     } catch (_) {
       // 离线/未注册环境兜底
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('绑定成功：$code'),
-          duration: const Duration(milliseconds: 1000),
-        ),
-      );
+      if (!mounted) return;
+      LumiraToast.show(toastContext, '绑定成功：$code', duration: const Duration(milliseconds: 1000));
       _codeController.clear();
     }
   }
@@ -177,10 +144,16 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
                 FadeUp(
                   delay: const Duration(milliseconds: 300),
                   child: LumiraButton(
-                    label: '生成邀请卡片',
-                    variant: LumiraButtonVariant.brand,
-                    icon: Icons.brush_outlined,
+                    variant: ButtonVariant.primary,
                     onPressed: _generateInviteCard,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.brush_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('生成邀请卡片'),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -560,37 +533,17 @@ class _CodeCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
+          LumiraTextField(
             controller: controller,
-            decoration: InputDecoration(
-              hintText: '粘贴好友的邀请码...',
-              hintStyle: TextStyle(color: tokens.textTertiary, fontSize: 14),
-              filled: true,
-              fillColor: tokens.canvas,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.divider, width: 1),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.divider, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.brand, width: 1.5),
-              ),
-            ),
-            style: TextStyle(color: tokens.textPrimary, fontSize: 14),
+            hintText: '粘贴好友的邀请码...',
           ),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
             child: LumiraButton(
-              label: '确认绑定',
-              variant: LumiraButtonVariant.outline,
-              expand: false,
+              variant: ButtonVariant.secondary,
               onPressed: onConfirm,
+              child: const Text('确认绑定'),
             ),
           ),
         ],

@@ -9,6 +9,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/router/route_names.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/profile_mock_data.dart';
 
@@ -34,23 +35,13 @@ class _ProfileThemePageState extends ConsumerState<ProfileThemePage> {
   void _selectTheme(ThemeKey key) {
     ref.read(themeKeyProvider.notifier).state = key;
     final label = ProfileMockData.themes.firstWhere((t) => t.key == key).label;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('已切换至$label'),
-        duration: const Duration(milliseconds: 1000),
-      ),
-    );
+    LumiraToast.show(context, '已切换至$label', duration: const Duration(milliseconds: 1000));
   }
 
   void _selectStyle(UIStyle style) {
     ref.read(uiStyleProvider.notifier).state = style;
     final label = ProfileMockData.styles.firstWhere((s) => s.style == style).label;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('已切换至$label风格'),
-        duration: const Duration(milliseconds: 1000),
-      ),
-    );
+    LumiraToast.show(context, '已切换至$label风格', duration: const Duration(milliseconds: 1000));
   }
 
   @override
@@ -784,10 +775,9 @@ class _FollowSystemCard extends StatelessWidget {
               ],
             ),
           ),
-          Switch(
+          LumiraSwitch(
             value: value,
             onChanged: onChanged,
-            activeColor: tokens.brand,
           ),
         ],
       ),

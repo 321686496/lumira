@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/composition_kit_models.dart';
 import '../providers/composition_kits_providers.dart';
@@ -33,7 +34,7 @@ class CompositionKitDetailPage extends ConsumerWidget {
       ),
       body: SafeArea(
         child: kitAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => Center(child: LumiraProgress.circular()),
           error: (e, _) => Center(child: Text('加载失败：$e')),
           data: (kit) {
             if (kit == null) {

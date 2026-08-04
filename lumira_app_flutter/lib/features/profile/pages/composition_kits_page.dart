@@ -6,10 +6,12 @@ import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/composition_kit_models.dart';
 import '../providers/composition_kits_providers.dart';
@@ -38,14 +40,13 @@ class CompositionKitsPage extends ConsumerWidget {
         transparent: true,
         leading: _BackButton(tokens: tokens),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: LumiraFloatingActionButton(
         onPressed: () => _showCreateKitSheet(context, ref),
-        backgroundColor: tokens.brand,
-        child: Icon(Icons.add, color: tokens.canvas),
+        child: const Icon(Icons.add),
       ),
       body: SafeArea(
         child: kitsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => Center(child: LumiraProgress.circular()),
           error: (e, _) => Center(child: Text('加载失败：$e')),
           data: (kits) => RefreshIndicator(
             onRefresh: () async => ref.invalidate(compositionKitsProvider),
@@ -79,47 +80,44 @@ class CompositionKitsPage extends ConsumerWidget {
 
   void _showActionSheet(BuildContext context, WidgetRef ref, CompositionKit kit) {
     final tokens = ref.read(themeTokensProvider);
-    showModalBottomSheet(
+    showLumiraBottomSheet(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.camera_alt_outlined, color: tokens.brand),
-              title: const Text('套用拍照'),
-              onTap: () {
-                Navigator.pop(ctx);
-                GoRouter.of(context).push(RouteNames.build(RouteNames.capture, {
-                  RouteNames.paramScene: kit.sceneId,
-                  RouteNames.paramTemplateId: kit.templateId ?? '',
-                  RouteNames.paramKitId: kit.id,
-                }));
-              },
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LumiraListTile(
+            leading: Icon(Icons.camera_alt_outlined, color: tokens.brand),
+            title: const Text('套用拍照'),
+            onTap: () {
+              Navigator.pop(ctx);
+              GoRouter.of(context).push(RouteNames.build(RouteNames.capture, {
+                RouteNames.paramScene: kit.sceneId,
+                RouteNames.paramTemplateId: kit.templateId ?? '',
+                RouteNames.paramKitId: kit.id,
+              }));
+            },
+          ),
+          LumiraListTile(
+            leading: Icon(Icons.delete_outline, color: tokens.danger),
+            title: Text('删除', style: TextStyle(color: tokens.danger)),
+            onTap: () async {
+              Navigator.pop(ctx);
+              final dao = await ref.read(compositionKitsDaoProvider.future);
+              await dao.delete(kit.id);
+              ref.invalidate(compositionKitsProvider);
+              // ignore: use_build_context_synchronously
+              if (!context.mounted) return;
+              LumiraToast.show(context, '已删除');
+            },
+          ),
+          LumiraListTile(
+            title: Center(
+              child: Text('取消',
+                  style: TextStyle(color: tokens.textSecondary)),
             ),
-            ListTile(
-              leading: Icon(Icons.delete_outline, color: tokens.danger),
-              title: Text('删除', style: TextStyle(color: tokens.danger)),
-              onTap: () async {
-                Navigator.pop(ctx);
-                final messenger = ScaffoldMessenger.of(context);
-                final dao = await ref.read(compositionKitsDaoProvider.future);
-                await dao.delete(kit.id);
-                ref.invalidate(compositionKitsProvider);
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('已删除')),
-                );
-              },
-            ),
-            ListTile(
-              title: Center(
-                child: Text('取消',
-                    style: TextStyle(color: tokens.textSecondary)),
-              ),
-              onTap: () => Navigator.pop(ctx),
-            ),
-          ],
-        ),
+            onTap: () => Navigator.pop(ctx),
+          ),
+        ],
       ),
     );
   }
@@ -127,13 +125,9 @@ class CompositionKitsPage extends ConsumerWidget {
   /// 弹出"新建组合"底部表单：选择场景（必选）+ 模板（可选）+ 名称
   void _showCreateKitSheet(BuildContext context, WidgetRef ref) {
     final tokens = ref.read(themeTokensProvider);
-    showModalBottomSheet<void>(
+    showLumiraBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: tokens.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (_) => _CreateKitSheet(tokens: tokens),
     );
   }
@@ -172,7 +166,7 @@ class _StatsBar extends StatelessWidget {
     return NeuCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       child: stats.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => Center(child: LumiraProgress.circular()),
         error: (_, __) => const SizedBox.shrink(),
         data: (s) => Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -404,7 +398,8 @@ class _EmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
-          TextButton(
+          LumiraButton(
+            variant: ButtonVariant.secondary,
             onPressed: () => GoRouter.of(context).push(RouteNames.scenes),
             child: const Text('去逛逛场景'),
           ),
@@ -474,19 +469,15 @@ class _CreateKitSheetState extends ConsumerState<_CreateKitSheet> {
   Future<void> _save() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入组合名称')),
-      );
+      LumiraToast.show(context, '请输入组合名称');
       return;
     }
     if (_selectedSceneId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择关联场景')),
-      );
+      LumiraToast.show(context, '请选择关联场景');
       return;
     }
     setState(() => _saving = true);
-    final messenger = ScaffoldMessenger.of(context);
+    final toastContext = context;
     final navigator = Navigator.of(context);
     try {
       final dao = await ref.read(compositionKitsDaoProvider.future);
@@ -506,14 +497,10 @@ class _CreateKitSheetState extends ConsumerState<_CreateKitSheet> {
       ref.invalidate(compositionKitsProvider);
       if (!mounted) return;
       navigator.pop();
-      messenger.showSnackBar(
-        const SnackBar(content: Text('已创建组合')),
-      );
+      LumiraToast.show(toastContext, '已创建组合');
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('创建失败：$e')),
-      );
+      LumiraToast.show(toastContext, '创建失败：$e');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -528,13 +515,10 @@ class _CreateKitSheetState extends ConsumerState<_CreateKitSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Grabber(tokens: tokens),
-            const SizedBox(height: 8),
             Text(
               '新建组合',
               style: TextStyle(
@@ -552,12 +536,10 @@ class _CreateKitSheetState extends ConsumerState<_CreateKitSheet> {
             const SizedBox(height: 18),
             _FieldLabel(text: '组合名称', required: true, tokens: tokens),
             const SizedBox(height: 6),
-            TextField(
+            LumiraTextField(
               controller: _nameController,
+              hintText: '如：咖啡馆+柔光人像',
               maxLength: 30,
-              textInputAction: TextInputAction.done,
-              decoration: _inputDecoration(tokens, '如：咖啡馆+柔光人像'),
-              style: TextStyle(fontSize: 14, color: tokens.textPrimary),
             ),
             const SizedBox(height: 14),
             _FieldLabel(text: '关联场景', required: true, tokens: tokens),
@@ -606,12 +588,9 @@ class _CreateKitSheetState extends ConsumerState<_CreateKitSheet> {
     if (_scenes!.isEmpty) {
       return _HintBox(tokens: tokens, text: '暂无可用场景，请先创建场景');
     }
-    return DropdownButtonFormField<String>(
-      value: _selectedSceneId,
-      decoration: _inputDecoration(tokens, '选择场景'),
-      style: TextStyle(fontSize: 14, color: tokens.textPrimary),
-      dropdownColor: tokens.surface,
-      icon: Icon(Icons.arrow_drop_down, color: tokens.textTertiary),
+    return LumiraDropdownFormField<String>(
+      initialValue: _selectedSceneId,
+      hintText: '选择场景',
       items: _scenes!
           .map((s) => DropdownMenuItem<String>(
                 value: s.id,
@@ -633,12 +612,9 @@ class _CreateKitSheetState extends ConsumerState<_CreateKitSheet> {
     if (_templates == null) {
       return _LoadingBox(tokens: tokens);
     }
-    return DropdownButtonFormField<String?>(
-      value: _selectedTemplateId,
-      decoration: _inputDecoration(tokens, '选择模板'),
-      style: TextStyle(fontSize: 14, color: tokens.textPrimary),
-      dropdownColor: tokens.surface,
-      icon: Icon(Icons.arrow_drop_down, color: tokens.textTertiary),
+    return LumiraDropdownFormField<String?>(
+      initialValue: _selectedTemplateId,
+      hintText: '选择模板',
       items: [
         DropdownMenuItem<String?>(
           value: null,
@@ -657,51 +633,6 @@ class _CreateKitSheetState extends ConsumerState<_CreateKitSheet> {
             )),
       ],
       onChanged: (v) => setState(() => _selectedTemplateId = v),
-    );
-  }
-
-  InputDecoration _inputDecoration(ThemeTokens tokens, String hint) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(fontSize: 14, color: tokens.textTertiary),
-      filled: true,
-      fillColor: tokens.surfaceAlt,
-      counterText: '',
-      isDense: true,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: tokens.divider),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: tokens.divider),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: tokens.brand, width: 1.5),
-      ),
-    );
-  }
-}
-
-/// 顶部小抓手装饰
-class _Grabber extends StatelessWidget {
-  const _Grabber({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 40,
-        height: 4,
-        decoration: BoxDecoration(
-          color: tokens.divider,
-          borderRadius: BorderRadius.circular(9999),
-        ),
-      ),
     );
   }
 }
@@ -754,10 +685,7 @@ class _LoadingBox extends StatelessWidget {
       child: SizedBox(
         width: 18,
         height: 18,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(tokens.brand),
-        ),
+        child: LumiraProgress.circular(strokeWidth: 2, size: 18),
       ),
     );
   }
@@ -821,10 +749,7 @@ class _PillButton extends StatelessWidget {
             ? SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(fg),
-                ),
+                child: LumiraProgress.circular(strokeWidth: 2, size: 18),
               )
             : Text(
                 label,

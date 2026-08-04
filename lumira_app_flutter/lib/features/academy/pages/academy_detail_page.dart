@@ -5,8 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/academy_models.dart';
 import '../data/academy_mock_data.dart';
@@ -308,18 +308,31 @@ class _ContentBody extends StatelessWidget {
           // 开始实战 CTA
           if (detail.assignment != null) ...[
             LumiraButton(
-              label: '开始实战',
-              icon: Icons.camera_alt_outlined,
+              variant: ButtonVariant.primary,
               onPressed: onGoAssignment,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.camera_alt_outlined),
+                  SizedBox(width: 8),
+                  Text('开始实战'),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
           ],
           // 标记完成
           LumiraButton(
-            label: '标记为已学完',
-            icon: Icons.check,
+            variant: ButtonVariant.primary,
             onPressed: isCompleted ? null : onMarkComplete,
-            enabled: !isCompleted,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.check),
+                SizedBox(width: 8),
+                Text('标记为已学完'),
+              ],
+            ),
           ),
         ],
       ),

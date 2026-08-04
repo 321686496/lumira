@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/widgets/lumira/lumira.dart';
+
 /// 剪影编辑器对话框（简化版）
 ///
 /// 视觉规格来源：lumira-app/src/components/SilhouetteEditor.vue（~500 行）
@@ -29,25 +31,22 @@ class _SilhouetteEditorDialogState extends State<SilhouetteEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      insetPadding: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 12),
-            _buildToolbar(),
-            const SizedBox(height: 8),
-            _buildBrushSizeSlider(),
-            const SizedBox(height: 12),
-            _buildCanvas(),
-            const SizedBox(height: 12),
-            _buildHint(),
-          ],
-        ),
+    return LumiraDialogContainer(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildHeader(),
+          const SizedBox(height: 12),
+          _buildToolbar(),
+          const SizedBox(height: 8),
+          _buildBrushSizeSlider(),
+          const SizedBox(height: 12),
+          _buildCanvas(),
+          const SizedBox(height: 12),
+          _buildHint(),
+        ],
       ),
     );
   }
@@ -138,7 +137,7 @@ class _SilhouetteEditorDialogState extends State<SilhouetteEditorDialog> {
           style: TextStyle(fontSize: 12),
         ),
         Expanded(
-          child: Slider(
+          child: LumiraSlider(
             value: _brushSize,
             min: 2.0,
             max: 30.0,

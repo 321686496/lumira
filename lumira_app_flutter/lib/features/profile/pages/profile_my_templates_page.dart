@@ -7,9 +7,10 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/number_format.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../templates/services/template_exporter.dart';
 import '../../templates/widgets/template_import_sheet.dart';
@@ -149,12 +150,7 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
   }
 
   void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(milliseconds: 1000),
-      ),
-    );
+    LumiraToast.show(context, msg, duration: const Duration(milliseconds: 1000));
   }
 
   void _handleActionEdit(CustomTemplate tpl) {
@@ -202,44 +198,43 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
 
   Future<void> _showExportFormatSheet(TemplateRecord record) async {
     final tokens = ref.watch(themeTokensProvider);
-    final result = await showModalBottomSheet<String>(
+    final result = await showLumiraBottomSheet<String>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text(
-                '选择导出格式',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+      isScrollControlled: true,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            child: Text(
+              '选择导出格式',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
               ),
             ),
-            ListTile(
-              leading: Icon(Icons.description_outlined, color: tokens.brand),
-              title: const Text('完整 .pptpl（推荐）'),
-              subtitle: const Text('含构图/姿势/相机/场景/后期全参数'),
-              onTap: () => Navigator.pop(ctx, 'pptpl'),
+          ),
+          LumiraListTile(
+            leading: Icon(Icons.description_outlined, color: tokens.brand),
+            title: const Text('完整 .pptpl（推荐）'),
+            subtitle: const Text('含构图/姿势/相机/场景/后期全参数'),
+            onTap: () => Navigator.pop(ctx, 'pptpl'),
+          ),
+          LumiraListTile(
+            leading: Icon(Icons.code_outlined, color: tokens.brand),
+            title: const Text('简化 .lumira'),
+            subtitle: const Text('仅元信息+相机核心参数'),
+            onTap: () => Navigator.pop(ctx, 'lumira'),
+          ),
+          LumiraListTile(
+            title: Center(
+              child: Text('取消',
+                  style: TextStyle(color: tokens.textSecondary)),
             ),
-            ListTile(
-              leading: Icon(Icons.code_outlined, color: tokens.brand),
-              title: const Text('简化 .lumira'),
-              subtitle: const Text('仅元信息+相机核心参数'),
-              onTap: () => Navigator.pop(ctx, 'lumira'),
-            ),
-            ListTile(
-              title: Center(
-                child: Text('取消',
-                    style: TextStyle(color: tokens.textSecondary)),
-              ),
-              onTap: () => Navigator.pop(ctx, null),
-            ),
-          ],
-        ),
+            onTap: () => Navigator.pop(ctx, null),
+          ),
+        ],
       ),
     );
 
@@ -247,21 +242,15 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
     if (!mounted) return;
 
     final usePptpl = result == 'pptpl';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('正在导出 ${record.name}...')),
-    );
+    LumiraToast.show(context, '正在导出 ${record.name}...');
 
     try {
       await TemplateExporter.shareTemplate(record, usePptpl: usePptpl);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已分享 ${record.name}')),
-      );
+      LumiraToast.show(context, '已分享 ${record.name}');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('导出失败：$e')),
-      );
+      LumiraToast.show(context, '导出失败：$e');
     }
   }
 
@@ -507,20 +496,31 @@ class _ActionBar extends StatelessWidget {
         children: [
           Expanded(
             child: LumiraButton(
-              label: '新建模板',
-              icon: Icons.add,
-              expand: true,
+              variant: ButtonVariant.primary,
               onPressed: () => GoRouter.of(context).push(RouteNames.templatesEditor),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.add, size: 18),
+                  SizedBox(width: 8),
+                  Text('新建模板'),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 10), // 20rpx → 10dp gap
           Expanded(
             child: LumiraButton(
-              label: '导入模板',
-              icon: Icons.download_outlined,
-              variant: LumiraButtonVariant.ghost,
-              expand: true,
+              variant: ButtonVariant.ghost,
               onPressed: onImport,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.download_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('导入模板'),
+                ],
+              ),
             ),
           ),
         ],
@@ -963,9 +963,16 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           LumiraButton(
-            label: '创建模板',
-            icon: Icons.add,
+            variant: ButtonVariant.primary,
             onPressed: () => GoRouter.of(context).push(RouteNames.templatesEditor),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.add, size: 18),
+                SizedBox(width: 8),
+                Text('创建模板'),
+              ],
+            ),
           ),
         ],
       ),

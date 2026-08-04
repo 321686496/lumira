@@ -3,13 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../features/templates/widgets/template_import_sheet.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 
 /// 分享码 / 邀请码 兑换入口页
@@ -75,30 +76,14 @@ class _ProfileShareCodePageState extends ConsumerState<ProfileShareCodePage> {
 
   void _handleImport() {
     final code = _codeController.text.trim();
-    final messenger = ScaffoldMessenger.of(context);
     if (code.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('请输入分享码'),
-          duration: Duration(milliseconds: 1200),
-        ),
-      );
+      LumiraToast.show(context, '请输入分享码', duration: const Duration(milliseconds: 1200));
       return;
     }
     if (_isValidShareCode(code)) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('分享码已识别：$code，请前往模板导入页完成导入'),
-          duration: const Duration(milliseconds: 1800),
-        ),
-      );
+      LumiraToast.show(context, '分享码已识别：$code，请前往模板导入页完成导入', duration: const Duration(milliseconds: 1800));
     } else {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('分享码格式无效'),
-          duration: Duration(milliseconds: 1200),
-        ),
-      );
+      LumiraToast.show(context, '分享码格式无效', duration: const Duration(milliseconds: 1200));
     }
   }
 
@@ -204,38 +189,22 @@ class _InputSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
+          LumiraTextField(
             controller: controller,
-            decoration: InputDecoration(
-              hintText: 'LUMIRA-{category}-{name}',
-              hintStyle: TextStyle(color: tokens.textTertiary, fontSize: 14),
-              filled: true,
-              fillColor: tokens.canvas,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 12,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.divider, width: 1),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.divider, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.brand, width: 1.5),
-              ),
-            ),
-            style: TextStyle(color: tokens.textPrimary, fontSize: 14),
+            hintText: 'LUMIRA-{category}-{name}',
           ),
           const SizedBox(height: 12),
           LumiraButton(
-            label: '导入',
-            variant: LumiraButtonVariant.brand,
-            icon: Icons.download_outlined,
+            variant: ButtonVariant.primary,
             onPressed: onImport,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.download_outlined, size: 18),
+                SizedBox(width: 8),
+                Text('导入'),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           // 二级入口：跳转到模板导入面板（保留原 sheet 流程）
@@ -495,10 +464,16 @@ class _MoreCodesSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           LumiraButton(
-            label: '邀请好友',
-            variant: LumiraButtonVariant.outline,
-            icon: Icons.person_add_outlined,
+            variant: ButtonVariant.secondary,
             onPressed: onInvite,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.person_add_outlined, size: 18),
+                SizedBox(width: 8),
+                Text('邀请好友'),
+              ],
+            ),
           ),
         ],
       ),

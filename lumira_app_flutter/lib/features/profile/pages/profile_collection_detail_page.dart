@@ -9,11 +9,12 @@ import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/buttons/lumira_buttons.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../providers/collection_providers.dart';
 
@@ -83,7 +84,7 @@ class ProfileCollectionDetailPage extends ConsumerWidget {
             top: false,
             child: asyncDetail.when(
               loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+                  Center(child: LumiraProgress.circular()),
               error: (e, _) => _ErrorState(
                 tokens: tokens,
                 message: '加载失败：$e',
@@ -470,41 +471,58 @@ class _ActionsSection extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: LumiraButton(
-              label: '编辑',
-              variant: LumiraButtonVariant.outline,
-              icon: Icons.edit_outlined,
+              variant: ButtonVariant.secondary,
               onPressed: () => GoRouter.of(context).push(
                 RouteNames.build(
                   RouteNames.profileCollectionEdit,
                   {RouteNames.paramCollectionId: collectionId},
                 ),
               ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.edit_outlined, size: 18),
+                  SizedBox(width: 8),
+                  Text('编辑'),
+                ],
+              ),
             ),
           ),
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: LumiraButton(
-            label: '导出九宫格拼图',
-            variant: LumiraButtonVariant.primary,
-            icon: Icons.send_outlined,
+            variant: ButtonVariant.primary,
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('导出功能即将上线'),
-                  duration: Duration(milliseconds: 1500),
-                ),
+              LumiraToast.show(
+                context,
+                '导出功能即将上线',
+                duration: const Duration(milliseconds: 1500),
               );
             },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.send_outlined, size: 18),
+                SizedBox(width: 8),
+                Text('导出九宫格拼图'),
+              ],
+            ),
           ),
         ),
         if (!isAuto)
           Padding(
             padding: const EdgeInsets.only(bottom: 0),
             child: LumiraButton(
-              label: '删除精选集',
-              variant: LumiraButtonVariant.ghost,
-              icon: Icons.delete_outline,
+              variant: ButtonVariant.ghost,
               onPressed: () => _confirmDelete(context, ref),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.delete_outline, size: 18),
+                  SizedBox(width: 8),
+                  Text('删除精选集'),
+                ],
+              ),
             ),
           ),
       ],
@@ -512,24 +530,23 @@ class _ActionsSection extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = GoRouter.of(context);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await LumiraAlertDialog.show<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('删除精选集'),
-        content: const Text('删除后无法恢复，确认删除？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text('删除', style: TextStyle(color: tokens.danger)),
-          ),
-        ],
-      ),
+      title: const Text('删除精选集'),
+      content: const Text('删除后无法恢复，确认删除？'),
+      actions: [
+        LumiraButton(
+          variant: ButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('取消'),
+        ),
+        LumiraButton(
+          variant: ButtonVariant.danger,
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('删除'),
+        ),
+      ],
     );
     if (confirmed != true) return;
 
@@ -537,20 +554,14 @@ class _ActionsSection extends ConsumerWidget {
       final service = await ref.read(collectionServiceProvider.future);
       await service.deleteCollection(collectionId);
       ref.invalidate(collectionsListProvider);
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('已删除精选集'),
-          duration: Duration(milliseconds: 1500),
-        ),
-      );
+      // ignore: use_build_context_synchronously
+      if (!context.mounted) return;
+      LumiraToast.show(context, '已删除精选集', duration: const Duration(milliseconds: 1500));
       navigator.pop();
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('删除失败：$e'),
-          duration: const Duration(milliseconds: 1500),
-        ),
-      );
+      // ignore: use_build_context_synchronously
+      if (!context.mounted) return;
+      LumiraToast.show(context, '删除失败：$e', duration: const Duration(milliseconds: 1500));
     }
   }
 }
@@ -579,7 +590,11 @@ class _ErrorState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
-          TextButton(onPressed: onRetry, child: const Text('重试')),
+          LumiraButton(
+            variant: ButtonVariant.secondary,
+            onPressed: onRetry,
+            child: const Text('重试'),
+          ),
         ],
       ),
     );

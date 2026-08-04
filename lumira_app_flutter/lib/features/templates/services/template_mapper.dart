@@ -167,6 +167,12 @@ class TemplateMapper {
         tags: List<String>.from(r.tags),
         description: r.description,
         referenceSource: r.referenceSource,
+        style: (r.classification['style'] as String?)?.isNotEmpty == true
+            ? r.classification['style'] as String
+            : null,
+        method: (r.classification['method'] as String?)?.isNotEmpty == true
+            ? r.classification['method'] as String
+            : null,
       ),
       composition: editor.EditorFormComposition(
         overlayType: (composition['overlayType'] as String?) ?? 'rule_of_thirds',

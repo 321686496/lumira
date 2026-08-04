@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../data/imported_templates_provider.dart';
 import '../services/template_mapper.dart';
 
@@ -29,12 +31,9 @@ class TemplateImportSheet extends ConsumerWidget {
     BuildContext context, {
     required void Function(String newTemplateId) onImported,
   }) {
-    return showModalBottomSheet(
+    return lumira.showLumiraBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (sheetCtx) => TemplateImportSheet(onImported: onImported),
     );
   }
@@ -43,89 +42,73 @@ class TemplateImportSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
 
-    return Material(
-      color: tokens.canvas,
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  children: [
-                    Text(
-                      '导入模板',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
-                      behavior: HitTestBehavior.opaque,
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.close,
-                          size: 20,
-                          color: tokens.textTertiary,
-                        ),
-                      ),
-                    ),
-                  ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              '导入模板',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.close,
+                  size: 20,
+                  color: tokens.textTertiary,
                 ),
               ),
-              const SizedBox(height: 12),
-              _ImportOption(
-                icon: Icons.insert_drive_file_outlined,
-                title: '从文件导入',
-                subtitle: '支持 .json / .lumira / .pptpl 模板文件',
-                tokens: tokens,
-                onTap: () => _handleFileImport(context, ref),
-              ),
-              _ImportOption(
-                icon: Icons.link_outlined,
-                title: '从链接导入',
-                subtitle: '粘贴分享链接（lumira://tpl/xxx）',
-                tokens: tokens,
-                onTap: () => _handleLinkImport(context, ref),
-              ),
-              _ImportOption(
-                icon: Icons.qr_code_scanner_outlined,
-                title: '扫码导入',
-                subtitle: '输入模板分享码（LUMIRA-xxx）',
-                tokens: tokens,
-                onTap: () => _handleQrImport(context, ref),
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  '导入的模板将出现在「我的模板」中，可随时编辑或删除',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: tokens.textTertiary,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-            ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _ImportOption(
+          icon: Icons.insert_drive_file_outlined,
+          title: '从文件导入',
+          subtitle: '支持 .json / .lumira / .pptpl 模板文件',
+          tokens: tokens,
+          onTap: () => _handleFileImport(context, ref),
+        ),
+        _ImportOption(
+          icon: Icons.link_outlined,
+          title: '从链接导入',
+          subtitle: '粘贴分享链接（lumira://tpl/xxx）',
+          tokens: tokens,
+          onTap: () => _handleLinkImport(context, ref),
+        ),
+        _ImportOption(
+          icon: Icons.qr_code_scanner_outlined,
+          title: '扫码导入',
+          subtitle: '输入模板分享码（LUMIRA-xxx）',
+          tokens: tokens,
+          onTap: () => _handleQrImport(context, ref),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '导入的模板将出现在「我的模板」中，可随时编辑或删除',
+          style: TextStyle(
+            fontSize: 11,
+            color: tokens.textTertiary,
+            height: 1.5,
           ),
         ),
-      ),
+      ],
     );
   }
 
   // ===== 文件导入（DAO 持久化 + 双格式嗅探）=====
   Future<void> _handleFileImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     navigator.pop(); // 先关闭 BottomSheet
 
     try {
@@ -143,14 +126,14 @@ class TemplateImportSheet extends ConsumerWidget {
       final file = result.files.first;
       final bytes = file.bytes;
       if (bytes == null) {
-        _showSnackMsg(messenger, '无法读取文件内容');
+        _showToast(navigator, '无法读取文件内容');
         return;
       }
 
       final content = utf8.decode(bytes);
       final parsed = _parseTemplateJson(content);
       if (parsed == null) {
-        _showSnackMsg(messenger, '文件格式无效，请选择有效的模板文件');
+        _showToast(navigator, '文件格式无效，请选择有效的模板文件');
         return;
       }
 
@@ -172,10 +155,10 @@ class TemplateImportSheet extends ConsumerWidget {
 
       await dao.upsert(record);
 
-      _showSnackMsg(messenger, '已导入模板：${record.name}');
+      _showToast(navigator, '已导入模板：${record.name}');
       onImported(record.id);
     } catch (e) {
-      _showSnackMsg(messenger, '导入失败：$e');
+      _showToast(navigator, '导入失败：$e');
     }
   }
 
@@ -209,7 +192,6 @@ class TemplateImportSheet extends ConsumerWidget {
   // ===== 链接导入 =====
   Future<void> _handleLinkImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     navigator.pop(); // 先关闭 BottomSheet
 
     final url = await _showInputDialog(
@@ -223,7 +205,7 @@ class TemplateImportSheet extends ConsumerWidget {
 
     final parsed = _parseTemplateLink(url.trim());
     if (parsed == null) {
-      _showSnackMsg(messenger, '链接格式无效，请输入有效的分享链接');
+      _showToast(navigator, '链接格式无效，请输入有效的分享链接');
       return;
     }
 
@@ -247,14 +229,13 @@ class TemplateImportSheet extends ConsumerWidget {
           coverSeed: coverSeed,
         );
 
-    _showSnackMsg(messenger, '已导入模板：$name');
+    _showToast(navigator, '已导入模板：$name');
     onImported(newId);
   }
 
   // ===== 扫码导入 =====
   Future<void> _handleQrImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     navigator.pop(); // 先关闭 BottomSheet
 
     // 无相机 QR 扫描库依赖，使用手动输入码作为简化实现
@@ -270,7 +251,7 @@ class TemplateImportSheet extends ConsumerWidget {
 
     final parsed = _parseTemplateCode(code.trim());
     if (parsed == null) {
-      _showSnackMsg(messenger, '分享码无效，请检查后重试');
+      _showToast(navigator, '分享码无效，请检查后重试');
       return;
     }
 
@@ -293,7 +274,7 @@ class TemplateImportSheet extends ConsumerWidget {
           coverSeed: coverSeed,
         );
 
-    _showSnackMsg(messenger, '已导入模板：$name');
+    _showToast(navigator, '已导入模板：$name');
     onImported(newId);
   }
 
@@ -423,13 +404,9 @@ class TemplateImportSheet extends ConsumerWidget {
 
   // ===== UI 辅助 =====
 
-  void _showSnackMsg(ScaffoldMessengerState messenger, String msg) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(milliseconds: 1500),
-      ),
-    );
+  void _showToast(NavigatorState navigator, String msg) {
+    if (!navigator.context.mounted) return;
+    lumira.LumiraToast.show(navigator.context, msg);
   }
 
   void _showLoadingWithNavigator(NavigatorState navigator, String msg) {
@@ -437,13 +414,18 @@ class TemplateImportSheet extends ConsumerWidget {
       DialogRoute(
         context: navigator.context,
         barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          content: Row(
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(width: 16),
-              Text(msg),
-            ],
+        builder: (ctx) => SafeArea(
+          child: Center(
+            child: lumira.LumiraDialogContainer(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  lumira.LumiraProgress.circular(),
+                  const SizedBox(width: 16),
+                  Text(msg),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -457,28 +439,42 @@ class TemplateImportSheet extends ConsumerWidget {
     TextInputType keyboardType = TextInputType.text,
   }) async {
     final controller = TextEditingController();
-    return showDialog<String>(
+    return lumira.showLumiraDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          lumira.LumiraTextField(
+            controller: controller,
             hintText: hint,
-            border: const OutlineInputBorder(),
+            keyboardType: keyboardType,
+            onSubmitted: (v) => Navigator.of(ctx).pop(v),
           ),
-          keyboardType: keyboardType,
-          autofocus: true,
-          onSubmitted: (v) => Navigator.of(ctx).pop(v),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(null),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text),
-            child: const Text('确定'),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              lumira.LumiraButton(
+                variant: ButtonVariant.ghost,
+                onPressed: () => Navigator.of(ctx).pop(null),
+                child: const Text('取消'),
+              ),
+              const SizedBox(width: 8),
+              lumira.LumiraButton(
+                variant: ButtonVariant.primary,
+                onPressed: () => Navigator.of(ctx).pop(controller.text),
+                child: const Text('确定'),
+              ),
+            ],
           ),
         ],
       ),
@@ -507,7 +503,7 @@ class _ImportOption extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
             Container(

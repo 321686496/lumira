@@ -101,7 +101,7 @@ class CollectionService {
       if (photos.isEmpty) continue;
 
       await _collectionsDao.insert(CollectionRecord(
-        id: 'auto_monthly_${year}${month}',
+        id: 'auto_monthly_$year$month',
         name: '$yearInt年$monthInt月精选',
         coverPhotoId: photos.first.id,
         type: CollectionType.autoMonthly,
