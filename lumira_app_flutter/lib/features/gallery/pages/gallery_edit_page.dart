@@ -36,7 +36,15 @@ class GalleryEditPage extends ConsumerStatefulWidget {
 }
 
 class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
-  /// 本地编辑状态（从照片记录初始化，编辑时实时更新预览，保存时写回 DB）
+  /// 照片已烘焙的后期参数（拍照/上次保存时烘焙进 JPEG 的色彩矩阵参数）。
+  ///
+  /// 修复"2x 参数 + 编辑页初始值"bug：
+  /// - JPEG 已烘焙 _bakedPostProcess，画布仅叠加增量 _localPostProcess → 所见即所得
+  /// - 编辑面板滑块绑定 _localPostProcess（初始为 0）→ 默认值正确
+  /// - 导出时全量参数 = _bakedPostProcess.merge(_localPostProcess) 从原图重新处理
+  late PostProcess _bakedPostProcess;
+
+  /// 本地编辑增量参数（仅影响当前预览，初始为默认值 0）。
   PostProcess _localPostProcess = const PostProcess(color: PostProcessColor());
   TransformParams _localTransform = const TransformParams();
   bool _isExporting = false;
@@ -63,8 +71,11 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
       if (mounted) {
         setState(() {
           _photo = photo;
-          _localPostProcess =
+          // JPEG 已烘焙 photo.postProcess → _bakedPostProcess 记录烘焙值
+          // _localPostProcess 重置为默认值（增量 0）→ 编辑面板滑块从 0 开始
+          _bakedPostProcess =
               photo?.postProcess ?? const PostProcess(color: PostProcessColor());
+          _localPostProcess = const PostProcess(color: PostProcessColor());
           _localTransform = photo?.transform ?? const TransformParams();
           _isReadOnly = photo?.originalPath == null;
           _isLoading = false;
@@ -265,8 +276,10 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
     final screenSize = MediaQuery.of(context).size;
     final screenRatio = screenSize.width / screenSize.height;
     final isPortrait = screenSize.height >= screenSize.width;
-    final aspectRatio = _localPostProcess.cropRatio.isNotEmpty
-        ? _localPostProcess.cropRatio
+    // 全量参数 = baked + local增量（从原图重新处理时使用）
+    final fullParams = _bakedPostProcess.merge(_localPostProcess);
+    final aspectRatio = fullParams.cropRatio.isNotEmpty
+        ? fullParams.cropRatio
         : 'fullscreen';
 
     if (!await File(originalPath).exists()) {
@@ -280,7 +293,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
     try {
       final processedPath = await PhotoPostProcessor.processFile(
         inputPath: originalPath,
-        params: _localPostProcess,
+        params: fullParams,
         transform: _localTransform,
         aspectRatio: aspectRatio,
         screenRatio: screenRatio,
@@ -299,7 +312,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
         filePath: processedPath,
         originalPath: originalPath,
         transform: _localTransform,
-        postProcess: _localPostProcess,
+        postProcess: fullParams,
       );
       ref.invalidate(galleryDaoProvider);
       ref.invalidate(collectionsListProvider);
@@ -311,7 +324,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
           filePath: processedPath,
           originalPath: originalPath,
           transform: _localTransform,
-          postProcess: _localPostProcess,
+          postProcess: fullParams,
           sceneId: _photo!.sceneId,
           templateId: _photo!.templateId,
           kitId: _photo!.kitId,
@@ -320,6 +333,10 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
           isFavorite: _photo!.isFavorite,
           createdAt: _photo!.createdAt,
         );
+        // 保存后 JPEG 已用 fullParams 重新处理（烘焙），
+        // 更新 _bakedPostProcess 为全量参数，_localPostProcess 重置为增量 0。
+        _bakedPostProcess = fullParams;
+        _localPostProcess = const PostProcess(color: PostProcessColor());
       });
 
       if (mounted) {

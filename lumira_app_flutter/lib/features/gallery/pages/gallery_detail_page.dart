@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,8 +14,6 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/time_format.dart';
 import '../../../shared/widgets/feedback/lumira_toast.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../../capture/domain/filter_recipe.dart';
-import '../../capture/domain/photo_template.dart';
 import '../../profile/providers/collection_providers.dart';
 
 /// 相册照片详情页（查看为主）
@@ -439,7 +436,8 @@ class _EmptyCanvas extends StatelessWidget {
   }
 }
 
-/// 只读照片预览区：直接使用 photo.postProcess / photo.transform 显示已保存效果
+/// 只读照片预览区：直接显示已烘焙的 JPEG（filePath 已含 postProcess 色彩矩阵 +
+/// transform 变换）。不再叠加 ColorFiltered，避免"2x 参数"效果。
 class _ReadOnlyCanvas extends StatelessWidget {
   const _ReadOnlyCanvas({required this.photo, required this.tokens});
   final GalleryItemRecord photo;
@@ -450,9 +448,6 @@ class _ReadOnlyCanvas extends StatelessWidget {
     final url = photo.dataUrl ?? photo.filePath;
     final screenHeight = MediaQuery.of(context).size.height;
     final canvasHeight = screenHeight * 0.45;
-    final transform = photo.transform ?? const TransformParams();
-    final postProcess =
-        photo.postProcess ?? const PostProcess(color: PostProcessColor());
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -466,13 +461,12 @@ class _ReadOnlyCanvas extends StatelessWidget {
                   child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
                 ),
               )
-            : _buildImage(url, transform, postProcess),
+            : _buildImage(url),
       ),
     );
   }
 
-  Widget _buildImage(
-      String url, TransformParams transform, PostProcess postProcess) {
+  Widget _buildImage(String url) {
     Widget imageWidget = url.startsWith('http')
         ? Image.network(url, fit: BoxFit.contain)
         : Image.file(
@@ -495,32 +489,8 @@ class _ReadOnlyCanvas extends StatelessWidget {
             ),
           );
 
-    if (!transform.isIdentity) {
-      imageWidget = RotatedBox(
-        quarterTurns: transform.rotation ~/ 90,
-        child: Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..scale(
-              transform.flipH ? -1.0 : 1.0,
-              transform.flipV ? -1.0 : 1.0,
-              1.0,
-            ),
-          child: Transform.rotate(
-            angle: transform.straighten * math.pi / 180.0,
-            child: ColorFiltered(
-              colorFilter: fromPostProcess(postProcess),
-              child: imageWidget,
-            ),
-          ),
-        ),
-      );
-    } else {
-      imageWidget = ColorFiltered(
-        colorFilter: fromPostProcess(postProcess),
-        child: imageWidget,
-      );
-    }
+    // JPEG 已烘焙 transform 变换（processFile 调用 _applyTransform），
+    // 此处不再叠加 RotatedBox/Transform，避免双重变换。
     return imageWidget;
   }
 }

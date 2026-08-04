@@ -165,13 +165,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     _moods = CapturePreviewMockData.moods
         .map((m) => m.copyWith(active: m.active))
         .toList();
-    // 快照拍摄时参数，作为本地调整的初始值。
-    // ConsumerState.initState 中 ref.read 是安全的（provider 已初始化）。
-    // 拍照时这些参数已烘焙进 JPEG（_processCaptureInIsolate → applyColorMatrixImg），
-    // 所以 _bakedPostProcess 与 _localPostProcess 初始值相同 → delta=0 → 预览页无 ColorFiltered。
+    // _localPostProcess 是用户在编辑页调整的【增量】参数（初始为默认值 0）。
+    // 照片已烘焙 _bakedPostProcess 参数，预览页仅叠加增量 → 所见即所得。
+    // 保存时：全量参数 = _bakedPostProcess.merge(_localPostProcess) 从原图重新处理。
     final initial = ref.read(CaptureState.effectivePostProcessProvider);
-    _localPostProcess = initial;
     _bakedPostProcess = initial;
+    _localPostProcess = const PostProcess(color: PostProcessColor());
     _sheetHeightNotifier = ValueNotifier<double>(_kClosedHeight);
     _currentPhotoId = widget.photoId;
     _pageController = PageController(initialPage: 0);
@@ -249,11 +248,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       _photoUrl = record.filePath ?? record.dataUrl ?? _photoUrl;
       _originalPath = record.originalPath;
       _isReadOnly = record.originalPath == null;
-      // 从 DB 记录恢复后期参数；若无记录则使用默认参数
-      _localPostProcess = record.postProcess ?? initial;
-      // 历史照片的 JPEG 已烘焙了 record.postProcess 参数，
-      // 所以 _bakedPostProcess = _localPostProcess → delta=0 → 预览页无 ColorFiltered。
+      // 照片 JPEG 已烘焙 record.postProcess 参数 → _bakedPostProcess = record.postProcess
+      // _localPostProcess 重置为默认值（增量 0）→ 编辑面板滑块从 0 开始
       _bakedPostProcess = record.postProcess ?? initial;
+      _localPostProcess = const PostProcess(color: PostProcessColor());
       _localTransform = record.transform ?? const TransformParams();
       _selectedSceneId = record.sceneId;
       _isEdited = false;
@@ -756,11 +754,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         return;
       }
 
-      // 从原图重新处理（全量参数，非 delta）
+      // 从原图重新处理（全量参数 = baked + local增量）
       // - outputPath=photoPath：覆盖当前显示的照片文件
+      final fullParams = _bakedPostProcess.merge(_localPostProcess);
       final processedPath = await PhotoPostProcessor.processFile(
         inputPath: originalPath,
-        params: _localPostProcess,
+        params: fullParams,
         transform: _localTransform,
         aspectRatio: captureAspectRatio,
         outputPath: photoPath,
@@ -796,9 +795,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
             setState(() {
               _originalPath = newOriginalPath;
               _isReadOnly = newOriginalPath == null;
-              // 保存后照片已用 _localPostProcess 重新处理（烘焙），
-              // 更新 _bakedPostProcess 使 delta 归零，避免下次显示时叠加滤镜。
-              _bakedPostProcess = _localPostProcess;
+              // 保存后照片已用 fullParams（baked+local）重新处理（烘焙），
+              // 更新 _bakedPostProcess 为全量参数，_localPostProcess 重置为增量 0。
+              _bakedPostProcess = fullParams;
+              _localPostProcess = const PostProcess(color: PostProcessColor());
               _isEdited = false;
               // 同步更新历史列表中的记录
               if (_currentIndex < _historyPhotos.length) {
@@ -809,7 +809,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                   filePath: processedPath,
                   originalPath: newOriginalPath,
                   transform: _localTransform,
-                  postProcess: _localPostProcess,
+                  postProcess: fullParams,
                   sceneId: _selectedSceneId,
                   templateId: old.templateId,
                   kitId: old.kitId,
@@ -911,9 +911,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                       ? _FullScreenPhoto(
                           photoUrl: _photoUrl,
                           isComparing: _isComparing,
-                          // 修复 2x 参数 bug：照片已烘焙 _bakedPostProcess，
-                          // 预览页仅应用增量 delta（current - baked）。
-                          postProcess: _computeDeltaPostProcess(),
+                          // 照片已烘焙 _bakedPostProcess，预览页仅应用增量 _localPostProcess。
+                          postProcess: _localPostProcess,
                           transform: _localTransform,
                         )
                       : PageView.builder(
@@ -932,7 +931,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                               return _FullScreenPhoto(
                                 photoUrl: _photoUrl,
                                 isComparing: _isComparing,
-                                postProcess: _computeDeltaPostProcess(),
+                                postProcess: _localPostProcess,
                                 transform: _localTransform,
                               );
                             }
