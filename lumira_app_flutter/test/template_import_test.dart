@@ -3,6 +3,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
 import 'package:lumira_app_flutter/core/db/tables.dart';
+import 'package:lumira_app_flutter/features/templates/services/pptpl_format.dart';
 import 'package:lumira_app_flutter/features/templates/services/template_mapper.dart';
 import 'package:lumira_app_flutter/features/templates/data/templates_editor_mock_data.dart'
     as mock;
@@ -409,6 +410,46 @@ void main() {
 
       expect(record.cover, 'assets/images/templates/test.jpg');
       expect(record.coverData, isNull);
+    });
+  });
+
+  group('PptplFormat.validate', () {
+    test('version 1.0 returns no warnings', () {
+      final json = <String, dynamic>{
+        'format': 'pptpl',
+        'version': '1.0',
+        'meta': {'id': 'test', 'name': 'test'},
+      };
+      final warnings = PptplFormat.validate(json);
+      expect(warnings, isEmpty);
+    });
+
+    test('missing version returns legacyFormat warning', () {
+      final json = <String, dynamic>{
+        'meta': {'id': 'test', 'name': 'test'},
+      };
+      final warnings = PptplFormat.validate(json);
+      expect(warnings, contains(TemplateImportWarning.legacyFormat));
+    });
+
+    test('version 2.0 returns unsupportedVersion warning', () {
+      final json = <String, dynamic>{
+        'format': 'pptpl',
+        'version': '2.0',
+        'meta': {'id': 'test', 'name': 'test'},
+      };
+      final warnings = PptplFormat.validate(json);
+      expect(warnings, contains(TemplateImportWarning.unsupportedVersion));
+    });
+
+    test('unrecognized version returns unsupportedVersion warning', () {
+      final json = <String, dynamic>{
+        'format': 'pptpl',
+        'version': '0.5-beta',
+        'meta': {'id': 'test', 'name': 'test'},
+      };
+      final warnings = PptplFormat.validate(json);
+      expect(warnings, contains(TemplateImportWarning.unsupportedVersion));
     });
   });
 }
