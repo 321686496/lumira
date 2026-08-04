@@ -14,7 +14,7 @@ const PhotoTemplate urbanArchitectureTemplate = PhotoTemplate(
     tags: ['建筑', '城市', '风光', '几何线条'],
     tagIds: [],
     price: 3,
-    cover: 'https://picsum.photos/seed/template-urban-architecture/400/600',
+    cover: 'assets/images/templates/urban_architecture.jpg',
     description: '城市建筑摄影，利用几何线条与透视关系呈现现代建筑之美',
     referenceSource: '样片 EXIF: ArchDaily 建筑摄影作品；参数参考建筑摄影作品集',
   ),

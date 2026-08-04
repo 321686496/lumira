@@ -14,7 +14,7 @@ const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
     tags: ['霓虹', '夜景人像', '赛博朋克', '城市'],
     tagIds: [],
     price: 3,
-    cover: 'https://picsum.photos/seed/template-neon-portrait/400/600',
+    cover: 'assets/images/templates/neon_portrait.jpg',
     description: '利用城市霓虹灯光拍摄赛博朋克风格人像',
     referenceSource: '样片 EXIF: 赛博朋克人像作品集；参数参考 500px Neon Portrait 专题',
   ),

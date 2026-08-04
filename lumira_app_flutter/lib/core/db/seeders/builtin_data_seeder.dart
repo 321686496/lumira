@@ -81,6 +81,24 @@ class BuiltinDataSeeder {
     await _seedBuiltinTemplates(db, now);
   }
 
+  /// 仅更新内置模板的 cover 字段（v11 迁移用）。
+  ///
+  /// 修复：12 款原始模板的 cover 从 picsum URL 改为本地 asset 路径。
+  /// 不删除/重建记录，仅 UPDATE cover 字段，保留用户可能的 is_favorite 等状态。
+  static Future<void> reseedBuiltinCovers(Database db) async {
+    final templates = TemplateRegistry.allTemplates;
+    final batch = db.batch();
+    for (final t in templates) {
+      batch.update(
+        Tables.customTemplates,
+        {Tables.colCover: t.meta.cover},
+        where: '${Tables.colId} = ? AND ${Tables.colIsBuiltin} = ?',
+        whereArgs: [t.meta.id, 1],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
   /// 插入预置场景数据
   static Future<void> _seedScenes(Database db, int now) async {
     final scenes = CaptureSceneMockData.allScenes;
