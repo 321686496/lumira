@@ -254,6 +254,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
       ${Tables.colPrice} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCover} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCoverData} TEXT,
       ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
       ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
       ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',

@@ -16,7 +16,7 @@ import 'dao/settings_dao.dart';
 import '../../core/auth/auth_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 10;
+const int _kDbVersion = 11;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -94,6 +94,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
       ${Tables.colPrice} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCover} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCoverData} TEXT,
       ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
       ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
       ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
@@ -478,6 +479,19 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await BuiltinDataSeeder.reseedBuiltinTemplates(db);
     } catch (e) {
       debugPrint('v10 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 11) {
+    try {
+      // v11: 新增 cover_data 列（.pptpl 自包含封面嵌入）
+      await _addColumnIfNotExists(
+        db,
+        Tables.customTemplates,
+        Tables.colCoverData,
+        'TEXT',
+      );
+    } catch (e) {
+      debugPrint('v11 migration failed (silent fallback): $e');
     }
   }
 }

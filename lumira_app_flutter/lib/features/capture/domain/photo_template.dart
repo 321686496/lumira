@@ -65,6 +65,7 @@ class TemplateMeta {
   final List<String> tagIds;
   final int price;
   final String cover;
+  final String? coverData;
   final String description;
   final String referenceSource;
 
@@ -79,6 +80,7 @@ class TemplateMeta {
     this.tagIds = const [],
     this.price = 0,
     this.cover = '',
+    this.coverData,
     this.description = '',
     this.referenceSource = '',
   });
@@ -94,6 +96,7 @@ class TemplateMeta {
     List<String>? tagIds,
     int? price,
     String? cover,
+    Object? coverData = _unset,
     String? description,
     String? referenceSource,
   }) =>
@@ -108,6 +111,9 @@ class TemplateMeta {
         tagIds: tagIds ?? this.tagIds,
         price: price ?? this.price,
         cover: cover ?? this.cover,
+        coverData: identical(coverData, _unset)
+            ? this.coverData
+            : coverData as String?,
         description: description ?? this.description,
         referenceSource: referenceSource ?? this.referenceSource,
       );
@@ -126,12 +132,13 @@ class TemplateMeta {
           listEquals(tagIds, other.tagIds) &&
           price == other.price &&
           cover == other.cover &&
+          coverData == other.coverData &&
           description == other.description &&
           referenceSource == other.referenceSource;
 
   @override
   int get hashCode => Object.hash(id, name, author, version, category, classification,
-      Object.hashAll(tags), Object.hashAll(tagIds), price, cover, description, referenceSource);
+      Object.hashAll(tags), Object.hashAll(tagIds), price, cover, coverData, description, referenceSource);
 }
 
 class TemplateClassification {

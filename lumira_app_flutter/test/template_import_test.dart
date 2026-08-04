@@ -22,6 +22,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
       ${Tables.colPrice} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCover} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCoverData} TEXT,
       ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
       ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
       ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
@@ -262,6 +263,72 @@ void main() {
       }
       expect(finalId, isNot(equals('tpl-conflict')));
       expect(finalId.startsWith('tpl-conflict_imported_'), isTrue);
+    });
+  });
+
+  group('TemplateRecord coverData', () {
+    test('toRow/fromRow round-trips coverData', () async {
+      final db = await openDatabase(inMemoryDatabasePath, version: 1,
+          onCreate: (db, v) async {
+        await db.execute('''
+          CREATE TABLE ${Tables.customTemplates} (
+            ${Tables.colId} TEXT PRIMARY KEY,
+            ${Tables.colName} TEXT NOT NULL,
+            ${Tables.colAuthor} TEXT NOT NULL DEFAULT '',
+            ${Tables.colVersion} TEXT NOT NULL DEFAULT '1.0.0',
+            ${Tables.colCategory} TEXT NOT NULL,
+            ${Tables.colClassificationJson} TEXT NOT NULL DEFAULT '{}',
+            ${Tables.colTagsJson} TEXT NOT NULL DEFAULT '[]',
+            ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+            ${Tables.colPrice} INTEGER NOT NULL DEFAULT 0,
+            ${Tables.colCover} TEXT NOT NULL DEFAULT '',
+            ${Tables.colCoverData} TEXT,
+            ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
+            ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
+            ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
+            ${Tables.colPoseJson} TEXT NOT NULL DEFAULT '{}',
+            ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
+            ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
+            ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
+            ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
+            ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+            ${Tables.colCreatedAt} INTEGER NOT NULL,
+            ${Tables.colUpdatedAt} INTEGER NOT NULL
+          )
+        ''');
+      });
+
+      final record = TemplateRecord(
+        id: 'test-cover',
+        name: '测试',
+        author: '',
+        version: '1.0.0',
+        category: 'portrait',
+        classification: {},
+        tags: [],
+        tagIds: [],
+        price: 0,
+        cover: 'assets/images/templates/test.jpg',
+        coverData: 'data:image/jpeg;base64,abc123',
+        description: '',
+        referenceSource: '',
+        composition: {},
+        pose: {},
+        camera: {},
+        sceneGuide: {},
+        postProcess: {},
+        createdAt: 1700000000000,
+        updatedAt: 1700000000000,
+        isBuiltin: false,
+        isRecommended: false,
+      );
+
+      await db.insert(Tables.customTemplates, record.toRow());
+      final rows = await db.query(Tables.customTemplates);
+      final restored = TemplateRecord.fromRow(rows.first);
+
+      expect(restored.coverData, 'data:image/jpeg;base64,abc123');
+      await db.close();
     });
   });
 }

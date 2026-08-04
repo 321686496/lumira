@@ -16,6 +16,7 @@ class Tables {
   static const String colTagIdsJson = 'tag_ids_json';
   static const String colPrice = 'price';
   static const String colCover = 'cover';
+  static const String colCoverData = 'cover_data';
   static const String colDescription = 'description';
   static const String colReferenceSource = 'reference_source';
   static const String colCompositionJson = 'composition_json';
