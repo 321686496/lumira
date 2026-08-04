@@ -76,6 +76,208 @@ class AppThemeData {
     }
   }
 
+  // === 组件级尺寸 token（rpx 原值，widget 内部 /2 转 dp，与 cardRadius 保持一致） ===
+
+  /// 按钮圆角（rpx）。neumorphic:28 / flat:20 / glass:28 / female:48
+  double get buttonRadius {
+    switch (style) {
+      case UIStyle.neumorphic:
+        return 28;
+      case UIStyle.flat:
+        return 20;
+      case UIStyle.glass:
+        return 28;
+      case UIStyle.female:
+        return 48;
+    }
+  }
+
+  /// 输入框圆角（rpx）。neumorphic:12 / flat:8 / glass:12 / female:24
+  double get inputRadius {
+    switch (style) {
+      case UIStyle.neumorphic:
+        return 12;
+      case UIStyle.flat:
+        return 8;
+      case UIStyle.glass:
+        return 12;
+      case UIStyle.female:
+        return 24;
+    }
+  }
+
+  /// 弹层（Dialog/BottomSheet/Menu）圆角（rpx）。neumorphic:20 / flat:16 / glass:20 / female:32
+  double get popupRadius {
+    switch (style) {
+      case UIStyle.neumorphic:
+        return 20;
+      case UIStyle.flat:
+        return 16;
+      case UIStyle.glass:
+        return 20;
+      case UIStyle.female:
+        return 32;
+    }
+  }
+
+  /// 滑块轨道高度（dp，无 rpx 转换）。neumorphic:6 / flat:4 / glass:6 / female:8
+  double get sliderTrackHeight {
+    switch (style) {
+      case UIStyle.neumorphic:
+        return 6;
+      case UIStyle.flat:
+        return 4;
+      case UIStyle.glass:
+        return 6;
+      case UIStyle.female:
+        return 8;
+    }
+  }
+
+  /// FAB 圆角（rpx）。neumorphic:24 / flat:20 / glass:24 / female:32
+  double get fabRadius {
+    switch (style) {
+      case UIStyle.neumorphic:
+        return 24;
+      case UIStyle.flat:
+        return 20;
+      case UIStyle.glass:
+        return 24;
+      case UIStyle.female:
+        return 32;
+    }
+  }
+
+  /// 按钮视觉规格解析（4 variant × 4 风格）
+  /// 调用方：LumiraButton / LumiraIconButton
+  ButtonVisual buttonVisual(ButtonVariant variant) {
+    switch (variant) {
+      case ButtonVariant.primary:
+        return ButtonVisual(
+          background: tokens.brand,
+          foreground: tokens.textInverse,
+          border: null,
+          shadows: style == UIStyle.neumorphic
+              ? tokens.shadowConvexBrand
+              : const [],
+        );
+      case ButtonVariant.secondary:
+        switch (style) {
+          case UIStyle.neumorphic:
+            return ButtonVisual(
+              background: tokens.surface,
+              foreground: tokens.brandText,
+              border: null,
+              shadows: tokens.shadowConvexSubtle,
+            );
+          case UIStyle.flat:
+            return ButtonVisual(
+              background: tokens.surfaceAlt,
+              foreground: tokens.brandText,
+              border: Border.all(color: tokens.divider, width: 1),
+              shadows: const [],
+            );
+          case UIStyle.glass:
+            return ButtonVisual(
+              background: Colors.white.withOpacity(0.55),
+              foreground: tokens.brandText,
+              border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+              shadows: const [
+                BoxShadow(color: Color(0x14000000), offset: Offset(0, 4), blurRadius: 16),
+              ],
+            );
+          case UIStyle.female:
+            return ButtonVisual(
+              background: tokens.brandSubtle,
+              foreground: tokens.brandText,
+              border: Border.all(color: Colors.white.withOpacity(0.7), width: 0.8),
+              shadows: [
+                BoxShadow(
+                  color: tokens.brand.withOpacity(0.15),
+                  offset: const Offset(0, 6),
+                  blurRadius: 20,
+                ),
+              ],
+            );
+        }
+      case ButtonVariant.ghost:
+        return ButtonVisual(
+          background: Colors.transparent,
+          foreground: tokens.brandText,
+          border: null,
+          shadows: const [],
+        );
+      case ButtonVariant.danger:
+        return ButtonVisual(
+          background: tokens.danger,
+          foreground: Colors.white,
+          border: null,
+          shadows: style == UIStyle.neumorphic
+              ? [
+                  BoxShadow(
+                    color: tokens.danger.withOpacity(0.3),
+                    offset: const Offset(4, 4),
+                    blurRadius: 10,
+                  ),
+                ]
+              : const [],
+        );
+    }
+  }
+
+  /// 输入框视觉规格解析（4 状态 × 4 风格）
+  /// 调用方：LumiraTextField / LumiraDropdown
+  InputVisual inputVisual(InputState state) {
+    final isFocused = state == InputState.focused;
+    final isError = state == InputState.error;
+    final isDisabled = state == InputState.disabled;
+
+    Color borderAccent = tokens.divider;
+    if (isFocused) {
+      borderAccent = tokens.brand;
+    } else if (isError) {
+      borderAccent = tokens.danger;
+    }
+
+    switch (style) {
+      case UIStyle.neumorphic:
+        return InputVisual(
+          background: tokens.surface,
+          border: null,
+          shadows: isDisabled ? const [] : tokens.shadowConcaveSubtle,
+          borderAccent: borderAccent,
+          foreground: isDisabled ? tokens.textTertiary : tokens.textPrimary,
+        );
+      case UIStyle.flat:
+        return InputVisual(
+          background: tokens.surfaceAlt,
+          border: Border.all(color: borderAccent, width: isFocused ? 1.5 : 1),
+          shadows: const [],
+          borderAccent: borderAccent,
+          foreground: isDisabled ? tokens.textTertiary : tokens.textPrimary,
+        );
+      case UIStyle.glass:
+        return InputVisual(
+          background: Colors.white.withOpacity(0.4),
+          border: Border.all(color: borderAccent.withOpacity(0.8), width: isFocused ? 1.5 : 1),
+          shadows: const [],
+          borderAccent: borderAccent,
+          foreground: isDisabled ? tokens.textTertiary : tokens.textPrimary,
+        );
+      case UIStyle.female:
+        return InputVisual(
+          background: tokens.brandSubtle.withOpacity(0.5),
+          border: Border.all(
+            color: isFocused ? borderAccent : Colors.white.withOpacity(0.6),
+            width: isFocused ? 1.2 : 0.8,
+          ),
+          shadows: const [],
+          borderAccent: borderAccent,
+          foreground: isDisabled ? tokens.textTertiary : tokens.textPrimary,
+        );
+    }
+  }
+
   /// 女性美学专属：多渐变卡片背景（5 层视觉）
   /// 仅在 style == UIStyle.female 时由 Widget 调用
   /// 层 1: 线性渐变基底（brand→brandLight，135deg）
@@ -139,5 +341,50 @@ class MultiGradientSpec {
     required this.linear,
     required this.radialHighlight,
     required this.hairlineBorder,
+  });
+}
+
+// === 组件视觉规格数据类（供 Lumira 全局组件使用） ===
+
+/// LumiraButton variant
+enum ButtonVariant { primary, secondary, ghost, danger }
+
+/// LumiraButton 视觉解析结果
+class ButtonVisual {
+  final Color background;
+  final Color foreground;
+  final Border? border;
+  final List<BoxShadow> shadows;
+
+  const ButtonVisual({
+    required this.background,
+    required this.foreground,
+    required this.border,
+    required this.shadows,
+  });
+}
+
+/// LumiraTextField 状态
+enum InputState { default_, focused, error, disabled }
+
+/// LumiraTextField 视觉解析结果
+class InputVisual {
+  final Color background;
+  final Border? border;
+  final List<BoxShadow> shadows;
+
+  /// 边框强调色（focused=brand, error=danger, default=divider）
+  /// 用于 flat/glass/female 风格的边框颜色，neumorphic 风格可忽略
+  final Color borderAccent;
+
+  /// 文字颜色（disabled 时为 textTertiary）
+  final Color foreground;
+
+  const InputVisual({
+    required this.background,
+    required this.border,
+    required this.shadows,
+    required this.borderAccent,
+    required this.foreground,
   });
 }
