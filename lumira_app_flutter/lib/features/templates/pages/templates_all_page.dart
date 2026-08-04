@@ -11,7 +11,6 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../data/imported_templates_provider.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../widgets/template_import_sheet.dart';
 
@@ -161,7 +160,8 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
-    final importedAll = ref.watch(importedAllTemplatesProvider);
+    // 导入的模板现在持久化到 DAO，不再需要内存 provider
+    final importedAll = <AllTemplateItem>[];
     final asyncDao = ref.watch(templatesDaoProvider);
     final isOverview = _selectedType == null;
 
