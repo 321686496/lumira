@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
 import 'package:lumira_app_flutter/features/templates/services/template_exporter.dart';
@@ -67,6 +68,90 @@ void main() {
 
       expect(data['composition']['overlayType'], 'rule_of_thirds');
       expect(data['composition'].containsKey('subjectFrame'), isFalse);
+    });
+  });
+
+  group('TemplateExporter.embedCoverData', () {
+    test('data: URL cover is copied directly to coverData', () async {
+      final record = _makeRecord().copyWith(
+        cover: 'data:image/jpeg;base64,abc123',
+      );
+      final result = await TemplateExporter.embedCoverData(record);
+      expect(result.coverData, 'data:image/jpeg;base64,abc123');
+    });
+
+    test('http URL cover leaves coverData null (offline app)', () async {
+      final record = _makeRecord().copyWith(
+        cover: 'https://picsum.photos/seed/test/400/600',
+      );
+      final result = await TemplateExporter.embedCoverData(record);
+      expect(result.coverData, isNull);
+    });
+
+    test('empty cover leaves coverData null', () async {
+      final record = _makeRecord(); // cover = ''
+      final result = await TemplateExporter.embedCoverData(record);
+      expect(result.coverData, isNull);
+    });
+
+    test('asset path cover loads bytes and encodes to base64 data URL', () async {
+      final record = _makeRecord().copyWith(
+        cover: 'assets/images/templates/cafe_portrait.jpg',
+      );
+      final fakeBytes = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0]); // JPEG magic bytes
+      final result = await TemplateExporter.embedCoverData(
+        record,
+        assetLoader: (_) async => fakeBytes,
+      );
+      expect(result.coverData, isNotNull);
+      expect(result.coverData!, startsWith('data:image/jpeg;base64,'));
+    });
+
+    test('coverData exceeding 500KB is skipped', () async {
+      final record = _makeRecord().copyWith(
+        cover: 'assets/images/templates/huge.jpg',
+      );
+      final hugeBytes = Uint8List(600 * 1024); // 600KB > 500KB limit
+      final result = await TemplateExporter.embedCoverData(
+        record,
+        assetLoader: (_) async => hugeBytes,
+      );
+      expect(result.coverData, isNull);
+    });
+  });
+
+  group('TemplateExporter.exportToPptpl with coverData', () {
+    test('meta includes coverData when record has it', () {
+      final record = _makeRecord().copyWith(
+        coverData: 'data:image/jpeg;base64,abc123',
+      );
+      final json = TemplateExporter.exportToPptpl(record);
+      final data = jsonDecode(json) as Map<String, dynamic>;
+      expect(data['meta']['coverData'], 'data:image/jpeg;base64,abc123');
+    });
+
+    test('meta omits coverData when null', () {
+      final record = _makeRecord(); // coverData = null
+      final json = TemplateExporter.exportToPptpl(record);
+      final data = jsonDecode(json) as Map<String, dynamic>;
+      expect(data['meta'].containsKey('coverData'), isFalse);
+    });
+  });
+
+  group('resolveCoverUrl', () {
+    test('returns coverData when present', () {
+      final record = _makeRecord().copyWith(
+        cover: 'assets/images/templates/test.jpg',
+        coverData: 'data:image/jpeg;base64,abc',
+      );
+      expect(TemplateExporter.resolveCoverUrl(record), 'data:image/jpeg;base64,abc');
+    });
+
+    test('returns cover when coverData is null', () {
+      final record = _makeRecord().copyWith(
+        cover: 'assets/images/templates/test.jpg',
+      );
+      expect(TemplateExporter.resolveCoverUrl(record), 'assets/images/templates/test.jpg');
     });
   });
 }
