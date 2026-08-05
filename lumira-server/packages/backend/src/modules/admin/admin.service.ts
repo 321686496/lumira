@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/modules/admin/admin.service.ts
 
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { eq, count, desc } from 'drizzle-orm';
+import { eq, count, desc, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   devices,
@@ -10,6 +10,7 @@ import {
   redemptionCodeBatches,
   redemptionCodes,
   redemptionRecords,
+  questionnaireRecords,
 } from '../../database/schema';
 
 @Injectable()
@@ -86,7 +87,8 @@ export class AdminService {
   async createBatch(dto: {
     campaignName: string;
     codes: string[];
-    rewardTier: number;
+    rewardTier?: number;
+    rewardPoints?: number;
     maxUsesPerCode: number;
     validFrom?: number;
     validUntil?: number;
@@ -100,7 +102,8 @@ export class AdminService {
       // so we use the synchronous .all() method on the QueryPromise instead of awaiting.
       const result = tx.insert(redemptionCodeBatches).values({
         campaignName: dto.campaignName,
-        rewardTier: dto.rewardTier,
+        rewardTier: dto.rewardTier ?? null,
+        rewardPoints: dto.rewardPoints ?? 0,
         maxUsesPerCode: dto.maxUsesPerCode,
         totalGenerated: dto.codes.length,
         totalUsed: 0,
@@ -126,6 +129,7 @@ export class AdminService {
         batchId,
         campaignName: dto.campaignName,
         totalGenerated: dto.codes.length,
+        rewardPoints: dto.rewardPoints ?? 0,
       };
     });
   }
@@ -190,5 +194,118 @@ export class AdminService {
       page,
       pageSize,
     };
+  }
+
+  // 问卷列表（每设备最新一条）
+  async getQuestionnaireList(page: number = 1, pageSize: number = 20, deviceId?: string) {
+    const db = this.dbService.getDb();
+
+    // 子查询：每设备最新一条记录的 id
+    const latestSubquery = db
+      .select({
+        id: sql<number>`MAX(${questionnaireRecords.id})`.as('max_id'),
+      })
+      .from(questionnaireRecords)
+      .groupBy(questionnaireRecords.deviceId)
+      .as('latest');
+
+    const offset = (page - 1) * pageSize;
+
+    // 主查询：JOIN devices 取 alias，JOIN 子查询取每设备最新
+    const rows = await db
+      .select({
+        id: questionnaireRecords.id,
+        deviceId: questionnaireRecords.deviceId,
+        answersJson: questionnaireRecords.answersJson,
+        submittedAt: questionnaireRecords.submittedAt,
+        clientIp: questionnaireRecords.clientIp,
+        deviceAlias: devices.alias,
+      })
+      .from(questionnaireRecords)
+      .innerJoin(latestSubquery, eq(questionnaireRecords.id, latestSubquery.id))
+      .leftJoin(devices, eq(questionnaireRecords.deviceId, devices.deviceId))
+      .where(deviceId ? eq(questionnaireRecords.deviceId, deviceId) : undefined)
+      .orderBy(desc(questionnaireRecords.submittedAt))
+      .limit(pageSize)
+      .offset(offset);
+
+    const totalCount = deviceId
+      ? await db.select({ value: count() }).from(questionnaireRecords).where(eq(questionnaireRecords.deviceId, deviceId))
+      : await db.select({ value: sql<number>`COUNT(DISTINCT ${questionnaireRecords.deviceId})` }).from(questionnaireRecords);
+
+    return {
+      data: rows,
+      total: totalCount[0]?.value || 0,
+      page,
+      pageSize,
+    };
+  }
+
+  // 单设备问卷历史
+  async getQuestionnaireHistory(deviceId: string) {
+    const db = this.dbService.getDb();
+    const rows = await db
+      .select()
+      .from(questionnaireRecords)
+      .where(eq(questionnaireRecords.deviceId, deviceId))
+      .orderBy(desc(questionnaireRecords.submittedAt));
+
+    return {
+      data: rows,
+      total: rows.length,
+    };
+  }
+
+  // 问卷聚合统计（基于每设备最新一条）
+  async getQuestionnaireStats() {
+    const db = this.dbService.getDb();
+
+    const latestSubquery = db
+      .select({
+        id: sql<number>`MAX(${questionnaireRecords.id})`.as('max_id'),
+      })
+      .from(questionnaireRecords)
+      .groupBy(questionnaireRecords.deviceId)
+      .as('latest');
+
+    const rows = await db
+      .select({
+        answersJson: questionnaireRecords.answersJson,
+      })
+      .from(questionnaireRecords)
+      .innerJoin(latestSubquery, eq(questionnaireRecords.id, latestSubquery.id));
+
+    const stats = {
+      totalRespondents: rows.length,
+      source: {} as Record<string, number>,
+      favorite_categories: {} as Record<string, number>,
+      pain_points: {} as Record<string, number>,
+      skill_level: {} as Record<string, number>,
+      expectations: {} as Record<string, number>,
+      common_scenes: {} as Record<string, number>,
+      shoot_frequency: {} as Record<string, number>,
+    };
+
+    for (const row of rows) {
+      try {
+        const answers = JSON.parse(row.answersJson) as Record<string, unknown>;
+        for (const [key, value] of Object.entries(answers)) {
+          if (!stats.hasOwnProperty(key)) continue;
+          if (value === null) continue;
+          if (Array.isArray(value)) {
+            for (const v of value as string[]) {
+              stats[key as keyof typeof stats][v] = (stats[key as keyof typeof stats][v] || 0) + 1;
+            }
+          } else {
+            const v = value as string;
+            stats[key as keyof typeof stats][v] = (stats[key as keyof typeof stats][v] || 0) + 1;
+          }
+        }
+      } catch {
+        // 跳过无法解析的记录
+      }
+    }
+
+    return stats;
   }
 }

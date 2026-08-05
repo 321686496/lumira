@@ -68,4 +68,27 @@ export class AdminController {
       deviceId,
     );
   }
+
+  @Get('questionnaire')
+  async getQuestionnaireList(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('deviceId') deviceId?: string,
+  ) {
+    return this.adminService.getQuestionnaireList(
+      page ? parseInt(page) : 1,
+      pageSize ? parseInt(pageSize) : 20,
+      deviceId,
+    );
+  }
+
+  @Get('questionnaire/stats')
+  async getQuestionnaireStats() {
+    return this.adminService.getQuestionnaireStats();
+  }
+
+  @Get('questionnaire/:deviceId')
+  async getQuestionnaireHistory(@Param('deviceId') deviceId: string) {
+    return this.adminService.getQuestionnaireHistory(deviceId);
+  }
 }
