@@ -169,11 +169,16 @@ class CaptureState {
   });
 
   /// 原始模板（只读，派生自 currentTemplateIdProvider）
-  /// 当 currentTemplateIdProvider 为 null 时返回 null（自由拍摄模式）
+  /// 先查 TemplateRegistry（系统模板，同步快路径）
+  /// 未找到 → 查 templateCacheProvider（含自定义模板的运行时缓存）
   static final originalTemplateProvider = Provider<PhotoTemplate?>((ref) {
     final id = ref.watch(currentTemplateIdProvider);
     if (id == null) return null;
-    return TemplateRegistry.getTemplate(id);
+    // 快路径：系统模板（同步）
+    final builtin = TemplateRegistry.getTemplate(id);
+    if (builtin != null) return builtin;
+    // 慢路径：自定义模板（从预加载缓存读取）
+    return ref.watch(templateCacheProvider)[id];
   });
 
   /// 可编辑模板副本（参数面板的所有修改都写到这里）
