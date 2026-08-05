@@ -212,6 +212,7 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                                   unlockedCount: data.unlockedCount,
                                   categoryCounts: data.categoryCounts,
                                   onSelectCategory: _selectCategory,
+                                  categories: data.categories,
                                 )
                               : Column(
                                   crossAxisAlignment:

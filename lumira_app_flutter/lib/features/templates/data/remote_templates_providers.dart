@@ -8,6 +8,7 @@
 //   进入模板页时触发，拉取后端 list/categories → upsert 到 sqflite → prune 已下架的 remote 模板
 // - remoteTemplateDetailProvider: 按需拉取单个模板完整内容的 FutureProvider.family
 //   打开详情页且 sqflite 中只有 meta（composition_json='{}'）时触发
+// - templateDetailProvider: 详情页统一入口，按 mock → DAO → remote 顺序查找
 //
 // 错误处理：网络失败抛异常，FutureProvider 自动进入 error 状态，
 // UI 层（templates_page / templates_all_page / templates_detail_page）使用本地缓存降级，
@@ -23,6 +24,7 @@ import '../../capture/domain/photo_template.dart';
 import '../services/template_mapper.dart';
 import 'remote_template_dto.dart';
 import 'remote_templates_repository.dart';
+import 'templates_browse_mock_data.dart';
 
 /// 远程模板 Repository Provider。
 ///
@@ -100,4 +102,47 @@ final remoteTemplateDetailProvider =
     return null;
   }
   return TemplateMapper.toPhotoTemplate(refreshed);
+});
+
+/// 模板详情统一 Provider（v14 新增）。
+///
+/// 详情页（templates_detail_page.dart）通过此 provider 获取 [TemplateDetail]，
+/// 查找顺序：
+/// 1. [TemplatesBrowseMockData.findDetailById]（mock + TemplateRegistry，同步快路径）
+///    - 覆盖内置 29 个模板 + mock 详情列表
+/// 2. DAO [TemplatesDao.getById]（含 builtin 镜像 / custom / remote meta）
+///    - 若记录存在且 source='remote' 且 composition_json 为空 → 触发 [remoteTemplateDetailProvider]
+/// 3. 将 [PhotoTemplate] 通过 [TemplatesBrowseMockData.fromPhotoTemplate] 转为 [TemplateDetail]
+///
+/// 返回值：
+/// - 非null：模板详情（来自 mock / DAO / 远程拉取）
+/// - null：模板不存在（id 错误或已下架且本地无缓存）
+///
+/// 错误处理：
+/// - 远程拉取失败 → 抛异常（FutureProvider 进入 error 状态，UI 显示"网络错误"）
+/// - DAO 不可用 → 返回 mock 结果（可能为 null）
+final templateDetailProvider =
+    FutureProvider.family<TemplateDetail?, String>((ref, id) async {
+  // 1. 快路径：mock + TemplateRegistry（同步）
+  final mock = TemplatesBrowseMockData.findDetailById(id);
+  if (mock != null) return mock;
+
+  // 2. 慢路径：DAO 查找（含 custom / remote 缓存）
+  final dao = await ref.watch(templatesDaoProvider.future);
+  final record = await dao.getById(id);
+  if (record == null) return null;
+
+  // 3. 若为 remote 且 composition 为空（仅 meta 缓存）→ 按需拉取完整内容
+  final needsRemoteFetch =
+      record.source == 'remote' && record.composition.isEmpty;
+  if (needsRemoteFetch) {
+    final remoteTemplate =
+        await ref.watch(remoteTemplateDetailProvider(id).future);
+    if (remoteTemplate == null) return null;
+    return TemplatesBrowseMockData.fromPhotoTemplate(remoteTemplate);
+  }
+
+  // 4. 本地已有完整内容 → 直接转换
+  return TemplatesBrowseMockData.fromPhotoTemplate(
+      TemplateMapper.toPhotoTemplate(record));
 });

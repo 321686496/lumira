@@ -1279,7 +1279,7 @@ class TemplatesBrowseMockData {
     // 回退：从 TemplateRegistry 查找（覆盖 17 个新增人像模板）
     final tpl = TemplateRegistry.getTemplate(id);
     if (tpl != null) {
-      return _fromPhotoTemplate(tpl);
+      return fromPhotoTemplate(tpl);
     }
     return null;
   }
@@ -1288,7 +1288,10 @@ class TemplatesBrowseMockData {
   ///
   /// 用于 [findDetailById] 回退路径：当模板不在 mock [details] 列表中时，
   /// 从 [TemplateRegistry] 获取完整 [PhotoTemplate] 并转换为详情页所需格式。
-  static TemplateDetail _fromPhotoTemplate(PhotoTemplate tpl) {
+  ///
+  /// v14: 改为 public，供 [templateDetailProvider] 在加载远程模板完整内容后
+  /// 转换为详情页所需格式。
+  static TemplateDetail fromPhotoTemplate(PhotoTemplate tpl) {
     return TemplateDetail(
       id: tpl.meta.id,
       name: tpl.meta.name,
