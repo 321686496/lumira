@@ -1,0 +1,163 @@
+{
+	"pages": [
+		{
+			"path": "pages/splash/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/home/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/challenge/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/capture/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#181614" }
+		},
+		{
+			"path": "pages/capture/preview",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#181614" }
+		},
+		{
+			"path": "pages/capture/preview-template",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#181614" }
+		},
+		{
+			"path": "pages/capture/scene-guide",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/capture/scene-manage",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/capture/scene-detail",
+			"style": {
+				"navigationBarTitleText": "场景详情",
+				"navigationStyle": "custom",
+				"backgroundColor": "#FAF7F2"
+			}
+		},
+		{
+			"path": "pages/templates/detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/unlock",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/editor",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/drafts",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/recommend",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/templates/all",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/challenge/detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/inspiration/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/gallery/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/gallery/detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/gallery/diary",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/gallery/monthly-digest",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/settings",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/redeem",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/points/wallet",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/settings/theme",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/growth",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/fragments",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/invite",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/academy",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/academy-detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/collections",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/collection-detail",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/profile/my-templates",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/scenes/index",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/shootkit/editor",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		}
+	],
+	"globalStyle": {
+		"bounce": "none",
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "如画 Lumira",
+		"navigationBarBackgroundColor": "#FAF7F2",
+		"backgroundColor": "#FAF7F2"
+	}
+}

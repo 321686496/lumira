@@ -1,0 +1,369 @@
+﻿8124aa8 feat(capture): TemplateStrip reads sorted real data with custom template badge
+ .../features/capture/widgets/template_strip.dart   | 249 +++++++++++++--------
+ .../capture/widgets/template_strip_test.dart       |  14 +-
+ 2 files changed, 165 insertions(+), 98 deletions(-)
+diff --git a/lumira_app_flutter/lib/features/capture/widgets/template_strip.dart b/lumira_app_flutter/lib/features/capture/widgets/template_strip.dart
+index 7e6ad93..a67c06d 100644
+--- a/lumira_app_flutter/lib/features/capture/widgets/template_strip.dart
++++ b/lumira_app_flutter/lib/features/capture/widgets/template_strip.dart
+@@ -1,136 +1,199 @@
+ import 'package:flutter/material.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import '../data/capture_state.dart';
+ import '../data/template_registry.dart';
++import '../domain/photo_template.dart';
+ 
+ /// 模板横向滚动条。
+ /// `compact=true` 显示前 6 个模板（底部条），`compact=false` 显示前 12 个（展开面板）。
+ /// 点击模板卡片切换 `currentTemplateIdProvider`。
+ ///
+ /// 修复 Bug 4：使用 TemplateMeta.cover 显示真实封面图，替代占位图标
+ class TemplateStrip extends ConsumerWidget {
+   final bool compact;
+   const TemplateStrip({super.key, this.compact = false});
+ 
+   @override
+   Widget build(BuildContext context, WidgetRef ref) {
+     final currentId = ref.watch(CaptureState.currentTemplateIdProvider);
+-    final templates = TemplateRegistry.getRecentTemplates(compact ? 6 : 12);
++    final templatesAsync = ref.watch(CaptureState.sortedTemplatesProvider);
+ 
+     return SizedBox(
+       height: compact ? 80 : 100,
+-      child: ListView.builder(
+-        scrollDirection: Axis.horizontal,
+-        padding: const EdgeInsets.symmetric(horizontal: 12),
+-        itemCount: templates.length,
+-        itemBuilder: (ctx, i) {
+-          final tpl = templates[i];
+-          final active = tpl.meta.id == currentId;
+-          return GestureDetector(
+-            onTap: () {
+-              // toggle 行为：点击已选中模板则取消（回到自由拍摄），否则选中
+-              final next = active ? null : tpl.meta.id;
+-              ref
+-                  .read(CaptureState.currentTemplateIdProvider.notifier)
+-                  .state = next;
+-            },
+-            child: Container(
+-              width: compact ? 60 : 72,
+-              margin: const EdgeInsets.only(right: 8),
+-              decoration: BoxDecoration(
+-                borderRadius: BorderRadius.circular(8),
+-                border: active
+-                    ? Border.all(color: Colors.amber, width: 2)
+-                    : Border.all(color: Colors.white12, width: 0.5),
+-              ),
+-              child: Stack(
+-                fit: StackFit.expand,
+-                children: [
+-                  // 封面图
+-                  ClipRRect(
+-                    borderRadius: BorderRadius.circular(6),
+-                    child: tpl.meta.cover.isEmpty
+-                        ? Container(
++      child: templatesAsync.when(
++        // 加载完成：显示排序后的模板列表
++        data: (templates) {
++          final list = compact ? templates.take(6).toList() : templates;
++          if (list.isEmpty) {
++            return _buildEmptyState();
++          }
++          return _buildTemplateList(list, currentId, ref);
++        },
++        // 加载中：降级显示系统模板
++        loading: () {
++          final fallback = TemplateRegistry.allTemplates;
++          final list = compact ? fallback.take(6).toList() : fallback;
++          return _buildTemplateList(list, currentId, ref);
++        },
++        // 错误：降级显示系统模板
++        error: (_, __) {
++          final fallback = TemplateRegistry.allTemplates;
++          final list = compact ? fallback.take(6).toList() : fallback;
++          return _buildTemplateList(list, currentId, ref);
++        },
++      ),
++    );
++  }
++
++  /// 空状态占位
++  Widget _buildEmptyState() {
++    return const Center(
++      child: Text(
++        '暂无模板',
++        style: TextStyle(color: Colors.white54, fontSize: 12),
++      ),
++    );
++  }
++
++  /// 构建模板横向列表
++  Widget _buildTemplateList(
++    List<PhotoTemplate> templates,
++    String? currentId,
++    WidgetRef ref,
++  ) {
++    return ListView.builder(
++      scrollDirection: Axis.horizontal,
++      padding: const EdgeInsets.symmetric(horizontal: 12),
++      itemCount: templates.length,
++      itemBuilder: (ctx, i) {
++        final tpl = templates[i];
++        final active = tpl.meta.id == currentId;
++        // 判断是否为自定义模板（不在 TemplateRegistry 中则为自定义）
++        final isCustom = TemplateRegistry.getTemplate(tpl.meta.id) == null;
++        return GestureDetector(
++          onTap: () {
++            final next = active ? null : tpl.meta.id;
++            ref
++                .read(CaptureState.currentTemplateIdProvider.notifier)
++                .state = next;
++          },
++          child: Container(
++            width: compact ? 60 : 72,
++            margin: const EdgeInsets.only(right: 8),
++            decoration: BoxDecoration(
++              borderRadius: BorderRadius.circular(8),
++              border: active
++                  ? Border.all(color: Colors.amber, width: 2)
++                  : Border.all(color: Colors.white12, width: 0.5),
++            ),
++            child: Stack(
++              fit: StackFit.expand,
++              children: [
++                // 封面图
++                ClipRRect(
++                  borderRadius: BorderRadius.circular(6),
++                  child: tpl.meta.cover.isEmpty
++                      ? Container(
++                          color: Colors.white12,
++                          child: Icon(
++                            Icons.image,
++                            color: active ? Colors.amber : Colors.white54,
++                            size: 24,
++                          ),
++                        )
++                      : Image.network(
++                          tpl.meta.cover,
++                          fit: BoxFit.cover,
++                          errorBuilder: (_, __, ___) => Container(
+                             color: Colors.white12,
+                             child: Icon(
+                               Icons.image,
+                               color: active ? Colors.amber : Colors.white54,
+                               size: 24,
+                             ),
+-                          )
+-                        : Image.network(
+-                            tpl.meta.cover,
+-                            fit: BoxFit.cover,
+-                            errorBuilder: (_, __, ___) => Container(
+-                              color: Colors.white12,
+-                              child: Icon(
+-                                Icons.image,
+-                                color: active ? Colors.amber : Colors.white54,
+-                                size: 24,
+-                              ),
+-                            ),
+                           ),
++                        ),
++                ),
++                // 渐变遮罩
++                Positioned(
++                  left: 0,
++                  right: 0,
++                  bottom: 0,
++                  child: Container(
++                    padding: const EdgeInsets.symmetric(
++                        horizontal: 4, vertical: 4),
++                    decoration: BoxDecoration(
++                      gradient: LinearGradient(
++                        begin: Alignment.topCenter,
++                        end: Alignment.bottomCenter,
++                        colors: [
++                          Colors.transparent,
++                          Colors.black.withOpacity(0.7),
++                        ],
++                      ),
++                      borderRadius: const BorderRadius.only(
++                        bottomLeft: Radius.circular(6),
++                        bottomRight: Radius.circular(6),
++                      ),
++                    ),
++                    child: Text(
++                      tpl.meta.name,
++                      style: const TextStyle(
++                        color: Colors.white,
++                        fontSize: 10,
++                        fontWeight: FontWeight.w500,
++                      ),
++                      maxLines: 1,
++                      overflow: TextOverflow.ellipsis,
++                      textAlign: TextAlign.center,
++                    ),
+                   ),
+-                  // 渐变遮罩，确保文字清晰
++                ),
++                // 自定义模板标记
++                if (isCustom)
+                   Positioned(
+-                    left: 0,
+-                    right: 0,
+-                    bottom: 0,
++                    top: 4,
++                    left: 4,
+                     child: Container(
+                       padding: const EdgeInsets.symmetric(
+-                          horizontal: 4, vertical: 4),
++                          horizontal: 4, vertical: 1),
+                       decoration: BoxDecoration(
+-                        gradient: LinearGradient(
+-                          begin: Alignment.topCenter,
+-                          end: Alignment.bottomCenter,
+-                          colors: [
+-                            Colors.transparent,
+-                            Colors.black.withOpacity(0.7),
+-                          ],
+-                        ),
+-                        borderRadius: const BorderRadius.only(
+-                          bottomLeft: Radius.circular(6),
+-                          bottomRight: Radius.circular(6),
+-                        ),
++                        color: Colors.black54,
++                        borderRadius: BorderRadius.circular(4),
+                       ),
+-                      child: Text(
+-                        tpl.meta.name,
+-                        style: const TextStyle(
+-                          color: Colors.white,
+-                          fontSize: 10,
+-                          fontWeight: FontWeight.w500,
++                      child: const Text(
++                        '我的',
++                        style: TextStyle(
++                          color: Colors.white70,
++                          fontSize: 8,
+                         ),
+-                        maxLines: 1,
+-                        overflow: TextOverflow.ellipsis,
+-                        textAlign: TextAlign.center,
+                       ),
+                     ),
+                   ),
+-                  // 选中标记
+-                  if (active)
+-                    Positioned(
+-                      top: 4,
+-                      right: 4,
+-                      child: Container(
+-                        width: 16,
+-                        height: 16,
+-                        decoration: const BoxDecoration(
+-                          color: Colors.amber,
+-                          shape: BoxShape.circle,
+-                        ),
+-                        child: const Icon(
+-                          Icons.check,
+-                          color: Colors.black,
+-                          size: 12,
+-                        ),
++                // 选中标记
++                if (active)
++                  Positioned(
++                    top: 4,
++                    right: 4,
++                    child: Container(
++                      width: 16,
++                      height: 16,
++                      decoration: const BoxDecoration(
++                        color: Colors.amber,
++                        shape: BoxShape.circle,
++                      ),
++                      child: const Icon(
++                        Icons.check,
++                        color: Colors.black,
++                        size: 12,
+                       ),
+                     ),
+-                ],
+-              ),
++                  ),
++              ],
+             ),
+-          );
+-        },
+-      ),
++          ),
++        );
++      },
+     );
+   }
+ }
+diff --git a/lumira_app_flutter/test/features/capture/widgets/template_strip_test.dart b/lumira_app_flutter/test/features/capture/widgets/template_strip_test.dart
+index 4e97497..438def8 100644
+--- a/lumira_app_flutter/test/features/capture/widgets/template_strip_test.dart
++++ b/lumira_app_flutter/test/features/capture/widgets/template_strip_test.dart
+@@ -1,54 +1,58 @@
+ import 'package:flutter/material.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
++import 'package:lumira_app_flutter/features/capture/data/template_registry.dart';
+ import 'package:lumira_app_flutter/features/capture/widgets/template_strip.dart';
+ 
+ void main() {
+   group('TemplateStrip', () {
+     testWidgets('compact mode renders 6 template cards', (tester) async {
+       final container = ProviderContainer();
+       addTearDown(container.dispose);
+ 
+       await tester.pumpWidget(
+         UncontrolledProviderScope(
+           container: container,
+           child: const MaterialApp(
+             home: Scaffold(body: TemplateStrip(compact: true)),
+           ),
+         ),
+       );
+ 
+       expect(find.byType(GestureDetector), findsNWidgets(6));
+     });
+ 
+-    testWidgets('expanded mode renders 12 template cards', (tester) async {
++    testWidgets('expanded mode renders all template cards', (tester) async {
+       final container = ProviderContainer();
+       addTearDown(container.dispose);
+-      // Expand the test viewport so the lazy ListView.builder builds all 12 cards
+-      // (default 800×600 only fits ~10 of the 72px-wide items).
+-      tester.binding.window.physicalSizeTestValue = const Size(2000, 600);
++      // Expand the test viewport so the lazy ListView.builder builds all cards
++      // (each card is 72px + 8px margin = 80px, need enough width for all)
++      final templateCount = TemplateRegistry.allTemplates.length;
++      tester.binding.window.physicalSizeTestValue =
++          Size(templateCount * 80 + 100, 600);
+       tester.binding.window.devicePixelRatioTestValue = 1.0;
+       addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+       addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+ 
+       await tester.pumpWidget(
+         UncontrolledProviderScope(
+           container: container,
+           child: const MaterialApp(
+             home: Scaffold(body: TemplateStrip(compact: false)),
+           ),
+         ),
+       );
+ 
+-      expect(find.byType(GestureDetector), findsNWidgets(12));
++      // In test environment, sortedTemplatesProvider falls back to system templates
++      expect(find.byType(GestureDetector), findsNWidgets(templateCount));
+     });
+ 
+     testWidgets('tapping a template card updates currentTemplateIdProvider',
+         (tester) async {
+       final container = ProviderContainer();
+       addTearDown(container.dispose);
+ 
+       await tester.pumpWidget(
+         UncontrolledProviderScope(
+           container: container,
