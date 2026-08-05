@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS redemption_code_batches (
   max_uses_per_code INTEGER NOT NULL DEFAULT 1,
   total_generated  INTEGER NOT NULL,
   total_used       INTEGER NOT NULL DEFAULT 0,
+  reward_points    INTEGER NOT NULL DEFAULT 0,
   valid_from       INTEGER,
   valid_until      INTEGER,
   is_active        INTEGER NOT NULL DEFAULT 1,
