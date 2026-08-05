@@ -1,4 +1,4 @@
-# 个人信息修改功能设计
+﻿# 个人信息修改功能设计
 
 > 日期：2026-08-05
 > 范围：Flutter 客户端（lumira_app_flutter）+ 后端（lumira-server）+ 共享类型（shared）
@@ -52,7 +52,7 @@ CREATE TABLE user_profile (
 
 ### 3.3 数据库迁移
 
-- `_kDbVersion` 13 → 14（`core/db/database_provider.dart`）
+- `_kDbVersion` 14 → 15（`core/db/database_provider.dart`）
 - `_onCreate` 增加建表语句
 - `_onUpgrade` 增加 `oldVersion < 14` 分支（`CREATE TABLE IF NOT EXISTS`，幂等）
 
@@ -199,7 +199,7 @@ lib/features/profile/
 ### 9.2 Flutter 单测
 
 - `profile_dao_test.dart`：get（空/有值）、upsert（覆盖）、markSynced、hasUnsynced
-- `migration_v14_test.dart`：`user_profile` 表创建、单行表初始化、幂等（参照 migration_v4/v5 测试）
+- `migration_v15_test.dart`：`user_profile` 表创建、单行表初始化、幂等（参照 migration_v4/v5 测试）
 
 ## 10. 文件清单
 
@@ -223,7 +223,7 @@ lib/features/profile/
 | 文件 | 变更 |
 |---|---|
 | `lib/core/db/tables.dart` | `user_profile` 表常量 |
-| `lib/core/db/database_provider.dart` | v14 迁移 |
+| `lib/core/db/database_provider.dart` | v15 迁移 |
 | `lib/core/router/route_names.dart` | `profileEdit` 路由名 |
 | `lib/app/router.dart` | 注册 `/profile/edit` |
 | `lib/core/auth/auth_controller.dart` | 解析并落地注册响应的 profile |
@@ -238,7 +238,7 @@ lib/features/profile/
 | `lib/features/profile/pages/profile_edit_page.dart` | 新页面 |
 | `lib/main.dart` | 启动 ensureLoaded + 补传 |
 | `test/core/db/profile_dao_test.dart` | 新测试 |
-| `test/core/db/migration_v14_test.dart` | 新测试 |
+| `test/core/db/migration_v15_test.dart` | 新测试 |
 
 ## 11. 非目标（YAGNI）
 
