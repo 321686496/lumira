@@ -77,3 +77,13 @@ INSERT OR IGNORE INTO reward_tiers (tier, required_invites, rewards_json, is_act
   (2, 3, '[{"type":"template_pack","id":"french-retro","label":"法式复古模板包(含3个模板)"}]', 1),
   (3, 5, '[{"type":"template_pack","id":"ambience-portrait","label":"氛围感写真模板包(含5个模板)"}]', 1),
   (4, 10, '[{"type":"achievement","id":"share-master","label":"分享达人成就"}]', 1);
+
+CREATE TABLE IF NOT EXISTS questionnaire_records (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  device_id     TEXT NOT NULL,
+  answers_json  TEXT NOT NULL,
+  submitted_at  INTEGER NOT NULL,
+  client_ip     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_questionnaire_records_device ON questionnaire_records(device_id);
+CREATE INDEX IF NOT EXISTS idx_questionnaire_records_submitted ON questionnaire_records(submitted_at DESC);
