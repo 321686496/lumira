@@ -10,6 +10,13 @@ export const devices = sqliteTable('devices', {
   ipRegion: text('ip_region'),
 });
 
+export const userProfiles = sqliteTable('user_profiles', {
+  deviceId: text('device_id').primaryKey().references(() => devices.deviceId),
+  username: text('username').notNull(),
+  avatarSeed: text('avatar_seed').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 export const inviteRecords = sqliteTable('invite_records', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   inviterDeviceId: text('inviter_device_id').notNull().references(() => devices.deviceId),

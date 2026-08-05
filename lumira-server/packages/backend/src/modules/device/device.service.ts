@@ -4,7 +4,8 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { devices } from '../../database/schema';
+import { devices, userProfiles } from '../../database/schema';
+import { BUILTIN_AVATAR_SEEDS, BUILTIN_USERNAMES, randomPick } from '../profile/profile-constants';
 
 @Injectable()
 export class DeviceService {
@@ -29,7 +30,8 @@ export class DeviceService {
         .where(eq(devices.deviceId, deviceId));
 
       const token = this.jwtService.sign({ deviceId });
-      return { token, isNewDevice: false };
+      const profile = await this.getOrCreateProfile(deviceId);
+      return { token, isNewDevice: false, profile };
     }
 
     // 新设备注册
@@ -42,6 +44,19 @@ export class DeviceService {
     });
 
     const token = this.jwtService.sign({ deviceId });
-    return { token, isNewDevice: true };
+    const profile = await this.getOrCreateProfile(deviceId);
+    return { token, isNewDevice: true, profile };
+  }
+
+  private async getOrCreateProfile(deviceId: string) {
+    const db = this.dbService.getDb();
+    const existing = await db.query.userProfiles.findFirst({ where: eq(userProfiles.deviceId, deviceId) });
+    if (existing) return { username: existing.username, avatarSeed: existing.avatarSeed };
+    const username = randomPick(BUILTIN_USERNAMES);
+    const avatarSeed = randomPick(BUILTIN_AVATAR_SEEDS);
+    await db.insert(userProfiles).values({
+      deviceId, username, avatarSeed, updatedAt: Math.floor(Date.now() / 1000),
+    });
+    return { username, avatarSeed };
   }
 }
