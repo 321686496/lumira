@@ -35,6 +35,7 @@ class RouteNames {
   static const String galleryStats = '/gallery/stats';
   static const String galleryMonthlyDigest = '/gallery/monthly-digest';
   static const String profileSettings = '/profile/settings';
+  static const String profileEdit = '/profile/edit';
   static const String profileSettingsTheme = '/profile/settings/theme';
   static const String profileGrowth = '/profile/growth';
   static const String profileInvite = '/profile/invite';

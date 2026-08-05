@@ -4,6 +4,7 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/growth_dao.dart';
 import '../data/growth_models.dart';
 import '../data/profile_mock_data.dart';
+import 'profile_providers.dart';
 
 final growthDaoProvider = FutureProvider<GrowthDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
@@ -49,6 +50,7 @@ String _levelName(int level) {
 /// 聚合 GrowthDao（等级/XP）+ GalleryDao（作品数/收藏数）+ TemplatesDao（模板数）
 /// 对照：lumira-app/src/pages/profile/index.vue 的 userProfile computed
 final userProfileProvider = FutureProvider<UserProfile>((ref) async {
+  final profile = await ref.watch(profileDataProvider.future);
   final growth = await ref.watch(growthLevelProvider.future);
   final galleryDao = await ref.watch(galleryDaoProvider.future);
   final templatesDao = await ref.watch(templatesDaoProvider.future);
@@ -60,8 +62,8 @@ final userProfileProvider = FutureProvider<UserProfile>((ref) async {
   final maxXp = growth.level * 500;
 
   return UserProfile(
-    name: '如画用户',
-    avatarSeed: 'lumira-user-001',
+    name: profile?.username ?? '如画用户',
+    avatarSeed: profile?.avatarSeed ?? 'lumira-user-001',
     level: growth.level,
     levelName: growth.levelName,
     currentXp: growth.currentXp,
