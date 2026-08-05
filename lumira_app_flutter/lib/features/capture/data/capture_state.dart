@@ -185,8 +185,8 @@ class CaptureState {
       final galleryDao = await ref.watch(galleryDaoProvider.future);
       usageCounts = await galleryDao.countByTemplate();
 
-      // 获取用户偏好
-      final pref = await ref.read(userPreferenceProvider.future);
+      // 获取用户偏好（用 ref.watch 建立依赖，使偏好变化时触发重排序）
+      final pref = await ref.watch(userPreferenceProvider.future);
       topCategory = pref.topCategory;
     } catch (e) {
       // DAO 不可用时降级为无排序（按默认顺序）
