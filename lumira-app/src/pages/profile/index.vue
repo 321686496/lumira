@@ -129,6 +129,15 @@
             </view>
             <text class="lumira-list-arrow"><text class="ph ph-caret-right"></text></text>
           </view>
+          <view class="lumira-list-item" @click="goPage('/pages/points/wallet')">
+            <view class="lumira-list-icon">
+              <text class="ph ph-currency-circle-dollar"></text>
+            </view>
+            <view class="lumira-list-text">
+              <text class="lumira-list-title">积分钱包</text>
+            </view>
+            <text class="lumira-list-arrow"><text class="ph ph-caret-right"></text></text>
+          </view>
           <view class="lumira-list-item">
             <view class="lumira-list-icon">
               <text class="ph ph-map-trifold"></text>

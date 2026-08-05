@@ -101,6 +101,14 @@
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},
 		{
+			"path": "pages/profile/redeem",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
+			"path": "pages/points/wallet",
+			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
+		},
+		{
 			"path": "pages/profile/settings/theme",
 			"style": { "navigationStyle": "custom", "backgroundColor": "#FAF7F2" }
 		},

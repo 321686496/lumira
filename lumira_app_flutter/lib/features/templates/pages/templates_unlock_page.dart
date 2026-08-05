@@ -9,6 +9,9 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../redeem/data/redeem_repository.dart';
+import '../../redeem/data/redeem_models.dart';
+import '../data/owned_templates_repository.dart';
 
 /// 解锁模板页
 ///
@@ -83,26 +86,55 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
         ],
       ),
     );
-    if (code != null && code.isNotEmpty) {
+    if (code == null || code.isEmpty) return;
+    if (!mounted) return;
+    try {
+      final repo = await ref.read(redeemRepositoryProvider.future);
+      final resp = await repo.redeem(RedeemCodeRequest(code: code));
       if (!mounted) return;
-      setState(() => _unlocked = true);
-      lumira.LumiraToast.show(context, '解锁成功');
+      lumira.LumiraToast.show(
+        context,
+        '兑换成功：${resp.campaignName}，获得 ${resp.rewardPoints} 积分，余额 ${resp.balance}',
+      );
+      // 兑换码发的是积分，不直接解锁模板，刷新 owned 列表后让用户用积分兑换
+      ref.invalidate(ownedTemplatesLoaderProvider);
+    } catch (e) {
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '兑换失败：$e');
     }
   }
 
-  void _onPurchase() {
-    lumira.showLumiraDialog<void>(
+  Future<void> _onPurchase() async {
+    final templateId = widget.templateId;
+    if (templateId == null || templateId.isEmpty) {
+      lumira.LumiraToast.show(context, '缺少模板信息');
+      return;
+    }
+    final confirmed = await lumira.showLumiraDialog<bool>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => _PayPopupContent(
-        onCancel: () => Navigator.pop(context),
-        onConfirm: () {
-          Navigator.pop(context);
-          setState(() => _unlocked = true);
-          lumira.LumiraToast.show(context, '解锁成功');
-        },
+        onCancel: () => Navigator.pop(context, false),
+        onConfirm: () => Navigator.pop(context, true),
       ),
     );
+    if (confirmed != true) return;
+    if (!mounted) return;
+    try {
+      final repo = await ref.read(ownedTemplatesRepositoryProvider.future);
+      final result = await repo.exchange(templateId);
+      if (!mounted) return;
+      // 刷新 owned 缓存
+      ref.invalidate(ownedTemplatesLoaderProvider);
+      setState(() => _unlocked = true);
+      lumira.LumiraToast.show(
+        context,
+        '解锁成功！消耗 ${result.spentCredits} 积分，余额 ${result.balance}',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '兑换失败：$e');
+    }
   }
 
   void _onStartUse() {

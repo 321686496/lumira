@@ -1,7 +1,4 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumira_app_flutter/core/db/dao/api_cache_dao.dart';
 import 'package:lumira_app_flutter/core/network/api_client.dart';
 import 'package:lumira_app_flutter/core/network/api_error.dart';
 import 'package:lumira_app_flutter/features/invite/data/invite_models.dart';
@@ -44,17 +41,6 @@ class _FakeApi implements ApiClient {
   }) async {
     throw UnimplementedError('PATCH $path');
   }
-}
-
-class _FakeCacheDao implements ApiCacheDao {
-  final Map<String, String> _store = {};
-
-  @override
-  Future<String?> load(String key) async => _store[key];
-  @override
-  Future<void> save(String key, String payload) async => _store[key] = payload;
-  @override
-  Future<void> clear(String key) async => _store.remove(key);
 }
 
 void main() {
@@ -126,60 +112,30 @@ void main() {
     });
   });
 
-  group('RemoteInviteRepository.getStats offline fallback', () {
-    test('returns cached stats on network error', () async {
-      final api = _FakeApi()
-        ..statsError = const ApiException(ApiErrorKind.network, 'timeout');
-      final cache = _FakeCacheDao();
-      // 预存缓存
-      final cachedStats = InviteStats(
-        totalInvites: 3,
-        currentTier: 1,
-        nextTier: null,
-        unlockedRewards: [],
-      );
-      await cache.save('invite_stats', jsonEncode(cachedStats.toJson()));
-
-      final repo = RemoteInviteRepository(
-        api: api,
-        cache: cache,
-      );
-      final result = await repo.getStats();
-      expect(result.totalInvites, 3);
-      expect(api.statsCallCount, 1);
-    });
-
+  group('RemoteInviteRepository.stats', () {
     test('rethrows non-network errors', () async {
       final api = _FakeApi()
         ..statsError = const ApiException(ApiErrorKind.server, '500');
-      final cache = _FakeCacheDao();
 
-      final repo = RemoteInviteRepository(
-        api: api,
-        cache: cache,
-      );
+      final repo = RemoteInviteRepository(api);
       expect(
-        () => repo.getStats(),
+        () => repo.stats(),
         throwsA(isA<ApiException>()),
       );
     });
 
-    test('rethrows when no cache available', () async {
+    test('rethrows network errors', () async {
       final api = _FakeApi()
         ..statsError = const ApiException(ApiErrorKind.network, 'timeout');
-      final cache = _FakeCacheDao();
 
-      final repo = RemoteInviteRepository(
-        api: api,
-        cache: cache,
-      );
+      final repo = RemoteInviteRepository(api);
       expect(
-        () => repo.getStats(),
+        () => repo.stats(),
         throwsA(isA<ApiException>()),
       );
     });
 
-    test('saves cache on successful call', () async {
+    test('returns stats on successful call', () async {
       final api = _FakeApi()
         ..statsResponse = InviteStats(
           totalInvites: 7,
@@ -187,17 +143,11 @@ void main() {
           nextTier: null,
           unlockedRewards: [],
         );
-      final cache = _FakeCacheDao();
 
-      final repo = RemoteInviteRepository(
-        api: api,
-        cache: cache,
-      );
-      await repo.getStats();
-      final cached = await cache.load('invite_stats');
-      expect(cached, isNotNull);
-      final decoded = jsonDecode(cached!) as Map<String, dynamic>;
-      expect(decoded['totalInvites'], 7);
+      final repo = RemoteInviteRepository(api);
+      final result = await repo.stats();
+      expect(result.totalInvites, 7);
+      expect(api.statsCallCount, 1);
     });
   });
 }

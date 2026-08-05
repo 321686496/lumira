@@ -10,6 +10,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../data/owned_templates_repository.dart';
 import '../data/templates_browse_mock_data.dart';
 
 /// 模板详情页
@@ -94,6 +95,15 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   void _goCapture() {
     final id = _template?.id;
     if (id == null) return;
+    // 门禁：付费模板未拥有时跳解锁页
+    final price = _template?.price ?? 0;
+    final owned = ref.read(ownedTemplateIdsProvider);
+    if (price > 0 && !owned.contains(id)) {
+      GoRouter.of(context).push(
+        '${RouteNames.templatesUnlock}?templateId=$id',
+      );
+      return;
+    }
     GoRouter.of(context).push('/capture?templateId=$id');
   }
 
@@ -124,6 +134,8 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    // 触发已拥有模板列表加载（门禁判断依赖此缓存）
+    ref.watch(ownedTemplatesLoaderProvider);
     final template = _template;
 
     return Scaffold(
