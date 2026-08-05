@@ -281,7 +281,7 @@ class TemplatesDao {
   }
 
   Future<int> count() async {
-    final rows = await db.rawQuery('SELECT COUNT(*) AS cnt FROM ${Tables.customTemplates}');
+    final rows = await _db.rawQuery('SELECT COUNT(*) AS cnt FROM ${Tables.customTemplates}');
     return Sqflite.firstIntValue(rows) ?? 0;
   }
 

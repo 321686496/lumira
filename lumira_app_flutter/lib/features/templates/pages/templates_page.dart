@@ -12,6 +12,7 @@ import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../../scenes/widgets/scene_category_overview.dart';
+import '../data/remote_templates_providers.dart';
 import '../data/templates_mock_data.dart';
 import '../data/templates_providers.dart';
 import '../widgets/recommendation_card.dart';
@@ -43,6 +44,14 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
     super.initState();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
+    // v14: 进入模板页时触发后端动态模板 + 分类同步（fire-and-forget）。
+    // FutureProvider 的 error 状态被静默忽略，UI 用本地缓存降级（spec §7.2）。
+    // 使用 postFrameCallback 避免在 initState 中直接 ref.read 可能引起的
+    // "setState during build" 问题。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(remoteCategoriesSyncProvider);
+      ref.read(remoteTemplatesSyncProvider);
+    });
   }
 
   @override

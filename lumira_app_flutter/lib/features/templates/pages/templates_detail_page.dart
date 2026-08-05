@@ -11,6 +11,7 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/owned_templates_repository.dart';
+import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
 
 /// 模板详情页
@@ -40,63 +41,22 @@ class TemplatesDetailPage extends ConsumerStatefulWidget {
 class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   bool _tagSelectorVisible = false;
 
+  /// mock 快路径：从 [TemplatesBrowseMockData.findDetailById] 同步查找。
+  /// 覆盖内置 29 模板 + mock 详情列表。返回 null 时走 [templateDetailProvider] 慢路径。
   TemplateDetail? get _template =>
       TemplatesBrowseMockData.findDetailById(widget.templateId ?? '');
 
-  bool get _hasSilhouette {
-    final pose = _template?.pose;
-    if (pose == null) return false;
-    if (pose.silhouetteType == 'builtin' && pose.silhouetteData == 'none') {
-      return false;
-    }
-    return true;
-  }
-
-  bool get _canEditTags => _template?.id.startsWith('custom_') ?? false;
-
-  /// 是否为"我的模板"（自定义创建或导入的模板），详情页显示编辑入口
+  /// 是否为"我的模板"（自定义创建或导入的模板），详情页显示编辑入口。
+  /// 仅基于 mock 快路径判断；remote 模板不显示编辑按钮（不可本地编辑）。
   bool get _isMyTemplate {
     final id = _template?.id ?? '';
     return id.startsWith('custom_') || id.startsWith('imp_');
   }
 
-  String get _wbLabel =>
-      TemplatesBrowseMockData.wbLabel(_template!.camera.whiteBalance);
-  String get _flashLabel =>
-      TemplatesBrowseMockData.flashLabel(_template!.camera.flashMode);
-  String get _focusLabel =>
-      TemplatesBrowseMockData.focusLabel(_template!.camera.focusMode);
-  String get _lensLabel =>
-      TemplatesBrowseMockData.lensLabel(_template!.camera.lensSuggestion);
-  String get _lutLabel =>
-      TemplatesBrowseMockData.lutLabel(_template!.postProcess.lut);
-
-  String get _evDisplay {
-    final ev = _template?.camera.exposureCompensation;
-    if (ev == null) return '';
-    return ev > 0 ? '+$ev' : '$ev';
-  }
-
-  String get _wbDisplay {
-    final k = _template?.camera.whiteBalanceK;
-    return k != null ? '${k}K' : '';
-  }
-
-  String get _propsText =>
-      (_template?.sceneGuide.props ?? []).join('、');
-
-  String get _unlockText {
-    final price = _template?.price ?? 0;
-    return price == 0 ? '免费' : '精选 ¥$price';
-  }
-
-  String _signedNum(int v) => v > 0 ? '+$v' : '$v';
-
-  void _goCapture() {
-    final id = _template?.id;
-    if (id == null) return;
+  void _goCapture(TemplateDetail template) {
+    final id = template.id;
     // 门禁：付费模板未拥有时跳解锁页
-    final price = _template?.price ?? 0;
+    final price = template.price;
     final owned = ref.read(ownedTemplateIdsProvider);
     if (price > 0 && !owned.contains(id)) {
       GoRouter.of(context).push(
@@ -131,12 +91,130 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     );
   }
 
+  /// 构建模板详情内容（v14 重构：接收 template 参数，支持 mock / DAO / remote 来源）。
+  ///
+  /// 将原 build 方法中的 Column widget tree 提取为此方法，
+  /// 使 mock 快路径与 provider 慢路径共用同一渲染逻辑。
+  /// 计算属性（_hasSilhouette / _wbLabel 等）改为局部变量，
+  /// 避免依赖 `_template` getter（remote 模板不在 mock 中时 getter 返回 null）。
+  Widget _buildDetailContent(TemplateDetail template, ThemeTokens tokens) {
+    final hasSilhouette = () {
+      final pose = template.pose;
+      if (pose.silhouetteType == 'builtin' && pose.silhouetteData == 'none') {
+        return false;
+      }
+      return true;
+    }();
+    final canEditTags = template.id.startsWith('custom_');
+    final propsText = (template.sceneGuide.props).join('、');
+    final ev = template.camera.exposureCompensation;
+    final evDisplay = ev > 0 ? '+$ev' : '$ev';
+    final wbK = template.camera.whiteBalanceK;
+    final wbDisplay = wbK != null ? '${wbK}K' : '';
+    final wbLabel =
+        TemplatesBrowseMockData.wbLabel(template.camera.whiteBalance);
+    final flashLabel =
+        TemplatesBrowseMockData.flashLabel(template.camera.flashMode);
+    final focusLabel =
+        TemplatesBrowseMockData.focusLabel(template.camera.focusMode);
+    final lensLabel =
+        TemplatesBrowseMockData.lensLabel(template.camera.lensSuggestion);
+    final lutLabel =
+        TemplatesBrowseMockData.lutLabel(template.postProcess.lut);
+    final unlockText =
+        template.price == 0 ? '免费' : '精选 ¥${template.price}';
+
+    String signedNum(int v) => v > 0 ? '+$v' : '$v';
+
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PreviewImage(
+                template: template,
+                tokens: tokens,
+              ),
+              _TitleAndTags(
+                template: template,
+                tokens: tokens,
+                canEditTags: canEditTags,
+                onAddTag: () =>
+                    setState(() => _tagSelectorVisible = true),
+              ),
+              if (_tagSelectorVisible && canEditTags)
+                _TagSelector(
+                  tokens: tokens,
+                  onNewTag: () =>
+                      _showSnack('新建标签功能即将上线'),
+                ),
+              _SceneGuideCard(
+                template: template,
+                tokens: tokens,
+                propsText: propsText,
+              ),
+              _CameraParamsCard(
+                template: template,
+                tokens: tokens,
+                evDisplay: evDisplay,
+                wbLabel: wbLabel,
+                wbDisplay: wbDisplay,
+                flashLabel: flashLabel,
+                focusLabel: focusLabel,
+                lensLabel: lensLabel,
+              ),
+              _PostProcessCard(
+                template: template,
+                tokens: tokens,
+                lutLabel: lutLabel,
+                signedNum: signedNum,
+              ),
+              if (hasSilhouette)
+                _PoseReferenceCard(
+                  template: template,
+                  tokens: tokens,
+                ),
+              _UnlockStatus(
+                tokens: tokens,
+                unlockText: unlockText,
+                price: template.price,
+              ),
+              _ReferenceSource(
+                template: template,
+                tokens: tokens,
+              ),
+              const SizedBox(height: 100), // cta-spacer
+            ],
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: _FixedCta(
+            tokens: tokens,
+            onPressed: () => _goCapture(template),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     // 触发已拥有模板列表加载（门禁判断依赖此缓存）
     ref.watch(ownedTemplatesLoaderProvider);
-    final template = _template;
+    final mockTemplate = _template;
+
+    // v14: mock 快路径（内置 29 模板 + mock 详情列表）
+    // 若 mock 中找不到（custom / remote 模板），走 provider 慢路径
+    final needsAsyncLoad = mockTemplate == null && widget.templateId != null;
+    final asyncDetail = needsAsyncLoad
+        ? ref.watch(templateDetailProvider(widget.templateId!))
+        : const AsyncValue<TemplateDetail?>.data(null);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -165,83 +243,22 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                       : null,
                 ),
                 Expanded(
-                  child: Stack(
-                    children: [
-                      SingleChildScrollView(
-                        padding: const EdgeInsets.only(bottom: 32),
-                        child: template == null
-                            ? _EmptyState(tokens: tokens)
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  _PreviewImage(
-                                    template: template,
-                                    tokens: tokens,
-                                  ),
-                                  _TitleAndTags(
-                                    template: template,
-                                    tokens: tokens,
-                                    canEditTags: _canEditTags,
-                                    onAddTag: () => setState(
-                                        () => _tagSelectorVisible = true),
-                                  ),
-                                  if (_tagSelectorVisible && _canEditTags)
-                                    _TagSelector(
-                                      tokens: tokens,
-                                      onNewTag: () =>
-                                          _showSnack('新建标签功能即将上线'),
-                                    ),
-                                  _SceneGuideCard(
-                                    template: template,
-                                    tokens: tokens,
-                                    propsText: _propsText,
-                                  ),
-                                  _CameraParamsCard(
-                                    template: template,
-                                    tokens: tokens,
-                                    evDisplay: _evDisplay,
-                                    wbLabel: _wbLabel,
-                                    wbDisplay: _wbDisplay,
-                                    flashLabel: _flashLabel,
-                                    focusLabel: _focusLabel,
-                                    lensLabel: _lensLabel,
-                                  ),
-                                  _PostProcessCard(
-                                    template: template,
-                                    tokens: tokens,
-                                    lutLabel: _lutLabel,
-                                    signedNum: _signedNum,
-                                  ),
-                                  if (_hasSilhouette)
-                                    _PoseReferenceCard(
-                                      template: template,
-                                      tokens: tokens,
-                                    ),
-                                  _UnlockStatus(
-                                    tokens: tokens,
-                                    unlockText: _unlockText,
-                                    price: template.price,
-                                  ),
-                                  _ReferenceSource(
-                                    template: template,
-                                    tokens: tokens,
-                                  ),
-                                  const SizedBox(height: 100), // cta-spacer
-                                ],
-                              ),
-                      ),
-                      if (template != null)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: _FixedCta(
-                            tokens: tokens,
-                            onPressed: _goCapture,
+                  child: mockTemplate != null
+                      ? _buildDetailContent(mockTemplate, tokens)
+                      : asyncDetail.when(
+                          loading: () => Center(
+                            child: LumiraProgress.circular(),
                           ),
+                          error: (e, _) => _RemoteLoadError(
+                            tokens: tokens,
+                            onRetry: () => ref.invalidate(
+                              templateDetailProvider(widget.templateId!),
+                            ),
+                          ),
+                          data: (detail) => detail == null
+                              ? _EmptyState(tokens: tokens)
+                              : _buildDetailContent(detail, tokens),
                         ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -333,6 +350,74 @@ class _EmptyState extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               color: tokens.textTertiary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 远程模板详情加载失败（v14 新增）。
+///
+/// 当 [remoteTemplateDetailProvider] 拉取完整内容失败时显示，
+/// 提供"重试"按钮通过 `ref.invalidate` 重新触发 provider。
+class _RemoteLoadError extends StatelessWidget {
+  const _RemoteLoadError({required this.tokens, required this.onRetry});
+
+  final ThemeTokens tokens;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 80, 20, 40),
+      child: Column(
+        children: [
+          Opacity(
+            opacity: 0.35,
+            child: Icon(
+              Icons.cloud_off_outlined,
+              size: 60,
+              color: tokens.textTertiary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '网络错误，无法加载完整内容',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: tokens.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '请检查网络后重试',
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.textTertiary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: onRetry,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              decoration: BoxDecoration(
+                color: tokens.brand,
+                borderRadius: BorderRadius.circular(9999),
+              ),
+              child: Text(
+                '重试',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
         ],
