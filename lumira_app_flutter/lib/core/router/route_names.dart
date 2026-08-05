@@ -6,6 +6,7 @@ class RouteNames {
   // === 路径常量 ===
   // 注意：GoRouter 路径以 / 开头，对应 uni-app pages/ 下的文件路径
   static const String splash = '/splash';
+  static const String onboarding = '/onboarding';
   static const String home = '/home';
   static const String templates = '/templates';
   static const String challenge = '/challenge';
@@ -72,6 +73,7 @@ class RouteNames {
   static const String paramMode = 'mode';
   static const String paramKitId = 'kitId';
   static const String paramCategory = 'category';
+  static const String paramFrom = 'from';
 
   // === 工具方法 ===
   /// 构建 templateId 查询参数 URL
