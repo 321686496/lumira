@@ -97,13 +97,14 @@ void main() {
       expect(find.widgetWithText(LumiraNav, '设置'), findsOneWidget);
     });
 
-    testWidgets('renders all 4 setting groups', (tester) async {
+    testWidgets('renders all 6 setting groups', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 4 个 group title
+      // 6 个 group title
       expect(find.text('通用'), findsOneWidget);
+      expect(find.text('首页标题样式'), findsOneWidget);
       expect(find.text('显示'), findsOneWidget);
       expect(find.text('拍摄'), findsOneWidget);
       expect(find.text('关于'), findsOneWidget);
