@@ -1,0 +1,77 @@
+﻿bcf2de5 feat(capture): extend originalTemplateProvider to support custom templates
+ .../lib/features/capture/data/capture_state.dart   |  9 +++++--
+ .../capture/original_template_provider_test.dart   | 30 ++++++++++++++++++++++
+ 2 files changed, 37 insertions(+), 2 deletions(-)
+diff --git a/lumira_app_flutter/lib/features/capture/data/capture_state.dart b/lumira_app_flutter/lib/features/capture/data/capture_state.dart
+index 1a72d9e..8ff617b 100644
+--- a/lumira_app_flutter/lib/features/capture/data/capture_state.dart
++++ b/lumira_app_flutter/lib/features/capture/data/capture_state.dart
+@@ -162,25 +162,30 @@ class CaptureState {
+     };
+     return asyncValue.maybeWhen(
+       data: (templates) => {
+         for (final t in templates) t.meta.id: t
+       },
+       orElse: () => systemMap,
+     );
+   });
+ 
+   /// 原始模板（只读，派生自 currentTemplateIdProvider）
+-  /// 当 currentTemplateIdProvider 为 null 时返回 null（自由拍摄模式）
++  /// 先查 TemplateRegistry（系统模板，同步快路径）
++  /// 未找到 → 查 templateCacheProvider（含自定义模板的运行时缓存）
+   static final originalTemplateProvider = Provider<PhotoTemplate?>((ref) {
+     final id = ref.watch(currentTemplateIdProvider);
+     if (id == null) return null;
+-    return TemplateRegistry.getTemplate(id);
++    // 快路径：系统模板（同步）
++    final builtin = TemplateRegistry.getTemplate(id);
++    if (builtin != null) return builtin;
++    // 慢路径：自定义模板（从预加载缓存读取）
++    return ref.watch(templateCacheProvider)[id];
+   });
+ 
+   /// 可编辑模板副本（参数面板的所有修改都写到这里）
+   /// 当 currentTemplateIdProvider 变化时，自动重置为新模板的副本
+   /// （StateProvider 的 initializer 在依赖 invalidation 时重新执行）
+   static final editableTemplateProvider = StateProvider<PhotoTemplate?>((ref) {
+     final original = ref.watch(originalTemplateProvider);
+     return original?.copyWith();
+   });
+ 
+diff --git a/lumira_app_flutter/test/features/capture/original_template_provider_test.dart b/lumira_app_flutter/test/features/capture/original_template_provider_test.dart
+new file mode 100644
+index 0000000..e35b954
+--- /dev/null
++++ b/lumira_app_flutter/test/features/capture/original_template_provider_test.dart
+@@ -0,0 +1,30 @@
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
++
++void main() {
++  test('originalTemplateProvider returns system template by id', () {
++    final container = ProviderContainer();
++    container.read(CaptureState.currentTemplateIdProvider.notifier).state =
++        'soft_portrait';
++    final template = container.read(CaptureState.originalTemplateProvider);
++    expect(template, isNotNull);
++    expect(template!.meta.id, 'soft_portrait');
++  });
++
++  test('originalTemplateProvider returns null when templateId is null', () {
++    final container = ProviderContainer();
++    container.read(CaptureState.currentTemplateIdProvider.notifier).state =
++        null;
++    final template = container.read(CaptureState.originalTemplateProvider);
++    expect(template, isNull);
++  });
++
++  test('originalTemplateProvider returns null for unknown id (not in registry or cache)', () {
++    final container = ProviderContainer();
++    container.read(CaptureState.currentTemplateIdProvider.notifier).state =
++        'nonexistent_template_id';
++    final template = container.read(CaptureState.originalTemplateProvider);
++    expect(template, isNull);
++  });
++}
