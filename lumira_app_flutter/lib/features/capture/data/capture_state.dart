@@ -9,6 +9,9 @@ import '../domain/photo_template.dart';
 import '../domain/scene_preset.dart';
 import '../data/template_registry.dart';
 import '../data/scene_presets_data.dart';
+import '../../templates/services/template_mapper.dart';
+import '../../../core/db/dao/templates_dao.dart';
+import '../../templates/data/templates_providers.dart';
 
 /// 闪光灯模式
 enum CaptureFlashMode { off, on, auto, torch }
@@ -123,6 +126,47 @@ class CaptureState {
   }
 
   // ── 新增：模板编辑状态 ──
+
+  /// 所有模板列表（系统 + 自定义）
+  /// 系统模板来自 TemplateRegistry（同步），自定义模板来自 TemplatesDao（异步）
+  /// DAO 加载失败时降级为仅系统模板
+  static final allTemplatesProvider =
+      FutureProvider<List<PhotoTemplate>>((ref) async {
+    // 系统模板（同步，立即可用）
+    final systemTemplates = TemplateRegistry.allTemplates;
+
+    // 自定义模板（异步）
+    try {
+      final dao = await ref.watch(templatesDaoProvider.future);
+      final customRecords = await dao.getCustomOnly();
+      final customTemplates = customRecords
+          .map((r) => TemplateMapper.toPhotoTemplate(r))
+          .toList();
+      return [...systemTemplates, ...customTemplates];
+    } catch (e) {
+      // DAO 不可用时降级为仅系统模板
+      debugPrint('[capture] allTemplatesProvider: DAO load failed, fallback to system only: $e');
+      return systemTemplates;
+    }
+  });
+
+  /// 模板缓存（ID → PhotoTemplate）
+  /// 从 allTemplatesProvider 结果构建 Map，供 originalTemplateProvider 快速查找
+  /// 降级策略：加载中时仅含系统模板
+  static final templateCacheProvider =
+      Provider<Map<String, PhotoTemplate>>((ref) {
+    final asyncValue = ref.watch(allTemplatesProvider);
+    // 系统模板始终可用（降级基线）
+    final systemMap = {
+      for (final t in TemplateRegistry.allTemplates) t.meta.id: t
+    };
+    return asyncValue.maybeWhen(
+      data: (templates) => {
+        for (final t in templates) t.meta.id: t
+      },
+      orElse: () => systemMap,
+    );
+  });
 
   /// 原始模板（只读，派生自 currentTemplateIdProvider）
   /// 当 currentTemplateIdProvider 为 null 时返回 null（自由拍摄模式）
