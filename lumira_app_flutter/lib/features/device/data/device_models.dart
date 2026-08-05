@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../profile/data/profile_models.dart';
+
 /// 设备操作系统
 ///
 /// 后端契约：'android' | 'ios' | 'harmonyos'（字符串）
@@ -51,21 +53,27 @@ class RegisterDeviceRequest {
 
 /// POST /api/v1/device/register 响应体
 ///
-/// 后端契约：{ token: string, isNewDevice: boolean }
+/// 后端契约：{ token: string, isNewDevice: boolean, profile?: { username, avatarSeed } }
 @immutable
 class RegisterDeviceResponse {
   final String token;
   final bool isNewDevice;
+  final ProfileData? profile;
 
   const RegisterDeviceResponse({
     required this.token,
     required this.isNewDevice,
+    this.profile,
   });
 
   factory RegisterDeviceResponse.fromJson(Map<String, dynamic> j) {
+    final profileJson = j['profile'];
     return RegisterDeviceResponse(
       token: j['token'] as String,
       isNewDevice: j['isNewDevice'] as bool,
+      profile: profileJson is Map<String, dynamic>
+          ? ProfileData.fromJson(profileJson)
+          : null,
     );
   }
 

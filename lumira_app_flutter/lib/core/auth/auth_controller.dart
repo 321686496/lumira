@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'auth_dao.dart';
 import 'auth_state.dart';
+import '../../features/profile/data/profile_models.dart';
 
 /// 设备注册结果
 ///
@@ -13,8 +14,13 @@ import 'auth_state.dart';
 class RegisterResult {
   final String token;
   final bool isNewDevice;
+  final ProfileData? profile;
 
-  const RegisterResult({required this.token, required this.isNewDevice});
+  const RegisterResult({
+    required this.token,
+    required this.isNewDevice,
+    this.profile,
+  });
 }
 
 /// 鉴权控制器
@@ -31,6 +37,7 @@ class AuthController extends StateNotifier<AuthState> {
     required String deviceId,
     required String os,
   }) _doRegister;
+  final Future<void> Function(RegisterResult result)? _onRegistered;
 
   AuthController({
     required AuthDaoLike dao,
@@ -40,10 +47,12 @@ class AuthController extends StateNotifier<AuthState> {
       required String deviceId,
       required String os,
     }) doRegister,
+    Future<void> Function(RegisterResult result)? onRegistered,
   })  : _dao = dao,
         _resolveDeviceId = resolveDeviceId,
         _resolveOs = resolveOs,
         _doRegister = doRegister,
+        _onRegistered = onRegistered,
         super(const AuthState());
 
   /// 当前 token（供 AuthInterceptor 注入）
@@ -84,6 +93,11 @@ class AuthController extends StateNotifier<AuthState> {
         registeredAt: now,
       );
       await _dao.save(record);
+      try {
+        await _onRegistered?.call(resp);
+      } catch (_) {
+        // 资料落库失败不阻塞注册流程
+      }
       state = AuthState(
         status: AuthStatus.registered,
         token: resp.token,
