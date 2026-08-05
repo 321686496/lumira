@@ -23,7 +23,7 @@ void main() {
     test('个人信息清单与SDK目录包含键值行与列表项', () {
       expect(ComplianceDocs.sdk, isNotEmpty);
       expect(ComplianceDocs.sdkUpdatedAt, isNotEmpty);
-      final sections = ComplianceDocs.sdk;
+      const sections = ComplianceDocs.sdk;
       final hasKV = sections.any((s) => s.blocks.any((b) => b is ComplianceKVRow));
       final hasListItem = sections.any((s) => s.blocks.any((b) => b is ComplianceListItem));
       expect(hasKV, isTrue);
