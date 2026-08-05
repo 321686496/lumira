@@ -22,7 +22,7 @@ describe('api client', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => ({ totalDevices: 1 }),
+      text: async () => JSON.stringify({ totalDevices: 1 }),
     });
     const { api } = await import('../api');
     const result = await api.getStats();
@@ -42,7 +42,7 @@ describe('api client', () => {
       ok: false,
       status: 404,
       statusText: 'Not Found',
-      json: async () => ({}),
+      text: async () => JSON.stringify({}),
     });
     const { api } = await import('../api');
     await expect(api.getBatchDetail(9999)).rejects.toThrow('API_ERROR: 404');

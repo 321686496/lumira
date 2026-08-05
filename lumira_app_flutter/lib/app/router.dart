@@ -10,6 +10,8 @@ import '../features/capture/pages/capture_preview_template_page.dart';
 import '../features/capture/pages/capture_scene_detail_page.dart';
 import '../features/capture/pages/capture_scene_guide_page.dart';
 import '../features/capture/pages/capture_scene_manage_page.dart';
+import '../features/challenge/pages/challenge_complete_page.dart';
+import '../features/challenge/pages/challenge_confirm_page.dart';
 import '../features/challenge/pages/challenge_detail_page.dart';
 import '../features/challenge/pages/challenge_history_page.dart';
 import '../features/challenge/pages/challenge_page.dart';
@@ -94,10 +96,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           final templateId = state.queryParams[RouteNames.paramTemplateId];
           final sceneId = state.queryParams[RouteNames.paramScene];
           final kitId = state.queryParams[RouteNames.paramKitId];
+          final challengeId = state.queryParams[RouteNames.paramChallengeId];
           return CapturePage(
             templateId: templateId,
             sceneId: sceneId,
             kitId: kitId,
+            challengeId: challengeId,
           );
         },
       ),
@@ -108,10 +112,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           final photoUrl = state.queryParams['photoUrl'];
           final photoId = state.queryParams[RouteNames.paramPhotoId];
           final aspectRatio = state.queryParams['aspectRatio'];
+          final challengeId = state.queryParams[RouteNames.paramChallengeId];
           return CapturePreviewPage(
             photoUrl: photoUrl,
             photoId: photoId,
             aspectRatio: aspectRatio,
+            challengeId: challengeId,
           );
         },
       ),
@@ -222,6 +228,35 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.challengeHistory,
         name: 'challengeHistory',
         builder: (context, state) => const ChallengeHistoryPage(),
+      ),
+      GoRoute(
+        path: RouteNames.challengeConfirm,
+        name: 'challengeConfirm',
+        builder: (context, state) {
+          final challengeId =
+              state.queryParams[RouteNames.paramChallengeId] ?? '';
+          final photoId = state.queryParams[RouteNames.paramPhotoId] ?? '';
+          return ChallengeConfirmPage(
+            challengeId: challengeId,
+            photoId: photoId,
+          );
+        },
+      ),
+      GoRoute(
+        path: RouteNames.challengeComplete,
+        name: 'challengeComplete',
+        builder: (context, state) {
+          final challengeId = state.queryParams[RouteNames.paramChallengeId] ?? '';
+          final rewardXp = int.tryParse(
+                  state.queryParams['rewardXp'] ?? '') ??
+              0;
+          final challengeTitle = state.queryParams['title'] ?? '';
+          return ChallengeCompletePage(
+            challengeId: challengeId,
+            rewardXp: rewardXp,
+            challengeTitle: challengeTitle,
+          );
+        },
       ),
 
       // === 灵感 / 相册 ===

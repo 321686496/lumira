@@ -99,6 +99,88 @@ class BuiltinDataSeeder {
     await batch.commit(noResult: true);
   }
 
+  /// 预置 7 个系统分类（v14 迁移 + onCreate 调用）。
+  ///
+  /// 与内置 7 类 key 严格对齐（portrait/landscape/food/street/night/macro/still-life），
+  /// 保证离线场景下分类瀑布流永远可展示。iconUrl 留空表示使用 Flutter 端内置 Material Icons 回退映射。
+  /// 使用 INSERT OR REPLACE 保证幂等：重复调用不会报错，会覆盖已存在的系统分类。
+  static Future<void> seedCategories(Database db) async {
+    const categories = <Map<String, Object?>>[
+      {
+        Tables.colKey: 'portrait',
+        Tables.colName: '人像',
+        Tables.colIconUrl: '',
+        Tables.colSortOrder: 1,
+        Tables.colIsSystem: 1,
+        Tables.colIsActive: 1,
+        Tables.colUpdatedAt: 0,
+      },
+      {
+        Tables.colKey: 'landscape',
+        Tables.colName: '风光',
+        Tables.colIconUrl: '',
+        Tables.colSortOrder: 2,
+        Tables.colIsSystem: 1,
+        Tables.colIsActive: 1,
+        Tables.colUpdatedAt: 0,
+      },
+      {
+        Tables.colKey: 'food',
+        Tables.colName: '美食',
+        Tables.colIconUrl: '',
+        Tables.colSortOrder: 3,
+        Tables.colIsSystem: 1,
+        Tables.colIsActive: 1,
+        Tables.colUpdatedAt: 0,
+      },
+      {
+        Tables.colKey: 'street',
+        Tables.colName: '街拍',
+        Tables.colIconUrl: '',
+        Tables.colSortOrder: 4,
+        Tables.colIsSystem: 1,
+        Tables.colIsActive: 1,
+        Tables.colUpdatedAt: 0,
+      },
+      {
+        Tables.colKey: 'night',
+        Tables.colName: '夜景',
+        Tables.colIconUrl: '',
+        Tables.colSortOrder: 5,
+        Tables.colIsSystem: 1,
+        Tables.colIsActive: 1,
+        Tables.colUpdatedAt: 0,
+      },
+      {
+        Tables.colKey: 'macro',
+        Tables.colName: '微距',
+        Tables.colIconUrl: '',
+        Tables.colSortOrder: 6,
+        Tables.colIsSystem: 1,
+        Tables.colIsActive: 1,
+        Tables.colUpdatedAt: 0,
+      },
+      {
+        Tables.colKey: 'still-life',
+        Tables.colName: '静物',
+        Tables.colIconUrl: '',
+        Tables.colSortOrder: 7,
+        Tables.colIsSystem: 1,
+        Tables.colIsActive: 1,
+        Tables.colUpdatedAt: 0,
+      },
+    ];
+    final batch = db.batch();
+    for (final c in categories) {
+      batch.insert(
+        Tables.templateCategories,
+        c,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
   /// 插入预置场景数据
   static Future<void> _seedScenes(Database db, int now) async {
     final scenes = CaptureSceneMockData.allScenes;

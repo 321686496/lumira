@@ -17,7 +17,7 @@ import '../../core/auth/auth_dao.dart';
 import '../../features/onboarding/data/questionnaire_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 12;
+const int _kDbVersion = 14;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -110,12 +110,27 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_category ON ${Tables.customTemplates}(${Tables.colCategory})');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_created_at ON ${Tables.customTemplates}(${Tables.colCreatedAt} DESC)');
+  batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_source ON ${Tables.customTemplates}(${Tables.colSource})');
+
+  // === template_categories（v13 新增，分类管理） ===
+  batch.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.templateCategories} (
+      ${Tables.colKey} TEXT PRIMARY KEY,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+      ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL
+    )
+  ''');
 
   // === scenes ===
   // 仅存储用户自定义场景 + 内置场景的 is_favorite 标记
@@ -298,6 +313,8 @@ Future<void> _onCreate(Database db, int version) async {
   // 但 fresh install 直接创建 v10 数据库不会触发 _onUpgrade，导致模板表为空。
   // 此处显式调用 seeder 确保新安装也能看到内置模板。
   try {
+    // v13: 预置 7 个系统分类（与内置 7 类对齐，保证离线兜底）
+    await BuiltinDataSeeder.seedCategories(db);
     await BuiltinDataSeeder.seedAll(db);
   } catch (e) {
     debugPrint('BuiltinDataSeeder in onCreate failed: $e');
@@ -525,6 +542,59 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       ''');
     } catch (e) {
       debugPrint('v12 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 13) {
+    try {
+      // v13: challenge_history 新增 photo_ids 列（关联用户提交的照片 id，逗号分隔）
+      await _addColumnIfNotExists(
+        db,
+        ChallengeHistoryTable.name,
+        ChallengeHistoryTable.colPhotoIds,
+        "TEXT NOT NULL DEFAULT ''",
+      );
+    } catch (e) {
+      debugPrint('v13 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 14) {
+    try {
+      // v14: 后台动态模板上传功能（spec 2026-08-05-remote-templates-design.md）
+      // custom_templates 新增 source 列（标记来源：builtin/custom/remote）
+      await _addColumnIfNotExists(
+        db,
+        Tables.customTemplates,
+        Tables.colSource,
+        "TEXT NOT NULL DEFAULT 'builtin'",
+      );
+      // 已有数据按 is_builtin 反推 source 值
+      await db.execute(
+        "UPDATE ${Tables.customTemplates} SET ${Tables.colSource} = 'custom' WHERE ${Tables.colIsBuiltin} = 0",
+      );
+      await db.execute(
+        "UPDATE ${Tables.customTemplates} SET ${Tables.colSource} = 'builtin' WHERE ${Tables.colIsBuiltin} = 1",
+      );
+      // source 列索引（加速 remote 模板筛选）
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_custom_templates_source ON ${Tables.customTemplates}(${Tables.colSource})',
+      );
+
+      // v14: 新增 template_categories 表（分类管理，支持后端动态分类）
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.templateCategories} (
+          ${Tables.colKey} TEXT PRIMARY KEY,
+          ${Tables.colName} TEXT NOT NULL,
+          ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+          ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
+          ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
+          ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
+          ${Tables.colUpdatedAt} INTEGER NOT NULL
+        )
+      ''');
+      // 预置 7 个系统分类（与内置 7 类对齐，保证离线兜底）
+      await BuiltinDataSeeder.seedCategories(db);
+    } catch (e) {
+      debugPrint('v14 migration failed (silent fallback): $e');
     }
   }
 }

@@ -11,6 +11,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../data/builtin_category_icons.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../widgets/template_import_sheet.dart';
 
@@ -62,12 +63,15 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   ///
   /// 计数（allCount / unlockedCount / categoryCounts）始终基于 builtin + custom + imported 全集，
   /// 与原 mock 阶段 `TemplatesBrowseMockData.allTemplates` 行为一致。
+  ///
+  /// v14: 同时加载分类列表（dao.getCategories），作为分类瀑布流数据源。
   Future<_AllPageData> _loadData(
     TemplatesDao dao,
     List<AllTemplateItem> imported,
   ) async {
     final builtins = await dao.getBuiltin();
     final customs = await dao.getCustomOnly();
+    final categories = await dao.getCategories(activeOnly: true);
 
     final builtinItems =
         builtins.map((r) => _recordToItem(r, isCustom: false)).toList();
@@ -94,6 +98,7 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
       unlockedCount: unlockedCount,
       categoryCounts: categoryCounts,
       filtered: filtered,
+      categories: categories,
     );
   }
 
@@ -1004,6 +1009,11 @@ class _PremiumBadge extends StatelessWidget {
 }
 
 /// 分类概览：大卡片 + 瀑布流排版展示一级分类
+///
+/// v14: 数据源从硬编码 7 类改为 DAO [TemplateCategoryRecord] 列表。
+/// 图标渲染：iconUrl 非空用 Image.network，为空回退到 [builtinCategoryIcons] 映射。
+/// 展示数据（desc/gradient/height）保留在 [_presentationMap] 中按 key 查找，
+/// 未命中的分类使用默认展示值。
 class _CategoryOverview extends ConsumerWidget {
   const _CategoryOverview({
     required this.tokens,
@@ -1011,6 +1021,7 @@ class _CategoryOverview extends ConsumerWidget {
     required this.unlockedCount,
     required this.categoryCounts,
     required this.onSelectCategory,
+    required this.categories,
   });
 
   final ThemeTokens tokens;
@@ -1018,65 +1029,56 @@ class _CategoryOverview extends ConsumerWidget {
   final int unlockedCount;
   final Map<String, int> categoryCounts;
   final void Function(String category) onSelectCategory;
+  /// 从 sqflite 加载的分类列表（v14 新增）
+  final List<TemplateCategoryRecord> categories;
 
-  static const List<_TemplateCategoryMeta> _categories = [
-    _TemplateCategoryMeta(
-      id: 'portrait',
-      name: '人像',
-      icon: Icons.person_outline,
+  /// 分类展示数据（desc / gradient / height）按 key 查找的回退映射。
+  ///
+  /// 7 个系统分类保留原有视觉规格（gradient 配色 + 高度 + 描述）。
+  /// 后端新增的自定义分类未命中此映射时，使用 [_defaultPresentation] 兜底。
+  static const Map<String, _CategoryPresentation> _presentationMap = {
+    'portrait': _CategoryPresentation(
       desc: '自然光、逆光、氛围感人像',
       gradient: [Color(0xFFE8B4B8), Color(0xFFC97B84)],
       height: 200,
     ),
-    _TemplateCategoryMeta(
-      id: 'landscape',
-      name: '风光',
-      icon: Icons.landscape_outlined,
+    'landscape': _CategoryPresentation(
       desc: '黄金时刻、城市天际线',
       gradient: [Color(0xFF8FA06A), Color(0xFF5A7A48)],
       height: 170,
     ),
-    _TemplateCategoryMeta(
-      id: 'food',
-      name: '美食',
-      icon: Icons.restaurant_outlined,
+    'food': _CategoryPresentation(
       desc: '平铺构图、暖色调美食',
       gradient: [Color(0xFFD4A574), Color(0xFFB8860B)],
       height: 190,
     ),
-    _TemplateCategoryMeta(
-      id: 'street',
-      name: '街拍',
-      icon: Icons.camera_alt_outlined,
+    'street': _CategoryPresentation(
       desc: '黑白街头、都市节奏',
       gradient: [Color(0xFF6B7280), Color(0xFF374151)],
       height: 160,
     ),
-    _TemplateCategoryMeta(
-      id: 'night',
-      name: '夜景',
-      icon: Icons.nights_stay_outlined,
+    'night': _CategoryPresentation(
       desc: '霓虹灯、城市夜景人像',
       gradient: [Color(0xFF5B6CB5), Color(0xFF2D3561)],
       height: 180,
     ),
-    _TemplateCategoryMeta(
-      id: 'macro',
-      name: '微距',
-      icon: Icons.zoom_in_outlined,
+    'macro': _CategoryPresentation(
       desc: '花草微距、细节之美',
       gradient: [Color(0xFF7BA87B), Color(0xFF4A7C59)],
       height: 165,
     ),
-    _TemplateCategoryMeta(
-      id: 'still-life',
-      name: '静物',
-      icon: Icons.collections_outlined,
+    'still-life': _CategoryPresentation(
       desc: '室内静物、咖啡馆时光',
       gradient: [Color(0xFFC9A96E), Color(0xFF8B7355)],
       height: 175,
     ),
-  ];
+  };
+
+  static const _CategoryPresentation _defaultPresentation = _CategoryPresentation(
+    desc: '探索更多模板',
+    gradient: [Color(0xFF9E9E9E), Color(0xFF616161)],
+    height: 170,
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1084,13 +1086,24 @@ class _CategoryOverview extends ConsumerWidget {
     // 瀑布流：两列交替分布
     final left = <Widget>[];
     final right = <Widget>[];
-    for (var i = 0; i < _categories.length; i++) {
-      final cat = _categories[i];
+    for (var i = 0; i < categories.length; i++) {
+      final cat = categories[i];
+      final presentation =
+          _presentationMap[cat.key] ?? _defaultPresentation;
+      final meta = _TemplateCategoryMeta(
+        id: cat.key,
+        name: cat.name,
+        iconUrl: cat.iconUrl,
+        icon: categoryIconForKey(cat.key),
+        desc: presentation.desc,
+        gradient: presentation.gradient,
+        height: presentation.height,
+      );
       final card = _CategoryCard(
-        meta: cat,
-        count: categoryCounts[cat.id] ?? 0,
+        meta: meta,
+        count: categoryCounts[cat.key] ?? 0,
         tokens: tokens,
-        onTap: () => onSelectCategory(cat.id),
+        onTap: () => onSelectCategory(cat.key),
       );
       if (i % 2 == 0) {
         left.add(card);
@@ -1185,10 +1198,26 @@ class _TemplateCategoryMeta {
     required this.desc,
     required this.gradient,
     required this.height,
+    this.iconUrl = '',
   });
   final String id;
   final String name;
+  /// 后端托管的图标 URL（非空时优先用 Image.network 渲染）
+  final String iconUrl;
+  /// iconUrl 为空时回退使用的 Material Icon
   final IconData icon;
+  final String desc;
+  final List<Color> gradient;
+  final double height;
+}
+
+/// 分类展示数据（不含 id/name/iconUrl，仅视觉规格）
+class _CategoryPresentation {
+  const _CategoryPresentation({
+    required this.desc,
+    required this.gradient,
+    required this.height,
+  });
   final String desc;
   final List<Color> gradient;
   final double height;
@@ -1264,7 +1293,21 @@ class _CategoryCard extends StatelessWidget {
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(meta.icon, size: 18, color: Colors.white),
+                    // v14: iconUrl 非空用 Image.network，为空回退到 Material Icon
+                    child: meta.iconUrl.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              meta.iconUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Icon(
+                                meta.icon,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            ),
+                          )
+                        : Icon(meta.icon, size: 18, color: Colors.white),
                   ),
                   const Spacer(),
                   Text(
@@ -1313,19 +1356,22 @@ class _CategoryCard extends StatelessWidget {
   }
 }
 
-/// 全部模板页加载的数据包（counts + filtered list）
+/// 全部模板页加载的数据包（counts + filtered list + categories）
 class _AllPageData {
   const _AllPageData({
     required this.allCount,
     required this.unlockedCount,
     required this.categoryCounts,
     required this.filtered,
+    required this.categories,
   });
 
   final int allCount;
   final int unlockedCount;
   final Map<String, int> categoryCounts;
   final List<AllTemplateItem> filtered;
+  /// v14: 从 sqflite template_categories 表加载的分类列表
+  final List<TemplateCategoryRecord> categories;
 }
 
 /// TemplateRecord → AllTemplateItem 适配

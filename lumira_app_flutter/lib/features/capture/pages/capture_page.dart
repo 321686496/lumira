@@ -14,6 +14,7 @@ import 'package:screen/screen.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
+import '../../challenge/widgets/challenge_overlay_bar.dart';
 import '../../home/providers/banner_recommendation_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
@@ -51,7 +52,7 @@ import '../widgets/template_strip.dart';
 /// - 保留 CaptureNav（含退出全屏按钮）和底部核心交互（拍摄按钮、缩略图、切换摄像头）
 /// - 确保用户在全屏下仍能拍照、退出全屏
 class CapturePage extends ConsumerStatefulWidget {
-  const CapturePage({super.key, this.templateId, this.sceneId, this.kitId});
+  const CapturePage({super.key, this.templateId, this.sceneId, this.kitId, this.challengeId});
 
   /// 来自 URL ?templateId=xxx，null 表示自由拍摄
   final String? templateId;
@@ -61,6 +62,10 @@ class CapturePage extends ConsumerStatefulWidget {
 
   /// 来自 URL ?kitId=xxx，表示套用组合套件（含场景+模板+参数覆盖）
   final String? kitId;
+
+  /// 来自 URL ?challengeId=xxx，表示从挑战详情页进入，
+  /// 拍照保存后需回写挑战状态并跳转 XP 奖励页
+  final String? challengeId;
 
   @override
   ConsumerState<CapturePage> createState() => _CapturePageState();
@@ -551,6 +556,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
   @override
   Widget build(BuildContext context) {
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    final thumbState = ref.watch(captureThumbnailProvider);
+    final isChallengeMode =
+        widget.challengeId != null && widget.challengeId!.isNotEmpty;
+    final captureInProgress =
+        thumbState.status == CaptureThumbnailStatus.processing;
     // 修复 Bug：watch facing 以在 facing 变化时重建 _viewfinderCaptureKey，
     // 强制 RepaintBoundary + CameraAwesomeBuilder 重建（切换 sensor）
     final facing = ref.watch(CaptureState.cameraFacingProvider);
@@ -671,10 +681,23 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: const Center(child: AspectRatioSelector()),
           ),
 
-          // 3. 顶部参数 pill 栏（全屏模式下隐藏，下移避开比例切换器）
+          // 2.6 挑战悬浮条（仅挑战拍摄模式显示，位于比例切换器下方）
+          if (isChallengeMode && !isFullscreen)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 104,
+              left: 0,
+              right: 0,
+              child: ChallengeOverlayBar(
+                challengeId: widget.challengeId!,
+                captureInProgress: captureInProgress,
+              ),
+            ),
+
+          // 3. 顶部参数 pill 栏（全屏模式下隐藏；挑战模式下下移避开悬浮条）
           if (!isFullscreen)
             Positioned(
-              top: MediaQuery.of(context).padding.top + 112,
+              top: MediaQuery.of(context).padding.top +
+                  (isChallengeMode ? 168 : 112),
               left: 12,
               right: 12,
               child: const ParamPillBar(),
@@ -723,12 +746,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
     if (_returnResult) {
       context.pop(path);
     } else {
-      GoRouter.of(context).push(
+      // 拼接 capturePreview 路由 URL，可选追加 challengeId（挑战闭环）
+      final buf = StringBuffer(
         '${RouteNames.capturePreview}'
         '?photoUrl=${Uri.encodeComponent(path)}'
         '&photoId=$photoId'
         '&aspectRatio=${Uri.encodeComponent(aspectRatio)}',
       );
+      final cid = widget.challengeId;
+      if (cid != null && cid.isNotEmpty) {
+        buf.write('&${RouteNames.paramChallengeId}=${Uri.encodeComponent(cid)}');
+      }
+      GoRouter.of(context).push(buf.toString());
     }
   }
 }

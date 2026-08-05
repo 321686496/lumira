@@ -1,0 +1,1029 @@
+// src/components/template-form.tsx
+'use client';
+
+import * as React from 'react';
+import { useState, useTransition } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { FileUpload } from '@/components/ui/file-upload';
+import { Upload as UploadIcon, ArrowLeft, ArrowRight, Check } from '@phosphor-icons/react/dist/ssr';
+import { useToast } from '@/hooks/use-toast';
+import { createTemplate, updateTemplate } from '@/actions/templates';
+import type { AdminTemplateDetail, TemplateCategory } from '@/types/admin';
+
+// ===== 选项常量 =====
+const OVERLAY_TYPES = ['rule_of_thirds', 'golden_ratio', 'diagonal', 'grid', 'leading_lines', 'center', 'none'] as const;
+const ASPECT_RATIOS = ['3:4', '4:3', '16:9', '1:1', '9:16'] as const;
+const SILHOUETTE_TYPES = ['builtin', 'image', 'svg'] as const;
+const ISO_MODES = ['auto', 'manual'] as const;
+const WHITE_BALANCES = ['daylight', 'cloudy', 'shade', 'tungsten', 'fluorescent', 'custom'] as const;
+const FLASH_MODES = ['off', 'on', 'auto', 'torch'] as const;
+const FOCUS_MODES = ['auto', 'manual', 'continuous'] as const;
+const LENS_SUGGESTIONS = ['wide', 'main', 'telephoto', 'ultra_wide'] as const;
+const LUTS = ['none', 'cinematic', 'vintage', 'bw', 'warm_film', 'cool_film', 'pastel', 'fuji'] as const;
+
+// ===== Zod schema =====
+const schema = z.object({
+  // Step 1 - Meta
+  name: z.string().min(1, '请输入模板名称').max(100),
+  category: z.string().min(1, '请选择分类'),
+  price: z.coerce.number().int().min(0, '价格不能为负'),
+  description: z.string().optional().default(''),
+  author: z.string().optional().default('Lumira'),
+  tags: z.string().optional().default(''),
+  referenceSource: z.string().optional().default(''),
+  // Step 2 - Cover & Silhouette
+  silhouetteType: z.enum(SILHOUETTE_TYPES).default('builtin'),
+  silhouetteBuiltinKey: z.string().optional().default(''),
+  poseDescription: z.string().optional().default(''),
+  posePositionX: z.coerce.number().min(0).max(1).default(0.5),
+  posePositionY: z.coerce.number().min(0).max(1).default(0.5),
+  poseScale: z.coerce.number().min(0.5).max(1.5).default(1.0),
+  poseRotation: z.coerce.number().min(-45).max(45).default(0),
+  // Step 3 - Composition
+  overlayType: z.enum(OVERLAY_TYPES).default('rule_of_thirds'),
+  gridType: z.string().optional().default(''),
+  aspectRatio: z.string().default('3:4'),
+  opacity: z.coerce.number().min(0).max(1).default(0.5),
+  compositionDescription: z.string().optional().default(''),
+  // Step 4 - Camera
+  exposureCompensation: z.coerce.number().min(-3).max(3).default(0),
+  isoMode: z.enum(ISO_MODES).default('auto'),
+  iso: z.coerce.number().int().min(0).default(200),
+  shutterSpeed: z.string().default('1/200'),
+  whiteBalance: z.enum(WHITE_BALANCES).default('daylight'),
+  whiteBalanceK: z.coerce.number().int().min(0).default(5500),
+  flashMode: z.enum(FLASH_MODES).default('off'),
+  focusMode: z.enum(FOCUS_MODES).default('auto'),
+  lensType: z.string().optional().default(''),
+  lensSuggestion: z.enum(LENS_SUGGESTIONS).default('main'),
+  // Step 5 - SceneGuide
+  lightDirection: z.string().optional().default(''),
+  shootingDistance: z.string().optional().default(''),
+  background: z.string().optional().default(''),
+  props: z.string().optional().default(''),
+  bestTime: z.string().optional().default(''),
+  tips: z.string().optional().default(''),
+  // Step 6 - PostProcess
+  cropRatio: z.string().default('3:4'),
+  colorBrightness: z.coerce.number().int().min(-100).max(100).default(0),
+  colorContrast: z.coerce.number().int().min(-100).max(100).default(0),
+  colorSaturation: z.coerce.number().int().min(-100).max(100).default(0),
+  colorTemperature: z.coerce.number().int().min(-100).max(100).default(0),
+  colorTint: z.coerce.number().int().min(-100).max(100).default(0),
+  smoothStrength: z.coerce.number().int().min(0).max(100).default(0),
+  sharpen: z.coerce.number().int().min(0).max(100).default(0),
+  vignette: z.coerce.number().int().min(0).max(100).default(0),
+  grain: z.coerce.number().int().min(0).max(100).default(0),
+  lut: z.enum(LUTS).default('none'),
+  // Common
+  sortOrder: z.coerce.number().int().default(0),
+  isActive: z.boolean().default(true),
+});
+
+type FormValues = z.infer<typeof schema>;
+
+const STEPS = [
+  { title: '基本信息', desc: '名称、分类、价格等' },
+  { title: '封面与剪影', desc: '上传封面图、设置剪影' },
+  { title: '构图', desc: '叠加层、网格、不透明度' },
+  { title: '相机参数', desc: '曝光、ISO、快门、白平衡等' },
+  { title: '场景引导', desc: '光线、距离、背景、提示' },
+  { title: '后期处理', desc: '裁剪、色彩、滤镜等' },
+] as const;
+
+function parseCommaList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(/[,，\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function num(v: unknown, fallback = 0): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+interface TemplateFormProps {
+  categories: TemplateCategory[];
+  initial?: AdminTemplateDetail;
+  /** 编辑模式下的模板 ID；为 undefined 表示新建。 */
+  templateId?: string;
+  /** 后端基础 URL，用于显示已有封面预览。 */
+  backendUrl?: string;
+}
+
+export default function TemplateForm({
+  categories,
+  initial,
+  templateId,
+  backendUrl = 'http://localhost:3000',
+}: TemplateFormProps) {
+  const { toast } = useToast();
+  const [step, setStep] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [silhouetteFile, setSilhouetteFile] = useState<File | null>(null);
+  const [pptplFile, setPptplFile] = useState<File | null>(null);
+  const pptplInputRef = React.useRef<HTMLInputElement>(null);
+
+  const isEdit = Boolean(templateId && initial);
+
+  // 从 initial 构造表单初值
+  const buildDefaults = (): FormValues => {
+    if (!initial) {
+      return {
+        name: '',
+        category: categories[0]?.key ?? 'portrait',
+        price: 0,
+        description: '',
+        author: 'Lumira',
+        tags: '',
+        referenceSource: '',
+        silhouetteType: 'builtin',
+        silhouetteBuiltinKey: '',
+        poseDescription: '',
+        posePositionX: 0.5,
+        posePositionY: 0.5,
+        poseScale: 1.0,
+        poseRotation: 0,
+        overlayType: 'rule_of_thirds',
+        gridType: '',
+        aspectRatio: '3:4',
+        opacity: 0.5,
+        compositionDescription: '',
+        exposureCompensation: 0,
+        isoMode: 'auto',
+        iso: 200,
+        shutterSpeed: '1/200',
+        whiteBalance: 'daylight',
+        whiteBalanceK: 5500,
+        flashMode: 'off',
+        focusMode: 'auto',
+        lensType: '',
+        lensSuggestion: 'main',
+        lightDirection: '',
+        shootingDistance: '',
+        background: '',
+        props: '',
+        bestTime: '',
+        tips: '',
+        cropRatio: '3:4',
+        colorBrightness: 0,
+        colorContrast: 0,
+        colorSaturation: 0,
+        colorTemperature: 0,
+        colorTint: 0,
+        smoothStrength: 0,
+        sharpen: 0,
+        vignette: 0,
+        grain: 0,
+        lut: 'none',
+        sortOrder: 0,
+        isActive: true,
+      };
+    }
+    const composition = (initial.composition ?? {}) as Record<string, unknown>;
+    const pose = (initial.pose ?? {}) as Record<string, unknown>;
+    const silhouette = (pose.silhouette ?? {}) as Record<string, unknown>;
+    const position = (pose.position ?? {}) as Record<string, unknown>;
+    const camera = (initial.camera ?? {}) as Record<string, unknown>;
+    const sceneGuide = (initial.sceneGuide ?? {}) as Record<string, unknown>;
+    const postProcess = (initial.postProcess ?? {}) as Record<string, unknown>;
+    const color = (postProcess.color ?? {}) as Record<string, unknown>;
+    return {
+      name: initial.name,
+      category: initial.category,
+      price: initial.price,
+      description: initial.description ?? '',
+      author: initial.author ?? 'Lumira',
+      tags: (initial.tags ?? []).join(', '),
+      referenceSource: initial.referenceSource ?? '',
+      silhouetteType: (silhouette.type as FormValues['silhouetteType']) ?? 'builtin',
+      silhouetteBuiltinKey: (silhouette.data as string) ?? '',
+      poseDescription: (pose.description as string) ?? '',
+      posePositionX: num(position.x, 0.5),
+      posePositionY: num(position.y, 0.5),
+      poseScale: num(pose.scale, 1.0),
+      poseRotation: num(pose.rotation, 0),
+      overlayType: (composition.overlayType as FormValues['overlayType']) ?? 'rule_of_thirds',
+      gridType: (composition.gridType as string) ?? '',
+      aspectRatio: (composition.aspectRatio as string) ?? '3:4',
+      opacity: num(composition.opacity, 0.5),
+      compositionDescription: (composition.description as string) ?? '',
+      exposureCompensation: num(camera.exposureCompensation, 0),
+      isoMode: (camera.isoMode as FormValues['isoMode']) ?? 'auto',
+      iso: num(camera.iso, 200),
+      shutterSpeed: (camera.shutterSpeed as string) ?? '1/200',
+      whiteBalance: (camera.whiteBalance as FormValues['whiteBalance']) ?? 'daylight',
+      whiteBalanceK: num(camera.whiteBalanceK, 5500),
+      flashMode: (camera.flashMode as FormValues['flashMode']) ?? 'off',
+      focusMode: (camera.focusMode as FormValues['focusMode']) ?? 'auto',
+      lensType: (camera.lensType as string) ?? '',
+      lensSuggestion: (camera.lensSuggestion as FormValues['lensSuggestion']) ?? 'main',
+      lightDirection: (sceneGuide.lightDirection as string) ?? '',
+      shootingDistance: (sceneGuide.shootingDistance as string) ?? '',
+      background: (sceneGuide.background as string) ?? '',
+      props: ((sceneGuide.props as string[]) ?? []).join(', '),
+      bestTime: (sceneGuide.bestTime as string) ?? '',
+      tips: ((sceneGuide.tips as string[]) ?? []).join(', '),
+      cropRatio: (postProcess.cropRatio as string) ?? '3:4',
+      colorBrightness: num(color.brightness, 0),
+      colorContrast: num(color.contrast, 0),
+      colorSaturation: num(color.saturation, 0),
+      colorTemperature: num(color.temperature, 0),
+      colorTint: num(color.tint, 0),
+      smoothStrength: num(postProcess.smoothStrength, 0),
+      sharpen: num(postProcess.sharpen, 0),
+      vignette: num(postProcess.vignette, 0),
+      grain: num(postProcess.grain, 0),
+      lut: (postProcess.lut as FormValues['lut']) ?? 'none',
+      sortOrder: initial.sortOrder ?? 0,
+      isActive: initial.isActive,
+    };
+  };
+
+  const {
+    register, handleSubmit, control, setValue, watch, formState: { errors },
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: buildDefaults(),
+  });
+
+  // .pptpl 自动填充
+  const handlePptplUpload = async (file: File | null) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text) as Record<string, unknown>;
+      if (!json || typeof json !== 'object') {
+        throw new Error('JSON 解析失败');
+      }
+      // 兼容 format === 'pptpl' 标识；若无也允许，但需含 5 段中的至少一段
+      const composition = (json.composition ?? {}) as Record<string, unknown>;
+      const pose = (json.pose ?? {}) as Record<string, unknown>;
+      const silhouette = (pose.silhouette ?? {}) as Record<string, unknown>;
+      const position = (pose.position ?? {}) as Record<string, unknown>;
+      const camera = (json.camera ?? {}) as Record<string, unknown>;
+      const sceneGuide = (json.sceneGuide ?? {}) as Record<string, unknown>;
+      const postProcess = (json.postProcess ?? {}) as Record<string, unknown>;
+      const color = (postProcess.color ?? {}) as Record<string, unknown>;
+
+      if (composition.overlayType) setValue('overlayType', composition.overlayType as FormValues['overlayType']);
+      if (typeof composition.aspectRatio === 'string') setValue('aspectRatio', composition.aspectRatio);
+      if (typeof composition.opacity === 'number') setValue('opacity', composition.opacity);
+      if (typeof composition.gridType === 'string') setValue('gridType', composition.gridType);
+      if (typeof composition.description === 'string') setValue('compositionDescription', composition.description);
+
+      if (silhouette.type) setValue('silhouetteType', silhouette.type as FormValues['silhouetteType']);
+      if (typeof silhouette.data === 'string') setValue('silhouetteBuiltinKey', silhouette.data);
+      if (typeof pose.description === 'string') setValue('poseDescription', pose.description);
+      if (typeof position.x === 'number') setValue('posePositionX', position.x);
+      if (typeof position.y === 'number') setValue('posePositionY', position.y);
+      if (typeof pose.scale === 'number') setValue('poseScale', pose.scale);
+      if (typeof pose.rotation === 'number') setValue('poseRotation', pose.rotation);
+
+      if (typeof camera.exposureCompensation === 'number') setValue('exposureCompensation', camera.exposureCompensation);
+      if (camera.isoMode) setValue('isoMode', camera.isoMode as FormValues['isoMode']);
+      if (typeof camera.iso === 'number') setValue('iso', camera.iso);
+      if (typeof camera.shutterSpeed === 'string') setValue('shutterSpeed', camera.shutterSpeed);
+      if (camera.whiteBalance) setValue('whiteBalance', camera.whiteBalance as FormValues['whiteBalance']);
+      if (typeof camera.whiteBalanceK === 'number') setValue('whiteBalanceK', camera.whiteBalanceK);
+      if (camera.flashMode) setValue('flashMode', camera.flashMode as FormValues['flashMode']);
+      if (camera.focusMode) setValue('focusMode', camera.focusMode as FormValues['focusMode']);
+      if (typeof camera.lensType === 'string') setValue('lensType', camera.lensType);
+      if (camera.lensSuggestion) setValue('lensSuggestion', camera.lensSuggestion as FormValues['lensSuggestion']);
+
+      if (typeof sceneGuide.lightDirection === 'string') setValue('lightDirection', sceneGuide.lightDirection);
+      if (typeof sceneGuide.shootingDistance === 'string') setValue('shootingDistance', sceneGuide.shootingDistance);
+      if (typeof sceneGuide.background === 'string') setValue('background', sceneGuide.background);
+      if (Array.isArray(sceneGuide.props)) setValue('props', (sceneGuide.props as string[]).join(', '));
+      if (typeof sceneGuide.bestTime === 'string') setValue('bestTime', sceneGuide.bestTime);
+      if (Array.isArray(sceneGuide.tips)) setValue('tips', (sceneGuide.tips as string[]).join(', '));
+
+      if (typeof postProcess.cropRatio === 'string') setValue('cropRatio', postProcess.cropRatio);
+      if (typeof color.brightness === 'number') setValue('colorBrightness', color.brightness);
+      if (typeof color.contrast === 'number') setValue('colorContrast', color.contrast);
+      if (typeof color.saturation === 'number') setValue('colorSaturation', color.saturation);
+      if (typeof color.temperature === 'number') setValue('colorTemperature', color.temperature);
+      if (typeof color.tint === 'number') setValue('colorTint', color.tint);
+      if (typeof postProcess.smoothStrength === 'number') setValue('smoothStrength', postProcess.smoothStrength);
+      if (typeof postProcess.sharpen === 'number') setValue('sharpen', postProcess.sharpen);
+      if (typeof postProcess.vignette === 'number') setValue('vignette', postProcess.vignette);
+      if (typeof postProcess.grain === 'number') setValue('grain', postProcess.grain);
+      if (postProcess.lut) setValue('lut', postProcess.lut as FormValues['lut']);
+
+      setPptplFile(file);
+      toast({
+        title: '已加载 .pptpl',
+        description: '构图 / 剪影 / 相机 / 场景引导 / 后期处理 5 段内容已自动填充，可在后续步骤中校对修改。',
+      });
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: '解析失败',
+        description: `${(e as Error).message}（请确认是合法的 .pptpl JSON 文件）`,
+      });
+      if (pptplInputRef.current) pptplInputRef.current.value = '';
+    }
+  };
+
+  const onSubmit = (data: FormValues) => {
+    setError(null);
+
+    // 新建模式下必须上传封面
+    if (!isEdit && !coverFile) {
+      setError('请上传封面图片（Step 2）');
+      setStep(1);
+      return;
+    }
+
+    // 构造 pose 对象
+    const pose: Record<string, unknown> = {
+      description: data.poseDescription ?? '',
+      position: { x: data.posePositionX, y: data.posePositionY },
+      scale: data.poseScale,
+      rotation: data.poseRotation,
+      silhouette: {
+        type: data.silhouetteType,
+        data: data.silhouetteBuiltinKey ?? '',
+      },
+    };
+
+    // 构造 meta
+    const meta: Record<string, unknown> = {
+      name: data.name,
+      category: data.category,
+      price: data.price,
+      description: data.description ?? '',
+      author: data.author || 'Lumira',
+      referenceSource: data.referenceSource ?? '',
+      tags: parseCommaList(data.tags),
+      tagIds: [],
+      classification: { type: data.category, style: '', method: '' },
+      sortOrder: data.sortOrder,
+      isActive: data.isActive,
+      composition: {
+        overlayType: data.overlayType,
+        gridType: data.gridType ?? '',
+        aspectRatio: data.aspectRatio,
+        opacity: data.opacity,
+        description: data.compositionDescription ?? '',
+      },
+      pose,
+      camera: {
+        exposureCompensation: data.exposureCompensation,
+        isoMode: data.isoMode,
+        iso: data.iso,
+        shutterSpeed: data.shutterSpeed,
+        whiteBalance: data.whiteBalance,
+        whiteBalanceK: data.whiteBalanceK,
+        flashMode: data.flashMode,
+        focusMode: data.focusMode,
+        lensType: data.lensType ?? '',
+        lensSuggestion: data.lensSuggestion,
+      },
+      sceneGuide: {
+        lightDirection: data.lightDirection ?? '',
+        shootingDistance: data.shootingDistance ?? '',
+        background: data.background ?? '',
+        props: parseCommaList(data.props),
+        bestTime: data.bestTime ?? '',
+        tips: parseCommaList(data.tips),
+      },
+      postProcess: {
+        cropRatio: data.cropRatio,
+        color: {
+          brightness: data.colorBrightness,
+          contrast: data.colorContrast,
+          saturation: data.colorSaturation,
+          temperature: data.colorTemperature,
+          tint: data.colorTint,
+        },
+        smoothStrength: data.smoothStrength,
+        sharpen: data.sharpen,
+        vignette: data.vignette,
+        grain: data.grain,
+        lut: data.lut,
+      },
+    };
+
+    const fd = new FormData();
+    fd.set('meta', JSON.stringify(meta));
+    if (coverFile) fd.set('cover', coverFile);
+    if (silhouetteFile && data.silhouetteType === 'image') {
+      fd.set('silhouette', silhouetteFile);
+    }
+    if (pptplFile) fd.set('pptpl', pptplFile);
+
+    startTransition(async () => {
+      const result = isEdit
+        ? await updateTemplate(templateId as string, fd)
+        : await createTemplate(fd);
+      if (result?.error) {
+        setError(result.error);
+      }
+      // 成功时 redirect 会在 server action 内部触发；如果未 redirect（出错），则继续显示
+    });
+  };
+
+  // 触发当前步骤的字段校验，但不阻止跳步（便于用户回头改）
+  const next = async () => {
+    // 仅做轻量提示：当前步必填项校验
+    const stepFields: (keyof FormValues)[][] = [
+      ['name', 'category', 'price'],
+      [],
+      [],
+      [],
+      [],
+      [],
+    ];
+    const fields = stepFields[step] ?? [];
+    let hasError = false;
+    for (const f of fields) {
+      if (errors[f]) hasError = true;
+    }
+    if (hasError) {
+      // 触发校验
+      await handleSubmit(() => undefined)();
+      return;
+    }
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
+  };
+
+  const prev = () => setStep((s) => Math.max(s - 1, 0));
+
+  const watchSilhouetteType = watch('silhouetteType');
+  const coverPreviewUrl = isEdit && initial?.coverUrl
+    ? (initial.coverUrl.startsWith('http')
+      ? initial.coverUrl
+      : `${backendUrl}${initial.coverUrl.startsWith('/') ? '' : '/'}${initial.coverUrl}`)
+    : undefined;
+
+  return (
+    <div className="space-y-6">
+      {/* 顶部 .pptpl 自动填充入口 */}
+      <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-4">
+        <div className="flex items-start gap-3">
+          <UploadIcon size={20} className="text-primary mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">从 .pptpl 文件自动填充</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              上传 Flutter 端导出的 .pptpl 模板文件，自动填充「构图 / 剪影 / 相机 / 场景引导 / 后期处理」5 段字段，可在后续步骤中继续修改。
+            </p>
+            <input
+              ref={pptplInputRef}
+              type="file"
+              accept=".pptpl,application/json,application/octet-stream"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                handlePptplUpload(f);
+              }}
+            />
+            <div className="mt-3 flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => pptplInputRef.current?.click()}
+              >
+                <UploadIcon size={14} className="mr-1" /> 选择 .pptpl 文件
+              </Button>
+              {pptplFile && (
+                <span className="text-xs text-muted-foreground">
+                  已选：{pptplFile.name}（{(pptplFile.size / 1024).toFixed(1)} KB） · 提交时一并上传
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 步骤指示器 */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2">
+        {STEPS.map((s, i) => (
+          <div key={s.title} className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setStep(i)}
+              className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                i === step
+                  ? 'bg-primary text-primary-foreground'
+                  : i < step
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/70'
+              }`}
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-current text-[10px]">
+                {i < step ? <Check size={10} /> : i + 1}
+              </span>
+              <span className="font-medium">{s.title}</span>
+            </button>
+            {i < STEPS.length - 1 && <span className="text-muted-foreground/50">→</span>}
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Step 1: 基本信息 */}
+        {step === 0 && (
+          <div className="space-y-4 max-w-2xl">
+            <div className="space-y-2">
+              <Label htmlFor="name">模板名称 *</Label>
+              <Input id="name" placeholder="如：秋日森林" {...register('name')} />
+              {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>分类 *</Label>
+                <Controller
+                  control={control}
+                  name="category"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue placeholder="选择分类" /></SelectTrigger>
+                      <SelectContent>
+                        {categories.map((c) => (
+                          <SelectItem key={c.key} value={c.key}>
+                            {c.name} ({c.key})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="price">价格（积分，0=免费）</Label>
+                <Input id="price" type="number" min={0} {...register('price')} />
+                {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">描述</Label>
+              <Textarea id="description" rows={3} {...register('description')} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="author">作者</Label>
+                <Input id="author" placeholder="Lumira" {...register('author')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="referenceSource">参考来源</Label>
+                <Input id="referenceSource" placeholder="如：样片 EXIF / 原创" {...register('referenceSource')} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="tags">标签（逗号分隔）</Label>
+              <Input id="tags" placeholder="如：秋季, 森林, 柔光" {...register('tags')} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="sortOrder">排序</Label>
+                <Input id="sortOrder" type="number" {...register('sortOrder')} />
+              </div>
+              <div className="space-y-2">
+                <Label>是否上架</Label>
+                <div className="flex items-center gap-2 h-10">
+                  <Controller
+                    control={control}
+                    name="isActive"
+                    render={({ field }) => (
+                      <input
+                        type="checkbox"
+                        checked={field.value}
+                        onChange={(e) => field.onChange(e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                    )}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {watch('isActive') ? '上架（可见）' : '下架（隐藏）'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: 封面与剪影 */}
+        {step === 1 && (
+          <div className="space-y-4 max-w-2xl">
+            <FileUpload
+              label="封面图片 *"
+              accept="image/png,image/jpeg,image/webp"
+              maxSize={2 * 1024 * 1024}
+              value={coverFile}
+              onChange={setCoverFile}
+              hint="JPG / PNG / WebP，≤2MB，建议 3:4 竖图。"
+              previewUrl={coverPreviewUrl}
+            />
+
+            <div className="space-y-2">
+              <Label>剪影类型</Label>
+              <Controller
+                control={control}
+                name="silhouetteType"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {SILHOUETTE_TYPES.map((v) => (
+                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+
+            {watchSilhouetteType === 'builtin' && (
+              <div className="space-y-2">
+                <Label htmlFor="silhouetteBuiltinKey">内置剪影 key</Label>
+                <Input id="silhouetteBuiltinKey" placeholder="如：sitting-cafe" {...register('silhouetteBuiltinKey')} />
+              </div>
+            )}
+
+            {watchSilhouetteType === 'image' && (
+              <FileUpload
+                label="剪影图片"
+                accept="image/png,image/svg+xml"
+                maxSize={1024 * 1024}
+                value={silhouetteFile}
+                onChange={setSilhouetteFile}
+                hint="PNG / SVG，≤1MB。提交时会随模板一起上传。"
+              />
+            )}
+
+            {watchSilhouetteType === 'svg' && (
+              <div className="rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
+                SVG 类型请通过 .pptpl 文件上传内嵌 SVG 内容（pose.silhouette.data 字段）。
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="posePositionX">位置 X (0-1)</Label>
+                <Input id="posePositionX" type="number" step={0.01} min={0} max={1} {...register('posePositionX')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="posePositionY">位置 Y (0-1)</Label>
+                <Input id="posePositionY" type="number" step={0.01} min={0} max={1} {...register('posePositionY')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="poseScale">缩放 (0.5-1.5)</Label>
+                <Input id="poseScale" type="number" step={0.01} min={0.5} max={1.5} {...register('poseScale')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="poseRotation">旋转 (-45~45)</Label>
+                <Input id="poseRotation" type="number" step={0.1} min={-45} max={45} {...register('poseRotation')} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="poseDescription">姿势描述</Label>
+              <Textarea id="poseDescription" rows={2} {...register('poseDescription')} />
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: 构图 */}
+        {step === 2 && (
+          <div className="space-y-4 max-w-2xl">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>叠加层类型</Label>
+                <Controller
+                  control={control}
+                  name="overlayType"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {OVERLAY_TYPES.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>宽高比</Label>
+                <Controller
+                  control={control}
+                  name="aspectRatio"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ASPECT_RATIOS.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="gridType">网格类型（可选）</Label>
+                <Input id="gridType" placeholder="如：rule_of_thirds" {...register('gridType')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="opacity">不透明度 (0-1)</Label>
+                <Input id="opacity" type="number" step={0.05} min={0} max={1} {...register('opacity')} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="compositionDescription">构图描述</Label>
+              <Textarea id="compositionDescription" rows={3} {...register('compositionDescription')} />
+            </div>
+          </div>
+        )}
+
+        {/* Step 4: 相机参数 */}
+        {step === 3 && (
+          <div className="space-y-4 max-w-3xl">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="exposureCompensation">曝光补偿 (-3~3)</Label>
+                <Input id="exposureCompensation" type="number" step={0.1} min={-3} max={3} {...register('exposureCompensation')} />
+              </div>
+              <div className="space-y-2">
+                <Label>ISO 模式</Label>
+                <Controller
+                  control={control}
+                  name="isoMode"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ISO_MODES.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="iso">ISO</Label>
+                <Input id="iso" type="number" min={0} {...register('iso')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="shutterSpeed">快门速度</Label>
+                <Input id="shutterSpeed" placeholder="如：1/200" {...register('shutterSpeed')} />
+              </div>
+              <div className="space-y-2">
+                <Label>白平衡</Label>
+                <Controller
+                  control={control}
+                  name="whiteBalance"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {WHITE_BALANCES.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="whiteBalanceK">白平衡 K</Label>
+                <Input id="whiteBalanceK" type="number" min={0} {...register('whiteBalanceK')} />
+              </div>
+              <div className="space-y-2">
+                <Label>闪光模式</Label>
+                <Controller
+                  control={control}
+                  name="flashMode"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FLASH_MODES.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>对焦模式</Label>
+                <Controller
+                  control={control}
+                  name="focusMode"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FOCUS_MODES.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>镜头建议</Label>
+                <Controller
+                  control={control}
+                  name="lensSuggestion"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {LENS_SUGGESTIONS.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lensType">镜头类型（可选）</Label>
+                <Input id="lensType" placeholder="如：main / wide" {...register('lensType')} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: 场景引导 */}
+        {step === 4 && (
+          <div className="space-y-4 max-w-2xl">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="lightDirection">光线方向</Label>
+                <Input id="lightDirection" placeholder="如：侧面柔光 45°" {...register('lightDirection')} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="shootingDistance">拍摄距离</Label>
+                <Input id="shootingDistance" placeholder="如：1.5-2m" {...register('shootingDistance')} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="background">背景</Label>
+              <Input id="background" placeholder="如：咖啡馆窗边 / 绿植背景" {...register('background')} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="props">道具（逗号分隔）</Label>
+              <Input id="props" placeholder="如：咖啡杯, 书" {...register('props')} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bestTime">最佳拍摄时间</Label>
+              <Input id="bestTime" placeholder="如：14:00-16:00" {...register('bestTime')} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tips">提示（逗号分隔）</Label>
+              <Textarea id="tips" rows={3} placeholder="如：让模特自然托腮, 利用窗光制造柔光效果" {...register('tips')} />
+            </div>
+          </div>
+        )}
+
+        {/* Step 6: 后期处理 */}
+        {step === 5 && (
+          <div className="space-y-4 max-w-3xl">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>裁剪比例</Label>
+                <Controller
+                  control={control}
+                  name="cropRatio"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ASPECT_RATIOS.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>滤镜 LUT</Label>
+                <Controller
+                  control={control}
+                  name="lut"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {LUTS.map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+
+            <fieldset className="space-y-3 rounded-md border border-input p-4">
+              <legend className="px-2 text-sm font-medium">色彩调整</legend>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="colorBrightness">亮度 (-100~100)</Label>
+                  <Input id="colorBrightness" type="number" min={-100} max={100} {...register('colorBrightness')} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="colorContrast">对比度</Label>
+                  <Input id="colorContrast" type="number" min={-100} max={100} {...register('colorContrast')} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="colorSaturation">饱和度</Label>
+                  <Input id="colorSaturation" type="number" min={-100} max={100} {...register('colorSaturation')} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="colorTemperature">色温</Label>
+                  <Input id="colorTemperature" type="number" min={-100} max={100} {...register('colorTemperature')} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="colorTint">色调</Label>
+                  <Input id="colorTint" type="number" min={-100} max={100} {...register('colorTint')} />
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="space-y-3 rounded-md border border-input p-4">
+              <legend className="px-2 text-sm font-medium">效果</legend>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="smoothStrength">平滑 (0-100)</Label>
+                  <Input id="smoothStrength" type="number" min={0} max={100} {...register('smoothStrength')} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sharpen">锐化</Label>
+                  <Input id="sharpen" type="number" min={0} max={100} {...register('sharpen')} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="vignette">暗角</Label>
+                  <Input id="vignette" type="number" min={0} max={100} {...register('vignette')} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="grain">颗粒</Label>
+                  <Input id="grain" type="number" min={0} max={100} {...register('grain')} />
+                </div>
+              </div>
+            </fieldset>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+
+        {/* 步骤导航 */}
+        <div className="flex items-center justify-between border-t border-border pt-4">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={prev}
+            disabled={step === 0 || isPending}
+          >
+            <ArrowLeft size={14} className="mr-1" /> 上一步
+          </Button>
+          <div className="text-xs text-muted-foreground">
+            步骤 {step + 1} / {STEPS.length} · {STEPS[step].title}
+          </div>
+          {step < STEPS.length - 1 ? (
+            <Button type="button" onClick={next} disabled={isPending}>
+              下一步 <ArrowRight size={14} className="ml-1" />
+            </Button>
+          ) : (
+            <Button type="submit" disabled={isPending}>
+              {isPending ? '提交中…' : isEdit ? '保存修改' : '创建模板'}
+            </Button>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+}

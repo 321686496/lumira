@@ -1,6 +1,9 @@
 // src/components/sidebar.tsx
 import Link from 'next/link';
-import { ChartLineUp, Users, Ticket, Gift, ClipboardText } from '@phosphor-icons/react/dist/ssr';
+import {
+  ChartLineUp, Users, Ticket, Gift, ClipboardText,
+  SquaresFour, GridFour,
+} from '@phosphor-icons/react/dist/ssr';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -9,6 +12,8 @@ const navItems = [
   { href: '/dashboard/redeem-batches', label: '兑换码', icon: Ticket },
   { href: '/dashboard/rewards', label: '奖励明细', icon: Gift },
   { href: '/dashboard/questionnaire', label: '问卷数据', icon: ClipboardText },
+  { href: '/dashboard/templates', label: '模板管理', icon: SquaresFour },
+  { href: '/dashboard/categories', label: '分类管理', icon: GridFour },
 ];
 
 export function Sidebar({ activePath }: { activePath: string }) {

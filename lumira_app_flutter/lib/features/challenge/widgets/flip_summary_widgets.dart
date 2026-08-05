@@ -3,64 +3,150 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../profile/providers/growth_providers.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
-import '../data/challenge_mock_data.dart';
 import '../data/challenge_models.dart';
+import '../data/challenge_providers.dart';
 
 /// 翻牌页下方：连续打卡进度条
+///
+/// 数据源：weeklyHistoryProvider（本周挑战历史）+ 连续打卡计算
 class FlipStreakBar extends ConsumerWidget {
   const FlipStreakBar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final streak = ChallengeMockData.flipStreak;
-    final weeklyDone = ChallengeMockData.weeklyCompletedCount;
-    final weeklyTotal = ChallengeMockData.weeklyTotalCount;
-    final progress = (weeklyDone / weeklyTotal).clamp(0.0, 1.0);
+    final historyAsync = ref.watch(weeklyHistoryProvider);
 
+    return historyAsync.when(
+      loading: () => _SkeletonBar(tokens: tokens),
+      error: (_, __) => _SkeletonBar(tokens: tokens),
+      data: (history) {
+        // 计算本周完成数
+        final weeklyDone = history
+            .where((r) => r.status == ChallengeStatus.done)
+            .length;
+        const weeklyTotal = 7;
+        final progress = (weeklyDone / weeklyTotal).clamp(0.0, 1.0);
+
+        // 计算连续打卡天数
+        final streak = _computeStreak(history);
+        final tipMessage = _buildTipMessage(streak, weeklyDone);
+
+        return NeuCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.local_fire_department_outlined,
+                      size: 18, color: tokens.brand),
+                  const SizedBox(width: 6),
+                  Text(
+                    '连续打卡 $streak 天',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '本周 $weeklyDone/$weeklyTotal',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              LumiraProgress.linear(
+                value: progress,
+                minHeight: 6,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                tipMessage,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.textTertiary,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 从历史记录计算连续打卡天数
+  /// 规则：从今天往回数，今天已打卡则从今天开始；否则从昨天往回数
+  int _computeStreak(List<ChallengeHistoryRecord> history) {
+    final completedDates = <String>{};
+    for (final r in history) {
+      if (r.status == ChallengeStatus.done) {
+        completedDates.add(r.date);
+      }
+    }
+    final now = DateTime.now();
+    String fmt(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+    final todayStr = fmt(DateTime(now.year, now.month, now.day));
+    int streak = 0;
+    if (completedDates.contains(todayStr)) {
+      streak = 1;
+      var cursor = DateTime(now.year, now.month, now.day)
+          .subtract(const Duration(days: 1));
+      while (completedDates.contains(fmt(cursor))) {
+        streak++;
+        cursor = cursor.subtract(const Duration(days: 1));
+      }
+    } else {
+      final yesterday =
+          DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
+      var cursor = yesterday;
+      while (completedDates.contains(fmt(cursor))) {
+        streak++;
+        cursor = cursor.subtract(const Duration(days: 1));
+      }
+    }
+    return streak;
+  }
+
+  String _buildTipMessage(int streak, int weeklyDone) {
+    if (streak == 0) return '今天翻牌并完成挑战开启打卡';
+    if (streak >= 7) return '已坚持一周，再接再厉！';
+    final remain = 7 - streak;
+    return '再坚持 $remain 天获得额外 50 XP';
+  }
+}
+
+class _SkeletonBar extends StatelessWidget {
+  const _SkeletonBar({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
     return NeuCard(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(Icons.local_fire_department_outlined,
-                  size: 18, color: tokens.brand),
-              const SizedBox(width: 6),
-              Text(
-                '连续打卡 ${streak.currentStreak} 天',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '本周 $weeklyDone/$weeklyTotal',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: tokens.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          LumiraProgress.linear(
-            value: progress,
-            minHeight: 6,
-          ),
-          const SizedBox(height: 8),
           Text(
-            streak.tipMessage,
+            '连续打卡 - 天',
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: tokens.textTertiary,
             ),
           ),
+          const SizedBox(height: 10),
+          LumiraProgress.linear(value: 0, minHeight: 6),
         ],
       ),
     );
@@ -68,14 +154,58 @@ class FlipStreakBar extends ConsumerWidget {
 }
 
 /// 翻牌页下方：用户成就摘要（3 列 Bento）
+///
+/// 数据源：growthLevelProvider（XP/等级）+ challengeDaoProvider（完成数）
 class FlipUserSummary extends ConsumerWidget {
   const FlipUserSummary({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final summary = ChallengeMockData.userSummary;
+    final growthAsync = ref.watch(growthLevelProvider);
 
+    return growthAsync.when(
+      loading: () => _SkeletonSummary(tokens: tokens),
+      error: (_, __) => _SkeletonSummary(tokens: tokens),
+      data: (growth) {
+        return NeuCard(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          child: Row(
+            children: [
+              _StatCell(
+                tokens: tokens,
+                icon: Icons.stars_outlined,
+                value: '${growth.currentXp}',
+                label: '总 XP',
+              ),
+              _Divider(tokens: tokens),
+              _StatCell(
+                tokens: tokens,
+                icon: Icons.check_circle_outline,
+                value: '${growth.level}',
+                label: '等级',
+              ),
+              _Divider(tokens: tokens),
+              _StatCell(
+                tokens: tokens,
+                icon: Icons.shield_outlined,
+                value: growth.levelName,
+                label: '头衔',
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SkeletonSummary extends StatelessWidget {
+  const _SkeletonSummary({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
     return NeuCard(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       child: Row(
@@ -83,22 +213,22 @@ class FlipUserSummary extends ConsumerWidget {
           _StatCell(
             tokens: tokens,
             icon: Icons.stars_outlined,
-            value: '${summary.totalXP}',
-            label: '总 XP',
+            value: '-',
+            label: '加载中',
           ),
           _Divider(tokens: tokens),
           _StatCell(
             tokens: tokens,
             icon: Icons.check_circle_outline,
-            value: '${summary.completedCount}',
-            label: '已完成',
+            value: '-',
+            label: '加载中',
           ),
           _Divider(tokens: tokens),
           _StatCell(
             tokens: tokens,
             icon: Icons.shield_outlined,
-            value: 'Lv.${summary.level}',
-            label: summary.levelName,
+            value: '-',
+            label: '加载中',
           ),
         ],
       ),
@@ -163,6 +293,8 @@ class _Divider extends StatelessWidget {
 }
 
 /// 翻牌页下方：最近完成记录
+///
+/// 数据源：weeklyHistoryProvider（取已完成、按完成时间倒序、前 2 条）
 class FlipRecentRecords extends ConsumerWidget {
   const FlipRecentRecords({super.key, required this.onViewAll});
 
@@ -171,49 +303,74 @@ class FlipRecentRecords extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final records = ChallengeMockData.recentRecords;
+    final historyAsync = ref.watch(weeklyHistoryProvider);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            children: [
-              Text(
-                '最近完成',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: onViewAll,
-                behavior: HitTestBehavior.opaque,
-                child: Row(
-                  children: [
-                    Text(
-                      '查看全部',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: tokens.brand,
-                      ),
+    return historyAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (history) {
+        // 过滤已完成、按完成时间倒序、取前 2 条
+        final records = history
+            .where((r) =>
+                r.status == ChallengeStatus.done && r.completedAt != null)
+            .toList()
+          ..sort((a, b) => (b.completedAt ?? 0).compareTo(a.completedAt ?? 0));
+        final top2 = records.take(2).toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: [
+                  Text(
+                    '最近完成',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
                     ),
-                    Icon(Icons.chevron_right, size: 16, color: tokens.brand),
-                  ],
-                ),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: onViewAll,
+                    behavior: HitTestBehavior.opaque,
+                    child: Row(
+                      children: [
+                        Text(
+                          '查看全部',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.brand,
+                          ),
+                        ),
+                        Icon(Icons.chevron_right, size: 16, color: tokens.brand),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        for (final r in records) ...[
-          _RecentRecordCard(record: r),
-          const SizedBox(height: 10),
-        ],
-      ],
+            ),
+            const SizedBox(height: 10),
+            if (top2.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    '本周还没有完成挑战',
+                    style: TextStyle(fontSize: 13, color: tokens.textTertiary),
+                  ),
+                ),
+              )
+            else
+              for (final r in top2) ...[
+                _RecentRecordCard(record: r),
+                const SizedBox(height: 10),
+              ],
+          ],
+        );
+      },
     );
   }
 }
@@ -225,30 +382,20 @@ class _RecentRecordCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final thumbnail = record.photoIds.isNotEmpty
-        ? ChallengeMockData.photoUrl(record.photoIds.first)
-        : null;
     final isDone = record.status == ChallengeStatus.done;
 
     return NeuCard(
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          // 缩略图
+          // 缩略图占位（无图片源时显示分类图标）
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: SizedBox(
               width: 48,
               height: 48,
-              child: thumbnail != null
-                  ? Image.network(
-                      thumbnail,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _ThumbPlaceholder(
-                          tokens: tokens, icon: Icons.image_outlined),
-                    )
-                  : _ThumbPlaceholder(
-                      tokens: tokens, icon: Icons.visibility_off_outlined),
+              child: _ThumbPlaceholder(
+                  tokens: tokens, icon: Icons.check_circle_outline),
             ),
           ),
           const SizedBox(width: 12),

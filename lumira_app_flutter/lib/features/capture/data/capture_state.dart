@@ -127,27 +127,28 @@ class CaptureState {
 
   // ── 新增：模板编辑状态 ──
 
-  /// 所有模板列表（系统 + 自定义）
-  /// 系统模板来自 TemplateRegistry（同步），自定义模板来自 TemplatesDao（异步）
+  /// 所有模板列表（系统 + 自定义 + 后端动态）
+  /// 系统模板来自 TemplateRegistry（同步），自定义与远程模板来自 TemplatesDao（异步）
+  /// 远程模板可能仅含 meta（5 段 JSON 为空），列表展示足够，详情按需拉取
   /// DAO 加载失败时降级为仅系统模板
   static final allTemplatesProvider =
       FutureProvider<List<PhotoTemplate>>((ref) async {
     // 系统模板（同步，立即可用）
     final systemTemplates = TemplateRegistry.allTemplates;
 
-    // 自定义模板（异步）
+    // 自定义 + 远程模板（异步）
     try {
       final dao = await ref.watch(templatesDaoProvider.future);
-      final customRecords = await dao.getCustomOnly();
-      final customTemplates = <PhotoTemplate>[];
-      for (final r in customRecords) {
+      final customAndRemoteRecords = await dao.getCustomAndRemote();
+      final customAndRemoteTemplates = <PhotoTemplate>[];
+      for (final r in customAndRemoteRecords) {
         try {
-          customTemplates.add(TemplateMapper.toPhotoTemplate(r));
+          customAndRemoteTemplates.add(TemplateMapper.toPhotoTemplate(r));
         } catch (e) {
           debugPrint('[capture] allTemplatesProvider: skipping malformed template ${r.id}: $e');
         }
       }
-      return [...systemTemplates, ...customTemplates];
+      return [...systemTemplates, ...customAndRemoteTemplates];
     } catch (e) {
       // DAO 不可用时降级为仅系统模板
       debugPrint('[capture] allTemplatesProvider: DAO load failed, fallback to system only: $e');

@@ -8,27 +8,20 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../data/challenge_mock_data.dart';
 import '../data/challenge_models.dart';
+import '../data/challenge_providers.dart';
 
 /// 挑战记录页（挑战墙）
 ///
 /// 按日期倒序展示用户的挑战历史记录，每条记录可溯源到当日拍摄的图片。
+/// 数据源：weeklyHistoryProvider（本周挑战历史）
 class ChallengeHistoryPage extends ConsumerWidget {
   const ChallengeHistoryPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final records = ChallengeMockData.fullHistoryRecords;
-
-    // 统计数据
-    final doneCount = records.where((r) => r.status == ChallengeStatus.done).length;
-    final skippedCount =
-        records.where((r) => r.status == ChallengeStatus.skipped).length;
-    final totalXP = records
-        .where((r) => r.status == ChallengeStatus.done)
-        .fold(0, (sum, r) => sum + r.rewardXP);
+    final historyAsync = ref.watch(weeklyHistoryProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -41,59 +34,95 @@ class ChallengeHistoryPage extends ConsumerWidget {
               leading: _BackButton(tokens: tokens),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
-                children: [
-                  // 顶部统计卡
-                  FadeUp(
-                    child: _SummaryHeader(
-                      tokens: tokens,
-                      totalDays: records.length,
-                      doneCount: doneCount,
-                      skippedCount: skippedCount,
-                      totalXP: totalXP,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  FadeUp(
-                    delay: const Duration(milliseconds: 80),
-                    child: Row(
-                      children: [
-                        Icon(Icons.history, size: 18, color: tokens.brand),
-                        const SizedBox(width: 6),
-                        Text(
-                          '历史记录',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary,
-                          ),
+              child: historyAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (_, __) => Center(
+                  child: Text('加载失败',
+                      style: TextStyle(color: tokens.textTertiary)),
+                ),
+                data: (records) {
+                  // 按日期倒序排列
+                  final sorted = List<ChallengeHistoryRecord>.from(records)
+                    ..sort((a, b) => b.date.compareTo(a.date));
+
+                  // 统计数据
+                  final doneCount = sorted
+                      .where((r) => r.status == ChallengeStatus.done)
+                      .length;
+                  final skippedCount = sorted
+                      .where((r) => r.status == ChallengeStatus.skipped)
+                      .length;
+                  final totalXP = sorted
+                      .where((r) => r.status == ChallengeStatus.done)
+                      .fold(0, (sum, r) => sum + r.rewardXP);
+
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+                    children: [
+                      // 顶部统计卡
+                      FadeUp(
+                        child: _SummaryHeader(
+                          tokens: tokens,
+                          totalDays: sorted.length,
+                          doneCount: doneCount,
+                          skippedCount: skippedCount,
+                          totalXP: totalXP,
                         ),
-                        const Spacer(),
-                        Text(
-                          '共 ${records.length} 条',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.textTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // 时间线列表
-                  for (var i = 0; i < records.length; i++) ...[
-                    FadeUp(
-                      delay: Duration(milliseconds: 160 + i * 60),
-                      child: _HistoryTimelineTile(
-                        tokens: tokens,
-                        record: records[i],
-                        isLast: i == records.length - 1,
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                  ],
-                ],
+                      const SizedBox(height: 24),
+                      FadeUp(
+                        delay: const Duration(milliseconds: 80),
+                        child: Row(
+                          children: [
+                            Icon(Icons.history, size: 18, color: tokens.brand),
+                            const SizedBox(width: 6),
+                            Text(
+                              '历史记录',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: tokens.textPrimary,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '共 ${sorted.length} 条',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: tokens.textTertiary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (sorted.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Center(
+                            child: Text(
+                              '本周还没有挑战记录',
+                              style: TextStyle(
+                                  fontSize: 13, color: tokens.textTertiary),
+                            ),
+                          ),
+                        )
+                      else
+                        // 时间线列表
+                        for (var i = 0; i < sorted.length; i++) ...[
+                          FadeUp(
+                            delay: Duration(milliseconds: 160 + i * 60),
+                            child: _HistoryTimelineTile(
+                              tokens: tokens,
+                              record: sorted[i],
+                              isLast: i == sorted.length - 1,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -340,7 +369,7 @@ class _HistoryTimelineTile extends StatelessWidget {
                         ],
                       ],
                     ),
-                    // 照片缩略图横滑
+                    // 照片缩略图横滑（真实数据 photoIds 可能为空，则不渲染）
                     if (record.photoIds.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       SizedBox(
@@ -351,8 +380,10 @@ class _HistoryTimelineTile extends StatelessWidget {
                           separatorBuilder: (_, __) =>
                               const SizedBox(width: 8),
                           itemBuilder: (context, index) {
-                            final url = ChallengeMockData.photoUrl(
-                                record.photoIds[index]);
+                            // photoIds 存储的是真实 photoId，此处用 picsum 占位
+                            // 未来接入 gallery_items 关联查询后替换为真实图片源
+                            final url =
+                                'https://picsum.photos/seed/lumira_${record.photoIds[index]}/200/200';
                             return GestureDetector(
                               onTap: () => _viewPhoto(context, url),
                               child: ClipRRect(

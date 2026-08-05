@@ -306,16 +306,34 @@ class _RevealedView extends ConsumerWidget {
   final ScrollController scrollController;
   final void Function(String id) goDetail;
 
+  void _goCapture(BuildContext context, String challengeId) {
+    GoRouter.of(context).push(
+      '${RouteNames.capture}?${RouteNames.paramChallengeId}=${Uri.encodeComponent(challengeId)}',
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
     final asyncSubs = ref.watch(subChallengesProvider);
+    // 查询今日主挑战是否已完成
+    final historyAsync = ref.watch(weeklyHistoryProvider);
+    final mainStatus = historyAsync.maybeWhen(
+      data: (history) {
+        final match = history.where((r) =>
+            r.challengeId == selected.id && r.status == ChallengeStatus.done);
+        return match.isNotEmpty
+            ? ChallengeStatus.done
+            : ChallengeStatus.pending;
+      },
+      orElse: () => ChallengeStatus.pending,
+    );
 
     final mainChallenge = MainChallenge(
       title: selected.title,
       description: selected.description,
       rewardXP: selected.rewardXP,
-      status: ChallengeStatus.pending,
+      status: mainStatus,
       coverImage: 'https://picsum.photos/seed/${selected.id}/400/600',
       tags: [
         ChallengeTag(
@@ -334,8 +352,13 @@ class _RevealedView extends ConsumerWidget {
       // body 从 appBar 下方开始，无需 top padding 占位。
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
       children: [
-        // 1. 主挑战卡
-        FadeUp(child: MainChallengeCard(challenge: mainChallenge)),
+        // 1. 主挑战卡（pending 态带"去拍照"按钮，直接跳拍摄页）
+        FadeUp(
+          child: MainChallengeCard(
+            challenge: mainChallenge,
+            onGoCapture: () => _goCapture(context, selected.id),
+          ),
+        ),
         const SizedBox(height: 32),
         // 2. 附加挑战
         const FadeUp(
@@ -369,7 +392,7 @@ class _RevealedView extends ConsumerWidget {
                     delay: Duration(milliseconds: 160 + entry.key * 80),
                     child: SubChallengeRow(
                       challenge: entry.value,
-                      onGoComplete: () => goDetail(entry.value.id),
+                      onGoComplete: () => _goCapture(context, entry.value.id),
                     ),
                   ),
                 );

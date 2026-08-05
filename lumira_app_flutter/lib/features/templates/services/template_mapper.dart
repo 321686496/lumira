@@ -2,6 +2,7 @@ import '../../../core/db/dao/templates_dao.dart';
 import '../../capture/domain/photo_template.dart';
 import '../data/builtin_silhouettes.dart';
 import '../data/templates_editor_mock_data.dart' as editor;
+import '../data/remote_template_dto.dart';
 
 /// 模板领域对象与 [TemplateRecord] / [editor.EditorForm] 之间的双向映射。
 ///
@@ -49,6 +50,79 @@ class TemplateMapper {
       updatedAt: createdAt,
       isBuiltin: isBuiltin,
       isRecommended: isRecommended,
+    );
+  }
+
+  /// 远程模板 meta DTO → TemplateRecord。
+  ///
+  /// 用于 [remoteTemplatesSyncProvider] 拉取后端 list 后 upsert 到 sqflite。
+  /// 5 段内容 JSON（composition/pose/camera/sceneGuide/postProcess）设为空 Map，
+  /// 详情按需拉取时由 [detailToRecord] 覆盖填充。
+  /// source 固定为 'remote'，isBuiltin/isRecommend 均为 false（后端动态模板不是系统内置）。
+  /// cover 字段使用后端 coverUrl（绝对或相对 URL），coverData 留空（不预下载 base64）。
+  static TemplateRecord metaToRecord(RemoteTemplateMetaDto meta) {
+    return TemplateRecord(
+      id: meta.id,
+      name: meta.name,
+      author: meta.author,
+      version: meta.version,
+      category: meta.category,
+      classification: <String, dynamic>{
+        'type': meta.classification.type,
+        'style': meta.classification.style,
+        'method': meta.classification.method,
+      },
+      tags: List<String>.from(meta.tags),
+      tagIds: List<String>.from(meta.tagIds),
+      price: meta.price,
+      cover: meta.coverUrl,
+      coverData: null,
+      description: meta.description,
+      referenceSource: meta.referenceSource,
+      composition: const <String, dynamic>{},
+      pose: const <String, dynamic>{},
+      camera: const <String, dynamic>{},
+      sceneGuide: const <String, dynamic>{},
+      postProcess: const <String, dynamic>{},
+      createdAt: meta.updatedAt,
+      updatedAt: meta.updatedAt,
+      isBuiltin: false,
+      isRecommended: false,
+      source: 'remote',
+    );
+  }
+
+  /// 远程模板完整内容 DTO → TemplateRecord。
+  ///
+  /// 用于 [remoteTemplateDetailProvider] 详情按需拉取时 upsert 到 sqflite。
+  /// 在 meta 基础上覆盖 5 段内容 JSON，使详情页能从本地缓存读取完整内容。
+  /// createdAt 保留 meta.updatedAt（与列表同步时一致，便于 prune 判定）。
+  static TemplateRecord detailToRecord(RemoteTemplateDetailDto detail) {
+    // RemoteTemplateDetailDto 与 RemoteTemplateMetaDto 字段重叠但非继承关系，
+    // 此处构造一个 meta DTO 复用 metaToRecord 逻辑，避免字段映射重复。
+    final meta = RemoteTemplateMetaDto(
+      id: detail.id,
+      name: detail.name,
+      author: detail.author,
+      version: detail.version,
+      category: detail.category,
+      price: detail.price,
+      coverUrl: detail.coverUrl,
+      description: detail.description,
+      referenceSource: detail.referenceSource,
+      tags: detail.tags,
+      tagIds: detail.tagIds,
+      classification: detail.classification,
+      sortOrder: detail.sortOrder,
+      updatedAt: detail.updatedAt,
+    );
+    final metaRecord = metaToRecord(meta);
+    return metaRecord.copyWith(
+      composition: detail.composition,
+      pose: detail.pose,
+      camera: detail.camera,
+      sceneGuide: detail.sceneGuide,
+      postProcess: detail.postProcess,
     );
   }
 
