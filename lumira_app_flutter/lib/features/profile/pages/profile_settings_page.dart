@@ -12,18 +12,19 @@ import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../onboarding/data/questionnaire_providers.dart';
 import '../data/profile_mock_data.dart';
 
 /// 设置页
 ///
 /// 视觉规格来源：lumira-app/src/pages/profile/settings.vue（323 行）
-/// 4 个分组：通用 / 显示 / 拍摄 / 关于
+/// 分组：通用 / 首页标题样式 / 显示 / 拍摄 / 关于 / 合规与法律
 ///
 /// 关键交互：
 /// - 主题选择 / 风格选择点击 → 跳 profileSettingsTheme
 /// - 4 个 toggle 开关（网格 / 水平仪 / 快门声 / 水印）
-/// - 版本号 7 连击 → 显示兑换码输入框（3 秒重置）
-/// - 兑换码确认 → SnackBar 反馈
+/// - 版本号 7 连击 → 跳转兑换码页面
+/// - 合规条目（用户协议 / 隐私政策 / 个人信息清单与SDK目录）→ 跳转对应详情页
 class ProfileSettingsPage extends ConsumerStatefulWidget {
   const ProfileSettingsPage({super.key});
 
@@ -135,6 +136,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     final styleLabel = ProfileMockData.styles
         .firstWhere((s) => s.style == currentUiStyle)
         .label;
+    // 问卷完成状态（用于"偏好问卷"入口显示）
+    final questionnaireCompleted =
+        ref.watch(questionnaireCompletedProvider).valueOrNull ?? false;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -185,6 +189,14 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         icon: Icons.language_outlined,
                         label: '语言',
                         value: '简体中文',
+                        tokens: tokens,
+                      ),
+                      _SettingItem(
+                        icon: Icons.assignment_outlined,
+                        label: '偏好问卷',
+                        value: questionnaireCompleted ? '已填' : '未填',
+                        onTap: () => GoRouter.of(context)
+                            .push('${RouteNames.onboarding}?from=settings'),
                         tokens: tokens,
                         isLast: true,
                       ),
