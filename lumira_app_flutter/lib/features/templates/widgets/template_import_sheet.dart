@@ -151,7 +151,7 @@ class TemplateImportSheet extends ConsumerWidget {
         finalId = '${finalId}_imported_$now';
       }
       if (finalId != record.id) {
-        record = _copyRecordWithId(record, finalId);
+        record = record.copyWith(id: finalId);
       }
 
       await dao.upsert(record);
@@ -167,33 +167,6 @@ class TemplateImportSheet extends ConsumerWidget {
     } catch (e) {
       _showToast(navigator, '导入失败：$e');
     }
-  }
-
-  /// 复制 TemplateRecord 并替换 id（用于 ID 冲突时生成新记录）
-  TemplateRecord _copyRecordWithId(TemplateRecord src, String newId) {
-    return TemplateRecord(
-      id: newId,
-      name: src.name,
-      author: src.author,
-      version: src.version,
-      category: src.category,
-      classification: src.classification,
-      tags: src.tags,
-      tagIds: src.tagIds,
-      price: src.price,
-      cover: src.cover,
-      description: src.description,
-      referenceSource: src.referenceSource,
-      composition: src.composition,
-      pose: src.pose,
-      camera: src.camera,
-      sceneGuide: src.sceneGuide,
-      postProcess: src.postProcess,
-      createdAt: src.createdAt,
-      updatedAt: src.updatedAt,
-      isBuiltin: src.isBuiltin,
-      isRecommended: src.isRecommended,
-    );
   }
 
   // ===== 链接导入（DAO 持久化）=====
@@ -237,7 +210,7 @@ class TemplateImportSheet extends ConsumerWidget {
         finalId = '${finalId}_imported_$now';
       }
       if (finalId != record.id) {
-        record = _copyRecordWithId(record, finalId);
+        record = record.copyWith(id: finalId);
       }
 
       await dao.upsert(record);
