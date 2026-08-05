@@ -14,6 +14,7 @@ import 'dao/composition_kits_dao.dart';
 import 'dao/api_cache_dao.dart';
 import 'dao/settings_dao.dart';
 import '../../core/auth/auth_dao.dart';
+import '../../features/onboarding/data/questionnaire_dao.dart';
 
 const String _kDbName = 'lumira.db';
 const int _kDbVersion = 12;
@@ -76,6 +77,11 @@ final apiCacheDaoProvider = FutureProvider<ApiCacheDao>((ref) async {
 final settingsDaoProvider = FutureProvider<SettingsDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return SettingsDao(db);
+});
+
+final questionnaireDaoProvider = FutureProvider<QuestionnaireDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return QuestionnaireDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
