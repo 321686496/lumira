@@ -113,14 +113,14 @@
             <text class="setting-value setting-value-mono">v2.0.0</text>
           </view>
         </view>
-        <view v-if="showRedemption" class="redemption-wrap">
-          <input
-            class="redemption-input neu-inset"
-            v-model="redemptionCode"
-            placeholder="输入兑换码..."
-            confirm-type="done"
-            @confirm="submitRedemption"
-          />
+        <view class="setting-item" @click="goRedeem">
+          <view class="setting-icon-wrap">
+            <text class="ph ph-key"></text>
+          </view>
+          <text class="setting-label">兑换码</text>
+          <view class="setting-right">
+            <text class="ph ph-caret-right setting-arrow"></text>
+          </view>
         </view>
         <view class="setting-item">
           <view class="setting-icon-wrap">
@@ -168,27 +168,21 @@ const watermarkOn = ref(true)
 
 const tapCount = ref(0)
 let tapTimer: ReturnType<typeof setTimeout> | null = null
-const showRedemption = ref(false)
-const redemptionCode = ref('')
 
 const handleVersionTap = () => {
   tapCount.value++
   if (tapTimer) clearTimeout(tapTimer)
   tapTimer = setTimeout(() => { tapCount.value = 0 }, 3000)
+  // 彩蛋：连续点击 7 次版本号跳转到兑换码页
   if (tapCount.value >= 7) {
-    showRedemption.value = true
     tapCount.value = 0
+    uni.navigateTo({ url: '/pages/profile/redeem' })
   }
-}
-
-const submitRedemption = () => {
-  uni.showToast({ title: '兑换码已提交', icon: 'none' })
-  redemptionCode.value = ''
-  showRedemption.value = false
 }
 
 const back = () => uni.navigateBack()
 const goTheme = () => uni.navigateTo({ url: '/pages/profile/settings/theme' })
+const goRedeem = () => uni.navigateTo({ url: '/pages/profile/redeem' })
 </script>
 
 <style scoped>
@@ -285,21 +279,6 @@ const goTheme = () => uni.navigateTo({ url: '/pages/profile/settings/theme' })
 .setting-arrow {
   font-size: 28rpx;
   color: var(--color-text-tertiary);
-}
-
-/* 兑换码 */
-.redemption-wrap {
-  padding: 24rpx 40rpx;
-  border-bottom: 1rpx solid var(--color-divider);
-}
-
-.redemption-input {
-  width: 100%;
-  padding: 24rpx 32rpx;
-  font-size: 28rpx;
-  color: var(--color-text-primary);
-  box-sizing: border-box;
-  border: none;
 }
 
 /* 底部版本 */

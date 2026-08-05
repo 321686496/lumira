@@ -14,7 +14,7 @@
       <!-- Template Preview Card -->
       <view class="preview-card fade-up">
         <view class="preview-img-wrap">
-          <image class="preview-img" src="https://picsum.photos/seed/1499327/800/600" mode="aspectFill" />
+          <image class="preview-img" :src="coverImage" mode="aspectFill" />
           <view class="lock-badge" :class="{ 'lock-badge-unlocked': unlocked }">
             <text class="ph" :class="unlocked ? 'ph-lock-open' : 'ph-lock'"></text>
           </view>
@@ -22,13 +22,12 @@
         <view class="preview-body">
           <view class="preview-title-row">
             <text class="ph ph-star star-icon"></text>
-            <text class="preview-title">日系胶片 · 精选模板</text>
+            <text class="preview-title">{{ templateName }}</text>
           </view>
-          <text class="preview-desc">包含 12 级胶片颗粒 · 暖调偏移 · 柔光晕影</text>
+          <text class="preview-desc">{{ templateDesc }}</text>
           <view class="preview-tags">
-            <text class="lumira-tag lumira-tag-gold">胶片</text>
-            <text class="lumira-tag lumira-tag-green">日系</text>
-            <text class="lumira-tag tag-neutral">人像</text>
+            <text class="lumira-tag lumira-tag-gold">精选</text>
+            <text class="lumira-tag tag-neutral">付费</text>
           </view>
         </view>
       </view>
@@ -50,10 +49,10 @@
               </view>
               <view class="option-text">
                 <text class="list-title">看广告解锁（30秒）</text>
-                <text class="list-desc">观看一段短视频广告即可解锁</text>
+                <text class="list-desc">敬请期待</text>
               </view>
             </view>
-            <view class="btn-brand-sm" @click="onWatchAd">立即观看</view>
+            <view class="btn-outline-sm btn-disabled">敬请期待</view>
           </view>
         </view>
 
@@ -64,35 +63,15 @@
               <text class="ph ph-paper-plane-tilt"></text>
             </view>
             <view class="option-text">
-              <text class="list-title">分享给好友（2/3）</text>
-              <text class="list-desc">累计分享 3 位好友即可解锁</text>
+              <text class="list-title">分享给好友</text>
+              <text class="list-desc">敬请期待</text>
             </view>
           </view>
-          <view class="lumira-progress progress-row">
-            <view class="lumira-progress-fill" style="width: 67%;"></view>
-          </view>
-          <view class="btn-outline-sm" @click="onShare">继续分享</view>
+          <view class="btn-outline-sm btn-disabled">敬请期待</view>
         </view>
 
-        <!-- Option 3: Take Photos -->
+        <!-- Option 3: Redemption Code -->
         <view class="option-card fade-up fade-up-d3">
-          <view class="option-head">
-            <view class="list-icon">
-              <text class="ph ph-target"></text>
-            </view>
-            <view class="option-text">
-              <text class="list-title">拍摄 5 张照片（3/5）</text>
-              <text class="list-desc">完成 5 张拍摄任务即可解锁</text>
-            </view>
-          </view>
-          <view class="lumira-progress progress-row">
-            <view class="lumira-progress-fill" style="width: 60%;"></view>
-          </view>
-          <view class="btn-outline-sm" @click="onGoCapture">去拍摄</view>
-        </view>
-
-        <!-- Option 4: Redemption Code -->
-        <view class="option-card fade-up fade-up-d4">
           <view class="option-row">
             <view class="option-left">
               <view class="list-icon">
@@ -100,26 +79,31 @@
               </view>
               <view class="option-text">
                 <text class="list-title">输入兑换码</text>
-                <text class="list-desc">使用兑换码直接解锁模板</text>
+                <text class="list-desc">使用兑换码获取积分后兑换</text>
               </view>
             </view>
             <view class="btn-outline-sm" style="padding: 16rpx 40rpx;" @click="onInputCode">输入</view>
           </view>
         </view>
 
-        <!-- Option 5: Direct Purchase -->
-        <view class="option-card option-card-brand fade-up fade-up-d5">
+        <!-- Option 4: Exchange with Points -->
+        <view class="option-card option-card-brand fade-up fade-up-d4">
           <view class="option-row">
             <view class="option-left">
               <view class="list-icon list-icon-gold">
                 <text class="ph ph-diamond"></text>
               </view>
               <view class="option-text">
-                <text class="list-title list-title-strong">¥3.00 直接购买</text>
-                <text class="list-desc">一次购买，永久使用</text>
+                <text class="list-title list-title-strong">{{ priceCredits }} 积分兑换</text>
+                <text class="list-desc">当前余额 {{ currentBalance }} 积分 · 永久使用</text>
               </view>
             </view>
-            <view class="neu-btn-brand" style="width: auto; padding: 16rpx 40rpx; flex-shrink: 0;" @click="onPurchase">购买</view>
+            <view
+              class="neu-btn-brand"
+              :class="{ 'btn-loading': exchanging }"
+              style="width: auto; padding: 16rpx 40rpx; flex-shrink: 0;"
+              @click="onPurchase"
+            >{{ exchanging ? '兑换中…' : '兑换' }}</view>
           </view>
         </view>
       </view>
@@ -136,23 +120,8 @@
           <text class="ph ph-check-circle success-icon"></text>
         </view>
         <text class="success-title">解锁成功</text>
-        <text class="success-desc">日系胶片 · 精选模板已永久解锁</text>
+        <text class="success-desc">{{ templateName }} 已永久解锁</text>
         <view class="lumira-btn-brand success-btn" @click="onStartUse">开始使用</view>
-      </view>
-    </view>
-
-    <!-- Pay Popup -->
-    <view v-if="showPayPopup" class="pay-popup-mask" @click="onCancelPay">
-      <view class="pay-popup" @click.stop>
-        <text class="pay-popup-title">确认支付</text>
-        <view class="pay-popup-price-row">
-          <text class="pay-popup-price">¥3.00</text>
-          <text class="pay-popup-desc">日系胶片 · 精选模板 · 永久使用</text>
-        </view>
-        <view class="pay-popup-actions">
-          <view class="pay-popup-cancel" @click="onCancelPay">取消</view>
-          <view class="neu-btn-brand pay-popup-confirm" @click="onConfirmPay">确认支付</view>
-        </view>
       </view>
     </view>
   </view>
@@ -160,54 +129,128 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { useTemplate } from '@/composables/useTemplate'
+import {
+  exchangeTemplate,
+  redeemCode,
+  getOwnedTemplates,
+  getTemplatePrices,
+  getPointsBalance,
+} from '@/api/points'
+import { ApiError } from '@/utils/request'
+
+const { loadTemplate } = useTemplate()
+
+const templateId = ref('')
+const templateName = ref('精选模板')
+const templateDesc = ref('付费精选模板，永久解锁')
+const coverImage = ref('https://picsum.photos/seed/1499327/800/600')
 
 const unlocked = ref(false)
-const showPayPopup = ref(false)
+const priceCredits = ref(100)
+const currentBalance = ref(0)
+const exchanging = ref(false)
+
+onLoad((options) => {
+  const id = options?.templateId
+  if (id) {
+    templateId.value = id
+    const tpl = loadTemplate(id)
+    if (tpl) {
+      templateName.value = tpl.meta.name
+      templateDesc.value = tpl.meta.description || '付费精选模板，永久解锁'
+      coverImage.value = tpl.meta.cover || `https://picsum.photos/seed/${id}/800/600`
+    }
+  }
+  // 加载价格、余额、已拥有状态
+  loadUnlockInfo()
+})
+
+async function loadUnlockInfo() {
+  try {
+    const [prices, balance, owned] = await Promise.all([
+      getTemplatePrices().catch(() => null),
+      getPointsBalance().catch(() => null),
+      getOwnedTemplates().catch(() => null),
+    ])
+    if (prices) {
+      const p = prices.prices.find(x => x.templateId === templateId.value)
+      if (p) priceCredits.value = p.priceCredits
+    }
+    if (balance) {
+      currentBalance.value = balance.balance
+    }
+    if (owned) {
+      if (owned.templateIds.includes(templateId.value)) {
+        unlocked.value = true
+      }
+    }
+  } catch {
+    // 静默：保持默认值
+  }
+}
 
 const back = () => uni.navigateBack()
-
-const onWatchAd = () => {
-  uni.showToast({ title: '广告播放中…', icon: 'none' })
-  setTimeout(() => {
-    unlocked.value = true
-    uni.showToast({ title: '解锁成功', icon: 'success' })
-  }, 1200)
-}
-
-const onShare = () => {
-  uni.showToast({ title: '分享成功 +1', icon: 'none' })
-}
-
-const onGoCapture = () => {
-  uni.navigateTo({ url: '/pages/capture/index' })
-}
 
 const onInputCode = () => {
   uni.showModal({
     title: '输入兑换码',
     editable: true,
     placeholderText: '请输入兑换码',
-    success: (res) => {
-      if (res.confirm && res.content) {
-        unlocked.value = true
-        uni.showToast({ title: '解锁成功', icon: 'success' })
+    success: async (res) => {
+      if (!res.confirm || !res.content) return
+      const code = res.content.trim()
+      if (!code) return
+      uni.showLoading({ title: '兑换中…' })
+      try {
+        const result = await redeemCode(code)
+        uni.hideLoading()
+        uni.showToast({
+          title: `获得 ${result.rewardPoints} 积分，余额 ${result.balance}`,
+          icon: 'none',
+          duration: 2500,
+        })
+        currentBalance.value = result.balance
+      } catch (err) {
+        uni.hideLoading()
+        const msg = err instanceof ApiError ? err.message : '兑换失败'
+        uni.showToast({ title: msg, icon: 'none' })
       }
-    }
+    },
   })
 }
 
-const onPurchase = () => {
-  showPayPopup.value = true
-}
-
-const onConfirmPay = () => {
-  showPayPopup.value = false
-  unlocked.value = true
-  uni.showToast({ title: '解锁成功', icon: 'success' })
-}
-
-const onCancelPay = () => {
-  showPayPopup.value = false
+const onPurchase = async () => {
+  if (exchanging.value || unlocked.value) return
+  if (!templateId.value) {
+    uni.showToast({ title: '模板信息缺失', icon: 'none' })
+    return
+  }
+  if (currentBalance.value < priceCredits.value) {
+    uni.showToast({
+      title: `积分不足，还差 ${priceCredits.value - currentBalance.value} 积分`,
+      icon: 'none',
+      duration: 2500,
+    })
+    return
+  }
+  uni.showLoading({ title: '兑换中…' })
+  try {
+    const result = await exchangeTemplate(templateId.value)
+    uni.hideLoading()
+    if (result.success) {
+      unlocked.value = true
+      currentBalance.value = result.balance
+      uni.showToast({ title: '解锁成功', icon: 'success' })
+    } else {
+      uni.showToast({ title: '兑换失败', icon: 'none' })
+    }
+  } catch (err) {
+    uni.hideLoading()
+    const msg = err instanceof ApiError ? err.message : '兑换失败'
+    uni.showToast({ title: msg, icon: 'none' })
+  }
 }
 
 const onStartUse = () => {
@@ -416,24 +459,7 @@ const onStartUse = () => {
   margin-top: 4rpx;
 }
 
-.progress-row {
-  margin-bottom: 24rpx;
-}
-
 /* Buttons */
-.btn-brand-sm {
-  background-color: var(--color-brand);
-  color: var(--color-text-inverse);
-  border: none;
-  border-radius: 16rpx;
-  box-shadow: var(--shadow-convex-brand);
-  padding: 16rpx 32rpx;
-  font-size: 26rpx;
-  font-weight: 500;
-  flex-shrink: 0;
-  line-height: 1;
-}
-
 .btn-outline-sm {
   border: 2rpx solid var(--color-divider);
   color: var(--color-text-primary);
@@ -443,6 +469,16 @@ const onStartUse = () => {
   font-weight: 500;
   text-align: center;
   line-height: 1;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+  border-style: dashed;
+  color: var(--color-text-tertiary);
+}
+
+.btn-loading {
+  opacity: 0.6;
 }
 
 /* Bottom note */
@@ -506,80 +542,5 @@ const onStartUse = () => {
 
 .success-btn {
   width: 100%;
-}
-
-/* ===== 付费弹窗 ===== */
-.pay-popup-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.pay-popup {
-  width: 600rpx;
-  background-color: var(--color-surface);
-  border-radius: 28rpx;
-  padding: 48rpx 40rpx 40rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-shadow: var(--shadow-float);
-}
-
-.pay-popup-title {
-  font-family: 'Noto Serif SC', serif;
-  font-size: 34rpx;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 32rpx;
-}
-
-.pay-popup-price-row {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 40rpx;
-}
-
-.pay-popup-price {
-  font-size: 72rpx;
-  font-weight: 700;
-  color: var(--color-brand);
-  line-height: 1;
-  margin-bottom: 12rpx;
-}
-
-.pay-popup-desc {
-  font-size: 24rpx;
-  color: var(--color-text-tertiary);
-}
-
-.pay-popup-actions {
-  display: flex;
-  gap: 24rpx;
-  width: 100%;
-}
-
-.pay-popup-cancel {
-  flex: 1;
-  text-align: center;
-  padding: 28rpx 0;
-  border-radius: 16rpx;
-  border: 2rpx solid var(--color-divider);
-  color: var(--color-text-secondary);
-  font-size: 30rpx;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.pay-popup-confirm {
-  flex: 1;
 }
 </style>

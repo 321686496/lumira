@@ -1,43 +1,36 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/db/database_provider.dart';
-import '../../../core/db/dao/api_cache_dao.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/network/api_error.dart';
 import 'invite_models.dart';
 
-/// 邀请 Repository 抽象
+/// 邀请 Repository
+///
+/// 复用 [invite_models.dart] 中已定义的请求/响应模型：
+/// - [InviteCode]（POST /invite/generate）
+/// - [ActivateInviteRequest] / [ActivateInviteResponse]（POST /invite/activate）
+/// - [InviteStats]（GET /invite/stats，旧契约：currentTier / nextTier / unlockedRewards）
+///
+/// 新增 [InvitePointsStats] 用于积分体系下的新契约：
+/// `{ totalInvites, rewardPointsPerInvite, totalEarnedFromInvite, currentBalance }`
 abstract class InviteRepository {
   /// POST /invite/generate
-  Future<InviteCode> generateCode();
+  Future<InviteCode> generate();
 
   /// POST /invite/activate
   Future<ActivateInviteResponse> activate(ActivateInviteRequest req);
 
-  /// GET /invite/stats
-  ///
-  /// 离线回退：网络失败时返回上次缓存的 stats
-  Future<InviteStats> getStats();
+  /// GET /invite/stats（旧契约，供 ProfileInvitePage 使用）
+  Future<InviteStats> stats();
 }
 
-/// 远程实现（getStats 离线回退缓存）
 class RemoteInviteRepository implements InviteRepository {
   final ApiClient _api;
-  final ApiCacheDao _cache;
 
-  static const _kCacheKeyStats = 'invite_stats';
-
-  RemoteInviteRepository({
-    required ApiClient api,
-    required ApiCacheDao cache,
-  })  : _api = api,
-        _cache = cache;
+  RemoteInviteRepository(this._api);
 
   @override
-  Future<InviteCode> generateCode() async {
+  Future<InviteCode> generate() {
     return _api.post(
       '/invite/generate',
       fromJson: (j) => InviteCode.fromJson(j as Map<String, dynamic>),
@@ -45,45 +38,90 @@ class RemoteInviteRepository implements InviteRepository {
   }
 
   @override
-  Future<ActivateInviteResponse> activate(ActivateInviteRequest req) async {
+  Future<ActivateInviteResponse> activate(ActivateInviteRequest req) {
     return _api.post(
       '/invite/activate',
       body: req.toJson(),
-      fromJson: (j) => ActivateInviteResponse.fromJson(j as Map<String, dynamic>),
+      fromJson: (j) =>
+          ActivateInviteResponse.fromJson(j as Map<String, dynamic>),
     );
   }
 
   @override
-  Future<InviteStats> getStats() async {
-    try {
-      final stats = await _api.get(
-        '/invite/stats',
-        fromJson: (j) => InviteStats.fromJson(j as Map<String, dynamic>),
-      );
-      // 缓存最新结果
-      await _cache.save(_kCacheKeyStats, jsonEncode(stats.toJson()));
-      return stats;
-    } on ApiException catch (e) {
-      if (e.isNetworkError) {
-        final cached = await _cache.load(_kCacheKeyStats);
-        if (cached != null) {
-          return InviteStats.fromJson(jsonDecode(cached) as Map<String, dynamic>);
-        }
-      }
-      rethrow;
-    }
+  Future<InviteStats> stats() {
+    return _api.get(
+      '/invite/stats',
+      fromJson: (j) => InviteStats.fromJson(j as Map<String, dynamic>),
+    );
   }
 }
 
-/// 全局 Provider
 final inviteRepositoryProvider = FutureProvider<InviteRepository>((ref) async {
   final api = await ref.watch(apiClientProvider.future);
-  final cache = await ref.watch(apiCacheDaoProvider.future);
-  return RemoteInviteRepository(api: api, cache: cache);
+  return RemoteInviteRepository(api);
 });
 
-/// InviteStats FutureProvider（带自动刷新）
+/// 旧契约的邀请统计 Provider（供 ProfileInvitePage 使用）
+///
+/// 包装 [inviteRepositoryProvider]，调用 `stats()` 获取 [InviteStats]。
 final inviteStatsProvider = FutureProvider<InviteStats>((ref) async {
   final repo = await ref.watch(inviteRepositoryProvider.future);
-  return repo.getStats();
+  return repo.stats();
+});
+
+/// 积分体系下的邀请统计（新契约）
+///
+/// 后端：`GET /invite/stats` 返回
+/// `{ totalInvites, rewardPointsPerInvite, totalEarnedFromInvite, currentBalance }`
+@immutable
+class InvitePointsStats {
+  final int totalInvites;
+  final int rewardPointsPerInvite;
+  final int totalEarnedFromInvite;
+  final int currentBalance;
+
+  const InvitePointsStats({
+    required this.totalInvites,
+    required this.rewardPointsPerInvite,
+    required this.totalEarnedFromInvite,
+    required this.currentBalance,
+  });
+
+  factory InvitePointsStats.fromJson(Map<String, dynamic> j) =>
+      InvitePointsStats(
+        totalInvites: (j['totalInvites'] as num?)?.toInt() ?? 0,
+        rewardPointsPerInvite:
+            (j['rewardPointsPerInvite'] as num?)?.toInt() ?? 0,
+        totalEarnedFromInvite:
+            (j['totalEarnedFromInvite'] as num?)?.toInt() ?? 0,
+        currentBalance: (j['currentBalance'] as num?)?.toInt() ?? 0,
+      );
+}
+
+/// 积分体系邀请统计 Repository（新契约）
+///
+/// 与 [InviteRepository] 分离，避免与旧 [InviteStats] 模型冲突。
+abstract class InvitePointsRepository {
+  /// GET /invite/stats（新契约）
+  Future<InvitePointsStats> pointsStats();
+}
+
+class RemoteInvitePointsRepository implements InvitePointsRepository {
+  final ApiClient _api;
+
+  RemoteInvitePointsRepository(this._api);
+
+  @override
+  Future<InvitePointsStats> pointsStats() {
+    return _api.get(
+      '/invite/stats',
+      fromJson: (j) => InvitePointsStats.fromJson(j as Map<String, dynamic>),
+    );
+  }
+}
+
+final invitePointsRepositoryProvider =
+    FutureProvider<InvitePointsRepository>((ref) async {
+  final api = await ref.watch(apiClientProvider.future);
+  return RemoteInvitePointsRepository(api);
 });

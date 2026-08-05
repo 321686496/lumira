@@ -170,7 +170,7 @@
 
     <!-- Fixed Bottom CTA -->
     <view v-if="template" class="fixed-cta">
-      <view class="lumira-btn-primary" @click="goCapture">套用此模板拍摄</view>
+      <view class="lumira-btn-primary" @click="goCapture">{{ isLocked ? '解锁后拍摄' : '套用此模板拍摄' }}</view>
     </view>
   </view>
 </template>
@@ -180,6 +180,7 @@ import { ref, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { useTemplate } from '@/composables/useTemplate'
 import { useTagManager } from '@/composables/useTagManager'
+import { getOwnedTemplates } from '@/api/points'
 import CompositionOverlay from '@/components/CompositionOverlay.vue'
 import PoseSilhouette from '@/components/PoseSilhouette.vue'
 import TagSelector from '@/components/TagSelector.vue'
@@ -190,11 +191,16 @@ const template = ref<PhotoTemplate | null>(null)
 
 const { getTagsByIds, updateTemplateTags, createTag } = useTagManager()
 
+// 已拥有模板 id 列表（用于付费模板门禁判断）
+const ownedTemplateIds = ref<string[]>([])
+
 // 刷新触发器：onShow 时自增，触发 userTags 重算
 // （getCustomTemplates / getTagsByIds 读 storage，本身非响应式）
 const refreshTick = ref(0)
 onShow(() => {
   refreshTick.value++
+  // onShow 时刷新已拥有列表（解锁后返回能立即生效）
+  loadOwnedTemplates()
 })
 
 // 用户自定义标签（基于 meta.tagIds 解析）
@@ -253,7 +259,19 @@ onLoad((options) => {
   if (id) {
     template.value = loadTemplate(id)
   }
+  // 加载已拥有模板列表（用于付费模板门禁）
+  loadOwnedTemplates()
 })
+
+async function loadOwnedTemplates() {
+  try {
+    const res = await getOwnedTemplates()
+    ownedTemplateIds.value = res.templateIds || []
+  } catch {
+    // 静默失败：未登录或网络异常时不阻塞预览
+    ownedTemplateIds.value = []
+  }
+}
 
 const coverImage = computed(() => {
   const t = template.value
@@ -410,8 +428,24 @@ const unlockText = computed(() => {
   return price === 0 ? '免费' : `精选 ¥${price}`
 })
 
+/** 当前模板是否被门禁（付费且未拥有） */
+const isLocked = computed(() => {
+  const t = template.value
+  if (!t) return false
+  if (t.meta.price <= 0) return false
+  return !ownedTemplateIds.value.includes(t.meta.id)
+})
+
 const back = () => uni.navigateBack()
-const goCapture = () => uni.navigateTo({ url: `/pages/capture/index?templateId=${template.value!.meta.id}` })
+const goCapture = () => {
+  if (!template.value) return
+  // 门禁：付费模板未拥有 → 跳转解锁页
+  if (isLocked.value) {
+    uni.navigateTo({ url: `/pages/templates/unlock?templateId=${template.value.meta.id}` })
+    return
+  }
+  uni.navigateTo({ url: `/pages/capture/index?templateId=${template.value.meta.id}` })
+}
 </script>
 
 <style lang="scss" scoped>

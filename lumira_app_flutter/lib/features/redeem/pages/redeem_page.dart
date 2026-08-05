@@ -64,7 +64,7 @@ class _RedeemPageState extends ConsumerState<RedeemPage> {
       if (mounted) {
         _showThemedSnackBar(
           tokens,
-          '已兑换：${resp.campaignName}（${resp.rewardItems.length} 项奖励）',
+          '已兑换：${resp.campaignName}，获得 ${resp.rewardPoints} 积分，当前余额 ${resp.balance}',
           isSuccess: true,
         );
         _codeCtrl.clear();

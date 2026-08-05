@@ -45,7 +45,7 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
     final toastContext = context;
     try {
       final repo = await ref.read(inviteRepositoryProvider.future);
-      final code = await repo.generateCode();
+      final code = await repo.generate();
       if (!mounted) return;
       LumiraToast.show(toastContext, '邀请码已生成：${code.code}', duration: const Duration(milliseconds: 1500));
     } on ApiException catch (e) {
