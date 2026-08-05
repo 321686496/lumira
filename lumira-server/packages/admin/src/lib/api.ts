@@ -9,6 +9,9 @@ import type {
   CreateBatchResponse,
   CreateBatchInput,
   RewardListResponse,
+  QuestionnaireListResponse,
+  QuestionnaireHistoryResponse,
+  QuestionnaireStats,
 } from '@/types/admin';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
@@ -74,4 +77,19 @@ export const api = {
     const qs = search.toString();
     return adminFetch<RewardListResponse>(`/rewards${qs ? `?${qs}` : ''}`);
   },
+
+  getQuestionnaire: (params: { page?: number; pageSize?: number; deviceId?: string } = {}) => {
+    const search = new URLSearchParams();
+    if (params.page) search.set('page', String(params.page));
+    if (params.pageSize) search.set('pageSize', String(params.pageSize));
+    if (params.deviceId) search.set('deviceId', params.deviceId);
+    const qs = search.toString();
+    return adminFetch<QuestionnaireListResponse>(`/questionnaire${qs ? `?${qs}` : ''}`);
+  },
+
+  getQuestionnaireHistory: (deviceId: string) =>
+    adminFetch<QuestionnaireHistoryResponse>(`/questionnaire/${deviceId}`),
+
+  getQuestionnaireStats: () =>
+    adminFetch<QuestionnaireStats>('/questionnaire/stats'),
 };
