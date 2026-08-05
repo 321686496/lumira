@@ -148,6 +148,12 @@ class Tables {
   static const String colCollectionPhotoPhotoId = 'photo_id';
   static const String colCollectionPhotoSortOrder = 'sort_order';
   static const String colCollectionPhotoAddedAt = 'added_at';
+
+  // === questionnaire 表（v12 迁移新增，单行表 id=1） ===
+  static const String questionnaire = 'questionnaire';
+  static const String colAnswersJson = 'answers_json';
+  static const String colSubmittedAt = 'submitted_at';
+  static const String colSyncedAt = 'synced_at';
 }
 
 class ChallengeHistoryTable {

@@ -16,7 +16,7 @@ import 'dao/settings_dao.dart';
 import '../../core/auth/auth_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 11;
+const int _kDbVersion = 12;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -277,6 +277,16 @@ Future<void> _onCreate(Database db, int version) async {
   ''');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_collection_photos_collection ON ${Tables.tableCollectionPhotos}(${Tables.colCollectionPhotoCollectionId})');
 
+  // === v12: questionnaire 表 ===
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.questionnaire} (
+      ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
+      ${Tables.colAnswersJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colSubmittedAt} INTEGER,
+      ${Tables.colSyncedAt} INTEGER
+    )
+  ''');
+
   // === 种子化预置数据（修复：fresh install 时不触发 _onUpgrade，需在 _onCreate 中显式调用 seeder） ===
   // _onUpgrade 仅在 oldVersion < 4 时调用 BuiltinDataSeeder.seedAll，
   // 但 fresh install 直接创建 v10 数据库不会触发 _onUpgrade，导致模板表为空。
@@ -494,6 +504,21 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await BuiltinDataSeeder.reseedBuiltinCovers(db);
     } catch (e) {
       debugPrint('v11 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 12) {
+    try {
+      // v12: 新增 questionnaire 表（新用户偏好问卷）
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.questionnaire} (
+          ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
+          ${Tables.colAnswersJson} TEXT NOT NULL DEFAULT '{}',
+          ${Tables.colSubmittedAt} INTEGER,
+          ${Tables.colSyncedAt} INTEGER
+        )
+      ''');
+    } catch (e) {
+      debugPrint('v12 migration failed (silent fallback): $e');
     }
   }
 }
