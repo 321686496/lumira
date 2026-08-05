@@ -11,6 +11,7 @@ import 'package:lumira_app_flutter/core/db/dao/scenes_dao.dart';
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
 import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/features/home/services/recommendation_service.dart';
+import 'package:lumira_app_flutter/features/onboarding/data/questionnaire_dao.dart';
 
 /// RecommendationService 单元测试
 ///
@@ -26,6 +27,7 @@ void main() {
   late TemplatesDao templatesDao;
   late CompositionKitsDao kitsDao;
   late GrowthDao growthDao;
+  late QuestionnaireDao questionnaireDao;
   late RecommendationService service;
 
   setUpAll(() {
@@ -42,12 +44,14 @@ void main() {
     templatesDao = TemplatesDao(db);
     kitsDao = CompositionKitsDao(db);
     growthDao = GrowthDao(db);
+    questionnaireDao = QuestionnaireDao(db);
     service = RecommendationService(
       galleryDao: galleryDao,
       scenesDao: scenesDao,
       templatesDao: templatesDao,
       kitsDao: kitsDao,
       growthDao: growthDao,
+      questionnaireDao: questionnaireDao,
     );
   });
 
@@ -332,6 +336,15 @@ Future<void> _onCreate(Database db, int version) async {
   ''');
   // composition_kits
   await db.execute(CompositionKitsTable.createSql);
+  // questionnaire（单行表，id=1；与 database_provider v12 迁移保持一致）
+  await db.execute('''
+    CREATE TABLE ${Tables.questionnaire} (
+      ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
+      ${Tables.colAnswersJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colSubmittedAt} INTEGER,
+      ${Tables.colSyncedAt} INTEGER
+    )
+  ''');
   // user_progress (单行，id=1，默认 total_photos=0)
   await db.execute('''
     CREATE TABLE ${Tables.userProgress} (

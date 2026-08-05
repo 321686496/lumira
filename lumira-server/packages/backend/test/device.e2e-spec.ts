@@ -46,10 +46,10 @@ describe('DeviceController (e2e)', () => {
     expect(res.body.isNewDevice).toBe(false);
   });
 
-  it('POST /api/v1/device/register — should reject invalid UUID', async () => {
+  it('POST /api/v1/device/register — should reject deviceId shorter than 8 chars', async () => {
     await request(app.getHttpServer())
       .post('/api/v1/device/register')
-      .send({ deviceId: 'not-a-uuid' })
+      .send({ deviceId: 'short' })
       .expect(400);
   });
 });
