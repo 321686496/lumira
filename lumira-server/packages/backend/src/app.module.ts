@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { DatabaseModule } from './database/database.module';
 import { DeviceModule } from './modules/device/device.module';
+import { ProfileModule } from './modules/profile/profile.module';
 import { InviteModule } from './modules/invite/invite.module';
 import { RedeemModule } from './modules/redeem/redeem.module';
 import { RewardsModule } from './modules/rewards/rewards.module';
@@ -16,7 +17,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { GlobalValidationPipe } from './common/pipes/global-validation.pipe';
 
 @Module({
-  imports: [DatabaseModule, DeviceModule, InviteModule, RedeemModule, RewardsModule, AdminModule, WeatherModule, QuestionnaireModule, TemplatesModule],
+  imports: [DatabaseModule, DeviceModule, ProfileModule, InviteModule, RedeemModule, RewardsModule, AdminModule, WeatherModule, QuestionnaireModule, TemplatesModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
