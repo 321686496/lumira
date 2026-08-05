@@ -34,3 +34,9 @@ String formatAbsoluteTime(int timestampMs) {
   final min = dt.minute.toString().padLeft(2, '0');
   return '$y-$m-$d $h:$min';
 }
+
+/// 格式化日期为 "M月D日"（探店打卡等场景）
+String formatDateOnly(int timestampMs) {
+  final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs);
+  return '${dt.month}月${dt.day}日';
+}
