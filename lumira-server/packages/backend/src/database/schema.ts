@@ -46,6 +46,7 @@ export const redemptionCodeBatches = sqliteTable('redemption_code_batches', {
   maxUsesPerCode: integer('max_uses_per_code').notNull().default(1),
   totalGenerated: integer('total_generated').notNull(),
   totalUsed: integer('total_used').notNull().default(0),
+  rewardPoints: integer('reward_points').notNull().default(0),
   validFrom: integer('valid_from'),
   validUntil: integer('valid_until'),
   isActive: integer('is_active').notNull().default(1),
@@ -73,4 +74,46 @@ export const questionnaireRecords = sqliteTable('questionnaire_records', {
   answersJson: text('answers_json').notNull(),
   submittedAt: integer('submitted_at').notNull(),
   clientIp: text('client_ip'),
+});
+
+export const userPoints = sqliteTable('user_points', {
+  deviceId: text('device_id').primaryKey().references(() => devices.deviceId),
+  balance: integer('balance').notNull().default(0),
+  totalEarned: integer('total_earned').notNull().default(0),
+  totalSpent: integer('total_spent').notNull().default(0),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const pointTransactions = sqliteTable('point_transactions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  deviceId: text('device_id').notNull().references(() => devices.deviceId),
+  delta: integer('delta').notNull(),
+  type: text('type').notNull(),
+  refId: text('ref_id'),
+  createdAt: integer('created_at').notNull(),
+});
+
+export const ownedTemplates = sqliteTable('owned_templates', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  deviceId: text('device_id').notNull().references(() => devices.deviceId),
+  templateId: text('template_id').notNull(),
+  source: text('source').notNull(),
+  sourceDetail: text('source_detail'),
+  unlockedAt: integer('unlocked_at').notNull(),
+});
+
+export const templatePrices = sqliteTable('template_prices', {
+  templateId: text('template_id').primaryKey(),
+  priceCredits: integer('price_credits').notNull(),
+  isActive: integer('is_active').notNull().default(1),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const dailySignInRecords = sqliteTable('daily_sign_in_records', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  deviceId: text('device_id').notNull().references(() => devices.deviceId),
+  signInDate: integer('sign_in_date').notNull(),
+  dayIndex: integer('day_index').notNull(),
+  pointsEarned: integer('points_earned').notNull(),
+  createdAt: integer('created_at').notNull(),
 });

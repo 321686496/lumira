@@ -87,7 +87,7 @@ export class AdminService {
   async createBatch(dto: {
     campaignName: string;
     codes: string[];
-    rewardTier?: number;
+    rewardTier: number;
     rewardPoints?: number;
     maxUsesPerCode: number;
     validFrom?: number;
@@ -102,7 +102,7 @@ export class AdminService {
       // so we use the synchronous .all() method on the QueryPromise instead of awaiting.
       const result = tx.insert(redemptionCodeBatches).values({
         campaignName: dto.campaignName,
-        rewardTier: dto.rewardTier ?? null,
+        rewardTier: dto.rewardTier,
         rewardPoints: dto.rewardPoints ?? 0,
         maxUsesPerCode: dto.maxUsesPerCode,
         totalGenerated: dto.codes.length,
