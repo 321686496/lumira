@@ -21,6 +21,7 @@ import '../features/gallery/pages/gallery_page.dart';
 import '../features/gallery/pages/gallery_stats_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/inspiration/pages/inspiration_page.dart';
+import '../features/onboarding/pages/questionnaire_page.dart';
 import '../features/academy/pages/academy_assignment_page.dart';
 import '../features/academy/pages/academy_detail_page.dart';
 import '../features/academy/pages/academy_knowledge_page.dart';
@@ -43,6 +44,7 @@ import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
+import '../features/points/pages/points_wallet_page.dart';
 import '../features/redeem/pages/redeem_page.dart';
 import '../features/rewards/pages/rewards_page.dart';
 import '../features/scenes/pages/scenes_page.dart';
@@ -70,6 +72,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.splash,
         name: 'splash',
         builder: (context, state) => const SplashPage(),
+      ),
+      GoRoute(
+        path: RouteNames.onboarding,
+        name: 'onboarding',
+        builder: (context, state) => QuestionnairePage(
+          fromSettings: state.queryParams[RouteNames.paramFrom] == 'settings',
+        ),
       ),
       GoRoute(
         path: RouteNames.home,
@@ -425,7 +434,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.invite,
         name: 'invite',
-        builder: (context, state) => const InvitePage(),
+        builder: (context, state) => const ProfileInvitePage(),
       ),
 
       // === 场景 ===

@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/auth/auth_state.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -68,6 +69,23 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     // failed 时不跳转，留在 splash 显示重试按钮
     if (auth.status == AuthStatus.failed) return;
     _navigated = true;
+    // 新设备首次注册且未填问卷 → 跳问卷页；否则跳首页
+    _routeAfterSplash(auth.isNewDevice);
+  }
+
+  Future<void> _routeAfterSplash(bool isNewDevice) async {
+    if (isNewDevice) {
+      try {
+        final dao = await ref.read(questionnaireDaoProvider.future);
+        final isCompleted = await dao.isCompleted();
+        if (!isCompleted) {
+          context.go(RouteNames.onboarding);
+          return;
+        }
+      } catch (_) {
+        // DAO 失败不阻塞，回退到 home
+      }
+    }
     context.go(RouteNames.home);
   }
 
