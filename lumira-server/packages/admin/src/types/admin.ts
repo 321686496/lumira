@@ -82,3 +82,39 @@ export interface CreateBatchInput {
   validFrom?: number;
   validUntil?: number;
 }
+
+// 问卷数据类型（与 @lumira/shared 一致，admin 端单独定义避免跨包依赖）
+export interface QuestionnaireRecord {
+  id: number;
+  deviceId: string;
+  answersJson: string;
+  submittedAt: number;
+  clientIp: string | null;
+}
+
+export interface QuestionnaireListItem extends QuestionnaireRecord {
+  deviceAlias: string | null;
+}
+
+export interface QuestionnaireListResponse {
+  data: QuestionnaireListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface QuestionnaireHistoryResponse {
+  data: QuestionnaireRecord[];
+  total: number;
+}
+
+export interface QuestionnaireStats {
+  totalRespondents: number;
+  source: Record<string, number>;
+  favorite_categories: Record<string, number>;
+  pain_points: Record<string, number>;
+  skill_level: Record<string, number>;
+  expectations: Record<string, number>;
+  common_scenes: Record<string, number>;
+  shoot_frequency: Record<string, number>;
+}
