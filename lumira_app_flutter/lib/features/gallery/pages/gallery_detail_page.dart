@@ -229,6 +229,16 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     setState(() => _isComparing = !_isComparing);
   }
 
+  /// 记录探店：跳转到探店新增页，预填当前照片
+  Future<void> _onCheckin() async {
+    final photo = _photo;
+    if (photo == null) return;
+    await GoRouter.of(context).push(RouteNames.build(
+      RouteNames.checkinEdit,
+      {RouteNames.paramPhotoId: photo.id},
+    ));
+  }
+
   /// 分享当前照片：优先分享本地文件；网络图（dataUrl 以 http 开头）暂不支持。
   Future<void> _onShare() async {
     final photo = _photo;
@@ -377,6 +387,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
           if (_photo != null)
             _MoreAction(
               tokens: tokens,
+              onCheckin: _onCheckin,
               onShare: _onShare,
               onDelete: _onDelete,
             ),
@@ -521,15 +532,17 @@ class _CompareAction extends StatelessWidget {
   }
 }
 
-/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"分享照片" / "删除照片"操作。
+/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"记录探店" / "分享照片" / "删除照片"操作。
 class _MoreAction extends StatelessWidget {
   const _MoreAction({
     required this.tokens,
+    required this.onCheckin,
     required this.onShare,
     required this.onDelete,
   });
 
   final ThemeTokens tokens;
+  final Future<void> Function() onCheckin;
   final Future<void> Function() onShare;
   final Future<void> Function() onDelete;
 
@@ -554,6 +567,14 @@ class _MoreAction extends StatelessWidget {
         children: [
           _MoreSheetOption(
             tokens: tokens,
+            icon: Icons.place_outlined,
+            label: '记录探店',
+            color: tokens.brand,
+            onTap: () => Navigator.of(ctx).pop('checkin'),
+          ),
+          Divider(height: 1, color: tokens.divider),
+          _MoreSheetOption(
+            tokens: tokens,
             icon: Icons.ios_share_outlined,
             label: '分享照片',
             onTap: () => Navigator.of(ctx).pop('share'),
@@ -571,7 +592,9 @@ class _MoreAction extends StatelessWidget {
       ),
     );
     if (result == null) return;
-    if (result == 'share') {
+    if (result == 'checkin') {
+      await onCheckin();
+    } else if (result == 'share') {
       await onShare();
     } else if (result == 'delete') {
       await onDelete();
@@ -587,6 +610,7 @@ class _MoreSheetOption extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.isDanger = false,
+    this.color,
   });
 
   final ThemeTokens tokens;
@@ -594,10 +618,12 @@ class _MoreSheetOption extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool isDanger;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final color = isDanger ? tokens.danger : tokens.textPrimary;
+    final effectiveColor =
+        color ?? (isDanger ? tokens.danger : tokens.textPrimary);
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -605,13 +631,13 @@ class _MoreSheetOption extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: color),
+            Icon(icon, size: 20, color: effectiveColor),
             const SizedBox(width: 12),
             Text(
               label,
               style: TextStyle(
                 fontSize: 15,
-                color: color,
+                color: effectiveColor,
                 fontWeight: FontWeight.w500,
               ),
             ),

@@ -15,6 +15,9 @@ import '../features/challenge/pages/challenge_confirm_page.dart';
 import '../features/challenge/pages/challenge_detail_page.dart';
 import '../features/challenge/pages/challenge_history_page.dart';
 import '../features/challenge/pages/challenge_page.dart';
+import '../features/checkin/pages/checkin_detail_page.dart';
+import '../features/checkin/pages/checkin_edit_page.dart';
+import '../features/checkin/pages/checkin_list_page.dart';
 import '../features/gallery/pages/gallery_detail_page.dart';
 import '../features/gallery/pages/gallery_diary_page.dart';
 import '../features/gallery/pages/gallery_edit_page.dart';
@@ -301,6 +304,28 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.galleryMonthlyDigest,
         name: 'galleryMonthlyDigest',
         builder: (context, state) => const GalleryMonthlyDigestPage(),
+      ),
+
+      // === 探店打卡 ===
+      GoRoute(
+        path: RouteNames.checkinList,
+        name: 'checkinList',
+        builder: (context, state) => const CheckinListPage(),
+      ),
+      GoRoute(
+        path: RouteNames.checkinDetail,
+        name: 'checkinDetail',
+        builder: (context, state) => CheckinDetailPage(
+          checkinId: state.queryParams[RouteNames.paramCheckinId],
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.checkinEdit,
+        name: 'checkinEdit',
+        builder: (context, state) => CheckinEditPage(
+          checkinId: state.queryParams[RouteNames.paramCheckinId],
+          photoId: state.queryParams[RouteNames.paramPhotoId],
+        ),
       ),
 
       // === 个人中心 ===

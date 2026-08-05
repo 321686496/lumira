@@ -35,22 +35,6 @@ class OutfitPhoto {
   final String date;
 }
 
-/// 探店打卡条目
-class CheckinEntry {
-  const CheckinEntry({
-    required this.title,
-    required this.desc,
-    required this.icon,
-    required this.iconColor,
-    required this.iconBgColor,
-  });
-  final String title;
-  final String desc;
-  final IconData icon;
-  final Color iconColor;
-  final Color iconBgColor;
-}
-
 /// 场景标签信息（对应 uni-app getSceneTagInfo）
 class SceneTagInfo {
   const SceneTagInfo({required this.tag, required this.tagCls});
@@ -110,25 +94,6 @@ class InspirationMockData {
 
   /// 穿搭日记连续打卡天数
   static const int outfitStreakDays = 7;
-
-  /// 探店打卡总数
-  static const int checkinTotalCount = 23;
-
-  /// 探店打卡条目（3 条，对应 uni-app checkins ref）
-  static const List<CheckinEntry> checkins = [
-    CheckinEntry(
-      title: 'Manner Coffee 武康路店', desc: '2天前',
-      icon: Icons.coffee_outlined, iconColor: Color(0xFFB8860B), iconBgColor: Color(0xFFFFF5E6),
-    ),
-    CheckinEntry(
-      title: '野兽派花园', desc: '5天前',
-      icon: Icons.local_florist_outlined, iconColor: Color(0xFFC47C7C), iconBgColor: Color(0xFFFFF0F0),
-    ),
-    CheckinEntry(
-      title: '上海当代艺术博物馆', desc: '1周前',
-      icon: Icons.account_balance_outlined, iconColor: Color(0xFF6B5E4E), iconBgColor: Color(0xFFEDE8E0),
-    ),
-  ];
 
   /// 推荐场景（4 条，对应 uni-app scenes computed：customScenes.slice(0,4) + SCENE_PRESETS.slice(0,4)，取前 4）
   /// uni-app 无自定义场景时取前 4 个预设：cafe-window / library-quiet / home-cozy / sunset-silhouette
