@@ -20,10 +20,10 @@ class GrowthDao {
       final xp = (rows.first[Tables.colXp] as num?)?.toInt() ?? 0;
       if (xp > 0) return xp;
     }
-    // 降级：challenge_history 求和
+    // 降级：challenge_history 求和（注意：状态值与 ChallengeStatus.name 对齐 = 'done'）
     final sumRows = await _db.rawQuery(
       'SELECT COALESCE(SUM(${ChallengeHistoryTable.colRewardXp}), 0) AS s FROM ${ChallengeHistoryTable.name} WHERE ${ChallengeHistoryTable.colStatus} = ?',
-      ['completed'],
+      ['done'],
     );
     return Sqflite.firstIntValue(sumRows) ?? 0;
   }
@@ -102,7 +102,7 @@ class GrowthDao {
              ${ChallengeHistoryTable.colCompletedAt} AS ts
       FROM ${ChallengeHistoryTable.name}
       WHERE ${ChallengeHistoryTable.colStatus} = ? AND ${ChallengeHistoryTable.colCompletedAt} IS NOT NULL
-    ''', ['completed']);
+    ''', ['done']);
 
     final galleryRows = await _db.rawQuery('''
       SELECT ${Tables.colId} AS eid, ${Tables.colCreatedAt} AS ts
@@ -147,7 +147,7 @@ class GrowthDao {
       FROM ${Tables.galleryItems}
       WHERE ${Tables.colCreatedAt} IS NOT NULL AND ${Tables.colCreatedAt} > 0
       GROUP BY d
-    ''', ['completed']);
+    ''', ['done']);
     final result = <String, int>{};
     for (final r in rows) {
       final d = r['d'] as String?;

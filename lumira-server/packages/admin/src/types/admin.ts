@@ -118,3 +118,88 @@ export interface QuestionnaireStats {
   common_scenes: Record<string, number>;
   shoot_frequency: Record<string, number>;
 }
+
+// ===== 模板与分类管理（后端动态模板上传） =====
+// 注：与 @lumira/shared 的 RemoteTemplate/TemplateCategory 类型对齐，
+// 此处单独定义以避免在 shared 类型尚未落地时产生跨包依赖断裂。
+
+export interface TemplateCategory {
+  key: string;
+  name: string;
+  iconUrl: string;
+  sortOrder: number;
+  isSystem: boolean;
+  isActive: boolean;
+  updatedAt: number;
+}
+
+export interface TemplateCategoryListResponse {
+  categories: TemplateCategory[];
+}
+
+export interface AdminTemplateListItem {
+  id: string;
+  name: string;
+  category: string;
+  categoryName: string;
+  price: number;
+  coverUrl: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface AdminTemplateListResponse {
+  templates: AdminTemplateListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminTemplateDetail extends AdminTemplateListItem {
+  author: string;
+  version: string;
+  description: string;
+  referenceSource: string;
+  tags: string[];
+  tagIds: string[];
+  classification: { type: string; style: string; method: string };
+  composition: Record<string, unknown>;
+  pose: Record<string, unknown>;
+  camera: Record<string, unknown>;
+  sceneGuide: Record<string, unknown>;
+  postProcess: Record<string, unknown>;
+}
+
+export interface CreateTemplateRequest {
+  name: string;
+  author?: string;
+  version?: string;
+  category: string;
+  price: number;
+  description?: string;
+  referenceSource?: string;
+  tags?: string[];
+  tagIds?: string[];
+  classification?: { type: string; style: string; method: string };
+  sortOrder?: number;
+  isActive?: boolean;
+  composition?: Record<string, unknown>;
+  pose?: Record<string, unknown>;
+  camera?: Record<string, unknown>;
+  sceneGuide?: Record<string, unknown>;
+  postProcess?: Record<string, unknown>;
+}
+
+export interface UpdateTemplateRequest extends Partial<CreateTemplateRequest> {}
+
+export interface CreateCategoryRequest {
+  key: string;
+  name: string;
+  iconUrl?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface UpdateCategoryRequest extends Partial<Omit<CreateCategoryRequest, 'key'>> {}

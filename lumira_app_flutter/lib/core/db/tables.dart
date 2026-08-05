@@ -47,6 +47,17 @@ class Tables {
   static const String colIsBuiltin = 'is_builtin';
   static const String colIsRecommended = 'is_recommended';
 
+  // === custom_templates 扩展列（v13 迁移新增，标记来源） ===
+  // 取值：'builtin' | 'custom' | 'remote'
+  static const String colSource = 'source';
+
+  // === template_categories 表（v13 迁移新增，分类管理） ===
+  static const String templateCategories = 'template_categories';
+  static const String colIconUrl = 'icon_url';
+  static const String colSortOrder = 'sort_order';
+  static const String colIsSystem = 'is_system';
+  static const String colIsActive = 'is_active';
+
   // === user_settings 扩展列（v4 迁移新增） ===
   static const String colSeedV3Done = 'seed_v3_done';
 
@@ -169,6 +180,8 @@ class ChallengeHistoryTable {
   static const colCompletedAt = 'completed_at';
   static const colSkippedAt = 'skipped_at';
   static const colIsDaily = 'is_daily';
+  /// 关联照片 id 列表，逗号分隔（如 "photo-1,photo-2"）
+  static const colPhotoIds = 'photo_ids';
 
   static const createSql = '''
     CREATE TABLE $name (
@@ -182,7 +195,8 @@ class ChallengeHistoryTable {
       $colSelectedAt INTEGER NOT NULL,
       $colCompletedAt INTEGER,
       $colSkippedAt INTEGER,
-      $colIsDaily INTEGER NOT NULL DEFAULT 0
+      $colIsDaily INTEGER NOT NULL DEFAULT 0,
+      $colPhotoIds TEXT NOT NULL DEFAULT ''
     )
   ''';
   static const indexDateSql = 'CREATE INDEX idx_challenge_history_date ON $name ($colDate DESC)';

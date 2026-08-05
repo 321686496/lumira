@@ -1,10 +1,16 @@
 // lumira-server/packages/backend/src/modules/templates/templates.service.ts
 
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, gt, asc, desc } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { ownedTemplates, templatePrices } from '../../database/schema';
+import { ownedTemplates, templatePrices, templates, templateCategories } from '../../database/schema';
 import { PointsService } from '../points/points.service';
+import type {
+  RemoteTemplateMeta,
+  RemoteTemplateListResponse,
+  RemoteTemplateDetail,
+  TemplateCategory,
+} from '@lumira/shared';
 
 @Injectable()
 export class TemplatesService {
@@ -132,4 +138,118 @@ export class TemplatesService {
     }).run();
     return true;
   }
+
+  // ===== 客户端：后端动态模板列表 / 详情 / 分类（spec 3.2）=====
+
+  /** 客户端拉取后端动态模板 meta 列表（仅 isActive=1） */
+  async listRemoteTemplates(since?: number, category?: string): Promise<RemoteTemplateListResponse> {
+    const db = this.dbService.getDb();
+
+    // 构建条件：isActive=1 + 可选 since + 可选 category
+    const conditions = [eq(templates.isActive, 1)];
+    if (since !== undefined && !Number.isNaN(since)) {
+      conditions.push(gt(templates.updatedAt, since));
+    }
+    if (category) {
+      conditions.push(eq(templates.category, category));
+    }
+
+    const rows = await db.select().from(templates)
+      .where(and(...conditions))
+      .orderBy(asc(templates.sortOrder), desc(templates.updatedAt));
+
+    const metas = rows.map(rowToMeta);
+    const serverUpdatedAt = metas.length > 0
+      ? metas.reduce((max, m) => Math.max(max, m.updatedAt), 0)
+      : Math.floor(Date.now() / 1000);
+
+    return { templates: metas, serverUpdatedAt };
+  }
+
+  /** 客户端拉取单个模板完整内容（5 段） */
+  async getRemoteTemplateDetail(id: string): Promise<RemoteTemplateDetail> {
+    const db = this.dbService.getDb();
+    const rows = await db.select().from(templates).where(eq(templates.id, id)).limit(1);
+    const row = rows[0];
+    if (!row) {
+      throw new NotFoundException('Template not found');
+    }
+    return rowToDetail(row);
+  }
+}
+
+// ===== 行 → DTO 映射函数（模块内共享）=====
+
+type TemplateRow = typeof templates.$inferSelect;
+type CategoryRow = typeof templateCategories.$inferSelect;
+
+export function rowToMeta(row: TemplateRow): RemoteTemplateMeta {
+  return {
+    id: row.id,
+    name: row.name,
+    author: row.author,
+    version: row.version,
+    category: row.category,
+    price: row.price,
+    coverUrl: row.coverUrl,
+    description: row.description,
+    referenceSource: row.referenceSource,
+    tags: safeParseStringArray(row.tagsJson),
+    tagIds: safeParseStringArray(row.tagIdsJson),
+    classification: safeParseClassification(row.classificationJson),
+    sortOrder: row.sortOrder,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export function rowToDetail(row: TemplateRow): RemoteTemplateDetail {
+  return {
+    ...rowToMeta(row),
+    composition: safeParseObject(row.compositionJson),
+    pose: safeParseObject(row.poseJson),
+    camera: safeParseObject(row.cameraJson),
+    sceneGuide: safeParseObject(row.sceneGuideJson),
+    postProcess: safeParseObject(row.postProcessJson),
+  };
+}
+
+export function rowToCategory(row: CategoryRow): TemplateCategory {
+  return {
+    key: row.key,
+    name: row.name,
+    iconUrl: row.iconUrl,
+    sortOrder: row.sortOrder,
+    isSystem: row.isSystem === 1,
+    isActive: row.isActive === 1,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function safeParseObject(json: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(json);
+    return v && typeof v === 'object' && !Array.isArray(v)
+      ? v as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function safeParseStringArray(json: string): string[] {
+  try {
+    const v = JSON.parse(json);
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function safeParseClassification(json: string): { type: string; style: string; method: string } {
+  const obj = safeParseObject(json);
+  return {
+    type: typeof obj.type === 'string' ? obj.type : '',
+    style: typeof obj.style === 'string' ? obj.style : '',
+    method: typeof obj.method === 'string' ? obj.method : '',
+  };
 }

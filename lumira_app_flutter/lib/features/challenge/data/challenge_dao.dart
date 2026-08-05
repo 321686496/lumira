@@ -19,6 +19,7 @@ class ChallengeDao {
       ChallengeHistoryTable.colCompletedAt: record.completedAt,
       ChallengeHistoryTable.colSkippedAt: record.skippedAt,
       ChallengeHistoryTable.colIsDaily: record.isDaily ? 1 : 0,
+      ChallengeHistoryTable.colPhotoIds: record.photoIds.join(','),
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
@@ -31,6 +32,24 @@ class ChallengeDao {
     }
     await _db.update(ChallengeHistoryTable.name, map,
         where: '${ChallengeHistoryTable.colId} = ?', whereArgs: [id]);
+  }
+
+  /// 关联照片 id 到挑战历史记录（追加，不去重）
+  /// 用于挑战确认页用户提交时把刚拍的照片 id 关联到当日挑战
+  Future<void> attachPhoto(String id, String photoId) async {
+    final rows = await _db.query(ChallengeHistoryTable.name,
+        where: '${ChallengeHistoryTable.colId} = ?',
+        whereArgs: [id],
+        limit: 1);
+    if (rows.isEmpty) return;
+    final current = (rows.first[ChallengeHistoryTable.colPhotoIds] as String?) ?? '';
+    final list = current.split(',').where((s) => s.isNotEmpty).toList()..add(photoId);
+    await _db.update(
+      ChallengeHistoryTable.name,
+      {ChallengeHistoryTable.colPhotoIds: list.join(',')},
+      where: '${ChallengeHistoryTable.colId} = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<ChallengeHistoryRecord?> getDailyByDate(String date) async {
@@ -71,6 +90,11 @@ class ChallengeDao {
   }
 
   ChallengeHistoryRecord _rowToRecord(Map<String, Object?> row) {
+    final photoIdsStr = (row[ChallengeHistoryTable.colPhotoIds] as String?) ?? '';
+    final photoIds = photoIdsStr
+        .split(',')
+        .where((s) => s.isNotEmpty)
+        .toList();
     return ChallengeHistoryRecord(
       id: row[ChallengeHistoryTable.colId] as String,
       date: row[ChallengeHistoryTable.colDate] as String,
@@ -83,6 +107,7 @@ class ChallengeDao {
       completedAt: row[ChallengeHistoryTable.colCompletedAt] as int?,
       skippedAt: row[ChallengeHistoryTable.colSkippedAt] as int?,
       isDaily: (row[ChallengeHistoryTable.colIsDaily] as int) == 1,
+      photoIds: photoIds,
     );
   }
 }

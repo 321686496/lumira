@@ -11,6 +11,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_pool.dart';
+import '../data/challenge_providers.dart';
 import '../widgets/challenge_tag.dart';
 
 /// Challenge 详情页
@@ -68,13 +69,52 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
     }
   }
 
-  void _goCapture() => GoRouter.of(context).push(RouteNames.capture);
+  void _goCapture() {
+    final cid = widget.challengeId;
+    if (cid == null || cid.isEmpty) {
+      GoRouter.of(context).push(RouteNames.capture);
+    } else {
+      GoRouter.of(context).push(
+        '${RouteNames.capture}?${RouteNames.paramChallengeId}=${Uri.encodeComponent(cid)}',
+      );
+    }
+  }
 
-  /// 从题库构建挑战详情
-  ChallengeDetail? _buildDetailFromPool(String? challengeId) {
+  /// 从题库 + 真实历史记录构建挑战详情
+  /// - hasCompletedWork: 该挑战今日是否已完成（status=done 且有 photoIds）
+  ChallengeDetail? _buildDetailFromPool(
+    String? challengeId,
+    ChallengeHistoryRecord? todayRecord,
+  ) {
     if (challengeId == null) return null;
     final item = ChallengePool.byId(challengeId);
     if (item == null) return null;
+
+    final isDone = todayRecord?.status == ChallengeStatus.done;
+    final hasPhoto =
+        isDone && todayRecord!.photoIds.isNotEmpty;
+    final progressCurrent = isDone ? 1 : 0;
+
+    // 完成作品（仅在已完成且有照片时构造）
+    Work? completedWork;
+    if (hasPhoto) {
+      completedWork = Work(
+        imageUrl:
+            'https://picsum.photos/seed/lumira_${todayRecord.photoIds.first}/400/600',
+        date: todayRecord.date,
+        title: item.title,
+        tags: [
+          ChallengeTag(
+            label: '+${item.rewardXP} XP',
+            color: ChallengeTagColor.gold,
+          ),
+          ChallengeTag(
+            label: ChallengeCategory.label(item.category),
+            color: ChallengeTagColor.green,
+          ),
+        ],
+      );
+    }
 
     return ChallengeDetail(
       id: item.id,
@@ -82,27 +122,28 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
       title: item.title,
       description: item.description,
       rewardXP: item.rewardXP,
-      progressCurrent: 0,
+      progressCurrent: progressCurrent,
       progressTotal: 1,
-      status: ChallengeStatus.pending,
+      status: isDone ? ChallengeStatus.done : ChallengeStatus.pending,
+      completedWork: completedWork,
       requirements: [
         Requirement(
           index: 1,
           title: '完成主题拍摄',
           description: '根据挑战标题完成一张符合主题的照片',
-          done: false,
+          done: isDone,
         ),
         Requirement(
           index: 2,
           title: '应用拍摄技巧',
           description: item.tip,
-          done: false,
+          done: isDone,
         ),
         Requirement(
           index: 3,
           title: '保存到画廊',
           description: '将作品保存到画廊完成挑战',
-          done: false,
+          done: isDone,
         ),
       ],
       tips: [
@@ -132,127 +173,150 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     final style = ref.watch(uiStyleProvider);
-    final detail = _buildDetailFromPool(widget.challengeId);
-
-    if (detail == null) {
-      return Scaffold(
-        backgroundColor: tokens.canvas,
-        body: SafeArea(
-          child: Center(
-            child: Text('挑战不存在', style: TextStyle(color: tokens.textSecondary)),
-          ),
-        ),
-      );
-    }
+    final historyAsync = ref.watch(weeklyHistoryProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      body: Stack(
-        children: [
-          SafeArea(
-            child: Column(
+      body: SafeArea(
+        child: historyAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, __) => Center(
+            child: Text('加载失败',
+                style: TextStyle(color: tokens.textSecondary)),
+          ),
+          data: (history) {
+            // 从历史记录中找到与当前 challengeId 匹配的记录（取最近一条）
+            final todayRecord = history
+                .where((r) => r.challengeId == widget.challengeId)
+                .toList()
+              ..sort((a, b) => b.date.compareTo(a.date));
+            final record =
+                todayRecord.isNotEmpty ? todayRecord.first : null;
+            final detail = _buildDetailFromPool(widget.challengeId, record);
+
+            if (detail == null) {
+              return Center(
+                child: Text('挑战不存在',
+                    style: TextStyle(color: tokens.textSecondary)),
+              );
+            }
+
+            final hasCompletedWork = detail.completedWork != null;
+
+            return Stack(
               children: [
-                LumiraNav(
-                  title: '挑战详情',
-                  scrolled: _scrolled,
-                  transparent: true,
-                ),
-                Expanded(
-                  child: ListView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
-                    children: [
-                      FadeUp(
-                        child: _HeroCard(detail: detail, tokens: tokens, style: style),
-                      ),
-                      const SizedBox(height: 24),
-                      // 完成的作品
-                      if (detail.completedWork != null) ...[
-                        const _SectionTitle(text: '完成的作品'),
-                        const SizedBox(height: 12),
-                        FadeUp(
-                          delay: const Duration(milliseconds: 80),
-                          child: _WorkCard(work: detail.completedWork!, tokens: tokens, style: style),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-                      // 挑战要求
-                      const _SectionTitle(text: '挑战要求'),
-                      const SizedBox(height: 12),
-                      FadeUp(
-                        delay: const Duration(milliseconds: 160),
-                        child: NeuCard(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                          child: Column(
-                            children: detail.requirements
-                                .map((r) => _RequirementItem(
-                                      requirement: r,
-                                      tokens: tokens,
-                                    ))
-                                .toList(),
+                Column(
+                  children: [
+                    LumiraNav(
+                      title: '挑战详情',
+                      scrolled: _scrolled,
+                      transparent: true,
+                    ),
+                    Expanded(
+                      child: ListView(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+                        children: [
+                          FadeUp(
+                            child: _HeroCard(
+                                detail: detail, tokens: tokens, style: style),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      // 拍摄建议
-                      const _SectionTitle(text: '拍摄建议'),
-                      const SizedBox(height: 12),
-                      FadeUp(
-                        delay: const Duration(milliseconds: 240),
-                        child: NeuCard(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                          child: Column(
-                            children: detail.tips
-                                .map((t) => _TipRow(tip: t, tokens: tokens))
-                                .toList(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      // 底部操作
-                      FadeUp(
-                        delay: const Duration(milliseconds: 320),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: LumiraButton(
-                                variant: ButtonVariant.secondary,
-                                onPressed: _back,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: const [
-                                    Icon(Icons.arrow_back),
-                                    SizedBox(width: 8),
-                                    Text('返回挑战'),
-                                  ],
-                                ),
+                          const SizedBox(height: 24),
+                          // 完成的作品（仅有照片时显示）
+                          if (hasCompletedWork) ...[
+                            const _SectionTitle(text: '完成的作品'),
+                            const SizedBox(height: 12),
+                            FadeUp(
+                              delay: const Duration(milliseconds: 80),
+                              child: _WorkCard(
+                                work: detail.completedWork!,
+                                tokens: tokens,
+                                style: style,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: LumiraButton(
-                                variant: ButtonVariant.primary,
-                                onPressed: _goCapture,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: const [
-                                    Icon(Icons.camera_alt_outlined),
-                                    SizedBox(width: 8),
-                                    Text('再拍一张'),
-                                  ],
-                                ),
-                              ),
-                            ),
+                            const SizedBox(height: 24),
                           ],
-                        ),
+                          // 挑战要求
+                          const _SectionTitle(text: '挑战要求'),
+                          const SizedBox(height: 12),
+                          FadeUp(
+                            delay: const Duration(milliseconds: 160),
+                            child: NeuCard(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 8),
+                              child: Column(
+                                children: detail.requirements
+                                    .map((r) => _RequirementItem(
+                                          requirement: r,
+                                          tokens: tokens,
+                                        ))
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          // 拍摄建议
+                          const _SectionTitle(text: '拍摄建议'),
+                          const SizedBox(height: 12),
+                          FadeUp(
+                            delay: const Duration(milliseconds: 240),
+                            child: NeuCard(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 4),
+                              child: Column(
+                                children: detail.tips
+                                    .map((t) => _TipRow(tip: t, tokens: tokens))
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 28),
+                          // 底部操作：未完成显示"去拍照"，已完成显示"再拍一张"
+                          FadeUp(
+                            delay: const Duration(milliseconds: 320),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: LumiraButton(
+                                    variant: ButtonVariant.secondary,
+                                    onPressed: _back,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(Icons.arrow_back),
+                                        SizedBox(width: 8),
+                                        Text('返回挑战'),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: LumiraButton(
+                                    variant: ButtonVariant.primary,
+                                    onPressed: _goCapture,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.camera_alt_outlined),
+                                        const SizedBox(width: 8),
+                                        Text(hasCompletedWork ? '再拍一张' : '去拍照'),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
     );
   }

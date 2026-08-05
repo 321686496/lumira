@@ -6,6 +6,12 @@ import { DatabaseModule } from '../../database/database.module';
 import { PointsModule } from '../points/points.module';
 import { TemplatesController } from './templates.controller';
 import { TemplatesService } from './templates.service';
+import { AdminTemplatesController } from './admin-templates.controller';
+import { AdminTemplatesService } from './admin-templates.service';
+import { CategoriesController } from './categories.controller';
+import { CategoriesService } from './categories.service';
+import { AdminCategoriesController } from './admin-categories.controller';
+import { AdminCategoriesService } from './admin-categories.service';
 
 @Module({
   imports: [
@@ -16,8 +22,18 @@ import { TemplatesService } from './templates.service';
       signOptions: { expiresIn: '30d' },
     }),
   ],
-  controllers: [TemplatesController],
-  providers: [TemplatesService],
+  controllers: [
+    TemplatesController,
+    CategoriesController,
+    AdminTemplatesController,
+    AdminCategoriesController,
+  ],
+  providers: [
+    TemplatesService,
+    AdminTemplatesService,
+    CategoriesService,
+    AdminCategoriesService,
+  ],
   exports: [TemplatesService],
 })
 export class TemplatesModule {}

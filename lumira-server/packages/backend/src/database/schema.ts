@@ -117,3 +117,44 @@ export const dailySignInRecords = sqliteTable('daily_sign_in_records', {
   pointsEarned: integer('points_earned').notNull(),
   createdAt: integer('created_at').notNull(),
 });
+
+// ===== 后台动态模板上传（spec 2026-08-05 第 2.1 节）=====
+
+// 分类管理：key 与 Flutter 内置 7 类对齐（系统分类 isSystem=1），允许 Admin 新增自定义分类
+export const templateCategories = sqliteTable('template_categories', {
+  key: text('key').primaryKey(),              // 'portrait' / 'landscape' / 自定义 key
+  name: text('name').notNull(),                // 显示名 '人像'
+  iconUrl: text('icon_url').notNull(),         // 图标文件 URL，空字符串表示用 Flutter 内置映射
+  sortOrder: integer('sort_order').notNull().default(0),
+  isSystem: integer('is_system').notNull().default(0),  // 1=系统保留, key 锁定不可改不可删
+  isActive: integer('is_active').notNull().default(1),  // 0=隐藏不展示
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+// 后端动态模板内容（结构化存储，5 段内容 JSON 列）
+export const templates = sqliteTable('templates', {
+  // —— meta 拆列（便于 SQL 筛选/排序/分页）——
+  id: text('id').primaryKey(),                 // 'srv_' + nanoid(12)
+  name: text('name').notNull(),
+  author: text('author').notNull().default('Lumira'),
+  version: text('version').notNull().default('1.0.0'),
+  category: text('category').notNull(),        // 引用 template_categories.key
+  price: integer('price').notNull().default(0),
+  coverUrl: text('cover_url').notNull(),
+  description: text('description').notNull().default(''),
+  referenceSource: text('reference_source').notNull().default(''),
+  tagsJson: text('tags_json').notNull().default('[]'),
+  tagIdsJson: text('tag_ids_json').notNull().default('[]'),
+  classificationJson: text('classification_json').notNull().default('{}'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  isActive: integer('is_active').notNull().default(1),  // 0=下架
+  // —— 5 段内容 JSON 列 ——
+  compositionJson: text('composition_json').notNull().default('{}'),
+  poseJson: text('pose_json').notNull().default('{}'),
+  cameraJson: text('camera_json').notNull().default('{}'),
+  sceneGuideJson: text('scene_guide_json').notNull().default('{}'),
+  postProcessJson: text('post_process_json').notNull().default('{}'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});

@@ -12,6 +12,10 @@ const titleMap: Record<string, string> = {
   '/dashboard/rewards': '奖励明细',
   '/dashboard/questionnaire': '问卷数据',
   '/dashboard/questionnaire/stats': '问卷统计',
+  '/dashboard/templates': '模板管理',
+  '/dashboard/templates/new': '新建模板',
+  '/dashboard/templates/[id]': '模板详情',
+  '/dashboard/categories': '分类管理',
 };
 
 function resolveTitle(pathname: string): string {
@@ -19,6 +23,7 @@ function resolveTitle(pathname: string): string {
   if (pathname === '/dashboard/redeem-batches/new') return '创建批次';
   if (pathname.match(/\/dashboard\/redeem-batches\/\d+/)) return '批次详情';
   if (pathname.match(/\/dashboard\/questionnaire\/[^/]+$/)) return '设备问卷历史';
+  if (pathname.match(/\/dashboard\/templates\/[^/]+$/)) return '模板详情';
   return 'Lumira 运营后台';
 }
 

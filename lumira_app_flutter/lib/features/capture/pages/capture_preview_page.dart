@@ -52,6 +52,7 @@ class CapturePreviewPage extends ConsumerStatefulWidget {
     this.photoUrl,
     this.photoId,
     this.aspectRatio,
+    this.challengeId,
   });
 
   /// 路由参数：photoUrl（拍摄后的照片 URL）
@@ -64,6 +65,10 @@ class CapturePreviewPage extends ConsumerStatefulWidget {
   /// 路由参数：aspectRatio（拍摄时使用的取景器比例 id，如 'fullscreen' / '3:4'）
   /// Task 10 起作为非破坏性重新处理时的裁剪比例传入 processFile。
   final String? aspectRatio;
+
+  /// 路由参数：challengeId（来自挑战详情页 → 拍摄页 → 预览页透传）
+  /// 保存照片后用于回写挑战状态 pending→done 并累加 XP，然后跳转 XP 奖励页
+  final String? challengeId;
 
   @override
   ConsumerState<CapturePreviewPage> createState() =>
@@ -835,8 +840,21 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       if (mounted) setState(() => _isSaving = false);
     }
 
-    // 保存完成后延迟返回
+    // 保存完成后的跳转：
+    // - 携带 challengeId：跳挑战确认页（用户决定是否作为挑战作品提交，再回写状态）
+    // - 否则：延迟返回上一页或回到画廊
     if (mounted) {
+      final cid = widget.challengeId;
+      final pid = widget.photoId;
+      if (cid != null && cid.isNotEmpty && pid != null && pid.isNotEmpty) {
+        // 清栈跳转到挑战确认页（避免返回时再次进入预览页）
+        GoRouter.of(context).go(
+          '${RouteNames.challengeConfirm}'
+          '?${RouteNames.paramChallengeId}=${Uri.encodeComponent(cid)}'
+          '&${RouteNames.paramPhotoId}=${Uri.encodeComponent(pid)}',
+        );
+        return;
+      }
       Future.delayed(const Duration(milliseconds: 1000), () {
         if (!mounted) return;
         if (Navigator.of(context).canPop()) {
