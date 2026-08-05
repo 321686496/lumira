@@ -12,7 +12,8 @@ class AppConfig {
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     // defaultValue: 'http://10.0.2.2:8880/api/v1',
-    defaultValue: 'http://124.71.61.105/lumira/api/v1',
+    defaultValue: 'https://lumira.iwtle.top/api/v1',
+    // defaultValue: 'http://124.71.61.105/lumira/api/v1',
   );
 
   static const int connectTimeoutMs = 8000;

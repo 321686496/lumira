@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../data/home_mock_data.dart';
+import '../data/home_providers.dart';
 
 /// 今日拍摄小贴士卡片
 ///
@@ -24,11 +25,13 @@ class TipCard extends ConsumerStatefulWidget {
 }
 
 class _TipCardState extends ConsumerState<TipCard> {
+  /// 当前显示贴士索引（在 provider 数据内的下标）
   int _tipIndex = 0;
 
-  void _refreshTip() {
+  void _refreshTip(int listLength) {
+    if (listLength == 0) return;
     setState(() {
-      _tipIndex = (_tipIndex + 1) % HomeMockData.tips.length;
+      _tipIndex = (_tipIndex + 1) % listLength;
     });
   }
 
@@ -37,130 +40,158 @@ class _TipCardState extends ConsumerState<TipCard> {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final isNeumorphic = appTheme.style == UIStyle.neumorphic;
-    final tip = HomeMockData.tips[_tipIndex];
+    final tipsAsync = ref.watch(homeTipsProvider);
+
+    // 默认 fallback（loading/error 时使用）
+    const fallbackTips = HomeMockData.tips;
+    final fallbackTip = fallbackTips[_tipIndex % fallbackTips.length];
+
+    return tipsAsync.when(
+      loading: () => _buildCard(tokens, isNeumorphic, fallbackTip, fallbackTips.length, dim: true),
+      error: (_, __) => _buildCard(tokens, isNeumorphic, fallbackTip, fallbackTips.length),
+      data: (tips) {
+        if (tips.isEmpty) {
+          return _buildCard(tokens, isNeumorphic, fallbackTip, fallbackTips.length);
+        }
+        // 索引越界保护（provider 数据变化时重置）
+        final idx = _tipIndex < tips.length ? _tipIndex : 0;
+        return _buildCard(tokens, isNeumorphic, tips[idx], tips.length);
+      },
+    );
+  }
+
+  Widget _buildCard(
+    ThemeTokens tokens,
+    bool isNeumorphic,
+    ShootingTip tip,
+    int listLength, {
+    bool dim = false,
+  }) {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20), // 40rpx → 20dp
-      child: Container(
-        padding: const EdgeInsets.all(20), // 40rpx → 20dp
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
-          // neumorphic 风格：surface 纯色 + 双向阴影，移除渐变和边框
-          // 其他风格：保留原渐变 + brand 15% 边框
-          color: isNeumorphic ? tokens.surface : null,
-          gradient: isNeumorphic
-              ? null
-              : const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFFFFFBF5),
-                    Color(0xFFFDF6EC),
-                  ],
-                ),
-          border: isNeumorphic
-              ? null
-              : Border.all(
-                  color: tokens.brand.withOpacity(0.15),
-                  width: 1, // 2rpx → 1dp
-                ),
-          boxShadow: isNeumorphic ? tokens.shadowConvex : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // tip-head
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 图标背景方块
-                Container(
-                  width: 36, // 72rpx → 36dp
-                  height: 36,
-                  decoration: BoxDecoration(
-                    // neumorphic 风格：canvasDeep 内凹阴影方块
-                    // 其他风格：brand 12% 半透明背景
-                    color: isNeumorphic
-                        ? tokens.canvasDeep
-                        : tokens.brand.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10), // 20rpx → 10dp
-                    boxShadow: isNeumorphic
-                        ? tokens.shadowConcaveSubtle
-                        : null,
-                  ),
-                  child: Icon(
-                    Icons.lightbulb_outline,
-                    size: 18, // 36rpx → 18dp
-                    color: tokens.brand,
-                  ),
-                ),
-                const SizedBox(width: 12), // 24rpx → 12dp
-                // 文字内容
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '今日拍摄小贴士',
-                        style: TextStyle(
-                          fontSize: 15, // 30rpx → 15dp
-                          fontWeight: FontWeight.w600,
-                          color: tokens.textPrimary,
-                          height: 1.3,
-                        ),
-                      ),
-                      const SizedBox(height: 6), // 12rpx → 6dp
-                      Text(
-                        tip.text,
-                        style: TextStyle(
-                          fontSize: 13, // 26rpx → 13dp
-                          color: tokens.textSecondary,
-                          height: 1.7,
-                        ),
-                      ),
-                      if (tip.sub.isNotEmpty) ...[
-                        const SizedBox(height: 4), // 8rpx → 4dp
-                        Text(
-                          tip.sub,
-                          style: TextStyle(
-                            fontSize: 12, // 24rpx → 12dp
-                            color: tokens.textTertiary,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
+      child: Opacity(
+        opacity: dim ? 0.5 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.all(20), // 40rpx → 20dp
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
+            // neumorphic 风格：surface 纯色 + 双向阴影，移除渐变和边框
+            // 其他风格：保留原渐变 + brand 15% 边框
+            color: isNeumorphic ? tokens.surface : null,
+            gradient: isNeumorphic
+                ? null
+                : const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFFFFFBF5),
+                      Color(0xFFFDF6EC),
                     ],
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14), // 28rpx → 14dp
-            // tip-btns
-            Row(
-              children: [
-                Expanded(
-                  child: _TipButton(
-                    icon: Icons.camera_alt_outlined,
-                    label: '试试',
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [tokens.brand, tokens.brandDeep],
-                    ),
-                    foregroundColor: Colors.white,
-                    onTap: widget.onTry,
-                    isNeumorphic: isNeumorphic,
-                    tokens: tokens,
+            border: isNeumorphic
+                ? null
+                : Border.all(
+                    color: tokens.brand.withOpacity(0.15),
+                    width: 1, // 2rpx → 1dp
                   ),
-                ),
-                const SizedBox(width: 8), // 16rpx → 8dp
-                Expanded(
+            boxShadow: isNeumorphic ? tokens.shadowConvex : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // tip-head
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 图标背景方块
+                  Container(
+                    width: 36, // 72rpx → 36dp
+                    height: 36,
+                    decoration: BoxDecoration(
+                      // neumorphic 风格：canvasDeep 内凹阴影方块
+                      // 其他风格：brand 12% 半透明背景
+                      color: isNeumorphic
+                          ? tokens.canvasDeep
+                          : tokens.brand.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10), // 20rpx → 10dp
+                      boxShadow: isNeumorphic
+                          ? tokens.shadowConcaveSubtle
+                          : null,
+                    ),
+                    child: Icon(
+                      Icons.lightbulb_outline,
+                      size: 18, // 36rpx → 18dp
+                      color: tokens.brand,
+                    ),
+                  ),
+                  const SizedBox(width: 12), // 24rpx → 12dp
+                  // 文字内容
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '今日拍摄小贴士',
+                          style: TextStyle(
+                            fontSize: 15, // 30rpx → 15dp
+                            fontWeight: FontWeight.w600,
+                            color: tokens.textPrimary,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 6), // 12rpx → 6dp
+                        Text(
+                          tip.text,
+                          style: TextStyle(
+                            fontSize: 13, // 26rpx → 13dp
+                            color: tokens.textSecondary,
+                            height: 1.7,
+                          ),
+                        ),
+                        if (tip.sub.isNotEmpty) ...[
+                          const SizedBox(height: 4), // 8rpx → 4dp
+                          Text(
+                            tip.sub,
+                            style: TextStyle(
+                              fontSize: 12, // 24rpx → 12dp
+                              color: tokens.textTertiary,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14), // 28rpx → 14dp
+              // tip-btns
+              Row(
+                children: [
+                  Expanded(
+                    child: _TipButton(
+                      icon: Icons.camera_alt_outlined,
+                      label: '试试',
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [tokens.brand, tokens.brandDeep],
+                      ),
+                      foregroundColor: Colors.white,
+                      onTap: widget.onTry,
+                      isNeumorphic: isNeumorphic,
+                      tokens: tokens,
+                    ),
+                  ),
+                  const SizedBox(width: 8), // 16rpx → 8dp
+                  Expanded(
                   child: _TipButton(
                     icon: Icons.refresh,
                     label: '换一批',
                     backgroundColor: tokens.surfaceAlt,
                     foregroundColor: tokens.textSecondary,
-                    onTap: _refreshTip,
+                    onTap: () => _refreshTip(listLength),
                     isNeumorphic: isNeumorphic,
                     tokens: tokens,
                   ),
@@ -168,6 +199,7 @@ class _TipCardState extends ConsumerState<TipCard> {
               ],
             ),
           ],
+        ),
         ),
       ),
     );

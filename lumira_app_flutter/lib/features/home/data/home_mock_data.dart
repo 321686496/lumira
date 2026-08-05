@@ -44,15 +44,31 @@ class RecentShot {
     required this.steps,
     required this.match,
     required this.progress,
+    this.imageFilePath,
+    this.imageDataUrl,
+    this.imageOriginalPath,
   });
 
   final String name;
   final String category;
   final IconData icon;
+
+  /// 真实照片源（优先级：imageFilePath > imageDataUrl > imageOriginalPath > imageSeed fallback）
+  /// 三者全空时回退到 imageSeed（picsum 占位）
   final String imageSeed;
+  final String? imageFilePath;
+  final String? imageDataUrl;
+  final String? imageOriginalPath;
+
   final int steps;
   final String match; // '98% 匹配' 或 ''
   final String progress; // '进行中' 或 ''
+
+  /// 是否有真实照片源
+  bool get hasRealImage =>
+      (imageFilePath != null && imageFilePath!.isNotEmpty) ||
+      (imageDataUrl != null && imageDataUrl!.isNotEmpty) ||
+      (imageOriginalPath != null && imageOriginalPath!.isNotEmpty);
 }
 
 /// 拍摄小贴士（今日拍摄小贴士 section）

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -55,18 +58,7 @@ class RecentShotCard extends ConsumerWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.network(
-                      'https://picsum.photos/seed/${recent.imageSeed}/400/600',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stack) => Container(
-                        color: tokens.surfaceAlt,
-                        child: Icon(
-                          Icons.image_outlined,
-                          size: 32,
-                          color: tokens.textTertiary,
-                        ),
-                      ),
-                    ),
+                    _buildImage(tokens),
                     // 分类标签（左上）
                     Positioned(
                       top: 8,
@@ -179,6 +171,66 @@ class RecentShotCard extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// 按优先级渲染真实照片：filePath > dataUrl > originalPath > picsum 占位
+  Widget _buildImage(ThemeTokens tokens) {
+    // 1. filePath：本地文件
+    final filePath = recent.imageFilePath;
+    if (filePath != null && filePath.isNotEmpty) {
+      final file = File(filePath);
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => _fallbackImage(tokens),
+      );
+    }
+
+    // 2. dataUrl：base64 内联（兼容旧数据）
+    final dataUrl = recent.imageDataUrl;
+    if (dataUrl != null && dataUrl.isNotEmpty) {
+      // 支持 data:image/...;base64,xxxx 或纯 base64
+      final pure = dataUrl.contains(',') ? dataUrl.split(',').last : dataUrl;
+      try {
+        final bytes = Uint8List.fromList(base64Decode(pure));
+        return Image.memory(
+          bytes,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stack) => _fallbackImage(tokens),
+        );
+      } catch (_) {
+        // 解码失败继续 fallback
+      }
+    }
+
+    // 3. originalPath：原始文件路径
+    final originalPath = recent.imageOriginalPath;
+    if (originalPath != null && originalPath.isNotEmpty) {
+      final file = File(originalPath);
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => _fallbackImage(tokens),
+      );
+    }
+
+    // 4. picsum 占位
+    return Image.network(
+      'https://picsum.photos/seed/${recent.imageSeed}/400/600',
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stack) => _fallbackImage(tokens),
+    );
+  }
+
+  Widget _fallbackImage(ThemeTokens tokens) {
+    return Container(
+      color: tokens.surfaceAlt,
+      child: Icon(
+        Icons.image_outlined,
+        size: 32,
+        color: tokens.textTertiary,
       ),
     );
   }
