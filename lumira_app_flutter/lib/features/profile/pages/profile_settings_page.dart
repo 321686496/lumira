@@ -39,13 +39,10 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
 
   int _tapCount = 0;
   Timer? _tapTimer;
-  bool _showRedemption = false;
-  final TextEditingController _codeController = TextEditingController();
 
   @override
   void dispose() {
     _tapTimer?.cancel();
-    _codeController.dispose();
     super.dispose();
   }
 
@@ -54,21 +51,10 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     _tapTimer?.cancel();
     _tapTimer = Timer(const Duration(seconds: 3), () => _tapCount = 0);
     if (_tapCount >= 7) {
-      setState(() {
-        _showRedemption = true;
-        _tapCount = 0;
-      });
+      _tapCount = 0;
+      // 彩蛋：跳转正规兑换页
+      GoRouter.of(context).push(RouteNames.profileRedeem);
     }
-  }
-
-  void _confirmRedemption() {
-    final code = _codeController.text.trim();
-    if (code.isEmpty) {
-      LumiraToast.show(context, '请输入兑换码', duration: const Duration(milliseconds: 1000));
-      return;
-    }
-    LumiraToast.show(context, '兑换码「$code」已提交', duration: const Duration(milliseconds: 1000));
-    _codeController.clear();
   }
 
   Widget _buildHomeWordmarkSection(ThemeTokens tokens) {
@@ -288,40 +274,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         onTap: _handleVersionTap,
                         tokens: tokens,
                       ),
-                      if (_showRedemption) ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: LumiraTextField(
-                                  controller: _codeController,
-                                  hintText: '请输入兑换码',
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              GestureDetector(
-                                onTap: _confirmRedemption,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: tokens.brand,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '确认',
-                                    style: TextStyle(
-                                      color: tokens.textInverse,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
                       _SettingItem(
                         icon: Icons.cleaning_services_outlined,
                         label: '清除缓存',
@@ -337,6 +289,36 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         icon: Icons.info_outline,
                         label: '关于如画',
                         onTap: () => GoRouter.of(context).push(RouteNames.profileAbout),
+                        tokens: tokens,
+                        isLast: true,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _GroupTitle(text: '合规与法律', tokens: tokens),
+                const SizedBox(height: 8),
+                NeuCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _SettingItem(
+                        icon: Icons.description_outlined,
+                        label: '用户协议',
+                        onTap: () => GoRouter.of(context).push(RouteNames.profileComplianceAgreement),
+                        tokens: tokens,
+                      ),
+                      _SettingItem(
+                        icon: Icons.privacy_tip_outlined,
+                        label: '隐私政策',
+                        onTap: () => GoRouter.of(context).push(RouteNames.profileCompliancePrivacy),
+                        tokens: tokens,
+                      ),
+                      _SettingItem(
+                        icon: Icons.list_alt_outlined,
+                        label: '个人信息清单与第三方SDK目录',
+                        onTap: () => GoRouter.of(context).push(RouteNames.profileComplianceSdk),
                         tokens: tokens,
                         isLast: true,
                       ),
