@@ -168,6 +168,49 @@ class CaptureState {
     );
   });
 
+  /// 排序后的模板列表（按使用频率 + 用户偏好）
+  /// 排序优先级：
+  /// 1. 使用频率降序（gallery_items 中 template_id 出现次数）
+  /// 2. 用户偏好匹配（category == topCategory 优先）
+  /// 3. 名称字母序兜底
+  static final sortedTemplatesProvider =
+      FutureProvider<List<PhotoTemplate>>((ref) async {
+    // 获取所有模板（系统 + 自定义）
+    final templates = await ref.watch(allTemplatesProvider.future);
+
+    // 获取使用频率
+    Map<String, int> usageCounts = {};
+    String topCategory = '';
+    try {
+      final galleryDao = await ref.watch(galleryDaoProvider.future);
+      usageCounts = await galleryDao.countByTemplate();
+
+      // 获取用户偏好
+      final pref = await ref.read(userPreferenceProvider.future);
+      topCategory = pref.topCategory;
+    } catch (e) {
+      // DAO 不可用时降级为无排序（按默认顺序）
+      debugPrint('[capture] sortedTemplatesProvider: stats load failed, fallback to unsorted: $e');
+      return templates;
+    }
+
+    // 排序
+    final sorted = List<PhotoTemplate>.from(templates);
+    sorted.sort((a, b) {
+      final countA = usageCounts[a.meta.id] ?? 0;
+      final countB = usageCounts[b.meta.id] ?? 0;
+      // 1. 使用频率降序
+      if (countA != countB) return countB.compareTo(countA);
+      // 2. 用户偏好匹配优先
+      final matchA = a.meta.category == topCategory ? 1 : 0;
+      final matchB = b.meta.category == topCategory ? 1 : 0;
+      if (matchA != matchB) return matchB.compareTo(matchA);
+      // 3. 名称字母序兜底
+      return a.meta.name.compareTo(b.meta.name);
+    });
+    return sorted;
+  });
+
   /// 原始模板（只读，派生自 currentTemplateIdProvider）
   /// 先查 TemplateRegistry（系统模板，同步快路径）
   /// 未找到 → 查 templateCacheProvider（含自定义模板的运行时缓存）
