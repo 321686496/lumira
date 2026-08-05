@@ -1,0 +1,126 @@
+﻿8037fcf feat(capture): add allTemplatesProvider and templateCacheProvider
+ .../lib/features/capture/data/capture_state.dart   | 44 ++++++++++++++++++++++
+ .../capture/all_templates_provider_test.dart       | 26 +++++++++++++
+ 2 files changed, 70 insertions(+)
+diff --git a/lumira_app_flutter/lib/features/capture/data/capture_state.dart b/lumira_app_flutter/lib/features/capture/data/capture_state.dart
+index e6fb7d4..1a72d9e 100644
+--- a/lumira_app_flutter/lib/features/capture/data/capture_state.dart
++++ b/lumira_app_flutter/lib/features/capture/data/capture_state.dart
+@@ -2,20 +2,23 @@ import 'dart:async';
+ import 'dart:ui' as ui;
+ 
+ import 'package:camerawesome_ohos/camerawesome_plugin.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:flutter/material.dart';
+ import '../../../core/db/database_provider.dart';
+ import '../domain/photo_template.dart';
+ import '../domain/scene_preset.dart';
+ import '../data/template_registry.dart';
+ import '../data/scene_presets_data.dart';
++import '../../templates/services/template_mapper.dart';
++import '../../../core/db/dao/templates_dao.dart';
++import '../../templates/data/templates_providers.dart';
+ 
+ /// 闪光灯模式
+ enum CaptureFlashMode { off, on, auto, torch }
+ 
+ /// 拍摄页状态 providers
+ class CaptureState {
+   CaptureState._();
+ 
+   // ── 已有 providers（保留不变）──
+   static final currentTemplateIdProvider = StateProvider<String?>((ref) => null);
+@@ -117,20 +120,61 @@ class CaptureState {
+       // 目标比例比传感器"窄"（更瘦长）→ 左右裁切
+       return sensorRatio / targetRatio;
+     } else {
+       // 目标比例比传感器"宽"（更扁平）→ 上下裁切
+       return targetRatio / sensorRatio;
+     }
+   }
+ 
+   // ── 新增：模板编辑状态 ──
+ 
++  /// 所有模板列表（系统 + 自定义）
++  /// 系统模板来自 TemplateRegistry（同步），自定义模板来自 TemplatesDao（异步）
++  /// DAO 加载失败时降级为仅系统模板
++  static final allTemplatesProvider =
++      FutureProvider<List<PhotoTemplate>>((ref) async {
++    // 系统模板（同步，立即可用）
++    final systemTemplates = TemplateRegistry.allTemplates;
++
++    // 自定义模板（异步）
++    try {
++      final dao = await ref.watch(templatesDaoProvider.future);
++      final customRecords = await dao.getCustomOnly();
++      final customTemplates = customRecords
++          .map((r) => TemplateMapper.toPhotoTemplate(r))
++          .toList();
++      return [...systemTemplates, ...customTemplates];
++    } catch (e) {
++      // DAO 不可用时降级为仅系统模板
++      debugPrint('[capture] allTemplatesProvider: DAO load failed, fallback to system only: $e');
++      return systemTemplates;
++    }
++  });
++
++  /// 模板缓存（ID → PhotoTemplate）
++  /// 从 allTemplatesProvider 结果构建 Map，供 originalTemplateProvider 快速查找
++  /// 降级策略：加载中时仅含系统模板
++  static final templateCacheProvider =
++      Provider<Map<String, PhotoTemplate>>((ref) {
++    final asyncValue = ref.watch(allTemplatesProvider);
++    // 系统模板始终可用（降级基线）
++    final systemMap = {
++      for (final t in TemplateRegistry.allTemplates) t.meta.id: t
++    };
++    return asyncValue.maybeWhen(
++      data: (templates) => {
++        for (final t in templates) t.meta.id: t
++      },
++      orElse: () => systemMap,
++    );
++  });
++
+   /// 原始模板（只读，派生自 currentTemplateIdProvider）
+   /// 当 currentTemplateIdProvider 为 null 时返回 null（自由拍摄模式）
+   static final originalTemplateProvider = Provider<PhotoTemplate?>((ref) {
+     final id = ref.watch(currentTemplateIdProvider);
+     if (id == null) return null;
+     return TemplateRegistry.getTemplate(id);
+   });
+ 
+   /// 可编辑模板副本（参数面板的所有修改都写到这里）
+   /// 当 currentTemplateIdProvider 变化时，自动重置为新模板的副本
+diff --git a/lumira_app_flutter/test/features/capture/all_templates_provider_test.dart b/lumira_app_flutter/test/features/capture/all_templates_provider_test.dart
+new file mode 100644
+index 0000000..1c4f5c0
+--- /dev/null
++++ b/lumira_app_flutter/test/features/capture/all_templates_provider_test.dart
+@@ -0,0 +1,26 @@
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
++import 'package:lumira_app_flutter/features/capture/data/template_registry.dart';
++
++void main() {
++  test('allTemplatesProvider returns system templates even when DAO is unavailable', () async {
++    final container = ProviderContainer();
++    final result = await container.read(CaptureState.allTemplatesProvider.future);
++    // 系统模板始终可用（12 个），DAO 加载失败时降级为仅系统模板
++    expect(result.length, greaterThanOrEqualTo(12));
++    // 验证包含已知系统模板
++    final ids = result.map((t) => t.meta.id).toList();
++    expect(ids, contains('soft_portrait'));
++    expect(ids, contains('neon_portrait'));
++  });
++
++  test('templateCacheProvider contains all system templates by id', () {
++    final container = ProviderContainer();
++    final cache = container.read(CaptureState.templateCacheProvider);
++    // 降级策略：DAO 未加载完成时仅含系统模板
++    expect(cache['soft_portrait'], isNotNull);
++    expect(cache['neon_portrait'], isNotNull);
++    expect(cache.length, greaterThanOrEqualTo(12));
++  });
++}
