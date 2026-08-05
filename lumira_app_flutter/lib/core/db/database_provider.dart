@@ -15,9 +15,10 @@ import 'dao/api_cache_dao.dart';
 import 'dao/settings_dao.dart';
 import '../../core/auth/auth_dao.dart';
 import '../../features/onboarding/data/questionnaire_dao.dart';
+import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 14;
+const int _kDbVersion = 15;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -82,6 +83,11 @@ final settingsDaoProvider = FutureProvider<SettingsDao>((ref) async {
 final questionnaireDaoProvider = FutureProvider<QuestionnaireDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return QuestionnaireDao(db);
+});
+
+final userProfileDaoProvider = FutureProvider<UserProfileDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return UserProfileDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -304,6 +310,17 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
       ${Tables.colAnswersJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colSubmittedAt} INTEGER,
+      ${Tables.colSyncedAt} INTEGER
+    )
+  ''');
+
+  // === v15: user_profile 表（单行表 id=1，个人资料本地副本） ===
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.userProfile} (
+      ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
+      ${Tables.colUsername} TEXT NOT NULL,
+      ${Tables.colAvatarSeed} TEXT NOT NULL,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL,
       ${Tables.colSyncedAt} INTEGER
     )
   ''');
@@ -595,6 +612,22 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await BuiltinDataSeeder.seedCategories(db);
     } catch (e) {
       debugPrint('v14 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 15) {
+    try {
+      // v15: 新增 user_profile 表（单行表 id=1，个人资料本地副本）
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.userProfile} (
+          ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
+          ${Tables.colUsername} TEXT NOT NULL,
+          ${Tables.colAvatarSeed} TEXT NOT NULL,
+          ${Tables.colUpdatedAt} INTEGER NOT NULL,
+          ${Tables.colSyncedAt} INTEGER
+        )
+      ''');
+    } catch (e) {
+      debugPrint('v15 migration failed (silent fallback): $e');
     }
   }
 }

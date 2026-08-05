@@ -165,6 +165,12 @@ class Tables {
   static const String colAnswersJson = 'answers_json';
   static const String colSubmittedAt = 'submitted_at';
   static const String colSyncedAt = 'synced_at';
+
+  // === user_profile 表（v15 迁移新增，单行表 id=1） ===
+  static const String userProfile = 'user_profile';
+  static const String colUsername = 'username';
+  static const String colAvatarSeed = 'avatar_seed';
+  // colSyncedAt 复用 questionnaire 段声明（值同为 'synced_at'），此处不重复声明
 }
 
 class ChallengeHistoryTable {
