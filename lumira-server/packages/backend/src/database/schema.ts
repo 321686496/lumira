@@ -66,3 +66,11 @@ export const redemptionRecords = sqliteTable('redemption_records', {
   redeemedAt: integer('redeemed_at').notNull(),
   ipAddress: text('ip_address'),
 });
+
+export const questionnaireRecords = sqliteTable('questionnaire_records', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  deviceId: text('device_id').notNull(),
+  answersJson: text('answers_json').notNull(),
+  submittedAt: integer('submitted_at').notNull(),
+  clientIp: text('client_ip'),
+});
