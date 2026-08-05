@@ -13,7 +13,7 @@ import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/checkin/data/checkin_dao.dart';
 import 'package:lumira_app_flutter/features/checkin/data/checkin_models.dart';
 import 'package:lumira_app_flutter/features/checkin/data/checkin_providers.dart';
-import 'package:lumira_app_flutter/features/checkin/pages/checkin_list_page.dart';
+import 'package:lumira_app_flutter/features/checkin/pages/checkin_detail_page.dart';
 
 void main() {
   late Database db;
@@ -35,7 +35,6 @@ void main() {
       checkinDaoProvider.overrideWith((ref) async => dao),
       galleryDaoProvider.overrideWith((ref) async => GalleryDao(db)),
     ]);
-    // Forced fix: 预解析基础 provider，避免 loading 态 CircularProgressIndicator（无限动画）拖垮 pumpAndSettle
     await container.read(checkinDaoProvider.future);
     await container.read(galleryDaoProvider.future);
   });
@@ -52,74 +51,60 @@ void main() {
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
   }
 
-  Future<void> seed({int n = 3}) async {
-    for (var i = 0; i < n; i++) {
-      await dao.insert(CheckinRecord(
-        id: 'c$i',
-        name: '店铺 $i',
-        place: '地点 $i',
-        category: 'coffee',
-        rating: i == 0 ? 5 : 0,
-        note: '',
-        visitedAt: 1000 * (i + 1),
-        createdAt: 1,
-        updatedAt: 1,
-      ));
-    }
+  Future<void> seed() async {
+    await dao.insert(CheckinRecord(
+      id: 'c1',
+      name: 'Manner Coffee',
+      place: '武康路',
+      category: 'coffee',
+      rating: 5,
+      note: '燕麦拿铁很香',
+      visitedAt: 3000,
+      createdAt: 1,
+      updatedAt: 2,
+    ));
   }
 
-  Widget wrap(Widget child) {
-    return UncontrolledProviderScope(
+  testWidgets('渲染足迹详情：店名/地点/分类/评分/心得', (tester) async {
+    setViewport(tester);
+    await seed();
+    await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: MaterialApp(home: child),
-    );
-  }
-
-  /// 在 seed 之后预解析列表/总数 provider（避免 FakeAsync 中 future 不 resolve 导致 loading 态超时）
-  Future<void> preload() async {
-    await container.read(checkinsProvider.future);
-    await container.read(checkinTotalCountProvider.future);
-  }
-
-  testWidgets('空态显示引导', (tester) async {
-    setViewport(tester);
-    await preload();
-    await tester.pumpWidget(wrap(const CheckinListPage()));
+      child: const MaterialApp(home: CheckinDetailPage(checkinId: 'c1')),
+    ));
     await tester.pumpAndSettle();
-    expect(find.text('还没有探店足迹'), findsOneWidget);
-    expect(find.text('记录第一笔'), findsOneWidget);
+
+    expect(find.text('Manner Coffee'), findsOneWidget);
+    expect(find.text('武康路'), findsOneWidget);
+    expect(find.text('咖啡'), findsOneWidget);
+    expect(find.text('燕麦拿铁很香'), findsOneWidget);
+    expect(find.byIcon(Icons.star), findsNWidgets(5)); // rating 5
   });
 
-  testWidgets('列表渲染足迹与总数', (tester) async {
+  testWidgets('足迹不存在显示占位', (tester) async {
     setViewport(tester);
-    await seed(n: 3);
-    // seed 后失效缓存并重新预解析，避免 loading 态无限动画拖垮 pumpAndSettle
-    container.invalidate(checkinsProvider);
-    container.invalidate(checkinTotalCountProvider);
-    await preload();
-    await tester.pumpWidget(wrap(const CheckinListPage()));
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: CheckinDetailPage(checkinId: 'none')),
+    ));
     await tester.pumpAndSettle();
-    expect(find.text('个探店足迹'), findsOneWidget);
-    expect(find.text('3'), findsOneWidget);
-    expect(find.text('店铺 0'), findsOneWidget);
-    expect(find.text('店铺 1'), findsOneWidget);
-    expect(find.text('店铺 2'), findsOneWidget);
-    expect(find.text('咖啡'), findsNWidgets(3));
+    expect(find.text('足迹不存在或已删除'), findsOneWidget);
   });
 
-  testWidgets('空态点击记录第一笔跳新增', (tester) async {
+  testWidgets('删除流程：确认弹窗 → 删除 → 返回列表', (tester) async {
     setViewport(tester);
-    await preload();
+    await seed();
     final router = GoRouter(
-      initialLocation: '/checkin/list',
+      initialLocation: '/',
       routes: [
         GoRoute(
-          path: '/checkin/list',
-          builder: (_, __) => const CheckinListPage(),
+          path: '/',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('LIST_PAGE'))),
         ),
         GoRoute(
-          path: '/checkin/edit',
-          builder: (_, __) => const Scaffold(body: Text('edit-page')),
+          path: '/checkin/detail',
+          builder: (_, __) => const CheckinDetailPage(),
         ),
       ],
     );
@@ -128,9 +113,22 @@ void main() {
       child: MaterialApp.router(routerConfig: router),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('记录第一笔'));
+
+    router.push('/checkin/detail?checkinId=c1');
     await tester.pumpAndSettle();
-    expect(find.text('edit-page'), findsOneWidget);
+    expect(find.text('Manner Coffee'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.pumpAndSettle();
+    expect(find.text('删除足迹'), findsOneWidget); // 弹窗标题
+    expect(find.textContaining('确定删除这条探店足迹吗'), findsOneWidget);
+
+    await tester.tap(find.text('删除').last); // 弹窗确认按钮
+    await tester.pumpAndSettle();
+
+    expect(find.text('已删除'), findsOneWidget); // toast
+    expect(await dao.getById('c1'), isNull); // 库中已删除
+    expect(find.text('LIST_PAGE'), findsOneWidget); // pop 回基页
   });
 }
 
