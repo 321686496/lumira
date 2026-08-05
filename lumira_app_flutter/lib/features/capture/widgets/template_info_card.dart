@@ -28,7 +28,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     super.didUpdateWidget(oldWidget);
     // 切换模板（id 变化）时重置为展开
     if (oldWidget.template.meta.id != widget.template.meta.id) {
-      setState(() => _expanded = true);
+      _expanded = true;
     }
   }
 

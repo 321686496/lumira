@@ -5,6 +5,7 @@ import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/data/templates/hk_noir_portrait.dart';
 import 'package:lumira_app_flutter/features/capture/data/templates/soft_portrait.dart';
+import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/template_info_card.dart';
 
 void main() {
@@ -57,5 +58,31 @@ void main() {
 
     expect(find.text('港风夜景人像'), findsOneWidget);
     expect(find.textContaining('王家卫式港风夜景'), findsOneWidget);
+  });
+
+  testWidgets('空内容模板：无简介与注意点时仅渲染标题条', (tester) async {
+    const emptyTemplate = PhotoTemplate(
+      meta: TemplateMeta(
+        id: 'empty',
+        name: '空内容模板',
+        category: 'portrait',
+        classification: TemplateClassification(type: 'portrait'),
+        description: '',
+      ),
+      composition: Composition(),
+      pose: Pose(),
+      camera: CameraParams(),
+      sceneGuide: SceneGuide(tips: <String>[]),
+      postProcess: PostProcess(color: PostProcessColor()),
+    );
+
+    await tester.pumpWidget(wrap(const TemplateInfoCard(template: emptyTemplate)));
+
+    // 模板名（标题条）仍渲染
+    expect(find.text('空内容模板'), findsOneWidget);
+    // 简介（description 为空字符串）不渲染
+    expect(find.text(''), findsNothing);
+    // 注意点（check 图标行）不渲染
+    expect(find.byIcon(Icons.check_circle_outline), findsNothing);
   });
 }
