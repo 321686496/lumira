@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../data/templates_mock_data.dart';
+import 'template_cover_image.dart';
 
 /// 模板网格卡片（更多模板 section 2 列网格项）
 ///
@@ -90,22 +91,37 @@ class _GridImage extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  tokens.brandSubtle,
-                  tokens.brand.withOpacity(0.4),
-                ],
+          TemplateCoverImage(
+            cover: tpl.cover,
+            coverData: tpl.coverData,
+            fit: BoxFit.cover,
+            fallback: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    tokens.brandSubtle,
+                    tokens.brand.withOpacity(0.4),
+                  ],
+                ),
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.photo_camera_outlined,
+                  size: 28,
+                  color: tokens.brandDeep.withOpacity(0.6),
+                ),
               ),
             ),
-            child: Center(
-              child: Icon(
-                Icons.photo_camera_outlined,
-                size: 28,
-                color: tokens.brandDeep.withOpacity(0.6),
+            errorFallback: Container(
+              color: tokens.surfaceAlt,
+              child: Center(
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  size: 24,
+                  color: tokens.textTertiary,
+                ),
               ),
             ),
           ),

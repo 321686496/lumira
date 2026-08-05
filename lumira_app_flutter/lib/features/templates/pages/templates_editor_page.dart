@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert' show base64Encode, base64Decode;
+import 'dart:io' as io;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../core/services/file_picker_service.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -57,6 +61,14 @@ const List<EditorOption> silhouetteSourceOptions = [
   EditorOption('builtin', '内置库'),
   EditorOption('image', '导入图片'),
   EditorOption('svg', '绘制剪影'),
+];
+
+const List<EditorOption> aspectRatioOptions = [
+  EditorOption('fullscreen', '全屏'),
+  EditorOption('4:3', '4:3'),
+  EditorOption('1:1', '1:1'),
+  EditorOption('3:4', '3:4'),
+  EditorOption('16:9', '16:9'),
 ];
 
 const List<EditorOption> whiteBalanceOptions = [
@@ -144,12 +156,21 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   // 拖动时只更新此 notifier，剪影预览部分用 ValueListenableBuilder 监听并重建
   late final ValueNotifier<Offset> _posePositionNotifier;
 
+  /// 是否正在从 DAO 异步加载模板（编辑模式且 mock 中不存在时为 true）。
+  /// 加载期间显示 loading 覆盖层，避免用户看到空白表单误以为模板未加载。
+  bool _isLoadingFromDao = false;
+
   @override
   void initState() {
     super.initState();
-    _form = _loadInitialForm();
-    _isEditMode = widget.templateId != null &&
+    // 同步加载 mock 数据（内置模板/草稿/测试种子）— 立即显示，避免空白闪烁
+    _form = _loadInitialFormSync();
+    final mockHasTemplate = widget.templateId != null &&
         TemplatesEditorMockData.loadTemplateById(widget.templateId) != null;
+    _isEditMode = widget.templateId != null && mockHasTemplate;
+    // 编辑模式但 mock 中不存在（用户自建模板）→ 需要从 DAO 异步加载
+    _isLoadingFromDao =
+        widget.templateId != null && !mockHasTemplate;
     _tagsController =
         TextEditingController(text: _form.meta.tags.join(', '));
     _propsController =
@@ -159,6 +180,10 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     _posePositionNotifier = ValueNotifier(
       Offset(_form.pose.position.x, _form.pose.position.y),
     );
+    // 异步从 DAO 加载（若 DAO 命中则覆盖 mock 数据，用于用户自建模板编辑）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadFromDaoIfNeeded();
+    });
   }
 
   @override
@@ -178,12 +203,16 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         Offset(_form.pose.position.x, _form.pose.position.y);
   }
 
-  EditorForm _loadInitialForm() {
-    if (widget.templateId != null) {
+  /// 同步加载初始表单（mock 数据源）：
+  /// 1. 编辑模式（templateId 非空）：从 mock 加载已有模板
+  /// 2. 草稿恢复（draftId 非空）：从 mock 加载草稿
+  /// 3. 兜底：空白模板
+  EditorForm _loadInitialFormSync() {
+    if (widget.templateId != null && widget.templateId!.isNotEmpty) {
       final tpl = TemplatesEditorMockData.loadTemplateById(widget.templateId);
       if (tpl != null) return tpl;
     }
-    if (widget.draftId != null) {
+    if (widget.draftId != null && widget.draftId!.isNotEmpty) {
       final draft = TemplatesEditorMockData.loadDraftById(widget.draftId);
       if (draft != null) {
         _currentDraftId = widget.draftId!;
@@ -191,6 +220,39 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       }
     }
     return createBlankEditorForm();
+  }
+
+  /// 异步从 DAO 加载已有模板（若命中则覆盖 mock 数据）。
+  /// 仅在编辑模式（templateId 非空）且 DAO 命中时覆盖。
+  /// 用于用户自建模板编辑（mock 数据不包含用户自建模板）。
+  Future<void> _loadFromDaoIfNeeded() async {
+    if (widget.templateId == null || widget.templateId!.isEmpty) {
+      if (mounted) setState(() => _isLoadingFromDao = false);
+      return;
+    }
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final record = await dao.getById(widget.templateId!);
+      if (record == null) {
+        if (!mounted) return;
+        setState(() => _isLoadingFromDao = false);
+        return;
+      }
+      final loaded = TemplateMapper.toEditorForm(record);
+      if (!mounted) return;
+      setState(() {
+        _form = loaded;
+        _isEditMode = true;
+        _tagsController.text = _form.meta.tags.join(', ');
+        _propsController.text = _form.sceneGuide.props.join(', ');
+        _tipsController.text = _form.sceneGuide.tips.join('\n');
+        _syncPosePosition();
+        _isLoadingFromDao = false;
+      });
+    } catch (e) {
+      debugPrint('Failed to load template from DAO: $e');
+      if (mounted) setState(() => _isLoadingFromDao = false);
+    }
   }
 
   // ===== 表单变更处理 =====
@@ -231,6 +293,108 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     _onChange(() => _form.camera.whiteBalanceK = value);
   }
 
+  // ===== 封面图选择 =====
+
+  Future<void> _pickCoverImage() async {
+    try {
+      final file = await FilePickerService.pickSingleImage();
+      if (file == null) return;
+      final bytes = file.bytes;
+      if (bytes == null) {
+        if (!mounted) return;
+        lumira.LumiraToast.show(context, '读取图片失败');
+        return;
+      }
+      final ext = (file.extension ?? '').toLowerCase();
+      final mime = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg' : 'image/png';
+      final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
+      _onChange(() => _form.meta.coverImage = dataUrl);
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '封面图已设置');
+    } catch (e) {
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '设置封面图失败：$e');
+    }
+  }
+
+  /// 通过拍摄页拍摄封面图（capture?mode=return），返回照片路径后读取文件转 base64。
+  ///
+  /// 不使用 ImagePicker / file_picker 的 camera 模式，因为本项目拍摄流程统一走
+  /// camerawesome 的 capture 页，且 file_picker 在 OHOS 上不支持相机。
+  /// capture 页 ?mode=return 拍照完成后会 `context.pop(path)` 回本页。
+  Future<void> _pickCoverImageFromCamera() async {
+    try {
+      final result = await GoRouter.of(context).push<String>(
+        RouteNames.build(RouteNames.capture, {RouteNames.paramMode: 'return'}),
+      );
+      if (result == null || result.isEmpty) return;
+      // capture?mode=return 返回的是本地文件路径，读取为 bytes 后转 data URL
+      final file = io.File(result);
+      final exists = await file.exists();
+      if (!exists) {
+        if (!mounted) return;
+        lumira.LumiraToast.show(context, '读取拍摄照片失败');
+        return;
+      }
+      final bytes = await file.readAsBytes();
+      // 拍摄结果统一为 jpeg
+      final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      _onChange(() => _form.meta.coverImage = dataUrl);
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '封面图已设置');
+    } catch (e) {
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '设置封面图失败：$e');
+    }
+  }
+
+  Future<void> _showCoverImagePicker() async {
+    final tokens = ref.read(themeTokensProvider);
+    await lumira.showLumiraBottomSheet<void>(
+      context: context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '选择封面图',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+            ),
+          ),
+          lumira.LumiraListTile(
+            leading: Icon(Icons.photo_outlined, color: tokens.brand),
+            title: const Text('从相册选择'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickCoverImage();
+            },
+          ),
+          lumira.LumiraListTile(
+            leading: Icon(Icons.camera_alt_outlined, color: tokens.brand),
+            title: const Text('拍照'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickCoverImageFromCamera();
+            },
+          ),
+          lumira.LumiraListTile(
+            title: Center(
+              child: Text('取消',
+                  style: TextStyle(color: tokens.textSecondary)),
+            ),
+            onTap: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _onSilhouetteSourceChange(String type) {
     setState(() {
       _form.pose.silhouette.type = type;
@@ -249,19 +413,35 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     _onChange(() => _form.pose.silhouette.data = key);
   }
 
-  void _importSilhouetteImage() {
-    // 简化：mock 上传成功，设置固定的 filename 和 sizeKB
-    // 真实实现在 Task 2.9+ 接入 file_picker
-    setState(() {
-      _form.pose.silhouette = SilhouetteResource(
-        type: 'image',
-        data: '', // 真实场景为 base64 data URL
-        filename: 'silhouette.png',
-        sizeKB: 24,
-      );
-    });
-    lumira.LumiraToast.show(context, '图片已导入（mock）');
-    _scheduleAutoSave();
+  Future<void> _importSilhouetteImage() async {
+    try {
+      final file = await FilePickerService.pickSingleImage();
+      if (file == null) return;
+      final bytes = file.bytes;
+      if (bytes == null) {
+        if (!mounted) return;
+        lumira.LumiraToast.show(context, '读取图片失败');
+        return;
+      }
+      final ext = (file.extension ?? '').toLowerCase();
+      final mime = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg' : 'image/png';
+      final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
+      final sizeKB = (bytes.length / 1024).round();
+      setState(() {
+        _form.pose.silhouette = SilhouetteResource(
+          type: 'image',
+          data: dataUrl,
+          filename: file.name,
+          sizeKB: sizeKB,
+        );
+      });
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '图片已导入（${sizeKB}KB）');
+      _scheduleAutoSave();
+    } catch (e) {
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '导入图片失败：$e');
+    }
   }
 
   void _openSilhouetteEditor() {
@@ -345,81 +525,26 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     final now = DateTime.now().millisecondsSinceEpoch;
     // 编辑模式复用 templateId；新建模式生成 user_<timestamp> 作为持久化主键
     final id = widget.templateId ?? 'user_$now';
-    final record = TemplateRecord(
+
+    // 编辑模式下保留原 createdAt（避免更新时刷新创建时间）
+    int createdAt = now;
+    if (_isEditMode && widget.templateId != null) {
+      try {
+        final dao = await ref.read(templatesDaoProvider.future);
+        final existing = await dao.getById(widget.templateId!);
+        if (existing != null) {
+          createdAt = existing.createdAt;
+        }
+      } catch (e) {
+        debugPrint('Failed to query existing record for createdAt: $e');
+      }
+    }
+
+    final record = TemplateMapper.fromEditorForm(
+      _form,
       id: id,
-      name: _form.meta.name.trim(),
-      author: 'user',
-      version: '1.0.0',
-      category: _form.meta.category,
-      classification: {
-        'type': _form.meta.category,
-      },
-      tags: _form.meta.tags,
-      tagIds: const [],
-      price: 0,
-      cover: '',
-      description: _form.meta.description,
-      referenceSource: _form.meta.referenceSource,
-      composition: {
-        'overlayType': _form.composition.overlayType,
-        'aspectRatio': _form.composition.aspectRatio,
-        'opacity': _form.composition.opacity,
-        'description': _form.composition.description,
-      },
-      pose: {
-        'silhouette': {
-          'type': _form.pose.silhouette.type,
-          'data': _form.pose.silhouette.data,
-          'filename': _form.pose.silhouette.filename,
-          'sizeKB': _form.pose.silhouette.sizeKB,
-        },
-        'position': {
-          'x': _form.pose.position.x,
-          'y': _form.pose.position.y,
-        },
-        'scale': _form.pose.scale,
-        'rotation': _form.pose.rotation,
-        'description': _form.pose.description,
-      },
-      camera: {
-        'exposureCompensation': _form.camera.exposureCompensation,
-        'isoMode': _form.camera.isoMode,
-        'iso': _form.camera.iso,
-        'shutterSpeed': _form.camera.shutterSpeed,
-        'whiteBalance': _form.camera.whiteBalance,
-        'whiteBalanceK': _form.camera.whiteBalanceK,
-        'flashMode': _form.camera.flashMode,
-        'focusMode': _form.camera.focusMode,
-        'lens': _form.camera.lensSuggestion,
-      },
-      sceneGuide: {
-        'lightDirection': _form.sceneGuide.lightDirection,
-        'shootingDistance': _form.sceneGuide.shootingDistance,
-        'background': _form.sceneGuide.background,
-        'props': _form.sceneGuide.props,
-        'bestTime': _form.sceneGuide.bestTime,
-        'tips': _form.sceneGuide.tips,
-      },
-      postProcess: {
-        'cropRatio': _form.postProcess.cropRatio,
-        'lut': _form.postProcess.lut,
-        'color': {
-          'brightness': _form.postProcess.color.brightness,
-          'contrast': _form.postProcess.color.contrast,
-          'saturation': _form.postProcess.color.saturation,
-          'temperature': _form.postProcess.color.temperature,
-          'tint': _form.postProcess.color.tint,
-        },
-        'smoothStrength': _form.postProcess.smoothStrength,
-        'sharpen': _form.postProcess.sharpen,
-        'vignette': _form.postProcess.vignette,
-        'grain': _form.postProcess.grain,
-      },
-      createdAt: now,
-      updatedAt: now,
-      isBuiltin: false,
-      isRecommended: false,
-    );
+      createdAt: createdAt,
+    ).copyWith(updatedAt: now);
 
     try {
       final dao = await ref.read(templatesDaoProvider.future);
@@ -622,6 +747,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                               tagsController: _tagsController,
                               onTagsChanged: _onTagsChanged,
                               onChange: _onChange,
+                              onPickCoverImage: _showCoverImagePicker,
                             ),
                             const SizedBox(height: 12),
                             _Step2Composition(
@@ -681,6 +807,15 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                         onSave: _onSave,
                         onExport: _onExport,
                       ),
+                      if (_isLoadingFromDao)
+                        Positioned.fill(
+                          child: Container(
+                            color: tokens.canvas.withOpacity(0.85),
+                            child: Center(
+                              child: lumira.LumiraProgress.circular(),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1083,6 +1218,7 @@ class _Step1TemplateInfo extends StatelessWidget {
     required this.tagsController,
     required this.onTagsChanged,
     required this.onChange,
+    required this.onPickCoverImage,
   });
 
   final ThemeTokens tokens;
@@ -1090,9 +1226,11 @@ class _Step1TemplateInfo extends StatelessWidget {
   final TextEditingController tagsController;
   final ValueChanged<String> onTagsChanged;
   final void Function(void Function() mutator) onChange;
+  final VoidCallback onPickCoverImage;
 
   @override
   Widget build(BuildContext context) {
+    final cover = form.meta.coverImage;
     return _StepCard(
       tokens: tokens,
       stepNumber: 1,
@@ -1100,6 +1238,34 @@ class _Step1TemplateInfo extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _FieldLabel(tokens: tokens, text: '效果图（封面图）'),
+          GestureDetector(
+            onTap: onPickCoverImage,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              height: 120,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: tokens.canvasDeep,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: tokens.divider,
+                  width: 0.5,
+                ),
+              ),
+              clipBehavior: Clip.hardEdge,
+              child: cover != null && cover.isNotEmpty
+                  ? Image.memory(
+                      base64Decode(
+                          cover.substring(cover.indexOf(',') + 1)),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, _) => _CoverPlaceholder(
+                          tokens: tokens),
+                    )
+                  : _CoverPlaceholder(tokens: tokens),
+            ),
+          ),
+          const SizedBox(height: 14),
           _FieldLabel(tokens: tokens, text: '名称'),
           _FieldInput(
             tokens: tokens,
@@ -1148,6 +1314,36 @@ class _Step1TemplateInfo extends StatelessWidget {
   }
 }
 
+/// 封面图占位（未设置封面图时显示）
+class _CoverPlaceholder extends StatelessWidget {
+  const _CoverPlaceholder({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.add_photo_alternate_outlined,
+            size: 32,
+            color: tokens.textTertiary,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '点击添加封面图',
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.textTertiary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ===== Step 2: 构图叠图 =====
 
 class _Step2Composition extends StatelessWidget {
@@ -1181,10 +1377,10 @@ class _Step2Composition extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           _FieldLabel(tokens: tokens, text: '宽高比'),
-          _FieldInput(
+          _PillGroup(
             tokens: tokens,
-            initialValue: form.composition.aspectRatio,
-            placeholder: '如 3:4',
+            options: aspectRatioOptions,
+            value: form.composition.aspectRatio,
             onChanged: (v) =>
                 onChange(() => form.composition.aspectRatio = v),
           ),
@@ -1377,9 +1573,9 @@ class _Step3Pose extends StatelessWidget {
             tokens: tokens,
             label: '缩放',
             value: form.pose.scale,
-            min: 0.5,
-            max: 1.5,
-            divisions: 100,
+            min: 0.3,
+            max: 2.5,
+            divisions: 110,
             onChanged: (v) => onChange(() => form.pose.scale = v),
             valueText: form.pose.scale.toStringAsFixed(2),
           ),
@@ -1404,8 +1600,10 @@ class _Step3Pose extends StatelessWidget {
           const SizedBox(height: 14),
           // 预览框（可拖动）—— Bug 11 修复：用 RepaintBoundary 隔离重绘，
           // ValueListenableBuilder 监听位置变化，拖动时只重建此部分而非整个 page
+          // 拖动区域比例使用设备屏幕比例，让剪影预览与实际取景画面尺寸更接近
           AspectRatio(
-            aspectRatio: parseAspectRatio(form.composition.aspectRatio),
+            aspectRatio:
+                MediaQuery.of(context).size.width / MediaQuery.of(context).size.height,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: RepaintBoundary(
@@ -1748,6 +1946,36 @@ class _Step4Camera extends StatelessWidget {
             options: lensOptions,
             onChanged: (v) => onChange(() => form.camera.lensSuggestion = v),
           ),
+          const SizedBox(height: 14),
+          _FieldLabel(tokens: tokens, text: '补光灯'),
+          _SliderRow(
+            tokens: tokens,
+            label: '启用',
+            value: form.fillLight?.enabled == true ? 1.0 : 0.0,
+            min: 0,
+            max: 1,
+            divisions: 1,
+            onChanged: (v) => onChange(() {
+              form.fillLight ??= EditorFormFillLight();
+              form.fillLight!.enabled = v > 0.5;
+            }),
+            valueText: form.fillLight?.enabled == true ? '开' : '关',
+          ),
+          if (form.fillLight?.enabled == true)
+            _SliderRow(
+              tokens: tokens,
+              label: '强度',
+              value: form.fillLight?.intensity ?? 0.8,
+              min: 0.1,
+              max: 1.5,
+              divisions: 14,
+              onChanged: (v) => onChange(() {
+                form.fillLight ??= EditorFormFillLight();
+                form.fillLight!.intensity = v;
+              }),
+              valueText:
+                  (form.fillLight?.intensity ?? 0.8).toStringAsFixed(1),
+            ),
         ],
       ),
     );
@@ -1883,57 +2111,123 @@ class _Step6PostProcess extends StatelessWidget {
           _SliderRow(
             tokens: tokens,
             label: '亮度',
-            value: form.postProcess.color.brightness.toDouble(),
+            value: form.postProcess.color.brightness,
             min: -100,
             max: 100,
             divisions: 200,
-            onChanged: (v) => onChange(
-                () => form.postProcess.color.brightness = v.round()),
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.brightness = v),
             valueText: formatSigned(form.postProcess.color.brightness),
           ),
           _SliderRow(
             tokens: tokens,
             label: '对比',
-            value: form.postProcess.color.contrast.toDouble(),
+            value: form.postProcess.color.contrast,
             min: -100,
             max: 100,
             divisions: 200,
-            onChanged: (v) => onChange(
-                () => form.postProcess.color.contrast = v.round()),
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.contrast = v),
             valueText: formatSigned(form.postProcess.color.contrast),
           ),
           _SliderRow(
             tokens: tokens,
             label: '饱和',
-            value: form.postProcess.color.saturation.toDouble(),
+            value: form.postProcess.color.saturation,
             min: -100,
             max: 100,
             divisions: 200,
-            onChanged: (v) => onChange(
-                () => form.postProcess.color.saturation = v.round()),
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.saturation = v),
             valueText: formatSigned(form.postProcess.color.saturation),
           ),
           _SliderRow(
             tokens: tokens,
             label: '色温',
-            value: form.postProcess.color.temperature.toDouble(),
+            value: form.postProcess.color.temperature,
             min: -100,
             max: 100,
             divisions: 200,
-            onChanged: (v) => onChange(
-                () => form.postProcess.color.temperature = v.round()),
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.temperature = v),
             valueText: formatSigned(form.postProcess.color.temperature),
           ),
           _SliderRow(
             tokens: tokens,
             label: '色调',
-            value: form.postProcess.color.tint.toDouble(),
+            value: form.postProcess.color.tint,
             min: -100,
             max: 100,
             divisions: 200,
             onChanged: (v) =>
-                onChange(() => form.postProcess.color.tint = v.round()),
+                onChange(() => form.postProcess.color.tint = v),
             valueText: formatSigned(form.postProcess.color.tint),
+          ),
+          _SliderRow(
+            tokens: tokens,
+            label: '高光',
+            value: form.postProcess.color.highlights ?? 0,
+            min: -100,
+            max: 100,
+            divisions: 200,
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.highlights = v),
+            valueText: formatSigned(form.postProcess.color.highlights ?? 0),
+          ),
+          _SliderRow(
+            tokens: tokens,
+            label: '阴影',
+            value: form.postProcess.color.shadows ?? 0,
+            min: -100,
+            max: 100,
+            divisions: 200,
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.shadows = v),
+            valueText: formatSigned(form.postProcess.color.shadows ?? 0),
+          ),
+          _SliderRow(
+            tokens: tokens,
+            label: '黑点',
+            value: form.postProcess.color.blackPoint ?? 0,
+            min: -100,
+            max: 100,
+            divisions: 200,
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.blackPoint = v),
+            valueText: formatSigned(form.postProcess.color.blackPoint ?? 0),
+          ),
+          _SliderRow(
+            tokens: tokens,
+            label: '自然饱和',
+            value: form.postProcess.color.vibrance ?? 0,
+            min: -100,
+            max: 100,
+            divisions: 200,
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.vibrance = v),
+            valueText: formatSigned(form.postProcess.color.vibrance ?? 0),
+          ),
+          _SliderRow(
+            tokens: tokens,
+            label: '鲜明度',
+            value: form.postProcess.color.brilliance ?? 0,
+            min: -100,
+            max: 100,
+            divisions: 200,
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.brilliance = v),
+            valueText: formatSigned(form.postProcess.color.brilliance ?? 0),
+          ),
+          _SliderRow(
+            tokens: tokens,
+            label: '清晰度',
+            value: form.postProcess.color.clarity ?? 0,
+            min: -100,
+            max: 100,
+            divisions: 200,
+            onChanged: (v) =>
+                onChange(() => form.postProcess.color.clarity = v),
+            valueText: formatSigned(form.postProcess.color.clarity ?? 0),
           ),
           _SliderRow(
             tokens: tokens,

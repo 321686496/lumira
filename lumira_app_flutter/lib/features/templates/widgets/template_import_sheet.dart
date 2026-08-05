@@ -1,8 +1,9 @@
 import 'dart:convert';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/services/file_picker_service.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -114,18 +115,16 @@ class TemplateImportSheet extends ConsumerWidget {
     navigator.pop(); // 先关闭 BottomSheet
 
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
+      final file = await FilePickerService.pickSingleFile(
         allowedExtensions: ['json', 'lumira', 'pptpl'],
-        allowMultiple: false,
+        withData: true,
       );
 
-      if (result == null || result.files.isEmpty) {
+      if (file == null) {
         // 用户取消选择
         return;
       }
 
-      final file = result.files.first;
       final bytes = file.bytes;
       if (bytes == null) {
         _showToast(navigator, '无法读取文件内容');

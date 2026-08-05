@@ -621,6 +621,8 @@ TemplateRecommendation _recordToRecommendation(TemplateRecord r) {
     source: TemplateSource.systemPick,
     imageSeed: r.id,
     category: r.category,
+    cover: r.cover.isEmpty ? null : r.cover,
+    coverData: r.coverData,
   );
 }
 
@@ -632,6 +634,8 @@ TemplateItem _recordToItem(TemplateRecord r) {
     name: r.name,
     category: r.category,
     imageSeed: r.id,
+    cover: r.cover.isEmpty ? null : r.cover,
+    coverData: r.coverData,
     price: r.price,
   );
 }

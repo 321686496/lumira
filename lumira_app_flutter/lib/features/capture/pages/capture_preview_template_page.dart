@@ -862,45 +862,45 @@ class _PostProcessSection extends StatelessWidget {
         ),
         _SliderRow(
           label: '亮度',
-          value: template.postProcess.color.brightness.toDouble(),
+          value: template.postProcess.color.brightness,
           min: -100,
           max: 100,
           divisions: 200,
           onChanged: (v) => onChange(() {
-            template.postProcess.color.brightness = v.round();
+            template.postProcess.color.brightness = v;
           }),
           valueText: formatSigned(template.postProcess.color.brightness),
         ),
         _SliderRow(
           label: '对比度',
-          value: template.postProcess.color.contrast.toDouble(),
+          value: template.postProcess.color.contrast,
           min: -100,
           max: 100,
           divisions: 200,
           onChanged: (v) => onChange(() {
-            template.postProcess.color.contrast = v.round();
+            template.postProcess.color.contrast = v;
           }),
           valueText: formatSigned(template.postProcess.color.contrast),
         ),
         _SliderRow(
           label: '饱和度',
-          value: template.postProcess.color.saturation.toDouble(),
+          value: template.postProcess.color.saturation,
           min: -100,
           max: 100,
           divisions: 200,
           onChanged: (v) => onChange(() {
-            template.postProcess.color.saturation = v.round();
+            template.postProcess.color.saturation = v;
           }),
           valueText: formatSigned(template.postProcess.color.saturation),
         ),
         _SliderRow(
           label: '色温',
-          value: template.postProcess.color.temperature.toDouble(),
+          value: template.postProcess.color.temperature,
           min: -100,
           max: 100,
           divisions: 200,
           onChanged: (v) => onChange(() {
-            template.postProcess.color.temperature = v.round();
+            template.postProcess.color.temperature = v;
           }),
           valueText: formatSigned(template.postProcess.color.temperature),
         ),

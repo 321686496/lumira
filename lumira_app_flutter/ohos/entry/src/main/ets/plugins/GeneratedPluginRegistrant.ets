@@ -1,6 +1,7 @@
 import { FlutterEngine, Log } from '@ohos/flutter_ohos';
 import CamerawesomePlugin from 'camerawesome_ohos';
 import DeviceInfoPlusOhosPlugin from 'device_info_plus';
+import FilePickerPlugin from 'file_picker_ohos';
 import PermissionHandlerPlugin from 'permission_handler_ohos';
 import ScreenPlugin from 'screen';
 import SqflitePlugin from 'sqflite';
@@ -19,6 +20,7 @@ export class GeneratedPluginRegistrant {
     try {
       flutterEngine.getPlugins()?.add(new CamerawesomePlugin());
       flutterEngine.getPlugins()?.add(new DeviceInfoPlusOhosPlugin());
+      flutterEngine.getPlugins()?.add(new FilePickerPlugin());
       flutterEngine.getPlugins()?.add(new PermissionHandlerPlugin());
       flutterEngine.getPlugins()?.add(new ScreenPlugin());
       flutterEngine.getPlugins()?.add(new SqflitePlugin());

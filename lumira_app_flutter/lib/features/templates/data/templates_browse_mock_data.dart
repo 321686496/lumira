@@ -177,6 +177,8 @@ class TemplateDetail {
     required this.name,
     required this.category,
     required this.coverSeed,
+    this.cover,
+    this.coverData,
     required this.tags,
     required this.tagIds,
     required this.price,
@@ -192,7 +194,11 @@ class TemplateDetail {
   final String id;
   final String name;
   final String category; // 'portrait' / 'landscape' / ...
-  final String coverSeed; // picsum seed
+  final String coverSeed; // picsum seed（兼容旧 mock，新代码用 cover/coverData）
+  /// 内置模板 assets 路径或远程模板 http URL（可能为空）
+  final String? cover;
+  /// 自定义模板 base64 data URL（如 `data:image/jpeg;base64,xxx`）
+  final String? coverData;
   final List<String> tags;
   final List<String> tagIds;
   final int price; // 0 = 免费
@@ -221,6 +227,7 @@ class CameraData {
     required this.flashMode,
     required this.focusMode,
     required this.lensSuggestion,
+    this.lensType,
   });
   final int iso;
   final String shutterSpeed; // '1/125' / '1/60' / ...
@@ -230,6 +237,8 @@ class CameraData {
   final String flashMode; // 'off' / 'on' / 'auto' / 'torch'
   final String focusMode; // 'auto' / 'manual' / 'continuous'
   final String lensSuggestion; // 'wide' / 'main' / 'telephoto' / 'ultra_wide'
+  /// 镜头类型（与 domain CameraParams.lensType 对齐）：null 表示未指定。
+  final String? lensType;
 }
 
 class PostProcessData {
@@ -241,6 +250,13 @@ class PostProcessData {
     required this.saturation,
     required this.temperature,
     required this.tint,
+    this.highlights,
+    this.shadows,
+    this.blackPoint,
+    this.vibrance,
+    this.brilliance,
+    this.clarity,
+    this.systemFilter,
     required this.smoothStrength,
     required this.sharpen,
     required this.vignette,
@@ -253,6 +269,20 @@ class PostProcessData {
   final int saturation;
   final int temperature;
   final int tint;
+  /// 高光（-100..+100）：null 表示未调整（与 domain PostProcessColor.highlights 对齐）
+  final int? highlights;
+  /// 阴影（-100..+100）：null 表示未调整
+  final int? shadows;
+  /// 黑点（-100..+100）：null 表示未调整
+  final int? blackPoint;
+  /// 自然饱和度（-100..+100）：null 表示未调整
+  final int? vibrance;
+  /// 鲜明度（-100..+100）：null 表示未调整
+  final int? brilliance;
+  /// 清晰度（-100..+100）：null 表示未调整
+  final int? clarity;
+  /// 系统滤镜预设（与 domain PostProcess.systemFilter 对齐）：null 表示未使用
+  final String? systemFilter;
   final int smoothStrength; // 0..100
   final int sharpen; // 0..100
   final int vignette; // 0..100
@@ -302,6 +332,8 @@ class AllTemplateItem {
     required this.coverSeed,
     required this.price,
     required this.isCustom,
+    this.cover,
+    this.coverData,
   });
   final String id;
   final String name;
@@ -311,6 +343,10 @@ class AllTemplateItem {
   final String coverSeed;
   final int price; // 0 = 免费
   final bool isCustom;
+  /// 内置模板 assets 路径或远程模板 http URL（可能为空）
+  final String? cover;
+  /// 自定义模板 base64 data URL（如 `data:image/jpeg;base64,xxx`）
+  final String? coverData;
 }
 
 /// 推荐页 mock 数据（recommend.vue verbatim）
@@ -1297,6 +1333,8 @@ class TemplatesBrowseMockData {
       name: tpl.meta.name,
       category: tpl.meta.category,
       coverSeed: tpl.meta.id,
+      cover: tpl.meta.cover.isEmpty ? null : tpl.meta.cover,
+      coverData: tpl.meta.coverData,
       tags: List<String>.from(tpl.meta.tags),
       tagIds: List<String>.from(tpl.meta.tagIds),
       price: tpl.meta.price,
@@ -1315,6 +1353,7 @@ class TemplatesBrowseMockData {
         flashMode: tpl.camera.flashMode,
         focusMode: tpl.camera.focusMode,
         lensSuggestion: tpl.camera.lensSuggestion ?? 'main',
+        lensType: tpl.camera.lensType,
       ),
       postProcess: PostProcessData(
         cropRatio: tpl.postProcess.cropRatio,
@@ -1324,6 +1363,13 @@ class TemplatesBrowseMockData {
         saturation: tpl.postProcess.color.saturation.round(),
         temperature: tpl.postProcess.color.temperature.round(),
         tint: tpl.postProcess.color.tint.round(),
+        highlights: tpl.postProcess.color.highlights?.round(),
+        shadows: tpl.postProcess.color.shadows?.round(),
+        blackPoint: tpl.postProcess.color.blackPoint?.round(),
+        vibrance: tpl.postProcess.color.vibrance?.round(),
+        brilliance: tpl.postProcess.color.brilliance?.round(),
+        clarity: tpl.postProcess.color.clarity?.round(),
+        systemFilter: tpl.postProcess.systemFilter,
         smoothStrength: tpl.postProcess.smoothStrength,
         sharpen: tpl.postProcess.sharpen,
         vignette: tpl.postProcess.vignette,

@@ -160,49 +160,112 @@ class TemplateMapper {
 
   /// EditorForm → TemplateRecord。
   /// 编辑器表单不包含 author/version/cover/tagIds/price 等字段，使用默认值填充。
+  ///
+  /// 与 domain 对齐的新增字段序列化：
+  /// - meta.coverImage → coverData（base64 data URL）
+  /// - composition.gridType / subjectFrame
+  /// - camera.lensType
+  /// - postProcess.color.highlights/shadows/blackPoint/clarity/vibrance/brilliance（可空）
+  /// - postProcess.systemFilter（可空）
+  /// - fillLight（启用时序列化到 postProcess.fillLight 子对象）
   static TemplateRecord fromEditorForm(editor.EditorForm form, {String? id, required int createdAt}) {
+    final postProcessJson = <String, dynamic>{
+      'cropRatio': form.postProcess.cropRatio,
+      'color': <String, dynamic>{
+        'brightness': form.postProcess.color.brightness,
+        'contrast': form.postProcess.color.contrast,
+        'saturation': form.postProcess.color.saturation,
+        'temperature': form.postProcess.color.temperature,
+        'tint': form.postProcess.color.tint,
+        if (form.postProcess.color.highlights != null)
+          'highlights': form.postProcess.color.highlights,
+        if (form.postProcess.color.shadows != null)
+          'shadows': form.postProcess.color.shadows,
+        if (form.postProcess.color.blackPoint != null)
+          'blackPoint': form.postProcess.color.blackPoint,
+        if (form.postProcess.color.clarity != null)
+          'clarity': form.postProcess.color.clarity,
+        if (form.postProcess.color.vibrance != null)
+          'vibrance': form.postProcess.color.vibrance,
+        if (form.postProcess.color.brilliance != null)
+          'brilliance': form.postProcess.color.brilliance,
+      },
+      'smoothStrength': form.postProcess.smoothStrength,
+      'sharpen': form.postProcess.sharpen,
+      'vignette': form.postProcess.vignette,
+      'grain': form.postProcess.grain,
+      'lut': form.postProcess.lut,
+      if (form.postProcess.systemFilter != null)
+        'systemFilter': form.postProcess.systemFilter,
+    };
+    // 补光灯：启用时序列化到 postProcess.fillLight 子对象
+    if (form.fillLight != null && form.fillLight!.enabled) {
+      postProcessJson['fillLight'] = <String, dynamic>{
+        'enabled': form.fillLight!.enabled,
+        'color': form.fillLight!.color,
+        'intensity': form.fillLight!.intensity,
+      };
+    }
+
+    final compositionJson = <String, dynamic>{
+      'overlayType': form.composition.overlayType,
+      'aspectRatio': form.composition.aspectRatio,
+      'opacity': form.composition.opacity,
+      'description': form.composition.description,
+      if (form.composition.gridType != null)
+        'gridType': form.composition.gridType,
+      if (form.composition.subjectFrame != null)
+        'subjectFrame': <String, dynamic>{
+          'x': form.composition.subjectFrame!.x,
+          'y': form.composition.subjectFrame!.y,
+          'w': form.composition.subjectFrame!.w,
+          'h': form.composition.subjectFrame!.h,
+        },
+    };
+
+    final cameraJson = <String, dynamic>{
+      'exposureCompensation': form.camera.exposureCompensation,
+      'isoMode': form.camera.isoMode,
+      'iso': form.camera.iso,
+      'shutterSpeed': form.camera.shutterSpeed,
+      'whiteBalance': form.camera.whiteBalance,
+      'whiteBalanceK': form.camera.whiteBalanceK,
+      'flashMode': form.camera.flashMode,
+      'focusMode': form.camera.focusMode,
+      'lensSuggestion': form.camera.lensSuggestion,
+      if (form.camera.lensType != null) 'lensType': form.camera.lensType,
+    };
+
+    final classificationJson = <String, dynamic>{
+      'type': form.meta.category,
+      'style': form.meta.style ?? '',
+      'method': form.meta.method ?? '',
+    };
+
     return TemplateRecord(
       id: id ?? form.meta.id,
       name: form.meta.name,
       author: 'Lumira',
       version: '1.0.0',
       category: form.meta.category,
-      classification: {
-        'type': form.meta.category,
-        'style': '',
-        'method': '',
-      },
+      classification: classificationJson,
       tags: List<String>.from(form.meta.tags),
       tagIds: const [],
       price: 0,
       cover: '',
+      coverData: form.meta.coverImage,
       description: form.meta.description,
       referenceSource: form.meta.referenceSource,
-      composition: {
-        'overlayType': form.composition.overlayType,
-        'aspectRatio': form.composition.aspectRatio,
-        'opacity': form.composition.opacity,
-        'description': form.composition.description,
-      },
-      pose: {
+      composition: compositionJson,
+      pose: <String, dynamic>{
         'silhouette': editorSilhouetteToJson(form.pose.silhouette),
         'position': {'x': form.pose.position.x, 'y': form.pose.position.y},
         'scale': form.pose.scale,
         'rotation': form.pose.rotation,
         'description': form.pose.description,
       },
-      camera: {
-        'exposureCompensation': form.camera.exposureCompensation,
-        'isoMode': form.camera.isoMode,
-        'iso': form.camera.iso,
-        'shutterSpeed': form.camera.shutterSpeed,
-        'whiteBalance': form.camera.whiteBalance,
-        'whiteBalanceK': form.camera.whiteBalanceK,
-        'flashMode': form.camera.flashMode,
-        'focusMode': form.camera.focusMode,
-        'lensSuggestion': form.camera.lensSuggestion,
-      },
-      sceneGuide: {
+      camera: cameraJson,
+      sceneGuide: <String, dynamic>{
         'lightDirection': form.sceneGuide.lightDirection,
         'shootingDistance': form.sceneGuide.shootingDistance,
         'background': form.sceneGuide.background,
@@ -210,30 +273,19 @@ class TemplateMapper {
         'bestTime': form.sceneGuide.bestTime,
         'tips': List<String>.from(form.sceneGuide.tips),
       },
-      postProcess: {
-        'cropRatio': form.postProcess.cropRatio,
-        'color': {
-          'brightness': form.postProcess.color.brightness,
-          'contrast': form.postProcess.color.contrast,
-          'saturation': form.postProcess.color.saturation,
-          'temperature': form.postProcess.color.temperature,
-          'tint': form.postProcess.color.tint,
-        },
-        'smoothStrength': form.postProcess.smoothStrength,
-        'sharpen': form.postProcess.sharpen,
-        'vignette': form.postProcess.vignette,
-        'grain': form.postProcess.grain,
-        'lut': form.postProcess.lut,
-      },
+      postProcess: postProcessJson,
       createdAt: createdAt,
       updatedAt: createdAt,
       isBuiltin: false,
       isRecommended: false,
+      source: 'custom',
     );
   }
 
   /// TemplateRecord → EditorForm。
-  /// 编辑器 PostProcessColor 字段为 int，从 JSON 读取时使用 [num.toInt]。
+  /// 与 domain 对齐：PostProcessColor 字段为 double（旧数据 int 会被 num.toDouble 兜底）。
+  /// 新增字段（gridType/subjectFrame/lensType/highlights/.../systemFilter/fillLight）
+  /// 缺失时回退到 null 默认值，向后兼容旧模板数据。
   static editor.EditorForm toEditorForm(TemplateRecord r) {
     final composition = r.composition;
     final pose = r.pose;
@@ -241,6 +293,8 @@ class TemplateMapper {
     final sceneGuide = r.sceneGuide;
     final postProcess = r.postProcess;
     final colorJson = postProcess['color'] as Map<String, dynamic>?;
+    final fillLightJson = postProcess['fillLight'] as Map<String, dynamic>?;
+    final sfJson = composition['subjectFrame'] as Map<String, dynamic>?;
 
     return editor.EditorForm(
       meta: editor.EditorFormMeta(
@@ -256,9 +310,19 @@ class TemplateMapper {
         method: (r.classification['method'] as String?)?.isNotEmpty == true
             ? r.classification['method'] as String
             : null,
+        coverImage: r.coverData,
       ),
       composition: editor.EditorFormComposition(
         overlayType: (composition['overlayType'] as String?) ?? 'rule_of_thirds',
+        gridType: composition['gridType'] as String?,
+        subjectFrame: sfJson == null
+            ? null
+            : SubjectFrame(
+                x: (sfJson['x'] as num?)?.toDouble() ?? 0,
+                y: (sfJson['y'] as num?)?.toDouble() ?? 0,
+                w: (sfJson['w'] as num?)?.toDouble() ?? 0,
+                h: (sfJson['h'] as num?)?.toDouble() ?? 0,
+              ),
         aspectRatio: (composition['aspectRatio'] as String?) ?? '3:4',
         opacity: (composition['opacity'] as num?)?.toDouble() ?? 0.5,
         description: (composition['description'] as String?) ?? '',
@@ -285,6 +349,7 @@ class TemplateMapper {
         flashMode: (camera['flashMode'] as String?) ?? 'off',
         focusMode: (camera['focusMode'] as String?) ?? 'auto',
         lensSuggestion: (camera['lensSuggestion'] as String?) ?? 'main',
+        lensType: camera['lensType'] as String?,
       ),
       sceneGuide: editor.EditorFormSceneGuide(
         lightDirection: (sceneGuide['lightDirection'] as String?) ?? '',
@@ -297,18 +362,32 @@ class TemplateMapper {
       postProcess: editor.EditorFormPostProcess(
         cropRatio: (postProcess['cropRatio'] as String?) ?? '3:4',
         color: editor.PostProcessColor(
-          brightness: (colorJson?['brightness'] as num?)?.toInt() ?? 0,
-          contrast: (colorJson?['contrast'] as num?)?.toInt() ?? 0,
-          saturation: (colorJson?['saturation'] as num?)?.toInt() ?? 0,
-          temperature: (colorJson?['temperature'] as num?)?.toInt() ?? 0,
-          tint: (colorJson?['tint'] as num?)?.toInt() ?? 0,
+          brightness: (colorJson?['brightness'] as num?)?.toDouble() ?? 0.0,
+          contrast: (colorJson?['contrast'] as num?)?.toDouble() ?? 0.0,
+          saturation: (colorJson?['saturation'] as num?)?.toDouble() ?? 0.0,
+          temperature: (colorJson?['temperature'] as num?)?.toDouble() ?? 0.0,
+          tint: (colorJson?['tint'] as num?)?.toDouble() ?? 0.0,
+          highlights: (colorJson?['highlights'] as num?)?.toDouble(),
+          shadows: (colorJson?['shadows'] as num?)?.toDouble(),
+          blackPoint: (colorJson?['blackPoint'] as num?)?.toDouble(),
+          clarity: (colorJson?['clarity'] as num?)?.toDouble(),
+          vibrance: (colorJson?['vibrance'] as num?)?.toDouble(),
+          brilliance: (colorJson?['brilliance'] as num?)?.toDouble(),
         ),
         smoothStrength: (postProcess['smoothStrength'] as num?)?.toInt() ?? 0,
         sharpen: (postProcess['sharpen'] as num?)?.toInt() ?? 0,
         vignette: (postProcess['vignette'] as num?)?.toInt() ?? 0,
         grain: (postProcess['grain'] as num?)?.toInt() ?? 0,
         lut: (postProcess['lut'] as String?) ?? 'none',
+        systemFilter: postProcess['systemFilter'] as String?,
       ),
+      fillLight: fillLightJson == null
+          ? null
+          : editor.EditorFormFillLight(
+              enabled: (fillLightJson['enabled'] as bool?) ?? false,
+              color: (fillLightJson['color'] as num?)?.toInt() ?? 0xFFFFE5B4,
+              intensity: (fillLightJson['intensity'] as num?)?.toDouble() ?? 0.8,
+            ),
     );
   }
 

@@ -19,6 +19,8 @@ class TemplateRecommendation {
     required this.source,
     required this.imageSeed,
     required this.category,
+    this.cover,
+    this.coverData,
   });
 
   final String id;
@@ -27,6 +29,10 @@ class TemplateRecommendation {
   final TemplateSource source;
   final String imageSeed; // picsum seed
   final String category; // 'portrait' / 'landscape' / ... 原始值
+  /// 内置模板 assets 路径或远程模板 http URL
+  final String? cover;
+  /// 自定义模板 base64 data URL
+  final String? coverData;
 }
 
 /// 模板卡片项（更多模板 section）
@@ -37,6 +43,8 @@ class TemplateItem {
     required this.category,
     required this.imageSeed,
     required this.price,
+    this.cover,
+    this.coverData,
   });
 
   final String id;
@@ -44,6 +52,10 @@ class TemplateItem {
   final String category;
   final String imageSeed;
   final int price; // 0 = 免费
+  /// 内置模板 assets 路径或远程模板 http URL
+  final String? cover;
+  /// 自定义模板 base64 data URL
+  final String? coverData;
 }
 
 /// 用户拍摄偏好（仅有照片时显示）
