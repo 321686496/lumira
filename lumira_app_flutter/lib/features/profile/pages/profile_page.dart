@@ -204,68 +204,76 @@ class _HeroCard extends ConsumerWidget {
       ),
       child: Column(
         children: [
-          // 头像 + 徽章
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 88, // 176rpx → 88dp
-                height: 88,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  // neumorphic 风格：移除白边框，使用 tokens.shadowConvexSubtle
-                  border: isNeu ? null : Border.all(color: Colors.white, width: 3),
-                  boxShadow: isNeu
-                      ? tokens.shadowConvexSubtle
-                      : [
-                          BoxShadow(
-                            color: const Color(0xFFC9A96E).withOpacity(0.2),
-                            offset: const Offset(0, 4),
-                            blurRadius: 16,
-                          ),
-                        ],
-                ),
-                child: ClipOval(
-                  child: Image.network(
-                    'https://picsum.photos/seed/${user.avatarSeed}/200/200',
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  width: 22, // 44rpx → 22dp
-                  height: 22,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    // 硬编码颜色：linear-gradient(135deg, #C9A96E, #A88550)
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
+          // 头像 + 徽章（点击进入编辑资料）
+          GestureDetector(
+            onTap: () => context.push(RouteNames.profileEdit),
+            behavior: HitTestBehavior.opaque,
+            child: Column(
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 88, // 176rpx → 88dp
+                      height: 88,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        // neumorphic 风格：移除白边框，使用 tokens.shadowConvexSubtle
+                        border: isNeu ? null : Border.all(color: Colors.white, width: 3),
+                        boxShadow: isNeu
+                            ? tokens.shadowConvexSubtle
+                            : [
+                                BoxShadow(
+                                  color: const Color(0xFFC9A96E).withOpacity(0.2),
+                                  offset: const Offset(0, 4),
+                                  blurRadius: 16,
+                                ),
+                              ],
+                      ),
+                      child: ClipOval(
+                        child: Image.network(
+                          'https://picsum.photos/seed/${user.avatarSeed}/200/200',
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
-                    border: Border.all(color: Colors.white, width: 2.5),
-                  ),
-                  child: const Icon(
-                    Icons.keyboard_arrow_up,
-                    size: 14,
-                    color: Colors.white,
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        width: 22, // 44rpx → 22dp
+                        height: 22,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          // 硬编码颜色：linear-gradient(135deg, #C9A96E, #A88550)
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
+                          ),
+                          border: Border.all(color: Colors.white, width: 2.5),
+                        ),
+                        child: const Icon(
+                          Icons.edit,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16), // 32rpx → 16dp
+                // 名字
+                Text(
+                  user.name,
+                  style: TextStyle(
+                    fontFamily: 'Noto Serif SC',
+                    fontSize: 24, // 48rpx → 24dp
+                    fontWeight: FontWeight.w600,
+                    // neumorphic 风格：tokens.textPrimary
+                    color: isNeu ? tokens.textPrimary : const Color(0xFF3D2817),
+                    letterSpacing: 0.02 * 24,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16), // 32rpx → 16dp
-          // 名字
-          Text(
-            user.name,
-            style: TextStyle(
-              fontFamily: 'Noto Serif SC',
-              fontSize: 24, // 48rpx → 24dp
-              fontWeight: FontWeight.w600,
-              // neumorphic 风格：tokens.textPrimary
-              color: isNeu ? tokens.textPrimary : const Color(0xFF3D2817),
-              letterSpacing: 0.02 * 24,
+              ],
             ),
           ),
           const SizedBox(height: 10), // 20rpx → 10dp
