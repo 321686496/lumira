@@ -35,6 +35,7 @@ import '../features/profile/pages/profile_about_page.dart';
 import '../features/profile/pages/profile_collection_detail_page.dart';
 import '../features/profile/pages/profile_collection_edit_page.dart';
 import '../features/profile/pages/profile_collections_page.dart';
+import '../features/profile/pages/profile_edit_page.dart';
 import '../features/profile/pages/composition_kit_detail_page.dart';
 import '../features/profile/pages/composition_kits_page.dart';
 import '../features/profile/pages/profile_fragment_detail_page.dart';
@@ -307,6 +308,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profile,
         name: 'profile',
         builder: (context, state) => const ProfilePage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileEdit,
+        name: 'profileEdit',
+        builder: (context, state) => const ProfileEditPage(),
       ),
       GoRoute(
         path: RouteNames.profileSettings,
