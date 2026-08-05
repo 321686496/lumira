@@ -39,6 +39,9 @@ class CustomTemplate {
   final String id;
   final String name;
   final String? coverUrl;
+  /// base64 data URL（自定义模板上传的封面图）
+  /// 当 coverUrl 为空或指向占位图时，列表渲染应使用此字段
+  final String? coverData;
   final TemplateCategory category;
   final List<String> tags;
   final int exposureCompensation; // EV
@@ -51,6 +54,7 @@ class CustomTemplate {
     required this.id,
     required this.name,
     this.coverUrl,
+    this.coverData,
     required this.category,
     required this.tags,
     required this.exposureCompensation,

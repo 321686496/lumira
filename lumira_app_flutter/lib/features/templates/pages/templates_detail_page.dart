@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -13,6 +15,9 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/owned_templates_repository.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
+import '../services/template_exporter.dart';
+import '../widgets/pose_silhouette.dart';
+import '../widgets/template_cover_image.dart';
 
 /// 模板详情页
 ///
@@ -53,6 +58,17 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     return id.startsWith('custom_') || id.startsWith('imp_');
   }
 
+  /// 是否为可导出的自定义模板（user-created / custom / imported）。
+  /// 与 [_isMyTemplate] 配合：导出按钮仅在两者均为 true 时显示。
+  bool get _isCustomTemplate {
+    final id = _template?.id ?? widget.templateId ?? '';
+    // Custom templates: user-created or imported (not builtin/system)
+    // source field is more reliable but id prefix is a simple heuristic
+    return id.startsWith('user_') ||
+        id.startsWith('custom_') ||
+        id.startsWith('imported_');
+  }
+
   void _goCapture(TemplateDetail template) {
     final id = template.id;
     // 门禁：付费模板未拥有时跳解锁页
@@ -89,6 +105,84 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
       msg,
       duration: const Duration(milliseconds: 1000),
     );
+  }
+
+  /// 导出当前模板：从 DAO 拉取完整 [TemplateRecord] 后弹出格式选择面板。
+  Future<void> _goExport() async {
+    final id = _template?.id ?? widget.templateId;
+    if (id == null || id.isEmpty) return;
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final record = await dao.getById(id);
+      if (record == null) {
+        _showSnack('模板未找到');
+        return;
+      }
+      if (!mounted) return;
+      await _showExportFormatSheet(context, record);
+    } catch (e) {
+      _showSnack('导出失败：$e');
+    }
+  }
+
+  /// 弹出导出格式选择面板（.pptpl 完整 / .lumira 简化）。
+  Future<void> _showExportFormatSheet(
+    BuildContext context,
+    TemplateRecord record,
+  ) async {
+    final tokens = ref.watch(themeTokensProvider);
+    final result = await showLumiraBottomSheet<String>(
+      context: context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '选择导出格式',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+            ),
+          ),
+          LumiraListTile(
+            leading: Icon(Icons.description_outlined, color: tokens.brand),
+            title: const Text('完整 .pptpl（推荐）'),
+            subtitle: const Text('含构图/姿势/相机/场景/后期全参数'),
+            onTap: () => Navigator.pop(ctx, 'pptpl'),
+          ),
+          LumiraListTile(
+            leading: Icon(Icons.code_outlined, color: tokens.brand),
+            title: const Text('简化 .lumira'),
+            subtitle: const Text('仅元信息+相机核心参数'),
+            onTap: () => Navigator.pop(ctx, 'lumira'),
+          ),
+          LumiraListTile(
+            title: Center(
+              child: Text(
+                '取消',
+                style: TextStyle(color: tokens.textSecondary),
+              ),
+            ),
+            onTap: () => Navigator.pop(ctx, null),
+          ),
+        ],
+      ),
+    );
+    if (result == null || !mounted) return;
+    final usePptpl = result == 'pptpl';
+    LumiraToast.show(context, '正在导出 ${record.name}...');
+    try {
+      await TemplateExporter.shareTemplate(record, usePptpl: usePptpl);
+      if (!mounted) return;
+      LumiraToast.show(context, '已分享 ${record.name}');
+    } catch (e) {
+      if (!mounted) return;
+      LumiraToast.show(context, '导出失败：$e');
+    }
   }
 
   /// 构建模板详情内容（v14 重构：接收 template 参数，支持 mock / DAO / remote 来源）。
@@ -233,6 +327,13 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                   leading: _BackButton(tokens: tokens, onTap: _back),
                   actions: _isMyTemplate
                       ? [
+                          if (_isCustomTemplate)
+                            LumiraIconButton(
+                              icon: Icons.ios_share,
+                              onPressed: _goExport,
+                              color: tokens.textPrimary,
+                              size: 20,
+                            ),
                           LumiraIconButton(
                             icon: Icons.edit_outlined,
                             onPressed: _goEdit,
@@ -454,10 +555,19 @@ class _PreviewImage extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.network(
-                  'https://picsum.photos/seed/${template.coverSeed}/800/600',
+                TemplateCoverImage(
+                  cover: template.cover,
+                  coverData: template.coverData,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  fallback: Container(
+                    color: tokens.surfaceAlt,
+                    child: Icon(
+                      Icons.photo_outlined,
+                      color: tokens.textTertiary,
+                      size: 40,
+                    ),
+                  ),
+                  errorFallback: Container(
                     color: tokens.surfaceAlt,
                     child: Icon(
                       Icons.broken_image_outlined,
@@ -1032,9 +1142,12 @@ class _PoseReferenceCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              // pose-preview-wrap：用 AspectRatio(1:1) 替代 padding-bottom 百分比
+              // pose-preview-wrap：用 AspectRatio 替代 padding-bottom 百分比
+              // 比例取设备屏幕宽高比，避免方形卡片在竖屏下占用过多纵向空间
               AspectRatio(
-                aspectRatio: 1.0,
+                aspectRatio:
+                    MediaQuery.of(context).size.width /
+                        MediaQuery.of(context).size.height,
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
@@ -1053,21 +1166,19 @@ class _PoseReferenceCard extends StatelessWidget {
                       // pose-layer：用 Align 百分比定位简化实现
                       // 简化原因：Flutter Positioned 不支持百分比，需 LayoutBuilder 计算
                       // 用 Alignment(x*2-1, y*2-1) 将 0..1 映射到 -1..1（位置 0.5 → Alignment.center）
-                      // Task 2.8C 剪影编辑器会替换为完整 SVG 剪影组件
                       Align(
                         alignment: Alignment(
                           pose.positionX * 2 - 1,
                           pose.positionY * 2 - 1,
                         ),
                         child: FractionallySizedBox(
-                          widthFactor: 0.2,
-                          heightFactor: 0.32,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              // 硬编码颜色，与 uni-app 一致 — 简化灰色块占位
-                              color: tokens.textTertiary.withOpacity(0.3),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                          widthFactor: 0.3,
+                          heightFactor: 0.45,
+                          child: PoseSilhouette(
+                            silhouetteType: pose.silhouetteType,
+                            silhouetteData: pose.silhouetteData,
+                            scale: 1.0,
+                            rotation: 0.0,
                           ),
                         ),
                       ),

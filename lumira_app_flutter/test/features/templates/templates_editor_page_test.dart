@@ -468,6 +468,11 @@ void main() {
       await tester.tap(find.text('绘制剪影'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
+      // 滚动到 打开画布 按钮（新增封面图选择器增加了 Step 1 高度，
+      // 需要滚动确保按钮在可见区域）
+      await tester.ensureVisible(find.text('打开画布'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
       // 点击 打开画布
       await tester.tap(find.text('打开画布'));
       await settleOrPump(tester, UIStyle.neumorphic);

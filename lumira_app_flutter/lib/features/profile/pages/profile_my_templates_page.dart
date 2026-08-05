@@ -14,6 +14,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_state.dart';
 import '../../templates/services/template_exporter.dart';
+import '../../templates/widgets/template_cover_image.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../data/profile_content_mock_data.dart';
 
@@ -38,6 +39,7 @@ CustomTemplate _recordToCustomTemplate(TemplateRecord r) {
     id: r.id,
     name: r.name,
     coverUrl: r.cover.isEmpty ? null : r.cover,
+    coverData: r.coverData,
     category: _stringToCategory(r.category),
     tags: r.tags,
     exposureCompensation: (r.camera['exposureCompensation'] as num?)?.toInt() ?? 0,
@@ -726,16 +728,26 @@ class _TplRow extends StatelessWidget {
                   child: SizedBox(
                     width: 100, // 200rpx → 100dp
                     height: 100,
-                    child: t.coverUrl != null
-                        ? Image.network(
-                            t.coverUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: tokens.surfaceAlt,
-                              child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary),
-                            ),
-                          )
-                        : Container(color: tokens.surfaceAlt),
+                    child: TemplateCoverImage(
+                      cover: t.coverUrl,
+                      coverData: t.coverData,
+                      fit: BoxFit.cover,
+                      fallback: Container(
+                        color: tokens.surfaceAlt,
+                        child: Icon(
+                          Icons.photo_outlined,
+                          color: tokens.textTertiary,
+                          size: 28,
+                        ),
+                      ),
+                      errorFallback: Container(
+                        color: tokens.surfaceAlt,
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: tokens.textTertiary,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 Positioned(

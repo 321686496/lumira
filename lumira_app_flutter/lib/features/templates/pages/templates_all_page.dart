@@ -13,6 +13,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/builtin_category_icons.dart';
 import '../data/templates_browse_mock_data.dart';
+import '../widgets/template_cover_image.dart';
 import '../widgets/template_import_sheet.dart';
 
 /// 全部模板页
@@ -871,10 +872,19 @@ class _TplCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(
-                    'https://picsum.photos/seed/${template.coverSeed}/400/600',
+                  TemplateCoverImage(
+                    cover: template.cover,
+                    coverData: template.coverData,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    fallback: Container(
+                      color: tokens.surfaceAlt,
+                      child: Icon(
+                        Icons.photo_outlined,
+                        color: tokens.textTertiary,
+                        size: 28,
+                      ),
+                    ),
+                    errorFallback: Container(
                       color: tokens.surfaceAlt,
                       child: Icon(
                         Icons.broken_image_outlined,
@@ -1387,6 +1397,8 @@ AllTemplateItem _recordToItem(TemplateRecord r, {required bool isCustom}) {
     style: (r.classification['style'] as String?),
     method: (r.classification['method'] as String?),
     coverSeed: r.id,
+    cover: r.cover.isEmpty ? null : r.cover,
+    coverData: r.coverData,
     price: r.price,
     isCustom: isCustom,
   );

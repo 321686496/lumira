@@ -39,8 +39,15 @@ dependencies:
   # 权限（brief ^12.0.1 → CPF-Flutter 3.7 Harmony 适配版本 10.3.2，11+ 需 Dart 3；未回合上游，见 dependency_overrides）
   permission_handler: 10.3.2  # Harmony 3.7 适配版本 (CPF-Flutter)
 
-  # 文件操作（brief ^10.3.8 → CPF-Flutter 3.7 Harmony 适配版本 8.0.6；未回合上游，见 dependency_overrides）
-  file_picker: 8.0.6  # Harmony 3.7 适配版本 (CPF-Flutter)
+  # 文件选择：iOS/Android 用 file_picker（fork 根包，Dart 2.19 兼容版，见 dependency_overrides）
+  # OHOS 用同 fork 的 ohos 子目录 file_picker_ohos 适配版
+  # (两个包 API 完全一致，通过 FilePickerService 包装器按平台运行时分发)
+  file_picker: 8.0.6
+  file_picker_ohos:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_file_picker.git
+      ref: master
+      path: ohos
   path_provider: ^2.0.14
 
   # 本地数据库
@@ -130,6 +137,8 @@ dependency_overrides:
       url: https://gitcode.com/CPF-Flutter/flutter_permission_handler.git
       ref: master
       path: permission_handler
+  # file_picker fork 根包（iOS/Android/Web/MacOS/Windows/Linux 兼容 Dart 2.19）
+  # OHOS 通过同 fork 的 ohos 子目录 file_picker_ohos 提供，业务代码用 FilePickerService 分发
   file_picker:
     git:
       url: https://gitcode.com/CPF-Flutter/fluttertpc_file_picker.git

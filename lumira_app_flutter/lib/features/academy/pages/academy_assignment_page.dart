@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
 import '../../../core/router/route_names.dart';
+import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
@@ -116,12 +116,8 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
 
   Future<void> _pickFromAlbum() async {
     try {
-      final pickResult = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-      );
-      if (pickResult == null || pickResult.files.isEmpty) return;
-      final file = pickResult.files.first;
+      final file = await FilePickerService.pickSingleImage(withData: false);
+      if (file == null) return;
       final path = file.path;
       if (path != null && mounted) {
         setState(() {
