@@ -34,6 +34,9 @@ describe('DeviceController (e2e)', () => {
 
     expect(res.body.token).toBeDefined();
     expect(res.body.isNewDevice).toBe(true);
+    expect(res.body.profile).toBeDefined();
+    expect(res.body.profile.username).toBeTruthy();
+    expect(res.body.profile.avatarSeed).toBeTruthy();
   });
 
   it('POST /api/v1/device/register — should return existing token for re-registration', async () => {
@@ -44,6 +47,7 @@ describe('DeviceController (e2e)', () => {
 
     expect(res.body.token).toBeDefined();
     expect(res.body.isNewDevice).toBe(false);
+    expect(res.body.profile).toBeDefined();
   });
 
   it('POST /api/v1/device/register — should reject deviceId shorter than 8 chars', async () => {
