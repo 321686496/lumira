@@ -39,7 +39,8 @@ jobs:
         run: flutter pub get
 
       - name: Analyze
-        run: flutter analyze
+        # --no-fatal-infos：info 级仅为风格建议（test 文件大量 prefer_const 等），不阻断 CI；warning/error 仍失败
+        run: flutter analyze --no-fatal-infos
 
       - name: Test
         run: flutter test

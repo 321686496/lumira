@@ -58,4 +58,5 @@ jobs:
 
       - name: Test
         working-directory: lumira-server
-        run: pnpm --filter @lumira/backend test
+        # 仓库仅有 e2e 测试（test/*.e2e-spec.ts），默认 jest 配置匹配不到，必须走 test:e2e
+        run: pnpm --filter @lumira/backend test:e2e

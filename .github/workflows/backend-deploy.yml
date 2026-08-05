@@ -72,7 +72,15 @@ jobs:
 
             echo "==> [1/5] 拉取最新代码"
             cd $DEPLOY_PATH/repo
-            git fetch --all
+            # GitHub 偶发 "Empty reply from server"（HTTP/2 连接被中间网络重置），强制 HTTP/1.1 并重试
+            git config http.version HTTP/1.1
+            for attempt in 1 2 3 4 5; do
+              if git fetch --all; then
+                break
+              fi
+              echo "==> git fetch 失败（第 $attempt 次），5 秒后重试..."
+              sleep 5
+            done
             git reset --hard $GIT_REMOTE/master
             echo "当前代码版本："
             git log --oneline -1
