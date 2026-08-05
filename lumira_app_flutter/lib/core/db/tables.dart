@@ -237,3 +237,55 @@ class AcademyLearningTrajectoryTable {
     )
   ''';
 }
+
+/// 探店打卡主表（v16 迁移新增）
+class CheckinTable {
+  static const String name = 'checkins';
+  static const String colId = 'id';
+  static const String colName = 'name';
+  static const String colPlace = 'place';
+  static const String colCategory = 'category';
+  static const String colRating = 'rating';
+  static const String colNote = 'note';
+  static const String colVisitedAt = 'visited_at';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  static const String createSql = '''
+    CREATE TABLE $name (
+      $colId TEXT PRIMARY KEY,
+      $colName TEXT NOT NULL,
+      $colPlace TEXT NOT NULL DEFAULT '',
+      $colCategory TEXT NOT NULL DEFAULT '',
+      $colRating INTEGER NOT NULL DEFAULT 0,
+      $colNote TEXT NOT NULL DEFAULT '',
+      $colVisitedAt INTEGER NOT NULL,
+      $colCreatedAt INTEGER NOT NULL,
+      $colUpdatedAt INTEGER NOT NULL
+    )
+  ''';
+
+  static const String indexVisitedAtSql =
+      'CREATE INDEX idx_checkins_visited_at ON $name ($colVisitedAt DESC)';
+}
+
+/// 探店打卡-照片关联表（v16 迁移新增，仿 collection_photos）
+class CheckinPhotoTable {
+  static const String name = 'checkin_photos';
+  static const String colCheckinId = 'checkin_id';
+  static const String colPhotoId = 'photo_id';
+  static const String colPosition = 'position';
+
+  static const String createSql = '''
+    CREATE TABLE $name (
+      $colCheckinId TEXT NOT NULL,
+      $colPhotoId TEXT NOT NULL,
+      $colPosition INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY ($colCheckinId, $colPhotoId),
+      FOREIGN KEY ($colCheckinId) REFERENCES ${CheckinTable.name}(${CheckinTable.colId}) ON DELETE CASCADE
+    )
+  ''';
+
+  static const String indexCheckinSql =
+      'CREATE INDEX idx_checkin_photos_checkin ON $name ($colCheckinId)';
+}

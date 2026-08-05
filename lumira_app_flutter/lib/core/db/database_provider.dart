@@ -18,7 +18,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 15;
+const int _kDbVersion = 16;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -325,6 +325,12 @@ Future<void> _onCreate(Database db, int version) async {
     )
   ''');
 
+  // === v16: 探店打卡 ===
+  await db.execute(CheckinTable.createSql);
+  await db.execute(CheckinTable.indexVisitedAtSql);
+  await db.execute(CheckinPhotoTable.createSql);
+  await db.execute(CheckinPhotoTable.indexCheckinSql);
+
   // === 种子化预置数据（修复：fresh install 时不触发 _onUpgrade，需在 _onCreate 中显式调用 seeder） ===
   // _onUpgrade 仅在 oldVersion < 4 时调用 BuiltinDataSeeder.seedAll，
   // 但 fresh install 直接创建 v10 数据库不会触发 _onUpgrade，导致模板表为空。
@@ -628,6 +634,16 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       ''');
     } catch (e) {
       debugPrint('v15 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 16) {
+    try {
+      await db.execute(CheckinTable.createSql);
+      await db.execute(CheckinTable.indexVisitedAtSql);
+      await db.execute(CheckinPhotoTable.createSql);
+      await db.execute(CheckinPhotoTable.indexCheckinSql);
+    } catch (e) {
+      debugPrint('v16 migration failed (silent fallback): $e');
     }
   }
 }
