@@ -5,7 +5,7 @@ import 'redeem_models.dart';
 
 /// 兑换码 Repository 抽象
 abstract class RedeemRepository {
-  /// POST /redeem/code
+  /// POST /redeem
   ///
   /// 提交类操作，无离线回退
   Future<RedeemCodeResponse> redeem(RedeemCodeRequest req);
@@ -19,7 +19,7 @@ class RemoteRedeemRepository implements RedeemRepository {
   @override
   Future<RedeemCodeResponse> redeem(RedeemCodeRequest req) async {
     return _api.post(
-      '/redeem/code',
+      '/redeem',
       body: req.toJson(),
       fromJson: (j) => RedeemCodeResponse.fromJson(j as Map<String, dynamic>),
     );

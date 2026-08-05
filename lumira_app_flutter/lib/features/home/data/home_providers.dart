@@ -2,9 +2,11 @@
 //
 // 首页真实数据 Provider：
 // - homeStreakProvider：连续打卡 + 本周打卡状态（来自挑战历史）
-// - homeRecentShotsProvider：最近拍摄 5 张（来自 GalleryDao）
+// - homeRecentShotsProvider：最近拍摄 5 张（来自 GalleryDao，含真实图片源）
 // - homeStatsProvider：收藏 / 总经验 / 作品数（来自 GalleryDao + GrowthDao）
-// - homeSceneRecosProvider：场景推荐 4 个（按用户拍摄数排序，不足补预设）
+// - homeSceneRecosProvider：场景推荐 4 个（SceneRecommendationService 3+1 算法）
+// - homeInspirationProvider：今日灵感（InspirationService：日期+天气+智能文案）
+// - homeTipsProvider：拍照小贴士（TipRecommendationService：基于偏好推荐）
 //
 // 对照：lumira-app/src/pages/home/index.vue script setup 中的真实数据集成
 
@@ -12,11 +14,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database_provider.dart';
-import '../../../core/db/dao/scenes_dao.dart';
+import '../../../core/network/api_client.dart';
 import '../../challenge/data/challenge_models.dart';
 import '../../challenge/data/challenge_providers.dart';
 import '../../profile/providers/growth_providers.dart';
 import '../data/home_mock_data.dart';
+import '../data/inspiration_models.dart';
+import '../services/inspiration_service.dart';
+import '../services/scene_recommendation_service.dart';
+import '../services/tip_recommendation_service.dart';
 import '../../capture/data/scene_presets_data.dart';
 import '../../capture/domain/scene_preset.dart';
 
@@ -189,6 +195,11 @@ final homeRecentShotsProvider =
       category: category,
       icon: icon,
       imageSeed: imageSeed,
+      // 真实照片源：优先 filePath，其次 dataUrl，最后 originalPath
+      // RecentShotCard 中根据优先级渲染（filePath 用 Image.file，dataUrl 用 Image.memory）
+      imageFilePath: p.filePath,
+      imageDataUrl: p.dataUrl,
+      imageOriginalPath: p.originalPath,
       steps: steps,
       match: match,
       progress: progress,
@@ -215,87 +226,59 @@ final homeStatsProvider = FutureProvider<HomeStats>((ref) async {
 });
 
 /// 首页场景推荐 Provider
-/// 实现：按用户拍摄数排序取前 4，不足补内置预设
+/// 实现：SceneRecommendationService 3+1 混合算法
+/// - 槽位 1：最常去场景
+/// - 槽位 2：次常去场景的同类
+/// - 槽位 3：第三常去场景的同类
+/// - 槽位 4：系统推荐（从未拍过，优先不同 category）
+/// 不足时从预设场景补齐
 final homeSceneRecosProvider =
     FutureProvider<List<SceneReco>>((ref) async {
   final galleryDao = await ref.watch(galleryDaoProvider.future);
   final scenesDao = await ref.watch(scenesDaoProvider.future);
 
-  // 收集所有场景：自定义场景（DB）+ 内置预设（代码常量）
-  final customScenes = await scenesDao.getAll();
-  final presetScenes = ScenePresetsData.allScenePresets;
+  final service = SceneRecommendationService(
+    galleryDao: galleryDao,
+    scenesDao: scenesDao,
+  );
+  final result = await service.build();
+  if (result.isEmpty) return HomeMockData.scenes; // fallback
+  return result;
+});
 
-  // 统计每个场景的照片数
-  final sceneCounts = <String, int>{};
-  for (final s in customScenes) {
-    if (s.name.isNotEmpty) {
-      sceneCounts[s.id] = await galleryDao.countByScene(s.id);
-    }
+/// 首页今日灵感 Provider
+/// 实现：InspirationService（日期 + 天气 + 智能 description）
+/// 失败时返回 fallback
+final homeInspirationProvider =
+    FutureProvider<HeroInspiration>((ref) async {
+  final galleryDao = await ref.watch(galleryDaoProvider.future);
+  final apiClient = await ref.watch(apiClientProvider.future);
+
+  final service = InspirationService(
+    galleryDao: galleryDao,
+    apiClient: apiClient,
+  );
+  try {
+    return await service.build();
+  } catch (_) {
+    return HeroInspiration.fallback;
   }
-  for (final s in presetScenes) {
-    sceneCounts[s.id] = await galleryDao.countByScene(s.id);
-  }
+});
 
-  // 排序：按照片数降序
-  final allIds = <String>[...customScenes.where((s) => s.name.isNotEmpty).map((s) => s.id), ...presetScenes.map((s) => s.id)];
-  // 去重（自定义场景 id 不会和预设重复，但保险起见）
-  final seen = <String>{};
-  final uniqueIds = allIds.where((id) => seen.add(id)).toList();
-  uniqueIds.sort((a, b) => (sceneCounts[b] ?? 0).compareTo(sceneCounts[a] ?? 0));
+/// 首页拍照小贴士 Provider
+/// 实现：TipRecommendationService（基于用户最近 30 天拍摄偏好）
+/// 失败时返回 fallback（HomeMockData.tips）
+final homeTipsProvider =
+    FutureProvider<List<ShootingTip>>((ref) async {
+  final galleryDao = await ref.watch(galleryDaoProvider.future);
+  final templatesDao = await ref.watch(templatesDaoProvider.future);
 
-  // 自定义场景按 id 索引
-  final customById = <String, SceneRecord>{};
-  for (final s in customScenes) {
-    customById[s.id] = s;
-  }
-  final presetById = <String, ScenePreset>{};
-  for (final s in presetScenes) {
-    presetById[s.id] = s;
-  }
-
-  final result = <SceneReco>[];
-  for (final id in uniqueIds.take(4)) {
-    final count = sceneCounts[id] ?? 0;
-    final isCustom = customById.containsKey(id);
-    final preset = presetById[id];
-
-    String name;
-    String vibe;
-    if (isCustom) {
-      final s = customById[id]!;
-      name = s.name;
-      vibe = s.vibe;
-    } else if (preset != null) {
-      name = preset.name;
-      vibe = preset.vibe;
-    } else {
-      continue;
-    }
-
-    String badgeText;
-    bool badgeBrand = false;
-    if (isCustom) {
-      badgeText = '我的场景';
-    } else if (count > 0 && result.isEmpty) {
-      badgeText = '你最常去';
-    } else if (result.length == 2) {
-      badgeText = '新场景推荐';
-      badgeBrand = true;
-    } else {
-      badgeText = '$name拍摄';
-    }
-
-    result.add(SceneReco(
-      id: id,
-      name: name,
-      vibe: vibe,
-      imageSeed: 'scene-home-$id',
-      badgeText: badgeText,
-      badgeBrand: badgeBrand,
-      photoCount: count,
-    ));
-  }
-
+  final service = TipRecommendationService(
+    galleryDao: galleryDao,
+    templatesDao: templatesDao,
+  );
+  final result = await service.build();
+  if (result.isEmpty) return HomeMockData.tips;
   return result;
 });
 
