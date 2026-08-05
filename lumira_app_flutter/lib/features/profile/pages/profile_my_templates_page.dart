@@ -12,6 +12,7 @@ import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../capture/data/capture_state.dart';
 import '../../templates/services/template_exporter.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../data/profile_content_mock_data.dart';
@@ -262,6 +263,8 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
       final dao = await ref.read(templatesDaoProvider.future);
       await dao.delete(tpl.id);
       ref.invalidate(customTemplatesProvider);
+      // 刷新 Capture 页模板缓存（系统 + 自定义），使删除立即反映
+      ref.invalidate(CaptureState.allTemplatesProvider);
       _showSnack('已删除');
     } catch (e) {
       _showSnack('删除失败：$e');

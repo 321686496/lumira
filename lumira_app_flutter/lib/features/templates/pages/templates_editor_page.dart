@@ -12,6 +12,7 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../capture/data/capture_state.dart';
 import '../../profile/pages/profile_my_templates_page.dart' show customTemplatesProvider;
 import '../data/preview_form_provider.dart';
 import '../data/templates_browse_mock_data.dart' show LabelValue, styleMap, methodMap;
@@ -425,6 +426,8 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       await dao.upsert(record);
       // 刷新 My Templates 页数据源，使新保存的模板立即出现
       ref.invalidate(customTemplatesProvider);
+      // 刷新 Capture 页模板缓存（系统 + 自定义），使新保存的模板立即出现
+      ref.invalidate(CaptureState.allTemplatesProvider);
       _currentDraftId = '';
       if (!mounted) return;
       lumira.LumiraToast.show(context, '保存成功');

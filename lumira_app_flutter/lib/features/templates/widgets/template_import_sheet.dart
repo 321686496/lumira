@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
+import '../../capture/data/capture_state.dart';
 import '../../capture/data/template_registry.dart';
 import '../services/pptpl_format.dart';
 import '../services/template_mapper.dart';
@@ -155,6 +156,8 @@ class TemplateImportSheet extends ConsumerWidget {
       }
 
       await dao.upsert(record);
+      // 刷新 Capture 页模板缓存（系统 + 自定义），使新导入的模板立即出现
+      ref.invalidate(CaptureState.allTemplatesProvider);
 
       // 版本兼容性校验
       final warnings = PptplFormat.validate(parsed);
@@ -214,6 +217,8 @@ class TemplateImportSheet extends ConsumerWidget {
       }
 
       await dao.upsert(record);
+      // 刷新 Capture 页模板缓存（系统 + 自定义），使新导入的模板立即出现
+      ref.invalidate(CaptureState.allTemplatesProvider);
 
       _showToast(navigator, '已导入模板：${record.name}');
       if (warnings.isNotEmpty) {
@@ -273,6 +278,8 @@ class TemplateImportSheet extends ConsumerWidget {
 
       final dao = await ref.read(templatesDaoProvider.future);
       await dao.upsert(record);
+      // 刷新 Capture 页模板缓存（系统 + 自定义），使新导入的模板立即出现
+      ref.invalidate(CaptureState.allTemplatesProvider);
 
       _showToast(navigator, '已导入模板：$name');
       onImported(record.id);
