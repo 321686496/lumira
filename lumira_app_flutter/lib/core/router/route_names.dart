@@ -27,6 +27,9 @@ class RouteNames {
   static const String challengeHistory = '/challenge/history';
   static const String challengeConfirm = '/challenge/confirm';
   static const String challengeComplete = '/challenge/complete';
+  static const String checkinList = '/checkin/list';
+  static const String checkinDetail = '/checkin/detail';
+  static const String checkinEdit = '/checkin/edit';
   static const String inspiration = '/inspiration';
   static const String gallery = '/gallery';
   static const String galleryDetail = '/gallery/detail';
@@ -70,6 +73,7 @@ class RouteNames {
   static const String paramScene = 'scene';
   static const String paramTab = 'tab';
   static const String paramChallengeId = 'challengeId';
+  static const String paramCheckinId = 'checkinId';
   static const String paramPhotoId = 'photoId';
   static const String paramCollectionId = 'collectionId';
   static const String paramAcademyId = 'academyId';
