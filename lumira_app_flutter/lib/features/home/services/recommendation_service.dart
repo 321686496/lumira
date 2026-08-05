@@ -4,6 +4,7 @@ import '../../../core/db/dao/growth_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../features/profile/data/composition_kit_models.dart';
+import '../../onboarding/data/questionnaire_dao.dart';
 import '../data/home_mock_data.dart';
 
 /// Banner 推荐源类型
@@ -64,17 +65,20 @@ class RecommendationService {
     required TemplatesDao templatesDao,
     required CompositionKitsDao kitsDao,
     required GrowthDao growthDao,
+    required QuestionnaireDao questionnaireDao,
   })  : _galleryDao = galleryDao,
         _scenesDao = scenesDao,
         _templatesDao = templatesDao,
         _kitsDao = kitsDao,
-        _growthDao = growthDao;
+        _growthDao = growthDao,
+        _questionnaireDao = questionnaireDao;
 
   final GalleryDao _galleryDao;
   final ScenesDao _scenesDao;
   final TemplatesDao _templatesDao;
   final CompositionKitsDao _kitsDao;
   final GrowthDao _growthDao;
+  final QuestionnaireDao _questionnaireDao;
 
   /// 构建 5 条首页 Banner
   Future<List<HomeBannerItem>> buildBanners() async {
@@ -103,15 +107,43 @@ class RecommendationService {
 
     // === 槽位 1：新老用户分层 ===
     if (isNewUser) {
-      banners.add(const HomeBannerItem(
-        id: 'banner_new_user_guide',
-        title: '新手友好场景',
-        subtitle: '从咖啡馆开始你的拍摄之旅',
-        imageSeed: 'banner-new-user-cafe',
-        tag: '新手友好',
-        route: '/capture/scene-guide?scene=preset_cafe',
-      ));
-      usedSceneIds.add('preset_cafe');
+      // 优先读问卷偏好，推用户首选分类的推荐模板
+      final questionnaire = await _questionnaireDao.getAnswers();
+      final favCats = questionnaire?.favoriteCategories ?? [];
+      HomeBannerItem? questionnaireBanner;
+      if (favCats.isNotEmpty) {
+        final topCat = favCats.first;
+        final tpls = await _templatesDao.getBuiltin(
+          category: topCat,
+          isRecommended: true,
+        );
+        if (tpls.isNotEmpty) {
+          final tpl = tpls.first;
+          usedTemplateIds.add(tpl.id);
+          usedCategories.add(topCat);
+          final label = _categoryLabelMap[topCat] ?? '推荐';
+          questionnaireBanner = HomeBannerItem(
+            id: 'banner_questionnaire_pick',
+            title: '从$label开始',
+            subtitle: '根据你的偏好推荐',
+            imageSeed: 'banner-questionnaire-$topCat',
+            tag: '为你推荐',
+            route: '/templates/detail?templateId=${tpl.id}',
+          );
+        }
+      }
+      banners.add(questionnaireBanner ??
+          const HomeBannerItem(
+            id: 'banner_new_user_guide',
+            title: '新手友好场景',
+            subtitle: '从咖啡馆开始你的拍摄之旅',
+            imageSeed: 'banner-new-user-cafe',
+            tag: '新手友好',
+            route: '/capture/scene-guide?scene=preset_cafe',
+          ));
+      if (questionnaireBanner == null) {
+        usedSceneIds.add('preset_cafe');
+      }
     }
     // 老用户跳过槽位 1，由末尾的槽位 5 补位（多一条探索新鲜感）
 
