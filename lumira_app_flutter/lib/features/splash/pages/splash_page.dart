@@ -10,6 +10,7 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../onboarding/services/questionnaire_sync_providers.dart';
 import '../../../shared/widgets/brand/lumira_logo.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -55,6 +56,10 @@ class _SplashPageState extends ConsumerState<SplashPage> {
         _maybeNavigate();
       }
     });
+    // 启动时补传未同步的问卷（fire-and-forget）
+    ref.read(questionnaireSyncServiceProvider.future).then((service) {
+      service.syncPendingIfNeeded();
+    }).catchError((_) {});
   }
 
   @override
