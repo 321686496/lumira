@@ -139,9 +139,14 @@ class CaptureState {
     try {
       final dao = await ref.watch(templatesDaoProvider.future);
       final customRecords = await dao.getCustomOnly();
-      final customTemplates = customRecords
-          .map((r) => TemplateMapper.toPhotoTemplate(r))
-          .toList();
+      final customTemplates = <PhotoTemplate>[];
+      for (final r in customRecords) {
+        try {
+          customTemplates.add(TemplateMapper.toPhotoTemplate(r));
+        } catch (e) {
+          debugPrint('[capture] allTemplatesProvider: skipping malformed template ${r.id}: $e');
+        }
+      }
       return [...systemTemplates, ...customTemplates];
     } catch (e) {
       // DAO 不可用时降级为仅系统模板
