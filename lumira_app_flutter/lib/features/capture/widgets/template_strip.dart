@@ -5,7 +5,7 @@ import '../data/template_registry.dart';
 import '../domain/photo_template.dart';
 
 /// 模板横向滚动条。
-/// `compact=true` 显示前 6 个模板（底部条），`compact=false` 显示前 12 个（展开面板）。
+/// `compact=true` 显示前 6 个模板（底部条），`compact=false` 显示全部模板（展开面板）。
 /// 点击模板卡片切换 `currentTemplateIdProvider`。
 ///
 /// 修复 Bug 4：使用 TemplateMeta.cover 显示真实封面图，替代占位图标
