@@ -26,6 +26,8 @@ import '../features/academy/pages/academy_detail_page.dart';
 import '../features/academy/pages/academy_knowledge_page.dart';
 import '../features/academy/pages/academy_page.dart';
 import '../features/academy/pages/academy_trajectory_page.dart';
+import '../features/profile/data/compliance_content.dart';
+import '../features/profile/pages/compliance_doc_page.dart';
 import '../features/profile/pages/profile_about_page.dart';
 import '../features/profile/pages/profile_collection_detail_page.dart';
 import '../features/profile/pages/profile_collection_edit_page.dart';
@@ -377,6 +379,33 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ProfileAboutPage(),
       ),
       GoRoute(
+        path: RouteNames.profileComplianceAgreement,
+        name: 'profileComplianceAgreement',
+        builder: (context, state) => const ComplianceDocPage(
+          title: '用户协议',
+          updatedAt: ComplianceDocs.agreementUpdatedAt,
+          sections: ComplianceDocs.agreement,
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.profileCompliancePrivacy,
+        name: 'profileCompliancePrivacy',
+        builder: (context, state) => const ComplianceDocPage(
+          title: '隐私政策',
+          updatedAt: ComplianceDocs.privacyUpdatedAt,
+          sections: ComplianceDocs.privacy,
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.profileComplianceSdk,
+        name: 'profileComplianceSdk',
+        builder: (context, state) => const ComplianceDocPage(
+          title: '个人信息清单与第三方SDK目录',
+          updatedAt: ComplianceDocs.sdkUpdatedAt,
+          sections: ComplianceDocs.sdk,
+        ),
+      ),
+      GoRoute(
         path: RouteNames.profileRewards,
         name: 'profileRewards',
         builder: (context, state) => const RewardsPage(),
@@ -385,6 +414,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileRedeem,
         name: 'profileRedeem',
         builder: (context, state) => const RedeemPage(),
+      ),
+
+      // === 积分 / 邀请 ===
+      GoRoute(
+        path: RouteNames.pointsWallet,
+        name: 'pointsWallet',
+        builder: (context, state) => const PointsWalletPage(),
+      ),
+      GoRoute(
+        path: RouteNames.invite,
+        name: 'invite',
+        builder: (context, state) => const InvitePage(),
       ),
 
       // === 场景 ===

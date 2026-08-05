@@ -47,6 +47,9 @@ class RouteNames {
   static const String profileFragmentDetail = '/profile/fragment-detail';
   static const String profileNotifications = '/profile/notifications';
   static const String profileAbout = '/profile/about';
+  static const String profileComplianceAgreement = '/profile/settings/agreement';
+  static const String profileCompliancePrivacy = '/profile/settings/privacy';
+  static const String profileComplianceSdk = '/profile/settings/sdk';
   static const String scenes = '/scenes';
   static const String shootkitEditor = '/shootkit/editor';
   static const String academyTrajectory = '/academy/trajectory';
@@ -54,6 +57,8 @@ class RouteNames {
   static const String profileCompositionKitDetail = '/profile/composition-kit-detail';
   static const String profileRewards = '/profile/rewards';
   static const String profileRedeem = '/profile/redeem';
+  static const String pointsWallet = '/points/wallet';
+  static const String invite = '/invite';
 
   // === 查询参数键名 ===
   static const String paramTemplateId = 'templateId';

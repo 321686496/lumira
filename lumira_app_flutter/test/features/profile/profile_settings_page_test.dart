@@ -32,6 +32,21 @@ void main() {
           name: 'profileSettingsTheme',
           builder: (_, __) => const Scaffold(body: Center(child: Text('PROFILE_THEME'))),
         ),
+        GoRoute(
+          path: RouteNames.profileComplianceAgreement,
+          name: 'profileComplianceAgreement',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('COMPLIANCE_AGREEMENT'))),
+        ),
+        GoRoute(
+          path: RouteNames.profileCompliancePrivacy,
+          name: 'profileCompliancePrivacy',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('COMPLIANCE_PRIVACY'))),
+        ),
+        GoRoute(
+          path: RouteNames.profileComplianceSdk,
+          name: 'profileComplianceSdk',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('COMPLIANCE_SDK'))),
+        ),
       ],
     );
     HttpOverrides.global = TestHttpOverrides();
@@ -92,6 +107,7 @@ void main() {
       expect(find.text('显示'), findsOneWidget);
       expect(find.text('拍摄'), findsOneWidget);
       expect(find.text('关于'), findsOneWidget);
+      expect(find.text('合规与法律'), findsOneWidget);
       // 通用组
       expect(find.text('主题选择'), findsOneWidget);
       expect(find.text('风格选择'), findsOneWidget);
@@ -107,6 +123,32 @@ void main() {
       expect(find.text('版本号'), findsOneWidget);
       expect(find.text('清除缓存'), findsOneWidget);
       expect(find.text('关于如画'), findsOneWidget);
+      // 合规与法律组
+      expect(find.text('用户协议'), findsOneWidget);
+      expect(find.text('隐私政策'), findsOneWidget);
+      expect(find.text('个人信息清单与第三方SDK目录'), findsOneWidget);
+    });
+
+    testWidgets('tapping 隐私政策 pushes compliance privacy page', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('隐私政策'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('COMPLIANCE_PRIVACY'), findsOneWidget);
+    });
+
+    testWidgets('tapping 用户协议 pushes compliance agreement page', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('用户协议'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('COMPLIANCE_AGREEMENT'), findsOneWidget);
     });
 
     testWidgets('tapping 主题选择 pushes /profile/settings/theme', (tester) async {
