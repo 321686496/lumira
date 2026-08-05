@@ -39,6 +39,7 @@ import '../widgets/param_panel.dart';
 import '../widgets/param_pill_bar.dart';
 import '../widgets/scene_preset_strip.dart';
 import '../widgets/shutter_feedback.dart';
+import '../widgets/template_info_card.dart';
 import '../widgets/template_strip.dart';
 
 /// 拍摄页（Phase 2 MVP）
@@ -561,6 +562,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
         widget.challengeId != null && widget.challengeId!.isNotEmpty;
     final captureInProgress =
         thumbState.status == CaptureThumbnailStatus.processing;
+    // 当前套用的模板（null = 自由模式）。用于顶部模板信息卡显示。
+    final template = ref.watch(CaptureState.originalTemplateProvider);
     // 修复 Bug：watch facing 以在 facing 变化时重建 _viewfinderCaptureKey，
     // 强制 RepaintBoundary + CameraAwesomeBuilder 重建（切换 sensor）
     final facing = ref.watch(CaptureState.cameraFacingProvider);
@@ -673,35 +676,36 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: CaptureNav(onBack: _onBack),
           ),
 
-          // 2.5 比例切换器（导航栏下方居中）
+          // 2.5 顶部浮层组：模板信息卡（可折叠）→ 比例切换器 → 挑战悬浮条 → 参数 pill 栏
+          //    模板信息卡高度动态变化，用 Column 让下方元素随卡片自然流动
           Positioned(
-            top: MediaQuery.of(context).padding.top + 64,
+            top: MediaQuery.of(context).padding.top + 56,
             left: 0,
             right: 0,
-            child: const Center(child: AspectRatioSelector()),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 套用模板时显示可折叠模板信息卡（全屏隐藏，与参数 pill 栏一致）
+                if (template != null && !isFullscreen)
+                  TemplateInfoCard(template: template),
+                const SizedBox(height: 8),
+                // 比例切换器（导航栏下方居中，全屏也显示，行为不变）
+                const Center(child: AspectRatioSelector()),
+                // 挑战悬浮条（仅挑战拍摄模式显示）
+                if (isChallengeMode && !isFullscreen)
+                  ChallengeOverlayBar(
+                    challengeId: widget.challengeId!,
+                    captureInProgress: captureInProgress,
+                  ),
+                // 参数 pill 栏（全屏模式隐藏）
+                if (!isFullscreen)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: ParamPillBar(),
+                  ),
+              ],
+            ),
           ),
-
-          // 2.6 挑战悬浮条（仅挑战拍摄模式显示，位于比例切换器下方）
-          if (isChallengeMode && !isFullscreen)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 104,
-              left: 0,
-              right: 0,
-              child: ChallengeOverlayBar(
-                challengeId: widget.challengeId!,
-                captureInProgress: captureInProgress,
-              ),
-            ),
-
-          // 3. 顶部参数 pill 栏（全屏模式下隐藏；挑战模式下下移避开悬浮条）
-          if (!isFullscreen)
-            Positioned(
-              top: MediaQuery.of(context).padding.top +
-                  (isChallengeMode ? 168 : 112),
-              left: 12,
-              right: 12,
-              child: const ParamPillBar(),
-            ),
 
           // 4. 底部控制区（始终保留：含拍摄按钮 + 缩略图 + 切换摄像头）
           //    全屏模式下仅隐藏工具栏与抽屉（在 _BottomControlArea 内部处理）
