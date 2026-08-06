@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { FileUpload } from '@/components/ui/file-upload';
 import { compressImage } from '@/lib/image-compress';
+import { toAssetUrl } from '@/lib/asset-url';
 import { Upload as UploadIcon, ArrowLeft, ArrowRight, Check } from '@phosphor-icons/react/dist/ssr';
 import { useToast } from '@/hooks/use-toast';
 import { createTemplate, updateTemplate } from '@/actions/templates';
@@ -502,9 +503,7 @@ export default function TemplateForm({
   const methodOptions = categories.filter((c) => c.level === 3 && c.parentKey === watchStyleKey);
 
   const coverPreviewUrl = isEdit && initial?.coverUrl
-    ? (initial.coverUrl.startsWith('http')
-      ? initial.coverUrl
-      : `${backendUrl}${initial.coverUrl.startsWith('/') ? '' : '/'}${initial.coverUrl}`)
+    ? toAssetUrl(initial.coverUrl, backendUrl) ?? undefined
     : undefined;
 
   return (
