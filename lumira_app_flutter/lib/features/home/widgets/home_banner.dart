@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../templates/widgets/template_cover_image.dart';
 import '../data/home_mock_data.dart';
 import '../providers/banner_recommendation_provider.dart';
 
@@ -171,6 +172,7 @@ class _BannerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasCover = banner.hasCover;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -190,45 +192,56 @@ class _BannerCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // 背景渐变
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    tokens.brandDeep,
-                    tokens.brand,
-                    tokens.brandLight,
-                  ],
-                ),
+            // 背景：模板类 banner 用封面图，其他用品牌渐变
+            if (hasCover) ...[
+              TemplateCoverImage(
+                cover: banner.cover,
+                coverData: banner.coverData,
+                fit: BoxFit.cover,
+                fallback: _buildGradientBackground(),
               ),
-            ),
-            // 装饰圆
-            Positioned(
-              top: -20,
-              right: -20,
-              child: Container(
-                width: 100,
-                height: 100,
+              // 暗色渐变遮罩，保证文字可读性
+              Container(
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.08),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.25),
+                      Colors.black.withOpacity(0.55),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              bottom: -30,
-              left: -10,
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.06),
+            ] else
+              _buildGradientBackground(),
+            // 装饰圆（仅渐变背景显示）
+            if (!hasCover) ...[
+              Positioned(
+                top: -20,
+                right: -20,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.08),
+                  ),
                 ),
               ),
-            ),
+              Positioned(
+                bottom: -30,
+                left: -10,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.06),
+                  ),
+                ),
+              ),
+            ],
             // 内容
             Padding(
               padding: const EdgeInsets.all(20),
@@ -272,7 +285,7 @@ class _BannerCard extends StatelessWidget {
                       color: Colors.white.withOpacity(0.85),
                       height: 1.4,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
@@ -296,6 +309,23 @@ class _BannerCard extends StatelessWidget {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 品牌渐变背景（无封面图时使用）
+  Widget _buildGradientBackground() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            tokens.brandDeep,
+            tokens.brand,
+            tokens.brandLight,
           ],
         ),
       ),

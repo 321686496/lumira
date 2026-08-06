@@ -24,7 +24,12 @@ if (process.env.NODE_ENV === 'production') {
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ trustProxy: true }),
+    new FastifyAdapter({
+      trustProxy: true,
+      // 整个请求体上限（multipart 请求总大小：多文件 + 表单字段 + 开销）。
+      // 默认 1MB 会导致多文件/大文件上传被 Fastify 核心拒绝（413）。
+      bodyLimit: 32 * 1024 * 1024,
+    }),
   );
 
   app.setGlobalPrefix('api/v1');
@@ -37,12 +42,14 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // 注册 multipart 插件（spec 3.5：单文件 5MB，单次最多 5 个文件）
-  // 注意：必须使用 app.register（NestFastifyApplication 暴露的底层 fastify register）
+  // 注册 multipart 插件
+  // - fileSize 25MB：.pptpl 内嵌 base64 封面图/剪影，文件常达 5-15MB；单文件上限放宽到 25MB
+  // - 图片（cover/silhouette）的 5MB 上限在 admin-templates.service 中按字段校验并返回明确错误
+  // - files 6：cover + silhouette + pptpl + icon + 预留
   await app.register(multipart, {
     limits: {
-      fileSize: 5 * 1024 * 1024,
-      files: 5,
+      fileSize: 25 * 1024 * 1024,
+      files: 6,
     },
   });
 

@@ -61,18 +61,29 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   /// - _showCustom==true → 只显示 isCustom==true（DAO getCustomOnly + imported）
   /// - _showCustom==false → 只显示 isCustom==false（DAO getBuiltin）
   /// - _selectedType 非空时进一步按 category 过滤
+  /// - _selectedStyle 非空时按 classification.style 过滤（v17 修复：原 bug 不生效）
+  /// - _selectedMethod 非空时按 classification.method 过滤（v17 修复：原 bug 不生效）
   ///
   /// 计数（allCount / unlockedCount / categoryCounts）始终基于 builtin + custom + imported 全集，
   /// 与原 mock 阶段 `TemplatesBrowseMockData.allTemplates` 行为一致。
   ///
   /// v14: 同时加载分类列表（dao.getCategories），作为分类瀑布流数据源。
+  /// v17: 改为加载三级树形分类（level=1 用于概览，level=2/3 用于筛选级联）。
   Future<_AllPageData> _loadData(
     TemplatesDao dao,
     List<AllTemplateItem> imported,
   ) async {
     final builtins = await dao.getBuiltin();
     final customs = await dao.getCustomOnly();
-    final categories = await dao.getCategories(activeOnly: true);
+    // v17: 仅加载一级分类用于概览页（level=1, parent_key IS NULL）
+    final categories = await dao.getCategories(activeOnly: true, level: 1);
+    // v17: 按当前选中状态加载二三级分类选项（级联筛选）
+    final styleOptions = _selectedType != null
+        ? await dao.getCategoriesByParent(_selectedType!)
+        : <TemplateCategoryRecord>[];
+    final methodOptions = _selectedStyle != null
+        ? await dao.getCategoriesByParent(_selectedStyle!)
+        : <TemplateCategoryRecord>[];
 
     final builtinItems =
         builtins.map((r) => _recordToItem(r, isCustom: false)).toList();
@@ -89,10 +100,19 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
       categoryCounts[t.category] = (categoryCounts[t.category] ?? 0) + 1;
     }
 
-    final source = _showCustom ? customWithImported : builtinItems;
-    final filtered = _selectedType != null
-        ? source.where((t) => t.category == _selectedType).toList()
-        : source;
+    // v17 修复筛选 bug：三级级联过滤（原代码仅按 type 过滤，style/method 不生效）
+    var filtered = _showCustom ? customWithImported : builtinItems;
+    if (_selectedType != null) {
+      filtered = filtered.where((t) => t.category == _selectedType).toList();
+    }
+    if (_selectedStyle != null) {
+      filtered =
+          filtered.where((t) => t.style == _selectedStyle).toList();
+    }
+    if (_selectedMethod != null) {
+      filtered =
+          filtered.where((t) => t.method == _selectedMethod).toList();
+    }
 
     return _AllPageData(
       allCount: allCount,
@@ -100,6 +120,8 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
       categoryCounts: categoryCounts,
       filtered: filtered,
       categories: categories,
+      styleOptions: styleOptions,
+      methodOptions: methodOptions,
     );
   }
 
@@ -226,6 +248,9 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                                     ),
                                     _FilterSection(
                                       tokens: tokens,
+                                      categories: data.categories,
+                                      styleOptions: data.styleOptions,
+                                      methodOptions: data.methodOptions,
                                       selectedType: _selectedType,
                                       selectedStyle: _selectedStyle,
                                       selectedMethod: _selectedMethod,
@@ -382,6 +407,9 @@ class _HeroCard extends StatelessWidget {
 class _FilterSection extends StatelessWidget {
   const _FilterSection({
     required this.tokens,
+    required this.categories,
+    required this.styleOptions,
+    required this.methodOptions,
     required this.selectedType,
     required this.selectedStyle,
     required this.selectedMethod,
@@ -391,6 +419,12 @@ class _FilterSection extends StatelessWidget {
   });
 
   final ThemeTokens tokens;
+  /// v17: 从 sqflite 加载的一级分类（type），替代原硬编码 _typeLabels
+  final List<TemplateCategoryRecord> categories;
+  /// v17: 当前 selectedType 下的二级分类（style），从 DAO 级联查询
+  final List<TemplateCategoryRecord> styleOptions;
+  /// v17: 当前 selectedStyle 下的三级分类（method），从 DAO 级联查询
+  final List<TemplateCategoryRecord> methodOptions;
   final String? selectedType;
   final String? selectedStyle;
   final String? selectedMethod;
@@ -398,23 +432,18 @@ class _FilterSection extends StatelessWidget {
   final void Function(int layer, String? value) onLayerSelect;
   final void Function(bool) onToggleCustom;
 
-  static const _typeLabels = <LabelValue>[
-    LabelValue('portrait', '人像'),
-    LabelValue('landscape', '风光'),
-    LabelValue('food', '美食'),
-    LabelValue('street', '街拍'),
-    LabelValue('night', '夜景'),
-    LabelValue('macro', '微距'),
-    LabelValue('still-life', '静物'),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final styleOptions =
-        selectedType != null ? (styleMap[selectedType] ?? <LabelValue>[]) : <LabelValue>[];
-    final methodOptions = selectedStyle != null
-        ? (methodMap[selectedStyle] ?? <LabelValue>[])
-        : <LabelValue>[];
+    // v17: 将 TemplateCategoryRecord 转为 _PillRow 所需的 LabelValue
+    final typeLabels = categories
+        .map((c) => LabelValue(c.key, c.name))
+        .toList();
+    final styleLabels = styleOptions
+        .map((c) => LabelValue(c.key, c.name))
+        .toList();
+    final methodLabels = methodOptions
+        .map((c) => LabelValue(c.key, c.name))
+        .toList();
 
     return FadeUp(
       delay: const Duration(milliseconds: 80),
@@ -426,24 +455,24 @@ class _FilterSection extends StatelessWidget {
             // Layer 0: Type pills
             _PillRow(
               tokens: tokens,
-              options: _typeLabels,
+              options: typeLabels,
               selected: selectedType,
               onSelect: (v) => onLayerSelect(0, v),
             ),
-            if (styleOptions.isNotEmpty) ...[
+            if (styleLabels.isNotEmpty) ...[
               const SizedBox(height: 8),
               _PillRow(
                 tokens: tokens,
-                options: styleOptions,
+                options: styleLabels,
                 selected: selectedStyle,
                 onSelect: (v) => onLayerSelect(1, v),
               ),
             ],
-            if (methodOptions.isNotEmpty) ...[
+            if (methodLabels.isNotEmpty) ...[
               const SizedBox(height: 8),
               _PillRow(
                 tokens: tokens,
-                options: methodOptions,
+                options: methodLabels,
                 selected: selectedMethod,
                 onSelect: (v) => onLayerSelect(2, v),
               ),
@@ -1375,14 +1404,20 @@ class _AllPageData {
     required this.categoryCounts,
     required this.filtered,
     required this.categories,
+    required this.styleOptions,
+    required this.methodOptions,
   });
 
   final int allCount;
   final int unlockedCount;
   final Map<String, int> categoryCounts;
   final List<AllTemplateItem> filtered;
-  /// v14: 从 sqflite template_categories 表加载的分类列表
+  /// v14: 从 sqflite template_categories 表加载的一级分类列表
   final List<TemplateCategoryRecord> categories;
+  /// v17: 当前 selectedType 下的二级分类（style）选项，selectedType 为空时为空列表
+  final List<TemplateCategoryRecord> styleOptions;
+  /// v17: 当前 selectedStyle 下的三级分类（method）选项，selectedStyle 为空时为空列表
+  final List<TemplateCategoryRecord> methodOptions;
 }
 
 /// TemplateRecord → AllTemplateItem 适配

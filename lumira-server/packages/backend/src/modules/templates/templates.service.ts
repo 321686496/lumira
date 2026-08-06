@@ -218,6 +218,8 @@ export function rowToCategory(row: CategoryRow): TemplateCategory {
     key: row.key,
     name: row.name,
     iconUrl: row.iconUrl,
+    parentKey: row.parentKey,
+    level: row.level,
     sortOrder: row.sortOrder,
     isSystem: row.isSystem === 1,
     isActive: row.isActive === 1,

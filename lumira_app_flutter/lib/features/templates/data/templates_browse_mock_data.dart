@@ -79,6 +79,11 @@ const Map<String, String> sceneToCategoryMap = {
 
 /// 三层分类 STYLE_MAP（all.vue STYLE_MAP verbatim）
 /// 注意：LabelValue 为公有类（brief 中 _LabelValue 改公有，见文件头注释）
+///
+/// @Deprecated v17：三级分类改为从 sqflite template_categories 表读取，
+/// 改用 `TemplatesDao.getCategoriesByParent(typeKey)` 获取二级分类。
+/// 此字典已过时且不完整，仅保留供旧代码渐进迁移，新代码请勿引用。
+@Deprecated('v17: 改用 TemplatesDao.getCategoriesByParent(typeKey) 从 sqflite 读取二级分类')
 const Map<String, List<LabelValue>> styleMap = {
   'portrait': [
     LabelValue('japanese', '日系'),
@@ -113,6 +118,11 @@ const Map<String, List<LabelValue>> styleMap = {
 };
 
 /// 三层分类 METHOD_MAP（all.vue METHOD_MAP verbatim）
+///
+/// @Deprecated v17：三级分类改为从 sqflite template_categories 表读取，
+/// 改用 `TemplatesDao.getCategoriesByParent(styleKey)` 获取三级分类。
+/// 此字典已过时且不完整，仅保留供旧代码渐进迁移，新代码请勿引用。
+@Deprecated('v17: 改用 TemplatesDao.getCategoriesByParent(styleKey) 从 sqflite 读取三级分类')
 const Map<String, List<LabelValue>> methodMap = {
   'japanese': [
     LabelValue('selfie', '自拍'),

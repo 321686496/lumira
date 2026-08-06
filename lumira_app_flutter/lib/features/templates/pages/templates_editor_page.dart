@@ -19,7 +19,6 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_state.dart';
 import '../../profile/pages/profile_my_templates_page.dart' show customTemplatesProvider;
 import '../data/preview_form_provider.dart';
-import '../data/templates_browse_mock_data.dart' show LabelValue, styleMap, methodMap;
 import '../data/builtin_silhouettes.dart';
 import '../data/templates_editor_mock_data.dart';
 import '../services/template_exporter.dart';
@@ -36,16 +35,8 @@ class EditorOption {
 }
 
 // ===== 选项数组（editor.vue lines 819-888 verbatim） =====
-
-const List<EditorOption> categoryOptions = [
-  EditorOption('portrait', '人像'),
-  EditorOption('landscape', '风光'),
-  EditorOption('food', '美食'),
-  EditorOption('night', '夜景'),
-  EditorOption('street', '街拍'),
-  EditorOption('macro', '微距'),
-  EditorOption('still-life', '静物'),
-];
+// v17: categoryOptions 改为从 DAO 动态加载（见 _Step1TemplateInfoState._loadTypeOptions），
+// 不再硬编码，以支持后端动态分类管理。
 
 const List<EditorOption> overlayTypeOptions = [
   EditorOption('rule_of_thirds', '三分法'),
@@ -1211,7 +1202,7 @@ class _SliderRow extends StatelessWidget {
 
 // ===== Step 1: 模板信息 =====
 
-class _Step1TemplateInfo extends StatelessWidget {
+class _Step1TemplateInfo extends ConsumerStatefulWidget {
   const _Step1TemplateInfo({
     required this.tokens,
     required this.form,
@@ -1229,8 +1220,114 @@ class _Step1TemplateInfo extends StatelessWidget {
   final VoidCallback onPickCoverImage;
 
   @override
+  ConsumerState<_Step1TemplateInfo> createState() => _Step1TemplateInfoState();
+}
+
+/// v17: Step1 表单状态。
+///
+/// 分类选项（type/style/method）从 sqflite DAO 动态加载，支持三级级联：
+/// - type（一级）：initState 时加载 level=1 分类
+/// - style（二级）：type 变化时按 parentKey 重新加载
+/// - method（三级）：style 变化时按 parentKey 重新加载
+///
+/// 切换 type 时清空 style/method，切换 style 时清空 method，保证级联一致性。
+class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
+  List<EditorOption> _typeOptions = const [];
+  List<EditorOption> _styleOptions = const [];
+  List<EditorOption> _methodOptions = const [];
+  /// 记录已加载过的 category/style，用于 didUpdateWidget 判断是否需要重新加载
+  String? _lastLoadedCategory;
+  String? _lastLoadedStyle;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTypeOptions();
+    _loadStyleOptions(widget.form.meta.category);
+    _loadMethodOptions(widget.form.meta.style);
+  }
+
+  @override
+  void didUpdateWidget(covariant _Step1TemplateInfo oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // v17: 分类变化时重新加载二级 style 选项
+    if (widget.form.meta.category != _lastLoadedCategory) {
+      _loadStyleOptions(widget.form.meta.category);
+    }
+    // style 变化时重新加载三级 method 选项
+    if (widget.form.meta.style != _lastLoadedStyle) {
+      _loadMethodOptions(widget.form.meta.style);
+    }
+  }
+
+  Future<void> _loadTypeOptions() async {
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final cats = await dao.getCategories(activeOnly: true, level: 1);
+      if (!mounted) return;
+      setState(() {
+        _typeOptions = cats.map((c) => EditorOption(c.key, c.name)).toList();
+      });
+    } catch (e) {
+      debugPrint('Failed to load type categories: $e');
+    }
+  }
+
+  Future<void> _loadStyleOptions(String? categoryKey) async {
+    _lastLoadedCategory = categoryKey;
+    if (categoryKey == null || categoryKey.isEmpty) {
+      if (mounted) setState(() => _styleOptions = const []);
+      return;
+    }
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final cats = await dao.getCategoriesByParent(categoryKey);
+      if (!mounted) return;
+      setState(() {
+        _styleOptions = cats.map((c) => EditorOption(c.key, c.name)).toList();
+      });
+    } catch (e) {
+      debugPrint('Failed to load style categories: $e');
+    }
+  }
+
+  Future<void> _loadMethodOptions(String? styleKey) async {
+    _lastLoadedStyle = styleKey;
+    if (styleKey == null || styleKey.isEmpty) {
+      if (mounted) setState(() => _methodOptions = const []);
+      return;
+    }
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final cats = await dao.getCategoriesByParent(styleKey);
+      if (!mounted) return;
+      setState(() {
+        _methodOptions = cats.map((c) => EditorOption(c.key, c.name)).toList();
+      });
+    } catch (e) {
+      debugPrint('Failed to load method categories: $e');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // 局部别名，避免 body 中大量 widget.xxx 前缀
+    final tokens = widget.tokens;
+    final form = widget.form;
+    final onChange = widget.onChange;
+    final onPickCoverImage = widget.onPickCoverImage;
+    final tagsController = widget.tagsController;
+    final onTagsChanged = widget.onTagsChanged;
     final cover = form.meta.coverImage;
+    // style/method 为可选字段，首位加"不限"（空值 → null）
+    final styleOptions = <EditorOption>[
+      const EditorOption('', '不限'),
+      ..._styleOptions,
+    ];
+    final methodOptions = <EditorOption>[
+      const EditorOption('', '不限'),
+      ..._methodOptions,
+    ];
     return _StepCard(
       tokens: tokens,
       stepNumber: 1,
@@ -1274,13 +1371,41 @@ class _Step1TemplateInfo extends StatelessWidget {
             onChanged: (v) => onChange(() => form.meta.name = v),
           ),
           const SizedBox(height: 14),
+          // v17: 分类（type，必选）— 选项从 DAO level=1 加载
           _FieldLabel(tokens: tokens, text: '分类'),
           _FieldDropdown(
             tokens: tokens,
             value: form.meta.category,
-            options: categoryOptions,
+            options: _typeOptions,
             onChanged: (v) => onChange(() {
               form.meta.category = v;
+              // v17: 切换分类时清空 style/method（级联一致性）
+              form.meta.style = null;
+              form.meta.method = null;
+            }),
+          ),
+          const SizedBox(height: 14),
+          // v17: 风格（style，可选，级联自分类）
+          _FieldLabel(tokens: tokens, text: '风格'),
+          _FieldDropdown(
+            tokens: tokens,
+            value: form.meta.style ?? '',
+            options: styleOptions,
+            onChanged: (v) => onChange(() {
+              form.meta.style = v.isEmpty ? null : v;
+              // v17: 切换风格时清空 method（级联一致性）
+              form.meta.method = null;
+            }),
+          ),
+          const SizedBox(height: 14),
+          // v17: 方式（method，可选，级联自风格）
+          _FieldLabel(tokens: tokens, text: '方式'),
+          _FieldDropdown(
+            tokens: tokens,
+            value: form.meta.method ?? '',
+            options: methodOptions,
+            onChanged: (v) => onChange(() {
+              form.meta.method = v.isEmpty ? null : v;
             }),
           ),
           const SizedBox(height: 14),

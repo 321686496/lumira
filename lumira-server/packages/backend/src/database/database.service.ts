@@ -25,10 +25,56 @@ export class DatabaseService implements OnModuleInit {
     this.sqlite.pragma('journal_mode = WAL');
     this.sqlite.pragma('foreign_keys = ON');
 
+    // 兼容旧库：template_categories 主键从 key 改为自增 id（spec 11 三级分类扩展）。
+    // SQLite 不支持 ALTER TABLE 修改主键，故在迁移执行前检测旧 schema 并重建表。
+    this.upgradeCategorySchemaIfNeeded();
+
     this.db = drizzle(this.sqlite, { schema });
 
     // 执行初始迁移
     this.runMigrations();
+  }
+
+  /**
+   * 检测 template_categories 是否为旧 schema（key PRIMARY KEY，无 parent_key/level/id），
+   * 若是则重建为新 schema（id 自增主键 + parent_key + level + 联合唯一索引）。
+   * 必须在 runMigrations() 之前执行，确保 005 迁移的 INSERT 能找到 parent_key 列。
+   */
+  private upgradeCategorySchemaIfNeeded(): void {
+    const cols = this.sqlite.prepare('PRAGMA table_info(template_categories)').all() as { name: string }[];
+    if (cols.length === 0) {
+      // 表不存在（全新库），003 迁移会以新 schema 创建，无需处理
+      return;
+    }
+    if (cols.some((c) => c.name === 'parent_key')) {
+      // 新 schema 已就位
+      return;
+    }
+
+    // 旧 schema：重建表
+    this.sqlite.exec(`
+      CREATE TABLE template_categories_new (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        key         TEXT NOT NULL,
+        name        TEXT NOT NULL,
+        icon_url    TEXT NOT NULL,
+        parent_key  TEXT,
+        level       INTEGER NOT NULL DEFAULT 1,
+        sort_order  INTEGER NOT NULL DEFAULT 0,
+        is_system   INTEGER NOT NULL DEFAULT 0,
+        is_active   INTEGER NOT NULL DEFAULT 1,
+        created_at  INTEGER NOT NULL,
+        updated_at  INTEGER NOT NULL
+      );
+      CREATE UNIQUE INDEX uq_category_key_parent ON template_categories_new(key, parent_key);
+
+      INSERT INTO template_categories_new (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at)
+      SELECT key, name, icon_url, NULL, 1, sort_order, is_system, is_active, created_at, updated_at
+      FROM template_categories;
+
+      DROP TABLE template_categories;
+      ALTER TABLE template_categories_new RENAME TO template_categories;
+    `);
   }
 
   private runMigrations() {

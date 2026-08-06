@@ -676,8 +676,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: CaptureNav(onBack: _onBack),
           ),
 
-          // 2.5 顶部浮层组：模板信息卡（可折叠）→ 比例切换器 → 挑战悬浮条 → 参数 pill 栏
-          //    模板信息卡高度动态变化，用 Column 让下方元素随卡片自然流动
+          // 2.5 顶部浮层组：比例切换器 → 参数 pill 栏 → 挑战悬浮条 → 模板信息卡
+          //    比例/参数固定在顶部，模板信息卡放在最下方避免挤压上方控件
           Positioned(
             top: MediaQuery.of(context).padding.top + 56,
             left: 0,
@@ -685,24 +685,25 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 套用模板时显示可折叠模板信息卡（全屏隐藏，与参数 pill 栏一致）
-                if (template != null && !isFullscreen)
-                  TemplateInfoCard(template: template),
-                const SizedBox(height: 8),
                 // 比例切换器（导航栏下方居中，全屏也显示，行为不变）
                 const Center(child: AspectRatioSelector()),
-                // 挑战悬浮条（仅挑战拍摄模式显示）
-                if (isChallengeMode && !isFullscreen)
-                  ChallengeOverlayBar(
-                    challengeId: widget.challengeId!,
-                    captureInProgress: captureInProgress,
-                  ),
+                // 比例切换器与参数 pill 栏之间的间隙
+                const SizedBox(height: 8),
                 // 参数 pill 栏（全屏模式隐藏）
                 if (!isFullscreen)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
                     child: ParamPillBar(),
                   ),
+                // 挑战悬浮条（仅挑战拍摄模式显示）
+                if (isChallengeMode && !isFullscreen)
+                  ChallengeOverlayBar(
+                    challengeId: widget.challengeId!,
+                    captureInProgress: captureInProgress,
+                  ),
+                // 套用模板时显示可折叠模板信息卡（移至下方，避免挤压比例/参数选项）
+                if (template != null && !isFullscreen)
+                  TemplateInfoCard(template: template),
               ],
             ),
           ),

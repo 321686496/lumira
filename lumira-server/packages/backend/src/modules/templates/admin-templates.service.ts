@@ -24,6 +24,19 @@ export interface UploadFile {
   mimetype: string;
 }
 
+/** 图片上传上限：封面 / 剪影（5MB） */
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+/** .pptpl 上传上限（25MB）：文件内嵌 base64 封面图/剪影，体积远大于原始 JSON */
+export const MAX_PPTPL_BYTES = 25 * 1024 * 1024;
+
+/** 校验上传文件大小，超限时抛出明确的 400 错误（避免依赖 busboy 的 413） */
+function assertFileSize(file: UploadFile, maxBytes: number, fieldLabel: string): void {
+  if (file.buffer.byteLength > maxBytes) {
+    const mb = (maxBytes / 1024 / 1024).toFixed(0);
+    throw new BadRequestException(`${fieldLabel}不能超过 ${mb}MB（当前 ${(file.buffer.byteLength / 1024 / 1024).toFixed(2)}MB）`);
+  }
+}
+
 /** 静态资源 URL 构造（spec 3.5：prefix 不含 /api/v1） */
 function buildPublicUrl(category: 'templates' | 'categories', id: string, filename: string): string {
   const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
@@ -176,6 +189,15 @@ export class AdminTemplatesService {
       throw new BadRequestException(`Category not found: ${meta.category}`);
     }
 
+    // 校验上传文件大小（图片 5MB / pptpl 25MB），超限返回明确的 400 而不是 413
+    assertFileSize(cover, MAX_IMAGE_BYTES, '封面图片');
+    if (silhouette) {
+      assertFileSize(silhouette, MAX_IMAGE_BYTES, '剪影图片');
+    }
+    if (pptpl) {
+      assertFileSize(pptpl, MAX_PPTPL_BYTES, '.pptpl 文件');
+    }
+
     // 5 段内容：默认取 meta，若有 pptpl 则覆盖
     let composition = meta.composition || {};
     let pose = meta.pose || {};
@@ -233,7 +255,12 @@ export class AdminTemplatesService {
       referenceSource: meta.referenceSource || '',
       tagsJson: JSON.stringify(meta.tags || []),
       tagIdsJson: JSON.stringify(meta.tagIds || []),
-      classificationJson: JSON.stringify(meta.classification || { type: '', style: '', method: '' }),
+      classificationJson: JSON.stringify({
+        // 自动同步：classification.type = category（spec 11.4）
+        type: meta.category,
+        style: meta.classification?.style || '',
+        method: meta.classification?.method || '',
+      }),
       sortOrder: meta.sortOrder ?? 0,
       isActive: meta.isActive === false ? 0 : 1,
       compositionJson: JSON.stringify(composition),
@@ -284,6 +311,17 @@ export class AdminTemplatesService {
     const existing = existingRows[0];
     if (!existing) {
       throw new NotFoundException('Template not found');
+    }
+
+    // 校验上传文件大小（图片 5MB / pptpl 25MB），超限返回明确的 400 而不是 413
+    if (cover) {
+      assertFileSize(cover, MAX_IMAGE_BYTES, '封面图片');
+    }
+    if (silhouette) {
+      assertFileSize(silhouette, MAX_IMAGE_BYTES, '剪影图片');
+    }
+    if (pptpl) {
+      assertFileSize(pptpl, MAX_PPTPL_BYTES, '.pptpl 文件');
     }
 
     // 若改了分类，校验新分类存在
@@ -354,7 +392,17 @@ export class AdminTemplatesService {
     if (meta.referenceSource !== undefined) updateData.referenceSource = meta.referenceSource;
     if (meta.tags !== undefined) updateData.tagsJson = JSON.stringify(meta.tags);
     if (meta.tagIds !== undefined) updateData.tagIdsJson = JSON.stringify(meta.tagIds);
-    if (meta.classification !== undefined) updateData.classificationJson = JSON.stringify(meta.classification);
+    // 自动同步：classification.type = category（spec 11.4）
+    // 当 category 或 classification 任一变化时，重写 classificationJson 保持 type 与 category 一致
+    if (meta.category !== undefined || meta.classification !== undefined) {
+      const finalCategory = meta.category !== undefined ? meta.category : existing.category;
+      const existingCls = safeParseClassification(existing.classificationJson);
+      updateData.classificationJson = JSON.stringify({
+        type: finalCategory,
+        style: meta.classification?.style ?? existingCls.style,
+        method: meta.classification?.method ?? existingCls.method,
+      });
+    }
     if (meta.sortOrder !== undefined) updateData.sortOrder = meta.sortOrder;
     if (meta.isActive !== undefined) updateData.isActive = meta.isActive ? 1 : 0;
     updateData.coverUrl = coverUrl;
@@ -438,4 +486,14 @@ function safeParse(json: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/** 解析 classification_json，提取 type/style/method 字符串 */
+function safeParseClassification(json: string): { type: string; style: string; method: string } {
+  const obj = safeParse(json);
+  return {
+    type: typeof obj.type === 'string' ? obj.type : '',
+    style: typeof obj.style === 'string' ? obj.style : '',
+    method: typeof obj.method === 'string' ? obj.method : '',
+  };
 }

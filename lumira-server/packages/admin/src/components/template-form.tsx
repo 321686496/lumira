@@ -30,11 +30,16 @@ const FOCUS_MODES = ['auto', 'manual', 'continuous'] as const;
 const LENS_SUGGESTIONS = ['wide', 'main', 'telephoto', 'ultra_wide'] as const;
 const LUTS = ['none', 'cinematic', 'vintage', 'bw', 'warm_film', 'cool_film', 'pastel', 'fuji'] as const;
 
+// Radix Select 不允许空字符串 value，用此哨兵值表示"无"
+const NONE_VALUE = '__none__';
+
 // ===== Zod schema =====
 const schema = z.object({
   // Step 1 - Meta
   name: z.string().min(1, '请输入模板名称').max(100),
   category: z.string().min(1, '请选择分类'),
+  classificationStyle: z.string().optional().default(NONE_VALUE),
+  classificationMethod: z.string().optional().default(NONE_VALUE),
   price: z.coerce.number().int().min(0, '价格不能为负'),
   description: z.string().optional().default(''),
   author: z.string().optional().default('Lumira'),
@@ -142,9 +147,12 @@ export default function TemplateForm({
   // 从 initial 构造表单初值
   const buildDefaults = (): FormValues => {
     if (!initial) {
+      const typeCategories = categories.filter((c) => c.level === 1);
       return {
         name: '',
-        category: categories[0]?.key ?? 'portrait',
+        category: typeCategories[0]?.key ?? 'portrait',
+        classificationStyle: NONE_VALUE,
+        classificationMethod: NONE_VALUE,
         price: 0,
         description: '',
         author: 'Lumira',
@@ -204,6 +212,8 @@ export default function TemplateForm({
     return {
       name: initial.name,
       category: initial.category,
+      classificationStyle: initial.classification?.style || NONE_VALUE,
+      classificationMethod: initial.classification?.method || NONE_VALUE,
       price: initial.price,
       description: initial.description ?? '',
       author: initial.author ?? 'Lumira',
@@ -263,6 +273,16 @@ export default function TemplateForm({
   // .pptpl 自动填充
   const handlePptplUpload = async (file: File | null) => {
     if (!file) return;
+    // .pptpl 内嵌 base64 封面图/剪影，体积可达数 MB；25MB 上限与后端一致
+    const MAX_PPTPL_BYTES = 25 * 1024 * 1024;
+    if (file.size > MAX_PPTPL_BYTES) {
+      toast({
+        variant: 'destructive',
+        title: '文件过大',
+        description: `.pptpl 文件不能超过 25MB（当前 ${(file.size / 1024 / 1024).toFixed(2)}MB）`,
+      });
+      return;
+    }
     try {
       const text = await file.text();
       const json = JSON.parse(text) as Record<string, unknown>;
@@ -370,7 +390,11 @@ export default function TemplateForm({
       referenceSource: data.referenceSource ?? '',
       tags: parseCommaList(data.tags),
       tagIds: [],
-      classification: { type: data.category, style: '', method: '' },
+      classification: {
+        type: data.category,
+        style: data.classificationStyle === NONE_VALUE ? '' : (data.classificationStyle ?? ''),
+        method: data.classificationMethod === NONE_VALUE ? '' : (data.classificationMethod ?? ''),
+      },
       sortOrder: data.sortOrder,
       isActive: data.isActive,
       composition: {
@@ -464,6 +488,15 @@ export default function TemplateForm({
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
   const watchSilhouetteType = watch('silhouetteType');
+  const watchCategory = watch('category');
+  const watchStyleField = watch('classificationStyle') || NONE_VALUE;
+  const watchStyleKey = watchStyleField === NONE_VALUE ? '' : watchStyleField;
+
+  // 三级级联分类选项（categories 含全部层级，按 level + parentKey 客户端筛选）
+  const typeCategories = categories.filter((c) => c.level === 1);
+  const styleOptions = categories.filter((c) => c.level === 2 && c.parentKey === watchCategory);
+  const methodOptions = categories.filter((c) => c.level === 3 && c.parentKey === watchStyleKey);
+
   const coverPreviewUrl = isEdit && initial?.coverUrl
     ? (initial.coverUrl.startsWith('http')
       ? initial.coverUrl
@@ -479,7 +512,7 @@ export default function TemplateForm({
           <div className="flex-1">
             <p className="text-sm font-medium text-foreground">从 .pptpl 文件自动填充</p>
             <p className="text-xs text-muted-foreground mt-1">
-              上传 Flutter 端导出的 .pptpl 模板文件，自动填充「构图 / 剪影 / 相机 / 场景引导 / 后期处理」5 段字段，可在后续步骤中继续修改。
+              上传 Flutter 端导出的 .pptpl 模板文件（≤25MB，内嵌 base64 封面图/剪影），自动填充「构图 / 剪影 / 相机 / 场景引导 / 后期处理」5 段字段，可在后续步骤中继续修改。
             </p>
             <input
               ref={pptplInputRef}
@@ -545,33 +578,98 @@ export default function TemplateForm({
               {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>分类 *</Label>
-                <Controller
-                  control={control}
-                  name="category"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger><SelectValue placeholder="选择分类" /></SelectTrigger>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.key} value={c.key}>
-                            {c.name} ({c.key})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
+            <div className="space-y-2">
+              <Label>分类（三级级联）*</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">一级（题材）</Label>
+                  <Controller
+                    control={control}
+                    name="category"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          // 切换一级时重置二三级
+                          setValue('classificationStyle', NONE_VALUE);
+                          setValue('classificationMethod', NONE_VALUE);
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="选择题材" /></SelectTrigger>
+                        <SelectContent>
+                          {typeCategories.map((c) => (
+                            <SelectItem key={c.key} value={c.key}>
+                              {c.name} ({c.key})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">二级（风格）</Label>
+                  <Controller
+                    control={control}
+                    name="classificationStyle"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value || NONE_VALUE}
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          // 切换二级时重置三级
+                          setValue('classificationMethod', NONE_VALUE);
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NONE_VALUE}>无</SelectItem>
+                          {styleOptions.map((c) => (
+                            <SelectItem key={c.key} value={c.key}>
+                              {c.name} ({c.key})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">三级（方式）</Label>
+                  <Controller
+                    control={control}
+                    name="classificationMethod"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value || NONE_VALUE}
+                        onValueChange={field.onChange}
+                        disabled={!watchStyleKey}
+                      >
+                        <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NONE_VALUE}>无</SelectItem>
+                          {methodOptions.map((c) => (
+                            <SelectItem key={c.key} value={c.key}>
+                              {c.name} ({c.key})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
               </div>
+              {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
+              <p className="text-xs text-muted-foreground">
+                一级（题材）为必选；二三级可选「无」。提交时 category = 一级 key，classification.type 与之相同。
+              </p>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="price">价格（积分，0=免费）</Label>
-                <Input id="price" type="number" min={0} {...register('price')} />
-                {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="price">价格（积分，0=免费）</Label>
+              <Input id="price" type="number" min={0} {...register('price')} />
+              {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
             </div>
 
             <div className="space-y-2">
@@ -630,10 +728,10 @@ export default function TemplateForm({
             <FileUpload
               label="封面图片 *"
               accept="image/png,image/jpeg,image/webp"
-              maxSize={2 * 1024 * 1024}
+              maxSize={5 * 1024 * 1024}
               value={coverFile}
               onChange={setCoverFile}
-              hint="JPG / PNG / WebP，≤2MB，建议 3:4 竖图。"
+              hint="JPG / PNG / WebP，≤5MB，建议 3:4 竖图。"
               previewUrl={coverPreviewUrl}
             />
 
@@ -666,10 +764,10 @@ export default function TemplateForm({
               <FileUpload
                 label="剪影图片"
                 accept="image/png,image/svg+xml"
-                maxSize={1024 * 1024}
+                maxSize={5 * 1024 * 1024}
                 value={silhouetteFile}
                 onChange={setSilhouetteFile}
-                hint="PNG / SVG，≤1MB。提交时会随模板一起上传。"
+                hint="PNG / SVG，≤5MB。提交时会随模板一起上传。"
               />
             )}
 

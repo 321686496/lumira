@@ -125,10 +125,14 @@ class RecommendationService {
           questionnaireBanner = HomeBannerItem(
             id: 'banner_questionnaire_pick',
             title: '从$label开始',
-            subtitle: '根据你的偏好推荐',
+            subtitle: tpl.description.isNotEmpty
+                ? _truncate(tpl.description, 30)
+                : '根据你的偏好推荐',
             imageSeed: 'banner-questionnaire-$topCat',
             tag: '为你推荐',
             route: '/templates/detail?templateId=${tpl.id}',
+            cover: tpl.cover.isNotEmpty ? tpl.cover : null,
+            coverData: tpl.coverData,
           );
         }
       }
@@ -166,15 +170,18 @@ class RecommendationService {
     if (slot2Tpl != null) {
       usedTemplateIds.add(slot2Tpl.id);
       final label = _categoryLabelMap[topCategory] ?? '推荐';
+      final subtitle = topCategory != null
+          ? '你最近常拍$label，试试这套模板'
+          : '编辑精选，${_truncate(slot2Tpl.description, 30)}';
       banners.add(HomeBannerItem(
         id: 'banner_recent_category',
         title: topCategory != null ? '继续拍$label' : slot2Tpl.name,
-        subtitle: topCategory != null
-            ? '你最近常拍$label，试试这套模板'
-            : '编辑精选，${_truncate(slot2Tpl.description, 30)}',
+        subtitle: subtitle,
         imageSeed: 'banner-recent-${topCategory ?? slot2Tpl.id}',
         tag: slot2Tag,
         route: '/templates/detail?templateId=${slot2Tpl.id}',
+        cover: slot2Tpl.cover.isNotEmpty ? slot2Tpl.cover : null,
+        coverData: slot2Tpl.coverData,
       ));
     }
 
@@ -222,6 +229,8 @@ class RecommendationService {
           imageSeed: 'banner-pick-${tpl.id}',
           tag: '编辑精选',
           route: '/templates/detail?templateId=${tpl.id}',
+          cover: tpl.cover.isNotEmpty ? tpl.cover : null,
+          coverData: tpl.coverData,
         ));
       }
     }
@@ -237,6 +246,8 @@ class RecommendationService {
         imageSeed: 'banner-pick-${slot4Tpl.id}',
         tag: '编辑精选',
         route: '/templates/detail?templateId=${slot4Tpl.id}',
+        cover: slot4Tpl.cover.isNotEmpty ? slot4Tpl.cover : null,
+        coverData: slot4Tpl.coverData,
       ));
     }
 
@@ -292,10 +303,14 @@ class RecommendationService {
         banners.add(HomeBannerItem(
           id: 'banner_exploration$idSuffix',
           title: '试试$label',
-          subtitle: '换个风格，发现新视角',
+          subtitle: tpl.description.isNotEmpty
+              ? _truncate(tpl.description, 30)
+              : '换个风格，发现新视角',
           imageSeed: 'banner-explore-$explorationCat$idSuffix',
           tag: '探索新鲜',
           route: '/templates/detail?templateId=${tpl.id}',
+          cover: tpl.cover.isNotEmpty ? tpl.cover : null,
+          coverData: tpl.coverData,
         ));
       }
     } else {
@@ -310,6 +325,8 @@ class RecommendationService {
           imageSeed: 'banner-pick-${tpl.id}$idSuffix',
           tag: '编辑精选',
           route: '/templates/detail?templateId=${tpl.id}',
+          cover: tpl.cover.isNotEmpty ? tpl.cover : null,
+          coverData: tpl.coverData,
         ));
       }
     }

@@ -57,6 +57,10 @@ class Tables {
   static const String colSortOrder = 'sort_order';
   static const String colIsSystem = 'is_system';
   static const String colIsActive = 'is_active';
+  // === template_categories 扩展列（v17 迁移新增，三级树形分类） ===
+  // parent_key: 父分类 key，一级为 NULL；level: 1=type / 2=style / 3=method
+  // colLevel 复用 user_progress 段已声明的 'level' 常量
+  static const String colParentKey = 'parent_key';
 
   // === user_settings 扩展列（v4 迁移新增） ===
   static const String colSeedV3Done = 'seed_v3_done';

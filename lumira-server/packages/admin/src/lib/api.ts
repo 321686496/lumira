@@ -1,6 +1,7 @@
 // src/lib/api.ts
 import { cookies } from 'next/headers';
 import { AUTH_COOKIE_NAME, UnauthenticatedError } from './auth';
+import { buildCategoryTree } from './category-tree';
 import type {
   StatsResponse,
   InviteListResponse,
@@ -15,8 +16,12 @@ import type {
   AdminTemplateListResponse,
   AdminTemplateDetail,
   TemplateCategoryListResponse,
+  TemplateCategoryTreeResponse,
   TemplateCategory,
 } from '@/types/admin';
+
+// 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
+export { buildCategoryTree };
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
 
@@ -44,7 +49,22 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
     throw new UnauthenticatedError('Token rejected by backend');
   }
   if (!res.ok) {
-    throw new Error(`API_ERROR: ${res.status} ${res.statusText}`);
+    // 尽量透传后端错误消息（如「封面图片不能超过 5MB」），否则退回 statusText
+    let detail = '';
+    try {
+      const text = await res.text();
+      if (text) {
+        const parsed = JSON.parse(text) as { message?: unknown };
+        const msg = parsed?.message;
+        if (typeof msg === 'string') detail = msg;
+        else if (Array.isArray(msg)) detail = msg.join('; ');
+      }
+    } catch {
+      // 忽略 body 解析失败，使用默认 statusText
+    }
+    throw new Error(detail
+      ? `API_ERROR: ${res.status} ${detail}`
+      : `API_ERROR: ${res.status} ${res.statusText}`);
   }
   // 部分写操作（DELETE）可能返回空 body
   const text = await res.text();
@@ -140,11 +160,38 @@ export const api = {
     ),
 
   // ===== 分类管理 =====
-  listCategories: (params: { isActive?: boolean } = {}) => {
+  listCategories: (params: { isActive?: boolean; parentKey?: string } = {}) => {
     const search = new URLSearchParams();
     if (params.isActive !== undefined) search.set('isActive', String(params.isActive));
+    if (params.parentKey !== undefined) search.set('parentKey', params.parentKey);
     const qs = search.toString();
     return adminFetch<TemplateCategoryListResponse>(`/categories${qs ? `?${qs}` : ''}`);
+  },
+
+  /**
+   * 返回三级树形结构。优先调用后端 `/categories/tree`；若不可用则从扁平列表客户端构造。
+   */
+  listCategoryTree: async (params: { isActive?: boolean } = {}): Promise<TemplateCategoryTreeResponse> => {
+    try {
+      const search = new URLSearchParams();
+      if (params.isActive !== undefined) search.set('isActive', String(params.isActive));
+      const qs = search.toString();
+      return await adminFetch<TemplateCategoryTreeResponse>(`/categories/tree${qs ? `?${qs}` : ''}`);
+    } catch {
+      // 后端未实现 /tree 端点时，从扁平列表构造
+      const resp = await api.listCategories(params);
+      return { tree: buildCategoryTree(resp.categories) };
+    }
+  },
+
+  /**
+   * 按父分类筛选子分类（调用后端 ?parentKey= 查询参数）。
+   */
+  listCategoriesByParent: (parentKey: string, params: { isActive?: boolean } = {}) => {
+    const search = new URLSearchParams();
+    search.set('parentKey', parentKey);
+    if (params.isActive !== undefined) search.set('isActive', String(params.isActive));
+    return adminFetch<TemplateCategoryListResponse>(`/categories?${search.toString()}`);
   },
 
   getCategory: (key: string) =>

@@ -971,3 +971,84 @@ final Map<String, IconData> builtinCategoryIcons = {
 - `lib/features/templates/pages/templates_all_page.dart`（分类数据源改为 sqflite）
 - `lib/features/templates/pages/templates_detail_page.dart`（按需拉取完整内容）
 - `lib/features/templates/services/template_mapper.dart`（新增 remote DTO → TemplateRecord）
+
+---
+
+## 11. 三级分类扩展（增量设计）
+
+### 11.1 问题背景
+
+模板分类实际为三级结构：`type`（一级，拍摄题材）→ `style`（二级，视觉风格）→ `method`（三级，拍摄方式），对应 `TemplateClassification.{type, style, method}`。初始实施仅管理了一级分类，二三级硬编码在 Flutter `templates_browse_mock_data.dart` 的 `styleMap` / `methodMap` 字典中，且字典严重过时（17 个新 style + 4 个新 method 未收录）。
+
+### 11.2 存储方案：单表自引用树形
+
+扩展现有 `template_categories` 表，新增 `parent_key` + `level` 列：
+
+| 列 | 说明 |
+|---|---|
+| `key` | 分类 key（全局唯一），如 `portrait` / `japanese` / `normal` |
+| `name` | 显示名，如 `人像` / `日系` / `他拍` |
+| `parent_key` | 父分类 key，一级为 NULL |
+| `level` | 层级：1=一级(type) / 2=二级(style) / 3=三级(method) |
+| `icon_url` | 图标 URL（仅一级有，二三级为空） |
+| `sort_order` | 排序 |
+| `is_system` | 1=系统保留，key 锁定不可删不可改 |
+| `is_active` | 1=启用 |
+| `updated_at` | 更新时间戳 |
+
+### 11.3 预置系统分类树
+
+把 29 个内置模板实际使用的所有 type/style/method + 字典中的值全部预置为 `is_system=1`：
+
+**portrait (人像)**:
+- japanese (日系) → normal(他拍), selfie(自拍), overhead(俯拍)
+- emotional (情绪) → wide(远景), selfie(自拍)
+- film (胶片) → normal(他拍), selfie(自拍)
+- western (欧美) → normal(他拍), wide(远景)
+- ccd_retro (CCD复古) → half_body(半身)
+- hk_noir (港风Noir) → half_body(半身)
+- japanese_fresh (日系清新) → seven_body(七分身)
+- cream_healing (奶油治愈) → half_body(半身)
+- chinese_classical (中式古典) → full_body(全身)
+- french_lazy (法式慵懒) → half_body(半身)
+- morandi_minimal (莫兰迪极简) → half_body(半身)
+- dark_indoor (暗调室内) → half_body(半身)
+- neon_city (霓虹都市) → half_body(半身)
+- fresh_green (清新绿意) → full_body(全身)
+- y2k (Y2K千禧) → half_body(半身)
+- anime_dream (动漫梦境) → full_body(全身)
+- blue_night (蓝色之夜) → seven_body(七分身)
+- purple_dusk (紫色黄昏) → half_body(半身)
+- foodie_portrait (美食人像) → half_body(半身)
+- sweet_girl (甜美少女) → half_body(半身)
+- elegant_lady (优雅女士) → seven_body(七分身)
+
+**landscape (风景)**: fresh(清新)→wide,flat / epic(大气)→wide,overhead
+**food (美食)**: overhead(俯拍)→flat,overhead / closeup(特写)→macro,detail
+**street (街拍)**: casual(随性)→normal,wide / geometric(几何)→wide,overhead
+**night (夜景)**: neon(霓虹)→normal,wide / starry(星空)→(无method)
+**macro (微距)**: nature(自然)→macro / object(物品)→(无method)
+**still-life (静物)**: minimal(极简)→single / flat(扁平)→(无method)
+
+### 11.4 后端改动
+
+- **schema.ts**：`templateCategories` 表新增 `parentKey` (text, nullable) + `level` (integer, notNull default 1)
+- **003_templates.sql 或新建 004 分类层级迁移**：ALTER TABLE 添加两列 + 预置所有二三级系统分类
+- **categories.service.ts**：新增 `listTree()` 返回完整三级树；`listByParent(parentKey)` 返回子分类
+- **admin-categories.service.ts**：CRUD 支持 parent_key/level；创建二级时 parent_key 必须是一级 key，创建三级时 parent_key 必须是二级 key
+- **admin-templates.service.ts**：创建/更新模板时 `classification.type` 自动设为 `category` 值
+
+### 11.5 Admin 改动
+
+- **分类管理页**：改为树形展示（一级 > 二级 > 三级缩进）；新建/编辑时选择 parent（一级无，二三级必须选父分类）
+- **模板表单 Step 1**：category 选择改为三级级联 select（选 type → 动态加载 style → 动态加载 method）
+
+### 11.6 Flutter 改动
+
+- **sqflite template_categories 表**：新增 parent_key + level 列（DB v14 → v15 迁移）
+- **种子数据**：预置所有 style/method 为系统分类
+- **templates_all_page.dart**：
+  - 分类数据源从 `styleMap`/`methodMap` 改为 sqflite 三级树
+  - 修复筛选 bug：style/method 选择真正参与 `where` 过滤
+- **templates_browse_mock_data.dart**：`styleMap`/`methodMap` 标记废弃，改为从 sqflite 读取
+- **templates_editor_page.dart**：编辑器的 style/method 选项从 sqflite 读取

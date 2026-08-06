@@ -103,12 +103,15 @@ class BuiltinDataSeeder {
   ///
   /// 与内置 7 类 key 严格对齐（portrait/landscape/food/street/night/macro/still-life），
   /// 保证离线场景下分类瀑布流永远可展示。iconUrl 留空表示使用 Flutter 端内置 Material Icons 回退映射。
+  /// v17: 新增 parent_key=NULL, level=1 字段（三级树形分类的一级节点）。
   /// 使用 INSERT OR REPLACE 保证幂等：重复调用不会报错，会覆盖已存在的系统分类。
   static Future<void> seedCategories(Database db) async {
     const categories = <Map<String, Object?>>[
       {
         Tables.colKey: 'portrait',
         Tables.colName: '人像',
+        Tables.colParentKey: null,
+        Tables.colLevel: 1,
         Tables.colIconUrl: '',
         Tables.colSortOrder: 1,
         Tables.colIsSystem: 1,
@@ -118,6 +121,8 @@ class BuiltinDataSeeder {
       {
         Tables.colKey: 'landscape',
         Tables.colName: '风光',
+        Tables.colParentKey: null,
+        Tables.colLevel: 1,
         Tables.colIconUrl: '',
         Tables.colSortOrder: 2,
         Tables.colIsSystem: 1,
@@ -127,6 +132,8 @@ class BuiltinDataSeeder {
       {
         Tables.colKey: 'food',
         Tables.colName: '美食',
+        Tables.colParentKey: null,
+        Tables.colLevel: 1,
         Tables.colIconUrl: '',
         Tables.colSortOrder: 3,
         Tables.colIsSystem: 1,
@@ -136,6 +143,8 @@ class BuiltinDataSeeder {
       {
         Tables.colKey: 'street',
         Tables.colName: '街拍',
+        Tables.colParentKey: null,
+        Tables.colLevel: 1,
         Tables.colIconUrl: '',
         Tables.colSortOrder: 4,
         Tables.colIsSystem: 1,
@@ -145,6 +154,8 @@ class BuiltinDataSeeder {
       {
         Tables.colKey: 'night',
         Tables.colName: '夜景',
+        Tables.colParentKey: null,
+        Tables.colLevel: 1,
         Tables.colIconUrl: '',
         Tables.colSortOrder: 5,
         Tables.colIsSystem: 1,
@@ -154,6 +165,8 @@ class BuiltinDataSeeder {
       {
         Tables.colKey: 'macro',
         Tables.colName: '微距',
+        Tables.colParentKey: null,
+        Tables.colLevel: 1,
         Tables.colIconUrl: '',
         Tables.colSortOrder: 6,
         Tables.colIsSystem: 1,
@@ -163,6 +176,8 @@ class BuiltinDataSeeder {
       {
         Tables.colKey: 'still-life',
         Tables.colName: '静物',
+        Tables.colParentKey: null,
+        Tables.colLevel: 1,
         Tables.colIconUrl: '',
         Tables.colSortOrder: 7,
         Tables.colIsSystem: 1,
@@ -176,6 +191,173 @@ class BuiltinDataSeeder {
         Tables.templateCategories,
         c,
         conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
+  /// 预置所有二三级系统分类（v17 迁移 + onCreate 调用）。
+  ///
+  /// 对应 spec §11.3 的完整分类树：
+  /// - 二级（level=2, parent_key=一级key）：视觉风格，如 japanese/emotional/film...
+  /// - 三级（level=3, parent_key=二级key）：拍摄方式，如 normal/selfie/wide...
+  ///
+  /// 使用 INSERT OR IGNORE 配合 UNIQUE(key, parent_key) 约束保证幂等：
+  /// 重复调用不会报错，已存在的记录保留不动（不覆盖 updatedAt）。
+  static Future<void> seedStyleMethodCategories(Database db) async {
+    // 二级分类（level=2）：(parentKey, key, name, sortOrder)
+    const styles = <List<Object>>[
+      // portrait 下 21 个二级
+      ['portrait', 'japanese', '日系', 1],
+      ['portrait', 'emotional', '情绪', 2],
+      ['portrait', 'film', '胶片', 3],
+      ['portrait', 'western', '欧美', 4],
+      ['portrait', 'ccd_retro', 'CCD复古', 5],
+      ['portrait', 'hk_noir', '港风Noir', 6],
+      ['portrait', 'japanese_fresh', '日系清新', 7],
+      ['portrait', 'cream_healing', '奶油治愈', 8],
+      ['portrait', 'chinese_classical', '中式古典', 9],
+      ['portrait', 'french_lazy', '法式慵懒', 10],
+      ['portrait', 'morandi_minimal', '莫兰迪极简', 11],
+      ['portrait', 'dark_indoor', '暗调室内', 12],
+      ['portrait', 'neon_city', '霓虹都市', 13],
+      ['portrait', 'fresh_green', '清新绿意', 14],
+      ['portrait', 'y2k', 'Y2K千禧', 15],
+      ['portrait', 'anime_dream', '动漫梦境', 16],
+      ['portrait', 'blue_night', '蓝色之夜', 17],
+      ['portrait', 'purple_dusk', '紫色黄昏', 18],
+      ['portrait', 'foodie_portrait', '美食人像', 19],
+      ['portrait', 'sweet_girl', '甜美少女', 20],
+      ['portrait', 'elegant_lady', '优雅女士', 21],
+      // landscape 下 2 个二级
+      ['landscape', 'fresh', '清新', 1],
+      ['landscape', 'epic', '大气', 2],
+      // food 下 2 个二级
+      ['food', 'overhead', '俯拍', 1],
+      ['food', 'closeup', '特写', 2],
+      // street 下 2 个二级
+      ['street', 'casual', '随性', 1],
+      ['street', 'geometric', '几何', 2],
+      // night 下 2 个二级
+      ['night', 'neon', '霓虹', 1],
+      ['night', 'starry', '星空', 2],
+      // macro 下 2 个二级
+      ['macro', 'nature', '自然', 1],
+      ['macro', 'object', '物品', 2],
+      // still-life 下 2 个二级
+      ['still-life', 'minimal', '极简', 1],
+      ['still-life', 'flat', '扁平', 2],
+    ];
+
+    // 三级分类（level=3）：(parentKey, key, name, sortOrder)
+    const methods = <List<Object>>[
+      // japanese 下
+      ['japanese', 'normal', '他拍', 1],
+      ['japanese', 'selfie', '自拍', 2],
+      ['japanese', 'overhead', '俯拍', 3],
+      // emotional 下
+      ['emotional', 'wide', '远景', 1],
+      ['emotional', 'selfie', '自拍', 2],
+      // film 下
+      ['film', 'normal', '他拍', 1],
+      ['film', 'selfie', '自拍', 2],
+      // western 下
+      ['western', 'normal', '他拍', 1],
+      ['western', 'wide', '远景', 2],
+      // ccd_retro 下
+      ['ccd_retro', 'half_body', '半身', 1],
+      // hk_noir 下
+      ['hk_noir', 'half_body', '半身', 1],
+      // japanese_fresh 下
+      ['japanese_fresh', 'seven_body', '七分身', 1],
+      // cream_healing 下
+      ['cream_healing', 'half_body', '半身', 1],
+      // chinese_classical 下
+      ['chinese_classical', 'full_body', '全身', 1],
+      // french_lazy 下
+      ['french_lazy', 'half_body', '半身', 1],
+      // morandi_minimal 下
+      ['morandi_minimal', 'half_body', '半身', 1],
+      // dark_indoor 下
+      ['dark_indoor', 'half_body', '半身', 1],
+      // neon_city 下
+      ['neon_city', 'half_body', '半身', 1],
+      // fresh_green 下
+      ['fresh_green', 'full_body', '全身', 1],
+      // y2k 下
+      ['y2k', 'half_body', '半身', 1],
+      // anime_dream 下
+      ['anime_dream', 'full_body', '全身', 1],
+      // blue_night 下
+      ['blue_night', 'seven_body', '七分身', 1],
+      // purple_dusk 下
+      ['purple_dusk', 'half_body', '半身', 1],
+      // foodie_portrait 下
+      ['foodie_portrait', 'half_body', '半身', 1],
+      // sweet_girl 下
+      ['sweet_girl', 'half_body', '半身', 1],
+      // elegant_lady 下
+      ['elegant_lady', 'seven_body', '七分身', 1],
+      // fresh(landscape) 下
+      ['fresh', 'wide', '远景', 1],
+      ['fresh', 'flat', '平拍', 2],
+      // epic 下
+      ['epic', 'wide', '远景', 1],
+      ['epic', 'overhead', '俯拍', 2],
+      // overhead(food) 下
+      ['overhead', 'flat', '平拍', 1],
+      ['overhead', 'overhead', '俯拍', 2],
+      // closeup 下
+      ['closeup', 'macro', '微距', 1],
+      ['closeup', 'detail', '细节', 2],
+      // casual 下
+      ['casual', 'normal', '随拍', 1],
+      ['casual', 'wide', '远景', 2],
+      // geometric 下
+      ['geometric', 'wide', '远景', 1],
+      ['geometric', 'overhead', '俯拍', 2],
+      // neon(night) 下
+      ['neon', 'normal', '他拍', 1],
+      ['neon', 'wide', '远景', 2],
+      // nature 下
+      ['nature', 'macro', '微距', 1],
+      // minimal 下
+      ['minimal', 'single', '单品', 1],
+    ];
+
+    final batch = db.batch();
+    for (final s in styles) {
+      batch.insert(
+        Tables.templateCategories,
+        {
+          Tables.colKey: s[1] as String,
+          Tables.colName: s[2] as String,
+          Tables.colParentKey: s[0] as String,
+          Tables.colLevel: 2,
+          Tables.colIconUrl: '',
+          Tables.colSortOrder: s[3] as int,
+          Tables.colIsSystem: 1,
+          Tables.colIsActive: 1,
+          Tables.colUpdatedAt: 0,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+    }
+    for (final m in methods) {
+      batch.insert(
+        Tables.templateCategories,
+        {
+          Tables.colKey: m[1] as String,
+          Tables.colName: m[2] as String,
+          Tables.colParentKey: m[0] as String,
+          Tables.colLevel: 3,
+          Tables.colIconUrl: '',
+          Tables.colSortOrder: m[3] as int,
+          Tables.colIsSystem: 1,
+          Tables.colIsActive: 1,
+          Tables.colUpdatedAt: 0,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
       );
     }
     await batch.commit(noResult: true);
