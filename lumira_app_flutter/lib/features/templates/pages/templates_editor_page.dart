@@ -22,6 +22,7 @@ import '../../capture/data/capture_state.dart';
 import '../../profile/pages/profile_my_templates_page.dart' show customTemplatesProvider;
 import '../data/preview_form_provider.dart';
 import '../data/builtin_silhouettes.dart';
+import '../data/remote_templates_providers.dart';
 import '../data/templates_editor_mock_data.dart';
 import '../services/template_exporter.dart';
 import '../services/template_mapper.dart';
@@ -225,11 +226,21 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     }
     try {
       final dao = await ref.read(templatesDaoProvider.future);
-      final record = await dao.getById(widget.templateId!);
+      var record = await dao.getById(widget.templateId!);
       if (record == null) {
         if (!mounted) return;
         setState(() => _isLoadingFromDao = false);
         return;
+      }
+      // 远程模板：meta 同步时 pose/composition 为空，编辑前按需拉取完整详情
+      // （与详情页 templateDetailProvider 慢路径一致，保证剪影/构图等 5 段内容完整）
+      if (record.source == 'remote' && record.composition.isEmpty) {
+        final remoteTemplate = await ref
+            .read(remoteTemplateDetailProvider(widget.templateId!).future);
+        if (remoteTemplate != null) {
+          final refreshed = await dao.getById(widget.templateId!);
+          if (refreshed != null) record = refreshed;
+        }
       }
       final loaded = TemplateMapper.toEditorForm(record);
       if (!mounted) return;
