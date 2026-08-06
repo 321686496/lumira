@@ -11,7 +11,8 @@ import { UnauthenticatedError } from '@/lib/auth';
  *   - meta: JSON string (CreateTemplateRequest)
  *   - cover: File (必填)
  *   - silhouette: File (可选)
- *   - pptpl: File (可选，会覆盖 meta 中的 5 段内容字段)
+ * 注意：.pptpl 原始文件不随此提交上传（内容已在客户端解析填充进 meta），
+ * 避免触发 Vercel Serverless 4.5MB 请求体限制。
  */
 export async function createTemplate(formData: FormData) {
   // 基础校验：cover 必填
@@ -41,7 +42,7 @@ export async function createTemplate(formData: FormData) {
 }
 
 /**
- * 更新模板。formData 字段同 createTemplate，但 cover / silhouette / pptpl 均可选。
+ * 更新模板。formData 字段同 createTemplate，但 cover / silhouette 均可选。
  */
 export async function updateTemplate(id: string, formData: FormData) {
   const meta = formData.get('meta');

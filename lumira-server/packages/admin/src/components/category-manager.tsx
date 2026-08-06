@@ -40,6 +40,9 @@ interface FlatRow {
   hasChildren: boolean;
 }
 
+/** 树的最大递归深度（三级分类 + 余量）。超过即截断，防止异常数据导致栈溢出。 */
+const MAX_TREE_DEPTH = 8;
+
 /** 将树扁平化为带缩进层级的行，跳过折叠节点的子级。 */
 function flattenTree(
   tree: TemplateCategoryTreeNode[],
@@ -47,6 +50,7 @@ function flattenTree(
 ): FlatRow[] {
   const rows: FlatRow[] = [];
   const walk = (nodes: TemplateCategoryTreeNode[], depth: number) => {
+    if (depth > MAX_TREE_DEPTH) return;
     for (const n of nodes) {
       const hasChildren = n.children.length > 0;
       rows.push({ node: n, depth, hasChildren });

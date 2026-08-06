@@ -92,4 +92,38 @@ describe('buildCategoryTree', () => {
     buildCategoryTree(flat);
     expect(flat).toEqual(snapshot);
   });
+
+  it('子节点 key 与父节点 key 相同时（overhead→overhead）不产生自引用循环', () => {
+    const flat: TemplateCategory[] = [
+      makeCat({ key: 'food', name: '美食', level: 1 }),
+      makeCat({ key: 'overhead', name: '俯拍', level: 2, parentKey: 'food' }),
+      makeCat({ key: 'overhead', name: '俯拍', level: 3, parentKey: 'overhead' }),
+    ];
+    const tree = buildCategoryTree(flat);
+    expect(tree).toHaveLength(1);
+    expect(tree[0].key).toBe('food');
+    expect(tree[0].children).toHaveLength(1);
+    expect(tree[0].children[0].key).toBe('overhead');
+    expect(tree[0].children[0].children).toHaveLength(1);
+    // 第三层不会再挂到自己的 children（防止无限递归）
+    expect(tree[0].children[0].children[0].children).toHaveLength(0);
+  });
+
+  it('method 级重复 key（normal 在多个 style 下）分别挂到正确的父级', () => {
+    const flat: TemplateCategory[] = [
+      makeCat({ key: 'portrait', name: '人像', level: 1 }),
+      makeCat({ key: 'japanese', name: '日系', level: 2, parentKey: 'portrait' }),
+      makeCat({ key: 'film', name: '胶片', level: 2, parentKey: 'portrait' }),
+      makeCat({ key: 'normal', name: '他拍', level: 3, parentKey: 'japanese' }),
+      makeCat({ key: 'normal', name: '他拍', level: 3, parentKey: 'film' }),
+    ];
+    const tree = buildCategoryTree(flat);
+    expect(tree).toHaveLength(1);
+    const portrait = tree[0];
+    expect(portrait.children).toHaveLength(2);
+    const japanese = portrait.children.find((c) => c.key === 'japanese')!;
+    const film = portrait.children.find((c) => c.key === 'film')!;
+    expect(japanese.children.map((c) => c.key)).toEqual(['normal']);
+    expect(film.children.map((c) => c.key)).toEqual(['normal']);
+  });
 });

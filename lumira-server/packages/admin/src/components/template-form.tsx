@@ -14,6 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { FileUpload } from '@/components/ui/file-upload';
+import { compressImage } from '@/lib/image-compress';
 import { Upload as UploadIcon, ArrowLeft, ArrowRight, Check } from '@phosphor-icons/react/dist/ssr';
 import { useToast } from '@/hooks/use-toast';
 import { createTemplate, updateTemplate } from '@/actions/templates';
@@ -448,7 +449,10 @@ export default function TemplateForm({
     if (silhouetteFile && data.silhouetteType === 'image') {
       fd.set('silhouette', silhouetteFile);
     }
-    if (pptplFile) fd.set('pptpl', pptplFile);
+    // 注意：.pptpl 原始文件不再随提交上传。
+    // 原因：1) 内容已在 handlePptplUpload 中解析并填充表单字段（meta 已含完整 5 段内容）；
+    //       2) .pptpl 内嵌 base64 封面图/剪影，体积可达 6-15MB，会触发 Vercel Serverless
+    //          4.5MB 请求体平台限制（FUNCTION_PAYLOAD_TOO_LARGE），导致提交必然失败。
 
     startTransition(async () => {
       const result = isEdit
@@ -512,7 +516,7 @@ export default function TemplateForm({
           <div className="flex-1">
             <p className="text-sm font-medium text-foreground">从 .pptpl 文件自动填充</p>
             <p className="text-xs text-muted-foreground mt-1">
-              上传 Flutter 端导出的 .pptpl 模板文件（≤25MB，内嵌 base64 封面图/剪影），自动填充「构图 / 剪影 / 相机 / 场景引导 / 后期处理」5 段字段，可在后续步骤中继续修改。
+              上传 Flutter 端导出的 .pptpl 模板文件（≤25MB，内嵌 base64 封面图/剪影），自动填充「构图 / 剪影 / 相机 / 场景引导 / 后期处理」5 段字段，可在后续步骤中继续修改。文件仅在浏览器本地解析，不会随模板上传。
             </p>
             <input
               ref={pptplInputRef}
@@ -535,7 +539,7 @@ export default function TemplateForm({
               </Button>
               {pptplFile && (
                 <span className="text-xs text-muted-foreground">
-                  已选：{pptplFile.name}（{(pptplFile.size / 1024).toFixed(1)} KB） · 提交时一并上传
+                  已选：{pptplFile.name}（{(pptplFile.size / 1024).toFixed(1)} KB） · 已解析填充到表单字段
                 </span>
               )}
             </div>
@@ -730,7 +734,9 @@ export default function TemplateForm({
               accept="image/png,image/jpeg,image/webp"
               maxSize={5 * 1024 * 1024}
               value={coverFile}
-              onChange={setCoverFile}
+              onChange={async (file) => {
+                setCoverFile(file ? await compressImage(file, { maxDim: 1280 }) : null);
+              }}
               hint="JPG / PNG / WebP，≤5MB，建议 3:4 竖图。"
               previewUrl={coverPreviewUrl}
             />
@@ -766,7 +772,9 @@ export default function TemplateForm({
                 accept="image/png,image/svg+xml"
                 maxSize={5 * 1024 * 1024}
                 value={silhouetteFile}
-                onChange={setSilhouetteFile}
+                onChange={async (file) => {
+                  setSilhouetteFile(file ? await compressImage(file, { maxDim: 800 }) : null);
+                }}
                 hint="PNG / SVG，≤5MB。提交时会随模板一起上传。"
               />
             )}
