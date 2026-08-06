@@ -20,6 +20,11 @@ export class CreateCategoryDto {
   @IsString()
   iconUrl?: string;
 
+  /** 父分类 key；省略或 null 表示一级分类 */
+  @IsOptional()
+  @IsString()
+  parentKey?: string | null;
+
   @IsOptional()
   @IsInt()
   @Min(0)

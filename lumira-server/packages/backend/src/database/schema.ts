@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/src/database/schema.ts
 
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const devices = sqliteTable('devices', {
   deviceId: text('device_id').primaryKey(),
@@ -127,17 +127,24 @@ export const dailySignInRecords = sqliteTable('daily_sign_in_records', {
 
 // ===== 后台动态模板上传（spec 2026-08-05 第 2.1 节）=====
 
-// 分类管理：key 与 Flutter 内置 7 类对齐（系统分类 isSystem=1），允许 Admin 新增自定义分类
+// 分类管理：三级树形（type/style/method），key + parent_key 联合唯一
+// 系统分类 isSystem=1（key 锁定不可改不可删）；一级 parentKey=null，level=1
 export const templateCategories = sqliteTable('template_categories', {
-  key: text('key').primaryKey(),              // 'portrait' / 'landscape' / 自定义 key
-  name: text('name').notNull(),                // 显示名 '人像'
-  iconUrl: text('icon_url').notNull(),         // 图标文件 URL，空字符串表示用 Flutter 内置映射
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  key: text('key').notNull(),                  // 'portrait' / 'japanese' / 'normal' / 自定义 key
+  name: text('name').notNull(),                // 显示名 '人像' / '日系' / '他拍'
+  iconUrl: text('icon_url').notNull(),         // 图标 URL，空字符串表示用 Flutter 内置映射（仅一级有）
+  parentKey: text('parent_key'),               // 父分类 key；一级为 NULL
+  level: integer('level').notNull().default(1), // 1=type / 2=style / 3=method
   sortOrder: integer('sort_order').notNull().default(0),
   isSystem: integer('is_system').notNull().default(0),  // 1=系统保留, key 锁定不可改不可删
   isActive: integer('is_active').notNull().default(1),  // 0=隐藏不展示
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
-});
+}, (table) => ({
+  // SQLite 中 NULL 不参与唯一约束，故一级分类的 key 在本索引中天然唯一
+  keyParentIdx: uniqueIndex('uq_category_key_parent').on(table.key, table.parentKey),
+}));
 
 // 后端动态模板内容（结构化存储，5 段内容 JSON 列）
 export const templates = sqliteTable('templates', {

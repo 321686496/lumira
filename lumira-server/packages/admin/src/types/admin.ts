@@ -124,8 +124,11 @@ export interface QuestionnaireStats {
 // 此处单独定义以避免在 shared 类型尚未落地时产生跨包依赖断裂。
 
 export interface TemplateCategory {
+  id: number;
   key: string;
   name: string;
+  parentKey: string | null;
+  level: number; // 1=type / 2=style / 3=method
   iconUrl: string;
   sortOrder: number;
   isSystem: boolean;
@@ -133,8 +136,16 @@ export interface TemplateCategory {
   updatedAt: number;
 }
 
+export interface TemplateCategoryTreeNode extends TemplateCategory {
+  children: TemplateCategoryTreeNode[];
+}
+
 export interface TemplateCategoryListResponse {
   categories: TemplateCategory[];
+}
+
+export interface TemplateCategoryTreeResponse {
+  tree: TemplateCategoryTreeNode[];
 }
 
 export interface AdminTemplateListItem {
@@ -197,6 +208,8 @@ export interface UpdateTemplateRequest extends Partial<CreateTemplateRequest> {}
 export interface CreateCategoryRequest {
   key: string;
   name: string;
+  parentKey: string | null; // 一级为 null
+  level: number; // 1/2/3
   iconUrl?: string;
   sortOrder?: number;
   isActive?: boolean;

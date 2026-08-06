@@ -7,6 +7,10 @@ export interface TemplateCategory {
   key: string;
   name: string;
   iconUrl: string;
+  /** 父分类 key；一级分类为 null */
+  parentKey: string | null;
+  /** 层级：1=type / 2=style / 3=method */
+  level: number;
   sortOrder: number;
   isSystem: boolean;
   isActive: boolean;
@@ -15,6 +19,15 @@ export interface TemplateCategory {
 
 export interface TemplateCategoryListResponse {
   categories: TemplateCategory[];
+}
+
+/** 树形分类节点（含 children 嵌套） */
+export interface TemplateCategoryTree extends TemplateCategory {
+  children: TemplateCategoryTree[];
+}
+
+export interface TemplateCategoryTreeResponse {
+  categories: TemplateCategoryTree[];
 }
 
 // ===== 后端动态模板 meta（列表用，轻量）=====
@@ -107,6 +120,8 @@ export interface CreateCategoryRequest {
   key: string;
   name: string;
   iconUrl?: string;
+  /** 父分类 key；省略或 null 表示一级分类 */
+  parentKey?: string | null;
   sortOrder?: number;
   isActive?: boolean;
 }

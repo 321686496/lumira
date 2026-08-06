@@ -22,7 +22,6 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/network/api_client.dart';
 import '../../capture/domain/photo_template.dart';
 import '../services/template_mapper.dart';
-import 'remote_template_dto.dart';
 import 'remote_templates_repository.dart';
 import 'templates_browse_mock_data.dart';
 
@@ -52,6 +51,8 @@ final remoteCategoriesSyncProvider = FutureProvider<void>((ref) async {
     await dao.upsertCategory(TemplateCategoryRecord(
       key: c.key,
       name: c.name,
+      parentKey: c.parentKey,
+      level: c.level,
       iconUrl: c.iconUrl,
       sortOrder: c.sortOrder,
       isSystem: c.isSystem,

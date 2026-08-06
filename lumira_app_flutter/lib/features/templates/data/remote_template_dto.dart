@@ -232,10 +232,16 @@ class RemoteTemplateDetailDto {
 ///
 /// 对应 spec `TemplateCategory`：
 /// `{ key; name; iconUrl; sortOrder; isSystem; isActive; updatedAt }`
+///
+/// v17 扩展：新增 `parentKey` 和 `level` 字段以支持三级树形分类。
 @immutable
 class TemplateCategoryDto {
   final String key;
   final String name;
+  /// 父分类 key（v17 新增）。一级分类为 null，二级为一级 key，三级为二级 key。
+  final String? parentKey;
+  /// 层级（v17 新增）：1=type / 2=style / 3=method。默认 1 兼容旧后端。
+  final int level;
   final String iconUrl;
   final int sortOrder;
   final bool isSystem;
@@ -245,6 +251,8 @@ class TemplateCategoryDto {
   const TemplateCategoryDto({
     required this.key,
     required this.name,
+    this.parentKey,
+    this.level = 1,
     required this.iconUrl,
     required this.sortOrder,
     required this.isSystem,
@@ -256,6 +264,8 @@ class TemplateCategoryDto {
     return TemplateCategoryDto(
       key: j['key'] as String? ?? '',
       name: j['name'] as String? ?? '',
+      parentKey: j['parentKey'] as String?,
+      level: (j['level'] as num?)?.toInt() ?? 1,
       iconUrl: j['iconUrl'] as String? ?? '',
       sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
       isSystem: j['isSystem'] as bool? ?? false,

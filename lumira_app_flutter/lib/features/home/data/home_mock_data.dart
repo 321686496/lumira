@@ -91,6 +91,8 @@ class HomeBannerItem {
     required this.imageSeed,
     required this.tag,
     required this.route,
+    this.cover,
+    this.coverData,
   });
   final String id;
   final String title;
@@ -99,6 +101,16 @@ class HomeBannerItem {
   final String tag;
   /// 点击跳转路由（带查询参数）
   final String route;
+  /// 模板封面（assets 路径或 http URL），用于模板类 banner 背景图。
+  /// 非空时与 [coverData] 一起传给 TemplateCoverImage 渲染背景。
+  final String? cover;
+  /// 模板封面 base64 data URL（自定义模板场景）。
+  final String? coverData;
+
+  /// 是否有模板封面可用
+  bool get hasCover =>
+      (cover != null && cover!.isNotEmpty) ||
+      (coverData != null && coverData!.isNotEmpty);
 }
 
 /// 首页 mock 数据

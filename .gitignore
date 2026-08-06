@@ -7,3 +7,6 @@ lumira-app/.vite/
 .FullName
 .agents/
 .superpowers/
+
+# Generated media outputs
+outputs/

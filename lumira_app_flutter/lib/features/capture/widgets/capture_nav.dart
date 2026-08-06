@@ -33,6 +33,17 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
     // 前置摄像头无闪光灯硬件，隐藏闪光灯按钮
     final showFlashButton = facing == 'back';
 
+    // 右侧按钮数量：全屏(1) + 模板叠图(1) + 剪影(1) + 场景灵感(1) + 闪光灯(1)
+    final rightButtonCount = 1 + // 全屏
+        (hasTemplate ? 2 : 0) + // 模板叠图 + 剪影
+        1 + // 场景灵感
+        (showFlashButton ? 1 : 0); // 闪光灯
+    // 平衡间距：无模板时右侧按钮少，左侧补齐差值让标题居中
+    // 有模板时右侧按钮多，补齐会导致 Expanded 宽度不足，故不补齐
+    final balancePadding = !hasTemplate
+        ? (rightButtonCount - 1) * 36.0 // -1 抵消左侧返回按钮
+        : 0.0;
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.4),
@@ -48,6 +59,8 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                 icon: Icons.arrow_back_ios_new,
                 onPressed: onBack,
               ),
+              // 平衡间距：让标题在无模板时相对屏幕居中
+              if (balancePadding > 0) SizedBox(width: balancePadding),
               // 标题（点击打开参数面板）
               Expanded(
                 child: GestureDetector(
@@ -110,7 +123,8 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                       .state = !showSilhouette,
                 ),
               _NavIcon(
-                icon: Icons.help_outline,
+                icon: Icons.explore,
+                tooltip: '场景灵感',
                 onPressed: () =>
                     GoRouter.of(context).push(RouteNames.captureSceneGuide),
               ),
@@ -144,11 +158,13 @@ class _NavIcon extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     this.iconColor = Colors.white,
+    this.tooltip,
   });
 
   final IconData icon;
   final VoidCallback onPressed;
   final Color iconColor;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +173,7 @@ class _NavIcon extends StatelessWidget {
       onPressed: onPressed,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      tooltip: null,
+      tooltip: tooltip,
     );
   }
 }

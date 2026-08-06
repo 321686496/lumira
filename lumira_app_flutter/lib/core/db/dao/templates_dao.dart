@@ -351,25 +351,106 @@ class TemplatesDao {
   ///
   /// - [activeOnly] = true：仅返回 isActive=1 的分类（客户端展示用）
   /// - [activeOnly] = false：返回所有分类（Admin 管理用，Flutter 端通常不需要）
+  /// - [level]：可选，按层级过滤（1=type / 2=style / 3=method）
+  /// - [parentKey]：可选，按父分类 key 过滤（一级分类的 parentKey 为 NULL）
   /// 按 sortOrder ASC 排序。
   Future<List<TemplateCategoryRecord>> getCategories({
     bool activeOnly = true,
+    int? level,
+    String? parentKey,
   }) async {
-    final where = activeOnly ? '${Tables.colIsActive} = ?' : null;
-    final whereArgs = activeOnly ? [1] : null;
+    final where = <String>[];
+    final args = <Object>[];
+    if (activeOnly) {
+      where.add('${Tables.colIsActive} = ?');
+      args.add(1);
+    }
+    if (level != null) {
+      where.add('${Tables.colLevel} = ?');
+      args.add(level);
+    }
+    if (parentKey != null) {
+      where.add('${Tables.colParentKey} = ?');
+      args.add(parentKey);
+    } else if (level == 1) {
+      // 查询一级分类时，parent_key IS NULL
+      where.add('${Tables.colParentKey} IS NULL');
+    }
+    final whereClause = where.isNotEmpty ? where.join(' AND ') : null;
     final rows = await _db.query(
       Tables.templateCategories,
-      where: where,
-      whereArgs: whereArgs,
+      where: whereClause,
+      whereArgs: args.isNotEmpty ? args : null,
       orderBy: '${Tables.colSortOrder} ASC',
     );
     return rows.map(TemplateCategoryRecord.fromRow).toList();
   }
 
-  /// Upsert 分类记录（按 key 主键 REPLACE）。
+  /// 按层级查询分类。
+  ///
+  /// - level=1：一级分类（type），parent_key IS NULL
+  /// - level=2：二级分类（style），parent_key 为某个一级 key
+  /// - level=3：三级分类（method），parent_key 为某个二级 key
+  Future<List<TemplateCategoryRecord>> getCategoriesByLevel(int level,
+      {bool activeOnly = true}) async {
+    return getCategories(activeOnly: activeOnly, level: level);
+  }
+
+  /// 按父分类 key 查询子分类。
+  ///
+  /// 用于级联选择：选中一级 → 查二级（parentKey=一级key）；
+  /// 选中二级 → 查三级（parentKey=二级key）。
+  Future<List<TemplateCategoryRecord>> getCategoriesByParent(
+    String parentKey, {
+    bool activeOnly = true,
+  }) async {
+    return getCategories(activeOnly: activeOnly, parentKey: parentKey);
+  }
+
+  /// 获取一级分类下的所有二级分类（style）。
+  Future<List<TemplateCategoryRecord>> getStylesForType(String typeKey,
+      {bool activeOnly = true}) async {
+    return getCategoriesByParent(typeKey, activeOnly: activeOnly);
+  }
+
+  /// 获取二级分类下的所有三级分类（method）。
+  Future<List<TemplateCategoryRecord>> getMethodsForStyle(String styleKey,
+      {bool activeOnly = true}) async {
+    return getCategoriesByParent(styleKey, activeOnly: activeOnly);
+  }
+
+  /// 获取完整的三级分类树。
+  ///
+  /// 返回一级分类列表，每个一级分类的 [TemplateCategoryNode.children] 含二级节点，
+  /// 二级节点的 children 含三级节点。
+  /// 用于需要一次性加载完整分类树的场景（如分类管理页）。
+  Future<List<TemplateCategoryNode>> getCategoryTree(
+      {bool activeOnly = true}) async {
+    final all = await getCategories(activeOnly: activeOnly);
+    final byParent = <String?, List<TemplateCategoryRecord>>{};
+    for (final c in all) {
+      byParent.putIfAbsent(c.parentKey, () => []).add(c);
+    }
+    final roots = byParent[null] ?? <TemplateCategoryRecord>[];
+    return roots.map((r) => _buildNode(r, byParent)).toList();
+  }
+
+  TemplateCategoryNode _buildNode(
+    TemplateCategoryRecord record,
+    Map<String?, List<TemplateCategoryRecord>> byParent,
+  ) {
+    final children = byParent[record.key] ?? <TemplateCategoryRecord>[];
+    return TemplateCategoryNode(
+      record: record,
+      children: children.map((c) => _buildNode(c, byParent)).toList(),
+    );
+  }
+
+  /// Upsert 分类记录（按 UNIQUE(key, parent_key) 约束 REPLACE）。
   ///
   /// 用于：
   /// - v14 迁移时种子化 7 个系统分类
+  /// - v17 迁移时种子化二三级系统分类
   /// - 后端分类同步时 upsert 到本地
   Future<void> upsertCategory(TemplateCategoryRecord record) async {
     await _db.insert(
@@ -380,13 +461,37 @@ class TemplatesDao {
   }
 }
 
-/// 模板分类记录（v14 新增，对应 [Tables.templateCategories] 表）。
+/// 分类树节点（三级树形结构）。
+///
+/// 用于 [TemplatesDao.getCategoryTree] 返回完整分类树。
+class TemplateCategoryNode {
+  const TemplateCategoryNode({
+    required this.record,
+    required this.children,
+  });
+
+  final TemplateCategoryRecord record;
+  final List<TemplateCategoryNode> children;
+}
+
+/// 模板分类记录（v14 新增，v17 扩展为三级树形）。
 ///
 /// 与后端 `template_categories` 表字段对齐（除 created_at 外），
 /// 用于分类瀑布流数据源 + 后端同步缓存。
+///
+/// v17 扩展字段：
+/// - [id]：自增主键（v17 新增，替代 key 作为 PRIMARY KEY）
+/// - [parentKey]：父分类 key，一级为 null
+/// - [level]：层级 1=type / 2=style / 3=method
 class TemplateCategoryRecord {
+  /// 自增主键（v17 新增）。从 DB 读取时有值，新建时为 null。
+  final int? id;
   final String key;
   final String name;
+  /// 父分类 key。一级分类为 null，二级为一级 key，三级为二级 key。
+  final String? parentKey;
+  /// 层级：1=type（一级） / 2=style（二级） / 3=method（三级）
+  final int level;
   /// 图标 URL（后端托管，空字符串表示使用 Flutter 端内置 Material Icons 回退映射）
   final String iconUrl;
   final int sortOrder;
@@ -397,8 +502,11 @@ class TemplateCategoryRecord {
   final int updatedAt;
 
   const TemplateCategoryRecord({
+    this.id,
     required this.key,
     required this.name,
+    this.parentKey,
+    this.level = 1,
     this.iconUrl = '',
     this.sortOrder = 0,
     this.isSystem = false,
@@ -408,8 +516,11 @@ class TemplateCategoryRecord {
 
   Map<String, Object?> toRow() {
     return {
+      // id 自增主键由 DB 分配，不写入（除非从 DB 读取后回写）
       Tables.colKey: key,
       Tables.colName: name,
+      Tables.colParentKey: parentKey,
+      Tables.colLevel: level,
       Tables.colIconUrl: iconUrl,
       Tables.colSortOrder: sortOrder,
       Tables.colIsSystem: isSystem ? 1 : 0,
@@ -420,8 +531,11 @@ class TemplateCategoryRecord {
 
   static TemplateCategoryRecord fromRow(Map<String, Object?> row) {
     return TemplateCategoryRecord(
+      id: (row[Tables.colId] as num?)?.toInt(),
       key: row[Tables.colKey] as String,
       name: row[Tables.colName] as String,
+      parentKey: row[Tables.colParentKey] as String?,
+      level: (row[Tables.colLevel] as num?)?.toInt() ?? 1,
       iconUrl: (row[Tables.colIconUrl] as String?) ?? '',
       sortOrder: (row[Tables.colSortOrder] as num?)?.toInt() ?? 0,
       isSystem: (row[Tables.colIsSystem] as num?)?.toInt() == 1,
@@ -431,8 +545,11 @@ class TemplateCategoryRecord {
   }
 
   TemplateCategoryRecord copyWith({
+    int? id,
     String? key,
     String? name,
+    String? parentKey,
+    int? level,
     String? iconUrl,
     int? sortOrder,
     bool? isSystem,
@@ -440,8 +557,11 @@ class TemplateCategoryRecord {
     int? updatedAt,
   }) {
     return TemplateCategoryRecord(
+      id: id ?? this.id,
       key: key ?? this.key,
       name: name ?? this.name,
+      parentKey: parentKey ?? this.parentKey,
+      level: level ?? this.level,
       iconUrl: iconUrl ?? this.iconUrl,
       sortOrder: sortOrder ?? this.sortOrder,
       isSystem: isSystem ?? this.isSystem,

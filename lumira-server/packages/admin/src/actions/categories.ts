@@ -8,15 +8,20 @@ import { UnauthenticatedError } from '@/lib/auth';
 
 /**
  * 创建分类。formData 字段：
- *   - meta: JSON string (CreateCategoryRequest)
- *   - icon: File (可选)
+ *   - meta: JSON string (CreateCategoryRequest，含 parentKey/level)
+ *   - icon: File (可选，仅一级分类)
  */
 export async function createCategory(formData: FormData) {
   const meta = formData.get('meta');
   if (!meta || typeof meta !== 'string') {
     return { error: '缺少分类元数据 (meta)' };
   }
-  let parsed: { key?: string; name?: string };
+  let parsed: {
+    key?: string;
+    name?: string;
+    level?: number;
+    parentKey?: string | null;
+  };
   try {
     parsed = JSON.parse(meta);
   } catch {
@@ -27,6 +32,18 @@ export async function createCategory(formData: FormData) {
   }
   if (!parsed.name || typeof parsed.name !== 'string' || !parsed.name.trim()) {
     return { error: '请填写分类名称' };
+  }
+  const level = Number(parsed.level);
+  if (![1, 2, 3].includes(level)) {
+    return { error: '请选择有效的层级（1/2/3）' };
+  }
+  // 二三级分类必须指定父分类
+  if (level !== 1 && !parsed.parentKey) {
+    return { error: '二三级分类必须选择父分类' };
+  }
+  // 一级分类的 parentKey 必须为 null
+  if (level === 1 && parsed.parentKey) {
+    return { error: '一级分类不能有父分类' };
   }
 
   try {

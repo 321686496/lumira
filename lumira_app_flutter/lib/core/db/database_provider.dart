@@ -18,7 +18,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 16;
+const int _kDbVersion = 17;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -125,18 +125,26 @@ Future<void> _onCreate(Database db, int version) async {
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_created_at ON ${Tables.customTemplates}(${Tables.colCreatedAt} DESC)');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_source ON ${Tables.customTemplates}(${Tables.colSource})');
 
-  // === template_categories（v13 新增，分类管理） ===
+  // === template_categories（v13 新增，v17 改为三级树形分类） ===
+  // 主键改为自增 id（method 级 key 在不同 style 下重复，如 'normal'），
+  // UNIQUE(key, parent_key) 保证同父级下 key 不重复。
   batch.execute('''
     CREATE TABLE IF NOT EXISTS ${Tables.templateCategories} (
-      ${Tables.colKey} TEXT PRIMARY KEY,
+      ${Tables.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+      ${Tables.colKey} TEXT NOT NULL,
       ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colParentKey} TEXT,
+      ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
       ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
       ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
-      ${Tables.colUpdatedAt} INTEGER NOT NULL
+      ${Tables.colUpdatedAt} INTEGER NOT NULL,
+      UNIQUE(${Tables.colKey}, ${Tables.colParentKey})
     )
   ''');
+  batch.execute('CREATE INDEX IF NOT EXISTS idx_template_categories_parent ON ${Tables.templateCategories}(${Tables.colParentKey})');
+  batch.execute('CREATE INDEX IF NOT EXISTS idx_template_categories_level ON ${Tables.templateCategories}(${Tables.colLevel})');
 
   // === scenes ===
   // 仅存储用户自定义场景 + 内置场景的 is_favorite 标记
@@ -338,6 +346,8 @@ Future<void> _onCreate(Database db, int version) async {
   try {
     // v13: 预置 7 个系统分类（与内置 7 类对齐，保证离线兜底）
     await BuiltinDataSeeder.seedCategories(db);
+    // v17: 预置二三级系统分类（style/method，三级树形分类）
+    await BuiltinDataSeeder.seedStyleMethodCategories(db);
     await BuiltinDataSeeder.seedAll(db);
   } catch (e) {
     debugPrint('BuiltinDataSeeder in onCreate failed: $e');
@@ -644,6 +654,48 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute(CheckinPhotoTable.indexCheckinSql);
     } catch (e) {
       debugPrint('v16 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 17) {
+    try {
+      // v17: template_categories 表升级为三级树形分类（spec §11）
+      // 新增 parent_key / level 列，主键从 key 改为自增 id + UNIQUE(key, parent_key)
+      // SQLite 不支持 ALTER PRIMARY KEY，需重建表：建新表 → 复制 → DROP → RENAME
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS template_categories_new (
+          ${Tables.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+          ${Tables.colKey} TEXT NOT NULL,
+          ${Tables.colName} TEXT NOT NULL,
+          ${Tables.colParentKey} TEXT,
+          ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
+          ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+          ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
+          ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
+          ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
+          ${Tables.colUpdatedAt} INTEGER NOT NULL,
+          UNIQUE(${Tables.colKey}, ${Tables.colParentKey})
+        )
+      ''');
+      // 复制旧一级分类数据（parent_key=NULL, level=1）
+      await db.execute('''
+        INSERT INTO template_categories_new
+          (${Tables.colKey}, ${Tables.colName}, ${Tables.colParentKey}, ${Tables.colLevel},
+           ${Tables.colIconUrl}, ${Tables.colSortOrder}, ${Tables.colIsSystem}, ${Tables.colIsActive}, ${Tables.colUpdatedAt})
+        SELECT ${Tables.colKey}, ${Tables.colName}, NULL, 1,
+               ${Tables.colIconUrl}, ${Tables.colSortOrder}, ${Tables.colIsSystem}, ${Tables.colIsActive}, ${Tables.colUpdatedAt}
+        FROM ${Tables.templateCategories}
+      ''');
+      await db.execute('DROP TABLE IF EXISTS ${Tables.templateCategories}');
+      await db.execute(
+          'ALTER TABLE template_categories_new RENAME TO ${Tables.templateCategories}');
+      await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_template_categories_parent ON ${Tables.templateCategories}(${Tables.colParentKey})');
+      await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_template_categories_level ON ${Tables.templateCategories}(${Tables.colLevel})');
+      // 预置所有二三级系统分类（style/method）
+      await BuiltinDataSeeder.seedStyleMethodCategories(db);
+    } catch (e) {
+      debugPrint('v17 migration failed (silent fallback): $e');
     }
   }
 }

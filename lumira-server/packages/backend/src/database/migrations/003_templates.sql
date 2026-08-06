@@ -2,17 +2,21 @@
 -- 后台动态模板上传功能（spec 2026-08-05 第 2.2 节）
 -- 幂等写法：CREATE TABLE IF NOT EXISTS + INSERT OR IGNORE
 
--- 1. 模板分类表
+-- 1. 模板分类表（三级树形：type/style/method，key + parent_key 联合唯一）
 CREATE TABLE IF NOT EXISTS template_categories (
-  key         TEXT PRIMARY KEY,
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  key         TEXT NOT NULL,
   name        TEXT NOT NULL,
   icon_url    TEXT NOT NULL,
+  parent_key  TEXT,
+  level       INTEGER NOT NULL DEFAULT 1,
   sort_order  INTEGER NOT NULL DEFAULT 0,
   is_system   INTEGER NOT NULL DEFAULT 0,
   is_active   INTEGER NOT NULL DEFAULT 1,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS uq_category_key_parent ON template_categories(key, parent_key);
 
 -- 2. 后端动态模板内容表（5 段内容 JSON 列）
 CREATE TABLE IF NOT EXISTS templates (
