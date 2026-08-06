@@ -53,27 +53,32 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     if (widget.category != null) {
       _selectedType = widget.category;
     }
+    // 远程模板同步由上游 TemplatesPage（入口页）的 initState 触发，
+    // 本页不重复触发，避免在测试环境中因网络调用导致 pumpAndSettle 超时。
+    // 同步完成后 DAO 缓存已更新，用户返回并重新进入本页时 FutureBuilder 会重新读取。
   }
 
   /// 从 DAO 加载全部数据并按当前筛选条件计算过滤后的列表与计数。
   ///
   /// brief 规定：
   /// - _showCustom==true → 只显示 isCustom==true（DAO getCustomOnly + imported）
-  /// - _showCustom==false → 只显示 isCustom==false（DAO getBuiltin）
+  /// - _showCustom==false → 只显示 isCustom==false（DAO getBuiltinAndRemote，含内置+远程）
   /// - _selectedType 非空时进一步按 category 过滤
   /// - _selectedStyle 非空时按 classification.style 过滤（v17 修复：原 bug 不生效）
   /// - _selectedMethod 非空时按 classification.method 过滤（v17 修复：原 bug 不生效）
   ///
-  /// 计数（allCount / unlockedCount / categoryCounts）始终基于 builtin + custom + imported 全集，
+  /// 计数（allCount / unlockedCount / categoryCounts）始终基于 builtin + remote + custom + imported 全集，
   /// 与原 mock 阶段 `TemplatesBrowseMockData.allTemplates` 行为一致。
   ///
   /// v14: 同时加载分类列表（dao.getCategories），作为分类瀑布流数据源。
   /// v17: 改为加载三级树形分类（level=1 用于概览，level=2/3 用于筛选级联）。
+  /// v18 修复：默认视图使用 getBuiltinAndRemote 包含服务器下发的远程模板，
+  /// getCustomOnly 严格按 source='custom' 过滤，不再把远程模板误归为自定义。
   Future<_AllPageData> _loadData(
     TemplatesDao dao,
     List<AllTemplateItem> imported,
   ) async {
-    final builtins = await dao.getBuiltin();
+    final builtinsAndRemotes = await dao.getBuiltinAndRemote();
     final customs = await dao.getCustomOnly();
     // v17: 仅加载一级分类用于概览页（level=1, parent_key IS NULL）
     final categories = await dao.getCategories(activeOnly: true, level: 1);
@@ -86,7 +91,7 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
         : <TemplateCategoryRecord>[];
 
     final builtinItems =
-        builtins.map((r) => _recordToItem(r, isCustom: false)).toList();
+        builtinsAndRemotes.map((r) => _recordToItem(r, isCustom: false)).toList();
     final customItems =
         customs.map((r) => _recordToItem(r, isCustom: true)).toList();
     final customWithImported = <AllTemplateItem>[...customItems, ...imported];
@@ -434,10 +439,8 @@ class _FilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // v17: 将 TemplateCategoryRecord 转为 _PillRow 所需的 LabelValue
-    final typeLabels = categories
-        .map((c) => LabelValue(c.key, c.name))
-        .toList();
+    // 一级分类（Type pills）不再展示：用户从模板库概览页已选中一级分类进入，
+    // 返回按钮可回到概览页切换。此处仅展示二三级级联筛选 + "我的" toggle。
     final styleLabels = styleOptions
         .map((c) => LabelValue(c.key, c.name))
         .toList();
@@ -452,22 +455,13 @@ class _FilterSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Layer 0: Type pills
-            _PillRow(
-              tokens: tokens,
-              options: typeLabels,
-              selected: selectedType,
-              onSelect: (v) => onLayerSelect(0, v),
-            ),
-            if (styleLabels.isNotEmpty) ...[
-              const SizedBox(height: 8),
+            if (styleLabels.isNotEmpty)
               _PillRow(
                 tokens: tokens,
                 options: styleLabels,
                 selected: selectedStyle,
                 onSelect: (v) => onLayerSelect(1, v),
               ),
-            ],
             if (methodLabels.isNotEmpty) ...[
               const SizedBox(height: 8),
               _PillRow(
@@ -478,31 +472,14 @@ class _FilterSection extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 12),
-            // TagSelector 占位 + 我的 toggle
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 36,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        _TagChip('人像', tokens: tokens),
-                        _TagChip('风光', tokens: tokens),
-                        _TagChip('美食', tokens: tokens),
-                        _TagChip('夜景', tokens: tokens),
-                        _TagChip('街拍', tokens: tokens),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _CustomToggle(
-                  tokens: tokens,
-                  active: showCustom,
-                  onTap: () => onToggleCustom(!showCustom),
-                ),
-              ],
+            // "我的" toggle：切换是否只看用户自定义/导入的模板
+            Align(
+              alignment: Alignment.centerRight,
+              child: _CustomToggle(
+                tokens: tokens,
+                active: showCustom,
+                onTap: () => onToggleCustom(!showCustom),
+              ),
             ),
           ],
         ),
@@ -593,35 +570,6 @@ class _Pill extends ConsumerWidget {
               fontWeight: active ? FontWeight.w600 : FontWeight.w400,
               color: active ? Colors.white : tokens.textSecondary,
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TagChip extends ConsumerWidget {
-  const _TagChip(this.label, {required this.tokens});
-  final String label;
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: isNeu ? tokens.surface : tokens.surfaceAlt,
-        borderRadius: BorderRadius.circular(9999),
-        boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: tokens.textTertiary,
           ),
         ),
       ),

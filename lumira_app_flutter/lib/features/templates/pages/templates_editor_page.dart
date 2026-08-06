@@ -4,7 +4,9 @@ import 'dart:io' as io;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../core/services/file_picker_service.dart';
 
@@ -286,6 +288,32 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
   // ===== 封面图选择 =====
 
+  /// 根据文件扩展名推断 MIME 类型，覆盖常见图片格式。
+  /// 未知扩展名回退到 image/png（大多数图片解码器可兼容处理）。
+  static String _imageMimeFromExtension(String? ext) {
+    switch (ext?.toLowerCase()) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      case 'bmp':
+        return 'image/bmp';
+      case 'heic':
+      case 'heif':
+        return 'image/heic';
+      case 'svg':
+      case 'svgz':
+        return 'image/svg+xml';
+      default:
+        return 'image/png';
+    }
+  }
+
   Future<void> _pickCoverImage() async {
     try {
       final file = await FilePickerService.pickSingleImage();
@@ -296,8 +324,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         lumira.LumiraToast.show(context, '读取图片失败');
         return;
       }
-      final ext = (file.extension ?? '').toLowerCase();
-      final mime = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg' : 'image/png';
+      final mime = _imageMimeFromExtension(file.extension);
       final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
       _onChange(() => _form.meta.coverImage = dataUrl);
       if (!mounted) return;
@@ -308,31 +335,37 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     }
   }
 
-  /// 通过拍摄页拍摄封面图（capture?mode=return），返回照片路径后读取文件转 base64。
+  /// 调用系统能力拍照获取封面图。
   ///
-  /// 不使用 ImagePicker / file_picker 的 camera 模式，因为本项目拍摄流程统一走
-  /// camerawesome 的 capture 页，且 file_picker 在 OHOS 上不支持相机。
-  /// capture 页 ?mode=return 拍照完成后会 `context.pop(path)` 回本页。
+  /// 使用 image_picker 的 ImageSource.camera 调起系统相机（而非 app 内拍摄页），
+  /// 拍照完成后读取图片 bytes 转 base64 data URL。
+  /// OHOS 平台 image_picker 无原生实现，回退到相册选择提示。
   Future<void> _pickCoverImageFromCamera() async {
     try {
-      final result = await GoRouter.of(context).push<String>(
-        RouteNames.build(RouteNames.capture, {RouteNames.paramMode: 'return'}),
-      );
-      if (result == null || result.isEmpty) return;
-      // capture?mode=return 返回的是本地文件路径，读取为 bytes 后转 data URL
-      final file = io.File(result);
-      final exists = await file.exists();
-      if (!exists) {
+      // OHOS: image_picker 无 OHOS 实现，提示用户从相册选择
+      if (io.Platform.operatingSystem == 'ohos') {
         if (!mounted) return;
-        lumira.LumiraToast.show(context, '读取拍摄照片失败');
+        lumira.LumiraToast.show(context, '当前系统暂不支持系统拍照，请从相册选择');
         return;
       }
-      final bytes = await file.readAsBytes();
+      final picker = ImagePicker();
+      final xfile = await picker.pickImage(source: ImageSource.camera);
+      if (xfile == null) return; // 用户取消拍照
+      final bytes = await xfile.readAsBytes();
       // 拍摄结果统一为 jpeg
       final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
       _onChange(() => _form.meta.coverImage = dataUrl);
       if (!mounted) return;
       lumira.LumiraToast.show(context, '封面图已设置');
+    } on PlatformException catch (e) {
+      // 用户取消拍照时某些平台抛 PlatformException，静默处理
+      final code = e.code.toLowerCase();
+      if (code.contains('cancel') || code.contains('abort') ||
+          code.contains('activity') || code.contains('unknown')) {
+        return;
+      }
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '设置封面图失败：$e');
     } catch (e) {
       if (!mounted) return;
       lumira.LumiraToast.show(context, '设置封面图失败：$e');
@@ -414,8 +447,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         lumira.LumiraToast.show(context, '读取图片失败');
         return;
       }
-      final ext = (file.extension ?? '').toLowerCase();
-      final mime = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg' : 'image/png';
+      final mime = _imageMimeFromExtension(file.extension);
       final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
       final sizeKB = (bytes.length / 1024).round();
       setState(() {
@@ -1024,6 +1056,20 @@ class _FieldInputState extends State<_FieldInput> {
     } else {
       _internalController = TextEditingController(text: widget.initialValue);
       _ownsController = true;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _FieldInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 当父级表单从 DAO 异步加载后，initialValue 会变化（如编辑已有模板时）。
+    // 需同步更新内部 controller 的 text，否则输入框仍显示初始空白值。
+    // 仅当 own controller 且 initialValue 实际变化时才更新，避免覆盖用户正在输入的内容。
+    if (_ownsController && widget.initialValue != oldWidget.initialValue) {
+      final newValue = widget.initialValue ?? '';
+      if (_internalController.text != newValue) {
+        _internalController.text = newValue;
+      }
     }
   }
 

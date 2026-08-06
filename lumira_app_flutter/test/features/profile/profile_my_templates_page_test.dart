@@ -453,6 +453,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
@@ -494,6 +495,7 @@ Future<void> _seedMockCustomTemplates(Database db) async {
         Tables.colPostProcessJson: '{}',
         Tables.colIsBuiltin: 0,
         Tables.colIsRecommended: 0,
+        Tables.colSource: 'custom',
         Tables.colCreatedAt: now,
         Tables.colUpdatedAt: now,
       },

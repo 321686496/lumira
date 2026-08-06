@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart' as io;
 import 'package:file_picker_ohos/file_picker_ohos.dart' as ohos;
+import 'package:flutter/services.dart' show PlatformException;
 
 /// 文件选择服务（跨平台包装器）。
 ///
@@ -71,28 +72,43 @@ class FilePickerService {
   }
 
   /// 平台分发核心方法。
+  ///
+  /// 捕获用户取消选择时 file_picker 抛出的 PlatformException
+  /// （Android 上 code 为 'unkown_activity'，为 plugin 沿用自 image_picker 的拼写错误），
+  /// 将其统一转为 null 返回，避免调用方需要额外处理取消逻辑。
   static Future<PickedResult?> _pick({
     required _FileType type,
     List<String>? allowedExtensions,
     bool allowMultiple = false,
     bool withData = true,
   }) async {
-    if (_isOhos) {
-      final result = await ohos.FilePicker.platform.pickFiles(
-        type: _mapTypeOhos(type),
+    try {
+      if (_isOhos) {
+        final result = await ohos.FilePicker.platform.pickFiles(
+          type: _mapTypeOhos(type),
+          allowedExtensions: allowedExtensions,
+          allowMultiple: allowMultiple,
+          withData: withData,
+        );
+        return result == null ? null : _wrapResultOhos(result);
+      }
+      final result = await io.FilePicker.platform.pickFiles(
+        type: _mapTypeIo(type),
         allowedExtensions: allowedExtensions,
         allowMultiple: allowMultiple,
         withData: withData,
       );
-      return result == null ? null : _wrapResultOhos(result);
+      return result == null ? null : _wrapResultIo(result);
+    } on PlatformException catch (e) {
+      // 用户取消选择（按返回键 / 点击空白区域）时 file_picker 在 Android 上
+      // 抛 PlatformException(code: 'unkown_activity')，静默返回 null。
+      final code = e.code.toLowerCase();
+      if (code.contains('activity') || code.contains('cancel') ||
+          code.contains('abort') || code.contains('unknown')) {
+        return null;
+      }
+      rethrow;
     }
-    final result = await io.FilePicker.platform.pickFiles(
-      type: _mapTypeIo(type),
-      allowedExtensions: allowedExtensions,
-      allowMultiple: allowMultiple,
-      withData: withData,
-    );
-    return result == null ? null : _wrapResultIo(result);
   }
 
   // ===== 类型映射 =====

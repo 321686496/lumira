@@ -52,6 +52,7 @@ void main() {
       updatedAt: now,
       isBuiltin: false,
       isRecommended: false,
+      source: 'custom',
     );
 
     await dao.upsert(record);
@@ -69,6 +70,7 @@ void main() {
       classification: {}, tags: [], tagIds: [], price: 0, cover: '', description: '',
       referenceSource: '', composition: {}, pose: {}, camera: {}, sceneGuide: {},
       postProcess: {}, createdAt: now, updatedAt: now, isBuiltin: false, isRecommended: false,
+      source: 'custom',
     ));
     expect((await dao.getCustomOnly()).length, 1);
 
@@ -107,6 +109,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )

@@ -47,5 +47,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- 系统相机拍照（image_picker ImageSource.camera 需要） -->
+	<key>NSCameraUsageDescription</key>
+	<string>需要使用相机拍摄模板封面图</string>
+	<!-- 相册访问（image_picker / file_picker 选图需要） -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>需要访问相册选择模板封面图与剪影图片</string>
 </dict>
 </plist>

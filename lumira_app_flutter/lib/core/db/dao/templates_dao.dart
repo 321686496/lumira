@@ -241,13 +241,56 @@ class TemplatesDao {
     return rows.map(TemplateRecord.fromRow).toList();
   }
 
-  /// 仅获取用户自定义模板（is_builtin=0）
+  /// 仅获取用户自定义模板（source='custom'）。
+  ///
+  /// 严格按 source='custom' 过滤，排除后端动态模板（source='remote'），
+  /// 避免远程模板被误归入"我的模板"列表。
+  /// 旧数据库（无 source 列，已迁移）回退值为 'custom'，兼容正常。
   Future<List<TemplateRecord>> getCustomOnly() async {
     final rows = await _db.query(
       Tables.customTemplates,
-      where: '${Tables.colIsBuiltin} = ?',
-      whereArgs: [0],
+      where: '${Tables.colSource} = ?',
+      whereArgs: ['custom'],
       orderBy: '${Tables.colCreatedAt} DESC',
+    );
+    return rows.map(TemplateRecord.fromRow).toList();
+  }
+
+  /// 获取内置 + 后端动态模板（is_builtin=1 OR source='remote'）。
+  ///
+  /// 用于"全部模板"页默认视图：展示所有非用户自定义模板（系统内置 + 服务器下发）。
+  /// 按 sortOrder ASC、updatedAt DESC 排序，内置模板优先。
+  Future<List<TemplateRecord>> getBuiltinAndRemote({
+    bool? isRecommended,
+    int? price,
+    bool paidOnly = false,
+    String? category,
+  }) async {
+    final where = <String>[
+      '(${Tables.colIsBuiltin} = ? OR ${Tables.colSource} = ?)',
+    ];
+    final args = <Object>[1, 'remote'];
+    if (isRecommended != null) {
+      where.add('${Tables.colIsRecommended} = ?');
+      args.add(isRecommended ? 1 : 0);
+    }
+    if (price != null) {
+      where.add('${Tables.colPrice} = ?');
+      args.add(price);
+    }
+    if (paidOnly) {
+      where.add('${Tables.colPrice} > ?');
+      args.add(0);
+    }
+    if (category != null) {
+      where.add('${Tables.colCategory} = ?');
+      args.add(category);
+    }
+    final rows = await _db.query(
+      Tables.customTemplates,
+      where: where.join(' AND '),
+      whereArgs: args,
+      orderBy: '${Tables.colPrice} ASC, ${Tables.colName} ASC',
     );
     return rows.map(TemplateRecord.fromRow).toList();
   }

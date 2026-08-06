@@ -44,13 +44,11 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
     super.initState();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
-    // v14: 进入模板页时触发后端动态模板 + 分类同步（fire-and-forget）。
-    // FutureProvider 的 error 状态被静默忽略，UI 用本地缓存降级（spec §7.2）。
-    // 使用 postFrameCallback 避免在 initState 中直接 ref.read 可能引起的
-    // "setState during build" 问题。
+    // 每次进入页面都 invalidate sync provider，强制重新拉取后端数据。
+    // build() 中 ref.watch 这两个 provider，同步完成后自动 rebuild 刷新 UI。
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(remoteCategoriesSyncProvider);
-      ref.read(remoteTemplatesSyncProvider);
+      ref.invalidate(remoteCategoriesSyncProvider);
+      ref.invalidate(remoteTemplatesSyncProvider);
     });
   }
 
@@ -82,6 +80,9 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    // watch sync providers：同步完成时自动 rebuild，刷新模板列表。
+    ref.watch(remoteCategoriesSyncProvider);
+    ref.watch(remoteTemplatesSyncProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
