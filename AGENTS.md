@@ -17,7 +17,10 @@
 3. 新功能、Bug 修复一律在 `lumira_app_flutter/` 实现
 4. 后端相关改动在 `lumira-server/` 实现
 5. 涉及两端协同时，Flutter 端为主，后端提供 API 支持
-6. **每次对后端（`lumira-server/packages/backend/`）或后台（`lumira-server/packages/admin/`）完成一次修改或功能增强之后，必须 commit 并 push 到 GitHub 远程仓库**（不要积压多次改动后再批量推送）。仅纯文档或注释改动可由用户决定是否推送
+6. **每次对后端（`lumira-server/packages/backend/`）或后台（`lumira-server/packages/admin/`）完成一次修改或功能增强之后，必须 commit 并同时 push 到两个远程仓库**（不要积压多次改动后再批量推送）：
+   - `origin` → gitee（`git@gitee.com:huangh-gitee/photo_post.git`）：`git push origin master`
+   - `github` → github（`git@github.com:321686496/lumira.git`）：`git push github master`
+   - 仅纯文档或注释改动可由用户决定是否推送
 
 ### 技术栈速查
 
