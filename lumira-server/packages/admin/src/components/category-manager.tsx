@@ -26,13 +26,8 @@ import {
   createCategory, updateCategory, deleteCategory, toggleCategoryActive,
 } from '@/actions/categories';
 import { buildCategoryTree } from '@/lib/category-tree';
+import { toAssetUrl } from '@/lib/asset-url';
 import type { TemplateCategory, TemplateCategoryTreeNode } from '@/types/admin';
-
-function resolveAssetUrl(url: string | null | undefined, backendUrl: string): string | null {
-  if (!url) return null;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `${backendUrl}${url.startsWith('/') ? '' : '/'}${url}`;
-}
 
 interface FlatRow {
   node: TemplateCategoryTreeNode;
@@ -317,7 +312,7 @@ export function CategoryManager({
               </TableRow>
             ) : (
               flatRows.map(({ node: c, depth, hasChildren }) => {
-                const icon = resolveAssetUrl(c.iconUrl, backendUrl);
+                const icon = toAssetUrl(c.iconUrl, backendUrl);
                 const isCollapsed = collapsedKeys.has(c.key);
                 return (
                   <TableRow key={c.key}>
@@ -597,7 +592,7 @@ export function CategoryManager({
                 hint="建议 5MB 以内的 png/svg/jpg；为空时使用 Flutter 内置图标映射。"
                 previewUrl={
                   editingKey
-                    ? resolveAssetUrl(
+                    ? toAssetUrl(
                         categories.find((c) => c.key === editingKey)?.iconUrl,
                         backendUrl,
                       ) || undefined

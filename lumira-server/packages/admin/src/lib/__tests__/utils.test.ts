@@ -12,11 +12,14 @@ describe('truncateDeviceId', () => {
 });
 
 describe('formatUnixTime', () => {
-  it('formats known Unix timestamp', () => {
-    // 2024-01-01 00:00:00 UTC = 1704067200
-    const result = formatUnixTime(1704067200);
-    // 时区相关，只验证格式
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  it('formats known Unix timestamp in fixed Asia/Shanghai timezone', () => {
+    // 2024-01-01 00:00:00 UTC = 1704067200 → 2024-01-01 08:00 Asia/Shanghai
+    expect(formatUnixTime(1704067200)).toBe('2024-01-01 08:00');
+  });
+  it('is independent of the host timezone (no hydration mismatch)', () => {
+    // 无论运行在 UTC 还是 UTC+8，输出都必须一致（固定 +8 偏移）
+    const sydney = formatUnixTime(1704067200);
+    expect(sydney).toBe('2024-01-01 08:00');
   });
 });
 

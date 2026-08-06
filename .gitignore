@@ -6,6 +6,7 @@ lumira-app/.vite/
 # Agent/process artifacts
 .FullName
 .agents/
+.agent/
 .superpowers/
 
 # Generated media outputs

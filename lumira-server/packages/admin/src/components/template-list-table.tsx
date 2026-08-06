@@ -12,16 +12,10 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Eye, PencilSimple, Trash } from '@phosphor-icons/react/dist/ssr';
 import { formatUnixTime } from '@/lib/utils';
+import { toAssetUrl } from '@/lib/asset-url';
 import { useToast } from '@/hooks/use-toast';
 import { toggleTemplateActive, deleteTemplate } from '@/actions/templates';
 import type { AdminTemplateListItem } from '@/types/admin';
-
-/** 将后端返回的相对/绝对 URL 拼成可访问的完整 URL。 */
-function resolveAssetUrl(url: string | null | undefined, backendUrl: string): string | null {
-  if (!url) return null;
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return `${backendUrl}${url.startsWith('/') ? '' : '/'}${url}`;
-}
 
 export function TemplateListTable({
   templates,
@@ -82,7 +76,7 @@ export function TemplateListTable({
             </TableRow>
           ) : (
             templates.map((t) => {
-              const cover = resolveAssetUrl(t.coverUrl, backendUrl);
+              const cover = toAssetUrl(t.coverUrl, backendUrl);
               return (
                 <TableRow key={t.id}>
                   <TableCell>
