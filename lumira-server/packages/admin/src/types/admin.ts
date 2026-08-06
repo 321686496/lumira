@@ -151,7 +151,7 @@ export interface AdminTemplateListItem {
 }
 
 export interface AdminTemplateListResponse {
-  templates: AdminTemplateListItem[];
+  data: AdminTemplateListItem[];
   total: number;
   page: number;
   pageSize: number;
