@@ -32,6 +32,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL,
       ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,

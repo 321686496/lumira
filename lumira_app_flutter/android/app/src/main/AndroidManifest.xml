@@ -2,6 +2,8 @@
     package="com.example.lumira_app_flutter">
     <!-- Release 构建必需：允许应用访问网络（debug/profile 权限由对应 manifest 提供，main 中缺失会导致打包后无法联网） -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 系统相机拍照（image_picker ImageSource.camera 需要） -->
+    <uses-permission android:name="android.permission.CAMERA"/>
    <application
         android:label="如画 Lumira"
         android:name="${applicationName}"

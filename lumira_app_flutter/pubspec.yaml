@@ -64,6 +64,11 @@ dependencies:
   gpu_image: ^1.0.0
   image: ^4.0.16
 
+  # 系统相机/相册（调用系统能力拍照选图，非 app 内拍摄页）
+  # 已是 transitive 依赖（pubspec.lock 1.0.4），此处提升为直接依赖
+  # OHOS 适配版见 https://gitcode.com/openharmony-sig/flutter_packages/packages/image_picker
+  image_picker: ^1.0.4
+
   # 保存相册（brief ^3.0.6 → CPF-Flutter 3.7 Harmony 适配版本 3.0.6；已回合上游，使用 pub.dev；精确锁定避免 3.0.7+ 依赖 mime 需 Dart 3.2+）
   saver_gallery: '3.0.6'  # Harmony 3.7 适配版本 (CPF-Flutter)
 

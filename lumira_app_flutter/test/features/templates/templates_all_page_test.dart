@@ -556,6 +556,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
@@ -599,6 +600,7 @@ Future<void> _seedTemplates(Database db) async {
       // use isCustom flag to split builtin vs custom (page uses getCustomOnly)
       Tables.colIsBuiltin: t.isCustom ? 0 : 1,
       Tables.colIsRecommended: recommendedIds.contains(t.id) ? 1 : 0,
+      Tables.colSource: t.isCustom ? 'custom' : 'builtin',
       Tables.colCreatedAt: now,
       Tables.colUpdatedAt: now,
     });
