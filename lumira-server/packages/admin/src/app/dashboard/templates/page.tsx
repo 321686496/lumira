@@ -13,7 +13,7 @@ export default async function TemplatesPage() {
   let templates;
   try {
     const resp = await api.listTemplates({ pageSize: 200 });
-    templates = resp.templates;
+    templates = resp.data;
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return <div className="text-destructive">加载失败：{(e as Error).message}</div>;
