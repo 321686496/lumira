@@ -735,9 +735,11 @@ export default function TemplateForm({
               maxSize={5 * 1024 * 1024}
               value={coverFile}
               onChange={async (file) => {
-                setCoverFile(file ? await compressImage(file, { maxDim: 1280 }) : null);
+                // 自动压缩到最长边 1080px（PNG 转 WebP），确保提交体量远低于
+                // Nginx client_max_body_size 与 Vercel 平台限制
+                setCoverFile(file ? await compressImage(file, { maxDim: 1080, quality: 0.8 }) : null);
               }}
-              hint="JPG / PNG / WebP，≤5MB，建议 3:4 竖图。"
+              hint="JPG / PNG / WebP，≤5MB，建议 3:4 竖图。上传后自动压缩（PNG 转 WebP）。"
               previewUrl={coverPreviewUrl}
             />
 
@@ -773,9 +775,10 @@ export default function TemplateForm({
                 maxSize={5 * 1024 * 1024}
                 value={silhouetteFile}
                 onChange={async (file) => {
-                  setSilhouetteFile(file ? await compressImage(file, { maxDim: 800 }) : null);
+                  // 自动压缩到最长边 640px（PNG 转 WebP 保留透明通道）
+                  setSilhouetteFile(file ? await compressImage(file, { maxDim: 640, quality: 0.8 }) : null);
                 }}
-                hint="PNG / SVG，≤5MB。提交时会随模板一起上传。"
+                hint="PNG / SVG，≤5MB。上传后自动压缩（PNG 转 WebP）。"
               />
             )}
 
