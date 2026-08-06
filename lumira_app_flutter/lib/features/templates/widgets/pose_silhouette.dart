@@ -75,14 +75,30 @@ class PoseSilhouette extends StatelessWidget {
           // mock 数据为空时不渲染（避免 base64Decode 异常）
           return const SizedBox(width: 80, height: 80);
         }
-        // image 类型支持两种数据源：
+        // image 类型支持三种数据源：
         // 1. asset 路径（如 `assets/images/silhouettes/xxx.png`）→ Image.asset
         // 2. base64 数据 URL（如 `data:image/png;base64,xxxx`）→ Image.memory
+        // 3. http(s) URL（后端上传的剪影图片，pose.silhouette.data 为 URL）→ Image.network
         if (silhouetteData.startsWith('assets/')) {
           return Image.asset(
             silhouetteData,
             width: 80,
             height: 80,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Icon(
+              Icons.broken_image_outlined,
+              color: effectiveColor,
+              size: 80,
+            ),
+          );
+        }
+        if (silhouetteData.startsWith('http://') ||
+            silhouetteData.startsWith('https://')) {
+          return Image.network(
+            silhouetteData,
+            width: 80,
+            height: 80,
+            color: effectiveColor,
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => Icon(
               Icons.broken_image_outlined,

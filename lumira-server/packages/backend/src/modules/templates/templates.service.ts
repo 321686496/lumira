@@ -191,7 +191,7 @@ export function rowToMeta(row: TemplateRow): RemoteTemplateMeta {
     version: row.version,
     category: row.category,
     price: row.price,
-    coverUrl: row.coverUrl,
+    coverUrl: normalizeAssetUrl(row.coverUrl),
     description: row.description,
     referenceSource: row.referenceSource,
     tags: safeParseStringArray(row.tagsJson),
@@ -203,10 +203,18 @@ export function rowToMeta(row: TemplateRow): RemoteTemplateMeta {
 }
 
 export function rowToDetail(row: TemplateRow): RemoteTemplateDetail {
+  const pose = safeParseObject(row.poseJson);
+  const silhouette = pose.silhouette;
+  if (silhouette && typeof silhouette === 'object') {
+    const s = silhouette as Record<string, unknown>;
+    // 旧数据修复：剪影 URL 可能在 BACKEND_PUBLIC_URL 配置前写入，前缀为 localhost
+    if (typeof s.url === 'string') s.url = normalizeAssetUrl(s.url);
+    if (typeof s.data === 'string') s.data = normalizeAssetUrl(s.data);
+  }
   return {
     ...rowToMeta(row),
     composition: safeParseObject(row.compositionJson),
-    pose: safeParseObject(row.poseJson),
+    pose,
     camera: safeParseObject(row.cameraJson),
     sceneGuide: safeParseObject(row.sceneGuideJson),
     postProcess: safeParseObject(row.postProcessJson),
@@ -217,7 +225,7 @@ export function rowToCategory(row: CategoryRow): TemplateCategory {
   return {
     key: row.key,
     name: row.name,
-    iconUrl: row.iconUrl,
+    iconUrl: normalizeAssetUrl(row.iconUrl),
     parentKey: row.parentKey,
     level: row.level,
     sortOrder: row.sortOrder,
@@ -225,6 +233,23 @@ export function rowToCategory(row: CategoryRow): TemplateCategory {
     isActive: row.isActive === 1,
     updatedAt: row.updatedAt,
   };
+}
+
+/**
+ * 规范化静态资源 URL。
+ *
+ * 背景：`BACKEND_PUBLIC_URL` 配置前上传的模板/分类，数据库中的 coverUrl、
+ * 剪影 url/data、iconUrl 前缀为 `http://localhost:3000`，App 端无法访问。
+ * 这里在返回客户端前将 localhost/127.0.0.1 前缀替换为当前 `BACKEND_PUBLIC_URL`，
+ * 保证旧数据也能被 App 正常加载（不依赖手动改库）。
+ */
+function normalizeAssetUrl(url: string | null | undefined): string {
+  if (!url) return url || '';
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(url)) {
+    const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
+    return url.replace(/^https?:\/\/[^/]+/, base);
+  }
+  return url;
 }
 
 function safeParseObject(json: string): Record<string, unknown> {
