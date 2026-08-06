@@ -15,6 +15,7 @@ import '../../scenes/widgets/scene_category_overview.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_mock_data.dart';
 import '../data/templates_providers.dart';
+import '../services/template_mapper.dart';
 import '../widgets/recommendation_card.dart';
 import '../widgets/template_grid_card.dart';
 import '../widgets/user_preference_card.dart';
@@ -622,7 +623,7 @@ TemplateRecommendation _recordToRecommendation(TemplateRecord r) {
     source: TemplateSource.systemPick,
     imageSeed: r.id,
     category: r.category,
-    cover: r.cover.isEmpty ? null : r.cover,
+    cover: r.cover.isEmpty ? null : TemplateMapper.normalizeAssetUrl(r.cover),
     coverData: r.coverData,
   );
 }
@@ -635,7 +636,7 @@ TemplateItem _recordToItem(TemplateRecord r) {
     name: r.name,
     category: r.category,
     imageSeed: r.id,
-    cover: r.cover.isEmpty ? null : r.cover,
+    cover: r.cover.isEmpty ? null : TemplateMapper.normalizeAssetUrl(r.cover),
     coverData: r.coverData,
     price: r.price,
   );

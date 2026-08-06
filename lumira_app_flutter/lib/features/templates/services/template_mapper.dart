@@ -1,3 +1,4 @@
+import '../../../core/config/app_config.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../capture/domain/photo_template.dart';
 import '../data/builtin_silhouettes.dart';
@@ -143,7 +144,7 @@ class TemplateMapper {
         tags: List<String>.from(r.tags),
         tagIds: List<String>.from(r.tagIds),
         price: r.price,
-        cover: r.cover,
+        cover: normalizeAssetUrl(r.cover),
         coverData: r.coverData,
         description: r.description,
         referenceSource: r.referenceSource,
@@ -420,10 +421,31 @@ class TemplateMapper {
   static SilhouetteResource silhouetteFromJson(Map<String, dynamic> json) {
     return SilhouetteResource(
       type: (json['type'] as String?) ?? 'builtin',
-      data: (json['data'] as String?) ?? 'none',
+      data: normalizeAssetUrl((json['data'] as String?) ?? 'none'),
       filename: json['filename'] as String?,
       sizeKB: (json['sizeKB'] as num?)?.toInt(),
     );
+  }
+
+  /// 规范化静态资源 URL：本地缓存的旧数据可能以 localhost/127.0.0.1 为前缀
+  /// （后端 BACKEND_PUBLIC_URL 配置前写入），用 [AppConfig.baseUrl] 推导的
+  /// 服务 origin 替换，保证图片/剪影在 App 端可加载。
+  static String normalizeAssetUrl(String url) {
+    if (!url.startsWith('http://localhost') &&
+        !url.startsWith('http://127.0.0.1') &&
+        !url.startsWith('https://localhost') &&
+        !url.startsWith('https://127.0.0.1')) {
+      return url;
+    }
+    final base = Uri.tryParse(AppConfig.baseUrl);
+    if (base == null || base.host.isEmpty) return url;
+    final origin =
+        '${base.scheme}://${base.host}${base.hasPort ? ':${base.port}' : ''}';
+    // 取 url 中主机之后的路径部分（如 /uploads/templates/x/cover.jpg）
+    final schemeEnd = url.indexOf('://') + 3;
+    final pathIdx = url.indexOf('/', schemeEnd);
+    final path = pathIdx >= 0 ? url.substring(pathIdx) : '/';
+    return '$origin$path';
   }
 
   // === 私有 helper：PhotoTemplate 子结构 → JSON ===
