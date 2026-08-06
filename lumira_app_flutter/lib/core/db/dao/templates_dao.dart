@@ -446,18 +446,34 @@ class TemplatesDao {
     );
   }
 
-  /// Upsert 分类记录（按 UNIQUE(key, parent_key) 约束 REPLACE）。
+  /// Upsert 分类记录。
+  ///
+  /// 先按 (key, parent_key) 删除已有记录（parent_key 为 NULL 时用 IS NULL 精确匹配），
+  /// 再插入新记录。不能依赖 UNIQUE(key, parent_key) 做 REPLACE：SQLite 唯一索引将
+  /// NULL 视为互不相同，一级分类（parent_key IS NULL）的唯一约束永远不触发，
+  /// REPLACE 会不断累积重复行。
   ///
   /// 用于：
   /// - v14 迁移时种子化 7 个系统分类
   /// - v17 迁移时种子化二三级系统分类
   /// - 后端分类同步时 upsert 到本地
   Future<void> upsertCategory(TemplateCategoryRecord record) async {
-    await _db.insert(
-      Tables.templateCategories,
-      record.toRow(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _db.transaction((txn) async {
+      if (record.parentKey == null) {
+        await txn.delete(
+          Tables.templateCategories,
+          where: '${Tables.colKey} = ? AND ${Tables.colParentKey} IS NULL',
+          whereArgs: [record.key],
+        );
+      } else {
+        await txn.delete(
+          Tables.templateCategories,
+          where: '${Tables.colKey} = ? AND ${Tables.colParentKey} = ?',
+          whereArgs: [record.key, record.parentKey],
+        );
+      }
+      await txn.insert(Tables.templateCategories, record.toRow());
+    });
   }
 }
 
