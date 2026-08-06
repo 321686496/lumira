@@ -51,8 +51,10 @@ GitHub Actions Runner
 |------|------|
 | `JWT_SECRET` | JWT 签名密钥（生产环境） |
 | `ADMIN_TOKEN` | Admin API 令牌（生产环境） |
+| `NGINX_NETWORK` | nginx 容器所在的 docker network 名 |
+| `BACKEND_PUBLIC_URL` | **后端 API 公网域名**（如 `https://api.lumira.app`），用于构造上传图片 URL。未设置时图片 URL 回退到 `http://localhost:3000`，App 端将无法加载图片 |
 
-> 这两个变量通过服务器的 `.env` 文件注入（docker-compose 通过 `--env-file .env` 加载），**不要**放在 GitHub Secrets 中。
+> 这些变量通过服务器的 `.env` 文件注入（docker-compose 通过 `--env-file .env` 加载），**不要**放在 GitHub Secrets 中。
 
 ---
 
@@ -143,11 +145,14 @@ cat > /opt/lumira/backend/.env <<EOF
 JWT_SECRET=$(openssl rand -hex 32)
 ADMIN_TOKEN=$(openssl rand -hex 32)
 NGINX_NETWORK=lumira-net
+BACKEND_PUBLIC_URL=https://api.your-domain.com
 EOF
 
 # 查看并记下这些值（用于客户端配置）
 cat /opt/lumira/backend/.env
 ```
+
+> `BACKEND_PUBLIC_URL` 必须是 App 和 Admin 都能访问到的后端 API 公网域名（与 nginx 反代配置的 `<<YOUR_API_DOMAIN>>` 一致），否则上传的图片在 App 端无法加载。
 
 ### 7. 创建 docker 网络（用于 nginx 与后端容器通信）
 
