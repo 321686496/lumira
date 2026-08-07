@@ -30,7 +30,26 @@ const WHITE_BALANCES = ['daylight', 'cloudy', 'shade', 'tungsten', 'fluorescent'
 const FLASH_MODES = ['off', 'on', 'auto', 'torch'] as const;
 const FOCUS_MODES = ['auto', 'manual', 'continuous'] as const;
 const LENS_SUGGESTIONS = ['wide', 'main', 'telephoto', 'ultra_wide'] as const;
-const LUTS = ['none', 'cinematic', 'vintage', 'bw', 'warm_film', 'cool_film', 'pastel', 'fuji'] as const;
+const LUTS = ['none', 'cinematic', 'vintage', 'bw', 'warm_film', 'cool_film', 'pastel', 'fuji', 'portrait', 'japanese', 'cyberpunk', 'sepia_classic', 'mist', 'rouge', 'twilight', 'cyan'] as const;
+
+const LUT_LABELS: Record<string, string> = {
+  none: '原图',
+  cinematic: '电影感',
+  vintage: '复古胶片',
+  bw: '黑白',
+  warm_film: '暖色胶片',
+  cool_film: '冷色胶片',
+  pastel: '柔色',
+  fuji: '富士感',
+  portrait: '人像',
+  japanese: '日系',
+  cyberpunk: '赛博朋克',
+  sepia_classic: '褐调',
+  mist: '薄雾',
+  rouge: '胭脂',
+  twilight: '暮光',
+  cyan: '青调',
+};
 
 const NONE_VALUE = '__none__';
 
@@ -790,6 +809,7 @@ export default function TemplateForm({
                       scale={watchedValues.poseScale}
                       rotation={watchedValues.poseRotation}
                       aspectRatio={watchedValues.aspectRatio}
+                      cropRatio={watchedValues.cropRatio}
                       onPositionChange={(x, y) => {
                         setValue('posePositionX', x);
                         setValue('posePositionY', y);
@@ -1044,7 +1064,7 @@ export default function TemplateForm({
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {LUTS.map((v) => (
-                            <SelectItem key={v} value={v}>{v}</SelectItem>
+                            <SelectItem key={v} value={v}>{LUT_LABELS[v] ?? v}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -1137,6 +1157,8 @@ export default function TemplateForm({
             <PhonePreview
               coverUrl={coverPreviewSrc}
               silhouetteUrl={silhouettePreviewSrc}
+              silhouetteType={watchedValues.silhouetteType}
+              silhouetteBuiltinKey={watchedValues.silhouetteBuiltinKey}
               positionX={watchedValues.posePositionX}
               positionY={watchedValues.posePositionY}
               scale={watchedValues.poseScale}
