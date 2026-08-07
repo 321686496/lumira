@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowsOut, MagnifyingGlassPlus } from '@phosphor-icons/react/dist/ssr';
+import { MagnifyingGlassPlus } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,17 @@ import {
   DialogContent,
   DialogTitle,
 } from '@/components/ui/dialog';
+import IphoneFrame from '@/components/iphone-frame';
+
+/** 解析 '3:4' → 0.75；不支持返回 null */
+function parseRatio(s: string): number | null {
+  if (!s || s === 'free' || s === 'none' || s === 'fullscreen') return null;
+  const parts = s.split(':');
+  const w = parseInt(parts[0], 10);
+  const h = parseInt(parts[1], 10);
+  if (!w || !h) return null;
+  return w / h;
+}
 
 interface SilhouettePreviewProps {
   silhouetteUrl: string | null;
@@ -19,21 +30,11 @@ interface SilhouettePreviewProps {
   scale: number;
   rotation: number;
   aspectRatio: string;
+  cropRatio?: string;
   onPositionChange: (x: number, y: number) => void;
   onScaleChange: (scale: number) => void;
   onRotationChange: (rotation: number) => void;
   className?: string;
-}
-
-function getAspectRatioPadding(ratio: string): string {
-  const map: Record<string, string> = {
-    '3:4': 'pb-[133.33%]',
-    '4:3': 'pb-[75%]',
-    '16:9': 'pb-[56.25%]',
-    '1:1': 'pb-[100%]',
-    '9:16': 'pb-[177.78%]',
-  };
-  return map[ratio] || 'pb-[133.33%]';
 }
 
 export default function SilhouettePreview({
@@ -43,15 +44,24 @@ export default function SilhouettePreview({
   scale,
   rotation,
   aspectRatio,
+  cropRatio,
   onPositionChange,
   onScaleChange,
   onRotationChange,
   className,
 }: SilhouettePreviewProps) {
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  const areaRef = React.useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = React.useState(false);
   const [lightboxOpen, setLightboxOpen] = React.useState(false);
   const dragStart = React.useRef({ x: 0, y: 0, posX: 0, posY: 0 });
+
+  // 与手机预览一致：优先 cropRatio（导出裁剪），回退 composition.aspectRatio
+  const ratio = React.useMemo(() => {
+    const r = parseRatio(cropRatio ?? '');
+    if (r) return r;
+    const fallback = parseRatio(aspectRatio);
+    return fallback ?? 0.75;
+  }, [cropRatio, aspectRatio]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!silhouetteUrl) return;
@@ -67,8 +77,8 @@ export default function SilhouettePreview({
 
   const handleMouseMove = React.useCallback(
     (e: MouseEvent) => {
-      if (!isDragging || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
+      if (!isDragging || !areaRef.current) return;
+      const rect = areaRef.current.getBoundingClientRect();
       const dx = (e.clientX - dragStart.current.x) / rect.width;
       const dy = (e.clientY - dragStart.current.y) / rect.height;
       const newX = Math.max(0, Math.min(1, dragStart.current.posX + dx));
@@ -94,54 +104,65 @@ export default function SilhouettePreview({
 
   return (
     <div className={cn('space-y-4', className)}>
-      <Label>剪影预览</Label>
-      <div className="flex items-center justify-center bg-muted/20 rounded-lg p-4">
-        <div
-          ref={containerRef}
-          className={cn(
-            'relative w-full max-w-[240px] rounded-2xl border-2 border-border bg-muted overflow-hidden select-none',
-            getAspectRatioPadding(aspectRatio),
-          )}
-        >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-muted-foreground/40">
-              <ArrowsOut size={32} className="mx-auto mb-1" />
-              <p className="text-xs">手机屏幕</p>
+      <Label>剪影预览（可拖动调整位置）</Label>
+      <div className="flex justify-center">
+        <IphoneFrame width={240}>
+          <div className="absolute inset-0 flex items-center justify-center bg-black">
+            <div
+              ref={areaRef}
+              className="relative overflow-hidden bg-[#14151a]"
+              style={{ width: '100%', aspectRatio: String(ratio) }}
+            >
+              {/* 占位网格背景 */}
+              <div className="absolute inset-0 opacity-20">
+                <div className="absolute left-1/2 top-0 bottom-0 border-l border-white/30" />
+                <div className="absolute top-1/2 left-0 right-0 border-t border-white/30" />
+              </div>
+
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center text-muted-foreground/30 pointer-events-none">
+                  <p className="text-[10px]">图片区域 {cropRatio || aspectRatio}</p>
+                </div>
+              </div>
+
+              {silhouetteUrl && (
+                <div
+                  className={cn(
+                    'absolute inset-0',
+                    isDragging ? 'cursor-grabbing' : 'cursor-grab',
+                  )}
+                  onMouseDown={handleMouseDown}
+                  style={{ touchAction: 'none' }}
+                >
+                  <div
+                    className="absolute"
+                    style={{
+                      left: `${positionX * 100}%`,
+                      top: `${positionY * 100}%`,
+                      width: '20.36%',
+                      aspectRatio: '1/1',
+                      transform: `translate(-50%, -50%) scale(${scale}) rotate(${rotation}deg)`,
+                      transition: isDragging ? 'none' : 'transform 0.15s ease-out',
+                    }}
+                  >
+                    <img
+                      src={silhouetteUrl}
+                      alt="剪影"
+                      className="w-full h-full object-contain pointer-events-none"
+                      draggable={false}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-
-          {silhouetteUrl && (
-            <div
-              className={cn(
-                'absolute inset-0 flex items-center justify-center',
-                isDragging ? 'cursor-grabbing' : 'cursor-grab',
-              )}
-              onMouseDown={handleMouseDown}
-              style={{ touchAction: 'none' }}
-            >
-              <div
-                className="relative"
-                style={{
-                  transform: `translate(${(positionX - 0.5) * 100}%, ${(positionY - 0.5) * 100}%) scale(${scale}) rotate(${rotation}deg)`,
-                  transition: isDragging ? 'none' : 'transform 0.15s ease-out',
-                }}
-              >
-                <img
-                  src={silhouetteUrl}
-                  alt="剪影"
-                  className="max-w-[80%] max-h-[80%] object-contain pointer-events-none"
-                  draggable={false}
-                />
-              </div>
-            </div>
-          )}
 
           {silhouetteUrl && (
             <Button
               type="button"
               variant="secondary"
               size="icon"
-              className="absolute top-2 right-2 h-7 w-7 opacity-70 hover:opacity-100 z-10"
+              className="absolute top-8 right-2 h-7 w-7 opacity-70 hover:opacity-100 z-10"
               onClick={(e) => {
                 e.stopPropagation();
                 setLightboxOpen(true);
@@ -150,7 +171,7 @@ export default function SilhouettePreview({
               <MagnifyingGlassPlus size={14} />
             </Button>
           )}
-        </div>
+        </IphoneFrame>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
