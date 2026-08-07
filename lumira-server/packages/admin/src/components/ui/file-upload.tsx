@@ -1,32 +1,29 @@
-// src/components/ui/file-upload.tsx
 'use client';
 
 import * as React from 'react';
-import { Upload, X } from '@phosphor-icons/react/dist/ssr';
+import { Upload, X, MagnifyingGlassPlus } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export interface FileUploadProps {
-  /** File input accept attribute, e.g. 'image/*' */
   accept?: string;
-  /** Max file size in bytes. Default 2MB. */
   maxSize?: number;
-  /** Controlled file value (or null when empty). */
   value?: File | null;
-  /** Called when user picks / clears a file. */
   onChange: (file: File | null) => void;
-  /** Label shown above the dropzone. */
   label?: string;
-  /** Hint shown below the dropzone. */
   hint?: string;
-  /** Optional preview URL override (e.g. existing remote cover URL). */
   previewUrl?: string;
   className?: string;
   disabled?: boolean;
 }
 
-const DEFAULT_MAX_SIZE = 2 * 1024 * 1024; // 2MB
+const DEFAULT_MAX_SIZE = 2 * 1024 * 1024;
 
 export function FileUpload({
   accept = 'image/*',
@@ -42,8 +39,8 @@ export function FileUpload({
   const { toast } = useToast();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [localObjectUrl, setLocalObjectUrl] = React.useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = React.useState(false);
 
-  // 当 value 变化时维护 object URL（用于本地预览）
   React.useEffect(() => {
     if (value) {
       const url = URL.createObjectURL(value);
@@ -75,7 +72,7 @@ export function FileUpload({
   };
 
   const previewSrc = localObjectUrl || previewUrl;
-  const showPreview = Boolean(previewSrc);
+  const hasPreview = Boolean(previewSrc);
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -87,70 +84,97 @@ export function FileUpload({
       <div className="relative">
         <label
           className={cn(
-            'flex flex-col items-center justify-center rounded-md border border-dashed border-input bg-background p-6 text-center transition-colors',
-            'hover:bg-muted/50 cursor-pointer',
+            'relative flex flex-col items-center justify-center rounded-md border border-dashed border-input bg-background text-center transition-colors overflow-hidden',
+            hasPreview
+              ? 'p-0 cursor-default'
+              : 'p-6 hover:bg-muted/50 cursor-pointer',
             disabled && 'opacity-50 pointer-events-none',
           )}
+          style={hasPreview ? { minHeight: '200px' } : undefined}
         >
-          <Upload size={20} className="text-muted-foreground" />
-          <span className="mt-2 text-sm text-muted-foreground">
-            点击选择文件{accept ? `（${accept}）` : ''}
-          </span>
-          {hint && (
-            <span className="mt-1 text-xs text-muted-foreground/80">{hint}</span>
-          )}
-          <input
-            ref={inputRef}
-            type="file"
-            accept={accept}
-            className="hidden"
-            disabled={disabled}
-            onChange={(e) => {
-              const file = e.target.files?.[0] ?? null;
-              handleFile(file);
-            }}
-          />
-        </label>
-        {showPreview && (
-          <div className="mt-2 flex items-start gap-3 rounded-md border border-input bg-muted/20 p-3">
-            {/* 预览图 */}
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-background border border-input">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+          {hasPreview ? (
+            <>
               <img
                 src={previewSrc}
                 alt="预览"
-                className="h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-contain bg-muted/10"
               />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate text-foreground">
-                {value?.name || '当前文件'}
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {value
-                  ? `${(value.size / 1024).toFixed(1)} KB`
-                  : previewUrl
-                    ? '已有远程文件，重新选择将覆盖'
-                    : ''}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => {
-                if (inputRef.current) inputRef.current.value = '';
-                handleFile(null);
-              }}
-              disabled={disabled}
-              aria-label="移除文件"
-            >
-              <X size={14} />
-            </Button>
-          </div>
-        )}
+              <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-colors group flex items-center justify-center gap-2">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setLightboxOpen(true);
+                    }}
+                  >
+                    <MagnifyingGlassPlus size={14} className="mr-1" /> 放大查看
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (inputRef.current) inputRef.current.value = '';
+                      onChange(null);
+                    }}
+                  >
+                    <X size={14} className="mr-1" /> 移除
+                  </Button>
+                </div>
+              </div>
+              <input
+                ref={inputRef}
+                type="file"
+                accept={accept}
+                className="hidden"
+                disabled={disabled}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  handleFile(file);
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <Upload size={24} className="text-muted-foreground" />
+              <span className="mt-2 text-sm text-muted-foreground">
+                点击选择文件{accept ? `（${accept}）` : ''}
+              </span>
+              {hint && (
+                <span className="mt-1 text-xs text-muted-foreground/80">{hint}</span>
+              )}
+              <input
+                ref={inputRef}
+                type="file"
+                accept={accept}
+                className="hidden"
+                disabled={disabled}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  handleFile(file);
+                }}
+              />
+            </>
+          )}
+        </label>
       </div>
+
+      <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
+        <DialogContent className="max-w-4xl p-2">
+          <DialogTitle className="sr-only">图片预览</DialogTitle>
+          <div className="flex items-center justify-center max-h-[80vh] overflow-hidden">
+            <img
+              src={previewSrc}
+              alt="预览"
+              className="max-h-[80vh] w-auto object-contain rounded-md"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
