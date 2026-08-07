@@ -83,22 +83,35 @@ class FilePickerService {
     bool withData = true,
   }) async {
     try {
+      PickedResult? result;
       if (_isOhos) {
-        final result = await ohos.FilePicker.platform.pickFiles(
+        final r = await ohos.FilePicker.platform.pickFiles(
           type: _mapTypeOhos(type),
           allowedExtensions: allowedExtensions,
           allowMultiple: allowMultiple,
           withData: withData,
         );
-        return result == null ? null : _wrapResultOhos(result);
+        result = r == null ? null : _wrapResultOhos(r);
+      } else {
+        final r = await io.FilePicker.platform.pickFiles(
+          type: _mapTypeIo(type),
+          allowedExtensions: allowedExtensions,
+          allowMultiple: allowMultiple,
+          withData: withData,
+        );
+        result = r == null ? null : _wrapResultIo(r);
       }
-      final result = await io.FilePicker.platform.pickFiles(
-        type: _mapTypeIo(type),
-        allowedExtensions: allowedExtensions,
-        allowMultiple: allowMultiple,
-        withData: withData,
-      );
-      return result == null ? null : _wrapResultIo(result);
+      if (result == null) return null;
+      if (!withData) return result;
+      // OHOS 的 file_picker_ohos 原生端 FileUtils.loadData 只读取文件前 4096 字节
+      // （单次 readSync），withData 返回的 bytes 是截断数据，Image.memory 解码必然失败。
+      // 这里利用插件同时返回的完整拷贝路径（cacheDir/file_picker/...），
+      // 用 dart:io 重新读取完整字节覆盖截断数据。
+      final files = <PickedFile>[];
+      for (final f in result.files) {
+        files.add(await ensureFullBytes(f));
+      }
+      return PickedResult(files: files);
     } on PlatformException catch (e) {
       // 用户取消选择（按返回键 / 点击空白区域）时 file_picker 在 Android 上
       // 抛 PlatformException(code: 'unkown_activity')，静默返回 null。
@@ -108,6 +121,32 @@ class FilePickerService {
         return null;
       }
       rethrow;
+    }
+  }
+
+  /// 读取文件的完整字节数据。
+  ///
+  /// OHOS 的 file_picker_ohos 原生端 `FileUtils.loadData` 只做单次 `readSync`
+  /// 且缓冲区固定 4096 字节，导致 `withData` 返回的 `bytes` 被截断，无法解码图片。
+  /// 插件同时会把源文件完整拷贝到缓存目录并返回 `path`，因此这里优先从磁盘
+  /// 重新读取完整内容；读取失败（如 iOS/Android 沙盒 path 不可访问）时回退到
+  /// 插件返回的 `bytes`，行为与修复前一致。
+  static Future<PickedFile> ensureFullBytes(PickedFile file) async {
+    final path = file.path;
+    if (path == null || path.isEmpty) return file;
+    try {
+      final fullBytes = await File(path).readAsBytes();
+      if (fullBytes.isEmpty) return file;
+      return PickedFile(
+        name: file.name,
+        bytes: fullBytes,
+        path: file.path,
+        extension: file.extension,
+        size: fullBytes.length,
+      );
+    } catch (_) {
+      // 读取失败时保留插件返回的 bytes，不阻塞流程
+      return file;
     }
   }
 

@@ -69,14 +69,31 @@ final remoteCategoriesSyncProvider = FutureProvider<void>((ref) async {
 ///
 /// 失败处理：网络失败静默忽略，UI 用本地缓存。
 /// 注意：不删除用户自定义模板（source='custom'），仅清理 source='remote' 的缓存。
+///
+/// 剪影 Bug 修复：meta 列表不含 5 段内容 JSON（pose/composition/camera/sceneGuide/postProcess），
+/// 直接用 metaToRecord 写入会覆盖之前已通过 remoteTemplateDetailProvider 拉取的详情数据。
+/// 修复方案：写入前检查本地是否已有非空的内容数据，如果有则保留，只更新 meta 字段。
 final remoteTemplatesSyncProvider = FutureProvider<void>((ref) async {
   final repo = await ref.watch(remoteTemplatesRepositoryProvider.future);
   final dao = await ref.watch(templatesDaoProvider.future);
   final resp = await repo.list();
-  // 阶段 1: upsert 远端 meta 到 sqflite（5 段 JSON 设为 '{}'，详情按需拉取）
+  // 阶段 1: upsert 远端 meta 到 sqflite
   for (final meta in resp.templates) {
-    final record = TemplateMapper.metaToRecord(meta);
-    await dao.upsert(record);
+    final metaRecord = TemplateMapper.metaToRecord(meta);
+    // 检查本地是否已有更完整的记录（已通过 remoteTemplateDetailProvider 拉取过详情）
+    final existing = await dao.getById(meta.id);
+    if (existing != null && existing.source == 'remote') {
+      // 保留已存在的 5 段内容数据，只更新 meta 字段
+      await dao.upsert(metaRecord.copyWith(
+        composition: existing.composition.isNotEmpty ? existing.composition : null,
+        pose: existing.pose.isNotEmpty ? existing.pose : null,
+        camera: existing.camera.isNotEmpty ? existing.camera : null,
+        sceneGuide: existing.sceneGuide.isNotEmpty ? existing.sceneGuide : null,
+        postProcess: existing.postProcess.isNotEmpty ? existing.postProcess : null,
+      ));
+    } else {
+      await dao.upsert(metaRecord);
+    }
   }
   // 阶段 2: 删除本地 source='remote' 但已不在后端列表的模板（已下架/已删除）
   final validIds = resp.templates.map((t) => t.id).toSet();

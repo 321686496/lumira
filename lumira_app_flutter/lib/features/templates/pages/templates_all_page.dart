@@ -40,6 +40,8 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   String? _selectedStyle;
   String? _selectedMethod;
   bool _showCustom = false;
+  /// v19: 当前一级分类名称（用于进入分类页后的标题展示）
+  String _selectedTypeName = '';
 
   @override
   void initState() {
@@ -83,6 +85,16 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     final customs = await dao.getCustomOnly();
     // v17: 仅加载一级分类用于概览页（level=1, parent_key IS NULL）
     final categories = await dao.getCategories(activeOnly: true, level: 1);
+    // v19: 根据当前选中的一级分类同步名称（标题展示用；选中动作时已同步，
+    // 此处兜底处理 scene/category 参数直接进入的情形）
+    if (_selectedType != null) {
+      for (final c in categories) {
+        if (c.key == _selectedType) {
+          _selectedTypeName = c.name;
+          break;
+        }
+      }
+    }
     // v17: 按当前选中状态加载二三级分类选项（级联筛选）
     final styleOptions = _selectedType != null
         ? await dao.getCategoriesByParent(_selectedType!)
@@ -139,10 +151,16 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
         _selectedStyle = null;
         _selectedMethod = null;
       } else if (layer == 1) {
-        _selectedStyle = (_selectedStyle == value) ? null : value;
+        // v19: value 为空串表示"全部"，选中时清除 style 筛选（_selectedStyle=null）
+        _selectedStyle = (value == null || value.isEmpty)
+            ? null
+            : ((_selectedStyle == value) ? null : value);
         _selectedMethod = null;
       } else {
-        _selectedMethod = (_selectedMethod == value) ? null : value;
+        // v19: 同 style，空串表示"全部"
+        _selectedMethod = (value == null || value.isEmpty)
+            ? null
+            : ((_selectedMethod == value) ? null : value);
       }
     });
   }
@@ -174,9 +192,11 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   }
 
   /// 选中某个一级分类，进入二级分类页面
-  void _selectCategory(String category) {
+  /// v19: 增加 name 参数，进入后标题直接显示一级分类名称
+  void _selectCategory(String category, String name) {
     setState(() {
       _selectedType = category;
+      _selectedTypeName = name;
       _selectedStyle = null;
       _selectedMethod = null;
     });
@@ -211,7 +231,11 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
             child: Column(
               children: [
                 LumiraNav(
-                  title: isOverview ? '模板库' : '全部模板',
+                  title: isOverview
+                      ? '模板库'
+                      : (_selectedTypeName.isNotEmpty
+                          ? _selectedTypeName
+                          : '全部模板'),
                   transparent: true,
                   leading: _BackButton(
                     tokens: tokens,
@@ -442,12 +466,17 @@ class _FilterSection extends StatelessWidget {
   Widget build(BuildContext context) {
     // 一级分类（Type pills）不再展示：用户从模板库概览页已选中一级分类进入，
     // 返回按钮可回到概览页切换。此处仅展示二三级级联筛选 + "我的" toggle。
-    final styleLabels = styleOptions
-        .map((c) => LabelValue(c.key, c.name))
-        .toList();
-    final methodLabels = methodOptions
-        .map((c) => LabelValue(c.key, c.name))
-        .toList();
+    // v19: 每个 tab 栏前插入"全部"项（value 为空串表示全部，选中态判定见 _PillRow）。
+    // 仅当该层存在真实分类时才插入"全部"；若该层分类为空（如二级分类下无三级分类），
+    // 整个 tab 栏隐藏，避免占位导致布局中间留空。
+    final styleLabels = <LabelValue>[
+      if (styleOptions.isNotEmpty) const LabelValue('', '全部'),
+      ...styleOptions.map((c) => LabelValue(c.key, c.name)),
+    ];
+    final methodLabels = <LabelValue>[
+      if (methodOptions.isNotEmpty) const LabelValue('', '全部'),
+      ...methodOptions.map((c) => LabelValue(c.key, c.name)),
+    ];
 
     return FadeUp(
       delay: const Duration(milliseconds: 80),
@@ -512,7 +541,10 @@ class _PillRow extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, index) {
           final opt = options[index];
-          final isSelected = selected == opt.value;
+          // v19: value 为空串表示"全部"项，选中态为当前无具体筛选（selected == null），
+          // 保证进入页面默认选中"全部"tab
+          final isSelected =
+              opt.value.isEmpty ? selected == null : selected == opt.value;
           return _Pill(
             tokens: tokens,
             label: opt.label,
@@ -1017,7 +1049,8 @@ class _CategoryOverview extends ConsumerWidget {
   final int allCount;
   final int unlockedCount;
   final Map<String, int> categoryCounts;
-  final void Function(String category) onSelectCategory;
+  /// v19: 回调传入 (key, name)，进入分类页后标题可直接显示分类名称
+  final void Function(String category, String name) onSelectCategory;
   /// 从 sqflite 加载的分类列表（v14 新增）
   final List<TemplateCategoryRecord> categories;
 
@@ -1092,7 +1125,7 @@ class _CategoryOverview extends ConsumerWidget {
         meta: meta,
         count: categoryCounts[cat.key] ?? 0,
         tokens: tokens,
-        onTap: () => onSelectCategory(cat.key),
+        onTap: () => onSelectCategory(cat.key, cat.name),
       );
       if (i % 2 == 0) {
         left.add(card);

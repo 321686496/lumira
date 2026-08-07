@@ -19,6 +19,7 @@ import '../../home/providers/banner_recommendation_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
+import '../../templates/data/remote_templates_providers.dart';
 import '../data/capture_state.dart';
 import '../data/capture_thumbnail_state.dart';
 import '../data/custom_fill_light_colors.dart';
@@ -130,6 +131,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
       _returnResult = mode == 'return';
       _requestCameraPermission();
       _loadLastPhotoForThumbnail();
+      // 异步按需加载远程模板详情（修复剪影不显示：列表同步仅缓存 meta，pose 为空）
+      _ensureRemoteTemplateDetail();
       // 异步加载持久化的自由模式参数（仅在自由模式生效，模板模式由 currentTemplateId 覆盖）
       CaptureState.loadFreeModeParams(
           ProviderScope.containerOf(context, listen: false));
@@ -203,6 +206,35 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
     } catch (e) {
       debugPrint('[capture] 加载套件失败: $e');
+    }
+  }
+
+  /// 异步按需加载远程模板完整详情。
+  ///
+  /// 修复剪影 Bug：模板列表同步（remoteTemplatesSyncProvider）时仅缓存 meta，
+  /// 5 段内容 JSON（pose 等）为空。若用户不经过详情页直接进入拍摄页，
+  /// originalTemplateProvider 从缓存取到的模板 pose 为空 → 剪影不显示。
+  /// 此方法在进入拍摄页时检查：remote 且 pose 为空 → 拉取详情并刷新模板缓存。
+  Future<void> _ensureRemoteTemplateDetail() async {
+    final id = widget.templateId;
+    if (id == null || id.isEmpty) return;
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final record = await dao.getById(id);
+      // 仅远程模板且 5 段内容未缓存时需拉取详情；系统/自定义模板或已有完整内容则跳过
+      if (record == null ||
+          record.source != 'remote' ||
+          record.pose.isNotEmpty) {
+        return;
+      }
+      await ref.read(remoteTemplateDetailProvider(id).future);
+      if (!mounted) return;
+      // 详情已写入 DAO，刷新 allTemplatesProvider 使 originalTemplateProvider 拿到完整数据
+      ref.invalidate(CaptureState.allTemplatesProvider);
+      debugPrint('[capture] 远程模板详情按需加载完成: $id');
+    } catch (e) {
+      // 网络失败等静默忽略，拍摄页降级为无剪影，不影响使用
+      debugPrint('[capture] 远程模板详情按需加载失败: $id, $e');
     }
   }
 
