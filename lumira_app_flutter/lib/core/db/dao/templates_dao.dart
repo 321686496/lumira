@@ -502,6 +502,17 @@ class TemplatesDao {
   /// - 后端分类同步时 upsert 到本地
   Future<void> upsertCategory(TemplateCategoryRecord record) async {
     await _db.transaction((txn) async {
+      // 防御性清理：插入 level>1 分类时，删除可能存在的 corrupted level=1 记录
+      // （key 相同但 level=1 且 parent_key IS NULL），避免概览页出现二级分类。
+      // 与 v19 迁移逻辑配合，防止远程同步重新引入 corrupted 数据。
+      if (record.level > 1) {
+        await txn.delete(
+          Tables.templateCategories,
+          where:
+              '${Tables.colKey} = ? AND ${Tables.colLevel} = 1 AND ${Tables.colParentKey} IS NULL',
+          whereArgs: [record.key],
+        );
+      }
       if (record.parentKey == null) {
         await txn.delete(
           Tables.templateCategories,

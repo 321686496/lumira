@@ -18,7 +18,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 17;
+const int _kDbVersion = 19;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -698,6 +698,97 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       debugPrint('v17 migration failed (silent fallback): $e');
     }
   }
+  if (oldVersion < 18) {
+    try {
+      // v18: 修复分类数据 corrupted 状态（与后端 006_fix_category_duplicates.sql 对齐）
+      //
+      // 问题：
+      //   1. Flutter schema 的 UNIQUE(key, parent_key) 对 NULL parent_key 不生效
+      //      （SQLite 将 NULL 视为互不相同），导致 seedCategories 的
+      //      ConflictAlgorithm.replace 不触发，每次调用累积重复一级分类。
+      //   2. 可能存在 level 与 parent_key 不一致的 corrupted 记录
+      //      （如 level=2/3 但 parent_key IS NULL，被 getCategories(level:1)
+      //      误返回为一级分类显示在概览页）。
+      //
+      // 修复：
+      //   1. 删除 level 与 parent_key 不一致的记录
+      //   2. 清理重复一级分类（每个 key+parent_key 仅保留 MIN(id)）
+      //   3. 新增 NULL 安全唯一索引 (key, COALESCE(parent_key, ''))
+      //      使后续 INSERT OR IGNORE 对一级分类同样幂等
+      await _fixCategoryData(db);
+    } catch (e) {
+      debugPrint('v18 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 19) {
+    try {
+      // v19: 删除被误标为一级的二级/三级分类记录
+      //
+      // v18 遗留问题：v18 的去重按 (key, IFNULL(parent_key, '')) 分组保留 MIN(id)，
+      // 但无法捕获以下 corrupted 场景：
+      //   - key='japanese', level=1, parent_key=NULL（被误标为一级）
+      //   - key='japanese', level=2, parent_key='portrait'（正确的二级分类）
+      // 两条记录的 (key, parent_key) 分组不同（('japanese','') vs ('japanese','portrait')），
+      // v18 去重后两者均存活。getCategories(level:1) 查询 level=1 AND parent_key IS NULL
+      // 会返回 corrupted 的 'japanese' 一级记录，导致概览页出现二级分类。
+      //
+      // 修复：删除 level=1 且 parent_key IS NULL 且 key 存在于 level>1 记录中的记录。
+      // 安全性：7 个合法一级 key（portrait/landscape/food/street/night/macro/still-life）
+      // 均不出现在 level>1 的 seed 数据中，因此只会删除 corrupted 记录。
+      await db.execute('''
+        DELETE FROM ${Tables.templateCategories}
+        WHERE ${Tables.colLevel} = 1
+          AND ${Tables.colParentKey} IS NULL
+          AND ${Tables.colKey} IN (
+            SELECT ${Tables.colKey}
+            FROM ${Tables.templateCategories}
+            WHERE ${Tables.colLevel} > 1
+          )
+      ''');
+    } catch (e) {
+      debugPrint('v19 migration failed (silent fallback): $e');
+    }
+  }
+}
+
+/// 修复 template_categories 表中的 corrupted 数据（v18 迁移）。
+///
+/// 1. 删除 level 与 parent_key 不一致的记录：
+///    - level=1 但 parent_key NOT NULL → 应为 NULL
+///    - level>1 但 parent_key IS NULL → 应有父分类
+/// 2. 清理重复记录（每个 key+COALESCE(parent_key,'') 仅保留 MIN(id)）
+/// 3. 创建 NULL 安全唯一索引
+Future<void> _fixCategoryData(Database db) async {
+  // 1. 删除 level 与 parent_key 不一致的 corrupted 记录
+  // level>1 但 parent_key IS NULL：这些是被误标为一级的二级/三级分类
+  await db.execute('''
+    DELETE FROM ${Tables.templateCategories}
+    WHERE ${Tables.colLevel} > 1 AND ${Tables.colParentKey} IS NULL
+  ''');
+  // level=1 但 parent_key NOT NULL：这些是被误标为一级但有父分类的记录
+  await db.execute('''
+    DELETE FROM ${Tables.templateCategories}
+    WHERE ${Tables.colLevel} = 1 AND ${Tables.colParentKey} IS NOT NULL
+  ''');
+
+  // 2. 清理重复记录（每个 key+COALESCE(parent_key,'') 仅保留 MIN(id)）
+  //    与后端 006_fix_category_duplicates.sql 逻辑一致
+  await db.execute('''
+    DELETE FROM ${Tables.templateCategories}
+    WHERE ${Tables.colId} NOT IN (
+      SELECT MIN(${Tables.colId})
+      FROM ${Tables.templateCategories}
+      GROUP BY ${Tables.colKey}, IFNULL(${Tables.colParentKey}, '')
+    )
+  ''');
+
+  // 3. NULL 安全唯一索引（COALESCE 将 NULL 归一为 ''，使唯一约束对一级分类生效）
+  //    sqflite 不支持 COALESCE 在 CREATE UNIQUE INDEX 中直接使用，
+  //    故用计算列方式创建表达式索引
+  await db.execute('''
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_category_key_parent_null_safe
+    ON ${Tables.templateCategories}(${Tables.colKey}, IFNULL(${Tables.colParentKey}, ''))
+  ''');
 }
 
 /// 安全添加列：若列已存在则跳过（迁移幂等）

@@ -243,6 +243,12 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         }
       }
       final loaded = TemplateMapper.toEditorForm(record);
+      // 调试日志：追踪封面图和剪影数据加载
+      debugPrint('[Editor] Load from DAO: id=${record.id}, source=${record.source}');
+      debugPrint('[Editor]   coverData: ${record.coverData != null ? '${record.coverData!.length} chars' : 'null'}');
+      debugPrint('[Editor]   coverImage in form: ${loaded.meta.coverImage != null ? '${loaded.meta.coverImage!.length} chars' : 'null'}');
+      final sil = loaded.pose.silhouette;
+      debugPrint('[Editor]   silhouette: type=${sil.type}, data=${sil.data.isNotEmpty ? '${sil.data.length} chars' : 'empty'}');
       if (!mounted) return;
       setState(() {
         _form = loaded;
@@ -579,6 +585,12 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       id: id,
       createdAt: createdAt,
     ).copyWith(updatedAt: now);
+
+    // 调试日志：追踪封面图和剪影数据保存
+    debugPrint('[Editor] Save: id=$id');
+    debugPrint('[Editor]   coverImage in form: ${_form.meta.coverImage != null ? '${_form.meta.coverImage!.length} chars' : 'null'}');
+    debugPrint('[Editor]   coverData in record: ${record.coverData != null ? '${record.coverData!.length} chars' : 'null'}');
+    debugPrint('[Editor]   silhouette: type=${_form.pose.silhouette.type}, data=${_form.pose.silhouette.data.isNotEmpty ? '${_form.pose.silhouette.data.length} chars' : 'empty'}');
 
     try {
       final dao = await ref.read(templatesDaoProvider.future);
@@ -1413,8 +1425,10 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
                       base64Decode(
                           cover.substring(cover.indexOf(',') + 1)),
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, _) => _CoverPlaceholder(
-                          tokens: tokens),
+                      errorBuilder: (context, error, _) {
+                        debugPrint('[Editor] Cover image decode error: $error');
+                        return _CoverPlaceholder(tokens: tokens);
+                      },
                     )
                   : _CoverPlaceholder(tokens: tokens),
             ),

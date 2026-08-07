@@ -94,30 +94,37 @@ class PoseSilhouette extends StatelessWidget {
         }
         if (silhouetteData.startsWith('http://') ||
             silhouetteData.startsWith('https://')) {
+          // 修复：不传 color 参数。color + 默认 BlendMode.srcIn 会将所有像素
+          // 替换为单一颜色，导致导入的照片显示为纯色块而非实际图像。
           return Image.network(
             silhouetteData,
             width: 80,
             height: 80,
-            color: effectiveColor,
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Icon(
-              Icons.broken_image_outlined,
-              color: effectiveColor,
-              size: 80,
-            ),
+            errorBuilder: (_, error, ___) {
+              debugPrint('[PoseSilhouette] Network image error: $error');
+              return Icon(
+                Icons.broken_image_outlined,
+                color: effectiveColor,
+                size: 80,
+              );
+            },
           );
         }
+        // 修复：同上，移除 color 参数以正确显示原始图像。
         return Image.memory(
           _decodeBase64DataUrl(silhouetteData),
           width: 80,
           height: 80,
-          color: effectiveColor,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Icon(
-            Icons.broken_image_outlined,
-            color: effectiveColor,
-            size: 80,
-          ),
+          errorBuilder: (_, error, ___) {
+            debugPrint('[PoseSilhouette] Memory image decode error: $error');
+            return Icon(
+              Icons.broken_image_outlined,
+              color: effectiveColor,
+              size: 80,
+            );
+          },
         );
 
       case 'svg':
