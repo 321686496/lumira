@@ -1,3 +1,4 @@
+import 'dart:async' show Completer;
 import 'dart:io' show File, stderr;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
@@ -30,6 +31,8 @@ import '../services/camera_service_provider.dart';
 import '../services/dart_photo_pipeline.dart'
     show applyPerPixelEffectsImg, applySmoothSkinImg, applyVignetteImg;
 import '../watermark/data/watermark_providers.dart';
+import '../watermark/models/watermark_template.dart';
+import '../watermark/widgets/watermark_animation_overlay.dart';
 import '../widgets/aspect_ratio_selector.dart';
 import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
@@ -122,6 +125,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 在 didChangeDependencies（element 仍 active）中缓存 container 引用，
   /// dispose 时通过引用直接操作 provider，绕过 widget 树查询。
   ProviderContainer? _container;
+
+  /// 水印相框动画状态：拍照完成且水印 + 动画开关均开启时挂载 overlay。
+  bool _showWatermarkAnimation = false;
+  String? _animationPhotoPath;
+  WatermarkTemplate? _animationTemplate;
+  Rect _animationTargetRect = Rect.zero;
+  VoidCallback? _onAnimationComplete;
+
+  /// 角标缩略图的 GlobalKey：水印动画 Phase 4 需要
+  /// 读取其在屏幕上的全局 Rect 作为缩小/平移的目标位置。
+  final _thumbnailKey = GlobalKey(debugLabel: 'watermarkThumb');
 
   @override
   void initState() {
@@ -548,6 +562,31 @@ class _CapturePageState extends ConsumerState<CapturePage>
         debugPrint('[capture] 落库失败: $e');
       }
 
+      // === 水印相框入场动画 ===
+      // 仅在总开关 + 动画开关均开启且有水印模板时播放；
+      // 复用前面已读取的 watermarkSettings / watermarkTemplate 变量，避免重复 read。
+      // 动画完成后（onAnimationComplete 回调）才继续更新角标缩略图，
+      // 保证"照片飞入角标"的视觉效果与角标刷新同步。
+      final shouldAnimate = watermarkSettings.enabled &&
+          watermarkSettings.animationEnabled &&
+          watermarkTemplate != null;
+      if (shouldAnimate && mounted) {
+        final completer = Completer<void>();
+        setState(() {
+          _showWatermarkAnimation = true;
+          _animationPhotoPath = finalPath;
+          _animationTemplate = watermarkTemplate;
+          _animationTargetRect = _getThumbnailGlobalRect();
+        });
+        _onAnimationComplete = () {
+          if (mounted) {
+            setState(() => _showWatermarkAnimation = false);
+          }
+          completer.complete();
+        };
+        await completer.future;
+      }
+
       ref.read(captureThumbnailProvider.notifier)
           .setFinalResult(finalPath, photoId);
       ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
@@ -561,6 +600,26 @@ class _CapturePageState extends ConsumerState<CapturePage>
         _processCaptureQueueItem();
       }
     }
+  }
+
+  /// 读取角标缩略图在屏幕上的全局 Rect。
+  ///
+  /// 用于水印动画 Phase 4（缩小 + 平移到角标位置）。当 GlobalKey
+  /// 尚未挂载或 RenderBox 还没测量时，回退到一个合理的左下角矩形。
+  Rect _getThumbnailGlobalRect() {
+    final ctx = _thumbnailKey.currentContext;
+    if (ctx == null) return const Rect.fromLTWH(24, 0, 48, 48);
+    final renderBox = ctx.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) {
+      return const Rect.fromLTWH(24, 0, 48, 48);
+    }
+    final position = renderBox.localToGlobal(Offset.zero);
+    return Rect.fromLTWH(
+      position.dx,
+      position.dy,
+      renderBox.size.width,
+      renderBox.size.height,
+    );
   }
 
   /// 切换摄像头：仅切换 `cameraFacingProvider` 状态。
@@ -803,6 +862,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
               onSwitchCamera: _switchCamera,
               onThumbnailTap: _onThumbnailTap,
               rawCaptureKey: _viewfinderCaptureKey,
+              thumbnailKey: _thumbnailKey,
             ),
           ),
 
@@ -816,6 +876,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
           Positioned.fill(
             child: ShutterFeedback(trigger: _shutterTrigger),
           ),
+
+          // 9. 水印相框动画 overlay（最顶层，IgnorePointer 不拦截手势）
+          if (_showWatermarkAnimation &&
+              _animationPhotoPath != null &&
+              _animationTemplate != null)
+            Positioned.fill(
+              child: WatermarkAnimationOverlay(
+                key: const ValueKey('watermark_anim'),
+                photoPath: _animationPhotoPath!,
+                watermarkTemplate: _animationTemplate!,
+                targetRect: _animationTargetRect,
+                onAnimationComplete: _onAnimationComplete ?? () {},
+              ),
+            ),
         ],
       ),
     );
@@ -1074,6 +1148,7 @@ class _BottomControlArea extends StatelessWidget {
     required this.onSwitchCamera,
     required this.onThumbnailTap,
     this.rawCaptureKey,
+    this.thumbnailKey,
   });
 
   final bool isFullscreen;
@@ -1082,6 +1157,7 @@ class _BottomControlArea extends StatelessWidget {
   final VoidCallback onSwitchCamera;
   final VoidCallback onThumbnailTap;
   final GlobalKey? rawCaptureKey;
+  final GlobalKey? thumbnailKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1116,6 +1192,7 @@ class _BottomControlArea extends StatelessWidget {
               onCapture: onCapture,
               onSwitchCamera: onSwitchCamera,
               onThumbnailTap: onThumbnailTap,
+              thumbnailKey: thumbnailKey,
             ),
           ],
         ),
@@ -2311,11 +2388,13 @@ class _CaptureButtonRow extends ConsumerWidget {
     required this.onCapture,
     required this.onSwitchCamera,
     required this.onThumbnailTap,
+    this.thumbnailKey,
   });
 
   final VoidCallback onCapture;
   final VoidCallback onSwitchCamera;
   final VoidCallback onThumbnailTap;
+  final GlobalKey? thumbnailKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2325,7 +2404,8 @@ class _CaptureButtonRow extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           // 角标缩略图（左）：四态状态机驱动（idle/processing/preview/final）
-          CaptureThumbnail(onTap: onThumbnailTap),
+          // thumbnailKey：水印动画 Phase 4 通过此 key 读取角标全局 Rect
+          CaptureThumbnail(key: thumbnailKey, onTap: onThumbnailTap),
           // 拍摄按钮（中）
           CaptureButton(onTap: onCapture),
           // 翻转摄像头（右）

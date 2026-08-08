@@ -73,6 +73,10 @@ class Tables {
   static const String colFreeModePostProcess = 'free_mode_post_process';
   static const String colFreeModeComposition = 'free_mode_composition';
 
+  // === user_settings 扩展列（v21 迁移新增，水印设置持久化） ===
+  // 存储 WatermarkSettings.toJson() 的 JSON 字符串
+  static const String colWatermarkSettings = 'watermark_settings';
+
   // === composition_kits 表（M2 用，v4 迁移同步创建） ===
   // 注：colSceneId / colTemplateId 复用 gallery_items 段已声明的同名常量
   static const String compositionKits = 'composition_kits';
