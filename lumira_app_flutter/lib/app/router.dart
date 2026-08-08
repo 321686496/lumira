@@ -10,6 +10,8 @@ import '../features/capture/pages/capture_preview_template_page.dart';
 import '../features/capture/pages/capture_scene_detail_page.dart';
 import '../features/capture/pages/capture_scene_guide_page.dart';
 import '../features/capture/pages/capture_scene_manage_page.dart';
+import '../features/capture/watermark/pages/watermark_editor_page.dart';
+import '../features/capture/watermark/pages/watermark_manage_page.dart';
 import '../features/challenge/pages/challenge_complete_page.dart';
 import '../features/challenge/pages/challenge_confirm_page.dart';
 import '../features/challenge/pages/challenge_detail_page.dart';
@@ -63,6 +65,7 @@ import '../features/templates/pages/templates_editor_page.dart';
 import '../features/templates/pages/templates_page.dart';
 import '../features/templates/pages/templates_recommend_page.dart';
 import '../features/templates/pages/templates_unlock_page.dart';
+import '../features/templates/pages/export_detail_page.dart';
 
 /// GoRouter Provider
 /// 34 个路由与 uni-app pages.json 1:1 对应
@@ -213,6 +216,20 @@ final routerProvider = Provider<GoRouter>((ref) {
           return TemplatesAllPage(scene: scene, category: category);
         },
       ),
+      GoRoute(
+        path: RouteNames.templatesExportDetail,
+        name: 'templatesExportDetail',
+        builder: (context, state) {
+          final filePath = state.queryParams['filePath'] ?? '';
+          final templateName = state.queryParams['templateName'] ?? '';
+          final usePptpl = state.queryParams['usePptpl'] == 'true';
+          return ExportDetailPage(
+            filePath: filePath,
+            templateName: templateName,
+            usePptpl: usePptpl,
+          );
+        },
+      ),
 
       // === 挑战 ===
       GoRoute(
@@ -225,7 +242,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'challengeDetail',
         builder: (context, state) {
           final challengeId = state.queryParams[RouteNames.paramChallengeId];
-          return ChallengeDetailPage(challengeId: challengeId);
+          final date = state.queryParams[RouteNames.paramDate];
+          return ChallengeDetailPage(challengeId: challengeId, date: date);
         },
       ),
       GoRoute(
@@ -348,6 +366,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileSettingsTheme,
         name: 'profileSettingsTheme',
         builder: (context, state) => const ProfileThemePage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileSettingsWatermark,
+        name: 'profileSettingsWatermark',
+        builder: (context, state) => const WatermarkManagePage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileSettingsWatermarkEdit,
+        name: 'profileSettingsWatermarkEdit',
+        builder: (context, state) {
+          final templateId =
+              state.queryParams[RouteNames.paramTemplateId];
+          return WatermarkEditorPage(templateId: templateId);
+        },
       ),
       GoRoute(
         path: RouteNames.profileGrowth,
