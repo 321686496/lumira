@@ -226,8 +226,8 @@ export default function PhonePreview(props: PhonePreviewProps) {
                   style={{
                     left: `${positionX * 100}%`,
                     top: `${positionY * 100}%`,
-                    width: '20.36%',
-                    aspectRatio: '1/1',
+                    width: '40%',
+                    aspectRatio: '1 / 1.6',
                     transform: `translate(-50%, -50%) scale(${scale}) rotate(${rotation}deg)`,
                   }}
                 >
