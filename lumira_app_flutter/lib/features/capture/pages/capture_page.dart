@@ -162,6 +162,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
       ref.invalidate(remoteTemplatesSyncProvider);
       ref.invalidate(remoteCategoriesSyncProvider);
     });
+    // 从 DB 异步加载水印设置 + 自定义模板到 provider（非阻塞）。
+    // 修复：原仅在设置页 initState 加载，用户直奔拍摄页时水印设置/自定义模板为空。
+    Future.microtask(() {
+      final container = ProviderScope.containerOf(context, listen: false);
+      loadWatermarkSettings(container);
+      loadCustomWatermarks(container);
+    });
   }
 
   @override

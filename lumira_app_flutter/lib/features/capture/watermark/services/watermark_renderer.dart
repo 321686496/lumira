@@ -57,6 +57,7 @@ class WatermarkRenderer {
     final byteData = await outputImage.toByteData(
       format: ui.ImageByteFormat.rawRgba,
     );
+    outputImage.dispose();
     if (byteData == null) {
       throw StateError('WatermarkRenderer: failed to encode output image');
     }

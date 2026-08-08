@@ -30,19 +30,35 @@ final presetWatermarksProvider = Provider<List<WatermarkTemplate>>((ref) {
   return getPresetWatermarks();
 });
 
+/// 自定义水印模板内存缓存。
+///
+/// 编辑页保存的自定义模板先写入 DAO 再同步追加到此 provider，使
+/// [currentWatermarkTemplateProvider] 能在内存中查到刚保存的自定义模板
+/// 而无需等待下次启动重新加载。启动时由 [loadCustomWatermarks] 从 DAO 填充。
+final customWatermarksProvider =
+    StateProvider<List<WatermarkTemplate>>((ref) {
+  return [];
+});
+
 /// 当前选中的水印模板（设置未启用 / 无选中模板 / 选中 id 不存在时返回 null）。
 ///
-/// 当前仅查预置模板；后续自定义模板表接入后，可在此 Provider 内
-/// 优先查 DAO，未命中再 fallback 预置列表。
+/// 优先查预置模板 [presetWatermarksProvider]，未命中再查自定义模板缓存
+/// [customWatermarksProvider]，仍找不到返回 null。
 final currentWatermarkTemplateProvider = Provider<WatermarkTemplate?>((ref) {
   final settings = ref.watch(watermarkSettingsProvider);
   if (!settings.enabled || settings.activeTemplateId == null) return null;
+  final id = settings.activeTemplateId!;
+  // Check presets first
   final presets = ref.watch(presetWatermarksProvider);
-  try {
-    return presets.firstWhere((t) => t.id == settings.activeTemplateId);
-  } catch (_) {
-    return null;
+  for (final t in presets) {
+    if (t.id == id) return t;
   }
+  // Then check custom templates cache
+  final customs = ref.watch(customWatermarksProvider);
+  for (final t in customs) {
+    if (t.id == id) return t;
+  }
+  return null;
 });
 
 /// 水印设置防抖持久化 Timer（500ms 内多次变更只写一次）。
@@ -50,7 +66,8 @@ Timer? _watermarkPersistTimer;
 
 /// 从 DAO 加载水印设置到 [watermarkSettingsProvider]。
 ///
-/// 在设置页 initState 中通过 `Future.microtask(() => loadWatermarkSettings(ref.container))`
+/// 在设置页 / 拍摄页 initState 中通过
+/// `Future.microtask(() => loadWatermarkSettings(ProviderScope.containerOf(context, listen: false)))`
 /// 调用，避免在 build 阶段同步触发 provider 写入。加载失败静默回退到默认值。
 Future<void> loadWatermarkSettings(ProviderContainer container) async {
   try {
@@ -61,6 +78,21 @@ Future<void> loadWatermarkSettings(ProviderContainer container) async {
     }
   } catch (e) {
     debugPrint('[watermark] load settings failed: $e');
+  }
+}
+
+/// 从 DAO 加载所有自定义水印模板到 [customWatermarksProvider]。
+///
+/// 在 app 启动（拍摄页 / 设置页 initState）时调用，使
+/// [currentWatermarkTemplateProvider] 能在内存中查到用户已保存的自定义模板。
+/// 加载失败静默回退到空列表。
+Future<void> loadCustomWatermarks(ProviderContainer container) async {
+  try {
+    final dao = await container.read(watermarkDaoProvider.future);
+    final templates = await dao.getAll();
+    container.read(customWatermarksProvider.notifier).state = templates;
+  } catch (e) {
+    debugPrint('[watermark] load custom watermarks failed: $e');
   }
 }
 

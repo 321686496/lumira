@@ -153,44 +153,151 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
               ),
 
               // 水印文本元素（Phase 2 淡入，与照片同步缩放/平移）
+              // 使用 CustomPaint + 自定义 Painter 复刻 WatermarkRenderer 的
+              // 绘制逻辑（textAlign X 偏移 / Y 偏移 / 旋转 / letterSpacing /
+              // shadow），确保动画 overlay 与最终渲染水印视觉一致。
               if (watermarkOpacity > 0)
-                ...widget.watermarkTemplate.elements.map((element) {
-                  if (element.type != WatermarkElementType.text ||
-                      element.text.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return Positioned(
-                    left: element.x * screenSize.width,
-                    top: element.y * screenSize.height,
-                    child: Transform.translate(
-                      offset: Offset(dx, dy),
-                      child: Transform.scale(
-                        scale: scale * (0.8 + 0.2 * watermarkOpacity),
-                        child: Opacity(
-                          opacity: watermarkOpacity * element.opacity,
-                          child: Text(
-                            element.text,
-                            style: TextStyle(
-                              color: element.color,
-                              fontSize: element.fontSize * screenSize.width,
-                              fontWeight: element.bold
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              fontStyle: element.italic
-                                  ? FontStyle.italic
-                                  : FontStyle.normal,
-                              decoration: TextDecoration.none,
-                            ),
-                          ),
-                        ),
-                      ),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _WatermarkOverlayPainter(
+                      template: widget.watermarkTemplate,
+                      screenSize: screenSize,
+                      opacity: watermarkOpacity,
+                      scale: scale * (0.8 + 0.2 * watermarkOpacity),
+                      translate: Offset(dx, dy),
                     ),
-                  );
-                }),
+                  ),
+                ),
             ],
           ),
         );
       },
     );
+  }
+}
+
+/// 水印动画 overlay 专用 Painter：复刻 [WatermarkRenderer._drawTextElement]
+/// 的绘制约定，使动画中显示的水印与最终渲染到照片上的水印视觉一致。
+///
+/// 关键约定（与渲染器对齐）：
+/// - absoluteFontSize = element.fontSize * screenSize.width
+/// - anchorX = element.x * screenSize.width, anchorY = element.y * screenSize.height
+/// - textAlign 偏移：left=0 / center=-width/2 / right=-width
+/// - Y 偏移：-textHeight * 0.85
+/// - letterSpacing: element.letterSpacing * (screenSize.width / 400)
+/// - shadow: blurRadius=(absFontSize*0.08).clamp(0.5,8.0),
+///           offset=(blurRadius*0.4, blurRadius*0.4)
+///
+/// overlay 自身应用 opacity / scale / translate 变换（与照片同步缩放平移）。
+class _WatermarkOverlayPainter extends CustomPainter {
+  _WatermarkOverlayPainter({
+    required this.template,
+    required this.screenSize,
+    required this.opacity,
+    required this.scale,
+    required this.translate,
+  });
+
+  static const double _referenceWidth = 400.0;
+
+  final WatermarkTemplate template;
+  final Size screenSize;
+  final double opacity;
+  final double scale;
+  final Offset translate;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // overlay 画布尺寸 = screenSize，元素坐标基于 screenSize 缩放
+    final scaleRef = screenSize.width / _referenceWidth;
+
+    canvas.save();
+    // 应用与照片同步的平移 + 缩放变换
+    canvas.translate(translate.dx, translate.dy);
+    canvas.scale(scale);
+
+    for (final element in template.elements) {
+      if (element.type == WatermarkElementType.image) continue;
+      if (element.text.isEmpty) continue;
+      _drawTextElement(canvas, element, scaleRef);
+    }
+
+    canvas.restore();
+  }
+
+  void _drawTextElement(
+    Canvas canvas,
+    WatermarkElement element,
+    double scaleRef,
+  ) {
+    final absoluteFontSize = element.fontSize * screenSize.width;
+    final blurRadius = (absoluteFontSize * 0.08).clamp(0.5, 8.0);
+
+    final textStyle = TextStyle(
+      color: _withOpacity(element.color, element.opacity * opacity),
+      fontSize: absoluteFontSize,
+      fontWeight: element.bold ? FontWeight.bold : FontWeight.normal,
+      fontStyle: element.italic ? FontStyle.italic : FontStyle.normal,
+      fontFamily: element.fontFamily.isEmpty ? null : element.fontFamily,
+      letterSpacing: element.letterSpacing * scaleRef,
+      shadows: [
+        ui.Shadow(
+          color: _withOpacity(element.shadowColor, element.opacity * opacity),
+          blurRadius: blurRadius,
+          offset: ui.Offset(blurRadius * 0.4, blurRadius * 0.4),
+        ),
+      ],
+    );
+
+    final painter = TextPainter(
+      text: TextSpan(text: element.text, style: textStyle),
+      textAlign: element.textAlign,
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final anchorX = element.x * screenSize.width;
+    final anchorY = element.y * screenSize.height;
+
+    double offsetX;
+    switch (element.textAlign) {
+      case TextAlign.right:
+        offsetX = -painter.width;
+        break;
+      case TextAlign.center:
+        offsetX = -painter.width / 2;
+        break;
+      case TextAlign.left:
+      case TextAlign.justify:
+      case TextAlign.start:
+      case TextAlign.end:
+      default:
+        offsetX = 0.0;
+    }
+    // 与渲染器一致：y 锚点视为文本基线顶部偏上，使视觉位置贴合
+    final offsetY = -painter.height * 0.85;
+
+    canvas.save();
+    canvas.translate(anchorX, anchorY);
+    if (element.rotation != 0.0) {
+      canvas.rotate(element.rotation);
+    }
+    canvas.translate(offsetX, offsetY);
+    painter.paint(canvas, ui.Offset.zero);
+    canvas.restore();
+  }
+
+  /// 将 [color] 的 alpha 通道乘以 [opacity]（0.0~1.0），返回带透明度的颜色。
+  ui.Color _withOpacity(ui.Color color, double opacity) {
+    if (opacity >= 1.0) return color;
+    final clamped = opacity.clamp(0.0, 1.0);
+    final alpha = (color.alpha * clamped).round();
+    return ui.Color.fromARGB(alpha, color.red, color.green, color.blue);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WatermarkOverlayPainter oldDelegate) {
+    // 与预览 painter 一致：元素属性为可变对象就地修改，无法靠引用相等判断；
+    // 始终重绘以保证动画过程中元素变化即时反映。
+    return true;
   }
 }
