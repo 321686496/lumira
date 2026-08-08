@@ -7,8 +7,10 @@ import {
   redemptionCodes,
   redemptionCodeBatches,
   redemptionRecords,
-  rewardUnlocks,
-  rewardTiers,
+  ownedTemplates,
+  templates,
+  userPoints,
+  pointTransactions,
 } from '../../database/schema';
 
 @Injectable()
@@ -79,29 +81,37 @@ export class RedeemService {
       throw new ConflictException('Daily redemption limit reached');
     }
 
-    // 8. 查找奖励阶梯（read，在事务前执行）
-    const tier = await db.query.rewardTiers.findFirst({
-      where: eq(rewardTiers.tier, batch.rewardTier),
-    });
+    // 8. 解析批次奖励配置
+    const rewardTemplatesList: string[] = JSON.parse(batch.rewardTemplates || '[]');
+    const rewardPoints = batch.rewardPoints;
 
-    // 9-12. 事务写入：4 个写操作必须原子化，任一失败则全部回滚。
-    // Note: better-sqlite3 transaction callbacks must be synchronous (no async/await),
-    // so we use the synchronous .run() method on the QueryPromise instead of awaiting.
-    // Pattern mirrors admin.service.ts:createBatch.
+    // 9. 查询奖励模板名称（在事务前执行 read）
+    let templateNames: Map<string, string> = new Map();
+    if (rewardTemplatesList.length > 0) {
+      const templateRows = await db.select({
+        id: templates.id,
+        name: templates.name,
+      })
+        .from(templates)
+        .where(and(...rewardTemplatesList.map((tid) => eq(templates.id, tid))));
+      templateNames = new Map(templateRows.map((t) => [t.id, t.name]));
+    }
+
+    // 10-13. 事务写入：所有写操作必须原子化
     db.transaction((tx) => {
-      // 9. 增加码使用次数
+      // 10. 增加码使用次数
       tx.update(redemptionCodes)
         .set({ usedCount: codeRecord.usedCount + 1 })
         .where(eq(redemptionCodes.code, code))
         .run();
 
-      // 10. 更新批次总使用量
+      // 11. 更新批次总使用量
       tx.update(redemptionCodeBatches)
         .set({ totalUsed: batch.totalUsed + 1 })
         .where(eq(redemptionCodeBatches.batchId, batch.batchId))
         .run();
 
-      // 11. 写入兑换记录
+      // 12. 写入兑换记录
       tx.insert(redemptionRecords).values({
         code,
         deviceId,
@@ -109,22 +119,79 @@ export class RedeemService {
         ipAddress: ip,
       }).run();
 
-      // 12. 解锁奖励
-      tx.insert(rewardUnlocks).values({
-        deviceId,
-        tier: batch.rewardTier,
-        source: 'redemption',
-        sourceDetail: code,
-        status: 'unlocked',
-        unlockedAt: now,
-      }).run();
+      // 13. 发放积分（直接操作 userPoints 和 pointTransactions）
+      if (rewardPoints > 0) {
+        const existingPoints = tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)).all() as Array<{
+          deviceId: string;
+          balance: number;
+          totalEarned: number;
+          totalSpent: number;
+          updatedAt: number;
+        }>;
+        tx.insert(pointTransactions).values({
+          deviceId,
+          delta: rewardPoints,
+          type: 'redeem_code',
+          refId: code,
+          createdAt: now,
+        }).run();
+        if (existingPoints.length > 0) {
+          tx.update(userPoints)
+            .set({
+              balance: existingPoints[0].balance + rewardPoints,
+              totalEarned: existingPoints[0].totalEarned + rewardPoints,
+              updatedAt: now,
+            })
+            .where(eq(userPoints.deviceId, deviceId))
+            .run();
+        } else {
+          tx.insert(userPoints).values({
+            deviceId,
+            balance: rewardPoints,
+            totalEarned: rewardPoints,
+            totalSpent: 0,
+            updatedAt: now,
+          }).run();
+        }
+      }
+
+      // 14. 发放模板所有权
+      for (const templateId of rewardTemplatesList) {
+        const existing = tx.select({ id: ownedTemplates.id })
+          .from(ownedTemplates)
+          .where(and(
+            eq(ownedTemplates.deviceId, deviceId),
+            eq(ownedTemplates.templateId, templateId),
+          ))
+          .all();
+        if (existing.length === 0) {
+          tx.insert(ownedTemplates).values({
+            deviceId,
+            templateId,
+            source: 'redemption',
+            sourceDetail: code,
+            unlockedAt: now,
+          }).run();
+        }
+      }
     });
+
+    // 15. 查询当前积分余额
+    const balanceRows = await db.select({ balance: userPoints.balance })
+      .from(userPoints)
+      .where(eq(userPoints.deviceId, deviceId));
+    const balance = balanceRows[0]?.balance ?? 0;
+    const rewardTemplateInfo = rewardTemplatesList.map((tid) => ({
+      templateId: tid,
+      templateName: templateNames.get(tid) ?? '未知模板',
+    }));
 
     return {
       batchId: batch.batchId,
       campaignName: batch.campaignName,
-      rewardTier: batch.rewardTier,
-      rewardItems: tier ? JSON.parse(tier.rewardsJson) : [],
+      rewardPoints,
+      balance,
+      rewardTemplates: rewardTemplateInfo,
     };
   }
 }

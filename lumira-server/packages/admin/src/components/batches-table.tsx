@@ -1,4 +1,3 @@
-// src/components/batches-table.tsx
 import Link from 'next/link';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -10,6 +9,22 @@ import { formatUnixTime } from '@/lib/utils';
 import { Eye } from '@phosphor-icons/react/dist/ssr';
 import type { Batch } from '@/types/admin';
 
+function renderRewardInfo(b: Batch): string {
+  const parts: string[] = [];
+  if (b.rewardPoints > 0) {
+    parts.push(`${b.rewardPoints} 积分`);
+  }
+  let templateCount = 0;
+  try {
+    const tpls = JSON.parse(b.rewardTemplates);
+    if (Array.isArray(tpls)) templateCount = tpls.length;
+  } catch {}
+  if (templateCount > 0) {
+    parts.push(`${templateCount} 个模板`);
+  }
+  return parts.length > 0 ? parts.join(' + ') : '无奖励';
+}
+
 export function BatchesTable({ batches }: { batches: Batch[] }) {
   return (
     <div className="rounded-md border border-border bg-card">
@@ -18,7 +33,7 @@ export function BatchesTable({ batches }: { batches: Batch[] }) {
           <TableRow className="bg-muted/30 hover:bg-muted/30">
             <TableHead className="w-16">ID</TableHead>
             <TableHead>Campaign</TableHead>
-            <TableHead>阶梯</TableHead>
+            <TableHead>奖励内容</TableHead>
             <TableHead className="w-32">使用情况</TableHead>
             <TableHead>有效期</TableHead>
             <TableHead>状态</TableHead>
@@ -43,7 +58,7 @@ export function BatchesTable({ batches }: { batches: Batch[] }) {
                   <TableCell className="text-muted-foreground">{b.batchId}</TableCell>
                   <TableCell className="font-medium">{b.campaignName}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">Tier {b.rewardTier}</Badge>
+                    <span className="text-sm text-muted-foreground">{renderRewardInfo(b)}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

@@ -18,6 +18,7 @@ import type {
   TemplateCategoryListResponse,
   TemplateCategoryTreeResponse,
   TemplateCategory,
+  TemplateOption,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -85,6 +86,8 @@ export const api = {
   },
 
   getBatches: () => adminFetch<Batch[]>('/redeem-batches'),
+
+  getBatchTemplates: () => adminFetch<TemplateOption[]>('/redeem-batches/templates'),
 
   createBatch: (data: CreateBatchInput) =>
     adminFetch<CreateBatchResponse>('/redeem-batches', {

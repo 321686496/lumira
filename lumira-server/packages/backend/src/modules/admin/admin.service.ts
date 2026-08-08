@@ -1,7 +1,5 @@
-// lumira-server/packages/backend/src/modules/admin/admin.service.ts
-
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { eq, count, desc, sql } from 'drizzle-orm';
+import { eq, count, desc, asc, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   devices,
@@ -11,6 +9,7 @@ import {
   redemptionCodes,
   redemptionRecords,
   questionnaireRecords,
+  templates,
 } from '../../database/schema';
 
 @Injectable()
@@ -87,8 +86,8 @@ export class AdminService {
   async createBatch(dto: {
     campaignName: string;
     codes: string[];
-    rewardTier: number;
-    rewardPoints?: number;
+    rewardPoints: number;
+    rewardTemplates?: string[];
     maxUsesPerCode: number;
     validFrom?: number;
     validUntil?: number;
@@ -97,13 +96,10 @@ export class AdminService {
     const now = Math.floor(Date.now() / 1000);
 
     return db.transaction((tx) => {
-      // 创建批次
-      // Note: better-sqlite3 transaction callbacks must be synchronous (no async/await),
-      // so we use the synchronous .all() method on the QueryPromise instead of awaiting.
       const result = tx.insert(redemptionCodeBatches).values({
         campaignName: dto.campaignName,
-        rewardTier: dto.rewardTier,
-        rewardPoints: dto.rewardPoints ?? 0,
+        rewardPoints: dto.rewardPoints,
+        rewardTemplates: JSON.stringify(dto.rewardTemplates ?? []),
         maxUsesPerCode: dto.maxUsesPerCode,
         totalGenerated: dto.codes.length,
         totalUsed: 0,
@@ -115,7 +111,6 @@ export class AdminService {
 
       const batchId = result[0].batchId;
 
-      // 批量插入码
       const codeValues = dto.codes.map(code => ({
         code,
         batchId,
@@ -129,7 +124,8 @@ export class AdminService {
         batchId,
         campaignName: dto.campaignName,
         totalGenerated: dto.codes.length,
-        rewardPoints: dto.rewardPoints ?? 0,
+        rewardPoints: dto.rewardPoints,
+        rewardTemplates: dto.rewardTemplates ?? [],
       };
     });
   }
@@ -137,7 +133,11 @@ export class AdminService {
   // 兑换码批次列表
   async getBatches() {
     const db = this.dbService.getDb();
-    return db.select().from(redemptionCodeBatches).orderBy(desc(redemptionCodeBatches.createdAt));
+    const rows = await db.select().from(redemptionCodeBatches).orderBy(desc(redemptionCodeBatches.createdAt));
+    return rows.map((b) => ({
+      ...b,
+      rewardTemplates: b.rewardTemplates,
+    }));
   }
 
   // 批次详情
@@ -194,6 +194,20 @@ export class AdminService {
       page,
       pageSize,
     };
+  }
+
+  // 查询所有活跃模板（用于 Admin 批次表单选择）
+  async getAllActiveTemplates() {
+    const db = this.dbService.getDb();
+    return db.select({
+      id: templates.id,
+      name: templates.name,
+      price: templates.price,
+      coverUrl: templates.coverUrl,
+    })
+      .from(templates)
+      .where(eq(templates.isActive, 1))
+      .orderBy(asc(templates.sortOrder));
   }
 
   // 问卷列表（每设备最新一条）

@@ -1,5 +1,3 @@
-// lumira-server/packages/backend/src/modules/admin/dto/create-batch.dto.ts
-
 import { IsString, IsArray, IsInt, IsOptional, Min, ArrayMinSize, MaxLength } from 'class-validator';
 
 export class CreateBatchDto {
@@ -13,8 +11,13 @@ export class CreateBatchDto {
   codes!: string[];
 
   @IsInt()
-  @Min(1)
-  rewardTier!: number;
+  @Min(0)
+  rewardPoints!: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  rewardTemplates?: string[];
 
   @IsInt()
   @Min(1)

@@ -49,11 +49,11 @@ export const rewardUnlocks = sqliteTable('reward_unlocks', {
 export const redemptionCodeBatches = sqliteTable('redemption_code_batches', {
   batchId: integer('batch_id').primaryKey({ autoIncrement: true }),
   campaignName: text('campaign_name').notNull(),
-  rewardTier: integer('reward_tier').notNull().references(() => rewardTiers.tier),
   maxUsesPerCode: integer('max_uses_per_code').notNull().default(1),
   totalGenerated: integer('total_generated').notNull(),
   totalUsed: integer('total_used').notNull().default(0),
   rewardPoints: integer('reward_points').notNull().default(0),
+  rewardTemplates: text('reward_templates').notNull().default('[]'),
   validFrom: integer('valid_from'),
   validUntil: integer('valid_until'),
   isActive: integer('is_active').notNull().default(1),

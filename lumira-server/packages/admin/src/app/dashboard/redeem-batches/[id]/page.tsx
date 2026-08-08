@@ -1,4 +1,3 @@
-// src/app/dashboard/redeem-batches/[id]/page.tsx
 import { notFound, redirect } from 'next/navigation';
 import { api } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
@@ -10,6 +9,15 @@ import { BatchCodesTable } from '@/components/batch-codes-table';
 import { formatUnixTime } from '@/lib/utils';
 import { ArrowLeft } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
+
+function parseRewardTemplates(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 export default async function BatchDetailPage({
   params,
@@ -29,6 +37,7 @@ export default async function BatchDetailPage({
   }
 
   const active = detail.isActive === 1;
+  const templateIds = parseRewardTemplates(detail.rewardTemplates);
 
   return (
     <div className="space-y-4">
@@ -56,8 +65,16 @@ export default async function BatchDetailPage({
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <p className="text-muted-foreground">奖励阶梯</p>
-              <p className="mt-1"><Badge variant="outline">Tier {detail.rewardTier}</Badge></p>
+              <p className="text-muted-foreground">奖励积分</p>
+              <p className="mt-1">{detail.rewardPoints > 0 ? `${detail.rewardPoints} 积分` : '无'}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">奖励模板</p>
+              <p className="mt-1">
+                {templateIds.length > 0
+                  ? `${templateIds.length} 个模板`
+                  : '无'}
+              </p>
             </div>
             <div>
               <p className="text-muted-foreground">每码上限</p>

@@ -97,13 +97,16 @@ describe('AdminController (e2e)', () => {
       .send({
         campaignName: '测试活动',
         codes: ['CODE0001', 'CODE0002', 'CODE0003'],
-        rewardTier: 1,
+        rewardPoints: 100,
+        rewardTemplates: ['tpl_001'],
         maxUsesPerCode: 1,
       })
       .expect(201);
 
     expect(res.body.batchId).toBeDefined();
     expect(res.body.totalGenerated).toBe(3);
+    expect(res.body.rewardPoints).toBe(100);
+    expect(res.body.rewardTemplates).toEqual(['tpl_001']);
   });
 
   it('GET /api/v1/admin/redeem-batches — should list batches', async () => {

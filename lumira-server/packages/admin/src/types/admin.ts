@@ -33,7 +33,8 @@ export interface InviteListResponse {
 export interface Batch {
   batchId: number;
   campaignName: string;
-  rewardTier: number;
+  rewardPoints: number;
+  rewardTemplates: string;
   maxUsesPerCode: number;
   totalGenerated: number;
   totalUsed: number;
@@ -56,6 +57,8 @@ export interface CreateBatchResponse {
   batchId: number;
   campaignName: string;
   totalGenerated: number;
+  rewardPoints: number;
+  rewardTemplates: string[];
 }
 
 export interface RewardListResponse {
@@ -77,10 +80,18 @@ export interface RewardListResponse {
 export interface CreateBatchInput {
   campaignName: string;
   codes: string[];
-  rewardTier: number;
+  rewardPoints: number;
+  rewardTemplates?: string[];
   maxUsesPerCode: number;
   validFrom?: number;
   validUntil?: number;
+}
+
+export interface TemplateOption {
+  id: string;
+  name: string;
+  price: number;
+  coverUrl: string;
 }
 
 // 问卷数据类型（与 @lumira/shared 一致，admin 端单独定义避免跨包依赖）

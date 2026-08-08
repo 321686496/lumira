@@ -54,11 +54,27 @@ void main() {
         'campaignName': 'Spring Campaign',
         'rewardPoints': 100,
         'balance': 150,
+        'rewardTemplates': [
+          {'templateId': 'tpl_001', 'templateName': '日系胶片'},
+        ],
       });
       expect(resp.batchId, 42);
       expect(resp.campaignName, 'Spring Campaign');
       expect(resp.rewardPoints, 100);
       expect(resp.balance, 150);
+      expect(resp.rewardTemplates.length, 1);
+      expect(resp.rewardTemplates[0].templateId, 'tpl_001');
+      expect(resp.rewardTemplates[0].templateName, '日系胶片');
+    });
+
+    test('parses without rewardTemplates', () {
+      final resp = RedeemCodeResponse.fromJson({
+        'batchId': 42,
+        'campaignName': 'Spring Campaign',
+        'rewardPoints': 100,
+        'balance': 150,
+      });
+      expect(resp.rewardTemplates, isEmpty);
     });
   });
 
@@ -69,6 +85,7 @@ void main() {
         'campaignName': 'Test',
         'rewardPoints': 50,
         'balance': 50,
+        'rewardTemplates': [],
       });
       final repo = RemoteRedeemRepository(fakeApi);
       final resp = await repo.redeem(const RedeemCodeRequest(code: 'ABC123'));
@@ -76,6 +93,7 @@ void main() {
       expect(resp.campaignName, 'Test');
       expect(resp.rewardPoints, 50);
       expect(resp.balance, 50);
+      expect(resp.rewardTemplates, isEmpty);
     });
   });
 }

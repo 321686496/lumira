@@ -96,11 +96,14 @@ export class DatabaseService implements OnModuleInit {
       this.sqlite.exec(sql);
     }
 
-    // 兼容旧库：redemption_code_batches 的 reward_points 列。
+    // 兼容旧库：redemption_code_batches 的 reward_points / reward_templates 列。
     // 迁移使用 CREATE TABLE IF NOT EXISTS，不会修改已存在的表，故对旧库做幂等补充。
     const batchColumns = this.sqlite.prepare('PRAGMA table_info(redemption_code_batches)').all() as { name: string }[];
     if (!batchColumns.some((c) => c.name === 'reward_points')) {
       this.sqlite.exec('ALTER TABLE redemption_code_batches ADD COLUMN reward_points INTEGER NOT NULL DEFAULT 0');
+    }
+    if (!batchColumns.some((c) => c.name === 'reward_templates')) {
+      this.sqlite.exec("ALTER TABLE redemption_code_batches ADD COLUMN reward_templates TEXT NOT NULL DEFAULT '[]'");
     }
   }
 

@@ -62,9 +62,18 @@ class _RedeemPageState extends ConsumerState<RedeemPage> {
       final repo = await ref.read(redeemRepositoryProvider.future);
       final resp = await repo.redeem(RedeemCodeRequest(code: code));
       if (mounted) {
+        final parts = <String>[resp.campaignName];
+        if (resp.rewardPoints > 0) {
+          parts.add('获得 ${resp.rewardPoints} 积分');
+        }
+        if (resp.rewardTemplates.isNotEmpty) {
+          final names = resp.rewardTemplates.map((t) => t.templateName).join('、');
+          parts.add('解锁模板：$names');
+        }
+        parts.add('当前余额 ${resp.balance} 积分');
         _showThemedSnackBar(
           tokens,
-          '已兑换：${resp.campaignName}，获得 ${resp.rewardPoints} 积分，当前余额 ${resp.balance}',
+          '已兑换：${parts.join('，')}',
           isSuccess: true,
         );
         _codeCtrl.clear();

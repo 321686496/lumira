@@ -39,6 +39,11 @@ export class AdminController {
     return this.adminService.createBatch(dto);
   }
 
+  @Get('redeem-batches/templates')
+  async getBatchTemplates() {
+    return this.adminService.getAllActiveTemplates();
+  }
+
   @Get('redeem-batches/:id')
   async getBatchDetail(@Param('id', ParseIntPipe) id: number) {
     const result = await this.adminService.getBatchDetail(id);
