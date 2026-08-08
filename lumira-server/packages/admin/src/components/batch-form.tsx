@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { createBatchAction } from '@/actions/batch';
-import { api } from '@/lib/api';
 import type { TemplateOption } from '@/types/admin';
 
 const schema = z.object({
@@ -28,11 +27,9 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function BatchForm() {
+export default function BatchForm({ templates }: { templates: TemplateOption[] }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [templates, setTemplates] = useState<TemplateOption[]>([]);
-  const [loadingTemplates, setLoadingTemplates] = useState(true);
   const { register, handleSubmit, control, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -43,13 +40,6 @@ export default function BatchForm() {
       maxUsesPerCode: 1,
     },
   });
-
-  useEffect(() => {
-    api.getBatchTemplates()
-      .then(setTemplates)
-      .catch(() => setTemplates([]))
-      .finally(() => setLoadingTemplates(false));
-  }, []);
 
   const onSubmit = (data: FormValues) => {
     setError(null);
@@ -101,9 +91,7 @@ export default function BatchForm() {
 
       <div className="space-y-2">
         <Label>奖励模板（可多选）</Label>
-        {loadingTemplates ? (
-          <p className="text-sm text-muted-foreground">加载模板中...</p>
-        ) : templates.length === 0 ? (
+        {templates.length === 0 ? (
           <p className="text-sm text-muted-foreground">暂无可用模板，请先创建模板</p>
         ) : (
           <Controller
