@@ -19,7 +19,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 20;
+const int _kDbVersion = 21;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -249,6 +249,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colFreeModeCamera} TEXT,
       ${Tables.colFreeModePostProcess} TEXT,
       ${Tables.colFreeModeComposition} TEXT,
+      ${Tables.colWatermarkSettings} TEXT,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
@@ -768,6 +769,20 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute(WatermarkTemplatesTable.indexCreatedAtSql);
     } catch (e) {
       debugPrint('v20 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 21) {
+    try {
+      // v21: user_settings 新增 watermark_settings TEXT 列（水印设置持久化）
+      // 存储 WatermarkSettings.toJson() JSON 字符串
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colWatermarkSettings,
+        'TEXT',
+      );
+    } catch (e) {
+      debugPrint('v21 migration failed (silent fallback): $e');
     }
   }
 }

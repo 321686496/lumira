@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../tables.dart';
 import '../../../features/capture/domain/photo_template.dart';
+import '../../../features/capture/watermark/models/watermark_settings.dart';
 
 /// 用户设置 DAO（单行表 user_settings，id=1）
 ///
@@ -128,6 +129,38 @@ class SettingsDao {
       Tables.userSettings,
       {
         Tables.colFreeModeComposition: jsonEncode(value.toJson()),
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 读取水印设置（未设置时返回 null）
+  Future<WatermarkSettings?> getWatermarkSettings() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colWatermarkSettings],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return null;
+    final raw = rows.first[Tables.colWatermarkSettings] as String?;
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      return WatermarkSettings.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 保存水印设置
+  Future<void> setWatermarkSettings(WatermarkSettings value) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colWatermarkSettings: jsonEncode(value.toJson()),
         Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
       },
       where: 'id = ?',

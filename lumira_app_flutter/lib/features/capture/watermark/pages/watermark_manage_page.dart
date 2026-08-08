@@ -49,6 +49,8 @@ class WatermarkManagePage extends ConsumerWidget {
                       ref
                           .read(watermarkSettingsProvider)
                           .copyWith(activeTemplateId: template.id);
+                  scheduleWatermarkPersist(
+                      ProviderScope.containerOf(context, listen: false));
                   if (context.canPop()) {
                     context.pop();
                   }

@@ -42,6 +42,15 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   Timer? _tapTimer;
 
   @override
+  void initState() {
+    super.initState();
+    // 从 DB 异步加载水印设置到 provider。
+    // 使用 microtask 避免在 build 阶段同步触发 provider 写入引发重建断言。
+    Future.microtask(() =>
+        loadWatermarkSettings(ProviderScope.containerOf(context, listen: false)));
+  }
+
+  @override
   void dispose() {
     _tapTimer?.cancel();
     super.dispose();
@@ -262,6 +271,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                             final current = ref.read(watermarkSettingsProvider);
                             ref.read(watermarkSettingsProvider.notifier).state =
                                 current.copyWith(enabled: v);
+                            scheduleWatermarkPersist(
+                                ProviderScope.containerOf(context, listen: false));
                           },
                         ),
                         tokens: tokens,
@@ -283,6 +294,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                             final current = ref.read(watermarkSettingsProvider);
                             ref.read(watermarkSettingsProvider.notifier).state =
                                 current.copyWith(animationEnabled: v);
+                            scheduleWatermarkPersist(
+                                ProviderScope.containerOf(context, listen: false));
                           },
                         ),
                         tokens: tokens,
