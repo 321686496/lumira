@@ -7,7 +7,7 @@
         "material": {
           "certpath": "C:\\Users\\黄sir\\.ohos\\config\\default_ohos_RLxGKtveBddYu3UaFBQm34u16lQ-G3dYn60Hy7I0eAs=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001BBC3C050B4B00FC6AA4B8485591F00D0B185153118542C062C992C018C4A98A51D4736D0219360A",
+"keyPassword": "0000001BBC3C050B4B00FC6AA4B8485591F00D0B185153118542C062C992C018C4A98A51D4736D0219360A",
           "profile": "C:\\Users\\黄sir\\.ohos\\config\\default_ohos_RLxGKtveBddYu3UaFBQm34u16lQ-G3dYn60Hy7I0eAs=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\黄sir\\.ohos\\config\\default_ohos_RLxGKtveBddYu3UaFBQm34u16lQ-G3dYn60Hy7I0eAs=.p12",

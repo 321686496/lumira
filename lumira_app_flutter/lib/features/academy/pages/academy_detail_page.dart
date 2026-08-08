@@ -9,7 +9,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/academy_models.dart';
-import '../data/academy_mock_data.dart';
+import '../data/academy_content.dart';
 import '../providers/academy_providers.dart';
 
 /// 课程详情页
@@ -28,12 +28,6 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
   @override
   void initState() {
     super.initState();
-    // 标记为已开始学习
-    if (widget.academyId != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(academyActionsProvider.notifier).markStarted(widget.academyId!);
-      });
-    }
   }
 
   void _toggleBookmark() {
@@ -79,10 +73,11 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
       );
     }
 
-    final isCompleted = progressAsync?.maybeWhen(
-          data: (p) => p?.status == CourseStatus.completed,
-          orElse: () => false,
-        ) ?? false;
+    final status = progressAsync?.maybeWhen(
+          data: (p) => p?.status ?? CourseStatus.notStarted,
+          orElse: () => CourseStatus.notStarted,
+        ) ?? CourseStatus.notStarted;
+    final isCompleted = status == CourseStatus.completed;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -120,6 +115,24 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
               children: [
                 _LessonHead(detail: detail, tokens: tokens),
                 _HeroImage(detail: detail, tokens: tokens),
+                if (status == CourseStatus.notStarted)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                    child: LumiraButton(
+                      variant: ButtonVariant.primary,
+                      onPressed: () {
+                        ref.read(academyActionsProvider.notifier).markStarted(widget.academyId!);
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.play_arrow),
+                          SizedBox(width: 8),
+                          Text('开始学习'),
+                        ],
+                      ),
+                    ),
+                  ),
                 _ContentBody(
                   detail: detail,
                   tokens: tokens,
@@ -147,7 +160,7 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
                       itemCount: detail.knowledgeCardIds.length,
                       itemBuilder: (context, index) {
                         final cardId = detail.knowledgeCardIds[index];
-                        final kc = AcademyMockData.getKnowledgeCard(cardId);
+                        final kc = AcademyContent.getKnowledgeCard(cardId);
                         if (kc == null) return const SizedBox.shrink();
                         return Container(
                           width: 160,
@@ -228,7 +241,7 @@ class _HeroImage extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: AspectRatio(
           aspectRatio: 16 / 9,
-          child: Image.network(detail.heroImage, fit: BoxFit.cover,
+          child: Image.asset(detail.heroImage, fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Container(
               color: tokens.surfaceAlt,
               child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary),
@@ -384,7 +397,7 @@ class _TipCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             child: AspectRatio(
               aspectRatio: 16 / 9,
-              child: Image.network(detail.tipCardImage, fit: BoxFit.cover,
+              child: Image.asset(detail.tipCardImage, fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt, child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary)),
               ),
             ),
@@ -578,7 +591,7 @@ class _RecommendCard extends StatelessWidget {
               width: 80,
               child: AspectRatio(
                 aspectRatio: 3 / 4,
-                child: Image.network(r.imageUrl, fit: BoxFit.cover,
+                child: Image.asset(r.imageUrl, fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt, child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary)),
                 ),
               ),

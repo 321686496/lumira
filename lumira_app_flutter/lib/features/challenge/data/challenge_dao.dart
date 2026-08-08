@@ -52,6 +52,14 @@ class ChallengeDao {
     );
   }
 
+  Future<ChallengeHistoryRecord?> getById(String id) async {
+    final rows = await _db.query(ChallengeHistoryTable.name,
+        where: '${ChallengeHistoryTable.colId} = ?',
+        whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return null;
+    return _rowToRecord(rows.first);
+  }
+
   Future<ChallengeHistoryRecord?> getDailyByDate(String date) async {
     final rows = await _db.query(ChallengeHistoryTable.name,
         where: '${ChallengeHistoryTable.colDate} = ? AND ${ChallengeHistoryTable.colIsDaily} = 1',

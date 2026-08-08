@@ -21,6 +21,8 @@ import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
 import '../services/compare_image_generator.dart';
 import 'package:share_plus/share_plus.dart';
+
+import '../../../core/utils/safe_share.dart';
 import '../../../shared/services/poster_generator.dart';
 import '../services/exif_card_generator.dart';
 import '../services/photo_exif_reader.dart';
@@ -569,9 +571,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     if (_photoUrl.isEmpty) return;
     try {
       if (_photoUrl.startsWith('http')) {
-        await Share.share(_photoUrl, subject: '如画 LUMIRA · 拍摄作品');
+        await SafeShare.share(_photoUrl, subject: '如画 LUMIRA · 拍摄作品');
       } else {
-        await Share.shareXFiles(
+        await SafeShare.shareXFiles(
           [XFile(_photoUrl)],
           subject: '如画 LUMIRA · 拍摄作品',
           text: '我用如画拍了一张照片，快来看看吧！',

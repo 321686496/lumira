@@ -82,6 +82,8 @@ class PoseSilhouette extends StatelessWidget {
         if (silhouetteData.startsWith('assets/')) {
           return Image.asset(
             silhouetteData,
+            key: ValueKey(silhouetteData),
+            gaplessPlayback: true,
             width: 80,
             height: 80,
             fit: BoxFit.contain,
@@ -98,6 +100,8 @@ class PoseSilhouette extends StatelessWidget {
           // 替换为单一颜色，导致导入的照片显示为纯色块而非实际图像。
           return Image.network(
             silhouetteData,
+            key: ValueKey(silhouetteData),
+            gaplessPlayback: true,
             width: 80,
             height: 80,
             fit: BoxFit.contain,
@@ -114,6 +118,8 @@ class PoseSilhouette extends StatelessWidget {
         // 修复：同上，移除 color 参数以正确显示原始图像。
         return Image.memory(
           _decodeBase64DataUrl(silhouetteData),
+          key: ValueKey(silhouetteData),
+          gaplessPlayback: true,
           width: 80,
           height: 80,
           fit: BoxFit.contain,
@@ -157,13 +163,17 @@ class PoseSilhouette extends StatelessWidget {
   }
 
   /// 解析 base64 data URL，strip `data:image/...;base64,` 前缀
+  static final Map<String, Uint8List> _cachedBase64 = {};
+
   static Uint8List _decodeBase64DataUrl(String data) {
-    String raw = data;
-    final commaIdx = data.indexOf(',');
-    if (commaIdx >= 0 && data.startsWith('data:')) {
-      raw = data.substring(commaIdx + 1);
-    }
-    return base64Decode(raw);
+    return _cachedBase64.putIfAbsent(data, () {
+      String raw = data;
+      final commaIdx = data.indexOf(',');
+      if (commaIdx >= 0 && data.startsWith('data:')) {
+        raw = data.substring(commaIdx + 1);
+      }
+      return base64Decode(raw);
+    });
   }
 }
 

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../core/utils/safe_share.dart';
+
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/templates_dao.dart';
@@ -268,7 +270,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
       return;
     }
     try {
-      await Share.shareXFiles(
+      await SafeShare.shareXFiles(
         [XFile(localPath)],
         subject: '如画 LUMIRA · 摄影作品',
         text: '我用如画拍了一张照片，快来看看吧！',

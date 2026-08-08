@@ -38,7 +38,7 @@ class AcademyCourseCard extends ConsumerWidget {
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   child: AspectRatio(
                     aspectRatio: 3 / 4,
-                    child: Image.network(
+                    child: Image.asset(
                       course.coverImage,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(

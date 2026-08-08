@@ -1,5 +1,5 @@
 import 'academy_dao.dart';
-import 'academy_mock_data.dart';
+import 'academy_content.dart';
 import 'academy_models.dart';
 import 'academy_trajectory_models.dart';
 
@@ -50,7 +50,7 @@ class LocalAcademyRepository implements AcademyRepository {
 
   @override
   List<AcademyCourse> getCourses({AcademyLevel? level, AcademyTopic? topic}) {
-    var result = AcademyMockData.courses;
+    var result = AcademyContent.courses;
     if (level != null) {
       result = result.where((c) => c.level == level).toList();
     }
@@ -62,15 +62,15 @@ class LocalAcademyRepository implements AcademyRepository {
 
   @override
   AcademyCourse? getCourse(String courseId) =>
-      AcademyMockData.getCourse(courseId);
+      AcademyContent.getCourse(courseId);
 
   @override
   AcademyCourseDetail? getCourseDetail(String courseId) =>
-      AcademyMockData.getCourseDetail(courseId);
+      AcademyContent.getCourseDetail(courseId);
 
   @override
   AcademyAssignment? getAssignment(String courseId) =>
-      AcademyMockData.getAssignment(courseId);
+      AcademyContent.getAssignment(courseId);
 
   @override
   Future<AcademyOverview> getOverview() async {
@@ -85,14 +85,15 @@ class LocalAcademyRepository implements AcademyRepository {
         .map((p) => p.courseId)
         .toList();
     for (final id in completedIds) {
-      final course = AcademyMockData.getCourse(id);
+      final course = AcademyContent.getCourse(id);
       if (course != null) totalXP += course.rewardXP;
     }
 
     // 推荐下一课：第一个未完成的课程
     String? nextId;
     String? nextTitle;
-    for (final course in AcademyMockData.courses) {
+    CourseStatus? nextStatus;
+    for (final course in AcademyContent.courses) {
       final progress = allProgress.firstWhere(
         (p) => p.courseId == course.id,
         orElse: () => const CourseProgress(
@@ -104,6 +105,7 @@ class LocalAcademyRepository implements AcademyRepository {
       if (progress.status != CourseStatus.completed) {
         nextId = course.id;
         nextTitle = course.title;
+        nextStatus = progress.status;
         break;
       }
     }
@@ -111,10 +113,11 @@ class LocalAcademyRepository implements AcademyRepository {
     return AcademyOverview(
       streakDays: streakDays,
       completedCourses: completedCount,
-      totalCourses: AcademyMockData.courses.length,
+      totalCourses: AcademyContent.courses.length,
       totalXP: totalXP,
       nextCourseId: nextId,
       nextCourseTitle: nextTitle,
+      nextCourseStatus: nextStatus,
     );
   }
 
@@ -224,11 +227,11 @@ class LocalAcademyRepository implements AcademyRepository {
 
   @override
   List<KnowledgeCard> getKnowledgeCards({AcademyTopic? topic}) =>
-      AcademyMockData.getKnowledgeCardsByTopic(topic);
+      AcademyContent.getKnowledgeCardsByTopic(topic);
 
   @override
   KnowledgeCard? getKnowledgeCard(String cardId) =>
-      AcademyMockData.getKnowledgeCard(cardId);
+      AcademyContent.getKnowledgeCard(cardId);
 
   @override
   Future<bool> isCardFavorited(String cardId) =>

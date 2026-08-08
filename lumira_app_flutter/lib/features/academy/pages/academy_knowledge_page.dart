@@ -58,7 +58,7 @@ class _AcademyKnowledgePageState extends ConsumerState<AcademyKnowledgePage> {
                   borderRadius: BorderRadius.circular(12),
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
-                    child: Image.network(card.coverImage, fit: BoxFit.cover,
+                    child: Image.asset(card.coverImage, fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt, child: Icon(Icons.image_outlined, color: tokens.textTertiary)),
                     ),
                   ),
@@ -172,7 +172,7 @@ class _AcademyKnowledgePageState extends ConsumerState<AcademyKnowledgePage> {
                         width: 80,
                         child: AspectRatio(
                           aspectRatio: 4 / 3,
-                          child: Image.network(kc.coverImage, fit: BoxFit.cover,
+                          child: Image.asset(kc.coverImage, fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt, child: Icon(Icons.image_outlined, color: tokens.textTertiary)),
                           ),
                         ),
@@ -238,7 +238,7 @@ class _RelatedCards extends ConsumerWidget {
                 width: 48,
                 child: AspectRatio(
                   aspectRatio: 4 / 3,
-                  child: Image.network(kc.coverImage, fit: BoxFit.cover,
+                  child: Image.asset(kc.coverImage, fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt),
                   ),
                 ),

@@ -1,6 +1,10 @@
+import 'dart:io' show File;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/db/dao/gallery_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/challenge_models.dart';
@@ -16,6 +20,7 @@ class MainChallengeCard extends ConsumerWidget {
     super.key,
     required this.challenge,
     this.onGoCapture,
+    this.onTap,
   });
 
   final MainChallenge challenge;
@@ -23,18 +28,25 @@ class MainChallengeCard extends ConsumerWidget {
   /// pending 态"去拍照"按钮回调（由父组件传入，携带 challengeId 跳拍摄页）
   final VoidCallback? onGoCapture;
 
+  /// 整卡点击回调（由父组件传入，携带 challengeId 跳详情页）
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDone = challenge.status == ChallengeStatus.done;
+    final card =
+        isDone ? _buildDoneCard(context, ref) : _buildPendingCard(context);
 
-    if (isDone) {
-      return _buildDoneCard(context);
-    }
-    return _buildPendingCard(context);
+    if (onTap == null) return card;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: card,
+    );
   }
 
   /// 已完成态：原视觉规格
-  Widget _buildDoneCard(BuildContext context) {
+  Widget _buildDoneCard(BuildContext context, WidgetRef ref) {
     return NeuCard(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -122,18 +134,91 @@ class MainChallengeCard extends ConsumerWidget {
             borderRadius: BorderRadius.circular(14),
             child: AspectRatio(
               aspectRatio: 16 / 9,
-              child: Image.network(
-                challenge.coverImage ?? '',
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: const Color(0xFFEAE5DC),
-                  child: const Icon(Icons.image, color: Colors.grey),
-                ),
-              ),
+              child: _buildWorkImage(ref),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  /// 作品图加载：
+  /// - 挑战已完成且关联 photoId 时，从 gallery_items 加载用户真实拍摄的照片
+  /// - photoId 为空或加载失败时回退到 coverImage（picsum 占位图）或占位图标
+  Widget _buildWorkImage(WidgetRef ref) {
+    final photoId = challenge.photoId;
+    if (photoId == null || photoId.isEmpty) {
+      return _buildCoverOrPlaceholder();
+    }
+    return FutureBuilder<GalleryItemRecord?>(
+      future: ref
+          .read(galleryDaoProvider.future)
+          .then((dao) => dao.getById(photoId)),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Container(
+            color: const Color(0xFFEAE5DC),
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+          );
+        }
+        final item = snapshot.data;
+        if (item == null) return _buildCoverOrPlaceholder();
+        // 优先级：filePath > originalPath > dataUrl
+        final filePath = item.filePath ?? item.originalPath;
+        if (filePath != null && filePath.isNotEmpty) {
+          return Image.file(
+            File(filePath),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildCoverOrPlaceholder(),
+          );
+        }
+        final dataUrl = item.dataUrl;
+        if (dataUrl != null && dataUrl.isNotEmpty) {
+          // dataUrl 形如 data:image/png;base64,xxxx
+          try {
+            final idx = dataUrl.indexOf('base64,');
+            if (idx != -1) {
+              final b64 = dataUrl.substring(idx + 7);
+              final bytes = Uri.parse('data:;base64,$b64').data!.contentAsBytes();
+              return Image.memory(
+                bytes,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _buildCoverOrPlaceholder(),
+              );
+            }
+          } catch (_) {}
+        }
+        return _buildCoverOrPlaceholder();
+      },
+    );
+  }
+
+  /// 回退：coverImage（picsum 占位图）网络加载，再失败显示占位图标
+  Widget _buildCoverOrPlaceholder() {
+    final cover = challenge.coverImage;
+    if (cover != null && cover.isNotEmpty) {
+      return Image.network(
+        cover,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _workPlaceholder(),
+      );
+    }
+    return _workPlaceholder();
+  }
+
+  Widget _workPlaceholder() {
+    return Container(
+      color: const Color(0xFFEAE5DC),
+      child: const Icon(Icons.image, color: Colors.grey),
     );
   }
 

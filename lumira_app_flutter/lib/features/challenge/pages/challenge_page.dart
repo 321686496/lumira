@@ -316,18 +316,28 @@ class _RevealedView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
     final asyncSubs = ref.watch(subChallengesProvider);
-    // 查询今日主挑战是否已完成
+    // 查询今日主挑战是否已完成，并取出关联的作品照片 ID
+    // 注意：必须限定 r.date == 今天，否则会匹配到之前日期完成的同 id 挑战
+    // （题库每天随机选题，不同日期可能选中同一挑战，导致误判为已完成）
     final historyAsync = ref.watch(weeklyHistoryProvider);
-    final mainStatus = historyAsync.maybeWhen(
-      data: (history) {
-        final match = history.where((r) =>
-            r.challengeId == selected.id && r.status == ChallengeStatus.done);
-        return match.isNotEmpty
-            ? ChallengeStatus.done
-            : ChallengeStatus.pending;
-      },
-      orElse: () => ChallengeStatus.pending,
-    );
+    final now = DateTime.now();
+    final todayStr = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    ChallengeStatus mainStatus = ChallengeStatus.pending;
+    String? mainPhotoId;
+    historyAsync.whenData((history) {
+      final match = history.where((r) =>
+          r.date == todayStr &&
+          r.challengeId == selected.id &&
+          r.status == ChallengeStatus.done);
+      if (match.isNotEmpty) {
+        mainStatus = ChallengeStatus.done;
+        // photoIds 为追加存储（attachPhoto 不去重），取最后一个即最近一次提交的作品
+        final record = match.first;
+        if (record.photoIds.isNotEmpty) {
+          mainPhotoId = record.photoIds.last;
+        }
+      }
+    });
 
     final mainChallenge = MainChallenge(
       title: selected.title,
@@ -335,6 +345,7 @@ class _RevealedView extends ConsumerWidget {
       rewardXP: selected.rewardXP,
       status: mainStatus,
       coverImage: 'https://picsum.photos/seed/${selected.id}/400/600',
+      photoId: mainPhotoId,
       tags: [
         ChallengeTag(
           label: '+${selected.rewardXP} XP',
@@ -357,6 +368,7 @@ class _RevealedView extends ConsumerWidget {
           child: MainChallengeCard(
             challenge: mainChallenge,
             onGoCapture: () => _goCapture(context, selected.id),
+            onTap: () => goDetail(selected.id),
           ),
         ),
         const SizedBox(height: 32),
@@ -393,6 +405,7 @@ class _RevealedView extends ConsumerWidget {
                     child: SubChallengeRow(
                       challenge: entry.value,
                       onGoComplete: () => _goCapture(context, entry.value.id),
+                      onTap: () => goDetail(entry.value.id),
                     ),
                   ),
                 );

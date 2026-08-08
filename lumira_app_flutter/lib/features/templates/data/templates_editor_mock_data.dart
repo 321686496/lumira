@@ -517,12 +517,20 @@ String formatSigned(num v) {
 }
 
 /// 解析 aspectRatio 字符串 '3:4' → 3/4
-/// 来源：editor.vue 的 _compositionPreviewPadding 中的解析逻辑
-/// 用于 Step 2 构图预览框的 AspectRatio 计算（姿势预览框改用设备实际比例，见 _Step3Pose）
-double parseAspectRatio(String ratio) {
+///
+/// - fullscreen 返回 -1（调用方需用屏幕比例处理）
+/// - 4:3 根据 isPortrait 做方向自适应（竖屏→3/4，横屏→4/3），
+///   与 capture 页 CaptureState.computeTargetRatio 保持一致
+/// - 其他 "W:H" 格式直接返回 W/H
+/// - 解析失败回退 4/3
+double parseAspectRatio(String ratio, {bool? isPortrait}) {
+  if (ratio == 'fullscreen') return -1;
+  if (ratio == '4:3' && isPortrait != null) {
+    return isPortrait ? 3.0 / 4.0 : 4.0 / 3.0;
+  }
   final parts = (ratio.isNotEmpty ? ratio : '4:3').split(':');
-  final w = int.tryParse(parts[0]) ?? 4;
-  final h = parts.length > 1 ? (int.tryParse(parts[1]) ?? 3) : 3;
+  final w = double.tryParse(parts[0]) ?? 4;
+  final h = parts.length > 1 ? (double.tryParse(parts[1]) ?? 3) : 3;
   if (w <= 0 || h <= 0) return 4 / 3;
   return w / h;
 }

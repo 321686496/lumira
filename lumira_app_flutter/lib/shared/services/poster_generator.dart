@@ -4,11 +4,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/theme_tokens.dart';
+import '../../core/utils/safe_share.dart';
+import '../../core/utils/safe_temp_dir.dart';
 import '../widgets/lumira/lumira.dart' show LumiraProgress, LumiraToast, showLumiraBottomSheet;
 
 /// 通用海报生成器
@@ -20,7 +21,7 @@ import '../widgets/lumira/lumira.dart' show LumiraProgress, LumiraToast, showLum
 /// 平台兼容：
 /// - 导出（保存到相册）：iOS/Android 用 `SaverGallery.saveImage`；
 ///   HarmonyOS 降级到 `MethodChannel('lumira/photo_saver')` 调用原生 photoAccessHelper。
-/// - 分享：`Share.shareXFiles` 三平台均支持。
+/// - 分享：`SafeShare.shareXFiles` 三平台均支持，鸿蒙降级到剪贴板。
 class PosterGenerator {
   PosterGenerator._();
 
@@ -98,7 +99,7 @@ class _PosterSheetState extends State<_PosterSheet> {
   }
 
   Future<File> _writeTempFile(List<int> bytes) async {
-    final tempDir = await getTemporaryDirectory();
+    final tempDir = await getSafeTemporaryDirectory();
     final fileName =
         '${widget.fileNamePrefix}_${DateTime.now().millisecondsSinceEpoch}.png';
     final file = File('${tempDir.path}/$fileName');
@@ -165,7 +166,7 @@ class _PosterSheetState extends State<_PosterSheet> {
         return;
       }
       final file = await _writeTempFile(bytes);
-      await Share.shareXFiles(
+      await SafeShare.shareXFiles(
         [XFile(file.path)],
         subject: widget.shareSubject,
         text: widget.shareText,

@@ -124,7 +124,7 @@ export default function PhonePreview(props: PhonePreviewProps) {
   const {
     coverUrl, silhouetteUrl, silhouetteType, silhouetteBuiltinKey,
     positionX, positionY, scale, rotation,
-    aspectRatio, cropRatio, overlayType, opacity,
+    aspectRatio, overlayType, opacity,
     lut, colorBrightness, colorContrast, colorSaturation, colorTemperature, colorTint,
     smoothStrength, sharpen, vignette, grain,
     exposureCompensation, isoMode, iso, shutterSpeed, whiteBalance,
@@ -136,13 +136,13 @@ export default function PhonePreview(props: PhonePreviewProps) {
   const [areaSize, setAreaSize] = useState<{ w: number; h: number } | null>(null);
   const [coverImg, setCoverImg] = useState<HTMLImageElement | null>(null);
 
-  // 图片区比例：优先 cropRatio（导出裁剪），回退 composition.aspectRatio
+  // 与 App 取景器一致：使用 composition.aspectRatio（照片比例）
+  // App 的 capture_preview_template_page 使用 composition.aspectRatio 作为取景器比例，
+  // 剪影位置相对于该比例区域，而非整个页面或取景器
   const ratio = useMemo(() => {
-    const r = parseRatio(cropRatio);
-    if (r) return r;
-    const fallback = parseRatio(aspectRatio);
-    return fallback ?? 0.75;
-  }, [cropRatio, aspectRatio]);
+    const r = parseRatio(aspectRatio);
+    return r ?? 0.75;
+  }, [aspectRatio]);
 
   // 监听图片区尺寸
   useEffect(() => {
@@ -257,7 +257,7 @@ export default function PhonePreview(props: PhonePreviewProps) {
             {name || '未命名模板'}
           </span>
           <span className="text-[10px] text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">
-            {getAspectRatioLabel(cropRatio || aspectRatio)}
+            {getAspectRatioLabel(aspectRatio)}
           </span>
         </div>
 

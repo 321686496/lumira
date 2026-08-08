@@ -211,11 +211,30 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
       final nowMs = now.millisecondsSinceEpoch;
 
       // 1. 回写挑战状态为 done（含完成时间戳）
-      await dao.updateStatus(
-        historyId,
-        ChallengeStatus.done,
-        timestamp: nowMs,
-      );
+      //    每日挑战在翻牌时已插入记录，直接更新；
+      //    附加挑战没有翻牌/选中动作、历史无记录，需要先插入一条 done 记录，
+      //    否则 updateStatus/attachPhoto 更新 0 行，附加挑战永远显示未完成。
+      final existing = await dao.getById(historyId);
+      if (existing == null) {
+        await dao.insert(ChallengeHistoryRecord(
+          id: historyId,
+          date: dateStr,
+          challengeId: poolItem.id,
+          category: poolItem.category,
+          title: poolItem.title,
+          rewardXP: poolItem.rewardXP,
+          status: ChallengeStatus.done,
+          selectedAt: nowMs,
+          completedAt: nowMs,
+          isDaily: false,
+        ));
+      } else {
+        await dao.updateStatus(
+          historyId,
+          ChallengeStatus.done,
+          timestamp: nowMs,
+        );
+      }
 
       // 2. 关联 photoId 到挑战历史记录（用于详情页"完成的作品"展示）
       await dao.attachPhoto(historyId, widget.photoId);

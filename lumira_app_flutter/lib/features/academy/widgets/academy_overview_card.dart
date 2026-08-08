@@ -92,7 +92,9 @@ class AcademyOverviewCard extends ConsumerWidget {
                           const SizedBox(width: 6),
                           Flexible(
                             child: Text(
-                              '继续：${overview.nextCourseTitle}',
+                              overview.nextCourseStatus == CourseStatus.inProgress
+                                  ? '继续：${overview.nextCourseTitle}'
+                                  : '推荐：${overview.nextCourseTitle}',
                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: tokens.brandText),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

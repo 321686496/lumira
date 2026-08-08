@@ -18,10 +18,16 @@ class SubChallengeRow extends ConsumerWidget {
     super.key,
     required this.challenge,
     this.onGoComplete,
+    this.onTap,
   });
 
   final SubChallenge challenge;
+
+  /// "去完成"按钮回调（携带挑战 id 跳拍摄页）
   final VoidCallback? onGoComplete;
+
+  /// 整卡点击回调（携带挑战 id 跳详情页）
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,7 +37,7 @@ class SubChallengeRow extends ConsumerWidget {
     // Forced fix: neumorphic 风格下使用 tokens.shadowConvexSubtle（主题派生色），canvas→surface
     final isNeumorphic = style == UIStyle.neumorphic;
 
-    return Opacity(
+    final card = Opacity(
       opacity: isDone ? 0.7 : 1.0,
       child: Container(
         padding: const EdgeInsets.all(20), // 40rpx → 20dp
@@ -134,6 +140,13 @@ class SubChallengeRow extends ConsumerWidget {
           ],
         ),
       ),
+    );
+
+    if (onTap == null) return card;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: card,
     );
   }
 }

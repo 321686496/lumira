@@ -405,7 +405,11 @@ class _Viewfinder extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final tpl = template!;
-    final aspectRatio = parseAspectRatio(tpl.composition.aspectRatio);
+    final rawRatio = parseAspectRatio(tpl.composition.aspectRatio,
+        isPortrait: MediaQuery.of(context).orientation == Orientation.portrait);
+    final aspectRatio = rawRatio < 0
+        ? MediaQuery.of(context).size.width / MediaQuery.of(context).size.height
+        : rawRatio;
     final hasSilhouette = !(tpl.pose.silhouette.type == 'builtin' &&
         tpl.pose.silhouette.data == 'none');
 

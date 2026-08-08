@@ -3,10 +3,11 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/utils/safe_share.dart';
+import '../../../core/utils/safe_temp_dir.dart';
 
 /// Asset 加载函数类型（便于测试注入）
 typedef AssetLoader = Future<Uint8List> Function(String assetPath);
@@ -153,10 +154,10 @@ class TemplateExporter {
     final recordWithCover = usePptpl ? await embedCoverData(record) : record;
     final json = usePptpl ? exportToPptpl(recordWithCover) : exportToLumira(recordWithCover);
     final fileName = buildFileName(record, usePptpl: usePptpl);
-    final tempDir = await getTemporaryDirectory();
+    final tempDir = await getSafeTemporaryDirectory();
     final file = File('${tempDir.path}/$fileName');
     await file.writeAsString(json);
-    await Share.shareXFiles(
+    await SafeShare.shareXFiles(
       [XFile(file.path)],
       subject: '如画模板：${record.name}',
       text: '我分享了一个如画摄影模板「${record.name}」，用如画 App 导入即可使用。',

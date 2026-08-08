@@ -183,11 +183,15 @@ class CamerawesomeCameraService implements CameraService {
   @override
   Future<double> getMaxZoomMultiplier() async {
     if (_cachedMaxZoom != null) return _cachedMaxZoom!;
+    // OHOS: camerawesome fork 的 getMaxZoom() 返回类型不稳定（int vs double?），
+    // 且 CamerawesomePlugin 声明为 Future<double?> 但实际返回 int，导致类型转换异常。
+    // 直接返回默认值 10.0，避免每次启动打印类型转换错误。
+    if (_delegate.platformTag == 'ohos') {
+      _cachedMaxZoom = 10.0;
+      return 10.0;
+    }
     try {
-      final raw = _delegate.platformTag == 'ohos'
-          ? await ohos.CamerawesomePlugin.getMaxZoom()
-          : await ca.CamerawesomePlugin.getMaxZoom();
-      // OHOS fork 返回 int（如 10），需安全转为 double
+      final raw = await ca.CamerawesomePlugin.getMaxZoom();
       final maxZoom = raw is num ? raw.toDouble() : (double.tryParse(raw.toString()) ?? 10.0);
       _cachedMaxZoom = maxZoom.clamp(1.0, 50.0);
       return _cachedMaxZoom!;
@@ -291,7 +295,9 @@ class CamerawesomeCameraService implements CameraService {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _cameraState = cameraState;
           config.onReady?.call();
-          _readyController.add(true);
+          if (!_readyController.isClosed) {
+            _readyController.add(true);
+          }
         });
         return const SizedBox.shrink();
       },
@@ -323,7 +329,9 @@ class CamerawesomeCameraService implements CameraService {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _cameraState = cameraState;
           config.onReady?.call();
-          _readyController.add(true);
+          if (!_readyController.isClosed) {
+            _readyController.add(true);
+          }
         });
         return const SizedBox.shrink();
       },

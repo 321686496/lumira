@@ -41,7 +41,7 @@ class AcademyKnowledgeCard extends ConsumerWidget {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                     child: AspectRatio(
                       aspectRatio: 4 / 3,
-                      child: Image.network(
+                      child: Image.asset(
                         card.coverImage,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
