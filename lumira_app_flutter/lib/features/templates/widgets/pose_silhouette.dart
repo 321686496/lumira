@@ -4,17 +4,15 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
-/// 姿势剪影渲染组件（简化版）
+/// 姿势剪影渲染组件
 ///
 /// 视觉规格来源：lumira-app/src/components/PoseSilhouette.vue
 ///
-/// 简化说明（brief §3.2 + §8.1 已知简化决策 #1）：
-/// - builtin：用 `Icon(Icons.person_outline)` 占位（仅当 data != 'none'）
-/// - image：用 `Image.memory(base64Decode(data))` 渲染（若 data 为空则不渲染）
-/// - svg：解析 SilhouetteEditor 导出的 SVG 字符串（<path d="M.. L.." stroke=".."
-///   stroke-width=".." .../>），用 CustomPainter 渲染
-///   - 仅支持 SilhouetteEditor 导出的简单格式（path 元素 + M/L 命令）
-///   - 外部复杂 SVG 仍 fallback 到占位图标
+/// 尺寸机制（与 uni-app 原始设计一致）：
+/// - 剪影基础宽度 = 父容器宽度的 40%（widthFactor: 0.4）
+/// - 剪影宽高比 = 1 : 1.6（人像纵向，非正方形）
+/// - 缩放/旋转通过 Transform 在基础尺寸上叠加
+/// - 图片/SVG 填满剪影容器（width: 100%, height: 100%）
 class PoseSilhouette extends StatelessWidget {
   const PoseSilhouette({
     super.key,
@@ -31,123 +29,131 @@ class PoseSilhouette extends StatelessWidget {
   /// builtin: silhouette key; image: base64 data URL; svg: inline SVG string
   final String silhouetteData;
 
-  /// 0.5 ~ 1.5
+  /// 缩放系数（在 40% 基础宽度上叠加）
   final double scale;
 
-  /// -45 ~ 45
+  /// 旋转角度 -45 ~ 45
   final double rotation;
 
-  /// 默认 Color.fromRGBO(255, 255, 255, 0.85)（与项目记忆规则"剪影包装元素 color: rgba(255,255,255,0.85)"一致）
+  /// 默认 Color.fromRGBO(255, 255, 255, 0.85)
   final Color? color;
+
+  /// 剪影基础宽度占父容器宽度的比例（与 uni-app 设计一致：40%）
+  static const double baseWidthFactor = 0.4;
+
+  /// 剪影宽高比（宽:高 = 1:1.6，人像纵向）
+  static const double baseAspectW = 1.0;
+  static const double baseAspectH = 1.6;
 
   @override
   Widget build(BuildContext context) {
     final effectiveColor = color ?? const Color.fromRGBO(255, 255, 255, 0.85);
 
-    Widget content = _buildContent(effectiveColor);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 剪影基础宽度 = 父容器宽度 × 40%
+        final baseWidth = constraints.maxWidth * baseWidthFactor;
+        // 高度 = 宽度 × 1.6
+        final baseHeight = baseWidth * baseAspectH / baseAspectW;
 
-    // 用 Transform 应用缩放和旋转
-    return Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()
-        ..rotateZ(rotation * math.pi / 180.0)
-        ..scale(scale),
-      child: content,
+        return Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..rotateZ(rotation * math.pi / 180.0)
+            ..scale(scale),
+          child: SizedBox(
+            width: baseWidth,
+            height: baseHeight,
+            child: _buildContent(effectiveColor, baseWidth),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildContent(Color effectiveColor) {
+  Widget _buildContent(Color effectiveColor, double baseWidth) {
     switch (silhouetteType) {
       case 'builtin':
         if (silhouetteData.isEmpty || silhouetteData == 'none') {
-          // builtin 'none'：渲染空 SizedBox（与 brief §3.2 一致）
-          return const SizedBox(width: 80, height: 80);
+          return const SizedBox.shrink();
         }
-        // 简化：用 Icon 占位（Task 2.9 接入真实 SVG 库后替换）
         return Icon(
           Icons.person_outline,
           color: effectiveColor,
-          size: 80,
+          size: baseWidth * 0.8,
         );
 
       case 'image':
         if (silhouetteData.isEmpty) {
-          // mock 数据为空时不渲染（避免 base64Decode 异常）
-          return const SizedBox(width: 80, height: 80);
+          return const SizedBox.shrink();
         }
         // image 类型支持三种数据源：
-        // 1. asset 路径（如 `assets/images/silhouettes/xxx.png`）→ Image.asset
-        // 2. base64 数据 URL（如 `data:image/png;base64,xxxx`）→ Image.memory
-        // 3. http(s) URL（后端上传的剪影图片，pose.silhouette.data 为 URL）→ Image.network
+        // 1. asset 路径 → Image.asset
+        // 2. http(s) URL → Image.network
+        // 3. base64 data URL → Image.memory
         if (silhouetteData.startsWith('assets/')) {
           return Image.asset(
             silhouetteData,
             key: ValueKey(silhouetteData),
             gaplessPlayback: true,
-            width: 80,
-            height: 80,
+            width: double.infinity,
+            height: double.infinity,
             fit: BoxFit.contain,
             errorBuilder: (_, __, ___) => Icon(
               Icons.broken_image_outlined,
               color: effectiveColor,
-              size: 80,
+              size: baseWidth * 0.8,
             ),
           );
         }
         if (silhouetteData.startsWith('http://') ||
             silhouetteData.startsWith('https://')) {
-          // 修复：不传 color 参数。color + 默认 BlendMode.srcIn 会将所有像素
-          // 替换为单一颜色，导致导入的照片显示为纯色块而非实际图像。
           return Image.network(
             silhouetteData,
             key: ValueKey(silhouetteData),
             gaplessPlayback: true,
-            width: 80,
-            height: 80,
+            width: double.infinity,
+            height: double.infinity,
             fit: BoxFit.contain,
             errorBuilder: (_, error, ___) {
               debugPrint('[PoseSilhouette] Network image error: $error');
               return Icon(
                 Icons.broken_image_outlined,
                 color: effectiveColor,
-                size: 80,
+                size: baseWidth * 0.8,
               );
             },
           );
         }
-        // 修复：同上，移除 color 参数以正确显示原始图像。
         return Image.memory(
           _decodeBase64DataUrl(silhouetteData),
           key: ValueKey(silhouetteData),
           gaplessPlayback: true,
-          width: 80,
-          height: 80,
+          width: double.infinity,
+          height: double.infinity,
           fit: BoxFit.contain,
           errorBuilder: (_, error, ___) {
             debugPrint('[PoseSilhouette] Memory image decode error: $error');
             return Icon(
               Icons.broken_image_outlined,
               color: effectiveColor,
-              size: 80,
+              size: baseWidth * 0.8,
             );
           },
         );
 
       case 'svg':
-        // Bug 11 修复：解析 SilhouetteEditor 导出的 SVG 字符串并渲染
-        // 仅支持简单格式（<path d="M.. L.." stroke-width=".." .../>），
-        // 复杂外部 SVG fallback 到占位图标
         final parsed = _SilhouetteSvgParser.parse(silhouetteData);
         if (parsed == null) {
           return Icon(
             Icons.brush_outlined,
             color: effectiveColor,
-            size: 80,
+            size: baseWidth * 0.8,
           );
         }
         return SizedBox(
-          width: 80,
-          height: 80,
+          width: double.infinity,
+          height: double.infinity,
           child: CustomPaint(
             painter: _SilhouetteSvgPainter(
               paths: parsed.paths,
@@ -158,7 +164,7 @@ class PoseSilhouette extends StatelessWidget {
         );
 
       default:
-        return const SizedBox(width: 80, height: 80);
+        return const SizedBox.shrink();
     }
   }
 
