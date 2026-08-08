@@ -1,7 +1,7 @@
 import 'dart:io' show File, stderr;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
-import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, ImageByteFormat, Paint, PictureRecorder, Offset, instantiateImageCodec;
+import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, Paint, PictureRecorder, Offset, instantiateImageCodec;
 
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
@@ -19,6 +19,7 @@ import '../../home/providers/banner_recommendation_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
+import '../../templates/data/remote_templates_providers.dart';
 import '../data/capture_state.dart';
 import '../data/capture_thumbnail_state.dart';
 import '../data/custom_fill_light_colors.dart';
@@ -28,6 +29,7 @@ import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
 import '../services/dart_photo_pipeline.dart'
     show applyPerPixelEffectsImg, applySmoothSkinImg, applyVignetteImg;
+import '../watermark/data/watermark_providers.dart';
 import '../widgets/aspect_ratio_selector.dart';
 import '../widgets/capture_button.dart';
 import '../widgets/capture_nav.dart';
@@ -124,6 +126,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
   @override
   void initState() {
     super.initState();
+    // 挑战模式：重置缩略图状态，确保 provider 处于 idle 初始态，
+    // 避免 StateNotifierProvider 残留 final_ 状态导致 ref.listen 误触发（直接跳转到确认页）。
+    if (widget.challengeId != null && widget.challengeId!.isNotEmpty) {
+      ref.read(captureThumbnailProvider.notifier).reset();
+    }
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _applyRouteParamsToState();
@@ -137,6 +144,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 异步加载持久化的自由模式参数（仅在自由模式生效，模板模式由 currentTemplateId 覆盖）
       CaptureState.loadFreeModeParams(
           ProviderScope.containerOf(context, listen: false));
+      // 触发远程模板同步（invalidate 强制重新拉取），同步完成后 allTemplatesProvider 自动重新评估
+      ref.invalidate(remoteTemplatesSyncProvider);
+      ref.invalidate(remoteCategoriesSyncProvider);
     });
   }
 
@@ -456,6 +466,49 @@ class _CapturePageState extends ConsumerState<CapturePage>
         debugPrint('[capture] evict FileImage 缓存失败: $e');
       }
 
+      // === 水印渲染 ===
+      // 在主 isolate 中将水印合成到 processedPath 上，生成带水印的 finalPath。
+      // 失败时静默回退到 processedPath，绝不阻塞拍照流程。
+      // originalPath 仍为未加水印的原始备份，不受此步骤影响。
+      String finalPath = processedPath;
+      final watermarkSettings = ref.read(watermarkSettingsProvider);
+      final watermarkTemplate = ref.read(currentWatermarkTemplateProvider);
+      if (watermarkSettings.enabled && watermarkTemplate != null) {
+        ui.Image? sourceImage;
+        try {
+          final bytes = await File(processedPath).readAsBytes();
+          final codec = await ui.instantiateImageCodec(bytes);
+          final frame = await codec.getNextFrame();
+          sourceImage = frame.image;
+          codec.dispose();
+
+          final renderer = ref.read(watermarkRendererProvider);
+          final rgbaBytes = await renderer.render(
+            sourceImage: sourceImage,
+            elements: watermarkTemplate.elements,
+          );
+
+          // 将 RGBA 字节重新编码为 JPEG，写入 _wm.jpg 文件
+          final outputImage = img.Image.fromBytes(
+            width: sourceImage.width,
+            height: sourceImage.height,
+            bytes: rgbaBytes.buffer,
+            numChannels: 4,
+            order: img.ChannelOrder.rgba,
+          );
+          final jpegBytes = img.encodeJpg(outputImage, quality: 95);
+          finalPath = processedPath.replaceAll(RegExp(r'\.jpg$'), '_wm.jpg');
+          await File(finalPath).writeAsBytes(jpegBytes);
+
+          debugPrint('[watermark] rendered to $finalPath');
+        } catch (e) {
+          debugPrint('[watermark] render failed, using original: $e');
+          finalPath = processedPath;
+        } finally {
+          sourceImage?.dispose();
+        }
+      }
+
       final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
 
       // 落库到相册（原图备份 + GalleryItemRecord + provider 失效）
@@ -466,7 +519,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
         final lut = params.postProcess.lut;
         final record = GalleryItemRecord(
           id: photoId,
-          filePath: processedPath,
+          filePath: finalPath,
           originalPath: originalPath,
           postProcess: params.postProcess,
           dataUrl: null,
@@ -496,9 +549,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
 
       ref.read(captureThumbnailProvider.notifier)
-          .setFinalResult(processedPath, photoId);
+          .setFinalResult(finalPath, photoId);
       ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
-          processedPath;
+          finalPath;
     } catch (e) {
       debugPrint('[capture] process failed: $e');
     } finally {
@@ -638,8 +691,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
         if (_hasNavigatedToChallenge) return;
         if (next.status != CaptureThumbnailStatus.final_) return;
         if (next.photoId == null || next.finalPath == null) return;
-        // 仅在从非 final_ 态切换到 final_ 态时触发，避免重复导航
-        if (prev?.status == CaptureThumbnailStatus.final_) return;
+        // 必须从 processing 或 preview 过渡到 final_ 才触发，避免：
+        // 1. prev 为 null（首次监听/重建后 provider 残留 final_ 状态）时误触发
+        // 2. 状态一直为 final_ 时重复触发
+        if (prev?.status != CaptureThumbnailStatus.processing &&
+            prev?.status != CaptureThumbnailStatus.preview) return;
         _hasNavigatedToChallenge = true;
         final cid = widget.challengeId!;
         final pid = next.photoId!;
