@@ -175,6 +175,12 @@ class Tables {
   static const String colUsername = 'username';
   static const String colAvatarSeed = 'avatar_seed';
   // colSyncedAt 复用 questionnaire 段声明（值同为 'synced_at'），此处不重复声明
+
+  // === watermark_templates 表（v20 迁移新增，自定义水印模板） ===
+  // colId / colName / colCreatedAt 复用前面已声明的同名常量
+  static const String watermarkTemplates = 'watermark_templates';
+  static const String colType = 'type';
+  static const String colConfig = 'config';
 }
 
 class ChallengeHistoryTable {
@@ -293,3 +299,23 @@ class CheckinPhotoTable {
   static const String indexCheckinSql =
       'CREATE INDEX idx_checkin_photos_checkin ON $name ($colCheckinId)';
 }
+
+/// 自定义水印模板表（v20 迁移新增）
+/// config 列存储 WatermarkTemplate.toJson() 的 JSON 字符串。
+class WatermarkTemplatesTable {
+  static const String name = Tables.watermarkTemplates;
+
+  static const String createSql = '''
+    CREATE TABLE IF NOT EXISTS $name (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colType} TEXT NOT NULL,
+      ${Tables.colConfig} TEXT NOT NULL,
+      ${Tables.colCreatedAt} INTEGER NOT NULL
+    )
+  ''';
+
+  static const String indexCreatedAtSql =
+      'CREATE INDEX IF NOT EXISTS idx_watermark_templates_created_at ON $name (${Tables.colCreatedAt} DESC)';
+}
+
