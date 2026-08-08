@@ -39,7 +39,8 @@ describe('RedeemController (e2e)', () => {
     await db.insert(redemptionCodeBatches).values({
       batchId: 1,
       campaignName: '测试活动',
-      rewardTier: 1,
+      rewardPoints: 50,
+      rewardTemplates: '[]',
       maxUsesPerCode: 1,
       totalGenerated: 1,
       totalUsed: 0,
@@ -67,7 +68,9 @@ describe('RedeemController (e2e)', () => {
 
     expect(res.body.batchId).toBe(1);
     expect(res.body.campaignName).toBe('测试活动');
-    expect(res.body.rewardTier).toBe(1);
+    expect(res.body.rewardPoints).toBe(50);
+    expect(res.body.balance).toBe(50);
+    expect(res.body.rewardTemplates).toEqual([]);
   });
 
   it('POST /api/v1/redeem — should reject already used code', async () => {

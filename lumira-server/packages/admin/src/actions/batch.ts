@@ -1,4 +1,3 @@
-// src/actions/batch.ts
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -18,6 +17,15 @@ export async function createBatchAction(formData: FormData) {
     return { error: '请至少输入一个兑换码' };
   }
 
+  let rewardTemplates: string[] = [];
+  try {
+    const raw = formData.get('rewardTemplates') as string;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) rewardTemplates = parsed;
+    }
+  } catch {}
+
   let result;
   try {
     const validFrom = formData.get('validFrom') as string | null;
@@ -26,7 +34,8 @@ export async function createBatchAction(formData: FormData) {
     result = await api.createBatch({
       campaignName: formData.get('campaignName') as string,
       codes,
-      rewardTier: Number(formData.get('rewardTier')),
+      rewardPoints: Number(formData.get('rewardPoints')),
+      rewardTemplates,
       maxUsesPerCode: Number(formData.get('maxUsesPerCode')),
       validFrom: validFrom ? toUnixSeconds(validFrom) : undefined,
       validUntil: validUntil ? toUnixSeconds(validUntil) : undefined,

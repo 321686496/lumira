@@ -2,17 +2,24 @@ export interface RedeemCodeRequest {
   code: string;
 }
 
+export interface RewardTemplateInfo {
+  templateId: string;
+  templateName: string;
+}
+
 export interface RedeemCodeResponse {
   batchId: number;
   campaignName: string;
-  rewardTier: number;
-  rewardItems: RewardItem[];
+  rewardPoints: number;
+  balance: number;
+  rewardTemplates: RewardTemplateInfo[];
 }
 
 export interface RedemptionCodeBatch {
   batchId: number;
   campaignName: string;
-  rewardTier: number;
+  rewardPoints: number;
+  rewardTemplates: string;
   maxUsesPerCode: number;
   totalGenerated: number;
   totalUsed: number;
