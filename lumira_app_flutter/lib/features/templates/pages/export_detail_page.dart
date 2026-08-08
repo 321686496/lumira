@@ -8,12 +8,11 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/services/file_picker_service.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/safe_share.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../services/template_exporter.dart';
 
 class ExportDetailPage extends ConsumerStatefulWidget {
   const ExportDetailPage({
@@ -230,92 +229,108 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          LumiraCard(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.description_outlined, color: tokens.brand, size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.templateName,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.textPrimary,
+          Card(
+            color: tokens.surface,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: tokens.divider, width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.description_outlined, color: tokens.brand, size: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.templateName,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: tokens.textPrimary,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '已导出为 $format 格式',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: tokens.textSecondary,
+                            const SizedBox(height: 4),
+                            Text(
+                              '已导出为 $format 格式',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: tokens.textSecondary,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _InfoRow(tokens: tokens, label: '文件名', value: fileName),
-                const SizedBox(height: 8),
-                _InfoRow(tokens: tokens, label: '文件大小', value: fileSize),
-                const SizedBox(height: 8),
-                _InfoRow(
-                  tokens: tokens,
-                  label: '保存位置',
-                  value: _file!.parent.path,
-                ),
-              ],
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _InfoRow(tokens: tokens, label: '文件名', value: fileName),
+                  const SizedBox(height: 8),
+                  _InfoRow(tokens: tokens, label: '文件大小', value: fileSize),
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    tokens: tokens,
+                    label: '保存位置',
+                    value: _file!.parent.path,
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 20),
-          LumiraCard(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.preview_outlined, color: tokens.brand, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      '内容预览',
+          Card(
+            color: tokens.surface,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: tokens.divider, width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.preview_outlined, color: tokens.brand, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '内容预览',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: tokens.surfaceAlt,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _contentPreview ?? '无内容',
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
+                        fontSize: 13,
+                        fontFamily: 'monospace',
+                        color: tokens.textSecondary,
+                        height: 1.5,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: tokens.surfaceAlt,
-                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    _contentPreview ?? '无内容',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontFamily: 'monospace',
-                      color: tokens.textSecondary,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 32),

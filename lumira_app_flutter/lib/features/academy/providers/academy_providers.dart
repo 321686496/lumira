@@ -17,7 +17,7 @@ final academyRepositoryProvider = FutureProvider<AcademyRepository>((ref) async 
 
 /// 按等级筛选课程（null = 全部）
 final coursesProvider = Provider.family<List<AcademyCourse>, AcademyLevel?>((ref, level) {
-  // 同步访问 mock 数据，无需 async
+  // 同步访问本地课程内容数据，无需 async
   return AcademyContent.courses
       .where((c) => level == null || c.level == level)
       .toList();
@@ -58,9 +58,9 @@ final academyTrajectoryProvider =
 
 /// 排序后的课程列表
 /// 规则：
-/// 1. 先按 level 升序（beginner → intermediate → advanced）
-/// 2. 同 level 内：未完全完成的在前（按 lastViewedAt DESC），
-///    已完全完成的沉底（按 completedAt ASC）
+/// 1. 先按完全完成状态分组：未完全完成的在前，已完全完成的沉底（跨 level）
+/// 2. 未完成组内：按 level 升序，同 level 按 lastViewedAt DESC
+/// 3. 已完成组内：按 level 升序，同 level 按 completedAt ASC
 final sortedCoursesProvider = FutureProvider.family<List<AcademyCourse>, AcademyLevel?>(
     (ref, level) async {
   final repo = await ref.watch(academyRepositoryProvider.future);
@@ -80,16 +80,16 @@ final sortedCoursesProvider = FutureProvider.family<List<AcademyCourse>, Academy
     ));
   }
 
-  // 排序
+  // 排序：已完全完成的课程统一沉底
   courseData.sort((a, b) {
-    // 1. level 升序
-    final levelCompare = a.course.level.index.compareTo(b.course.level.index);
-    if (levelCompare != 0) return levelCompare;
-
-    // 2. 同 level 内：未完成在前，已完成沉底
+    // 1. 未完成在前，已完成沉底（跨 level）
     if (a.isFullyCompleted != b.isFullyCompleted) {
       return a.isFullyCompleted ? 1 : -1;
     }
+
+    // 2. 同组内按 level 升序
+    final levelCompare = a.course.level.index.compareTo(b.course.level.index);
+    if (levelCompare != 0) return levelCompare;
 
     if (a.isFullyCompleted) {
       // 都已完成：按 completedAt ASC

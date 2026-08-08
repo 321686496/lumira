@@ -12,6 +12,7 @@ import '../data/scene_presets_data.dart';
 import '../../templates/services/template_mapper.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../templates/data/templates_providers.dart';
+import '../../templates/data/remote_templates_providers.dart';
 
 /// 闪光灯模式
 enum CaptureFlashMode { off, on, auto, torch }
@@ -128,11 +129,19 @@ class CaptureState {
   // ── 新增：模板编辑状态 ──
 
   /// 所有模板列表（系统 + 自定义 + 后端动态）
-  /// 系统模板来自 TemplateRegistry（同步），自定义与远程模板来自 TemplatesDao（异步）
-  /// 远程模板可能仅含 meta（5 段 JSON 为空），列表展示足够，详情按需拉取
-  /// DAO 加载失败时降级为仅系统模板
+  /// 系统模板来自 TemplateRegistry（同步），自定义与远程模板来自 TemplatesDao（异步）。
+  /// 远程模板全量同步后仅含 meta（5 段 JSON 为空），此处按需拉取完整内容补全，
+  /// 确保 silhouette/pose 等数据在拍摄页可用。
+  ///
+  /// 通过 `ref.watch(remoteTemplatesSyncProvider)` 建立依赖，当同步完成时自动重新评估，
+  /// 确保远程模板出现在列表后模板条可自动刷新。
+  /// DAO 加载失败时降级为仅系统模板。
   static final allTemplatesProvider =
       FutureProvider<List<PhotoTemplate>>((ref) async {
+    // 建立对远程模板同步的依赖 — 同步完成后自动重新评估，不需要 await
+    // 同步本身在 CapturePage.initState 中触发
+    ref.watch(remoteTemplatesSyncProvider);
+
     // 系统模板（同步，立即可用）
     final systemTemplates = TemplateRegistry.allTemplates;
 
@@ -143,6 +152,24 @@ class CaptureState {
       final customAndRemoteTemplates = <PhotoTemplate>[];
       for (final r in customAndRemoteRecords) {
         try {
+          // 远程模板仅含 meta（5 段 JSON 为空）时，按需拉取完整内容
+          // 确保 pose（含 silhouette）、composition 等数据在拍摄页可直接使用
+          if (r.source == 'remote' &&
+              (r.composition.isEmpty || r.pose.isEmpty)) {
+            try {
+              final repo = await ref.watch(remoteTemplatesRepositoryProvider.future);
+              final dto = await repo.fetchDetail(r.id);
+              final record = TemplateMapper.detailToRecord(dto);
+              await dao.upsert(record);
+              final refreshed = await dao.getById(r.id);
+              if (refreshed != null) {
+                customAndRemoteTemplates.add(TemplateMapper.toPhotoTemplate(refreshed));
+                continue;
+              }
+            } catch (e) {
+              debugPrint('[capture] allTemplatesProvider: remote detail fetch failed for ${r.id}: $e');
+            }
+          }
           customAndRemoteTemplates.add(TemplateMapper.toPhotoTemplate(r));
         } catch (e) {
           debugPrint('[capture] allTemplatesProvider: skipping malformed template ${r.id}: $e');
@@ -220,14 +247,30 @@ class CaptureState {
   /// 原始模板（只读，派生自 currentTemplateIdProvider）
   /// 先查 TemplateRegistry（系统模板，同步快路径）
   /// 未找到 → 查 templateCacheProvider（含自定义模板的运行时缓存）
+  /// 仍未找到或 silhouette 为空 → 若为远程模板（srv_ 前缀），按需拉取详情
   static final originalTemplateProvider = Provider<PhotoTemplate?>((ref) {
     final id = ref.watch(currentTemplateIdProvider);
     if (id == null) return null;
     // 快路径：系统模板（同步）
     final builtin = TemplateRegistry.getTemplate(id);
     if (builtin != null) return builtin;
-    // 慢路径：自定义模板（从预加载缓存读取）
-    return ref.watch(templateCacheProvider)[id];
+    // 慢路径：自定义/远程模板（从预加载缓存读取）
+    final cached = ref.watch(templateCacheProvider)[id];
+    // 缓存中有完整模板（silhouette 非 none）→ 直接返回
+    if (cached != null && cached.pose.silhouette.data != 'none') {
+      return cached;
+    }
+    // 远程模板未在缓存中或 silhouette 为空时，按需拉取详情
+    // remoteTemplateDetailProvider 会 fetchDetail → upsert DAO → 返回 PhotoTemplate
+    // 拉取完成后此 Provider 自动重新评估（因为 watch 了 family provider）
+    if (id.startsWith('srv_')) {
+      final asyncDetail = ref.watch(remoteTemplateDetailProvider(id));
+      return asyncDetail.maybeWhen(
+        data: (tpl) => tpl ?? cached,
+        orElse: () => cached,
+      );
+    }
+    return cached;
   });
 
   /// 可编辑模板副本（参数面板的所有修改都写到这里）

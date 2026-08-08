@@ -176,9 +176,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     final usePptpl = result == 'pptpl';
     LumiraToast.show(context, '正在导出 ${record.name}...');
     try {
-      await TemplateExporter.shareTemplate(record, usePptpl: usePptpl);
+      final filePath = await TemplateExporter.exportToTempFile(record, usePptpl: usePptpl);
       if (!mounted) return;
-      LumiraToast.show(context, '已分享 ${record.name}');
+      GoRouter.of(context).push(
+        '${RouteNames.templatesExportDetail}?filePath=${Uri.encodeComponent(filePath)}&templateName=${Uri.encodeComponent(record.name)}&usePptpl=$usePptpl',
+      );
     } catch (e) {
       if (!mounted) return;
       LumiraToast.show(context, '导出失败：$e');

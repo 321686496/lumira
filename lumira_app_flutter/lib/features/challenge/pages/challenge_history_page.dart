@@ -1,7 +1,11 @@
+import 'dart:io' show File;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/gallery_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -41,8 +45,16 @@ class ChallengeHistoryPage extends ConsumerWidget {
                       style: TextStyle(color: tokens.textTertiary)),
                 ),
                 data: (records) {
+                  // 过滤今日未完成的 pending 记录：只有到第二天才显示为跳过
+                  final now = DateTime.now();
+                  final todayStr =
+                      '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+                  final filtered = List<ChallengeHistoryRecord>.from(records)
+                    ..removeWhere((r) =>
+                        r.date == todayStr &&
+                        r.status == ChallengeStatus.pending);
                   // 按日期倒序排列
-                  final sorted = List<ChallengeHistoryRecord>.from(records)
+                  final sorted = List<ChallengeHistoryRecord>.from(filtered)
                     ..sort((a, b) => b.date.compareTo(a.date));
 
                   // 统计数据
@@ -265,7 +277,7 @@ class _CompletionRing extends StatelessWidget {
 }
 
 /// 时间线单条记录
-class _HistoryTimelineTile extends StatelessWidget {
+class _HistoryTimelineTile extends ConsumerWidget {
   const _HistoryTimelineTile({
     required this.tokens,
     required this.record,
@@ -277,7 +289,7 @@ class _HistoryTimelineTile extends StatelessWidget {
   final bool isLast;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDone = record.status == ChallengeStatus.done;
     final dotColor = isDone ? tokens.brand : tokens.textTertiary;
 
@@ -380,26 +392,14 @@ class _HistoryTimelineTile extends StatelessWidget {
                           separatorBuilder: (_, __) =>
                               const SizedBox(width: 8),
                           itemBuilder: (context, index) {
-                            // photoIds 存储的是真实 photoId，此处用 picsum 占位
-                            // 未来接入 gallery_items 关联查询后替换为真实图片源
-                            final url =
-                                'https://picsum.photos/seed/lumira_${record.photoIds[index]}/200/200';
+                            final photoId = record.photoIds[index];
                             return GestureDetector(
-                              onTap: () => _viewPhoto(context, url),
+                              onTap: () => _viewDetail(context, ref),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  url,
-                                  width: 72,
-                                  height: 72,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    width: 72,
-                                    height: 72,
-                                    color: tokens.brandSubtle,
-                                    child: Icon(Icons.image_outlined,
-                                        size: 24, color: tokens.brand),
-                                  ),
+                                child: _PhotoThumb(
+                                  photoId: photoId,
+                                  tokens: tokens,
                                 ),
                               ),
                             );
@@ -427,12 +427,94 @@ class _HistoryTimelineTile extends StatelessWidget {
     return isoDate;
   }
 
-  void _viewPhoto(BuildContext context, String url) {
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        pageBuilder: (_, __, ___) => _PhotoViewer(url: url),
+  void _viewDetail(BuildContext context, WidgetRef ref) {
+    GoRouter.of(context).push(
+      RouteNames.build(
+        RouteNames.challengeDetail,
+        {
+          RouteNames.paramChallengeId: record.challengeId,
+          RouteNames.paramDate: record.date,
+        },
       ),
+    );
+  }
+}
+
+/// 照片缩略图组件，从 gallery_items 加载真实图片
+class _PhotoThumb extends ConsumerWidget {
+  const _PhotoThumb({required this.photoId, required this.tokens});
+
+  final String photoId;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<GalleryItemRecord?>(
+      future: ref
+          .read(galleryDaoProvider.future)
+          .then((dao) => dao.getById(photoId)),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Container(
+            width: 72,
+            height: 72,
+            color: tokens.divider,
+            child: const Center(
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        final item = snapshot.data;
+        if (item == null) {
+          return Container(
+            width: 72,
+            height: 72,
+            color: tokens.brandSubtle,
+            child: Icon(Icons.image_outlined, size: 24, color: tokens.brand),
+          );
+        }
+        final filePath = item.filePath ?? item.originalPath;
+        if (filePath != null && filePath.isNotEmpty) {
+          return Image.file(
+            File(filePath),
+            width: 72,
+            height: 72,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _placeholder(),
+          );
+        }
+        final dataUrl = item.dataUrl;
+        if (dataUrl != null && dataUrl.isNotEmpty) {
+          try {
+            final idx = dataUrl.indexOf('base64,');
+            if (idx != -1) {
+              final b64 = dataUrl.substring(idx + 7);
+              final bytes = Uri.parse('data:;base64,$b64').data!.contentAsBytes();
+              return Image.memory(
+                bytes,
+                width: 72,
+                height: 72,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _placeholder(),
+              );
+            }
+          } catch (_) {}
+        }
+        return _placeholder();
+      },
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      width: 72,
+      height: 72,
+      color: tokens.brandSubtle,
+      child: Icon(Icons.image_outlined, size: 24, color: tokens.brand),
     );
   }
 }
@@ -488,31 +570,4 @@ class _CategoryChip extends StatelessWidget {
   }
 }
 
-/// 图片查看器（点击缩略图全屏预览）
-class _PhotoViewer extends StatelessWidget {
-  const _PhotoViewer({required this.url});
-  final String url;
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).pop(),
-      child: Scaffold(
-        backgroundColor: Colors.black.withOpacity(0.9),
-        body: Center(
-          child: InteractiveViewer(
-            child: Image.network(
-              url,
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.broken_image_outlined,
-                size: 64,
-                color: Colors.white54,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

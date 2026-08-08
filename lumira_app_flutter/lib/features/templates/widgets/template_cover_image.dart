@@ -59,6 +59,7 @@ class TemplateCoverImage extends StatelessWidget {
         return Image.asset(
           cover!,
           fit: fit,
+          frameBuilder: _fadeInFrameBuilder,
           errorBuilder: (_, __, ___) =>
               errorFallback ?? _defaultError(context),
         );
@@ -68,6 +69,9 @@ class TemplateCoverImage extends StatelessWidget {
         return Image.network(
           cover!,
           fit: fit,
+          frameBuilder: _fadeInFrameBuilder,
+          // 网络图片下载期间显示占位底色，避免空白闪烁
+          loadingBuilder: _networkLoadingBuilder,
           errorBuilder: (_, __, ___) =>
               errorFallback ?? _defaultError(context),
         );
@@ -78,12 +82,44 @@ class TemplateCoverImage extends StatelessWidget {
     return fallback ?? _defaultEmpty(context);
   }
 
+  /// 图片解码完成前显示淡入（避免跳变）。
+  static Widget _fadeInFrameBuilder(
+    BuildContext context,
+    Widget child,
+    int? frame,
+    bool wasSynchronouslyLoaded,
+  ) {
+    if (wasSynchronouslyLoaded) return child;
+    return AnimatedOpacity(
+      opacity: frame == null ? 0 : 1,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      child: child,
+    );
+  }
+
+  /// 网络图片下载中显示占位底色（下载完成后由 child 淡入替换）。
+  static Widget _networkLoadingBuilder(
+    BuildContext context,
+    Widget child,
+    ImageChunkEvent? loadingProgress,
+  ) {
+    if (loadingProgress == null) return child;
+    return Builder(
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return ColoredBox(color: theme.colorScheme.surfaceVariant);
+      },
+    );
+  }
+
   Widget _buildFromDataUrl(String dataUrl) {
     try {
       final bytes = _decodeBase64DataUrl(dataUrl);
       return Image.memory(
         bytes,
         fit: fit,
+        frameBuilder: _fadeInFrameBuilder,
         errorBuilder: (_, __, ___) =>
             errorFallback ?? _defaultError(null),
       );

@@ -418,10 +418,25 @@ class TemplateMapper {
   }
 
   /// JSON → PhotoTemplate 剪影。
+  /// 优先读 data 字段，为空或 'none' 时回退到 url 字段（后端兼容字段）。
+  /// 若 type 为 builtin 但 data 实际是 http URL（后端上传剪影时未更新 type），自动修正为 image。
   static SilhouetteResource silhouetteFromJson(Map<String, dynamic> json) {
+    var type = (json['type'] as String?) ?? 'builtin';
+    var data = (json['data'] as String?) ?? '';
+    // data 为空或 'none' 时，尝试从 url 字段获取（后端 silhouette 对象同时含 url 和 data）
+    if (data.isEmpty || data == 'none') {
+      data = (json['url'] as String?) ?? '';
+    }
+    data = normalizeAssetUrl(data.isNotEmpty ? data : 'none');
+    // 后端 bug 修复：上传剪影图片时可能未更新 type，仍为 builtin
+    // 若 data 是 http URL 但 type 不是 image，自动修正为 image
+    if (type != 'image' &&
+        (data.startsWith('http://') || data.startsWith('https://'))) {
+      type = 'image';
+    }
     return SilhouetteResource(
-      type: (json['type'] as String?) ?? 'builtin',
-      data: normalizeAssetUrl((json['data'] as String?) ?? 'none'),
+      type: type,
+      data: data,
       filename: json['filename'] as String?,
       sizeKB: (json['sizeKB'] as num?)?.toInt(),
     );
@@ -430,7 +445,18 @@ class TemplateMapper {
   /// 规范化静态资源 URL：本地缓存的旧数据可能以 localhost/127.0.0.1 为前缀
   /// （后端 BACKEND_PUBLIC_URL 配置前写入），用 [AppConfig.baseUrl] 推导的
   /// 服务 origin 替换，保证图片/剪影在 App 端可加载。
+  /// 也处理相对路径（以 / 开头）：自动补全服务 origin，避免 TemplateCoverImage
+  /// 和 PoseSilhouette 因 URL 不满足 startsWith('http') 而无法加载。
   static String normalizeAssetUrl(String url) {
+    // 相对路径：补全服务器 origin
+    if (url.startsWith('/')) {
+      final base = Uri.tryParse(AppConfig.baseUrl);
+      if (base != null && base.host.isNotEmpty) {
+        final origin =
+            '${base.scheme}://${base.host}${base.hasPort ? ':${base.port}' : ''}';
+        return '$origin$url';
+      }
+    }
     if (!url.startsWith('http://localhost') &&
         !url.startsWith('http://127.0.0.1') &&
         !url.startsWith('https://localhost') &&

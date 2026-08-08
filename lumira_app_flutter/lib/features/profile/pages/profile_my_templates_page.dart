@@ -248,9 +248,17 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
     LumiraToast.show(context, '正在导出 ${record.name}...');
 
     try {
-      await TemplateExporter.shareTemplate(record, usePptpl: usePptpl);
+      final filePath = await TemplateExporter.exportToTempFile(record, usePptpl: usePptpl);
       if (!mounted) return;
-      LumiraToast.show(context, '已分享 ${record.name}');
+      
+      context.push(
+        RouteNames.templatesExportDetail,
+        extra: {
+          'filePath': filePath,
+          'templateName': record.name,
+          'usePptpl': usePptpl,
+        },
+      );
     } catch (e) {
       if (!mounted) return;
       LumiraToast.show(context, '导出失败：$e');

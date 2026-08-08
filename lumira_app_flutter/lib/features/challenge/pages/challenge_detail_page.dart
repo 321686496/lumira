@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:io' show File;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/gallery_dao.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -25,9 +29,11 @@ import '../widgets/challenge_tag.dart';
 /// 5. 拍摄建议（3 个 tip-row，gold/green/red 三色）
 /// 6. 底部操作（"返回挑战" outline + "再拍一张" brand）
 class ChallengeDetailPage extends ConsumerStatefulWidget {
-  const ChallengeDetailPage({super.key, this.challengeId});
+  const ChallengeDetailPage({super.key, this.challengeId, this.date});
 
   final String? challengeId;
+  /// 指定日期（YYYY-MM-DD），为空时默认使用今天
+  final String? date;
 
   @override
   ConsumerState<ChallengeDetailPage> createState() =>
@@ -37,6 +43,7 @@ class ChallengeDetailPage extends ConsumerStatefulWidget {
 class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
   final ScrollController _scrollController = ScrollController();
   bool _scrolled = false;
+  String? _completedPhotoId;
 
   static const double _scrollThreshold = 10.0;
 
@@ -99,21 +106,14 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
     Work? completedWork;
     if (hasPhoto) {
       completedWork = Work(
-        imageUrl:
-            'https://picsum.photos/seed/lumira_${todayRecord.photoIds.first}/400/600',
+        imageUrl: '',
         date: todayRecord.date,
         title: item.title,
-        tags: [
-          ChallengeTag(
-            label: '+${item.rewardXP} XP',
-            color: ChallengeTagColor.gold,
-          ),
-          ChallengeTag(
-            label: ChallengeCategory.label(item.category),
-            color: ChallengeTagColor.green,
-          ),
-        ],
+        tags: const [],
       );
+      _completedPhotoId = todayRecord.photoIds.isNotEmpty
+          ? todayRecord.photoIds.last
+          : null;
     }
 
     return ChallengeDetail(
@@ -185,15 +185,14 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                 style: TextStyle(color: tokens.textSecondary)),
           ),
           data: (history) {
-            // 从历史记录中找到与当前 challengeId 匹配的"今日"记录。
-            // 必须限定 r.date == 今天：题库每天随机选题，不同日期可能选中同一挑战，
-            // 若不限定会误把之前日期完成的同 id 挑战显示为已完成。
+            // 从历史记录中找到与当前 challengeId 匹配的记录。
+            // 使用 widget.date 指定日期，为空时默认今天。
             final now = DateTime.now();
-            final todayStr =
+            final targetDate = widget.date ??
                 '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
             final todayRecord = history
                 .where((r) =>
-                    r.date == todayStr &&
+                    r.date == targetDate &&
                     r.challengeId == widget.challengeId)
                 .toList()
               ..sort((a, b) => b.date.compareTo(a.date));
@@ -236,7 +235,10 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                             FadeUp(
                               delay: const Duration(milliseconds: 80),
                               child: _WorkCard(
-                                work: detail.completedWork!,
+                                photoId: _completedPhotoId ?? '',
+                                date: detail.completedWork!.date,
+                                title: detail.completedWork!.title,
+                                rewardXP: detail.rewardXP,
                                 tokens: tokens,
                                 style: style,
                               ),
@@ -486,16 +488,25 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _WorkCard extends StatelessWidget {
-  const _WorkCard({required this.work, required this.tokens, required this.style});
+class _WorkCard extends ConsumerWidget {
+  const _WorkCard({
+    required this.photoId,
+    required this.date,
+    required this.title,
+    required this.rewardXP,
+    required this.tokens,
+    required this.style,
+  });
 
-  final Work work;
+  final String photoId;
+  final String date;
+  final String title;
+  final int rewardXP;
   final ThemeTokens tokens;
   final UIStyle style;
 
   @override
-  Widget build(BuildContext context) {
-    // Forced fix: neumorphic 风格下移除 border，canvas→surface，boxShadow→shadowConvexSubtle
+  Widget build(BuildContext context, WidgetRef ref) {
     final isNeumorphic = style == UIStyle.neumorphic;
     return Container(
       decoration: BoxDecoration(
@@ -517,31 +528,21 @@ class _WorkCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 3:4 作品图
             AspectRatio(
               aspectRatio: 3 / 4,
-              child: Image.network(
-                work.imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: tokens.divider,
-                  child: Icon(Icons.image, color: tokens.textTertiary),
-                ),
-              ),
+              child: _buildWorkImage(ref),
             ),
-            // 信息区
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 日期
                   Row(
                     children: [
                       Icon(Icons.calendar_today_outlined, size: 12, color: tokens.textTertiary),
                       const SizedBox(width: 6),
                       Text(
-                        work.date,
+                        date,
                         style: TextStyle(
                           fontSize: 12,
                           color: tokens.textTertiary,
@@ -550,9 +551,8 @@ class _WorkCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  // 标题
                   Text(
-                    work.title,
+                    title,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -562,11 +562,25 @@ class _WorkCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 10),
-                  // tags
                   Wrap(
                     spacing: 8,
                     runSpacing: 4,
-                    children: work.tags.map((t) => ChallengeTagWidget(tag: t)).toList(),
+                    children: [
+                      ChallengeTagWidget(
+                        tag: ChallengeTag(
+                          label: '+$rewardXP XP',
+                          color: ChallengeTagColor.gold,
+                          showCheckIcon: false,
+                        ),
+                      ),
+                      ChallengeTagWidget(
+                        tag: ChallengeTag(
+                          label: '已完成',
+                          color: ChallengeTagColor.green,
+                          showCheckIcon: false,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -574,6 +588,66 @@ class _WorkCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildWorkImage(WidgetRef ref) {
+    return FutureBuilder<GalleryItemRecord?>(
+      future: ref
+          .read(galleryDaoProvider.future)
+          .then((dao) => dao.getById(photoId)),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Container(
+            color: tokens.divider,
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        final item = snapshot.data;
+        if (item == null) {
+          return Container(
+            color: tokens.divider,
+            child: Icon(Icons.image, color: tokens.textTertiary),
+          );
+        }
+        final filePath = item.filePath ?? item.originalPath;
+        if (filePath != null && filePath.isNotEmpty) {
+          return Image.file(
+            File(filePath),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _placeholder(),
+          );
+        }
+        final dataUrl = item.dataUrl;
+        if (dataUrl != null && dataUrl.isNotEmpty) {
+          try {
+            final idx = dataUrl.indexOf('base64,');
+            if (idx != -1) {
+              final b64 = dataUrl.substring(idx + 7);
+              final bytes = Uri.parse('data:;base64,$b64').data!.contentAsBytes();
+              return Image.memory(
+                bytes,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _placeholder(),
+              );
+            }
+          } catch (_) {}
+        }
+        return _placeholder();
+      },
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      color: tokens.divider,
+      child: Icon(Icons.image, color: tokens.textTertiary),
     );
   }
 }
@@ -639,9 +713,7 @@ class _RequirementItem extends StatelessWidget {
               ],
             ),
           ),
-          if (requirement.done)
-            Icon(Icons.check, size: 16, color: tokens.brand),
-        ],
+          ],
       ),
     );
   }

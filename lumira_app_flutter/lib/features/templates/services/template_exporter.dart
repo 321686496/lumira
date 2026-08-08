@@ -147,18 +147,24 @@ class TemplateExporter {
     return record.coverData ?? record.cover;
   }
 
-  /// 调用系统分享面板分享模板文件。
+  /// 导出模板到临时文件并返回文件路径。
   /// [usePptpl] 为 true 时使用 .pptpl 完整格式，否则使用 .lumira 简化格式。
-  static Future<void> shareTemplate(TemplateRecord record, {required bool usePptpl}) async {
-    // .pptpl 导出时嵌入封面图（自包含）
+  static Future<String> exportToTempFile(TemplateRecord record, {required bool usePptpl}) async {
     final recordWithCover = usePptpl ? await embedCoverData(record) : record;
     final json = usePptpl ? exportToPptpl(recordWithCover) : exportToLumira(recordWithCover);
     final fileName = buildFileName(record, usePptpl: usePptpl);
     final tempDir = await getSafeTemporaryDirectory();
     final file = File('${tempDir.path}/$fileName');
     await file.writeAsString(json);
+    return file.path;
+  }
+
+  /// 调用系统分享面板分享模板文件。
+  /// [usePptpl] 为 true 时使用 .pptpl 完整格式，否则使用 .lumira 简化格式。
+  static Future<void> shareTemplate(TemplateRecord record, {required bool usePptpl}) async {
+    final filePath = await exportToTempFile(record, usePptpl: usePptpl);
     await SafeShare.shareXFiles(
-      [XFile(file.path)],
+      [XFile(filePath)],
       subject: '如画模板：${record.name}',
       text: '我分享了一个如画摄影模板「${record.name}」，用如画 App 导入即可使用。',
     );

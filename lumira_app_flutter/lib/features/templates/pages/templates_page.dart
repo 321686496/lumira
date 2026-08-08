@@ -527,11 +527,11 @@ class _AcademyEntrySection extends ConsumerWidget {
               borderRadius: BorderRadius.circular(14),
               child: Stack(
                 children: [
-                  // 封面图
+                  // 封面图（本地资源，避免网络占位图加载慢/失败）
                   AspectRatio(
                     aspectRatio: 16 / 9,
-                    child: Image.network(
-                      'https://picsum.photos/seed/academy_entry/640/360',
+                    child: Image.asset(
+                      'assets/images/academy/course_01_cover.jpg',
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         color: tokens.surfaceAlt,
