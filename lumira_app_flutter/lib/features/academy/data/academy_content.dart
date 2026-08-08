@@ -5,10 +5,10 @@ import 'academy_models.dart';
 // 为避免对 16 课 × ~10 处内部构造逐一添加 const，此处整体忽略该 lint。
 // ignore_for_file: prefer_const_constructors
 
-/// 学院 mock 数据
+/// 学院课程内容数据
 /// 16 课按难度×主题矩阵组织，8 张知识卡片
-class AcademyMockData {
-  AcademyMockData._();
+class AcademyContent {
+  AcademyContent._();
 
   // === 16 课课程矩阵（列表元数据） ===
   static const courses = <AcademyCourse>[
@@ -16,99 +16,99 @@ class AcademyMockData {
     AcademyCourse(
       id: 'course_01', lessonNumber: 1, title: '找到你的最佳角度',
       level: AcademyLevel.beginner, topic: AcademyTopic.portrait,
-      coverImage: 'https://picsum.photos/seed/academy_01/400/600',
+      coverImage: 'assets/images/academy/course_01_cover.jpg',
       meta: '8分钟 · 入门', tags: ['角度', '人像'], rewardXP: 50,
     ),
     AcademyCourse(
       id: 'course_02', lessonNumber: 2, title: '光线基础',
       level: AcademyLevel.beginner, topic: AcademyTopic.portrait,
-      coverImage: 'https://picsum.photos/seed/academy_02/400/600',
+      coverImage: 'assets/images/academy/course_02_cover.jpg',
       meta: '10分钟 · 入门', tags: ['光线', '侧光'], rewardXP: 50,
     ),
     AcademyCourse(
       id: 'course_03', lessonNumber: 3, title: '构图三分法',
       level: AcademyLevel.beginner, topic: AcademyTopic.landscape,
-      coverImage: 'https://picsum.photos/seed/academy_03/400/600',
+      coverImage: 'assets/images/academy/course_03_cover.jpg',
       meta: '8分钟 · 入门', tags: ['构图', '三分法'], rewardXP: 50,
     ),
     AcademyCourse(
       id: 'course_04', lessonNumber: 4, title: '黄金时段',
       level: AcademyLevel.beginner, topic: AcademyTopic.landscape,
-      coverImage: 'https://picsum.photos/seed/academy_04/400/600',
+      coverImage: 'assets/images/academy/course_04_cover.jpg',
       meta: '6分钟 · 入门', tags: ['日落', '柔光'], rewardXP: 50,
     ),
     AcademyCourse(
       id: 'course_05', lessonNumber: 5, title: '俯拍平铺',
       level: AcademyLevel.beginner, topic: AcademyTopic.stillLife,
-      coverImage: 'https://picsum.photos/seed/academy_05/400/600',
+      coverImage: 'assets/images/academy/course_05_cover.jpg',
       meta: '7分钟 · 入门', tags: ['俯拍', '静物'], rewardXP: 50,
     ),
     AcademyCourse(
       id: 'course_06', lessonNumber: 6, title: '决定性瞬间',
       level: AcademyLevel.beginner, topic: AcademyTopic.street,
-      coverImage: 'https://picsum.photos/seed/academy_06/400/600',
+      coverImage: 'assets/images/academy/course_06_cover.jpg',
       meta: '9分钟 · 入门', tags: ['街拍', '抓拍'], rewardXP: 50,
     ),
     // 进阶（6 课）
     AcademyCourse(
       id: 'course_07', lessonNumber: 7, title: '伦勃朗光',
       level: AcademyLevel.intermediate, topic: AcademyTopic.portrait,
-      coverImage: 'https://picsum.photos/seed/academy_07/400/600',
+      coverImage: 'assets/images/academy/course_07_cover.jpg',
       meta: '12分钟 · 进阶', tags: ['布光', '伦勃朗'], rewardXP: 80,
     ),
     AcademyCourse(
       id: 'course_08', lessonNumber: 8, title: '情绪表达',
       level: AcademyLevel.intermediate, topic: AcademyTopic.portrait,
-      coverImage: 'https://picsum.photos/seed/academy_08/400/600',
+      coverImage: 'assets/images/academy/course_08_cover.jpg',
       meta: '10分钟 · 进阶', tags: ['情绪', '人像'], rewardXP: 80,
     ),
     AcademyCourse(
       id: 'course_09', lessonNumber: 9, title: '引导线构图',
       level: AcademyLevel.intermediate, topic: AcademyTopic.landscape,
-      coverImage: 'https://picsum.photos/seed/academy_09/400/600',
+      coverImage: 'assets/images/academy/course_09_cover.jpg',
       meta: '11分钟 · 进阶', tags: ['构图', '引导线'], rewardXP: 80,
     ),
     AcademyCourse(
       id: 'course_10', lessonNumber: 10, title: '布光法',
       level: AcademyLevel.intermediate, topic: AcademyTopic.stillLife,
-      coverImage: 'https://picsum.photos/seed/academy_10/400/600',
+      coverImage: 'assets/images/academy/course_10_cover.jpg',
       meta: '13分钟 · 进阶', tags: ['布光', '静物'], rewardXP: 80,
     ),
     AcademyCourse(
       id: 'course_11', lessonNumber: 11, title: '色彩搭配',
       level: AcademyLevel.intermediate, topic: AcademyTopic.stillLife,
-      coverImage: 'https://picsum.photos/seed/academy_11/400/600',
+      coverImage: 'assets/images/academy/course_11_cover.jpg',
       meta: '10分钟 · 进阶', tags: ['色彩', '搭配'], rewardXP: 80,
     ),
     AcademyCourse(
       id: 'course_12', lessonNumber: 12, title: '街头光影',
       level: AcademyLevel.intermediate, topic: AcademyTopic.street,
-      coverImage: 'https://picsum.photos/seed/academy_12/400/600',
+      coverImage: 'assets/images/academy/course_12_cover.jpg',
       meta: '11分钟 · 进阶', tags: ['光影', '街拍'], rewardXP: 80,
     ),
     // 高级（4 课）
     AcademyCourse(
       id: 'course_13', lessonNumber: 13, title: '风格化人像',
       level: AcademyLevel.advanced, topic: AcademyTopic.portrait,
-      coverImage: 'https://picsum.photos/seed/academy_13/400/600',
+      coverImage: 'assets/images/academy/course_13_cover.jpg',
       meta: '15分钟 · 高级', tags: ['风格', '人像'], rewardXP: 120,
     ),
     AcademyCourse(
       id: 'course_14', lessonNumber: 14, title: '黑白风光',
       level: AcademyLevel.advanced, topic: AcademyTopic.landscape,
-      coverImage: 'https://picsum.photos/seed/academy_14/400/600',
+      coverImage: 'assets/images/academy/course_14_cover.jpg',
       meta: '14分钟 · 高级', tags: ['黑白', '风光'], rewardXP: 120,
     ),
     AcademyCourse(
       id: 'course_15', lessonNumber: 15, title: '极简静物',
       level: AcademyLevel.advanced, topic: AcademyTopic.stillLife,
-      coverImage: 'https://picsum.photos/seed/academy_15/400/600',
+      coverImage: 'assets/images/academy/course_15_cover.jpg',
       meta: '12分钟 · 高级', tags: ['极简', '静物'], rewardXP: 120,
     ),
     AcademyCourse(
       id: 'course_16', lessonNumber: 16, title: '街头叙事',
       level: AcademyLevel.advanced, topic: AcademyTopic.street,
-      coverImage: 'https://picsum.photos/seed/academy_16/400/600',
+      coverImage: 'assets/images/academy/course_16_cover.jpg',
       meta: '16分钟 · 高级', tags: ['叙事', '街拍'], rewardXP: 120,
     ),
   ];
@@ -132,56 +132,56 @@ class AcademyMockData {
     KnowledgeCard(
       id: 'kc_01', topic: AcademyTopic.portrait,
       title: '三分法则', subtitle: '构图的核心法则',
-      coverImage: 'https://picsum.photos/seed/kc_01/400/300',
+      coverImage: 'assets/images/academy/kc_01_cover.jpg',
       body: '将画面分为九宫格，把主体放在交叉点或线条上，能创造出平衡而富有张力的构图。这是摄影最基础也最实用的构图法则。',
       keyPoints: ['将画面横竖各分三等分', '主体放在交叉点上', '地平线对齐水平三分线'],
     ),
     KnowledgeCard(
       id: 'kc_02', topic: AcademyTopic.portrait,
       title: '黄金时刻', subtitle: '一天中最美的光线',
-      coverImage: 'https://picsum.photos/seed/kc_02/400/300',
+      coverImage: 'assets/images/academy/kc_02_cover.jpg',
       body: '日出后和日落前的一小时，光线柔和、色温暖黄，是拍摄人像和风光的最佳时段。此时的光线角度低，能产生长长的阴影和丰富的纹理。',
       keyPoints: ['日出后1小时内', '日落前1小时内', '色温约 3200K-4500K'],
     ),
     KnowledgeCard(
       id: 'kc_03', topic: AcademyTopic.landscape,
       title: '引导线', subtitle: '用线条引导视线',
-      coverImage: 'https://picsum.photos/seed/kc_03/400/300',
+      coverImage: 'assets/images/academy/kc_03_cover.jpg',
       body: '道路、河流、栏杆、树列等线条元素可以将观者的视线引导至画面主体，增强照片的纵深感和叙事性。',
       keyPoints: ['寻找自然或人造线条', '线条应指向主体', '可使用汇聚线增强透视'],
     ),
     KnowledgeCard(
       id: 'kc_04', topic: AcademyTopic.landscape,
       title: '前景层次', subtitle: '让风景有深度',
-      coverImage: 'https://picsum.photos/seed/kc_04/400/300',
+      coverImage: 'assets/images/academy/kc_04_cover.jpg',
       body: '在画面中加入前景元素（如岩石、花朵、树枝），可以建立近-中-远三层结构，让二维照片呈现三维空间感。',
       keyPoints: ['寻找前景元素', '建立三层结构', '使用小光圈保证景深'],
     ),
     KnowledgeCard(
       id: 'kc_05', topic: AcademyTopic.stillLife,
       title: '侧光布光', subtitle: '静物的立体感密码',
-      coverImage: 'https://picsum.photos/seed/kc_05/400/300',
+      coverImage: 'assets/images/academy/kc_05_cover.jpg',
       body: '从物体侧面 45-90 度角打光，能产生明暗对比，突出物体的质感和立体感。这是静物摄影最常用的布光方式。',
       keyPoints: ['光源在侧面 45-90 度', '暗部可用反光板补光', '注意阴影方向'],
     ),
     KnowledgeCard(
       id: 'kc_06', topic: AcademyTopic.stillLife,
       title: '色彩理论', subtitle: '配色让画面更高级',
-      coverImage: 'https://picsum.photos/seed/kc_06/400/300',
+      coverImage: 'assets/images/academy/kc_06_cover.jpg',
       body: '互补色（如蓝-橙、红-绿）能产生强烈对比，同类色（如棕-米-橙）则营造和谐感。掌握色彩搭配能让照片视觉层次更丰富。',
       keyPoints: ['互补色产生对比', '同类色营造和谐', '控制色彩数量在 3-4 种'],
     ),
     KnowledgeCard(
       id: 'kc_07', topic: AcademyTopic.street,
       title: '决定性瞬间', subtitle: '布列松的街拍哲学',
-      coverImage: 'https://picsum.photos/seed/kc_07/400/300',
+      coverImage: 'assets/images/academy/kc_07_cover.jpg',
       body: '在街拍中，形态、姿态、光线和情绪在某一刻完美结合的瞬间就是"决定性瞬间"。预判场景、提前对焦、快速反应是捕捉它的关键。',
       keyPoints: ['预判场景发展', '提前设定对焦和曝光', '反应要快但不慌'],
     ),
     KnowledgeCard(
       id: 'kc_08', topic: AcademyTopic.street,
       title: '光影对比', subtitle: '用明暗讲故事',
-      coverImage: 'https://picsum.photos/seed/kc_08/400/300',
+      coverImage: 'assets/images/academy/kc_08_cover.jpg',
       body: '在街拍中寻找光与影的交界，将主体放在亮处或暗处，利用强烈的明暗对比营造戏剧感和神秘感。',
       keyPoints: ['寻找光影交界线', '主体放在亮处', '暗部保留细节但不抢戏'],
     ),
@@ -208,7 +208,7 @@ class AcademyMockData {
   static final Map<String, AcademyCourseDetail> _courseDetails = {
     'course_01': AcademyCourseDetail(
       course: courses[0],
-      heroImage: 'https://picsum.photos/seed/academy_01_hero/800/450',
+      heroImage: 'assets/images/academy/course_01_cover.jpg',
       sections: [
         LessonSection(title: '为什么角度很重要', paragraphs: [
           '同样的场景、同样的光线，仅仅因为拍摄角度的不同，照片效果可能天差地别。找到你身上最自信的角度，是出片的第一步。',
@@ -219,7 +219,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '45度角拍摄',
       tipCardParagraph: '微微侧身45度，下巴略微前伸，可以让脸部轮廓更立体。这个角度适合绝大多数脸型，尤其对圆脸非常友好。',
-      tipCardImage: 'https://picsum.photos/seed/academy_01_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_01_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'arrow_down', name: '俯拍', desc: '相机在眼睛上方，从上往下拍。显脸小、显头身比好。', tagText: '推荐', tagColor: 'green'),
         CompareCell(iconName: 'arrows_left_right', name: '平拍', desc: '相机与眼睛平齐。真实还原，适合证件照、正面照。', tagText: '中性', tagColor: 'gold'),
@@ -233,8 +233,8 @@ class AcademyMockData {
       ],
       tips: ['手机举高15-30cm，微微俯拍效果最好', '避免完全正面，微微转头更自然', '利用窗光，侧光拍出脸部立体感'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_01_rec/400/600',
-        name: '街拍回眸', desc: '试试用「街拍回眸」拍摄', badge: '免费',
+        imageUrl: 'assets/images/templates/cafe_portrait.jpg',
+        name: '咖啡馆人像', desc: '用「咖啡馆人像」练习角度', badge: '免费',
       ),
       knowledgeCardIds: ['kc_01'],
       assignment: AcademyAssignment(
@@ -247,7 +247,7 @@ class AcademyMockData {
     ),
     'course_02': AcademyCourseDetail(
       course: courses[1],
-      heroImage: 'https://picsum.photos/seed/academy_02_hero/800/450',
+      heroImage: 'assets/images/academy/course_02_cover.jpg',
       sections: [
         LessonSection(title: '光线三要素', paragraphs: [
           '摄影一词本意是「用光作画」，理解光线是学好摄影的第一课。光线的三个核心要素是：方向、强度和色温。',
@@ -258,7 +258,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '侧光的魅力',
       tipCardParagraph: '让光源从模特侧面 45-90 度照射，会在面部形成明暗过渡，突出立体感和轮廓。这是人像摄影最常用的光线方向。',
-      tipCardImage: 'https://picsum.photos/seed/academy_02_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_02_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'sun', name: '侧光', desc: '光源在模特侧面，明暗对比鲜明，立体感强。', tagText: '推荐', tagColor: 'green'),
         CompareCell(iconName: 'sun', name: '逆光', desc: '光源在模特背后，营造剪影或光晕效果，氛围感强。', tagText: '进阶', tagColor: 'gold'),
@@ -272,8 +272,8 @@ class AcademyMockData {
       ],
       tips: ['侧光时让模特微微转向光源，明暗更协调', '逆光拍摄注意对焦在脸部，必要时提高曝光补偿', '避免正午顶光，阴影生硬不讨喜'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_02_rec/400/600',
-        name: '清新人像', desc: '用「清新人像」拍摄侧光人像', badge: '免费',
+        imageUrl: 'assets/images/templates/soft_portrait.jpg',
+        name: '柔光人像', desc: '用「柔光人像」练习光线', badge: '免费',
       ),
       knowledgeCardIds: ['kc_02'],
       assignment: AcademyAssignment(
@@ -286,7 +286,7 @@ class AcademyMockData {
     ),
     'course_03': AcademyCourseDetail(
       course: courses[2],
-      heroImage: 'https://picsum.photos/seed/academy_03_hero/800/450',
+      heroImage: 'assets/images/academy/course_03_cover.jpg',
       sections: [
         LessonSection(title: '三分法原理', paragraphs: [
           '三分法是构图最基础的法则：将画面用两条横线、两条竖线均分为九宫格，四条线的四个交点被称为「趣味中心」。',
@@ -297,7 +297,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '地平线位置',
       tipCardParagraph: '拍摄风光时，将地平线对齐上三分线（强调地面）或下三分线（强调天空），避免地平线居中把画面切成两半。',
-      tipCardImage: 'https://picsum.photos/seed/academy_03_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_03_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'arrows_left_right', name: '居中构图', desc: '主体放在画面正中央，对称稳定但容易呆板。', tagText: '中性', tagColor: 'gold'),
         CompareCell(iconName: 'arrows_left_right', name: '三分构图', desc: '主体放在趣味中心，画面更平衡且富有张力。', tagText: '推荐', tagColor: 'green'),
@@ -311,8 +311,8 @@ class AcademyMockData {
       ],
       tips: ['打开相机网格线，方便对齐三分线', '主体朝向的方向多留空间，避免「撞墙」感', '地平线一定要水平，倾斜会破坏稳定感'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_03_rec/400/600',
-        name: '风光大片', desc: '用「风光大片」模板练习三分法', badge: '免费',
+        imageUrl: 'assets/images/templates/urban_architecture.jpg',
+        name: '城市建筑', desc: '用「城市建筑」练习三分法', badge: '免费',
       ),
       knowledgeCardIds: ['kc_01', 'kc_03'],
       assignment: AcademyAssignment(
@@ -325,7 +325,7 @@ class AcademyMockData {
     ),
     'course_04': AcademyCourseDetail(
       course: courses[3],
-      heroImage: 'https://picsum.photos/seed/academy_04_hero/800/450',
+      heroImage: 'assets/images/academy/course_04_cover.jpg',
       sections: [
         LessonSection(title: '为什么黄金时段最美', paragraphs: [
           '黄金时段指日出后和日落前的一小时，此时太阳低悬于地平线，光线经过更长的大气路径，蓝光被散射，留下温暖柔和的橙红色光。',
@@ -336,7 +336,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '逆光剪影',
       tipCardParagraph: '在日落前 15 分钟，让模特背对太阳，对焦在亮天空上，人物会形成黑色剪影，轮廓清晰，氛围感极强。',
-      tipCardImage: 'https://picsum.photos/seed/academy_04_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_04_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'sun', name: '正午硬光', desc: '太阳在头顶，光线硬、阴影浓、反差大，不适合人像。', tagText: '不推荐', tagColor: 'red'),
         CompareCell(iconName: 'sun', name: '黄金时段柔光', desc: '光线柔和、色温暖、阴影长，氛围感极强。', tagText: '推荐', tagColor: 'green'),
@@ -350,8 +350,8 @@ class AcademyMockData {
       ],
       tips: ['提前 30 分钟到达机位，黄金时段转瞬即逝', '白平衡设为阴天或阴影模式，强化暖色调', '逆光拍摄时锁定对焦和曝光，避免画面发灰'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_04_rec/400/600',
-        name: '日落剪影', desc: '用「日落剪影」捕捉黄金时段', badge: '免费',
+        imageUrl: 'assets/images/templates/golden_landscape.jpg',
+        name: '黄金时刻风光', desc: '用「黄金时刻风光」练习黄金时段', badge: '免费',
       ),
       knowledgeCardIds: ['kc_02'],
       assignment: AcademyAssignment(
@@ -364,7 +364,7 @@ class AcademyMockData {
     ),
     'course_05': AcademyCourseDetail(
       course: courses[4],
-      heroImage: 'https://picsum.photos/seed/academy_05_hero/800/450',
+      heroImage: 'assets/images/academy/course_05_cover.jpg',
       sections: [
         LessonSection(title: '俯拍的优势', paragraphs: [
           '俯拍（flat lay）是从正上方 90 度拍摄平铺物体的方式，是静物、美食、穿搭摄影中最常用的视角。',
@@ -375,7 +375,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '留白与对称',
       tipCardParagraph: '在平铺时，主体周围留出适当空白（留白）能让画面更呼吸；对称式排列则营造秩序感和仪式感，适合美食和饰品。',
-      tipCardImage: 'https://picsum.photos/seed/academy_05_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_05_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'arrow_down', name: '侧拍', desc: '45 度侧面拍摄，有透视感，适合立体物体。', tagText: '中性', tagColor: 'gold'),
         CompareCell(iconName: 'arrow_down', name: '俯拍', desc: '正上方 90 度拍摄，平面感强，适合平铺。', tagText: '推荐', tagColor: 'green'),
@@ -389,8 +389,8 @@ class AcademyMockData {
       ],
       tips: ['手机与桌面保持平行，避免梯形变形', '选择统一色系的背景，突出主体', '加入道具（书、花、餐具）丰富画面层次'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_05_rec/400/600',
-        name: '桌面平铺', desc: '用「桌面平铺」模板拍摄静物', badge: '免费',
+        imageUrl: 'assets/images/templates/food_flat_lay.jpg',
+        name: '美食俯拍', desc: '用「美食俯拍」练习俯拍', badge: '免费',
       ),
       knowledgeCardIds: ['kc_05'],
       assignment: AcademyAssignment(
@@ -403,7 +403,7 @@ class AcademyMockData {
     ),
     'course_06': AcademyCourseDetail(
       course: courses[5],
-      heroImage: 'https://picsum.photos/seed/academy_06_hero/800/450',
+      heroImage: 'assets/images/academy/course_06_cover.jpg',
       sections: [
         LessonSection(title: '什么是决定性瞬间', paragraphs: [
           '「决定性瞬间」由摄影大师布列松提出，指场景中形态、姿态、光线和情绪在某一刻完美结合的瞬间。',
@@ -414,7 +414,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '提前对焦',
       tipCardParagraph: '在预判主体会经过的位置提前对焦并锁定，使用连拍模式提高命中率。不要追逐主体，而是「守株待兔」。',
-      tipCardImage: 'https://picsum.photos/seed/academy_06_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_06_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'camera', name: '摆拍', desc: '可控性强，但容易失真、缺乏故事感。', tagText: '中性', tagColor: 'gold'),
         CompareCell(iconName: 'camera', name: '抓拍', desc: '真实自然，捕捉瞬间情绪，故事感强。', tagText: '推荐', tagColor: 'green'),
@@ -428,8 +428,8 @@ class AcademyMockData {
       ],
       tips: ['提前设定好曝光和对焦，反应更快', '使用连拍模式，从中挑选最佳瞬间', '保持低调，不打扰被摄者'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_06_rec/400/600',
-        name: '街拍纪实', desc: '用「街拍纪实」捕捉决定性瞬间', badge: '免费',
+        imageUrl: 'assets/images/templates/street_bw.jpg',
+        name: '黑白街拍', desc: '用「黑白街拍」练习决定性瞬间', badge: '免费',
       ),
       knowledgeCardIds: ['kc_07'],
       assignment: AcademyAssignment(
@@ -442,7 +442,7 @@ class AcademyMockData {
     ),
     'course_07': AcademyCourseDetail(
       course: courses[6],
-      heroImage: 'https://picsum.photos/seed/academy_07_hero/800/450',
+      heroImage: 'assets/images/academy/course_07_cover.jpg',
       sections: [
         LessonSection(title: '什么是伦勃朗光', paragraphs: [
           '伦勃朗光得名于荷兰画家伦勃朗，特点是脸部一侧受光、另一侧形成三角形光斑。这种布光方式能让面部产生强烈的明暗对比，营造出戏剧性和立体感。',
@@ -453,7 +453,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '窗光伦勃朗',
       tipCardParagraph: '让模特侧对窗户（45度角），窗户光线从斜上方投射。调整模特位置直到暗面出现三角形光斑。使用白色反光板微微补光暗部。',
-      tipCardImage: 'https://picsum.photos/seed/academy_07_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_07_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'sun', name: '自然光', desc: '利用窗户侧光，成本低、光线柔和自然。', tagText: '推荐', tagColor: 'green'),
         CompareCell(iconName: 'lightbulb', name: '人造光', desc: '使用LED灯精确控制角度和强度，适合室内棚拍。', tagText: '专业', tagColor: 'gold'),
@@ -467,8 +467,8 @@ class AcademyMockData {
       ],
       tips: ['光源角度约45度，高于头顶', '暗面三角形光斑是标志', '不要过度补光，保留明暗对比'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_07_rec/400/600',
-        name: '复古胶片人像', desc: '用「复古胶片人像」拍摄伦勃朗光', badge: '免费',
+        imageUrl: 'assets/images/templates/elegant_lady_portrait.png',
+        name: '知性优雅轻熟女', desc: '用「知性优雅轻熟女」练习伦勃朗光', badge: '付费',
       ),
       knowledgeCardIds: ['kc_01', 'kc_02'],
       assignment: AcademyAssignment(
@@ -481,7 +481,7 @@ class AcademyMockData {
     ),
     'course_08': AcademyCourseDetail(
       course: courses[7],
-      heroImage: 'https://picsum.photos/seed/academy_08_hero/800/450',
+      heroImage: 'assets/images/academy/course_08_cover.jpg',
       sections: [
         LessonSection(title: '情绪与表情', paragraphs: [
           '一张好的人像不只是「拍清楚一张脸」，更要传递情绪。情绪通过表情、姿态、眼神、环境共同营造。',
@@ -492,7 +492,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '环境与情绪',
       tipCardParagraph: '选择与情绪匹配的环境：沉思适合空旷的窗边，欢快适合色彩明亮的街道，忧郁适合雨后或黄昏。环境是情绪的放大器。',
-      tipCardImage: 'https://picsum.photos/seed/academy_08_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_08_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'face', name: '微笑', desc: '明亮、亲和，适合日常记录和清新风格。', tagText: '常见', tagColor: 'gold'),
         CompareCell(iconName: 'face', name: '沉思', desc: '深邃、有故事感，适合情绪人像和艺术创作。', tagText: '推荐', tagColor: 'green'),
@@ -506,8 +506,8 @@ class AcademyMockData {
       ],
       tips: ['不要直说「笑一下」，用故事和情境引导情绪', '眼神方向决定情绪走向：直视强烈、侧望含蓄', '给模特一个动作（如整理头发），更易抓到自然瞬间'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_08_rec/400/600',
-        name: '情绪人像', desc: '用「情绪人像」模板拍摄故事感作品', badge: '免费',
+        imageUrl: 'assets/images/templates/french_lazy_portrait.png',
+        name: '法式慵懒高雅', desc: '用「法式慵懒高雅」练习情绪表达', badge: '付费',
       ),
       knowledgeCardIds: ['kc_01'],
       assignment: AcademyAssignment(
@@ -520,7 +520,7 @@ class AcademyMockData {
     ),
     'course_09': AcademyCourseDetail(
       course: courses[8],
-      heroImage: 'https://picsum.photos/seed/academy_09_hero/800/450',
+      heroImage: 'assets/images/academy/course_09_cover.jpg',
       sections: [
         LessonSection(title: '引导线的类型', paragraphs: [
           '引导线是画面中能将观者视线引向主体的线条元素，可以是实际的线（道路、河流、栏杆），也可以是隐含的线（视线、阴影、色彩边界）。',
@@ -531,7 +531,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '多重引导线',
       tipCardParagraph: '当画面中存在多条引导线（如铁轨、走廊、桥梁）共同指向主体时，视觉冲击力会成倍增强，观者很难移开视线。',
-      tipCardImage: 'https://picsum.photos/seed/academy_09_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_09_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'arrows_left_right', name: '无引导线', desc: '主体孤立，视线游离，画面平淡。', tagText: '不推荐', tagColor: 'red'),
         CompareCell(iconName: 'arrows_left_right', name: '有引导线', desc: '视线被自然引向主体，纵深感强。', tagText: '推荐', tagColor: 'green'),
@@ -545,8 +545,8 @@ class AcademyMockData {
       ],
       tips: ['低角度拍摄能强化引导线的透视感', '汇聚点（消失点）最好落在趣味中心', '注意线条不要从画面角落斜出，会显得突兀'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_09_rec/400/600',
-        name: '纵深远景', desc: '用「纵深远景」模板练习引导线', badge: '免费',
+        imageUrl: 'assets/images/templates/night_cityscape.jpg',
+        name: '夜景城市', desc: '用「夜景城市」练习引导线', badge: '免费',
       ),
       knowledgeCardIds: ['kc_03', 'kc_04'],
       assignment: AcademyAssignment(
@@ -559,7 +559,7 @@ class AcademyMockData {
     ),
     'course_10': AcademyCourseDetail(
       course: courses[9],
-      heroImage: 'https://picsum.photos/seed/academy_10_hero/800/450',
+      heroImage: 'assets/images/academy/course_10_cover.jpg',
       sections: [
         LessonSection(title: '三点布光法', paragraphs: [
           '三点布光是摄影棚最经典的布光方案，由主光、辅光和轮廓光三盏灯组成，能精准控制物体的立体感、层次和氛围。',
@@ -570,7 +570,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '单灯布光',
       tipCardParagraph: '没有三盏灯也能拍出好照片。一盏主灯配合白卡纸反光，就能实现接近三点布光的效果，适合家庭静物摄影入门。',
-      tipCardImage: 'https://picsum.photos/seed/academy_10_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_10_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'lightbulb', name: '平光', desc: '左右两侧均匀打光，物体平面化，适合证件照。', tagText: '中性', tagColor: 'gold'),
         CompareCell(iconName: 'lightbulb', name: '立体光', desc: '主辅光有光比，明暗过渡自然，立体感强。', tagText: '推荐', tagColor: 'green'),
@@ -584,8 +584,8 @@ class AcademyMockData {
       ],
       tips: ['主辅光比建议 2:1 到 4:1，立体感与细节兼顾', '轮廓光从侧后方打来，勾勒物体边缘', '关闭环境光，单独控制每盏灯的效果'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_10_rec/400/600',
-        name: '棚拍静物', desc: '用「棚拍静物」模板练习布光', badge: '免费',
+        imageUrl: 'assets/images/templates/indoor_still_life.jpg',
+        name: '室内静物', desc: '用「室内静物」练习布光', badge: '免费',
       ),
       knowledgeCardIds: ['kc_05'],
       assignment: AcademyAssignment(
@@ -598,7 +598,7 @@ class AcademyMockData {
     ),
     'course_11': AcademyCourseDetail(
       course: courses[10],
-      heroImage: 'https://picsum.photos/seed/academy_11_hero/800/450',
+      heroImage: 'assets/images/academy/course_11_cover.jpg',
       sections: [
         LessonSection(title: '色彩三要素', paragraphs: [
           '色彩的三要素是色相、明度和饱和度。色相决定「是什么颜色」，明度决定「多亮」，饱和度决定「多鲜艳」。',
@@ -609,7 +609,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '莫兰迪色系',
       tipCardParagraph: '莫兰迪色系以低饱和、灰调为特点，色彩之间互相调和，营造出高级、内敛、宁静的氛围，是静物摄影最常用的色系之一。',
-      tipCardImage: 'https://picsum.photos/seed/academy_11_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_11_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'image', name: '高饱和', desc: '色彩鲜艳，视觉冲击强，但容易显得廉价。', tagText: '慎用', tagColor: 'red'),
         CompareCell(iconName: 'image', name: '低饱和', desc: '色彩柔和耐看，氛围高级，适合静物与人像。', tagText: '推荐', tagColor: 'green'),
@@ -623,8 +623,8 @@ class AcademyMockData {
       ],
       tips: ['画面色彩控制在 3-4 种以内，避免杂乱', '互补色搭配时降低饱和度，避免刺眼', '背景色与主体色拉开明度差，主体更突出'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_11_rec/400/600',
-        name: '莫兰迪静物', desc: '用「莫兰迪静物」模板练习配色', badge: '免费',
+        imageUrl: 'assets/images/templates/morandi_minimal_portrait.png',
+        name: '莫兰迪高级冷淡', desc: '用「莫兰迪高级冷淡」练习色彩', badge: '付费',
       ),
       knowledgeCardIds: ['kc_06'],
       assignment: AcademyAssignment(
@@ -637,7 +637,7 @@ class AcademyMockData {
     ),
     'course_12': AcademyCourseDetail(
       course: courses[11],
-      heroImage: 'https://picsum.photos/seed/academy_12_hero/800/450',
+      heroImage: 'assets/images/academy/course_12_cover.jpg',
       sections: [
         LessonSection(title: '光影的戏剧性', paragraphs: [
           '街头摄影的灵魂在于光影。城市中随处可见的光影交界——树荫、廊道、楼缝、雨后水洼——都是天然的剧场。',
@@ -648,7 +648,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '隧道光',
       tipCardParagraph: '当阳光穿过两栋楼之间的缝隙形成「光带」时，等待行人走入光带拍摄，主体被强光打亮、四周隐入暗影，戏剧感拉满。',
-      tipCardImage: 'https://picsum.photos/seed/academy_12_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_12_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'sun', name: '柔光', desc: '阴天或散射光，过渡柔和，适合纪实叙事。', tagText: '中性', tagColor: 'gold'),
         CompareCell(iconName: 'sun', name: '硬光', desc: '直射阳光，明暗分明，戏剧感强。', tagText: '推荐', tagColor: 'green'),
@@ -662,8 +662,8 @@ class AcademyMockData {
       ],
       tips: ['降低曝光补偿，让暗部更黑、亮部更亮', '蹲下低角度拍摄，光影对比更强烈', '善用雨后水洼的反光，画面更丰富'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_12_rec/400/600',
-        name: '光影街头', desc: '用「光影街头」模板捕捉戏剧光影', badge: '免费',
+        imageUrl: 'assets/images/templates/neon_city_portrait.png',
+        name: '夜景霓虹人像', desc: '用「夜景霓虹人像」练习光影', badge: '付费',
       ),
       knowledgeCardIds: ['kc_07', 'kc_08'],
       assignment: AcademyAssignment(
@@ -676,7 +676,7 @@ class AcademyMockData {
     ),
     'course_13': AcademyCourseDetail(
       course: courses[12],
-      heroImage: 'https://picsum.photos/seed/academy_13_hero/800/450',
+      heroImage: 'assets/images/academy/course_13_cover.jpg',
       sections: [
         LessonSection(title: '什么是风格化', paragraphs: [
           '风格化人像不是简单地「加滤镜」，而是通过色调、构图、光线、姿态的综合设计，让照片呈现统一的视觉语言和个人辨识度。',
@@ -687,7 +687,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '胶片色调',
       tipCardParagraph: '胶片色调的特点是低对比、偏黄绿、暗部发青，颗粒感明显。它能让数字照片瞬间拥有「时光感」，是复古风格人像的常用色调。',
-      tipCardImage: 'https://picsum.photos/seed/academy_13_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_13_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'image', name: '自然风格', desc: '色彩还原真实，适合纪实和商业记录。', tagText: '中性', tagColor: 'gold'),
         CompareCell(iconName: 'image', name: '风格化', desc: '色调统一有辨识度，适合艺术创作和个人作品。', tagText: '推荐', tagColor: 'green'),
@@ -701,8 +701,8 @@ class AcademyMockData {
       ],
       tips: ['先确定风格，再选择服装、场景、道具', '色调统一比单张好看更重要，组照要有「家族感」', '后期色调可以参考电影截图或老照片'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_13_rec/400/600',
-        name: '电影感人像', desc: '用「电影感人像」打造个人风格', badge: '付费',
+        imageUrl: 'assets/images/templates/anime_dream_portrait.png',
+        name: '动漫温柔青', desc: '用「动漫温柔青」练习风格化', badge: '付费',
       ),
       knowledgeCardIds: ['kc_01', 'kc_06'],
       assignment: AcademyAssignment(
@@ -715,7 +715,7 @@ class AcademyMockData {
     ),
     'course_14': AcademyCourseDetail(
       course: courses[13],
-      heroImage: 'https://picsum.photos/seed/academy_14_hero/800/450',
+      heroImage: 'assets/images/academy/course_14_cover.jpg',
       sections: [
         LessonSection(title: '为什么用黑白', paragraphs: [
           '黑白摄影剥离了色彩的干扰，让观者专注于形状、线条、光影和情绪。当色彩杂乱或不足以表达主题时，黑白往往是更好的选择。',
@@ -726,7 +726,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '高反差黑白',
       tipCardParagraph: '高反差黑白能强化形状和光影，让画面更有力量感。压暗暗部、提亮亮部，但保留中间过渡，避免死黑或死白。',
-      tipCardImage: 'https://picsum.photos/seed/academy_14_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_14_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'image', name: '彩色', desc: '信息量大，色彩是主要表达手段。', tagText: '中性', tagColor: 'gold'),
         CompareCell(iconName: 'image', name: '黑白', desc: '剥离色彩，突出结构与光影，情绪更纯粹。', tagText: '推荐', tagColor: 'green'),
@@ -740,8 +740,8 @@ class AcademyMockData {
       ],
       tips: ['拍摄时就想好要转黑白，构图关注形状和线条', '寻找强烈光影，黑白对明暗更敏感', '保留中间灰度，避免画面干涩'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_14_rec/400/600',
-        name: '黑白艺术', desc: '用「黑白艺术」模板拍摄纯色作品', badge: '付费',
+        imageUrl: 'assets/images/templates/sunset_silhouette.jpg',
+        name: '日落逆光剪影', desc: '用「日落逆光剪影」练习黑白风光', badge: '免费',
       ),
       knowledgeCardIds: ['kc_03', 'kc_04'],
       assignment: AcademyAssignment(
@@ -754,7 +754,7 @@ class AcademyMockData {
     ),
     'course_15': AcademyCourseDetail(
       course: courses[14],
-      heroImage: 'https://picsum.photos/seed/academy_15_hero/800/450',
+      heroImage: 'assets/images/academy/course_15_cover.jpg',
       sections: [
         LessonSection(title: '少即是多', paragraphs: [
           '极简摄影的核心理念是「做减法」——剔除一切与主题无关的元素，让画面只剩下最纯粹的主体和留白。',
@@ -765,7 +765,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '单一主体',
       tipCardParagraph: '一张极简照片通常只有一个明确的主体，放在大片留白中。主体的「小」与留白的「大」形成对比，反而更突出。',
-      tipCardImage: 'https://picsum.photos/seed/academy_15_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_15_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'image', name: '复杂构图', desc: '元素多，信息量大，适合叙事但易杂乱。', tagText: '慎用', tagColor: 'red'),
         CompareCell(iconName: 'image', name: '极简构图', desc: '单一主体，大片留白，意境纯粹。', tagText: '推荐', tagColor: 'green'),
@@ -779,8 +779,8 @@ class AcademyMockData {
       ],
       tips: ['背景越简洁越好，纯色墙面或白纸即可', '主体放在三分之一处，留出呼吸空间', '去掉一切干扰元素，包括多余的颜色'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_15_rec/400/600',
-        name: '极简留白', desc: '用「极简留白」模板拍摄意境作品', badge: '付费',
+        imageUrl: 'assets/images/templates/macro_flower.jpg',
+        name: '微距花卉', desc: '用「微距花卉」练习极简', badge: '免费',
       ),
       knowledgeCardIds: ['kc_05', 'kc_06'],
       assignment: AcademyAssignment(
@@ -793,7 +793,7 @@ class AcademyMockData {
     ),
     'course_16': AcademyCourseDetail(
       course: courses[15],
-      heroImage: 'https://picsum.photos/seed/academy_16_hero/800/450',
+      heroImage: 'assets/images/academy/course_16_cover.jpg',
       sections: [
         LessonSection(title: '用照片讲故事', paragraphs: [
           '街头叙事不是单张抓拍，而是用一组照片讲述一个完整的故事——人物、环境、情绪、时间、冲突缺一不可。',
@@ -804,7 +804,7 @@ class AcademyMockData {
       ],
       tipCardTitle: '系列照片',
       tipCardParagraph: '一组叙事照片建议 5-8 张：1 张环境交代场景，2-3 张人物特写讲故事，1 张细节（手、物）补充信息，1 张远景收束情绪。',
-      tipCardImage: 'https://picsum.photos/seed/academy_16_tip/800/450',
+      tipCardImage: 'assets/images/academy/course_16_cover.jpg',
       compareCells: [
         CompareCell(iconName: 'camera', name: '单张', desc: '瞬间即故事，适合社交媒体传播。', tagText: '常见', tagColor: 'gold'),
         CompareCell(iconName: 'camera', name: '系列', desc: '多张组合叙事，故事更完整有深度。', tagText: '推荐', tagColor: 'green'),
@@ -818,8 +818,8 @@ class AcademyMockData {
       ],
       tips: ['先确定主题和故事线，再出门拍摄', '组照要有不同景别：远景、中景、特写', '开头和结尾照片最重要，决定整组的基调'],
       recommendTemplate: RecommendTemplate(
-        imageUrl: 'https://picsum.photos/seed/academy_16_rec/400/600',
-        name: '街头故事', desc: '用「街头故事」模板拍摄组照', badge: '付费',
+        imageUrl: 'assets/images/templates/hk_noir_portrait.png',
+        name: '港风夜景人像', desc: '用「港风夜景人像」练习叙事', badge: '付费',
       ),
       knowledgeCardIds: ['kc_07', 'kc_08'],
       assignment: AcademyAssignment(
@@ -840,18 +840,5 @@ class AcademyMockData {
   /// 获取课程作业
   static AcademyAssignment? getAssignment(String courseId) {
     return _courseDetails[courseId]?.assignment;
-  }
-
-  // === 作业提交后的 mock 评分 ===
-
-  /// 生成 70-94 随机评分
-  static int generateScore() => 70 + DateTime.now().millisecond % 25;
-
-  /// 根据评分生成反馈文案
-  static String generateFeedback(int score) {
-    if (score >= 90) return '非常出色的作品！构图精准，光影运用到位，继续保持。';
-    if (score >= 80) return '很好的尝试！整体完成度高，细节上可以再打磨。';
-    if (score >= 70) return '不错的开始！建议多关注光线方向和构图平衡。';
-    return '继续练习，多观察多拍摄，你会越来越好。';
   }
 }

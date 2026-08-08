@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/database_provider.dart';
 import '../data/academy_repository.dart';
 import '../data/academy_models.dart';
-import '../data/academy_mock_data.dart';
+import '../data/academy_content.dart';
 import '../data/academy_trajectory_models.dart';
 
 // === DAO & Repository ===
@@ -18,14 +18,14 @@ final academyRepositoryProvider = FutureProvider<AcademyRepository>((ref) async 
 /// 按等级筛选课程（null = 全部）
 final coursesProvider = Provider.family<List<AcademyCourse>, AcademyLevel?>((ref, level) {
   // 同步访问 mock 数据，无需 async
-  return AcademyMockData.courses
+  return AcademyContent.courses
       .where((c) => level == null || c.level == level)
       .toList();
 });
 
 /// 课程详情
 final courseDetailProvider = Provider.family<AcademyCourseDetail?, String>((ref, courseId) {
-  return AcademyMockData.getCourseDetail(courseId);
+  return AcademyContent.getCourseDetail(courseId);
 });
 
 // === 学习进度 ===
@@ -64,7 +64,7 @@ final academyTrajectoryProvider =
 final sortedCoursesProvider = FutureProvider.family<List<AcademyCourse>, AcademyLevel?>(
     (ref, level) async {
   final repo = await ref.watch(academyRepositoryProvider.future);
-  final allCourses = AcademyMockData.courses
+  final allCourses = AcademyContent.courses
       .where((c) => level == null || c.level == level)
       .toList();
 
@@ -131,7 +131,7 @@ final assignmentSubmissionProvider = FutureProvider.family<AssignmentSubmission?
 
 /// 知识卡片列表
 final knowledgeCardsProvider = Provider<List<KnowledgeCard>>((ref) {
-  return AcademyMockData.knowledgeCards;
+  return AcademyContent.knowledgeCards;
 });
 
 /// 收藏卡片 ID 集合

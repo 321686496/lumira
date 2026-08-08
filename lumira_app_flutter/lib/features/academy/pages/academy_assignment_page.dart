@@ -12,7 +12,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
     show ButtonVariant, LumiraButton, LumiraProgress, LumiraTextField;
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../data/academy_mock_data.dart';
+import '../data/academy_content.dart';
 import '../data/academy_models.dart';
 import '../providers/academy_providers.dart';
 
@@ -54,7 +54,7 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
       setState(() => _loading = false);
       return;
     }
-    final detail = AcademyMockData.getCourseDetail(widget.academyId!);
+    final detail = AcademyContent.getCourseDetail(widget.academyId!);
     final assignment = detail?.assignment;
     if (assignment == null) {
       setState(() => _loading = false);
@@ -136,16 +136,13 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
 
   Future<void> _submit() async {
     if (widget.academyId == null) return;
-    final detail = AcademyMockData.getCourseDetail(widget.academyId!);
+    final detail = AcademyContent.getCourseDetail(widget.academyId!);
     final assignment = detail?.assignment;
     if (assignment == null) return;
 
     setState(() => _submitting = true);
 
-    // 模拟评分
-    await Future.delayed(const Duration(seconds: 1));
-    final score = AcademyMockData.generateScore();
-    final feedback = AcademyMockData.generateFeedback(score);
+    await Future.delayed(const Duration(milliseconds: 500));
 
     final submission = AssignmentSubmission(
       id: 'sub_${assignment.id}_${DateTime.now().millisecondsSinceEpoch}',
@@ -154,9 +151,9 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
       photoPath: _photoPath,
       photoUrl: _photoUrl,
       note: _note.isNotEmpty ? _note : null,
-      status: AssignmentStatus.reviewed,
-      score: score,
-      feedback: feedback,
+      status: AssignmentStatus.submitted,
+      score: null,
+      feedback: null,
       submittedAt: DateTime.now().millisecondsSinceEpoch,
     );
 
@@ -324,17 +321,17 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
                   ),
                 )
               else ...[
-                // 评分结果
+                // 提交成功
                 NeuCard(
                   padding: const EdgeInsets.all(20),
                   child: Column(children: [
-                    Icon(Icons.emoji_events_outlined, size: 48, color: tokens.brand),
+                    Icon(Icons.check_circle_outline, size: 48, color: tokens.brand),
                     const SizedBox(height: 8),
-                    Text('${_result!.score} 分', style: TextStyle(
-                      fontSize: 28, fontWeight: FontWeight.w700, color: tokens.brand,
+                    Text('作业已提交', style: TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w700, color: tokens.brand,
                     )),
                     const SizedBox(height: 8),
-                    Text(_result!.feedback ?? '', style: TextStyle(
+                    Text('继续探索其他课程，提升你的摄影技巧', style: TextStyle(
                       fontSize: 13, color: tokens.textSecondary, height: 1.6,
                     ), textAlign: TextAlign.center),
                   ]),

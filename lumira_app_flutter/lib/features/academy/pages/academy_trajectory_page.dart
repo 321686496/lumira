@@ -10,7 +10,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../data/academy_mock_data.dart';
+import '../data/academy_content.dart';
 import '../data/academy_trajectory_models.dart';
 import '../providers/academy_providers.dart';
 
@@ -48,7 +48,7 @@ class AcademyTrajectoryPage extends ConsumerWidget {
             // 估算总学习时长：每段 paragraphs 折算 30 秒
             int totalDurationSeconds = 0;
             for (final record in trajectory) {
-              final detail = AcademyMockData.getCourseDetail(record.courseId);
+              final detail = AcademyContent.getCourseDetail(record.courseId);
               if (detail != null) {
                 final paragraphCount = detail.sections.fold<int>(
                     0, (sum, s) => sum + s.paragraphs.length);
@@ -64,7 +64,7 @@ class AcademyTrajectoryPage extends ConsumerWidget {
                     child: _StatsCard(
                       tokens: tokens,
                       completedCount: trajectory.length,
-                      totalCount: AcademyMockData.courses.length,
+                      totalCount: AcademyContent.courses.length,
                       totalDurationSeconds: totalDurationSeconds,
                     ),
                   ),
@@ -249,7 +249,7 @@ class _TimelineNode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final course = AcademyMockData.getCourse(record.courseId);
+    final course = AcademyContent.getCourse(record.courseId);
     final courseTitle = course?.title ?? '未知课程';
     final coverImage = course?.coverImage ?? '';
 
@@ -314,7 +314,7 @@ class _TimelineNode extends StatelessWidget {
                         width: 56,
                         height: 56,
                         child: coverImage.isNotEmpty
-                            ? Image.network(
+                            ? Image.asset(
                                 coverImage,
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Container(

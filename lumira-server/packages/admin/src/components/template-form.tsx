@@ -68,7 +68,7 @@ const schema = z.object({
   poseDescription: z.string().optional().default(''),
   posePositionX: z.coerce.number().min(0).max(1).default(0.5),
   posePositionY: z.coerce.number().min(0).max(1).default(0.5),
-  poseScale: z.coerce.number().min(0.5).max(1.5).default(1.0),
+  poseScale: z.coerce.number().min(0.3).max(2.5).default(1.0),
   poseRotation: z.coerce.number().min(-45).max(45).default(0),
   overlayType: z.enum(OVERLAY_TYPES).default('rule_of_thirds'),
   gridType: z.string().optional().default(''),

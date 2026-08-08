@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert' show base64Encode, base64Decode;
+import 'dart:typed_data' show Uint8List;
 import 'dart:io' as io;
 
 import 'package:flutter/material.dart';
@@ -29,6 +30,16 @@ import '../services/template_mapper.dart';
 import '../widgets/composition_overlay.dart';
 import '../widgets/pose_silhouette.dart';
 import '../widgets/silhouette_editor.dart';
+
+/// 计算有效宽高比（处理 fullscreen 和方向自适应）
+double _effectiveAspectRatio(String ratio, BuildContext context) {
+  final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+  final raw = parseAspectRatio(ratio, isPortrait: isPortrait);
+  if (raw < 0) {
+    return MediaQuery.of(context).size.width / MediaQuery.of(context).size.height;
+  }
+  return raw;
+}
 
 /// 选项对（label/value）
 class EditorOption {
@@ -146,9 +157,9 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   // 姿势预览拖动状态
   bool _isDraggingPose = false;
 
-  // Bug 11 修复：用 ValueNotifier 通知剪影位置变化，避免拖动时整个 page rebuild
-  // 拖动时只更新此 notifier，剪影预览部分用 ValueListenableBuilder 监听并重建
-  late final ValueNotifier<Offset> _posePositionNotifier;
+  // 用版本计数器通知剪影预览区域重建，避免滑块/拖动时 setState 导致整个页面 rebuild
+  int _poseVersion = 0;
+  late final ValueNotifier<int> _poseVersionNotifier;
 
   /// 是否正在从 DAO 异步加载模板（编辑模式且 mock 中不存在时为 true）。
   /// 加载期间显示 loading 覆盖层，避免用户看到空白表单误以为模板未加载。
@@ -171,9 +182,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         TextEditingController(text: _form.sceneGuide.props.join(', '));
     _tipsController =
         TextEditingController(text: _form.sceneGuide.tips.join('\n'));
-    _posePositionNotifier = ValueNotifier(
-      Offset(_form.pose.position.x, _form.pose.position.y),
-    );
+    _poseVersionNotifier = ValueNotifier(0);
     // 异步从 DAO 加载（若 DAO 命中则覆盖 mock 数据，用于用户自建模板编辑）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadFromDaoIfNeeded();
@@ -187,14 +196,14 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     _tagsController.dispose();
     _propsController.dispose();
     _tipsController.dispose();
-    _posePositionNotifier.dispose();
+    _poseVersionNotifier.dispose();
     super.dispose();
   }
 
-  /// 同步 pose position 到 notifier（在所有修改 _form.pose.position 的地方调用）
-  void _syncPosePosition() {
-    _posePositionNotifier.value =
-        Offset(_form.pose.position.x, _form.pose.position.y);
+  /// 通知剪影预览区域重建（不触发父级 setState，避免页面滚动跳跃）
+  void _notifyPoseChanged() {
+    _poseVersion++;
+    _poseVersionNotifier.value = _poseVersion;
   }
 
   /// 同步加载初始表单（mock 数据源）：
@@ -256,7 +265,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         _tagsController.text = _form.meta.tags.join(', ');
         _propsController.text = _form.sceneGuide.props.join(', ');
         _tipsController.text = _form.sceneGuide.tips.join('\n');
-        _syncPosePosition();
+        _notifyPoseChanged();
         _isLoadingFromDao = false;
       });
     } catch (e) {
@@ -336,9 +345,9 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       final file = await FilePickerService.pickSingleImage();
       if (file == null) return;
       final bytes = file.bytes;
-      if (bytes == null) {
+      if (bytes == null || bytes.isEmpty) {
         if (!mounted) return;
-        lumira.LumiraToast.show(context, '读取图片失败');
+        lumira.LumiraToast.show(context, '读取图片失败，请重试');
         return;
       }
       final mime = _imageMimeFromExtension(file.extension);
@@ -459,9 +468,9 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       final file = await FilePickerService.pickSingleImage();
       if (file == null) return;
       final bytes = file.bytes;
-      if (bytes == null) {
+      if (bytes == null || bytes.isEmpty) {
         if (!mounted) return;
-        lumira.LumiraToast.show(context, '读取图片失败');
+        lumira.LumiraToast.show(context, '读取图片失败，请重试');
         return;
       }
       final mime = _imageMimeFromExtension(file.extension);
@@ -514,15 +523,15 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
   void _onPoseDragUpdate(DragUpdateDetails details, BoxConstraints constraints) {
     if (!_isDraggingPose) return;
-    // Bug 11 修复：拖动时不调用 setState（避免整个 page rebuild），
-    // 只更新 _form 和 _posePositionNotifier，让 ValueListenableBuilder 局部重建
+    // 拖动时不调用 setState（避免整个 page rebuild 和滚动跳跃），
+    // 只更新 _form 和 _poseVersionNotifier，让 ValueListenableBuilder 局部重建
     final dx = details.delta.dx / constraints.maxWidth;
     final dy = details.delta.dy / constraints.maxHeight;
     _form.pose.position.x =
         (_form.pose.position.x + dx).clamp(0.0, 1.0);
     _form.pose.position.y =
         (_form.pose.position.y + dy).clamp(0.0, 1.0);
-    _syncPosePosition();
+    _notifyPoseChanged();
   }
 
   void _onPoseDragEnd(DragEndDetails details) {
@@ -530,16 +539,29 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     _scheduleAutoSave();
   }
 
-  /// 位置 X/Y 滑块变化时同步到 notifier（避免拖动滑块时预览不更新）
+  /// 位置 X/Y 滑块变化（不调用 setState，避免页面滚动跳跃）
   void _onPosePositionSliderChanged(bool isX, double v) {
-    _onChange(() {
-      if (isX) {
-        _form.pose.position.x = v;
-      } else {
-        _form.pose.position.y = v;
-      }
-    });
-    _syncPosePosition();
+    if (isX) {
+      _form.pose.position.x = v;
+    } else {
+      _form.pose.position.y = v;
+    }
+    _notifyPoseChanged();
+    _scheduleAutoSave();
+  }
+
+  /// 缩放滑块变化（不调用 setState）
+  void _onScaleSliderChanged(double v) {
+    _form.pose.scale = v;
+    _notifyPoseChanged();
+    _scheduleAutoSave();
+  }
+
+  /// 旋转滑块变化（不调用 setState）
+  void _onRotationSliderChanged(double v) {
+    _form.pose.rotation = v;
+    _notifyPoseChanged();
+    _scheduleAutoSave();
   }
 
   // ===== 自动保存草稿（debounce 1000ms） =====
@@ -725,7 +747,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       // 将修改后的 form 复制回 _form（深拷贝避免后续 mutation 污染）
       _form = syncedForm.copy();
       // 同步 notifier（让剪影预览的位置滑块立即反映新值）
-      _syncPosePosition();
+      _notifyPoseChanged();
       // 同步文本控制器
       _tagsController.text = _form.meta.tags.join(', ');
       _propsController.text = _form.sceneGuide.props.join(', ');
@@ -805,8 +827,9 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                             _Step3Pose(
                               tokens: tokens,
                               form: _form,
+                              compositionAspectRatio: _form.composition.aspectRatio,
                               isDragging: _isDraggingPose,
-                              posePositionNotifier: _posePositionNotifier,
+                              poseVersionNotifier: _poseVersionNotifier,
                               onSourceChange: _onSilhouetteSourceChange,
                               onSelectBuiltin: _selectBuiltinSilhouette,
                               onImportImage: _importSilhouetteImage,
@@ -817,6 +840,8 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                               onPoseDragEnd: _onPoseDragEnd,
                               onPosePositionSliderChanged:
                                   _onPosePositionSliderChanged,
+                              onScaleSliderChanged: _onScaleSliderChanged,
+                              onRotationSliderChanged: _onRotationSliderChanged,
                             ),
                             const SizedBox(height: 12),
                             _Step4Camera(
@@ -1292,6 +1317,63 @@ class _Step1TemplateInfo extends ConsumerStatefulWidget {
   ConsumerState<_Step1TemplateInfo> createState() => _Step1TemplateInfoState();
 }
 
+/// base64 data URL 解码缓存（避免每次 rebuild 重复解码）
+final Map<String, Uint8List> _coverImageDecodeCache = {};
+
+Uint8List _cachedCoverDecode(String dataUrl) {
+  return _coverImageDecodeCache.putIfAbsent(dataUrl, () {
+    return base64Decode(dataUrl.substring(dataUrl.indexOf(',') + 1));
+  });
+}
+
+/// 封面图放大预览弹窗
+void _showCoverPreviewDialog(
+  BuildContext context,
+  String cover,
+  ThemeTokens tokens,
+  VoidCallback onChangeCover,
+) {
+  showDialog(
+    context: context,
+    builder: (ctx) => Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.memory(
+              _cachedCoverDecode(cover),
+              width: double.infinity,
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              style: TextButton.styleFrom(
+                backgroundColor: tokens.textPrimary,
+                foregroundColor: tokens.canvas,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                onChangeCover();
+              },
+              child: const Text('更换封面', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// v17: Step1 表单状态。
 ///
 /// 分类选项（type/style/method）从 sqflite DAO 动态加载，支持三级级联：
@@ -1405,34 +1487,43 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _FieldLabel(tokens: tokens, text: '效果图（封面图）'),
-          GestureDetector(
-            onTap: onPickCoverImage,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              height: 120,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: tokens.canvasDeep,
+          if (cover != null && cover.isNotEmpty)
+            GestureDetector(
+              onTap: () => _showCoverPreviewDialog(
+                context, cover, tokens, onPickCoverImage),
+              behavior: HitTestBehavior.opaque,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: tokens.divider,
-                  width: 0.5,
+                child: Image.memory(
+                  _cachedCoverDecode(cover),
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, _) {
+                    debugPrint('[Editor] Cover image decode error: $error');
+                    return _CoverPlaceholder(tokens: tokens);
+                  },
                 ),
               ),
-              clipBehavior: Clip.hardEdge,
-              child: cover != null && cover.isNotEmpty
-                  ? Image.memory(
-                      base64Decode(
-                          cover.substring(cover.indexOf(',') + 1)),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, _) {
-                        debugPrint('[Editor] Cover image decode error: $error');
-                        return _CoverPlaceholder(tokens: tokens);
-                      },
-                    )
-                  : _CoverPlaceholder(tokens: tokens),
+            )
+          else
+            GestureDetector(
+              onTap: onPickCoverImage,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                height: 120,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: tokens.canvasDeep,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: tokens.divider,
+                    width: 0.5,
+                  ),
+                ),
+                clipBehavior: Clip.hardEdge,
+                child: _CoverPlaceholder(tokens: tokens),
+              ),
             ),
-          ),
           const SizedBox(height: 14),
           _FieldLabel(tokens: tokens, text: '名称'),
           _FieldInput(
@@ -1604,7 +1695,8 @@ class _Step2Composition extends StatelessWidget {
           const SizedBox(height: 14),
           _PreviewBox(
             tokens: tokens,
-            aspectRatio: parseAspectRatio(form.composition.aspectRatio),
+            aspectRatio: _effectiveAspectRatio(
+              form.composition.aspectRatio, context),
             child: CompositionOverlay(
               overlayType: form.composition.overlayType,
               opacity: form.composition.opacity,
@@ -1661,8 +1753,9 @@ class _Step3Pose extends StatelessWidget {
   const _Step3Pose({
     required this.tokens,
     required this.form,
+    required this.compositionAspectRatio,
     required this.isDragging,
-    required this.posePositionNotifier,
+    required this.poseVersionNotifier,
     required this.onSourceChange,
     required this.onSelectBuiltin,
     required this.onImportImage,
@@ -1672,12 +1765,15 @@ class _Step3Pose extends StatelessWidget {
     required this.onPoseDragUpdate,
     required this.onPoseDragEnd,
     required this.onPosePositionSliderChanged,
+    required this.onScaleSliderChanged,
+    required this.onRotationSliderChanged,
   });
 
   final ThemeTokens tokens;
   final EditorForm form;
+  final String compositionAspectRatio;
   final bool isDragging;
-  final ValueNotifier<Offset> posePositionNotifier;
+  final ValueNotifier<int> poseVersionNotifier;
   final ValueChanged<String> onSourceChange;
   final ValueChanged<String> onSelectBuiltin;
   final VoidCallback onImportImage;
@@ -1687,6 +1783,8 @@ class _Step3Pose extends StatelessWidget {
   final void Function(DragUpdateDetails, BoxConstraints) onPoseDragUpdate;
   final void Function(DragEndDetails) onPoseDragEnd;
   final void Function(bool isX, double v) onPosePositionSliderChanged;
+  final ValueChanged<double> onScaleSliderChanged;
+  final ValueChanged<double> onRotationSliderChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1772,7 +1870,7 @@ class _Step3Pose extends StatelessWidget {
             min: 0.3,
             max: 2.5,
             divisions: 110,
-            onChanged: (v) => onChange(() => form.pose.scale = v),
+            onChanged: onScaleSliderChanged,
             valueText: form.pose.scale.toStringAsFixed(2),
           ),
           _SliderRow(
@@ -1782,7 +1880,7 @@ class _Step3Pose extends StatelessWidget {
             min: -45,
             max: 45,
             divisions: 90,
-            onChanged: (v) => onChange(() => form.pose.rotation = v),
+            onChanged: onRotationSliderChanged,
             valueText: '${form.pose.rotation.round()}°',
           ),
           _FieldLabel(tokens: tokens, text: '姿势描述'),
@@ -1794,12 +1892,11 @@ class _Step3Pose extends StatelessWidget {
             onChanged: (v) => onChange(() => form.pose.description = v),
           ),
           const SizedBox(height: 14),
-          // 预览框（可拖动）—— Bug 11 修复：用 RepaintBoundary 隔离重绘，
-          // ValueListenableBuilder 监听位置变化，拖动时只重建此部分而非整个 page
-          // 拖动区域比例使用设备屏幕比例，让剪影预览与实际取景画面尺寸更接近
+          // 预览框（可拖动）—— 用 RepaintBoundary 隔离重绘，
+          // ValueListenableBuilder 监听版本计数器，拖动时只重建此部分而非整个 page
+          // 拖动区域比例使用构图宽高比 + 方向自适应
           AspectRatio(
-            aspectRatio:
-                MediaQuery.of(context).size.width / MediaQuery.of(context).size.height,
+            aspectRatio: _effectiveAspectRatio(compositionAspectRatio, context),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: RepaintBoundary(
@@ -1827,13 +1924,13 @@ class _Step3Pose extends StatelessWidget {
                               ),
                             ),
                           ),
-                          // 剪影 —— ValueListenableBuilder 局部重建
-                          ValueListenableBuilder<Offset>(
-                            valueListenable: posePositionNotifier,
-                            builder: (context, pos, _) {
+                          // 剪影 —— ValueListenableBuilder 局部重建（版本计数器触发）
+                          ValueListenableBuilder<int>(
+                            valueListenable: poseVersionNotifier,
+                            builder: (context, _, __) {
                               return Positioned(
-                                left: constraints.maxWidth * pos.dx,
-                                top: constraints.maxHeight * pos.dy,
+                                left: constraints.maxWidth * form.pose.position.x,
+                                top: constraints.maxHeight * form.pose.position.y,
                                 child: FractionalTranslation(
                                   translation: const Offset(-0.5, -0.5),
                                   child: PoseSilhouette(
@@ -1895,11 +1992,11 @@ class _Step3Pose extends StatelessWidget {
           // 位置数值显示 —— 也用 ValueListenableBuilder 局部重建
           if (form.pose.silhouette.data != 'none') ...[
             const SizedBox(height: 8),
-            ValueListenableBuilder<Offset>(
-              valueListenable: posePositionNotifier,
-              builder: (context, pos, _) {
+            ValueListenableBuilder<int>(
+              valueListenable: poseVersionNotifier,
+              builder: (context, _, __) {
                 return Text(
-                  '位置 X: ${(pos.dx * 100).round()}%  Y: ${(pos.dy * 100).round()}%',
+                  '位置 X: ${(form.pose.position.x * 100).round()}%  Y: ${(form.pose.position.y * 100).round()}%',
                   style: TextStyle(
                     fontSize: 11,
                     fontFamily: 'SF Mono',

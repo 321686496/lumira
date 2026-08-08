@@ -2,7 +2,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart' as io;
 import 'package:file_picker_ohos/file_picker_ohos.dart' as ohos;
-import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/services.dart' show MethodChannel, PlatformException;
 
 /// 文件选择服务（跨平台包装器）。
 ///
@@ -111,6 +112,82 @@ class FilePickerService {
     }
   }
 
+/// OHOS 原生文件读取 MethodChannel
+  /// 当 dart:io File.readAsBytes() 失败时，通过原生 fileIo API 读取文件
+  static const MethodChannel _fileReaderChannel =
+      MethodChannel('lumira/file_reader');
+
+  /// 读取文件的完整字节数据。
+  ///
+  /// OHOS 的 file_picker_ohos 原生端 `FileUtils.loadData` 只做单次 `readSync`
+  /// 且缓冲区固定 4096 字节，导致 `withData` 返回的 `bytes` 被截断，无法解码图片。
+  /// 插件同时会把源文件完整拷贝到缓存目录并返回 `path`，因此这里优先从磁盘
+  /// 重新读取完整内容。
+  ///
+  /// 读取策略（OHOS）：
+  /// 1. 优先使用 dart:io File.readAsBytes() 读取缓存路径
+  /// 2. 若失败，通过原生 MethodChannel（lumira/file_reader）使用 OHOS fileIo API 读取
+  /// 3. 均失败时回退到插件返回的截断 bytes
+  ///
+  /// 非 OHOS 平台行为不变：读取失败时回退到插件返回的 bytes。
+  static Future<PickedFile> ensureFullBytes(PickedFile file) async {
+    final path = file.path;
+    if (path == null || path.isEmpty) {
+      debugPrint('[FilePickerService] ensureFullBytes: path is null or empty, '
+          'bytes=${file.bytes?.length ?? 0} bytes, size=${file.size}');
+      return file;
+    }
+
+    // 策略 1: dart:io File.readAsBytes()
+    try {
+      final fullBytes = await File(path).readAsBytes();
+      if (fullBytes.isNotEmpty) {
+        debugPrint('[FilePickerService] ensureFullBytes: dart:io success, '
+            '${fullBytes.length} bytes from $path');
+        return PickedFile(
+          name: file.name,
+          bytes: fullBytes,
+          path: file.path,
+          extension: file.extension,
+          size: fullBytes.length,
+        );
+      }
+      debugPrint('[FilePickerService] ensureFullBytes: dart:io returned empty bytes');
+    } catch (e) {
+      debugPrint('[FilePickerService] ensureFullBytes: dart:io failed: $e');
+    }
+
+    // 策略 2: OHOS 原生 MethodChannel 兜底
+    if (_isOhos) {
+      try {
+        final result = await _fileReaderChannel
+            .invokeMethod<dynamic>('readBytes', {'path': path});
+        if (result != null) {
+          final List<int> nativeBytes =
+              result is List ? List<int>.from(result) : <int>[];
+          if (nativeBytes.isNotEmpty) {
+            debugPrint('[FilePickerService] ensureFullBytes: native success, '
+                '${nativeBytes.length} bytes from $path');
+            return PickedFile(
+              name: file.name,
+              bytes: nativeBytes,
+              path: file.path,
+              extension: file.extension,
+              size: nativeBytes.length,
+            );
+          }
+        }
+        debugPrint('[FilePickerService] ensureFullBytes: native returned null/empty');
+      } catch (e) {
+        debugPrint('[FilePickerService] ensureFullBytes: native failed: $e');
+      }
+    }
+
+    // 策略 3: 回退到插件返回的截断 bytes
+    debugPrint('[FilePickerService] ensureFullBytes: fallback to original bytes '
+        '(${file.bytes?.length ?? 0} bytes)');
+    return file;
+  }
   // ===== 类型映射 =====
 
   static io.FileType _mapTypeIo(_FileType t) {

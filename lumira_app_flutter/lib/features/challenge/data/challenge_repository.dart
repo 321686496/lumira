@@ -12,7 +12,7 @@ abstract class ChallengeRepository {
   Future<List<ChallengeHistoryRecord>> getWeeklyHistory();
   Future<List<ChallengeAchievement>> getAchievements();
   ChallengeTip getTipForCategory(String category);
-  List<SubChallenge> getSubChallenges(String dailyCategory);
+  Future<List<SubChallenge>> getSubChallenges(String dailyCategory);
 }
 
 class LocalChallengeRepository implements ChallengeRepository {
@@ -154,17 +154,29 @@ class LocalChallengeRepository implements ChallengeRepository {
   }
 
   @override
-  List<SubChallenge> getSubChallenges(String dailyCategory) {
+  Future<List<SubChallenge>> getSubChallenges(String dailyCategory) async {
+    // 查询今天的完成记录，用于还原附加挑战的真实完成状态
+    // （附加挑战提交时会在历史表插入当天的 done 记录）
+    final now = _now();
+    final today = _formatDate(now);
+    final history = await _challengeDao.getWeeklyHistory(today, today);
+    final doneIds = history
+        .where((r) => r.status == ChallengeStatus.done)
+        .map((r) => r.challengeId)
+        .toSet();
+
     final otherCategories = ChallengeCategory.all.where((c) => c != dailyCategory).toList();
-    final random = Random(_dailySeed(_now()) + 1);
+    final random = Random(_dailySeed(now) + 1);
     otherCategories.shuffle(random);
     final subChallenges = <SubChallenge>[];
     for (final cat in otherCategories.take(2)) {
       final pool = ChallengePool.byCategory(cat);
       final item = pool[random.nextInt(pool.length)];
+      final isDone = doneIds.contains(item.id);
       subChallenges.add(SubChallenge(
         id: item.id, title: item.title, icon: _categoryIcon(cat),
-        status: ChallengeStatus.pending, progressCurrent: 0, progressTotal: 1,
+        status: isDone ? ChallengeStatus.done : ChallengeStatus.pending,
+        progressCurrent: isDone ? 1 : 0, progressTotal: 1,
         rewardXP: (item.rewardXP * 0.6).round(),
         tags: [ChallengeTag(label: ChallengeCategory.label(cat), color: _tagColor(cat))],
       ));

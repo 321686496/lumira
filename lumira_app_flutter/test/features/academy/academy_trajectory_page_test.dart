@@ -46,7 +46,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 验证顶部统计卡显示（AcademyMockData.courses.length = 16）
+    // 验证顶部统计卡显示（AcademyContent.courses.length = 16）
     expect(find.text('已完成 2 / 16 课'), findsOneWidget);
     // 验证总学习时长显示（按 sections.paragraphs.length * 30秒 估算）
     expect(find.textContaining('总学习时长约'), findsOneWidget);

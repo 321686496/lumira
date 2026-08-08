@@ -27,6 +27,7 @@ class MainChallenge {
     required this.rewardXP,
     required this.status,
     this.coverImage,
+    this.photoId,
     this.tags = const [],
   });
 
@@ -35,6 +36,8 @@ class MainChallenge {
   final int rewardXP;
   final ChallengeStatus status;
   final String? coverImage;
+  /// 已完成态关联的作品照片 ID（来自 gallery_items），存在时优先显示真实照片
+  final String? photoId;
   final List<ChallengeTag> tags;
 }
 

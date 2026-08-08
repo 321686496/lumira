@@ -44,7 +44,6 @@ export default function SilhouettePreview({
   scale,
   rotation,
   aspectRatio,
-  cropRatio,
   onPositionChange,
   onScaleChange,
   onRotationChange,
@@ -55,13 +54,13 @@ export default function SilhouettePreview({
   const [lightboxOpen, setLightboxOpen] = React.useState(false);
   const dragStart = React.useRef({ x: 0, y: 0, posX: 0, posY: 0 });
 
-  // 与手机预览一致：优先 cropRatio（导出裁剪），回退 composition.aspectRatio
+  // 与 App 取景器一致：使用 composition.aspectRatio（照片比例）
+  // App 的 capture_preview_template_page 使用 composition.aspectRatio 作为取景器比例，
+  // 剪影位置相对于该比例区域，而非整个页面或取景器
   const ratio = React.useMemo(() => {
-    const r = parseRatio(cropRatio ?? '');
-    if (r) return r;
-    const fallback = parseRatio(aspectRatio);
-    return fallback ?? 0.75;
-  }, [cropRatio, aspectRatio]);
+    const r = parseRatio(aspectRatio);
+    return r ?? 0.75;
+  }, [aspectRatio]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!silhouetteUrl) return;
@@ -121,7 +120,7 @@ export default function SilhouettePreview({
 
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-muted-foreground/30 pointer-events-none">
-                  <p className="text-[10px]">图片区域 {cropRatio || aspectRatio}</p>
+                  <p className="text-[10px]">照片区域 {aspectRatio}</p>
                 </div>
               </div>
 
@@ -203,8 +202,8 @@ export default function SilhouettePreview({
           <Label className="text-xs text-muted-foreground">缩放 ({scale.toFixed(2)})</Label>
           <Input
             type="range"
-            min={0.5}
-            max={1.5}
+            min={0.3}
+            max={2.5}
             step={0.01}
             value={scale}
             onChange={(e) => onScaleChange(Number(e.target.value))}

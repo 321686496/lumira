@@ -185,9 +185,16 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                 style: TextStyle(color: tokens.textSecondary)),
           ),
           data: (history) {
-            // 从历史记录中找到与当前 challengeId 匹配的记录（取最近一条）
+            // 从历史记录中找到与当前 challengeId 匹配的"今日"记录。
+            // 必须限定 r.date == 今天：题库每天随机选题，不同日期可能选中同一挑战，
+            // 若不限定会误把之前日期完成的同 id 挑战显示为已完成。
+            final now = DateTime.now();
+            final todayStr =
+                '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
             final todayRecord = history
-                .where((r) => r.challengeId == widget.challengeId)
+                .where((r) =>
+                    r.date == todayStr &&
+                    r.challengeId == widget.challengeId)
                 .toList()
               ..sort((a, b) => b.date.compareTo(a.date));
             final record =

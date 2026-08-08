@@ -87,6 +87,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// （用于实战作业页的"去拍摄"流程，捕获路径作为 String 返回）
   bool _returnResult = false;
 
+  /// 挑战模式自动导航标志：照片处理完成后仅自动跳转一次挑战确认页，
+  /// 防止状态持续为 final_ 时重复触发导航。
+  bool _hasNavigatedToChallenge = false;
+
   /// 相机重建 key：每次 app 从后台恢复时递增，
   /// 强制 CameraAwesomeBuilder 销毁旧实例并创建新实例，
   /// 确保原生相机被重新初始化（修复取景器一直转圈的问题）。
@@ -624,6 +628,28 @@ class _CapturePageState extends ConsumerState<CapturePage>
         }
       }
     });
+
+    // 挑战模式：照片处理完成（状态变为 final_ 且 photoId 就绪）后，
+    // 直接跳转挑战确认页，跳过预览页的"保存"步骤。
+    // 用户可在确认页点"重拍"回到拍摄页重新拍摄。
+    if (isChallengeMode) {
+      ref.listen<CaptureThumbnailState>(captureThumbnailProvider,
+          (prev, next) {
+        if (_hasNavigatedToChallenge) return;
+        if (next.status != CaptureThumbnailStatus.final_) return;
+        if (next.photoId == null || next.finalPath == null) return;
+        // 仅在从非 final_ 态切换到 final_ 态时触发，避免重复导航
+        if (prev?.status == CaptureThumbnailStatus.final_) return;
+        _hasNavigatedToChallenge = true;
+        final cid = widget.challengeId!;
+        final pid = next.photoId!;
+        GoRouter.of(context).go(
+          '${RouteNames.challengeConfirm}'
+          '?${RouteNames.paramChallengeId}=${Uri.encodeComponent(cid)}'
+          '&${RouteNames.paramPhotoId}=${Uri.encodeComponent(pid)}',
+        );
+      });
+    }
 
     // EV 补偿通过上方 effectiveCameraProvider 监听器实时下发到取景器。
     // 闪光灯模式变化由 flashModeProvider 监听器通过 CameraService.setFlashMode 处理。

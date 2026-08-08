@@ -40,5 +40,5 @@ final subChallengesProvider = FutureProvider<List<SubChallenge>>((ref) async {
   final state = await ref.watch(dailyChallengeStateProvider.future);
   final repo = await ref.watch(challengeRepositoryProvider.future);
   final category = state.selected?.category ?? ChallengeCategory.portrait;
-  return repo.getSubChallenges(category);
+  return await repo.getSubChallenges(category);
 });

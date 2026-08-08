@@ -243,6 +243,7 @@ class AcademyOverview {
   final int totalXP; // 累计 XP
   final String? nextCourseId; // 推荐下一课 ID
   final String? nextCourseTitle; // 推荐下一课标题
+  final CourseStatus? nextCourseStatus; // 推荐下一课的学习状态
 
   const AcademyOverview({
     required this.streakDays,
@@ -251,6 +252,7 @@ class AcademyOverview {
     required this.totalXP,
     this.nextCourseId,
     this.nextCourseTitle,
+    this.nextCourseStatus,
   });
 
   double get completionRate =>
