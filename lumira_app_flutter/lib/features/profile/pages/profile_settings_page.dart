@@ -12,6 +12,7 @@ import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../capture/watermark/data/watermark_providers.dart';
 import '../../onboarding/data/questionnaire_providers.dart';
 import '../data/profile_mock_data.dart';
 
@@ -36,7 +37,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   late bool _gridOn = ProfileMockData.defaultGridOn;
   late bool _levelOn = ProfileMockData.defaultLevelOn;
   late bool _shutterOn = ProfileMockData.defaultShutterOn;
-  late bool _watermarkOn = ProfileMockData.defaultWatermarkOn;
 
   int _tapCount = 0;
   Timer? _tapTimer;
@@ -139,6 +139,10 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     // 问卷完成状态（用于"偏好问卷"入口显示）
     final questionnaireCompleted =
         ref.watch(questionnaireCompletedProvider).valueOrNull ?? false;
+    // 水印设置（总开关 / 动画开关）+ 当前选中模板名称
+    final watermarkSettings = ref.watch(watermarkSettingsProvider);
+    final watermarkTemplate = ref.watch(currentWatermarkTemplateProvider);
+    final currentTemplateName = watermarkTemplate?.name ?? '未选择';
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -253,8 +257,33 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         icon: Icons.branding_watermark_outlined,
                         label: '水印',
                         trailing: LumiraSwitch(
-                          value: _watermarkOn,
-                          onChanged: (v) => setState(() => _watermarkOn = v),
+                          value: watermarkSettings.enabled,
+                          onChanged: (v) {
+                            final current = ref.read(watermarkSettingsProvider);
+                            ref.read(watermarkSettingsProvider.notifier).state =
+                                current.copyWith(enabled: v);
+                          },
+                        ),
+                        tokens: tokens,
+                      ),
+                      _SettingItem(
+                        icon: Icons.palette_outlined,
+                        label: '水印样式',
+                        value: currentTemplateName,
+                        tokens: tokens,
+                        onTap: () =>
+                            GoRouter.of(context).push(RouteNames.profileSettingsWatermark),
+                      ),
+                      _SettingItem(
+                        icon: Icons.animation_outlined,
+                        label: '水印动画',
+                        trailing: LumiraSwitch(
+                          value: watermarkSettings.animationEnabled,
+                          onChanged: (v) {
+                            final current = ref.read(watermarkSettingsProvider);
+                            ref.read(watermarkSettingsProvider.notifier).state =
+                                current.copyWith(animationEnabled: v);
+                          },
                         ),
                         tokens: tokens,
                       ),
