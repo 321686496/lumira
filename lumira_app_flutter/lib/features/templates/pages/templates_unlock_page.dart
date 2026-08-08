@@ -12,6 +12,8 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../redeem/data/redeem_repository.dart';
 import '../../redeem/data/redeem_models.dart';
 import '../data/owned_templates_repository.dart';
+import '../data/templates_browse_mock_data.dart';
+import '../widgets/template_cover_image.dart';
 
 /// 解锁模板页
 ///
@@ -148,6 +150,10 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    // 使用真实模板封面（本地资源），替代原 picsum 网络占位图
+    final cover = widget.templateId == null
+        ? null
+        : TemplatesBrowseMockData.findDetailById(widget.templateId!)?.cover;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -179,6 +185,7 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
                               _PreviewCard(
                                 tokens: tokens,
                                 unlocked: _unlocked,
+                                cover: cover,
                               ),
                               _SubtitleWrap(tokens: tokens),
                               _OptionsList(
@@ -252,9 +259,14 @@ class _CloseButton extends StatelessWidget {
 }
 
 class _PreviewCard extends ConsumerWidget {
-  const _PreviewCard({required this.tokens, required this.unlocked});
+  const _PreviewCard({
+    required this.tokens,
+    required this.unlocked,
+    this.cover,
+  });
   final ThemeTokens tokens;
   final bool unlocked;
+  final String? cover;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -279,10 +291,18 @@ class _PreviewCard extends ConsumerWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(
-                    'https://picsum.photos/seed/1499327/800/600',
+                  TemplateCoverImage(
+                    cover: cover,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    fallback: Container(
+                      color: tokens.surfaceAlt,
+                      child: Icon(
+                        Icons.image_outlined,
+                        size: 40,
+                        color: tokens.textTertiary,
+                      ),
+                    ),
+                    errorFallback: Container(
                       color: tokens.surfaceAlt,
                       child: Icon(
                         Icons.broken_image_outlined,

@@ -71,6 +71,18 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
     );
   }
 
+  void _goDetailForDate(String challengeId, String date) {
+    GoRouter.of(context).push(
+      RouteNames.build(
+        RouteNames.challengeDetail,
+        {
+          RouteNames.paramChallengeId: challengeId,
+          RouteNames.paramDate: date,
+        },
+      ),
+    );
+  }
+
   Future<void> _onFlipSelected(ChallengePoolItem selected) async {
     if (_selecting) return;
     setState(() => _selecting = true);
@@ -179,6 +191,7 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
                 selected: selected,
                 scrollController: _scrollController,
                 goDetail: _goDetail,
+                goDetailForDate: _goDetailForDate,
               );
             },
           ),
@@ -300,11 +313,13 @@ class _RevealedView extends ConsumerWidget {
     required this.selected,
     required this.scrollController,
     required this.goDetail,
+    required this.goDetailForDate,
   });
 
   final ChallengePoolItem selected;
   final ScrollController scrollController;
   final void Function(String id) goDetail;
+  final void Function(String challengeId, String date) goDetailForDate;
 
   void _goCapture(BuildContext context, String challengeId) {
     GoRouter.of(context).push(
@@ -423,9 +438,11 @@ class _RevealedView extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const FadeUp(
-          delay: Duration(milliseconds: 240),
-          child: WeeklyCalendarCard(),
+        FadeUp(
+          delay: const Duration(milliseconds: 240),
+          child: WeeklyCalendarCard(
+            onDateTap: goDetailForDate,
+          ),
         ),
         const SizedBox(height: 32),
         // 4. 挑战成就墙

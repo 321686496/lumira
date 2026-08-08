@@ -7,7 +7,10 @@ import '../data/challenge_providers.dart';
 import '../data/challenge_models.dart';
 
 class WeeklyCalendarCard extends ConsumerWidget {
-  const WeeklyCalendarCard({super.key});
+  const WeeklyCalendarCard({super.key, this.onDateTap});
+
+  /// 点击已完成或已跳过的日期回调，传递 challengeId 和 date（YYYY-MM-DD）
+  final void Function(String challengeId, String date)? onDateTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -28,10 +31,14 @@ class WeeklyCalendarCard extends ConsumerWidget {
         data: (history) {
           // 构建日期到状态的映射
           final dateStatus = <String, ChallengeStatus>{};
+          // 按日期索引历史记录，用于回调
+          final dateRecords = <String, ChallengeHistoryRecord>{};
           for (final record in history) {
             if (record.status == ChallengeStatus.done) {
               dateStatus[record.date] = ChallengeStatus.done;
             }
+            // 取每个日期最晚的一条记录作为代表
+            dateRecords[record.date] = record;
           }
 
           final todayStr = _formatDate(now);
@@ -50,6 +57,10 @@ class WeeklyCalendarCard extends ConsumerWidget {
                   final isFuture = day.isAfter(now);
                   final isCompleted = dateStatus[dayStr] == ChallengeStatus.done;
 
+                  // 是否可点击：已完成或已跳过的历史日期
+                  final isPastWithRecord = !isFuture && dateRecords.containsKey(dayStr);
+                  final canTap = isPastWithRecord && onDateTap != null;
+
                   Color iconColor;
                   IconData iconData;
                   if (isCompleted) {
@@ -66,24 +77,32 @@ class WeeklyCalendarCard extends ConsumerWidget {
                     iconData = Icons.remove_circle_outline;
                   }
 
-                  return Column(
-                    children: [
-                      Text(
-                        ['一', '二', '三', '四', '五', '六', '日'][day.weekday - 1],
-                        style: TextStyle(fontSize: 11, color: isToday ? tokens.brand : tokens.textTertiary),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: isToday ? tokens.brandSubtle : tokens.canvasDeep,
-                          borderRadius: BorderRadius.circular(10),
-                          border: isToday ? Border.all(color: tokens.brand, width: 1.5) : null,
+                  return GestureDetector(
+                    onTap: canTap
+                        ? () {
+                            final record = dateRecords[dayStr]!;
+                            onDateTap!(record.challengeId, dayStr);
+                          }
+                        : null,
+                    child: Column(
+                      children: [
+                        Text(
+                          ['一', '二', '三', '四', '五', '六', '日'][day.weekday - 1],
+                          style: TextStyle(fontSize: 11, color: isToday ? tokens.brand : tokens.textTertiary),
                         ),
-                        child: Icon(iconData, size: 20, color: iconColor),
-                      ),
-                    ],
+                        const SizedBox(height: 6),
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: isToday ? tokens.brandSubtle : tokens.canvasDeep,
+                            borderRadius: BorderRadius.circular(10),
+                            border: isToday ? Border.all(color: tokens.brand, width: 1.5) : null,
+                          ),
+                          child: Icon(iconData, size: 20, color: iconColor),
+                        ),
+                      ],
+                    ),
                   );
                 }).toList(),
               ),

@@ -65,10 +65,14 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
     final detail = academyId != null ? ref.watch(courseDetailProvider(academyId)) : null;
     final progressAsync = academyId != null ? ref.watch(courseProgressProvider(academyId)) : null;
 
+    final appBarTitle = detail != null
+        ? '摄影美学院-第${detail.course.lessonNumber}课'
+        : '摄影美学院';
+
     if (detail == null) {
       return Scaffold(
         backgroundColor: tokens.canvas,
-        appBar: const LumiraNav(title: '教程', transparent: true),
+        appBar: LumiraNav(title: appBarTitle, transparent: true),
         body: Center(child: Text('课程不存在', style: TextStyle(color: tokens.textTertiary))),
       );
     }
@@ -83,7 +87,7 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
       appBar: LumiraNav(
-        title: '教程',
+        title: appBarTitle,
         transparent: true,
         actions: [
           GestureDetector(
@@ -236,17 +240,16 @@ class _HeroImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Image.asset(detail.heroImage, fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
-              color: tokens.surfaceAlt,
-              child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary),
-            ),
-          ),
+      padding: const EdgeInsets.only(top: 16),
+      child: Image.asset(
+        detail.heroImage,
+        width: double.infinity,
+        fit: BoxFit.fitWidth,
+        errorBuilder: (_, __, ___) => Container(
+          width: double.infinity,
+          height: 200,
+          color: tokens.surfaceAlt,
+          child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary),
         ),
       ),
     );
@@ -395,10 +398,15 @@ class _TipCard extends StatelessWidget {
           const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Image.asset(detail.tipCardImage, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt, child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary)),
+            child: Image.asset(
+              detail.tipCardImage,
+              width: double.infinity,
+              fit: BoxFit.fitWidth,
+              errorBuilder: (_, __, ___) => Container(
+                width: double.infinity,
+                height: 120,
+                color: tokens.surfaceAlt,
+                child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary),
               ),
             ),
           ),

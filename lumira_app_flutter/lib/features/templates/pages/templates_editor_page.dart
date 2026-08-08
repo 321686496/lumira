@@ -716,9 +716,17 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     lumira.LumiraToast.show(context, '正在导出 ${record.name}...');
 
     try {
-      await TemplateExporter.shareTemplate(record, usePptpl: usePptpl);
+      final filePath = await TemplateExporter.exportToTempFile(record, usePptpl: usePptpl);
       if (!mounted) return;
-      lumira.LumiraToast.show(context, '已分享 ${record.name}');
+      
+      context.push(
+        RouteNames.templatesExportDetail,
+        extra: {
+          'filePath': filePath,
+          'templateName': record.name,
+          'usePptpl': usePptpl,
+        },
+      );
     } catch (e) {
       if (!mounted) return;
       lumira.LumiraToast.show(context, '导出失败：$e');
@@ -1343,10 +1351,25 @@ void _showCoverPreviewDialog(
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.memory(
-              _cachedCoverDecode(cover),
-              width: double.infinity,
-              fit: BoxFit.contain,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth.isFinite
+                    ? constraints.maxWidth
+                    : MediaQuery.of(context).size.width;
+                return ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: w,
+                    maxWidth: w,
+                    minHeight: 1,
+                  ),
+                  child: Image.memory(
+                    _cachedCoverDecode(cover),
+                    width: w,
+                    height: double.infinity,
+                    fit: BoxFit.contain,
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 16),
@@ -1494,13 +1517,28 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
               behavior: HitTestBehavior.opaque,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: Image.memory(
-                  _cachedCoverDecode(cover),
-                  width: double.infinity,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, _) {
-                    debugPrint('[Editor] Cover image decode error: $error');
-                    return _CoverPlaceholder(tokens: tokens);
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final w = constraints.maxWidth.isFinite
+                        ? constraints.maxWidth
+                        : MediaQuery.of(context).size.width;
+                    return ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: w,
+                        maxWidth: w,
+                        minHeight: 1,
+                      ),
+                      child: Image.memory(
+                        _cachedCoverDecode(cover),
+                        width: w,
+                        height: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, _) {
+                          debugPrint('[Editor] Cover image decode error: $error');
+                          return _CoverPlaceholder(tokens: tokens);
+                        },
+                      ),
+                    );
                   },
                 ),
               ),

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,7 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/academy_content.dart';
+import '../data/academy_models.dart';
 import '../data/academy_trajectory_models.dart';
 import '../providers/academy_providers.dart';
 
@@ -206,7 +208,7 @@ class _StatsCard extends StatelessWidget {
   }
 }
 
-class _Timeline extends StatelessWidget {
+class _Timeline extends ConsumerWidget {
   const _Timeline({required this.tokens, required this.trajectory});
 
   final ThemeTokens tokens;
@@ -217,8 +219,17 @@ class _Timeline extends StatelessWidget {
     return '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   }
 
+  void _goDetail(BuildContext context, String courseId) {
+    GoRouter.of(context).push(
+      RouteNames.build(
+        RouteNames.profileAcademyDetail,
+        {RouteNames.paramAcademyId: courseId},
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -228,27 +239,30 @@ class _Timeline extends StatelessWidget {
             record: trajectory[i],
             isLast: i == trajectory.length - 1,
             formatDate: _formatDate,
+            onTap: () => _goDetail(context, trajectory[i].courseId),
           ),
       ],
     );
   }
 }
 
-class _TimelineNode extends StatelessWidget {
+class _TimelineNode extends ConsumerWidget {
   const _TimelineNode({
     required this.tokens,
     required this.record,
     required this.isLast,
     required this.formatDate,
+    required this.onTap,
   });
 
   final ThemeTokens tokens;
   final AcademyTrajectoryRecord record;
   final bool isLast;
   final String Function(int) formatDate;
+  final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final course = AcademyContent.getCourse(record.courseId);
     final courseTitle = course?.title ?? '未知课程';
     final coverImage = course?.coverImage ?? '';
@@ -300,87 +314,340 @@ class _TimelineNode extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // 右侧：课程卡片
+          // 右侧：课程卡片（可点击进入详情）
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
-              child: NeuCard(
-                child: Row(
-                  children: [
-                    // 课程封面
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: SizedBox(
-                        width: 56,
-                        height: 56,
-                        child: coverImage.isNotEmpty
-                            ? Image.asset(
-                                coverImage,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: tokens.surfaceAlt,
-                                  child: Icon(Icons.image_outlined,
-                                      size: 20, color: tokens.textTertiary),
-                                ),
-                              )
-                            : Container(
-                                color: tokens.surfaceAlt,
-                                child: Icon(Icons.school,
-                                    size: 20, color: tokens.brand),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // 课程信息
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              child: GestureDetector(
+                onTap: onTap,
+                behavior: HitTestBehavior.opaque,
+                child: NeuCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
                         children: [
-                          Text(
-                            courseTitle,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.textPrimary,
+                          // 课程封面
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: coverImage.isNotEmpty
+                                  ? Image.asset(
+                                      coverImage,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: tokens.surfaceAlt,
+                                        child: Icon(Icons.image_outlined,
+                                            size: 20, color: tokens.textTertiary),
+                                      ),
+                                    )
+                                  : Container(
+                                      color: tokens.surfaceAlt,
+                                      child: Icon(Icons.school,
+                                          size: 20, color: tokens.brand),
+                                    ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            formatDate(record.completedAt),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontFamily: 'Courier New',
+                          const SizedBox(width: 12),
+                          // 课程信息
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  courseTitle,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: tokens.textPrimary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  formatDate(record.completedAt),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontFamily: 'Courier New',
+                                    color: tokens.textTertiary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: tokens.successSubtle,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    '第 ${record.sequence} 个完成',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                      color: tokens.success,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // 进入详情指示
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Icon(
+                              Icons.chevron_right,
+                              size: 20,
                               color: tokens.textTertiary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: tokens.successSubtle,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              '第 ${record.sequence} 个完成',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                                color: tokens.success,
-                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      // 实战作业照片
+                      _SubmissionPhotos(
+                        courseId: record.courseId,
+                        tokens: tokens,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 加载并展示课程作业提交的照片
+class _SubmissionPhotos extends ConsumerWidget {
+  const _SubmissionPhotos({required this.courseId, required this.tokens});
+
+  final String courseId;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repoAsync = ref.watch(academyRepositoryProvider);
+    return repoAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (repo) => FutureBuilder<List<AssignmentSubmission>>(
+        future: repo.getCourseSubmissions(courseId),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const SizedBox.shrink();
+          final submissions = snapshot.data!
+              .where((s) =>
+                  s.status != AssignmentStatus.notSubmitted &&
+                  (s.photoPath != null || s.photoUrl != null))
+              .toList();
+          if (submissions.isEmpty) return const SizedBox.shrink();
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                height: 1, color: tokens.divider,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.camera_alt_outlined,
+                      size: 14, color: tokens.textTertiary),
+                  const SizedBox(width: 6),
+                  Text(
+                    '实战作品 · ${submissions.length} 张',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: tokens.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 88,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: submissions.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final sub = submissions[index];
+                    return GestureDetector(
+                      onTap: () => _openPhotoViewer(context, sub),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 88,
+                          height: 88,
+                          child: sub.photoPath != null
+                              ? Image.file(
+                                  File(sub.photoPath!),
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: tokens.surfaceAlt,
+                                    child: Icon(Icons.broken_image_outlined,
+                                        size: 20, color: tokens.textTertiary),
+                                  ),
+                                )
+                              : Image.network(
+                                  sub.photoUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: tokens.surfaceAlt,
+                                    child: Icon(Icons.broken_image_outlined,
+                                        size: 20, color: tokens.textTertiary),
+                                  ),
+                                ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// 打开全屏照片查看器：支持双指缩放与拖拽
+  void _openPhotoViewer(BuildContext context, AssignmentSubmission sub) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black87,
+        transitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (_, __, ___) => _PhotoViewerDialog(
+          submission: sub,
+          tokens: tokens,
+        ),
+        transitionsBuilder: (_, animation, __, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+  }
+}
+
+/// 全屏照片查看器：点击空白处关闭，支持双指/双击缩放
+class _PhotoViewerDialog extends StatelessWidget {
+  const _PhotoViewerDialog({
+    required this.submission,
+    required this.tokens,
+  });
+
+  final AssignmentSubmission submission;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPath = submission.photoPath != null;
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      behavior: HitTestBehavior.opaque,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            // 居中可缩放图片
+            Center(
+              child: GestureDetector(
+                onTap: () {}, // 阻止点击图片关闭
+                child: InteractiveViewer(
+                  minScale: 1.0,
+                  maxScale: 4.0,
+                  panEnabled: true,
+                  scaleEnabled: true,
+                  boundaryMargin: const EdgeInsets.all(40),
+                  child: hasPath
+                      ? Image.file(
+                          File(submission.photoPath!),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 120, height: 120,
+                            color: tokens.surfaceAlt,
+                            child: Icon(Icons.broken_image_outlined,
+                                size: 40, color: tokens.textTertiary),
+                          ),
+                        )
+                      : Image.network(
+                          submission.photoUrl!,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (_, child, progress) {
+                            if (progress == null) return child;
+                            return SizedBox(
+                              width: 60, height: 60,
+                              child: CircularProgressIndicator(
+                                value: progress.cumulativeBytesLoaded /
+                                    (progress.expectedTotalBytes ?? 1),
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            );
+                          },
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 120, height: 120,
+                            color: tokens.surfaceAlt,
+                            child: Icon(Icons.broken_image_outlined,
+                                size: 40, color: tokens.textTertiary),
+                          ),
+                        ),
+                ),
+              ),
+            ),
+            // 顶部关闭按钮
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 12,
+              right: 16,
+              child: GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close,
+                      size: 22, color: Colors.white),
+                ),
+              ),
+            ),
+            // 底部备注（如有）
+            if (submission.note != null && submission.note!.isNotEmpty)
+              Positioned(
+                left: 24,
+                right: 24,
+                bottom: MediaQuery.of(context).padding.bottom + 24,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    submission.note!,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.white,
+                      height: 1.5,
+                    ),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

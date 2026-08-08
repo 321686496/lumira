@@ -72,6 +72,26 @@ class FilePickerService {
     return result?.files;
   }
 
+  /// 选择目录（用于保存文件）。
+  /// 
+  /// 返回目录路径，用户取消或失败时返回 null。
+  static Future<String?> pickDirectory() async {
+    try {
+      if (_isOhos) {
+        return await ohos.FilePicker.platform.getDirectoryPath();
+      } else {
+        return await io.FilePicker.platform.getDirectoryPath();
+      }
+    } on PlatformException catch (e) {
+      final code = e.code.toLowerCase();
+      if (code.contains('activity') || code.contains('cancel') ||
+          code.contains('abort') || code.contains('unknown')) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
   /// 平台分发核心方法。
   ///
   /// 捕获用户取消选择时 file_picker 抛出的 PlatformException

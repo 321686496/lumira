@@ -51,8 +51,12 @@ class PoseSilhouette extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        // Positioned 内布局无约束，回退到屏幕宽度
+        final parentWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.of(context).size.width;
         // 剪影基础宽度 = 父容器宽度 × 40%
-        final baseWidth = constraints.maxWidth * baseWidthFactor;
+        final baseWidth = parentWidth * baseWidthFactor;
         // 高度 = 宽度 × 1.6
         final baseHeight = baseWidth * baseAspectH / baseAspectW;
 

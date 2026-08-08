@@ -127,6 +127,26 @@ void main() {
       expect(find.text('咖啡馆人像'), findsOneWidget);
     });
 
+    testWidgets('renders local cover image for builtin template',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        ThemeKey.warmWhite,
+        UIStyle.neumorphic,
+        templateId: 'cafe_portrait',
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 封面应从本地 asset 加载（修复详情页封面加载不出来）
+      final covers = tester
+          .widgetList<Image>(find.byType(Image))
+          .map((i) => i.image)
+          .whereType<AssetImage>()
+          .where((a) => a.assetName == 'assets/images/templates/cafe_portrait.jpg');
+      expect(covers, isNotEmpty,
+          reason: '详情页应渲染咖啡馆人像本地封面图');
+    });
+
     testWidgets('renders category label on preview image', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
