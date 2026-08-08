@@ -11,3 +11,6 @@ lumira-app/.vite/
 
 # Generated media outputs
 outputs/
+
+# ML model files (large binary, not tracked in git)
+models/
