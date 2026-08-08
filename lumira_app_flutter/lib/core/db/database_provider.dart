@@ -13,12 +13,13 @@ import '../../features/academy/data/academy_dao.dart';
 import 'dao/composition_kits_dao.dart';
 import 'dao/api_cache_dao.dart';
 import 'dao/settings_dao.dart';
+import 'dao/watermark_dao.dart';
 import '../../core/auth/auth_dao.dart';
 import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 19;
+const int _kDbVersion = 20;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -88,6 +89,11 @@ final questionnaireDaoProvider = FutureProvider<QuestionnaireDao>((ref) async {
 final userProfileDaoProvider = FutureProvider<UserProfileDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return UserProfileDao(db);
+});
+
+final watermarkDaoProvider = FutureProvider<WatermarkDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return WatermarkDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -338,6 +344,10 @@ Future<void> _onCreate(Database db, int version) async {
   await db.execute(CheckinTable.indexVisitedAtSql);
   await db.execute(CheckinPhotoTable.createSql);
   await db.execute(CheckinPhotoTable.indexCheckinSql);
+
+  // === v20: 自定义水印模板表 ===
+  await db.execute(WatermarkTemplatesTable.createSql);
+  await db.execute(WatermarkTemplatesTable.indexCreatedAtSql);
 
   // === 种子化预置数据（修复：fresh install 时不触发 _onUpgrade，需在 _onCreate 中显式调用 seeder） ===
   // _onUpgrade 仅在 oldVersion < 4 时调用 BuiltinDataSeeder.seedAll，
@@ -747,6 +757,17 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       ''');
     } catch (e) {
       debugPrint('v19 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 20) {
+    try {
+      // v20: 自定义水印模板表（watermark feature data layer）
+      // 存储用户自定义水印模板，config 列保存 WatermarkTemplate.toJson() JSON 字符串。
+      // 预置模板（getPresetWatermarks()）不入库，运行时由 presetWatermarksProvider 提供。
+      await db.execute(WatermarkTemplatesTable.createSql);
+      await db.execute(WatermarkTemplatesTable.indexCreatedAtSql);
+    } catch (e) {
+      debugPrint('v20 migration failed (silent fallback): $e');
     }
   }
 }
