@@ -23,6 +23,7 @@ class RouteNames {
   static const String templatesDrafts = '/templates/drafts';
   static const String templatesRecommend = '/templates/recommend';
   static const String templatesAll = '/templates/all';
+  static const String templatesExportDetail = '/templates/export-detail';
   static const String challengeDetail = '/challenge/detail';
   static const String challengeHistory = '/challenge/history';
   static const String challengeConfirm = '/challenge/confirm';
@@ -40,6 +41,8 @@ class RouteNames {
   static const String profileSettings = '/profile/settings';
   static const String profileEdit = '/profile/edit';
   static const String profileSettingsTheme = '/profile/settings/theme';
+  static const String profileSettingsWatermark = '/profile/settings/watermark';
+  static const String profileSettingsWatermarkEdit = '/profile/settings/watermark/edit';
   static const String profileGrowth = '/profile/growth';
   static const String profileInvite = '/profile/invite';
   static const String profileShareCode = '/profile/share-code';
@@ -73,6 +76,7 @@ class RouteNames {
   static const String paramScene = 'scene';
   static const String paramTab = 'tab';
   static const String paramChallengeId = 'challengeId';
+  static const String paramDate = 'date';
   static const String paramCheckinId = 'checkinId';
   static const String paramPhotoId = 'photoId';
   static const String paramCollectionId = 'collectionId';
