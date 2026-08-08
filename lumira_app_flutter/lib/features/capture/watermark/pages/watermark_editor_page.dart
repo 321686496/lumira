@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/db/database_provider.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
 import '../../../../shared/widgets/nav/lumira_nav.dart';
@@ -130,10 +131,29 @@ class _WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     setState(() {});
   }
 
-  void _save() {
+  Future<void> _save() async {
+    // 在 await 之前捕获 container，避免 async gap 后使用 BuildContext
+    final container = ProviderScope.containerOf(context, listen: false);
+    // 1. 持久化自定义模板到 DAO
+    try {
+      final dao = await ref.read(watermarkDaoProvider.future);
+      await dao.insert(_template);
+      // 2. 同步追加到内存缓存，使 currentWatermarkTemplateProvider 立即命中
+      ref.read(customWatermarksProvider.notifier).state = [
+        ...ref.read(customWatermarksProvider),
+        _template,
+      ];
+    } catch (e) {
+      debugPrint('[watermark-editor] persist custom template failed: $e');
+    }
+    // 3. 切换 settings.activeTemplateId 到刚保存的模板
     final current = ref.read(watermarkSettingsProvider);
     ref.read(watermarkSettingsProvider.notifier).state =
         current.copyWith(activeTemplateId: _template.id);
+    // 4. 防抖持久化 settings
+    scheduleWatermarkPersist(container);
+    // 5. 返回上一页（await 后需检查 mounted）
+    if (!mounted) return;
     if (context.canPop()) {
       context.pop();
     }
