@@ -234,6 +234,7 @@ export class AdminTemplatesService {
       // 将 silhouette URL 注入 pose 对象
       const poseObj = typeof pose === 'object' && pose !== null ? pose as Record<string, unknown> : {};
       if (poseObj.silhouette && typeof poseObj.silhouette === 'object') {
+        (poseObj.silhouette as Record<string, unknown>).type = 'image';
         (poseObj.silhouette as Record<string, unknown>).url = silUrl;
         (poseObj.silhouette as Record<string, unknown>).data = silUrl; // 兼容字段
       } else {
@@ -371,6 +372,7 @@ export class AdminTemplatesService {
       const silUrl = buildPublicUrl('templates', id, silFilename);
       const poseObj = typeof pose === 'object' && pose !== null ? pose as Record<string, unknown> : {};
       if (poseObj.silhouette && typeof poseObj.silhouette === 'object') {
+        (poseObj.silhouette as Record<string, unknown>).type = 'image';
         (poseObj.silhouette as Record<string, unknown>).url = silUrl;
         (poseObj.silhouette as Record<string, unknown>).data = silUrl;
       } else {
