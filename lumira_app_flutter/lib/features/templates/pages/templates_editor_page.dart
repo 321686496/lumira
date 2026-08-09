@@ -1351,25 +1351,13 @@ void _showCoverPreviewDialog(
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final w = constraints.maxWidth.isFinite
-                    ? constraints.maxWidth
-                    : MediaQuery.of(context).size.width;
-                return ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minWidth: w,
-                    maxWidth: w,
-                    minHeight: 1,
-                  ),
-                  child: Image.memory(
-                    _cachedCoverDecode(cover),
-                    width: w,
-                    height: double.infinity,
-                    fit: BoxFit.contain,
-                  ),
-                );
-              },
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 1),
+              child: Image.memory(
+                _cachedCoverDecode(cover),
+                width: double.infinity,
+                fit: BoxFit.contain,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -1517,29 +1505,17 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
               behavior: HitTestBehavior.opaque,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final w = constraints.maxWidth.isFinite
-                        ? constraints.maxWidth
-                        : MediaQuery.of(context).size.width;
-                    return ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: w,
-                        maxWidth: w,
-                        minHeight: 1,
-                      ),
-                      child: Image.memory(
-                        _cachedCoverDecode(cover),
-                        width: w,
-                        height: double.infinity,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, _) {
-                          debugPrint('[Editor] Cover image decode error: $error');
-                          return _CoverPlaceholder(tokens: tokens);
-                        },
-                      ),
-                    );
-                  },
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 1),
+                  child: Image.memory(
+                    _cachedCoverDecode(cover),
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, _) {
+                      debugPrint('[Editor] Cover image decode error: $error');
+                      return _CoverPlaceholder(tokens: tokens);
+                    },
+                  ),
                 ),
               ),
             )
@@ -1881,45 +1857,65 @@ class _Step3Pose extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 14),
-          _SliderRow(
-            tokens: tokens,
-            label: '位置 X',
-            value: form.pose.position.x,
-            min: 0,
-            max: 1,
-            divisions: 100,
-            onChanged: (v) => onPosePositionSliderChanged(true, v),
-            valueText: form.pose.position.x.toStringAsFixed(2),
+          ValueListenableBuilder<int>(
+            valueListenable: poseVersionNotifier,
+            builder: (context, _, __) {
+              return _SliderRow(
+                tokens: tokens,
+                label: '位置 X',
+                value: form.pose.position.x,
+                min: 0,
+                max: 1,
+                divisions: 100,
+                onChanged: (v) => onPosePositionSliderChanged(true, v),
+                valueText: form.pose.position.x.toStringAsFixed(2),
+              );
+            },
           ),
-          _SliderRow(
-            tokens: tokens,
-            label: '位置 Y',
-            value: form.pose.position.y,
-            min: 0,
-            max: 1,
-            divisions: 100,
-            onChanged: (v) => onPosePositionSliderChanged(false, v),
-            valueText: form.pose.position.y.toStringAsFixed(2),
+          ValueListenableBuilder<int>(
+            valueListenable: poseVersionNotifier,
+            builder: (context, _, __) {
+              return _SliderRow(
+                tokens: tokens,
+                label: '位置 Y',
+                value: form.pose.position.y,
+                min: 0,
+                max: 1,
+                divisions: 100,
+                onChanged: (v) => onPosePositionSliderChanged(false, v),
+                valueText: form.pose.position.y.toStringAsFixed(2),
+              );
+            },
           ),
-          _SliderRow(
-            tokens: tokens,
-            label: '缩放',
-            value: form.pose.scale,
-            min: 0.3,
-            max: 2.5,
-            divisions: 110,
-            onChanged: onScaleSliderChanged,
-            valueText: form.pose.scale.toStringAsFixed(2),
+          ValueListenableBuilder<int>(
+            valueListenable: poseVersionNotifier,
+            builder: (context, _, __) {
+              return _SliderRow(
+                tokens: tokens,
+                label: '缩放',
+                value: form.pose.scale,
+                min: 0.3,
+                max: 2.5,
+                divisions: 110,
+                onChanged: onScaleSliderChanged,
+                valueText: form.pose.scale.toStringAsFixed(2),
+              );
+            },
           ),
-          _SliderRow(
-            tokens: tokens,
-            label: '旋转',
-            value: form.pose.rotation,
-            min: -45,
-            max: 45,
-            divisions: 90,
-            onChanged: onRotationSliderChanged,
-            valueText: '${form.pose.rotation.round()}°',
+          ValueListenableBuilder<int>(
+            valueListenable: poseVersionNotifier,
+            builder: (context, _, __) {
+              return _SliderRow(
+                tokens: tokens,
+                label: '旋转',
+                value: form.pose.rotation,
+                min: -45,
+                max: 45,
+                divisions: 90,
+                onChanged: onRotationSliderChanged,
+                valueText: '${form.pose.rotation.round()}°',
+              );
+            },
           ),
           _FieldLabel(tokens: tokens, text: '姿势描述'),
           _FieldInput(
@@ -2766,3 +2762,7 @@ class _VerticalFooterButton extends ConsumerWidget {
     );
   }
 }
+
+
+
+
