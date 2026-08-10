@@ -19,7 +19,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 21;
+const int _kDbVersion = 22;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -250,6 +250,8 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colFreeModePostProcess} TEXT,
       ${Tables.colFreeModeComposition} TEXT,
       ${Tables.colWatermarkSettings} TEXT,
+      ${Tables.colCameraFacing} TEXT,
+      ${Tables.colAspectRatio} TEXT,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
@@ -783,6 +785,26 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v21 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 22) {
+    try {
+      // v22: user_settings 新增 camera_facing / aspect_ratio 列（拍摄页偏好持久化）
+      // 前后置摄像头选择 + 照片比例，退出拍摄页/App 后下次进入自动恢复
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colCameraFacing,
+        'TEXT',
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colAspectRatio,
+        'TEXT',
+      );
+    } catch (e) {
+      debugPrint('v22 migration failed (silent fallback): $e');
     }
   }
 }

@@ -167,4 +167,56 @@ class SettingsDao {
       whereArgs: [1],
     );
   }
+
+  /// 读取持久化的前后置摄像头选择（未设置时返回 null）
+  Future<String?> getCameraFacing() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colCameraFacing],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return null;
+    final v = rows.first[Tables.colCameraFacing] as String?;
+    return (v == 'front' || v == 'back') ? v : null;
+  }
+
+  /// 保存前后置摄像头选择（'front' / 'back'）
+  Future<void> setCameraFacing(String facing) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colCameraFacing: facing,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 读取持久化的照片比例选择（未设置时返回 null）
+  Future<String?> getAspectRatio() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colAspectRatio],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return null;
+    final v = rows.first[Tables.colAspectRatio] as String?;
+    return (v == null || v.isEmpty) ? null : v;
+  }
+
+  /// 保存照片比例选择（'fullscreen' / '4:3' / '1:1' 等）
+  Future<void> setAspectRatio(String ratio) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colAspectRatio: ratio,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
 }

@@ -5,6 +5,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { dailySignInRecords } from '../../database/schema';
 import { PointsService } from '../points/points.service';
+import { getUtc8DayStart } from '../../common/utils/date.util';
 
 // 签到奖励配置：每天 2 积分，第 7 天额外奖励 14 积分（共 16 积分）
 const DAILY_BASE_POINTS = 2;
@@ -18,11 +19,9 @@ export class SignInService {
     private readonly pointsService: PointsService,
   ) {}
 
-  /** 获取当天 0 点时间戳（秒） */
+  /** 获取当天 0 点时间戳（秒），按 UTC+8（Asia/Shanghai）自然日计算 */
   private getTodayStart(): number {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return Math.floor(d.getTime() / 1000);
+    return getUtc8DayStart();
   }
 
   /** 计算连签天数：从今天往前数连续签到天数 */

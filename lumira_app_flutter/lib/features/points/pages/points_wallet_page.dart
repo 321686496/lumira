@@ -83,7 +83,18 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
       ref.invalidate(signInRepositoryProvider);
     } on ApiException catch (e) {
       if (mounted) {
-        _showSnack(tokens, '签到失败：${e.message}');
+        // 409 = 服务端判定今日已签到（客户端状态可能因时区/缓存不同步），按成功处理
+        final alreadySigned = e.kind == ApiErrorKind.conflict;
+        _showSnack(
+          tokens,
+          alreadySigned ? '今日已签到，明天再来吧' : '签到失败：${e.message}',
+          isSuccess: alreadySigned,
+        );
+        if (alreadySigned) {
+          // 刷新余额 + 签到状态，让按钮恢复"已签到"
+          ref.invalidate(pointsRepositoryProvider);
+          ref.invalidate(signInRepositoryProvider);
+        }
       }
     } finally {
       if (mounted) setState(() => _signingIn = false);
@@ -172,6 +183,11 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
                         onTap: () =>
                             GoRouter.of(context).push(RouteNames.invite),
                       ),
+                    ),
+                    const SizedBox(height: 16),
+                    FadeUp(
+                      delay: const Duration(milliseconds: 200),
+                      child: _EarnWaysCard(tokens: tokens),
                     ),
                     const SizedBox(height: 16),
                     FadeUp(
@@ -608,6 +624,83 @@ class _InviteEntryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 获取积分途径提示卡：展示签到/每日首拍/完成挑战等积分来源
+class _EarnWaysCard extends StatelessWidget {
+  const _EarnWaysCard({required this.tokens});
+  final ThemeTokens tokens;
+
+  static const _ways = <_EarnWay>[
+    _EarnWay(Icons.calendar_today_outlined, '每日签到', '+2 积分/天，连签 7 天额外 +14'),
+    _EarnWay(Icons.photo_camera_outlined, '每日首次拍摄', '+2 积分/天'),
+    _EarnWay(Icons.emoji_events_outlined, '完成挑战', '+5 积分/次'),
+    _EarnWay(Icons.card_giftcard, '邀请好友 / 兑换码', '按邀请阶梯发放'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return NeuCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.tips_and_updates_outlined,
+                  size: 18, color: tokens.brand),
+              const SizedBox(width: 8),
+              Text(
+                '获取积分',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < _ways.length; i++) ...[
+            if (i > 0)
+              Divider(height: 1, color: tokens.divider),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Icon(_ways[i].icon, size: 16, color: tokens.brand),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _ways[i].title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _ways[i].desc,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: tokens.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EarnWay {
+  final IconData icon;
+  final String title;
+  final String desc;
+  const _EarnWay(this.icon, this.title, this.desc);
 }
 
 /// 积分流水卡

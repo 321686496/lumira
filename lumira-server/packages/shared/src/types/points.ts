@@ -8,7 +8,9 @@ export type PointTransactionType =
   | 'redeem_code'      // 兑换码兑换积分
   | 'exchange_template' // 积分兑换模板（负数）
   | 'ad'               // 看广告（预留）
-  | 'admin_grant';     // 后台发放
+  | 'admin_grant'      // 后台发放
+  | 'shoot_daily'      // 每日首次拍摄
+  | 'challenge';       // 完成挑战
 
 // 积分流水记录
 export interface PointTransaction {

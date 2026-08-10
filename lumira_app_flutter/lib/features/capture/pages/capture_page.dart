@@ -1,4 +1,3 @@
-import 'dart:async' show Completer;
 import 'dart:io' show File, stderr;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
@@ -17,6 +16,7 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../challenge/widgets/challenge_overlay_bar.dart';
 import '../../home/providers/banner_recommendation_provider.dart';
+import '../../points/data/points_repository.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -58,7 +58,7 @@ import '../widgets/template_strip.dart';
 /// - 保留 CaptureNav（含退出全屏按钮）和底部核心交互（拍摄按钮、缩略图、切换摄像头）
 /// - 确保用户在全屏下仍能拍照、退出全屏
 class CapturePage extends ConsumerStatefulWidget {
-  const CapturePage({super.key, this.templateId, this.sceneId, this.kitId, this.challengeId});
+  const CapturePage({super.key, this.templateId, this.sceneId, this.kitId, this.challengeId, this.trialMode = false});
 
   /// 来自 URL ?templateId=xxx，null 表示自由拍摄
   final String? templateId;
@@ -72,6 +72,10 @@ class CapturePage extends ConsumerStatefulWidget {
   /// 来自 URL ?challengeId=xxx，表示从挑战详情页进入，
   /// 拍照保存后需回写挑战状态并跳转 XP 奖励页
   final String? challengeId;
+
+  /// 来自 URL ?trial=1，表示付费模板试用模式：
+  /// 仅展示模板效果，隐藏参数调整/工具栏、禁用快门、取景器铺水印
+  final bool trialMode;
 
   @override
   ConsumerState<CapturePage> createState() => _CapturePageState();
@@ -137,6 +141,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 读取其在屏幕上的全局 Rect 作为缩小/平移的目标位置。
   final _thumbnailKey = GlobalKey(debugLabel: 'watermarkThumb');
 
+  /// 每日首次拍摄积分是否已在本会话尝试过。
+  /// 仅用于减少重复请求；最终幂等由服务端 point_earn_events 唯一约束保证。
+  bool _dailyShootEarned = false;
+
   @override
   void initState() {
     super.initState();
@@ -146,13 +154,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
       ref.read(captureThumbnailProvider.notifier).reset();
     }
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _applyRouteParamsToState();
       ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
           widget.templateId;
+      // 试用模式：付费模板未解锁时仅展示效果，隐藏参数/禁用快门/铺水印
+      if (widget.trialMode) {
+        ref.read(CaptureState.trialModeProvider.notifier).state = true;
+      }
       // 解析 returnResult 模式：?mode=return 时拍照完成后 pop 回上一页
       final mode = GoRouterState.of(context).queryParams[RouteNames.paramMode];
       _returnResult = mode == 'return';
+      // 加载持久化的前后置摄像头与照片比例（先于相机初始化，保证首次进入即恢复）
+      await CaptureState.loadCameraPrefs(
+          ProviderScope.containerOf(context, listen: false));
       _requestCameraPermission();
       _loadLastPhotoForThumbnail();
       // 异步加载持久化的自由模式参数（仅在自由模式生效，模板模式由 currentTemplateId 覆盖）
@@ -378,6 +393,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
   Future<void> _onCapture() async {
     debugPrint('[capture] _onCapture() called');
 
+    // 试用模式：禁用快门，提示用户解锁后再拍摄
+    if (ref.read(CaptureState.trialModeProvider)) {
+      LumiraToast.show(
+        context,
+        '试用模式不可拍摄，购买解锁后即可使用',
+        duration: const Duration(milliseconds: 1200),
+      );
+      return;
+    }
+
     final cameraService = ref.read(cameraServiceProvider);
     final flashMode = ref.read(CaptureState.flashModeProvider);
     final facing = ref.read(CaptureState.cameraFacingProvider);
@@ -409,6 +434,29 @@ class _CapturePageState extends ConsumerState<CapturePage>
           flashMode: _mapFlashMode(flashMode),
         ),
       );
+
+      // === 水印相框入场动画（立即触发） ===
+      // 快门按下并拿到原始 JPEG 后立即播放动画，使用原始照片 + CustomPaint
+      // 叠加水印（与最终渲染水印视觉一致），后处理在队列中并行执行。
+      // 这样用户按下快门即可看到水印动画，无需等待 GPU/isolate/落库完成。
+      final wmSettings = ref.read(watermarkSettingsProvider);
+      final wmTemplate = ref.read(currentWatermarkTemplateProvider);
+      final shouldAnimateNow = wmSettings.enabled &&
+          wmSettings.animationEnabled &&
+          wmTemplate != null;
+      if (shouldAnimateNow && mounted) {
+        setState(() {
+          _showWatermarkAnimation = true;
+          _animationPhotoPath = result.filePath;
+          _animationTemplate = wmTemplate;
+          _animationTargetRect = _getThumbnailGlobalRect();
+        });
+        _onAnimationComplete = () {
+          if (mounted) {
+            setState(() => _showWatermarkAnimation = false);
+          }
+        };
+      }
 
       // 后处理异步执行，不阻塞下次 capture 调用（支持连拍）
       final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
@@ -556,6 +604,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
         ref.invalidate(bannerRecommendationProvider);
         debugPrint('[capture] 自动保存到应用相册: ${record.id}');
 
+        // 每日首次拍摄积分（后台幂等；失败静默，绝不阻塞拍照流程）
+        if (!_dailyShootEarned) {
+          _dailyShootEarned = true;
+          _earnDailyShootPoints();
+        }
+
         // 套件使用次数 +1（仅在套用 kit 进入时）
         if (widget.kitId != null) {
           try {
@@ -569,31 +623,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
         debugPrint('[capture] 落库失败: $e');
       }
 
-      // === 水印相框入场动画 ===
-      // 仅在总开关 + 动画开关均开启且有水印模板时播放；
-      // 复用前面已读取的 watermarkSettings / watermarkTemplate 变量，避免重复 read。
-      // 动画完成后（onAnimationComplete 回调）才继续更新角标缩略图，
-      // 保证"照片飞入角标"的视觉效果与角标刷新同步。
-      final shouldAnimate = watermarkSettings.enabled &&
-          watermarkSettings.animationEnabled &&
-          watermarkTemplate != null;
-      if (shouldAnimate && mounted) {
-        final completer = Completer<void>();
-        setState(() {
-          _showWatermarkAnimation = true;
-          _animationPhotoPath = finalPath;
-          _animationTemplate = watermarkTemplate;
-          _animationTargetRect = _getThumbnailGlobalRect();
-        });
-        _onAnimationComplete = () {
-          if (mounted) {
-            setState(() => _showWatermarkAnimation = false);
-          }
-          completer.complete();
-        };
-        await completer.future;
-      }
-
+      // === 角标缩略图更新 ===
+      // 动画已在 _onCapture() 中立即触发（使用原始照片 + 水印 overlay），
+      // 后处理完成后直接更新角标，无需等待动画结束。
+      // 动画 overlay 覆盖在角标上方，用户在动画结束后才看到更新后的角标。
       ref.read(captureThumbnailProvider.notifier)
           .setFinalResult(finalPath, photoId);
       ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
@@ -637,6 +670,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final next = current == 'back' ? 'front' : 'back';
     ref.read(CaptureState.cameraFacingProvider.notifier).state = next;
 
+    // 持久化前后置选择：退出拍摄页/App 后下次进入自动恢复
+    CaptureState.persistCameraFacing(
+        ProviderScope.containerOf(context, listen: false), next);
+
     // 切换到前置摄像头时关闭闪光灯（前置无闪光灯硬件）
     if (next == 'front' &&
         ref.read(CaptureState.flashModeProvider) != CaptureFlashMode.off) {
@@ -665,6 +702,21 @@ class _CapturePageState extends ConsumerState<CapturePage>
     ref.read(CaptureState.zoomProvider.notifier).state = 1.0;
   }
 
+  /// 每日首次拍摄积分（fire-and-forget）。
+  /// 服务端按 UTC+8 自然日幂等，同一会话只请求一次。
+  Future<void> _earnDailyShootPoints() async {
+    try {
+      final repo = await ref.read(pointsRepositoryProvider.future);
+      final result = await repo.earn(type: 'shoot_daily');
+      if (result.granted && mounted) {
+        LumiraToast.show(context, '每日首拍 +${result.delta} 积分');
+      }
+    } catch (e) {
+      // 离线/网络异常静默，不打扰拍摄
+      debugPrint('[capture] earn daily shoot points failed: $e');
+    }
+  }
+
   /// 缩放回调：接收真实倍数，clamp 到设备支持范围后下发到相机。
   /// 由 _ZoomTabBar 倍数切换或水平拖动触发。
   /// 比例切换的视觉效果由取景器容器大小变化 + cover 裁切自动实现，无需 zoom 补偿。
@@ -680,6 +732,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
   @override
   Widget build(BuildContext context) {
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    final isTrialMode = ref.watch(CaptureState.trialModeProvider);
     final thumbState = ref.watch(captureThumbnailProvider);
     final isChallengeMode =
         widget.challengeId != null && widget.challengeId!.isNotEmpty;
@@ -816,6 +869,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
             rawCaptureKey: _viewfinderCaptureKey,
           ),
 
+          // 1.5 试用模式水印遮罩（铺在取景器上方，不可点击穿透）
+          if (isTrialMode)
+            const Positioned.fill(
+              child: _TrialWatermarkOverlay(),
+            ),
+
           // 2. 导航栏（始终保留：含返回 + 全屏切换 + 闪光灯）
           Positioned(
             top: 0,
@@ -837,8 +896,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
                 const Center(child: AspectRatioSelector()),
                 // 比例切换器与参数 pill 栏之间的间隙
                 const SizedBox(height: 8),
-                // 参数 pill 栏（全屏模式隐藏）
-                if (!isFullscreen)
+                // 参数 pill 栏（全屏 / 试用模式隐藏）
+                if (!isFullscreen && !isTrialMode)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
                     child: ParamPillBar(),
@@ -850,7 +909,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
                     captureInProgress: captureInProgress,
                   ),
                 // 套用模板时显示可折叠模板信息卡（移至下方，避免挤压比例/参数选项）
-                if (template != null && !isFullscreen)
+                // 试用模式隐藏（仅展示效果，不暴露参数）
+                if (template != null && !isFullscreen && !isTrialMode)
                   TemplateInfoCard(template: template),
               ],
             ),
@@ -858,12 +918,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
           // 4. 底部控制区（始终保留：含拍摄按钮 + 缩略图 + 切换摄像头）
           //    全屏模式下仅隐藏工具栏与抽屉（在 _BottomControlArea 内部处理）
+          //    试用模式下隐藏工具栏/抽屉/缩放栏，快门替换为锁定态
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: _BottomControlArea(
               isFullscreen: isFullscreen,
+              isTrialMode: isTrialMode,
               onZoomChanged: _onZoomChanged,
               onCapture: _onCapture,
               onSwitchCamera: _switchCamera,
@@ -1150,6 +1212,7 @@ class _FloatingViewfinderState extends ConsumerState<_FloatingViewfinder> {
 class _BottomControlArea extends StatelessWidget {
   const _BottomControlArea({
     required this.isFullscreen,
+    required this.isTrialMode,
     required this.onZoomChanged,
     required this.onCapture,
     required this.onSwitchCamera,
@@ -1159,6 +1222,7 @@ class _BottomControlArea extends StatelessWidget {
   });
 
   final bool isFullscreen;
+  final bool isTrialMode;
   final ValueChanged<double> onZoomChanged;
   final VoidCallback onCapture;
   final VoidCallback onSwitchCamera;
@@ -1185,21 +1249,23 @@ class _BottomControlArea extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 缩放Tab栏（始终显示，便于用户主动缩放）
-            _ZoomTabBar(onChanged: onZoomChanged),
+            // 缩放Tab栏（全屏 / 试用模式隐藏）
+            if (!isFullscreen && !isTrialMode)
+              _ZoomTabBar(onChanged: onZoomChanged),
 
-            // 工具栏 + 抽屉（全屏模式下隐藏）
-            if (!isFullscreen) ...[
+            // 工具栏 + 抽屉（全屏 / 试用模式隐藏）
+            if (!isFullscreen && !isTrialMode) ...[
               const _CaptureToolbar(),
               _AnimatedToolDrawer(rawCaptureKey: rawCaptureKey),
             ],
 
-            // 拍摄按钮行（始终显示，确保全屏下也能拍照）
+            // 拍摄按钮行（试用模式下快门替换为锁定态，不响应拍照）
             _CaptureButtonRow(
               onCapture: onCapture,
               onSwitchCamera: onSwitchCamera,
               onThumbnailTap: onThumbnailTap,
               thumbnailKey: thumbnailKey,
+              locked: isTrialMode,
             ),
           ],
         ),
@@ -2390,18 +2456,102 @@ class _ZoomWheelIndicator extends StatelessWidget {
 }
 
 /// 拍摄按钮行：角标缩略图 + 拍摄按钮 + 翻转摄像头
+/// 试用模式水印遮罩
+///
+/// 铺在取景器上方：半透明白色斜纹 + 重复"LUMIRA 试用"水印文字，
+/// 中央提示"购买解锁后去除水印"。IgnorePointer 不拦截手势，
+/// 导航栏（含购买/退出）与底部锁定快门仍可操作。
+class _TrialWatermarkOverlay extends StatelessWidget {
+  const _TrialWatermarkOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        color: Colors.white.withOpacity(0.06),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // 斜纹水印文字（CustomPainter 绘制，性能优于大量 Transform Text）
+            CustomPaint(painter: _TrialWatermarkPainter()),
+            // 中央提示
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.55),
+                  borderRadius: BorderRadius.circular(9999),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 0.5,
+                  ),
+                ),
+                child: const Text(
+                  '试用模式 · 购买解锁后去除水印',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 斜纹"LUMIRA 试用"水印文字画笔
+class _TrialWatermarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textStyle = TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      color: Colors.white.withOpacity(0.22),
+      letterSpacing: 2,
+    );
+
+    canvas.save();
+    canvas.rotate(-0.45);
+    const step = 130.0;
+    const offset = -200.0;
+    // 沿斜向网格铺满水印文字
+    for (var x = offset; x < size.height + 200; x += step) {
+      for (var y = offset; y < size.width + 200; y += step) {
+        final tp = TextPainter(
+          text: TextSpan(text: 'LUMIRA 试用', style: textStyle),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(y, x));
+      }
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 class _CaptureButtonRow extends ConsumerWidget {
   const _CaptureButtonRow({
     required this.onCapture,
     required this.onSwitchCamera,
     required this.onThumbnailTap,
     this.thumbnailKey,
+    this.locked = false,
   });
 
   final VoidCallback onCapture;
   final VoidCallback onSwitchCamera;
   final VoidCallback onThumbnailTap;
   final GlobalKey? thumbnailKey;
+  /// 试用模式：快门替换为锁定态，点击提示解锁
+  final bool locked;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2412,9 +2562,11 @@ class _CaptureButtonRow extends ConsumerWidget {
         children: [
           // 角标缩略图（左）：四态状态机驱动（idle/processing/preview/final）
           // thumbnailKey：水印动画 Phase 4 通过此 key 读取角标全局 Rect
-          CaptureThumbnail(key: thumbnailKey, onTap: onThumbnailTap),
-          // 拍摄按钮（中）
-          CaptureButton(onTap: onCapture),
+          // 试用模式隐藏缩略图（不产生照片）
+          if (!locked)
+            CaptureThumbnail(key: thumbnailKey, onTap: onThumbnailTap),
+          // 拍摄按钮（中）：试用模式替换为锁定快门
+          locked ? const _LockedCaptureButton() : CaptureButton(onTap: onCapture),
           // 翻转摄像头（右）
           GestureDetector(
             onTap: onSwitchCamera,
@@ -2437,6 +2589,45 @@ class _CaptureButtonRow extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 试用模式锁定快门：不可拍照，点击提示解锁
+class _LockedCaptureButton extends StatelessWidget {
+  const _LockedCaptureButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => LumiraToast.show(
+        context,
+        '试用模式不可拍摄，购买解锁后即可使用',
+        duration: const Duration(milliseconds: 1200),
+      ),
+      child: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withOpacity(0.6), width: 4),
+        ),
+        alignment: Alignment.center,
+        child: Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withOpacity(0.85),
+          ),
+          child: const Icon(
+            Icons.lock_outline,
+            size: 28,
+            color: Colors.black54,
+          ),
+        ),
       ),
     );
   }

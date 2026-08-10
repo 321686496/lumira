@@ -77,6 +77,11 @@ class Tables {
   // 存储 WatermarkSettings.toJson() 的 JSON 字符串
   static const String colWatermarkSettings = 'watermark_settings';
 
+  // === user_settings 扩展列（v22 迁移新增，拍摄页偏好持久化） ===
+  // 前后置摄像头选择（'front' / 'back'）与照片比例（'fullscreen' / '4:3' / '1:1' 等）
+  static const String colCameraFacing = 'camera_facing';
+  static const String colAspectRatio = 'aspect_ratio';
+
   // === composition_kits 表（M2 用，v4 迁移同步创建） ===
   // 注：colSceneId / colTemplateId 复用 gallery_items 段已声明的同名常量
   static const String compositionKits = 'composition_kits';

@@ -3,12 +3,18 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { userPoints, pointTransactions } from '../../database/schema';
+import { userPoints, pointTransactions, pointEarnEvents } from '../../database/schema';
+import { getUtc8DateStr } from '../../common/utils/date.util';
 
 // 积分流水类型（与 shared 类型保持一致，此处本地定义避免事务内依赖 shared 构建产物）
 type PointTransactionType =
   | 'invite' | 'sign_in' | 'share' | 'redeem_code'
-  | 'exchange_template' | 'ad' | 'admin_grant';
+  | 'exchange_template' | 'ad' | 'admin_grant'
+  | 'shoot_daily' | 'challenge';
+
+// 事件型积分规则：type → 单次积分值
+const DAILY_SHOOT_POINTS = 2; // 每日首次拍摄
+const CHALLENGE_POINTS = 5;   // 每次完成挑战
 
 interface BalanceRow {
   deviceId: string;
@@ -74,6 +80,94 @@ export class PointsService {
 
     const updated = await this.getBalance(deviceId);
     return updated.balance;
+  }
+
+  /**
+   * 事件型积分发放（每日首拍 / 完成挑战等）。
+   *
+   * 幂等性由 point_earn_events 的 UNIQUE(device_id, type, ref_id) 保证：
+   * 同一设备同一事件只发放一次，重复请求返回 { granted: false }（200，不抛错），
+   * 避免客户端因状态不同步把"已领取"当错误处理（参考签到 409 → Unknown Error 问题）。
+   *
+   * @param type  'shoot_daily'（refId 由服务端按 UTC+8 日期计算）| 'challenge'（refId=challengeId）
+   */
+  async earnEvent(
+    deviceId: string,
+    type: PointTransactionType,
+    refId: string | null = null,
+  ): Promise<{ granted: boolean; delta: number; balance: number }> {
+    let points: number;
+    let eventRefId: string;
+
+    if (type === 'shoot_daily') {
+      points = DAILY_SHOOT_POINTS;
+      // refId 统一按服务端 UTC+8 自然日计算，防止客户端时区不一致导致重复领取或漏领
+      eventRefId = getUtc8DateStr();
+    } else if (type === 'challenge') {
+      points = CHALLENGE_POINTS;
+      if (!refId) {
+        throw new BadRequestException('refId is required for challenge');
+      }
+      eventRefId = refId;
+    } else {
+      throw new BadRequestException(`Unsupported earn type: ${type}`);
+    }
+
+    const db = this.dbService.getDb();
+    const now = Math.floor(Date.now() / 1000);
+
+    try {
+      db.transaction((tx) => {
+        // 幂等检查：插入事件记录（device+type+refId 唯一，冲突时抛出 UNIQUE 错误）
+        tx.insert(pointEarnEvents).values({
+          deviceId,
+          type,
+          refId: eventRefId,
+          points,
+          createdAt: now,
+        }).run();
+
+        // 写流水 + upsert 余额
+        const rows = tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)).all() as BalanceRow[];
+        const existing = rows[0];
+
+        tx.insert(pointTransactions).values({
+          deviceId,
+          delta: points,
+          type,
+          refId: eventRefId,
+          createdAt: now,
+        }).run();
+
+        if (existing) {
+          tx.update(userPoints)
+            .set({
+              balance: existing.balance + points,
+              totalEarned: existing.totalEarned + points,
+              updatedAt: now,
+            })
+            .where(eq(userPoints.deviceId, deviceId))
+            .run();
+        } else {
+          tx.insert(userPoints).values({
+            deviceId,
+            balance: points,
+            totalEarned: points,
+            totalSpent: 0,
+            updatedAt: now,
+          }).run();
+        }
+      });
+      const updated = await this.getBalance(deviceId);
+      return { granted: true, delta: points, balance: updated.balance };
+    } catch (e) {
+      // 唯一约束冲突 = 该事件已发放过 → 返回未发放（不抛错）
+      if (e instanceof Error && e.message.includes('UNIQUE constraint failed')) {
+        const updated = await this.getBalance(deviceId);
+        return { granted: false, delta: 0, balance: updated.balance };
+      }
+      throw e;
+    }
   }
 
   /**

@@ -34,6 +34,9 @@ void main() {
             free_mode_camera TEXT,
             free_mode_post_process TEXT,
             free_mode_composition TEXT,
+            watermark_settings TEXT,
+            camera_facing TEXT,
+            aspect_ratio TEXT,
             updated_at INTEGER NOT NULL
           )
         ''');
@@ -133,6 +136,35 @@ void main() {
       expect(restored.opacity, equals(0.7));
       expect(restored.aspectRatio, equals('4:3'));
       expect(restored.description, equals('测试构图'));
+    });
+  });
+
+  group('拍摄页偏好持久化', () {
+    test('getCameraFacing returns null when not set', () async {
+      expect(await dao.getCameraFacing(), isNull);
+    });
+
+    test('setCameraFacing persists and getCameraFacing returns same value', () async {
+      await dao.setCameraFacing('front');
+      expect(await dao.getCameraFacing(), equals('front'));
+      await dao.setCameraFacing('back');
+      expect(await dao.getCameraFacing(), equals('back'));
+    });
+
+    test('getCameraFacing rejects invalid value', () async {
+      await db.update('user_settings', {'camera_facing': 'side'}, where: 'id = 1');
+      expect(await dao.getCameraFacing(), isNull);
+    });
+
+    test('getAspectRatio returns null when not set', () async {
+      expect(await dao.getAspectRatio(), isNull);
+    });
+
+    test('setAspectRatio persists and getAspectRatio returns same value', () async {
+      await dao.setAspectRatio('4:3');
+      expect(await dao.getAspectRatio(), equals('4:3'));
+      await dao.setAspectRatio('1:1');
+      expect(await dao.getAspectRatio(), equals('1:1'));
     });
   });
 }

@@ -30,6 +30,10 @@ class CaptureState {
   static final lastPhotoPathProvider = StateProvider<String?>((ref) => null);
   static final cameraFacingProvider = StateProvider<String>((ref) => 'back');
 
+  /// 试用模式：付费模板未解锁时通过 ?trial=1 进入。
+  /// 仅展示模板效果：隐藏所有参数调整/工具栏、禁用快门、取景器铺水印。
+  static final trialModeProvider = StateProvider<bool>((ref) => false);
+
   // ── 相机引擎状态（由 CameraPreview 通过 onCameraStateCreated 回调注入）──
   // 持有 camerawesome 的 CameraState 引用，用于实现真实拍照/缩放/摄像头切换/闪光灯同步。
   // 测试环境中为 null（cameraPreviewOverrideProvider 注入占位 widget，不创建真实 CameraState）。
@@ -367,6 +371,55 @@ class CaptureState {
     }
   }
 
+  // ── 拍摄页偏好持久化（前后置摄像头 + 照片比例）──
+
+  /// 从 DAO 加载持久化的拍摄页偏好（前后置摄像头 + 照片比例）到对应 provider。
+  /// 必须在相机初始化前调用（capture_page initState），保证首次进入即生效。
+  static Future<void> loadCameraPrefs(ProviderContainer container) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      final facing = await dao.getCameraFacing();
+      if (facing != null) {
+        container.read(cameraFacingProvider.notifier).state = facing;
+      }
+      final ratio = await dao.getAspectRatio();
+      if (ratio != null) {
+        container.read(aspectRatioProvider.notifier).state = ratio;
+      }
+    } catch (e) {
+      // 加载失败静默降级，使用默认值
+      debugPrint('[capture] loadCameraPrefs failed: $e');
+    }
+  }
+
+  /// 持久化前后置摄像头选择（用户切换摄像头时调用）
+  static Future<void> persistCameraFacing(
+    ProviderContainer container,
+    String facing,
+  ) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      await dao.setCameraFacing(facing);
+    } catch (e) {
+      // 持久化失败静默，不影响本次拍摄
+      debugPrint('[capture] persist camera facing failed: $e');
+    }
+  }
+
+  /// 持久化照片比例选择（用户手动切换比例时调用）
+  static Future<void> persistAspectRatio(
+    ProviderContainer container,
+    String ratio,
+  ) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      await dao.setAspectRatio(ratio);
+    } catch (e) {
+      // 持久化失败静默，不影响本次拍摄
+      debugPrint('[capture] persist aspect ratio failed: $e');
+    }
+  }
+
   /// 防抖持久化相机参数（500ms 内多次变更只写一次）
   static void _scheduleCameraPersist(ProviderContainer container) {
     _cameraPersistTimer?.cancel();
@@ -553,6 +606,7 @@ class CaptureState {
     container.read(showSilhouetteProvider.notifier).state = true;
     container.read(lastPhotoPathProvider.notifier).state = null;
     container.read(cameraFacingProvider.notifier).state = 'back';
+    container.read(trialModeProvider.notifier).state = false;
     // 新增
     container.read(rawModeProvider.notifier).state = false;
     container.read(panelExpandedProvider.notifier).state = false;

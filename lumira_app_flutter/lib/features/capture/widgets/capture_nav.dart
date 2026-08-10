@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_state.dart';
 
 /// 拍摄页导航栏（深色沉浸式）
@@ -24,23 +25,27 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentTemplateId = ref.watch(CaptureState.currentTemplateIdProvider);
     final isFullscreen = ref.watch(CaptureState.isFullscreenProvider);
+    final isTrialMode = ref.watch(CaptureState.trialModeProvider);
     final showTemplate = ref.watch(CaptureState.showTemplateProvider);
     final showSilhouette = ref.watch(CaptureState.showSilhouetteProvider);
     final flashMode = ref.watch(CaptureState.flashModeProvider);
     final facing = ref.watch(CaptureState.cameraFacingProvider);
 
     final hasTemplate = currentTemplateId != null;
-    // 前置摄像头无闪光灯硬件，隐藏闪光灯按钮
-    final showFlashButton = facing == 'back';
+    // 前置摄像头无闪光灯硬件，隐藏闪光灯按钮（试用模式也不显示）
+    final showFlashButton = facing == 'back' && !isTrialMode;
 
     // 右侧按钮数量：全屏(1) + 模板叠图(1) + 剪影(1) + 场景灵感(1) + 闪光灯(1)
-    final rightButtonCount = 1 + // 全屏
-        (hasTemplate ? 2 : 0) + // 模板叠图 + 剪影
-        1 + // 场景灵感
-        (showFlashButton ? 1 : 0); // 闪光灯
+    // 试用模式：仅保留"购买解锁"按钮（右侧），不显示全屏/模板/剪影/闪光灯
+    final rightButtonCount = isTrialMode
+        ? 1
+        : 1 + // 全屏
+            (hasTemplate ? 2 : 0) + // 模板叠图 + 剪影
+            1 + // 场景灵感
+            (showFlashButton ? 1 : 0); // 闪光灯
     // 平衡间距：无模板时右侧按钮少，左侧补齐差值让标题居中
     // 有模板时右侧按钮多，补齐会导致 Expanded 宽度不足，故不补齐
-    final balancePadding = !hasTemplate
+    final balancePadding = !hasTemplate && !isTrialMode
         ? (rightButtonCount - 1) * 36.0 // -1 抵消左侧返回按钮
         : 0.0;
 
@@ -61,19 +66,31 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
               ),
               // 平衡间距：让标题在无模板时相对屏幕居中
               if (balancePadding > 0) SizedBox(width: balancePadding),
-              // 标题（点击打开参数面板）
+              // 标题（点击打开参数面板；试用模式点击提示解锁）
               Expanded(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => ref
-                      .read(CaptureState.panelExpandedProvider.notifier)
-                      .state = true,
+                  onTap: () {
+                    if (isTrialMode) {
+                      LumiraToast.show(
+                        context,
+                        '试用模式不可调整参数，购买解锁后即可使用',
+                        duration: const Duration(milliseconds: 1200),
+                      );
+                      return;
+                    }
+                    ref
+                        .read(CaptureState.panelExpandedProvider.notifier)
+                        .state = true;
+                  },
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
-                        hasTemplate ? '模板拍摄' : '自由调参',
+                        isTrialMode
+                            ? '试用模板'
+                            : (hasTemplate ? '模板拍摄' : '自由调参'),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -83,7 +100,7 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (hasTemplate)
+                      if (hasTemplate && !isTrialMode)
                         const Padding(
                           padding: EdgeInsets.only(top: 2),
                           child: Text(
@@ -100,51 +117,67 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                 ),
               ),
               // 右侧操作按钮组
-              _NavIcon(
-                icon: isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                onPressed: () => ref
-                    .read(CaptureState.isFullscreenProvider.notifier)
-                    .state = !isFullscreen,
-              ),
-              if (hasTemplate)
+              if (isTrialMode)
                 _NavIcon(
-                  icon: Icons.crop_free,
-                  iconColor: showTemplate ? Colors.amber : Colors.white,
-                  onPressed: () => ref
-                      .read(CaptureState.showTemplateProvider.notifier)
-                      .state = !showTemplate,
-                ),
-              if (hasTemplate)
-                _NavIcon(
-                  icon: Icons.accessibility_new,
-                  iconColor: showSilhouette ? Colors.amber : Colors.white,
-                  onPressed: () => ref
-                      .read(CaptureState.showSilhouetteProvider.notifier)
-                      .state = !showSilhouette,
-                ),
-              _NavIcon(
-                icon: Icons.explore,
-                tooltip: '场景灵感',
-                onPressed: () =>
-                    GoRouter.of(context).push(RouteNames.captureSceneGuide),
-              ),
-              if (showFlashButton)
-                _NavIcon(
-                  icon: flashMode == CaptureFlashMode.off
-                      ? Icons.flash_off
-                      : flashMode == CaptureFlashMode.torch
-                          ? Icons.flashlight_on
-                          : Icons.flash_on,
-                  iconColor: flashMode != CaptureFlashMode.off
-                      ? Colors.amber
-                      : Colors.white,
+                  icon: Icons.lock_open_outlined,
+                  tooltip: '购买解锁',
                   onPressed: () {
-                    final next = flashMode == CaptureFlashMode.off
-                        ? CaptureFlashMode.torch
-                        : CaptureFlashMode.off;
-                    ref.read(CaptureState.flashModeProvider.notifier).state = next;
+                    final tid = currentTemplateId;
+                    if (tid == null || tid.isEmpty) return;
+                    GoRouter.of(context).push(
+                      '${RouteNames.templatesUnlock}?templateId=$tid',
+                    );
                   },
+                )
+              else ...[
+                _NavIcon(
+                  icon: isFullscreen
+                      ? Icons.fullscreen_exit
+                      : Icons.fullscreen,
+                  onPressed: () => ref
+                      .read(CaptureState.isFullscreenProvider.notifier)
+                      .state = !isFullscreen,
                 ),
+                if (hasTemplate)
+                  _NavIcon(
+                    icon: Icons.crop_free,
+                    iconColor: showTemplate ? Colors.amber : Colors.white,
+                    onPressed: () => ref
+                        .read(CaptureState.showTemplateProvider.notifier)
+                        .state = !showTemplate,
+                  ),
+                if (hasTemplate)
+                  _NavIcon(
+                    icon: Icons.accessibility_new,
+                    iconColor: showSilhouette ? Colors.amber : Colors.white,
+                    onPressed: () => ref
+                        .read(CaptureState.showSilhouetteProvider.notifier)
+                        .state = !showSilhouette,
+                  ),
+                _NavIcon(
+                  icon: Icons.explore,
+                  tooltip: '使用指南',
+                  onPressed: () =>
+                      GoRouter.of(context).push(RouteNames.captureTutorial),
+                ),
+                if (showFlashButton)
+                  _NavIcon(
+                    icon: flashMode == CaptureFlashMode.off
+                        ? Icons.flash_off
+                        : flashMode == CaptureFlashMode.torch
+                            ? Icons.flashlight_on
+                            : Icons.flash_on,
+                    iconColor: flashMode != CaptureFlashMode.off
+                        ? Colors.amber
+                        : Colors.white,
+                    onPressed: () {
+                      final next = flashMode == CaptureFlashMode.off
+                          ? CaptureFlashMode.torch
+                          : CaptureFlashMode.off;
+                      ref.read(CaptureState.flashModeProvider.notifier).state = next;
+                    },
+                  ),
+              ],
             ],
           ),
         ),

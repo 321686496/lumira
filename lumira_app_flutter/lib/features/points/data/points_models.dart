@@ -141,3 +141,28 @@ class TemplateExchangeResult {
         balance: (j['balance'] as num?)?.toInt() ?? 0,
       );
 }
+
+/// POST /points/earn 响应体
+///
+/// 事件型积分领取（每日首次拍摄 / 完成挑战）：
+/// - [granted] = 本次是否发放积分（false = 该事件当天/该挑战已领过）
+/// - [delta]   = 本次获得的积分数（未发放时为 0）
+/// - [balance] = 领取后的积分余额
+@immutable
+class PointEarnResult {
+  final bool granted;
+  final int delta;
+  final int balance;
+
+  const PointEarnResult({
+    required this.granted,
+    required this.delta,
+    required this.balance,
+  });
+
+  factory PointEarnResult.fromJson(Map<String, dynamic> j) => PointEarnResult(
+        granted: j['granted'] as bool? ?? false,
+        delta: (j['delta'] as num?)?.toInt() ?? 0,
+        balance: (j['balance'] as num?)?.toInt() ?? 0,
+      );
+}

@@ -17,6 +17,7 @@ class RouteNames {
   static const String captureSceneGuide = '/capture/scene-guide';
   static const String captureSceneManage = '/capture/scene-manage';
   static const String captureSceneDetail = '/capture/scene-detail';
+  static const String captureTutorial = '/capture/tutorial';
   static const String templatesDetail = '/templates/detail';
   static const String templatesUnlock = '/templates/unlock';
   static const String templatesEditor = '/templates/editor';
@@ -85,6 +86,7 @@ class RouteNames {
   static const String paramKitId = 'kitId';
   static const String paramCategory = 'category';
   static const String paramFrom = 'from';
+  static const String paramTrial = 'trial';
 
   // === 工具方法 ===
   /// 构建 templateId 查询参数 URL

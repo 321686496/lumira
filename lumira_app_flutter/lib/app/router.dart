@@ -10,6 +10,7 @@ import '../features/capture/pages/capture_preview_template_page.dart';
 import '../features/capture/pages/capture_scene_detail_page.dart';
 import '../features/capture/pages/capture_scene_guide_page.dart';
 import '../features/capture/pages/capture_scene_manage_page.dart';
+import '../features/capture/pages/capture_tutorial_page.dart';
 import '../features/capture/watermark/pages/watermark_editor_page.dart';
 import '../features/capture/watermark/pages/watermark_manage_page.dart';
 import '../features/challenge/pages/challenge_complete_page.dart';
@@ -104,11 +105,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           final sceneId = state.queryParams[RouteNames.paramScene];
           final kitId = state.queryParams[RouteNames.paramKitId];
           final challengeId = state.queryParams[RouteNames.paramChallengeId];
+          final trial = state.queryParams[RouteNames.paramTrial] == '1';
           return CapturePage(
             templateId: templateId,
             sceneId: sceneId,
             kitId: kitId,
             challengeId: challengeId,
+            trialMode: trial,
           );
         },
       ),
@@ -148,6 +151,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final scene = state.queryParams[RouteNames.paramScene];
           return CaptureSceneGuidePage(scene: scene);
         },
+      ),
+      GoRoute(
+        path: RouteNames.captureTutorial,
+        name: 'captureTutorial',
+        builder: (context, state) => const CaptureTutorialPage(),
       ),
       GoRoute(
         path: RouteNames.captureSceneManage,

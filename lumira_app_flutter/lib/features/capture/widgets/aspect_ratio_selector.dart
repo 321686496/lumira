@@ -38,9 +38,12 @@ class AspectRatioSelector extends ConsumerWidget {
         children: _options.map((opt) {
           final active = opt.id == current;
           return GestureDetector(
-            onTap: () => ref
-                .read(CaptureState.aspectRatioProvider.notifier)
-                .state = opt.id,
+            onTap: () {
+              ref.read(CaptureState.aspectRatioProvider.notifier).state = opt.id;
+              // 持久化比例选择：退出拍摄页/App 后下次进入自动恢复
+              CaptureState.persistAspectRatio(
+                  ProviderScope.containerOf(context, listen: false), opt.id);
+            },
             behavior: HitTestBehavior.opaque,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

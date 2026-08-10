@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show File;
 
 import 'package:flutter/material.dart';
@@ -14,6 +15,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../points/data/points_repository.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_pool.dart';
 import '../data/challenge_providers.dart';
@@ -260,8 +262,11 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
       ref.invalidate(dailyChallengeStateProvider);
       ref.invalidate(subChallengesProvider);
 
+      // 5. 完成挑战积分（后台按 challengeId 幂等；失败静默，不阻塞提交）
+      unawaited(_earnChallengePoints(poolItem.id));
+
       if (!mounted) return;
-      // 5. 跳转 XP 完成页（清栈）
+      // 6. 跳转 XP 完成页（清栈）
       GoRouter.of(context).go(
         '${RouteNames.challengeComplete}'
         '?${RouteNames.paramChallengeId}=${Uri.encodeComponent(poolItem.id)}'
@@ -275,6 +280,21 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  /// 完成挑战积分（fire-and-forget）。
+  /// 服务端按 deviceId + challengeId 幂等，同一挑战只发放一次。
+  Future<void> _earnChallengePoints(String challengeId) async {
+    try {
+      final repo = await ref.read(pointsRepositoryProvider.future);
+      final result = await repo.earn(type: 'challenge', refId: challengeId);
+      if (result.granted && mounted) {
+        LumiraToast.show(context, '完成挑战 +${result.delta} 积分');
+      }
+    } catch (e) {
+      // 离线/网络异常静默，不干扰挑战提交
+      debugPrint('[challenge] earn points failed: $e');
     }
   }
 }

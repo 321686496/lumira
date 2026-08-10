@@ -8,6 +8,8 @@ enum ApiErrorKind {
   forbidden,
   /// 404 未找到
   notFound,
+  /// 409 冲突（如重复签到）
+  conflict,
   /// 5xx 服务端错误
   server,
   /// 其他未知错误
@@ -66,6 +68,8 @@ ApiException classifyDioError(dynamic err) {
       return ApiException(ApiErrorKind.forbidden, 'Forbidden', statusCode: 403, original: err);
     case 404:
       return ApiException(ApiErrorKind.notFound, 'Not Found', statusCode: 404, original: err);
+    case 409:
+      return ApiException(ApiErrorKind.conflict, 'Conflict', statusCode: 409, original: err);
     default:
       if (statusCode != null && statusCode >= 500) {
         return ApiException(ApiErrorKind.server, 'Server error', statusCode: statusCode, original: err);

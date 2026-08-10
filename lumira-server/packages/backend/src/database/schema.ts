@@ -125,6 +125,19 @@ export const dailySignInRecords = sqliteTable('daily_sign_in_records', {
   createdAt: integer('created_at').notNull(),
 });
 
+// 通用积分事件发放记录（每日首拍/完成挑战等新途径，幂等去重）
+// UNIQUE(device_id, type, ref_id) 保证同一设备同一事件只发一次积分
+export const pointEarnEvents = sqliteTable('point_earn_events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  deviceId: text('device_id').notNull().references(() => devices.deviceId),
+  type: text('type').notNull(),
+  refId: text('ref_id').notNull(),
+  points: integer('points').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, (table) => ({
+  uniqueEvent: uniqueIndex('uq_point_earn_event').on(table.deviceId, table.type, table.refId),
+}));
+
 // ===== 后台动态模板上传（spec 2026-08-05 第 2.1 节）=====
 
 // 分类管理：三级树形（type/style/method），key + parent_key 联合唯一

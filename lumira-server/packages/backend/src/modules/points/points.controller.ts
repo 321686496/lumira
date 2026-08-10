@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/src/modules/points/points.controller.ts
 
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { PointsService } from './points.service';
 import { DeviceAuthGuard } from '../../common/guards/device-auth.guard';
 import { DeviceId } from '../../common/decorators';
@@ -24,5 +24,23 @@ export class PointsController {
     const lim = limit ? Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200) : 50;
     const off = offset ? Math.max(parseInt(offset, 10) || 0, 0) : 0;
     return this.pointsService.listTransactions(deviceId, lim, off);
+  }
+
+  /**
+   * 事件型积分领取：每日首次拍摄（type='shoot_daily'）、完成挑战（type='challenge', refId=challengeId）。
+   * 幂等：同一设备同一事件只发放一次；重复领取返回 { granted: false }（200，不抛错）。
+   */
+  @Post('earn')
+  async earn(
+    @DeviceId() deviceId: string,
+    @Body() body: { type?: string; refId?: string },
+  ) {
+    const type = (body?.type ?? '').trim();
+    const refId = (body?.refId ?? '').trim() || null;
+    return this.pointsService.earnEvent(
+      deviceId,
+      type as 'shoot_daily' | 'challenge',
+      refId,
+    );
   }
 }
