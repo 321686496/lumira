@@ -1,0 +1,494 @@
+name: iOS Build
+
+# ==============================================================================
+# Lumira iOS 构建 workflow（替代 Codemagic）
+#
+# 触发方式：手动 workflow_dispatch
+#   - sign:                是否走完整代码签名并导出 IPA（默认 false，仅验证编译）
+#   - upload_to_testflight: 是否上传到 App Store Connect / TestFlight（默认 false）
+#
+# 三种运行模式：
+#   1. 仅验证编译（sign=false）        → flutter build ios --no-codesign，无需任何 Secrets
+#   2. 签名导出 IPA（sign=true）       → 需要配置下方 4 个签名 Secrets
+#   3. 签名 + 上传 TestFlight（sign=true & upload_to_testflight=true）
+#                                      → 额外需要 3 个 App Store Connect API Key Secrets
+#
+# 需要配置的 GitHub Secrets（sign=true 时）：
+#   - BUILD_CERTIFICATE_BASE64       .p12 证书文件的 base64 编码（base64 -i cert.p12）
+#   - P12_PASSWORD                   .p12 证书导出时设置的密码
+#   - PROVISIONING_PROFILE_BASE64    .mobileprovision 文件的 base64 编码
+#   - TEAM_ID                        Apple Developer Team ID（10 位字符，如 ABCD1234EF）
+#
+# 上传 TestFlight 额外 Secrets（upload_to_testflight=true 时）：
+#   - APP_STORE_CONNECT_KEY_ID        API Key ID
+#   - APP_STORE_CONNECT_ISSUER_ID     Issuer ID
+#   - APP_STORE_CONNECT_KEY_BASE64    AuthKey_XXXXX.p8 文件的 base64 编码
+#
+# 注意：bundle identifier 需先在 Apple Developer 后台创建 App ID，
+# 并在 GitHub Secrets 中配置对应签名材料。
+# ==============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: '走完整代码签名并导出 IPA（需要配置签名 Secrets）'
+        type: boolean
+        default: false
+      upload_to_testflight:
+        description: '签名后上传到 TestFlight（需 sign=true + API Key Secrets）'
+        type: boolean
+        default: false
+
+env:
+  FLUTTER_VERSION: '3.7.12'
+  BUNDLE_ID: 'com.lumira.rh'
+  WORKSPACE: 'lumira_app_flutter'
+  SCHEME: 'Runner'
+  # 临时 keychain 密码，随便填一个固定值即可（仅本次构建使用）
+  KEYCHAIN_PASSWORD: 'lumira-ci-keychain-2026'
+
+jobs:
+  build-ios:
+    name: Build iOS
+    # macos-26：默认 Xcode 26.6（iOS 26 SDK）。苹果 2026 新规：上传 ASC 的 app
+    # 必须用 iOS 26 SDK 构建，macos-14(Xcode 15.4/iOS 17.5) 已不满足。
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    env:
+      # secrets 不能在 if 条件中直接引用，需先映射到 job 级 env（job 级 env 允许引用 secrets）
+      HAS_EXT_PROFILE: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter doctor & version
+        run: |
+          flutter --version
+          flutter doctor
+
+      - name: Install dependencies
+        run: |
+          cd ${{ env.WORKSPACE }}
+          flutter pub get
+
+      - name: Patch OHOS fork packages for standard Flutter SDK
+        # 复用 codemagic.yaml 的补丁逻辑：
+        # flutter_local_notifications / shared_preferences / sqflite / permission_handler
+        # 等 OHOS fork 包引用了 TargetPlatform.ohos / Platform.isOhos，
+        # 在标准 Flutter SDK 下编译失败，统一替换为 linux（iOS/Android 上永不匹配）
+        run: |
+          python3 -c "
+          import os
+          patched = []
+          for root, dirs, files in os.walk(os.path.expanduser('~/.pub-cache/git')):
+              for fname in files:
+                  if not fname.endswith('.dart'):
+                      continue
+                  path = os.path.join(root, fname)
+                  try:
+                      with open(path, 'r', encoding='utf-8') as f:
+                          content = f.read()
+                  except Exception:
+                      continue
+                  original = content
+                  content = content.replace('TargetPlatform.ohos', 'TargetPlatform.linux')
+                  content = content.replace('Platform.isOhos', 'Platform.isLinux')
+                  if content != original:
+                      with open(path, 'w', encoding='utf-8') as f:
+                          f.write(content)
+                      patched.append(path)
+          print(f'Patched {len(patched)} file(s) for standard Flutter SDK compatibility')
+          for p in patched:
+              print(f'  {p}')
+          "
+
+      # --------------------------------------------------------------------------
+      # 代码签名准备（仅 sign=true 时执行）
+      # --------------------------------------------------------------------------
+      - name: Diagnose certificate & password
+        if: ${{ inputs.sign == true }}
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/diag.p12"
+          echo "===== 证书诊断 ====="
+          echo "BUILD_CERTIFICATE_BASE64 长度: ${#BUILD_CERTIFICATE_BASE64} 字符"
+          echo "解码后 p12 大小: $(stat -f%z "$RUNNER_TEMP/diag.p12") 字节 (本地 p12 通常 2~5KB)"
+          echo "P12_PASSWORD 长度: ${#P12_PASSWORD} 字符"
+          echo "密码非ASCII字符数(0=纯ASCII): $(printf '%s' "$P12_PASSWORD" | LC_ALL=C tr -d '[:print:]' | wc -c | tr -d ' ')"
+          echo "--- OpenSSL 密码验证（若显示 Mac verify error 则密码不匹配）---"
+          openssl pkcs12 -legacy -in "$RUNNER_TEMP/diag.p12" -passin "pass:$P12_PASSWORD" -noout 2>&1 | head -20
+          echo "--- p12 算法信息（Apple 兼容应为 sha1/3DES/RC2 等旧算法）---"
+          openssl pkcs12 -legacy -info -in "$RUNNER_TEMP/diag.p12" -passin "pass:$P12_PASSWORD" -noout 2>&1 | head -12
+          echo "===== 证书诊断结束 ====="
+
+      - name: Create temporary keychain & import certificate
+        if: ${{ inputs.sign == true }}
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          CERT_PATH="$RUNNER_TEMP/build_cert.p12"
+          printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+
+          if ! openssl pkcs12 -legacy -in "$CERT_PATH" -passin "pass:$P12_PASSWORD" -noout 2>/dev/null; then
+            echo "::error::证书验证失败：请检查 BUILD_CERTIFICATE_BASE64 是否完整（本地 p12 约 $(stat -f%z "$CERT_PATH") 字节，base64 长度 ${#BUILD_CERTIFICATE_BASE64}），P12_PASSWORD 是否与导出时完全一致"
+            exit 1
+          fi
+
+          security import "$CERT_PATH" \
+            -P "$P12_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
+          security set-key-partition-list -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Install provisioning profile
+        if: ${{ inputs.sign == true }}
+        env:
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          PP_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PP_DIR"
+          PP_PATH="$PP_DIR/build_pp.mobileprovision"
+          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > "$PP_PATH"
+
+          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin \
+            <<< "$(security cms -D -i "$PP_PATH")")
+          mv "$PP_PATH" "$PP_DIR/$PP_UUID.mobileprovision"
+          echo "Installed provisioning profile: $PP_UUID"
+
+      - name: Configure Manual code signing (Runner Release)
+        if: ${{ inputs.sign == true }}
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          cd ${{ env.WORKSPACE }}
+          PP_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          PP_FILE=$(ls "$PP_DIR" | head -n1)
+          if [ -z "$PP_FILE" ]; then
+            echo "::error::未找到已安装的 provisioning profile"
+            exit 1
+          fi
+          PROFILE_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin \
+            <<< "$(security cms -D -i "$PP_DIR/$PP_FILE")")
+          echo "Provisioning profile name: $PROFILE_NAME"
+          export PROFILE_NAME TEAM_ID
+          python3 <<'PYEOF'
+          import os
+
+          pbx_path = 'ios/Runner.xcodeproj/project.pbxproj'
+          with open(pbx_path, 'r', encoding='utf-8') as f:
+              content = f.read()
+
+          old = (
+              'PRODUCT_BUNDLE_IDENTIFIER = com.example.lumiraAppFlutter;\n'
+              '\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";\n'
+              '\t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";\n'
+              '\t\t\t\tSWIFT_VERSION = 5.0;\n'
+              '\t\t\t\tVERSIONING_SYSTEM = "apple-generic";\n'
+              '\t\t\t};\n'
+              '\t\t\tname = Release;'
+          )
+          team_id = os.environ['TEAM_ID']
+          profile_name = os.environ['PROFILE_NAME']
+          new = (
+              'PRODUCT_BUNDLE_IDENTIFIER = com.lumira.app;\n'
+              '\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";\n'
+              '\t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";\n'
+              '\t\t\t\tSWIFT_VERSION = 5.0;\n'
+              '\t\t\t\tVERSIONING_SYSTEM = "apple-generic";\n'
+              '\t\t\t\tCODE_SIGN_STYLE = Manual;\n'
+              '\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";\n'
+              f'\t\t\t\tDEVELOPMENT_TEAM = "{team_id}";\n'
+              f'\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile_name}";\n'
+              '\t\t\t};\n'
+              '\t\t\tname = Release;'
+          )
+
+          if old not in content:
+              print("ERROR: Runner Release build settings block not found")
+              exit(1)
+          content = content.replace(old, new, 1)
+          with open(pbx_path, 'w', encoding='utf-8') as f:
+              f.write(content)
+          print("Configured Manual code signing for Runner Release")
+          PYEOF
+
+      - name: Generate ExportOptions.plist
+        if: ${{ inputs.sign == true }}
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          python3 -c "
+          import os
+          team_id = os.environ['TEAM_ID']
+          plist = (
+              '<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n'
+              '<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n'
+              '<plist version=\"1.0\">\n'
+              '<dict>\n'
+              '    <key>method</key>\n'
+              '    <string>app-store-connect</string>\n'
+              '    <key>teamID</key>\n'
+              f'    <string>{team_id}</string>\n'
+              '    <key>uploadBitcode</key>\n'
+              '    <false/>\n'
+              '    <key>uploadSymbols</key>\n'
+              '    <true/>\n'
+              '    <key>compileBitcode</key>\n'
+              '    <false/>\n'
+              '</dict>\n'
+              '</plist>\n'
+          )
+          out_dir = '${{ env.WORKSPACE }}/ios'
+          os.makedirs(out_dir, exist_ok=True)
+          out_path = os.path.join(out_dir, 'ExportOptions.plist')
+          with open(out_path, 'w', encoding='utf-8') as f:
+              f.write(plist)
+          print('Generated ExportOptions.plist at', out_path)
+          print(plist)
+          "
+
+      # --------------------------------------------------------------------------
+      # 构建
+      # --------------------------------------------------------------------------
+      - name: Build iOS (no codesign)
+        if: ${{ inputs.sign != true }}
+        run: |
+          cd ${{ env.WORKSPACE }}
+          flutter build ios --release --no-codesign
+
+      - name: Build IPA (signed)
+        if: ${{ inputs.sign == true }}
+        run: |
+          cd ${{ env.WORKSPACE }}
+          flutter build ipa --release \
+            --build-number=$GITHUB_RUN_NUMBER \
+            --export-options-plist=ios/ExportOptions.plist || true
+          if [ ! -f build/ios/ipa/Runner.ipa ]; then
+            APP=$(find build/ios/archive/Runner.xcarchive -type d -name '*.app' | head -n1)
+            if [ -n "$APP" ]; then
+              echo "xcodebuild 导出未产出 .ipa，走 ditto 归档打包 fallback（预期路径）"
+              rm -rf build/ios/ipa && mkdir -p build/ios/ipa/Payload
+              cp -R "$APP" build/ios/ipa/Payload/
+              SWIFT_LIB_DIR="$(dirname "$(dirname "$(xcrun --find swiftc 2>/dev/null)")")/lib/swift/iphoneos"
+              mkdir -p build/ios/ipa/SwiftSupport/iphoneos
+              otool -L build/ios/ipa/Payload/Runner.app/Runner 2>/dev/null | \
+                grep -o 'libswift[A-Za-z0-9_]*\.dylib' | sort -u | while read -r lib; do
+                if [ -f "$SWIFT_LIB_DIR/$lib" ]; then
+                  cp "$SWIFT_LIB_DIR/$lib" build/ios/ipa/SwiftSupport/iphoneos/
+                  echo "SwiftSupport: $lib"
+                else
+                  echo "::warning::Swift 库 $lib 未在 toolchain 中找到: $SWIFT_LIB_DIR"
+                fi
+              done
+              if ! (cd build/ios/ipa && rm -f Runner.ipa && zip -q -r Runner.ipa Payload SwiftSupport -x "*.DS_Store"); then
+                echo "::error::zip 打包 .ipa 失败，退出诊断流程"
+                ls -la build/ios/ipa/ || true
+                exit 1
+              fi
+              DSYM_DIR=$(find build/ios/archive/Runner.xcarchive -type d -name dSYMs | head -n1)
+              if [ -n "$DSYM_DIR" ] && ls "$DSYM_DIR"/*.dSYM >/dev/null 2>&1; then
+                (cd "$DSYM_DIR" && zip -q -r "$GITHUB_WORKSPACE/${{ env.WORKSPACE }}/build/ios/ipa/Runner.dSYM.zip" . -x "*.DS_Store")
+                echo "已生成 dSYM.zip: $(ls -la build/ios/ipa/Runner.dSYM.zip 2>/dev/null)"
+              else
+                echo "归档中无 dSYM，跳过 dSYM 打包"
+              fi
+              echo "=== 打包后签名验证 ==="
+              codesign -dv --verbose=2 build/ios/ipa/Payload/Runner.app 2>&1 | grep -E 'Identifier|Authority' || true
+              security cms -D -i build/ios/ipa/Payload/Runner.app/embedded.mobileprovision > "$RUNNER_TEMP/pp.plist" 2>/dev/null && \
+                echo "内嵌 profile Name: $(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/pp.plist" 2>/dev/null)" || true
+              echo "=== Swift 动态库依赖检查（有输出则需要 SwiftSupport） ==="
+              otool -L build/ios/ipa/Payload/Runner.app/Runner | grep -i libswift || echo "无 Swift 动态库依赖（无需 SwiftSupport）"
+              ls -la build/ios/ipa/
+              exit 0
+            fi
+            echo "::error::flutter build ipa 未产出 .ipa，进入诊断流程"
+            echo "======== 1. 签名配置诊断（pbxproj + xcodebuild 实际解析） ========"
+            echo "--- pbxproj 中的 Manual 设置 ---"
+            grep -nE 'CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|DEVELOPMENT_TEAM|PROVISIONING_PROFILE_SPECIFIER' \
+              ios/Runner.xcodeproj/project.pbxproj || echo "（未找到 Manual 设置）"
+            echo "--- xcodebuild Release 实际解析的签名设置 ---"
+            xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
+              -showBuildSettings 2>/dev/null | grep -E '^\s*(CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|DEVELOPMENT_TEAM|PROVISIONING_PROFILE_SPECIFIER) =' || true
+
+            echo "======== 2. 手动 xcodebuild -exportArchive（完整输出） ========"
+            xcodebuild -exportArchive \
+              -archivePath build/ios/archive/Runner.xcarchive \
+              -exportPath build/ios/ipa \
+              -exportOptionsPlist ios/ExportOptions.plist 2>&1 | tail -150
+
+            echo "======== 3. 导出日志（xcdistributionlogs 中的真实错误） ========"
+            DIST=$(find /var/folders -maxdepth 8 -type d -name '*.xcdistributionlogs' -mmin -10 2>/dev/null | head -n1)
+            if [ -n "$DIST" ]; then
+              echo "日志目录: $DIST"
+              find "$DIST" -type f | while read f; do
+                echo "----- $f -----"
+                case "$f" in
+                  *.xcactivitylog)
+                    gzip -dc "$f" 2>/dev/null | strings | grep -iE 'error|fail|provisioning|certificate|signing|identity|profile' | tail -60 || true
+                    ;;
+                  *.critical.log)
+                    echo "--- critical.log 全文（tail 200） ---"
+                    tail -200 "$f" 2>/dev/null || true
+                    ;;
+                  *)
+                    tail -80 "$f" 2>/dev/null || true
+                    ;;
+                esac
+              done
+            else
+              echo "未找到 xcdistributionlogs"
+            fi
+
+            echo "======== 4. keychain 签名身份 ========"
+            security find-identity -v -p codesigning 2>&1 | head -20
+
+            echo "======== 5. 归档签名信息（内嵌 profile 类型） ========"
+            APP=$(find build/ios/archive/Runner.xcarchive -type d -name '*.app' | head -n1)
+            if [ -n "$APP" ]; then
+              echo "App bundle: $APP"
+              codesign -dv --verbose=4 "$APP" 2>&1 | head -20 || true
+              PROFILE="$APP/embedded.mobileprovision"
+              if [ -f "$PROFILE" ]; then
+                PP_PLIST="$RUNNER_TEMP/embedded_pp.plist"
+                security cms -D -i "$PROFILE" > "$PP_PLIST" 2>/dev/null
+                if [ -s "$PP_PLIST" ]; then
+                  /usr/libexec/PlistBuddy \
+                    -c "Print :Name" \
+                    -c "Print :UUID" \
+                    -c "Print :CreationDate" \
+                    -c "Print :ExpirationDate" \
+                    -c "Print :get-task-allow" \
+                    -c "Print :ProvisionedDevices" \
+                    -c "Print :Entitlements" \
+                    "$PP_PLIST" 2>&1 || true
+                  echo "--- 类型判断依据 ---"
+                  echo "get-task-allow=$(/usr/libexec/PlistBuddy -c 'Print :get-task-allow' "$PP_PLIST" 2>/dev/null || echo 'N/A')"
+                  echo "是否有 ProvisionedDevices 键（有=Development/AdHoc，无=App Store）: $(/usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$PP_PLIST" >/dev/null 2>&1 && echo '有' || echo '无')"
+                else
+                  echo "内嵌 profile 解码失败或为空"
+                fi
+              else
+                echo "无内嵌 profile（归档未签名）"
+              fi
+            else
+              echo "未在归档中找到 .app"
+            fi
+
+            echo "======== 6. 已安装的 provisioning profile（源文件） ========"
+            PP_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+            if [ -d "$PP_DIR" ]; then
+              for PP_FILE in "$PP_DIR"/*.mobileprovision; do
+                [ -f "$PP_FILE" ] || continue
+                echo "----- $(basename "$PP_FILE") -----"
+                PP_PLIST="$RUNNER_TEMP/installed_pp.plist"
+                security cms -D -i "$PP_FILE" > "$PP_PLIST" 2>/dev/null
+                if [ -s "$PP_PLIST" ]; then
+                  /usr/libexec/PlistBuddy \
+                    -c "Print :Name" \
+                    -c "Print :UUID" \
+                    -c "Print :CreationDate" \
+                    -c "Print :ExpirationDate" \
+                    -c "Print :get-task-allow" \
+                    "$PP_PLIST" 2>&1 || true
+                  echo "是否有 ProvisionedDevices 键: $(/usr/libexec/PlistBuddy -c 'Print :ProvisionedDevices' "$PP_PLIST" >/dev/null 2>&1 && echo '有' || echo '无')"
+                  echo "--- Entitlements ---"
+                  /usr/libexec/PlistBuddy -c "Print :Entitlements" "$PP_PLIST" 2>&1 || true
+                else
+                  echo "解码失败或为空"
+                fi
+              done
+            else
+              echo "未安装任何 provisioning profile"
+            fi
+
+            exit 1
+          fi
+          ls -la build/ios/ipa/
+
+      # --------------------------------------------------------------------------
+      # 产物上传
+      # --------------------------------------------------------------------------
+      - name: Upload IPA artifact
+        if: ${{ success() && inputs.sign == true }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: lumira-ios-ipa
+          path: ${{ env.WORKSPACE }}/build/ios/ipa/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload dSYM artifact
+        if: ${{ success() && inputs.sign == true }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: lumira-ios-dsym
+          path: ${{ env.WORKSPACE }}/build/ios/ipa/*.dSYM.zip
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload app folder (no-codesign mode)
+        if: ${{ success() && inputs.sign != true }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: lumira-ios-build
+          path: ${{ env.WORKSPACE }}/build/ios/iphoneos/Runner.app
+          if-no-files-found: error
+          retention-days: 7
+
+      # --------------------------------------------------------------------------
+      # 可选：上传到 TestFlight
+      # --------------------------------------------------------------------------
+      - name: Upload to TestFlight
+        if: ${{ success() && inputs.sign == true && inputs.upload_to_testflight == true }}
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_BASE64 }}
+        run: |
+          KEY_DIR="$HOME/private_keys"
+          mkdir -p "$KEY_DIR"
+          KEY_PATH="$KEY_DIR/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          echo "$APP_STORE_CONNECT_KEY_BASE64" | base64 --decode > "$KEY_PATH"
+          ls -la "$KEY_DIR"
+
+          IPA_PATH=$(ls ${{ env.WORKSPACE }}/build/ios/ipa/*.ipa | head -n1)
+          echo "Uploading $IPA_PATH to App Store Connect..."
+
+          xcrun altool --upload-app \
+            -f "$IPA_PATH" \
+            -t ios \
+            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --verbose
+
+      # --------------------------------------------------------------------------
+      # 清理临时 keychain（始终执行）
+      # --------------------------------------------------------------------------
+      - name: Clean up keychain
+        if: ${{ always() && inputs.sign == true }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
