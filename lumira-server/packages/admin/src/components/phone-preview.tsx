@@ -42,12 +42,25 @@ interface PhonePreviewProps {
   className?: string;
 }
 
-/** 解析 '3:4' → 0.75；不支持返回 null */
+/** 竖屏手机屏幕比例（19.5:9），与 IphoneFrame 一致，模拟真机全屏取景 */
+const PHONE_SCREEN_RATIO = 393 / 852;
+
+/**
+ * 解析比例字符串 → 宽高比。与 App 端 parseAspectRatio / computeTargetRatio 一致：
+ * - 'fullscreen' → 手机屏幕比例（App 全屏取景 = 设备屏幕比例）
+ * - '4:3' → 3/4（竖屏手机自适应，与 App computeTargetRatio 竖屏行为一致）
+ * - 其余 'W:H' 按字面解析（如 '3:4' → 0.75、'9:16' → 9/16）
+ * - 'free'/'none'/无法解析返回 null（调用方回退）
+ */
 function parseRatio(s: string): number | null {
-  if (!s || s === 'free' || s === 'none' || s === 'fullscreen') return null;
-  const parts = s.split(':');
-  const w = parseInt(parts[0], 10);
-  const h = parseInt(parts[1], 10);
+  if (!s) return null;
+  const v = s.trim().toLowerCase();
+  if (v === 'fullscreen') return PHONE_SCREEN_RATIO;
+  if (v === '4:3') return 3 / 4;
+  if (v === 'free' || v === 'none') return null;
+  const parts = v.split(':');
+  const w = parseFloat(parts[0]);
+  const h = parseFloat(parts[1]);
   if (!w || !h) return null;
   return w / h;
 }
@@ -124,7 +137,7 @@ export default function PhonePreview(props: PhonePreviewProps) {
   const {
     coverUrl, silhouetteUrl, silhouetteType, silhouetteBuiltinKey,
     positionX, positionY, scale, rotation,
-    aspectRatio, overlayType, opacity,
+    aspectRatio, cropRatio, overlayType, opacity,
     lut, colorBrightness, colorContrast, colorSaturation, colorTemperature, colorTint,
     smoothStrength, sharpen, vignette, grain,
     exposureCompensation, isoMode, iso, shutterSpeed, whiteBalance,
@@ -136,13 +149,15 @@ export default function PhonePreview(props: PhonePreviewProps) {
   const [areaSize, setAreaSize] = useState<{ w: number; h: number } | null>(null);
   const [coverImg, setCoverImg] = useState<HTMLImageElement | null>(null);
 
-  // 与 App 取景器一致：使用 composition.aspectRatio（照片比例）
-  // App 的 capture_preview_template_page 使用 composition.aspectRatio 作为取景器比例，
-  // 剪影位置相对于该比例区域，而非整个页面或取景器
+  // 与 App 拍摄页真机取景一致：取景比例 = 模板 postProcess.cropRatio
+  // （App capture_page 在模板切换时将 aspectRatioProvider 同步为 cropRatio），
+  // cropRatio 为空时回退 composition.aspectRatio。
+  // 剪影 position.x/y 相对该取景比例框定位（x:0,y:0 = 比例框左上角）。
+  const effectiveRatio = cropRatio || aspectRatio;
   const ratio = useMemo(() => {
-    const r = parseRatio(aspectRatio);
+    const r = parseRatio(effectiveRatio);
     return r ?? 0.75;
-  }, [aspectRatio]);
+  }, [effectiveRatio]);
 
   // 监听图片区尺寸
   useEffect(() => {
@@ -257,7 +272,7 @@ export default function PhonePreview(props: PhonePreviewProps) {
             {name || '未命名模板'}
           </span>
           <span className="text-[10px] text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">
-            {getAspectRatioLabel(aspectRatio)}
+            {getAspectRatioLabel(effectiveRatio)}
           </span>
         </div>
 

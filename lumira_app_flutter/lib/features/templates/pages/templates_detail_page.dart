@@ -15,6 +15,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/owned_templates_repository.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
+import '../data/templates_editor_mock_data.dart' show parseAspectRatio;
 import '../services/template_exporter.dart';
 import '../widgets/pose_silhouette.dart';
 import '../widgets/template_cover_image.dart';
@@ -1116,6 +1117,19 @@ class _PoseReferenceCard extends StatelessWidget {
   final TemplateDetail template;
   final ThemeTokens tokens;
 
+  /// 姿势参考预览框比例：与拍摄页取景比例框保持一致（模板照片比例），
+  /// fullscreen 时回退设备屏幕宽高比。
+  double _posePreviewRatio(BuildContext context) {
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
+    final raw = parseAspectRatio(template.aspectRatio, isPortrait: isPortrait);
+    if (raw < 0) {
+      return MediaQuery.of(context).size.width /
+          MediaQuery.of(context).size.height;
+    }
+    return raw;
+  }
+
   @override
   Widget build(BuildContext context) {
     final pose = template.pose;
@@ -1145,11 +1159,11 @@ class _PoseReferenceCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               // pose-preview-wrap：用 AspectRatio 替代 padding-bottom 百分比
-              // 比例取设备屏幕宽高比，避免方形卡片在竖屏下占用过多纵向空间
+              // 剪影位置以取景比例框为参考系（x:0,y:0 = 比例框左上角），
+              // 因此预览框比例与模板照片比例（composition.aspectRatio）保持一致，
+              // 与拍摄页/预览页/编辑页渲染结果一致；fullscreen 时回退设备屏幕比例
               AspectRatio(
-                aspectRatio:
-                    MediaQuery.of(context).size.width /
-                        MediaQuery.of(context).size.height,
+                aspectRatio: _posePreviewRatio(context),
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),

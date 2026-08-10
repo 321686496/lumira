@@ -23,7 +23,7 @@ import PhonePreview from '@/components/phone-preview';
 import type { AdminTemplateDetail, TemplateCategory } from '@/types/admin';
 
 const OVERLAY_TYPES = ['rule_of_thirds', 'golden_ratio', 'diagonal', 'grid', 'leading_lines', 'center', 'none'] as const;
-const ASPECT_RATIOS = ['3:4', '4:3', '16:9', '1:1', '9:16'] as const;
+const ASPECT_RATIOS = ['fullscreen', '3:4', '4:3', '16:9', '1:1', '9:16'] as const;
 const SILHOUETTE_TYPES = ['builtin', 'image', 'svg'] as const;
 const ISO_MODES = ['auto', 'manual'] as const;
 const WHITE_BALANCES = ['daylight', 'cloudy', 'shade', 'tungsten', 'fluorescent', 'custom'] as const;

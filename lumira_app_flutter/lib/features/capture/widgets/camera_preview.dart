@@ -191,6 +191,11 @@ class CameraPreview extends ConsumerWidget {
     final String silhouetteData;
     final double silhouetteScale;
     final double silhouetteRotation;
+    // 剪影位置（0..1，相对当前取景器比例框：x:0,y:0 = 比例框左上角）。
+    // 与模板预览页/编辑页保持一致，统一以取景比例框为参考系，
+    // 避免全屏比例下 x:0,y:0 在手机左上角、4:3 时位置错位的现象。
+    final double silhouettePosX;
+    final double silhouettePosY;
     final bool hasSilhouette;
     if (formOverride != null) {
       // formOverride 模式下不渲染剪影（showSilhouette 已为 false，hasSilhouette 不影响）
@@ -198,29 +203,48 @@ class CameraPreview extends ConsumerWidget {
       silhouetteData = 'none';
       silhouetteScale = 1.0;
       silhouetteRotation = 0.0;
+      silhouettePosX = 0.5;
+      silhouettePosY = 0.5;
       hasSilhouette = false;
     } else if (editable != null) {
       silhouetteType = editable.pose.silhouette.type;
       silhouetteData = editable.pose.silhouette.data;
       silhouetteScale = editable.pose.scale;
       silhouetteRotation = editable.pose.rotation;
+      silhouettePosX = editable.pose.position.x;
+      silhouettePosY = editable.pose.position.y;
       hasSilhouette = silhouetteData != 'none';
     } else {
       silhouetteType = '';
       silhouetteData = 'none';
       silhouetteScale = 1.0;
       silhouetteRotation = 0.0;
+      silhouettePosX = 0.5;
+      silhouettePosY = 0.5;
       hasSilhouette = false;
     }
     final silhouetteOverlay = (hasSilhouette && showSilhouette)
-        ? Positioned.fill(
-            child: IgnorePointer(
-              child: PoseSilhouette(
-                silhouetteType: silhouetteType,
-                silhouetteData: silhouetteData,
-                scale: silhouetteScale,
-                rotation: silhouetteRotation,
-              ),
+        ? LayoutBuilder(
+            builder: (context, constraints) => Stack(
+              fit: StackFit.expand,
+              children: [
+                Positioned(
+                  left: constraints.maxWidth * silhouettePosX,
+                  top: constraints.maxHeight * silhouettePosY,
+                  child: IgnorePointer(
+                    child: FractionalTranslation(
+                      // 以剪影中心点为锚点，与预览页可拖动层定位方式一致
+                      translation: const Offset(-0.5, -0.5),
+                      child: PoseSilhouette(
+                        silhouetteType: silhouetteType,
+                        silhouetteData: silhouetteData,
+                        scale: silhouetteScale,
+                        rotation: silhouetteRotation,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           )
         : const SizedBox.shrink();
