@@ -112,6 +112,23 @@ jobs:
               print(f'  {p}')
           "
 
+      - name: Fix GPUImage Swift module compatibility for Xcode 26
+        # gpu_image 插件包含预编译的 GPUImage.framework（vendored_framework），
+        # 其 .swiftmodule 文件是用旧版 Swift 编译器编译的。
+        # macOS 26 runner（Xcode 26.6 / Swift 6.x）无法读取旧格式的 module 文件，
+        # 报错：found incompatible module ... compiled with an older version of the compiler
+        # 移除 .swiftmodule 目录后，Swift 编译器会通过 module.modulemap 的 Clang 模块
+        # 接口导入 GPUImage，二进制文件本身与编译器版本无关。
+        run: |
+          FW_DIR="${{ env.WORKSPACE }}/ios/.symlinks/plugins/gpu_image/ios/gpuimage/GPUImage.framework"
+          if [ -d "$FW_DIR/Modules/GPUImage.swiftmodule" ]; then
+            echo "Removing incompatible GPUImage.swiftmodule (compiled with older Swift compiler)"
+            rm -rf "$FW_DIR/Modules/GPUImage.swiftmodule"
+            echo "Done. Swift compiler will import GPUImage through Clang module interface."
+          else
+            echo "GPUImage.swiftmodule not found - OK"
+          fi
+
       # --------------------------------------------------------------------------
       # 代码签名准备（仅 sign=true 时执行）
       # --------------------------------------------------------------------------
