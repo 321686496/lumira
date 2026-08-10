@@ -42,7 +42,7 @@ on:
 
 env:
   FLUTTER_VERSION: '3.7.12'
-  BUNDLE_ID: 'com.lumira.rh'
+  BUNDLE_ID: 'com.rh.lumira'
   WORKSPACE: 'lumira_app_flutter'
   SCHEME: 'Runner'
   # 临时 keychain 密码，随便填一个固定值即可（仅本次构建使用）
@@ -213,7 +213,7 @@ jobs:
           team_id = os.environ['TEAM_ID']
           profile_name = os.environ['PROFILE_NAME']
           new = (
-              'PRODUCT_BUNDLE_IDENTIFIER = com.lumira.app;\n'
+              'PRODUCT_BUNDLE_IDENTIFIER = com.rh.lumira;\n'
               '\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";\n'
               '\t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";\n'
               '\t\t\t\tSWIFT_VERSION = 5.0;\n'

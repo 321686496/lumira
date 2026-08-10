@@ -1,7 +1,7 @@
 # Lumira iOS 打包操作指南（GitHub Actions）
 
 > 本文档说明如何使用 GitHub Actions 构建 iOS 安装包（IPA），
-> 以及首次需要完成的配置。Bundle ID 为 `com.lumira.rh`。
+> 以及首次需要完成的配置。Bundle ID 为 `com.rh.lumira`。
 
 ---
 
@@ -44,7 +44,7 @@
 1. 打开 [developer.apple.com/account](https://developer.apple.com/account) → **Certificates, Identifiers & Profiles**
 2. **Identifiers** → 新建 App ID：
    - 类型：App
-   - Bundle ID：`com.lumira.rh`（必须与工程一致）
+   - Bundle ID：`com.rh.lumira`（必须与工程一致）
    - 按需勾选 Capabilities（如 Push Notifications、App Groups）
 
 ### 3.2 用 OpenSSL 生成私钥与证书签名请求（CSR）
@@ -63,7 +63,7 @@ openssl req -new -newkey rsa:2048 -nodes \
 1. 打开 [developer.apple.com/account](https://developer.apple.com/account) → **Certificates, Identifiers & Profiles**
 2. **Identifiers** → 新建 App ID：
    - 类型：App
-   - Bundle ID：`com.lumira.rh`（必须与工程一致）
+   - Bundle ID：`com.rh.lumira`（必须与工程一致）
    - 按需勾选 Capabilities（如 Push Notifications、App Groups）
 3. **Certificates** → 新建 → **Apple Distribution**
 4. 上传上一步生成的 `distribution.csr`，下载 `.cer` 证书文件
@@ -87,7 +87,7 @@ openssl pkcs12 -export -out distribution.p12 \
 
 1. Apple Developer → **Profiles** → 新建
 2. 类型选 **App Store Connect**（若想 Ad Hoc 内测分发，选 **Ad Hoc** 并勾选目标设备）
-3. 选择 App ID：`com.lumira.rh`
+3. 选择 App ID：`com.rh.lumira`
 4. 勾选你的 Distribution 证书
 5. 下载生成的 `.mobileprovision` 文件
 
@@ -100,7 +100,7 @@ openssl pkcs12 -export -out distribution.p12 \
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("distribution.p12"))
 
 # Provisioning Profile
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("com.lumira.rh.mobileprovision"))
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("com.rh.lumira.mobileprovision"))
 ```
 
 **方式二：Mac / Linux 终端**
@@ -205,7 +205,7 @@ CI 内的 macOS 服务器会自动完成上传。
 上传成功后，打开 [appstoreconnect.apple.com](https://appstoreconnect.apple.com) →
 **TestFlight** → 等待「正在处理」完成后即可添加测试员分发。
 
-> 首次上传前需在 App Store Connect 中创建 App（Bundle ID `com.lumira.rh`）并填写
+> 首次上传前需在 App Store Connect 中创建 App（Bundle ID `com.rh.lumira`）并填写
 > 基础信息（名称、截图、隐私政策等），否则上传会提示 App 不存在。
 
 ---
@@ -245,4 +245,4 @@ CI 内的 macOS 服务器会自动完成上传。
 
 - Workflow 定义：`.github/workflows/ios-build.yml`
 - iOS 工程目录：`lumira_app_flutter/ios/`
-- Bundle ID：`com.lumira.rh`（CI 构建时自动注入到 `ios/Runner.xcodeproj/project.pbxproj`）
+- Bundle ID：`com.rh.lumira`（CI 构建时自动注入到 `ios/Runner.xcodeproj/project.pbxproj`）
