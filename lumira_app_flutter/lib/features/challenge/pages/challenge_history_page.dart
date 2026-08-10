@@ -18,14 +18,14 @@ import '../data/challenge_providers.dart';
 /// 挑战记录页（挑战墙）
 ///
 /// 按日期倒序展示用户的挑战历史记录，每条记录可溯源到当日拍摄的图片。
-/// 数据源：weeklyHistoryProvider（本周挑战历史）
+/// 数据源：allHistoryProvider（全部挑战历史，不限日期范围）
 class ChallengeHistoryPage extends ConsumerWidget {
   const ChallengeHistoryPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final historyAsync = ref.watch(weeklyHistoryProvider);
+    final historyAsync = ref.watch(allHistoryProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -113,7 +113,7 @@ class ChallengeHistoryPage extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(vertical: 40),
                           child: Center(
                             child: Text(
-                              '本周还没有挑战记录',
+                              '还没有挑战记录',
                               style: TextStyle(
                                   fontSize: 13, color: tokens.textTertiary),
                             ),

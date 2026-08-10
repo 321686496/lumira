@@ -24,6 +24,13 @@ final weeklyHistoryProvider = FutureProvider<List<ChallengeHistoryRecord>>((ref)
   return repo.getWeeklyHistory();
 });
 
+/// 全部挑战历史（不限日期范围）。
+/// 用于挑战记录页"查看全部"，展示所有日期的挑战记录。
+final allHistoryProvider = FutureProvider<List<ChallengeHistoryRecord>>((ref) async {
+  final repo = await ref.watch(challengeRepositoryProvider.future);
+  return repo.getAllHistory();
+});
+
 final challengeAchievementsProvider = FutureProvider<List<ChallengeAchievement>>((ref) async {
   final repo = await ref.watch(challengeRepositoryProvider.future);
   return repo.getAchievements();

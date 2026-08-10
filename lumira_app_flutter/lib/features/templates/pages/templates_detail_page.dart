@@ -70,8 +70,19 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
         id.startsWith('imported_');
   }
 
-  void _goCapture(TemplateDetail template) {
+  /// 付费模板是否已被当前用户解锁（免费模板视为已解锁）。
+  bool _isOwned(int price, Set<String> ownedIds, String id) {
+    if (price <= 0) return true;
+    return ownedIds.contains(id);
+  }
+
+  void _goCapture(TemplateDetail template, {bool trial = false}) {
     final id = template.id;
+    // 试用模式：直接进入拍摄页试用（仅展示效果）
+    if (trial) {
+      GoRouter.of(context).push('/capture?templateId=$id&trial=1');
+      return;
+    }
     // 门禁：付费模板未拥有时跳解锁页
     final price = template.price;
     final owned = ref.read(ownedTemplateIdsProvider);
@@ -82,6 +93,12 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
       return;
     }
     GoRouter.of(context).push('/capture?templateId=$id');
+  }
+
+  void _goUnlock(TemplateDetail template) {
+    GoRouter.of(context).push(
+      '${RouteNames.templatesUnlock}?templateId=${template.id}',
+    );
   }
 
   void _goEdit() {
@@ -194,7 +211,14 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   /// 使 mock 快路径与 provider 慢路径共用同一渲染逻辑。
   /// 计算属性（_hasSilhouette / _wbLabel 等）改为局部变量，
   /// 避免依赖 `_template` getter（remote 模板不在 mock 中时 getter 返回 null）。
-  Widget _buildDetailContent(TemplateDetail template, ThemeTokens tokens) {
+  ///
+  /// v19：新增 [isLocked] —— 付费模板未解锁时隐藏相机/后期/滤镜参数
+  /// （显示锁定提示），CTA 变为"购买 + 试用"。
+  Widget _buildDetailContent(
+    TemplateDetail template,
+    ThemeTokens tokens, {
+    required bool isLocked,
+  }) {
     final hasSilhouette = () {
       final pose = template.pose;
       if (pose.silhouetteType == 'builtin' && pose.silhouetteData == 'none') {
@@ -252,22 +276,30 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                 tokens: tokens,
                 propsText: propsText,
               ),
-              _CameraParamsCard(
-                template: template,
-                tokens: tokens,
-                evDisplay: evDisplay,
-                wbLabel: wbLabel,
-                wbDisplay: wbDisplay,
-                flashLabel: flashLabel,
-                focusLabel: focusLabel,
-                lensLabel: lensLabel,
-              ),
-              _PostProcessCard(
-                template: template,
-                tokens: tokens,
-                lutLabel: lutLabel,
-                signedNum: signedNum,
-              ),
+              // 付费模板未解锁：相机/后期/滤镜参数隐藏为锁定提示
+              if (isLocked)
+                _LockedParamsCard(
+                  tokens: tokens,
+                  price: template.price,
+                )
+              else ...[
+                _CameraParamsCard(
+                  template: template,
+                  tokens: tokens,
+                  evDisplay: evDisplay,
+                  wbLabel: wbLabel,
+                  wbDisplay: wbDisplay,
+                  flashLabel: flashLabel,
+                  focusLabel: focusLabel,
+                  lensLabel: lensLabel,
+                ),
+                _PostProcessCard(
+                  template: template,
+                  tokens: tokens,
+                  lutLabel: lutLabel,
+                  signedNum: signedNum,
+                ),
+              ],
               if (hasSilhouette)
                 _PoseReferenceCard(
                   template: template,
@@ -292,7 +324,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
           bottom: 0,
           child: _FixedCta(
             tokens: tokens,
+            isLocked: isLocked,
+            price: template.price,
             onPressed: () => _goCapture(template),
+            onTrial: () => _goCapture(template, trial: true),
+            onPurchase: () => _goUnlock(template),
           ),
         ),
       ],
@@ -304,7 +340,12 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     final tokens = ref.watch(themeTokensProvider);
     // 触发已拥有模板列表加载（门禁判断依赖此缓存）
     ref.watch(ownedTemplatesLoaderProvider);
+    final ownedIds = ref.watch(ownedTemplateIdsProvider);
     final mockTemplate = _template;
+
+    // 付费模板是否被锁定（未解锁）：已解锁或免费模板不锁定
+    bool computeLocked(TemplateDetail t) =>
+        !_isOwned(t.price, ownedIds, t.id);
 
     // v14: mock 快路径（内置 29 模板 + mock 详情列表）
     // 若 mock 中找不到（custom / remote 模板），走 provider 慢路径
@@ -348,7 +389,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                 ),
                 Expanded(
                   child: mockTemplate != null
-                      ? _buildDetailContent(mockTemplate, tokens)
+                      ? _buildDetailContent(
+                          mockTemplate,
+                          tokens,
+                          isLocked: computeLocked(mockTemplate),
+                        )
                       : asyncDetail.when(
                           loading: () => Center(
                             child: LumiraProgress.circular(),
@@ -361,7 +406,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                           ),
                           data: (detail) => detail == null
                               ? _EmptyState(tokens: tokens)
-                              : _buildDetailContent(detail, tokens),
+                              : _buildDetailContent(
+                                  detail,
+                                  tokens,
+                                  isLocked: computeLocked(detail),
+                                ),
                         ),
                 ),
               ],
@@ -1282,9 +1331,21 @@ class _ReferenceSource extends StatelessWidget {
 }
 
 class _FixedCta extends StatelessWidget {
-  const _FixedCta({required this.tokens, required this.onPressed});
+  const _FixedCta({
+    required this.tokens,
+    required this.isLocked,
+    required this.price,
+    required this.onPressed,
+    required this.onTrial,
+    required this.onPurchase,
+  });
   final ThemeTokens tokens;
+  /// 付费模板未解锁：CTA 显示"试用 + 购买"
+  final bool isLocked;
+  final int price;
   final VoidCallback onPressed;
+  final VoidCallback onTrial;
+  final VoidCallback onPurchase;
 
   @override
   Widget build(BuildContext context) {
@@ -1303,17 +1364,140 @@ class _FixedCta extends StatelessWidget {
           stops: const [0, 0.4, 1],
         ),
       ),
-      child: SizedBox(
-        width: double.infinity,
-        child: LumiraButton(
-          variant: ButtonVariant.primary,
-          onPressed: onPressed,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.camera_alt_outlined),
-              SizedBox(width: 8),
-              Text('套用此模板拍摄'),
+      child: isLocked
+          ? Row(
+              children: [
+                // 试用按钮（描边）
+                Expanded(
+                  child: GestureDetector(
+                    onTap: onTrial,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: tokens.brand, width: 1),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.visibility_outlined,
+                              size: 18, color: tokens.brand),
+                          const SizedBox(width: 6),
+                          Text(
+                            '试用',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.brand,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // 购买按钮（品牌色）
+                Expanded(
+                  child: LumiraButton(
+                    variant: ButtonVariant.primary,
+                    onPressed: onPurchase,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.lock_open_outlined, size: 18),
+                        const SizedBox(width: 6),
+                        Text('购买 ¥$price'),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : SizedBox(
+              width: double.infinity,
+              child: LumiraButton(
+                variant: ButtonVariant.primary,
+                onPressed: onPressed,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.camera_alt_outlined),
+                    SizedBox(width: 8),
+                    Text('套用此模板拍摄'),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// 付费模板未解锁时的参数锁定提示卡
+///
+/// 替代相机参数/后期参数/滤镜参数卡片，仅提示解锁后可查看，
+/// 不暴露任何具体参数值。
+class _LockedParamsCard extends StatelessWidget {
+  const _LockedParamsCard({required this.tokens, required this.price});
+
+  final ThemeTokens tokens;
+  final int price;
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeUp(
+      delay: const Duration(milliseconds: 240),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        child: NeuCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: tokens.brandSubtle,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.lock_outline, size: 22, color: tokens.brand),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '相机 / 后期 / 滤镜参数已锁定',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '解锁后即可查看并套用完整参数（含 LUT 滤镜、相机参数、后期调整）',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: tokens.textTertiary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.stars_outlined, size: 14, color: tokens.brand),
+                  const SizedBox(width: 4),
+                  Text(
+                    '¥$price 永久解锁',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: tokens.brand,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

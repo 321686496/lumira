@@ -415,6 +415,55 @@ void main() {
       expect(find.text('该分类暂无模板'), findsOneWidget);
     });
 
+    testWidgets('tapping 付费 filter shows only paid templates', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        themeKey: ThemeKey.warmWhite,
+        uiStyle: UIStyle.neumorphic,
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 进入 风光 分类视图（含付费 golden_landscape 与免费自定义模板）
+      await tester.tap(find.text('风光').first);
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 默认"全部"：付费 + 免费模板都显示
+      expect(find.text('金色风光'), findsOneWidget);
+
+      // 点击"付费"筛选
+      await tester.tap(find.text('付费'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 仅付费模板（金色风光）保留
+      expect(find.text('金色风光'), findsOneWidget);
+      // 免费模板不再显示（模板库默认视图为 builtin，此处验证付费筛掉免费项）
+      expect(find.text('金色风光精选'), findsNothing);
+    });
+
+    testWidgets('tapping 免费 filter shows only free templates', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        themeKey: ThemeKey.warmWhite,
+        uiStyle: UIStyle.neumorphic,
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 进入 人像 分类视图（cafe_portrait 免费）
+      await tester.tap(find.text('人像'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('咖啡馆人像'), findsOneWidget);
+
+      // 点击"付费"筛选 → 人像分类无付费模板 → 空状态
+      await tester.tap(find.text('付费'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('该分类暂无模板'), findsOneWidget);
+
+      // 点击"免费"筛选（筛选行在网格上方，.last 排除卡片上的"免费"角标）→ 恢复显示免费模板
+      await tester.tap(find.text('免费').last);
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('咖啡馆人像'), findsOneWidget);
+    });
+
     testWidgets('tapping template card navigates to /templates/detail page',
         (tester) async {
       setLargeViewport(tester);

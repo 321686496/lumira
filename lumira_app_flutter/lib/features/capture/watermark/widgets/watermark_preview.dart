@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../models/watermark_template.dart';
 
-/// 水印预览组件：在灰色背景上以 [CustomPaint] + [TextPainter] 渲染
-/// [WatermarkTemplate] 的元素，供水印管理页与编辑页共用。
+/// 水印预览组件：在深色（仿照片）背景上以 [CustomPaint] + [TextPainter]
+/// 渲染 [WatermarkTemplate] 的元素，供水印管理页与编辑页共用。
 ///
 /// 绘制约定与 [WatermarkRenderer] 一致：
 /// - 锚点 = `element.x * size.width`, `element.y * size.height`
-/// - 绝对字号 = `element.fontSize * size.width`（fontSize 为相对值 0.0~1.0）
+/// - 绝对字号 = `element.fontSize * size.width`（fontSize 为相对值 0.0~1.0），
+///   并施加最小字号 7px 的下限，保证小尺寸预览中文字仍可读
 /// - letterSpacing 按 `size.width / 400` 缩放（参考宽度 400）
 /// - textAlign 决定相对锚点的水平偏移（left=0 / right=-w / center=-w/2）
 /// - 旋转 / 透明度 / bold / italic / shadow 均按元素属性应用
@@ -17,10 +18,10 @@ class WatermarkPreview extends StatelessWidget {
   const WatermarkPreview({
     super.key,
     required this.template,
-    this.width = 80,
-    this.height = 100,
+    this.width = 100,
+    this.height = 130,
     this.background,
-    this.borderRadius = 6,
+    this.borderRadius = 8,
   });
 
   final WatermarkTemplate template;
@@ -29,7 +30,8 @@ class WatermarkPreview extends StatelessWidget {
   final Color? background;
   final double borderRadius;
 
-  static const Color _defaultBackground = Color(0xFFE5E5E5);
+  /// 深色仿照片背景：浅灰文字在深色背景上清晰可辨
+  static const Color _defaultBackground = Color(0xFF2A2A2A);
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +76,10 @@ class _WatermarkPreviewPainter extends CustomPainter {
     Size size,
     double scale,
   ) {
-    final absoluteFontSize = element.fontSize * size.width;
+    // 预览场景施加最小字号 7px，保证小尺寸预览（如 100x130）中文字仍可读；
+    // 最大字号限制为预览宽度的 18%，防止过大元素溢出预览框
+    final absoluteFontSize =
+        (element.fontSize * size.width).clamp(7.0, size.width * 0.18);
     final blurRadius = (absoluteFontSize * 0.08).clamp(0.5, 8.0);
 
     final textStyle = TextStyle(

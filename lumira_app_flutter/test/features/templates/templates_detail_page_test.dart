@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/features/templates/data/owned_templates_repository.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_detail_page.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
@@ -232,6 +233,91 @@ void main() {
 
       // custom_golden_landscape price=18 → '精选 ¥18' 出现在 title badge + unlock status
       expect(find.text('精选 ¥18'), findsNWidgets(2));
+    });
+
+    testWidgets('locks camera/post-process params for unowned paid template',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        ThemeKey.warmWhite,
+        UIStyle.neumorphic,
+        templateId: 'custom_golden_landscape',
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 未解锁付费模板：隐藏相机/后期参数，显示锁定提示卡
+      expect(find.text('相机 / 后期 / 滤镜参数已锁定'), findsOneWidget);
+      expect(find.text('相机参数'), findsNothing);
+      expect(find.text('后期参数'), findsNothing);
+      // CTA 变为"试用 + 购买"
+      expect(find.text('试用'), findsOneWidget);
+      expect(find.text('购买 ¥18'), findsOneWidget);
+      expect(find.text('套用此模板拍摄'), findsNothing);
+    });
+
+    testWidgets('renders full params for paid template after unlock',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
+          uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
+          // 模拟已解锁该付费模板
+          ownedTemplateIdsProvider
+              .overrideWith((ref) => <String>{'custom_golden_landscape'}),
+        ],
+        child: MaterialApp.router(
+          routerConfig: GoRouter(
+            initialLocation: '/templates/detail',
+            routes: [
+              GoRoute(
+                path: '/templates/detail',
+                name: 'templatesDetail',
+                builder: (_, __) => TemplatesDetailPage(
+                  templateId: 'custom_golden_landscape',
+                ),
+              ),
+              GoRoute(
+                path: RouteNames.capture,
+                name: 'capture',
+                builder: (_, __) =>
+                    const Scaffold(body: Center(child: Text('CAPTURE_PAGE'))),
+              ),
+              GoRoute(
+                path: RouteNames.templatesUnlock,
+                name: 'templatesUnlock',
+                builder: (_, __) =>
+                    const Scaffold(body: Center(child: Text('UNLOCK_PAGE'))),
+              ),
+            ],
+          ),
+        ),
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 已解锁：参数卡片可见，CTA 为"套用此模板拍摄"
+      expect(find.text('相机参数'), findsOneWidget);
+      expect(find.text('后期参数'), findsOneWidget);
+      expect(find.text('套用此模板拍摄'), findsOneWidget);
+      expect(find.text('试用'), findsNothing);
+      expect(find.text('购买 ¥18'), findsNothing);
+    });
+
+    testWidgets('tapping 试用 navigates to /capture with trial param',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        ThemeKey.warmWhite,
+        UIStyle.neumorphic,
+        templateId: 'custom_golden_landscape',
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('试用'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 试用模式跳转 /capture（测试用 GoRouter 占位）
+      expect(find.text('CAPTURE_PAGE'), findsOneWidget);
     });
 
     testWidgets('renders pose section when silhouette is not none',

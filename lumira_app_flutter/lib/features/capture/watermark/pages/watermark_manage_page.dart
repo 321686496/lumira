@@ -102,8 +102,8 @@ class _WatermarkCard extends StatelessWidget {
                 children: [
                   WatermarkPreview(
                     template: template,
-                    width: 72,
-                    height: 96,
+                    width: 96,
+                    height: 124,
                   ),
                   const SizedBox(width: 12),
                   Expanded(

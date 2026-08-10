@@ -10,6 +10,7 @@ abstract class ChallengeRepository {
   Future<void> recordDailySelection(ChallengePoolItem selected);
   Future<ChallengePoolItem?> getTodayChallenge();
   Future<List<ChallengeHistoryRecord>> getWeeklyHistory();
+  Future<List<ChallengeHistoryRecord>> getAllHistory();
   Future<List<ChallengeAchievement>> getAchievements();
   ChallengeTip getTipForCategory(String category);
   Future<List<SubChallenge>> getSubChallenges(String dailyCategory);
@@ -111,6 +112,11 @@ class LocalChallengeRepository implements ChallengeRepository {
     final now = _now();
     final weekStart = now.subtract(Duration(days: now.weekday - 1));
     return _challengeDao.getWeeklyHistory(_formatDate(weekStart), _formatDate(now));
+  }
+
+  @override
+  Future<List<ChallengeHistoryRecord>> getAllHistory() async {
+    return _challengeDao.getAllHistory();
   }
 
   @override

@@ -76,6 +76,14 @@ class ChallengeDao {
     return rows.map(_rowToRecord).toList();
   }
 
+  /// 获取全部挑战历史（不限制日期范围）。
+  /// 用于挑战记录页"查看全部"，展示所有日期的挑战记录。
+  Future<List<ChallengeHistoryRecord>> getAllHistory() async {
+    final rows = await _db.query(ChallengeHistoryTable.name,
+        orderBy: '${ChallengeHistoryTable.colDate} ASC');
+    return rows.map(_rowToRecord).toList();
+  }
+
   Future<int> countCompleted() async {
     final rows = await _db.rawQuery(
         'SELECT COUNT(*) as cnt FROM ${ChallengeHistoryTable.name} WHERE ${ChallengeHistoryTable.colStatus} = ?',

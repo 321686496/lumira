@@ -35,11 +35,19 @@ class TemplatesAllPage extends ConsumerStatefulWidget {
   ConsumerState<TemplatesAllPage> createState() => _TemplatesAllPageState();
 }
 
+/// 价格筛选：全部 / 免费 / 付费
+enum PriceFilter {
+  all,
+  free,
+  paid,
+}
+
 class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   String? _selectedType;
   String? _selectedStyle;
   String? _selectedMethod;
   bool _showCustom = false;
+  PriceFilter _priceFilter = PriceFilter.all;
 
   @override
   void initState() {
@@ -119,6 +127,12 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
       filtered =
           filtered.where((t) => t.method == _selectedMethod).toList();
     }
+    // 价格筛选：免费（price == 0）/ 付费（price > 0）/ 全部
+    if (_priceFilter == PriceFilter.free) {
+      filtered = filtered.where((t) => t.price == 0).toList();
+    } else if (_priceFilter == PriceFilter.paid) {
+      filtered = filtered.where((t) => t.price > 0).toList();
+    }
 
     return _AllPageData(
       allCount: allCount,
@@ -149,6 +163,10 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
 
   void _toggleCustom(bool value) {
     setState(() => _showCustom = value);
+  }
+
+  void _onPriceFilter(PriceFilter value) {
+    setState(() => _priceFilter = value);
   }
 
   void _goEditor() {
@@ -261,8 +279,10 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                                       selectedStyle: _selectedStyle,
                                       selectedMethod: _selectedMethod,
                                       showCustom: _showCustom,
+                                      priceFilter: _priceFilter,
                                       onLayerSelect: _onLayerSelect,
                                       onToggleCustom: _toggleCustom,
+                                      onPriceFilter: _onPriceFilter,
                                     ),
                                     if (_showCustom)
                                       _ActionRow(
@@ -420,8 +440,10 @@ class _FilterSection extends StatelessWidget {
     required this.selectedStyle,
     required this.selectedMethod,
     required this.showCustom,
+    required this.priceFilter,
     required this.onLayerSelect,
     required this.onToggleCustom,
+    required this.onPriceFilter,
   });
 
   final ThemeTokens tokens;
@@ -435,8 +457,11 @@ class _FilterSection extends StatelessWidget {
   final String? selectedStyle;
   final String? selectedMethod;
   final bool showCustom;
+  /// 价格筛选：全部 / 免费 / 付费
+  final PriceFilter priceFilter;
   final void Function(int layer, String? value) onLayerSelect;
   final void Function(bool) onToggleCustom;
+  final void Function(PriceFilter) onPriceFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -473,6 +498,13 @@ class _FilterSection extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 12),
+            // 免费 / 付费筛选行（默认"全部"）
+            _PriceFilterRow(
+              tokens: tokens,
+              filter: priceFilter,
+              onSelect: onPriceFilter,
+            ),
+            const SizedBox(height: 12),
             // "我的" toggle：切换是否只看用户自定义/导入的模板
             Align(
               alignment: Alignment.centerRight,
@@ -483,6 +515,91 @@ class _FilterSection extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 免费 / 付费筛选行
+class _PriceFilterRow extends StatelessWidget {
+  const _PriceFilterRow({
+    required this.tokens,
+    required this.filter,
+    required this.onSelect,
+  });
+
+  final ThemeTokens tokens;
+  final PriceFilter filter;
+  final void Function(PriceFilter) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final f in PriceFilter.values) ...[
+          _PricePill(
+            tokens: tokens,
+            label: f == PriceFilter.all
+                ? '全部'
+                : f == PriceFilter.free
+                    ? '免费'
+                    : '付费',
+            active: filter == f,
+            onTap: () => onSelect(f),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _PricePill extends ConsumerWidget {
+  const _PricePill({
+    required this.tokens,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final ThemeTokens tokens;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: active
+              ? (isNeumorphic
+                  ? null
+                  : LinearGradient(colors: [tokens.brand, tokens.brandDeep]))
+              : null,
+          color: active
+              ? (isNeumorphic ? tokens.brand : null)
+              : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(9999),
+          boxShadow: active
+              ? (isNeumorphic ? tokens.shadowConvex : tokens.shadowPressed)
+              : tokens.shadowConvexSubtle,
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+              color: active ? Colors.white : tokens.textSecondary,
+            ),
+          ),
         ),
       ),
     );
