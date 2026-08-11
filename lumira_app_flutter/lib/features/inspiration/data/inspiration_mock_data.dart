@@ -35,6 +35,13 @@ class OutfitPhoto {
   final String date;
 }
 
+/// 穿搭日记卡片真实数据（替代 mock）
+class OutfitDiaryCardData {
+  const OutfitDiaryCardData({required this.streak, required this.photos});
+  final int streak;
+  final List<OutfitPhoto> photos;
+}
+
 /// 场景标签信息（对应 uni-app getSceneTagInfo）
 class SceneTagInfo {
   const SceneTagInfo({required this.tag, required this.tagCls});

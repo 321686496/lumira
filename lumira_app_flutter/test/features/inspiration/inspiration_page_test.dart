@@ -16,6 +16,8 @@ import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/checkin/data/checkin_dao.dart';
 import 'package:lumira_app_flutter/features/checkin/data/checkin_models.dart';
 import 'package:lumira_app_flutter/features/checkin/data/checkin_providers.dart';
+import 'package:lumira_app_flutter/features/gallery/providers/gallery_diary_providers.dart';
+import 'package:lumira_app_flutter/features/inspiration/data/inspiration_mock_data.dart';
 import 'package:lumira_app_flutter/features/inspiration/pages/inspiration_page.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
@@ -100,6 +102,13 @@ void main() {
         uiStyleProvider.overrideWith((ref) => uiStyle),
         checkinDaoProvider.overrideWith((ref) async => checkinDao),
         galleryDaoProvider.overrideWith((ref) async => GalleryDao(db)),
+        outfitDiaryCardProvider.overrideWith((ref) async => OutfitDiaryCardData(
+          streak: 7,
+          photos: const [
+            OutfitPhoto(imageSeed: 'outfit-0708', date: '7月8日'),
+            OutfitPhoto(imageSeed: 'outfit-0707', date: '7月7日'),
+          ],
+        )),
       ],
       child: MaterialApp.router(routerConfig: router),
     );

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../features/inspiration/data/inspiration_mock_data.dart';
 import '../data/gallery_models.dart';
 
 /// 中文星期名（DateTime.weekday: 1=周一 ... 7=周日）
@@ -131,4 +132,18 @@ final diaryStreakProvider = FutureProvider<int>((ref) async {
 final diaryTotalCountProvider = FutureProvider<int>((ref) async {
   final dao = await ref.watch(galleryDaoProvider.future);
   return dao.count();
+});
+
+/// 穿搭日记卡片数据：连续打卡天数 + 最近 2 张穿搭照片
+final outfitDiaryCardProvider = FutureProvider<OutfitDiaryCardData>((ref) async {
+  final streak = await ref.watch(diaryStreakProvider.future);
+  final entries = await ref.watch(diaryEntriesProvider(kDiaryTabOutfit).future);
+  final recentPhotos = <OutfitPhoto>[];
+  if (entries.isNotEmpty) {
+    final firstEntry = entries.first;
+    for (final p in firstEntry.photos.take(2)) {
+      recentPhotos.add(OutfitPhoto(imageSeed: p.img, date: firstEntry.date));
+    }
+  }
+  return OutfitDiaryCardData(streak: streak, photos: recentPhotos);
 });

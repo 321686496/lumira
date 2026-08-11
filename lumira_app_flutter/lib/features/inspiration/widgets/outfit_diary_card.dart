@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/lumira/feedback/lumira_progress.dart';
+import '../../gallery/providers/gallery_diary_providers.dart';
 import '../data/inspiration_mock_data.dart';
 
 /// 穿搭日记卡片
@@ -19,127 +23,148 @@ class OutfitDiaryCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
+    final dataAsync = ref.watch(outfitDiaryCardProvider);
 
     return NeuCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 标题行
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.checkroom_outlined, // ph-t-shirt 替代
-                    size: 18, // 36rpx → 18dp
-                    color: tokens.brand,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '穿搭日记',
-                    style: TextStyle(
-                      fontSize: 17, // 34rpx → 17dp
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                      fontFamily: 'Noto Serif SC',
-                    ),
-                  ),
-                ],
+      child: dataAsync.when(
+        loading: () => SizedBox(
+          height: 200,
+          child: Center(child: LumiraProgress.circular()),
+        ),
+        error: (e, _) => SizedBox(
+          height: 200,
+          child: Center(
+            child: Text('加载失败', style: TextStyle(color: tokens.textSecondary)),
+          ),
+        ),
+        data: (data) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(tokens),
+            const SizedBox(height: 16),
+            _buildStreakRow(tokens, data.streak),
+            const SizedBox(height: 16),
+            _buildPhotosRow(tokens, data.photos),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(ThemeTokens tokens) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.checkroom_outlined,
+              size: 18,
+              color: tokens.brand,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '穿搭日记',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+                fontFamily: 'Noto Serif SC',
               ),
-              GestureDetector(
-                onTap: onViewDiary,
-                behavior: HitTestBehavior.opaque,
-                child: Row(
-                  children: [
-                    Text(
-                      '查看日记',
-                      style: TextStyle(
-                        fontSize: 13, // 26rpx → 13dp
-                        color: tokens.textTertiary,
-                      ),
-                    ),
-                    Icon(
-                      Icons.chevron_right, // ph-caret-right 替代
-                      size: 14,
-                      color: tokens.textTertiary,
-                    ),
-                  ],
+            ),
+          ],
+        ),
+        GestureDetector(
+          onTap: onViewDiary,
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            children: [
+              Text(
+                '查看日记',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: tokens.textTertiary,
                 ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                size: 14,
+                color: tokens.textTertiary,
               ),
             ],
           ),
-          const SizedBox(height: 16), // 32rpx → 16dp
-          // streak 行
-          Row(
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    '${InspirationMockData.outfitStreakDays}',
-                    style: TextStyle(
-                      fontSize: 28, // lumira-stat-num 56rpx → 28dp
-                      fontWeight: FontWeight.w600,
-                      color: tokens.brand,
-                      fontFamily: 'Noto Serif SC',
-                    ),
-                  ),
-                  const SizedBox(width: 4), // 8rpx → 4dp
-                  Text(
-                    '天',
-                    style: TextStyle(fontSize: 13, color: tokens.textSecondary), // 26rpx → 13dp
-                  ),
-                ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStreakRow(ThemeTokens tokens, int streak) {
+    return Row(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              '$streak',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w600,
+                color: tokens.brand,
+                fontFamily: 'Noto Serif SC',
               ),
-              const SizedBox(width: 12), // 24rpx → 12dp
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '天',
+              style: TextStyle(fontSize: 13, color: tokens.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(width: 12),
+        Text(
+          '连续打卡',
+          style: TextStyle(fontSize: 13, color: tokens.textSecondary),
+        ),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: tokens.brandSubtle,
+            borderRadius: BorderRadius.circular(1000),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.local_fire_department_outlined, size: 12, color: tokens.brandText),
+              const SizedBox(width: 3),
               Text(
                 '连续打卡',
-                style: TextStyle(fontSize: 13, color: tokens.textSecondary),
-              ),
-              const Spacer(),
-              // 连续打卡 tag
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), // 20rpx/6rpx → 10dp/3dp
-                decoration: BoxDecoration(
-                  color: tokens.brandSubtle,
-                  borderRadius: BorderRadius.circular(1000),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.local_fire_department_outlined, size: 12, color: tokens.brandText), // ph-fire 替代
-                    const SizedBox(width: 3),
-                    Text(
-                      '连续打卡',
-                      style: TextStyle(
-                        fontSize: 11, // 22rpx → 11dp
-                        fontWeight: FontWeight.w600,
-                        color: tokens.brandText,
-                      ),
-                    ),
-                  ],
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.brandText,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16), // 32rpx → 16dp
-          // 2 张照片横排
-          Row(
-            children: InspirationMockData.outfitPhotos.map((photo) {
-              return Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    right: photo == InspirationMockData.outfitPhotos.first ? 10 : 0, // 20rpx → 10dp gap
-                  ),
-                  child: _OutfitPhotoView(photo: photo),
-                ),
-              );
-            }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhotosRow(ThemeTokens tokens, List<OutfitPhoto> photos) {
+    return Row(
+      children: photos.map((photo) {
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(
+              right: photo == photos.first ? 10 : 0,
+            ),
+            child: _OutfitPhotoView(photo: photo),
           ),
-        ],
-      ),
+        );
+      }).toList(),
     );
   }
 }
