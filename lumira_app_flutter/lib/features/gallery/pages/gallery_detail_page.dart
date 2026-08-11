@@ -241,6 +241,46 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     ));
   }
 
+  /// 标记为穿搭日记：弹出场景选择器
+  Future<void> _onOutfitMark() async {
+    final scenes = _allScenes;
+    if (scenes.isEmpty) {
+      LumiraToast.show(context, '暂无可用场景', duration: const Duration(milliseconds: 1500));
+      return;
+    }
+    final tokens = ref.read(themeTokensProvider);
+    final selected = await showLumiraBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _OutfitScenePicker(
+        scenes: scenes,
+        currentSceneId: _photo?.sceneId,
+        tokens: tokens,
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final dao = await ref.read(galleryDaoProvider.future);
+    await dao.updateScene(_photo!.id, selected);
+    setState(() {
+      _photo = GalleryItemRecord(
+        id: _photo!.id,
+        dataUrl: _photo!.dataUrl,
+        filePath: _photo!.filePath,
+        originalPath: _photo!.originalPath,
+        transform: _photo!.transform,
+        postProcess: _photo!.postProcess,
+        sceneId: selected,
+        templateId: _photo!.templateId,
+        kitId: _photo!.kitId,
+        mood: _photo!.mood,
+        lut: _photo!.lut,
+        isFavorite: _photo!.isFavorite,
+        createdAt: _photo!.createdAt,
+      );
+    });
+    LumiraToast.show(context, '已标记为穿搭日记', duration: const Duration(milliseconds: 1500));
+  }
+
   /// 分享当前照片：优先分享本地文件；网络图（dataUrl 以 http 开头）暂不支持。
   Future<void> _onShare() async {
     final photo = _photo;
@@ -390,6 +430,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
             _MoreAction(
               tokens: tokens,
               onCheckin: _onCheckin,
+              onOutfitMark: _onOutfitMark,
               onShare: _onShare,
               onDelete: _onDelete,
             ),
@@ -452,6 +493,65 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
               templateId: photo.templateId,
             ),
           const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+/// 穿搭场景选择器 BottomSheet
+class _OutfitScenePicker extends StatelessWidget {
+  const _OutfitScenePicker({
+    required this.scenes,
+    required this.currentSceneId,
+    required this.tokens,
+  });
+
+  final List<SceneRecord> scenes;
+  final String? currentSceneId;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '选择穿搭场景',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...scenes.map((scene) => GestureDetector(
+            onTap: () => Navigator.of(context).pop(scene.id),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: scene.id == currentSceneId ? tokens.brandSubtle : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.checkroom_outlined, size: 18, color: tokens.brand),
+                  const SizedBox(width: 12),
+                  Text(
+                    scene.name,
+                    style: TextStyle(fontSize: 15, color: tokens.textPrimary),
+                  ),
+                  if (scene.id == currentSceneId) ...[
+                    const Spacer(),
+                    Icon(Icons.check, size: 18, color: tokens.brand),
+                  ],
+                ],
+              ),
+            ),
+          )),
         ],
       ),
     );
@@ -534,17 +634,19 @@ class _CompareAction extends StatelessWidget {
   }
 }
 
-/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"记录探店" / "分享照片" / "删除照片"操作。
+/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"记录探店" / "标记为穿搭日记" / "分享照片" / "删除照片"操作。
 class _MoreAction extends StatelessWidget {
   const _MoreAction({
     required this.tokens,
     required this.onCheckin,
+    required this.onOutfitMark,
     required this.onShare,
     required this.onDelete,
   });
 
   final ThemeTokens tokens;
   final Future<void> Function() onCheckin;
+  final Future<void> Function() onOutfitMark;
   final Future<void> Function() onShare;
   final Future<void> Function() onDelete;
 
@@ -577,6 +679,14 @@ class _MoreAction extends StatelessWidget {
           Divider(height: 1, color: tokens.divider),
           _MoreSheetOption(
             tokens: tokens,
+            icon: Icons.checkroom_outlined,
+            label: '标记为穿搭日记',
+            color: tokens.brand,
+            onTap: () => Navigator.of(ctx).pop('outfit'),
+          ),
+          Divider(height: 1, color: tokens.divider),
+          _MoreSheetOption(
+            tokens: tokens,
             icon: Icons.ios_share_outlined,
             label: '分享照片',
             onTap: () => Navigator.of(ctx).pop('share'),
@@ -596,6 +706,8 @@ class _MoreAction extends StatelessWidget {
     if (result == null) return;
     if (result == 'checkin') {
       await onCheckin();
+    } else if (result == 'outfit') {
+      await onOutfitMark();
     } else if (result == 'share') {
       await onShare();
     } else if (result == 'delete') {

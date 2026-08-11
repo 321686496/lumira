@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert' show base64Encode, base64Decode;
 import 'dart:typed_data' show Uint8List;
 import 'dart:io' as io;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1334,6 +1335,18 @@ Uint8List _cachedCoverDecode(String dataUrl) {
   });
 }
 
+/// 封面图尺寸缓存（宽高比用于 AspectRatio 约束）
+final Map<String, Future<ui.Image>> _coverImageSizeCache = {};
+
+Future<ui.Image> _getCachedCoverImage(String dataUrl) {
+  return _coverImageSizeCache.putIfAbsent(dataUrl, () async {
+    final bytes = _cachedCoverDecode(dataUrl);
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    return frame.image;
+  });
+}
+
 /// 封面图放大预览弹窗
 void _showCoverPreviewDialog(
   BuildContext context,
@@ -1351,13 +1364,26 @@ void _showCoverPreviewDialog(
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 1),
-              child: Image.memory(
-                _cachedCoverDecode(cover),
-                width: double.infinity,
-                fit: BoxFit.contain,
-              ),
+            child: FutureBuilder<ui.Image>(
+              future: _getCachedCoverImage(cover),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  final img = snapshot.data!;
+                  return AspectRatio(
+                    aspectRatio: img.width / img.height,
+                    child: Image.memory(
+                      _cachedCoverDecode(cover),
+                      fit: BoxFit.contain,
+                    ),
+                  );
+                }
+                return Container(
+                  height: 300,
+                  width: double.infinity,
+                  color: tokens.canvasDeep,
+                  child: const Center(child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator())),
+                );
+              },
             ),
           ),
           const SizedBox(height: 16),
@@ -1505,17 +1531,30 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
               behavior: HitTestBehavior.opaque,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 1),
-                  child: Image.memory(
-                    _cachedCoverDecode(cover),
-                    width: double.infinity,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, _) {
-                      debugPrint('[Editor] Cover image decode error: $error');
-                      return _CoverPlaceholder(tokens: tokens);
-                    },
-                  ),
+                child: FutureBuilder<ui.Image>(
+                  future: _getCachedCoverImage(cover),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      final img = snapshot.data!;
+                      return AspectRatio(
+                        aspectRatio: img.width / img.height,
+                        child: Image.memory(
+                          _cachedCoverDecode(cover),
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, _) {
+                            debugPrint('[Editor] Cover image decode error: $error');
+                            return _CoverPlaceholder(tokens: tokens);
+                          },
+                        ),
+                      );
+                    }
+                    return Container(
+                      height: 200,
+                      width: double.infinity,
+                      color: tokens.canvasDeep,
+                      child: const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator())),
+                    );
+                  },
                 ),
               ),
             )
