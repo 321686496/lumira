@@ -15,11 +15,11 @@
   "overrides": {
     "@ohos/flutter_module": "file:./entry",
     "@ohos/flutter_ohos": "file:./har/flutter.har",
-    "permission_handler_ohos": "file:./har/permission_handler_ohos.har",
-    "device_info_plus": "file:./har/device_info_plus.har",
-    "camerawesome_ohos": "file:./har/camerawesome_ohos.har",
-    "sqflite": "file:./har/sqflite.har",
-    "screen": "file:./har/screen.har",
-    "file_picker_ohos": "file:./har/file_picker_ohos.har"
+    "permission_handler_ohos": "../../../../flutter/flutter_pub_cache/git/flutter_permission_handler-f79dfe1770c5e3df1e1fd1f68092f9718bf87712/permission_handler_ohos/ohos",
+    "device_info_plus": "../../../../flutter/flutter_pub_cache/git/flutter_plus_plugins-44f907d59a3d7c8c1bce7e37893564de3d81f335/packages/device_info_plus/device_info_plus/ohos",
+    "camerawesome_ohos": "../../../../flutter/flutter_pub_cache/git/fluttertpc_camerawesome-5a68c67ecbb192f1abbce5578c1c823a50d37ddc/ohos/ohos",
+    "sqflite": "../../../../flutter/flutter_pub_cache/git/flutter_sqflite-e909d9f75a9b5e0939c073b6ebf3c45ea0ea69a3/sqflite/ohos",
+    "screen": "../../../../flutter/flutter_pub_cache/git/fluttertpc_screen-70b66a5fa8ce3b34dd7da2a204505a86dd6385e8/ohos",
+    "file_picker_ohos": "../../../../flutter/flutter_pub_cache/git/fluttertpc_file_picker-32efe30702551cd68b1e4a985e0648f5e61fdc85/ohos/ohos"
   }
 }
