@@ -105,6 +105,21 @@ export class DatabaseService implements OnModuleInit {
     if (!batchColumns.some((c) => c.name === 'reward_templates')) {
       this.sqlite.exec("ALTER TABLE redemption_code_batches ADD COLUMN reward_templates TEXT NOT NULL DEFAULT '[]'");
     }
+
+    // 兼容旧库：devices 表新增设备信息字段（009 迁移）
+    const deviceColumns = this.sqlite.prepare('PRAGMA table_info(devices)').all() as { name: string }[];
+    if (!deviceColumns.some((c) => c.name === 'platform')) {
+      this.sqlite.exec('ALTER TABLE devices ADD COLUMN platform TEXT');
+    }
+    if (!deviceColumns.some((c) => c.name === 'os_version')) {
+      this.sqlite.exec('ALTER TABLE devices ADD COLUMN os_version TEXT');
+    }
+    if (!deviceColumns.some((c) => c.name === 'device_model')) {
+      this.sqlite.exec('ALTER TABLE devices ADD COLUMN device_model TEXT');
+    }
+    if (!deviceColumns.some((c) => c.name === 'app_version')) {
+      this.sqlite.exec('ALTER TABLE devices ADD COLUMN app_version TEXT');
+    }
   }
 
   getDb(): BetterSQLite3Database<typeof schema> {

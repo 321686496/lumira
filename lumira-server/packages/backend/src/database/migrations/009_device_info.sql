@@ -1,0 +1,3 @@
+-- 迁移 009：为 devices 表新增设备信息字段
+-- 注：实际 ALTER TABLE 在 database.service.ts 的兼容代码中幂等执行
+-- 此处仅保留描述性注释，无重复 SQL 以避免容器重启时冲突
