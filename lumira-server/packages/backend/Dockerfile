@@ -61,6 +61,7 @@ COPY --from=builder /app/packages/shared/package.json packages/shared/
 
 # Built artifacts only (no source)
 COPY --from=builder /app/packages/backend/dist/ packages/backend/dist/
+COPY --from=builder /app/packages/backend/public/ packages/backend/public/
 COPY --from=builder /app/packages/shared/dist/ packages/shared/dist/
 
 EXPOSE 3000

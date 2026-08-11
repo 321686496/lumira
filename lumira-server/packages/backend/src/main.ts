@@ -64,6 +64,25 @@ async function bootstrap() {
     prefix: '/uploads/',
   });
 
+  // 官网静态文件服务
+  // 访问根路径返回官网首页，支持 CSS/JS/图片等资源文件
+  const publicRoot = path.resolve(__dirname, '../public');
+  if (fs.existsSync(publicRoot)) {
+    await app.register(fastifyStatic, {
+      root: publicRoot,
+      prefix: '/',
+      decorateReply: false,
+    });
+
+    // 根路径返回 index.html
+    const fastify = app.getHttpAdapter().getInstance();
+    const indexPath = path.join(publicRoot, 'index.html');
+    fastify.get('/', async (_request, reply) => {
+      const html = fs.readFileSync(indexPath, 'utf-8');
+      return reply.type('text/html').send(html);
+    });
+  }
+
   const port = parseInt(process.env.PORT || '3000', 10);
   await app.listen(port, '0.0.0.0');
   console.log(`Lumira server running on port ${port}`);
