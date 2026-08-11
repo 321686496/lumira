@@ -61,6 +61,21 @@ class _FilterPickerState extends ConsumerState<FilterPicker> {
   /// 防重叠标志：toImage 是异步 GPU 操作，防止上一次未完成时定时器又触发
   bool _isCapturing = false;
 
+  /// 缓存的 ProviderContainer 引用。
+  /// dispose() 中调用 ref.read 会触发 ProviderScope.containerOf(this)，
+  /// 但 dispose() 执行时 element 已被 deactivate，断言
+  /// "Looking up a deactivated widget's ancestor is unsafe" 会抛出，
+  /// 导致整棵 widget 树卸载中断（父级 State.dispose 不执行，Timer 等资源泄漏）。
+  /// 在 didChangeDependencies（element 仍 active）中缓存容器引用，
+  /// dispose 时通过引用直接操作 provider，绕过 widget 树查询。
+  ProviderContainer? _container;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _container = ProviderScope.containerOf(context);
+  }
+
   @override
   void dispose() {
     _captureTimer?.cancel();
@@ -68,7 +83,9 @@ class _FilterPickerState extends ConsumerState<FilterPicker> {
     // 否则 RawImage 会引用已被 dispose 的 ui.Image，触发
     // "Creator of a RawImage disposed of the image" 断言。
     if (_lastFrame != null) {
-      ref.read(CaptureState.filterPreviewImageProvider.notifier).state = null;
+      _container
+          ?.read(CaptureState.filterPreviewImageProvider.notifier)
+          .state = null;
       _lastFrame?.dispose();
     }
     super.dispose();

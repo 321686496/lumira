@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'dart:io' show File, stderr;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
-import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, Paint, PictureRecorder, Offset, instantiateImageCodec;
+import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat, instantiateImageCodec;
 
 import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
@@ -121,14 +122,24 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 补光关闭或页面退出时恢复此值；null 表示未保存（补光未开启或已恢复）。
   double? _originalScreenBrightness;
 
-  /// 缓存的 ProviderContainer 引用。
-  /// 在 dispose() 中调用 ref.read 会触发 ProviderScope.containerOf(this)，
-  /// 它通过 getElementForInheritedWidgetOfExactType 查询 widget 树祖先；
-  /// 但 dispose() 执行时 element 已被 deactivate，断言 "Looking up a
-  /// deactivated widget's ancestor is unsafe" 会抛出。
-  /// 在 didChangeDependencies（element 仍 active）中缓存 container 引用，
-  /// dispose 时通过引用直接操作 provider，绕过 widget 树查询。
-  ProviderContainer? _container;
+  /// 相机就绪流订阅：驱动取景器加载看门狗。
+  /// readyStream 收到 true 表示相机已就绪（CameraAwesomeBuilder 状态脱离 Preparing）。
+  StreamSubscription<bool>? _cameraReadySub;
+
+  /// 取景器加载看门狗定时器。
+  ///
+  /// 修复 Bug：重复进入拍摄页时，上一会话的相机释放（native releaseCamera 未被
+  /// stop 等待）可能与本次初始化冲突，导致 CameraAwesomeBuilder 一直停留在
+  /// PreparingCameraState，取景器永远显示加载圈。这里在相机超时未就绪时递增
+  /// _cameraRebuildKey 强制重建 CameraAwesomeBuilder（与 App 恢复重建策略一致），
+  /// 让相机重新走完整的初始化流程。
+  Timer? _cameraReadyWatchdog;
+
+  /// 当前相机是否已就绪（readyStream 最近一次事件）。
+  bool _cameraReady = false;
+
+  /// 看门狗已触发的重建次数（上限 2 次，避免无限重建）。
+  int _cameraReadyRebuildCount = 0;
 
   /// 水印相框动画状态：拍照完成且水印 + 动画开关均开启时挂载 overlay。
   bool _showWatermarkAnimation = false;
@@ -168,6 +179,25 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 加载持久化的前后置摄像头与照片比例（先于相机初始化，保证首次进入即恢复）
       await CaptureState.loadCameraPrefs(
           ProviderScope.containerOf(context, listen: false));
+
+      // 修复 Bug（重复进入取景器卡加载）：
+      // 1. 订阅相机就绪流，驱动取景器加载看门狗（超时未就绪自动重建）
+      // 2. 调用 initialize() 让单例服务清除上一会话残留状态，保证干净起点
+      final cameraService = ref.read(cameraServiceProvider);
+      _cameraReadySub ??= cameraService.readyStream.listen((ready) {
+        if (!mounted) return;
+        if (ready) {
+          _cameraReady = true;
+          _cameraReadyWatchdog?.cancel();
+          _cameraReadyWatchdog = null;
+        } else {
+          _cameraReady = false;
+        }
+      });
+      cameraService.initialize(
+        facing: ref.read(CaptureState.cameraFacingProvider),
+      );
+
       _requestCameraPermission();
       _loadLastPhotoForThumbnail();
       // 异步加载持久化的自由模式参数（仅在自由模式生效，模板模式由 currentTemplateId 覆盖）
@@ -184,13 +214,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
       loadWatermarkSettings(container);
       loadCustomWatermarks(container);
     });
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Element 仍 active 时缓存 container，供 dispose() 使用
-    _container = ProviderScope.containerOf(context);
   }
 
   /// 读取路由参数（sceneId / templateId / kitId）并应用到 CaptureState
@@ -267,6 +290,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
       switch (status) {
         case PermissionStatus.granted:
           _permissionStatus = CameraPermissionStatus.granted;
+          // 权限就绪后相机预览即将构建，启动取景器加载看门狗：
+          // 相机超时未就绪时自动重建 CameraAwesomeBuilder，避免取景器一直加载。
+          _startCameraReadyWatchdog();
           break;
         case PermissionStatus.permanentlyDenied:
           _permissionStatus = CameraPermissionStatus.permanentlyDenied;
@@ -276,6 +302,33 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
     });
   }
+
+  /// 启动取景器加载看门狗。
+  ///
+  /// 相机在 [_cameraReadyTimeout] 内未就绪（readyStream 未收到 true）时，
+  /// 递增 [_cameraRebuildKey] 强制 CameraPreview 重建（ValueKey 变化 →
+  /// CameraAwesomeBuilder 销毁重建，相机重新初始化），最多重建 2 次。
+  /// 修复 Bug：重复进入拍摄页时相机初始化可能卡住，取景器永远显示加载圈。
+  void _startCameraReadyWatchdog() {
+    _cameraReadyWatchdog?.cancel();
+    _cameraReady = false;
+    _cameraReadyWatchdog = Timer(_cameraReadyTimeout, () {
+      if (!mounted || _cameraReady) return;
+      if (_cameraReadyRebuildCount >= 2) {
+        debugPrint('[capture] 相机多次重建后仍未就绪，放弃自动恢复');
+        return;
+      }
+      _cameraReadyRebuildCount++;
+      debugPrint(
+          '[capture] 相机 ${_cameraReadyTimeout.inSeconds}s 内未就绪，'
+          '强制重建取景器（第 $_cameraReadyRebuildCount 次）');
+      setState(() => _cameraRebuildKey++);
+      // 重建后重新计时（新 CameraAwesomeBuilder 会走完整初始化流程）
+      _startCameraReadyWatchdog();
+    });
+  }
+
+  static const _cameraReadyTimeout = Duration(seconds: 10);
 
   /// 从数据库加载最近一张照片，显示在左下角缩略图（与原生相机行为一致）。
   /// 修复 Bug：之前缩略图仅在拍摄后显示，进入拍摄页时为空白。
@@ -299,12 +352,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
   void dispose() {
     // 退出页面时恢复屏幕亮度（安全网：补光仍开启时退出）
     _restoreBrightness();
-    // 通过 CameraService 抽象层释放原生相机资源（替代 CamerawesomePlugin.stop）。
-    // 使用缓存的 container 引用，避免 ref.read 在 deactivated element 上查询 widget 树祖先。
-    // dispose() 返回 Future，测试环境中无平台通道会异步抛 MissingPluginException，
-    // 用 catchError 吞掉错误避免未捕获的 Future 异常。
-    final service = _container?.read(cameraServiceProvider);
-    service?.dispose().catchError((_) {});
+    // 修复 Bug：不再在这里调用 cameraService.dispose()。
+    // 相机资源由 CameraAwesomeBuilder 自身的 CameraContext.dispose() 在卸载时
+    // 通过 CamerawesomePlugin.stop() 停止；这里再 stop 一次会与前者并发，且
+    // cameraServiceProvider 是 app 级单例，dispose 会把 _readyController 永久
+    // 关闭，导致再次进入拍摄页时取景器就绪流失效、卡在加载中。
+    _cameraReadySub?.cancel();
+    _cameraReadyWatchdog?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -427,6 +481,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
         CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
 
     try {
+      // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
+      final sw = Stopwatch()..start();
       final result = await cameraService.capture(
         config: CaptureConfig(
           facing: facing,
@@ -434,6 +490,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           flashMode: _mapFlashMode(flashMode),
         ),
       );
+      debugPrint('[perf] cameraService.capture: ${sw.elapsedMilliseconds}ms');
 
       // === 水印相框入场动画（立即触发） ===
       // 快门按下并拿到原始 JPEG 后立即播放动画，使用原始照片 + CustomPaint
@@ -500,32 +557,56 @@ class _CapturePageState extends ConsumerState<CapturePage>
     _isProcessingCapture = true;
     final params = _processCaptureQueue.removeAt(0);
 
+    // 提前判断是否需要水印（决定 isolate 输出 rawRgba 还是 JPEG）
+    final watermarkSettings = ref.read(watermarkSettingsProvider);
+    final watermarkTemplate = ref.read(currentWatermarkTemplateProvider);
+    final needWatermark = watermarkSettings.enabled && watermarkTemplate != null;
+
     // [非破坏性编辑] 在 isolate 处理前备份原图（isolate 会覆写 inputPath）
+    // 与 GPU 处理并行执行（两者都只读 inputPath，互不干扰），节省 ~50ms
     String? originalPath;
+    Future<void>? backupFuture;
     try {
       originalPath = '${params.inputPath}.original.jpg';
-      await File(params.inputPath).copy(originalPath);
+      backupFuture = File(params.inputPath).copy(originalPath).then((_) {});
     } catch (e) {
-      debugPrint('[capture] 原图保留失败（不阻塞）: $e');
+      debugPrint('[capture] 原图保留启动失败（不阻塞）: $e');
       originalPath = null;
     }
 
+    // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
+    final swTotal = Stopwatch()..start();
     try {
+      final swGpu = Stopwatch()..start();
       // 【所见即所得修复】先在主 isolate 中用 dart:ui GPU 管线应用色彩矩阵，
       // 与取景器 ColorFiltered 使用完全相同的渲染管线。
       // 然后传 rawRgba 给 worker isolate 做后续 CPU 处理（锐化/磨皮/暗角/JPEG 编码）。
-      final gpuData = await _applyColorMatrixOnGpu(params);
+      final gpuData = await _applyColorMatrixOnGpu(params, needRawRgba: needWatermark);
+      swGpu.stop();
+      debugPrint('[perf] _applyColorMatrixOnGpu: ${swGpu.elapsedMilliseconds}ms');
       if (gpuData == null) {
         // GPU 处理失败，跳过后续处理（不阻塞拍照流程）
         debugPrint('[capture] GPU 处理失败，使用原始照片');
         _isProcessingCapture = false;
         return;
       }
-      final processedPath = await compute(_processCaptureInIsolate, gpuData);
+      // 等待原图备份完成（isolate 即将覆写 inputPath）
+      if (backupFuture != null) {
+        await backupFuture.catchError((Object e) {
+          debugPrint('[capture] 原图保留失败（不阻塞）: $e');
+          originalPath = null;
+        });
+      }
+      final swIso = Stopwatch()..start();
+      final isolateResult = await compute(_processCaptureInIsolate, gpuData);
+      swIso.stop();
+      debugPrint('[perf] compute(_processCaptureInIsolate): ${swIso.elapsedMilliseconds}ms');
       if (!mounted) {
         _isProcessingCapture = false;
         return;
       }
+
+      String processedPath = isolateResult.outputPath;
 
       // evict FileImage 缓存，防止 isolate 覆写后旧解码图残留
       try {
@@ -536,19 +617,30 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
 
       // === 水印渲染 ===
-      // 在主 isolate 中将水印合成到 processedPath 上，生成带水印的 finalPath。
+      // 在主 isolate 中将水印合成到处理后的图像上，生成带水印的 finalPath。
       // 失败时静默回退到 processedPath，绝不阻塞拍照流程。
       // originalPath 仍为未加水印的原始备份，不受此步骤影响。
       String finalPath = processedPath;
-      final watermarkSettings = ref.read(watermarkSettingsProvider);
-      final watermarkTemplate = ref.read(currentWatermarkTemplateProvider);
-      if (watermarkSettings.enabled && watermarkTemplate != null) {
+      if (watermarkTemplate != null &&
+          watermarkSettings.enabled &&
+          isolateResult.rgbaBytes != null) {
         ui.Image? sourceImage;
+        final swWm = Stopwatch()..start();
         try {
-          final bytes = await File(processedPath).readAsBytes();
-          final codec = await ui.instantiateImageCodec(bytes);
+          // 用 isolate 返回的 rawRgba 直接创建 ui.Image（ImageDescriptor.raw）
+          // 避免 JPEG 编解码往返（节省 ~180ms：isolate 不编码 JPEG + 主 isolate 不解码 JPEG）
+          final buffer = await ui.ImmutableBuffer.fromUint8List(isolateResult.rgbaBytes!);
+          final descriptor = ui.ImageDescriptor.raw(
+            buffer,
+            width: isolateResult.width,
+            height: isolateResult.height,
+            pixelFormat: ui.PixelFormat.rgba8888,
+          );
+          buffer.dispose();
+          final codec = await descriptor.instantiateCodec();
           final frame = await codec.getNextFrame();
           sourceImage = frame.image;
+          descriptor.dispose();
           codec.dispose();
 
           final renderer = ref.read(watermarkRendererProvider);
@@ -557,15 +649,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
             elements: watermarkTemplate.elements,
           );
 
-          // 将 RGBA 字节重新编码为 JPEG，写入 _wm.jpg 文件
+          // 将 RGBA 字节重新编码为 JPEG（quality 90，与 isolate 输出统一）
           final outputImage = img.Image.fromBytes(
-            width: sourceImage.width,
-            height: sourceImage.height,
+            width: isolateResult.width,
+            height: isolateResult.height,
             bytes: rgbaBytes.buffer,
             numChannels: 4,
             order: img.ChannelOrder.rgba,
           );
-          final jpegBytes = img.encodeJpg(outputImage, quality: 95);
+          final jpegBytes = img.encodeJpg(outputImage, quality: 90);
           finalPath = processedPath.replaceAll(RegExp(r'\.jpg$'), '_wm.jpg');
           await File(finalPath).writeAsBytes(jpegBytes);
 
@@ -575,6 +667,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
           finalPath = processedPath;
         } finally {
           sourceImage?.dispose();
+          swWm.stop();
+          debugPrint('[perf] watermark render: ${swWm.elapsedMilliseconds}ms');
         }
       }
 
@@ -634,6 +728,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
     } catch (e) {
       debugPrint('[capture] process failed: $e');
     } finally {
+      swTotal.stop();
+      debugPrint('[perf] _processCaptureQueueItem total: ${swTotal.elapsedMilliseconds}ms');
       _isProcessingCapture = false;
       // 队列中还有则继续处理
       if (_processCaptureQueue.isNotEmpty && mounted) {
@@ -2762,6 +2858,7 @@ class _GpuProcessedData {
     required this.grain,
     required this.smoothStrength,
     required this.vignette,
+    required this.needRawRgba,
   });
   final Uint8List rgbaBytes;
   final int width;
@@ -2772,6 +2869,27 @@ class _GpuProcessedData {
   final int grain;
   final int smoothStrength;
   final int vignette;
+  /// 为 true 时 isolate 不编码 JPEG，直接返回 rawRgba 给主 isolate 做水印合成，
+  /// 避免主 isolate 重复解码 JPEG（节省 ~180ms）。
+  /// 为 false 时 isolate 直接编码 JPEG 写文件（无水印场景，不阻塞 UI）。
+  final bool needRawRgba;
+}
+
+/// worker isolate 处理结果。
+/// - [rgbaBytes] 非空：isolate 未编码 JPEG，主 isolate 需用 rawRgba 创建 ui.Image
+///   做水印合成后再编码 JPEG 写文件。
+/// - [rgbaBytes] 为空：isolate 已编码 JPEG 并写入 [outputPath]，主 isolate 直接使用。
+class _IsolateProcessResult {
+  const _IsolateProcessResult({
+    this.rgbaBytes,
+    required this.width,
+    required this.height,
+    required this.outputPath,
+  });
+  final Uint8List? rgbaBytes;
+  final int width;
+  final int height;
+  final String outputPath;
 }
 
 /// 在主 isolate 中用 dart:ui GPU 管线处理照片：
@@ -2786,13 +2904,17 @@ class _GpuProcessedData {
 /// 导致拍照后效果与取景器不一致。
 /// 现在改为在主 isolate 中用 dart:ui 的 Canvas + ColorFilter.matrix 处理，
 /// 与取景器使用完全相同的渲染管线，保证所见即所得。
-Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params) async {
+Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, {required bool needRawRgba}) async {
+  // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
+  final swDecode = Stopwatch()..start();
   try {
     final bytes = await File(params.inputPath).readAsBytes();
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     final srcImage = frame.image;
     codec.dispose();
+    swDecode.stop();
+    debugPrint('[perf] gpu decode JPEG: ${swDecode.elapsedMilliseconds}ms (src=${srcImage.width}x${srcImage.height})');
 
     // 计算方向对齐参数
     final jpegIsLandscape = srcImage.width > srcImage.height;
@@ -2853,13 +2975,19 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params) 
     );
 
     final picture = recorder.endRecording();
+    final swToImage = Stopwatch()..start();
     final outImage = await picture.toImage(iOutW, iOutH);
+    swToImage.stop();
     picture.dispose();
     srcImage.dispose();
 
     // 导出 rawRgba
+    final swRgba = Stopwatch()..start();
     final byteData = await outImage.toByteData(format: ui.ImageByteFormat.rawRgba);
     outImage.dispose();
+    swRgba.stop();
+    debugPrint('[perf] gpu canvas toImage: ${swToImage.elapsedMilliseconds}ms, '
+        'toByteData(rawRgba): ${swRgba.elapsedMilliseconds}ms (out=$iOutW x $iOutH)');
     if (byteData == null) return null;
 
     return _GpuProcessedData(
@@ -2872,6 +3000,7 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params) 
       grain: params.postProcess.grain,
       smoothStrength: params.postProcess.smoothStrength,
       vignette: params.postProcess.vignette,
+      needRawRgba: needRawRgba,
     );
   } catch (e, st) {
     debugPrint('[capture] GPU 色彩矩阵处理失败: $e\n$st');
@@ -2884,10 +3013,14 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params) 
 /// 2. 细节效果：锐化 + 清晰度 + 颗粒
 /// 3. 磨皮
 /// 4. 暗角
-/// 5. JPEG 编码保存
+/// 5. 根据 [data.needRawRgba]：
+///    - true：不编码 JPEG，直接返回 rawRgba（主 isolate 需做水印合成）
+///    - false：编码 JPEG(quality 90) 并写入 data.outputPath
 ///
 /// 色彩矩阵已在主 isolate 中由 dart:ui GPU 管线应用（所见即所得）。
-Future<String> _processCaptureInIsolate(_GpuProcessedData data) async {
+Future<_IsolateProcessResult> _processCaptureInIsolate(_GpuProcessedData data) async {
+  // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
+  final swCreate = Stopwatch()..start();
   try {
     // 1. 从 rawRgba 创建 img.Image
     final result = img.Image.fromBytes(
@@ -2897,27 +3030,76 @@ Future<String> _processCaptureInIsolate(_GpuProcessedData data) async {
       numChannels: 4,
       order: img.ChannelOrder.rgba,
     );
+    swCreate.stop();
 
     // 2. 细节效果：锐化 + 清晰度 + 颗粒
+    final swEffects = Stopwatch()..start();
     applyPerPixelEffectsImg(
       result,
       sharpen: data.sharpen,
       clarity: data.clarity,
       grain: data.grain,
     );
-
     // 3. 磨皮
     applySmoothSkinImg(result, smoothStrength: data.smoothStrength);
-
     // 4. 暗角
     applyVignetteImg(result, vignette: data.vignette);
+    swEffects.stop();
 
-    // 5. 编码保存（quality 90）
-    final encoded = img.encodeJpg(result, quality: 90);
-    await File(data.outputPath).writeAsBytes(encoded);
-    return data.outputPath;
+    // 5. 输出
+    final swEncode = Stopwatch()..start();
+    if (data.needRawRgba) {
+      // 有水印：返回 rawRgba，主 isolate 用 ImageDescriptor.raw 创建 ui.Image
+      // 避免主 isolate 重复 JPEG 解码（节省 ~80ms）
+      final rgba = result.toUint8List();
+      swEncode.stop();
+      debugPrint('[perf] isolate: create=${swCreate.elapsedMilliseconds}ms, '
+          'effects=${swEffects.elapsedMilliseconds}ms, '
+          'toUint8List=${swEncode.elapsedMilliseconds}ms, '
+          'size=${data.width}x${data.height}');
+      return _IsolateProcessResult(
+        rgbaBytes: rgba,
+        width: data.width,
+        height: data.height,
+        outputPath: data.outputPath,
+      );
+    } else {
+      // 无水印：直接编码 JPEG 写文件（不阻塞主 isolate）
+      final encoded = img.encodeJpg(result, quality: 90);
+      await File(data.outputPath).writeAsBytes(encoded);
+      swEncode.stop();
+      debugPrint('[perf] isolate: create=${swCreate.elapsedMilliseconds}ms, '
+          'effects=${swEffects.elapsedMilliseconds}ms, '
+          'encodeJpg+write=${swEncode.elapsedMilliseconds}ms, '
+          'size=${data.width}x${data.height}');
+      return _IsolateProcessResult(
+        rgbaBytes: null,
+        width: data.width,
+        height: data.height,
+        outputPath: data.outputPath,
+      );
+    }
   } catch (e, st) {
     stderr.writeln('[capture-isolate] postProcess failed: $e\n$st');
-    return data.outputPath;
+    // 失败时回退：尝试编码原始 rawRgba 写文件
+    try {
+      if (!data.needRawRgba) {
+        final fallback = img.Image.fromBytes(
+          width: data.width,
+          height: data.height,
+          bytes: data.rgbaBytes.buffer,
+          numChannels: 4,
+          order: img.ChannelOrder.rgba,
+        );
+        final encoded = img.encodeJpg(fallback, quality: 90);
+        await File(data.outputPath).writeAsBytes(encoded);
+      }
+    } catch (_) {}
+    return _IsolateProcessResult(
+      rgbaBytes: data.needRawRgba ? data.rgbaBytes : null,
+      width: data.width,
+      height: data.height,
+      outputPath: data.outputPath,
+    );
   }
 }

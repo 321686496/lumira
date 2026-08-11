@@ -39,22 +39,45 @@ class CamerawesomeCameraService implements CameraService {
 
   @override
   Future<void> initialize({required String facing}) async {
-    // camerawesome 通过 CameraAwesomeBuilder 隐式初始化，此处只发信号
-    _readyController.add(false);
+    // 拍摄页可能被重复进入/退出，相机服务是 app 级单例，必须保证每次进入
+    // 都从干净状态开始：
+    // 1. 清除上一会话持有的 cameraState，避免后续 capture() 复用已释放实例
+    // 2. 清除缩放能力缓存，保证重新查询当前会话的设备能力
+    // 3. 先发 false 再等待上一会话的插件 stop 完成（幂等，已停止时立即返回）
+    _cameraState = null;
+    _cachedMaxZoom = null;
+    _cachedMinZoom = null;
+    _lastBuildFacing = null;
+    if (!_readyController.isClosed) {
+      _readyController.add(false);
+    }
+    try {
+      if (_delegate.platformTag == 'ohos') {
+        await ohos.CamerawesomePlugin.stop();
+      } else {
+        await ca.CamerawesomePlugin.stop();
+      }
+    } catch (e) {
+      debugPrint('[camera] initialize stop failed: $e');
+    }
   }
 
   @override
   Future<void> dispose() async {
+    // 相机资源由 CameraAwesomeBuilder 自身的 CameraContext.dispose() 在卸载时停止，
+    // 此处仅作幂等兜底：await 等待 stop 完成、清除 cameraState、防重复 close。
+    // 注意：服务是 app 级单例，若在此关闭 _readyController 会导致再次进入拍摄页时
+    // 取景器就绪流失效，因此保留 controller 不关闭（只清状态）。
     try {
       if (_delegate.platformTag == 'ohos') {
-        ohos.CamerawesomePlugin.stop();
+        await ohos.CamerawesomePlugin.stop();
       } else {
-        ca.CamerawesomePlugin.stop();
+        await ca.CamerawesomePlugin.stop();
       }
     } catch (e) {
       debugPrint('[camera] dispose stop failed: $e');
     }
-    await _readyController.close();
+    _cameraState = null;
   }
 
   @override
@@ -270,6 +293,9 @@ class CamerawesomeCameraService implements CameraService {
 
   @override
   Widget buildPreview({required CameraPreviewConfig config}) {
+    // 每次构建预览都从空状态开始，防止复用上一会话已释放的 cameraState
+    // （CameraAwesomeBuilder 就绪后 builder 回调会重新赋值）。
+    _cameraState = null;
     // 仅在 facing 切换时清空缩放缓存（不同摄像头的 maxZoom/minZoom 不同）。
     // 比例切换、参数调整等重建不再重复查询，避免 OHOS 平台 getMaxZoom/getMinZoom
     // 方法通道报错（PlatformException / int-double 类型转换异常）。

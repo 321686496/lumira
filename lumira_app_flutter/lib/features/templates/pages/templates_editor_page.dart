@@ -345,13 +345,16 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     try {
       final file = await FilePickerService.pickSingleImage();
       if (file == null) return;
-      final bytes = file.bytes;
+      // OHOS 端 file_picker 的 withData 返回的 bytes 会被截断为 4096 字节，
+      // 无法解码图片；ensureFullBytes 会从磁盘/原生通道读取完整内容。
+      final fullFile = await FilePickerService.ensureFullBytes(file);
+      final bytes = fullFile.bytes;
       if (bytes == null || bytes.isEmpty) {
         if (!mounted) return;
         lumira.LumiraToast.show(context, '读取图片失败，请重试');
         return;
       }
-      final mime = _imageMimeFromExtension(file.extension);
+      final mime = _imageMimeFromExtension(fullFile.extension);
       final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
       _onChange(() => _form.meta.coverImage = dataUrl);
       if (!mounted) return;
@@ -468,20 +471,23 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     try {
       final file = await FilePickerService.pickSingleImage();
       if (file == null) return;
-      final bytes = file.bytes;
+      // OHOS 端 file_picker 的 withData 返回的 bytes 会被截断为 4096 字节，
+      // 无法解码图片；ensureFullBytes 会从磁盘/原生通道读取完整内容。
+      final fullFile = await FilePickerService.ensureFullBytes(file);
+      final bytes = fullFile.bytes;
       if (bytes == null || bytes.isEmpty) {
         if (!mounted) return;
         lumira.LumiraToast.show(context, '读取图片失败，请重试');
         return;
       }
-      final mime = _imageMimeFromExtension(file.extension);
+      final mime = _imageMimeFromExtension(fullFile.extension);
       final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
       final sizeKB = (bytes.length / 1024).round();
       setState(() {
         _form.pose.silhouette = SilhouetteResource(
           type: 'image',
           data: dataUrl,
-          filename: file.name,
+          filename: fullFile.name,
           sizeKB: sizeKB,
         );
       });
@@ -1339,12 +1345,21 @@ Uint8List _cachedCoverDecode(String dataUrl) {
 final Map<String, Future<ui.Image>> _coverImageSizeCache = {};
 
 Future<ui.Image> _getCachedCoverImage(String dataUrl) {
-  return _coverImageSizeCache.putIfAbsent(dataUrl, () async {
+  return _coverImageSizeCache
+      .putIfAbsent(dataUrl, () => _decodeCoverImage(dataUrl));
+}
+
+Future<ui.Image> _decodeCoverImage(String dataUrl) async {
+  try {
     final bytes = _cachedCoverDecode(dataUrl);
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     return frame.image;
-  });
+  } catch (e) {
+    // 解码失败：移出缓存，避免坏 Future 被永久缓存导致后续重建永远失败
+    _coverImageSizeCache.remove(dataUrl);
+    rethrow;
+  }
 }
 
 /// 封面图放大预览弹窗
@@ -1374,6 +1389,17 @@ void _showCoverPreviewDialog(
                     child: Image.memory(
                       _cachedCoverDecode(cover),
                       fit: BoxFit.contain,
+                    ),
+                  );
+                }
+                if (snapshot.hasError) {
+                  debugPrint('[Editor] Cover preview decode error: ${snapshot.error}');
+                  return Container(
+                    height: 300,
+                    width: double.infinity,
+                    color: tokens.canvasDeep,
+                    child: const Center(
+                      child: Icon(Icons.broken_image_outlined, color: Colors.white38),
                     ),
                   );
                 }
@@ -1547,6 +1573,10 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
                           },
                         ),
                       );
+                    }
+                    if (snapshot.hasError) {
+                      debugPrint('[Editor] Cover image decode error: ${snapshot.error}');
+                      return _CoverPlaceholder(tokens: tokens);
                     }
                     return Container(
                       height: 200,
