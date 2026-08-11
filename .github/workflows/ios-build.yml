@@ -213,43 +213,52 @@ jobs:
           export PROFILE_NAME TEAM_ID
           python3 <<'PYEOF'
           import os
+          import re
 
           pbx_path = 'ios/Runner.xcodeproj/project.pbxproj'
           with open(pbx_path, 'r', encoding='utf-8') as f:
               content = f.read()
 
-          old = (
-              'PRODUCT_BUNDLE_IDENTIFIER = com.example.lumiraAppFlutter;\n'
-              '\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";\n'
-              '\t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";\n'
-              '\t\t\t\tSWIFT_VERSION = 5.0;\n'
-              '\t\t\t\tVERSIONING_SYSTEM = "apple-generic";\n'
-              '\t\t\t};\n'
-              '\t\t\tname = Release;'
-          )
           team_id = os.environ['TEAM_ID']
           profile_name = os.environ['PROFILE_NAME']
-          new = (
-              'PRODUCT_BUNDLE_IDENTIFIER = com.rh.lumira;\n'
-              '\t\t\t\tPRODUCT_NAME = "$(TARGET_NAME)";\n'
-              '\t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";\n'
-              '\t\t\t\tSWIFT_VERSION = 5.0;\n'
-              '\t\t\t\tVERSIONING_SYSTEM = "apple-generic";\n'
-              '\t\t\t\tCODE_SIGN_STYLE = Manual;\n'
-              '\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";\n'
-              f'\t\t\t\tDEVELOPMENT_TEAM = "{team_id}";\n'
-              f'\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile_name}";\n'
-              '\t\t\t};\n'
-              '\t\t\tname = Release;'
-          )
+          bundle_id = os.environ.get('BUNDLE_ID', 'com.rh.lumira')
 
-          if old not in content:
+          # 用正则匹配 Runner target 的 Release 构建设置块：
+          # 通过结尾 name = Release; 锚定（Profile/Debug 块结尾不同，不会误匹配），
+          # PRODUCT_BUNDLE_IDENTIFIER 匹配任意当前值，不依赖具体包名。
+          pattern = re.compile(
+              r'(PRODUCT_BUNDLE_IDENTIFIER = [^;]+;\n'
+              r'\t\t\t\tPRODUCT_NAME = "\$\(TARGET_NAME\)";\n'
+              r'\t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header\.h";\n'
+              r'\t\t\t\tSWIFT_VERSION = 5\.0;\n'
+              r'\t\t\t\tVERSIONING_SYSTEM = "apple-generic";\n)'
+              r'(\t\t\t\};\n'
+              r'\t\t\tname = Release;)'
+          )
+          m = pattern.search(content)
+          if not m:
               print("ERROR: Runner Release build settings block not found")
               exit(1)
-          content = content.replace(old, new, 1)
+
+          # 在 Release 块末尾（VERSIONING_SYSTEM 之后）注入 Manual 签名设置
+          new_block = (
+              m.group(1)
+              + '\t\t\t\tCODE_SIGN_STYLE = Manual;\n'
+              + '\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";\n'
+              + f'\t\t\t\tDEVELOPMENT_TEAM = "{team_id}";\n'
+              + f'\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profile_name}";\n'
+              + m.group(2)
+          )
+          content = content[:m.start()] + new_block + content[m.end():]
+
+          # 统一 Runner target（Profile/Debug/Release）的 PRODUCT_BUNDLE_IDENTIFIER
+          content = re.sub(r'PRODUCT_BUNDLE_IDENTIFIER = [^;]+;',
+                           f'PRODUCT_BUNDLE_IDENTIFIER = {bundle_id};',
+                           content)
+
           with open(pbx_path, 'w', encoding='utf-8') as f:
               f.write(content)
-          print("Configured Manual code signing for Runner Release")
+          print(f"Configured Manual code signing for Runner Release (bundle id: {bundle_id})")
           PYEOF
 
       - name: Generate ExportOptions.plist
