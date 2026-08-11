@@ -16,45 +16,73 @@ import {
 export class AdminService {
   constructor(private readonly dbService: DatabaseService) {}
 
-  // 概览统计
   async getStats() {
     const db = this.dbService.getDb();
 
-    const deviceCount = await db.select({ value: count() }).from(devices);
-    const inviteCount = await db.select({ value: count() }).from(inviteRecords);
-    const rewardCount = await db.select({ value: count() }).from(rewardUnlocks);
-    const redemptionCount = await db.select({ value: count() }).from(redemptionRecords);
-
-    // 今日数据
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const todayTs = Math.floor(todayStart.getTime() / 1000);
 
-    const todayDevices = await db.query.devices.findMany();
-    const todayNewDevices = todayDevices.filter(d => d.firstSeenAt >= todayTs).length;
+    const [deviceCount] = await db.select({ value: count() }).from(devices);
+    const [inviteCount] = await db.select({ value: count() }).from(inviteRecords);
+    const [rewardCount] = await db.select({ value: count() }).from(rewardUnlocks);
+    const [redemptionCount] = await db.select({ value: count() }).from(redemptionRecords);
 
-    const todayInvites = await db.query.inviteRecords.findMany();
-    const todayNewInvites = todayInvites.filter(i => i.activatedAt >= todayTs).length;
+    const [todayNewDevicesRow] = await db.select({ value: count() }).from(devices)
+      .where(sql`${devices.firstSeenAt} >= ${todayTs}`);
+    const [todayNewInvitesRow] = await db.select({ value: count() }).from(inviteRecords)
+      .where(sql`${inviteRecords.activatedAt} >= ${todayTs}`);
+    const [todayRedeemedRow] = await db.select({ value: count() }).from(redemptionRecords)
+      .where(sql`${redemptionRecords.redeemedAt} >= ${todayTs}`);
 
-    const todayRedemptions = await db.query.redemptionRecords.findMany();
-    const todayRedeemed = todayRedemptions.filter(r => r.redeemedAt >= todayTs).length;
+    const [codesRow] = await db.select({
+      generated: sql<number>`COALESCE(SUM(${redemptionCodeBatches.totalGenerated}), 0)`,
+      used: sql<number>`COALESCE(SUM(${redemptionCodeBatches.totalUsed}), 0)`,
+    }).from(redemptionCodeBatches);
 
-    // 兑换码统计
-    const batches = await db.query.redemptionCodeBatches.findMany();
-    const totalGenerated = batches.reduce((sum, b) => sum + b.totalGenerated, 0);
-    const totalUsed = batches.reduce((sum, b) => sum + b.totalUsed, 0);
+    const totalGenerated = codesRow?.generated || 0;
+    const totalUsed = codesRow?.used || 0;
 
     return {
-      totalDevices: deviceCount[0]?.value || 0,
-      todayNewDevices,
-      totalInvites: inviteCount[0]?.value || 0,
-      todayNewInvites,
-      totalRedemptions: redemptionCount[0]?.value || 0,
-      todayRedeemed,
-      totalRewardUnlocks: rewardCount[0]?.value || 0,
+      totalDevices: deviceCount?.value || 0,
+      todayNewDevices: todayNewDevicesRow?.value || 0,
+      totalInvites: inviteCount?.value || 0,
+      todayNewInvites: todayNewInvitesRow?.value || 0,
+      totalRedemptions: redemptionCount?.value || 0,
+      todayRedeemed: todayRedeemedRow?.value || 0,
+      totalRewardUnlocks: rewardCount?.value || 0,
       totalCodesGenerated: totalGenerated,
       totalCodesUsed: totalUsed,
       totalCodesRemaining: totalGenerated - totalUsed,
+    };
+  }
+
+  async getDeviceList(page: number = 1, pageSize: number = 20, search?: string) {
+    const db = this.dbService.getDb();
+
+    let query = db.select().from(devices).$dynamic();
+
+    if (search) {
+      const pattern = `%${search}%`;
+      query = query.where(
+        sql`(${devices.deviceId} LIKE ${pattern} OR ${devices.alias} LIKE ${pattern} OR ${devices.platform} LIKE ${pattern} OR ${devices.deviceModel} LIKE ${pattern})`
+      );
+    }
+
+    const offset = (page - 1) * pageSize;
+    const records = await query.orderBy(desc(devices.firstSeenAt)).limit(pageSize).offset(offset);
+
+    const totalCount = search
+      ? await db.select({ value: count() }).from(devices).where(
+          sql`(${devices.deviceId} LIKE ${`%${search}%`} OR ${devices.alias} LIKE ${`%${search}%`} OR ${devices.platform} LIKE ${`%${search}%`} OR ${devices.deviceModel} LIKE ${`%${search}%`})`
+        )
+      : await db.select({ value: count() }).from(devices);
+
+    return {
+      data: records,
+      total: totalCount[0]?.value || 0,
+      page,
+      pageSize,
     };
   }
 

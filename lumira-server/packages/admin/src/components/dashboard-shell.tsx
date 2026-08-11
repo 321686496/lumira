@@ -7,6 +7,7 @@ import { Topbar } from '@/components/topbar';
 
 const titleMap: Record<string, string> = {
   '/dashboard': '概览',
+  '/dashboard/devices': '设备统计',
   '/dashboard/invites': '邀请记录',
   '/dashboard/redeem-batches': '兑换码批次',
   '/dashboard/rewards': '奖励明细',

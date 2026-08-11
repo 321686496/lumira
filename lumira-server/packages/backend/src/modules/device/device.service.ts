@@ -15,19 +15,33 @@ export class DeviceService {
     private readonly profileService: ProfileService,
   ) {}
 
-  async registerDevice(deviceId: string, alias: string | undefined, ip: string) {
+  async registerDevice(
+    deviceId: string,
+    alias: string | undefined,
+    ip: string,
+    deviceInfo?: {
+      platform?: string;
+      osVersion?: string;
+      deviceModel?: string;
+      appVersion?: string;
+    },
+  ) {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    // 查询是否已存在
     const existing = await db.query.devices.findFirst({
       where: eq(devices.deviceId, deviceId),
     });
 
     if (existing) {
-      // 更新最后活跃时间
       await db.update(devices)
-        .set({ lastSeenAt: now })
+        .set({
+          lastSeenAt: now,
+          ...(deviceInfo?.platform && { platform: deviceInfo.platform }),
+          ...(deviceInfo?.osVersion && { osVersion: deviceInfo.osVersion }),
+          ...(deviceInfo?.deviceModel && { deviceModel: deviceInfo.deviceModel }),
+          ...(deviceInfo?.appVersion && { appVersion: deviceInfo.appVersion }),
+        })
         .where(eq(devices.deviceId, deviceId));
 
       const token = this.jwtService.sign({ deviceId });
@@ -35,10 +49,13 @@ export class DeviceService {
       return { token, isNewDevice: false, profile };
     }
 
-    // 新设备注册
     await db.insert(devices).values({
       deviceId,
       alias: alias || null,
+      platform: deviceInfo?.platform || null,
+      osVersion: deviceInfo?.osVersion || null,
+      deviceModel: deviceInfo?.deviceModel || null,
+      appVersion: deviceInfo?.appVersion || null,
       firstSeenAt: now,
       lastSeenAt: now,
       ipRegion: ip,

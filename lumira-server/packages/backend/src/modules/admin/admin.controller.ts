@@ -16,6 +16,19 @@ export class AdminController {
     return this.adminService.getStats();
   }
 
+  @Get('devices')
+  async getDeviceList(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.adminService.getDeviceList(
+      page ? parseInt(page) : 1,
+      pageSize ? parseInt(pageSize) : 20,
+      search,
+    );
+  }
+
   @Get('invites')
   async getInviteRecords(
     @Query('page') page?: string,

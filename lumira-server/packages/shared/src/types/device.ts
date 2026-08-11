@@ -16,6 +16,10 @@ export interface RegisterDeviceResponse {
 export interface DeviceRecord {
   deviceId: string;
   alias: string | null;
+  platform: string | null;
+  osVersion: string | null;
+  deviceModel: string | null;
+  appVersion: string | null;
   firstSeenAt: number;
   lastSeenAt: number;
   ipRegion: string | null;

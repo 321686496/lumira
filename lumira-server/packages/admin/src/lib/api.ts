@@ -4,6 +4,7 @@ import { AUTH_COOKIE_NAME, UnauthenticatedError } from './auth';
 import { buildCategoryTree } from './category-tree';
 import type {
   StatsResponse,
+  DeviceListResponse,
   InviteListResponse,
   Batch,
   BatchDetail,
@@ -75,6 +76,15 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   getStats: () => adminFetch<StatsResponse>('/stats'),
+
+  getDevices: (params: { page?: number; pageSize?: number; search?: string } = {}) => {
+    const search = new URLSearchParams();
+    if (params.page) search.set('page', String(params.page));
+    if (params.pageSize) search.set('pageSize', String(params.pageSize));
+    if (params.search) search.set('search', params.search);
+    const qs = search.toString();
+    return adminFetch<DeviceListResponse>(`/devices${qs ? `?${qs}` : ''}`);
+  },
 
   getInvites: (params: { page?: number; pageSize?: number; deviceId?: string } = {}) => {
     const search = new URLSearchParams();

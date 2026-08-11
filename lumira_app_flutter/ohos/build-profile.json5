@@ -5,13 +5,13 @@
         "name": "default",
         "type": "HarmonyOS",
         "material": {
-          "certpath": "C:\\Users\\黄sir\\.ohos\\config\\default_ohos_RLxGKtveBddYu3UaFBQm34u16lQ-G3dYn60Hy7I0eAs=.cer",
-          "keyAlias": "debugKey",
-          "keyPassword": "0000001BBC3C050B4B00FC6AA4B8485591F00D0B185153118542C062C992C018C4A98A51D4736D0219360A",
-          "profile": "C:\\Users\\黄sir\\.ohos\\config\\default_ohos_RLxGKtveBddYu3UaFBQm34u16lQ-G3dYn60Hy7I0eAs=.p7b",
+          "storeFile": "D:/app/projects/photo_post/packagefile/harmony/public.p12",
+          "storePassword": "00000019704B88809C3F9AC23A67C5DA9FEB5A9B61E6002DF6FCFE3FABD86B23E16FB0437D31645666",
+          "keyAlias": "public",
+          "keyPassword": "00000019CB68298EFDE55FB88294DAAAF0992B17791F01D8E1132A4C04AE7A15328F3213047D00A188",
           "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\黄sir\\.ohos\\config\\default_ohos_RLxGKtveBddYu3UaFBQm34u16lQ-G3dYn60Hy7I0eAs=.p12",
-          "storePassword": "0000001BE2415ED8AA299F4BA5900A1FFD913E352FA6444E671C64EE3133D04B776C8F068377AF775B74F7"
+          "profile": "D:/app/projects/photo_post/packagefile/harmony/lumiraRelease.p7b",
+          "certpath": "D:/app/projects/photo_post/packagefile/harmony/public.cer"
         }
       }
     ],

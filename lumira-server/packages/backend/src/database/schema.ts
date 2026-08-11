@@ -5,6 +5,10 @@ import { sqliteTable, text, integer, uniqueIndex } from 'drizzle-orm/sqlite-core
 export const devices = sqliteTable('devices', {
   deviceId: text('device_id').primaryKey(),
   alias: text('alias'),
+  platform: text('platform'),
+  osVersion: text('os_version'),
+  deviceModel: text('device_model'),
+  appVersion: text('app_version'),
   firstSeenAt: integer('first_seen_at').notNull(),
   lastSeenAt: integer('last_seen_at').notNull(),
   ipRegion: text('ip_region'),

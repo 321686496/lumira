@@ -14,6 +14,25 @@ export interface StatsResponse {
   totalCodesRemaining: number;
 }
 
+export interface DeviceRecord {
+  deviceId: string;
+  alias: string | null;
+  platform: string | null;
+  osVersion: string | null;
+  deviceModel: string | null;
+  appVersion: string | null;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  ipRegion: string | null;
+}
+
+export interface DeviceListResponse {
+  data: DeviceRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface InviteListResponse {
   data: Array<{
     id: number;

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -104,20 +105,33 @@ Future<RegisterResult> _doRegister({
   required String deviceId,
   required String os,
 }) async {
-  // 创建一个无鉴权拦截的 Dio 直接调用 /device/register
-  // （此时 AuthController 未就绪，无法用 apiClientProvider）
   final dio = Dio(BaseOptions(
     baseUrl: AppConfig.baseUrl,
     connectTimeout: AppConfig.connectTimeoutMs,
     receiveTimeout: AppConfig.receiveTimeoutMs,
     headers: {'Content-Type': 'application/json'},
   ));
-  final resp = await dio.post('/device/register', data: {
+  
+  final deviceInfo = DeviceInfoPlugin();
+  Map<String, dynamic> registerData = {
     'deviceId': deviceId,
-    // 后端 RegisterDeviceDto 只接受 deviceId 和 alias，os 字段会被 forbidNonWhitelisted 拒绝
-    // 后端通过 IP 推断地域，不需要 os 信息
-    // 如未来后端需要 os，在此处重新添加 'os': os
-  });
+  };
+  
+  if (Platform.isAndroid) {
+    final androidInfo = await deviceInfo.androidInfo;
+    registerData['platform'] = os;
+    registerData['osVersion'] = '${androidInfo.version.release} (API ${androidInfo.version.sdkInt})';
+    registerData['deviceModel'] = '${androidInfo.manufacturer} ${androidInfo.model}';
+    registerData['appVersion'] = '1.0.0';
+  } else if (Platform.isIOS) {
+    final iosInfo = await deviceInfo.iosInfo;
+    registerData['platform'] = 'ios';
+    registerData['osVersion'] = '${iosInfo.systemName} ${iosInfo.systemVersion}';
+    registerData['deviceModel'] = iosInfo.utsname.machine;
+    registerData['appVersion'] = '1.0.0';
+  }
+  
+  final resp = await dio.post('/device/register', data: registerData);
   final body = resp.data as Map<String, dynamic>;
   final profileJson = body['profile'];
   return RegisterResult(

@@ -15,6 +15,11 @@ export class DeviceController {
     @Req() req: any,
   ): Promise<RegisterDeviceResponse> {
     const ip = req.ip || '0.0.0.0';
-    return this.deviceService.registerDevice(dto.deviceId, dto.alias, ip);
+    return this.deviceService.registerDevice(dto.deviceId, dto.alias, ip, {
+      platform: dto.platform,
+      osVersion: dto.osVersion,
+      deviceModel: dto.deviceModel,
+      appVersion: dto.appVersion,
+    });
   }
 }

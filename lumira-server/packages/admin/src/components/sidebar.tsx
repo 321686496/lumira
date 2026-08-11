@@ -2,12 +2,13 @@
 import Link from 'next/link';
 import {
   ChartLineUp, Users, Ticket, Gift, ClipboardText,
-  SquaresFour, GridFour,
+  SquaresFour, GridFour, DeviceMobile,
 } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/dashboard', label: '概览', icon: ChartLineUp },
+  { href: '/dashboard/devices', label: '设备统计', icon: DeviceMobile },
   { href: '/dashboard/invites', label: '邀请记录', icon: Users },
   { href: '/dashboard/redeem-batches', label: '兑换码', icon: Ticket },
   { href: '/dashboard/rewards', label: '奖励明细', icon: Gift },
@@ -25,7 +26,9 @@ export function Sidebar({ activePath }: { activePath: string }) {
       <nav className="flex-1 px-3 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const active = activePath === item.href || activePath.startsWith(item.href + '/');
+          const active = item.href === '/dashboard'
+            ? activePath === '/dashboard'
+            : activePath === item.href || activePath.startsWith(item.href + '/');
           return (
             <Link
               key={item.href}
