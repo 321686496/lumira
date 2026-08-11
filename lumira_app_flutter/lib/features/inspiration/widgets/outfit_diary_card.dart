@@ -44,7 +44,7 @@ class OutfitDiaryCard extends ConsumerWidget {
             const SizedBox(height: 16),
             _buildStreakRow(tokens, data.streak),
             const SizedBox(height: 16),
-            _buildPhotosRow(tokens, data.photos),
+            _buildPhotosRow(data.photos),
           ],
         ),
       ),
@@ -153,7 +153,7 @@ class OutfitDiaryCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildPhotosRow(ThemeTokens tokens, List<OutfitPhoto> photos) {
+  Widget _buildPhotosRow(List<OutfitPhoto> photos) {
     return Row(
       children: photos.map((photo) {
         return Expanded(
