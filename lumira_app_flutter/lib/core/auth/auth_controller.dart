@@ -123,11 +123,12 @@ class AuthController extends StateNotifier<AuthState> {
 /// 默认的 deviceId 解析器
 ///
 /// 平台分支：
-/// - Android: AndroidInfo.id（系统 Settings.Secure.ANDROID_ID）
+/// - Android / HarmonyOS(ohos): AndroidInfo.id（系统 Settings.Secure.ANDROID_ID，
+///   鸿蒙兼容 Android API 同样可用）
 /// - iOS: IosInfo.identifierForVendor
-/// - 其他（含鸿蒙 fallback）: UUID v4 持久化到 sqflite
+/// - 其他 fallback: UUID v4 持久化到 sqflite
 Future<String> defaultResolveDeviceId(AuthDao dao) async {
-  if (Platform.isAndroid) {
+  if (Platform.isAndroid || Platform.operatingSystem == 'ohos') {
     final info = await DeviceInfoPlugin().androidInfo;
     return info.id;
   }
@@ -144,16 +145,13 @@ Future<String> defaultResolveDeviceId(AuthDao dao) async {
 
 /// 默认的 os 解析器
 ///
-/// 注意：ohos 平台在 CPF-Flutter 3.7 环境下 Platform.operatingSystem 行为待验证
-/// 通过 device_info_plus 是否能拿到 ohos 信息来判定
+/// 鸿蒙识别：CPF-Flutter（ohos 分支）下 Platform.operatingSystem 返回 'ohos'，
+/// 该方式已在 templates_editor_page / export_detail_page 中验证有效。
+/// 注意：不能依赖 Platform.isAndroid 判断鸿蒙——鸿蒙兼容 Android API 时 isAndroid 为 true，
+/// 不传 --dart-define=HARMONY=true 会误判为 android；isAndroid 为 false 时又会走末尾兜底 android。
 String defaultResolveOs() {
-  if (Platform.isAndroid) {
-    // 鸿蒙 CPF-Flutter 环境下，Platform 可能仍报告 android
-    // 通过环境变量 HARMONY（dart-define）覆盖
-    const isHarmony = bool.fromEnvironment('HARMONY', defaultValue: false);
-    if (isHarmony) return 'harmonyos';
-    return 'android';
-  }
+  if (Platform.operatingSystem == 'ohos') return 'harmonyos';
+  if (Platform.isAndroid) return 'android';
   if (Platform.isIOS) return 'ios';
   return 'android';
 }

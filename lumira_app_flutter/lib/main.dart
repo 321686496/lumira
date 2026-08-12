@@ -67,10 +67,11 @@ Future<void> main() async {
     ],
   );
 
-  // 5. 已注册设备：启动补传设备信息（修复历史版本平台信息缺失，不阻塞启动）
+  // 5. 已注册设备：启动补传设备信息（修复历史版本平台信息缺失/误判，不阻塞启动）
+  // 注意用 defaultResolveOs() 而非 state.os——旧设备可能存了错误的 'android'
   if (!authController.state.needsRegistration) {
     // ignore: unawaited_futures
-    _reportDeviceInfo(container, authController.state.os ?? defaultResolveOs());
+    _reportDeviceInfo(container, defaultResolveOs());
   }
 
   // 6. 初始化个人资料：拉取/补传（不阻塞启动）
