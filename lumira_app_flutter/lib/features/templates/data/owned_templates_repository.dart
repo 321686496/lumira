@@ -107,7 +107,7 @@ class TemplatePrices {
 abstract class OwnedTemplatesRepository {
   Future<OwnedTemplates> listOwned();
   Future<TemplatePrices> listPrices();
-  Future<TemplateExchangeResult> exchange(String templateId);
+  Future<TemplateExchangeResult> exchange(String templateId, {int? priceCredits});
 }
 
 class RemoteOwnedTemplatesRepository implements OwnedTemplatesRepository {
@@ -132,10 +132,13 @@ class RemoteOwnedTemplatesRepository implements OwnedTemplatesRepository {
   }
 
   @override
-  Future<TemplateExchangeResult> exchange(String templateId) {
+  Future<TemplateExchangeResult> exchange(String templateId, {int? priceCredits}) {
     return _api.post(
       '/templates/exchange',
-      body: {'templateId': templateId},
+      body: {
+        'templateId': templateId,
+        if (priceCredits != null) 'priceCredits': priceCredits,
+      },
       fromJson: (j) =>
           TemplateExchangeResult.fromJson(j as Map<String, dynamic>),
     );
