@@ -42,6 +42,9 @@ class TemplatesUnlockPage extends ConsumerStatefulWidget {
 class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
   bool _unlocked = false;
 
+  /// 购买请求进行中标记：防重入（仅方法内串行保护，不参与 UI 渲染）
+  bool _purchasing = false;
+
   void _back() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
@@ -98,28 +101,30 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
   }
 
   Future<void> _onPurchase() async {
-    final templateId = widget.templateId;
-    final price = widget.price;
-    if (templateId == null || templateId.isEmpty) {
-      lumira.LumiraToast.show(context, '缺少模板信息');
-      return;
-    }
-    if (price == null || price < 1) {
-      lumira.LumiraToast.show(context, '缺少模板积分价格');
-      return;
-    }
-    final confirmed = await lumira.showLumiraDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => _PayPopupContent(
-        price: price,
-        onCancel: () => Navigator.pop(context, false),
-        onConfirm: () => Navigator.pop(context, true),
-      ),
-    );
-    if (confirmed != true) return;
-    if (!mounted) return;
+    if (_purchasing) return; // 防重入：请求进行中忽略重复点击
+    _purchasing = true;
     try {
+      final templateId = widget.templateId;
+      final price = widget.price;
+      if (templateId == null || templateId.isEmpty) {
+        lumira.LumiraToast.show(context, '缺少模板信息');
+        return;
+      }
+      if (price == null || price < 1) {
+        lumira.LumiraToast.show(context, '缺少模板积分价格');
+        return;
+      }
+      final confirmed = await lumira.showLumiraDialog<bool>(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => _PayPopupContent(
+          price: price,
+          onCancel: () => Navigator.pop(context, false),
+          onConfirm: () => Navigator.pop(context, true),
+        ),
+      );
+      if (confirmed != true) return;
+      if (!mounted) return;
       final repo = await ref.read(ownedTemplatesRepositoryProvider.future);
       final result = await repo.exchange(templateId, priceCredits: price);
       if (!mounted) return;
@@ -133,6 +138,8 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
     } catch (e) {
       if (!mounted) return;
       lumira.LumiraToast.show(context, '兑换失败：$e');
+    } finally {
+      _purchasing = false;
     }
   }
 
