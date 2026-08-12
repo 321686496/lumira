@@ -58,69 +58,76 @@ export class TemplatesService {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    // 1. 定价：srv_ 前缀（后端远程模板）以 template_prices 记录为准（防篡改）；
-    //    非 srv_ 前缀（本地内置模板）以客户端上报 priceCredits 为准，并 UPSERT 记录定价
-    let price: number;
-    if (templateId.startsWith('srv_')) {
-      const record = await db.query.templatePrices.findFirst({
-        where: and(
-          eq(templatePrices.templateId, templateId),
-          eq(templatePrices.isActive, 1),
-        ),
-      });
-      if (!record) {
-        throw new NotFoundException('Template not available for exchange');
+    // 整体事务：已拥有检查 + 定价 + 扣积分 + 写入 owned，
+    // 任一环节失败（已拥有 / 余额不足 / 无定价记录）则整体回滚
+    return db.transaction((tx) => {
+      // 1. 幂等检查（必须先于定价：已拥有 → 409，不落任何定价记录，
+      //    防止重复/失败请求用上报值污染 template_prices）
+      const ownedRows = tx.select().from(ownedTemplates)
+        .where(and(
+          eq(ownedTemplates.deviceId, deviceId),
+          eq(ownedTemplates.templateId, templateId),
+        ))
+        .all();
+      if (ownedRows.length > 0) {
+        throw new ConflictException('Template already owned');
       }
-      price = record.priceCredits;
-    } else {
-      if (priceCredits === undefined || !Number.isInteger(priceCredits) || priceCredits < 1) {
-        throw new BadRequestException(
-          'priceCredits must be a positive integer for builtin template',
-        );
-      }
-      price = priceCredits;
-      await db.insert(templatePrices)
-        .values({ templateId, priceCredits: price, isActive: 1, updatedAt: now })
-        .onConflictDoUpdate({
-          target: templatePrices.templateId,
-          set: { priceCredits: price, isActive: 1, updatedAt: now },
-        }).run();
-    }
 
-    // 2. 检查是否已拥有（幂等：已拥有则直接返回成功）
-    const existing = await db.query.ownedTemplates.findFirst({
-      where: and(
-        eq(ownedTemplates.deviceId, deviceId),
-        eq(ownedTemplates.templateId, templateId),
-      ),
+      // 2. 定价：srv_ 前缀（后端远程模板）以 template_prices 记录为准（防篡改）；
+      //    非 srv_ 前缀（本地内置模板）以客户端上报 priceCredits 为准，并 UPSERT 记录定价
+      let price: number;
+      if (templateId.startsWith('srv_')) {
+        const priceRows = tx.select().from(templatePrices)
+          .where(and(
+            eq(templatePrices.templateId, templateId),
+            eq(templatePrices.isActive, 1),
+          ))
+          .all();
+        const record = priceRows[0];
+        if (!record) {
+          throw new NotFoundException('Template not available for exchange');
+        }
+        price = record.priceCredits;
+      } else {
+        if (priceCredits === undefined || !Number.isInteger(priceCredits) || priceCredits < 1) {
+          throw new BadRequestException(
+            'priceCredits must be a positive integer for builtin template',
+          );
+        }
+        price = priceCredits;
+        tx.insert(templatePrices)
+          .values({ templateId, priceCredits: price, isActive: 1, updatedAt: now })
+          .onConflictDoUpdate({
+            target: templatePrices.templateId,
+            set: { priceCredits: price, isActive: 1, updatedAt: now },
+          }).run();
+      }
+
+      // 3. 扣积分（余额不足抛 BadRequestException，事务回滚）
+      const newBalance = this.pointsService.spendPointsSync(
+        tx,
+        deviceId,
+        price,
+        'exchange_template',
+        templateId,
+      );
+
+      // 4. 写入拥有记录
+      tx.insert(ownedTemplates).values({
+        deviceId,
+        templateId,
+        source: 'points',
+        sourceDetail: `credits:${price}`,
+        unlockedAt: now,
+      }).run();
+
+      return {
+        success: true,
+        templateId,
+        spentCredits: price,
+        balance: newBalance,
+      };
     });
-    if (existing) {
-      throw new ConflictException('Template already owned');
-    }
-
-    // 3. 扣积分（余额不足会抛 BadRequestException）
-    const newBalance = await this.pointsService.spendPoints(
-      deviceId,
-      price,
-      'exchange_template',
-      templateId,
-    );
-
-    // 4. 写入拥有记录
-    await db.insert(ownedTemplates).values({
-      deviceId,
-      templateId,
-      source: 'points',
-      sourceDetail: `credits:${price}`,
-      unlockedAt: now,
-    }).run();
-
-    return {
-      success: true,
-      templateId,
-      spentCredits: price,
-      balance: newBalance,
-    };
   }
 
   /**

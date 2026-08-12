@@ -75,12 +75,21 @@ describe('TemplatesController (e2e) — exchange', () => {
     expect(owned.body.templateIds).toContain('film_vintage');
   });
 
-  it('内置模板重复兑换返回 409', async () => {
+  it('内置模板重复兑换返回 409，且不污染定价记录', async () => {
+    // 重复请求上报一个不同的价格，验证 409 后 template_prices 仍为第一次兑换时的定价
     await request(app.getHttpServer())
       .post('/api/v1/templates/exchange')
       .set('Authorization', `Bearer ${token}`)
-      .send({ templateId: 'film_vintage', priceCredits: 20 })
+      .send({ templateId: 'film_vintage', priceCredits: 999 })
       .expect(409);
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/templates/prices')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    const prices = res.body.prices as Array<{ templateId: string; priceCredits: number }>;
+    const price = prices.find((p) => p.templateId === 'film_vintage');
+    expect(price?.priceCredits).toBe(20);
   });
 
   it('内置模板缺少 priceCredits 返回 400', async () => {

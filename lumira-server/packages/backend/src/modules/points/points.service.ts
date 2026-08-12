@@ -2,8 +2,11 @@
 
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
+import type { ExtractTablesWithRelations } from 'drizzle-orm';
+import type { BetterSQLiteTransaction } from 'drizzle-orm/better-sqlite3';
 import { DatabaseService } from '../../database/database.service';
 import { userPoints, pointTransactions, pointEarnEvents } from '../../database/schema';
+import * as schema from '../../database/schema';
 import { getUtc8DateStr } from '../../common/utils/date.util';
 
 // 积分流水类型（与 shared 类型保持一致，此处本地定义避免事务内依赖 shared 构建产物）
@@ -180,39 +183,51 @@ export class PointsService {
     type: PointTransactionType,
     refId: string | null = null,
   ): Promise<number> {
+    const db = this.dbService.getDb();
+    return db.transaction((tx) =>
+      this.spendPointsSync(tx, deviceId, delta, type, refId),
+    );
+  }
+
+  /**
+   * 消耗积分（同步，供外层事务复用，如模板兑换的整体事务）。
+   * 在传入的 tx 内执行：校验余额 + 写流水（负数）+ 扣减余额；
+   * 余额不足抛 BadRequestException；同步返回扣减后的新余额。
+   */
+  spendPointsSync(
+    tx: BetterSQLiteTransaction<typeof schema, ExtractTablesWithRelations<typeof schema>>,
+    deviceId: string,
+    delta: number,
+    type: PointTransactionType,
+    refId: string | null = null,
+  ): number {
     if (delta <= 0) {
       throw new BadRequestException('spendPoints delta must be positive');
     }
-    const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
-
-    db.transaction((tx) => {
-      const rows = tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)).all() as BalanceRow[];
-      const existing = rows[0];
-      if (!existing || existing.balance < delta) {
-        throw new BadRequestException('Insufficient points balance');
-      }
-      // 写流水（负数）
-      tx.insert(pointTransactions).values({
-        deviceId,
-        delta: -delta,
-        type,
-        refId,
-        createdAt: now,
-      }).run();
-      // 扣减余额
-      tx.update(userPoints)
-        .set({
-          balance: existing.balance - delta,
-          totalSpent: existing.totalSpent + delta,
-          updatedAt: now,
-        })
-        .where(eq(userPoints.deviceId, deviceId))
-        .run();
-    });
-
-    const updated = await this.getBalance(deviceId);
-    return updated.balance;
+    const rows = tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)).all() as BalanceRow[];
+    const existing = rows[0];
+    if (!existing || existing.balance < delta) {
+      throw new BadRequestException('Insufficient points balance');
+    }
+    // 写流水（负数）
+    tx.insert(pointTransactions).values({
+      deviceId,
+      delta: -delta,
+      type,
+      refId,
+      createdAt: now,
+    }).run();
+    // 扣减余额
+    tx.update(userPoints)
+      .set({
+        balance: existing.balance - delta,
+        totalSpent: existing.totalSpent + delta,
+        updatedAt: now,
+      })
+      .where(eq(userPoints.deviceId, deviceId))
+      .run();
+    return existing.balance - delta;
   }
 
   /** 查余额（不存在则返回 0） */
