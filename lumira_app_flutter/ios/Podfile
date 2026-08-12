@@ -39,6 +39,15 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+
+      # permission_handler（iOS）必须启用对应的编译宏，否则 permission_handler_apple
+      # 的相机策略会被编译成空实现，Permission.camera.request() 无法弹出系统授权弹窗。
+      # 参考：https://github.com/Baseflow/flutter-permission-handler#how-to-migrate
+      #      （iOS 章节：Podfile 中配置 GCC_PREPROCESSOR_DEFINITIONS）
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+        'PERMISSION_CAMERA=1',
+      ]
     end
   end
 end
