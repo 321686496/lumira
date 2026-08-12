@@ -193,7 +193,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'templatesUnlock',
         builder: (context, state) {
           final templateId = state.queryParams[RouteNames.paramTemplateId];
-          return TemplatesUnlockPage(templateId: templateId);
+          final priceStr = state.queryParams['price'];
+          return TemplatesUnlockPage(
+            templateId: templateId,
+            price: priceStr != null ? int.tryParse(priceStr) : null,
+          );
         },
       ),
       GoRoute(

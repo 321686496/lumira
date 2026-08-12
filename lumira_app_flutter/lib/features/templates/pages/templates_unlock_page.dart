@@ -26,10 +26,13 @@ import '../widgets/template_cover_image.dart';
 /// 5. SuccessCard（解锁态）
 /// 6. PayPopup（showLumiraDialog，购买时弹出）
 class TemplatesUnlockPage extends ConsumerStatefulWidget {
-  const TemplatesUnlockPage({super.key, this.templateId});
+  const TemplatesUnlockPage({super.key, this.templateId, this.price});
 
-  /// 路由参数（当前未使用，与 uni-app unlock.vue 一致 — 模板信息硬编码）
+  /// 路由参数：模板 id
   final String? templateId;
+
+  /// 路由参数：积分价格（由详情页传入，内置模板用）
+  final int? price;
 
   @override
   ConsumerState<TemplatesUnlockPage> createState() =>
@@ -47,21 +50,9 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
     }
   }
 
-  void _onWatchAd() {
-    lumira.LumiraToast.show(context, '广告播放中…');
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      if (!mounted) return;
-      setState(() => _unlocked = true);
-      lumira.LumiraToast.show(context, '解锁成功');
-    });
-  }
-
   void _onShare() {
-    lumira.LumiraToast.show(context, '分享成功 +1');
-  }
-
-  void _onGoCapture() {
-    GoRouter.of(context).push(RouteNames.capture);
+    // 分享给好友 → 跳转邀请有礼页，通过邀请获取积分 / 兑换模板
+    GoRouter.of(context).push(RouteNames.profileInvite);
   }
 
   Future<void> _onInputCode() async {
@@ -108,14 +99,20 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
 
   Future<void> _onPurchase() async {
     final templateId = widget.templateId;
+    final price = widget.price;
     if (templateId == null || templateId.isEmpty) {
       lumira.LumiraToast.show(context, '缺少模板信息');
+      return;
+    }
+    if (price == null || price < 1) {
+      lumira.LumiraToast.show(context, '缺少模板积分价格');
       return;
     }
     final confirmed = await lumira.showLumiraDialog<bool>(
       context: context,
       barrierDismissible: true,
       builder: (ctx) => _PayPopupContent(
+        price: price,
         onCancel: () => Navigator.pop(context, false),
         onConfirm: () => Navigator.pop(context, true),
       ),
@@ -124,7 +121,7 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
     if (!mounted) return;
     try {
       final repo = await ref.read(ownedTemplatesRepositoryProvider.future);
-      final result = await repo.exchange(templateId);
+      final result = await repo.exchange(templateId, priceCredits: price);
       if (!mounted) return;
       // 刷新 owned 缓存
       ref.invalidate(ownedTemplatesLoaderProvider);
@@ -190,9 +187,8 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
                               _SubtitleWrap(tokens: tokens),
                               _OptionsList(
                                 tokens: tokens,
-                                onWatchAd: _onWatchAd,
+                                price: widget.price,
                                 onShare: _onShare,
-                                onGoCapture: _onGoCapture,
                                 onInputCode: _onInputCode,
                                 onPurchase: _onPurchase,
                               ),
@@ -494,17 +490,15 @@ class _SubtitleWrap extends StatelessWidget {
 class _OptionsList extends StatelessWidget {
   const _OptionsList({
     required this.tokens,
-    required this.onWatchAd,
+    required this.price,
     required this.onShare,
-    required this.onGoCapture,
     required this.onInputCode,
     required this.onPurchase,
   });
 
   final ThemeTokens tokens;
-  final VoidCallback onWatchAd;
+  final int? price;
   final VoidCallback onShare;
-  final VoidCallback onGoCapture;
   final Future<void> Function() onInputCode;
   final VoidCallback onPurchase;
 
@@ -516,57 +510,23 @@ class _OptionsList extends StatelessWidget {
           delay: const Duration(milliseconds: 80),
           child: _OptionCard(
             tokens: tokens,
-            icon: Icons.play_circle_outline,
-            iconBgColor: tokens.surfaceAlt,
+            icon: Icons.star, // Flutter 3.7.12 无 Icons.diamond_outlined，用 Icons.star 替代
+            iconBgColor: tokens.brandSubtle,
             iconColor: tokens.brand,
-            title: '看广告解锁（30秒）',
-            desc: '观看一段短视频广告即可解锁',
+            title: '${price ?? 0} 积分解锁',
+            desc: '消耗积分，永久使用',
+            titleStrong: true,
+            brandBorder: true,
             button: _SmallBrandButton(
               tokens: tokens,
-              label: '立即观看',
-              onTap: onWatchAd,
+              label: '积分购买',
+              onTap: onPurchase,
             ),
           ),
         ),
         const SizedBox(height: 12),
         FadeUp(
           delay: const Duration(milliseconds: 160),
-          child: _OptionCard(
-            tokens: tokens,
-            icon: Icons.send_outlined,
-            iconBgColor: tokens.surfaceAlt,
-            iconColor: tokens.brand,
-            title: '分享给好友（2/3）',
-            desc: '累计分享 3 位好友即可解锁',
-            progress: 0.67,
-            button: _SmallOutlineButton(
-              tokens: tokens,
-              label: '继续分享',
-              onTap: onShare,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        FadeUp(
-          delay: const Duration(milliseconds: 240),
-          child: _OptionCard(
-            tokens: tokens,
-            icon: Icons.gps_fixed,
-            iconBgColor: tokens.surfaceAlt,
-            iconColor: tokens.brand,
-            title: '拍摄 5 张照片（3/5）',
-            desc: '完成 5 张拍摄任务即可解锁',
-            progress: 0.60,
-            button: _SmallOutlineButton(
-              tokens: tokens,
-              label: '去拍摄',
-              onTap: onGoCapture,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        FadeUp(
-          delay: const Duration(milliseconds: 320),
           child: _OptionCard(
             tokens: tokens,
             icon: Icons.vpn_key_outlined,
@@ -583,20 +543,18 @@ class _OptionsList extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         FadeUp(
-          delay: const Duration(milliseconds: 400),
+          delay: const Duration(milliseconds: 240),
           child: _OptionCard(
             tokens: tokens,
-            icon: Icons.star, // Flutter 3.7.12 无 Icons.diamond_outlined，用 Icons.star 替代
-            iconBgColor: tokens.brandSubtle,
+            icon: Icons.send_outlined,
+            iconBgColor: tokens.surfaceAlt,
             iconColor: tokens.brand,
-            title: '¥3.00 直接购买',
-            desc: '一次购买，永久使用',
-            titleStrong: true,
-            brandBorder: true,
-            button: _SmallBrandButton(
+            title: '分享给好友',
+            desc: '邀请好友赚积分 / 兑换模板',
+            button: _SmallOutlineButton(
               tokens: tokens,
-              label: '购买',
-              onTap: onPurchase,
+              label: '去邀请',
+              onTap: onShare,
             ),
           ),
         ),
@@ -876,10 +834,12 @@ class _SuccessCard extends StatelessWidget {
 
 class _PayPopupContent extends ConsumerWidget {
   const _PayPopupContent({
+    required this.price,
     required this.onCancel,
     required this.onConfirm,
   });
 
+  final int price;
   final VoidCallback onCancel;
   final VoidCallback onConfirm;
 
@@ -892,7 +852,7 @@ class _PayPopupContent extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          '确认支付',
+          '积分解锁',
           style: TextStyle(
             fontFamily: 'Noto Serif SC',
             fontSize: 17,
@@ -902,7 +862,7 @@ class _PayPopupContent extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          '¥3.00',
+          '$price 积分',
           style: TextStyle(
             fontSize: 36,
             fontWeight: FontWeight.w700,
@@ -912,7 +872,7 @@ class _PayPopupContent extends ConsumerWidget {
         ),
         const SizedBox(height: 6),
         Text(
-          '日系胶片 · 精选模板 · 永久使用',
+          '消耗 $price 积分，永久解锁该模板',
           style: TextStyle(
             fontSize: 12,
             color: tokens.textTertiary,
@@ -969,7 +929,7 @@ class _PayPopupContent extends ConsumerWidget {
                   ),
                   child: Center(
                     child: Text(
-                      '确认支付',
+                      '确认解锁',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
