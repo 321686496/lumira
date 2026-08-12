@@ -59,5 +59,9 @@
 	<!-- 定位（camerawesome 组件要求：可将拍摄位置 GPS 写入照片 Exif 信息） -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>用于将拍摄位置（GPS）写入照片的 Exif 信息</string>
+	<!-- 出口合规：App 仅使用豁免类加密（标准 HTTPS/TLS，无自定义/非豁免加密）。
+	     设为 false 后 App Store Connect 上传时不再每次弹出"App 加密文稿"问卷。 -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
