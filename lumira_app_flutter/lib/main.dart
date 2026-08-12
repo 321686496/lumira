@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +8,7 @@ import 'core/auth/auth_controller.dart';
 import 'core/auth/auth_dao.dart';
 import 'core/config/app_config.dart';
 import 'core/db/database_provider.dart';
+import 'core/network/api_client.dart';
 import 'core/theme/theme_controller.dart';
 import 'features/profile/data/profile_dao.dart';
 import 'features/profile/data/profile_models.dart';
@@ -68,7 +67,13 @@ Future<void> main() async {
     ],
   );
 
-  // 5. 初始化个人资料：拉取/补传（不阻塞启动）
+  // 5. 已注册设备：启动补传设备信息（修复历史版本平台信息缺失，不阻塞启动）
+  if (!authController.state.needsRegistration) {
+    // ignore: unawaited_futures
+    _reportDeviceInfo(container, authController.state.os ?? defaultResolveOs());
+  }
+
+  // 6. 初始化个人资料：拉取/补传（不阻塞启动）
   container.read(profileSyncServiceProvider.future).then((sync) async {
     await sync.ensureLoadedIfMissing();
     await sync.syncPendingIfNeeded();
@@ -113,26 +118,10 @@ Future<RegisterResult> _doRegister({
     receiveTimeout: AppConfig.receiveTimeoutMs,
     headers: {'Content-Type': 'application/json'},
   ));
-  
-  final deviceInfo = DeviceInfoPlugin();
-  Map<String, dynamic> registerData = {
-    'deviceId': deviceId,
-  };
-  
-  if (Platform.isAndroid) {
-    final androidInfo = await deviceInfo.androidInfo;
-    registerData['platform'] = os;
-    registerData['osVersion'] = '${androidInfo.version.release} (API ${androidInfo.version.sdkInt})';
-    registerData['deviceModel'] = '${androidInfo.manufacturer} ${androidInfo.model}';
-    registerData['appVersion'] = '1.0.0';
-  } else if (Platform.isIOS) {
-    final iosInfo = await deviceInfo.iosInfo;
-    registerData['platform'] = 'ios';
-    registerData['osVersion'] = '${iosInfo.systemName} ${iosInfo.systemVersion}';
-    registerData['deviceModel'] = iosInfo.utsname.machine;
-    registerData['appVersion'] = '1.0.0';
-  }
-  
+
+  final registerData = await _collectDeviceInfo(os);
+  registerData['deviceId'] = deviceId;
+
   final resp = await dio.post('/device/register', data: registerData);
   final body = resp.data as Map<String, dynamic>;
   final profileJson = body['profile'];
@@ -143,4 +132,43 @@ Future<RegisterResult> _doRegister({
         ? ProfileData.fromJson(profileJson)
         : null,
   );
+}
+
+/// 采集设备信息
+///
+/// 注意：鸿蒙（HarmonyOS）环境下 Platform.isAndroid / isIOS 均为 false，
+/// 若按平台分支填充字段会导致平台、系统版本、型号全部缺失。
+/// 故始终填充 platform（= os）与 appVersion，版本/型号用 try-catch 尽力采集：
+/// 鸿蒙 Flutter 提供 androidInfo 兼容实现，失败再回退 iosInfo，最终回退 os。
+Future<Map<String, dynamic>> _collectDeviceInfo(String os) async {
+  final deviceInfo = DeviceInfoPlugin();
+  final data = <String, dynamic>{
+    'platform': os,
+    'appVersion': '1.0.0',
+  };
+  try {
+    final androidInfo = await deviceInfo.androidInfo;
+    data['osVersion'] = '${androidInfo.version.release} (API ${androidInfo.version.sdkInt})';
+    data['deviceModel'] = '${androidInfo.manufacturer} ${androidInfo.model}';
+  } catch (_) {
+    try {
+      final iosInfo = await deviceInfo.iosInfo;
+      data['osVersion'] = '${iosInfo.systemName} ${iosInfo.systemVersion}';
+      data['deviceModel'] = iosInfo.utsname.machine;
+    } catch (_) {
+      data['osVersion'] = os;
+    }
+  }
+  return data;
+}
+
+/// 已注册设备启动时补传设备信息（PATCH /device/info，JWT 鉴权，失败静默）
+Future<void> _reportDeviceInfo(ProviderContainer container, String os) async {
+  try {
+    final client = await container.read(apiClientProvider.future);
+    final info = await _collectDeviceInfo(os);
+    await client.patch<bool>('/device/info', body: info, fromJson: (_) => true);
+  } catch (_) {
+    // 网络/鉴权失败不影响启动
+  }
 }

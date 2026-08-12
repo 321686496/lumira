@@ -65,4 +65,33 @@ export class DeviceService {
     const profile = await this.profileService.getOrCreateProfile(deviceId);
     return { token, isNewDevice: true, profile };
   }
+
+  /// 更新设备信息（JWT 鉴权后由 token 中的 deviceId 定位），不轮换 token
+  async updateDeviceInfo(
+    deviceId: string,
+    deviceInfo?: {
+      platform?: string;
+      osVersion?: string;
+      deviceModel?: string;
+      appVersion?: string;
+    },
+  ) {
+    const db = this.dbService.getDb();
+    const now = Math.floor(Date.now() / 1000);
+
+    const existing = await db.query.devices.findFirst({
+      where: eq(devices.deviceId, deviceId),
+    });
+    if (!existing) return;
+
+    await db.update(devices)
+      .set({
+        lastSeenAt: now,
+        ...(deviceInfo?.platform && { platform: deviceInfo.platform }),
+        ...(deviceInfo?.osVersion && { osVersion: deviceInfo.osVersion }),
+        ...(deviceInfo?.deviceModel && { deviceModel: deviceInfo.deviceModel }),
+        ...(deviceInfo?.appVersion && { appVersion: deviceInfo.appVersion }),
+      })
+      .where(eq(devices.deviceId, deviceId));
+  }
 }

@@ -56,4 +56,35 @@ describe('DeviceController (e2e)', () => {
       .send({ deviceId: 'short' })
       .expect(400);
   });
+
+  it('PATCH /api/v1/device/info — should reject without token', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/v1/device/info')
+      .send({ platform: 'android', osVersion: '13 (API 33)', deviceModel: 'Xiaomi 13', appVersion: '1.0.0' })
+      .expect(401);
+  });
+
+  it('PATCH /api/v1/device/info — should update device info with token', async () => {
+    const reg = await request(app.getHttpServer())
+      .post('/api/v1/device/register')
+      .send({ deviceId: testDeviceId })
+      .expect(201);
+    const token = reg.body.token as string;
+
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/device/info')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ platform: 'harmonyos', osVersion: '5.0 (API 18)', deviceModel: 'HUAWEI Mate 60 Pro', appVersion: '1.0.0' })
+      .expect(200);
+
+    expect(res.body).toEqual({ success: true });
+  });
+
+  it('PATCH /api/v1/device/info — should return 401 with invalid token', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/v1/device/info')
+      .set('Authorization', 'Bearer invalid-token')
+      .send({ platform: 'android' })
+      .expect(401);
+  });
 });
