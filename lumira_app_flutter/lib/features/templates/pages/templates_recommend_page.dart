@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,29 +7,37 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../data/templates_browse_mock_data.dart';
+import '../recommend/recommendation_models.dart';
+import '../recommend/recommendation_providers.dart';
 
 /// 为你推荐页
 ///
-/// 视觉规格来源：lumira-app/src/pages/templates/recommend.vue
-/// 4 个 section：
-/// 1. StyleAnalysisCard（palette 图标 + 根据你的拍摄风格 + 3 个 LinearProgressIndicator）
-/// 2. GuessLikesSection（猜你喜欢 + 换一换 link + 2 列网格 6 项）
-/// 3. SimilarUsersSection（相似用户也在拍 + 查看全部 link + 2 列网格 4 项，usageCount 用 formatThousands）
-/// 4. RecentShotSection（根据最近拍摄 + recent-info-card + 2 列网格 4 项）
-///
-/// 接收参数：无
-class TemplatesRecommendPage extends ConsumerWidget {
+/// 纯本地算法推荐（spec 2026-08-12）：
+/// 1. 风格分析卡：真实场景风格统计
+/// 2. 猜你喜欢：匹配打分 Top（排除已拥有+已用过），支持换一换
+/// 3. 旧爱回归：很久前用过 + 近期类型匹配的模板召回
+/// 4. 根据最近拍摄：最近照片关联模板推荐
+class TemplatesRecommendPage extends ConsumerStatefulWidget {
   const TemplatesRecommendPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TemplatesRecommendPage> createState() =>
+      _TemplatesRecommendPageState();
+}
+
+class _TemplatesRecommendPageState extends ConsumerState<TemplatesRecommendPage> {
+  // 猜你喜欢 / 旧爱回归 的轮换偏移（换一换 = 窗口滑动）
+  int _guessOffset = 0;
+  int _recallOffset = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final resultAsync = ref.watch(recommendationProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -49,18 +59,16 @@ class TemplatesRecommendPage extends ConsumerWidget {
                   ),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.only(bottom: 32),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _StyleAnalysisCard(tokens: tokens),
-                        _GuessLikesSection(tokens: tokens),
-                        _SimilarUsersSection(tokens: tokens),
-                        _RecentShotSection(tokens: tokens),
-                        const SizedBox(height: 40),
-                      ],
+                  child: resultAsync.when(
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(),
                     ),
+                    error: (e, _) => _ErrorView(
+                      tokens: tokens,
+                      message: '推荐数据加载失败',
+                      onRetry: () => ref.invalidate(recommendationProvider),
+                    ),
+                    data: (result) => _buildContent(tokens, result),
                   ),
                 ),
               ],
@@ -69,6 +77,57 @@ class TemplatesRecommendPage extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildContent(ThemeTokens tokens, RecommendationResult result) {
+    // 窗口切片（换一换用）：guessLikes 每屏 6，recall 每屏 4
+    final guessPage = _slice(result.guessLikes, _guessOffset, 6);
+    final recallPage = _slice(result.recall, _recallOffset, 4);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _StyleAnalysisCard(
+            tokens: tokens,
+            scores: result.styleScores,
+            coldStart: result.coldStart,
+          ),
+          _GuessLikesSection(
+            tokens: tokens,
+            items: guessPage,
+            onShuffle: () => setState(() => _guessOffset += 6),
+            hasMore: result.guessLikes.length > _guessOffset + 6,
+          ),
+          if (recallPage.isNotEmpty)
+            _RecallSection(
+              tokens: tokens,
+              items: recallPage,
+              onShuffle: () => setState(() => _recallOffset += 4),
+              hasMore: result.recall.length > _recallOffset + 4,
+            ),
+          if (result.recentInfo != null || result.recentRelated.isNotEmpty)
+            _RecentShotSection(
+              tokens: tokens,
+              info: result.recentInfo,
+              items: result.recentRelated,
+            ),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+  }
+
+  /// 从完整候选按偏移取窗口（换一换轮转）
+  List<RecommendItem> _slice(List<RecommendItem> all, int offset, int page) {
+    if (all.isEmpty) return const [];
+    final start = offset % all.length;
+    final result = <RecommendItem>[];
+    for (var i = 0; i < page && result.length < page; i++) {
+      result.add(all[(start + i) % all.length]);
+    }
+    return result;
   }
 
   void _back(BuildContext context) {
@@ -174,18 +233,11 @@ class _SectionTitle extends StatelessWidget {
                 children: [
                   Text(
                     linkText!,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.brand,
-                    ),
+                    style: TextStyle(fontSize: 12, color: tokens.brand),
                     maxLines: 1,
                   ),
                   const SizedBox(width: 4),
-                  Icon(
-                    Icons.arrow_forward,
-                    size: 14,
-                    color: tokens.brand,
-                  ),
+                  Icon(Icons.arrow_forward, size: 14, color: tokens.brand),
                 ],
               ),
             ),
@@ -195,10 +247,17 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-/// Section 1: 风格分析卡
+/// Section 1: 风格分析卡（真实风格统计 / 冷启动引导）
 class _StyleAnalysisCard extends StatelessWidget {
-  const _StyleAnalysisCard({required this.tokens});
+  const _StyleAnalysisCard({
+    required this.tokens,
+    required this.scores,
+    required this.coldStart,
+  });
+
   final ThemeTokens tokens;
+  final List<StyleScore> scores;
+  final bool coldStart;
 
   @override
   Widget build(BuildContext context) {
@@ -226,50 +285,52 @@ class _StyleAnalysisCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '分析你过往的 128 张作品，我们发现你偏爱以下风格',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: tokens.textSecondary,
-                ),
+                coldStart || scores.isEmpty
+                    ? '完成 3 张拍摄后生成你的风格分析'
+                    : '分析你的真实拍摄记录，我们发现你偏爱以下风格',
+                style: TextStyle(fontSize: 12, color: tokens.textSecondary),
               ),
-              const SizedBox(height: 16),
-              ...TemplatesBrowseMockData.styleAnalysis.map(
-                (s) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Icon(s.icon, color: tokens.brand, size: 16),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              s.label,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: tokens.textPrimary,
+              if (scores.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                ...scores.map(
+                  (s) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.auto_awesome,
+                                color: tokens.brand, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                s.label,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: tokens.textPrimary,
+                                ),
                               ),
                             ),
-                          ),
-                          Text(
-                            '${s.percent}%',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.brand,
+                            Text(
+                              '${s.percent.round()}%',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: tokens.brand,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      LumiraProgress.linear(
-                        value: s.percent / 100,
-                        minHeight: 6,
-                      ),
-                    ],
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        LumiraProgress.linear(
+                          value: (s.percent / 100).clamp(0.0, 1.0),
+                          minHeight: 6,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -278,21 +339,23 @@ class _StyleAnalysisCard extends StatelessWidget {
   }
 }
 
-/// Section 2: 猜你喜欢
+/// Section 2: 猜你喜欢（真实推荐 + 换一换）
 class _GuessLikesSection extends StatelessWidget {
-  const _GuessLikesSection({required this.tokens});
-  final ThemeTokens tokens;
+  const _GuessLikesSection({
+    required this.tokens,
+    required this.items,
+    required this.onShuffle,
+    required this.hasMore,
+  });
 
-  void _showSnack(BuildContext context) {
-    LumiraToast.show(
-      context,
-      '换一换功能即将上线',
-      duration: const Duration(milliseconds: 1000),
-    );
-  }
+  final ThemeTokens tokens;
+  final List<RecommendItem> items;
+  final VoidCallback onShuffle;
+  final bool hasMore;
 
   @override
   Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
     return FadeUp(
       delay: const Duration(milliseconds: 80),
       child: Column(
@@ -303,7 +366,14 @@ class _GuessLikesSection extends StatelessWidget {
             title: '猜你喜欢',
             tokens: tokens,
             linkText: '换一换',
-            onLinkTap: () => _showSnack(context),
+            onLinkTap: () {
+              if (hasMore) {
+                onShuffle();
+              } else {
+                LumiraToast.show(context, '已展示全部推荐',
+                    duration: const Duration(milliseconds: 1000));
+              }
+            },
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -314,14 +384,14 @@ class _GuessLikesSection extends StatelessWidget {
                 crossAxisCount: 2,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                // Forced fix: 0.72 在 360dp 小屏溢出 ~14dp
-                // cellWidth=154 → cellHeight(0.66)=233dp，内容=154(图 1:1)+20(padding)+54(3 行文字)=228dp ✓
                 childAspectRatio: 0.66,
               ),
-              itemCount: TemplatesBrowseMockData.guessLikes.length,
-              itemBuilder: (_, index) => _GuessLikeCard(
+              itemCount: items.length,
+              itemBuilder: (_, index) => _RecommendCard(
                 tokens: tokens,
-                item: TemplatesBrowseMockData.guessLikes[index],
+                item: items[index],
+                showMatch: true,
+                showUsedCount: true,
               ),
             ),
           ),
@@ -331,18 +401,19 @@ class _GuessLikesSection extends StatelessWidget {
   }
 }
 
-/// Section 3: 相似用户也在拍
-class _SimilarUsersSection extends StatelessWidget {
-  const _SimilarUsersSection({required this.tokens});
-  final ThemeTokens tokens;
+/// Section 3: 旧爱回归（很久前用过 + 近期类型匹配）
+class _RecallSection extends StatelessWidget {
+  const _RecallSection({
+    required this.tokens,
+    required this.items,
+    required this.onShuffle,
+    required this.hasMore,
+  });
 
-  void _showSnack(BuildContext context) {
-    LumiraToast.show(
-      context,
-      '查看全部功能即将上线',
-      duration: const Duration(milliseconds: 1000),
-    );
-  }
+  final ThemeTokens tokens;
+  final List<RecommendItem> items;
+  final VoidCallback onShuffle;
+  final bool hasMore;
 
   @override
   Widget build(BuildContext context) {
@@ -352,11 +423,18 @@ class _SimilarUsersSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _SectionTitle(
-            icon: Icons.group_outlined,
-            title: '相似用户也在拍',
+            icon: Icons.restore,
+            title: '旧爱回归',
             tokens: tokens,
-            linkText: '查看全部',
-            onLinkTap: () => _showSnack(context),
+            linkText: '换一换',
+            onLinkTap: () {
+              if (hasMore) {
+                onShuffle();
+              } else {
+                LumiraToast.show(context, '已展示全部推荐',
+                    duration: const Duration(milliseconds: 1000));
+              }
+            },
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -367,13 +445,14 @@ class _SimilarUsersSection extends StatelessWidget {
                 crossAxisCount: 2,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                // Forced fix: 0.72 在 360dp 小屏溢出（_SimilarUserCard 仅 2 行文字但接近边界）
                 childAspectRatio: 0.66,
               ),
-              itemCount: TemplatesBrowseMockData.similarUsers.length,
-              itemBuilder: (_, index) => _SimilarUserCard(
+              itemCount: items.length,
+              itemBuilder: (_, index) => _RecommendCard(
                 tokens: tokens,
-                item: TemplatesBrowseMockData.similarUsers[index],
+                item: items[index],
+                showMatch: true,
+                showUsedCount: true,
               ),
             ),
           ),
@@ -383,28 +462,158 @@ class _SimilarUsersSection extends StatelessWidget {
   }
 }
 
-/// Section 4: 根据最近拍摄
-class _RecentShotSection extends StatelessWidget {
-  const _RecentShotSection({required this.tokens});
+/// 推荐模板卡片（猜你喜欢 / 旧爱回归 共用）
+class _RecommendCard extends StatelessWidget {
+  const _RecommendCard({
+    required this.tokens,
+    required this.item,
+    this.showMatch = false,
+    this.showUsedCount = false,
+  });
+
   final ThemeTokens tokens;
+  final RecommendItem item;
+  final bool showMatch;
+  final bool showUsedCount;
 
   @override
   Widget build(BuildContext context) {
-    const recent = TemplatesBrowseMockData.recentShot;
+    return GestureDetector(
+      onTap: () => context.push(
+        RouteNames.withTemplateId(RouteNames.templatesDetail, item.templateId),
+      ),
+      child: NeuCard(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox.expand(
+                  child: _TemplateCover(item: item),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              item.name,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                if (item.price > 0) ...[
+                  Text(
+                    '${item.price} 积分',
+                    style: TextStyle(fontSize: 11, color: tokens.brand),
+                  ),
+                ] else ...[
+                  Text(
+                    '免费',
+                    style: TextStyle(fontSize: 11, color: tokens.textSecondary),
+                  ),
+                ],
+                const Spacer(),
+                if (showMatch)
+                  Text(
+                    '匹配 ${(item.matchScore * 100).round()}%',
+                    style: TextStyle(
+                        fontSize: 11, color: tokens.textSecondary),
+                  ),
+                if (showUsedCount && item.usedCount > 0)
+                  Text(
+                    '用过 ${item.usedCount} 次',
+                    style: TextStyle(
+                        fontSize: 11, color: tokens.textSecondary),
+                  ),
+              ],
+            ),
+            if (item.reason.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                item.reason,
+                style: TextStyle(fontSize: 11, color: tokens.textSecondary),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 模板封面（支持本地 coverData 与网络 cover）
+class _TemplateCover extends StatelessWidget {
+  const _TemplateCover({required this.item});
+  final RecommendItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    if (item.coverData != null && item.coverData!.isNotEmpty) {
+      return Image.memory(
+        base64Decode(item.coverData!),
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+      );
+    }
+    if (item.cover.isNotEmpty) {
+      return Image.network(
+        item.cover,
+        fit: BoxFit.cover,
+        loadingBuilder: (_, child, progress) {
+          if (progress == null) return child;
+          return Container(color: const Color(0xFFF0EDE8));
+        },
+        errorBuilder: (_, __, ___) =>
+            Container(color: const Color(0xFFF0EDE8)),
+      );
+    }
+    return Container(color: const Color(0xFFF0EDE8));
+  }
+}
+
+/// Section 4: 根据最近拍摄
+class _RecentShotSection extends StatelessWidget {
+  const _RecentShotSection({
+    required this.tokens,
+    required this.info,
+    required this.items,
+  });
+
+  final ThemeTokens tokens;
+  final RecentInfo? info;
+  final List<RecommendItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty && info == null) return const SizedBox.shrink();
     return FadeUp(
       delay: const Duration(milliseconds: 240),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _SectionTitle(
-            icon: Icons.history,
+            icon: Icons.photo_camera,
             title: '根据最近拍摄',
             tokens: tokens,
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-            child: _RecentInfoCard(tokens: tokens, info: recent),
-          ),
+          if (info != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                info!.text,
+                style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+              ),
+            ),
           const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -415,13 +624,12 @@ class _RecentShotSection extends StatelessWidget {
                 crossAxisCount: 2,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                // Forced fix: 0.72 在 360dp 小屏溢出 ~14dp（_RecentTemplateCard 3 行文字）
                 childAspectRatio: 0.66,
               ),
-              itemCount: TemplatesBrowseMockData.recentTemplates.length,
-              itemBuilder: (_, index) => _RecentTemplateCard(
+              itemCount: items.length,
+              itemBuilder: (_, index) => _RecommendCard(
                 tokens: tokens,
-                item: TemplatesBrowseMockData.recentTemplates[index],
+                item: items[index],
               ),
             ),
           ),
@@ -431,364 +639,33 @@ class _RecentShotSection extends StatelessWidget {
   }
 }
 
-/// recent-info-card：最近拍摄信息提示
-class _RecentInfoCard extends StatelessWidget {
-  const _RecentInfoCard({required this.tokens, required this.info});
-  final ThemeTokens tokens;
-  final RecentShotInfo info;
-
-  @override
-  Widget build(BuildContext context) {
-    return NeuCard(
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              'https://picsum.photos/seed/${info.imgSeed}/100/100',
-              width: 44,
-              height: 44,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 44,
-                height: 44,
-                color: tokens.surfaceAlt,
-                child: Icon(
-                  Icons.image_outlined,
-                  size: 20,
-                  color: tokens.textTertiary,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  info.text,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  info.sub,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: tokens.textSecondary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 猜你喜欢卡片
-class _GuessLikeCard extends StatelessWidget {
-  const _GuessLikeCard({required this.tokens, required this.item});
-  final ThemeTokens tokens;
-  final GuessLikeItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => GoRouter.of(context).push('/templates/detail'),
-      behavior: HitTestBehavior.opaque,
-      child: NeuCard(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1.0,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    'https://picsum.photos/seed/${item.imgSeed}/400/400',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: tokens.surfaceAlt,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: tokens.textTertiary,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: _LevelBadge(
-                      tokens: tokens,
-                      level: item.level,
-                      isGold: item.isGold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    style: TextStyle(
-                      fontFamily: 'Noto Serif SC',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.match,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: tokens.brand,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.reason,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: tokens.textTertiary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 相似用户卡片
-class _SimilarUserCard extends StatelessWidget {
-  const _SimilarUserCard({required this.tokens, required this.item});
-  final ThemeTokens tokens;
-  final SimilarUserItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => GoRouter.of(context).push('/templates/detail'),
-      behavior: HitTestBehavior.opaque,
-      child: NeuCard(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1.0,
-              child: Image.network(
-                'https://picsum.photos/seed/${item.imgSeed}/400/400',
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: tokens.surfaceAlt,
-                  child: Icon(
-                    Icons.broken_image_outlined,
-                    color: tokens.textTertiary,
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    style: TextStyle(
-                      fontFamily: 'Noto Serif SC',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${formatThousands(item.usageCount)}+ 用户使用',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: tokens.brand,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 最近模板卡片
-class _RecentTemplateCard extends StatelessWidget {
-  const _RecentTemplateCard({required this.tokens, required this.item});
-  final ThemeTokens tokens;
-  final RecentTemplateItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => GoRouter.of(context).push('/templates/detail'),
-      behavior: HitTestBehavior.opaque,
-      child: NeuCard(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 1.0,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    'https://picsum.photos/seed/${item.imgSeed}/400/400',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: tokens.surfaceAlt,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: tokens.textTertiary,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: _ThemeBadge(tokens: tokens, theme: item.theme),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.name,
-                    style: TextStyle(
-                      fontFamily: 'Noto Serif SC',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.match,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: tokens.brand,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.count,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: tokens.textTertiary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 难度 badge（猜你喜欢卡片）
-class _LevelBadge extends StatelessWidget {
-  const _LevelBadge({
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({
     required this.tokens,
-    required this.level,
-    required this.isGold,
+    required this.message,
+    required this.onRetry,
   });
 
   final ThemeTokens tokens;
-  final String level; // '易 新手' / '中 进阶' / '中 构图' / '难 大师'
-  final bool isGold;
+  final String message;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        // 硬编码颜色，与 uni-app 一致 (lumira-tag-gold / lumira-tag-green)
-        color: isGold
-            ? tokens.brand.withOpacity(0.92)
-            : const Color(0xFF5A7A48).withOpacity(0.92),
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Text(
-        level,
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
-
-/// 主题 badge（最近模板卡片）
-class _ThemeBadge extends StatelessWidget {
-  const _ThemeBadge({required this.tokens, required this.theme});
-  final ThemeTokens tokens;
-  final String theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        // 硬编码颜色，与 uni-app 一致 (rgba(0,0,0,0.55))
-        color: Colors.black.withOpacity(0.55),
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Text(
-        theme,
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, color: tokens.textSecondary, size: 40),
+          const SizedBox(height: 12),
+          Text(message,
+              style: TextStyle(fontSize: 14, color: tokens.textSecondary)),
+          const SizedBox(height: 16),
+          OutlinedButton(
+            onPressed: onRetry,
+            child: const Text('重试'),
+          ),
+        ],
       ),
     );
   }
