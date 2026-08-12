@@ -69,6 +69,7 @@ export interface TemplatePricesResponse {
 // 积分兑换模板请求
 export interface ExchangeTemplateRequest {
   templateId: string;
+  priceCredits?: number; // 内置模板（id 无 srv_ 前缀）必填，客户端上报积分价格（≥1）
 }
 
 // 积分兑换模板响应
