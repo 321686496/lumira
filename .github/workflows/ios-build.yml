@@ -179,7 +179,12 @@ jobs:
           PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin \
             <<< "$(security cms -D -i "$PP_PATH")")
           mv "$PP_PATH" "$PP_DIR/$PP_UUID.mobileprovision"
-          echo "Installed provisioning profile: $PP_UUID"
+          PP_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" /dev/stdin \
+            <<< "$(security cms -D -i "$PP_DIR/$PP_UUID.mobileprovision")")
+          echo "Installed provisioning profile: $PP_UUID ($PP_NAME)"
+          # 供后续 Generate ExportOptions.plist 步骤使用
+          echo "PP_UUID=$PP_UUID" >> "$GITHUB_ENV"
+          echo "PP_NAME=$PP_NAME" >> "$GITHUB_ENV"
 
       - name: Configure Manual code signing (Runner Release)
         if: ${{ inputs.sign == true }}
@@ -252,35 +257,42 @@ jobs:
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
-          python3 -c "
+          # 手动签名（CODE_SIGN_STYLE=Manual）下，xcodebuild -exportArchive 要求
+          # ExportOptions.plist 必须包含 signingStyle=manual 和 provisioningProfiles 映射，
+          # 否则 flutter build ipa / xcodebuild -exportArchive 归档成功但导出失败
+          # （Flutter issue #177853）。
+          python3 <<'PYEOF'
           import os
+          import plistlib
+
           team_id = os.environ['TEAM_ID']
-          plist = (
-              '<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n'
-              '<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n'
-              '<plist version=\"1.0\">\n'
-              '<dict>\n'
-              '    <key>method</key>\n'
-              '    <string>app-store-connect</string>\n'
-              '    <key>teamID</key>\n'
-              f'    <string>{team_id}</string>\n'
-              '    <key>uploadBitcode</key>\n'
-              '    <false/>\n'
-              '    <key>uploadSymbols</key>\n'
-              '    <true/>\n'
-              '    <key>compileBitcode</key>\n'
-              '    <false/>\n'
-              '</dict>\n'
-              '</plist>\n'
-          )
-          out_dir = '${{ env.WORKSPACE }}/ios'
+          pp_uuid = os.environ.get('PP_UUID', '')
+          pp_name = os.environ.get('PP_NAME', '')
+          workspace = os.environ.get('WORKSPACE', 'lumira_app_flutter')
+          bundle_id = os.environ.get('BUNDLE_ID', 'com.rh.lumira')
+
+          if not pp_uuid:
+              raise SystemExit('PP_UUID is empty: provisioning profile was not installed')
+
+          options = {
+              'method': 'app-store-connect',
+              'teamID': team_id,
+              'signingStyle': 'manual',
+              'signingCertificate': 'Apple Distribution',
+              'provisioningProfiles': {bundle_id: pp_uuid},
+              'uploadBitcode': False,
+              'uploadSymbols': True,
+              'compileBitcode': False,
+          }
+
+          out_dir = os.path.join(os.getcwd(), workspace, 'ios')
           os.makedirs(out_dir, exist_ok=True)
           out_path = os.path.join(out_dir, 'ExportOptions.plist')
-          with open(out_path, 'w', encoding='utf-8') as f:
-              f.write(plist)
+          with open(out_path, 'wb') as f:
+              plistlib.dump(options, f)
           print('Generated ExportOptions.plist at', out_path)
-          print(plist)
-          "
+          print('bundle id:', bundle_id, '| profile uuid:', pp_uuid, '| profile name:', pp_name)
+          PYEOF
 
       # --------------------------------------------------------------------------
       # 构建
