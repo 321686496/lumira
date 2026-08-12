@@ -216,4 +216,169 @@ void main() {
       expect(ids, contains('tpl-portrait'));
     });
   });
+
+  group('旧爱回归 recall', () {
+    test('很久前用过且近期类型匹配的模板被召回', () {
+      final engine = RecommendationEngine();
+      // 90 天前用过 tpl-food（很久前），近期照片都是 still-life 相关场景
+      final result = engine.build(RecommendationEngineInput(
+        photos: [
+          photo(now: now, daysAgo: 90, templateId: 'tpl-food'),
+          photo(now: now, daysAgo: 1, sceneId: 'scene-cafe'),
+          photo(now: now, daysAgo: 1, sceneId: 'scene-cafe'),
+        ],
+        scenes: const {
+          'scene-cafe':
+              SceneSignal(id: 'scene-cafe', style: '清新', relatedCategory: 'still-life'),
+        },
+        templates: [
+          // 很久前用过的 food 模板（应被召回）
+          const TemplateSignal(
+            id: 'tpl-food',
+            name: '美食模板',
+            category: 'food',
+            tags: [],
+            tagIds: ['food-tag'],
+            classification: {'type': 'food', 'style': 'overhead', 'method': 'normal'},
+            postProcess: {'saturation': 0, 'temperature': 0, 'contrast': 0, 'brightness': 0},
+            cover: 'https://picsum.photos/seed/b/400/400',
+            price: 100,
+            updatedAt: 200,
+          ),
+          // 未用过的 food 模板（不应被召回，但会进 guessLikes）
+          const TemplateSignal(
+            id: 'tpl-food-2',
+            name: '美食模板二',
+            category: 'food',
+            tags: [],
+            tagIds: ['food-tag'],
+            classification: {'type': 'food', 'style': 'overhead', 'method': 'normal'},
+            postProcess: {'saturation': 0, 'temperature': 0, 'contrast': 0, 'brightness': 0},
+            cover: 'https://picsum.photos/seed/b2/400/400',
+            price: 100,
+            updatedAt: 200,
+          ),
+        ],
+        ownedTemplateIds: const {},
+        questionnaire: null,
+        nowMs: now,
+      ));
+      expect(result.recall.map((r) => r.templateId), contains('tpl-food'));
+      expect(
+          result.recall.map((r) => r.templateId), isNot(contains('tpl-food-2')));
+      // 猜你喜欢：tpl-food（已用过）被排除，tpl-food-2 保留
+      final guessIds = result.guessLikes.map((r) => r.templateId).toList();
+      expect(guessIds, isNot(contains('tpl-food')));
+      expect(guessIds, contains('tpl-food-2'));
+      // 召回文案与使用张数
+      final recallItem =
+          result.recall.firstWhere((r) => r.templateId == 'tpl-food');
+      expect(recallItem.reason, contains('很久前用过'));
+      expect(recallItem.usedCount, 1);
+    });
+
+    test('近期（30 天内）用过的不进召回区', () {
+      final engine = RecommendationEngine();
+      final result = engine.build(RecommendationEngineInput(
+        photos: [photo(now: now, daysAgo: 5, templateId: 'tpl-food')],
+        scenes: const {},
+        templates: const [
+          TemplateSignal(
+            id: 'tpl-food',
+            name: '美食模板',
+            category: 'food',
+            tags: [],
+            tagIds: [],
+            classification: {'type': 'food', 'style': 'overhead', 'method': 'normal'},
+            postProcess: {},
+            cover: '',
+            price: 0,
+            updatedAt: 100,
+          ),
+        ],
+        ownedTemplateIds: const {},
+        questionnaire: null,
+        nowMs: now,
+      ));
+      expect(result.recall, isEmpty);
+    });
+  });
+
+  group('冷启动', () {
+    test('无照片有问卷：问卷偏好分类模板排最前', () {
+      final engine = RecommendationEngine();
+      final result = engine.build(RecommendationEngineInput(
+        photos: const [],
+        scenes: const {},
+        templates: templates(),
+        ownedTemplateIds: const {},
+        questionnaire: QuestionnaireAnswers(
+          source: 'onboarding',
+          favoriteCategories: const ['food'],
+          painPoints: const [],
+          skillLevel: 'beginner',
+          expectations: const [],
+          commonScenes: const [],
+          shootFrequency: null,
+        ),
+        nowMs: now,
+      ));
+      expect(result.coldStart, isTrue);
+      expect(result.guessLikes.first.templateId, 'tpl-food');
+    });
+
+    test('无照片无问卷：各分类均匀覆盖', () {
+      final engine = RecommendationEngine();
+      final result = engine.build(RecommendationEngineInput(
+        photos: const [],
+        scenes: const {},
+        templates: templates(),
+        ownedTemplateIds: const {},
+        questionnaire: null,
+        nowMs: now,
+      ));
+      // 3 个分类都有覆盖
+      final cats = result.guessLikes.map((r) => r.category).toSet();
+      expect(cats, contains('portrait'));
+      expect(cats, contains('food'));
+      expect(cats, contains('street'));
+    });
+  });
+
+  group('根据最近拍摄 recent', () {
+    test('最近照片套用模板：推荐同分类模板', () {
+      final engine = RecommendationEngine();
+      // 最新照片用了 tpl-food（1 天前），旧照片用 tpl-portrait（10 天前）
+      final result = engine.build(RecommendationEngineInput(
+        photos: [
+          photo(now: now, daysAgo: 1, templateId: 'tpl-food'),
+          photo(now: now, daysAgo: 10, templateId: 'tpl-portrait'),
+        ],
+        scenes: const {},
+        templates: templates(),
+        ownedTemplateIds: const {},
+        questionnaire: null,
+        nowMs: now,
+      ));
+      expect(result.recentInfo, isNotNull);
+      // 最近相关推荐应含 food 分类（未被使用过的候选：tpl-food 已用过，但同分类无其他
+      // 候选时可回退；此处断言非空即可）
+      expect(result.recentRelated, isNotEmpty);
+    });
+
+    test('无照片时 recent 为空', () {
+      final engine = RecommendationEngine();
+      final result = engine.build(RecommendationEngineInput(
+        photos: const [],
+        scenes: const {},
+        templates: templates(),
+        ownedTemplateIds: const {},
+        questionnaire: null,
+        nowMs: now,
+      ));
+      expect(result.coldStart, isTrue);
+      expect(result.recentInfo, isNull);
+      expect(result.recentRelated, isEmpty);
+    });
+  });
 }

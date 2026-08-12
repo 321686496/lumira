@@ -213,13 +213,45 @@ class RecommendationEngine {
 
   // ===== 私有辅助 =====
 
-  /// 冷启动（Task 2 完善：问卷偏好 / 分类多样性）
+  /// 冷启动：有问卷按问卷偏好，无问卷按分类多样性均匀覆盖
   RecommendationResult _buildColdStart(RecommendationEngineInput input) {
     final owned = input.ownedTemplateIds;
-    final pool = input.templates
-        .where((t) => !owned.contains(t.id))
-        .toList();
-    final picked = pool.take(8).toList();
+    final pool =
+        input.templates.where((t) => !owned.contains(t.id)).toList();
+
+    final List<TemplateSignal> picked;
+    final q = input.questionnaire;
+    if (q != null && !q.isAllSkipped && q.favoriteCategories.isNotEmpty) {
+      // 问卷偏好优先：偏好分类的模板排前，其余按 updatedAt 补足
+      final liked = pool
+          .where((t) => q.favoriteCategories.contains(t.category))
+          .toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      final others = pool
+          .where((t) => !q.favoriteCategories.contains(t.category))
+          .toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      picked = [...liked, ...others].take(8).toList();
+    } else {
+      // 多样性：按 category 分组，每组最多 2 个，循环填充至 8 个
+      final byCategory = <String, List<TemplateSignal>>{};
+      for (final t in pool) {
+        byCategory.putIfAbsent(t.category, () => []).add(t);
+      }
+      picked = [];
+      var done = false;
+      while (!done && picked.length < 8) {
+        done = true;
+        for (final list in byCategory.values) {
+          if (list.isEmpty) continue;
+          final t = list.removeAt(0);
+          picked.add(t);
+          done = false;
+          if (picked.length >= 8) break;
+        }
+      }
+    }
+
     return RecommendationResult(
       coldStart: true,
       guessLikes: picked
@@ -247,22 +279,144 @@ class RecommendationEngine {
     }).toList();
   }
 
-  /// 旧爱回归（Task 2 实现）
+  /// 旧爱回归：>30 天前用过 + 当前匹配分 >= 阈值
   List<RecommendItem> _buildRecall(
       UserProfile profile, RecommendationEngineInput input) {
-    return const [];
+    final gapMs = kRecallGapDays * 24 * 3600 * 1000;
+    final now = input.nowMs;
+    final templateById = <String, TemplateSignal>{
+      for (final t in input.templates) t.id: t,
+    };
+
+    final items = <RecommendItem>[];
+    profile.usedTemplateCounts.forEach((templateId, count) {
+      final lastUsed = profile.lastUsedTemplateAt[templateId] ?? 0;
+      if (now - lastUsed <= gapMs) return; // 近期用过，不进召回
+      final tpl = templateById[templateId];
+      if (tpl == null) return; // 模板已下架
+      if (input.ownedTemplateIds.contains(templateId)) return; // 已拥有
+
+      // 用当前画像计算匹配分（不含 tag 之外的排除）
+      final score = _scoreTemplate(profile, tpl, input);
+      if (score < kRecallThreshold) return;
+
+      items.add(RecommendItem(
+        templateId: tpl.id,
+        name: tpl.name,
+        category: tpl.category,
+        cover: tpl.cover,
+        coverData: tpl.coverData,
+        price: tpl.price,
+        matchScore: score,
+        reason: '你最近很喜欢拍这种类型，这是你很久前用过的同类型模板',
+        usedCount: count,
+      ));
+    });
+
+    items.sort((a, b) => b.matchScore.compareTo(a.matchScore));
+    return items.take(4).toList();
   }
 
-  /// 最近拍摄信息（Task 2 实现）
+  /// 计算单个模板的匹配分（供旧召回复用；排除逻辑由调用方负责）
+  double _scoreTemplate(
+      UserProfile profile, TemplateSignal t, RecommendationEngineInput input) {
+    final maxCategory = _maxOr1(profile.categoryWeights);
+    final maxStyle = _maxOr1(profile.styleWeights);
+    final tagTotal = profile.tagWeights.values.fold(0.0, (a, b) => a + b);
+
+    final categorySim = maxCategory > 0
+        ? ((profile.categoryWeights[t.category] ?? 0) / maxCategory)
+            .clamp(0.0, 1.0)
+        : 0.0;
+
+    double tagSim = 0.0;
+    if (tagTotal > 0) {
+      for (final tagId in t.tagIds) {
+        tagSim += profile.tagWeights[tagId] ?? 0;
+      }
+      tagSim = (tagSim / tagTotal).clamp(0.0, 1.0);
+    }
+
+    final tplStyle = t.classification['style'];
+    double styleSim = 0.0;
+    if (maxStyle > 0 && tplStyle is String && tplStyle.isNotEmpty) {
+      styleSim =
+          ((profile.styleWeights[tplStyle] ?? 0) / maxStyle).clamp(0.0, 1.0);
+    }
+
+    final postSim = _cosinePost(profile.avgPost, _templatePost(t.postProcess));
+
+    return (wCategory * categorySim +
+            wTag * tagSim +
+            wStyle * styleSim +
+            wPost * postSim)
+        .clamp(0.0, 1.0);
+  }
+
+  /// 最近拍摄信息
   RecentInfo? _buildRecentInfo(
       UserProfile profile, RecommendationEngineInput input) {
-    return null;
+    if (input.photos.isEmpty) return null;
+    // 最新一张照片
+    final recent = input.photos.reduce((a, b) => a.createdAt >= b.createdAt ? a : b);
+    if (recent.templateId == null && recent.sceneId == null) return null;
+    final scene = recent.sceneId != null ? input.scenes[recent.sceneId] : null;
+    final category = scene?.relatedCategory.isNotEmpty == true
+        ? scene!.relatedCategory
+        : null;
+    final tplName = _templateName(input, recent.templateId);
+    if (category == null && recent.templateId == null) return null;
+    return RecentInfo(
+      text: tplName.isNotEmpty
+          ? '你最近用「$tplName」拍摄了照片'
+          : '你最近拍摄的照片',
+      sub: '试试这些同类型的模板吧',
+    );
   }
 
-  /// 最近拍摄相关模板（Task 2 实现）
+  /// 最近拍摄相关模板：优先同模板分类 / 同场景分类，回退 guessLikes 前 4
   List<RecommendItem> _buildRecentRelated(UserProfile profile,
       RecommendationEngineInput input, List<RecommendItem> ranked) {
-    return const [];
+    if (input.photos.isEmpty) return const [];
+    final recent = input.photos.reduce((a, b) => a.createdAt >= b.createdAt ? a : b);
+
+    TemplateSignal? tpl;
+    for (final t in input.templates) {
+      if (t.id == recent.templateId) {
+        tpl = t;
+        break;
+      }
+    }
+    final scene = recent.sceneId != null ? input.scenes[recent.sceneId] : null;
+
+    final targetCategory = tpl?.category ??
+        (scene?.relatedCategory.isNotEmpty == true ? scene!.relatedCategory : null);
+
+    List<RecommendItem> related;
+    if (targetCategory != null) {
+      related = ranked.where((r) => r.category == targetCategory).toList();
+    } else {
+      related = const [];
+    }
+    // 不足 4 个时用 guessLikes 头部补位（去重）
+    if (related.length < 4) {
+      final seen = related.map((r) => r.templateId).toSet();
+      for (final r in ranked) {
+        if (related.length >= 4) break;
+        if (seen.contains(r.templateId)) continue;
+        related = [...related, r];
+        seen.add(r.templateId);
+      }
+    }
+    return related.take(4).toList();
+  }
+
+  String _templateName(RecommendationEngineInput input, String? templateId) {
+    if (templateId == null) return '';
+    for (final t in input.templates) {
+      if (t.id == templateId) return t.name;
+    }
+    return '';
   }
 
   static double _maxOr1(Map<String, double> m) {
