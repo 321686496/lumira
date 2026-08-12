@@ -13,7 +13,7 @@ const PhotoTemplate macroFlowerTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'macro', style: 'nature', method: 'macro'),
     tags: ['微距', '花卉', '特写', '自然'],
     tagIds: [],
-    price: 3,
+    price: 20,
     cover: 'assets/images/templates/macro_flower.jpg',
     description: '微距镜头捕捉花卉细节，呈现花蕊纹理与娇嫩质感',
     referenceSource: '样片 EXIF: 500px 微距花卉作品；参数参考微距摄影教程',

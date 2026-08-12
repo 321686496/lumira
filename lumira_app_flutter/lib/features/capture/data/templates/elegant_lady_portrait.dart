@@ -13,7 +13,7 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'elegant_lady', method: 'seven_body'),
     tags: ['人像', '知性', '优雅', '轻熟女', '莫兰迪'],
     tagIds: [],
-    price: 3,
+    price: 60,
     cover: 'assets/images/templates/elegant_lady_portrait.png',
     description: '莫兰迪淡雅三分法，知性优雅轻熟女，成熟大气的品质感。',
     referenceSource: '小红书轻熟女穿搭拍照；莫兰迪淡雅风格；城市街拍人像',

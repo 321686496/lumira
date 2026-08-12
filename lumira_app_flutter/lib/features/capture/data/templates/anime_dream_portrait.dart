@@ -13,7 +13,7 @@ const PhotoTemplate animeDreamPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'anime_dream', method: 'full_body'),
     tags: ['人像', '动漫', '宫崎骏', '梦境', '晴天'],
     tagIds: [],
-    price: 3,
+    price: 40,
     cover: 'assets/images/templates/anime_dream_portrait.png',
     description: '宫崎骏感饱和提亮梦境青，晴天草地张开双臂的动漫浪漫。',
     referenceSource: '小红书梦境滤镜教程；宫崎骏动漫感；晴天户外人像',

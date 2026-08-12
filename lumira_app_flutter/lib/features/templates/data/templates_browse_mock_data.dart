@@ -593,7 +593,7 @@ class TemplatesBrowseMockData {
       cover: 'assets/images/templates/golden_landscape.jpg',
       tags: ['金色', '日落'],
       tagIds: [],
-      price: 18,
+      price: 0,
       referenceSource: '风光摄影指南',
       aspectRatio: '16:9',
       composition: CompositionData(
@@ -809,7 +809,7 @@ class TemplatesBrowseMockData {
       cover: 'assets/images/templates/macro_flower.jpg',
       tags: ['微距', '自然'],
       tagIds: [],
-      price: 0,
+      price: 20,
       referenceSource: '微距摄影教程',
       aspectRatio: '1:1',
       composition: CompositionData(
@@ -1210,7 +1210,7 @@ class TemplatesBrowseMockData {
       style: 'nature',
       method: null,
       coverSeed: 'tpl-macro-flower',
-      price: 0,
+      price: 20,
       isCustom: false,
     ),
     AllTemplateItem(
@@ -1220,7 +1220,7 @@ class TemplatesBrowseMockData {
       style: 'epic',
       method: 'wide',
       coverSeed: 'tpl-golden-landscape',
-      price: 18,
+      price: 0,
       isCustom: false,
     ),
     AllTemplateItem(

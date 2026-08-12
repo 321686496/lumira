@@ -13,7 +13,7 @@ const PhotoTemplate y2kPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'y2k', method: 'half_body'),
     tags: ['人像', 'Y2K', '千禧', '高饱和', '闪光'],
     tagIds: [],
-    price: 3,
+    price: 40,
     cover: 'assets/images/templates/y2k_portrait.png',
     description: '千禧回潮高饱和闪光，飒爽酷 girl 攻击性，Y2K 非甜美路线。',
     referenceSource: '小红书 Y2K 千禧风教程；酷 girl 非甜美风格；千禧回潮摄影',

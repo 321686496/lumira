@@ -13,7 +13,7 @@ const PhotoTemplate morandiMinimalPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'morandi_minimal', method: 'half_body'),
     tags: ['人像', '莫兰迪', '冷淡', '低饱和', '知性'],
     tagIds: [],
-    price: 3,
+    price: 60,
     cover: 'assets/images/templates/morandi_minimal_portrait.png',
     description: '莫兰迪低饱和高级冷淡，纯色极简知性风，轻熟女的品质感。',
     referenceSource: '莫兰迪色系人像；轻熟女知性风；小红书极简人像教程',

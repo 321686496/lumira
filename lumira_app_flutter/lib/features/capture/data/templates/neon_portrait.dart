@@ -13,7 +13,7 @@ const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'film', method: 'normal'),
     tags: ['霓虹', '夜景人像', '赛博朋克', '城市'],
     tagIds: [],
-    price: 3,
+    price: 20,
     cover: 'assets/images/templates/neon_portrait.jpg',
     description: '利用城市霓虹灯光拍摄赛博朋克风格人像',
     referenceSource: '样片 EXIF: 赛博朋克人像作品集；参数参考 500px Neon Portrait 专题',

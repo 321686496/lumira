@@ -13,7 +13,7 @@ const PhotoTemplate neonCityPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'neon_city', method: 'half_body'),
     tags: ['人像', '霓虹', '夜景', '青紫', '爱乐之城'],
     tagIds: [],
-    price: 3,
+    price: 40,
     cover: 'assets/images/templates/neon_city_portrait.png',
     description: '城市霓虹青紫冷暖对比，爱乐之城夜景人像，夜晚街头的赛博浪漫。',
     referenceSource: '小红书爱乐之城滤镜教程；城市夜景人像；霓虹拍照教程',

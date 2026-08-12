@@ -13,7 +13,7 @@ const PhotoTemplate purpleDuskPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'purple_dusk', method: 'half_body'),
     tags: ['人像', '日暮', '紫色', '梦幻', '夕阳'],
     tagIds: [],
-    price: 3,
+    price: 60,
     cover: 'assets/images/templates/purple_dusk_portrait.png',
     description: '夕阳克莱因蓝梦幻紫，HSL 蓝饱和提升的日暮浪漫。',
     referenceSource: '小红书克莱因蓝滤镜教程；夕阳紫色梦幻；日暮氛围人像',

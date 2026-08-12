@@ -13,7 +13,7 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'dark_indoor', method: 'half_body'),
     tags: ['人像', '暗调', '咖啡馆', '锐化', '质感'],
     tagIds: [],
-    price: 3,
+    price: 40,
     cover: 'assets/images/templates/dark_indoor_portrait.png',
     description: '咖啡馆暗调精致高级，锐化质感黑森林氛围，探店氛围感首选。',
     referenceSource: '小红书黑森林滤镜教程；咖啡馆暗调人像；探店拍照教程',

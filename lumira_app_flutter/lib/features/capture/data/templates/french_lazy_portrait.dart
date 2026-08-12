@@ -13,7 +13,7 @@ const PhotoTemplate frenchLazyPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'french_lazy', method: 'half_body'),
     tags: ['人像', '法式', '慵懒', '颗粒', '窗光'],
     tagIds: [],
-    price: 3,
+    price: 40,
     cover: 'assets/images/templates/french_lazy_portrait.png',
     description: '白床单窗光下的法式慵懒，颗粒质感复古高雅，卧室里的慵懒时光。',
     referenceSource: '小红书法式慵懒风格教程；复古颗粒质感；法式写真套图',

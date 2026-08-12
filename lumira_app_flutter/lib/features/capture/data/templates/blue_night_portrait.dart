@@ -13,7 +13,7 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
     classification: TemplateClassification(type: 'portrait', style: 'blue_night', method: 'seven_body'),
     tags: ['人像', '暗夜', '逆光', '剪影', '冷调'],
     tagIds: [],
-    price: 3,
+    price: 40,
     cover: 'assets/images/templates/blue_night_portrait.png',
     description: '黄昏逆光暗夜蓝冷峻浪漫，天空大海的背影剪影诗。',
     referenceSource: '小红书爱乐之城深色滤镜；逆光剪影人像；黄昏海边摄影',
