@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -50,6 +51,35 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
       '已选择 $label',
       duration: const Duration(milliseconds: 1200),
     );
+  }
+
+  Future<void> _onPhotoLongPress(String photoId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除照片'),
+        content: const Text('确定要删除这张照片吗？此操作不可撤销。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('删除', style: TextStyle(color: ref.read(themeTokensProvider).danger)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final dao = await ref.read(galleryDaoProvider.future);
+    await dao.delete(photoId);
+    ref.invalidate(diaryEntriesProvider(_viewTab));
+    ref.invalidate(diaryStreakProvider);
+    ref.invalidate(diaryTotalCountProvider);
+    if (mounted) {
+      LumiraToast.show(context, '已删除', duration: const Duration(milliseconds: 1200));
+    }
   }
 
   @override
@@ -140,6 +170,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                         child: DiaryTimelineEntry(
                           entry: e.value,
                           onPhotoTap: _navigateToPhoto,
+                          onPhotoLongPress: _onPhotoLongPress,
                         ),
                       );
                     }),

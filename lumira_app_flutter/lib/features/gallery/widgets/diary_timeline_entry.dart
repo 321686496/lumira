@@ -11,12 +11,15 @@ import '../data/gallery_models.dart';
 ///
 /// 视觉规格来源：lumira-app/src/pages/gallery/diary.vue line 56-103
 class DiaryTimelineEntry extends ConsumerWidget {
-  const DiaryTimelineEntry({super.key, required this.entry, this.onPhotoTap});
+  const DiaryTimelineEntry({super.key, required this.entry, this.onPhotoTap, this.onPhotoLongPress});
 
   final DiaryEntry entry;
 
   /// 点击照片回调，参数为照片 ID（用于跳转详情页）
   final void Function(String photoId)? onPhotoTap;
+
+  /// 长按照片回调，参数为照片 ID（用于删除照片）
+  final void Function(String photoId)? onPhotoLongPress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -68,6 +71,7 @@ class DiaryTimelineEntry extends ConsumerWidget {
                           child: _PhotoCard(
                             photo: p,
                             onTap: onPhotoTap == null ? null : () => onPhotoTap!(p.id),
+                            onLongPress: onPhotoLongPress == null ? null : () => onPhotoLongPress!(p.id),
                           ),
                         ),
                       ))
@@ -81,9 +85,10 @@ class DiaryTimelineEntry extends ConsumerWidget {
 }
 
 class _PhotoCard extends ConsumerWidget {
-  const _PhotoCard({required this.photo, this.onTap});
+  const _PhotoCard({required this.photo, this.onTap, this.onLongPress});
   final DiaryPhoto photo;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -91,6 +96,7 @@ class _PhotoCard extends ConsumerWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
