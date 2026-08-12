@@ -43,11 +43,11 @@ CREATE INDEX IF NOT EXISTS idx_reward_unlocks_device ON reward_unlocks(device_id
 CREATE TABLE IF NOT EXISTS redemption_code_batches (
   batch_id         INTEGER PRIMARY KEY AUTOINCREMENT,
   campaign_name    TEXT NOT NULL,
-  reward_tier      INTEGER NOT NULL REFERENCES reward_tiers(tier),
   max_uses_per_code INTEGER NOT NULL DEFAULT 1,
   total_generated  INTEGER NOT NULL,
   total_used       INTEGER NOT NULL DEFAULT 0,
   reward_points    INTEGER NOT NULL DEFAULT 0,
+  reward_templates TEXT NOT NULL DEFAULT '[]',
   valid_from       INTEGER,
   valid_until      INTEGER,
   is_active        INTEGER NOT NULL DEFAULT 1,

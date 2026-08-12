@@ -106,6 +106,39 @@ export class DatabaseService implements OnModuleInit {
       this.sqlite.exec("ALTER TABLE redemption_code_batches ADD COLUMN reward_templates TEXT NOT NULL DEFAULT '[]'");
     }
 
+    // 兼容旧库：移除 redemption_code_batches.reward_tier 列（007 迁移）。
+    // 该列在旧 001_init.sql 中为 NOT NULL 且被 schema 移除，插入时必然违反约束；
+    // SQLite 不支持 ALTER TABLE DROP COLUMN 外键列，故重建表（先补充列后再重建）。
+    if (batchColumns.some((c) => c.name === 'reward_tier')) {
+      this.sqlite.exec('PRAGMA foreign_keys = OFF');
+      this.sqlite.exec(`
+        CREATE TABLE redemption_code_batches_new (
+          batch_id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          campaign_name     TEXT NOT NULL,
+          max_uses_per_code INTEGER NOT NULL DEFAULT 1,
+          total_generated   INTEGER NOT NULL,
+          total_used        INTEGER NOT NULL DEFAULT 0,
+          reward_points     INTEGER NOT NULL DEFAULT 0,
+          reward_templates  TEXT NOT NULL DEFAULT '[]',
+          valid_from        INTEGER,
+          valid_until       INTEGER,
+          is_active         INTEGER NOT NULL DEFAULT 1,
+          created_at        INTEGER NOT NULL
+        );
+        INSERT INTO redemption_code_batches_new (
+          batch_id, campaign_name, max_uses_per_code, total_generated, total_used,
+          reward_points, reward_templates, valid_from, valid_until, is_active, created_at
+        )
+        SELECT
+          batch_id, campaign_name, max_uses_per_code, total_generated, total_used,
+          reward_points, COALESCE(reward_templates, '[]'), valid_from, valid_until, is_active, created_at
+        FROM redemption_code_batches;
+        DROP TABLE redemption_code_batches;
+        ALTER TABLE redemption_code_batches_new RENAME TO redemption_code_batches;
+      `);
+      this.sqlite.exec('PRAGMA foreign_keys = ON');
+    }
+
     // 兼容旧库：devices 表新增设备信息字段（009 迁移）
     const deviceColumns = this.sqlite.prepare('PRAGMA table_info(devices)').all() as { name: string }[];
     if (!deviceColumns.some((c) => c.name === 'platform')) {
