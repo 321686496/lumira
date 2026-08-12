@@ -314,7 +314,8 @@ class RecommendationEngine {
     });
 
     items.sort((a, b) => b.matchScore.compareTo(a.matchScore));
-    return items.take(4).toList();
+    // 返回全部合格项，分页轮换（换一换）由页面 _slice 负责
+    return items;
   }
 
   /// 计算单个模板的匹配分（供旧召回复用；排除逻辑由调用方负责）

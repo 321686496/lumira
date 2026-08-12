@@ -14,6 +14,7 @@ import 'package:lumira_app_flutter/core/db/dao/scenes_dao.dart';
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
 import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/features/onboarding/data/questionnaire_dao.dart';
+import 'package:lumira_app_flutter/features/templates/data/owned_templates_repository.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_recommend_page.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -89,7 +90,7 @@ void main() {
   }
 
   /// 共享种子 DB 的页面包装（含路由，供点卡片跳转使用）
-  Widget wrap() {
+  Widget wrap({List<Override> extraOverrides = const []}) {
     final goRouter = GoRouter(
       initialLocation: '/templates/recommend',
       routes: [
@@ -110,6 +111,7 @@ void main() {
         scenesDaoProvider.overrideWith((ref) async => ScenesDao(db)),
         questionnaireDaoProvider
             .overrideWith((ref) async => QuestionnaireDao(db)),
+        ...extraOverrides,
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
@@ -166,6 +168,22 @@ void main() {
     // 种子：照片用了 tpl-used（近期），推荐中不应出现
     expect(find.text('已用模板'), findsNothing);
     expect(find.text('推荐模板A'), findsWidgets);
+  });
+
+  testWidgets('已拥有模板被排除不出现在页面', (tester) async {
+    setLargeViewport(tester);
+    // override 已拥有集合：tpl-recommend-a 未用过、应进猜你喜欢，
+    // 但被"已拥有排除"链路剔除（owned loader 在测试环境必然失败走降级，
+    // ownedTemplateIdsProvider 保持此 override 值）
+    await tester.pumpWidget(wrap(extraOverrides: [
+      ownedTemplateIdsProvider.overrideWith((ref) => const {'tpl-recommend-a'}),
+    ]));
+    await settleOrPump(tester);
+
+    expect(find.text('推荐模板A'), findsNothing);
+    // 页面仍正常渲染：导航标题 + 旧爱回归区（tpl-recall 90 天前用过被召回）
+    expect(find.text('为你推荐'), findsOneWidget);
+    expect(find.text('旧爱回归'), findsWidgets);
   });
 
   testWidgets('旧爱回归 section 渲染', (tester) async {
