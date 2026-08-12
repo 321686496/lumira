@@ -302,17 +302,31 @@ jobs:
               rm -rf build/ios/ipa && mkdir -p build/ios/ipa/Payload
               cp -R "$APP" build/ios/ipa/Payload/
               SWIFT_LIB_DIR="$(dirname "$(dirname "$(xcrun --find swiftc 2>/dev/null)")")/lib/swift/iphoneos"
-              mkdir -p build/ios/ipa/SwiftSupport/iphoneos
-              otool -L build/ios/ipa/Payload/Runner.app/Runner 2>/dev/null | \
-                grep -o 'libswift[A-Za-z0-9_]*\.dylib' | sort -u | while read -r lib; do
-                if [ -f "$SWIFT_LIB_DIR/$lib" ]; then
-                  cp "$SWIFT_LIB_DIR/$lib" build/ios/ipa/SwiftSupport/iphoneos/
-                  echo "SwiftSupport: $lib"
-                else
-                  echo "::warning::Swift 库 $lib 未在 toolchain 中找到: $SWIFT_LIB_DIR"
-                fi
-              done
-              if ! (cd build/ios/ipa && rm -f Runner.ipa && zip -q -r Runner.ipa Payload SwiftSupport -x "*.DS_Store"); then
+              # 扫描 app 内所有二进制（主可执行文件 + Frameworks 下动态框架）的 Swift 动态库依赖。
+              # Xcode 14+ 默认静态链接 Swift 运行时，通常无动态依赖；
+              # 此时若保留空 SwiftSupport 目录，Apple 校验会报 ITMS-90424 "SwiftSupport folder is empty"。
+              NEEDED_SWIFT_LIBS="$(
+                {
+                  otool -L build/ios/ipa/Payload/Runner.app/Runner 2>/dev/null
+                  for fw in build/ios/ipa/Payload/Runner.app/Frameworks/*.framework; do
+                    [ -d "$fw" ] && otool -L "$fw/$(basename "$fw" .framework)" 2>/dev/null
+                  done
+                } | grep -o 'libswift[A-Za-z0-9_]*\.dylib' | sort -u
+              )"
+              if [ -n "$NEEDED_SWIFT_LIBS" ]; then
+                mkdir -p build/ios/ipa/SwiftSupport/iphoneos
+                for lib in $NEEDED_SWIFT_LIBS; do
+                  if [ -f "$SWIFT_LIB_DIR/$lib" ]; then
+                    cp "$SWIFT_LIB_DIR/$lib" build/ios/ipa/SwiftSupport/iphoneos/
+                    echo "SwiftSupport: $lib"
+                  else
+                    echo "::warning::Swift 库 $lib 未在 toolchain 中找到: $SWIFT_LIB_DIR"
+                  fi
+                done
+              else
+                echo "无 Swift 动态库依赖，不生成 SwiftSupport（避免空目录触发 ITMS-90424）"
+              fi
+              if ! (cd build/ios/ipa && rm -f Runner.ipa && if [ -d SwiftSupport ]; then zip -q -r Runner.ipa Payload SwiftSupport -x "*.DS_Store"; else zip -q -r Runner.ipa Payload -x "*.DS_Store"; fi); then
                 echo "::error::zip 打包 .ipa 失败，退出诊断流程"
                 ls -la build/ios/ipa/ || true
                 exit 1
@@ -328,8 +342,13 @@ jobs:
               codesign -dv --verbose=2 build/ios/ipa/Payload/Runner.app 2>&1 | grep -E 'Identifier|Authority' || true
               security cms -D -i build/ios/ipa/Payload/Runner.app/embedded.mobileprovision > "$RUNNER_TEMP/pp.plist" 2>/dev/null && \
                 echo "内嵌 profile Name: $(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/pp.plist" 2>/dev/null)" || true
-              echo "=== Swift 动态库依赖检查（有输出则需要 SwiftSupport） ==="
-              otool -L build/ios/ipa/Payload/Runner.app/Runner | grep -i libswift || echo "无 Swift 动态库依赖（无需 SwiftSupport）"
+              echo "=== Swift 动态库依赖检查 ==="
+              if [ -d build/ios/ipa/SwiftSupport ]; then
+                echo "SwiftSupport 已生成："
+                ls build/ios/ipa/SwiftSupport/iphoneos/
+              else
+                echo "无 Swift 动态库依赖（无需 SwiftSupport）"
+              fi
               ls -la build/ios/ipa/
               exit 0
             fi
