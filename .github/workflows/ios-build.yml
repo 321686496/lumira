@@ -45,6 +45,9 @@ env:
   BUNDLE_ID: 'com.rh.lumira'
   WORKSPACE: 'lumira_app_flutter'
   SCHEME: 'Runner'
+  # Xcode 26 runner（macOS 26）默认会引入 MetalToolchain，导致 Swift 工具链路径异常、
+  # SwiftSupport 生成错误；固定为标准工具链（actions/runner-images#13135 官方建议）
+  TOOLCHAINS: 'com.apple.dt.toolchain.XcodeDefault'
   # 临时 keychain 密码，随便填一个固定值即可（仅本次构建使用）
   KEYCHAIN_PASSWORD: 'lumira-ci-keychain-2026'
 
@@ -292,9 +295,30 @@ jobs:
         if: ${{ inputs.sign == true }}
         run: |
           cd ${{ env.WORKSPACE }}
-          flutter build ipa --release \
-            --build-number=$GITHUB_RUN_NUMBER \
-            --export-options-plist=ios/ExportOptions.plist || true
+
+          # 首选 flutter build ipa；失败时不再吞掉错误，输出日志尾部便于排查
+          if ! flutter build ipa --release \
+              --build-number=$GITHUB_RUN_NUMBER \
+              --export-options-plist=ios/ExportOptions.plist > "$RUNNER_TEMP/flutter_build_ipa.log" 2>&1; then
+            echo "::warning::flutter build ipa 未产出 IPA（错误日志尾部如下）"
+            tail -100 "$RUNNER_TEMP/flutter_build_ipa.log" || true
+          fi
+
+          # flutter build ipa 失败时，先让 Xcode 自己 exportArchive（能正确生成 SwiftSupport）
+          if [ ! -f build/ios/ipa/Runner.ipa ] && [ -d build/ios/archive/Runner.xcarchive ]; then
+            echo "尝试 xcodebuild -exportArchive 导出 IPA ..."
+            if xcodebuild -exportArchive \
+                -archivePath build/ios/archive/Runner.xcarchive \
+                -exportPath build/ios/ipa \
+                -exportOptionsPlist ios/ExportOptions.plist > "$RUNNER_TEMP/xcode_export.log" 2>&1; then
+              echo "xcodebuild -exportArchive 导出成功"
+              ls -la build/ios/ipa/
+            else
+              echo "::warning::xcodebuild -exportArchive 也失败，回退到 ditto 手动打包（日志尾部）"
+              tail -50 "$RUNNER_TEMP/xcode_export.log" || true
+            fi
+          fi
+
           if [ ! -f build/ios/ipa/Runner.ipa ]; then
             APP=$(find build/ios/archive/Runner.xcarchive -type d -name '*.app' | head -n1)
             if [ -n "$APP" ]; then
@@ -325,6 +349,12 @@ jobs:
                 done
               else
                 echo "无 Swift 动态库依赖，不生成 SwiftSupport（避免空目录触发 ITMS-90424）"
+              fi
+              # 兜底：SwiftSupport 目录存在但没有任何文件时先删除再打包，
+              # 避免空目录触发 ITMS-90424 "SwiftSupport folder is empty"
+              if [ -d build/ios/ipa/SwiftSupport ] && [ -z "$(ls -A build/ios/ipa/SwiftSupport/iphoneos 2>/dev/null)" ]; then
+                echo "::error::检测到 Swift 动态库依赖但未能拷贝任何 dylib，移除空 SwiftSupport 目录（若 App 确实需要这些库，需检查 Xcode 工具链配置）"
+                rm -rf build/ios/ipa/SwiftSupport
               fi
               if ! (cd build/ios/ipa && rm -f Runner.ipa && if [ -d SwiftSupport ]; then zip -q -r Runner.ipa Payload SwiftSupport -x "*.DS_Store"; else zip -q -r Runner.ipa Payload -x "*.DS_Store"; fi); then
                 echo "::error::zip 打包 .ipa 失败，退出诊断流程"
@@ -453,6 +483,16 @@ jobs:
             fi
 
             exit 1
+          fi
+          # 非 fallback 路径（flutter build ipa / xcodebuild 导出成功）也补打 dSYM
+          if [ -f build/ios/ipa/Runner.ipa ] && [ ! -f build/ios/ipa/Runner.dSYM.zip ]; then
+            DSYM_DIR=$(find build/ios/archive/Runner.xcarchive -type d -name dSYMs | head -n1)
+            if [ -n "$DSYM_DIR" ] && ls "$DSYM_DIR"/*.dSYM >/dev/null 2>&1; then
+              (cd "$DSYM_DIR" && zip -q -r "$GITHUB_WORKSPACE/${{ env.WORKSPACE }}/build/ios/ipa/Runner.dSYM.zip" . -x "*.DS_Store")
+              echo "已生成 dSYM.zip: $(ls -la build/ios/ipa/Runner.dSYM.zip 2>/dev/null)"
+            else
+              echo "归档中无 dSYM，跳过 dSYM 打包"
+            fi
           fi
           ls -la build/ios/ipa/
 
