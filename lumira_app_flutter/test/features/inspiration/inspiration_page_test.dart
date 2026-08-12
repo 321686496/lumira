@@ -82,9 +82,9 @@ void main() {
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
         galleryDaoProvider.overrideWith((ref) async => GalleryDao(db)),
-        outfitDiaryCardProvider.overrideWith((ref) async => OutfitDiaryCardData(
+        outfitDiaryCardProvider.overrideWith((ref) async => const OutfitDiaryCardData(
           streak: 7,
-          photos: const [
+          photos: [
             OutfitPhoto(imageSeed: 'outfit-0708', date: '7月8日'),
             OutfitPhoto(imageSeed: 'outfit-0707', date: '7月7日'),
           ],

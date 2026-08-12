@@ -6,7 +6,6 @@ import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../profile/providers/collection_providers.dart';
