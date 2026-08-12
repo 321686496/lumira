@@ -723,6 +723,9 @@ class TemplateMapper {
       updatedAt: createdAt,
       isBuiltin: false,
       isRecommended: false,
+      // 导入的模板属于用户自定义模板（否则默认 source='builtin'，
+      // 会导致 getCustomOnly/getCustomAndRemote 查询不到，列表不显示）
+      source: 'custom',
     );
   }
 

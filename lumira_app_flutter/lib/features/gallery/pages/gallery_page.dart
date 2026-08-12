@@ -186,7 +186,6 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         leading: _BackButton(tokens: tokens),
         actions: [
           _StatsAction(tokens: tokens),
-          _CollectionsAction(tokens: tokens),
         ],
       ),
       body: Stack(
@@ -403,31 +402,6 @@ class _BackButton extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Icon(Icons.arrow_back_ios_new, size: 18, color: tokens.textPrimary),
-      ),
-    );
-  }
-}
-
-class _CollectionsAction extends StatelessWidget {
-  const _CollectionsAction({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => GoRouter.of(context).push(RouteNames.profileCollections),
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Text(
-          '精选集',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: tokens.brand,
-            height: 1.3,
-          ),
-        ),
       ),
     );
   }

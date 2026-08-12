@@ -91,7 +91,7 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
 
         final price = meta['price'];
         if (price != null) {
-          buffer.writeln('价格: ${price == 0 ? '免费' : '¥$price'}');
+          buffer.writeln('价格: ${price == 0 ? '免费' : '$price 积分'}');
         }
       }
 
@@ -135,6 +135,18 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
     if (_file == null) return;
 
     try {
+      // OHOS 无目录选择 API（DocumentViewPicker 只能选文件），改用系统「保存文件」对话框
+      if (Platform.operatingSystem == 'ohos') {
+        final savedPath = await FilePickerService.saveFile(
+          sourceFilePath: _file!.path,
+          fileName: _file!.path.split('/').last,
+        );
+        if (savedPath == null || !mounted) return;
+        if (!mounted) return;
+        LumiraToast.show(context, '已保存');
+        return;
+      }
+
       final dirPath = await FilePickerService.pickDirectory();
       if (dirPath == null || !mounted) return;
 

@@ -9,7 +9,9 @@ import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/features/profile/data/profile_mock_data.dart';
 import 'package:lumira_app_flutter/features/profile/pages/profile_page.dart';
+import 'package:lumira_app_flutter/features/profile/providers/fragments_providers.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -57,6 +59,21 @@ void main() {
           name: 'gallery',
           builder: (_, __) => const Scaffold(body: Center(child: Text('GALLERY'))),
         ),
+        GoRoute(
+          path: RouteNames.galleryDiary,
+          name: 'galleryDiary',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('GALLERY_DIARY'))),
+        ),
+        GoRoute(
+          path: RouteNames.checkinList,
+          name: 'checkinList',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('CHECKIN_LIST'))),
+        ),
+        GoRoute(
+          path: RouteNames.profileCollections,
+          name: 'profileCollections',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('PROFILE_COLLECTIONS'))),
+        ),
       ],
     );
     HttpOverrides.global = TestHttpOverrides();
@@ -77,6 +94,13 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        // FragmentCard 数据来自本地库，测试环境无真实 DB，按仓库惯例 override 卡片数据
+        fragmentsProvider.overrideWith((ref) async => const [
+          FragmentItem(name: '人像', icon: Icons.person_outline, current: 2, max: 5),
+          FragmentItem(name: '风光', icon: Icons.landscape_outlined, current: 3, max: 5),
+          FragmentItem(name: '美食', icon: Icons.restaurant_outlined, current: 1, max: 5),
+          FragmentItem(name: '街拍', icon: Icons.photo_camera_outlined, current: 4, max: 5),
+        ]),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
@@ -107,7 +131,7 @@ void main() {
       expect(find.widgetWithText(LumiraNav, '我的'), findsOneWidget);
     });
 
-    testWidgets('renders all 5 sections', (tester) async {
+    testWidgets('renders all 6 sections', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
@@ -121,18 +145,23 @@ void main() {
       expect(find.text('拍摄作品'), findsOneWidget);
       expect(find.text('使用模板'), findsOneWidget);
       expect(find.text('收藏'), findsOneWidget);
-      // 3. FragmentCard（4 项）
+      // 3. 我的内容（记录功能统一入口）
+      expect(find.text('我的内容'), findsOneWidget);
+      expect(find.text('我的相册'), findsOneWidget);
+      expect(find.text('拍摄日记'), findsOneWidget);
+      expect(find.text('探店足迹'), findsOneWidget);
+      expect(find.text('我的精选集'), findsOneWidget);
+      // 4. FragmentCard（4 项）
       expect(find.text('碎片收集'), findsOneWidget);
       expect(find.text('人像'), findsOneWidget);
       expect(find.text('风光'), findsOneWidget);
       expect(find.text('美食'), findsOneWidget);
       expect(find.text('街拍'), findsOneWidget);
-      // 4. QuickActionsRow
+      // 5. QuickActionsRow
       expect(find.text('成长中心'), findsOneWidget);
       expect(find.text('邀请有礼'), findsOneWidget);
       expect(find.text('摄影美学院'), findsOneWidget);
-      // 5. MenuCard
-      expect(find.text('我的相册'), findsOneWidget);
+      // 6. MenuCard
       expect(find.text('我的模板'), findsOneWidget);
       expect(find.text('场景管理'), findsOneWidget);
       expect(find.text('导入模板'), findsOneWidget);
@@ -182,6 +211,39 @@ void main() {
       await settleOrPump(tester, UIStyle.neumorphic);
 
       expect(find.text('GALLERY'), findsOneWidget);
+    });
+
+    testWidgets('tapping 拍摄日记 pushes /gallery/diary', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('拍摄日记'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('GALLERY_DIARY'), findsOneWidget);
+    });
+
+    testWidgets('tapping 探店足迹 pushes /checkin/list', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('探店足迹'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('CHECKIN_LIST'), findsOneWidget);
+    });
+
+    testWidgets('tapping 我的精选集 pushes /profile/collections', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('我的精选集'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('PROFILE_COLLECTIONS'), findsOneWidget);
     });
 
     testWidgets('renders correctly across all 8 themes', (tester) async {

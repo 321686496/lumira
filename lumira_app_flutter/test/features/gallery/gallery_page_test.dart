@@ -151,7 +151,20 @@ void main() {
     expect(find.text('detail'), findsOneWidget);
   });
 
-  testWidgets('tapping 精选集 pushes /profile/collections', (tester) async {
+  testWidgets('gallery AppBar no longer shows 精选集 entry', (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 1200);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
+    await _pumpGalleryPage(tester, container);
+    await tester.pumpAndSettle();
+
+    // 精选集入口已移到「我的」页，相册 AppBar 不再直接暴露
+    expect(find.text('精选集'), findsNothing);
+  });
+
+  testWidgets('long press enters multi-select with 加入精选集 action', (tester) async {
     tester.binding.window.physicalSizeTestValue = const Size(800, 1200);
     // Forced fix: 不设 devicePixelRatio=1.0 时默认 ~3.0，逻辑视口仅 ~266×400，
     // Row（张数 + ViewToggle）会溢出。与 challenge_page_test.dart 同模式。
@@ -159,21 +172,25 @@ void main() {
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
 
-    final router = GoRouter(
-      initialLocation: '/gallery',
-      routes: [
-        GoRoute(path: '/gallery', builder: (_, __) => UncontrolledProviderScope(container: container, child: const GalleryPage())),
-        GoRoute(path: '/profile/collections', builder: (_, __) => const Scaffold(body: Text('collections'))),
-      ],
-    );
+    await dao.insert(GalleryItemRecord(
+      id: 'p1',
+      dataUrl: 'https://example.com/p1.jpg',
+      filePath: null,
+      sceneId: null,
+      templateId: null,
+      kitId: null,
+      mood: null,
+      lut: null,
+      createdAt: 1700000000000,
+    ));
 
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await _pumpGalleryPage(tester, container);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('精选集'));
+    await tester.longPress(find.byType(PhotoCell));
     await tester.pumpAndSettle();
 
-    expect(find.text('collections'), findsOneWidget);
+    expect(find.text('加入精选集'), findsOneWidget);
   });
 }
 
@@ -192,6 +209,9 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colId} TEXT PRIMARY KEY,
       ${Tables.colDataUrl} TEXT,
       ${Tables.colFilePath} TEXT,
+      ${Tables.colOriginalPath} TEXT,
+      ${Tables.colTransform} TEXT,
+      ${Tables.colPostProcess} TEXT,
       ${Tables.colSceneId} TEXT,
       ${Tables.colTemplateId} TEXT,
       ${Tables.colKitId} TEXT,

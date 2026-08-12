@@ -9,15 +9,14 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../home/widgets/scene_reco_card.dart';
 import '../data/inspiration_mock_data.dart';
-import '../widgets/checkin_card.dart';
 import '../widgets/mood_card.dart';
 import '../widgets/outfit_diary_card.dart';
 
 /// 灵感页
 ///
 /// 视觉规格来源：lumira-app/src/pages/inspiration/index.vue（549 行）
-/// - 5 个 section：今日心情 / 穿搭日记 / 推荐场景 / 探店打卡 / 加载更多
-/// - 所有 section 用 FadeUp 错峰入场（d0/d1/d2/d3/d4）
+/// - 4 个 section：今日心情 / 穿搭日记 / 推荐场景 / 加载更多
+/// - 所有 section 用 FadeUp 错峰入场（d0/d1/d2/d3）
 /// - 路由跳转：goSceneDetail(id) → captureSceneDetail?sceneId=xxx；goSceneManage → captureSceneManage
 class InspirationPage extends ConsumerWidget {
   const InspirationPage({super.key});
@@ -83,15 +82,9 @@ class InspirationPage extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-                // 4. 探店打卡卡片
+                // 4. 加载更多按钮
                 const FadeUp(
                   delay: Duration(milliseconds: 300), // fade-up-d3
-                  child: CheckinCard(),
-                ),
-                const SizedBox(height: 20),
-                // 5. 加载更多按钮
-                const FadeUp(
-                  delay: Duration(milliseconds: 400), // fade-up-d4
                   child: _LoadMoreButton(),
                 ),
                 const SizedBox(height: 16), // 32rpx → 16dp 底部间距

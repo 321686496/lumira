@@ -232,9 +232,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.templatesExportDetail,
         name: 'templatesExportDetail',
         builder: (context, state) {
-          final filePath = state.queryParams['filePath'] ?? '';
-          final templateName = state.queryParams['templateName'] ?? '';
-          final usePptpl = state.queryParams['usePptpl'] == 'true';
+          String filePath;
+          String templateName;
+          bool usePptpl;
+
+          final extra = state.extra as Map<String, dynamic>?;
+          if (extra != null) {
+            filePath = extra['filePath'] as String? ?? '';
+            templateName = extra['templateName'] as String? ?? '';
+            usePptpl = (extra['usePptpl'] as bool?) ?? false;
+          } else {
+            filePath = state.queryParams['filePath'] ?? '';
+            templateName = state.queryParams['templateName'] ?? '';
+            usePptpl = state.queryParams['usePptpl'] == 'true';
+          }
+
           return ExportDetailPage(
             filePath: filePath,
             templateName: templateName,

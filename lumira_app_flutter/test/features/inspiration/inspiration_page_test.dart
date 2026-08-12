@@ -9,13 +9,9 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:lumira_app_flutter/core/db/dao/gallery_dao.dart';
 import 'package:lumira_app_flutter/core/db/database_provider.dart';
-import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
-import 'package:lumira_app_flutter/features/checkin/data/checkin_dao.dart';
-import 'package:lumira_app_flutter/features/checkin/data/checkin_models.dart';
-import 'package:lumira_app_flutter/features/checkin/data/checkin_providers.dart';
 import 'package:lumira_app_flutter/features/gallery/providers/gallery_diary_providers.dart';
 import 'package:lumira_app_flutter/features/inspiration/data/inspiration_mock_data.dart';
 import 'package:lumira_app_flutter/features/inspiration/pages/inspiration_page.dart';
@@ -30,7 +26,6 @@ import '../../../test/helpers/test_http_overrides.dart';
 void main() {
   late GoRouter router;
   late Database db;
-  late CheckinDao checkinDao;
   FlutterExceptionHandler? originalErrorHandler;
 
   setUpAll(() {
@@ -41,20 +36,6 @@ void main() {
 
   setUp(() async {
     db = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
-    checkinDao = CheckinDao(db);
-    // seed 3 条探店足迹（真实数据，供灵感页卡片渲染）
-    await checkinDao.insert(const CheckinRecord(
-      id: 'c0', name: '打卡咖啡馆', place: '愚园路', category: 'coffee',
-      rating: 5, note: '', visitedAt: 3, createdAt: 1, updatedAt: 2,
-    ));
-    await checkinDao.insert(const CheckinRecord(
-      id: 'c1', name: '周末书店', place: '安福路', category: 'bookstore',
-      rating: 4, note: '', visitedAt: 2, createdAt: 1, updatedAt: 2,
-    ));
-    await checkinDao.insert(const CheckinRecord(
-      id: 'c2', name: '看展美术馆', place: '西岸', category: 'art',
-      rating: 5, note: '', visitedAt: 1, createdAt: 1, updatedAt: 2,
-    ));
 
     router = GoRouter(
       initialLocation: RouteNames.inspiration,
@@ -100,7 +81,6 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
-        checkinDaoProvider.overrideWith((ref) async => checkinDao),
         galleryDaoProvider.overrideWith((ref) async => GalleryDao(db)),
         outfitDiaryCardProvider.overrideWith((ref) async => OutfitDiaryCardData(
           streak: 7,
@@ -143,7 +123,7 @@ void main() {
       expect(find.widgetWithText(LumiraNav, '灵感'), findsOneWidget);
     });
 
-    testWidgets('renders all 5 sections', (tester) async {
+    testWidgets('renders all 4 sections', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
@@ -185,12 +165,8 @@ void main() {
       expect(find.text('图书馆拍摄'), findsOneWidget);
       expect(find.text('黄昏剪影拍摄'), findsOneWidget);
 
-      // 4. 探店打卡（真实数据：seed 3 条）
-      expect(find.text('探店打卡'), findsOneWidget);
-      expect(find.text('个探店足迹'), findsOneWidget);
-      expect(find.text('打卡咖啡馆'), findsOneWidget);
-      expect(find.text('周末书店'), findsOneWidget);
-      expect(find.text('看展美术馆'), findsOneWidget);
+      // 4. 探店打卡已移出灵感页（统一收口到「我的」页）
+      expect(find.text('探店打卡'), findsNothing);
 
       // 5. 加载更多
       expect(find.text('加载更多灵感'), findsOneWidget);
@@ -255,10 +231,6 @@ void main() {
 }
 
 Future<void> _onCreate(Database d, int v) async {
-  await d.execute(CheckinTable.createSql);
-  await d.execute(CheckinTable.indexVisitedAtSql);
-  await d.execute(CheckinPhotoTable.createSql);
-  await d.execute(CheckinPhotoTable.indexCheckinSql);
   await d.execute('''
     CREATE TABLE gallery_items (
       id TEXT PRIMARY KEY,

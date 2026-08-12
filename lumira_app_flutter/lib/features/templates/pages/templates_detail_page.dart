@@ -197,7 +197,12 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
       final filePath = await TemplateExporter.exportToTempFile(record, usePptpl: usePptpl);
       if (!mounted) return;
       GoRouter.of(context).push(
-        '${RouteNames.templatesExportDetail}?filePath=${Uri.encodeComponent(filePath)}&templateName=${Uri.encodeComponent(record.name)}&usePptpl=$usePptpl',
+        RouteNames.templatesExportDetail,
+        extra: {
+          'filePath': filePath,
+          'templateName': record.name,
+          'usePptpl': usePptpl,
+        },
       );
     } catch (e) {
       if (!mounted) return;

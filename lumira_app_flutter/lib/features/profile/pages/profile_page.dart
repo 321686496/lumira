@@ -22,12 +22,13 @@ import '../providers/growth_providers.dart';
 /// 个人中心主页
 ///
 /// 视觉规格来源：lumira-app/src/pages/profile/index.vue（184 行）
-/// 5 个 section：
+/// 6 个 section：
 /// 1. HeroCard（用户信息 + 经验进度）
 /// 2. StatsCard（3 列 Bento：作品 / 模板 / 收藏）
-/// 3. FragmentCard（4 项碎片收集）
-/// 4. QuickActionsRow（3 个 ghost 按钮：成长中心 / 邀请有礼 / 摄影美学院）
-/// 5. MenuCard（6 项菜单列表）
+/// 3. ContentCard（我的内容：相册 / 拍摄日记 / 探店足迹 / 精选集）
+/// 4. FragmentCard（4 项碎片收集）
+/// 5. QuickActionsRow（3 个 ghost 按钮：成长中心 / 邀请有礼 / 摄影美学院）
+/// 6. MenuCard（8 项菜单列表）
 ///
 /// Forced fix: 之前注释说"Flutter 版 ProfilePage 不渲染 FloatingTabBar"是错的。
 /// 与 HomePage / TemplatesPage / ChallengePage 一致，profile 作为 tab 页必须渲染 FloatingTabBar。
@@ -128,21 +129,27 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       child: _StatsCard(),
                     ),
                     const SizedBox(height: 20),
-                    // 3. FragmentCard
+                    // 3. ContentCard（我的内容）
                     const FadeUp(
                       delay: Duration(milliseconds: 200),
+                      child: _ContentCard(),
+                    ),
+                    const SizedBox(height: 20),
+                    // 4. FragmentCard
+                    const FadeUp(
+                      delay: Duration(milliseconds: 300),
                       child: _FragmentCard(),
                     ),
                     const SizedBox(height: 20),
-                    // 4. QuickActionsRow
+                    // 5. QuickActionsRow
                     FadeUp(
-                      delay: const Duration(milliseconds: 300),
+                      delay: const Duration(milliseconds: 400),
                       child: _QuickActionsRow(onTap: (p) => _goPage(p)),
                     ),
                     const SizedBox(height: 20),
-                    // 5. MenuCard
+                    // 6. MenuCard
                     FadeUp(
-                      delay: const Duration(milliseconds: 400),
+                      delay: const Duration(milliseconds: 500),
                       child: _MenuCard(onTap: (p) => _goPage(p)),
                     ),
                     const SizedBox(height: 16),
@@ -460,6 +467,126 @@ class _StatsCell extends StatelessWidget {
               fontSize: 12, // 24rpx → 12dp
               color: tokens.textTertiary,
               letterSpacing: 0.04 * 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// ContentCard：我的内容（记录功能统一入口）
+class _ContentCard extends ConsumerWidget {
+  const _ContentCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+
+    const entries = <_ContentEntry>[
+      _ContentEntry(
+        icon: Icons.photo_library_outlined,
+        label: '我的相册',
+        route: RouteNames.gallery,
+      ),
+      _ContentEntry(
+        icon: Icons.menu_book_outlined,
+        label: '拍摄日记',
+        route: RouteNames.galleryDiary,
+      ),
+      _ContentEntry(
+        icon: Icons.place_outlined,
+        label: '探店足迹',
+        route: RouteNames.checkinList,
+      ),
+      _ContentEntry(
+        icon: Icons.collections_bookmark_outlined,
+        label: '我的精选集',
+        route: RouteNames.profileCollections,
+      ),
+    ];
+
+    return NeuCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 标题行
+          Row(
+            children: [
+              Icon(Icons.auto_awesome_mosaic_outlined, size: 18, color: tokens.brand),
+              const SizedBox(width: 6), // 12rpx → 6dp
+              Text(
+                '我的内容',
+                style: TextStyle(
+                  fontFamily: 'Noto Serif SC',
+                  fontSize: 17, // 32rpx → 16dp，视觉接近用 17
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16), // 32rpx → 16dp
+          // 4 项内容入口
+          Row(
+            children: [
+              for (var i = 0; i < entries.length; i++) ...[
+                Expanded(child: _ContentEntryItem(entry: entries[i], tokens: tokens)),
+                if (i != entries.length - 1) const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContentEntry {
+  const _ContentEntry({
+    required this.icon,
+    required this.label,
+    required this.route,
+  });
+
+  final IconData icon;
+  final String label;
+  final String route;
+}
+
+class _ContentEntryItem extends StatelessWidget {
+  const _ContentEntryItem({required this.entry, required this.tokens});
+
+  final _ContentEntry entry;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => GoRouter.of(context).push(entry.route),
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: tokens.brand.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(entry.icon, size: 18, color: tokens.brand),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            entry.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: tokens.textSecondary,
+              height: 1.2,
             ),
           ),
         ],
@@ -801,7 +928,7 @@ class _QuickActionCard extends StatelessWidget {
   }
 }
 
-/// MenuCard：6 项菜单列表
+/// MenuCard：8 项菜单列表
 class _MenuCard extends ConsumerWidget {
   const _MenuCard({required this.onTap});
   final void Function(String path) onTap;
@@ -811,7 +938,6 @@ class _MenuCard extends ConsumerWidget {
     final tokens = ref.watch(themeTokensProvider);
 
     const items = <_MenuItem>[
-      _MenuItem(icon: Icons.image_outlined, title: '我的相册'),
       _MenuItem(icon: Icons.layers_outlined, title: '我的模板'),
       _MenuItem(icon: Icons.map_outlined, title: '场景管理'),
       _MenuItem(icon: Icons.download_outlined, title: '导入模板'),
@@ -846,9 +972,7 @@ class _MenuCard extends ConsumerWidget {
   ) {
     // Forced fix: 之前只处理 3 项菜单（我的相册/我的模板/设置），其余 3 项无响应。
     // 补齐：场景管理/导入模板/关于如画跳对应页。
-    if (title == '我的相册') {
-      onNav(RouteNames.gallery);
-    } else if (title == '我的模板') {
+    if (title == '我的模板') {
       onNav(RouteNames.profileMyTemplates);
     } else if (title == '场景管理') {
       onNav(RouteNames.captureSceneManage);

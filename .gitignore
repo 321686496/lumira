@@ -9,6 +9,9 @@ lumira-app/.vite/
 .agent/
 .superpowers/
 
+# Flutter test pid
+lumira_app_flutter/flutter_test.pid
+
 # Generated media outputs
 outputs/
 

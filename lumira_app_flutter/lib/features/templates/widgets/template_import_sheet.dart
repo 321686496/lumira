@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/file_picker_service.dart';
 
-import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -112,8 +111,13 @@ class TemplateImportSheet extends ConsumerWidget {
   // ===== 文件导入（DAO 持久化 + 双格式嗅探）=====
   Future<void> _handleFileImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
-    navigator.pop(); // 先关闭 BottomSheet
-
+    // 版本标记：确认真机部署的是否为最新代码（v2 = 无提前 pop）
+    debugPrint('[TemplateImport] code-version: v2-no-early-pop');
+    // 注意：不能提前 navigator.pop() 关闭 BottomSheet。
+    // pop 后本 widget 的 element 会被 deactivate，后续再使用 context/ref
+    // （如 ref.read 查找 ProviderScope 祖先、toast 查找 Overlay）都会抛出
+    // "Looking up a deactivated widget's ancestor is unsafe"。
+    // 因此全程保持 BottomSheet 打开，所有操作完成后再统一关闭。
     try {
       final file = await FilePickerService.pickSingleFile(
         allowedExtensions: ['json', 'lumira', 'pptpl'],
@@ -122,19 +126,46 @@ class TemplateImportSheet extends ConsumerWidget {
 
       if (file == null) {
         // 用户取消选择
+        if (context.mounted) navigator.pop();
         return;
       }
 
-      final bytes = file.bytes;
+      // OHOS 上 file_picker_ohos 原生端 withData 返回的 bytes 被截断
+      // （FileUtils.loadData 固定 4096 字节缓冲、只读一次），需从缓存路径
+      // 读取完整内容，否则模板 JSON 解析会失败（大文件截断 / 小文件带零填充）。
+      // 与 templates_editor_page 选图处理保持一致。
+      final picked = await FilePickerService.ensureFullBytes(file);
+      final bytes = picked.bytes;
+      debugPrint('[TemplateImport] picked file: ${file.name}, '
+          'bytes=${bytes?.length ?? -1}, path=${picked.path}');
       if (bytes == null) {
-        _showToast(navigator, '无法读取文件内容');
+        if (context.mounted) {
+          navigator.pop();
+          _showToast(context, '无法读取文件内容');
+        }
         return;
       }
 
-      final content = utf8.decode(bytes);
+      String content;
+      try {
+        content = utf8.decode(bytes);
+      } on FormatException catch (e) {
+        debugPrint('[TemplateImport] utf8.decode failed: $e');
+        if (context.mounted) {
+          navigator.pop();
+          _showToast(context, '文件编码不是有效的 UTF-8，无法导入');
+        }
+        return;
+      }
+      debugPrint('[TemplateImport] utf8 decode ok, content.length=${content.length}');
+
       final parsed = _parseTemplateJson(content);
+      debugPrint('[TemplateImport] parseTemplateJson => ${parsed != null}');
       if (parsed == null) {
-        _showToast(navigator, '文件格式无效，请选择有效的模板文件');
+        if (context.mounted) {
+          navigator.pop();
+          _showToast(context, '文件格式无效，请选择有效的模板文件');
+        }
         return;
       }
 
@@ -143,6 +174,9 @@ class TemplateImportSheet extends ConsumerWidget {
         parsed,
         createdAt: now,
       );
+      debugPrint('[TemplateImport] recordFromImportedJson ok, '
+          'id=${record.id}, name=${record.name}, coverDataLen=${record.coverData?.length ?? 0}, '
+          'source=${record.source}');
 
       // ID 冲突处理：已存在则追加 _imported_ 时间戳后缀
       final dao = await ref.read(templatesDaoProvider.future);
@@ -153,29 +187,37 @@ class TemplateImportSheet extends ConsumerWidget {
       if (finalId != record.id) {
         record = record.copyWith(id: finalId);
       }
+      debugPrint('[TemplateImport] final id: $finalId');
 
       await dao.upsert(record);
+      debugPrint('[TemplateImport] dao.upsert ok');
       // 刷新 Capture 页模板缓存（系统 + 自定义），使新导入的模板立即出现
       ref.invalidate(CaptureState.allTemplatesProvider);
 
-      // 版本兼容性校验
-      final warnings = PptplFormat.validate(parsed);
-      if (warnings.isNotEmpty) {
-        _showWarningsDialog(navigator, warnings);
+      if (context.mounted) {
+        // 版本兼容性校验
+        final warnings = PptplFormat.validate(parsed);
+        if (warnings.isNotEmpty) {
+          _showWarningsDialog(context, warnings);
+        }
+        _showToast(context, '已导入模板：${record.name}');
+        navigator.pop();
       }
-
-      _showToast(navigator, '已导入模板：${record.name}');
       onImported(record.id);
-    } catch (e) {
-      _showToast(navigator, '导入失败：$e');
+    } catch (e, st) {
+      debugPrint('[TemplateImport] FAILED: $e\n$st');
+      if (context.mounted) {
+        navigator.pop();
+        _showToast(context, '导入失败：$e');
+      }
     }
   }
 
   // ===== 链接导入（DAO 持久化）=====
   Future<void> _handleLinkImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
-    navigator.pop(); // 先关闭 BottomSheet
-
+    // 与 _handleFileImport 同理：不提前关闭 BottomSheet，
+    // 全程使用 sheet 的 context/ref（保持 active），操作完成后再统一关闭。
     final url = await _showInputDialog(
       context: context,
       title: '从链接导入',
@@ -183,17 +225,26 @@ class TemplateImportSheet extends ConsumerWidget {
       keyboardType: TextInputType.url,
     );
 
-    if (url == null || url.trim().isEmpty) return;
+    if (url == null || url.trim().isEmpty) {
+      if (context.mounted) navigator.pop();
+      return;
+    }
 
     final parsed = _parseTemplateLink(url.trim());
     if (parsed == null) {
-      _showToast(navigator, '链接格式无效，请输入有效的分享链接');
+      if (context.mounted) {
+        navigator.pop();
+        _showToast(context, '链接格式无效，请输入有效的分享链接');
+      }
       return;
     }
 
     // 轻量形式（无完整 JSON）→ 不支持
     if (parsed['name'] is String && parsed.containsKey('coverSeed') && !parsed.containsKey('meta')) {
-      _showToast(navigator, '该分享链接不包含完整模板参数，请使用文件导入');
+      if (context.mounted) {
+        navigator.pop();
+        _showToast(context, '该分享链接不包含完整模板参数，请使用文件导入');
+      }
       return;
     }
 
@@ -219,21 +270,27 @@ class TemplateImportSheet extends ConsumerWidget {
       // 刷新 Capture 页模板缓存（系统 + 自定义），使新导入的模板立即出现
       ref.invalidate(CaptureState.allTemplatesProvider);
 
-      _showToast(navigator, '已导入模板：${record.name}');
-      if (warnings.isNotEmpty) {
-        _showWarningsDialog(navigator, warnings);
+      if (context.mounted) {
+        _showToast(context, '已导入模板：${record.name}');
+        if (warnings.isNotEmpty) {
+          _showWarningsDialog(context, warnings);
+        }
+        navigator.pop();
       }
       onImported(record.id);
-    } catch (e) {
-      _showToast(navigator, '导入失败：$e');
+    } catch (e, st) {
+      debugPrint('[TemplateImport] link FAILED: $e\n$st');
+      if (context.mounted) {
+        navigator.pop();
+        _showToast(context, '导入失败：$e');
+      }
     }
   }
 
   // ===== 扫码导入（DAO 持久化）=====
   Future<void> _handleQrImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
-    navigator.pop(); // 先关闭 BottomSheet
-
+    // 与 _handleFileImport 同理：不提前关闭 BottomSheet，操作完成后再统一关闭。
     final code = await _showInputDialog(
       context: context,
       title: '扫码导入',
@@ -241,11 +298,17 @@ class TemplateImportSheet extends ConsumerWidget {
       keyboardType: TextInputType.text,
     );
 
-    if (code == null || code.trim().isEmpty) return;
+    if (code == null || code.trim().isEmpty) {
+      if (context.mounted) navigator.pop();
+      return;
+    }
 
     final parsed = _parseTemplateCode(code.trim());
     if (parsed == null) {
-      _showToast(navigator, '分享码无效，请检查后重试');
+      if (context.mounted) {
+        navigator.pop();
+        _showToast(context, '分享码无效，请检查后重试');
+      }
       return;
     }
 
@@ -280,10 +343,17 @@ class TemplateImportSheet extends ConsumerWidget {
       // 刷新 Capture 页模板缓存（系统 + 自定义），使新导入的模板立即出现
       ref.invalidate(CaptureState.allTemplatesProvider);
 
-      _showToast(navigator, '已导入模板：$name');
+      if (context.mounted) {
+        _showToast(context, '已导入模板：$name');
+        navigator.pop();
+      }
       onImported(record.id);
-    } catch (e) {
-      _showToast(navigator, '导入失败：$e');
+    } catch (e, st) {
+      debugPrint('[TemplateImport] qr FAILED: $e\n$st');
+      if (context.mounted) {
+        navigator.pop();
+        _showToast(context, '导入失败：$e');
+      }
     }
   }
 
@@ -413,13 +483,13 @@ class TemplateImportSheet extends ConsumerWidget {
 
   // ===== UI 辅助 =====
 
-  void _showToast(NavigatorState navigator, String msg) {
-    if (!navigator.context.mounted) return;
-    lumira.LumiraToast.show(navigator.context, msg);
+  void _showToast(BuildContext context, String msg) {
+    if (!context.mounted) return;
+    lumira.LumiraToast.show(context, msg);
   }
 
-  void _showWarningsDialog(NavigatorState navigator, List<TemplateImportWarning> warnings) {
-    if (!navigator.context.mounted) return;
+  void _showWarningsDialog(BuildContext context, List<TemplateImportWarning> warnings) {
+    if (!context.mounted) return;
     final messages = warnings.map((w) {
       switch (w) {
         case TemplateImportWarning.legacyFormat:
@@ -429,7 +499,7 @@ class TemplateImportSheet extends ConsumerWidget {
       }
     }).join('\n');
     lumira.showLumiraDialog(
-      context: navigator.context,
+      context: context,
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

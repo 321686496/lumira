@@ -287,6 +287,9 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
       onImported: (_) {
         // 导入后切换到"全部"以确保新模板可见
         setState(() => _activeFilter = _FilterKey.all);
+        // 关键：customTemplatesProvider 是缓存的 FutureProvider，
+        // 必须 invalidate 才会重新查询 DAO，否则列表仍是旧数据
+        ref.invalidate(customTemplatesProvider);
       },
     );
   }

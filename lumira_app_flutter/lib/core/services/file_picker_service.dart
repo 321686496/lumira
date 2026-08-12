@@ -92,6 +92,35 @@ class FilePickerService {
     }
   }
 
+  /// 通过系统「保存文件」对话框保存文件，返回保存后的路径。
+  ///
+  /// OHOS 平台的 `getDirectoryPath()` 底层是 `DocumentViewPicker`（文件选择器），
+  /// 鸿蒙没有目录选择 API，只能选文件、没有保存选项。因此 OHOS 上保存文件
+  /// 必须改用 `saveFile`（`DocumentViewPicker.save` 保存对话框）。
+  ///
+  /// [sourceFilePath] 为已存在的源文件路径（OHOS 原生端会校验存在性并将其
+  /// 拷贝到用户选择的保存位置），[fileName] 为默认保存文件名。
+  /// 用户取消或失败时返回 null；非 OHOS 平台返回 null（由调用方走目录选择流程）。
+  static Future<String?> saveFile({
+    required String sourceFilePath,
+    String? fileName,
+  }) async {
+    if (!_isOhos) return null;
+    try {
+      return await ohos.FilePicker.platform.saveFile(
+        initialDirectory: sourceFilePath,
+        fileName: fileName,
+      );
+    } on PlatformException catch (e) {
+      final code = e.code.toLowerCase();
+      if (code.contains('activity') || code.contains('cancel') ||
+          code.contains('abort') || code.contains('unknown')) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
   /// 平台分发核心方法。
   ///
   /// 捕获用户取消选择时 file_picker 抛出的 PlatformException

@@ -101,6 +101,9 @@ void main() {
       expect(record.name, '导入的完整模板');
       expect(record.author, 'friend');
       expect(record.category, 'portrait');
+      // 导入的模板必须标记为 custom，否则模板库"我的"列表（getCustomOnly）
+      // 与拍摄页（getCustomAndRemote）都查不到，模板"导入后看不见"
+      expect(record.source, 'custom');
       expect(record.tags, ['人像', '导入']);
       expect(record.composition['overlayType'], 'golden_ratio');
       expect(record.pose['silhouette']['type'], 'builtin');
