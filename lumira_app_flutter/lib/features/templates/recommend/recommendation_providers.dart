@@ -17,8 +17,12 @@ import 'recommendation_models.dart';
 /// 2. 读取本地照片（最近 500 张）、模板候选池（builtin + remote）、场景、问卷
 /// 3. 转换为引擎信号，调用 RecommendationEngine.build
 final recommendationProvider = FutureProvider<RecommendationResult>((ref) async {
-  // 确保已拥有模板列表加载完成，避免推荐误含已拥有模板
-  await ref.watch(ownedTemplatesLoaderProvider.future);
+  // 确保已拥有模板列表加载完成，失败不阻塞推荐
+  try {
+    await ref.watch(ownedTemplatesLoaderProvider.future);
+  } catch (_) {
+    // 网络失败时使用当前已知的 owned 集合
+  }
   final owned = ref.watch(ownedTemplateIdsProvider);
 
   final galleryDao = await ref.watch(galleryDaoProvider.future);

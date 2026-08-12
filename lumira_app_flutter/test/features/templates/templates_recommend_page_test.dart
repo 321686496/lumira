@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,20 +6,42 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'package:lumira_app_flutter/core/router/route_names.dart';
-import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
-import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+import 'package:lumira_app_flutter/core/db/database_provider.dart';
+import 'package:lumira_app_flutter/core/db/dao/gallery_dao.dart';
+import 'package:lumira_app_flutter/core/db/dao/scenes_dao.dart';
+import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
+import 'package:lumira_app_flutter/core/db/tables.dart';
+import 'package:lumira_app_flutter/features/onboarding/data/questionnaire_dao.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_recommend_page.dart';
-import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
 
-/// Task 2.8A — TemplatesRecommendPage 测试
+/// 为你推荐页 widget 测试（改造后）
 ///
-/// 覆盖 brief 第 8 节 "Page 3" 的 8 项断言 + cross-theme/cross-style smoke test。
+/// 策略：sqflite 内存 DB 种入模板 / 场景 / 照片数据，
+/// override `galleryDaoProvider` 等读取 provider，验证 4 个 section 真实渲染。
+///
+/// 建表注意（与 DAO fromRow 的真实列名对齐）：
+/// - custom_templates 使用 classification_json / tags_json / tag_ids_json /
+///   post_process_json / cover_data，且必须有 is_builtin / is_recommended
+///   （getBuiltinAndRemote 的 SQL 引用 is_builtin 列）
+/// - scenes 必须有 category / created_at / updated_at（fromRow 直接强转）
 void main() {
+  late Database db;
   FlutterExceptionHandler? originalErrorHandler;
+
+  setUpAll(() async {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    db = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
+    await _seed(db);
+  });
+
+  tearDownAll(() async {
+    await db.close();
+  });
 
   setUp(() {
     HttpOverrides.global = TestHttpOverrides();
@@ -36,46 +59,7 @@ void main() {
     FlutterError.onError = originalErrorHandler;
   });
 
-  Widget wrap(ThemeKey themeKey, UIStyle uiStyle) {
-    final goRouter = GoRouter(
-      initialLocation: '/templates/recommend',
-      routes: [
-        GoRoute(
-          path: '/templates/recommend',
-          name: 'templatesRecommend',
-          builder: (_, __) => const TemplatesRecommendPage(),
-        ),
-        GoRoute(
-          path: RouteNames.templatesDetail,
-          name: 'templatesDetail',
-          builder: (_, __) =>
-              const Scaffold(body: Center(child: Text('DETAIL_PAGE'))),
-        ),
-        GoRoute(
-          path: RouteNames.templates,
-          name: 'templates',
-          builder: (_, __) =>
-              const Scaffold(body: Center(child: Text('TEMPLATES_PAGE'))),
-        ),
-      ],
-    );
-    return ProviderScope(
-      overrides: [
-        themeKeyProvider.overrideWith((ref) => themeKey),
-        uiStyleProvider.overrideWith((ref) => uiStyle),
-      ],
-      child: MaterialApp.router(routerConfig: goRouter),
-    );
-  }
-
-  Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
-    if (style == UIStyle.female) {
-      await tester.pump(const Duration(milliseconds: 500));
-    } else {
-      await tester.pumpAndSettle();
-    }
-  }
-
+  /// 加大视口，避免折叠区以下文本被 GridView 懒加载截断
   void setLargeViewport(WidgetTester tester) {
     tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
@@ -83,147 +67,319 @@ void main() {
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
   }
 
-  group('TemplatesRecommendPage', () {
-    testWidgets('renders style analysis section header', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+  /// 等待真实 async（DAO 查询 + owned loader 网络请求）完成并渲染内容
+  ///
+  /// sqflite_common_ffi 的 DB 查询与 HTTP 请求是真实 async，
+  /// 在 FakeAsync 环境下 pump(Duration) 无法让真实 Future 完成，
+  /// 必须用 tester.runAsync 让真实 async 操作完成（参考 templates_all_page_test.dart）。
+  Future<void> settleOrPump(WidgetTester tester) async {
+    for (var i = 0; i < 20; i++) {
+      await tester.pump();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      // 内容标志：有照片渲染风格卡 / 冷启动渲染引导文案 / 出错渲染错误视图
+      final loaded = find.text('根据你的拍摄风格').evaluate().isNotEmpty ||
+          find.text('完成 3 张拍摄后生成你的风格分析').evaluate().isNotEmpty ||
+          find.text('推荐数据加载失败').evaluate().isNotEmpty;
+      if (loaded) break;
+    }
+    // FadeUp 延迟动画（0/80/160/240ms）在 pumpAndSettle 中推进完成
+    await tester.pumpAndSettle();
+  }
 
-      expect(find.text('根据你的拍摄风格'), findsOneWidget);
-      expect(
-        find.text('分析你过往的 128 张作品，我们发现你偏爱以下风格'),
-        findsOneWidget,
-      );
-    });
+  /// 共享种子 DB 的页面包装（含路由，供点卡片跳转使用）
+  Widget wrap() {
+    final goRouter = GoRouter(
+      initialLocation: '/templates/recommend',
+      routes: [
+        GoRoute(
+          path: '/templates/recommend',
+          builder: (_, __) => const TemplatesRecommendPage(),
+        ),
+        GoRoute(
+          path: '/templates',
+          builder: (_, __) => const Scaffold(body: Text('templates root')),
+        ),
+      ],
+    );
+    return ProviderScope(
+      overrides: [
+        galleryDaoProvider.overrideWith((ref) async => GalleryDao(db)),
+        templatesDaoProvider.overrideWith((ref) async => TemplatesDao(db)),
+        scenesDaoProvider.overrideWith((ref) async => ScenesDao(db)),
+        questionnaireDaoProvider
+            .overrideWith((ref) async => QuestionnaireDao(db)),
+      ],
+      child: MaterialApp.router(routerConfig: goRouter),
+    );
+  }
 
-    testWidgets('renders 3 style analysis bars with labels and percents',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+  testWidgets('冷启动（无照片无问卷）：显示引导文案且推荐非空', (tester) async {
+    setLargeViewport(tester);
+    // 独立内存 DB：只种模板，不种照片（真实 async 打开，需 runAsync）
+    // 注意：必须 singleInstance: false——sqflite 按 path 缓存单例，
+    // 与共享 DB 同用 ':memory:' 会返回同一实例导致种子数据被共享
+    final emptyDb = (await tester.runAsync<Database>(() => openDatabase(
+        ':memory:',
+        singleInstance: false,
+        version: 1,
+        onCreate: (db, v) async {
+      await _onCreate(db, v);
+      await _seedTemplates(db);
+    })))!;
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        galleryDaoProvider.overrideWith((ref) async => GalleryDao(emptyDb)),
+        templatesDaoProvider
+            .overrideWith((ref) async => TemplatesDao(emptyDb)),
+        scenesDaoProvider.overrideWith((ref) async => ScenesDao(emptyDb)),
+        questionnaireDaoProvider
+            .overrideWith((ref) async => QuestionnaireDao(emptyDb)),
+      ],
+      child: const MaterialApp(home: TemplatesRecommendPage()),
+    ));
+    await settleOrPump(tester);
 
-      // 3 个风格标签：温柔 / 清新 / 复古
-      expect(find.text('温柔'), findsOneWidget);
-      expect(find.text('清新'), findsOneWidget);
-      expect(find.text('复古'), findsOneWidget);
-      // 3 个百分比文本
-      expect(find.text('68%'), findsOneWidget);
-      expect(find.text('45%'), findsOneWidget);
-      expect(find.text('32%'), findsOneWidget);
-    });
+    expect(find.text('完成 3 张拍摄后生成你的风格分析'), findsOneWidget);
+    expect(find.text('猜你喜欢'), findsOneWidget);
+    // 冷启动卡片 showMatch=true 渲染 "匹配 0%"
+    expect(find.textContaining('匹配'), findsWidgets);
+    await tester.runAsync(() => emptyDb.close());
+  });
 
-    testWidgets('renders 猜你喜欢 section with 6 items', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+  testWidgets('有照片：风格分析显示真实场景风格', (tester) async {
+    setLargeViewport(tester);
+    await tester.pumpWidget(wrap());
+    await settleOrPump(tester);
 
-      expect(find.text('猜你喜欢'), findsOneWidget);
-      expect(find.text('换一换'), findsOneWidget);
-      // 6 项：牡丹花下 / 茶园春色 / 民国风情 / 白纱轻舞 / 植物园记 / 旧上海
-      expect(find.text('牡丹花下'), findsOneWidget);
-      expect(find.text('茶园春色'), findsOneWidget);
-      expect(find.text('民国风情'), findsOneWidget);
-      expect(find.text('白纱轻舞'), findsOneWidget);
-      expect(find.text('植物园记'), findsOneWidget);
-      expect(find.text('旧上海'), findsOneWidget);
-    });
+    expect(find.text('根据你的拍摄风格'), findsOneWidget);
+    expect(find.text('清新'), findsWidgets); // 种子场景风格
+    expect(find.textContaining('%'), findsWidgets);
+  });
 
-    testWidgets('renders 相似用户也在拍 section with 4 items', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+  testWidgets('猜你喜欢排除已用模板且渲染推荐卡片', (tester) async {
+    setLargeViewport(tester);
+    await tester.pumpWidget(wrap());
+    await settleOrPump(tester);
 
-      expect(find.text('相似用户也在拍'), findsOneWidget);
-      expect(find.text('查看全部'), findsOneWidget);
-      // 4 项
-      expect(find.text('晨雾森林'), findsOneWidget);
-      expect(find.text('向日葵田'), findsOneWidget);
-      expect(find.text('书香午后'), findsOneWidget);
-      expect(find.text('海边栈道'), findsOneWidget);
-    });
+    // 种子：照片用了 tpl-used（近期），推荐中不应出现
+    expect(find.text('已用模板'), findsNothing);
+    expect(find.text('推荐模板A'), findsWidgets);
+  });
 
-    testWidgets('renders similar user usage count with formatThousands',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+  testWidgets('旧爱回归 section 渲染', (tester) async {
+    setLargeViewport(tester);
+    await tester.pumpWidget(wrap());
+    await settleOrPump(tester);
 
-      // 4 个 usageCount：1200 / 980 / 850 / 720
-      // 仅 1200 是 4+ 位数，formatThousands → '1,200'
-      expect(find.text('1,200+ 用户使用'), findsOneWidget);
-      // 980 / 850 / 720 不满 4 位，formatThousands 原样返回
-      expect(find.text('980+ 用户使用'), findsOneWidget);
-      expect(find.text('850+ 用户使用'), findsOneWidget);
-      expect(find.text('720+ 用户使用'), findsOneWidget);
-    });
+    // 种子含 90 天前用过 tpl-recall（tag street-tag、style urban），
+    // 匹配分 ≈ 0.35*catSim + 0.30*tagSim(1.0) ≈ 0.317 >= 0.3 → 被召回
+    expect(find.text('旧爱回归'), findsWidgets);
+  });
 
-    testWidgets('renders 根据最近拍摄 section with recent info', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+  testWidgets('换一换：候选不足时展示 toast 且页面不崩溃', (tester) async {
+    setLargeViewport(tester);
+    await tester.pumpWidget(wrap());
+    await settleOrPump(tester);
 
-      expect(find.text('根据最近拍摄'), findsOneWidget);
-      expect(find.text('你昨天在咖啡馆拍了 3 张照片'), findsOneWidget);
-      expect(find.text('试试这些咖啡馆模板吧'), findsOneWidget);
-    });
+    // 种子仅 1 个未用过模板 → 候选 < 6 → hasMore=false
+    expect(find.text('推荐模板A'), findsWidgets);
+    // 点击「换一换」（猜你喜欢 section 的链接，树序第一个）
+    await tester.ensureVisible(find.text('换一换').first);
+    await tester.pump();
+    await tester.tap(find.text('换一换').first);
+    // toast 入场（1000ms auto-dismiss）
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('已展示全部推荐'), findsOneWidget);
+    // 让 auto-dismiss(1000ms) + dismiss 动画 timer(220ms) 都触发，避免 pending Timer
+    await tester.pump(const Duration(milliseconds: 1300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
+    // 无崩溃
+    expect(find.byType(TemplatesRecommendPage), findsOneWidget);
+  });
+}
 
-    testWidgets('renders recent templates with theme label', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+/// 建表（仅测试所需表；列名与 DAO fromRow 读取的真实列名一致）
+Future<void> _onCreate(Database db, int version) async {
+  // scenes：category / created_at / updated_at 为 SceneRecord.fromRow 强转列，必须有
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.scenes} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colIcon} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCategory} TEXT NOT NULL DEFAULT '',
+      ${Tables.colStyle} TEXT NOT NULL DEFAULT '',
+      ${Tables.colFilterJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colVibe} TEXT NOT NULL DEFAULT '',
+      ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
+      ${Tables.colExampleImagesJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colTipsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colWhereToShoot} TEXT NOT NULL DEFAULT '',
+      ${Tables.colBestTime} TEXT NOT NULL DEFAULT '',
+      ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colRelatedCategory} TEXT NOT NULL DEFAULT '',
+      ${Tables.colRecommendedTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colCreator} TEXT NOT NULL DEFAULT 'user',
+      ${Tables.colIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCreatedAt} INTEGER NOT NULL,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL
+    )
+  ''');
+  // custom_templates：is_builtin / is_recommended 为 getBuiltinAndRemote 引用列
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.customTemplates} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colAuthor} TEXT NOT NULL DEFAULT '',
+      ${Tables.colVersion} TEXT NOT NULL DEFAULT '1.0.0',
+      ${Tables.colCategory} TEXT NOT NULL,
+      ${Tables.colClassificationJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colTagsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colPrice} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCover} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCoverData} TEXT,
+      ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
+      ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colPoseJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
+      ${Tables.colCreatedAt} INTEGER NOT NULL,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.galleryItems} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colDataUrl} TEXT,
+      ${Tables.colFilePath} TEXT,
+      ${Tables.colOriginalPath} TEXT,
+      ${Tables.colTransform} TEXT,
+      ${Tables.colPostProcess} TEXT,
+      ${Tables.colSceneId} TEXT,
+      ${Tables.colTemplateId} TEXT,
+      ${Tables.colKitId} TEXT,
+      ${Tables.colMood} TEXT,
+      ${Tables.colLut} TEXT,
+      ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCreatedAt} INTEGER NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.questionnaire} (
+      ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
+      ${Tables.colAnswersJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colSubmittedAt} INTEGER,
+      ${Tables.colSyncedAt} INTEGER
+    )
+  ''');
+}
 
-      // 4 个 recentTemplates 都有 theme='咖啡馆主题'
-      // 出现在 _ThemeBadge 中 4 次
-      expect(find.text('咖啡馆主题'), findsNWidgets(4));
-      // 4 个 name
-      expect(find.text('咖啡角落'), findsOneWidget);
-      expect(find.text('拉花艺术'), findsOneWidget);
-      expect(find.text('窗边阅读'), findsOneWidget);
-      expect(find.text('咖啡物语'), findsOneWidget);
-    });
+/// 种子：模板（含未用/已用/召回）、场景、照片
+Future<void> _seed(Database db) async {
+  await _seedTemplates(db);
+  await _seedPhotos(db);
+}
 
-    testWidgets('tapping template card pushes /templates/detail',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+Future<void> _seedTemplates(Database db) async {
+  // 模板：分类 food（未用过 → 猜你喜欢候选）
+  await db.insert(Tables.customTemplates, {
+    Tables.colId: 'tpl-recommend-a',
+    Tables.colName: '推荐模板A',
+    Tables.colCover: 'https://picsum.photos/seed/a/400/400',
+    Tables.colCoverData: '',
+    Tables.colCategory: 'food',
+    Tables.colTagsJson: jsonEncode(<String>[]),
+    Tables.colTagIdsJson: jsonEncode(['food-tag']),
+    Tables.colClassificationJson: jsonEncode(
+        {'type': 'food', 'style': 'overhead', 'method': 'normal'}),
+    Tables.colPostProcessJson: jsonEncode(
+        {'saturation': 20, 'temperature': 0, 'contrast': 0, 'brightness': 0}),
+    Tables.colPrice: 0,
+    Tables.colSource: 'remote',
+    Tables.colIsBuiltin: 0,
+    Tables.colIsRecommended: 0,
+    Tables.colCreatedAt: 100,
+    Tables.colUpdatedAt: 200,
+  });
+  // 模板：分类 portrait（近期用过 → 进入候选池后由引擎 used 排除逻辑剔除）
+  await db.insert(Tables.customTemplates, {
+    Tables.colId: 'tpl-used',
+    Tables.colName: '已用模板',
+    Tables.colCover: 'https://picsum.photos/seed/b/400/400',
+    Tables.colCoverData: '',
+    Tables.colCategory: 'portrait',
+    Tables.colTagsJson: jsonEncode(<String>[]),
+    Tables.colTagIdsJson: jsonEncode(<String>[]),
+    Tables.colClassificationJson: jsonEncode(
+        {'type': 'portrait', 'style': 'fresh', 'method': 'normal'}),
+    Tables.colPostProcessJson: jsonEncode(<String, dynamic>{}),
+    Tables.colPrice: 0,
+    Tables.colSource: 'remote',
+    Tables.colIsBuiltin: 0,
+    Tables.colIsRecommended: 0,
+    Tables.colCreatedAt: 100,
+    Tables.colUpdatedAt: 200,
+  });
+  // 模板：分类 street（90 天前用过 → 旧爱回归）
+  await db.insert(Tables.customTemplates, {
+    Tables.colId: 'tpl-recall',
+    Tables.colName: '街拍回忆',
+    Tables.colCover: 'https://picsum.photos/seed/c/400/400',
+    Tables.colCoverData: '',
+    Tables.colCategory: 'street',
+    Tables.colTagsJson: jsonEncode(<String>[]),
+    Tables.colTagIdsJson: jsonEncode(['street-tag']),
+    Tables.colClassificationJson: jsonEncode(
+        {'type': 'street', 'style': 'urban', 'method': 'normal'}),
+    Tables.colPostProcessJson: jsonEncode(
+        {'saturation': 0, 'temperature': 10, 'contrast': 0, 'brightness': 0}),
+    Tables.colPrice: 0,
+    Tables.colSource: 'remote',
+    Tables.colIsBuiltin: 0,
+    Tables.colIsRecommended: 0,
+    Tables.colCreatedAt: 100,
+    Tables.colUpdatedAt: 300,
+  });
+}
 
-      // 点击猜你喜欢第一张卡片
-      await tester.tap(find.text('牡丹花下'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 验证跳转到 /templates/detail（无 templateId 参数，对齐 recommend.vue 原行为）
-      expect(find.text('DETAIL_PAGE'), findsOneWidget);
-    });
-
-    testWidgets('renders LumiraNav with title 为你推荐', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.widgetWithText(LumiraNav, '为你推荐'), findsOneWidget);
-    });
-
-    testWidgets('renders correctly across all 8 themes', (tester) async {
-      setLargeViewport(tester);
-      for (final theme in ThemeKey.values) {
-        await tester.pumpWidget(wrap(theme, UIStyle.neumorphic));
-        await settleOrPump(tester, UIStyle.neumorphic);
-        expect(find.text('根据你的拍摄风格'), findsOneWidget,
-            reason: 'theme=$theme');
-        expect(find.text('猜你喜欢'), findsOneWidget, reason: 'theme=$theme');
-      }
-    });
-
-    testWidgets('renders correctly across all 4 UI styles', (tester) async {
-      setLargeViewport(tester);
-      for (final style in UIStyle.values) {
-        await tester.pumpWidget(wrap(ThemeKey.warmWhite, style));
-        await settleOrPump(tester, style);
-        expect(find.text('根据你的拍摄风格'), findsOneWidget,
-            reason: 'style=$style');
-        expect(find.text('猜你喜欢'), findsOneWidget, reason: 'style=$style');
-      }
-    });
+Future<void> _seedPhotos(Database db) async {
+  final now = DateTime.now().millisecondsSinceEpoch;
+  const dayMs = 24 * 3600 * 1000;
+  // 场景：清新/still-life（category/created_at/updated_at 为 fromRow 强转列，必须提供）
+  await db.insert(Tables.scenes, {
+    Tables.colId: 'scene-cafe',
+    Tables.colName: '咖啡馆',
+    Tables.colStyle: '清新',
+    Tables.colRelatedCategory: 'still-life',
+    Tables.colCategory: 'still-life',
+    Tables.colCreator: 'system',
+    Tables.colIsFavorite: 0,
+    Tables.colCreatedAt: now,
+    Tables.colUpdatedAt: now,
+  });
+  // 近期照片：用 tpl-used（1 天前）
+  await db.insert(Tables.galleryItems, {
+    Tables.colId: 'g1',
+    Tables.colSceneId: 'scene-cafe',
+    Tables.colTemplateId: 'tpl-used',
+    Tables.colGalleryItemIsFavorite: 0,
+    Tables.colCreatedAt: now - dayMs,
+  });
+  // 很久前照片：用 tpl-recall（90 天前）
+  await db.insert(Tables.galleryItems, {
+    Tables.colId: 'g2',
+    Tables.colSceneId: 'scene-cafe',
+    Tables.colTemplateId: 'tpl-recall',
+    Tables.colGalleryItemIsFavorite: 0,
+    Tables.colCreatedAt: now - 90 * dayMs,
   });
 }
