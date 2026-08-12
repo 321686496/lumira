@@ -178,12 +178,12 @@ class _CapturePreviewTemplatePageState
   Future<void> _onCapture() async {
     try {
       await ref.read(cameraServiceProvider).capture(
-        config: CaptureConfig(
-          facing: 'back',
-          zoomMultiplier: 1.0,
-          flashMode: _flashOn ? CameraFlashMode.on : CameraFlashMode.off,
-        ),
-      );
+            config: CaptureConfig(
+              facing: 'back',
+              zoomMultiplier: 1.0,
+              flashMode: _flashOn ? CameraFlashMode.on : CameraFlashMode.off,
+            ),
+          );
       if (!mounted) return;
       LumiraToast.show(context, '已拍摄');
     } catch (e) {
@@ -446,19 +446,14 @@ class _Viewfinder extends StatelessWidget {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              Positioned(
-                                left: constraints.maxWidth * tpl.pose.position.x,
-                                top: constraints.maxHeight * tpl.pose.position.y,
-                                child: FractionalTranslation(
-                                  translation: const Offset(-0.5, -0.5),
-                                  child: PoseSilhouette(
-                                    silhouetteType:
-                                        tpl.pose.silhouette.type,
-                                    silhouetteData:
-                                        tpl.pose.silhouette.data,
-                                    scale: tpl.pose.scale,
-                                    rotation: tpl.pose.rotation,
-                                  ),
+                              Positioned.fill(
+                                child: SilhouetteLayer(
+                                  silhouetteType: tpl.pose.silhouette.type,
+                                  silhouetteData: tpl.pose.silhouette.data,
+                                  positionX: tpl.pose.position.x,
+                                  positionY: tpl.pose.position.y,
+                                  scale: tpl.pose.scale,
+                                  rotation: tpl.pose.rotation,
                                 ),
                               ),
                               // 拖动提示
@@ -473,8 +468,8 @@ class _Viewfinder extends StatelessWidget {
                                           horizontal: 12, vertical: 6),
                                       decoration: BoxDecoration(
                                         // 硬编码颜色，与 uni-app 一致 (drag-hint bg rgba(0,0,0,0.5))
-                                        color: const Color.fromRGBO(
-                                            0, 0, 0, 0.5),
+                                        color:
+                                            const Color.fromRGBO(0, 0, 0, 0.5),
                                         borderRadius:
                                             BorderRadius.circular(9999),
                                       ),
@@ -484,16 +479,16 @@ class _Viewfinder extends StatelessWidget {
                                           Icon(
                                             Icons.open_with,
                                             size: 12,
-                                            color: Colors.white
-                                                .withOpacity(0.8),
+                                            color:
+                                                Colors.white.withOpacity(0.8),
                                           ),
                                           const SizedBox(width: 4),
                                           Text(
                                             '拖动调整剪影位置',
                                             style: TextStyle(
                                               fontSize: 11,
-                                              color: Colors.white
-                                                  .withOpacity(0.8),
+                                              color:
+                                                  Colors.white.withOpacity(0.8),
                                             ),
                                           ),
                                         ],
@@ -578,13 +573,16 @@ class _ParamPillBar extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _ParamPill(label: 'EV', value: formatEv(template.camera.exposureCompensation)),
+            _ParamPill(
+                label: 'EV',
+                value: formatEv(template.camera.exposureCompensation)),
             const SizedBox(width: 8),
             _ParamPill(label: 'ISO', value: '${template.camera.iso}'),
             const SizedBox(width: 8),
             _ParamPill(label: 'SS', value: template.camera.shutterSpeed),
             const SizedBox(width: 8),
-            _ParamPill(label: 'WB', value: formatWb(template.camera.whiteBalanceK)),
+            _ParamPill(
+                label: 'WB', value: formatWb(template.camera.whiteBalanceK)),
           ],
         ),
       ),
@@ -792,7 +790,8 @@ class _CameraSection extends StatelessWidget {
             template.camera.exposureCompensation =
                 double.parse(v.toStringAsFixed(1));
           }),
-          valueText: '${formatEvSlider(template.camera.exposureCompensation)} EV',
+          valueText:
+              '${formatEvSlider(template.camera.exposureCompensation)} EV',
         ),
         _SliderRow(
           label: 'ISO',
@@ -1120,9 +1119,8 @@ class _SegBtnRow extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       // 硬编码颜色，与 uni-app 一致 (seg-btn text active #fff / inactive rgba(255,255,255,0.7))
-                      color: active
-                          ? Colors.white
-                          : Colors.white.withOpacity(0.7),
+                      color:
+                          active ? Colors.white : Colors.white.withOpacity(0.7),
                     ),
                   ),
                 ),

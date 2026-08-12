@@ -21,7 +21,8 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_state.dart';
-import '../../profile/pages/profile_my_templates_page.dart' show customTemplatesProvider;
+import '../../profile/pages/profile_my_templates_page.dart'
+    show customTemplatesProvider;
 import '../data/preview_form_provider.dart';
 import '../data/builtin_silhouettes.dart';
 import '../data/remote_templates_providers.dart';
@@ -37,7 +38,8 @@ double _effectiveAspectRatio(String ratio, BuildContext context) {
   final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
   final raw = parseAspectRatio(ratio, isPortrait: isPortrait);
   if (raw < 0) {
-    return MediaQuery.of(context).size.width / MediaQuery.of(context).size.height;
+    return MediaQuery.of(context).size.width /
+        MediaQuery.of(context).size.height;
   }
   return raw;
 }
@@ -175,10 +177,8 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         TemplatesEditorMockData.loadTemplateById(widget.templateId) != null;
     _isEditMode = widget.templateId != null && mockHasTemplate;
     // 编辑模式但 mock 中不存在（用户自建模板）→ 需要从 DAO 异步加载
-    _isLoadingFromDao =
-        widget.templateId != null && !mockHasTemplate;
-    _tagsController =
-        TextEditingController(text: _form.meta.tags.join(', '));
+    _isLoadingFromDao = widget.templateId != null && !mockHasTemplate;
+    _tagsController = TextEditingController(text: _form.meta.tags.join(', '));
     _propsController =
         TextEditingController(text: _form.sceneGuide.props.join(', '));
     _tipsController =
@@ -254,11 +254,15 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       }
       final loaded = TemplateMapper.toEditorForm(record);
       // 调试日志：追踪封面图和剪影数据加载
-      debugPrint('[Editor] Load from DAO: id=${record.id}, source=${record.source}');
-      debugPrint('[Editor]   coverData: ${record.coverData != null ? '${record.coverData!.length} chars' : 'null'}');
-      debugPrint('[Editor]   coverImage in form: ${loaded.meta.coverImage != null ? '${loaded.meta.coverImage!.length} chars' : 'null'}');
+      debugPrint(
+          '[Editor] Load from DAO: id=${record.id}, source=${record.source}');
+      debugPrint(
+          '[Editor]   coverData: ${record.coverData != null ? '${record.coverData!.length} chars' : 'null'}');
+      debugPrint(
+          '[Editor]   coverImage in form: ${loaded.meta.coverImage != null ? '${loaded.meta.coverImage!.length} chars' : 'null'}');
       final sil = loaded.pose.silhouette;
-      debugPrint('[Editor]   silhouette: type=${sil.type}, data=${sil.data.isNotEmpty ? '${sil.data.length} chars' : 'empty'}');
+      debugPrint(
+          '[Editor]   silhouette: type=${sil.type}, data=${sil.data.isNotEmpty ? '${sil.data.length} chars' : 'empty'}');
       if (!mounted) return;
       setState(() {
         _form = loaded;
@@ -283,14 +287,20 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   }
 
   void _onTagsChanged(String text) {
-    _form.meta.tags =
-        text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+    _form.meta.tags = text
+        .split(',')
+        .map((t) => t.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
     _scheduleAutoSave();
   }
 
   void _onPropsChanged(String text) {
-    _form.sceneGuide.props =
-        text.split(',').map((t) => t.trim()).where((t) => t.isNotEmpty).toList();
+    _form.sceneGuide.props = text
+        .split(',')
+        .map((t) => t.trim())
+        .where((t) => t.isNotEmpty)
+        .toList();
     _scheduleAutoSave();
   }
 
@@ -390,8 +400,10 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     } on PlatformException catch (e) {
       // 用户取消拍照时某些平台抛 PlatformException，静默处理
       final code = e.code.toLowerCase();
-      if (code.contains('cancel') || code.contains('abort') ||
-          code.contains('activity') || code.contains('unknown')) {
+      if (code.contains('cancel') ||
+          code.contains('abort') ||
+          code.contains('activity') ||
+          code.contains('unknown')) {
         return;
       }
       if (!mounted) return;
@@ -439,8 +451,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
           ),
           lumira.LumiraListTile(
             title: Center(
-              child: Text('取消',
-                  style: TextStyle(color: tokens.textSecondary)),
+              child: Text('取消', style: TextStyle(color: tokens.textSecondary)),
             ),
             onTap: () => Navigator.pop(ctx),
           ),
@@ -528,16 +539,15 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     setState(() => _isDraggingPose = true);
   }
 
-  void _onPoseDragUpdate(DragUpdateDetails details, BoxConstraints constraints) {
+  void _onPoseDragUpdate(
+      DragUpdateDetails details, BoxConstraints constraints) {
     if (!_isDraggingPose) return;
     // 拖动时不调用 setState（避免整个 page rebuild 和滚动跳跃），
     // 只更新 _form 和 _poseVersionNotifier，让 ValueListenableBuilder 局部重建
     final dx = details.delta.dx / constraints.maxWidth;
     final dy = details.delta.dy / constraints.maxHeight;
-    _form.pose.position.x =
-        (_form.pose.position.x + dx).clamp(0.0, 1.0);
-    _form.pose.position.y =
-        (_form.pose.position.y + dy).clamp(0.0, 1.0);
+    _form.pose.position.x = (_form.pose.position.x + dx).clamp(0.0, 1.0);
+    _form.pose.position.y = (_form.pose.position.y + dy).clamp(0.0, 1.0);
     _notifyPoseChanged();
   }
 
@@ -617,9 +627,12 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
     // 调试日志：追踪封面图和剪影数据保存
     debugPrint('[Editor] Save: id=$id');
-    debugPrint('[Editor]   coverImage in form: ${_form.meta.coverImage != null ? '${_form.meta.coverImage!.length} chars' : 'null'}');
-    debugPrint('[Editor]   coverData in record: ${record.coverData != null ? '${record.coverData!.length} chars' : 'null'}');
-    debugPrint('[Editor]   silhouette: type=${_form.pose.silhouette.type}, data=${_form.pose.silhouette.data.isNotEmpty ? '${_form.pose.silhouette.data.length} chars' : 'empty'}');
+    debugPrint(
+        '[Editor]   coverImage in form: ${_form.meta.coverImage != null ? '${_form.meta.coverImage!.length} chars' : 'null'}');
+    debugPrint(
+        '[Editor]   coverData in record: ${record.coverData != null ? '${record.coverData!.length} chars' : 'null'}');
+    debugPrint(
+        '[Editor]   silhouette: type=${_form.pose.silhouette.type}, data=${_form.pose.silhouette.data.isNotEmpty ? '${_form.pose.silhouette.data.length} chars' : 'empty'}');
 
     try {
       final dao = await ref.read(templatesDaoProvider.future);
@@ -648,8 +661,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   void _onSaveDraft() {
     // 简化：mock 草稿保存
     if (_currentDraftId.isEmpty) {
-      _currentDraftId =
-          'draft-editor-${DateTime.now().millisecondsSinceEpoch}';
+      _currentDraftId = 'draft-editor-${DateTime.now().millisecondsSinceEpoch}';
     }
     lumira.LumiraToast.show(context, '草稿已保存');
   }
@@ -707,8 +719,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
           ),
           lumira.LumiraListTile(
             title: Center(
-              child: Text('取消',
-                  style: TextStyle(color: tokens.textSecondary)),
+              child: Text('取消', style: TextStyle(color: tokens.textSecondary)),
             ),
             onTap: () => Navigator.pop(ctx, null),
           ),
@@ -723,9 +734,10 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     lumira.LumiraToast.show(context, '正在导出 ${record.name}...');
 
     try {
-      final filePath = await TemplateExporter.exportToTempFile(record, usePptpl: usePptpl);
+      final filePath =
+          await TemplateExporter.exportToTempFile(record, usePptpl: usePptpl);
       if (!mounted) return;
-      
+
       context.push(
         RouteNames.templatesExportDetail,
         extra: {
@@ -744,8 +756,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     // Bug 12 修复：将当前 _form 的副本写入 previewEditorFormProvider，
     // 让预览页能直接读取真实编辑器表单（而非 mock 数据）
     if (_currentDraftId.isEmpty) {
-      _currentDraftId =
-          'draft-editor-${DateTime.now().millisecondsSinceEpoch}';
+      _currentDraftId = 'draft-editor-${DateTime.now().millisecondsSinceEpoch}';
     }
     ref.read(previewEditorFormProvider.notifier).state = _form.copy();
 
@@ -842,7 +853,8 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                             _Step3Pose(
                               tokens: tokens,
                               form: _form,
-                              compositionAspectRatio: _form.composition.aspectRatio,
+                              compositionAspectRatio:
+                                  _form.composition.aspectRatio,
                               isDragging: _isDraggingPose,
                               poseVersionNotifier: _poseVersionNotifier,
                               onSourceChange: _onSilhouetteSourceChange,
@@ -887,7 +899,8 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                       ),
                       _EditorFooter(
                         tokens: tokens,
-                        isExportVisible: _isEditMode && _form.meta.id.isNotEmpty,
+                        isExportVisible:
+                            _isEditMode && _form.meta.id.isNotEmpty,
                         onSaveDraft: _onSaveDraft,
                         onPreview: _onPreview,
                         onSave: _onSave,
@@ -1223,9 +1236,7 @@ class _PillGroup extends ConsumerWidget {
                       width: 1,
                     ),
               boxShadow: isNeumorphic
-                  ? (active
-                      ? tokens.shadowConvex
-                      : tokens.shadowConvexSubtle)
+                  ? (active ? tokens.shadowConvex : tokens.shadowConvexSubtle)
                   : null,
             ),
             child: Text(
@@ -1345,8 +1356,8 @@ Uint8List _cachedCoverDecode(String dataUrl) {
 final Map<String, Future<ui.Image>> _coverImageSizeCache = {};
 
 Future<ui.Image> _getCachedCoverImage(String dataUrl) {
-  return _coverImageSizeCache
-      .putIfAbsent(dataUrl, () => _decodeCoverImage(dataUrl));
+  return _coverImageSizeCache.putIfAbsent(
+      dataUrl, () => _decodeCoverImage(dataUrl));
 }
 
 Future<ui.Image> _decodeCoverImage(String dataUrl) async {
@@ -1393,13 +1404,15 @@ void _showCoverPreviewDialog(
                   );
                 }
                 if (snapshot.hasError) {
-                  debugPrint('[Editor] Cover preview decode error: ${snapshot.error}');
+                  debugPrint(
+                      '[Editor] Cover preview decode error: ${snapshot.error}');
                   return Container(
                     height: 300,
                     width: double.infinity,
                     color: tokens.canvasDeep,
                     child: const Center(
-                      child: Icon(Icons.broken_image_outlined, color: Colors.white38),
+                      child: Icon(Icons.broken_image_outlined,
+                          color: Colors.white38),
                     ),
                   );
                 }
@@ -1407,7 +1420,11 @@ void _showCoverPreviewDialog(
                   height: 300,
                   width: double.infinity,
                   color: tokens.canvasDeep,
-                  child: const Center(child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator())),
+                  child: const Center(
+                      child: SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: CircularProgressIndicator())),
                 );
               },
             ),
@@ -1428,7 +1445,8 @@ void _showCoverPreviewDialog(
                 Navigator.pop(ctx);
                 onChangeCover();
               },
-              child: const Text('更换封面', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+              child: const Text('更换封面',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
             ),
           ),
         ],
@@ -1449,6 +1467,7 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
   List<EditorOption> _typeOptions = const [];
   List<EditorOption> _styleOptions = const [];
   List<EditorOption> _methodOptions = const [];
+
   /// 记录已加载过的 category/style，用于 didUpdateWidget 判断是否需要重新加载
   String? _lastLoadedCategory;
   String? _lastLoadedStyle;
@@ -1553,7 +1572,7 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
           if (cover != null && cover.isNotEmpty)
             GestureDetector(
               onTap: () => _showCoverPreviewDialog(
-                context, cover, tokens, onPickCoverImage),
+                  context, cover, tokens, onPickCoverImage),
               behavior: HitTestBehavior.opaque,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
@@ -1568,21 +1587,27 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
                           _cachedCoverDecode(cover),
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, _) {
-                            debugPrint('[Editor] Cover image decode error: $error');
+                            debugPrint(
+                                '[Editor] Cover image decode error: $error');
                             return _CoverPlaceholder(tokens: tokens);
                           },
                         ),
                       );
                     }
                     if (snapshot.hasError) {
-                      debugPrint('[Editor] Cover image decode error: ${snapshot.error}');
+                      debugPrint(
+                          '[Editor] Cover image decode error: ${snapshot.error}');
                       return _CoverPlaceholder(tokens: tokens);
                     }
                     return Container(
                       height: 200,
                       width: double.infinity,
                       color: tokens.canvasDeep,
-                      child: const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator())),
+                      child: const Center(
+                          child: SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator())),
                     );
                   },
                 ),
@@ -1742,8 +1767,7 @@ class _Step2Composition extends StatelessWidget {
             tokens: tokens,
             value: form.composition.overlayType,
             options: overlayTypeOptions,
-            onChanged: (v) =>
-                onChange(() => form.composition.overlayType = v),
+            onChanged: (v) => onChange(() => form.composition.overlayType = v),
           ),
           const SizedBox(height: 14),
           _FieldLabel(tokens: tokens, text: '宽高比'),
@@ -1751,8 +1775,7 @@ class _Step2Composition extends StatelessWidget {
             tokens: tokens,
             options: aspectRatioOptions,
             value: form.composition.aspectRatio,
-            onChanged: (v) =>
-                onChange(() => form.composition.aspectRatio = v),
+            onChanged: (v) => onChange(() => form.composition.aspectRatio = v),
           ),
           const SizedBox(height: 14),
           _SliderRow(
@@ -1762,8 +1785,7 @@ class _Step2Composition extends StatelessWidget {
             min: 0,
             max: 1,
             divisions: 10,
-            onChanged: (v) =>
-                onChange(() => form.composition.opacity = v),
+            onChanged: (v) => onChange(() => form.composition.opacity = v),
             valueText: form.composition.opacity.toStringAsFixed(1),
           ),
           _FieldLabel(tokens: tokens, text: '构图说明'),
@@ -1772,14 +1794,13 @@ class _Step2Composition extends StatelessWidget {
             initialValue: form.composition.description,
             placeholder: '构图说明',
             multiline: true,
-            onChanged: (v) =>
-                onChange(() => form.composition.description = v),
+            onChanged: (v) => onChange(() => form.composition.description = v),
           ),
           const SizedBox(height: 14),
           _PreviewBox(
             tokens: tokens,
-            aspectRatio: _effectiveAspectRatio(
-              form.composition.aspectRatio, context),
+            aspectRatio:
+                _effectiveAspectRatio(form.composition.aspectRatio, context),
             child: CompositionOverlay(
               overlayType: form.composition.overlayType,
               opacity: form.composition.opacity,
@@ -2031,19 +2052,14 @@ class _Step3Pose extends StatelessWidget {
                           ValueListenableBuilder<int>(
                             valueListenable: poseVersionNotifier,
                             builder: (context, _, __) {
-                              return Positioned(
-                                left: constraints.maxWidth * form.pose.position.x,
-                                top: constraints.maxHeight * form.pose.position.y,
-                                child: FractionalTranslation(
-                                  translation: const Offset(-0.5, -0.5),
-                                  child: PoseSilhouette(
-                                    silhouetteType:
-                                        form.pose.silhouette.type,
-                                    silhouetteData:
-                                        form.pose.silhouette.data,
-                                    scale: form.pose.scale,
-                                    rotation: form.pose.rotation,
-                                  ),
+                              return Positioned.fill(
+                                child: SilhouetteLayer(
+                                  silhouetteType: form.pose.silhouette.type,
+                                  silhouetteData: form.pose.silhouette.data,
+                                  positionX: form.pose.position.x,
+                                  positionY: form.pose.position.y,
+                                  scale: form.pose.scale,
+                                  rotation: form.pose.rotation,
                                 ),
                               );
                             },
@@ -2157,18 +2173,14 @@ class _BuiltinSilhouetteThumbnails extends ConsumerWidget {
                         width: 1,
                       ),
                 boxShadow: isNeumorphic
-                    ? (active
-                        ? tokens.shadowConvex
-                        : tokens.shadowConvexSubtle)
+                    ? (active ? tokens.shadowConvex : tokens.shadowConvexSubtle)
                     : null,
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    key == 'none'
-                        ? Icons.close
-                        : Icons.person_outline,
+                    key == 'none' ? Icons.close : Icons.person_outline,
                     size: 32,
                     color: active ? tokens.brandDeep : tokens.textSecondary,
                   ),
@@ -2273,8 +2285,8 @@ class _Step4Camera extends StatelessWidget {
             min: -3,
             max: 3,
             divisions: 20,
-            onChanged: (v) => onChange(
-                () => form.camera.exposureCompensation = v.toDouble()),
+            onChanged: (v) =>
+                onChange(() => form.camera.exposureCompensation = v.toDouble()),
             valueText: formatEvSlider(form.camera.exposureCompensation),
           ),
           _FieldLabel(tokens: tokens, text: 'ISO 模式'),
@@ -2369,8 +2381,7 @@ class _Step4Camera extends StatelessWidget {
                 form.fillLight ??= EditorFormFillLight();
                 form.fillLight!.intensity = v;
               }),
-              valueText:
-                  (form.fillLight?.intensity ?? 0.8).toStringAsFixed(1),
+              valueText: (form.fillLight?.intensity ?? 0.8).toStringAsFixed(1),
             ),
         ],
       ),
@@ -2555,8 +2566,7 @@ class _Step6PostProcess extends StatelessWidget {
             min: -100,
             max: 100,
             divisions: 200,
-            onChanged: (v) =>
-                onChange(() => form.postProcess.color.tint = v),
+            onChanged: (v) => onChange(() => form.postProcess.color.tint = v),
             valueText: formatSigned(form.postProcess.color.tint),
           ),
           _SliderRow(
@@ -2632,8 +2642,8 @@ class _Step6PostProcess extends StatelessWidget {
             min: 0,
             max: 100,
             divisions: 100,
-            onChanged: (v) => onChange(
-                () => form.postProcess.smoothStrength = v.round()),
+            onChanged: (v) =>
+                onChange(() => form.postProcess.smoothStrength = v.round()),
             valueText: '${form.postProcess.smoothStrength}',
           ),
           _SliderRow(
@@ -2805,9 +2815,8 @@ class _VerticalFooterButton extends ConsumerWidget {
           border: borderColor != null
               ? Border.all(color: borderColor, width: 1)
               : null,
-          boxShadow: isNeumorphic && !isPrimary
-              ? tokens.shadowConvexSubtle
-              : null,
+          boxShadow:
+              isNeumorphic && !isPrimary ? tokens.shadowConvexSubtle : null,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2831,7 +2840,3 @@ class _VerticalFooterButton extends ConsumerWidget {
     );
   }
 }
-
-
-
-

@@ -11,6 +11,7 @@ import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/templates/data/owned_templates_repository.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_detail_page.dart';
+import 'package:lumira_app_flutter/features/templates/widgets/pose_silhouette.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -90,6 +91,22 @@ void main() {
   }
 
   group('TemplatesDetailPage', () {
+    test('poseReferenceAspectRatio maps template ratios literally', () {
+      const screen = Size(390, 844);
+      // 模板宽高比 4:3 → 姿势参考卡片内容也是 4:3
+      expect(
+          poseReferenceAspectRatio('4:3', screen), closeTo(4.0 / 3.0, 0.001));
+      // 16:9 同样按字面比例，不做方向自适应
+      expect(
+          poseReferenceAspectRatio('16:9', screen), closeTo(16.0 / 9.0, 0.001));
+      expect(
+          poseReferenceAspectRatio('3:4', screen), closeTo(3.0 / 4.0, 0.001));
+      expect(poseReferenceAspectRatio('1:1', screen), closeTo(1.0, 0.001));
+      // fullscreen 回退设备屏幕宽高比
+      expect(poseReferenceAspectRatio('fullscreen', screen),
+          closeTo(390 / 844, 0.001));
+    });
+
     testWidgets('renders empty state when templateId is null', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
@@ -113,7 +130,9 @@ void main() {
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('模板未找到'), findsOneWidget);
+      // 测试环境无数据库/网络：详情 provider 进入 error 分支，显示重试 UI
+      expect(find.text('网络错误，无法加载完整内容'), findsOneWidget);
+      expect(find.text('重试'), findsOneWidget);
     });
 
     testWidgets('renders template name for free template', (tester) async {
@@ -143,9 +162,9 @@ void main() {
           .widgetList<Image>(find.byType(Image))
           .map((i) => i.image)
           .whereType<AssetImage>()
-          .where((a) => a.assetName == 'assets/images/templates/cafe_portrait.jpg');
-      expect(covers, isNotEmpty,
-          reason: '详情页应渲染咖啡馆人像本地封面图');
+          .where((a) =>
+              a.assetName == 'assets/images/templates/cafe_portrait.jpg');
+      expect(covers, isNotEmpty, reason: '详情页应渲染咖啡馆人像本地封面图');
     });
 
     testWidgets('renders category label on preview image', (tester) async {
@@ -222,7 +241,8 @@ void main() {
       expect(find.text('免费'), findsNWidgets(2));
     });
 
-    testWidgets('renders premium unlock text for paid template', (tester) async {
+    testWidgets('renders premium unlock text for paid template',
+        (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         ThemeKey.warmWhite,
@@ -231,8 +251,8 @@ void main() {
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // custom_golden_landscape price=18 → '精选 ¥18' 出现在 title badge + unlock status
-      expect(find.text('精选 ¥18'), findsNWidgets(2));
+      // custom_golden_landscape price=18 → '18 积分' 出现在 title badge + unlock status
+      expect(find.text('18 积分'), findsNWidgets(2));
     });
 
     testWidgets('locks camera/post-process params for unowned paid template',
@@ -251,7 +271,7 @@ void main() {
       expect(find.text('后期参数'), findsNothing);
       // CTA 变为"试用 + 购买"
       expect(find.text('试用'), findsOneWidget);
-      expect(find.text('购买 ¥18'), findsOneWidget);
+      expect(find.text('18 积分解锁'), findsOneWidget);
       expect(find.text('套用此模板拍摄'), findsNothing);
     });
 
@@ -334,6 +354,45 @@ void main() {
       expect(find.text('姿势参考'), findsOneWidget);
     });
 
+    testWidgets('pose reference card uses the template aspect ratio',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        ThemeKey.warmWhite,
+        UIStyle.neumorphic,
+        templateId: 'cafe_portrait',
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      final aspect = tester.widget<AspectRatio>(
+        find.byKey(const Key('pose_reference_card_aspect')),
+      );
+      // cafe_portrait aspectRatio='3:4' → 卡片内容宽高比 3:4
+      expect(aspect.aspectRatio, closeTo(3.0 / 4.0, 0.001));
+    });
+
+    testWidgets(
+        'pose reference card applies template silhouette scale/rotation',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        ThemeKey.warmWhite,
+        UIStyle.neumorphic,
+        templateId: 'cafe_portrait',
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      final silhouette = tester.widget<PoseSilhouette>(
+        find.descendant(
+          of: find.byKey(const Key('pose_reference_card_aspect')),
+          matching: find.byType(PoseSilhouette),
+        ),
+      );
+      // 与模板提供的一致（mock cafe_portrait pose: scale 1.2 / rotation 8）
+      expect(silhouette.scale, 1.2);
+      expect(silhouette.rotation, 8);
+    });
+
     testWidgets('hides pose section when silhouette is none', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
@@ -359,8 +418,7 @@ void main() {
       expect(find.text('参数参考来源：摄影美学院 L03'), findsOneWidget);
     });
 
-    testWidgets(
-        'tapping 套用此模板拍摄 button navigates to /capture page',
+    testWidgets('tapping 套用此模板拍摄 button navigates to /capture page',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
@@ -380,9 +438,7 @@ void main() {
       expect(find.text('CAPTURE_PAGE'), findsOneWidget);
     });
 
-    testWidgets(
-        'renders LumiraNav with title 模板详情',
-        (tester) async {
+    testWidgets('renders LumiraNav with title 模板详情', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         ThemeKey.warmWhite,

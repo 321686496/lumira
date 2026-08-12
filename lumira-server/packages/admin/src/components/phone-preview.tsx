@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import IphoneFrame from '@/components/iphone-frame';
 import CompositionGrid from '@/components/composition-grid';
 import { renderTemplateImage } from '@/lib/template-effects';
+import { BUILTIN_SILHOUETTES } from '@/lib/builtin-silhouettes';
 
 interface PhonePreviewProps {
   coverUrl: string | null;
@@ -133,6 +134,56 @@ function PersonOutline({ color }: { color: string }) {
   );
 }
 
+/**
+ * 剪影内容渲染：与 App 端 PoseSilhouette 一致。
+ * - image 类型：URL 图片
+ * - builtin 类型：真实内置 SVG 美术（fill="currentColor"，通过 CSS color 着色）
+ * - svg 类型：内联 SVG 字符串
+ * - 未知 key：回退通用人形图标
+ */
+function SilhouetteArtwork({
+  silhouetteUrl,
+  silhouetteType,
+  silhouetteKey,
+}: {
+  silhouetteUrl: string | null;
+  silhouetteType: string;
+  silhouetteKey: string;
+}) {
+  if (silhouetteUrl) {
+    return (
+      <img
+        src={silhouetteUrl}
+        alt="剪影"
+        className="w-full h-full object-contain"
+        draggable={false}
+      />
+    );
+  }
+
+  let svg: string | undefined;
+  if (silhouetteType === 'builtin') {
+    svg = silhouetteKey && silhouetteKey !== 'none'
+      ? BUILTIN_SILHOUETTES[silhouetteKey]
+      : undefined;
+  } else if (silhouetteType === 'svg') {
+    svg = silhouetteKey || undefined;
+  }
+
+  if (svg) {
+    return (
+      <div
+        className="w-full h-full"
+        style={{ color: 'rgba(255,255,255,0.85)' }}
+        // 静态受信任 SVG（内置库或 .pptpl 上传内容），与 uni-app v-html 一致
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+    );
+  }
+
+  return <PersonOutline color="rgba(255,255,255,0.85)" />;
+}
+
 export default function PhonePreview(props: PhonePreviewProps) {
   const {
     coverUrl, silhouetteUrl, silhouetteType, silhouetteBuiltinKey,
@@ -219,7 +270,8 @@ export default function PhonePreview(props: PhonePreviewProps) {
 
   const hasEffects = smoothStrength > 0 || sharpen > 0 || vignette > 0 || grain > 0;
   const hasSilhouette = silhouetteUrl
-    || (silhouetteType === 'builtin' && silhouetteBuiltinKey && silhouetteBuiltinKey !== 'none');
+    || (silhouetteType === 'builtin' && silhouetteBuiltinKey && silhouetteBuiltinKey !== 'none')
+    || (silhouetteType === 'svg' && !!silhouetteBuiltinKey);
 
   return (
     <div className={cn('flex flex-col items-center', className)}>
@@ -246,16 +298,11 @@ export default function PhonePreview(props: PhonePreviewProps) {
                     transform: `translate(-50%, -50%) scale(${scale}) rotate(${rotation}deg)`,
                   }}
                 >
-                  {silhouetteUrl ? (
-                    <img
-                      src={silhouetteUrl}
-                      alt="剪影"
-                      className="w-full h-full object-contain"
-                      draggable={false}
-                    />
-                  ) : (
-                    <PersonOutline color="rgba(255,255,255,0.85)" />
-                  )}
+                  <SilhouetteArtwork
+                    silhouetteUrl={silhouetteUrl}
+                    silhouetteType={silhouetteType}
+                    silhouetteKey={silhouetteBuiltinKey}
+                  />
                 </div>
               </div>
             )}

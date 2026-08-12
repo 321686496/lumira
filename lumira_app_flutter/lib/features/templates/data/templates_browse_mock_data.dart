@@ -83,7 +83,8 @@ const Map<String, String> sceneToCategoryMap = {
 /// @Deprecated v17：三级分类改为从 sqflite template_categories 表读取，
 /// 改用 `TemplatesDao.getCategoriesByParent(typeKey)` 获取二级分类。
 /// 此字典已过时且不完整，仅保留供旧代码渐进迁移，新代码请勿引用。
-@Deprecated('v17: 改用 TemplatesDao.getCategoriesByParent(typeKey) 从 sqflite 读取二级分类')
+@Deprecated(
+    'v17: 改用 TemplatesDao.getCategoriesByParent(typeKey) 从 sqflite 读取二级分类')
 const Map<String, List<LabelValue>> styleMap = {
   'portrait': [
     LabelValue('japanese', '日系'),
@@ -122,7 +123,8 @@ const Map<String, List<LabelValue>> styleMap = {
 /// @Deprecated v17：三级分类改为从 sqflite template_categories 表读取，
 /// 改用 `TemplatesDao.getCategoriesByParent(styleKey)` 获取三级分类。
 /// 此字典已过时且不完整，仅保留供旧代码渐进迁移，新代码请勿引用。
-@Deprecated('v17: 改用 TemplatesDao.getCategoriesByParent(styleKey) 从 sqflite 读取三级分类')
+@Deprecated(
+    'v17: 改用 TemplatesDao.getCategoriesByParent(styleKey) 从 sqflite 读取三级分类')
 const Map<String, List<LabelValue>> methodMap = {
   'japanese': [
     LabelValue('selfie', '自拍'),
@@ -207,6 +209,7 @@ class TemplateDetail {
   final String coverSeed; // picsum seed（兼容旧 mock，新代码用 cover/coverData）
   /// 内置模板 assets 路径或远程模板 http URL（可能为空）
   final String? cover;
+
   /// 自定义模板 base64 data URL（如 `data:image/jpeg;base64,xxx`）
   final String? coverData;
   final List<String> tags;
@@ -279,18 +282,25 @@ class PostProcessData {
   final int saturation;
   final int temperature;
   final int tint;
+
   /// 高光（-100..+100）：null 表示未调整（与 domain PostProcessColor.highlights 对齐）
   final int? highlights;
+
   /// 阴影（-100..+100）：null 表示未调整
   final int? shadows;
+
   /// 黑点（-100..+100）：null 表示未调整
   final int? blackPoint;
+
   /// 自然饱和度（-100..+100）：null 表示未调整
   final int? vibrance;
+
   /// 鲜明度（-100..+100）：null 表示未调整
   final int? brilliance;
+
   /// 清晰度（-100..+100）：null 表示未调整
   final int? clarity;
+
   /// 系统滤镜预设（与 domain PostProcess.systemFilter 对齐）：null 表示未使用
   final String? systemFilter;
   final int smoothStrength; // 0..100
@@ -323,12 +333,16 @@ class PoseData {
     required this.positionX,
     required this.positionY,
     required this.description,
+    this.scale = 1.0,
+    this.rotation = 0.0,
   });
   final String silhouetteType; // 'builtin' / 'inline' / 'none'
-  final String silhouetteData; // 'none' / 'standing_basic' / ... SVG id
+  final String silhouetteData; // 'none' / 'standing-profile' / ... SVG id
   final double positionX; // 0..1
   final double positionY; // 0..1
   final String description;
+  final double scale; // 缩放系数（叠加在 40% 基础宽度上）
+  final double rotation; // 旋转角度 -45 ~ 45
 }
 
 /// 全部模板列表项（all 页用，分类筛选后渲染）
@@ -353,15 +367,18 @@ class AllTemplateItem {
   final String coverSeed;
   final int price; // 0 = 免费
   final bool isCustom;
+
   /// 内置模板 assets 路径或远程模板 http URL（可能为空）
   final String? cover;
+
   /// 自定义模板 base64 data URL（如 `data:image/jpeg;base64,xxx`）
   final String? coverData;
 }
 
 /// 推荐页 mock 数据（recommend.vue verbatim）
 class StyleAnalysis {
-  const StyleAnalysis({required this.icon, required this.label, required this.percent});
+  const StyleAnalysis(
+      {required this.icon, required this.label, required this.percent});
   final IconData icon; // Flutter 替代 Phosphor icon
   final String label;
   final int percent;
@@ -387,14 +404,16 @@ class GuessLikeItem {
 }
 
 class SimilarUserItem {
-  const SimilarUserItem({required this.imgSeed, required this.name, required this.usageCount});
+  const SimilarUserItem(
+      {required this.imgSeed, required this.name, required this.usageCount});
   final String imgSeed;
   final String name;
   final int usageCount; // 1200 / 980 / 850 / 720 — 用于 formatThousands
 }
 
 class RecentShotInfo {
-  const RecentShotInfo({required this.imgSeed, required this.text, required this.sub});
+  const RecentShotInfo(
+      {required this.imgSeed, required this.text, required this.sub});
   final String imgSeed;
   final String text;
   final String sub;
@@ -470,10 +489,12 @@ class TemplatesBrowseMockData {
       ),
       pose: PoseData(
         silhouetteType: 'builtin',
-        silhouetteData: 'standing_basic',
+        silhouetteData: 'standing-profile',
         positionX: 0.4,
         positionY: 0.5,
         description: '站立微侧，双手自然交叠于腰前',
+        scale: 1.2,
+        rotation: 8,
       ),
     ),
     TemplateDetail(
@@ -579,7 +600,7 @@ class TemplatesBrowseMockData {
       ),
       pose: PoseData(
         silhouetteType: 'builtin',
-        silhouetteData: 'standing_basic',
+        silhouetteData: 'standing-profile',
         positionX: 0.5,
         positionY: 0.5,
         description: '正面站立，下巴微抬',
@@ -795,7 +816,7 @@ class TemplatesBrowseMockData {
       ),
       pose: PoseData(
         silhouetteType: 'builtin',
-        silhouetteData: 'standing_basic',
+        silhouetteData: 'standing-profile',
         positionX: 0.5,
         positionY: 0.6,
         description: '行走姿态',
@@ -957,7 +978,7 @@ class TemplatesBrowseMockData {
       ),
       pose: PoseData(
         silhouetteType: 'builtin',
-        silhouetteData: 'standing_basic',
+        silhouetteData: 'standing-profile',
         positionX: 0.5,
         positionY: 0.5,
         description: '微侧回眸',
@@ -1065,7 +1086,7 @@ class TemplatesBrowseMockData {
       ),
       pose: PoseData(
         silhouetteType: 'builtin',
-        silhouetteData: 'standing_basic',
+        silhouetteData: 'standing-profile',
         positionX: 0.4,
         positionY: 0.5,
         description: '人物站在霓虹灯旁',
@@ -1173,7 +1194,7 @@ class TemplatesBrowseMockData {
       ),
       pose: PoseData(
         silhouetteType: 'builtin',
-        silhouetteData: 'standing_basic',
+        silhouetteData: 'standing-profile',
         positionX: 0.5,
         positionY: 0.5,
         description: '正面站立',
@@ -1295,12 +1316,54 @@ class TemplatesBrowseMockData {
 
   /// 推荐页：猜你喜欢（6 项，recommend.vue verbatim）
   static const List<GuessLikeItem> guessLikes = [
-    GuessLikeItem(imgSeed: '1038002', name: '牡丹花下', match: '匹配 96%', reason: '因为你喜欢温柔风格', count: '12 张', level: '易 新手', isGold: false),
-    GuessLikeItem(imgSeed: '326473', name: '茶园春色', match: '匹配 92%', reason: '因为你喜欢清新品味', count: '9 张', level: '易 新手', isGold: false),
-    GuessLikeItem(imgSeed: '1926769', name: '民国风情', match: '匹配 89%', reason: '因为你喜欢复古调性', count: '14 张', level: '中 进阶', isGold: true),
-    GuessLikeItem(imgSeed: '1239291', name: '白纱轻舞', match: '匹配 94%', reason: '因为你喜欢温柔风格', count: '11 张', level: '易 新手', isGold: false),
-    GuessLikeItem(imgSeed: '326473', name: '植物园记', match: '匹配 87%', reason: '因为你喜欢清新品味', count: '13 张', level: '中 构图', isGold: true),
-    GuessLikeItem(imgSeed: '1926769', name: '旧上海', match: '匹配 85%', reason: '因为你喜欢复古调性', count: '16 张', level: '难 大师', isGold: true),
+    GuessLikeItem(
+        imgSeed: '1038002',
+        name: '牡丹花下',
+        match: '匹配 96%',
+        reason: '因为你喜欢温柔风格',
+        count: '12 张',
+        level: '易 新手',
+        isGold: false),
+    GuessLikeItem(
+        imgSeed: '326473',
+        name: '茶园春色',
+        match: '匹配 92%',
+        reason: '因为你喜欢清新品味',
+        count: '9 张',
+        level: '易 新手',
+        isGold: false),
+    GuessLikeItem(
+        imgSeed: '1926769',
+        name: '民国风情',
+        match: '匹配 89%',
+        reason: '因为你喜欢复古调性',
+        count: '14 张',
+        level: '中 进阶',
+        isGold: true),
+    GuessLikeItem(
+        imgSeed: '1239291',
+        name: '白纱轻舞',
+        match: '匹配 94%',
+        reason: '因为你喜欢温柔风格',
+        count: '11 张',
+        level: '易 新手',
+        isGold: false),
+    GuessLikeItem(
+        imgSeed: '326473',
+        name: '植物园记',
+        match: '匹配 87%',
+        reason: '因为你喜欢清新品味',
+        count: '13 张',
+        level: '中 构图',
+        isGold: true),
+    GuessLikeItem(
+        imgSeed: '1926769',
+        name: '旧上海',
+        match: '匹配 85%',
+        reason: '因为你喜欢复古调性',
+        count: '16 张',
+        level: '难 大师',
+        isGold: true),
   ];
 
   /// 推荐页：相似用户也在拍（4 项，recommend.vue verbatim — usageCount 用 int 类型便于 formatThousands）
@@ -1320,10 +1383,30 @@ class TemplatesBrowseMockData {
 
   /// 推荐页：最近模板（4 项）
   static const List<RecentTemplateItem> recentTemplates = [
-    RecentTemplateItem(imgSeed: '2074130', name: '咖啡角落', theme: '咖啡馆主题', match: '匹配 91%', count: '10 张'),
-    RecentTemplateItem(imgSeed: '2074130', name: '拉花艺术', theme: '咖啡馆主题', match: '匹配 86%', count: '8 张'),
-    RecentTemplateItem(imgSeed: '2074130', name: '窗边阅读', theme: '咖啡馆主题', match: '匹配 88%', count: '12 张'),
-    RecentTemplateItem(imgSeed: '2074130', name: '咖啡物语', theme: '咖啡馆主题', match: '匹配 82%', count: '6 张'),
+    RecentTemplateItem(
+        imgSeed: '2074130',
+        name: '咖啡角落',
+        theme: '咖啡馆主题',
+        match: '匹配 91%',
+        count: '10 张'),
+    RecentTemplateItem(
+        imgSeed: '2074130',
+        name: '拉花艺术',
+        theme: '咖啡馆主题',
+        match: '匹配 86%',
+        count: '8 张'),
+    RecentTemplateItem(
+        imgSeed: '2074130',
+        name: '窗边阅读',
+        theme: '咖啡馆主题',
+        match: '匹配 88%',
+        count: '12 张'),
+    RecentTemplateItem(
+        imgSeed: '2074130',
+        name: '咖啡物语',
+        theme: '咖啡馆主题',
+        match: '匹配 82%',
+        count: '6 张'),
   ];
 
   /// 标签查询：通过 id 查询 TemplateDetail（detail 页用）
@@ -1413,6 +1496,8 @@ class TemplatesBrowseMockData {
         positionX: tpl.pose.position.x,
         positionY: tpl.pose.position.y,
         description: tpl.pose.description,
+        scale: tpl.pose.scale,
+        rotation: tpl.pose.rotation,
       ),
     );
   }

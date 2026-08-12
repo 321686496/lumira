@@ -3,14 +3,17 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
+import '../data/builtin_silhouettes.dart';
 
 /// 姿势剪影渲染组件
 ///
 /// 视觉规格来源：lumira-app/src/components/PoseSilhouette.vue
 ///
 /// 尺寸机制（与 uni-app 原始设计一致）：
-/// - 剪影基础宽度 = 父容器宽度的 40%（widthFactor: 0.4）
-/// - 剪影宽高比 = 1 : 1.6（人像纵向，非正方形）
+/// - 本组件**填满父容器**，父容器（[SilhouetteLayer]）负责把剪影框设为
+///   成像区宽度的 40% × 1:1.6 宽高比
 /// - 缩放/旋转通过 Transform 在基础尺寸上叠加
 /// - 图片/SVG 填满剪影容器（width: 100%, height: 100%）
 class PoseSilhouette extends StatelessWidget {
@@ -51,14 +54,15 @@ class PoseSilhouette extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Positioned 内布局无约束，回退到屏幕宽度
-        final parentWidth = constraints.maxWidth.isFinite
+        // 填满父容器：父容器（SilhouetteLayer）已把尺寸算好
+        final baseWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-            : MediaQuery.of(context).size.width;
-        // 剪影基础宽度 = 父容器宽度 × 40%
-        final baseWidth = parentWidth * baseWidthFactor;
-        // 高度 = 宽度 × 1.6
-        final baseHeight = baseWidth * baseAspectH / baseAspectW;
+            : (constraints.maxHeight.isFinite
+                ? constraints.maxHeight * baseAspectW / baseAspectH
+                : 100.0);
+        final baseHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : baseWidth * baseAspectH / baseAspectW;
 
         return Transform(
           alignment: Alignment.center,
@@ -80,6 +84,19 @@ class PoseSilhouette extends StatelessWidget {
       case 'builtin':
         if (silhouetteData.isEmpty || silhouetteData == 'none') {
           return const SizedBox.shrink();
+        }
+        // 渲染模板提供的真实 SVG 剪影（fill="currentColor" → color 参数着色）
+        final svg = BuiltinSilhouettes.svgMap[silhouetteData];
+        if (svg != null && svg.isNotEmpty) {
+          return SvgPicture.string(
+            svg,
+            key: ValueKey('silhouette_svg_$silhouetteData'),
+            color: effectiveColor,
+            fit: BoxFit.contain,
+            width: double.infinity,
+            height: double.infinity,
+            placeholderBuilder: (_) => const SizedBox.shrink(),
+          );
         }
         return Icon(
           Icons.person_outline,
@@ -187,6 +204,95 @@ class PoseSilhouette extends StatelessWidget {
   }
 }
 
+/// 剪影叠加层（统一渲染规则）
+///
+/// 三端（模板详情姿势参考 / 拍摄页取景 / 编辑页预览）共用的剪影定位组件，
+/// 视觉规格来源：lumira-app 的 `.silhouette-layer` / `.pose-layer`：
+/// - 剪影框宽 = 成像区（取景比例框）宽度的 40%（[PoseSilhouette.baseWidthFactor]）
+/// - 剪影框宽高比 = 1 : 1.6（[PoseSilhouette.baseAspectW] / [PoseSilhouette.baseAspectH]）
+/// - 剪影框中心锚定在 (positionX × 成像区宽, positionY × 成像区高)，
+///   position 为 0..1 百分比，切换比例后位置随比例框自动变化
+/// - scale / rotation 在基础尺寸上叠加
+///
+/// 使用方式：在成像区 Stack 中以 `Positioned.fill(child: SilhouetteLayer(...))`
+/// 放入（本组件内部自带 LayoutBuilder，按成像区实际尺寸计算）。
+class SilhouetteLayer extends StatelessWidget {
+  const SilhouetteLayer({
+    super.key,
+    required this.silhouetteType,
+    required this.silhouetteData,
+    required this.positionX,
+    required this.positionY,
+    this.scale = 1.0,
+    this.rotation = 0.0,
+    this.color,
+  });
+
+  /// 'builtin' / 'image' / 'svg'
+  final String silhouetteType;
+
+  /// builtin: silhouette key；image: base64 data URL / asset / http URL；
+  /// svg: 内联 SVG 字符串
+  final String silhouetteData;
+
+  /// 剪影中心相对成像区的水平位置（0..1，百分比）
+  final double positionX;
+
+  /// 剪影中心相对成像区的垂直位置（0..1，百分比）
+  final double positionY;
+
+  /// 缩放系数（叠加在 40% 基础宽度上）
+  final double scale;
+
+  /// 旋转角度 -45 ~ 45
+  final double rotation;
+
+  /// 默认 Color.fromRGBO(255, 255, 255, 0.85)
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final areaW = constraints.maxWidth;
+        final areaH = constraints.maxHeight;
+        if (!areaW.isFinite || !areaH.isFinite) {
+          return const SizedBox.shrink();
+        }
+        final baseW = areaW * PoseSilhouette.baseWidthFactor;
+        final baseH =
+            baseW * PoseSilhouette.baseAspectH / PoseSilhouette.baseAspectW;
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned(
+              left: areaW * positionX,
+              top: areaH * positionY,
+              child: FractionalTranslation(
+                // 以剪影框中心点为锚点（left/top 指向中心）
+                translation: const Offset(-0.5, -0.5),
+                child: SizedBox(
+                  key: const ValueKey('silhouette_box'),
+                  width: baseW,
+                  height: baseH,
+                  child: PoseSilhouette(
+                    silhouetteType: silhouetteType,
+                    silhouetteData: silhouetteData,
+                    scale: scale,
+                    rotation: rotation,
+                    color: color,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 /// 解析 SilhouetteEditor 导出的简单 SVG 字符串
 ///
 /// 支持格式：
@@ -209,8 +315,8 @@ class _SilhouetteSvgParser {
       final pathXml = match.group(0)!;
       final d = _attr(pathXml, 'd');
       if (d == null) continue;
-      final strokeWidth = double.tryParse(_attr(pathXml, 'stroke-width') ?? '') ??
-          8.0;
+      final strokeWidth =
+          double.tryParse(_attr(pathXml, 'stroke-width') ?? '') ?? 8.0;
       paths.add(_ParsedPath(
         d: d,
         strokeWidth: strokeWidth,

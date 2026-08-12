@@ -7,7 +7,6 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -19,6 +18,16 @@ import '../data/templates_editor_mock_data.dart' show parseAspectRatio;
 import '../services/template_exporter.dart';
 import '../widgets/pose_silhouette.dart';
 import '../widgets/template_cover_image.dart';
+
+/// 姿势参考卡片内容宽高比：按模板宽高比**字面**解析（不随设备方向自适应）。
+///
+/// - '4:3' → 4/3、'16:9' → 16/9、'3:4' → 3/4、'1:1' → 1.0
+/// - 'fullscreen' → 回退设备屏幕宽高比
+double poseReferenceAspectRatio(String ratio, Size screenSize) {
+  final raw = parseAspectRatio(ratio);
+  if (raw < 0) return screenSize.width / screenSize.height;
+  return raw;
+}
 
 /// 模板详情页
 ///
@@ -194,7 +203,8 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     final usePptpl = result == 'pptpl';
     LumiraToast.show(context, '正在导出 ${record.name}...');
     try {
-      final filePath = await TemplateExporter.exportToTempFile(record, usePptpl: usePptpl);
+      final filePath =
+          await TemplateExporter.exportToTempFile(record, usePptpl: usePptpl);
       if (!mounted) return;
       GoRouter.of(context).push(
         RouteNames.templatesExportDetail,
@@ -245,10 +255,8 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
         TemplatesBrowseMockData.focusLabel(template.camera.focusMode);
     final lensLabel =
         TemplatesBrowseMockData.lensLabel(template.camera.lensSuggestion);
-    final lutLabel =
-        TemplatesBrowseMockData.lutLabel(template.postProcess.lut);
-    final unlockText =
-        template.price == 0 ? '免费' : '${template.price} 积分';
+    final lutLabel = TemplatesBrowseMockData.lutLabel(template.postProcess.lut);
+    final unlockText = template.price == 0 ? '免费' : '${template.price} 积分';
 
     String signedNum(int v) => v > 0 ? '+$v' : '$v';
 
@@ -267,14 +275,12 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                 template: template,
                 tokens: tokens,
                 canEditTags: canEditTags,
-                onAddTag: () =>
-                    setState(() => _tagSelectorVisible = true),
+                onAddTag: () => setState(() => _tagSelectorVisible = true),
               ),
               if (_tagSelectorVisible && canEditTags)
                 _TagSelector(
                   tokens: tokens,
-                  onNewTag: () =>
-                      _showSnack('新建标签功能即将上线'),
+                  onNewTag: () => _showSnack('新建标签功能即将上线'),
                 ),
               _SceneGuideCard(
                 template: template,
@@ -349,8 +355,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     final mockTemplate = _template;
 
     // 付费模板是否被锁定（未解锁）：已解锁或免费模板不锁定
-    bool computeLocked(TemplateDetail t) =>
-        !_isOwned(t.price, ownedIds, t.id);
+    bool computeLocked(TemplateDetail t) => !_isOwned(t.price, ownedIds, t.id);
 
     // v14: mock 快路径（内置 29 模板 + mock 详情列表）
     // 若 mock 中找不到（custom / remote 模板），走 provider 慢路径
@@ -562,8 +567,7 @@ class _RemoteLoadError extends StatelessWidget {
             onTap: onRetry,
             behavior: HitTestBehavior.opaque,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               decoration: BoxDecoration(
                 color: tokens.brand,
                 borderRadius: BorderRadius.circular(9999),
@@ -636,8 +640,8 @@ class _PreviewImage extends StatelessWidget {
                   top: 12,
                   left: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       // 硬编码颜色，与 uni-app 一致 (rgba(0,0,0,0.45))
                       color: const Color(0x73000000),
@@ -703,8 +707,8 @@ class _TitleAndTags extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: template.price == 0
                         ? tokens.successSubtle
@@ -731,8 +735,8 @@ class _TitleAndTags extends StatelessWidget {
               children: [
                 for (final tag in template.tags)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: tokens.brandSubtle,
                       borderRadius: BorderRadius.circular(9999),
@@ -753,8 +757,7 @@ class _TitleAndTags extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        border: Border.all(
-                            color: tokens.divider, width: 0.5),
+                        border: Border.all(color: tokens.divider, width: 0.5),
                         borderRadius: BorderRadius.circular(9999),
                       ),
                       child: Row(
@@ -824,8 +827,7 @@ class _TagSelector extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          border:
-                              Border.all(color: tokens.brand, width: 0.5),
+                          border: Border.all(color: tokens.brand, width: 0.5),
                           borderRadius: BorderRadius.circular(9999),
                         ),
                         child: Row(
@@ -937,8 +939,7 @@ class _SceneGuideCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.wb_sunny_outlined,
-                      size: 18, color: tokens.brand),
+                  Icon(Icons.wb_sunny_outlined, size: 18, color: tokens.brand),
                   const SizedBox(width: 8),
                   Text(
                     '场景指南',
@@ -1171,17 +1172,13 @@ class _PoseReferenceCard extends StatelessWidget {
   final TemplateDetail template;
   final ThemeTokens tokens;
 
-  /// 姿势参考预览框比例：与拍摄页取景比例框保持一致（模板照片比例），
+  /// 姿势参考预览框比例：与模板宽高比一致（4:3 → 4:3、16:9 → 16:9），
   /// fullscreen 时回退设备屏幕宽高比。
   double _posePreviewRatio(BuildContext context) {
-    final isPortrait =
-        MediaQuery.of(context).orientation == Orientation.portrait;
-    final raw = parseAspectRatio(template.aspectRatio, isPortrait: isPortrait);
-    if (raw < 0) {
-      return MediaQuery.of(context).size.width /
-          MediaQuery.of(context).size.height;
-    }
-    return raw;
+    return poseReferenceAspectRatio(
+      template.aspectRatio,
+      MediaQuery.of(context).size,
+    );
   }
 
   @override
@@ -1198,8 +1195,7 @@ class _PoseReferenceCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.accessibility_new,
-                      size: 18, color: tokens.brand),
+                  Icon(Icons.accessibility_new, size: 18, color: tokens.brand),
                   const SizedBox(width: 8),
                   Text(
                     '姿势参考',
@@ -1212,11 +1208,12 @@ class _PoseReferenceCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              // pose-preview-wrap：用 AspectRatio 替代 padding-bottom 百分比
-              // 剪影位置以取景比例框为参考系（x:0,y:0 = 比例框左上角），
-              // 因此预览框比例与模板照片比例（composition.aspectRatio）保持一致，
-              // 与拍摄页/预览页/编辑页渲染结果一致；fullscreen 时回退设备屏幕比例
+              // pose-preview-wrap：比例 = 模板宽高比（字面 W:H，4:3 → 4/3）
+              // 剪影位置以该比例框为参考系（x:0,y:0 = 比例框左上角），
+              // 剪影大小 = 比例框宽 40% × 1:1.6，中心锚定在位置百分比上，
+              // scale/rotation 与模板一致（SilhouetteLayer 统一规则）。
               AspectRatio(
+                key: const Key('pose_reference_card_aspect'),
                 aspectRatio: _posePreviewRatio(context),
                 child: Container(
                   decoration: BoxDecoration(
@@ -1233,23 +1230,15 @@ class _PoseReferenceCard extends StatelessWidget {
                   ),
                   child: Stack(
                     children: [
-                      // pose-layer：用 Align 百分比定位简化实现
-                      // 简化原因：Flutter Positioned 不支持百分比，需 LayoutBuilder 计算
-                      // 用 Alignment(x*2-1, y*2-1) 将 0..1 映射到 -1..1（位置 0.5 → Alignment.center）
-                      Align(
-                        alignment: Alignment(
-                          pose.positionX * 2 - 1,
-                          pose.positionY * 2 - 1,
-                        ),
-                        child: FractionallySizedBox(
-                          widthFactor: 0.3,
-                          heightFactor: 0.45,
-                          child: PoseSilhouette(
-                            silhouetteType: pose.silhouetteType,
-                            silhouetteData: pose.silhouetteData,
-                            scale: 1.0,
-                            rotation: 0.0,
-                          ),
+                      // pose-layer：统一剪影渲染规则（40% 宽 × 1:1.6 + 百分比中心定位）
+                      Positioned.fill(
+                        child: SilhouetteLayer(
+                          silhouetteType: pose.silhouetteType,
+                          silhouetteData: pose.silhouetteData,
+                          positionX: pose.positionX,
+                          positionY: pose.positionY,
+                          scale: pose.scale,
+                          rotation: pose.rotation,
                         ),
                       ),
                     ],
@@ -1345,6 +1334,7 @@ class _FixedCta extends StatelessWidget {
     required this.onPurchase,
   });
   final ThemeTokens tokens;
+
   /// 付费模板未解锁：CTA 显示"试用 + 购买"
   final bool isLocked;
   final int price;

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -106,17 +105,18 @@ class CameraPreview extends ConsumerWidget {
 
     // 当 formOverride 非空时，silhouette/composition/postProcess 都来自 formOverride，
     // 不再 watch editableTemplateProvider（避免预览页与拍摄页状态耦合）
-    final editable = hasOverride
-        ? null
-        : ref.watch(CaptureState.editableTemplateProvider);
+    final editable =
+        hasOverride ? null : ref.watch(CaptureState.editableTemplateProvider);
 
     final flashMode = ref.watch(CaptureState.flashModeProvider);
     final facing = ref.watch(CaptureState.cameraFacingProvider);
-    final showTemplate = hasOverride || ref.watch(CaptureState.showTemplateProvider);
+    final showTemplate =
+        hasOverride || ref.watch(CaptureState.showTemplateProvider);
     // Bug fix: 当 formOverride 非空时，不在此处渲染剪影——
     // 调用方（如 _Viewfinder）会自行渲染可拖动的剪影交互层。
     // 否则会出现两个剪影叠加（中间一个不可拖 + 真实位置一个可拖）。
-    final showSilhouette = !hasOverride && ref.watch(CaptureState.showSilhouetteProvider);
+    final showSilhouette =
+        !hasOverride && ref.watch(CaptureState.showSilhouetteProvider);
     final rawMode = ref.watch(CaptureState.rawModeProvider);
 
     // 修复 Bug 2/3：自由模式下也应用滤镜（来自 freeModePostProcessProvider）
@@ -137,23 +137,25 @@ class CameraPreview extends ConsumerWidget {
     final cameraService = ref.read(cameraServiceProvider);
     // 用 SizedBox.expand 包裹，强制 CameraAwesomeBuilder 填满父容器，
     // 避免 camerawesome 内部根据 previewSize 计算尺寸时留下黑边
-    final cameraWidget = overrideWidget ?? SizedBox.expand(
-      child: cameraService.buildPreview(
-        config: CameraPreviewConfig(
-          facing: facing,
-          fit: previewFit,
-          onReady: () => _onCameraReady(ref, flashMode, facing),
-          onTapFocus: (position, previewSize) {
-            cameraService.focusOnPoint(position, previewSize);
-          },
-          onScaleZoom: (multiplier) {
-            // multiplier 已是真实倍数（service 层已按平台转换）
-            ref.read(CaptureState.apparentZoomProvider.notifier).state = multiplier;
-            ref.read(CaptureState.zoomProvider.notifier).state = multiplier;
-          },
-        ),
-      ),
-    );
+    final cameraWidget = overrideWidget ??
+        SizedBox.expand(
+          child: cameraService.buildPreview(
+            config: CameraPreviewConfig(
+              facing: facing,
+              fit: previewFit,
+              onReady: () => _onCameraReady(ref, flashMode, facing),
+              onTapFocus: (position, previewSize) {
+                cameraService.focusOnPoint(position, previewSize);
+              },
+              onScaleZoom: (multiplier) {
+                // multiplier 已是真实倍数（service 层已按平台转换）
+                ref.read(CaptureState.apparentZoomProvider.notifier).state =
+                    multiplier;
+                ref.read(CaptureState.zoomProvider.notifier).state = multiplier;
+              },
+            ),
+          ),
+        );
 
     // 原始相机流（未经 ColorFiltered 处理），用 RepaintBoundary 包裹以支持帧捕获。
     // rawCaptureKey 非 null 时，FilterPicker 可通过 boundary.toImage() 捕获当前帧，
@@ -224,27 +226,16 @@ class CameraPreview extends ConsumerWidget {
       hasSilhouette = false;
     }
     final silhouetteOverlay = (hasSilhouette && showSilhouette)
-        ? LayoutBuilder(
-            builder: (context, constraints) => Stack(
-              fit: StackFit.expand,
-              children: [
-                Positioned(
-                  left: constraints.maxWidth * silhouettePosX,
-                  top: constraints.maxHeight * silhouettePosY,
-                  child: IgnorePointer(
-                    child: FractionalTranslation(
-                      // 以剪影中心点为锚点，与预览页可拖动层定位方式一致
-                      translation: const Offset(-0.5, -0.5),
-                      child: PoseSilhouette(
-                        silhouetteType: silhouetteType,
-                        silhouetteData: silhouetteData,
-                        scale: silhouetteScale,
-                        rotation: silhouetteRotation,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+        ? Positioned.fill(
+            child: IgnorePointer(
+              child: SilhouetteLayer(
+                silhouetteType: silhouetteType,
+                silhouetteData: silhouetteData,
+                positionX: silhouettePosX,
+                positionY: silhouettePosY,
+                scale: silhouetteScale,
+                rotation: silhouetteRotation,
+              ),
             ),
           )
         : const SizedBox.shrink();
@@ -265,7 +256,8 @@ class CameraPreview extends ConsumerWidget {
   /// 注意：不重置缩放为 1x，而是恢复 zoomProvider 中保存的当前值。
   /// 这样拍照后 CameraPreview 重建（_cameraRebuildKey 递增）触发 onReady 时，
   // 不会丢失用户已调整的缩放比例。
-  void _onCameraReady(WidgetRef ref, CaptureFlashMode flashMode, String facing) {
+  void _onCameraReady(
+      WidgetRef ref, CaptureFlashMode flashMode, String facing) {
     final cameraService = ref.read(cameraServiceProvider);
     // 应用闪光灯模式
     cameraService.setFlashMode(_mapFlashMode(flashMode));
@@ -295,7 +287,8 @@ class CameraPreview extends ConsumerWidget {
       final ultraWide = await service.supportsUltraWide();
       ref.read(CaptureState.deviceMaxZoomProvider.notifier).state = maxZoom;
       ref.read(CaptureState.deviceMinZoomProvider.notifier).state = minZoom;
-      ref.read(CaptureState.supportsUltraWideProvider.notifier).state = ultraWide;
+      ref.read(CaptureState.supportsUltraWideProvider.notifier).state =
+          ultraWide;
     } catch (e) {
       debugPrint('[camera] query zoom capabilities failed: $e');
     }
