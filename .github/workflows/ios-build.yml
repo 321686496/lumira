@@ -308,11 +308,13 @@ jobs:
         run: |
           cd ${{ env.WORKSPACE }}
 
-          # 首选 flutter build ipa；失败时不再吞掉错误，输出日志尾部便于排查
-          if ! flutter build ipa --release \
+          # 首选 flutter build ipa；注意 Flutter 3.7.x 在导出失败时仍返回成功，
+          # 因此不依赖退出码，改为检查 IPA 产物是否存在。
+          flutter build ipa --release \
               --build-number=$GITHUB_RUN_NUMBER \
-              --export-options-plist=ios/ExportOptions.plist > "$RUNNER_TEMP/flutter_build_ipa.log" 2>&1; then
-            echo "::warning::flutter build ipa 未产出 IPA（错误日志尾部如下）"
+              --export-options-plist=ios/ExportOptions.plist > "$RUNNER_TEMP/flutter_build_ipa.log" 2>&1 || true
+          if [ ! -f build/ios/ipa/Runner.ipa ]; then
+            echo "::debug::flutter build ipa 未产出 IPA（错误日志尾部如下）"
             tail -100 "$RUNNER_TEMP/flutter_build_ipa.log" || true
           fi
 
@@ -326,7 +328,7 @@ jobs:
               echo "xcodebuild -exportArchive 导出成功"
               ls -la build/ios/ipa/
             else
-              echo "::warning::xcodebuild -exportArchive 也失败，回退到 ditto 手动打包（日志尾部）"
+              echo "xcodebuild -exportArchive 失败（不影响后续 ditto 兜底打包；日志尾部如下）"
               tail -50 "$RUNNER_TEMP/xcode_export.log" || true
             fi
           fi
@@ -337,38 +339,11 @@ jobs:
               echo "xcodebuild 导出未产出 .ipa，走 ditto 归档打包 fallback（预期路径）"
               rm -rf build/ios/ipa && mkdir -p build/ios/ipa/Payload
               cp -R "$APP" build/ios/ipa/Payload/
-              SWIFT_LIB_DIR="$(dirname "$(dirname "$(xcrun --find swiftc 2>/dev/null)")")/lib/swift/iphoneos"
-              # 扫描 app 内所有二进制（主可执行文件 + Frameworks 下动态框架）的 Swift 动态库依赖。
-              # Xcode 14+ 默认静态链接 Swift 运行时，通常无动态依赖；
-              # 此时若保留空 SwiftSupport 目录，Apple 校验会报 ITMS-90424 "SwiftSupport folder is empty"。
-              NEEDED_SWIFT_LIBS="$(
-                {
-                  otool -L build/ios/ipa/Payload/Runner.app/Runner 2>/dev/null
-                  for fw in build/ios/ipa/Payload/Runner.app/Frameworks/*.framework; do
-                    [ -d "$fw" ] && otool -L "$fw/$(basename "$fw" .framework)" 2>/dev/null
-                  done
-                } | grep -o 'libswift[A-Za-z0-9_]*\.dylib' | sort -u
-              )"
-              if [ -n "$NEEDED_SWIFT_LIBS" ]; then
-                mkdir -p build/ios/ipa/SwiftSupport/iphoneos
-                for lib in $NEEDED_SWIFT_LIBS; do
-                  if [ -f "$SWIFT_LIB_DIR/$lib" ]; then
-                    cp "$SWIFT_LIB_DIR/$lib" build/ios/ipa/SwiftSupport/iphoneos/
-                    echo "SwiftSupport: $lib"
-                  else
-                    echo "::warning::Swift 库 $lib 未在 toolchain 中找到: $SWIFT_LIB_DIR"
-                  fi
-                done
-              else
-                echo "无 Swift 动态库依赖，不生成 SwiftSupport（避免空目录触发 ITMS-90424）"
-              fi
-              # 兜底：SwiftSupport 目录存在但没有任何文件时先删除再打包，
-              # 避免空目录触发 ITMS-90424 "SwiftSupport folder is empty"
-              if [ -d build/ios/ipa/SwiftSupport ] && [ -z "$(ls -A build/ios/ipa/SwiftSupport/iphoneos 2>/dev/null)" ]; then
-                echo "::error::检测到 Swift 动态库依赖但未能拷贝任何 dylib，移除空 SwiftSupport 目录（若 App 确实需要这些库，需检查 Xcode 工具链配置）"
-                rm -rf build/ios/ipa/SwiftSupport
-              fi
-              if ! (cd build/ios/ipa && rm -f Runner.ipa && if [ -d SwiftSupport ]; then zip -q -r Runner.ipa Payload SwiftSupport -x "*.DS_Store"; else zip -q -r Runner.ipa Payload -x "*.DS_Store"; fi); then
+              # 说明：Xcode 14+ 已默认静态链接 Swift 运行时，App 无需 SwiftSupport 目录；
+              # macOS 26 runner 的 Xcode 26 也不再在工具链中提供 libswift*.dylib，
+              # 因此不再扫描/拷贝 Swift 动态库（旧扫描逻辑会误报警告，
+              # 且空 SwiftSupport 目录反而会触发 ITMS-90424）。
+              if ! (cd build/ios/ipa && rm -f Runner.ipa && zip -q -r Runner.ipa Payload -x "*.DS_Store"); then
                 echo "::error::zip 打包 .ipa 失败，退出诊断流程"
                 ls -la build/ios/ipa/ || true
                 exit 1
@@ -384,13 +359,6 @@ jobs:
               codesign -dv --verbose=2 build/ios/ipa/Payload/Runner.app 2>&1 | grep -E 'Identifier|Authority' || true
               security cms -D -i build/ios/ipa/Payload/Runner.app/embedded.mobileprovision > "$RUNNER_TEMP/pp.plist" 2>/dev/null && \
                 echo "内嵌 profile Name: $(/usr/libexec/PlistBuddy -c 'Print :Name' "$RUNNER_TEMP/pp.plist" 2>/dev/null)" || true
-              echo "=== Swift 动态库依赖检查 ==="
-              if [ -d build/ios/ipa/SwiftSupport ]; then
-                echo "SwiftSupport 已生成："
-                ls build/ios/ipa/SwiftSupport/iphoneos/
-              else
-                echo "无 Swift 动态库依赖（无需 SwiftSupport）"
-              fi
               ls -la build/ios/ipa/
               exit 0
             fi
