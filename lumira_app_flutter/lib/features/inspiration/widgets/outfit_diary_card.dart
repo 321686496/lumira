@@ -1,7 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
@@ -184,14 +185,7 @@ class _OutfitPhotoView extends ConsumerWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              'https://picsum.photos/seed/${photo.imageSeed}/400/533',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stack) => Container(
-                color: tokens.surfaceAlt,
-                child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
-              ),
-            ),
+            _buildImage(tokens),
             // 日期 overlay
             Positioned(
               bottom: 8, // 16rpx → 8dp
@@ -213,6 +207,35 @@ class _OutfitPhotoView extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 图片源可能是网络 URL 或本地文件路径（与 _PhotoCard 一致）
+  Widget _buildImage(ThemeTokens tokens) {
+    final url = photo.imageSeed;
+    if (url.isEmpty) {
+      return Container(
+        color: tokens.surfaceAlt,
+        child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
+      );
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => Container(
+          color: tokens.surfaceAlt,
+          child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
+        ),
+      );
+    }
+    return Image.file(
+      File(url),
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stack) => Container(
+        color: tokens.surfaceAlt,
+        child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
       ),
     );
   }

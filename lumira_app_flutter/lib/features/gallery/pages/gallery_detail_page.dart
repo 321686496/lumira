@@ -18,6 +18,7 @@ import '../../../core/utils/time_format.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/providers/collection_providers.dart';
+import '../providers/gallery_diary_providers.dart';
 
 /// 相册照片详情页（查看为主）
 ///
@@ -243,7 +244,9 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
 
   /// 标记为穿搭日记：弹出场景选择器
   Future<void> _onOutfitMark() async {
+    final photo = _photo;
     final scenes = _allScenes;
+    if (photo == null) return;
     if (scenes.isEmpty) {
       LumiraToast.show(context, '暂无可用场景', duration: const Duration(milliseconds: 1500));
       return;
@@ -254,31 +257,40 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
       isScrollControlled: true,
       builder: (ctx) => _OutfitScenePicker(
         scenes: scenes,
-        currentSceneId: _photo?.sceneId,
+        currentSceneId: photo.sceneId,
         tokens: tokens,
       ),
     );
     if (selected == null || !mounted) return;
-    final dao = await ref.read(galleryDaoProvider.future);
-    await dao.updateScene(_photo!.id, selected);
-    setState(() {
-      _photo = GalleryItemRecord(
-        id: _photo!.id,
-        dataUrl: _photo!.dataUrl,
-        filePath: _photo!.filePath,
-        originalPath: _photo!.originalPath,
-        transform: _photo!.transform,
-        postProcess: _photo!.postProcess,
-        sceneId: selected,
-        templateId: _photo!.templateId,
-        kitId: _photo!.kitId,
-        mood: _photo!.mood,
-        lut: _photo!.lut,
-        isFavorite: _photo!.isFavorite,
-        createdAt: _photo!.createdAt,
-      );
-    });
-    LumiraToast.show(context, '已标记为穿搭日记', duration: const Duration(milliseconds: 1500));
+    try {
+      final dao = await ref.read(galleryDaoProvider.future);
+      await dao.updateScene(photo.id, selected);
+      if (!mounted) return;
+      setState(() {
+        _photo = GalleryItemRecord(
+          id: photo.id,
+          dataUrl: photo.dataUrl,
+          filePath: photo.filePath,
+          originalPath: photo.originalPath,
+          transform: photo.transform,
+          postProcess: photo.postProcess,
+          sceneId: selected,
+          templateId: photo.templateId,
+          kitId: photo.kitId,
+          mood: photo.mood,
+          lut: photo.lut,
+          isFavorite: photo.isFavorite,
+          createdAt: photo.createdAt,
+        );
+      });
+      ref.invalidate(diaryEntriesProvider(kDiaryTabOutfit));
+      ref.invalidate(diaryStreakProvider);
+      LumiraToast.show(context, '已标记为穿搭日记', duration: const Duration(milliseconds: 1500));
+    } catch (e) {
+      if (mounted) {
+        LumiraToast.show(context, '标记失败：$e', duration: const Duration(seconds: 2));
+      }
+    }
   }
 
   /// 分享当前照片：优先分享本地文件；网络图（dataUrl 以 http 开头）暂不支持。
@@ -513,45 +525,56 @@ class _OutfitScenePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
+    final maxHeight = MediaQuery.of(context).size.height * 0.5;
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '选择穿搭场景',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+            child: Text(
+              '选择穿搭场景',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-          ...scenes.map((scene) => GestureDetector(
-            onTap: () => Navigator.of(context).pop(scene.id),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              decoration: BoxDecoration(
-                color: scene.id == currentSceneId ? tokens.brandSubtle : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.checkroom_outlined, size: 18, color: tokens.brand),
-                  const SizedBox(width: 12),
-                  Text(
-                    scene.name,
-                    style: TextStyle(fontSize: 15, color: tokens.textPrimary),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.only(bottom: 24),
+              children: [
+                ...scenes.map((scene) => GestureDetector(
+                  onTap: () => Navigator.of(context).pop(scene.id),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: scene.id == currentSceneId ? tokens.brandSubtle : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.checkroom_outlined, size: 18, color: tokens.brand),
+                        const SizedBox(width: 12),
+                        Text(
+                          scene.name,
+                          style: TextStyle(fontSize: 15, color: tokens.textPrimary),
+                        ),
+                        if (scene.id == currentSceneId) ...[
+                          const Spacer(),
+                          Icon(Icons.check, size: 18, color: tokens.brand),
+                        ],
+                      ],
+                    ),
                   ),
-                  if (scene.id == currentSceneId) ...[
-                    const Spacer(),
-                    Icon(Icons.check, size: 18, color: tokens.brand),
-                  ],
-                ],
-              ),
+                )),
+              ],
             ),
-          )),
+          ),
         ],
       ),
     );
