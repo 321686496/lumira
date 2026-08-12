@@ -44,6 +44,6 @@ export class TemplatesController {
     @DeviceId() deviceId: string,
     @Body() dto: ExchangeTemplateDto,
   ) {
-    return this.templatesService.exchange(deviceId, dto.templateId);
+    return this.templatesService.exchange(deviceId, dto.templateId, dto.priceCredits);
   }
 }

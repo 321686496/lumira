@@ -54,19 +54,37 @@ export class TemplatesService {
   }
 
   /** 积分兑换模板 */
-  async exchange(deviceId: string, templateId: string) {
+  async exchange(deviceId: string, templateId: string, priceCredits?: number) {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    // 1. 查定价
-    const price = await db.query.templatePrices.findFirst({
-      where: and(
-        eq(templatePrices.templateId, templateId),
-        eq(templatePrices.isActive, 1),
-      ),
-    });
-    if (!price) {
-      throw new NotFoundException('Template not available for exchange');
+    // 1. 定价：srv_ 前缀（后端远程模板）以 template_prices 记录为准（防篡改）；
+    //    非 srv_ 前缀（本地内置模板）以客户端上报 priceCredits 为准，并 UPSERT 记录定价
+    let price: number;
+    if (templateId.startsWith('srv_')) {
+      const record = await db.query.templatePrices.findFirst({
+        where: and(
+          eq(templatePrices.templateId, templateId),
+          eq(templatePrices.isActive, 1),
+        ),
+      });
+      if (!record) {
+        throw new NotFoundException('Template not available for exchange');
+      }
+      price = record.priceCredits;
+    } else {
+      if (priceCredits === undefined || !Number.isInteger(priceCredits) || priceCredits < 1) {
+        throw new BadRequestException(
+          'priceCredits must be a positive integer for builtin template',
+        );
+      }
+      price = priceCredits;
+      await db.insert(templatePrices)
+        .values({ templateId, priceCredits: price, isActive: 1, updatedAt: now })
+        .onConflictDoUpdate({
+          target: templatePrices.templateId,
+          set: { priceCredits: price, isActive: 1, updatedAt: now },
+        }).run();
     }
 
     // 2. 检查是否已拥有（幂等：已拥有则直接返回成功）
@@ -83,7 +101,7 @@ export class TemplatesService {
     // 3. 扣积分（余额不足会抛 BadRequestException）
     const newBalance = await this.pointsService.spendPoints(
       deviceId,
-      price.priceCredits,
+      price,
       'exchange_template',
       templateId,
     );
@@ -93,14 +111,14 @@ export class TemplatesService {
       deviceId,
       templateId,
       source: 'points',
-      sourceDetail: `credits:${price.priceCredits}`,
+      sourceDetail: `credits:${price}`,
       unlockedAt: now,
     }).run();
 
     return {
       success: true,
       templateId,
-      spentCredits: price.priceCredits,
+      spentCredits: price,
       balance: newBalance,
     };
   }
