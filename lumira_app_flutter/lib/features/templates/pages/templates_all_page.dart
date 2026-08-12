@@ -1103,7 +1103,7 @@ class _PremiumBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(9999),
       ),
       child: Text(
-        '¥$price',
+        '$price 积分',
         style: const TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,

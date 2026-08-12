@@ -88,7 +88,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     final owned = ref.read(ownedTemplateIdsProvider);
     if (price > 0 && !owned.contains(id)) {
       GoRouter.of(context).push(
-        '${RouteNames.templatesUnlock}?templateId=$id',
+        '${RouteNames.templatesUnlock}?templateId=$id&price=$price',
       );
       return;
     }
@@ -97,7 +97,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
 
   void _goUnlock(TemplateDetail template) {
     GoRouter.of(context).push(
-      '${RouteNames.templatesUnlock}?templateId=${template.id}',
+      '${RouteNames.templatesUnlock}?templateId=${template.id}&price=${template.price}',
     );
   }
 
@@ -243,7 +243,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     final lutLabel =
         TemplatesBrowseMockData.lutLabel(template.postProcess.lut);
     final unlockText =
-        template.price == 0 ? '免费' : '精选 ¥${template.price}';
+        template.price == 0 ? '免费' : '${template.price} 积分';
 
     String signedNum(int v) => v > 0 ? '+$v' : '$v';
 
@@ -707,7 +707,7 @@ class _TitleAndTags extends StatelessWidget {
                     borderRadius: BorderRadius.circular(9999),
                   ),
                   child: Text(
-                    template.price == 0 ? '免费' : '精选 ¥${template.price}',
+                    template.price == 0 ? '免费' : '${template.price} 积分',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -1408,7 +1408,7 @@ class _FixedCta extends StatelessWidget {
                       children: [
                         const Icon(Icons.lock_open_outlined, size: 18),
                         const SizedBox(width: 6),
-                        Text('购买 ¥$price'),
+                        Text('$price 积分解锁'),
                       ],
                     ),
                   ),
@@ -1489,7 +1489,7 @@ class _LockedParamsCard extends StatelessWidget {
                   Icon(Icons.stars_outlined, size: 14, color: tokens.brand),
                   const SizedBox(width: 4),
                   Text(
-                    '¥$price 永久解锁',
+                    '$price 积分永久解锁',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,

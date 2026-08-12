@@ -124,8 +124,10 @@ class CaptureNav extends ConsumerWidget implements PreferredSizeWidget {
                   onPressed: () {
                     final tid = currentTemplateId;
                     if (tid == null || tid.isEmpty) return;
+                    final tpl = ref.read(CaptureState.originalTemplateProvider);
+                    final price = tpl?.meta.price ?? 0;
                     GoRouter.of(context).push(
-                      '${RouteNames.templatesUnlock}?templateId=$tid',
+                      '${RouteNames.templatesUnlock}?templateId=$tid&price=$price',
                     );
                   },
                 )
