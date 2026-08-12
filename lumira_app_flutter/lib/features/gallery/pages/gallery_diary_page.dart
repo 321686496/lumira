@@ -27,6 +27,13 @@ class GalleryDiaryPage extends ConsumerStatefulWidget {
 
 class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
   String _viewTab = kDiaryTabOutfit; // 'outfit' / 'shoot'
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   void _navigateToPhoto(String photoId) {
     GoRouter.of(context).push(
@@ -45,12 +52,33 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
       lastDate: DateTime.now(),
     );
     if (picked == null || !mounted) return;
-    final label = DateFormat('M月d日').format(picked);
-    LumiraToast.show(
-      context,
-      '已选择 $label',
-      duration: const Duration(milliseconds: 1200),
-    );
+
+    final entries = ref.read(diaryEntriesProvider(_viewTab)).valueOrNull;
+    if (entries == null || entries.isEmpty) {
+      LumiraToast.show(context, '暂无照片数据', duration: const Duration(milliseconds: 1200));
+      return;
+    }
+
+    final targetLabel = DateFormat('M月d日').format(picked);
+    final index = entries.indexWhere((e) => e.date == targetLabel);
+    if (index < 0) {
+      LumiraToast.show(
+        context,
+        '该日期没有照片',
+        duration: const Duration(milliseconds: 1200),
+      );
+      return;
+    }
+
+    // 估算滚动位置：顶部 view toggle (~60) + streak banner (~90) + 时间轴标题 (~50) + index 个 entry (~120 each)
+    final offset = 60 + 90 + 50 + index * 120.0;
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   Future<void> _onPhotoLongPress(String photoId) async {
@@ -113,6 +141,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                 ),
               ),
               data: (entries) => ListView(
+                controller: _scrollController,
                 padding: const EdgeInsets.only(bottom: 100),
                 children: [
                   // 视图切换
@@ -168,6 +197,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                       return FadeUp(
                         delay: Duration(milliseconds: (e.key % 5) * 60),
                         child: DiaryTimelineEntry(
+                          key: ValueKey('diary_${e.value.date}'),
                           entry: e.value,
                           onPhotoTap: _navigateToPhoto,
                           onPhotoLongPress: _onPhotoLongPress,
