@@ -24,6 +24,29 @@ export interface DeviceRecord {
   firstSeenAt: number;
   lastSeenAt: number;
   ipRegion: string | null;
+  username: string | null;
+  avatarSeed: string | null;
+  pointsBalance: number | null;
+}
+
+export interface UserPointsDetail {
+  deviceId: string;
+  balance: number;
+  totalEarned: number;
+  totalSpent: number;
+  transactions: Array<{
+    id: number;
+    deviceId: string;
+    delta: number;
+    type: string;
+    refId: string | null;
+    createdAt: number;
+  }>;
+}
+
+export interface GrantPointsResponse {
+  success: boolean;
+  balance: number;
 }
 
 export interface DeviceListResponse {

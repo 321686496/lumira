@@ -32,7 +32,7 @@ export default async function DevicesPage({
           <Input
             name="search"
             defaultValue={search}
-            placeholder="设备ID、别名、平台、型号"
+            placeholder="设备ID、用户名、别名、平台、型号"
           />
         </div>
         <Button type="submit" size="sm">

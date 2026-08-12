@@ -23,4 +23,7 @@ export interface DeviceRecord {
   firstSeenAt: number;
   lastSeenAt: number;
   ipRegion: string | null;
+  username: string | null;
+  avatarSeed: string | null;
+  pointsBalance: number | null;
 }

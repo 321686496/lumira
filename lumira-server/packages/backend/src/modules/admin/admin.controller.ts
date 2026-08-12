@@ -4,6 +4,7 @@ import { Controller, Get, Post, Patch, Body, Param, Query, ParseIntPipe, UseGuar
 import { AdminService } from './admin.service';
 import { CreateBatchDto } from './dto/create-batch.dto';
 import { ToggleBatchDto } from './dto/toggle-batch.dto';
+import { GrantPointsDto } from './dto/grant-points.dto';
 import { AdminAuthGuard } from '../../common/guards/admin-auth.guard';
 
 @Controller('admin')
@@ -108,5 +109,20 @@ export class AdminController {
   @Get('questionnaire/:deviceId')
   async getQuestionnaireHistory(@Param('deviceId') deviceId: string) {
     return this.adminService.getQuestionnaireHistory(deviceId);
+  }
+
+  // ===== 积分管理 =====
+
+  @Get('devices/:deviceId/points')
+  async getUserPoints(@Param('deviceId') deviceId: string) {
+    return this.adminService.getUserPoints(deviceId);
+  }
+
+  @Post('devices/:deviceId/points/grant')
+  async grantPoints(
+    @Param('deviceId') deviceId: string,
+    @Body() dto: GrantPointsDto,
+  ) {
+    return this.adminService.grantPoints(deviceId, dto.delta, dto.reason);
   }
 }

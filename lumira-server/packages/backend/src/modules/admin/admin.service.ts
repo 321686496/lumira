@@ -1,8 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { eq, count, desc, asc, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
+import { PointsService } from '../points/points.service';
 import {
   devices,
+  userProfiles,
+  userPoints,
+  pointTransactions,
   inviteRecords,
   rewardUnlocks,
   redemptionCodeBatches,
@@ -14,7 +18,10 @@ import {
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(
+    private readonly dbService: DatabaseService,
+    private readonly pointsService: PointsService,
+  ) {}
 
   async getStats() {
     const db = this.dbService.getDb();
@@ -60,12 +67,30 @@ export class AdminService {
   async getDeviceList(page: number = 1, pageSize: number = 20, search?: string) {
     const db = this.dbService.getDb();
 
-    let query = db.select().from(devices).$dynamic();
+    let query = db
+      .select({
+        deviceId: devices.deviceId,
+        alias: devices.alias,
+        platform: devices.platform,
+        osVersion: devices.osVersion,
+        deviceModel: devices.deviceModel,
+        appVersion: devices.appVersion,
+        firstSeenAt: devices.firstSeenAt,
+        lastSeenAt: devices.lastSeenAt,
+        ipRegion: devices.ipRegion,
+        username: userProfiles.username,
+        avatarSeed: userProfiles.avatarSeed,
+        pointsBalance: userPoints.balance,
+      })
+      .from(devices)
+      .leftJoin(userProfiles, eq(devices.deviceId, userProfiles.deviceId))
+      .leftJoin(userPoints, eq(devices.deviceId, userPoints.deviceId))
+      .$dynamic();
 
     if (search) {
       const pattern = `%${search}%`;
       query = query.where(
-        sql`(${devices.deviceId} LIKE ${pattern} OR ${devices.alias} LIKE ${pattern} OR ${devices.platform} LIKE ${pattern} OR ${devices.deviceModel} LIKE ${pattern})`
+        sql`(${devices.deviceId} LIKE ${pattern} OR ${devices.alias} LIKE ${pattern} OR ${devices.platform} LIKE ${pattern} OR ${devices.deviceModel} LIKE ${pattern} OR ${userProfiles.username} LIKE ${pattern})`
       );
     }
 
@@ -73,9 +98,11 @@ export class AdminService {
     const records = await query.orderBy(desc(devices.firstSeenAt)).limit(pageSize).offset(offset);
 
     const totalCount = search
-      ? await db.select({ value: count() }).from(devices).where(
-          sql`(${devices.deviceId} LIKE ${`%${search}%`} OR ${devices.alias} LIKE ${`%${search}%`} OR ${devices.platform} LIKE ${`%${search}%`} OR ${devices.deviceModel} LIKE ${`%${search}%`})`
-        )
+      ? await db.select({ value: count() }).from(devices)
+          .leftJoin(userProfiles, eq(devices.deviceId, userProfiles.deviceId))
+          .where(
+            sql`(${devices.deviceId} LIKE ${`%${search}%`} OR ${devices.alias} LIKE ${`%${search}%`} OR ${devices.platform} LIKE ${`%${search}%`} OR ${devices.deviceModel} LIKE ${`%${search}%`} OR ${userProfiles.username} LIKE ${`%${search}%`})`
+          )
       : await db.select({ value: count() }).from(devices);
 
     return {
@@ -349,5 +376,35 @@ export class AdminService {
     }
 
     return stats;
+  }
+
+  // ===== 积分管理 =====
+
+  async getUserPoints(deviceId: string) {
+    const db = this.dbService.getDb();
+    const balance = await this.pointsService.getBalance(deviceId);
+    const transactions = await this.pointsService.listTransactions(deviceId, 100, 0);
+
+    return {
+      ...balance,
+      transactions: transactions.transactions,
+    };
+  }
+
+  async grantPoints(
+    deviceId: string,
+    delta: number,
+    reason: string,
+  ) {
+    if (delta <= 0) {
+      throw new BadRequestException('充值积分必须为正数');
+    }
+    const newBalance = await this.pointsService.earnPoints(
+      deviceId,
+      delta,
+      'admin_grant',
+      null,
+    );
+    return { success: true, balance: newBalance };
   }
 }

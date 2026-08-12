@@ -25,6 +25,7 @@ function resolveTitle(pathname: string): string {
   if (pathname.match(/\/dashboard\/redeem-batches\/\d+/)) return '批次详情';
   if (pathname.match(/\/dashboard\/questionnaire\/[^/]+$/)) return '设备问卷历史';
   if (pathname.match(/\/dashboard\/templates\/[^/]+$/)) return '模板详情';
+  if (pathname.match(/\/dashboard\/devices\/[^/]+\/points/)) return '积分管理';
   return 'Lumira 运营后台';
 }
 

@@ -20,6 +20,8 @@ import type {
   TemplateCategoryTreeResponse,
   TemplateCategory,
   TemplateOption,
+  UserPointsDetail,
+  GrantPointsResponse,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -232,4 +234,15 @@ export const api = {
       `/categories/${key}/toggle-active`,
       { method: 'POST' },
     ),
+
+  // ===== 积分管理 =====
+
+  getUserPoints: (deviceId: string) =>
+    adminFetch<UserPointsDetail>(`/devices/${deviceId}/points`),
+
+  grantPoints: (deviceId: string, delta: number, reason: string) =>
+    adminFetch<GrantPointsResponse>(`/devices/${deviceId}/points/grant`, {
+      method: 'POST',
+      body: JSON.stringify({ delta, reason }),
+    }),
 };
