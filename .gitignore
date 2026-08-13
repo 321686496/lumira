@@ -15,5 +15,5 @@ lumira_app_flutter/flutter_test.pid
 # Generated media outputs
 outputs/
 
-# ML model files (large binary, not tracked in git)
-models/
+# ML model files (large binary, not tracked in git, root dir only)
+/models/
