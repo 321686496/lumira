@@ -32,27 +32,29 @@ async function bootstrap() {
 
   app.setGlobalPrefix("api/v1");
 
-  // Custom JSON parser: handle empty body gracefully instead of throwing
-  // "Body cannot be empty when content-type is set to 'application/json'".
-  // This happens when health checks, monitors, or clients send POST/PATCH
-  // with Content-Type: application/json but an empty body.
+  // preParsing hook: intercept empty body before Fastify''s default JSON
+  // parser sees it. When a client sends Content-Type: application/json with
+  // an empty body, Fastify throws "Body cannot be empty...". This hook
+  // replaces the empty payload with "{}" so the parser succeeds.
+  // Uses a preParsing hook instead of addContentTypeParser to avoid
+  // conflicting with NestJS''s own parser registration during app.listen().
   const fastifyInstance = app.getHttpAdapter().getInstance();
-  fastifyInstance.addContentTypeParser(
-    "application/json",
-    { parseAs: "string" },
-    (_req, body, done) => {
-      try {
-        const raw = Buffer.isBuffer(body) ? body.toString("utf-8") : (body as string);
-        if (!raw || raw.trim() === "") {
-          done(null, {});
-        } else {
-          done(null, JSON.parse(raw));
-        }
-      } catch (err) {
-        done(err as Error, undefined);
+  fastifyInstance.addHook("preParsing", async (request, _reply, payload) => {
+    if (!payload) return payload;
+    const ct = request.headers["content-type"];
+    if (ct && ct.includes("application/json")) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of payload) {
+        chunks.push(chunk);
       }
-    },
-  );
+      const body = Buffer.concat(chunks).toString("utf-8");
+      if (!body || body.trim() === "") {
+        return "{}";
+      }
+      return body;
+    }
+    return payload;
+  });
 
   // CORS
   const corsOrigin = process.env.CORS_ORIGIN || "*";
