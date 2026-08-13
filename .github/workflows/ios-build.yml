@@ -3,7 +3,9 @@ name: iOS Build
 # ==============================================================================
 # Lumira iOS 构建 workflow（替代 Codemagic）
 #
-# 触发方式：手动 workflow_dispatch
+# 触发方式：
+#   - push 到 master 分支：自动触发（仅验证编译，sign=false，无需 Secrets）
+#   - 手动 workflow_dispatch：
 #   - sign:                是否走完整代码签名并导出 IPA（默认 false，仅验证编译）
 #   - upload_to_testflight: 是否上传到 App Store Connect / TestFlight（默认 false）
 #
@@ -29,6 +31,8 @@ name: iOS Build
 # ==============================================================================
 
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
     inputs:
       sign:
