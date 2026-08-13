@@ -4,6 +4,7 @@ import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import * as path from "path";
 import * as fs from "fs";
+import { Readable } from "stream";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { AppModule } from "./app.module";
@@ -35,9 +36,8 @@ async function bootstrap() {
   // preParsing hook: intercept empty body before Fastify''s default JSON
   // parser sees it. When a client sends Content-Type: application/json with
   // an empty body, Fastify throws "Body cannot be empty...". This hook
-  // replaces the empty payload with "{}" so the parser succeeds.
-  // Uses a preParsing hook instead of addContentTypeParser to avoid
-  // conflicting with NestJS''s own parser registration during app.listen().
+  // replaces the empty payload with Readable.from("{}") so the downstream
+  // parser (which expects a stream with .on()) succeeds.
   const fastifyInstance = app.getHttpAdapter().getInstance();
   fastifyInstance.addHook("preParsing", async (request, _reply, payload) => {
     if (!payload) return payload;
@@ -49,9 +49,9 @@ async function bootstrap() {
       }
       const body = Buffer.concat(chunks).toString("utf-8");
       if (!body || body.trim() === "") {
-        return "{}";
+        return Readable.from("{}");
       }
-      return body;
+      return Readable.from(body);
     }
     return payload;
   });
