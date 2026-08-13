@@ -448,12 +448,18 @@ class PhotoPostProcessor {
   /// 关键：使用与取景器 [CaptureState.computeTargetRatio] 完全一致的比例计算逻辑，
   /// 确保拍照裁剪区域与取景器显示区域一致（所见即所得）。
   ///
-  /// 两种模式：
-  /// - 'fullscreen'：单步 cover 裁剪到 screenRatio（与之前一致）
-  /// - 其他比例：两步裁剪保证 WYSIWYG
-  ///   1. 先按 screenRatio 模拟 cover 裁剪（匹配相机流 cover 行为，
-  ///      因为相机流铺满全屏时传感器会被裁剪以匹配屏幕比例）
-  ///   2. 再在可见区域内按 targetRatio 裁剪（匹配 _CropGuideOverlay 框线区域）
+  /// 统一裁剪模式（同时适用于 fullscreen / 4:3 / 1:1 / 模板 W:H 等比例）：
+  /// 取景器 [_ViewfinderArea] 把相机预览约束到目标比例的矩形框内并以
+  /// [CameraPreviewFit.cover] 填充，因此可见区域 = 传感器图像按目标比例的
+  /// **居中裁剪**：
+  /// - 图像比目标更宽（targetRatio 小）→ 左右裁剪，保留全高
+  /// - 图像比目标更窄（targetRatio 大）→ 上下裁剪，保留全宽
+  /// - 比例相等 → 不裁剪（4:3 传感器在 4:3 框中显示全部内容）
+  ///
+  /// 修复说明（原为两步裁剪）：
+  /// 旧版先把传感器图像 cover 到屏幕比例，再按 targetRatio 裁剪，
+  /// 这与"比例框直接约束传感器图像"的现实布局不符，
+  /// 导致非 fullscreen 比例下成片比取景器更大（左右、上下都被再裁一次）。
   static List<int> computeCropRect(
     String ratio,
     int imgW,
@@ -472,70 +478,32 @@ class PhotoPostProcessor {
 
     final imgRatio = imgW / imgH;
 
-    // fullscreen 模式：直接按 screenRatio cover 裁剪（与之前一致）
-    if (ratio == 'fullscreen') {
-      double cropW, cropH;
-      if (imgRatio > screenRatio) {
-        // 图片比屏幕更宽 → 裁剪左右
-        cropH = imgH.toDouble();
-        cropW = cropH * screenRatio;
-      } else {
-        // 图片比屏幕更高 → 裁剪上下
-        cropW = imgW.toDouble();
-        cropH = cropW / screenRatio;
-      }
-      cropW = cropW.clamp(1.0, imgW.toDouble());
-      cropH = cropH.clamp(1.0, imgH.toDouble());
-      final offsetX = ((imgW - cropW) / 2.0).round().clamp(0, imgW - 1);
-      final offsetY = ((imgH - cropH) / 2.0).round().clamp(0, imgH - 1);
-      final width = cropW.round().clamp(1, imgW - offsetX);
-      final height = cropH.round().clamp(1, imgH - offsetY);
-      debugPrint('[post-process] fullscreen 单步裁剪: imgRatio=$imgRatio, '
-          'screenRatio=$screenRatio, 裁剪后比例=${width / height}');
-      return [offsetX, offsetY, width, height];
-    }
-
-    // 非 fullscreen 模式：两步裁剪保证 WYSIWYG
-    // 第 1 步：模拟相机流 cover 到屏幕比例（裁剪传感器以匹配屏幕）
-    double visW, visH, visOffsetX, visOffsetY;
-    if (imgRatio > screenRatio) {
-      // 传感器比屏幕更宽 → 裁左右
-      visH = imgH.toDouble();
-      visW = visH * screenRatio;
-      visOffsetX = (imgW - visW) / 2.0;
-      visOffsetY = 0.0;
-    } else {
-      // 传感器比屏幕更窄 → 裁上下
-      visW = imgW.toDouble();
-      visH = visW / screenRatio;
-      visOffsetX = 0.0;
-      visOffsetY = (imgH - visH) / 2.0;
-    }
-
-    // 第 2 步：在可见区域内按 targetRatio 裁剪（对应辅助线框区域）
-    final visRatio = visW / visH;
     double cropW, cropH;
-    if (visRatio > targetRatio) {
-      // 可见区域比目标更宽 → 裁左右
-      cropH = visH;
-      cropW = visH * targetRatio;
+    if (imgRatio > targetRatio) {
+      // 图片比目标比例更宽 → 裁剪左右，保留全高
+      cropH = imgH.toDouble();
+      cropW = cropH * targetRatio;
+    } else if (imgRatio < targetRatio) {
+      // 图片比目标比例更窄 → 裁剪上下，保留全宽
+      cropW = imgW.toDouble();
+      cropH = cropW / targetRatio;
     } else {
-      // 可见区域比目标更窄 → 裁上下
-      cropW = visW;
-      cropH = visW / targetRatio;
+      // 比例相等，无需裁剪
+      cropW = imgW.toDouble();
+      cropH = imgH.toDouble();
     }
+    cropW = cropW.clamp(1.0, imgW.toDouble());
+    cropH = cropH.clamp(1.0, imgH.toDouble());
 
-    // 计算最终裁剪区域在原图中的位置
-    // 水平方向居中，垂直方向顶部对齐（与取景器 _AnimatedCropOverlay 竖屏顶部对齐一致）
-    final offsetX =
-        (visOffsetX + (visW - cropW) / 2.0).round().clamp(0, imgW - 1);
-    final offsetY = visOffsetY.round().clamp(0, imgH - 1);
+    // 居中对齐（与取景器 cover 的居中裁剪行为一致）
+    final offsetX = ((imgW - cropW) / 2.0).round().clamp(0, imgW - 1);
+    final offsetY = ((imgH - cropH) / 2.0).round().clamp(0, imgH - 1);
     final width = cropW.round().clamp(1, imgW - offsetX);
     final height = cropH.round().clamp(1, imgH - offsetY);
 
     debugPrint(
-        '[post-process] 两步裁剪: imgRatio=$imgRatio, screenRatio=$screenRatio, '
-        'targetRatio=$targetRatio, 裁剪后比例=${width / height}');
+        '[post-process] 单步裁剪: imgRatio=$imgRatio, targetRatio=$targetRatio, '
+        '裁剪后比例=${width / height}');
 
     return [offsetX, offsetY, width, height];
   }

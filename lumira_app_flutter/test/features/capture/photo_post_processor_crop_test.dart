@@ -149,6 +149,60 @@ void main() {
         reason: 'rawMode 不应跳过裁剪：4:3 竖屏输出仍须为 3:4');
   });
 
+  // ── 裁剪区域回归测试（所见即所得：照片 = 取景器可见区域）──
+  // 取景器 _ViewfinderArea 把相机预览约束到目标比例框内并以 cover 填充，
+  // 可见区域 = 传感器图像按目标比例的居中裁剪。
+  // 旧版两步裁剪（先 cover 到屏幕比例再按比例裁）会让非全屏成片比取景器
+  // 更放大（左右、上下都被再裁一次），iOS 上还叠加原生插件预裁剪导致更明显。
+  // 修复后统一为单步居中裁剪：4:3 传感器在 4:3 框中显示全部内容。
+
+  test('crop region: 4:3 portrait on 3:4 sensor keeps full image', () {
+    final rect = PhotoPostProcessor.computeCropRect(
+      '4:3', 1080, 1440, 9.0 / 19.5, true);
+    expect(rect, [0, 0, 1080, 1440],
+        reason: '4:3 框与 3:4 传感器同比例，取景器显示全帧，照片不应再裁剪');
+  });
+
+  test('crop region: 1:1 portrait is centered square (full width)', () {
+    final rect = PhotoPostProcessor.computeCropRect(
+      '1:1', 1080, 1440, 9.0 / 19.5, true);
+    expect(rect[0], 0);
+    expect(rect[2], 1080);
+    expect(rect[3], 1080);
+    expect(rect[1], closeTo((1440 - 1080) / 2, 1),
+        reason: '1:1 框比 3:4 传感器更窄，应保留全宽、垂直居中裁剪');
+    expect(rect[1] + rect[3], lessThanOrEqualTo(1440));
+  });
+
+  test('crop region: fullscreen portrait is centered horizontal strip', () {
+    final rect = PhotoPostProcessor.computeCropRect(
+      'fullscreen', 1080, 1440, 9.0 / 19.5, true);
+    expect(rect[1], 0);
+    expect(rect[3], 1440);
+    expect(rect[2] / rect[3], closeTo(9.0 / 19.5, 0.02));
+    expect(rect[0], closeTo((1080 - rect[2]) / 2, 1),
+        reason: '全屏框比传感器更宽，应保留全高、水平居中裁剪');
+    expect(rect[0] + rect[2], lessThanOrEqualTo(1080));
+  });
+
+  test('crop region: template 4:5 portrait is centered vertical crop', () {
+    final rect = PhotoPostProcessor.computeCropRect(
+      '4:5', 1080, 1440, 9.0 / 19.5, true);
+    expect(rect[0], 0);
+    expect(rect[2], 1080);
+    expect(rect[2] / rect[3], closeTo(4.0 / 5.0, 0.01));
+    expect(rect[1], closeTo((1440 - rect[3]) / 2, 1),
+        reason: '4:5 竖版框比 3:4 传感器更窄，应保留全宽、垂直居中裁剪');
+    expect(rect[1] + rect[3], lessThanOrEqualTo(1440));
+  });
+
+  test('crop region: landscape 4:3 on 4:3 sensor keeps full image', () {
+    final rect = PhotoPostProcessor.computeCropRect(
+      '4:3', 1440, 1080, 19.5 / 9.0, false);
+    expect(rect, [0, 0, 1440, 1080],
+        reason: '横屏 4:3 框与 4:3 传感器同比例，不应再裁剪');
+  });
+
   /// 解码输出 JPEG 并返回 img.Image（用于像素采样）
   Future<img.Image> processAndDecodePixels({
     FillLightState? fillLight,

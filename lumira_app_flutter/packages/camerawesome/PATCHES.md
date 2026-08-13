@@ -29,3 +29,10 @@
 与 OHOS fork 选择与照片同比例的预览 profile 的策略一致。
 
 > 注意：应用未使用视频录制/图像流分析，本补丁未覆盖这两条路径。
+## 3. iOS 原生：成片不再做比例裁剪（ios/Classes/Controllers/Picture/CameraPictureController.m）
+上游拍照回调会按 `aspectRatio`（应用侧固定为默认 4:3）对照片再裁一次，
+且裁剪矩形混用了“方向校正后的 UIImage size”与“传感器原始 CGImage 坐标”，
+导致成片在 Dart 后处理裁剪之前就已经被裁小（双次裁剪 → 成片比取景器放大）。
+Android（CameraX）与 OHOS（Camera Kit）均保存全传感器原图，交由 Dart 统一裁剪；
+本补丁让 iOS 保持一致：`takePicture` 保存全分辨率原图（含 EXIF 方向），
+比例裁剪全部由 `lumira_app_flutter` 的 `PhotoPostProcessor.computeCropRect` 完成。

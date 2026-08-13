@@ -106,25 +106,14 @@ previewPhotoSampleBuffer:(CMSampleBufferRef)previewPhotoSampleBuffer
   UIImage *image = [UIImage imageWithCGImage:[UIImage imageWithData:data].CGImage
                                        scale:1.0
                                  orientation:[self getJpegOrientation]];
-  float originalWidth = image.size.width;
-  float originalHeight = image.size.height;
-  
-  float originalImageAspectRatio = originalWidth / originalHeight;
-  
-  float outputWidth = originalWidth;
-  float outputHeight = originalHeight;
-  if (originalImageAspectRatio != _aspectRatio) {
-    if (originalImageAspectRatio > _aspectRatio) {
-      outputWidth = originalHeight * _aspectRatio;
-    } else if (originalImageAspectRatio < _aspectRatio) {
-      outputHeight = originalWidth / _aspectRatio;
-    }
-  }
-  
-  UIImage *imageConverted = [self imageByCroppingImage:image toSize:CGSizeMake(outputWidth, outputHeight)];
-  
-  image = [UIImage imageWithCGImage:[imageConverted CGImage] scale:0.0 orientation:[self getJpegOrientation]];
 
+  // WYSIWYG fix (iOS): save the full-resolution sensor photo without applying
+  // the plugin's aspect-ratio crop. The app's Dart pipeline crops the photo to
+  // the selected ratio afterwards, matching the viewfinder's visible area.
+  // The upstream crop here operates in raw sensor coordinates (mismatched with
+  // the oriented image size), so it double-crops the photo and makes it appear
+  // zoomed in compared to the viewfinder. Android (CameraX) and OHOS (Camera
+  // Kit) both save the full sensor photo, so this aligns iOS with them.
   NSData *imageWithExif = [UIImageJPEGRepresentation(image, 1.0) addExif:container];
   
   bool success = [imageWithExif writeToFile:_path atomically:YES];
