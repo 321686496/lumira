@@ -4,7 +4,6 @@ import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
 import * as path from "path";
 import * as fs from "fs";
-import { Readable } from "stream";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { AppModule } from "./app.module";
@@ -33,27 +32,17 @@ async function bootstrap() {
 
   app.setGlobalPrefix("api/v1");
 
-  // preParsing hook: intercept empty body before Fastify's default JSON
-  // parser sees it. When a client sends Content-Type: application/json with
-  // an empty body, Fastify throws "Body cannot be empty...". This hook
-  // replaces the empty payload with a Buffer Readable so the downstream
-  // parser (which does Buffer.concat(chunks)) succeeds.
+  // onRequest hook: when a client sends Content-Type: application/json
+  // with an empty body (Content-Length: 0), strip the content-type header.
+  // This prevents Fastify's default JSON parser from throwing
+  // "Body cannot be empty when content-type is set to 'application/json'".
   const fastifyInstance = app.getHttpAdapter().getInstance();
-  fastifyInstance.addHook("preParsing", async (request, _reply, payload) => {
-    if (!payload) return payload;
+  fastifyInstance.addHook("onRequest", async (request) => {
     const ct = request.headers["content-type"];
-    if (!ct || !ct.includes("application/json")) return payload;
-
-    const chunks: Buffer[] = [];
-    for await (const chunk of payload) {
-      chunks.push(chunk);
+    const cl = request.headers["content-length"];
+    if (ct && ct.includes("application/json") && cl === "0") {
+      delete request.headers["content-type"];
     }
-    const body = Buffer.concat(chunks).toString("utf-8");
-    if (!body || body.trim() === "") {
-      return Readable.from([Buffer.from("{}")]);
-    }
-    // Non-empty: pass through original chunks as a new Readable
-    return Readable.from(chunks);
   });
 
   // CORS
