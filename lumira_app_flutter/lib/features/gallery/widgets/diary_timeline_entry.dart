@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,23 +7,32 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../data/gallery_models.dart';
 
-/// 日记时间轴单条 entry（左日期 + 右双照片）
+/// 日記時間軸單條 entry（左日期 + 右雙照片，固定佈局）
 ///
-/// 视觉规格来源：lumira-app/src/pages/gallery/diary.vue line 56-103
+/// 視覺規格來源：lumira-app/src/pages/gallery/diary.vue（固定雙照片佈局）
+/// 修復：不再無限制地用 Expanded 平鋪所有照片，始終保持 2 列。
+/// 僅 1 張時左對齊 + 右側留空；≥3 張時第二張顯示 "+N" 遮罩。
 class DiaryTimelineEntry extends ConsumerWidget {
   const DiaryTimelineEntry({super.key, required this.entry, this.onPhotoTap, this.onPhotoLongPress});
 
   final DiaryEntry entry;
 
-  /// 点击照片回调，参数为照片 ID（用于跳转详情页）
+  /// 點擊照片回調，參數為照片 ID（用於跳轉詳情頁）
   final void Function(String photoId)? onPhotoTap;
 
-  /// 长按照片回调，参数为照片 ID（用于删除照片）
+  /// 長按照片回調，參數為照片 ID（用於刪除照片）
   final void Function(String photoId)? onPhotoLongPress;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
+    final allPhotos = entry.photos;
+
+    // 固定顯示前 2 張，第 3 張起用 +N 遮罩提示
+    final displayPhotos = allPhotos.length <= 2
+        ? allPhotos
+        : allPhotos.sublist(0, 2);
+    final overflow = allPhotos.length > 2 ? allPhotos.length - 2 : 0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -58,42 +67,87 @@ class DiaryTimelineEntry extends ConsumerWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // 右：双照片
+          // 右：照片區域（0 張、1 張、2+ 張三種情況）
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: entry.photos
-                  .map((p) => Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            right: entry.photos.last == p ? 0 : 8,
-                          ),
-                          child: _PhotoCard(
-                            photo: p,
-                            onTap: onPhotoTap == null ? null : () => onPhotoTap!(p.id),
-                            onLongPress: onPhotoLongPress == null ? null : () => onPhotoLongPress!(p.id),
-                          ),
-                        ),
-                      ))
-                  .toList(),
-            ),
+            child: _buildPhotosRow(displayPhotos, overflow, tokens),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildPhotosRow(List<DiaryPhoto> photos, int overflow, ThemeTokens tokens) {
+    if (photos.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (photos.length == 1) {
+      // 單張：左半邊顯示，右半邊留空保持對齊
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _PhotoCard(
+              photo: photos[0],
+              tokens: tokens,
+              onTap: onPhotoTap == null ? null : () => onPhotoTap!(photos[0].id),
+              onLongPress: onPhotoLongPress == null ? null : () => onPhotoLongPress!(photos[0].id),
+            ),
+          ),
+          const Expanded(child: SizedBox.shrink()),
+        ],
+      );
+    }
+    // 雙照片：第一張正常，第二張可能有 +N 遮罩
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: _PhotoCard(
+            photo: photos[0],
+            tokens: tokens,
+            onTap: onPhotoTap == null ? null : () => onPhotoTap!(photos[0].id),
+            onLongPress: onPhotoLongPress == null ? null : () => onPhotoLongPress!(photos[0].id),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: overflow > 0
+              ? _OverflowCard(
+                  photo: photos[1],
+                  overflowCount: overflow,
+                  tokens: tokens,
+                  onTap: () => onPhotoTap?.call(photos[1].id),
+                  onLongPress: onPhotoLongPress == null ? null : () => onPhotoLongPress!(photos[1].id),
+                )
+              : _PhotoCard(
+                  photo: photos[1],
+                  tokens: tokens,
+                  onTap: onPhotoTap == null ? null : () => onPhotoTap!(photos[1].id),
+                  onLongPress: onPhotoLongPress == null ? null : () => onPhotoLongPress!(photos[1].id),
+                ),
+        ),
+      ],
+    );
+  }
 }
 
-class _PhotoCard extends ConsumerWidget {
-  const _PhotoCard({required this.photo, this.onTap, this.onLongPress});
+/// 第二張照片 + 溢出數量遮罩
+class _OverflowCard extends StatelessWidget {
+  const _OverflowCard({
+    required this.photo,
+    required this.overflowCount,
+    required this.tokens,
+    this.onTap,
+    this.onLongPress,
+  });
   final DiaryPhoto photo;
+  final int overflowCount;
+  final ThemeTokens tokens;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
-
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -103,25 +157,103 @@ class _PhotoCard extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
+            borderRadius: BorderRadius.circular(8),
             child: AspectRatio(
-              aspectRatio: 2 / 3, // 400×600
-              child: _buildImage(tokens),
+              aspectRatio: 2 / 3,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _PhotoImage(photo: photo, tokens: tokens),
+                  // 半透明遮罩 + "+N"
+                  Container(
+                    color: Colors.black.withOpacity(0.45),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '+$overflowCount',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '更多',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withOpacity(0.85),
+                              height: 1.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 4,
             runSpacing: 4,
-            children: photo.tags.map((t) => _DiaryTagChip(tag: t)).toList(),
+            children: photo.tags.map((t) => _DiaryTagChip(tag: t, tokens: tokens)).toList(),
           ),
         ],
       ),
     );
   }
+}
 
-  /// 图片源可能是网络 URL 或本地文件路径（与 PhotoCell 一致）
-  Widget _buildImage(ThemeTokens tokens) {
+class _PhotoCard extends StatelessWidget {
+  const _PhotoCard({required this.photo, required this.tokens, this.onTap, this.onLongPress});
+  final DiaryPhoto photo;
+  final ThemeTokens tokens;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: AspectRatio(
+              aspectRatio: 2 / 3,
+              child: _PhotoImage(photo: photo, tokens: tokens),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: photo.tags.map((t) => _DiaryTagChip(tag: t, tokens: tokens)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 提取圖片渲染邏輯，讓 _PhotoCard 和 _OverflowCard 共用
+class _PhotoImage extends StatelessWidget {
+  const _PhotoImage({required this.photo, required this.tokens});
+  final DiaryPhoto photo;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
     final url = photo.img;
     if (url.isEmpty) {
       return Container(
@@ -150,13 +282,13 @@ class _PhotoCard extends ConsumerWidget {
   }
 }
 
-class _DiaryTagChip extends ConsumerWidget {
-  const _DiaryTagChip({required this.tag});
+class _DiaryTagChip extends StatelessWidget {
+  const _DiaryTagChip({required this.tag, required this.tokens});
   final DiaryTag tag;
+  final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+  Widget build(BuildContext context) {
     final colors = _TagColors.of(tag.color, tokens);
 
     return Container(
