@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -386,12 +386,15 @@ class _CheckinEditPageState extends ConsumerState<CheckinEditPage> {
           const SizedBox(height: 20),
           FadeUp(
             delay: const Duration(milliseconds: 360),
-            child: _CheckinPhotosSection(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _CheckinPhotosSection(
               tokens: tokens,
               photoIds: _photoIds,
               photoCache: _photoCache,
               onAdd: _openPhotoPicker,
               onRemove: _removePhoto,
+              ),
             ),
           ),
         ],
