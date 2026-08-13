@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -538,7 +538,7 @@ class _CategorySelector extends StatelessWidget {
   }
 }
 
-/// 照片区：3 列 grid，首张为封面，最多 9 张
+/// ????3 ? grid????????? 9 ?
 class _CheckinPhotosSection extends StatelessWidget {
   const _CheckinPhotosSection({
     required this.tokens,
@@ -559,42 +559,71 @@ class _CheckinPhotosSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+        // Header with icon and count
+        Container(
+          padding: const EdgeInsets.only(bottom: 12),
           child: Row(
             children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: tokens.brand.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.photo_library_outlined,
+                  size: 16,
+                  color: tokens.brand,
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(
-                '照片',
+                '??',
                 style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: tokens.textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                '${photoIds.length} 张',
-                style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: tokens.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${photoIds.length}/9',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: tokens.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
               const Spacer(),
-              if (photoIds.isNotEmpty)
+              if (photoIds.isNotEmpty && photoIds.length < 9)
                 GestureDetector(
                   onTap: onAdd,
                   behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: tokens.brand.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add_photo_alternate_outlined,
-                            size: 16, color: tokens.brand),
-                        const SizedBox(width: 4),
+                        Icon(Icons.add, size: 14, color: tokens.brand),
+                        const SizedBox(width: 2),
                         Text(
-                          '添加',
+                          '??',
                           style: TextStyle(
                             fontSize: 12,
                             color: tokens.brand,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -604,6 +633,7 @@ class _CheckinPhotosSection extends StatelessWidget {
             ],
           ),
         ),
+        // Photo grid or empty state
         if (photoIds.isEmpty)
           _AddPhotoPrompt(tokens: tokens, onAdd: onAdd)
         else
@@ -613,8 +643,8 @@ class _CheckinPhotosSection extends StatelessWidget {
             padding: const EdgeInsets.only(top: 4),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
               childAspectRatio: 1.0,
             ),
             itemCount: photoIds.length + 1,
@@ -633,12 +663,26 @@ class _CheckinPhotosSection extends StatelessWidget {
               );
             },
           ),
+        // Footer hint
         if (photoIds.isNotEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 8, left: 4),
-            child: Text(
-              '最多 9 张 · 首张为封面',
-              style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+            padding: const EdgeInsets.only(top: 12, left: 4),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 12,
+                  color: tokens.textTertiary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '???????????',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: tokens.textTertiary,
+                  ),
+                ),
+              ],
             ),
           ),
       ],
@@ -657,21 +701,48 @@ class _AddPhotoPrompt extends StatelessWidget {
       onTap: onAdd,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        height: 96,
+        height: 120,
         decoration: BoxDecoration(
           color: tokens.surface,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: tokens.brand.withOpacity(0.3),
+            width: 1.5,
+          ),
           boxShadow: tokens.shadowConvexSubtle,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_photo_alternate_outlined,
-                size: 28, color: tokens.textTertiary),
-            const SizedBox(height: 6),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: tokens.brand.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.add_photo_alternate_outlined,
+                size: 24,
+                color: tokens.brand,
+              ),
+            ),
+            const SizedBox(height: 8),
             Text(
-              '添加照片',
-              style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+              '????',
+              style: TextStyle(
+                fontSize: 13,
+                color: tokens.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '??????',
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.textTertiary,
+              ),
             ),
           ],
         ),
@@ -693,15 +764,38 @@ class _AddPhotoCell extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: tokens.surface,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: tokens.brand.withOpacity(0.25),
+            width: 1.5,
+          ),
           boxShadow: tokens.shadowConvexSubtle,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add, size: 22, color: tokens.textTertiary),
-            const SizedBox(height: 2),
-            Text('添加', style: TextStyle(fontSize: 10, color: tokens.textTertiary)),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: tokens.brand.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.add,
+                size: 18,
+                color: tokens.brand,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '??',
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.brand,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -725,62 +819,116 @@ class _PhotoEditCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = photo?.dataUrl ?? photo?.filePath;
-    return Stack(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: url == null || url.isEmpty
-              ? Container(
-                  color: tokens.surfaceAlt,
-                  child: Center(
-                    child: Icon(Icons.broken_image_outlined,
-                        color: tokens.textTertiary),
-                  ),
-                )
-              : CheckinPhotoImage(url: url, tokens: tokens, fit: BoxFit.cover),
-        ),
-        if (isCover)
-          Positioned(
-            top: 4,
-            left: 4,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: tokens.shadowConvexSubtle,
+      ),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: url == null || url.isEmpty
+                ? Container(
+                    color: tokens.surfaceAlt,
+                    child: Center(
+                      child: Icon(Icons.broken_image_outlined,
+                          color: tokens.textTertiary, size: 24),
+                    ),
+                  )
+                : CheckinPhotoImage(url: url, tokens: tokens, fit: BoxFit.cover),
+          ),
+          // Gradient overlay for better contrast
+          Positioned.fill(
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: tokens.brand,
-                borderRadius: BorderRadius.circular(9999),
-              ),
-              child: const Text(
-                '封面',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.white,
-                  fontWeight: FontWeight.w500,
+                borderRadius: BorderRadius.circular(10),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.3),
+                    Colors.transparent,
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.2),
+                  ],
+                  stops: const [0.0, 0.3, 0.7, 1.0],
                 ),
               ),
             ),
           ),
-        Positioned(
-          top: 4,
-          right: 4,
-          child: GestureDetector(
-            onTap: onRemove,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
+          // Cover badge
+          if (isCover)
+            Positioned(
+              bottom: 6,
+              left: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: tokens.brand,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: tokens.brand.withOpacity(0.3),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const <Widget>[
+                    Icon(
+                      Icons.star_rounded,
+                      size: 10,
+                      color: Colors.white,
+                    ),
+                    SizedBox(width: 2),
+                    Text(
+                      '??',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: const Icon(Icons.close, size: 12, color: Colors.white),
+            ),
+          // Remove button
+          Positioned(
+            top: 6,
+            right: 6,
+            child: GestureDetector(
+              onTap: onRemove,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.close_rounded,
+                  size: 14,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-/// 照片选择器底部 Sheet（仿 collection 版，但走 galleryDaoProvider + maxCount 上限）
+/// ??????? Sheet
 class _CheckinPhotoPickerSheet extends ConsumerStatefulWidget {
   const _CheckinPhotoPickerSheet({
     required this.tokens,
@@ -836,7 +984,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
     } else if (_selected.length < widget.maxCount) {
       setState(() => _selected.add(id));
     } else {
-      LumiraToast.show(context, '最多选择 9 张照片',
+      LumiraToast.show(context, '???? 9 ???',
           duration: const Duration(milliseconds: 1500));
     }
   }
@@ -844,60 +992,144 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
   @override
   Widget build(BuildContext context) {
     final tokens = widget.tokens;
-    final height = MediaQuery.of(context).size.height * 0.7;
-    return SizedBox(
-      height: height,
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       child: Column(
         children: [
+          // Drag handle
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 8),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: tokens.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          // Header
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: Row(
               children: [
-                Text(
-                  '选择照片',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: tokens.brand.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.photo_library_outlined,
+                    size: 18,
+                    color: tokens.brand,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '已选 ${_selected.length} 张',
-                  style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '????',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '?? ${_selected.length} / ${widget.maxCount}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const Spacer(),
-                LumiraButton(
-                  variant: ButtonVariant.ghost,
-                  onPressed: _selected.isEmpty
-                      ? null
-                      : () => Navigator.of(context).pop(_selected
-                          .map((id) => _photos.firstWhere((p) => p.id == id))
-                          .toList()),
-                  child: const Text('确定'),
-                ),
+                if (_selected.isNotEmpty)
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [tokens.brand, tokens.brand.withOpacity(0.8)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: tokens.brand.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => Navigator.of(context).pop(_selected
+                            .map((id) => _photos.firstWhere((p) => p.id == id))
+                            .toList()),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
+                          child: const Text(
+                            '??',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-          const Divider(height: 1),
+          // Divider
+          Container(
+            height: 1,
+            color: tokens.divider.withOpacity(0.5),
+          ),
+          // Content
           Expanded(
             child: _isLoading
                 ? Center(child: LumiraProgress.circular())
                 : _photos.isEmpty
                     ? Center(
-                        child: Text(
-                          '相册暂无可选照片',
-                          style: TextStyle(
-                              color: tokens.textTertiary, fontSize: 13),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.photo_library_outlined,
+                              size: 64,
+                              color: tokens.textTertiary.withOpacity(0.5),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              '????????',
+                              style: TextStyle(
+                                color: tokens.textTertiary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ),
                       )
                     : GridView.builder(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(16),
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          mainAxisSpacing: 6,
-                          crossAxisSpacing: 6,
+                          crossAxisCount: 3,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
                           childAspectRatio: 1.0,
                         ),
                         itemCount: _photos.length,
@@ -907,42 +1139,72 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                           return GestureDetector(
                             onTap: () => _toggle(p.id),
                             behavior: HitTestBehavior.opaque,
-                            child: Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: _buildThumb(p, tokens),
-                                ),
-                                if (selected)
-                                  Positioned.fill(
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: tokens.brand.withOpacity(0.3),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                            color: tokens.brand, width: 2),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              child: Stack(
+                                children: [
+                                  // Photo
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: _buildThumb(p, tokens),
+                                  ),
+                                  // Selection overlay
+                                  AnimatedOpacity(
+                                    opacity: selected ? 1.0 : 0.0,
+                                    duration: const Duration(milliseconds: 200),
+                                    child: Positioned.fill(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: tokens.brand.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: tokens.brand,
+                                            width: 2.5,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                Positioned(
-                                  top: 4,
-                                  right: 4,
-                                  child: Container(
-                                    width: 18,
-                                    height: 18,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: selected
-                                          ? tokens.brand
-                                          : Colors.black45,
+                                  // Checkbox
+                                  Positioned(
+                                    top: 6,
+                                    right: 6,
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      child: Container(
+                                        width: 22,
+                                        height: 22,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: selected
+                                              ? tokens.brand
+                                              : Colors.white.withOpacity(0.9),
+                                          border: Border.all(
+                                            color: selected
+                                                ? tokens.brand
+                                                : Colors.white.withOpacity(0.6),
+                                            width: 2,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.15),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: selected
+                                            ? const Icon(
+                                                Icons.check_rounded,
+                                                size: 14,
+                                                color: Colors.white,
+                                              )
+                                            : null,
+                                      ),
                                     ),
-                                    child: selected
-                                        ? const Icon(Icons.check,
-                                            size: 12, color: Colors.white)
-                                        : null,
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           );
                         },
@@ -959,7 +1221,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
       return Container(
         color: tokens.surfaceAlt,
         child:
-            Icon(Icons.broken_image_outlined, color: tokens.textTertiary, size: 20),
+            Icon(Icons.broken_image_outlined, color: tokens.textTertiary, size: 24),
       );
     }
     return CheckinPhotoImage(url: url, tokens: tokens, fit: BoxFit.cover);
