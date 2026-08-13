@@ -52,10 +52,9 @@ packages:
   camerawesome:
     dependency: "direct main"
     description:
-      name: camerawesome
-      sha256: "0fd4ad7cf85ced7c3018edbe5a66d8c4b630ada7120b02c01961db3ea36f52ce"
-      url: "https://pub.flutter-io.cn"
-    source: hosted
+      path: "packages/camerawesome"
+      relative: true
+    source: path
     version: "1.4.0"
   camerawesome_ohos:
     dependency: "direct main"

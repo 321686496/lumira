@@ -34,7 +34,11 @@ dependencies:
       path: ohos
 
   # 原版 camerawesome（iOS/Android 用，包名不同于 camerawesome_ohos）
-  camerawesome: ^1.4.0
+  # Fix(ios WYSIWYG): 原版 1.4.0 预览 cover 算法有 bug（竖屏纹理永远按高度适配），
+  # 且 iOS 预览流选 16:9 视频 preset 与 4:3 成片视场不一致。改为自建 vendor 包修复，
+  # 见 packages/camerawesome（与原版同版本号，仅打 iOS/预览适配补丁）。
+  camerawesome:
+    path: packages/camerawesome
 
   # 权限（brief ^12.0.1 → CPF-Flutter 3.7 Harmony 适配版本 10.3.2，11+ 需 Dart 3；未回合上游，见 dependency_overrides）
   permission_handler: 10.3.2  # Harmony 3.7 适配版本 (CPF-Flutter)
