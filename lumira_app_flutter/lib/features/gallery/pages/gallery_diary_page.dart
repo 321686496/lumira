@@ -348,7 +348,7 @@ class _MoodFilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final moods = CapturePreviewMockData.moods;
+    const moods = CapturePreviewMockData.moods;
     return SizedBox(
       height: 38,
       child: ListView.separated(
