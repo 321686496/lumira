@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/features/capture/data/capture_state.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/param_panel.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_slider.dart';
 
 void main() {
   group('ParamPanel', () {
@@ -53,8 +54,8 @@ void main() {
       container.read(CaptureState.panelExpandedProvider.notifier).state = true;
       await tester.pumpAndSettle();
 
-      // No template → no reset button (only "完成" is shown).
-      expect(find.text('重置'), findsNothing);
+      // 页面始终显示重置按钮（模板模式重置为模板原始值，自由模式重置为默认值）
+      expect(find.text('重置'), findsOneWidget);
     });
 
     testWidgets('EV slider drag updates editableTemplate.camera.exposureCompensation',
@@ -200,6 +201,10 @@ void main() {
           .read(CaptureState.freeModeCameraProvider)
           .exposureCompensation;
       expect(newEv, isNot(equals(initialEv)));
+
+      // 推进 500ms 防抖持久化 Timer，避免测试结束时 Timer pending
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
     });
   });
 }

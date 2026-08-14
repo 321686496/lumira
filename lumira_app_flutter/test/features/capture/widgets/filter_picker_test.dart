@@ -84,6 +84,7 @@ void main() {
           .lut;
 
       // Tap the "电影感" chip (LUT 'cinematic').
+      await tester.ensureVisible(find.text('电影感'));
       await tester.tap(find.text('电影感'));
       await tester.pumpAndSettle();
 

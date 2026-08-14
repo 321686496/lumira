@@ -10,6 +10,7 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/pages/capture_preview_template_page.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_slider.dart';
 import 'package:lumira_app_flutter/features/capture/widgets/camera_preview.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -342,8 +343,8 @@ void main() {
       expect(find.text('锐化'), findsOneWidget);
       expect(find.text('暗角'), findsOneWidget);
 
-      // 至少 8 个 slider（实际 11 个）
-      expect(find.byType(Slider), findsNWidgets(11));
+      // 至少 8 个 LumiraSlider（实际 11 个）
+      expect(find.byType(LumiraSlider), findsNWidgets(11));
     });
 
     testWidgets(

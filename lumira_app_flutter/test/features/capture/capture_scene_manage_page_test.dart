@@ -96,7 +96,7 @@ void main() {
       expect(find.widgetWithText(LumiraNav, '场景管理'), findsOneWidget);
     });
 
-    testWidgets('renders 3 tab pills', (tester) async {
+    testWidgets('renders 2 tab pills', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
@@ -104,7 +104,8 @@ void main() {
 
       expect(find.text('我的收藏'), findsOneWidget);
       expect(find.text('自定义场景'), findsOneWidget);
-      expect(find.text('我的组合'), findsOneWidget);
+      // 组合套件已迁移至 CompositionKitsPage
+      expect(find.text('我的组合'), findsNothing);
     });
 
     testWidgets('default tab is fav (我的收藏)', (tester) async {
@@ -160,7 +161,7 @@ void main() {
       expect(find.text('我的咖啡馆'), findsOneWidget);
     });
 
-    testWidgets('initialTab=kit shows kit tab content', (tester) async {
+    testWidgets('initialTab=kit falls back to fav', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
@@ -169,9 +170,9 @@ void main() {
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // kit tab 显示「新建组合」按钮 + mock kit 名称
-      expect(find.text('新建组合'), findsOneWidget);
-      expect(find.text('咖啡馆人像套件'), findsOneWidget);
+      // kit tab 已迁移至 CompositionKitsPage，tab=kit 回退到 fav
+      expect(find.text('咖啡馆'), findsOneWidget);
+      expect(find.text('新建场景'), findsNothing);
     });
 
     testWidgets('initialTab=fav shows fav tab content', (tester) async {
@@ -285,19 +286,20 @@ void main() {
       expect(find.text('删除'), findsOneWidget);
     });
 
-    testWidgets('tapping 新建组合 button shows SnackBar', (tester) async {
+    testWidgets('tapping 新建场景 opens form', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
-        initialLocation: '/capture/scene-manage?tab=kit',
+        initialLocation: '/capture/scene-manage?tab=custom',
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      await tester.tap(find.text('新建组合'));
+      await tester.tap(find.text('新建场景'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('新建组合（mock）'), findsOneWidget);
+      // 表单显示：场景名称字段
+      expect(find.text('场景名称'), findsOneWidget);
     });
   });
 
@@ -505,22 +507,21 @@ void main() {
       expect(find.text('去场景指南发现更多'), findsOneWidget);
     });
 
-    testWidgets('kit tab empty state shows after deleting all kits',
+    testWidgets('custom tab empty state shows after deleting all scenes',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
-        initialLocation: '/capture/scene-manage?tab=kit',
+        initialLocation: '/capture/scene-manage?tab=custom',
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 点击唯一的 kit 进入删除对话框
-      await tester.tap(find.text('咖啡馆人像套件'));
+      // more 菜单 → 删除 → 确认对话框 → 确认
+      await tester.tap(find.byIcon(Icons.more_horiz));
       await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 确认删除
-      expect(find.text('删除组合'), findsOneWidget);
+      await tester.tap(find.text('删除').last);
+      await settleOrPump(tester, UIStyle.neumorphic);
       await tester.tap(find.text('删除').last);
       await settleOrPump(tester, UIStyle.neumorphic);
 
@@ -528,7 +529,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       // 显示空状态
-      expect(find.text('还没有组合'), findsOneWidget);
+      expect(find.text('还没有自定义场景'), findsOneWidget);
     });
   });
 

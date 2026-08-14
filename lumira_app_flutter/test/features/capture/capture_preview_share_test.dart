@@ -37,10 +37,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // 验证底部 Sheet 出现三个选项
-    // 用 ListTile 精确匹配分享 sheet 中的 _ShareOption，
-    // 避免与折叠操作栏的"保存到相册"（_CollapsedActionButton）冲突
-    expect(find.widgetWithText(ListTile, '保存到相册'), findsOneWidget);
-    expect(find.widgetWithText(ListTile, '分享到系统'), findsOneWidget);
-    expect(find.widgetWithText(ListTile, '生成 EXIF 海报'), findsOneWidget);
+    // 分享 sheet 使用 LumiraCheckboxListTile（非原生 ListTile）
+    expect(find.text('保存到相册'), findsWidgets);
+    expect(find.text('分享到系统'), findsOneWidget);
+    expect(find.text('生成 EXIF 海报'), findsOneWidget);
   });
 }
