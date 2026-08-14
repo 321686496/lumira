@@ -49,8 +49,13 @@ Future<T?> showLumiraDialog<T>({
     builder: (dialogContext) {
       return SafeArea(
         child: Center(
-          child: LumiraDialogContainer(
-            child: Builder(builder: builder),
+          // TextField / Button 等 Material 组件需要 Material ancestor；
+          // LumiraDialogContainer 是纯 Container（DecoratedBox），这里补一层透明 Material
+          child: Material(
+            type: MaterialType.transparency,
+            child: LumiraDialogContainer(
+              child: Builder(builder: builder),
+            ),
           ),
         ),
       );

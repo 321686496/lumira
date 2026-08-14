@@ -10,6 +10,8 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_unlock_page.dart';
+import 'package:lumira_app_flutter/features/templates/data/owned_templates_repository.dart';
+import 'package:lumira_app_flutter/features/points/data/points_models.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -40,6 +42,8 @@ void main() {
     required ThemeKey themeKey,
     required UIStyle uiStyle,
     String initialLocation = '/templates/unlock',
+    int? price,
+    String? templateId,
   }) {
     final goRouter = GoRouter(
       initialLocation: initialLocation,
@@ -47,7 +51,8 @@ void main() {
         GoRoute(
           path: '/templates/unlock',
           name: 'templatesUnlock',
-          builder: (_, __) => const TemplatesUnlockPage(),
+          builder: (_, __) =>
+              TemplatesUnlockPage(templateId: templateId, price: price),
         ),
         GoRoute(
           path: RouteNames.capture,
@@ -66,12 +71,19 @@ void main() {
           name: 'home',
           builder: (_, __) => const _HomeStubPage(),
         ),
+        GoRoute(
+          path: RouteNames.profileInvite,
+          name: 'profileInvite',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('INVITE_PAGE'))),
+        ),
       ],
     );
     return ProviderScope(
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        ownedTemplatesRepositoryProvider.overrideWith(
+            (ref) async => _MockOwnedTemplatesRepository()),
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
@@ -153,40 +165,18 @@ void main() {
       expect(find.text('完成任意一项即可永久解锁'), findsOneWidget);
     });
 
-    testWidgets('renders option 1 看广告解锁（30秒）', (tester) async {
+    testWidgets('renders option 1 积分解锁', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('看广告解锁（30秒）'), findsOneWidget);
-      expect(find.text('观看一段短视频广告即可解锁'), findsOneWidget);
-      expect(find.text('立即观看'), findsOneWidget);
+      expect(find.text('0 积分解锁'), findsOneWidget);
+      expect(find.text('消耗积分，永久使用'), findsOneWidget);
+      expect(find.text('积分购买'), findsOneWidget);
     });
 
-    testWidgets('renders option 2 分享给好友（2/3）', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.text('分享给好友（2/3）'), findsOneWidget);
-      expect(find.text('累计分享 3 位好友即可解锁'), findsOneWidget);
-      expect(find.text('继续分享'), findsOneWidget);
-    });
-
-    testWidgets('renders option 3 拍摄 5 张照片（3/5）', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.text('拍摄 5 张照片（3/5）'), findsOneWidget);
-      expect(find.text('完成 5 张拍摄任务即可解锁'), findsOneWidget);
-      expect(find.text('去拍摄'), findsOneWidget);
-    });
-
-    testWidgets('renders option 4 输入兑换码', (tester) async {
+    testWidgets('renders option 2 输入兑换码', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
@@ -197,15 +187,15 @@ void main() {
       expect(find.text('输入'), findsOneWidget);
     });
 
-    testWidgets('renders option 5 ¥3.00 直接购买', (tester) async {
+    testWidgets('renders option 3 分享给好友', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('¥3.00 直接购买'), findsOneWidget);
-      expect(find.text('一次购买，永久使用'), findsOneWidget);
-      expect(find.text('购买'), findsOneWidget);
+      expect(find.text('分享给好友'), findsOneWidget);
+      expect(find.text('邀请好友赚积分 / 兑换模板'), findsOneWidget);
+      expect(find.text('去邀请'), findsOneWidget);
     });
 
     testWidgets('renders bottom note 解锁后永久使用', (tester) async {
@@ -219,52 +209,36 @@ void main() {
   });
 
   group('TemplatesUnlockPage — interactions', () {
-    testWidgets('tapping 立即观看 shows ad SnackBar then unlocks after 1200ms',
-        (tester) async {
+    testWidgets('tapping 积分购买 shows pay popup', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+          wrap(
+              themeKey: ThemeKey.warmWhite,
+              uiStyle: UIStyle.neumorphic,
+              price: 18,
+              templateId: 'cafe_portrait'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 点击 立即观看
-      await tester.tap(find.text('立即观看'));
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // 广告播放中 SnackBar 出现
-      expect(find.text('广告播放中…'), findsOneWidget);
-
-      // 推进时间至 1200ms 之后
-      await tester.pump(const Duration(milliseconds: 1300));
+      await tester.tap(find.text('积分购买'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 解锁后 success card 出现（desc 唯一）
-      expect(find.text('日系胶片 · 精选模板已永久解锁'), findsOneWidget);
-      // 选项列表消失
-      expect(find.text('解锁方式任选其一'), findsNothing);
+      // 弹窗内容：标题 + 价格 + 描述 + 取消/确认
+      expect(find.text('积分解锁'), findsOneWidget);
+      expect(find.text('18 积分'), findsOneWidget);
+      expect(find.text('消耗 18 积分，永久解锁该模板'), findsOneWidget);
+      expect(find.text('取消'), findsOneWidget);
     });
 
-    testWidgets('tapping 继续分享 shows SnackBar 分享成功 +1', (tester) async {
+    testWidgets('tapping 去邀请 navigates to /profile/invite', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      await tester.tap(find.text('继续分享'));
+      await tester.tap(find.text('去邀请'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('分享成功 +1'), findsOneWidget);
-    });
-
-    testWidgets('tapping 去拍摄 navigates to /capture', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      await tester.tap(find.text('去拍摄'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.text('CAPTURE_PAGE'), findsOneWidget);
+      expect(find.text('INVITE_PAGE'), findsOneWidget);
     });
 
     testWidgets('tapping 输入 shows code input dialog with TextField',
@@ -283,7 +257,31 @@ void main() {
       expect(find.text('确认'), findsOneWidget);
     });
 
-    testWidgets('entering code and confirming unlocks', (tester) async {
+    testWidgets('tapping 取消 in pay popup closes popup without unlocking',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(
+              themeKey: ThemeKey.warmWhite,
+              uiStyle: UIStyle.neumorphic,
+              price: 18,
+              templateId: 'cafe_portrait'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('积分购买'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 点击 取消 关闭弹窗
+      await tester.tap(find.text('取消'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 弹窗消失，仍为锁定态
+      expect(find.text('18 积分'), findsNothing);
+      expect(find.text('解锁方式任选其一'), findsOneWidget);
+    });
+
+    testWidgets('tapping 取消 in code dialog closes without unlocking',
+        (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
@@ -292,85 +290,30 @@ void main() {
       await tester.tap(find.text('输入'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 输入兑换码
-      await tester.enterText(find.byType(TextField), 'TESTCODE');
-      // 点击对话框中的 确认（区别于选项列表中的 输入 按钮）
-      await tester.tap(find.text('确认'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 解锁成功 SnackBar + success card 出现
-      expect(find.text('日系胶片 · 精选模板已永久解锁'), findsOneWidget);
-      expect(find.text('解锁方式任选其一'), findsNothing);
-    });
-
-    testWidgets('tapping 购买 shows pay popup', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      await tester.tap(find.text('购买'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 弹窗内容：确认支付（title + button，2 个） + ¥3.00 + 取消 + 描述
-      expect(find.text('确认支付'), findsNWidgets(2));
-      expect(find.text('¥3.00'), findsOneWidget);
-      expect(find.text('取消'), findsOneWidget);
-      expect(find.text('日系胶片 · 精选模板 · 永久使用'), findsOneWidget);
-    });
-
-    testWidgets('tapping 取消 in pay popup closes popup without unlocking',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      await tester.tap(find.text('购买'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 点击 取消 关闭弹窗
+      // 取消兑换码对话框
       await tester.tap(find.text('取消'));
       await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 弹窗消失
-      expect(find.text('¥3.00'), findsNothing);
-      // 仍然锁定
+      expect(find.byType(TextField), findsNothing);
       expect(find.text('解锁方式任选其一'), findsOneWidget);
     });
 
-    testWidgets('tapping 确认支付 unlocks and shows SnackBar', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      await tester.tap(find.text('购买'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 点击 确认支付（第二个匹配项是按钮，第一个是 title）
-      await tester.tap(find.text('确认支付').at(1));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 解锁成功 SnackBar 出现（content 文本 '解锁成功'，与 success card title 同名，至少 1 个）
-      expect(find.text('解锁成功'), findsAtLeastNWidgets(1));
-      // success card 出现
-      expect(find.text('日系胶片 · 精选模板已永久解锁'), findsOneWidget);
-      // 选项列表消失
-      expect(find.text('解锁方式任选其一'), findsNothing);
-    });
   });
 
   group('TemplatesUnlockPage — unlocked state', () {
     testWidgets('renders success card when unlocked', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
-          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+          wrap(
+              themeKey: ThemeKey.warmWhite,
+              uiStyle: UIStyle.neumorphic,
+              price: 18,
+              templateId: 'cafe_portrait'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 通过 立即观看 触发解锁
-      await tester.tap(find.text('立即观看'));
-      await tester.pump(const Duration(milliseconds: 1300));
+      // 积分购买 → 确认弹窗 → mock exchange 成功
+      await tester.tap(find.text('积分购买'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.tap(find.text('确认解锁'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // success card 内容
@@ -386,6 +329,8 @@ void main() {
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
         initialLocation: '/home',
+        price: 18,
+        templateId: 'cafe_portrait',
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
@@ -394,9 +339,10 @@ void main() {
       GoRouter.of(homeContext).push('/templates/unlock');
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 通过 立即观看 触发解锁
-      await tester.tap(find.text('立即观看'));
-      await tester.pump(const Duration(milliseconds: 1300));
+      // 积分购买 → 确认 → mock exchange 成功
+      await tester.tap(find.text('积分购买'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.tap(find.text('确认解锁'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 点击 开始使用
@@ -416,8 +362,7 @@ void main() {
             wrap(themeKey: theme, uiStyle: UIStyle.neumorphic));
         await settleOrPump(tester, UIStyle.neumorphic);
         expect(find.text('解锁模板'), findsOneWidget, reason: 'theme=$theme');
-        expect(find.text('看广告解锁（30秒）'), findsOneWidget,
-            reason: 'theme=$theme');
+        expect(find.text('0 积分解锁'), findsOneWidget, reason: 'theme=$theme');
       }
     });
 
@@ -428,11 +373,33 @@ void main() {
             wrap(themeKey: ThemeKey.warmWhite, uiStyle: style));
         await settleOrPump(tester, style);
         expect(find.text('解锁模板'), findsOneWidget, reason: 'style=$style');
-        expect(find.text('看广告解锁（30秒）'), findsOneWidget,
-            reason: 'style=$style');
+        expect(find.text('0 积分解锁'), findsOneWidget, reason: 'style=$style');
       }
     });
   });
+}
+
+class _MockOwnedTemplatesRepository implements OwnedTemplatesRepository {
+  @override
+  Future<OwnedTemplates> listOwned() =>
+      throw UnimplementedError('unlock page test does not call listOwned');
+
+  @override
+  Future<TemplatePrices> listPrices() =>
+      throw UnimplementedError('unlock page test does not call listPrices');
+
+  @override
+  Future<TemplateExchangeResult> exchange(
+    String templateId, {
+    int? priceCredits,
+  }) async {
+    return TemplateExchangeResult(
+      success: true,
+      templateId: templateId,
+      spentCredits: priceCredits ?? 0,
+      balance: 100,
+    );
+  }
 }
 
 /// 用于测试 pop 行为的 home 占位页（包含跳转 unlock 页的入口）
