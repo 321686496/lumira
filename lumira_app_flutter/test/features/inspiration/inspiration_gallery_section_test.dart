@@ -4,8 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
-import 'package:lumira_app_flutter/features/inspiration/data/inspiration_content.dart';
-import 'package:lumira_app_flutter/features/inspiration/data/inspiration_providers.dart';
 import 'package:lumira_app_flutter/features/inspiration/widgets/inspiration_gallery_section.dart';
 
 void main() {
