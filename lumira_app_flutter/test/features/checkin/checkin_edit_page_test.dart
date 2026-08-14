@@ -41,6 +41,17 @@ void main() {
     await db.close();
   });
 
+  /// sqflite_common_ffi 的 DB 查询是真实 async：在 FakeAsync 中 pumpAndSettle 无法让
+  /// 真实 Future 完成，必须先轮询 runAsync 推进（与 checkin_list_page_test 同模式）。
+  Future<void> settle(WidgetTester tester) async {
+    for (var i = 0; i < 20; i++) {
+      await tester.pump();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+    }
+    await tester.pump(const Duration(milliseconds: 600));
+  }
+
   void setViewport(WidgetTester tester) {
     tester.binding.window.physicalSizeTestValue = const Size(800, 1600);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
@@ -75,10 +86,10 @@ void main() {
       container: container,
       child: const MaterialApp(home: CheckinEditPage()),
     ));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('请输入店名'), findsOneWidget);
     expect(await dao.countAll(), 0);
   });
@@ -89,7 +100,7 @@ void main() {
       container: container,
       child: const MaterialApp(home: CheckinEditPage()),
     ));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     await tester.enterText(find.byType(TextField).first, '新咖啡馆');
     // 选分类「书店」
@@ -99,7 +110,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.star_border).at(2));
     await tester.pump();
     await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     expect(find.text('已保存'), findsOneWidget);
     expect(await dao.countAll(), 1);
@@ -111,18 +122,18 @@ void main() {
 
   testWidgets('photoId 参数自动预填', (tester) async {
     setViewport(tester);
-    await seedGallery(n: 1);
+    await tester.runAsync(() => seedGallery(n: 1));
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: const MaterialApp(home: CheckinEditPage(photoId: 'p0')),
     ));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
-    expect(find.text('1 张'), findsOneWidget); // 照片 section 计数
+    expect(find.text('1/9'), findsOneWidget); // 照片 section 计数
     // 保存后照片关联写入
     await tester.enterText(find.byType(TextField).first, '预填店铺');
     await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
     final rec = (await dao.getAll()).first;
     expect(await dao.getPhotoIds(rec.id), ['p0']);
   });

@@ -44,6 +44,17 @@ void main() {
     await db.close();
   });
 
+  /// sqflite_common_ffi 的 DB 查询是真实 async：在 FakeAsync 中 pumpAndSettle 无法让
+  /// 真实 Future 完成，必须先轮询 runAsync 推进（与 checkin_list_page_test 同模式）。
+  Future<void> settle(WidgetTester tester) async {
+    for (var i = 0; i < 20; i++) {
+      await tester.pump();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+    }
+    await tester.pump(const Duration(milliseconds: 600));
+  }
+
   void setViewport(WidgetTester tester) {
     tester.binding.window.physicalSizeTestValue = const Size(800, 1400);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
@@ -68,11 +79,14 @@ void main() {
   testWidgets('渲染足迹详情：店名/地点/分类/评分/心得', (tester) async {
     setViewport(tester);
     await seed();
+    // 预解析详情 provider，避免 fake zone 中页面查询挂起
+    await tester.runAsync(
+        () => container.read(checkinDetailProvider('c1').future));
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: const MaterialApp(home: CheckinDetailPage(checkinId: 'c1')),
     ));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
     expect(find.text('Manner Coffee'), findsOneWidget);
     expect(find.text('武康路'), findsOneWidget);
@@ -87,13 +101,15 @@ void main() {
       container: container,
       child: const MaterialApp(home: CheckinDetailPage(checkinId: 'none')),
     ));
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('足迹不存在或已删除'), findsOneWidget);
   });
 
   testWidgets('删除流程：确认弹窗 → 删除 → 返回列表', (tester) async {
     setViewport(tester);
     await seed();
+    await tester.runAsync(
+        () => container.read(checkinDetailProvider('c1').future));
     final router = GoRouter(
       initialLocation: '/',
       routes: [
@@ -112,19 +128,23 @@ void main() {
       container: container,
       child: MaterialApp.router(routerConfig: router),
     ));
-    await tester.pumpAndSettle();
+    await settle(tester);
 
+    // 预解析详情 provider，避免 fake zone 中页面查询挂起
+    await tester.runAsync(
+        () => container.read(checkinDetailProvider('c1').future));
+    await tester.pump();
     router.push('/checkin/detail?checkinId=c1');
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('Manner Coffee'), findsOneWidget);
 
     await tester.tap(find.byIcon(Icons.delete_outline));
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('删除足迹'), findsOneWidget); // 弹窗标题
     expect(find.textContaining('确定删除这条探店足迹吗'), findsOneWidget);
 
     await tester.tap(find.text('删除').last); // 弹窗确认按钮
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
 
     expect(find.text('已删除'), findsOneWidget); // toast
     expect(await dao.getById('c1'), isNull); // 库中已删除

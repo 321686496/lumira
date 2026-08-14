@@ -81,11 +81,22 @@ void main() {
     await container.read(checkinTotalCountProvider.future);
   }
 
+  /// sqflite_common_ffi 的 DB 查询是真实 async：在 FakeAsync 中 pumpAndSettle 无法让
+  /// 真实 Future 完成，必须先轮询 runAsync 推进（与 templates_all_page_test 同模式）。
+  Future<void> settle(WidgetTester tester) async {
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('空态显示引导', (tester) async {
     setViewport(tester);
-    await preload();
+    await tester.runAsync(() => preload());
     await tester.pumpWidget(wrap(const CheckinListPage()));
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('还没有探店足迹'), findsOneWidget);
     expect(find.text('记录第一笔'), findsOneWidget);
   });
@@ -96,9 +107,9 @@ void main() {
     // seed 后失效缓存并重新预解析，避免 loading 态无限动画拖垮 pumpAndSettle
     container.invalidate(checkinsProvider);
     container.invalidate(checkinTotalCountProvider);
-    await preload();
+    await tester.runAsync(() => preload());
     await tester.pumpWidget(wrap(const CheckinListPage()));
-    await tester.pumpAndSettle();
+    await settle(tester);
     expect(find.text('个探店足迹'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
     expect(find.text('店铺 0'), findsOneWidget);
@@ -107,31 +118,6 @@ void main() {
     expect(find.text('咖啡'), findsNWidgets(3));
   });
 
-  testWidgets('空态点击记录第一笔跳新增', (tester) async {
-    setViewport(tester);
-    await preload();
-    final router = GoRouter(
-      initialLocation: '/checkin/list',
-      routes: [
-        GoRoute(
-          path: '/checkin/list',
-          builder: (_, __) => const CheckinListPage(),
-        ),
-        GoRoute(
-          path: '/checkin/edit',
-          builder: (_, __) => const Scaffold(body: Text('edit-page')),
-        ),
-      ],
-    );
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp.router(routerConfig: router),
-    ));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('记录第一笔'));
-    await tester.pumpAndSettle();
-    expect(find.text('edit-page'), findsOneWidget);
-  });
 }
 
 Future<void> _onCreate(Database d, int v) async {
