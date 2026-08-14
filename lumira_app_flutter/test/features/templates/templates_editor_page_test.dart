@@ -14,6 +14,8 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_editor_page.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_dropdown.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_slider.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 /// Task 2.8C + Task A5 — TemplatesEditorPage 测试
@@ -44,6 +46,7 @@ void main() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     sharedDb = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
+    await _seedCategories(sharedDb);
   });
 
   tearDownAll(() async {
@@ -139,14 +142,15 @@ void main() {
       await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
       await tester.pump();
     } else {
-      await tester.pumpAndSettle();
+      // 先让真实 async（DAO 查询/写入）完成，再 settle；顺序颠倒会导致 pumpAndSettle 超时
       await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
       await tester.pump();
+      await tester.pumpAndSettle();
     }
   }
 
   void setLargeViewport(WidgetTester tester) {
-    tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
+    tester.binding.window.physicalSizeTestValue = const Size(800, 4000);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
@@ -300,10 +304,10 @@ void main() {
       // 默认 category='portrait'，dropdown 显示 '人像'
       expect(find.text('人像'), findsWidgets);
 
-      // 通过 ancestor 模式定位 category DropdownButton（包裹 '人像' 文字）
+      // 通过 ancestor 模式定位 category LumiraDropdown（包裹 '人像' 文字）
       final categoryDropdown = find.ancestor(
         of: find.text('人像').first,
-        matching: find.byType(DropdownButton<String>),
+        matching: find.byType(LumiraDropdown<String>),
       );
       expect(categoryDropdown, findsOneWidget);
 
@@ -318,7 +322,7 @@ void main() {
       // 验证：dropdown 现在显示 '风光'（value 已更新为 'landscape'）
       final updatedDropdown = find.ancestor(
         of: find.text('风光'),
-        matching: find.byType(DropdownButton<String>),
+        matching: find.byType(LumiraDropdown<String>),
       );
       expect(updatedDropdown, findsOneWidget);
     });
@@ -381,7 +385,7 @@ void main() {
       );
       final opacitySlider = find.descendant(
         of: opacityRow,
-        matching: find.byType(Slider),
+        matching: find.byType(LumiraSlider),
       );
       expect(opacitySlider, findsOneWidget);
 
@@ -685,7 +689,7 @@ void main() {
       );
       final brightnessSlider = find.descendant(
         of: brightnessRow,
-        matching: find.byType(Slider),
+        matching: find.byType(LumiraSlider),
       );
       expect(brightnessSlider, findsOneWidget);
 
@@ -950,4 +954,46 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
+  await db.execute('''
+    CREATE TABLE ${Tables.templateCategories} (
+      ${Tables.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+      ${Tables.colKey} TEXT NOT NULL,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colParentKey} TEXT,
+      ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+      ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL,
+      UNIQUE(${Tables.colKey}, ${Tables.colParentKey})
+    )
+  ''');
+}
+
+/// 种入一级分类（editor Step 1 分类下拉框数据源）
+Future<void> _seedCategories(Database db) async {
+  final now = DateTime.now().millisecondsSinceEpoch;
+  const categories = <Map<String, String>>[
+    {'key': 'portrait', 'name': '人像'},
+    {'key': 'landscape', 'name': '风光'},
+    {'key': 'food', 'name': '美食'},
+    {'key': 'street', 'name': '街拍'},
+    {'key': 'night', 'name': '夜景'},
+    {'key': 'macro', 'name': '微距'},
+    {'key': 'still-life', 'name': '静物'},
+  ];
+  for (final c in categories) {
+    await db.insert(Tables.templateCategories, {
+      Tables.colKey: c['key'],
+      Tables.colName: c['name'],
+      Tables.colParentKey: null,
+      Tables.colLevel: 1,
+      Tables.colIconUrl: '',
+      Tables.colSortOrder: 0,
+      Tables.colIsSystem: 1,
+      Tables.colIsActive: 1,
+      Tables.colUpdatedAt: now,
+    });
+  }
 }

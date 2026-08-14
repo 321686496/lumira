@@ -14,6 +14,8 @@ import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/templates/data/templates_browse_mock_data.dart';
+import 'package:lumira_app_flutter/features/templates/data/templates_mock_data.dart';
+import 'package:lumira_app_flutter/features/templates/data/templates_providers.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_page.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -84,6 +86,11 @@ void main() {
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
         templatesDaoProvider.overrideWith((ref) async => TemplatesDao(db)),
+        userPreferenceProvider.overrideWith((ref) async => const UserPreference(
+              totalPhotos: 24,
+              topCategory: 'portrait',
+              topCategoryPercentage: 42,
+            )),
       ],
       child: MaterialApp.router(
         routerConfig: router,
@@ -140,10 +147,10 @@ void main() {
     expect(find.text('更多模板'), findsOneWidget);
     expect(find.text('查看全部 ›'), findsOneWidget);
     // Hero 推荐：前 3 个 builtin（isRecommended=true）= cafe_portrait/street_bw/macro_flower
-    // '咖啡馆人像'/'街拍黑白'/'微距花卉' 在 Hero + Other 中都出现（3 个推荐都是 price=0，也在 Other 中）
+    // '咖啡馆人像'/'街拍黑白' 免费（Hero + Other 各 1 次）；'微距花卉' 已改为付费（price=20），仅 Hero 出现
     expect(find.text('咖啡馆人像'), findsNWidgets(2));
     expect(find.text('街拍黑白'), findsNWidgets(2));
-    expect(find.text('微距花卉'), findsNWidgets(2));
+    expect(find.text('微距花卉'), findsOneWidget);
     // Other section 6 个免费模板中的非推荐项：美食俯拍/咖啡日记/柔光人像自创（仅 Other 出现）
     expect(find.text('美食俯拍'), findsOneWidget);
   });
@@ -196,8 +203,8 @@ void main() {
     await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
     await settleOrPump(tester, UIStyle.neumorphic);
 
-    // 点击右上角"查看全部"icon
-    await tester.tap(find.byTooltip('查看全部'));
+    // 点击右上角"查看全部"icon（apps icon，无 Tooltip）
+    await tester.tap(find.byIcon(Icons.apps_outlined));
     await settleOrPump(tester, UIStyle.neumorphic);
 
     expect(find.text('all'), findsOneWidget);
@@ -264,8 +271,24 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE ${Tables.templateCategories} (
+      ${Tables.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+      ${Tables.colKey} TEXT NOT NULL,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colParentKey} TEXT,
+      ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+      ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL,
+      UNIQUE(${Tables.colKey}, ${Tables.colParentKey})
     )
   ''');
 }
