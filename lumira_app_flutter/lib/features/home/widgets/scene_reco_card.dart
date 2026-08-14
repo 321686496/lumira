@@ -58,19 +58,7 @@ class SceneRecoCard extends ConsumerWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // picsum 图片（占位）
-                    Image.network(
-                      'https://picsum.photos/seed/${scene.imageSeed}/400/600',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stack) => Container(
-                        color: tokens.surfaceAlt,
-                        child: Icon(
-                          Icons.image_outlined,
-                          size: 32,
-                          color: tokens.textTertiary,
-                        ),
-                      ),
-                    ),
+                    _buildCoverImage(tokens),
                     // 标签
                     Positioned(
                       top: 8, // 16rpx → 8dp
@@ -162,6 +150,36 @@ class SceneRecoCard extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 封面图：imageSeed 以 assets/ 开头时加载本地资源，否则保持 picsum 占位
+  Widget _buildCoverImage(ThemeTokens tokens) {
+    if (scene.imageSeed.startsWith('assets/')) {
+      return Image.asset(
+        scene.imageSeed,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stack) => Container(
+          color: tokens.surfaceAlt,
+          child: Icon(
+            Icons.image_outlined,
+            size: 32,
+            color: tokens.textTertiary,
+          ),
+        ),
+      );
+    }
+    return Image.network(
+      'https://picsum.photos/seed/${scene.imageSeed}/400/600',
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stack) => Container(
+        color: tokens.surfaceAlt,
+        child: Icon(
+          Icons.image_outlined,
+          size: 32,
+          color: tokens.textTertiary,
         ),
       ),
     );
