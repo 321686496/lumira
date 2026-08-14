@@ -10,6 +10,7 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../capture/data/capture_preview_mock_data.dart';
 import '../providers/gallery_diary_providers.dart';
 import '../widgets/diary_timeline_entry.dart';
 
@@ -27,6 +28,7 @@ class GalleryDiaryPage extends ConsumerStatefulWidget {
 
 class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
   String _viewTab = kDiaryTabOutfit; // 'outfit' / 'shoot'
+  String? _selectedMood;
   final ScrollController _scrollController = ScrollController();
 
   /// 每个日期 entry 的 GlobalKey，用于日期跳转（Scrollable.ensureVisible）
@@ -56,7 +58,9 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     );
     if (picked == null || !mounted) return;
 
-    final entries = ref.read(diaryEntriesProvider(_viewTab)).valueOrNull;
+    final entries = ref
+        .read(diaryEntriesProvider(DiaryFilter(tab: _viewTab, mood: _selectedMood)))
+        .valueOrNull;
     if (entries == null || entries.isEmpty) {
       LumiraToast.show(context, '暂无照片数据', duration: const Duration(milliseconds: 1200));
       return;
@@ -106,7 +110,8 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     if (confirmed != true) return;
     final dao = await ref.read(galleryDaoProvider.future);
     await dao.delete(photoId);
-    ref.invalidate(diaryEntriesProvider(_viewTab));
+    ref.invalidate(
+        diaryEntriesProvider(DiaryFilter(tab: _viewTab, mood: _selectedMood)));
     ref.invalidate(diaryStreakProvider);
     ref.invalidate(diaryTotalCountProvider);
     if (mounted) {
@@ -118,7 +123,8 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
-    final entriesAsync = ref.watch(diaryEntriesProvider(_viewTab));
+    final entriesAsync = ref.watch(
+        diaryEntriesProvider(DiaryFilter(tab: _viewTab, mood: _selectedMood)));
     final streak = ref.watch(diaryStreakProvider).valueOrNull ?? 0;
 
     return Scaffold(
@@ -157,6 +163,15 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                         onTap: (t) => setState(() => _viewTab = t),
                         tokens: tokens,
                       ),
+                    ),
+                  ),
+                  // 心情筛选
+                  FadeUp(
+                    delay: const Duration(milliseconds: 50),
+                    child: _MoodFilterRow(
+                      selectedMood: _selectedMood,
+                      onSelect: (mood) => setState(() => _selectedMood = mood),
+                      tokens: tokens,
                     ),
                   ),
                   // 连续打卡 banner
@@ -314,6 +329,68 @@ class _DiaryViewToggle extends ConsumerWidget {
             color: active ? tokens.textPrimary : tokens.textTertiary,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 心情筛选行：横向滚动 pill，复用 CapturePreviewMockData.moods 的 7 个文案
+class _MoodFilterRow extends StatelessWidget {
+  const _MoodFilterRow({
+    required this.selectedMood,
+    required this.onSelect,
+    required this.tokens,
+  });
+
+  final String? selectedMood;
+  final void Function(String?) onSelect;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    final moods = CapturePreviewMockData.moods;
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        itemCount: moods.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final mood = moods[index];
+          final active = selectedMood == mood.name;
+          return GestureDetector(
+            onTap: () => onSelect(active ? null : mood.name),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: active ? tokens.brand : tokens.surface,
+                borderRadius: BorderRadius.circular(1000),
+                border: Border.all(
+                  color: active ? tokens.brand : tokens.divider,
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(mood.icon,
+                      size: 14,
+                      color: active ? tokens.textInverse : tokens.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(
+                    mood.name,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: active ? tokens.textInverse : tokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

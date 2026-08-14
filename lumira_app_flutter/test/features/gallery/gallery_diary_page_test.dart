@@ -30,20 +30,26 @@ void main() {
   setUp(() async {
     db = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
     dao = GalleryDao(db);
-    container = ProviderContainer(overrides: [
-      databaseProvider.overrideWith((ref) async => db),
-    ]);
-    // 预热 DAO providers，使首次 build 时 diaryEntriesProvider 已是 data 状态，
-    // 跳过 loading 分支的 CircularProgressIndicator（无限动画）。
-    await container.read(galleryDaoProvider.future);
-    await container.read(scenesDaoProvider.future);
-    await container.read(templatesDaoProvider.future);
   });
 
   tearDown(() async {
     container.dispose();
     await db.close();
   });
+
+  // 预热 DAO providers，使首次 build 时 diaryEntriesProvider 已是 data 状态，
+  // 跳过 loading 分支的 CircularProgressIndicator（无限动画）。
+  // Forced fix: 容器必须在 testWidgets body（fake async zone）内创建，
+  // 否则 provider 体内的 sqflite FFI 调用在 fake zone 中 await 会挂起
+  // （pumpAndSettle 永久等待，详见 _probe_hang_test 排查记录）。
+  Future<void> initContainer() async {
+    container = ProviderContainer(overrides: [
+      databaseProvider.overrideWith((ref) async => db),
+    ]);
+    await container.read(galleryDaoProvider.future);
+    await container.read(scenesDaoProvider.future);
+    await container.read(templatesDaoProvider.future);
+  }
 
   // 视口配置：逻辑视口 800x1800（dpr=1.0），容纳 toggle + banner + 2 篇 entry。
   void setViewport(WidgetTester tester) {
@@ -88,10 +94,20 @@ void main() {
       sceneId: 'scene_cafe',
       createdAt: yesterday.millisecondsSinceEpoch,
     ));
+    // p4: 今天，带 sceneId（outfit tab 可见）+ mood（心情筛选）
+    await dao.insert(GalleryItemRecord(
+      id: 'p4',
+      dataUrl: 'https://example.com/p4.jpg',
+      sceneId: 'scene_cafe',
+      mood: '开心',
+      createdAt: today.millisecondsSinceEpoch + 2,
+    ));
 
     // 预热 diary providers，避免 loading spinner 导致 pumpAndSettle 超时
-    await container.read(diaryEntriesProvider(kDiaryTabOutfit).future);
-    await container.read(diaryEntriesProvider(kDiaryTabShoot).future);
+    await container.read(
+        diaryEntriesProvider(const DiaryFilter(tab: kDiaryTabOutfit)).future);
+    await container.read(
+        diaryEntriesProvider(const DiaryFilter(tab: kDiaryTabShoot)).future);
     await container.read(diaryStreakProvider.future);
   }
 
@@ -104,6 +120,7 @@ void main() {
 
   testWidgets('renders diary entries timeline from DB', (tester) async {
     setViewport(tester);
+    await initContainer();
     await seedData();
 
     await pumpDiaryPage(tester);
@@ -124,6 +141,7 @@ void main() {
 
   testWidgets('renders streak banner with dynamic streak', (tester) async {
     setViewport(tester);
+    await initContainer();
     await seedData();
 
     await pumpDiaryPage(tester);
@@ -136,6 +154,7 @@ void main() {
 
   testWidgets('toggles between outfit and shoot tabs', (tester) async {
     setViewport(tester);
+    await initContainer();
     await seedData();
 
     await pumpDiaryPage(tester);
@@ -149,6 +168,31 @@ void main() {
 
     // shoot tab 激活后：title 动态切换为 '拍摄日记'，仅 toggle 中 '穿搭日记' 文字保留
     expect(find.text('穿搭日记'), findsOneWidget);
+  });
+
+  testWidgets('filters diary by mood pill and clears on re-tap', (tester) async {
+    setViewport(tester);
+    await initContainer();
+    await seedData();
+
+    await pumpDiaryPage(tester);
+    await tester.pumpAndSettle();
+
+    // 未筛选：outfit tab 下 p1/p4 今天、p3 昨天 → 2 篇
+    expect(find.text('时间轴'), findsOneWidget);
+    expect(find.text('2篇'), findsOneWidget);
+
+    // 点击心情 pill「开心」→ 仅 p4（今天）可见；pill 位于时间轴条目之前，
+    // 且 p4 的 mood 标签也含「开心」，故用 .first 命中树序靠前的 pill
+    await tester.ensureVisible(find.text('开心').first);
+    await tester.tap(find.text('开心').first);
+    await tester.pumpAndSettle();
+    expect(find.text('1篇'), findsOneWidget);
+
+    // 再次点击取消 → 恢复全部
+    await tester.tap(find.text('开心').first);
+    await tester.pumpAndSettle();
+    expect(find.text('2篇'), findsOneWidget);
   });
 }
 

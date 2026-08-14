@@ -4,8 +4,26 @@ import 'package:intl/intl.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
-import '../../../features/inspiration/data/inspiration_mock_data.dart';
 import '../data/gallery_models.dart';
+
+/// 拍摄日记筛选条件：tab（穿搭/拍摄）+ 可选心情
+class DiaryFilter {
+  const DiaryFilter({required this.tab, this.mood});
+
+  final String tab;
+  final String? mood;
+
+  bool get isAllMood => mood == null;
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is DiaryFilter && other.tab == tab && other.mood == mood;
+  }
+
+  @override
+  int get hashCode => Object.hash(tab, mood);
+}
 
 /// 中文星期名（DateTime.weekday: 1=周一 ... 7=周日）
 const List<String> kDiaryWeekdayNames = [
@@ -24,10 +42,10 @@ const String kDiaryTabShoot = 'shoot'; // 拍摄日记：全部照片
 
 /// 拍摄日记时间轴 entries（按天分组）
 ///
-/// family 参数为视图 tab：[kDiaryTabOutfit] 仅展示带 sceneId 的照片，
-/// [kDiaryTabShoot] 展示全部照片。每篇 entry 对应一个有照片的日期。
+/// family 参数为筛选条件：[DiaryFilter.tab] 区分穿搭/拍摄视图，
+/// [DiaryFilter.mood] 非空时仅保留该心情的照片。每篇 entry 对应一个有照片的日期。
 final diaryEntriesProvider =
-    FutureProvider.family<List<DiaryEntry>, String>((ref, viewTab) async {
+    FutureProvider.family<List<DiaryEntry>, DiaryFilter>((ref, filter) async {
   final dao = await ref.watch(galleryDaoProvider.future);
   final scenesDao = await ref.watch(scenesDaoProvider.future);
   final templatesDao = await ref.watch(templatesDaoProvider.future);
@@ -36,9 +54,13 @@ final diaryEntriesProvider =
   final records = await dao.getRecent(limit: 50);
 
   // 按 tab 过滤：outfit 仅含 sceneId 的照片
-  final filtered = viewTab == kDiaryTabOutfit
+  var filtered = filter.tab == kDiaryTabOutfit
       ? records.where((r) => r.sceneId != null && r.sceneId!.isNotEmpty).toList()
       : records;
+  // 按心情过滤
+  if (!filter.isAllMood) {
+    filtered = filtered.where((r) => r.mood == filter.mood).toList();
+  }
 
   // 预取 scene / template 名称用于派生标签
   final sceneNames = <String, String>{};
@@ -134,16 +156,3 @@ final diaryTotalCountProvider = FutureProvider<int>((ref) async {
   return dao.count();
 });
 
-/// 穿搭日记卡片数据：连续打卡天数 + 最近 2 张穿搭照片
-final outfitDiaryCardProvider = FutureProvider<OutfitDiaryCardData>((ref) async {
-  final streak = await ref.watch(diaryStreakProvider.future);
-  final entries = await ref.watch(diaryEntriesProvider(kDiaryTabOutfit).future);
-  final recentPhotos = <OutfitPhoto>[];
-  if (entries.isNotEmpty) {
-    final firstEntry = entries.first;
-    for (final p in firstEntry.photos.take(2)) {
-      recentPhotos.add(OutfitPhoto(imageSeed: p.img, date: firstEntry.date));
-    }
-  }
-  return OutfitDiaryCardData(streak: streak, photos: recentPhotos);
-});

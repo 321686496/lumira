@@ -29,21 +29,25 @@ void main() {
     HttpOverrides.global = TestHttpOverrides();
   });
 
-  setUp(() async {
-    db = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
-    dao = GalleryDao(db);
-    container = ProviderContainer(overrides: [
-      galleryDaoProvider.overrideWith((ref) async => dao),
-    ]);
-    // Forced fix: 预先让 provider 进入 data 状态，避免 pumpAndSettle 等待
-    // CircularProgressIndicator（无限动画）而 timed out。详见 gallery_page_test.dart。
-    await container.read(galleryDaoProvider.future);
-  });
-
   tearDown(() async {
     container.dispose();
     await db.close();
   });
+
+  // Forced fix: DB 与容器必须在 testWidgets body（fake async zone）内创建，
+  // 否则页面内 await dao 查询在 fake zone 中挂起（pumpAndSettle 永久等待，
+  // 与 gallery_diary_page_test.dart 排查同根因）。
+  Future<void> initContainer() async {
+    db = await openDatabase(':memory:', version: 1, onCreate: _onCreate);
+    dao = GalleryDao(db);
+    container = ProviderContainer(overrides: [
+      databaseProvider.overrideWith((ref) async => db),
+      galleryDaoProvider.overrideWith((ref) async => dao),
+    ]);
+    // 预先让 provider 进入 data 状态，避免 pumpAndSettle 等待
+    // CircularProgressIndicator（无限动画）而 timed out。详见 gallery_page_test.dart。
+    await container.read(galleryDaoProvider.future);
+  }
 
   // Forced fix: gallery_detail_page 已重构为 state-variable-based loading（不再用 FutureBuilder）。
   // _isLoading=true 时显示 CircularProgressIndicator（无限动画）让 pumpAndSettle 持续 pump，
@@ -62,6 +66,7 @@ void main() {
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
 
+    await initContainer();
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: const MaterialApp(home: GalleryDetailPage(photoId: null)),
@@ -79,6 +84,7 @@ void main() {
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
 
+    await initContainer();
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: const MaterialApp(home: GalleryDetailPage(photoId: 'nonexistent')),
@@ -96,6 +102,15 @@ void main() {
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
 
+    await initContainer();
+    // 场景：detail 页 _loadPhoto 会经 scenesDaoProvider 查询场景名
+    await db.insert(Tables.scenes, {
+      Tables.colId: 'cafe',
+      Tables.colName: 'cafe',
+      Tables.colCategory: '室内',
+      Tables.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+      Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+    });
     await dao.insert(GalleryItemRecord(
       id: 'p1',
       dataUrl: 'https://example.com/p1.jpg',
@@ -115,46 +130,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('照片详情'), findsOneWidget);
-    expect(find.text('cafe'), findsOneWidget);
-    expect(find.text('调色'), findsOneWidget);
-    expect(find.text('LUT'), findsOneWidget);
-    expect(find.text('导出'), findsOneWidget);
-  });
-
-  testWidgets('tapping reset sets all sliders to 0', (tester) async {
-    tester.binding.window.physicalSizeTestValue = const Size(800, 1800);
-    // Forced fix: 不设 devicePixelRatio=1.0 时默认 ~3.0，逻辑视口仅 ~266×600，
-    // 内容溢出 / offstage 导致 findsOneWidget 失败。与 challenge_page_test.dart 同模式。
-    tester.binding.window.devicePixelRatioTestValue = 1.0;
-    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
-    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
-
-    await dao.insert(GalleryItemRecord(
-      id: 'p1',
-      dataUrl: 'https://example.com/p1.jpg',
-      filePath: null,
-      sceneId: null,
-      templateId: null,
-      kitId: null,
-      mood: null,
-      lut: null,
-      createdAt: 1700000000000,
-    ));
-
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: GalleryDetailPage(photoId: 'p1')),
-    ));
-    await tester.pumpAndSettle();
-
-    // 初始有 '+12' 滑块显示
-    expect(find.text('+12'), findsOneWidget);
-
-    await tester.tap(find.text('重置'));
-    await tester.pumpAndSettle();
-
-    // 重置后应全部为 '0'
-    expect(find.text('0'), findsNWidgets(4));
+    // 场景名同时出现在分类 section 与来源 chips（2 处）
+    expect(find.text('cafe'), findsWidgets);
+    expect(find.text('分类'), findsOneWidget);
+    // 原图未保留时底部为只读提示（编辑能力已迁移至 GalleryEditPage）
+    expect(find.text('原图未保留'), findsWidgets);
   });
 }
 
@@ -164,6 +144,9 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colId} TEXT PRIMARY KEY,
       ${Tables.colDataUrl} TEXT,
       ${Tables.colFilePath} TEXT,
+      ${Tables.colOriginalPath} TEXT,
+      ${Tables.colTransform} TEXT,
+      ${Tables.colPostProcess} TEXT,
       ${Tables.colSceneId} TEXT,
       ${Tables.colTemplateId} TEXT,
       ${Tables.colKitId} TEXT,
@@ -171,6 +154,58 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colLut} TEXT,
       ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCreatedAt} INTEGER NOT NULL
+    )
+  ''');
+  // scenes（detail 页 _loadPhoto 经 scenesDaoProvider 查询场景名/全量列表）
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.scenes} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colIcon} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCategory} TEXT NOT NULL,
+      ${Tables.colStyle} TEXT NOT NULL DEFAULT '',
+      ${Tables.colFilterJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colVibe} TEXT NOT NULL DEFAULT '',
+      ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
+      ${Tables.colExampleImagesJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colTipsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colWhereToShoot} TEXT NOT NULL DEFAULT '',
+      ${Tables.colBestTime} TEXT NOT NULL DEFAULT '',
+      ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colRelatedCategory} TEXT NOT NULL DEFAULT '',
+      ${Tables.colRecommendedTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colCreator} TEXT NOT NULL DEFAULT 'user',
+      ${Tables.colIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCreatedAt} INTEGER NOT NULL,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL
+    )
+  ''');
+  // custom_templates（detail 页 _loadPhoto 经 templatesDaoProvider 查询模板名）
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.customTemplates} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colAuthor} TEXT NOT NULL DEFAULT '',
+      ${Tables.colVersion} TEXT NOT NULL DEFAULT '1.0.0',
+      ${Tables.colCategory} TEXT NOT NULL,
+      ${Tables.colClassificationJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colTagsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
+      ${Tables.colPrice} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCover} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCoverData} TEXT,
+      ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
+      ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
+      ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colPoseJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCreatedAt} INTEGER NOT NULL,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
 }

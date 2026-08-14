@@ -283,7 +283,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
           createdAt: photo.createdAt,
         );
       });
-      ref.invalidate(diaryEntriesProvider(kDiaryTabOutfit));
+      ref.invalidate(diaryEntriesProvider(const DiaryFilter(tab: kDiaryTabOutfit)));
       ref.invalidate(diaryStreakProvider);
       LumiraToast.show(context, '已标记为穿搭日记', duration: const Duration(milliseconds: 1500));
     } catch (e) {
