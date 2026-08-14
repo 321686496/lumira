@@ -34,7 +34,7 @@ void main() {
       ChallengeHistoryTable.colCategory: 'portrait',
       ChallengeHistoryTable.colTitle: 'T1',
       ChallengeHistoryTable.colRewardXp: 80,
-      ChallengeHistoryTable.colStatus: 'completed',
+      ChallengeHistoryTable.colStatus: 'done',
       ChallengeHistoryTable.colSelectedAt: now,
       ChallengeHistoryTable.colCompletedAt: now,
     });
@@ -45,7 +45,7 @@ void main() {
       ChallengeHistoryTable.colCategory: 'landscape',
       ChallengeHistoryTable.colTitle: 'T2',
       ChallengeHistoryTable.colRewardXp: 50,
-      ChallengeHistoryTable.colStatus: 'completed',
+      ChallengeHistoryTable.colStatus: 'done',
       ChallengeHistoryTable.colSelectedAt: now,
       ChallengeHistoryTable.colCompletedAt: now,
     });
@@ -76,7 +76,7 @@ void main() {
       ChallengeHistoryTable.colCategory: 'portrait',
       ChallengeHistoryTable.colTitle: '挑战 T1',
       ChallengeHistoryTable.colRewardXp: 80,
-      ChallengeHistoryTable.colStatus: 'completed',
+      ChallengeHistoryTable.colStatus: 'done',
       ChallengeHistoryTable.colSelectedAt: now,
       ChallengeHistoryTable.colCompletedAt: now,
     });
