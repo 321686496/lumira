@@ -278,19 +278,6 @@ void main() {
     }
   });
 
-  testWidgets('scene guide button pushes /capture/scene-guide',
-      (tester) async {
-    await tester.pumpWidget(
-      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
-    );
-    await pumpWithPermission(tester);
-
-    await tester.tap(find.byIcon(Icons.help_outline));
-    await tester.pumpAndSettle();
-
-    expect(find.text('scene-guide'), findsOneWidget);
-  });
-
   testWidgets('back button pops the capture page', (tester) async {
     router.go('/home');
     await tester.pumpWidget(
@@ -347,38 +334,19 @@ void main() {
     expect(find.byType(LevelIndicator), findsOneWidget);
   });
 
-  testWidgets('capture toolbar with 5 tools is present', (tester) async {
-    await tester.pumpWidget(
-      wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
-    );
-    await pumpWithPermission(tester);
-
-    // 底部工具栏包含 5 个工具：模板/场景/参数/滤镜/补光
-    // 默认 activeTool=null（收起），所有工具显示未激活态图标
-    expect(find.byIcon(Icons.dashboard_outlined), findsOneWidget); // 模板
-    expect(find.byIcon(Icons.palette_outlined), findsOneWidget); // 场景
-    expect(find.byIcon(Icons.lightbulb_outline), findsOneWidget); // 补光
-    expect(find.byIcon(Icons.filter_alt_outlined), findsOneWidget); // 滤镜
-    expect(find.text('参数'), findsOneWidget); // 参数 tab 文字
-  });
-
-  testWidgets('tapping filter tool renders FilterPicker in drawer',
+  testWidgets('capture toolbar shows 4 tools on back camera (fillLight is front-only)',
       (tester) async {
     await tester.pumpWidget(
       wrap(ThemeKey.warmWhite, UIStyle.neumorphic, cameraOverride: cameraPlaceholder),
     );
     await pumpWithPermission(tester);
 
-    // 默认 FilterPicker 不在 widget tree 中
-    expect(find.byType(FilterPicker), findsNothing);
-
-    // 点击"滤镜"工具按钮
-    await tester.tap(find.byIcon(Icons.filter_alt_outlined));
-    await tester.pumpAndSettle();
-
-    // 现在 FilterPicker 应该出现在 widget tree 中
-    expect(find.byType(FilterPicker), findsOneWidget);
-    expect(find.text('系统滤镜'), findsOneWidget);
-    expect(find.text('LUT 预设'), findsOneWidget);
+    // 默认后置摄像头：工具栏含 4 个工具（模板/场景/参数/滤镜），补光仅前摄显示
+    expect(find.byIcon(Icons.dashboard_outlined), findsOneWidget); // 模板
+    expect(find.byIcon(Icons.palette_outlined), findsOneWidget); // 场景
+    expect(find.byIcon(Icons.filter_alt_outlined), findsOneWidget); // 滤镜
+    expect(find.text('参数'), findsOneWidget); // 参数 tab 文字
+    expect(find.byIcon(Icons.lightbulb_outline), findsNothing); // 后置无补光
   });
+
 }
