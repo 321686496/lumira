@@ -67,7 +67,7 @@ void main() {
       expect(container.read(CaptureState.fillLightEnabledProvider), isFalse);
       expect(container.read(CaptureState.fillLightColorProvider),
           const Color(0xFFFFE5B4));
-      expect(container.read(CaptureState.fillLightIntensityProvider), 0.6);
+      expect(container.read(CaptureState.fillLightIntensityProvider), 0.8);
 
       // fillLightStateProvider 在禁用时返回 null
       expect(container.read(CaptureState.fillLightStateProvider), isNull);
@@ -138,7 +138,7 @@ void main() {
       expect(container.read(CaptureState.fillLightEnabledProvider), isFalse);
       expect(container.read(CaptureState.fillLightColorProvider),
           const Color(0xFFFFE5B4));
-      expect(container.read(CaptureState.fillLightIntensityProvider), 0.6);
+      expect(container.read(CaptureState.fillLightIntensityProvider), 0.8);
 
       container.dispose();
     });
