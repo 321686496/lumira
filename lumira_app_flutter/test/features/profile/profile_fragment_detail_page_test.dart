@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/features/profile/pages/profile_fragment_detail_page.dart';
+import 'package:lumira_app_flutter/features/profile/data/profile_mock_data.dart';
+import 'package:lumira_app_flutter/features/profile/providers/fragments_providers.dart';
 
 void main() {
   testWidgets(
@@ -9,6 +11,10 @@ void main() {
       (tester) async {
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [
+          fragmentsProvider.overrideWith(
+              (ref) async => ProfileMockData.fragments),
+        ],
         child: const MaterialApp(home: ProfileFragmentDetailPage()),
       ),
     );

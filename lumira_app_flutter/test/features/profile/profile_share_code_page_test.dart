@@ -107,12 +107,10 @@ void main() {
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.byType(SnackBar), findsNothing);
-
       await tester.tap(find.text('导入'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.byType(SnackBar), findsOneWidget);
+      // LumiraToast（自定义 Overlay，非原生 SnackBar）
       expect(find.text('请输入分享码'), findsOneWidget);
     });
 
@@ -131,7 +129,7 @@ void main() {
       await tester.tap(find.text('导入'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.byType(SnackBar), findsOneWidget);
+      // LumiraToast（自定义 Overlay，非原生 SnackBar）
       expect(find.text('分享码格式无效'), findsOneWidget);
     });
 
@@ -150,7 +148,7 @@ void main() {
       await tester.tap(find.text('导入'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.byType(SnackBar), findsOneWidget);
+      // LumiraToast（自定义 Overlay，非原生 SnackBar）
       expect(
         find.textContaining('分享码已识别：LUMIRA-portrait-mood'),
         findsOneWidget,

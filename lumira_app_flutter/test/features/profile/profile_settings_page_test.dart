@@ -10,6 +10,8 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/profile/pages/profile_settings_page.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_switch.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_text_field.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -46,6 +48,11 @@ void main() {
           path: RouteNames.profileComplianceSdk,
           name: 'profileComplianceSdk',
           builder: (_, __) => const Scaffold(body: Center(child: Text('COMPLIANCE_SDK'))),
+        ),
+        GoRoute(
+          path: RouteNames.profileRedeem,
+          name: 'profileRedeem',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('REDEEM_PAGE'))),
         ),
       ],
     );
@@ -170,28 +177,25 @@ void main() {
 
       // 找到 "网格显示" 行下的 Switch
       final gridRow = find.ancestor(of: find.text('网格显示'), matching: find.byType(GestureDetector));
-      final gridSwitch = find.descendant(of: gridRow, matching: find.byType(Switch));
+      final gridSwitch = find.descendant(of: gridRow, matching: find.byType(LumiraSwitch));
       expect(gridSwitch, findsOneWidget);
 
       // 初始状态：defaultGridOn=false
-      Switch switchWidget = tester.widget<Switch>(gridSwitch);
+      LumiraSwitch switchWidget = tester.widget<LumiraSwitch>(gridSwitch);
       expect(switchWidget.value, false);
 
       // 切换开关
       await tester.tap(gridSwitch);
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      switchWidget = tester.widget<Switch>(gridSwitch);
+      switchWidget = tester.widget<LumiraSwitch>(gridSwitch);
       expect(switchWidget.value, true);
     });
 
-    testWidgets('tapping version 7 times shows redemption input', (tester) async {
+    testWidgets('tapping version 7 times navigates to redeem page', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 初始无 TextField
-      expect(find.byType(TextField), findsNothing);
 
       // 找到版本号行
       final versionRow = find.ancestor(of: find.text('版本号'), matching: find.byType(GestureDetector));
@@ -204,9 +208,8 @@ void main() {
       }
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 应该出现 TextField（兑换码输入框）
-      expect(find.byType(TextField), findsOneWidget);
-      expect(find.text('确认'), findsOneWidget);
+      // 7 连击跳转正规兑换页
+      expect(find.text('REDEEM_PAGE'), findsOneWidget);
     });
 
     testWidgets('renders correctly across all 8 themes', (tester) async {

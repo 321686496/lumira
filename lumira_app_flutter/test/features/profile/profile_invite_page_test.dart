@@ -10,6 +10,9 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/profile/pages/profile_invite_page.dart';
+import 'package:lumira_app_flutter/features/invite/data/invite_models.dart';
+import 'package:lumira_app_flutter/features/invite/data/invite_repository.dart';
+import 'package:lumira_app_flutter/features/rewards/data/rewards_models.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -47,6 +50,50 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        inviteStatsProvider.overrideWith((ref) async => const InviteStats(
+              totalInvites: 3,
+              currentTier: 1,
+              nextTier: NextInviteTier(
+                tier: 2,
+                requiredInvites: 5,
+                rewards: [
+                  RewardItem(
+                    type: RewardType.templatePack,
+                    id: 'atmosphere',
+                    label: '氛围感包',
+                  ),
+                ],
+              ),
+              unlockedRewards: [
+                UnlockedReward(
+                  id: 1,
+                  tier: 1,
+                  source: RewardSource.invite,
+                  sourceDetail: '小雅',
+                  status: UnlockStatus.unlocked,
+                  rewardItems: [],
+                  unlockedAt: 1700000000000,
+                ),
+                UnlockedReward(
+                  id: 2,
+                  tier: 1,
+                  source: RewardSource.invite,
+                  sourceDetail: '小琳',
+                  status: UnlockStatus.unlocked,
+                  rewardItems: [],
+                  unlockedAt: 1700000000000,
+                ),
+                UnlockedReward(
+                  id: 3,
+                  tier: 1,
+                  source: RewardSource.invite,
+                  sourceDetail: '小悦',
+                  status: UnlockStatus.unlocked,
+                  rewardItems: [],
+                  unlockedAt: 1700000000000,
+                ),
+              ],
+            )),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
@@ -114,14 +161,13 @@ void main() {
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 初始无 SnackBar
-      expect(find.byType(SnackBar), findsNothing);
+      // 初始无 toast
+      expect(find.text('生成邀请卡片'), findsOneWidget);
 
       await tester.tap(find.text('生成邀请卡片'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 应出现 SnackBar，文本 '生成邀请卡片'
-      expect(find.byType(SnackBar), findsOneWidget);
+      // LumiraToast（自定义 Overlay，非原生 SnackBar）显示 '生成邀请卡片'
       expect(find.text('生成邀请卡片'), findsNWidgets(2)); // button + snackbar
     });
 
@@ -134,8 +180,7 @@ void main() {
       await tester.tap(find.text('确认绑定'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 应出现 SnackBar，文本 '请输入邀请码'
-      expect(find.byType(SnackBar), findsOneWidget);
+      // LumiraToast 显示错误提示
       expect(find.text('请输入邀请码'), findsOneWidget);
     });
 
