@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,25 +11,23 @@ import 'package:lumira_app_flutter/core/db/database_provider.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
-import 'package:lumira_app_flutter/features/gallery/providers/gallery_diary_providers.dart';
-import 'package:lumira_app_flutter/features/inspiration/data/inspiration_mock_data.dart';
+import 'package:lumira_app_flutter/features/academy/data/academy_content.dart';
+import 'package:lumira_app_flutter/features/home/data/home_providers.dart';
+import 'package:lumira_app_flutter/features/home/data/inspiration_models.dart';
+import 'package:lumira_app_flutter/features/inspiration/data/inspiration_content.dart';
+import 'package:lumira_app_flutter/features/inspiration/data/inspiration_providers.dart';
 import 'package:lumira_app_flutter/features/inspiration/pages/inspiration_page.dart';
+import 'package:lumira_app_flutter/features/inspiration/widgets/inspiration_guide_bar.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
-// Forced fix: brief 的 import 路径 '../../../helpers/test_http_overrides.dart' 不正确（缺 test/ 前缀），
-// 与其他 test/features/X/ 下的测试文件统一为 '../../../test/helpers/test_http_overrides.dart'。
-// Forced fix: brief 漏掉 package:flutter/foundation.dart import（FlutterExceptionHandler 类型来源），
-// 与 challenge_page_test.dart 同模式补齐。
 import '../../../test/helpers/test_http_overrides.dart';
 
 void main() {
   late GoRouter router;
   late Database db;
-  FlutterExceptionHandler? originalErrorHandler;
 
   setUpAll(() {
     sqfliteFfiInit();
-    // Forced fix: 主 isolate FFI 直连，pumpAndSettle 可解析 provider future（同 gallery_detail_page_test）
     databaseFactory = databaseFactoryFfiNoIsolate;
   });
 
@@ -46,33 +43,41 @@ void main() {
           builder: (_, __) => const InspirationPage(),
         ),
         GoRoute(
-          path: RouteNames.captureSceneDetail,
-          name: 'captureSceneDetail',
-          builder: (_, __) => const Scaffold(body: Center(child: Text('SCENE_DETAIL'))),
+          path: RouteNames.captureSceneGuide,
+          name: 'captureSceneGuide',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('SCENE_GUIDE'))),
         ),
         GoRoute(
-          path: RouteNames.captureSceneManage,
-          name: 'captureSceneManage',
-          builder: (_, __) => const Scaffold(body: Center(child: Text('SCENE_MANAGE'))),
+          path: RouteNames.templatesDetail,
+          name: 'templatesDetail',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('TEMPLATE_DETAIL'))),
         ),
         GoRoute(
-          path: RouteNames.galleryDiary,
-          name: 'galleryDiary',
-          builder: (_, __) => const Scaffold(body: Center(child: Text('GALLERY_DIARY'))),
+          path: RouteNames.profileAcademyDetail,
+          name: 'profileAcademyDetail',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('ACADEMY_DETAIL'))),
+        ),
+        GoRoute(
+          path: RouteNames.scenes,
+          name: 'scenes',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('SCENES'))),
+        ),
+        GoRoute(
+          path: RouteNames.profileAcademy,
+          name: 'profileAcademy',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('ACADEMY'))),
         ),
       ],
     );
     HttpOverrides.global = TestHttpOverrides();
-    originalErrorHandler = FlutterError.onError;
-    FlutterError.onError = (FlutterErrorDetails details) {
-      if (details.exception.toString().contains('NetworkImageLoadException')) return;
-      originalErrorHandler?.call(details);
-    };
   });
 
   tearDown(() async {
     HttpOverrides.global = null;
-    FlutterError.onError = originalErrorHandler;
     await db.close();
   });
 
@@ -82,32 +87,42 @@ void main() {
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
         galleryDaoProvider.overrideWith((ref) async => GalleryDao(db)),
-        outfitDiaryCardProvider.overrideWith((ref) async => const OutfitDiaryCardData(
-          streak: 7,
-          photos: [
-            OutfitPhoto(imageSeed: 'outfit-0708', date: '7月8日'),
-            OutfitPhoto(imageSeed: 'outfit-0707', date: '7月7日'),
-          ],
-        )),
+        homeInspirationProvider.overrideWith((ref) async => const HeroInspiration(
+              dateText: '8月14日 星期五 · 光线极佳',
+              title: '今日灵感',
+              description: '适合拍人像',
+              weatherText: '28°C 晴 · 黄金时刻 17:00',
+            )),
+        todayShootProvider.overrideWith((ref) async => const [
+              TodayShootItem(
+                id: 'cafe-window',
+                name: '咖啡馆窗边',
+                vibe: '午后斜阳，把光调成蜜糖色',
+                imageAsset: 'assets/images/scenes/scene_cafe.jpg',
+                target: TodayShootTarget.scene,
+                targetId: 'cafe-window',
+              ),
+              TodayShootItem(
+                id: 'night-street',
+                name: '霓虹街头',
+                vibe: '霓虹与夜，城市的故事',
+                imageAsset: 'assets/images/scenes/scene_street.jpg',
+                target: TodayShootTarget.scene,
+                targetId: 'night-street',
+              ),
+            ]),
+        coursePicksProvider.overrideWith((ref) async => [
+              AcademyContent.getCourse('course_01')!,
+              AcademyContent.getCourse('course_02')!,
+              AcademyContent.getCourse('course_04')!,
+            ]),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
   }
 
-  Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
-    if (style == UIStyle.female) {
-      await tester.pump(const Duration(milliseconds: 500));
-    } else {
-      await tester.pumpAndSettle();
-    }
-  }
-
   void setLargeViewport(WidgetTester tester) {
-    // Forced fix: brief 用 800x1800，但 _RecommendScenesCard 的 2x2 SceneRecoCard 网格
-    // childAspectRatio=0.56 使单卡高度 ~627dp，2 行 ~1264dp，加上其他 section 总高 ~2600dp。
-    // 「发现更多场景」链接位于 y≈2155，1800 视口下 tester.tap 无法 hit-test。
-    // 增大视口到 800x2800 让所有内容（包括「发现更多场景」）进入可视区。
-    tester.binding.window.physicalSizeTestValue = const Size(800, 2800);
+    tester.binding.window.physicalSizeTestValue = const Size(800, 3200);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
     addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
@@ -117,114 +132,65 @@ void main() {
     testWidgets('renders LumiraNav with title 灵感', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.pumpAndSettle();
 
       expect(find.byType(InspirationPage), findsOneWidget);
       expect(find.widgetWithText(LumiraNav, '灵感'), findsOneWidget);
     });
 
-    testWidgets('renders all 4 sections', (tester) async {
+    testWidgets('renders 4 sections without legacy blocks', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.pumpAndSettle();
 
-      // 1. 今日心情
-      expect(find.text('今日心情'), findsOneWidget);
-      // 7 mood labels
-      expect(find.text('开心'), findsOneWidget);
-      expect(find.text('甜酷'), findsOneWidget);
-      expect(find.text('温柔'), findsOneWidget);
-      expect(find.text('复古'), findsOneWidget);
-      expect(find.text('清新'), findsOneWidget);
-      expect(find.text('文艺'), findsOneWidget);
-      expect(find.text('治愈'), findsOneWidget);
+      expect(find.textContaining('光线极佳'), findsOneWidget);
+      expect(find.text('今日可拍'), findsOneWidget);
+      expect(find.text('拍得更好'), findsOneWidget);
+      expect(find.text('灵感图集'), findsOneWidget);
 
-      // 2. 穿搭日记
-      expect(find.text('穿搭日记'), findsOneWidget);
-      expect(find.text('查看日记'), findsOneWidget);
-      expect(find.text('连续打卡'), findsNWidgets(2)); // streak text + tag
-      // Forced fix: brief 期望 findsOneWidget，但 mood pill '治愈' count 也是 7，
-      // 与 outfit streak days 7 共渲染 2 个 Text('7')。改为 findsNWidgets(2)。
-      expect(find.text('7'), findsNWidgets(2)); // streak days + mood 治愈 count
-      expect(find.text('天'), findsOneWidget);
-      expect(find.text('7月8日'), findsOneWidget);
-      expect(find.text('7月7日'), findsOneWidget);
-
-      // 3. 推荐场景
-      expect(find.text('根据你的喜好推荐'), findsOneWidget);
-      expect(find.text('基于你最近 30 天的拍摄记录'), findsOneWidget);
-      expect(find.text('发现更多场景'), findsOneWidget);
-      // 4 scene names (badgeText + name = 2 处每个)
-      expect(find.text('咖啡馆'), findsNWidgets(2));
-      expect(find.text('图书馆'), findsNWidgets(2));
-      expect(find.text('居家温馨'), findsNWidgets(2));
-      expect(find.text('黄昏剪影'), findsNWidgets(2));
-      // scene tags
-      expect(find.text('你最常去'), findsOneWidget);
-      expect(find.text('新场景推荐'), findsOneWidget);
-      expect(find.text('图书馆拍摄'), findsOneWidget);
-      expect(find.text('黄昏剪影拍摄'), findsOneWidget);
-
-      // 4. 探店打卡已移出灵感页（统一收口到「我的」页）
-      expect(find.text('探店打卡'), findsNothing);
-
-      // 5. 加载更多
-      expect(find.text('加载更多灵感'), findsOneWidget);
+      expect(find.text('今日心情'), findsNothing);
+      expect(find.text('穿搭日记'), findsNothing);
+      expect(find.text('加载更多灵感'), findsNothing);
+      expect(find.text('根据你的喜好推荐'), findsNothing);
     });
 
-    testWidgets('tapping 查看日记 pushes /gallery/diary', (tester) async {
+    testWidgets('tapping guide bar pushes scene guide', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.pumpAndSettle();
 
-      await tester.tap(find.text('查看日记'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.text('GALLERY_DIARY'), findsOneWidget);
+      await tester.tap(find.byType(InspirationGuideBar));
+      await tester.pumpAndSettle();
+      expect(find.text('SCENE_GUIDE'), findsOneWidget);
     });
 
-    testWidgets('tapping 发现更多场景 pushes /capture/scene-manage', (tester) async {
+    testWidgets('tapping a today scene card pushes scene guide',
+        (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.pumpAndSettle();
 
-      await tester.tap(find.text('发现更多场景'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.text('SCENE_MANAGE'), findsOneWidget);
+      await tester.ensureVisible(find.text('咖啡馆窗边'));
+      await tester.tap(find.text('咖啡馆窗边'));
+      await tester.pumpAndSettle();
+      expect(find.text('SCENE_GUIDE'), findsOneWidget);
     });
 
-    testWidgets('tapping a scene card pushes /capture/scene-detail?sceneId=xxx', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 点击第一个场景卡片（咖啡馆）— 用 name 文本定位其祖先 SceneRecoCard
-      // 由于 badge 和 name 都有「咖啡馆」，用 find.ancestor 精确定位卡片
-      final card = find.ancestor(of: find.text('咖啡馆').first, matching: find.byType(GestureDetector));
-      await tester.tap(card.first);
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      expect(find.text('SCENE_DETAIL'), findsOneWidget);
-    });
-
-    testWidgets('renders correctly across all 8 themes', (tester) async {
+    testWidgets('renders across all 8 themes', (tester) async {
       setLargeViewport(tester);
       for (final theme in ThemeKey.values) {
         await tester.pumpWidget(wrap(theme, UIStyle.neumorphic));
-        await settleOrPump(tester, UIStyle.neumorphic);
-        expect(find.byType(InspirationPage), findsOneWidget);
-        expect(find.text('今日心情'), findsOneWidget, reason: 'theme=$theme');
+        await tester.pumpAndSettle();
+        expect(find.text('今日可拍'), findsOneWidget, reason: 'theme=$theme');
       }
     });
 
-    testWidgets('renders correctly across all 4 UI styles', (tester) async {
+    testWidgets('renders across all 4 UI styles', (tester) async {
       setLargeViewport(tester);
       for (final style in UIStyle.values) {
         await tester.pumpWidget(wrap(ThemeKey.warmWhite, style));
-        await settleOrPump(tester, style);
-        expect(find.byType(InspirationPage), findsOneWidget);
-        expect(find.text('今日心情'), findsOneWidget, reason: 'style=$style');
+        await tester.pumpAndSettle();
+        expect(find.text('灵感图集'), findsOneWidget, reason: 'style=$style');
       }
     });
   });
