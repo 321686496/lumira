@@ -396,9 +396,9 @@ class InspirationContent {
       templateId: 'macro_flower',
     ),
     InspirationGalleryItem(
-      assetPath: 'assets/images/templates/still_life_warm.jpg',
+      assetPath: 'assets/images/templates/indoor_still_life.jpg',
       title: '温暖静物 · 光影层次',
-      templateId: 'still_life_warm',
+      templateId: 'indoor_still_life',
     ),
   ];
 
