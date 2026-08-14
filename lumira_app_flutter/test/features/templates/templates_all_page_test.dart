@@ -265,7 +265,7 @@ void main() {
       expect(find.text('咖啡馆人像'), findsOneWidget);
     });
 
-    testWidgets('renders 7 type pills in category view', (tester) async {
+    testWidgets('renders style pills in category view', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
@@ -277,49 +277,13 @@ void main() {
       await tester.tap(find.text('人像'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // Forced fix: '人像'/'风光'/'美食'/'街拍'/'夜景' 在 _PillRow type pill + _TagChip 占位 + _TplCard category label 中各出现 3 次
-      // '微距'/'静物' 不在 _TagChip 中，仅 2 次（type pill + card label；当前 portrait 视图无 macro/still-life 卡片，仅 1 次 = type pill）
-      // 注：portrait 视图中 _TplCard category label = '人像'，故 '微距'/'静物' 仅 type pill 1 次
-      expect(find.text('人像'), findsNWidgets(3));
-      expect(find.text('风光'), findsNWidgets(2)); // type pill + tag chip
-      expect(find.text('美食'), findsNWidgets(2)); // type pill + tag chip
-      expect(find.text('街拍'), findsNWidgets(2)); // type pill + tag chip
-      expect(find.text('夜景'), findsNWidgets(2)); // type pill + tag chip
-      expect(find.text('微距'), findsOneWidget); // type pill only
-      expect(find.text('静物'), findsOneWidget); // type pill only
-    });
-
-    testWidgets('tapping type pill switches category and clears style/method',
-        (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(
-        themeKey: ThemeKey.warmWhite,
-        uiStyle: UIStyle.neumorphic,
-      ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 进入 人像 分类视图
-      await tester.tap(find.text('人像'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 选 'japanese' style → METHOD_MAP['japanese'] = [自拍, 他拍, 俯拍]
-      await tester.tap(find.text('日系'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      expect(find.text('自拍'), findsOneWidget);
-
-      // 选 '自拍' method（选中后 method pill 仍渲染）
-      await tester.tap(find.text('自拍'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-      expect(find.text('自拍'), findsOneWidget);
-
-      // 切换 type 到 '风光' → _onLayerSelect(0, 'landscape') 清空 style + method
-      // '风光' 出现 2 次（type pill + tag chip），用 .first 选择 type pill
-      await tester.tap(find.text('风光').first);
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // STYLE_MAP['landscape'] = [清新, 大气]，无 method 层；'自拍' 应不再渲染
-      expect(find.text('清新'), findsOneWidget);
-      expect(find.text('大气'), findsOneWidget);
+      // v17 后一级分类（type pills）已从分类视图移除，仅展示二三级级联筛选；
+      // 人像分类下应渲染 4 个 style pills（来自 template_categories 二级数据）
+      expect(find.text('日系'), findsOneWidget);
+      expect(find.text('情绪'), findsOneWidget);
+      expect(find.text('胶片'), findsOneWidget);
+      expect(find.text('欧美'), findsOneWidget);
+      // 未选择 style 时无 method 层
       expect(find.text('自拍'), findsNothing);
     });
 
@@ -423,21 +387,24 @@ void main() {
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 进入 风光 分类视图（含付费 golden_landscape 与免费自定义模板）
+      // 进入 风光 分类视图（golden_landscape 为免费 builtin；付费模板均为 custom）
       await tester.tap(find.text('风光').first);
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 默认"全部"：付费 + 免费模板都显示
+      // 默认"全部"：显示免费 builtin golden_landscape
       expect(find.text('金色风光'), findsOneWidget);
 
       // 点击"付费"筛选
       await tester.tap(find.text('付费'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 仅付费模板（金色风光）保留
+      // builtin 视图无付费模板 → 空态
+      expect(find.text('该分类暂无模板'), findsOneWidget);
+
+      // 点击"免费" → 恢复显示免费 builtin 模板
+      await tester.tap(find.text('免费').last);
+      await settleOrPump(tester, UIStyle.neumorphic);
       expect(find.text('金色风光'), findsOneWidget);
-      // 免费模板不再显示（模板库默认视图为 builtin，此处验证付费筛掉免费项）
-      expect(find.text('金色风光精选'), findsNothing);
     });
 
     testWidgets('tapping 免费 filter shows only free templates', (tester) async {
@@ -610,6 +577,21 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
   ''');
+  await db.execute('''
+    CREATE TABLE ${Tables.templateCategories} (
+      ${Tables.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+      ${Tables.colKey} TEXT NOT NULL,
+      ${Tables.colName} TEXT NOT NULL,
+      ${Tables.colParentKey} TEXT,
+      ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+      ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL,
+      UNIQUE(${Tables.colKey}, ${Tables.colParentKey})
+    )
+  ''');
 }
 
 /// 种入 TemplatesBrowseMockData.allTemplates（10 项）。
@@ -618,6 +600,71 @@ Future<void> _onCreate(Database db, int version) async {
 /// - 前 3 个 builtin 标记为 recommended（与 BuiltinDataSeeder 行为一致）
 Future<void> _seedTemplates(Database db) async {
   final now = DateTime.now().millisecondsSinceEpoch;
+  const categories = <Map<String, String>>[
+    {'key': 'portrait', 'name': '人像'},
+    {'key': 'landscape', 'name': '风光'},
+    {'key': 'food', 'name': '美食'},
+    {'key': 'street', 'name': '街拍'},
+    {'key': 'night', 'name': '夜景'},
+    {'key': 'macro', 'name': '微距'},
+    {'key': 'still-life', 'name': '静物'},
+  ];
+  for (final c in categories) {
+    await db.insert(Tables.templateCategories, {
+      Tables.colKey: c['key'],
+      Tables.colName: c['name'],
+      Tables.colParentKey: null,
+      Tables.colLevel: 1,
+      Tables.colIconUrl: '',
+      Tables.colSortOrder: 0,
+      Tables.colIsSystem: 1,
+      Tables.colIsActive: 1,
+      Tables.colUpdatedAt: now,
+    });
+  }
+  // 二级分类（style）：portrait / landscape / still-life
+  const styles = <Map<String, String>>[
+    {'key': 'japanese', 'name': '日系', 'parent': 'portrait'},
+    {'key': 'emotional', 'name': '情绪', 'parent': 'portrait'},
+    {'key': 'film', 'name': '胶片', 'parent': 'portrait'},
+    {'key': 'european', 'name': '欧美', 'parent': 'portrait'},
+    {'key': 'fresh', 'name': '清新', 'parent': 'landscape'},
+    {'key': 'grand', 'name': '大气', 'parent': 'landscape'},
+    {'key': 'minimal', 'name': '极简', 'parent': 'still-life'},
+    {'key': 'flat', 'name': '扁平', 'parent': 'still-life'},
+  ];
+  for (final s in styles) {
+    await db.insert(Tables.templateCategories, {
+      Tables.colKey: s['key'],
+      Tables.colName: s['name'],
+      Tables.colParentKey: s['parent'],
+      Tables.colLevel: 2,
+      Tables.colIconUrl: '',
+      Tables.colSortOrder: 0,
+      Tables.colIsSystem: 1,
+      Tables.colIsActive: 1,
+      Tables.colUpdatedAt: now,
+    });
+  }
+  // 三级分类（method）：japanese style 下
+  const methods = <Map<String, String>>[
+    {'key': 'selfie', 'name': '自拍', 'parent': 'japanese'},
+    {'key': 'other', 'name': '他拍', 'parent': 'japanese'},
+    {'key': 'overhead', 'name': '俯拍', 'parent': 'japanese'},
+  ];
+  for (final m in methods) {
+    await db.insert(Tables.templateCategories, {
+      Tables.colKey: m['key'],
+      Tables.colName: m['name'],
+      Tables.colParentKey: m['parent'],
+      Tables.colLevel: 3,
+      Tables.colIconUrl: '',
+      Tables.colSortOrder: 0,
+      Tables.colIsSystem: 1,
+      Tables.colIsActive: 1,
+      Tables.colUpdatedAt: now,
+    });
+  }
   const items = TemplatesBrowseMockData.allTemplates;
   // 前 3 个 builtin 标记为 recommended
   final builtinItems = items.where((t) => !t.isCustom).toList();
