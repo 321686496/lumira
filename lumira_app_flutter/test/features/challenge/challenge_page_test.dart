@@ -231,7 +231,7 @@ void main() {
     expect(find.text('连续打卡 1 天'), findsOneWidget);
   });
 
-  testWidgets('tapping "去完成" pushes /challenge/detail with challengeId',
+  testWidgets('tapping challenge card pushes /challenge/detail with challengeId',
       (tester) async {
     tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
@@ -241,7 +241,8 @@ void main() {
     await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('去完成').first);
+    // MainChallengeCard 整卡可点击跳详情（pending 态按钮"去拍照"跳拍摄页）
+    await tester.tap(find.text(testSelectedItem.title));
     await tester.pumpAndSettle();
 
     expect(find.text('detail'), findsOneWidget);

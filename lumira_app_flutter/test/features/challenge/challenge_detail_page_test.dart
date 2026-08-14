@@ -11,6 +11,8 @@ import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/challenge/data/challenge_pool.dart';
+import 'package:lumira_app_flutter/features/challenge/data/challenge_providers.dart';
+import 'package:lumira_app_flutter/features/challenge/data/challenge_models.dart';
 import 'package:lumira_app_flutter/features/challenge/pages/challenge_detail_page.dart';
 
 /// Forced fix: picsum.photos 在测试环境对部分 seed（如 challenge-work-1）返回 400，
@@ -143,6 +145,9 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        // 页面依赖 weeklyHistoryProvider（底层走挑战/图库 DAO），测试无 DB 时提供空历史
+        weeklyHistoryProvider.overrideWith(
+            (ref) async => <ChallengeHistoryRecord>[]),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
@@ -186,11 +191,12 @@ void main() {
     expect(find.text('奖励'), findsOneWidget);
     // 底部按钮
     expect(find.text('返回挑战'), findsOneWidget);
-    expect(find.text('再拍一张'), findsOneWidget);
+    // 未完成状态显示"去拍照"（已完成才显示"再拍一张"）
+    expect(find.text('去拍照'), findsOneWidget);
   });
 
-  testWidgets('tapping "再拍一张" pushes /capture', (tester) async {
-    // Forced fix: "再拍一张" 按钮在 ListView 底部，超出默认 600 视口。
+  testWidgets('tapping "去拍照" pushes /capture', (tester) async {
+    // Forced fix: "去拍照" 按钮在 ListView 底部，超出默认 600 视口。
     tester.binding.window.physicalSizeTestValue = const Size(800, 2400);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
     addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
@@ -199,7 +205,7 @@ void main() {
     await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('再拍一张'));
+    await tester.tap(find.text('去拍照'));
     await tester.pumpAndSettle();
 
     expect(find.text('capture'), findsOneWidget);
