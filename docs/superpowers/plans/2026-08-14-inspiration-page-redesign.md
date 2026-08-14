@@ -1574,8 +1574,11 @@ import 'package:lumira_app_flutter/core/db/dao/gallery_dao.dart';
 import 'package:lumira_app_flutter/core/db/database_provider.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
+import 'package:lumira_app_flutter/features/academy/data/academy_content.dart';
 import 'package:lumira_app_flutter/features/home/data/home_providers.dart';
 import 'package:lumira_app_flutter/features/home/data/inspiration_models.dart';
+import 'package:lumira_app_flutter/features/inspiration/data/inspiration_content.dart';
+import 'package:lumira_app_flutter/features/inspiration/data/inspiration_providers.dart';
 import 'package:lumira_app_flutter/features/inspiration/pages/inspiration_page.dart';
 import 'package:lumira_app_flutter/features/inspiration/widgets/inspiration_guide_bar.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
@@ -1649,6 +1652,29 @@ void main() {
               description: '适合拍人像',
               weatherText: '28°C 晴 · 黄金时刻 17:00',
             )),
+        todayShootProvider.overrideWith((ref) async => const [
+              TodayShootItem(
+                id: 'cafe-window',
+                name: '咖啡馆窗边',
+                vibe: '午后斜阳，把光调成蜜糖色',
+                imageAsset: 'assets/images/scenes/scene_cafe.jpg',
+                target: TodayShootTarget.scene,
+                targetId: 'cafe-window',
+              ),
+              TodayShootItem(
+                id: 'night-street',
+                name: '霓虹街头',
+                vibe: '霓虹与夜，城市的故事',
+                imageAsset: 'assets/images/scenes/scene_street.jpg',
+                target: TodayShootTarget.scene,
+                targetId: 'night-street',
+              ),
+            ]),
+        coursePicksProvider.overrideWith((ref) async => [
+              AcademyContent.getCourse('course_01')!,
+              AcademyContent.getCourse('course_02')!,
+              AcademyContent.getCourse('course_04')!,
+            ]),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
