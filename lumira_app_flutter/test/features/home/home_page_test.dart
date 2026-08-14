@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
+import 'package:lumira_app_flutter/features/home/data/home_mock_data.dart';
+import 'package:lumira_app_flutter/features/home/data/home_providers.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/home/pages/home_page.dart';
 import 'package:lumira_app_flutter/shared/widgets/tabbar/floating_tabbar.dart';
@@ -73,6 +75,19 @@ Widget _wrapWithRouter({ThemeKey theme = ThemeKey.warmWhite, UIStyle? style}) {
     overrides: [
       themeKeyProvider.overrideWith((ref) => theme),
       uiStyleProvider.overrideWith((ref) => style ?? UIStyle.neumorphic),
+      // 连续打卡 7 天（StreakCard 数据来自挑战历史 DAO，测试无 DB 时提供固定数据）
+      homeStreakProvider.overrideWith((ref) async => const HomeStreakStatus(
+            streakDays: 7,
+            weekDays: [
+              WeekDay(label: '一', done: true, today: false),
+              WeekDay(label: '二', done: true, today: false),
+              WeekDay(label: '三', done: true, today: false),
+              WeekDay(label: '四', done: true, today: false),
+              WeekDay(label: '五', done: true, today: false),
+              WeekDay(label: '六', done: true, today: false),
+              WeekDay(label: '日', done: true, today: false),
+            ],
+          )),
     ],
     child: MaterialApp.router(routerConfig: router),
   );
@@ -150,7 +165,7 @@ void main() {
     // Forced fix: '收藏' 在两处合法出现 — SceneReco _SectionTitle 的 links 列表 + StatsCard 的统计标签
     // 原本 findsOneWidget 断言不成立，改为 findsNWidgets(2)
     expect(find.text('收藏'), findsNWidgets(2));
-    expect(find.text('获赞'), findsOneWidget);
+    expect(find.text('总经验'), findsOneWidget);
     expect(find.text('作品'), findsOneWidget);
 
     // FloatingTabBar

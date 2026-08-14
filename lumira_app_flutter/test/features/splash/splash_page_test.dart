@@ -10,6 +10,7 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/splash/pages/splash_page.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/feedback/lumira_progress.dart';
 import 'package:lumira_app_flutter/shared/widgets/brand/lumira_logo.dart';
 
 /// 测试用 AuthDao stub（避免依赖 sqflite）
@@ -134,7 +135,7 @@ void main() {
     ));
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LumiraProgress), findsOneWidget);
     // 保留原 UI 不破坏
     expect(find.byType(LumiraLogo), findsOneWidget);
   });

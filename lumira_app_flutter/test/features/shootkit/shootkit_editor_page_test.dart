@@ -11,6 +11,7 @@ import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/shootkit/data/shootkit_mock_data.dart';
 import 'package:lumira_app_flutter/features/shootkit/pages/shootkit_editor_page.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_slider.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -319,7 +320,7 @@ void main() {
       );
       final evSlider = find.descendant(
         of: evRow,
-        matching: find.byType(Slider),
+        matching: find.byType(LumiraSlider),
       );
       expect(evSlider, findsOneWidget);
 
@@ -350,7 +351,7 @@ void main() {
       );
       final evSlider = find.descendant(
         of: evRow,
-        matching: find.byType(Slider),
+        matching: find.byType(LumiraSlider),
       );
       await tester.ensureVisible(evSlider);
       await settleOrPump(tester, UIStyle.neumorphic);
