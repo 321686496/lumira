@@ -171,8 +171,7 @@ class _ReadBadge extends ConsumerWidget {
     final isRead = async.maybeWhen(
           data: (ids) => ids.contains(tutorialId),
           orElse: () => false,
-        ) ??
-        false;
+        );
     if (!isRead) return const SizedBox.shrink();
     return Icon(Icons.check_circle, size: 14, color: tokens.brand);
   }

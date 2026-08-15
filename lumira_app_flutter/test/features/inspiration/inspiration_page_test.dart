@@ -11,11 +11,11 @@ import 'package:lumira_app_flutter/core/db/database_provider.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
-import 'package:lumira_app_flutter/features/academy/data/academy_content.dart';
 import 'package:lumira_app_flutter/features/home/data/home_providers.dart';
 import 'package:lumira_app_flutter/features/home/data/inspiration_models.dart';
 import 'package:lumira_app_flutter/features/inspiration/data/inspiration_content.dart';
 import 'package:lumira_app_flutter/features/inspiration/data/inspiration_providers.dart';
+import 'package:lumira_app_flutter/features/inspiration/data/tutorial_models.dart';
 import 'package:lumira_app_flutter/features/inspiration/pages/inspiration_page.dart';
 import 'package:lumira_app_flutter/features/inspiration/widgets/inspiration_guide_bar.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
@@ -71,6 +71,12 @@ void main() {
           builder: (_, __) =>
               const Scaffold(body: Center(child: Text('ACADEMY'))),
         ),
+        GoRoute(
+          path: RouteNames.inspirationTutorialDetail,
+          name: 'inspirationTutorialDetail',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('TUTORIAL_DETAIL'))),
+        ),
       ],
     );
     HttpOverrides.global = TestHttpOverrides();
@@ -111,11 +117,37 @@ void main() {
                 targetId: 'night-street',
               ),
             ]),
-        coursePicksProvider.overrideWith((ref) async => [
-              AcademyContent.getCourse('course_01')!,
-              AcademyContent.getCourse('course_02')!,
-              AcademyContent.getCourse('course_04')!,
+        tutorialPicksProvider.overrideWith((ref) async => const [
+              ShootingTutorial(
+                id: 'tut_general_premium',
+                title: '如何拍出高级感',
+                subtitle: '留白与克制',
+                coverImage: 'assets/images/scenes/scene_cafe.jpg',
+                category: 'general',
+                readMinutes: '3分钟',
+                tags: [],
+                intro: 'i',
+                steps: [TutorialStep(title: '减少画面元素', body: 'b')],
+                tips: ['tip'],
+                cta: TutorialCta(
+                    type: TutorialCtaType.scene, targetId: 'cafe-window'),
+              ),
+              ShootingTutorial(
+                id: 'tut_general_vibe',
+                title: '氛围感怎么找',
+                subtitle: 's',
+                coverImage: 'assets/images/scenes/scene_street.jpg',
+                category: 'general',
+                readMinutes: '2分钟',
+                tags: [],
+                intro: 'i',
+                steps: [TutorialStep(title: 's', body: 'b')],
+                tips: ['tip'],
+                cta: TutorialCta(
+                    type: TutorialCtaType.template, targetId: 'tpl'),
+              ),
             ]),
+        tutorialReadIdsProvider.overrideWith((ref) async => const {}),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
@@ -145,7 +177,7 @@ void main() {
 
       expect(find.textContaining('光线极佳'), findsOneWidget);
       expect(find.text('今日可拍'), findsOneWidget);
-      expect(find.text('拍得更好'), findsOneWidget);
+      expect(find.text('拍摄小课堂'), findsOneWidget);
       expect(find.text('灵感图集'), findsOneWidget);
 
       expect(find.text('今日心情'), findsNothing);
@@ -174,6 +206,29 @@ void main() {
       await tester.tap(find.text('咖啡馆窗边'));
       await tester.pumpAndSettle();
       expect(find.text('SCENE_GUIDE'), findsOneWidget);
+    });
+
+    testWidgets('tapping a tutorial card pushes tutorial detail',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('如何拍出高级感'));
+      await tester.tap(find.text('如何拍出高级感'));
+      await tester.pumpAndSettle();
+      expect(find.text('TUTORIAL_DETAIL'), findsOneWidget);
+    });
+
+    testWidgets('tapping 系统性学习 → 美学院 pushes academy', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('系统性学习 → 美学院'));
+      await tester.tap(find.text('系统性学习 → 美学院'));
+      await tester.pumpAndSettle();
+      expect(find.text('ACADEMY'), findsOneWidget);
     });
 
     testWidgets('renders across all 8 themes', (tester) async {

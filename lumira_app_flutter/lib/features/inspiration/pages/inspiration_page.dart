@@ -6,16 +6,15 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../../academy/data/academy_models.dart';
 import '../data/inspiration_content.dart';
-import '../widgets/better_shoot_section.dart';
 import '../widgets/inspiration_gallery_section.dart';
 import '../widgets/inspiration_guide_bar.dart';
 import '../widgets/today_shoot_section.dart';
+import '../widgets/tutorial_section.dart';
 
 /// 灵感页
 ///
-/// 纯本地拍照灵感流：顶部引导 + 今日可拍 + 拍得更好 + 灵感图集。
+/// 纯本地拍照灵感流：顶部引导 + 今日可拍 + 拍摄小课堂 + 灵感图集。
 /// 所有内容来自 App 内置静态配置（InspirationContent）与本地拍摄统计。
 class InspirationPage extends ConsumerWidget {
   const InspirationPage({super.key});
@@ -32,15 +31,6 @@ class InspirationPage extends ConsumerWidget {
   void _goTemplateDetail(BuildContext context, String templateId) {
     GoRouter.of(context).push(
       RouteNames.withTemplateId(RouteNames.templatesDetail, templateId),
-    );
-  }
-
-  void _goAcademyDetail(BuildContext context, String courseId) {
-    GoRouter.of(context).push(
-      RouteNames.build(
-        RouteNames.profileAcademyDetail,
-        {RouteNames.paramAcademyId: courseId},
-      ),
     );
   }
 
@@ -106,10 +96,14 @@ class InspirationPage extends ConsumerWidget {
                 const SizedBox(height: 20),
                 FadeUp(
                   delay: const Duration(milliseconds: 200),
-                  child: BetterShootSection(
-                    onCourseTap: (AcademyCourse course) =>
-                        _goAcademyDetail(context, course.id),
-                    onMoreCourses: () =>
+                  child: TutorialSection(
+                    onTutorialTap: (tutorial) => GoRouter.of(context).push(
+                      RouteNames.build(
+                        RouteNames.inspirationTutorialDetail,
+                        {RouteNames.paramTutorialId: tutorial.id},
+                      ),
+                    ),
+                    onAcademyTap: () =>
                         GoRouter.of(context).push(RouteNames.profileAcademy),
                   ),
                 ),
