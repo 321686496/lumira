@@ -58,17 +58,16 @@ export class TemplatesService {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    // 整体事务：已拥有检查 + 定价 + 扣积分 + 写入 owned，
+    // 整体事务：已拥有检查 + 定价 + 扣积分 + 写入 owned
     // 任一环节失败（已拥有 / 余额不足 / 无定价记录）则整体回滚
-    return db.transaction((tx) => {
+    return db.transaction(async (tx) => {
       // 1. 幂等检查（必须先于定价：已拥有 → 409，不落任何定价记录，
       //    防止重复/失败请求用上报值污染 template_prices）
-      const ownedRows = tx.select().from(ownedTemplates)
+      const ownedRows = await tx.select().from(ownedTemplates)
         .where(and(
           eq(ownedTemplates.deviceId, deviceId),
           eq(ownedTemplates.templateId, templateId),
-        ))
-        .all();
+        ));
       if (ownedRows.length > 0) {
         throw new ConflictException('Template already owned');
       }
@@ -77,12 +76,11 @@ export class TemplatesService {
       //    非 srv_ 前缀（本地内置模板）以客户端上报 priceCredits 为准，并 UPSERT 记录定价
       let price: number;
       if (templateId.startsWith('srv_')) {
-        const priceRows = tx.select().from(templatePrices)
+        const priceRows = await tx.select().from(templatePrices)
           .where(and(
             eq(templatePrices.templateId, templateId),
             eq(templatePrices.isActive, 1),
-          ))
-          .all();
+          ));
         const record = priceRows[0];
         if (!record) {
           throw new NotFoundException('Template not available for exchange');
@@ -95,16 +93,15 @@ export class TemplatesService {
           );
         }
         price = priceCredits;
-        tx.insert(templatePrices)
+        await tx.insert(templatePrices)
           .values({ templateId, priceCredits: price, isActive: 1, updatedAt: now })
-          .onConflictDoUpdate({
-            target: templatePrices.templateId,
+          .onDuplicateKeyUpdate({
             set: { priceCredits: price, isActive: 1, updatedAt: now },
-          }).run();
+          });
       }
 
       // 3. 扣积分（余额不足抛 BadRequestException，事务回滚）
-      const newBalance = this.pointsService.spendPointsSync(
+      const newBalance = await this.pointsService.spendPointsSync(
         tx,
         deviceId,
         price,
@@ -113,13 +110,13 @@ export class TemplatesService {
       );
 
       // 4. 写入拥有记录
-      tx.insert(ownedTemplates).values({
+      await tx.insert(ownedTemplates).values({
         deviceId,
         templateId,
         source: 'points',
         sourceDetail: `credits:${price}`,
         unlockedAt: now,
-      }).run();
+      });
 
       return {
         success: true,
@@ -160,13 +157,13 @@ export class TemplatesService {
       source,
       sourceDetail,
       unlockedAt: now,
-    }).run();
+    });
     return true;
   }
 
   // ===== 客户端：后端动态模板列表 / 详情 / 分类（spec 3.2）=====
 
-  /** 客户端拉取后端动态模板 meta 列表（仅 isActive=1） */
+  /** 客户端拉取后端动态模板 meta 列表（仅 isActive=1）*/
   async listRemoteTemplates(since?: number, category?: string): Promise<RemoteTemplateListResponse> {
     const db = this.dbService.getDb();
 
@@ -191,7 +188,7 @@ export class TemplatesService {
     return { templates: metas, serverUpdatedAt };
   }
 
-  /** 客户端拉取单个模板完整内容（5 段） */
+  /** 客户端拉取单个模板完整内容（5 段）*/
   async getRemoteTemplateDetail(id: string): Promise<RemoteTemplateDetail> {
     const db = this.dbService.getDb();
     const rows = await db.select().from(templates).where(eq(templates.id, id)).limit(1);
@@ -203,7 +200,7 @@ export class TemplatesService {
   }
 }
 
-// ===== 行 → DTO 映射函数（模块内共享）=====
+// ===== 表 → DTO 映射函数（模块内共享）=====
 
 type TemplateRow = typeof templates.$inferSelect;
 type CategoryRow = typeof templateCategories.$inferSelect;

@@ -17,33 +17,33 @@ import type {
   AdminTemplateDetail,
 } from '@lumira/shared';
 
-/** 上传文件信息（controller 解析后传入 service） */
+/** 上传文件信息（controller 解析后传入 service）*/
 export interface UploadFile {
   buffer: Buffer;
   filename: string;
   mimetype: string;
 }
 
-/** 图片上传上限：封面 / 剪影（5MB） */
+/** 图片上传上限：封面 / 剪影 5MB */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 /** .pptpl 上传上限（25MB）：文件内嵌 base64 封面图/剪影，体积远大于原始 JSON */
 export const MAX_PPTPL_BYTES = 25 * 1024 * 1024;
 
-/** 校验上传文件大小，超限时抛出明确的 400 错误（避免依赖 busboy 的 413） */
+/** 校验上传文件大小，超限时抛出明确的 400 错误（避免依赖 busboy 的 413）*/
 function assertFileSize(file: UploadFile, maxBytes: number, fieldLabel: string): void {
   if (file.buffer.byteLength > maxBytes) {
     const mb = (maxBytes / 1024 / 1024).toFixed(0);
-    throw new BadRequestException(`${fieldLabel}不能超过 ${mb}MB（当前 ${(file.buffer.byteLength / 1024 / 1024).toFixed(2)}MB）`);
+    throw new BadRequestException(`${fieldLabel}不能超过 ${mb}MB（当前${(file.buffer.byteLength / 1024 / 1024).toFixed(2)}MB）`);
   }
 }
 
-/** 静态资源 URL 构造（spec 3.5：prefix 不含 /api/v1） */
+/** 静态资源 URL 构造（spec 3.5：prefix 不含 /api/v1）*/
 function buildPublicUrl(category: 'templates' | 'categories', id: string, filename: string): string {
   const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
   return `${base}/uploads/${category}/${id}/${filename}`;
 }
 
-/** 从文件名/mimetype 提取扩展名（小写，不含点） */
+/** 从文件名/mimetype 提取扩展名（小写，不含点）*/
 function extractExt(file: UploadFile): string {
   // 优先用文件名扩展名
   if (file.filename) {
@@ -167,7 +167,7 @@ export class AdminTemplatesService {
   // ===== 创建 / 更新 / 删除 =====
 
   /**
-   * 创建模板（spec 3.4 处理流程）
+   * 创建模板（spec 3.4 处理流程）：
    * 1. 解析 meta JSON → 2. 若有 pptpl 覆盖 5 段 → 3. 生成 ID →
    * 4. 保存封面 → 5. 保存剪影 → 6. 构造 URL 写入 poseJson →
    * 7. INSERT → 8. 若 price>0 UPSERT template_prices → 9. 返回详情
@@ -271,9 +271,9 @@ export class AdminTemplatesService {
       postProcessJson: JSON.stringify(postProcess),
       createdAt: now,
       updatedAt: now,
-    }).run();
+    });
 
-    // 若 price > 0：UPSERT template_prices
+    // 若 price > 0，UPSERT template_prices
     if (meta.price > 0) {
       await db.insert(templatePrices)
         .values({
@@ -282,21 +282,19 @@ export class AdminTemplatesService {
           isActive: 1,
           updatedAt: now,
         })
-        .onConflictDoUpdate({
-          target: templatePrices.templateId,
+        .onDuplicateKeyUpdate({
           set: {
             priceCredits: meta.price,
             isActive: 1,
             updatedAt: now,
           },
-        })
-        .run();
+        });
     }
 
     return this.getDetail(id);
   }
 
-  /** 更新模板（multipart：可选新封面 + 可选新剪影 + 可选 pptpl 覆盖 5 段） */
+  /** 更新模板（multipart：可选新封面 + 可选新剪影 + 可选 pptpl 覆盖 5 段）*/
   async update(
     id: string,
     meta: UpdateTemplateDto,
@@ -414,9 +412,9 @@ export class AdminTemplatesService {
     updateData.sceneGuideJson = JSON.stringify(sceneGuide);
     updateData.postProcessJson = JSON.stringify(postProcess);
 
-    await db.update(templates).set(updateData).where(eq(templates.id, id)).run();
+    await db.update(templates).set(updateData).where(eq(templates.id, id));
 
-    // 若 price > 0 且 price 发生变化：UPSERT template_prices
+    // 若 price > 0 且 price 发生变化，UPSERT template_prices
     if (meta.price !== undefined && meta.price > 0) {
       await db.insert(templatePrices)
         .values({
@@ -425,15 +423,13 @@ export class AdminTemplatesService {
           isActive: 1,
           updatedAt: now,
         })
-        .onConflictDoUpdate({
-          target: templatePrices.templateId,
+        .onDuplicateKeyUpdate({
           set: {
             priceCredits: meta.price,
             isActive: 1,
             updatedAt: now,
           },
-        })
-        .run();
+        });
     }
 
     return this.getDetail(id);
@@ -450,10 +446,10 @@ export class AdminTemplatesService {
     }
 
     // 删除 DB 记录
-    await db.delete(templates).where(eq(templates.id, id)).run();
+    await db.delete(templates).where(eq(templates.id, id));
 
     // 删除 template_prices 记录（若存在）
-    await db.delete(templatePrices).where(eq(templatePrices.templateId, id)).run();
+    await db.delete(templatePrices).where(eq(templatePrices.templateId, id));
 
     // 删除文件目录
     deleteTemplateFiles(this.uploadDir, id);
@@ -472,10 +468,10 @@ export class AdminTemplatesService {
     }
 
     const newActive = existingRows[0].isActive === 1 ? 0 : 1;
-    await db.update(templates).set({ isActive: newActive, updatedAt: now }).where(eq(templates.id, id)).run();
+    await db.update(templates).set({ isActive: newActive, updatedAt: now }).where(eq(templates.id, id));
 
     // 同步 template_prices 的 isActive
-    await db.update(templatePrices).set({ isActive: newActive, updatedAt: now }).where(eq(templatePrices.templateId, id)).run();
+    await db.update(templatePrices).set({ isActive: newActive, updatedAt: now }).where(eq(templatePrices.templateId, id));
 
     return { id, isActive: newActive === 1 };
   }

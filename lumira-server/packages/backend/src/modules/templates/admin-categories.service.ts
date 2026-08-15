@@ -139,7 +139,7 @@ export class AdminCategoriesService {
       isActive: meta.isActive === false ? 0 : 1,
       createdAt: now,
       updatedAt: now,
-    }).run();
+    });
 
     return this.getByKeyAndParent(meta.key, parentKey);
   }
@@ -177,8 +177,7 @@ export class AdminCategoriesService {
 
     await db.update(templateCategories)
       .set(updateData)
-      .where(eq(templateCategories.id, existing.id))
-      .run();
+      .where(eq(templateCategories.id, existing.id));
 
     return this.getByKeyAndParent(key, parentKey);
   }
@@ -219,7 +218,7 @@ export class AdminCategoriesService {
       throw new ConflictException('Category is referenced by existing templates');
     }
 
-    await db.delete(templateCategories).where(eq(templateCategories.id, existing.id)).run();
+    await db.delete(templateCategories).where(eq(templateCategories.id, existing.id));
     deleteCategoryFiles(this.uploadDir, key);
 
     return { success: true };
@@ -234,8 +233,7 @@ export class AdminCategoriesService {
     const newActive = existing.isActive ? 0 : 1;
     await db.update(templateCategories)
       .set({ isActive: newActive, updatedAt: now })
-      .where(eq(templateCategories.id, existing.id))
-      .run();
+      .where(eq(templateCategories.id, existing.id));
 
     return { key, isActive: newActive === 1 };
   }
@@ -283,7 +281,7 @@ export class AdminCategoriesService {
       .from(templates)
       .where(level === 1
         ? eq(templates.category, key)
-        : sql`json_extract(${templates.classificationJson}, ${jsonField}) = ${key}`);
+        : sql`JSON_UNQUOTE(JSON_EXTRACT(${templates.classificationJson}, ${jsonField})) = ${key}`);
     return rows[0]?.count ?? 0;
   }
 }

@@ -55,7 +55,7 @@ export class RedeemService {
       throw new ConflictException('Code usage limit reached');
     }
 
-    // 6. 检查该设备是否已用过此码
+    // 6. 检查设备是否已用过此码
     const existingRedemption = await db.query.redemptionRecords.findFirst({
       where: and(
         eq(redemptionRecords.code, code),
@@ -98,80 +98,76 @@ export class RedeemService {
     }
 
     // 10-13. 事务写入：所有写操作必须原子化
-    db.transaction((tx) => {
+    await db.transaction(async (tx) => {
       // 10. 增加码使用次数
-      tx.update(redemptionCodes)
+      await tx.update(redemptionCodes)
         .set({ usedCount: codeRecord.usedCount + 1 })
-        .where(eq(redemptionCodes.code, code))
-        .run();
+        .where(eq(redemptionCodes.code, code));
 
       // 11. 更新批次总使用量
-      tx.update(redemptionCodeBatches)
+      await tx.update(redemptionCodeBatches)
         .set({ totalUsed: batch.totalUsed + 1 })
-        .where(eq(redemptionCodeBatches.batchId, batch.batchId))
-        .run();
+        .where(eq(redemptionCodeBatches.batchId, batch.batchId));
 
       // 12. 写入兑换记录
-      tx.insert(redemptionRecords).values({
+      await tx.insert(redemptionRecords).values({
         code,
         deviceId,
         redeemedAt: now,
         ipAddress: ip,
-      }).run();
+      });
 
       // 13. 发放积分（直接操作 userPoints 和 pointTransactions）
       if (rewardPoints > 0) {
-        const existingPoints = tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)).all() as Array<{
+        const existingPoints = await tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)) as Array<{
           deviceId: string;
           balance: number;
           totalEarned: number;
           totalSpent: number;
           updatedAt: number;
         }>;
-        tx.insert(pointTransactions).values({
+        await tx.insert(pointTransactions).values({
           deviceId,
           delta: rewardPoints,
           type: 'redeem_code',
           refId: code,
           createdAt: now,
-        }).run();
+        });
         if (existingPoints.length > 0) {
-          tx.update(userPoints)
+          await tx.update(userPoints)
             .set({
               balance: existingPoints[0].balance + rewardPoints,
               totalEarned: existingPoints[0].totalEarned + rewardPoints,
               updatedAt: now,
             })
-            .where(eq(userPoints.deviceId, deviceId))
-            .run();
+            .where(eq(userPoints.deviceId, deviceId));
         } else {
-          tx.insert(userPoints).values({
+          await tx.insert(userPoints).values({
             deviceId,
             balance: rewardPoints,
             totalEarned: rewardPoints,
             totalSpent: 0,
             updatedAt: now,
-          }).run();
+          });
         }
       }
 
       // 14. 发放模板所有权
       for (const templateId of rewardTemplatesList) {
-        const existing = tx.select({ id: ownedTemplates.id })
+        const existing = await tx.select({ id: ownedTemplates.id })
           .from(ownedTemplates)
           .where(and(
             eq(ownedTemplates.deviceId, deviceId),
             eq(ownedTemplates.templateId, templateId),
-          ))
-          .all();
+          ));
         if (existing.length === 0) {
-          tx.insert(ownedTemplates).values({
+          await tx.insert(ownedTemplates).values({
             deviceId,
             templateId,
             source: 'redemption',
             sourceDetail: code,
             unlockedAt: now,
-          }).run();
+          });
         }
       }
     });

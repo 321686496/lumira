@@ -3,7 +3,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
-import type { BetterSQLiteTransaction } from 'drizzle-orm/better-sqlite3';
+import type { MySql2Transaction } from 'drizzle-orm/mysql2';
 import { DatabaseService } from '../../database/database.service';
 import { userPoints, pointTransactions, pointEarnEvents } from '../../database/schema';
 import * as schema from '../../database/schema';
@@ -47,37 +47,36 @@ export class PointsService {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    db.transaction((tx) => {
-      // 同步查询当前余额（better-sqlite3 事务内用 .all()）
-      const rows = tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)).all() as BalanceRow[];
+    await db.transaction(async (tx) => {
+      // 查询当前余额
+      const rows = await tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)) as BalanceRow[];
       const existing = rows[0];
 
       // 写流水
-      tx.insert(pointTransactions).values({
+      await tx.insert(pointTransactions).values({
         deviceId,
         delta,
         type,
         refId,
         createdAt: now,
-      }).run();
+      });
 
       if (existing) {
-        tx.update(userPoints)
+        await tx.update(userPoints)
           .set({
             balance: existing.balance + delta,
             totalEarned: existing.totalEarned + delta,
             updatedAt: now,
           })
-          .where(eq(userPoints.deviceId, deviceId))
-          .run();
+          .where(eq(userPoints.deviceId, deviceId));
       } else {
-        tx.insert(userPoints).values({
+        await tx.insert(userPoints).values({
           deviceId,
           balance: delta,
           totalEarned: delta,
           totalSpent: 0,
           updatedAt: now,
-        }).run();
+        });
       }
     });
 
@@ -120,52 +119,51 @@ export class PointsService {
     const now = Math.floor(Date.now() / 1000);
 
     try {
-      db.transaction((tx) => {
+      await db.transaction(async (tx) => {
         // 幂等检查：插入事件记录（device+type+refId 唯一，冲突时抛出 UNIQUE 错误）
-        tx.insert(pointEarnEvents).values({
+        await tx.insert(pointEarnEvents).values({
           deviceId,
           type,
           refId: eventRefId,
           points,
           createdAt: now,
-        }).run();
+        });
 
         // 写流水 + upsert 余额
-        const rows = tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)).all() as BalanceRow[];
+        const rows = await tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)) as BalanceRow[];
         const existing = rows[0];
 
-        tx.insert(pointTransactions).values({
+        await tx.insert(pointTransactions).values({
           deviceId,
           delta: points,
           type,
           refId: eventRefId,
           createdAt: now,
-        }).run();
+        });
 
         if (existing) {
-          tx.update(userPoints)
+          await tx.update(userPoints)
             .set({
               balance: existing.balance + points,
               totalEarned: existing.totalEarned + points,
               updatedAt: now,
             })
-            .where(eq(userPoints.deviceId, deviceId))
-            .run();
+            .where(eq(userPoints.deviceId, deviceId));
         } else {
-          tx.insert(userPoints).values({
+          await tx.insert(userPoints).values({
             deviceId,
             balance: points,
             totalEarned: points,
             totalSpent: 0,
             updatedAt: now,
-          }).run();
+          });
         }
       });
       const updated = await this.getBalance(deviceId);
       return { granted: true, delta: points, balance: updated.balance };
     } catch (e) {
       // 唯一约束冲突 = 该事件已发放过 → 返回未发放（不抛错）
-      if (e instanceof Error && e.message.includes('UNIQUE constraint failed')) {
+      if (e instanceof Error && (e.message.includes('Duplicate entry') || e.message.includes('ER_DUP_ENTRY'))) {
         const updated = await this.getBalance(deviceId);
         return { granted: false, delta: 0, balance: updated.balance };
       }
@@ -184,53 +182,52 @@ export class PointsService {
     refId: string | null = null,
   ): Promise<number> {
     const db = this.dbService.getDb();
-    return db.transaction((tx) =>
+    return db.transaction(async (tx) =>
       this.spendPointsSync(tx, deviceId, delta, type, refId),
     );
   }
 
   /**
-   * 消耗积分（同步，供外层事务复用，如模板兑换的整体事务）。
+   * 消耗积分（供外层事务复用，如模板兑换的整体事务）。
    * 在传入的 tx 内执行：校验余额 + 写流水（负数）+ 扣减余额；
-   * 余额不足抛 BadRequestException；同步返回扣减后的新余额。
+   * 余额不足抛 BadRequestException；返回扣减后的新余额。
    */
-  spendPointsSync(
-    tx: BetterSQLiteTransaction<typeof schema, ExtractTablesWithRelations<typeof schema>>,
+  async spendPointsSync(
+    tx: MySql2Transaction<typeof schema, ExtractTablesWithRelations<typeof schema>>,
     deviceId: string,
     delta: number,
     type: PointTransactionType,
     refId: string | null = null,
-  ): number {
+  ): Promise<number> {
     if (delta <= 0) {
       throw new BadRequestException('spendPoints delta must be positive');
     }
     const now = Math.floor(Date.now() / 1000);
-    const rows = tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)).all() as BalanceRow[];
+    const rows = await tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)) as BalanceRow[];
     const existing = rows[0];
     if (!existing || existing.balance < delta) {
       throw new BadRequestException('Insufficient points balance');
     }
     // 写流水（负数）
-    tx.insert(pointTransactions).values({
+    await tx.insert(pointTransactions).values({
       deviceId,
       delta: -delta,
       type,
       refId,
       createdAt: now,
-    }).run();
+    });
     // 扣减余额
-    tx.update(userPoints)
+    await tx.update(userPoints)
       .set({
         balance: existing.balance - delta,
         totalSpent: existing.totalSpent + delta,
         updatedAt: now,
       })
-      .where(eq(userPoints.deviceId, deviceId))
-      .run();
+      .where(eq(userPoints.deviceId, deviceId));
     return existing.balance - delta;
   }
 
-  /** 查余额（不存在则返回 0） */
+  /** 查余额（不存在则返回 0）*/
   async getBalance(deviceId: string) {
     const db = this.dbService.getDb();
     const rows = await db.select().from(userPoints).where(eq(userPoints.deviceId, deviceId));
@@ -243,7 +240,7 @@ export class PointsService {
     };
   }
 
-  /** 查流水（倒序，默认 50 条） */
+  /** 查流水（倒序，默认 50 条）*/
   async listTransactions(deviceId: string, limit = 50, offset = 0) {
     const db = this.dbService.getDb();
     const rows = await db.query.pointTransactions.findMany({

@@ -150,8 +150,8 @@ export class AdminService {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    return db.transaction((tx) => {
-      const result = tx.insert(redemptionCodeBatches).values({
+    return db.transaction(async (tx) => {
+      const result = await tx.insert(redemptionCodeBatches).values({
         campaignName: dto.campaignName,
         rewardPoints: dto.rewardPoints,
         rewardTemplates: JSON.stringify(dto.rewardTemplates ?? []),
@@ -162,7 +162,7 @@ export class AdminService {
         validUntil: dto.validUntil || null,
         isActive: 1,
         createdAt: now,
-      }).returning().all();
+      }).$returningId();
 
       const batchId = result[0].batchId;
 
@@ -173,7 +173,7 @@ export class AdminService {
         maxUses: dto.maxUsesPerCode,
       }));
 
-      tx.insert(redemptionCodes).values(codeValues).run();
+      await tx.insert(redemptionCodes).values(codeValues);
 
       return {
         batchId,
@@ -217,13 +217,15 @@ export class AdminService {
   // 启用/禁用批次
   async toggleBatch(batchId: number, isActive: boolean) {
     const db = this.dbService.getDb();
-    const updated = await db.update(redemptionCodeBatches)
-      .set({ isActive: isActive ? 1 : 0 })
-      .where(eq(redemptionCodeBatches.batchId, batchId))
-      .returning();
-    if (updated.length === 0) {
+    const existing = await db.query.redemptionCodeBatches.findFirst({
+      where: eq(redemptionCodeBatches.batchId, batchId),
+    });
+    if (!existing) {
       throw new NotFoundException('Batch not found');
     }
+    await db.update(redemptionCodeBatches)
+      .set({ isActive: isActive ? 1 : 0 })
+      .where(eq(redemptionCodeBatches.batchId, batchId));
     return { success: true };
   }
 

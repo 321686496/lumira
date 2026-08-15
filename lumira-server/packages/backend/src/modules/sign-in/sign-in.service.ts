@@ -109,7 +109,7 @@ export class SignInService {
       dayIndex,
       pointsEarned,
       createdAt: now,
-    }).run();
+    });
 
     // 发积分
     const newBalance = await this.pointsService.earnPoints(
