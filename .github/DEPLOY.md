@@ -51,6 +51,10 @@ GitHub Actions Runner
 |------|------|
 | `JWT_SECRET` | JWT 签名密钥（生产环境） |
 | `ADMIN_TOKEN` | Admin API 令牌（生产环境） |
+| `MYSQL_ROOT_PASSWORD` | MySQL root 密码（`openssl rand -hex 16` 生成） |
+| `MYSQL_DATABASE` | 数据库名（如 `lumira`） |
+| `MYSQL_USER` | 应用数据库用户（如 `lumira`） |
+| `MYSQL_PASSWORD` | 应用数据库用户密码（`openssl rand -hex 16` 生成） |
 | `NGINX_NETWORK` | nginx 容器所在的 docker network 名 |
 | `BACKEND_PUBLIC_URL` | **后端 API 公网域名**（如 `https://api.lumira.app`），用于构造上传图片 URL。未设置时图片 URL 回退到 `http://localhost:3000`，App 端将无法加载图片 |
 
@@ -123,7 +127,8 @@ cd /opt/lumira/backend
 ├── repo/                    # git clone 的仓库
 ├── docker-compose.prod.yml  # 从 repo/deploy/ 同步的部署配置
 ├── .env                     # 环境变量（手动创建）
-└── data/                    # 数据卷（SQLite 数据库持久化）
+├── data/                    # 数据卷（MySQL 数据 + 上传图片持久化）
+└── data/mysql/              # MySQL 数据目录（容器挂载，自动创建）
 ```
 
 ### 5. Clone 仓库到 repo/ 子目录
@@ -144,6 +149,10 @@ git clone git@github.com-lumira:<your-username>/lumira.git repo
 cat > /opt/lumira/backend/.env <<EOF
 JWT_SECRET=$(openssl rand -hex 32)
 ADMIN_TOKEN=$(openssl rand -hex 32)
+MYSQL_ROOT_PASSWORD=$(openssl rand -hex 16)
+MYSQL_DATABASE=lumira
+MYSQL_USER=lumira
+MYSQL_PASSWORD=$(openssl rand -hex 16)
 NGINX_NETWORK=lumira-net
 BACKEND_PUBLIC_URL=https://api.your-domain.com
 EOF
@@ -178,6 +187,7 @@ cp repo/deploy/docker-compose.prod.yml .
 
 # 创建数据目录
 mkdir -p data
+mkdir -p data/mysql
 
 # 构建镜像（首次会拉取 node:20-alpine 基础镜像，需要 3-10 分钟）
 docker compose -f docker-compose.prod.yml --env-file .env build
@@ -196,6 +206,10 @@ docker compose -f docker-compose.prod.yml logs -f
 ```bash
 # 查看容器状态
 docker compose -f docker-compose.prod.yml ps
+
+# 确认 lumira-mysql 健康（首次启动初始化需 30-60 秒）
+docker compose -f docker-compose.prod.yml ps lumira-mysql
+docker compose -f docker-compose.prod.yml logs lumira-mysql | tail -30
 
 # 进入容器验证健康检查
 docker compose -f docker-compose.prod.yml exec lumira-backend wget -qO- http://localhost:3000/api/v1
@@ -314,6 +328,11 @@ docker build -f lumira-server/packages/backend/Dockerfile -t lumira-backend lumi
 docker run -p 3000:3000 \
   -e JWT_SECRET=test-secret \
   -e ADMIN_TOKEN=test-token \
+  -e DB_HOST=127.0.0.1 \
+  -e DB_PORT=3306 \
+  -e DB_USER=root \
+  -e DB_PASSWORD=root \
+  -e DB_NAME=lumira \
   -v $(pwd)/data:/app/data \
   lumira-backend
 ```
@@ -342,6 +361,10 @@ healthcheck 使用 `wget --spider http://localhost:3000/api/v1`。
 ### Q: Flutter CI 报 Dart SDK 版本不兼容？
 
 项目 `pubspec.yaml` 要求 `sdk: '>=2.19.6 <3.0.0'`，CI 已锁定 Flutter 3.7.12（对应 Dart 2.19.6）。如版本冲突，检查 `flutter-ci.yml` 中的 `flutter-version`。
+
+### Q: 后端连不上 MySQL / 迁移失败？
+
+确认 `docker compose ps` 中 `lumira-mysql` 是否 healthy、服务器 `.env` 的 `MYSQL_*` 是否与后端 `DB_*` 一致（`DB_HOST=lumira-mysql`、`DB_USER=${MYSQL_USER}`、`DB_PASSWORD=${MYSQL_PASSWORD}`、`DB_NAME=${MYSQL_DATABASE}`）；首次部署时 MySQL 首次初始化需 30-60 秒，`start_period` 已覆盖。
 
 ### Q: 服务器 git pull 失败提示认证失败？
 

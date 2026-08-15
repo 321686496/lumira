@@ -7,7 +7,7 @@
 `lumira-app/` 目录下的 uni-app 项目是**技术选型后被遗弃的旧项目**，当前**不再维护、不再开发新功能**。
 
 - **当前主项目**：`lumira_app_flutter/`（Flutter，HarmonyOS 兼容，Dart 2.19.6 / Flutter 3.7.12）
-- **后端**：`lumira-server/`（NestJS + Fastify + Drizzle ORM + SQLite，pnpm monorepo 含 admin Next.js）
+- **后端**：`lumira-server/`（NestJS + Fastify + Drizzle ORM + MySQL 8，pnpm monorepo 含 admin Next.js）
 - **uni-app 的作用**：仅作为**视觉规格与交互原型参考**，不可作为运行时或修改目标
 
 ### 处理原则
@@ -27,7 +27,7 @@
 | 层 | 技术 | 位置 |
 |---|---|---|
 | 客户端 | Flutter 3.7.12 / Dart 2.19.6（不支持 Dart 3 records 语法） | `lumira_app_flutter/` |
-| 后端 | NestJS + Fastify + Drizzle ORM + better-sqlite3 | `lumira-server/packages/backend/` |
+| 后端 | NestJS + Fastify + Drizzle ORM + MySQL 8 (mysql2) | `lumira-server/packages/backend/` |
 | 后台 | Next.js (App Router) + Tailwind + shadcn/ui | `lumira-server/packages/admin/` |
 | 共享类型 | TypeScript | `lumira-server/packages/shared/` |
 | 状态管理（Flutter） | flutter_riverpod 2.3.6 + sqflite v11（离线优先） | `lumira_app_flutter/lib/` |
@@ -89,7 +89,8 @@
 ├── repo/                    # git clone 的仓库（CI 在此 git reset --hard origin/master）
 ├── docker-compose.prod.yml  # CI 从 repo/deploy/ 同步
 ├── .env                     # 环境变量（服务器本地维护，不在 GitHub Secrets）
-└── data/                    # 数据卷（SQLite + 上传图片持久化）
+├── data/                    # 数据卷（MySQL 数据 + 上传图片持久化）
+└── data/mysql/              # MySQL 数据目录（容器挂载，自动创建）
 ```
 
 **服务器 `.env` 必填变量**：
@@ -98,6 +99,10 @@
 |---|---|
 | `JWT_SECRET` | JWT 签名密钥（`openssl rand -hex 32` 生成） |
 | `ADMIN_TOKEN` | Admin API 令牌 |
+| `MYSQL_ROOT_PASSWORD` | MySQL root 密码（`openssl rand -hex 16` 生成） |
+| `MYSQL_DATABASE` | 数据库名（如 `lumira`） |
+| `MYSQL_USER` | 应用数据库用户（如 `lumira`） |
+| `MYSQL_PASSWORD` | 应用数据库用户密码（`openssl rand -hex 16` 生成） |
 | `NGINX_NETWORK` | nginx 容器所在的 docker network 名（如 `lumira-net`） |
 | `BACKEND_PUBLIC_URL` | **后端 API 公网域名**，如 `https://lumira.iwtle.top`（详见下方图片 URL 章节） |
 
