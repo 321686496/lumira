@@ -118,4 +118,33 @@ void main() {
     // 色彩 Tab 是默认页，亮度行应显示全量 20（而非增量 0）
     expect(find.text('20'), findsOneWidget);
   });
+
+  testWidgets('null-baked: detail tab reset clears detail fields but preserves color delta', (tester) async {
+    PostProcess? capturedPost;
+    await tester.pumpWidget(wrapWidget(
+      PreviewEditPanel(
+        // 无烘焙基线（null）时视为全零基线
+        postProcess: const PostProcess(
+          color: PostProcessColor(brightness: 20),
+          smoothStrength: 10,
+          sharpen: 5,
+        ),
+        transform: const TransformParams(),
+        onPostProcessChanged: (p) => capturedPost = p,
+        onTransformChanged: (_) {},
+      ),
+    ));
+
+    await tester.tap(find.text('细节'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('重置'));
+    await tester.pumpAndSettle();
+
+    // 重置后：color 增量保留（brightness 仍为 20），细节字段清零
+    expect(capturedPost, isNotNull);
+    expect(capturedPost!.color.brightness, 20);
+    expect(capturedPost!.smoothStrength, 0);
+    expect(capturedPost!.sharpen, 0);
+  });
 }

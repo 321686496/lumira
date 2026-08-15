@@ -163,10 +163,13 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
                   _updatePostFromFull(_baked);
                   break;
                 case 1:
-                  // 重置细节字段（smooth/sharpen/vignette/grain），保留 color/cropRatio 烘焙值
-                  _updatePostFromFull(PostProcess(
-                    color: _baked.color,
-                    cropRatio: _baked.cropRatio,
+                  // 重置细节字段（smooth/sharpen/vignette/grain）为烘焙基线，保留 color 增量。
+                  // 在 _fullForEdit 基础上逐字段覆盖，避免细节重置时把 color 增量（含清晰度）一并置零。
+                  _updatePostFromFull(_fullForEdit.copyWith(
+                    smoothStrength: _baked.smoothStrength,
+                    sharpen: _baked.sharpen,
+                    vignette: _baked.vignette,
+                    grain: _baked.grain,
                   ));
                   break;
                 case 3:
