@@ -396,4 +396,16 @@ class GalleryDao {
     ''', limit != null ? [yearStr, monthStr, limit] : [yearStr, monthStr]);
     return rows.map(GalleryItemRecord.fromRow).toList();
   }
+
+  /// 按关键字搜索照片：多字段模糊匹配（场景/模板/心情），最新在前
+  Future<List<GalleryItemRecord>> search(String query) async {
+    final pattern = '%$query%';
+    final rows = await _db.query(
+      Tables.galleryItems,
+      where: '${Tables.colSceneId} LIKE ? OR ${Tables.colTemplateId} LIKE ? OR ${Tables.colMood} LIKE ?',
+      whereArgs: [pattern, pattern, pattern],
+      orderBy: '${Tables.colCreatedAt} DESC',
+    );
+    return rows.map(GalleryItemRecord.fromRow).toList();
+  }
 }

@@ -35,6 +35,16 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   bool _isMultiSelectMode = false;
   final Set<String> _selectedIds = <String>{};
 
+  // 搜索状态
+  bool _isSearching = false;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   // Forced fix: FutureBuilder 在测试环境下不会从 ConnectionState.waiting
   // 切到 done（即使 future 已解析），导致 pumpAndSettle timed out。
   // 改用 state-variable-based loading + setState，绕过 FutureBuilder
@@ -92,6 +102,64 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
     _loadPhotos(dao);
   }
 
+  /// 退出搜索：清空关键词并恢复全量照片
+  void _cancelSearch() {
+    _searchController.clear();
+    final dao = ref.read(galleryDaoProvider).value;
+    setState(() => _isSearching = false);
+    if (dao != null) {
+      _loadPhotos(dao);
+    }
+  }
+
+  /// 执行搜索：多字段模糊匹配（场景/模板/心情）
+  void _doSearch(GalleryDao dao, String value) {
+    if (value.isEmpty) {
+      _loadPhotos(dao);
+      return;
+    }
+    setState(() => _isLoading = true);
+    dao.search(value).then((results) {
+      if (!mounted) return;
+      setState(() {
+        _photos = results;
+        _isLoading = false;
+      });
+    }).catchError((_) {
+      if (!mounted) return;
+      setState(() {
+        _photos = const [];
+        _isLoading = false;
+      });
+    });
+  }
+
+  /// 将照片按「今天/昨天/本周/更早」分组（用于相册时间轴分区展示）
+  Map<String, List<GalleryItemRecord>> _groupByTime(List<GalleryItemRecord> photos) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final weekStart = today.subtract(Duration(days: today.weekday - 1));
+
+    final groups = <String, List<GalleryItemRecord>>{};
+    for (final p in photos) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(p.createdAt);
+      final day = DateTime(dt.year, dt.month, dt.day);
+      String key;
+      if (day == today) {
+        key = '今天';
+      } else if (day == yesterday) {
+        key = '昨天';
+      } else if (day.isAfter(weekStart.subtract(const Duration(days: 1)))) {
+        key = '本周';
+      } else {
+        key = '更早';
+      }
+      groups.putIfAbsent(key, () => []).add(p);
+    }
+    return groups;
+  }
+
   Future<void> _deleteSelected() async {
     final dao = ref.read(galleryDaoProvider).value;
     if (dao == null) return;
@@ -105,7 +173,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         _selectedIds.clear();
       });
       if (mounted) {
-        LumiraToast.show(context, '已删除选中照片');
+        LumiraToast.show(context, '已删除 ${_selectedIds.length} 张照片');
       }
     } catch (e) {
       if (mounted) {
@@ -180,11 +248,27 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
     return Scaffold(
       backgroundColor: tokens.canvas,
       appBar: LumiraNav(
-        title: '相册',
+        title: _isSearching ? '' : '相册',
         transparent: true,
-        leading: _BackButton(tokens: tokens),
+        leading: _isSearching
+            ? _CancelSearchButton(tokens: tokens, onTap: _cancelSearch)
+            : _BackButton(tokens: tokens),
         actions: [
-          _StatsAction(tokens: tokens),
+          if (!_isSearching) ...[
+            GestureDetector(
+              onTap: () => setState(() => _isSearching = true),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  Icons.search_outlined,
+                  size: 20,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ),
+            _StatsAction(tokens: tokens),
+          ],
         ],
       ),
       body: Stack(
@@ -217,142 +301,279 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   Widget _buildBody(ThemeTokens tokens) {
     final photoViews = _photos.map(GalleryPhoto.fromRecord).toList();
     final pills = _buildPills(_photos);
+    final grouped = _groupByTime(_photos);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 顶部信息条：张数 + 视图切换
+        // 顶部信息条：搜索框 或 张数 + 视图切换
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${_photos.length} 张照片',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: tokens.textTertiary,
-                  height: 1.3,
-                ),
-              ),
-              ViewToggle(
-                activeTab: _viewTab,
-                onPhotoTap: () {},
-                onDiaryTap: () => GoRouter.of(context).push(RouteNames.galleryDiary),
-              ),
-            ],
-          ),
-        ),
-        // 场景筛选 pills
-        SceneFilterPills(
-          pills: pills,
-          activeKey: _activeFilter,
-          onTap: _setFilter,
-        ),
-        const SizedBox(height: 12),
-        // 网格或空状态
-        Expanded(
-          child: _isLoading
-              ? Center(child: LumiraProgress.circular())
-              : photoViews.isEmpty
-                  ? _EmptyState(tokens: tokens)
-                  : GridView.builder(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        mainAxisSpacing: 6, // 12rpx → 6dp
-                        crossAxisSpacing: 6,
-                      ),
-                      itemCount: photoViews.length,
-                      itemBuilder: (_, i) {
-                        final photo = photoViews[i];
-                        final isSelected = _selectedIds.contains(photo.id);
-                        return FadeUp(
-                          delay: Duration(milliseconds: (i % 6) * 50),
-                          child: PhotoCell(
-                            key: ValueKey('photo_cell_$i'),
-                            photo: photo,
-                            isSelected: isSelected,
-                            isMultiSelectMode: _isMultiSelectMode,
-                            onTap: () {
-                              if (_isMultiSelectMode) {
-                                setState(() {
-                                  if (isSelected) {
-                                    _selectedIds.remove(photo.id);
-                                  } else {
-                                    _selectedIds.add(photo.id);
-                                  }
-                                });
-                              } else {
-                                GoRouter.of(context).push(
-                                  RouteNames.build(
-                                    RouteNames.galleryDetail,
-                                    {RouteNames.paramPhotoId: photo.id},
-                                  ),
-                                );
-                              }
-                            },
-                            onLongPress: () {
-                              setState(() {
-                                _isMultiSelectMode = true;
-                                _selectedIds.add(photo.id);
-                              });
-                            },
-                          ),
-                        );
-                      },
+          child: _isSearching
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  style: TextStyle(fontSize: 14, color: tokens.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: '搜索场景、模板、心情...',
+                    hintStyle: TextStyle(fontSize: 13, color: tokens.textTertiary),
+                    prefixIcon: Icon(Icons.search, size: 18, color: tokens.textTertiary),
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.close, size: 18, color: tokens.textTertiary),
+                      onPressed: _cancelSearch,
                     ),
-        ),
-        // 长按多选提示 / 多选操作栏
-        if (_isMultiSelectMode)
-          Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                LumiraButton(
-                  variant: ButtonVariant.ghost,
-                  onPressed: () {
-                    setState(() {
-                      _isMultiSelectMode = false;
-                      _selectedIds.clear();
-                    });
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(1000),
+                      borderSide: BorderSide(color: tokens.divider),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(1000),
+                      borderSide: BorderSide(color: tokens.divider),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(1000),
+                      borderSide: BorderSide(color: tokens.brand),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    filled: true,
+                    fillColor: tokens.surface,
+                    isDense: true,
+                  ),
+                  onChanged: (value) {
+                    final dao = ref.read(galleryDaoProvider).value;
+                    if (dao != null) _doSearch(dao, value);
                   },
-                  child: const Text('取消'),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${_photos.length} 张照片',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: tokens.textTertiary,
+                        height: 1.3,
+                      ),
+                    ),
+                    ViewToggle(
+                      activeTab: _viewTab,
+                      onPhotoTap: () {},
+                      onDiaryTap: () => GoRouter.of(context).push(RouteNames.galleryDiary),
+                    ),
+                  ],
                 ),
-                LumiraButton(
-                  variant: ButtonVariant.ghost,
-                  onPressed: _selectedIds.isEmpty ? null : _deleteSelected,
-                  child: Text('删除 (${_selectedIds.length})'),
+        ),
+        // 场景筛选 pills（搜索时隐藏）
+        if (!_isSearching) ...[
+          SceneFilterPills(
+            pills: pills,
+            activeKey: _activeFilter,
+            onTap: _setFilter,
+          ),
+          const SizedBox(height: 12),
+        ],
+        // 内容区：时间分组 / 搜索网格 / 空状态（支持下拉刷新）
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              final dao = ref.read(galleryDaoProvider).value;
+              if (dao == null) return;
+              if (_isSearching && _searchController.text.isNotEmpty) {
+                _doSearch(dao, _searchController.text);
+              } else {
+                await _loadPhotos(dao);
+              }
+            },
+            child: _buildContent(tokens, photoViews, grouped),
+          ),
+        ),
+        // 长按多选提示 / 多选操作栏（搜索时隐藏）
+        if (!_isSearching)
+          _isMultiSelectMode
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 12, bottom: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      LumiraButton(
+                        variant: ButtonVariant.ghost,
+                        onPressed: () {
+                          setState(() {
+                            _isMultiSelectMode = false;
+                            _selectedIds.clear();
+                          });
+                        },
+                        child: const Text('取消'),
+                      ),
+                      LumiraButton(
+                        variant: ButtonVariant.ghost,
+                        onPressed: _selectedIds.isEmpty ? null : _deleteSelected,
+                        child: Text('删除 (${_selectedIds.length})'),
+                      ),
+                      LumiraButton(
+                        variant: ButtonVariant.ghost,
+                        onPressed: _selectedIds.isEmpty ? null : _exportSelected,
+                        child: Text('导出 (${_selectedIds.length})'),
+                      ),
+                      LumiraButton(
+                        variant: ButtonVariant.ghost,
+                        onPressed: _selectedIds.isEmpty ? null : _addToCollection,
+                        child: const Text('加入精选集'),
+                      ),
+                    ],
+                  ),
+                )
+              : Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Center(
+                    child: Text(
+                      '长按照片进入多选模式 · 支持批量删除与导出',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: tokens.textTertiary,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
                 ),
-                LumiraButton(
-                  variant: ButtonVariant.ghost,
-                  onPressed: _selectedIds.isEmpty ? null : _exportSelected,
-                  child: Text('导出 (${_selectedIds.length})'),
-                ),
-                LumiraButton(
-                  variant: ButtonVariant.ghost,
-                  onPressed: _selectedIds.isEmpty ? null : _addToCollection,
-                  child: const Text('加入精选集'),
-                ),
-              ],
-            ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Center(
-              child: Text(
-                '长按照片进入多选模式 · 支持批量删除与导出',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.textTertiary,
-                  height: 1.3,
-                ),
+      ],
+    );
+  }
+
+  /// 内容区构建：按当前状态渲染 加载 / 空状态 / 搜索网格 / 时间分组列表
+  Widget _buildContent(
+    ThemeTokens tokens,
+    List<GalleryPhoto> photoViews,
+    Map<String, List<GalleryItemRecord>> grouped,
+  ) {
+    if (_isLoading) {
+      return Center(child: LumiraProgress.circular());
+    }
+    if (photoViews.isEmpty) {
+      final empty = _isSearching
+          ? _SearchEmptyState(tokens: tokens, onClear: _cancelSearch)
+          : _EmptyState(
+              tokens: tokens,
+              onCapture: () => GoRouter.of(context).push(RouteNames.capture),
+              onImport: () => LumiraToast.show(context, '导入功能即将上线'),
+            );
+      // 用可滚动容器包裹空状态，使下拉刷新在空数据时依然可用
+      return LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(child: empty),
+          ),
+        ),
+      );
+    }
+    if (_isSearching) {
+      // 搜索时保持原有网格，不分时间组
+      return GridView.builder(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 6,
+          crossAxisSpacing: 6,
+        ),
+        itemCount: photoViews.length,
+        itemBuilder: (_, i) => _buildPhotoCell(tokens, photoViews, i),
+      );
+    }
+    // 时间分组展示：杂志式翻阅
+    final sectionKeys = grouped.keys.toList();
+    final sectionViews = sectionKeys
+        .map((k) => grouped[k]!.map(GalleryPhoto.fromRecord).toList())
+        .toList();
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+      itemCount: sectionKeys.length,
+      itemBuilder: (_, sectionIndex) {
+        final key = sectionKeys[sectionIndex];
+        final sectionPhotos = sectionViews[sectionIndex];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 组头
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    key,
+                    style: TextStyle(
+                      fontFamily: 'Noto Serif SC',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    '${sectionPhotos.length} 张',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.textTertiary,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-      ],
+            // 该组照片网格
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 6,
+                crossAxisSpacing: 6,
+              ),
+              itemCount: sectionPhotos.length,
+              itemBuilder: (_, i) => _buildPhotoCell(tokens, sectionPhotos, i),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPhotoCell(ThemeTokens tokens, List<GalleryPhoto> photoViews, int i) {
+    final photo = photoViews[i];
+    final isSelected = _selectedIds.contains(photo.id);
+    return FadeUp(
+      delay: Duration(milliseconds: (i % 6) * 50),
+      child: PhotoCell(
+        key: ValueKey('photo_cell_$i'),
+        photo: photo,
+        isSelected: isSelected,
+        isMultiSelectMode: _isMultiSelectMode,
+        onTap: () {
+          if (_isMultiSelectMode) {
+            setState(() {
+              if (isSelected) {
+                _selectedIds.remove(photo.id);
+              } else {
+                _selectedIds.add(photo.id);
+              }
+            });
+          } else {
+            GoRouter.of(context).push(
+              RouteNames.build(
+                RouteNames.galleryDetail,
+                {RouteNames.paramPhotoId: photo.id},
+              ),
+            );
+          }
+        },
+        onLongPress: () {
+          setState(() {
+            _isMultiSelectMode = true;
+            _selectedIds.add(photo.id);
+          });
+        },
+      ),
     );
   }
 
@@ -427,9 +648,32 @@ class _StatsAction extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.tokens});
+class _CancelSearchButton extends StatelessWidget {
+  const _CancelSearchButton({required this.tokens, required this.onTap});
   final ThemeTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Text(
+          '取消',
+          style: TextStyle(fontSize: 13, color: tokens.brand),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.tokens, this.onCapture, this.onImport});
+  final ThemeTokens tokens;
+  final VoidCallback? onCapture;
+  final VoidCallback? onImport;
 
   @override
   Widget build(BuildContext context) {
@@ -437,15 +681,93 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.image_outlined, size: 48, color: tokens.textTertiary),
-          const SizedBox(height: 12),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: tokens.brandSubtle,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.image_outlined, size: 34, color: tokens.brand),
+          ),
+          const SizedBox(height: 16),
           Text(
             '还没有照片，去拍一张吧',
             style: TextStyle(
-              fontSize: 13,
-              color: tokens.textTertiary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: tokens.textPrimary,
               height: 1.3,
             ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '记录每一个值得收藏的瞬间',
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.textTertiary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LumiraButton(
+                variant: ButtonVariant.primary,
+                onPressed: onCapture ?? () => GoRouter.of(context).push(RouteNames.capture),
+                child: const Text('去拍摄'),
+              ),
+              const SizedBox(width: 12),
+              LumiraButton(
+                variant: ButtonVariant.secondary,
+                onPressed: onImport ?? () {},
+                child: const Text('导入照片'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchEmptyState extends StatelessWidget {
+  const _SearchEmptyState({required this.tokens, required this.onClear});
+  final ThemeTokens tokens;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.search_off_outlined, size: 44, color: tokens.textTertiary),
+          const SizedBox(height: 12),
+          Text(
+            '未找到相关照片',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: tokens.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '试试换个关键词，或按场景 / 模板 / 心情搜索',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.textTertiary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+          LumiraButton(
+            variant: ButtonVariant.secondary,
+            onPressed: onClear,
+            child: const Text('清空搜索'),
           ),
         ],
       ),
