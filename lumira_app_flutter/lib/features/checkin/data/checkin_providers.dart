@@ -35,6 +35,42 @@ final checkinTotalCountProvider = FutureProvider<int>((ref) async {
   return dao.countAll();
 });
 
+/// 足迹统计汇总
+class CheckinStats {
+  final int total;
+  final int highRated;
+  final double avgRating;
+  final int thisYear;
+
+  const CheckinStats({
+    required this.total,
+    required this.highRated,
+    required this.avgRating,
+    required this.thisYear,
+  });
+}
+
+/// 足迹统计 Provider
+final checkinStatsProvider = FutureProvider<CheckinStats>((ref) async {
+  final dao = await ref.watch(checkinDaoProvider.future);
+  final total = await dao.countAll();
+  final highRated = await dao.countHighRated();
+  final avg = await dao.avgRating();
+  final thisYear = await dao.countThisYear();
+  return CheckinStats(
+    total: total,
+    highRated: highRated,
+    avgRating: avg,
+    thisYear: thisYear,
+  );
+});
+
+/// 足迹分类列表（去重，非空）
+final checkinCategoriesProvider = FutureProvider<List<String>>((ref) async {
+  final dao = await ref.watch(checkinDaoProvider.future);
+  return dao.getAllCategories();
+});
+
 /// 足迹详情（含关联照片）
 final checkinDetailProvider = FutureProvider.family<CheckinDetail?, String>(
   (ref, id) async {

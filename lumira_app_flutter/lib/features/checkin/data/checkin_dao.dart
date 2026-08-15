@@ -102,4 +102,64 @@ class CheckinDao {
         .map((r) => r[CheckinPhotoTable.colPhotoId] as String)
         .toList();
   }
+
+  /// 获取评分 ≥ 4 的足迹数
+  Future<int> countHighRated() async {
+    final rows = await _db.rawQuery(
+      'SELECT COUNT(*) AS cnt FROM ${CheckinTable.name} WHERE ${CheckinTable.colRating} >= 4',
+    );
+    return Sqflite.firstIntValue(rows) ?? 0;
+  }
+
+  /// 获取平均评分（四舍五入到 1 位小数）
+  Future<double> avgRating() async {
+    final rows = await _db.rawQuery(
+      'SELECT AVG(${CheckinTable.colRating}) AS avg FROM ${CheckinTable.name} WHERE ${CheckinTable.colRating} > 0',
+    );
+    final val = rows.first['avg'];
+    if (val == null) return 0.0;
+    return (val as num).toDouble();
+  }
+
+  /// 获取当年新增足迹数
+  Future<int> countThisYear() async {
+    final now = DateTime.now();
+    final yearStart = DateTime(now.year, 1, 1).millisecondsSinceEpoch;
+    final rows = await _db.rawQuery(
+      'SELECT COUNT(*) AS cnt FROM ${CheckinTable.name} WHERE ${CheckinTable.colVisitedAt} >= ?',
+      [yearStart],
+    );
+    return Sqflite.firstIntValue(rows) ?? 0;
+  }
+
+  /// 获取所有分类（去重，非空）
+  Future<List<String>> getAllCategories() async {
+    final rows = await _db.rawQuery(
+      'SELECT DISTINCT ${CheckinTable.colCategory} FROM ${CheckinTable.name} '
+      'WHERE ${CheckinTable.colCategory} IS NOT NULL AND ${CheckinTable.colCategory} != \'\'',
+    );
+    return rows
+        .map((r) => r[CheckinTable.colCategory] as String)
+        .toList();
+  }
+
+  /// 按分类筛选足迹
+  Future<List<CheckinRecord>> getByCategory(String category) async {
+    final rows = await _db.query(
+      CheckinTable.name,
+      where: '${CheckinTable.colCategory} = ?',
+      whereArgs: [category],
+      orderBy: '${CheckinTable.colVisitedAt} DESC',
+    );
+    return rows.map(CheckinRecord.fromRow).toList();
+  }
+
+  /// 按评分排序（高分在前，同分按时间倒序）
+  Future<List<CheckinRecord>> getByRatingDesc() async {
+    final rows = await _db.query(
+      CheckinTable.name,
+      orderBy: '${CheckinTable.colRating} DESC, ${CheckinTable.colVisitedAt} DESC',
+    );
+    return rows.map(CheckinRecord.fromRow).toList();
+  }
 }
