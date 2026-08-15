@@ -7,7 +7,7 @@ FROM node:20-alpine AS base
 
 # 切换为阿里云 Alpine 镜像源（解决国内服务器无法访问 dl-cdn.alpinelinux.org 的问题）
 RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
-    && apk add --no-cache libc6-compat python3 make g++
+    && apk add --no-cache libc6-compat
 
 # 配置 pnpm 使用淘宝 npm 镜像加速（国内服务器拉取 npm 包更快）
 RUN npm install -g pnpm@9 \

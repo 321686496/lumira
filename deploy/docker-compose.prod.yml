@@ -23,7 +23,32 @@
 
 version: "3.8"
 
+# ---- MySQL 8 服务（SQLite -> MySQL 迁移，2026-08）----
+# .env 需额外配置：MYSQL_ROOT_PASSWORD / MYSQL_DATABASE / MYSQL_USER / MYSQL_PASSWORD
+# 后端通过内部网络 DB_HOST=lumira-mysql 连接，不暴露 3306 到宿主机
+
 services:
+  lumira-mysql:
+    image: mysql:8
+    restart: always
+    # 数据持久化：宿主机 data/mysql 目录（首次启动自动建库，MySQL 会初始化 /var/lib/mysql）
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    # 不暴露 3306 到宿主机（仅内部网络访问，更安全）
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - lumira-net
+
   lumira-backend:
     build:
       # 部署目录结构：/opt/lumira/backend/{repo, docker-compose.prod.yml, .env, data}
@@ -32,6 +57,9 @@ services:
       dockerfile: packages/backend/Dockerfile
     image: lumira-backend:latest
     restart: always
+    depends_on:
+      lumira-mysql:
+        condition: service_healthy
     # 不暴露端口到宿主机（通过 docker network 与 nginx 通信，更安全）
     # 如需在宿主机直接访问调试，取消注释下面两行
     # ports:
@@ -41,7 +69,11 @@ services:
       - PORT=3000
       - JWT_SECRET=${JWT_SECRET}
       - ADMIN_TOKEN=${ADMIN_TOKEN}
-      - DB_PATH=/app/data/lumira.db
+      - DB_HOST=lumira-mysql
+      - DB_PORT=3306
+      - DB_USER=${MYSQL_USER}
+      - DB_PASSWORD=${MYSQL_PASSWORD}
+      - DB_NAME=${MYSQL_DATABASE}
       - UPLOAD_DIR=/app/data/uploads
       - BACKEND_PUBLIC_URL=${BACKEND_PUBLIC_URL}
     volumes:

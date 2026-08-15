@@ -65,6 +65,10 @@ jobs:
               echo "::error::  cat > .env <<EOF"
               echo "::error::  JWT_SECRET=\$(openssl rand -hex 32)"
               echo "::error::  ADMIN_TOKEN=\$(openssl rand -hex 32)"
+              echo "::error::  MYSQL_ROOT_PASSWORD=\$(openssl rand -hex 16)"
+              echo "::error::  MYSQL_DATABASE=lumira"
+              echo "::error::  MYSQL_USER=lumira"
+              echo "::error::  MYSQL_PASSWORD=\$(openssl rand -hex 16)"
               echo "::error::  EOF"
               echo "::error::详细步骤见 .github/DEPLOY.md"
               exit 1
@@ -90,6 +94,7 @@ jobs:
 
             echo "==> [3/5] 确保数据目录存在"
             mkdir -p $DEPLOY_PATH/data
+            mkdir -p $DEPLOY_PATH/data/mysql
 
             echo "==> [4/5] 构建后端镜像（git reset 已确保代码最新，Docker 会自动失效受影响的缓存层）"
             cd $DEPLOY_PATH

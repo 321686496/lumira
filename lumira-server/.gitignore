@@ -6,6 +6,9 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+data/mysql/
+# 后端本地数据目录（SQLite 旧库 / 上传文件，均为运行时数据，不入库）
+packages/backend/data/
 *.tsbuildinfo
 .env
 *.log
