@@ -9,9 +9,13 @@ PostProcess fullOf(PostProcess baked, PostProcess local) => baked.merge(local);
 /// 与 [PostProcess.merge] 的互逆性并非对所有字段成立，仅对以下分组成立：
 ///
 /// 1. 加法字段（color 各数值、smoothStrength/sharpen/vignette/grain）：deltaOf 产出差值，
-///    merge 按加法合并，保证 baked.merge(deltaOf(baked, full)) 还原 full。
-/// 2. lut / systemFilter：相等时归 'none' / null，merge 在 'none'/null 时回退 baked 基线，
-///    同样保证互逆成立。
+///    merge 按加法合并，保证 baked.merge(deltaOf(baked, full)) 还原 full，互逆成立。
+/// 2. lut / systemFilter：当 full 与 baked 相等时，deltaOf 归哨兵（'none'/null），merge 在
+///    哨兵时回退 baked 基线，此时互逆成立；当 full 为非哨兵值时同样互逆成立。
+///    但存在一个固有边界：一旦烘焙值存在（如 baked.lut='fuji'），用户无法通过增量模型
+///    "清除回原图"（让 full.lut 回到 'none'）——因为 deltaOf 会把 full.lut='none' 映射为
+///    delta.lut='none'，而 merge 把 'none' 视为"保留 baked"。因此互逆仅对 full == baked
+///    （→ 哨兵）或 full 为非哨兵值时成立，这是 baked+delta 模型的固有边界，不是 bug。
 /// 3. cropRatio / customCropRect：为绝对值，不参与 merge 的增量合并（merge 对 cropRatio
 ///    取 baked 基线 this.cropRatio，对 customCropRect 仅在 delta 非空时覆盖），
 ///    因此互逆对这两个字段不适用。

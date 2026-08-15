@@ -101,7 +101,24 @@ void main() {
     expect(captured!.rotation, 90);
   });
 
-  testWidgets('with bakedPostProcess: color sliders show full value, onChanged emits delta', (tester) async {
+  testWidgets('with bakedPostProcess: color sliders show full value', (tester) async {
+    await tester.pumpWidget(wrapWidget(
+      PreviewEditPanel(
+        // 增量 postProcess：brightness 归一化为 0（用户未额外调整）
+        postProcess: const PostProcess(color: PostProcessColor()),
+        // 烘焙基线：brightness=20
+        bakedPostProcess: const PostProcess(color: PostProcessColor(brightness: 20)),
+        transform: const TransformParams(),
+        onPostProcessChanged: (_) {},
+        onTransformChanged: (_) {},
+      ),
+    ));
+
+    // 色彩 Tab 是默认页，亮度行应显示全量 20（而非增量 0）
+    expect(find.text('20'), findsOneWidget);
+  });
+
+  testWidgets('with bakedPostProcess: dragging brightness slider emits delta (increment), not full', (tester) async {
     PostProcess? capturedDelta;
     await tester.pumpWidget(wrapWidget(
       PreviewEditPanel(
@@ -115,8 +132,54 @@ void main() {
       ),
     ));
 
-    // 色彩 Tab 是默认页，亮度行应显示全量 20（而非增量 0）
-    expect(find.text('20'), findsOneWidget);
+    // 亮度滑块行 = '亮度' 文本的最近祖先 GestureDetector
+    final brightnessRow = find.ancestor(
+      of: find.text('亮度'),
+      matching: find.byType(GestureDetector),
+    ).first;
+    final rowSize = tester.getSize(brightnessRow);
+    const labelWidth = 64.0;
+    const valueWidth = 32.0;
+    final trackWidth = rowSize.width - labelWidth - valueWidth;
+    const min = -100.0;
+    const max = 100.0;
+    const newFull = 60.0; // 拖到亮度全量 60
+    const t = (newFull - min) / (max - min);
+    final localDx = labelWidth + trackWidth * t;
+
+    // 直接触发滑块 onPanStart，等价于把滑块拖到目标位置
+    final detector = tester.widget<GestureDetector>(brightnessRow);
+    detector.onPanStart!(DragStartDetails(localPosition: Offset(localDx, 0)));
+
+    expect(capturedDelta, isNotNull);
+    // 回调收到的是增量 = newFull - baked = 60 - 20 = 40，而非全量 60
+    expect(capturedDelta!.color.brightness, closeTo(40, 0.001));
+  });
+
+  testWidgets('with bakedPostProcess filter: FilterTab shows baked lut as selected', (tester) async {
+    await tester.pumpWidget(wrapWidget(
+      PreviewEditPanel(
+        // 增量 postProcess：未选滤镜（lut='none'）
+        postProcess: const PostProcess(color: PostProcessColor()),
+        // 烘焙基线：lut='fuji'
+        bakedPostProcess: const PostProcess(color: PostProcessColor(), lut: 'fuji'),
+        transform: const TransformParams(),
+        onPostProcessChanged: (_) {},
+        onTransformChanged: (_) {},
+      ),
+    ));
+
+    await tester.tap(find.text('滤镜'));
+    await tester.pumpAndSettle();
+
+    // 缩略图下方标签字号为 10（区别于无图时容器内 9），通过字体粗细判断选中态
+    Text labelText(String label) => tester
+        .widgetList<Text>(find.text(label))
+        .firstWhere((t) => t.style?.fontSize == 10);
+
+    // 烘焙滤镜 'fuji' 应作为选中态显示（而非本地增量的 'none'）
+    expect(labelText('富士').style?.fontWeight, FontWeight.w600);
+    expect(labelText('原图').style?.fontWeight, isNot(FontWeight.w600));
   });
 
   testWidgets('null-baked: detail tab reset clears detail fields but preserves color delta', (tester) async {
