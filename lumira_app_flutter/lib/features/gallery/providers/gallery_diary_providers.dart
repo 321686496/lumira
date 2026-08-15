@@ -156,3 +156,61 @@ final diaryTotalCountProvider = FutureProvider<int>((ref) async {
   return dao.count();
 });
 
+/// 月度统计：本月照片数 / 打卡天数 / 最常心情 / 常去场景 / 当前连续天数
+class DiaryMonthlyStats {
+  final int thisMonthPhotos;
+  final int thisMonthDays;
+  final String? mostCommonMood;
+  final String? mostCommonScene;
+  final int currentStreak;
+
+  const DiaryMonthlyStats({
+    required this.thisMonthPhotos,
+    required this.thisMonthDays,
+    this.mostCommonMood,
+    this.mostCommonScene,
+    required this.currentStreak,
+  });
+}
+
+/// 本月统计 Provider：聚合本月照片数、打卡天数、最常心情、常去场景
+final diaryMonthlyStatsProvider = FutureProvider<DiaryMonthlyStats>((ref) async {
+  final dao = await ref.watch(galleryDaoProvider.future);
+  final now = DateTime.now();
+  final records = await dao.getByMonth(now.year, now.month);
+
+  final daySet = <DateTime>{};
+  final moodCounts = <String, int>{};
+  final sceneCounts = <String, int>{};
+
+  for (final r in records) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(r.createdAt);
+    daySet.add(DateTime(dt.year, dt.month, dt.day));
+    if (r.mood != null && r.mood!.isNotEmpty) {
+      moodCounts[r.mood!] = (moodCounts[r.mood!] ?? 0) + 1;
+    }
+    if (r.sceneId != null && r.sceneId!.isNotEmpty) {
+      sceneCounts[r.sceneId!] = (sceneCounts[r.sceneId!] ?? 0) + 1;
+    }
+  }
+
+  String? topMood;
+  if (moodCounts.isNotEmpty) {
+    topMood = moodCounts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  }
+  String? topScene;
+  if (sceneCounts.isNotEmpty) {
+    topScene = sceneCounts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  }
+
+  final streak = await ref.watch(diaryStreakProvider.future);
+
+  return DiaryMonthlyStats(
+    thisMonthPhotos: records.length,
+    thisMonthDays: daySet.length,
+    mostCommonMood: topMood,
+    mostCommonScene: topScene,
+    currentStreak: streak,
+  );
+});
+

@@ -147,9 +147,16 @@ void main() {
     await pumpDiaryPage(tester);
     await tester.pumpAndSettle();
 
-    // 连续打卡 = 2（今天 + 昨天均有照片）
-    expect(find.textContaining('连续打卡 2'), findsOneWidget);
-    expect(find.text('继续保持，解锁「周更达人」徽章'), findsOneWidget);
+    // 本月打卡进度（今天+昨天共 2 天）；连续打卡 = 2（今天 + 昨天均有照片）
+    final daysInMonth = DateTime.now().day;
+    expect(find.text('本月打卡 2/$daysInMonth 天'), findsOneWidget);
+    expect(find.textContaining('已连续打卡 2 天'), findsOneWidget);
+
+    // 月度聚合条
+    expect(find.text('本月照片'), findsOneWidget);
+    expect(find.text('打卡天数'), findsOneWidget);
+    expect(find.text('最常心情'), findsOneWidget);
+    expect(find.text('常去场景'), findsOneWidget);
   });
 
   testWidgets('toggles between outfit and shoot tabs', (tester) async {

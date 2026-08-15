@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,12 +39,27 @@ class DiaryTimelineEntry extends ConsumerWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 左：日期列
+          // 左：日期列 + 时间轴节点
           SizedBox(
             width: 56,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 时间轴节点圆点（今天高亮）
+                Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(top: 4, bottom: 6),
+                  decoration: BoxDecoration(
+                    color: entry.isToday
+                        ? tokens.brand
+                        : tokens.textTertiary.withOpacity(0.4),
+                    shape: BoxShape.circle,
+                    border: entry.isToday
+                        ? Border.all(color: tokens.brandLight, width: 2)
+                        : null,
+                  ),
+                ),
                 Text(
                   entry.weekday,
                   style: TextStyle(
@@ -66,7 +81,22 @@ class DiaryTimelineEntry extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          // 时间轴引导线
+          Container(
+            width: 1,
+            margin: const EdgeInsets.only(left: 4, right: 12),
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  tokens.brand.withOpacity(0.5),
+                  tokens.brand.withOpacity(0.1),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
           // 右：照片區域（0 張、1 張、2+ 張三種情況）
           Expanded(
             child: _buildPhotosRow(displayPhotos, overflow, tokens),
@@ -81,7 +111,7 @@ class DiaryTimelineEntry extends ConsumerWidget {
       return const SizedBox.shrink();
     }
     if (photos.length == 1) {
-      // 單張：左半邊顯示，右半邊留空保持對齊
+      // 單張：首图横版（4:3）展示，右半邊留空保持對齊
       return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -89,6 +119,7 @@ class DiaryTimelineEntry extends ConsumerWidget {
             child: _PhotoCard(
               photo: photos[0],
               tokens: tokens,
+              isFirst: true,
               onTap: onPhotoTap == null ? null : () => onPhotoTap!(photos[0].id),
               onLongPress: onPhotoLongPress == null ? null : () => onPhotoLongPress!(photos[0].id),
             ),
@@ -97,7 +128,7 @@ class DiaryTimelineEntry extends ConsumerWidget {
         ],
       );
     }
-    // 雙照片：第一張正常，第二張可能有 +N 遮罩
+    // 雙照片：第一張横版引导，第二張可能有 +N 遮罩
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -105,6 +136,7 @@ class DiaryTimelineEntry extends ConsumerWidget {
           child: _PhotoCard(
             photo: photos[0],
             tokens: tokens,
+            isFirst: true,
             onTap: onPhotoTap == null ? null : () => onPhotoTap!(photos[0].id),
             onLongPress: onPhotoLongPress == null ? null : () => onPhotoLongPress!(photos[0].id),
           ),
@@ -211,9 +243,16 @@ class _OverflowCard extends StatelessWidget {
 }
 
 class _PhotoCard extends StatelessWidget {
-  const _PhotoCard({required this.photo, required this.tokens, this.onTap, this.onLongPress});
+  const _PhotoCard({
+    required this.photo,
+    required this.tokens,
+    this.isFirst = false,
+    this.onTap,
+    this.onLongPress,
+  });
   final DiaryPhoto photo;
   final ThemeTokens tokens;
+  final bool isFirst;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -230,7 +269,8 @@ class _PhotoCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: AspectRatio(
-              aspectRatio: 2 / 3,
+              // 每日首张横版引导（4:3），其余保持竖版（2:3）
+              aspectRatio: isFirst ? 4 / 3 : 2 / 3,
               child: _PhotoImage(photo: photo, tokens: tokens),
             ),
           ),

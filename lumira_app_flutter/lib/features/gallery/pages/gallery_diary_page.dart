@@ -126,6 +126,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     final entriesAsync = ref.watch(
         diaryEntriesProvider(DiaryFilter(tab: _viewTab, mood: _selectedMood)));
     final streak = ref.watch(diaryStreakProvider).valueOrNull ?? 0;
+    final monthStats = ref.watch(diaryMonthlyStatsProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -174,11 +175,55 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                       tokens: tokens,
                     ),
                   ),
-                  // 连续打卡 banner
+                  // 连续打卡 banner（本月进度 + 里程碑徽章）
                   FadeUp(
                     delay: const Duration(milliseconds: 100),
-                    child: _StreakBanner(tokens: tokens, streak: streak),
+                    child: _StreakBanner(
+                      tokens: tokens,
+                      streak: streak,
+                      monthStats: monthStats,
+                    ),
                   ),
+                  // 月度聚合条
+                  if (monthStats != null)
+                    FadeUp(
+                      delay: const Duration(milliseconds: 150),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _MiniStat(
+                                label: '本月照片',
+                                value: '${monthStats.thisMonthPhotos}',
+                                tokens: tokens,
+                              ),
+                            ),
+                            Expanded(
+                              child: _MiniStat(
+                                label: '打卡天数',
+                                value: '${monthStats.thisMonthDays}',
+                                tokens: tokens,
+                              ),
+                            ),
+                            Expanded(
+                              child: _MiniStat(
+                                label: '最常心情',
+                                value: monthStats.mostCommonMood ?? '-',
+                                tokens: tokens,
+                              ),
+                            ),
+                            Expanded(
+                              child: _MiniStat(
+                                label: '常去场景',
+                                value: monthStats.mostCommonScene ?? '-',
+                                tokens: tokens,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   // 时间轴标题
                   if (entries.isEmpty)
                     Padding(
@@ -397,12 +442,31 @@ class _MoodFilterRow extends StatelessWidget {
 }
 
 class _StreakBanner extends StatelessWidget {
-  const _StreakBanner({required this.tokens, required this.streak});
+  const _StreakBanner({
+    required this.tokens,
+    required this.streak,
+    required this.monthStats,
+  });
   final ThemeTokens tokens;
   final int streak;
+  final DiaryMonthlyStats? monthStats;
 
   @override
   Widget build(BuildContext context) {
+    final daysInMonth = DateTime.now().day;
+    final progress = monthStats?.thisMonthDays ?? 0;
+    final ratio = daysInMonth > 0 ? (progress / daysInMonth).clamp(0.0, 1.0) : 0.0;
+
+    // 里程碑徽章：7/14/30 天
+    String? badgeLabel;
+    if (streak >= 30) {
+      badgeLabel = '月度达人';
+    } else if (streak >= 14) {
+      badgeLabel = '坚持达人';
+    } else if (streak >= 7) {
+      badgeLabel = '周更达人';
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       padding: const EdgeInsets.all(16),
@@ -414,37 +478,110 @@ class _StreakBanner extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '连续打卡 $streak ',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
+          Row(
+            children: [
+              Text(
+                '本月打卡 $progress/$daysInMonth 天',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              if (badgeLabel != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: tokens.brand,
+                    borderRadius: BorderRadius.circular(1000),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.emoji_events, size: 14, color: tokens.textInverse),
+                      const SizedBox(width: 4),
+                      Text(
+                        badgeLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textInverse,
+                        ),
                       ),
-                    ),
-                    Icon(Icons.local_fire_department_outlined, size: 18, color: tokens.brand),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '继续保持，解锁「周更达人」徽章',
-                  style: TextStyle(fontSize: 12, color: tokens.textSecondary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+            ],
+          ),
+          const SizedBox(height: 12),
+          // 本月进度条
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: SizedBox(
+              height: 6,
+              child: LinearProgressIndicator(
+                value: ratio,
+                backgroundColor: tokens.brand.withOpacity(0.15),
+                valueColor: AlwaysStoppedAnimation<Color>(tokens.brand),
+              ),
             ),
           ),
-          Icon(Icons.local_fire_department, size: 36, color: tokens.brand),
+          const SizedBox(height: 8),
+          Text(
+            streak > 0
+                ? badgeLabel != null
+                    ? '已连续打卡 $streak 天，已获得「$badgeLabel」徽章'
+                    : '已连续打卡 $streak 天，距离「周更达人」还差 ${7 - streak} 天'
+                : '今天开始打卡，记录你的拍摄轨迹',
+            style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 月度聚合小格：数值 + 标签
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({required this.label, required this.value, required this.tokens});
+  final String label;
+  final String value;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: tokens.shadowConvexSubtle,
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: tokens.brand,
+              fontFamily: 'Courier New',
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 10, color: tokens.textTertiary),
+          ),
         ],
       ),
     );
