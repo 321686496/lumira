@@ -37,6 +37,12 @@ final tutorialPicksProvider = FutureProvider<List<ShootingTutorial>>((ref) async
   ).recommend();
 });
 
+/// 已读教程 id 集合
+final tutorialReadIdsProvider = FutureProvider<Set<String>>((ref) async {
+  final dao = await ref.watch(tutorialReadDaoProvider.future);
+  return dao.getReadIds();
+});
+
 /// 灵感图集：内置静态素材（无个性化、无网络）
 final inspirationGalleryProvider = Provider<List<InspirationGalleryItem>>(
   (ref) => InspirationContent.galleryItems,

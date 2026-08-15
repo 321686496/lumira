@@ -3,23 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../academy/data/academy_models.dart';
 import '../data/inspiration_providers.dart';
+import '../data/tutorial_models.dart';
 
-class BetterShootSection extends ConsumerWidget {
-  const BetterShootSection({
+/// 拍摄小课堂：横滑小教程卡片区（取代原"拍得更好"推系统课）
+class TutorialSection extends ConsumerWidget {
+  const TutorialSection({
     super.key,
-    required this.onCourseTap,
-    required this.onMoreCourses,
+    required this.onTutorialTap,
+    required this.onAcademyTap,
   });
 
-  final void Function(AcademyCourse) onCourseTap;
-  final VoidCallback onMoreCourses;
+  final void Function(ShootingTutorial) onTutorialTap;
+  final VoidCallback onAcademyTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
-    final async = ref.watch(coursePicksProvider);
+    final async = ref.watch(tutorialPicksProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -29,7 +30,7 @@ class BetterShootSection extends ConsumerWidget {
             Icon(Icons.auto_awesome_outlined, size: 18, color: tokens.brand),
             const SizedBox(width: 8),
             Text(
-              '拍得更好',
+              '拍摄小课堂',
               style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
@@ -39,11 +40,11 @@ class BetterShootSection extends ConsumerWidget {
             ),
             const Spacer(),
             GestureDetector(
-              onTap: onMoreCourses,
+              onTap: onAcademyTap,
               behavior: HitTestBehavior.opaque,
               child: Text(
-                '全部课程',
-                style: TextStyle(fontSize: 13, color: tokens.textTertiary),
+                '系统性学习 → 美学院',
+                style: TextStyle(fontSize: 12, color: tokens.textTertiary),
               ),
             ),
           ],
@@ -54,13 +55,13 @@ class BetterShootSection extends ConsumerWidget {
           child: async.when(
             loading: () => _placeholder(tokens),
             error: (_, __) => _placeholder(tokens),
-            data: (courses) => ListView.separated(
+            data: (list) => ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: courses.length,
+              itemCount: list.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (context, index) => _CourseCard(
-                course: courses[index],
-                onTap: () => onCourseTap(courses[index]),
+              itemBuilder: (context, index) => TutorialCard(
+                tutorial: list[index],
+                onTap: () => onTutorialTap(list[index]),
               ),
             ),
           ),
@@ -72,16 +73,18 @@ class BetterShootSection extends ConsumerWidget {
   Widget _placeholder(ThemeTokens tokens) {
     return Center(
       child: Text(
-        '精选课程加载中',
+        '小课堂加载中',
         style: TextStyle(fontSize: 12, color: tokens.textTertiary),
       ),
     );
   }
 }
 
-class _CourseCard extends ConsumerWidget {
-  const _CourseCard({required this.course, required this.onTap});
-  final AcademyCourse course;
+/// 单张教程小卡（封面 + 标题 + 时长 + 已读勾）
+class TutorialCard extends ConsumerWidget {
+  const TutorialCard({super.key, required this.tutorial, required this.onTap});
+
+  final ShootingTutorial tutorial;
   final VoidCallback onTap;
 
   @override
@@ -106,38 +109,45 @@ class _CourseCard extends ConsumerWidget {
                 height: 90,
                 width: double.infinity,
                 child: Image.asset(
-                  course.coverImage,
+                  tutorial.coverImage,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stack) => Container(
                     color: tokens.surfaceAlt,
-                    child: Icon(Icons.menu_book_outlined,
+                    child: Icon(Icons.photo_outlined,
                         size: 24, color: tokens.textTertiary),
                   ),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      course.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tutorial.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            tutorial.readMinutes,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 10, color: tokens.textTertiary),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      course.meta,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 10, color: tokens.textTertiary),
-                    ),
+                    _ReadBadge(tutorialId: tutorial.id),
                   ],
                 ),
               ),
@@ -146,5 +156,24 @@ class _CourseCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// 已读勾（异步读 tutorial_reads）
+class _ReadBadge extends ConsumerWidget {
+  const _ReadBadge({required this.tutorialId});
+  final String tutorialId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    final async = ref.watch(tutorialReadIdsProvider);
+    final isRead = async.maybeWhen(
+          data: (ids) => ids.contains(tutorialId),
+          orElse: () => false,
+        ) ??
+        false;
+    if (!isRead) return const SizedBox.shrink();
+    return Icon(Icons.check_circle, size: 14, color: tokens.brand);
   }
 }
