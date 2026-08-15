@@ -10,6 +10,9 @@ import '../../gallery/widgets/crop_overlay.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
 import '../domain/post_process_delta.dart';
+import 'post_process_color_tab.dart';
+import 'post_process_detail_tab.dart';
+import 'post_process_slider_row.dart';
 
 /// 预览页编辑面板（4 标签底部抽屉）
 ///
@@ -107,13 +110,13 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
     final tokens = ref.watch(themeTokensProvider);
     switch (_tabController.index) {
       case 0:
-        return _ColorTab(
-          postProcess: _fullForEdit,
+        return PostProcessColorTab(
+          full: _fullForEdit,
           onChanged: _updatePostFromFull,
         );
       case 1:
-        return _DetailTab(
-          postProcess: _fullForEdit,
+        return PostProcessDetailTab(
+          full: _fullForEdit,
           onChanged: _updatePostFromFull,
         );
       case 2:
@@ -133,9 +136,9 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
           previewImagePath: widget.previewImagePath,
         );
       default:
-        return _ColorTab(
-          postProcess: widget.postProcess,
-          onChanged: _updatePost,
+        return PostProcessColorTab(
+          full: _fullForEdit,
+          onChanged: _updatePostFromFull,
         );
     }
   }
@@ -199,174 +202,6 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
         Text('细节'),
         Text('滤镜'),
         Text('裁剪旋转'),
-      ],
-    );
-  }
-}
-
-// === Color Tab ===
-class _ColorTab extends StatelessWidget {
-  final PostProcess postProcess;
-  final ValueChanged<PostProcess> onChanged;
-
-  const _ColorTab({required this.postProcess, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = postProcess.color;
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      children: [
-        _SliderRow(
-          label: '亮度',
-          value: c.brightness,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(brightness: v),
-          )),
-        ),
-        _SliderRow(
-          label: '对比度',
-          value: c.contrast,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(contrast: v),
-          )),
-        ),
-        _SliderRow(
-          label: '饱和度',
-          value: c.saturation,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(saturation: v),
-          )),
-        ),
-        _SliderRow(
-          label: '色温',
-          value: c.temperature,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(temperature: v),
-          )),
-        ),
-        _SliderRow(
-          label: '色调',
-          value: c.tint,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(tint: v),
-          )),
-        ),
-        _SliderRow(
-          label: '高光',
-          value: c.highlights ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(highlights: v),
-          )),
-        ),
-        _SliderRow(
-          label: '阴影',
-          value: c.shadows ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(shadows: v),
-          )),
-        ),
-        _SliderRow(
-          label: '黑点',
-          value: c.blackPoint ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(blackPoint: v),
-          )),
-        ),
-        _SliderRow(
-          label: '自然饱和度',
-          value: c.vibrance ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(vibrance: v),
-          )),
-        ),
-        _SliderRow(
-          label: '明亮度',
-          value: c.brilliance ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(brilliance: v),
-          )),
-        ),
-      ],
-    );
-  }
-}
-
-// === Detail Tab ===
-class _DetailTab extends StatelessWidget {
-  final PostProcess postProcess;
-  final ValueChanged<PostProcess> onChanged;
-
-  const _DetailTab({required this.postProcess, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = postProcess.color;
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      children: [
-        _SliderRow(
-          label: '清晰度',
-          value: c.clarity ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(
-            color: c.copyWith(clarity: v),
-          )),
-        ),
-        _SliderRow(
-          label: '锐化',
-          value: postProcess.sharpen.toDouble(),
-          min: 0,
-          max: 100,
-          hint: '导出后生效',
-          onChanged: (v) =>
-              onChanged(postProcess.copyWith(sharpen: v.round())),
-        ),
-        _SliderRow(
-          label: '磨皮',
-          value: postProcess.smoothStrength.toDouble(),
-          min: 0,
-          max: 100,
-          hint: '导出后生效',
-          onChanged: (v) =>
-              onChanged(postProcess.copyWith(smoothStrength: v.round())),
-        ),
-        _SliderRow(
-          label: '晕影',
-          value: postProcess.vignette.toDouble(),
-          min: 0,
-          max: 100,
-          onChanged: (v) =>
-              onChanged(postProcess.copyWith(vignette: v.round())),
-        ),
-        _SliderRow(
-          label: '颗粒',
-          value: postProcess.grain.toDouble(),
-          min: 0,
-          max: 100,
-          onChanged: (v) => onChanged(postProcess.copyWith(grain: v.round())),
-        ),
       ],
     );
   }
@@ -808,7 +643,7 @@ class _CropTab extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        _SliderRow(
+        PostProcessSliderRow(
           label: '拉直',
           value: transform.straighten,
           min: -15,
@@ -997,172 +832,6 @@ class _CropPreviewState extends State<_CropPreview> {
           ],
         ),
       ),
-    );
-  }
-}
-
-// === 自定义滑块 ===
-/// 细线轨道（3px）+ 圆形把手（16px，命中区域 24x24）+ 品牌色填充
-/// 用 LayoutBuilder + Stack 实现，支持拖拽（onPanStart + onPanUpdate）
-///
-/// 修复要点：使用绝对位置（details.localPosition.dx）而非增量（delta.dx），
-/// 避免多次 pan 事件共用过时 t 导致拖拽不灵敏；移除重复的轨道 GestureDetector。
-class _SliderRow extends StatelessWidget {
-  final String label;
-  final double value;
-  final double min;
-  final double max;
-  final ValueChanged<double> onChanged;
-
-  /// 可选提示文字（如"导出后生效"），显示在滑块下方。
-  final String? hint;
-
-  const _SliderRow({
-    required this.label,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.onChanged,
-    this.hint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final slider = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // 标签宽 64 + 数值宽 32，剩余为轨道宽度
-          const labelWidth = 64.0;
-          const valueWidth = 32.0;
-          final trackWidth =
-              (constraints.maxWidth - labelWidth - valueWidth).clamp(0.0, double.infinity);
-          final t = ((value - min) / (max - min)).clamp(0.0, 1.0);
-          final thumbX = labelWidth + (trackWidth * t);
-
-          // 整体高度 32，把手 16px，垂直居中
-          const rowHeight = 32.0;
-          const thumbSize = 16.0;
-          const trackHeight = 3.0;
-          const trackTop = (rowHeight - trackHeight) / 2;
-
-          // 绝对位置计算：将 localPosition.dx（相对 Stack 左上角）映射到轨道比例
-          void updateFromLocal(double localDx) {
-            if (trackWidth <= 0) return;
-            final localX = localDx - labelWidth;
-            final newT = (localX / trackWidth).clamp(0.0, 1.0);
-            onChanged(min + newT * (max - min));
-          }
-
-          return SizedBox(
-            height: rowHeight,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanStart: (details) =>
-                  updateFromLocal(details.localPosition.dx),
-              onPanUpdate: (details) =>
-                  updateFromLocal(details.localPosition.dx),
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // 标签
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: labelWidth,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        label,
-                        style: const TextStyle(
-                            fontSize: 11, color: Colors.white70),
-                      ),
-                    ),
-                  ),
-                  // 轨道背景
-                  Positioned(
-                    left: labelWidth,
-                    right: valueWidth,
-                    top: trackTop,
-                    height: trackHeight,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  // 已填充部分
-                  Positioned(
-                    left: labelWidth,
-                    top: trackTop,
-                    width: (trackWidth * t).clamp(0.0, trackWidth),
-                    height: trackHeight,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE5C07B),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  // 把手（纯视觉，手势由外层 GestureDetector 统一处理）
-                  Positioned(
-                    left: thumbX - thumbSize / 2,
-                    top: (rowHeight - thumbSize) / 2,
-                    child: Container(
-                      width: thumbSize,
-                      height: thumbSize,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Color(0x44000000),
-                            blurRadius: 4,
-                            offset: Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // 数值
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: valueWidth,
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        value.toStringAsFixed(0),
-                        style: const TextStyle(
-                            fontSize: 11, color: Colors.white54),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-
-    if (hint == null) return slider;
-    // 有 hint 时在滑块下方显示提示文字
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        slider,
-        Padding(
-          padding: const EdgeInsets.only(left: 64, bottom: 2),
-          child: Text(
-            hint!,
-            style: const TextStyle(fontSize: 9, color: Colors.white38),
-          ),
-        ),
-      ],
     );
   }
 }
