@@ -5,6 +5,7 @@ import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
 import { userPoints, templatePrices } from '../src/database/schema';
 import request from 'supertest';
+import { resetTestDatabase } from './test-db';
 
 describe('TemplatesController (e2e) — exchange', () => {
   let app: NestFastifyApplication;
@@ -14,8 +15,13 @@ describe('TemplatesController (e2e) — exchange', () => {
   const deviceId = '44444444-4444-4444-8444-444444444444';
 
   beforeAll(async () => {
-    process.env.DB_PATH = ':memory:';
+    process.env.DB_HOST = process.env.DB_HOST || '127.0.0.1';
+    process.env.DB_PORT = process.env.DB_PORT || '3306';
+    process.env.DB_USER = process.env.DB_USER || 'root';
+    process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'root';
+    process.env.DB_NAME = process.env.DB_NAME || 'lumira_test';
     process.env.JWT_SECRET = 'test-secret';
+    await resetTestDatabase();
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
@@ -42,7 +48,7 @@ describe('TemplatesController (e2e) — exchange', () => {
       totalEarned: 100,
       totalSpent: 0,
       updatedAt: now,
-    }).run();
+    });
   });
 
   afterAll(async () => {
@@ -131,7 +137,7 @@ describe('TemplatesController (e2e) — exchange', () => {
       priceCredits: 30,
       isActive: 1,
       updatedAt: now,
-    }).run();
+    });
 
     const res = await request(app.getHttpServer())
       .post('/api/v1/templates/exchange')

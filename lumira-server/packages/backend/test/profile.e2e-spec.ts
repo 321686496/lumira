@@ -2,14 +2,20 @@ import { Test } from '@nestjs/testing';
 import { NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';
 import request from 'supertest';
+import { resetTestDatabase } from './test-db';
 
 describe('ProfileController (e2e)', () => {
   let app: NestFastifyApplication;
   const testDeviceId = 'profile-e2e-device-0001';
 
   beforeAll(async () => {
-    process.env.DB_PATH = ':memory:';
+    process.env.DB_HOST = process.env.DB_HOST || '127.0.0.1';
+    process.env.DB_PORT = process.env.DB_PORT || '3306';
+    process.env.DB_USER = process.env.DB_USER || 'root';
+    process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'root';
+    process.env.DB_NAME = process.env.DB_NAME || 'lumira_test';
     process.env.JWT_SECRET = 'test-secret';
+    await resetTestDatabase();
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.setGlobalPrefix('api/v1');
