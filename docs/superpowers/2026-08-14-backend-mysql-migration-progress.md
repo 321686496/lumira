@@ -1,7 +1,7 @@
 # 后端存储迁移 SQLite→MySQL 实施进度文档
 
 > 记录时间：2026-08-14
-> 状态：**执行中（已暂停）** —— Task 1 完成并已提交，Task 2 起尚未执行，待后续按本文档恢复。
+> 状态：**已完成（2026-08-15）** —— Task 2–8 全部完成并已推送双远程。
 > 恢复入口：本文档 + `docs/superpowers/plans/2026-08-14-backend-mysql-migration.md`（实施计划，含每步代码与命令）。
 
 ---
@@ -38,13 +38,13 @@
 | 任务 | 内容 | 状态 | Commit |
 |---|---|---|---|
 | Task 1 | 驱动与连接层（依赖 + schema + database.service） | ✅ 完成 | `c9f6bfc` |
-| Task 2 | 迁移 SQL 重写为 MySQL 语法（001–008 + 删 009） | ⬜ 待做 | — |
-| Task 3 | 服务层同步 API 改异步（7 个文件） | ⬜ 待做 | — |
-| Task 4 | e2e 测试切换 MySQL（test-db.ts + 8 spec + --runInBand） | ⬜ 待做 | — |
-| Task 5 | CI 加 MySQL service container（backend-ci.yml） | ⬜ 待做 | — |
-| Task 6 | 生产部署改造（compose / deploy workflow / .env / Dockerfile） | ⬜ 待做 | — |
-| Task 7 | 文档同步（DEPLOY.md / AGENTS.md） | ⬜ 待做 | — |
-| Task 8 | 全量验证与收尾（typecheck + e2e + 清理残留 + push 双远程） | ⬜ 待做 | — |
+| Task 2 | 迁移 SQL 重写为 MySQL 语法（001–008 + 删 009） | ✅ 完成 | `4e554bc` |
+| Task 3 | 服务层同步 API 改异步（7 个文件） | ✅ 完成 | `cac7296` |
+| Task 4 | e2e 测试切换 MySQL（test-db.ts + 8 spec + --runInBand） | ✅ 完成 | `1beefce` |
+| Task 5 | CI 加 MySQL service container（backend-ci.yml） | ✅ 完成 | `c499d4c` |
+| Task 6 | 生产部署改造（compose / deploy workflow / .env / Dockerfile） | ✅ 完成 | `f657cc0` |
+| Task 7 | 文档同步（DEPLOY.md / AGENTS.md） | ✅ 完成 | `2f6fdcb` |
+| Task 8 | 全量验证与收尾（typecheck + e2e + 清理残留 + push 双远程） | ✅ 完成 | 本提交 |
 | — | 最终 whole-branch review | ⬜ 待做 | — |
 
 **当前分支基线与提交链**：
@@ -145,3 +145,21 @@ c9f6bfc refactor(backend): 数据库驱动切换为 mysql2 + mysql-core schema +
 2. 每个 Task 完成后：controller 复核 → 更新 `.superpowers/sdd/progress.md` → 继续下一 Task。
 3. 含部署/CI 的 Task（5/6/7/8）完成后按 AGENTS.md 规则 push 双远程。
 4. 全部 Task 完成后做最终 whole-branch review（`73d72d3..HEAD`），无 Critical/Important 即收尾。
+---
+
+## 9. Task 2–8 完成记录（2026-08-15）
+
+- Task 2：`4e554bc` 迁移 SQL 重写为 MySQL 语法（001–008，删除 009，devices 合并设备信息列）
+- Task 3：`cac7296` 服务层同步 API 改异步（points/redeem/admin/templates/sign-in/admin-categories/admin-templates），
+  `onConflictDoUpdate` 改为 MySQL `onDuplicateKeyUpdate`，`BetterSQLiteTransaction` 改为 `MySql2Transaction`，
+  `json_extract` 改为 `JSON_UNQUOTE(JSON_EXTRACT(...))`
+- Task 4：`1beefce` e2e 切换 MySQL（test-db.ts + 7 个 spec + --runInBand）
+- Task 5：`c499d4c` backend-ci.yml 增加 mysql:8 service container + Test 步骤注入 DB_* 环境变量
+- Task 6：`f657cc0` 生产 compose 新增 lumira-mysql（healthcheck + data/mysql 卷），后端 DB_* 指向容器，
+  deploy workflow 初始化提示补 MYSQL_*、.env.example / Dockerfile / .gitignore 同步，lumira.db 已随 126a064 移出仓库
+- Task 7：`2f6fdcb` DEPLOY.md / AGENTS.md 同步 MySQL 部署说明
+- Task 8：本提交（进度台账）+ 双远程推送
+
+**本地验证**：`tsc --noEmit` 与 `pnpm --filter @lumira/backend build` 均通过；YAML（backend-ci / backend-deploy / compose）解析通过。
+e2e 由 CI 的 MySQL 8 service container 验证（本机无 Docker 且本地 MySQL 密码未知，未在本机跑 e2e）。
+残留清理：`better-sqlite3` / `sqlite-core` / `DB_PATH` / `:memory:` 已从 backend 源码与部署配置中移除。
