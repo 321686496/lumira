@@ -9,9 +9,9 @@ import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/safe_share.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -21,10 +21,9 @@ import '../providers/collection_providers.dart';
 /// 我的精选集页
 ///
 /// 数据来源：[collectionsListProvider]（基于 CollectionsDao + CollectionService）。
-/// - auto 类型在上（带"自动"小标签）
-/// - manual 类型在下
-/// - 每张卡：封面（cover_photo_id 缩略图，无封面用前 4 张缩略图九宫格预览）+
-///   名称 + 照片数 + 更新时间 + 类型标签
+/// - 按类型分区：手动「自建精选」在上，自动「系统精选」在下
+/// - 每张卡：封面（cover_photo_id 缩略图，无封面用前 4 张缩略图拼贴）+
+///   名称 + 照片数 + 更新时间 + 类型标签；manual 卡带「⋯」菜单（编辑/分享/删除）
 class ProfileCollectionsPage extends ConsumerWidget {
   const ProfileCollectionsPage({super.key});
 
@@ -68,11 +67,17 @@ class ProfileCollectionsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildList(BuildContext context, ThemeTokens tokens, List<CollectionRecord> collections) {
+  Widget _buildList(
+      BuildContext context, ThemeTokens tokens, List<CollectionRecord> collections) {
+    final manuals =
+        collections.where((c) => c.type == CollectionType.manual).toList();
+    final autos =
+        collections.where((c) => c.type != CollectionType.manual).toList();
     final totalPhotos = collections.fold<int>(0, (s, c) => s + c.photoCount);
     // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
     // 用 viewPadding.top（状态栏） + 48（nav 内容高度） 精确占位
     final topPadding = MediaQuery.of(context).viewPadding.top + 48;
+
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(child: SizedBox(height: topPadding)),
@@ -84,27 +89,50 @@ class ProfileCollectionsPage extends ConsumerWidget {
           ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 16)),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, i) {
-                final collection = collections[i];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: FadeUp(
-                    delay: Duration(milliseconds: (i % 6) * 60),
-                    child: _CollectionCard(
-                      tokens: tokens,
-                      collection: collection,
-                    ),
-                  ),
-                );
-              },
-              childCount: collections.length,
-            ),
+        // === 手动区：自建精选 ===
+        SliverToBoxAdapter(
+          child: _SectionHeader(
+            tokens: tokens,
+            title: '自建精选',
+            action: '新建',
+            onAction: () => GoRouter.of(context).push(RouteNames.profileCollectionEdit),
           ),
         ),
+        if (manuals.isEmpty)
+          SliverToBoxAdapter(
+            child: _ManualEmptyHint(tokens: tokens),
+          )
+        else
+          ...manuals.map(
+            (c) => SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                child: FadeUp(
+                  child: _CollectionCard(tokens: tokens, collection: c),
+                ),
+              ),
+            ),
+          ),
+        // === 自动区：系统精选 ===
+        if (autos.isNotEmpty) ...[
+          SliverToBoxAdapter(
+            child: _SectionHeader(
+              tokens: tokens,
+              title: '系统精选',
+              subtitle: '根据你的照片自动生成',
+            ),
+          ),
+          ...autos.map(
+            (c) => SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                child: FadeUp(
+                  child: _CollectionCard(tokens: tokens, collection: c),
+                ),
+              ),
+            ),
+          ),
+        ],
         const SliverToBoxAdapter(child: SizedBox(height: 16)),
       ],
     );
@@ -137,6 +165,65 @@ class _CreateButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.tokens,
+    required this.title,
+    this.subtitle,
+    this.action,
+    this.onAction,
+  });
+  final ThemeTokens tokens;
+  final String title;
+  final String? subtitle;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontFamily: 'Noto Serif SC',
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              subtitle!,
+              style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+            ),
+          ],
+          const Spacer(),
+          if (action != null && onAction != null)
+            GestureDetector(
+              onTap: onAction,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Text(
+                  action!,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: tokens.brand,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -233,9 +320,11 @@ class _CollectionCard extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 封面：coverPhotoId 缩略图，无封面用占位图标
+              // 封面：coverPhotoId 缩略图，无封面用 2×2 照片拼贴 / 占位
               _CoverThumb(
                 tokens: tokens,
+                collectionId: collection.id,
+                isManual: !isAuto,
                 coverPhotoId: collection.coverPhotoId,
                 photoCount: collection.photoCount,
               ),
@@ -279,6 +368,19 @@ class _CollectionCard extends ConsumerWidget {
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
+                            )
+                          else
+                            GestureDetector(
+                              onTap: () => _showCardMenu(context, ref),
+                              behavior: HitTestBehavior.opaque,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Icon(
+                                  Icons.more_horiz,
+                                  size: 20,
+                                  color: tokens.textTertiary,
+                                ),
+                              ),
                             ),
                         ],
                       ),
@@ -302,16 +404,89 @@ class _CollectionCard extends ConsumerWidget {
       ),
     );
   }
+
+  /// manual 卡片的「⋯」菜单：编辑 / 分享 / 删除
+  Future<void> _showCardMenu(BuildContext context, WidgetRef ref) async {
+    final tokens = ref.read(themeTokensProvider);
+    final collection = this.collection;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: tokens.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: tokens.divider,
+                  borderRadius: BorderRadius.circular(9999),
+                ),
+              ),
+              ListTile(
+                leading: Icon(Icons.edit_outlined, color: tokens.brandText),
+                title: const Text('编辑'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  GoRouter.of(context).push(RouteNames.build(
+                    RouteNames.profileCollectionEdit,
+                    {RouteNames.paramCollectionId: collection.id},
+                  ));
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.share_outlined, color: tokens.brandText),
+                title: const Text('分享'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  SafeShare.share(
+                    '精选集：${collection.name}\n共 ${collection.photoCount} 张照片\n来自如画 LUMIRA',
+                    subject: '如画 LUMIRA · 精选集',
+                  );
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: tokens.danger),
+                title: Text('删除', style: TextStyle(color: tokens.danger)),
+                onTap: () async {
+                  Navigator.of(ctx).pop();
+                  final service = await ref.read(collectionServiceProvider.future);
+                  await service.deleteCollection(collection.id);
+                  ref.invalidate(collectionsListProvider);
+                  if (context.mounted) {
+                    LumiraToast.show(context, '已删除精选集');
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-/// 封面缩略图：若有 coverPhotoId，从 GalleryDao 取缩略图；否则显示占位图标。
+/// 封面缩略图：若有 coverPhotoId，从 GalleryDao 取缩略图；
+/// 无封面但照片数 > 0 时，取该精选集前 4 张照片做 2×2 拼贴；否则占位图标。
 class _CoverThumb extends ConsumerStatefulWidget {
   const _CoverThumb({
     required this.tokens,
+    required this.collectionId,
+    required this.isManual,
     required this.coverPhotoId,
     required this.photoCount,
   });
   final ThemeTokens tokens;
+  final String collectionId;
+  final bool isManual;
   final String? coverPhotoId;
   final int photoCount;
 
@@ -322,6 +497,8 @@ class _CoverThumb extends ConsumerStatefulWidget {
 class _CoverThumbState extends ConsumerState<_CoverThumb> {
   GalleryItemRecord? _photo;
   bool _loaded = false;
+  List<GalleryItemRecord> _collagePhotos = [];
+  bool _collageLoaded = false;
 
   @override
   void didChangeDependencies() {
@@ -329,6 +506,12 @@ class _CoverThumbState extends ConsumerState<_CoverThumb> {
     if (!_loaded) {
       _loaded = true;
       _loadCover();
+    }
+    final needCollage = (widget.coverPhotoId == null || widget.coverPhotoId!.isEmpty) &&
+        widget.photoCount > 0;
+    if (!_collageLoaded && needCollage) {
+      _collageLoaded = true;
+      _loadCollage();
     }
   }
 
@@ -347,45 +530,131 @@ class _CoverThumbState extends ConsumerState<_CoverThumb> {
     }
   }
 
+  Future<void> _loadCollage() async {
+    try {
+      final db = await ref.read(databaseProvider.future);
+      final galleryDao = GalleryDao(db);
+      if (widget.isManual) {
+        final ids = await CollectionsDao(db).getPhotos(widget.collectionId);
+        final photos = <GalleryItemRecord>[];
+        for (final rec in ids.take(4)) {
+          final p = await galleryDao.getById(rec.photoId);
+          if (p != null) photos.add(p);
+        }
+        if (mounted && photos.isNotEmpty) {
+          setState(() => _collagePhotos = photos);
+        }
+      } else {
+        final all = await galleryDao.getAll(limit: 4);
+        if (mounted && all.isNotEmpty) {
+          setState(() => _collagePhotos = all);
+        }
+      }
+    } catch (_) {
+      // 静默失败：保持空，UI 显示占位
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const size = 96.0;
     final url = _photo?.dataUrl ?? _photo?.filePath;
+    if (url != null && url.isNotEmpty) {
+      return _buildSingle(url, size);
+    }
+    if (_collagePhotos.length >= 2) {
+      return _buildCollage(size);
+    }
+    return _buildPlaceholder(size);
+  }
+
+  Widget _buildSingle(String url, double size) {
     return SizedBox(
       width: size,
       height: size,
-      child: url == null || url.isEmpty
-          ? Container(
-              color: widget.tokens.surfaceAlt,
-              child: Icon(
-                Icons.photo_outlined,
-                color: widget.tokens.textTertiary,
-                size: 28,
-              ),
+      child: url.startsWith('http')
+          ? Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _buildPlaceholder(size),
             )
-          : url.startsWith('http')
-              ? Image.network(
-                  url,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: widget.tokens.surfaceAlt,
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      color: widget.tokens.textTertiary,
-                    ),
-                  ),
-                )
-              : Image.file(
-                  File(url),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: widget.tokens.surfaceAlt,
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      color: widget.tokens.textTertiary,
-                    ),
-                  ),
-                ),
+          : Image.file(
+              File(url),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _buildPlaceholder(size),
+            ),
+    );
+  }
+
+  Widget _buildCollage(double size) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: GridView.count(
+        crossAxisCount: 2,
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.zero,
+        mainAxisSpacing: 1,
+        crossAxisSpacing: 1,
+        children: List.generate(4, (i) {
+          if (i < _collagePhotos.length) {
+            final p = _collagePhotos[i];
+            final u = p.dataUrl ?? p.filePath;
+            if (u == null || u.isEmpty) return _buildPlaceholder(size / 2);
+            return u.startsWith('http')
+                ? Image.network(
+                    u,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _buildPlaceholder(size / 2),
+                  )
+                : Image.file(
+                    File(u),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _buildPlaceholder(size / 2),
+                  );
+          }
+          return _buildPlaceholder(size / 2);
+        }),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder(double size) {
+    return Container(
+      width: size,
+      height: size,
+      color: widget.tokens.surfaceAlt,
+      child: Icon(
+        Icons.photo_outlined,
+        color: widget.tokens.textTertiary,
+        size: 28,
+      ),
+    );
+  }
+}
+
+class _ManualEmptyHint extends StatelessWidget {
+  const _ManualEmptyHint({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Text(
+            '还没有自建精选集\n点击「+ 新建」从相册选照片创建',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: tokens.textTertiary, height: 1.5),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -409,8 +678,25 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '拍摄几张照片后，系统会自动生成精选集',
+            '去相册选照片创建你的第一个精选集吧',
             style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LumiraButton(
+                variant: ButtonVariant.primary,
+                onPressed: () => GoRouter.of(context).push(RouteNames.profileCollectionEdit),
+                child: const Text('创建精选集'),
+              ),
+              const SizedBox(width: 12),
+              LumiraButton(
+                variant: ButtonVariant.secondary,
+                onPressed: () => GoRouter.of(context).push(RouteNames.gallery),
+                child: const Text('去相册'),
+              ),
+            ],
           ),
         ],
       ),
