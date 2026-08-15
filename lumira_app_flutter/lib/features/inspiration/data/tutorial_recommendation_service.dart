@@ -1,6 +1,5 @@
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/tutorial_read_dao.dart';
-import '../../onboarding/data/questionnaire_answers.dart';
 import '../../onboarding/data/questionnaire_dao.dart';
 import 'tutorial_content.dart';
 import 'tutorial_models.dart';

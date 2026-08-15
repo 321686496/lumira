@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:sqflite/sqflite.dart';
 
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
@@ -20,7 +19,7 @@ void main() {
         themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
         uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
       ],
-      child: MaterialApp(
+      child: const MaterialApp(
         home: TutorialDetailPage(tutorialId: 'tut_general_premium'),
       ),
     ));

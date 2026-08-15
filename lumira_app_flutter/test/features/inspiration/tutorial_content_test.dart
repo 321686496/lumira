@@ -1,4 +1,5 @@
-import 'package:flutter/services.dart';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lumira_app_flutter/features/academy/data/academy_content.dart';
@@ -63,18 +64,22 @@ void main() {
   });
 
   test('封面/步骤图 asset 文件真实存在', () {
-    final assetPaths = <String>[];
     for (final t in TutorialContent.all) {
-      assetPaths.add(t.coverImage);
+      final cover = File(t.coverImage);
+      expect(cover.existsSync(), isTrue,
+          reason: '封面 ${t.coverImage} 不存在（请在 Task 8 生成）');
+      expect(cover.lengthSync(), greaterThan(0),
+          reason: '封面 ${t.coverImage} 为空文件');
       for (final s in t.steps) {
-        if (s.imageAsset != null) assetPaths.add(s.imageAsset!);
+        final img = s.imageAsset;
+        if (img == null) continue;
+        final f = File(img);
+        expect(f.existsSync(), isTrue,
+            reason: '步骤图 $img 不存在（请在 Task 8 生成）');
+        expect(f.lengthSync(), greaterThan(0), reason: '步骤图 $img 为空文件');
       }
     }
-    for (final p in assetPaths) {
-      expect(() => rootBundle.load(p), returnsNormally,
-          reason: 'asset $p 不存在（请在 Task 8 生成）');
-    }
-  }, skip: 'Task 8 生成图片后启用');
+  });
 
   test('getById 命中与未命中', () {
     expect(TutorialContent.getById('tut_general_premium'), isNotNull);

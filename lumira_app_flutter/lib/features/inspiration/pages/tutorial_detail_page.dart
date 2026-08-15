@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -29,7 +28,7 @@ class TutorialDetailPage extends ConsumerWidget {
     if (tutorial == null) {
       return Scaffold(
         backgroundColor: tokens.canvas,
-        appBar: LumiraNav(title: '拍摄小课堂', transparent: true),
+        appBar: const LumiraNav(title: '拍摄小课堂', transparent: true),
         body: Center(
           child: Text('教程不存在', style: TextStyle(color: tokens.textTertiary)),
         ),
@@ -46,7 +45,7 @@ class TutorialDetailPage extends ConsumerWidget {
     return Scaffold(
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
-      appBar: LumiraNav(title: '拍摄小课堂', transparent: true),
+      appBar: const LumiraNav(title: '拍摄小课堂', transparent: true),
       body: Container(
         decoration: BoxDecoration(
           gradient: RadialGradient(
@@ -180,7 +179,7 @@ class _StepBlock extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: Text('$index',
-                  style: TextStyle(fontSize: 12, color: Colors.white)),
+                  style: const TextStyle(fontSize: 12, color: Colors.white)),
             ),
             const SizedBox(width: 8),
             Text(
