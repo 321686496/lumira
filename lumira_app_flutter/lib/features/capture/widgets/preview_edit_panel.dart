@@ -118,8 +118,8 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
         );
       case 2:
         return _FilterTab(
-          postProcess: widget.postProcess,
-          onChanged: _updatePost,
+          postProcess: _fullForEdit,
+          onChanged: _updatePostFromFull,
           previewImagePath: widget.previewImagePath,
           tokens: tokens,
         );
