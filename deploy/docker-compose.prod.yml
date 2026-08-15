@@ -41,10 +41,9 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
     # 不暴露 3306 到宿主机（仅内部网络访问，更安全）
     healthcheck:
-      # 必须走 TCP（-h 127.0.0.1），不要用 -h localhost（Unix socket）：
-      # mysql:8 官方镜像（oraclelinux 9）里 healthcheck 经 socket 连接会一直失败，
-      # 而 127.0.0.1 的 TCP 写法与 CI service container 已验证一致、稳定通过。
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      # 密码通过 MYSQL_PWD 环境变量传入，避免 -p$VAR 在 shell 中分词/触发交互式提示；
+      # 走 TCP（-h 127.0.0.1）而非 localhost socket，与 CI service container 已验证一致。
+      test: ["CMD-SHELL", "MYSQL_PWD=$${MYSQL_ROOT_PASSWORD} mysqladmin ping -h 127.0.0.1 -uroot --silent"]
       interval: 10s
       timeout: 5s
       retries: 10
