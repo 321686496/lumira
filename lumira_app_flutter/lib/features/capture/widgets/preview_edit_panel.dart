@@ -9,6 +9,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../gallery/widgets/crop_overlay.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
+import '../domain/post_process_delta.dart';
 
 /// 预览页编辑面板（4 标签底部抽屉）
 ///
@@ -27,6 +28,10 @@ class PreviewEditPanel extends ConsumerStatefulWidget {
   /// 预览图路径（用于滤镜缩略图）。可为空（此时滤镜页降级为文字 Chip）。
   final String? previewImagePath;
 
+  /// 拍摄时烘焙的基线参数。为 null 时视为全零基线（默认行为不变）。
+  /// 色彩/细节 Tab 的滑块显示全量值（baked + 增量），onChanged 时反推增量传回上层。
+  final PostProcess? bakedPostProcess;
+
   const PreviewEditPanel({
     super.key,
     required this.postProcess,
@@ -34,6 +39,7 @@ class PreviewEditPanel extends ConsumerStatefulWidget {
     required this.onPostProcessChanged,
     required this.onTransformChanged,
     this.previewImagePath,
+    this.bakedPostProcess,
   });
 
   @override
@@ -65,6 +71,17 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
   void _updatePost(PostProcess p) => widget.onPostProcessChanged(p);
   void _updateTransform(TransformParams t) => widget.onTransformChanged(t);
 
+  /// 烘焙基线（未提供时为全零基线）。
+  PostProcess get _baked =>
+      widget.bakedPostProcess ?? const PostProcess(color: PostProcessColor());
+
+  /// 用户在色彩/细节面板上看到并操作的全量参数（baked + 增量）。
+  PostProcess get _fullForEdit => fullOf(_baked, widget.postProcess);
+
+  /// 由新的全量值反推增量并回调上层。
+  void _updatePostFromFull(PostProcess newFull) =>
+      widget.onPostProcessChanged(deltaOf(_baked, newFull));
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -91,13 +108,13 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
     switch (_tabController.index) {
       case 0:
         return _ColorTab(
-          postProcess: widget.postProcess,
-          onChanged: _updatePost,
+          postProcess: _fullForEdit,
+          onChanged: _updatePostFromFull,
         );
       case 1:
         return _DetailTab(
-          postProcess: widget.postProcess,
-          onChanged: _updatePost,
+          postProcess: _fullForEdit,
+          onChanged: _updatePostFromFull,
         );
       case 2:
         return _FilterTab(
@@ -142,14 +159,14 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
               // 重置当前 Tab 的参数
               switch (_tabController.index) {
                 case 0:
-                  _updatePost(const PostProcess(color: PostProcessColor()));
+                  // 重置到烘焙基线：全量 = _baked，反推增量自然为 0
+                  _updatePostFromFull(_baked);
                   break;
                 case 1:
-                  _updatePost(widget.postProcess.copyWith(
-                    smoothStrength: 0,
-                    sharpen: 0,
-                    vignette: 0,
-                    grain: 0,
+                  // 重置细节字段（smooth/sharpen/vignette/grain），保留 color/cropRatio 烘焙值
+                  _updatePostFromFull(PostProcess(
+                    color: _baked.color,
+                    cropRatio: _baked.cropRatio,
                   ));
                   break;
                 case 3:

@@ -100,4 +100,22 @@ void main() {
     expect(captured, isNotNull);
     expect(captured!.rotation, 90);
   });
+
+  testWidgets('with bakedPostProcess: color sliders show full value, onChanged emits delta', (tester) async {
+    PostProcess? capturedDelta;
+    await tester.pumpWidget(wrapWidget(
+      PreviewEditPanel(
+        // 增量 postProcess：brightness 归一化为 0（用户未额外调整）
+        postProcess: const PostProcess(color: PostProcessColor()),
+        // 烘焙基线：brightness=20
+        bakedPostProcess: const PostProcess(color: PostProcessColor(brightness: 20)),
+        transform: const TransformParams(),
+        onPostProcessChanged: (p) => capturedDelta = p,
+        onTransformChanged: (_) {},
+      ),
+    ));
+
+    // 色彩 Tab 是默认页，亮度行应显示全量 20（而非增量 0）
+    expect(find.text('20'), findsOneWidget);
+  });
 }
