@@ -1,6 +1,3 @@
-import '../../academy/data/academy_content.dart';
-import '../../academy/data/academy_models.dart';
-
 enum TodayShootTarget { scene, template }
 
 class TodayShootItem {
@@ -197,35 +194,5 @@ class InspirationContent {
       return a.id.compareTo(b.id);
     });
     return items.take(count).toList();
-  }
-
-  static List<AcademyCourse> pickCourses(String? topCategory, {int count = 3}) {
-    final List<String> ids;
-    switch (topCategory) {
-      case 'portrait':
-        ids = ['course_01', 'course_02', 'course_08'];
-        break;
-      case 'landscape':
-        ids = ['course_03', 'course_04', 'course_09'];
-        break;
-      case 'street':
-        ids = ['course_06', 'course_12', 'course_16'];
-        break;
-      case 'food':
-      case 'night':
-      case 'macro':
-      case 'still-life':
-        ids = ['course_05', 'course_10', 'course_11'];
-        break;
-      default:
-        ids = ['course_01', 'course_02', 'course_04'];
-    }
-    final result = <AcademyCourse>[];
-    for (final id in ids) {
-      final course = AcademyContent.getCourse(id);
-      if (course != null) result.add(course);
-      if (result.length == count) break;
-    }
-    return result;
   }
 }
