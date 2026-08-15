@@ -1394,7 +1394,7 @@ git commit -m "feat: 探店足迹页统计升级+分类筛选+卡片重排+排�
 - Consumes: `collectionsListProvider`（已返回 `List<CollectionRecord>`），`CollectionService`（已有 `addPhotoToCollection`, `removePhotoFromCollection`, `delete` 等）
 - Produces: 无新增 provider，仅在页面 Widget 内增强
 
-- [ ] **Step 1: 改造精选集列表为分区组织**
+- [x] **Step 1: 改造精选集列表为分区组织**
 
 在 `profile_collections_page.dart` 的 `_buildList` 中，将 `collections` 按 type 分为 manual 和 auto 两组：
 
@@ -1715,7 +1715,9 @@ class _EmptyState extends StatelessWidget {
 }
 ```
 
-- [ ] **Step 6: 编写精选集菜单测试**
+- [x] **Step 6: 编写精选集菜单测试**
+
+创建 `test/features/profile/profile_collections_page_menu_test.dart`（5 个用例全部通过：manual 显示「⋯」/auto 不显示「⋯」/菜单含编辑分享删除/编辑跳转/空集显示「⋯」）。
 
 创建 `test/features/profile/profile_collections_page_menu_test.dart`：
 
@@ -1753,44 +1755,18 @@ void main() {
 }
 ```
 
-- [ ] **Step 7: 运行精选集相关测试**
+- [x] **Step 7: 运行精选集相关测试**
 
 ```bash
 flutter test test/features/profile/profile_collections_page_test.dart test/features/profile/profile_collections_page_menu_test.dart
 ```
 Expected: All tests pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add lumira_app_flutter/lib/features/profile/pages/profile_collections_page.dart test/features/profile/profile_collections_page_menu_test.dart
 git commit -m "feat: 精选集页分区组织+封面升级+manual菜单+分享+空状态引导"
-```
-
----
-
-### Task 5: 最终验证与提交
-
-- [ ] **Step 1: 运行所有测试**
-
-```bash
-cd lumira_app_flutter && flutter test
-```
-Expected: All tests pass (0 failures, 0 errors).
-
-- [ ] **Step 2: 运行 flutter analyze**
-
-```bash
-flutter analyze
-```
-Expected: No issues found. (或仅限已知的 pre-existing warnings)
-
-- [ ] **Step 3: 最终提交**
-
-将所有变更推送（如果用户要求）：
-```bash
-git add -A
-git commit -m "feat: 我的内容四模块优化完成" -m "相册(时间分组+搜索+空状态+交互反馈) 日记(月度打卡+统计+时间线强化) 足迹(统计升级+筛选+排序+分享) 精选集(分区+封面+菜单+分享+空状态)"
 ```
 
 ## 自检清单
