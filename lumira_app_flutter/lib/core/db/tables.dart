@@ -190,6 +190,11 @@ class Tables {
   static const String watermarkTemplates = 'watermark_templates';
   static const String colType = 'type';
   static const String colConfig = 'config';
+
+  // === tutorial_reads 表（v23 迁移新增，小教程已读记录） ===
+  // colId 复用已声明常量（值 'id'）
+  static const String tutorialReads = 'tutorial_reads';
+  static const String colTutorialReadAt = 'read_at';
 }
 
 class ChallengeHistoryTable {

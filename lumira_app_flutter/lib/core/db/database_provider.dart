@@ -14,12 +14,13 @@ import 'dao/composition_kits_dao.dart';
 import 'dao/api_cache_dao.dart';
 import 'dao/settings_dao.dart';
 import 'dao/watermark_dao.dart';
+import 'dao/tutorial_read_dao.dart';
 import '../../core/auth/auth_dao.dart';
 import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 22;
+const int _kDbVersion = 23;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -94,6 +95,11 @@ final userProfileDaoProvider = FutureProvider<UserProfileDao>((ref) async {
 final watermarkDaoProvider = FutureProvider<WatermarkDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return WatermarkDao(db);
+});
+
+final tutorialReadDaoProvider = FutureProvider<TutorialReadDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return TutorialReadDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -805,6 +811,19 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v22 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 23) {
+    try {
+      // v23: 小教程已读记录表（拍摄小课堂）
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.tutorialReads} (
+          ${Tables.colId} TEXT PRIMARY KEY,
+          ${Tables.colTutorialReadAt} INTEGER
+        )
+      ''');
+    } catch (e) {
+      debugPrint('v23 migration failed (silent fallback): $e');
     }
   }
 }
