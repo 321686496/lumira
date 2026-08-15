@@ -21,6 +21,19 @@ jobs:
   ci:
     name: Typecheck · Test
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: lumira_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     steps:
       - name: Print trigger info
@@ -60,3 +73,9 @@ jobs:
         working-directory: lumira-server
         # 仓库仅有 e2e 测试（test/*.e2e-spec.ts），默认 jest 配置匹配不到，必须走 test:e2e
         run: pnpm --filter @lumira/backend test:e2e
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_NAME: lumira_test
