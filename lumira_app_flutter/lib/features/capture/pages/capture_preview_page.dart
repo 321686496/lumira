@@ -1027,6 +1027,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         onSave: _onSave,
                         isSaving: _isSaving,
                         localPostProcess: _localPostProcess,
+                        bakedPostProcess: _bakedPostProcess,
                         onUpdateLocalPostProcess: _updateLocalPostProcess,
                         localTransform: _localTransform,
                         onUpdateLocalTransform: _updateLocalTransform,
@@ -1428,6 +1429,7 @@ class _BottomSheet extends StatelessWidget {
     required this.onSave,
     required this.isSaving,
     required this.localPostProcess,
+    required this.bakedPostProcess,
     required this.onUpdateLocalPostProcess,
     required this.localTransform,
     required this.onUpdateLocalTransform,
@@ -1463,6 +1465,9 @@ class _BottomSheet extends StatelessWidget {
 
   /// 预览页本地后期参数（仅影响当前照片，不回写 CaptureState）
   final PostProcess localPostProcess;
+
+  /// 拍摄时已烘焙的后期参数基线（滑块显示全量 = 基线 + 本地增量）
+  final PostProcess bakedPostProcess;
 
   /// 本地后期参数更新回调（仅更新本地状态，不污染拍摄页）
   final ValueChanged<PostProcess> onUpdateLocalPostProcess;
@@ -1577,6 +1582,7 @@ class _BottomSheet extends StatelessWidget {
               Expanded(
                 child: PreviewEditPanel(
                   postProcess: localPostProcess,
+                  bakedPostProcess: bakedPostProcess,
                   transform: localTransform,
                   onPostProcessChanged: onUpdateLocalPostProcess,
                   onTransformChanged: onUpdateLocalTransform,
@@ -1597,6 +1603,7 @@ class _BottomSheet extends StatelessWidget {
                 height: 280,
                 child: PreviewEditPanel(
                   postProcess: localPostProcess,
+                  bakedPostProcess: bakedPostProcess,
                   transform: localTransform,
                   onPostProcessChanged: onUpdateLocalPostProcess,
                   onTransformChanged: onUpdateLocalTransform,

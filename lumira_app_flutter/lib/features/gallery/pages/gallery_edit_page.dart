@@ -225,6 +225,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
                   height: 420,
                   child: PreviewEditPanel(
                     postProcess: _localPostProcess,
+                    bakedPostProcess: _bakedPostProcess,
                     transform: _localTransform,
                     onPostProcessChanged: _onPostProcessChanged,
                     onTransformChanged: _onTransformChanged,
