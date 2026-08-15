@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/src/database/database.service.ts
 
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createPool, Pool } from 'mysql2/promise';
 import { drizzle, MySql2Database } from 'drizzle-orm/mysql2';
 import * as fs from 'fs';
@@ -8,7 +8,7 @@ import * as path from 'path';
 import * as schema from './schema';
 
 @Injectable()
-export class DatabaseService implements OnModuleInit {
+export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private pool!: Pool;
   private db!: MySql2Database<typeof schema>;
 
@@ -34,6 +34,13 @@ export class DatabaseService implements OnModuleInit {
     this.db = drizzle(this.pool, { schema, mode: 'default' });
 
     await this.runMigrations();
+  }
+
+  async onModuleDestroy() {
+    // 关闭连接池，避免 e2e 测试结束后 Jest 因未释放的 mysql 句柄无法退出
+    if (this.pool) {
+      await this.pool.end();
+    }
   }
 
   /**
