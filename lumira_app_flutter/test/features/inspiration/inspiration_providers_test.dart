@@ -1,7 +1,9 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:lumira_app_flutter/features/academy/data/academy_models.dart';
 import 'package:lumira_app_flutter/features/inspiration/data/inspiration_content.dart';
+import 'package:lumira_app_flutter/features/inspiration/data/inspiration_providers.dart';
+import 'package:lumira_app_flutter/features/inspiration/data/tutorial_models.dart';
 
 void main() {
   group('InspirationContent.slotOf', () {
@@ -39,16 +41,22 @@ void main() {
     });
   });
 
-  group('InspirationContent.pickCourses', () {
-    test('returns 3 beginner picks when no category', () {
-      final courses = InspirationContent.pickCourses(null);
-      expect(courses.length, 3);
-      expect(courses.first.id, 'course_01');
-    });
-
-    test('maps portrait category to portrait courses', () {
-      final courses = InspirationContent.pickCourses('portrait');
-      expect(courses.first.topic, AcademyTopic.portrait);
+  group('tutorialPicksProvider', () {
+    test('可 override 返回教程列表', () async {
+      const tutorials = [
+        ShootingTutorial(
+          id: 't1', title: 't', subtitle: 's',
+          coverImage: 'c', category: 'general', readMinutes: '3分钟',
+          intro: 'i', cta: TutorialCta(type: TutorialCtaType.scene, targetId: 'cafe-window'),
+        ),
+      ];
+      final container = ProviderContainer(
+        overrides: [tutorialPicksProvider.overrideWith((ref) async => tutorials)],
+      );
+      addTearDown(container.dispose);
+      final value = await container.read(tutorialPicksProvider.future);
+      expect(value, hasLength(1));
+      expect(value.first.id, 't1');
     });
   });
 

@@ -29,6 +29,7 @@ import '../features/gallery/pages/gallery_page.dart';
 import '../features/gallery/pages/gallery_stats_page.dart';
 import '../features/home/pages/home_page.dart';
 import '../features/inspiration/pages/inspiration_page.dart';
+import '../features/inspiration/pages/tutorial_detail_page.dart';
 import '../features/onboarding/pages/questionnaire_page.dart';
 import '../features/academy/pages/academy_assignment_page.dart';
 import '../features/academy/pages/academy_detail_page.dart';
@@ -310,6 +311,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.inspiration,
         name: 'inspiration',
         builder: (context, state) => const InspirationPage(),
+      ),
+      GoRoute(
+        path: RouteNames.inspirationTutorialDetail,
+        name: 'inspirationTutorialDetail',
+        builder: (context, state) {
+          final tutorialId = state.queryParams[RouteNames.paramTutorialId];
+          return TutorialDetailPage(tutorialId: tutorialId);
+        },
       ),
       GoRoute(
         path: RouteNames.gallery,
