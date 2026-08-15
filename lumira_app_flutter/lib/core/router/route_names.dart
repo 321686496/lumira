@@ -33,6 +33,7 @@ class RouteNames {
   static const String checkinDetail = '/checkin/detail';
   static const String checkinEdit = '/checkin/edit';
   static const String inspiration = '/inspiration';
+  static const String inspirationTutorialDetail = '/inspiration/tutorial-detail';
   static const String gallery = '/gallery';
   static const String galleryDetail = '/gallery/detail';
   static const String galleryEdit = '/gallery/edit';
@@ -82,6 +83,7 @@ class RouteNames {
   static const String paramPhotoId = 'photoId';
   static const String paramCollectionId = 'collectionId';
   static const String paramAcademyId = 'academyId';
+  static const String paramTutorialId = 'tutorialId';
   static const String paramMode = 'mode';
   static const String paramKitId = 'kitId';
   static const String paramCategory = 'category';
