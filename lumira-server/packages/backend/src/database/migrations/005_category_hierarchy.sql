@@ -1,13 +1,13 @@
 -- lumira-server/packages/backend/src/database/migrations/005_category_hierarchy.sql
 -- 三级分类扩展（spec 2026-08-05 第 11 节）：预置所有二级(style)/三级(method)系统分类
--- 幂等写法：INSERT OR IGNORE（UNIQUE(key, parent_key) 约束保证重复执行不报错）
+-- 幂等写法：INSERT IGNORE（UNIQUE(key, parent_key) 约束保证重复执行不报错）
 -- 注意：method 的 key 在不同 style 下可能重复（如 normal/selfie/wide），
 -- 但 parent_key 不同，故 (key, parent_key) 联合唯一不冲突。
 
 -- ===== 二级分类（style, level=2）=====
 
 -- portrait 下 21 个 style
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('japanese',           '日系',       '', 'portrait', 2, 1,  1, 1, 0, 0),
   ('emotional',          '情绪',       '', 'portrait', 2, 2,  1, 1, 0, 0),
   ('film',               '胶片',       '', 'portrait', 2, 3,  1, 1, 0, 0),
@@ -31,39 +31,39 @@ INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, leve
   ('elegant_lady',       '优雅女士',   '', 'portrait', 2, 21, 1, 1, 0, 0);
 
 -- landscape 下 2 个 style
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('fresh', '清新', '', 'landscape', 2, 1, 1, 1, 0, 0),
   ('epic',  '大气', '', 'landscape', 2, 2, 1, 1, 0, 0);
 
 -- food 下 2 个 style
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('overhead', '俯拍', '', 'food', 2, 1, 1, 1, 0, 0),
   ('closeup',  '特写', '', 'food', 2, 2, 1, 1, 0, 0);
 
 -- street 下 2 个 style
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
-  ('casual',    '随性', '', 'street', 2, 1, 1, 1, 0, 0),
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+  ('casual',    '随拍', '', 'street', 2, 1, 1, 1, 0, 0),
   ('geometric', '几何', '', 'street', 2, 2, 1, 1, 0, 0);
 
 -- night 下 2 个 style
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('neon',   '霓虹', '', 'night', 2, 1, 1, 1, 0, 0),
   ('starry', '星空', '', 'night', 2, 2, 1, 1, 0, 0);
 
 -- macro 下 2 个 style
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('nature', '自然', '', 'macro', 2, 1, 1, 1, 0, 0),
   ('object', '物品', '', 'macro', 2, 2, 1, 1, 0, 0);
 
 -- still-life 下 2 个 style
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('minimal', '极简', '', 'still-life', 2, 1, 1, 1, 0, 0),
   ('flat',    '扁平', '', 'still-life', 2, 2, 1, 1, 0, 0);
 
 -- ===== 三级分类（method, level=3）=====
 
 -- portrait 各 style 下的 method
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('normal',    '他拍',   '', 'japanese',          3, 1, 1, 1, 0, 0),
   ('selfie',    '自拍',   '', 'japanese',          3, 2, 1, 1, 0, 0),
   ('overhead',  '俯拍',   '', 'japanese',          3, 3, 1, 1, 0, 0),
@@ -92,35 +92,35 @@ INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, leve
   ('seven_body','七分身', '', 'elegant_lady',      3, 1, 1, 1, 0, 0);
 
 -- landscape 各 style 下的 method
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('wide',     '远景', '', 'fresh', 3, 1, 1, 1, 0, 0),
   ('flat',     '平拍', '', 'fresh', 3, 2, 1, 1, 0, 0),
   ('wide',     '远景', '', 'epic',  3, 1, 1, 1, 0, 0),
   ('overhead', '俯拍', '', 'epic',  3, 2, 1, 1, 0, 0);
 
 -- food 各 style 下的 method
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('flat',     '平拍', '', 'overhead', 3, 1, 1, 1, 0, 0),
   ('overhead', '俯拍', '', 'overhead', 3, 2, 1, 1, 0, 0),
   ('macro',    '微距', '', 'closeup',  3, 1, 1, 1, 0, 0),
   ('detail',   '细节', '', 'closeup',  3, 2, 1, 1, 0, 0);
 
 -- street 各 style 下的 method
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('normal',   '随拍', '', 'casual',    3, 1, 1, 1, 0, 0),
   ('wide',     '远景', '', 'casual',    3, 2, 1, 1, 0, 0),
   ('wide',     '远景', '', 'geometric', 3, 1, 1, 1, 0, 0),
   ('overhead', '俯拍', '', 'geometric', 3, 2, 1, 1, 0, 0);
 
 -- night 下 neon 的 method（starry 无 method）
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('normal',   '他拍', '', 'neon', 3, 1, 1, 1, 0, 0),
   ('wide',     '远景', '', 'neon', 3, 2, 1, 1, 0, 0);
 
 -- macro 下 nature 的 method（object 无 method）
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('macro',    '微距', '', 'nature', 3, 1, 1, 1, 0, 0);
 
 -- still-life 下 minimal 的 method（flat 无 method）
-INSERT OR IGNORE INTO template_categories (key, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
+INSERT IGNORE INTO template_categories (`key`, name, icon_url, parent_key, level, sort_order, is_system, is_active, created_at, updated_at) VALUES
   ('single',   '单品', '', 'minimal', 3, 1, 1, 1, 0, 0);

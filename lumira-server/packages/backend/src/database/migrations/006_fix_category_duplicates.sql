@@ -1,28 +1,24 @@
 -- lumira-server/packages/backend/src/database/migrations/006_fix_category_duplicates.sql
--- 修复一级分类重复问题（三级分类 spec 2026-08-05 第 11 节）。
---
--- 背景：
---   runMigrations() 每次服务启动会重新执行所有迁移 SQL；
---   003_templates.sql 预置 7 个系统根分类时未指定 parent_key（SQLite 中为 NULL），
---   而唯一索引 (key, parent_key) 对 NULL 不生效（SQLite 将 NULL 视为互不相同），
---   导致每次启动都会给每个系统根分类再插入一条重复记录。
---   二级/三级分类 parent_key 非空，联合唯一索引生效，不受影响。
---
--- 本迁移：
---   1) 清理已存在的一级分类重复记录（每个 key 仅保留 id 最小的一条）
---   2) 新增 NULL 安全唯一索引 (key, COALESCE(parent_key, ''))，
---      使后续 INSERT OR IGNORE 对一级分类同样幂等
---
--- 幂等写法：DELETE 条件清理 + CREATE UNIQUE INDEX IF NOT EXISTS。
+-- 修复一级分类重复问题（三级分类 spec 2026-08-05 第 11 节）
+-- MySQL 8 唯一索引对 NULL 不生效（多行 (key, NULL) 允许重复），
+-- 与旧 SQLite 行为一致，故用 NULL 安全索引 + 清理重复保证幂等。
 
--- 1. 清理重复的一级分类
+-- 1. 清理重复的一级分类（每个 key 仅保留 id 最小的一条）
+--    同表子查询需包一层派生表，避免 MySQL 1093 错误
 DELETE FROM template_categories
 WHERE id NOT IN (
-  SELECT MIN(id)
-  FROM template_categories
-  GROUP BY key, IFNULL(parent_key, '')
+  SELECT * FROM (
+    SELECT MIN(id)
+    FROM template_categories
+    GROUP BY `key`, IFNULL(parent_key, '')
+  ) AS keep_ids
 );
 
--- 2. NULL 安全唯一索引（COALESCE 将 NULL 归一为 ''，使唯一约束对一级分类生效）
-CREATE UNIQUE INDEX IF NOT EXISTS uq_category_key_parent_null_safe
-  ON template_categories(key, COALESCE(parent_key, ''));
+-- 2. NULL 安全唯一索引（COALESCE 将 NULL 归一到 ''，使唯一约束对一级分类生效）
+--    索引列必须是等值表达式；用生成列实现 NULL → '' 归一
+ALTER TABLE template_categories
+  ADD COLUMN parent_key_norm VARCHAR(64)
+  GENERATED ALWAYS AS (COALESCE(parent_key, '')) STORED;
+
+CREATE UNIQUE INDEX uq_category_key_parent_null_safe
+  ON template_categories (`key`, parent_key_norm);

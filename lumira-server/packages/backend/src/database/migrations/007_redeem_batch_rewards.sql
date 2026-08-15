@@ -1,4 +1,3 @@
 -- 迁移 007：兑换码批次移除 reward_tier 依赖，增加 reward_templates 列
--- 注：新库由 001_init.sql 直接定义不含 reward_tier 的表；
--- 旧库的实际 ALTER TABLE / 重建逻辑在 database.service.ts 的兼容代码中幂等执行
--- 此处仅保留描述性注释，无重复 SQL 以避免容器重启时冲突
+-- 注：新库由 001_init.sql 直接定义含 reward_templates 的表（不含 reward_tier）；
+-- 本迁移无重复 SQL；旧库的 ALTER 逻辑已由 SQLite 兼容代码承载（随 SQLite 迁移一并移除）
