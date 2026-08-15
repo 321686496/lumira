@@ -6,8 +6,8 @@ name: iOS Build
 # 触发方式：
 #   - push 到 master 分支：自动触发（仅验证编译，sign=false，无需 Secrets）
 #   - 手动 workflow_dispatch：
-#   - sign:                是否走完整代码签名并导出 IPA（默认 false，仅验证编译）
-#   - upload_to_testflight: 是否上传到 App Store Connect / TestFlight（默认 false）
+#   - sign:                是否走完整代码签名并导出 IPA（默认 true）
+#   - upload_to_testflight: 是否上传到 App Store Connect / TestFlight（默认 true）
 #
 # 三种运行模式：
 #   1. 仅验证编译（sign=false）        → flutter build ios --no-codesign，无需任何 Secrets
@@ -38,11 +38,11 @@ on:
       sign:
         description: '走完整代码签名并导出 IPA（需要配置签名 Secrets）'
         type: boolean
-        default: false
+        default: true
       upload_to_testflight:
         description: '签名后上传到 TestFlight（需 sign=true + API Key Secrets）'
         type: boolean
-        default: false
+        default: true
 
 env:
   FLUTTER_VERSION: '3.7.12'

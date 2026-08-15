@@ -16,17 +16,22 @@ import '../data/home_mock_data.dart';
 /// - 28rpx→14dp 圆角
 /// - 图片 aspect ratio 3:4 (padding-bottom 133.33%)
 /// - 标签左上：white 90% + blur 8px + brand 文字
-/// - 匹配度右下：dark 60% bg + white 文字
-/// - 进度右下：brand bg + white 文字
+/// - 收藏右下：isFavorite 时显示实心心形
+/// - 再拍一次：右上角小按钮（onRetake 非空时显示）
+/// - 下方文字：作品名 + 相对拍摄时间
 class RecentShotCard extends ConsumerWidget {
   const RecentShotCard({
     super.key,
     required this.recent,
     required this.onTap,
+    this.onRetake,
   });
 
   final RecentShot recent;
   final VoidCallback onTap;
+
+  /// "再拍一次"回调；为 null 时隐藏右上角复用按钮
+  final VoidCallback? onRetake;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -97,8 +102,48 @@ class RecentShotCard extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    // 匹配度或进度（右下）
-                    if (recent.match.isNotEmpty || recent.progress.isNotEmpty)
+                    // 再拍一次（右上角）
+                    if (onRetake != null)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: GestureDetector(
+                          onTap: onRetake,
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(1000),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(
+                                  Icons.replay,
+                                  size: 11,
+                                  color: Colors.white,
+                                ),
+                                SizedBox(width: 3),
+                                Text(
+                                  '再拍',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white,
+                                    height: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    // 收藏状态（右下角）
+                    if (recent.isFavorite)
                       Positioned(
                         bottom: 8,
                         right: 8,
@@ -108,21 +153,28 @@ class RecentShotCard extends ConsumerWidget {
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: recent.progress.isNotEmpty
-                                ? tokens.brand
-                                : const Color(0x991A1A1A),
+                            color: const Color(0x991A1A1A),
                             borderRadius: BorderRadius.circular(1000),
                           ),
-                          child: Text(
-                            recent.progress.isNotEmpty
-                                ? recent.progress
-                                : recent.match,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white,
-                              height: 1.2,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.favorite,
+                                size: 10,
+                                color: tokens.danger,
+                              ),
+                              const SizedBox(width: 3),
+                              const Text(
+                                '已收藏',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white,
+                                  height: 1.2,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -138,6 +190,8 @@ class RecentShotCard extends ConsumerWidget {
                   children: [
                     Text(
                       recent.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 13, // 26rpx → 13dp
                         fontWeight: FontWeight.w600,
@@ -150,13 +204,13 @@ class RecentShotCard extends ConsumerWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Icons.directions_walk_outlined, // ph-footprints
-                          size: 11, // 22rpx → 11dp
+                          Icons.access_time_outlined,
+                          size: 11,
                           color: tokens.textTertiary,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${recent.steps} 步',
+                          _relativeTime(recent.createdAt),
                           style: TextStyle(
                             fontSize: 11,
                             color: tokens.textTertiary,
@@ -173,6 +227,23 @@ class RecentShotCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// 相对拍摄时间：今天 HH:mm / 昨天 / N 天前
+  String _relativeTime(DateTime t) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final thatDay = DateTime(t.year, t.month, t.day);
+    final dayDiff = today.difference(thatDay).inDays;
+
+    if (dayDiff <= 0) {
+      final hh = t.hour.toString().padLeft(2, '0');
+      final mm = t.minute.toString().padLeft(2, '0');
+      return '今天 $hh:$mm';
+    }
+    if (dayDiff == 1) return '昨天';
+    if (dayDiff < 7) return '$dayDiff 天前';
+    return '${t.month}月${t.day}日';
   }
 
   /// 按优先级渲染真实照片：filePath > dataUrl > originalPath > picsum 占位

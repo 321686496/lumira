@@ -1,10 +1,9 @@
 import 'dart:async';
-import 'dart:io' show File, stderr;
+import 'dart:io' show File;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
-import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat, instantiateImageCodec;
+import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat, instantiateImageCodec;
 
-import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -29,8 +28,7 @@ import '../domain/filter_recipe.dart' show composePostProcessMatrix;
 import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
-import '../services/dart_photo_pipeline.dart'
-    show applyPerPixelEffectsImg, applySmoothSkinImg, applyVignetteImg;
+import '../services/capture_worker.dart';
 import '../watermark/data/watermark_providers.dart';
 import '../watermark/models/watermark_template.dart';
 import '../watermark/widgets/watermark_animation_overlay.dart';
@@ -165,6 +163,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       ref.read(captureThumbnailProvider.notifier).reset();
     }
     WidgetsBinding.instance.addObserver(this);
+    // 预热常驻 worker isolate（性能优化 A）：提前创建，避免第一张照片承担 isolate 创建开销
+    CaptureWorker.instance.ensureStarted().catchError((Object e) {
+      debugPrint('[capture] worker 预热失败（首次拍照时会重试）: $e');
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _applyRouteParamsToState();
       ref.read(CaptureState.currentTemplateIdProvider.notifier).state =
@@ -359,6 +361,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 关闭，导致再次进入拍摄页时取景器就绪流失效、卡在加载中。
     _cameraReadySub?.cancel();
     _cameraReadyWatchdog?.cancel();
+    // 释放常驻 worker isolate（性能优化 A：避免 isolate 泄漏）
+    CaptureWorker.instance.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -598,15 +602,29 @@ class _CapturePageState extends ConsumerState<CapturePage>
         });
       }
       final swIso = Stopwatch()..start();
-      final isolateResult = await compute(_processCaptureInIsolate, gpuData);
+      // 常驻 worker isolate（A 优化），避免 compute() 每次创建 isolate 的开销
+      final workerResult = await CaptureWorker.instance.process(
+        CaptureWorkerRequest(
+          rgbaBytes: gpuData.rgbaBytes,
+          width: gpuData.width,
+          height: gpuData.height,
+          outputPath: gpuData.outputPath,
+          sharpen: gpuData.sharpen,
+          clarity: gpuData.clarity,
+          grain: gpuData.grain,
+          smoothStrength: gpuData.smoothStrength,
+          vignette: gpuData.vignette,
+          needRawRgba: gpuData.needRawRgba,
+        ),
+      );
       swIso.stop();
-      debugPrint('[perf] compute(_processCaptureInIsolate): ${swIso.elapsedMilliseconds}ms');
+      debugPrint('[perf] CaptureWorker.process: ${swIso.elapsedMilliseconds}ms');
       if (!mounted) {
         _isProcessingCapture = false;
         return;
       }
 
-      String processedPath = isolateResult.outputPath;
+      String processedPath = workerResult.outputPath;
 
       // evict FileImage 缓存，防止 isolate 覆写后旧解码图残留
       try {
@@ -623,17 +641,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
       String finalPath = processedPath;
       if (watermarkTemplate != null &&
           watermarkSettings.enabled &&
-          isolateResult.rgbaBytes != null) {
+          workerResult.rgbaBytes != null) {
         ui.Image? sourceImage;
         final swWm = Stopwatch()..start();
         try {
-          // 用 isolate 返回的 rawRgba 直接创建 ui.Image（ImageDescriptor.raw）
-          // 避免 JPEG 编解码往返（节省 ~180ms：isolate 不编码 JPEG + 主 isolate 不解码 JPEG）
-          final buffer = await ui.ImmutableBuffer.fromUint8List(isolateResult.rgbaBytes!);
+          // 用 worker 返回的 rawRgba 直接创建 ui.Image（ImageDescriptor.raw）
+          // 避免 JPEG 编解码往返（节省 ~180ms）
+          final buffer = await ui.ImmutableBuffer.fromUint8List(workerResult.rgbaBytes!);
           final descriptor = ui.ImageDescriptor.raw(
             buffer,
-            width: isolateResult.width,
-            height: isolateResult.height,
+            width: workerResult.width,
+            height: workerResult.height,
             pixelFormat: ui.PixelFormat.rgba8888,
           );
           buffer.dispose();
@@ -649,10 +667,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
             elements: watermarkTemplate.elements,
           );
 
-          // 将 RGBA 字节重新编码为 JPEG（quality 90，与 isolate 输出统一）
+          // 将 RGBA 字节编码为 JPEG（quality 90，与 worker 输出统一）
+          // 注：Flutter 3.7 的 dart:ui toByteData 不支持 JPEG（ImageByteFormat.jpeg
+          // 是较新版本 API），此处用 image 包纯 Dart 编码；1280px 下耗时已可接受。
           final outputImage = img.Image.fromBytes(
-            width: isolateResult.width,
-            height: isolateResult.height,
+            width: workerResult.width,
+            height: workerResult.height,
             bytes: rgbaBytes.buffer,
             numChannels: 4,
             order: img.ChannelOrder.rgba,
@@ -924,7 +944,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
     // EV 补偿通过上方 effectiveCameraProvider 监听器实时下发到取景器。
     // 闪光灯模式变化由 flashModeProvider 监听器通过 CameraService.setFlashMode 处理。
-    // ISO/快门/白平衡为推荐参考值（camerawesome SDK 不支持手动设置这些参数）。
+    // 白平衡功能已下线（SDK 不支持手动设置），ISO/快门为推荐参考值，
+    // 三者（WB/快门/ISO）的真实实现见 docs/superpowers/plans/ 下的相机手动参数计划。
 
     // 权限未授予时显示权限引导 UI
     if (_permissionStatus == CameraPermissionStatus.unknown ||
@@ -981,8 +1002,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
           // 2.5 顶部浮层组：比例切换器 → 参数 pill 栏 → 挑战悬浮条 → 模板信息卡
           //    比例/参数固定在顶部，模板信息卡放在最下方避免挤压上方控件
+          //    导航栏改为毛玻璃胶囊后，需要更大的偏移量来留出间隙
           Positioned(
-            top: MediaQuery.of(context).padding.top + 56,
+            top: MediaQuery.of(context).padding.top + 76,
             left: 0,
             right: 0,
             child: Column(
@@ -1030,6 +1052,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
               thumbnailKey: _thumbnailKey,
             ),
           ),
+
+          // 4.5 抽屉浮层（工具栏上方，不挤压布局）
+          //    全屏 / 试用模式隐藏
+          //    使用 Positioned 独立浮层，bottom 偏移 = 底部安全区 + 按钮行 + 工具栏高度
+          if (!isFullscreen && !isTrialMode)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: MediaQuery.of(context).padding.bottom + 140,
+              child: _AnimatedToolDrawer(rawCaptureKey: _viewfinderCaptureKey),
+            ),
 
           // 5. 参数面板（底部滑入，使用 AnimatedPositioned，必须在 Stack 内）
           const ParamPanel(),
@@ -1336,8 +1369,11 @@ class _BottomControlArea extends StatelessWidget {
           end: Alignment.bottomCenter,
           colors: [
             Colors.transparent,
+            Colors.black.withOpacity(0.3),
             Colors.black.withOpacity(0.7),
+            Colors.black.withOpacity(0.95),
           ],
+          stops: const [0.0, 0.4, 0.7, 1.0],
         ),
       ),
       child: Padding(
@@ -1349,11 +1385,10 @@ class _BottomControlArea extends StatelessWidget {
             if (!isFullscreen && !isTrialMode)
               _ZoomTabBar(onChanged: onZoomChanged),
 
-            // 工具栏 + 抽屉（全屏 / 试用模式隐藏）
-            if (!isFullscreen && !isTrialMode) ...[
+            // 工具栏（全屏 / 试用模式隐藏）
+            // 抽屉已移至主 Stack 作为独立浮层，不再挤压工具栏
+            if (!isFullscreen && !isTrialMode)
               const _CaptureToolbar(),
-              _AnimatedToolDrawer(rawCaptureKey: rawCaptureKey),
-            ],
 
             // 拍摄按钮行（试用模式下快门替换为锁定态，不响应拍照）
             _CaptureButtonRow(
@@ -1370,7 +1405,7 @@ class _BottomControlArea extends StatelessWidget {
   }
 }
 
-/// 底部工具栏：一排图标按钮（模板/场景/参数/补光）
+/// 底部工具栏：一排图标按钮（模板/场景/参数/补光）— 毛玻璃胶囊设计
 /// 点击未激活的工具 → 激活并展开抽屉
 /// 点击已激活的工具 → 收起抽屉
 /// 点击"参数" → 直接打开 ParamPanel
@@ -1397,24 +1432,47 @@ class _CaptureToolbar extends ConsumerWidget {
         ? _tools
         : _tools.where((t) => t.id != 'fillLight').toList();
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.4),
-        border: Border(
-          top: BorderSide(color: Colors.white.withOpacity(0.08), width: 0.5),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141416).withOpacity(0.75),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+                width: 0.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.05),
+                  blurRadius: 1,
+                  offset: const Offset(0, 0.5),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: tools.map((tool) {
+                final active = activeTool == tool.id;
+                return _ToolButton(
+                  tool: tool,
+                  active: active,
+                  onTap: () => _onTap(ref, tool.id, active),
+                );
+              }).toList(),
+            ),
+          ),
         ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: tools.map((tool) {
-          final active = activeTool == tool.id;
-          return _ToolButton(
-            tool: tool,
-            active: active,
-            onTap: () => _onTap(ref, tool.id, active),
-          );
-        }).toList(),
       ),
     );
   }
@@ -2447,23 +2505,51 @@ class _ZoomTabBarState extends ConsumerState<_ZoomTabBar> {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          // Tab 栏
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var i = 0; i < presets.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 6),
-                  _ZoomTab(
-                    label: '${presets[i].toStringAsFixed(presets[i] == presets[i].toInt() ? 0 : 1)}x',
-                    active: i == activeIndex && !_showWheel,
-                    onTap: () {
-                      widget.onChanged(presets[i]);
-                    },
+          // Tab 栏 — 毛玻璃胶囊容器
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141416).withOpacity(0.75),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.1),
+                    width: 0.5,
                   ),
-                ],
-              ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.25),
+                      blurRadius: 20,
+                      offset: const Offset(0, 4),
+                    ),
+                    BoxShadow(
+                      color: Colors.white.withOpacity(0.05),
+                      blurRadius: 1,
+                      offset: const Offset(0, 0.5),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < presets.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 4),
+                      _ZoomTab(
+                        label: '${presets[i].toStringAsFixed(presets[i] == presets[i].toInt() ? 0 : 1)}x',
+                        active: i == activeIndex && !_showWheel,
+                        onTap: () {
+                          widget.onChanged(presets[i]);
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
           // 轮盘 overlay（水平拖动时显示）
@@ -2495,22 +2581,25 @@ class _ZoomTab extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFFC9A96E).withOpacity(0.25)
-              : Colors.white.withOpacity(0.08),
+              ? const Color(0xFFC9A96E)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: active
-                ? const Color(0xFFC9A96E)
-                : Colors.white.withOpacity(0.12),
-            width: active ? 1.2 : 0.5,
-          ),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFC9A96E).withOpacity(0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: active ? const Color(0xFFC9A96E) : Colors.white70,
+            color: active ? Colors.black : Colors.white.withOpacity(0.5),
             fontSize: 12,
-            fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
           ),
         ),
       ),
@@ -2846,6 +2935,19 @@ class _CaptureProcessParams {
   final PostProcess postProcess;
 }
 
+/// 后处理输出最大边（px）。
+/// 2048 → 1280 大幅降低逐像素 CPU 处理耗时（锐化/清晰度/颗粒/磨皮/暗角均为 O(N)），
+/// 像素数降为原来的 (1280/2048)^2 ≈ 39%，CPU 处理耗时约减半。
+/// 【性能优化 B】
+const int kMaxProcessDim = 1280;
+
+/// JPEG 降采样解码目标长边（px）。
+/// 相机原始图通常 4000px 级别，用 targetWidth/targetHeight 让引擎在解码阶段
+/// 直接降采样到略高于输出尺寸（1600），避免全尺寸解码后再 GPU 缩小，
+/// 可省 0.4-1.0s。略高于输出 1280 是为了留出画质余量。
+/// 【性能优化 C】
+const int kDecodeTargetDim = 1600;
+
 /// GPU 处理后的 rawRgba 数据 + 尺寸，传给 worker isolate 做后续 CPU 处理。
 class _GpuProcessedData {
   const _GpuProcessedData({
@@ -2875,28 +2977,11 @@ class _GpuProcessedData {
   final bool needRawRgba;
 }
 
-/// worker isolate 处理结果。
-/// - [rgbaBytes] 非空：isolate 未编码 JPEG，主 isolate 需用 rawRgba 创建 ui.Image
-///   做水印合成后再编码 JPEG 写文件。
-/// - [rgbaBytes] 为空：isolate 已编码 JPEG 并写入 [outputPath]，主 isolate 直接使用。
-class _IsolateProcessResult {
-  const _IsolateProcessResult({
-    this.rgbaBytes,
-    required this.width,
-    required this.height,
-    required this.outputPath,
-  });
-  final Uint8List? rgbaBytes;
-  final int width;
-  final int height;
-  final String outputPath;
-}
-
 /// 在主 isolate 中用 dart:ui GPU 管线处理照片：
-/// 1. 解码 JPEG
-/// 2. 方向对齐 + cover 裁切 + 前置镜像 + 缩放到 2048px
+/// 1. 解码 JPEG（降采样，C 优化）
+/// 2. 方向对齐 + cover 裁切 + 前置镜像 + 缩放到 kMaxProcessDim（B 优化）
 /// 3. 应用色彩矩阵（与取景器 ColorFiltered 使用完全相同的 GPU 渲染管线）
-/// 4. 导出 rawRgba 给 worker isolate 做后续 CPU 处理（锐化/磨皮/暗角/JPEG 编码）
+/// 4. 导出 rawRgba 给常驻 worker isolate（capture_worker.dart）做后续 CPU 处理
 ///
 /// 【所见即所得修复】
 /// 之前在 worker isolate 中用 image 包的 applyColorMatrixImg 逐像素应用色彩矩阵，
@@ -2909,7 +2994,12 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
   final swDecode = Stopwatch()..start();
   try {
     final bytes = await File(params.inputPath).readAsBytes();
-    final codec = await ui.instantiateImageCodec(bytes);
+    // 降采样解码（C 优化）：限制解码尺寸，避免全尺寸 4000px 解码
+    final codec = await ui.instantiateImageCodec(
+      bytes,
+      targetWidth: kDecodeTargetDim,
+      targetHeight: kDecodeTargetDim,
+    );
     final frame = await codec.getNextFrame();
     final srcImage = frame.image;
     codec.dispose();
@@ -2923,8 +3013,9 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     final needMirror = params.isFront;
     final alignRotation = needRotate ? (params.isPortrait ? 90 : 270) : 0;
 
-    // 计算输出尺寸（基于 targetRatio，限制最大边 2048px）
-    const maxDim = 2048;
+    // 计算输出尺寸（基于 targetRatio，限制最大边 kMaxProcessDim）
+    // （B 优化：2048 → 1280，逐像素 CPU 效果处理耗时约减半）
+    const maxDim = kMaxProcessDim;
     double outW, outH;
     if (params.isPortrait) {
       outH = maxDim.toDouble();
@@ -3005,101 +3096,5 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
   } catch (e, st) {
     debugPrint('[capture] GPU 色彩矩阵处理失败: $e\n$st');
     return null;
-  }
-}
-
-/// 在 worker isolate 中对 GPU 处理后的 rawRgba 做后续 CPU 处理：
-/// 1. 从 rawRgba 创建 img.Image
-/// 2. 细节效果：锐化 + 清晰度 + 颗粒
-/// 3. 磨皮
-/// 4. 暗角
-/// 5. 根据 [data.needRawRgba]：
-///    - true：不编码 JPEG，直接返回 rawRgba（主 isolate 需做水印合成）
-///    - false：编码 JPEG(quality 90) 并写入 data.outputPath
-///
-/// 色彩矩阵已在主 isolate 中由 dart:ui GPU 管线应用（所见即所得）。
-Future<_IsolateProcessResult> _processCaptureInIsolate(_GpuProcessedData data) async {
-  // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
-  final swCreate = Stopwatch()..start();
-  try {
-    // 1. 从 rawRgba 创建 img.Image
-    final result = img.Image.fromBytes(
-      width: data.width,
-      height: data.height,
-      bytes: data.rgbaBytes.buffer,
-      numChannels: 4,
-      order: img.ChannelOrder.rgba,
-    );
-    swCreate.stop();
-
-    // 2. 细节效果：锐化 + 清晰度 + 颗粒
-    final swEffects = Stopwatch()..start();
-    applyPerPixelEffectsImg(
-      result,
-      sharpen: data.sharpen,
-      clarity: data.clarity,
-      grain: data.grain,
-    );
-    // 3. 磨皮
-    applySmoothSkinImg(result, smoothStrength: data.smoothStrength);
-    // 4. 暗角
-    applyVignetteImg(result, vignette: data.vignette);
-    swEffects.stop();
-
-    // 5. 输出
-    final swEncode = Stopwatch()..start();
-    if (data.needRawRgba) {
-      // 有水印：返回 rawRgba，主 isolate 用 ImageDescriptor.raw 创建 ui.Image
-      // 避免主 isolate 重复 JPEG 解码（节省 ~80ms）
-      final rgba = result.toUint8List();
-      swEncode.stop();
-      debugPrint('[perf] isolate: create=${swCreate.elapsedMilliseconds}ms, '
-          'effects=${swEffects.elapsedMilliseconds}ms, '
-          'toUint8List=${swEncode.elapsedMilliseconds}ms, '
-          'size=${data.width}x${data.height}');
-      return _IsolateProcessResult(
-        rgbaBytes: rgba,
-        width: data.width,
-        height: data.height,
-        outputPath: data.outputPath,
-      );
-    } else {
-      // 无水印：直接编码 JPEG 写文件（不阻塞主 isolate）
-      final encoded = img.encodeJpg(result, quality: 90);
-      await File(data.outputPath).writeAsBytes(encoded);
-      swEncode.stop();
-      debugPrint('[perf] isolate: create=${swCreate.elapsedMilliseconds}ms, '
-          'effects=${swEffects.elapsedMilliseconds}ms, '
-          'encodeJpg+write=${swEncode.elapsedMilliseconds}ms, '
-          'size=${data.width}x${data.height}');
-      return _IsolateProcessResult(
-        rgbaBytes: null,
-        width: data.width,
-        height: data.height,
-        outputPath: data.outputPath,
-      );
-    }
-  } catch (e, st) {
-    stderr.writeln('[capture-isolate] postProcess failed: $e\n$st');
-    // 失败时回退：尝试编码原始 rawRgba 写文件
-    try {
-      if (!data.needRawRgba) {
-        final fallback = img.Image.fromBytes(
-          width: data.width,
-          height: data.height,
-          bytes: data.rgbaBytes.buffer,
-          numChannels: 4,
-          order: img.ChannelOrder.rgba,
-        );
-        final encoded = img.encodeJpg(fallback, quality: 90);
-        await File(data.outputPath).writeAsBytes(encoded);
-      }
-    } catch (_) {}
-    return _IsolateProcessResult(
-      rgbaBytes: data.needRawRgba ? data.rgbaBytes : null,
-      width: data.width,
-      height: data.height,
-      outputPath: data.outputPath,
-    );
   }
 }

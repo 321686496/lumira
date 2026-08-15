@@ -82,11 +82,20 @@ class _FilterPickerState extends ConsumerState<FilterPicker> {
     // 先清空 provider，避免父级 widget 在本 State dispose 后仍用旧 image 渲染。
     // 否则 RawImage 会引用已被 dispose 的 ui.Image，触发
     // "Creator of a RawImage disposed of the image" 断言。
-    if (_lastFrame != null) {
-      _container
-          ?.read(CaptureState.filterPreviewImageProvider.notifier)
-          .state = null;
-      _lastFrame?.dispose();
+    //
+    // 注意：dispose() 在 widget 树 finalizeTree 阶段被同步调用，此刻直接修改
+    // provider 会触发 "Tried to modify a provider while the widget tree was
+    // building" 异常。因此把 provider 清空与 image 释放延迟到微任务中，等当前
+    // 帧构建完成后执行，避免在构建阶段修改 provider。
+    final container = _container;
+    final lastFrame = _lastFrame;
+    if (lastFrame != null) {
+      scheduleMicrotask(() {
+        container
+            ?.read(CaptureState.filterPreviewImageProvider.notifier)
+            .state = null;
+        lastFrame.dispose();
+      });
     }
     super.dispose();
   }

@@ -41,9 +41,10 @@ class RecentShot {
     required this.category,
     required this.icon,
     required this.imageSeed,
-    required this.steps,
-    required this.match,
-    required this.progress,
+    required this.createdAt,
+    this.isFavorite = false,
+    this.templateId,
+    this.sceneId,
     this.imageFilePath,
     this.imageDataUrl,
     this.imageOriginalPath,
@@ -53,16 +54,22 @@ class RecentShot {
   final String category;
   final IconData icon;
 
+  /// 拍摄时间（用于展示相对时间，如"今天"、"昨天"、"N 天前"）
+  final DateTime createdAt;
+
+  /// 是否已收藏（卡片右下角展示真实收藏状态）
+  final bool isFavorite;
+
+  /// 模板 / 场景 ID（用于"再拍一次"直达对应拍摄流程，可为空则不可复用）
+  final String? templateId;
+  final String? sceneId;
+
   /// 真实照片源（优先级：imageFilePath > imageDataUrl > imageOriginalPath > imageSeed fallback）
   /// 三者全空时回退到 imageSeed（picsum 占位）
   final String imageSeed;
   final String? imageFilePath;
   final String? imageDataUrl;
   final String? imageOriginalPath;
-
-  final int steps;
-  final String match; // '98% 匹配' 或 ''
-  final String progress; // '进行中' 或 ''
 
   /// 是否有真实照片源
   bool get hasRealImage =>
@@ -183,51 +190,48 @@ class HomeMockData {
   ];
 
   /// 最近拍摄（5 个，对齐 home/index.vue 的 recents）
-  static const List<RecentShot> recents = [
+  /// 补充真实字段：createdAt 拍摄时间、isFavorite 收藏状态、templateId/sceneId 复用来源
+  static final List<RecentShot> recents = [
     RecentShot(
       name: '自然光人像',
       category: '人像',
       icon: Icons.person_outline,
       imageSeed: 'recent-portrait',
-      steps: 12,
-      match: '98% 匹配',
-      progress: '',
+      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+      isFavorite: true,
+      templateId: 'tpl_natural_portrait',
     ),
     RecentShot(
       name: '复古胶片感',
       category: '胶片',
       icon: Icons.movie_outlined,
       imageSeed: 'recent-film',
-      steps: 8,
-      match: '',
-      progress: '',
+      createdAt: DateTime.now().subtract(const Duration(days: 1)),
+      templateId: 'tpl_film_vintage',
     ),
     RecentShot(
       name: '窗边咖啡时光',
       category: '咖啡馆半身',
       icon: Icons.local_cafe_outlined,
       imageSeed: 'recent-cafe',
-      steps: 15,
-      match: '',
-      progress: '',
+      createdAt: DateTime.now().subtract(const Duration(days: 3)),
+      sceneId: 'preset_cafe',
     ),
     RecentShot(
       name: '氛围感人像',
       category: '人像氛围',
       icon: Icons.auto_awesome_outlined,
       imageSeed: 'recent-mood',
-      steps: 15,
-      match: '',
-      progress: '进行中',
+      createdAt: DateTime.now().subtract(const Duration(days: 6)),
+      templateId: 'tpl_mood_portrait',
     ),
     RecentShot(
       name: '黄金时刻风光',
       category: '风光',
       icon: Icons.landscape_outlined,
       imageSeed: 'recent-landscape',
-      steps: 10,
-      match: '',
-      progress: '',
+      createdAt: DateTime.now().subtract(const Duration(days: 12)),
+      sceneId: 'preset_sunset',
     ),
   ];
 

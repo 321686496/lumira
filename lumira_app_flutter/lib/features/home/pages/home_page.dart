@@ -77,6 +77,16 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _goChallenge() => context.go(RouteNames.challenge);
   void _goInspiration() => GoRouter.of(context).push(RouteNames.inspiration);
   void _goGallery() => GoRouter.of(context).push(RouteNames.gallery);
+  void _goRetake(RecentShot recent) {
+    // 复用来源：优先模板，其次场景；都没有则退回自由拍摄
+    final params = <String, String>{};
+    if (recent.templateId != null && recent.templateId!.isNotEmpty) {
+      params[RouteNames.paramTemplateId] = recent.templateId!;
+    } else if (recent.sceneId != null && recent.sceneId!.isNotEmpty) {
+      params[RouteNames.paramSceneId] = recent.sceneId!;
+    }
+    GoRouter.of(context).push(RouteNames.build(RouteNames.capture, params));
+  }
   void _goSceneGuide(String sceneId) {
     // 项目记忆规则：场景推荐卡片跳转 scene-guide?scene=xxx（不是 scene-detail）
     // Forced fix: 改为 push 而非 context.go，避免返回时跳到其他页面或退出应用
@@ -220,7 +230,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                 FadeUp(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _RecentShotsGrid(onTap: () => _goGallery(), onCapture: _goCapture),
+                    child: _RecentShotsGrid(
+                      onTap: () => _goGallery(),
+                      onCapture: _goCapture,
+                      onRetake: _goRetake,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -460,10 +474,15 @@ class _SceneRecoGrid extends ConsumerWidget {
 /// 数据来源：homeRecentShotsProvider（来自 GalleryDao.getRecent）
 /// 无照片时显示空状态引导拍摄
 class _RecentShotsGrid extends ConsumerWidget {
-  const _RecentShotsGrid({required this.onTap, required this.onCapture});
+  const _RecentShotsGrid({
+    required this.onTap,
+    required this.onCapture,
+    required this.onRetake,
+  });
 
   final VoidCallback onTap;
   final VoidCallback onCapture;
+  final void Function(RecentShot recent) onRetake;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -488,6 +507,7 @@ class _RecentShotsGrid extends ConsumerWidget {
               .map((recent) => RecentShotCard(
                     recent: recent,
                     onTap: onTap,
+                    onRetake: () => onRetake(recent),
                   ))
               .toList(),
         );
@@ -507,6 +527,7 @@ class _RecentShotsGrid extends ConsumerWidget {
           .map((recent) => RecentShotCard(
                 recent: recent,
                 onTap: onTap,
+                onRetake: () => onRetake(recent),
               ))
           .toList(),
     );

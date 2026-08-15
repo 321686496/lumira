@@ -95,6 +95,48 @@ void main() {
     expect(result, inputPath);
   });
 
+  test('front camera + portrait + mirror-only keeps dimensions (no stretch)', () async {
+    // 前置摄像头竖屏，JPEG 本身为竖屏（高>宽），仅需水平镜像、无需旋转。
+    // 回归：旧逻辑错误地对仅镜像的图片应用 90° 旋转并填入未交换的画布，导致横向拉伸变形。
+    final inputPath = p.join(tempDir.path, 'front_portrait.jpg');
+    final outputPath = p.join(tempDir.path, 'front_portrait_out.jpg');
+    final image = img.Image(width: 200, height: 300);
+    // 竖屏 + 左右不对称图案：左半区红、右半区蓝，便于验证水平镜像
+    for (var y = 0; y < image.height; y++) {
+      for (var x = 0; x < image.width; x++) {
+        final r = x < image.width ~/ 2 ? 255 : 0;
+        final b = x >= image.width ~/ 2 ? 255 : 0;
+        image.setPixelRgb(x, y, r, 0, b);
+      }
+    }
+    await File(inputPath).writeAsBytes(img.encodeJpg(image));
+
+    final params = const PostProcess(
+      color: PostProcessColor(),
+      cropRatio: 'none',
+    );
+
+    await PhotoPostProcessor.processFile(
+      inputPath: inputPath,
+      params: params,
+      aspectRatio: 'none',
+      isPortrait: true,
+      facing: 'front',
+      outputPath: outputPath,
+    );
+
+    final out = img.decodeImage(await File(outputPath).readAsBytes())!;
+    // 仅镜像不旋转 → 宽高保持不变（200x300），绝不能出现拉伸或宽高互换
+    expect(out.width, 200, reason: 'front portrait mirror must not stretch width');
+    expect(out.height, 300, reason: 'front portrait mirror must not change height');
+
+    // 水平镜像：原左半区（红）应出现在输出右半区
+    final leftR = out.getPixel(10, out.height ~/ 2).r;
+    final rightR = out.getPixel(out.width - 10, out.height ~/ 2).r;
+    expect(leftR, lessThan(100), reason: 'left half should no longer be red after mirror');
+    expect(rightR, greaterThan(150), reason: 'right half should be red after mirror');
+  });
+
   test('rotation 90 produces different pixel layout than identity', () async {
     final inputPath = p.join(tempDir.path, 'rot_input.jpg');
     final outputPathIdentity = p.join(tempDir.path, 'rot_identity.jpg');

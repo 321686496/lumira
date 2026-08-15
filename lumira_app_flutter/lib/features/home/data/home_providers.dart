@@ -137,9 +137,6 @@ final homeRecentShotsProvider =
     String name = '作品 ${i + 1}';
     String category = '作品';
     IconData icon = Icons.image_outlined;
-    int steps = 6;
-    String match = '';
-    String progress = '';
 
     // 优先用模板信息
     if (p.templateId != null && p.templateId!.isNotEmpty) {
@@ -148,9 +145,6 @@ final homeRecentShotsProvider =
         name = tpl.name;
         category = _categoryLabel(tpl.category);
         icon = _categoryIcon(tpl.category);
-        // sceneGuide 是 Map<String, dynamic>，tips 字段为 List
-        final tips = tpl.sceneGuide['tips'];
-        steps = tips is List ? tips.length : 8;
       }
     } else if (p.sceneId != null && p.sceneId!.isNotEmpty) {
       // 其次用场景信息（DB 自定义场景）
@@ -159,7 +153,6 @@ final homeRecentShotsProvider =
         name = scene.name;
         category = _sceneCategoryLabel(scene.category);
         icon = _sceneCategoryIcon(scene.category);
-        steps = scene.tips.isNotEmpty ? scene.tips.length : 6;
       } else {
         // 可能是内置场景预设，DB 仅存收藏标记，从代码常量找完整数据
         ScenePreset? preset;
@@ -173,19 +166,8 @@ final homeRecentShotsProvider =
           name = preset.name;
           category = _sceneCategoryLabel(preset.category);
           icon = _sceneCategoryIcon(preset.category);
-          steps = preset.tips.isNotEmpty ? preset.tips.length : 6;
         }
       }
-    }
-
-    // 第一张展示「最新」徽标；3 天内的照片展示「新作品」
-    final isLatest = i == 0;
-    final isRecent =
-        DateTime.now().millisecondsSinceEpoch - p.createdAt < 3 * 24 * 3600 * 1000;
-    if (isLatest) {
-      match = '最新';
-    } else if (isRecent) {
-      progress = '新作品';
     }
 
     final imageSeed = 'photo-${p.id}';
@@ -195,14 +177,18 @@ final homeRecentShotsProvider =
       category: category,
       icon: icon,
       imageSeed: imageSeed,
+      // 真实拍摄时间：用于卡片展示相对时间
+      createdAt: DateTime.fromMillisecondsSinceEpoch(p.createdAt),
+      // 真实收藏状态：卡片右下角展示
+      isFavorite: p.isFavorite,
+      // 复用来源：供"再拍一次"直达对应模板/场景拍摄
+      templateId: p.templateId,
+      sceneId: p.sceneId,
       // 真实照片源：优先 filePath，其次 dataUrl，最后 originalPath
       // RecentShotCard 中根据优先级渲染（filePath 用 Image.file，dataUrl 用 Image.memory）
       imageFilePath: p.filePath,
       imageDataUrl: p.dataUrl,
       imageOriginalPath: p.originalPath,
-      steps: steps,
-      match: match,
-      progress: progress,
     ));
   }
   return result;

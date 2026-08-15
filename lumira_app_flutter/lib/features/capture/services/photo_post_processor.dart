@@ -384,9 +384,20 @@ class PhotoPostProcessor {
     final needMirror = facing == 'front';
     if (!needRotate && !needMirror) return src;
 
-    final rotation = deviceIsPortrait ? 90 : 270;
-    final outW = needRotate ? src.height : src.width;
-    final outH = needRotate ? src.width : src.height;
+    // 仅当需要旋转时才旋转并交换宽高；仅镜像时保持原尺寸与 0°，
+    // 避免"竖屏 JPEG + 前置镜像"时把图片旋转 90° 填入未交换的竖屏画布导致横向拉伸变形。
+    final int rotation;
+    final int outW;
+    final int outH;
+    if (needRotate) {
+      rotation = deviceIsPortrait ? 90 : 270;
+      outW = src.height;
+      outH = src.width;
+    } else {
+      rotation = 0;
+      outW = src.width;
+      outH = src.height;
+    }
     final radians = rotation * math.pi / 180.0;
 
     final recorder = ui.PictureRecorder();

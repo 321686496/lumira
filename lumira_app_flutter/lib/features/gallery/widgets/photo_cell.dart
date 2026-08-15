@@ -38,7 +38,7 @@ class PhotoCell extends ConsumerWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _buildImage(tokens),
+              _buildImage(context, tokens),
               if (isMultiSelectMode)
                 Positioned(
                   top: 4,
@@ -70,31 +70,41 @@ class PhotoCell extends ConsumerWidget {
     );
   }
 
-  Widget _buildImage(ThemeTokens tokens) {
+  Widget _buildImage(BuildContext context, ThemeTokens tokens) {
     final url = photo.displayUrl;
+    final placeholder = Container(
+      color: tokens.surfaceAlt,
+      child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
+    );
     if (url == null || url.isEmpty) {
-      return Container(
-        color: tokens.surfaceAlt,
-        child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
-      );
+      return placeholder;
+    }
+    // 性能优化：相册为 3 列网格，格子仅约 1/3 屏宽。
+    // 只传 cacheWidth（不传 cacheHeight）按「格子实际像素 × DPR」降采样解码，
+    // 引擎会按原图宽高比自动计算高度，避免拉伸变形；既省解码量又保比例。
+    final mq = MediaQuery.of(context);
+    final cellLogical =
+        (((mq.size.width - 48 - 12) / 3).clamp(64.0, 300.0)).toDouble();
+    final cachePx = (cellLogical * mq.devicePixelRatio).round();
+    // frameBuilder：解码完成前先显示占位底色，避免白块闪烁
+    Widget buildFrame(BuildContext context, Widget child, int? frame, bool wasSync) {
+      return frame == null ? placeholder : child;
     }
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return Image.network(
         url,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stack) => Container(
-          color: tokens.surfaceAlt,
-          child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
-        ),
+        cacheWidth: cachePx,
+        frameBuilder: buildFrame,
+        errorBuilder: (context, error, stack) => placeholder,
       );
     }
     return Image.file(
       File(url),
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stack) => Container(
-        color: tokens.surfaceAlt,
-        child: Icon(Icons.image_outlined, size: 32, color: tokens.textTertiary),
-      ),
+      cacheWidth: cachePx,
+      frameBuilder: buildFrame,
+      errorBuilder: (context, error, stack) => placeholder,
     );
   }
 }
