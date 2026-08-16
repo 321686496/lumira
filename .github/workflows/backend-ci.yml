@@ -1,0 +1,81 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'lumira-server/**'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'lumira-server/**'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '触发原因（可选，仅用于日志记录）'
+        required: false
+        default: 'manual'
+        type: string
+
+jobs:
+  ci:
+    name: Typecheck · Test
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: lumira_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Print trigger info
+        run: |
+          echo "Trigger reason: ${{ github.event.inputs.reason || github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: lumira-server/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: lumira-server
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared
+        working-directory: lumira-server
+        run: pnpm --filter @lumira/shared build
+
+      - name: Typecheck
+        working-directory: lumira-server
+        run: pnpm --filter @lumira/backend exec tsc --noEmit
+
+      - name: Test
+        working-directory: lumira-server
+        # 仓库仅有 e2e 测试（test/*.e2e-spec.ts），默认 jest 配置匹配不到，必须走 test:e2e
+        run: pnpm --filter @lumira/backend test:e2e
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: root
+          DB_PASSWORD: root
+          DB_NAME: lumira_test
