@@ -126,8 +126,8 @@ void main() {
     await pumpDiaryPage(tester);
     await tester.pumpAndSettle();
 
-    // outfit tab（默认）：仅含 sceneId 的照片 → p1(今天) + p3(昨天) → 2 篇
-    expect(find.text('穿搭日记'), findsWidgets); // AppBar title + toggle item
+    // 拍摄日记（唯一视图）：展示全部照片并按天分组 → 今天(p1/p2/p4) + 昨天(p3) → 2 篇
+    expect(find.text('拍摄日记'), findsOneWidget); // AppBar title
     expect(find.text('时间轴'), findsOneWidget);
     expect(find.text('2篇'), findsOneWidget);
 
@@ -157,24 +157,6 @@ void main() {
     expect(find.text('打卡天数'), findsOneWidget);
     expect(find.text('最常心情'), findsOneWidget);
     expect(find.text('常去场景'), findsOneWidget);
-  });
-
-  testWidgets('toggles between outfit and shoot tabs', (tester) async {
-    setViewport(tester);
-    await initContainer();
-    await seedData();
-
-    await pumpDiaryPage(tester);
-    await tester.pumpAndSettle();
-
-    // 默认 outfit tab 激活：title='穿搭日记' + toggle '穿搭日记' = 2 处
-    expect(find.text('穿搭日记'), findsWidgets);
-
-    await tester.tap(find.text('拍摄日记').first);
-    await tester.pumpAndSettle();
-
-    // shoot tab 激活后：title 动态切换为 '拍摄日记'，仅 toggle 中 '穿搭日记' 文字保留
-    expect(find.text('穿搭日记'), findsOneWidget);
   });
 
   testWidgets('filters diary by mood pill and clears on re-tap', (tester) async {

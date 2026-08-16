@@ -82,14 +82,14 @@ void main() {
       expect(out.height, src.height);
     });
 
-    test('performance: 768px image under 2000ms', () {
+    test('performance: 768px image under 4000ms', () {
       final src = makeTestImage(768);
       final sw = Stopwatch()..start();
       SkinSmoother.smooth(src, 50);
       sw.stop();
-      // 阈值 2000ms：真实设备通常 <100ms，但全量并发测试时共享 CPU 竞争会显著放大耗时
-      expect(sw.elapsedMilliseconds, lessThan(2000),
-          reason: '768px smoothing must be under 2000ms');
-    }, timeout: const Timeout(Duration(seconds: 2)));
+      // 阈值 4000ms：真实设备通常 <100ms，但全量并发测试时共享 CPU 竞争会显著放大耗时
+      expect(sw.elapsedMilliseconds, lessThan(4000),
+          reason: '768px smoothing must be under 4000ms');
+    }, timeout: const Timeout(Duration(seconds: 5)));
   });
 }

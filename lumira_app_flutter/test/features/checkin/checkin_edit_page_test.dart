@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:lumira_app_flutter/core/db/dao/gallery_dao.dart';
@@ -123,18 +124,39 @@ void main() {
   testWidgets('photoId 参数自动预填', (tester) async {
     setViewport(tester);
     await tester.runAsync(() => seedGallery(n: 1));
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, __) =>
+              const Scaffold(body: Center(child: Text('LIST_PAGE'))),
+        ),
+        GoRoute(
+          path: '/checkin/edit',
+          builder: (_, state) => CheckinEditPage(
+            photoId: state.queryParams['photoId'],
+          ),
+        ),
+      ],
+    );
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(home: CheckinEditPage(photoId: 'p0')),
+      child: MaterialApp.router(routerConfig: router),
     ));
+    await settle(tester);
+
+    router.push('/checkin/edit?photoId=p0');
     await settle(tester);
 
     expect(find.text('1/9'), findsOneWidget); // 照片 section 计数
     // 保存后照片关联写入
     await tester.enterText(find.byType(TextField).first, '预填店铺');
     await tester.tap(find.text('保存'));
-    await tester.pump(const Duration(milliseconds: 600));
-    final rec = (await dao.getAll()).first;
+    await settle(tester);
+    final all = await dao.getAll();
+    expect(all, isNotEmpty, reason: 'save should have inserted a record');
+    final rec = all.first;
     expect(await dao.getPhotoIds(rec.id), ['p0']);
   });
 }

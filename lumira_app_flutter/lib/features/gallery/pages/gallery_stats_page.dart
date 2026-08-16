@@ -266,7 +266,7 @@ class _StatsContentState extends State<_StatsContent> {
   }
 
   String _sceneLabel(String sceneId) {
-    if (sceneId == 'uncategorized') return '未分类';
+    if (sceneId == 'uncategorized') return '未设置场景';
     // 简单返回 sceneId 作为标签（真实场景下可查询场景名称）
     return sceneId;
   }
@@ -562,7 +562,7 @@ class _CategoryRankCard extends StatelessWidget {
               Icon(Icons.leaderboard_outlined, size: 20, color: tokens.brand),
               const SizedBox(width: 8),
               Text(
-                '拍摄分类排行',
+                '拍摄场景排行',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
@@ -577,7 +577,7 @@ class _CategoryRankCard extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 20),
                 child: Text(
-                  '暂无分类数据',
+                  '暂无场景数据',
                   style: TextStyle(fontSize: 12, color: tokens.textTertiary),
                 ),
               ),

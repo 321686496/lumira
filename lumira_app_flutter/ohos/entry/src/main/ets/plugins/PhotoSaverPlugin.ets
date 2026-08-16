@@ -110,7 +110,17 @@ export default class PhotoSaverPlugin implements FlutterPlugin, MethodCallHandle
       fs.closeSync(srcFile);
 
       // 3. 获取 PhotoAccessHelper 并创建图片资源
-      const helper = photoAccessHelper.getPhotoAccessHelper(this.context!);
+      // 注意：getPhotoAccessHelper 需要 UIAbility context（而非 application context），
+      // 否则返回 undefined，导致 createAsset 调用失败。
+      if (!this.uiAbility) {
+        result.success({ success: false, error: '未获取到 UIAbility 上下文（onAttachedToAbility 未触发）' });
+        return;
+      }
+      const helper = photoAccessHelper.getPhotoAccessHelper(this.uiAbility.context);
+      if (!helper) {
+        result.success({ success: false, error: 'getPhotoAccessHelper 返回 undefined，请检查传入的 context 是否为 UIAbility context' });
+        return;
+      }
       const uri = await helper.createAsset(photoAccessHelper.PhotoType.IMAGE, 'jpg');
       const destFile = fs.openSync(uri, fs.OpenMode.WRITE_ONLY);
       fs.writeSync(destFile.fd, buffer);

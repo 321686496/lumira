@@ -21,7 +21,7 @@ class ScenePresetStrip extends ConsumerWidget {
         : ScenePresetsData.allScenePresets;
 
     return SizedBox(
-      height: compact ? 80 : 110,
+      height: compact ? 60 : 82,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -81,7 +81,7 @@ class ScenePresetStrip extends ConsumerWidget {
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              width: compact ? 60 : 72,
+              width: compact ? 45 : 54,
               margin: const EdgeInsets.only(right: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),

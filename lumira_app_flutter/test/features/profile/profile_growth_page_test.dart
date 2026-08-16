@@ -85,8 +85,12 @@ void main() {
   Future<void> settleOrPump(WidgetTester tester) async {
     // sqflite_common_ffi 的 DB 查询是真实 async 操作，FakeAsync 下
     // pump(Duration) 无法让真实 Future 完成，必须用 tester.runAsync。
-    await tester.pump();
-    await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+    // 并行全量负载下 DB Provider 解析可能超过单次 50ms，轮询多次以稳定通过。
+    for (var i = 0; i < 10; i++) {
+      await tester.pump();
+      await tester.runAsync(
+          () => Future.delayed(const Duration(milliseconds: 50)));
+    }
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
   }

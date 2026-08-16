@@ -591,7 +591,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
     if (groups.containsKey('uncategorized')) {
       result.add(SceneFilterPill(
         key: 'uncategorized',
-        label: '未分类',
+        label: '未设置场景',
         count: groups['uncategorized']!,
         icon: Icons.folder_open_outlined,
       ));

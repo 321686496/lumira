@@ -130,9 +130,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('照片详情'), findsOneWidget);
-    // 场景名同时出现在分类 section 与来源 chips（2 处）
-    expect(find.text('cafe'), findsWidgets);
-    expect(find.text('分类'), findsOneWidget);
+    // 面板标题（合并后的"照片信息"面板）
+    expect(find.text('照片信息'), findsOneWidget);
+    // 场景名仅出现一次（分类行），已消除与来源 chips 的重复
+    expect(find.text('cafe'), findsOneWidget);
+    // 分类（场景）行提供"更换"操作
+    expect(find.text('更换'), findsOneWidget);
     // 原图未保留时底部为只读提示（编辑能力已迁移至 GalleryEditPage）
     expect(find.text('原图未保留'), findsWidgets);
   });

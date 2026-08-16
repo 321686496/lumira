@@ -1,11 +1,6 @@
-import 'dart:async';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/capture_state.dart';
-import '../data/capture_thumbnail_state.dart';
 import '../domain/filter_recipe.dart';
 
 /// 所有系统滤镜名称（与 filter_recipe.dart 中 systemFilterLabel 的 keys 一致）。
@@ -39,153 +34,31 @@ const _allLuts = [
   'cyan',
 ];
 
+/// 静态预览图 URL（替代实时取景，减少 GPU 开销）
+const _staticLandscapeImage =
+    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200&q=80';
+const _staticPortraitImage =
+    'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&q=80';
+
 /// 滤镜选择器：内联透明抽屉组件。
-///
-/// 性能优化：直接存储 ui.Image（跳过 PNG 编码/解码），高频捕获（~250ms），
-/// 滤镜卡片使用 RawImage 直接渲染，实现流畅实时预览。
-class FilterPicker extends ConsumerStatefulWidget {
-  const FilterPicker({super.key, this.rawCaptureKey});
+/// 使用静态图片预览，根据前后置摄像头自动切换。
+class FilterPicker extends ConsumerWidget {
+  const FilterPicker({super.key});
 
-  final GlobalKey? rawCaptureKey;
-
-  @override
-  ConsumerState<FilterPicker> createState() => _FilterPickerState();
-}
-
-class _FilterPickerState extends ConsumerState<FilterPicker> {
-  Timer? _captureTimer;
-
-  /// 上一帧的 ui.Image，捕获新帧前 dispose 释放 GPU 内存
-  ui.Image? _lastFrame;
-
-  /// 防重叠标志：toImage 是异步 GPU 操作，防止上一次未完成时定时器又触发
-  bool _isCapturing = false;
-
-  /// 缓存的 ProviderContainer 引用。
-  /// dispose() 中调用 ref.read 会触发 ProviderScope.containerOf(this)，
-  /// 但 dispose() 执行时 element 已被 deactivate，断言
-  /// "Looking up a deactivated widget's ancestor is unsafe" 会抛出，
-  /// 导致整棵 widget 树卸载中断（父级 State.dispose 不执行，Timer 等资源泄漏）。
-  /// 在 didChangeDependencies（element 仍 active）中缓存容器引用，
-  /// dispose 时通过引用直接操作 provider，绕过 widget 树查询。
-  ProviderContainer? _container;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _container = ProviderScope.containerOf(context);
-  }
-
-  @override
-  void dispose() {
-    _captureTimer?.cancel();
-    // 先清空 provider，避免父级 widget 在本 State dispose 后仍用旧 image 渲染。
-    // 否则 RawImage 会引用已被 dispose 的 ui.Image，触发
-    // "Creator of a RawImage disposed of the image" 断言。
-    //
-    // 注意：dispose() 在 widget 树 finalizeTree 阶段被同步调用，此刻直接修改
-    // provider 会触发 "Tried to modify a provider while the widget tree was
-    // building" 异常。因此把 provider 清空与 image 释放延迟到微任务中，等当前
-    // 帧构建完成后执行，避免在构建阶段修改 provider。
-    final container = _container;
-    final lastFrame = _lastFrame;
-    if (lastFrame != null) {
-      scheduleMicrotask(() {
-        container
-            ?.read(CaptureState.filterPreviewImageProvider.notifier)
-            .state = null;
-        lastFrame.dispose();
-      });
-    }
-    super.dispose();
-  }
-
-  /// 启动高频帧捕获，立即执行一次首次捕获。
-  ///
-  /// 性能优化（修复卡顿）：
-  /// - 使用递归 Timer 替代 Timer.periodic：上一帧捕获完成后再调度下一帧，
-  ///   避免 toImage 耗时 >interval 时多个捕获重叠导致 GPU 拥塞
-  /// - _isCapturing 防重叠保护
-  /// - pixelRatio 降至 0.15（72x96 缩略图足够，大幅降低 GPU 开销）
-  void _startCapture() {
-    _captureTimer?.cancel();
-    _scheduleNextCapture(const Duration(milliseconds: 80));
-    WidgetsBinding.instance.addPostFrameCallback((_) => _captureFrame());
-  }
-
-  void _scheduleNextCapture(Duration delay) {
-    _captureTimer = Timer(delay, () {
-      _captureFrame().then((_) {
-        if (mounted && _captureTimer != null) {
-          _scheduleNextCapture(const Duration(milliseconds: 120));
-        }
-      });
-    });
-  }
-
-  void _stopCapture() {
-    _captureTimer?.cancel();
-    _captureTimer = null;
-  }
-
-  /// 捕取当前原始相机帧并直接存储 ui.Image（跳过 PNG 编码/解码）
-  Future<void> _captureFrame() async {
-    if (_isCapturing) return;
-    final key = widget.rawCaptureKey;
-    if (key == null || !mounted) return;
-    final boundary =
-        key.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-    if (boundary == null || boundary.debugNeedsPaint) return;
-
-    _isCapturing = true;
-    try {
-      // pixelRatio: 0.15 — 极低分辨率足以在 72x96 缩略图中显示，大幅降低捕获开销
-      final image = await boundary.toImage(pixelRatio: 0.15);
-      if (!mounted) {
-        image.dispose();
-        return;
-      }
-      // dispose 上一帧释放 GPU 内存
-      // 关键：先清空 provider 引用，再 dispose oldFrame。
-      // 否则 provider 仍持有旧 image，而 RawImage 在下一帧渲染时发现 image 已被
-      // dispose，触发 "Creator of a RawImage disposed of the image" 断言。
-      final oldFrame = _lastFrame;
-      _lastFrame = image;
-      ref.read(CaptureState.filterPreviewImageProvider.notifier).state = image;
-      oldFrame?.dispose();
-    } catch (e) {
-      // 捕获失败时静默忽略
-    } finally {
-      _isCapturing = false;
-    }
-  }
-
-  void _selectSystemFilter(String filter) {
+  void _selectSystemFilter(WidgetRef ref, String filter) {
     final target = filter == 'none' ? null : filter;
     CaptureState.updatePostProcess(
         ref, (p) => p.copyWith(systemFilter: target));
   }
 
-  void _selectLut(String lut) {
+  void _selectLut(WidgetRef ref, String lut) {
     CaptureState.updatePostProcess(ref, (p) => p.copyWith(lut: lut));
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final activeTool = ref.watch(CaptureState.activeToolProvider);
     final isVisible = activeTool == 'filter';
-    // 拍照处理中暂停帧捕获，避免 GPU 占用导致连拍卡顿
-    final thumbnailStatus = ref.watch(captureThumbnailProvider).status;
-    final isCapturing = thumbnailStatus == CaptureThumbnailStatus.processing;
-
-    if (isVisible && _captureTimer == null && !isCapturing) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _captureTimer == null) _startCapture();
-      });
-    } else if ((!isVisible || isCapturing) && _captureTimer != null) {
-      _stopCapture();
-    }
-
     if (!isVisible) return const SizedBox.shrink();
 
     final raw = ref.watch(CaptureState.rawModeProvider);
@@ -194,42 +67,39 @@ class _FilterPickerState extends ConsumerState<FilterPicker> {
     }
 
     final post = ref.watch(CaptureState.effectivePostProcessProvider);
-    final previewImage = ref.watch(CaptureState.filterPreviewImageProvider);
+    final facing = ref.watch(CaptureState.cameraFacingProvider);
+    // 根据前后置摄像头选择静态预览图
+    final previewImageUrl = facing == 'front'
+        ? _staticPortraitImage
+        : _staticLandscapeImage;
 
     return Container(
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.2),
       ),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.35,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _FilterSection(
-                label: '系统滤镜',
-                filters: _allSystemFilters,
-                activeFilter: post.systemFilter ?? 'none',
-                previewImage: previewImage,
-                filterKind: _FilterKind.system,
-                onSelect: _selectSystemFilter,
-              ),
-              const SizedBox(height: 4),
-              _FilterSection(
-                label: 'LUT 预设',
-                filters: _allLuts,
-                activeFilter: post.lut,
-                previewImage: previewImage,
-                filterKind: _FilterKind.lut,
-                onSelect: _selectLut,
-              ),
-            ],
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FilterSection(
+            label: '系统滤镜',
+            filters: _allSystemFilters,
+            activeFilter: post.systemFilter ?? 'none',
+            previewImageUrl: previewImageUrl,
+            filterKind: _FilterKind.system,
+            onSelect: (filter) => _selectSystemFilter(ref, filter),
           ),
-        ),
+          const SizedBox(height: 4),
+          _FilterSection(
+            label: 'LUT 预设',
+            filters: _allLuts,
+            activeFilter: post.lut,
+            previewImageUrl: previewImageUrl,
+            filterKind: _FilterKind.lut,
+            onSelect: (lut) => _selectLut(ref, lut),
+          ),
+        ],
       ),
     );
   }
@@ -242,7 +112,7 @@ class _FilterSection extends StatelessWidget {
     required this.label,
     required this.filters,
     required this.activeFilter,
-    required this.previewImage,
+    required this.previewImageUrl,
     required this.filterKind,
     required this.onSelect,
   });
@@ -250,7 +120,7 @@ class _FilterSection extends StatelessWidget {
   final String label;
   final List<String> filters;
   final String activeFilter;
-  final ui.Image? previewImage;
+  final String previewImageUrl;
   final _FilterKind filterKind;
   final ValueChanged<String> onSelect;
 
@@ -272,12 +142,12 @@ class _FilterSection extends StatelessWidget {
           ),
         ),
         SizedBox(
-          height: 104,
+          height: 78,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             itemCount: filters.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 6),
+            separatorBuilder: (_, __) => const SizedBox(width: 4),
             itemBuilder: (ctx, i) {
               final f = filters[i];
               final active = activeFilter == f ||
@@ -289,7 +159,7 @@ class _FilterSection extends StatelessWidget {
                 filterName: f,
                 filterKind: filterKind,
                 active: active,
-                previewImage: previewImage,
+                previewImageUrl: previewImageUrl,
                 onTap: () => onSelect(f),
               );
             },
@@ -300,14 +170,14 @@ class _FilterSection extends StatelessWidget {
   }
 }
 
-/// 滤镜缩略卡片：使用 RawImage 直接渲染 ui.Image（无需 PNG 解码）
+/// 滤镜缩略卡片：使用静态网络图片 + ColorFiltered 应用滤镜效果
 class _FilterThumbCard extends StatelessWidget {
   const _FilterThumbCard({
     required this.name,
     required this.filterName,
     required this.filterKind,
     required this.active,
-    required this.previewImage,
+    required this.previewImageUrl,
     required this.onTap,
   });
 
@@ -315,7 +185,7 @@ class _FilterThumbCard extends StatelessWidget {
   final String filterName;
   final _FilterKind filterKind;
   final bool active;
-  final ui.Image? previewImage;
+  final String previewImageUrl;
   final VoidCallback onTap;
 
   ColorFilter _buildColorFilter() {
@@ -330,8 +200,9 @@ class _FilterThumbCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const thumbW = 64.0;
-    const thumbH = 80.0;
+    // 75% 缩小：原 64x80 → 48x60
+    const thumbW = 48.0;
+    const thumbH = 60.0;
 
     return GestureDetector(
       onTap: onTap,
@@ -343,51 +214,48 @@ class _FilterThumbCard extends StatelessWidget {
             width: thumbW,
             height: thumbH,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(6),
               border: Border.all(
                 color: active
                     ? const Color(0xFFC9A96E)
                     : Colors.white.withOpacity(0.15),
-                width: active ? 2 : 0.5,
+                width: active ? 1.5 : 0.5,
               ),
             ),
             clipBehavior: Clip.antiAlias,
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (previewImage != null)
-                  ColorFiltered(
-                    colorFilter: _buildColorFilter(),
-                    // RawImage 直接渲染 ui.Image，跳过 PNG 解码，零延迟
-                    child: RawImage(
-                      image: previewImage,
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                else
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.white.withOpacity(0.08),
-                          Colors.white.withOpacity(0.02),
-                        ],
+                ColorFiltered(
+                  colorFilter: _buildColorFilter(),
+                  child: Image.network(
+                    previewImageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white.withOpacity(0.08),
+                            Colors.white.withOpacity(0.02),
+                          ],
+                        ),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.image_outlined,
+                            color: Colors.white24, size: 16),
                       ),
                     ),
-                    child: const Center(
-                      child: Icon(Icons.image_outlined,
-                          color: Colors.white24, size: 20),
-                    ),
                   ),
+                ),
                 if (active)
                   Positioned(
-                    top: 4,
-                    right: 4,
+                    top: 3,
+                    right: 3,
                     child: Container(
-                      width: 16,
-                      height: 16,
+                      width: 12,
+                      height: 12,
                       decoration: const BoxDecoration(
                         color: Color(0xFFC9A96E),
                         shape: BoxShape.circle,
@@ -395,14 +263,14 @@ class _FilterThumbCard extends StatelessWidget {
                       child: const Icon(
                         Icons.check,
                         color: Colors.black,
-                        size: 10,
+                        size: 8,
                       ),
                     ),
                   ),
               ],
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
           SizedBox(
             width: thumbW,
             child: Text(
@@ -414,7 +282,7 @@ class _FilterThumbCard extends StatelessWidget {
                 color: active
                     ? const Color(0xFFC9A96E)
                     : Colors.white70,
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               ),
             ),

@@ -19,7 +19,7 @@ class TemplateStrip extends ConsumerWidget {
     final templatesAsync = ref.watch(CaptureState.sortedTemplatesProvider);
 
     return SizedBox(
-      height: compact ? 80 : 100,
+      height: compact ? 60 : 75,
       child: templatesAsync.when(
         // 加载完成：显示排序后的模板列表
         data: (templates) {
@@ -55,6 +55,31 @@ class TemplateStrip extends ConsumerWidget {
     );
   }
 
+  /// 根据路径类型选择加载方式（本地资源 vs 网络 URL）
+  Widget _buildCoverImage(String cover, bool active) {
+    final isAsset = cover.startsWith('assets/');
+    final placeholder = Container(
+      color: Colors.white12,
+      child: Icon(
+        Icons.image,
+        color: active ? Colors.amber : Colors.white54,
+        size: 24,
+      ),
+    );
+    if (isAsset) {
+      return Image.asset(
+        cover,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => placeholder,
+      );
+    }
+    return Image.network(
+      cover,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => placeholder,
+    );
+  }
+
   /// 构建模板横向列表
   Widget _buildTemplateList(
     List<PhotoTemplate> templates,
@@ -78,7 +103,7 @@ class TemplateStrip extends ConsumerWidget {
                 .state = next;
           },
           child: Container(
-            width: compact ? 60 : 72,
+            width: compact ? 45 : 54,
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
@@ -89,7 +114,7 @@ class TemplateStrip extends ConsumerWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // 封面图
+                // 封面图（本地资源用 Image.asset，网络 URL 用 Image.network）
                 ClipRRect(
                   borderRadius: BorderRadius.circular(6),
                   child: tpl.meta.cover.isEmpty
@@ -101,18 +126,7 @@ class TemplateStrip extends ConsumerWidget {
                             size: 24,
                           ),
                         )
-                      : Image.network(
-                          tpl.meta.cover,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.white12,
-                            child: Icon(
-                              Icons.image,
-                              color: active ? Colors.amber : Colors.white54,
-                              size: 24,
-                            ),
-                          ),
-                        ),
+                      : _buildCoverImage(tpl.meta.cover, active),
                 ),
                 // 渐变遮罩
                 Positioned(

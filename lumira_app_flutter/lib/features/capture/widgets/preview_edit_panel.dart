@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
-import '../../gallery/widgets/crop_overlay.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
 import '../domain/post_process_delta.dart';
@@ -35,6 +34,10 @@ class PreviewEditPanel extends ConsumerStatefulWidget {
   /// 色彩/细节 Tab 的滑块显示全量值（baked + 增量），onChanged 时反推增量传回上层。
   final PostProcess? bakedPostProcess;
 
+  /// 裁剪工具激活状态回调（true = 用户切到「裁剪旋转」Tab）。
+  /// 上层据此在照片本身上叠加裁剪框（iPhone 风格，而非底部小预览）。
+  final ValueChanged<bool>? onCropModeChanged;
+
   const PreviewEditPanel({
     super.key,
     required this.postProcess,
@@ -43,6 +46,7 @@ class PreviewEditPanel extends ConsumerStatefulWidget {
     required this.onTransformChanged,
     this.previewImagePath,
     this.bakedPostProcess,
+    this.onCropModeChanged,
   });
 
   @override
@@ -61,6 +65,8 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() {});
+        // 通知上层裁剪工具激活状态（在照片上叠加裁剪框）
+        widget.onCropModeChanged?.call(_tabController.index == 3);
       }
     });
   }
@@ -113,21 +119,23 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
         return PostProcessColorTab(
           full: _fullForEdit,
           onChanged: _updatePostFromFull,
+          tokens: tokens,
         );
       case 1:
         return PostProcessDetailTab(
           full: _fullForEdit,
           onChanged: _updatePostFromFull,
+          tokens: tokens,
         );
       case 2:
-        return _FilterTab(
+        return FilterTab(
           postProcess: _fullForEdit,
           onChanged: _updatePostFromFull,
           previewImagePath: widget.previewImagePath,
           tokens: tokens,
         );
       case 3:
-        return _CropTab(
+        return CropTab(
           transform: widget.transform,
           onChanged: _updateTransform,
           postProcess: widget.postProcess,
@@ -144,17 +152,18 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
   }
 
   Widget _buildHeader() {
+    final tokens = ref.watch(themeTokensProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
+          Text(
             '编辑',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: tokens.textPrimary,
             ),
           ),
           GestureDetector(
@@ -181,11 +190,11 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
               }
             },
             behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               child: Text(
                 '重置',
-                style: TextStyle(fontSize: 11, color: Colors.white54),
+                style: TextStyle(fontSize: 11, color: tokens.textSecondary),
               ),
             ),
           ),
@@ -208,7 +217,7 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
 }
 
 // === Filter Tab ===
-const _systemFilterLabels = <String, String>{
+const editSystemFilterLabels = <String, String>{
   'none': '原图',
   'vivid': '鲜艳',
   'vivid_warm': '暖艳',
@@ -218,7 +227,7 @@ const _systemFilterLabels = <String, String>{
   'noir': '黑色电影',
 };
 
-const _lutLabels = <String, String>{
+const editLutLabels = <String, String>{
   'none': '原图',
   'cinematic': '电影感',
   'vintage': '复古',
@@ -237,7 +246,7 @@ const _lutLabels = <String, String>{
   'cyan': '青调',
 };
 
-class _FilterTab extends StatelessWidget {
+class FilterTab extends StatelessWidget {
   final PostProcess postProcess;
   final ValueChanged<PostProcess> onChanged;
 
@@ -247,7 +256,8 @@ class _FilterTab extends StatelessWidget {
   /// 主题色板
   final ThemeTokens tokens;
 
-  const _FilterTab({
+  const FilterTab({
+    super.key,
     required this.postProcess,
     required this.onChanged,
     required this.previewImagePath,
@@ -295,9 +305,9 @@ class _FilterTab extends StatelessWidget {
             color: tokens.textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         SizedBox(
-          height: 104,
+          height: 96,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: systemFilters.length,
@@ -305,8 +315,8 @@ class _FilterTab extends StatelessWidget {
             itemBuilder: (_, i) {
               final name = systemFilters[i];
               final selected = postProcess.systemFilter == name;
-              return _FilterThumbnail(
-                label: _systemFilterLabels[name] ?? name,
+              return FilterThumbnail(
+                label: editSystemFilterLabels[name] ?? name,
                 selected: selected,
                 tokens: tokens,
                 matrix: composeSystemFilterMatrix(name),
@@ -318,7 +328,7 @@ class _FilterTab extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 11),
         Text(
           'LUT 预设',
           style: TextStyle(
@@ -327,9 +337,9 @@ class _FilterTab extends StatelessWidget {
             color: tokens.textPrimary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         SizedBox(
-          height: 104,
+          height: 96,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: luts.length,
@@ -337,8 +347,8 @@ class _FilterTab extends StatelessWidget {
             itemBuilder: (_, i) {
               final name = luts[i];
               final selected = postProcess.lut == name;
-              return _FilterThumbnail(
-                label: _lutLabels[name] ?? name,
+              return FilterThumbnail(
+                label: editLutLabels[name] ?? name,
                 selected: selected,
                 tokens: tokens,
                 matrix: composeLutMatrix(name),
@@ -354,7 +364,7 @@ class _FilterTab extends StatelessWidget {
 }
 
 /// 滤镜缩略图卡片：64x80 预览图 + 滤镜名 + 选中边框
-class _FilterThumbnail extends StatelessWidget {
+class FilterThumbnail extends StatelessWidget {
   final String label;
   final bool selected;
   final ThemeTokens tokens;
@@ -362,7 +372,8 @@ class _FilterThumbnail extends StatelessWidget {
   final String? previewImagePath;
   final VoidCallback onTap;
 
-  const _FilterThumbnail({
+  const FilterThumbnail({
+    super.key,
     required this.label,
     required this.selected,
     required this.tokens,
@@ -378,41 +389,64 @@ class _FilterThumbnail extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 64,
+        width: 56,
         child: Column(
           children: [
-            Container(
-              width: 64,
-              height: 80,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: selected ? tokens.brand : tokens.divider,
-                  width: selected ? 2 : 1,
+            Stack(
+              children: [
+                Container(
+                  width: 56,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: selected ? tokens.brand : tokens.divider,
+                      width: selected ? 2 : 1,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: selected ? tokens.shadowFloat : null,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: hasImage
+                        ? ColorFiltered(
+                            colorFilter: ColorFilter.matrix(matrix),
+                            child: previewImagePath!.startsWith('http')
+                                ? Image.network(previewImagePath!,
+                                    fit: BoxFit.cover)
+                                : Image.file(File(previewImagePath!),
+                                    fit: BoxFit.cover),
+                          )
+                        : Container(
+                            color: tokens.surfaceAlt,
+                            alignment: Alignment.center,
+                            child: Text(
+                              label,
+                              style: TextStyle(
+                                  fontSize: 9, color: tokens.textSecondary),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(7),
-                child: hasImage
-                    ? ColorFiltered(
-                        colorFilter: ColorFilter.matrix(matrix),
-                        child: previewImagePath!.startsWith('http')
-                            ? Image.network(previewImagePath!,
-                                fit: BoxFit.cover)
-                            : Image.file(File(previewImagePath!),
-                                fit: BoxFit.cover),
-                      )
-                    : Container(
-                        color: tokens.surfaceAlt,
-                        alignment: Alignment.center,
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                              fontSize: 9, color: tokens.textSecondary),
-                          textAlign: TextAlign.center,
-                        ),
+                // 选中态徽标（右上角对勾）
+                if (selected)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: tokens.brand,
+                        shape: BoxShape.circle,
+                        border:
+                            Border.all(color: tokens.surface, width: 1.5),
                       ),
-              ),
+                      child: Icon(Icons.check,
+                          size: 11, color: tokens.textInverse),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(
@@ -431,7 +465,7 @@ class _FilterThumbnail extends StatelessWidget {
 }
 
 // === Crop Tab ===
-class _CropTab extends StatelessWidget {
+class CropTab extends StatelessWidget {
   final TransformParams transform;
   final ValueChanged<TransformParams> onChanged;
 
@@ -447,7 +481,8 @@ class _CropTab extends StatelessWidget {
   /// 预览图路径（用于裁剪框预览区）
   final String? previewImagePath;
 
-  const _CropTab({
+  const CropTab({
+    super.key,
     required this.transform,
     required this.onChanged,
     required this.postProcess,
@@ -455,23 +490,6 @@ class _CropTab extends StatelessWidget {
     required this.tokens,
     required this.previewImagePath,
   });
-
-  /// 将裁剪比例字符串解析为数值宽高比（width/height）
-  /// 返回 null 表示自由裁剪（不锁定比例）
-  double? _parseCropAspectRatio(String ratio, bool isPortrait) {
-    if (ratio == 'free' || ratio == 'none' || ratio == 'fullscreen') {
-      return null;
-    }
-    if (ratio == '4:3') return isPortrait ? 3.0 / 4.0 : 4.0 / 3.0;
-    if (ratio == '1:1') return 1.0;
-    final parts = ratio.split(':');
-    if (parts.length == 2) {
-      final w = double.tryParse(parts[0]);
-      final h = double.tryParse(parts[1]);
-      if (w != null && h != null && w > 0 && h > 0) return w / h;
-    }
-    return null;
-  }
 
   /// 裁剪比例选择器：自由 / 1:1 / 4:3 / 3:4 / 16:9 / 全屏
   Widget _buildRatioSelector() {
@@ -551,96 +569,57 @@ class _CropTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isPortrait =
-        MediaQuery.of(context).size.height >= MediaQuery.of(context).size.width;
-    final cropAspect = _parseCropAspectRatio(postProcess.cropRatio, isPortrait);
-
+    // 裁剪框已迁移到照片本体上（PhotoCropLayer 叠加），
+    // 底部面板不再显示小预览框，保留比例选择 / 旋转翻转 / 拉直。
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       children: [
         _buildRatioSelector(),
-        // 裁剪框预览区
-        _CropPreview(
-          imagePath: previewImagePath,
-          cropRect: postProcess.customCropRect,
-          aspectRatio: cropAspect,
-          tokens: tokens,
-          onCropChanged: (rect) {
-            onPostProcessChanged(postProcess.copyWith(
-              customCropRect: CropRect(
-                x: rect.left,
-                y: rect.top,
-                w: rect.width,
-                h: rect.height,
+        // 旋转 / 翻转 控制组：圆角容器内一字排开的图标操作
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: tokens.surfaceAlt,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _CropAction(
+                icon: Icons.rotate_left,
+                label: '逆时针',
+                tokens: tokens,
+                onTap: () => onChanged(transform.copyWith(
+                  rotation: (transform.rotation - 90) % 360,
+                )),
               ),
-            ));
-          },
-        ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              '旋转',
-              style: TextStyle(fontSize: 11, color: Colors.white70),
-            ),
-            Row(
-              children: [
-                LumiraIconButton(
-                  icon: Icons.rotate_left,
-                  onPressed: () => onChanged(transform.copyWith(
-                    rotation: (transform.rotation - 90) % 360,
-                  )),
-                  color: Colors.white70,
-                  size: 18,
-                ),
-                LumiraIconButton(
-                  icon: Icons.rotate_right,
-                  onPressed: () => onChanged(transform.copyWith(
-                    rotation: (transform.rotation + 90) % 360,
-                  )),
-                  color: Colors.white70,
-                  size: 18,
-                ),
-                SizedBox(
-                  width: 48,
-                  child: Text(
-                    '${transform.rotation}°',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 11, color: Colors.white54),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              '翻转',
-              style: TextStyle(fontSize: 11, color: Colors.white70),
-            ),
-            Row(
-              children: [
-                _CustomChip(
-                  label: '水平',
-                  selected: transform.flipH,
-                  onTap: () =>
-                      onChanged(transform.copyWith(flipH: !transform.flipH)),
-                ),
-                const SizedBox(width: 6),
-                _CustomChip(
-                  label: '垂直',
-                  selected: transform.flipV,
-                  onTap: () =>
-                      onChanged(transform.copyWith(flipV: !transform.flipV)),
-                ),
-              ],
-            ),
-          ],
+              _CropAction(
+                icon: Icons.rotate_right,
+                label: '顺时针',
+                tokens: tokens,
+                onTap: () => onChanged(transform.copyWith(
+                  rotation: (transform.rotation + 90) % 360,
+                )),
+              ),
+              _CropAction(
+                icon: Icons.flip,
+                label: '水平',
+                active: transform.flipH,
+                tokens: tokens,
+                onTap: () =>
+                    onChanged(transform.copyWith(flipH: !transform.flipH)),
+              ),
+              _CropAction(
+                icon: Icons.flip,
+                label: '垂直',
+                active: transform.flipV,
+                quarterTurns: 1,
+                tokens: tokens,
+                onTap: () =>
+                    onChanged(transform.copyWith(flipV: !transform.flipV)),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 8),
         PostProcessSliderRow(
@@ -648,6 +627,7 @@ class _CropTab extends StatelessWidget {
           value: transform.straighten,
           min: -15,
           max: 15,
+          tokens: tokens,
           onChanged: (v) => onChanged(transform.copyWith(straighten: v)),
         ),
       ],
@@ -655,223 +635,58 @@ class _CropTab extends StatelessWidget {
   }
 }
 
-/// 裁剪框预览区
-///
-/// 加载图片获取宽高比，按比例显示图片 + 可拖拽裁剪框叠加层。
-/// 使用 ImageStream 监听图片加载完成，获取 intrinsic 尺寸。
-class _CropPreview extends StatefulWidget {
-  /// 图片路径（文件路径或 URL）
-  final String? imagePath;
-
-  /// 当前裁剪框（相对坐标），null = 使用默认居中
-  final CropRect? cropRect;
-
-  /// 锁定宽高比（null = 自由）
-  final double? aspectRatio;
-
-  /// 主题色板
-  final ThemeTokens tokens;
-
-  /// 裁剪框变化回调
-  final ValueChanged<Rect> onCropChanged;
-
-  const _CropPreview({
-    required this.imagePath,
-    required this.cropRect,
-    required this.aspectRatio,
+/// 裁剪变换操作项：圆形图标 + 下方名称，翻转类操作高亮选中态
+class _CropAction extends StatelessWidget {
+  const _CropAction({
+    required this.icon,
+    required this.label,
     required this.tokens,
-    required this.onCropChanged,
+    required this.onTap,
+    this.active = false,
+    this.quarterTurns = 0,
   });
 
-  @override
-  State<_CropPreview> createState() => _CropPreviewState();
-}
-
-class _CropPreviewState extends State<_CropPreview> {
-  /// 图片宽高比（width / height），加载前为 null
-  double? _imageAspect;
-
-  /// 图片流和监听器（用于 dispose 时移除）
-  ImageStream? _imageStream;
-  ImageStreamListener? _listener;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadImage();
-  }
-
-  @override
-  void didUpdateWidget(_CropPreview oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.imagePath != oldWidget.imagePath) {
-      _loadImage();
-    }
-  }
-
-  @override
-  void dispose() {
-    _imageStream?.removeListener(_listener!);
-    super.dispose();
-  }
-
-  /// 加载图片获取宽高比
-  void _loadImage() {
-    if (widget.imagePath == null || widget.imagePath!.isEmpty) {
-      if (mounted) setState(() => _imageAspect = null);
-      return;
-    }
-    // 移除旧监听
-    _imageStream?.removeListener(_listener!);
-    // 分别处理网络图片和本地文件，避免泛型类型推断问题
-    if (widget.imagePath!.startsWith('http')) {
-      _imageStream =
-          NetworkImage(widget.imagePath!).resolve(const ImageConfiguration());
-    } else {
-      _imageStream =
-          FileImage(File(widget.imagePath!)).resolve(const ImageConfiguration());
-    }
-    _listener = ImageStreamListener((info, _) {
-      if (mounted) {
-        setState(() {
-          _imageAspect = info.image.width / info.image.height;
-        });
-      }
-    });
-    _imageStream!.addListener(_listener!);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.imagePath == null || widget.imagePath!.isEmpty) {
-      return _buildPlaceholder('无图片');
-    }
-    if (_imageAspect == null) {
-      return const SizedBox(
-        height: 200,
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // 在可用空间内按图片宽高比计算显示尺寸（最大高度 200）
-        const maxH = 200.0;
-        final maxW = constraints.maxWidth;
-        final ratio = _imageAspect!;
-        double w, h;
-        if (maxW / maxH > ratio) {
-          // 受高度约束
-          h = maxH;
-          w = h * ratio;
-        } else {
-          // 受宽度约束
-          w = maxW;
-          h = w / ratio;
-        }
-        return Center(
-          child: SizedBox(
-            width: w,
-            height: h,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // 图片（BoxFit.fill 填满整个区域，与裁剪框坐标对齐）
-                  widget.imagePath!.startsWith('http')
-                      ? Image.network(widget.imagePath!,
-                          fit: BoxFit.fill,
-                          errorBuilder: (_, __, ___) => _buildErrorWidget())
-                      : Image.file(File(widget.imagePath!),
-                          fit: BoxFit.fill,
-                          errorBuilder: (_, __, ___) => _buildErrorWidget()),
-                  // 裁剪框叠加层
-                  CropOverlay(
-                    initialRect: widget.cropRect != null
-                        ? Rect.fromLTWH(
-                            widget.cropRect!.x,
-                            widget.cropRect!.y,
-                            widget.cropRect!.w,
-                            widget.cropRect!.h,
-                          )
-                        : null,
-                    aspectRatio: widget.aspectRatio,
-                    onChanged: widget.onCropChanged,
-                    tokens: widget.tokens,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildPlaceholder(String text) {
-    return SizedBox(
-      height: 200,
-      child: Center(
-        child: Text(text,
-            style: const TextStyle(fontSize: 12, color: Colors.white38)),
-      ),
-    );
-  }
-
-  Widget _buildErrorWidget() {
-    return Container(
-      color: const Color(0xFF2A2724),
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.broken_image_outlined, size: 32, color: Colors.white38),
-            SizedBox(height: 8),
-            Text('图片加载失败',
-                style: TextStyle(fontSize: 12, color: Colors.white38)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// === 自定义 Chip ===
-/// 圆角矩形（borderRadius 8）
-/// 选中：品牌色背景 + 黑字
-/// 未选中：半透明白色背景 + 白字
-class _CustomChip extends StatelessWidget {
+  final IconData icon;
   final String label;
-  final bool selected;
+  final bool active;
+  final int quarterTurns;
+  final ThemeTokens tokens;
   final VoidCallback onTap;
 
-  const _CustomChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
   @override
   Widget build(BuildContext context) {
+    final color = active ? tokens.brand : tokens.textSecondary;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFFE5C07B)
-              : Colors.white.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: selected ? Colors.black : Colors.white70,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: active ? tokens.brandSubtle : Colors.transparent,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: RotatedBox(
+              quarterTurns: quarterTurns,
+              child: Icon(icon, size: 20, color: color),
+            ),
           ),
-        ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              color: color,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ],
       ),
     );
   }

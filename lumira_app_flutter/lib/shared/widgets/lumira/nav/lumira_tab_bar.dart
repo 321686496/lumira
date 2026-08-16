@@ -75,19 +75,22 @@ class LumiraTabBar extends ConsumerWidget {
                       final value =
                           controller.animation?.value ??
                           controller.index.toDouble();
-                      // 把 [0, tabCount-1] 映射到 Alignment.x 的 [-1, 1]
-                      // 使下划线中心对齐到当前选中 tab 的中心
+                      // 下划线宽度取 tab 宽的一半，中心对齐到当前选中 tab 的中心。
+                      // 直接计算 left，避免 Align 偏移公式未扣除子组件宽度导致的错位。
+                      final underlineWidth = tabWidth * 0.5;
+                      final left =
+                          value * tabWidth + (tabWidth - underlineWidth) / 2;
                       return Align(
-                        alignment: Alignment(
-                          (value + 0.5) / tabCount * 2 - 1,
-                          0,
-                        ),
-                        child: Container(
-                          width: tabWidth * 0.5,
-                          height: 2,
-                          decoration: BoxDecoration(
-                            color: tokens.brand,
-                            borderRadius: BorderRadius.circular(1),
+                        alignment: Alignment.centerLeft,
+                        child: Padding(
+                          padding: EdgeInsets.only(left: left),
+                          child: Container(
+                            width: underlineWidth,
+                            height: 2,
+                            decoration: BoxDecoration(
+                              color: tokens.brand,
+                              borderRadius: BorderRadius.circular(1),
+                            ),
                           ),
                         ),
                       );

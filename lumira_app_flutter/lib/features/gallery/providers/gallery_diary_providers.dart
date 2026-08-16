@@ -111,15 +111,14 @@ final diaryEntriesProvider =
           icon: Icons.photo_filter_outlined,
         ));
       }
+      // 心情独立成字段（叠加在照片角上），不再混入下方标签
       final mood = r.mood;
-      if (mood != null && mood.isNotEmpty) {
-        tags.add(DiaryTag(
-          label: mood,
-          color: DiaryTagColor.red,
-          icon: Icons.sentiment_satisfied_outlined,
-        ));
-      }
-      return DiaryPhoto(id: r.id, img: img, tags: tags);
+      return DiaryPhoto(
+        id: r.id,
+        img: img,
+        tags: tags,
+        mood: (mood != null && mood.isNotEmpty) ? mood : null,
+      );
     }).toList();
 
     return DiaryEntry(

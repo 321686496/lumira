@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io' show File;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
-import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat, instantiateImageCodec;
+import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat;
+
+import 'package:flutter/services.dart' show HapticFeedback;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -745,6 +747,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
           .setFinalResult(finalPath, photoId);
       ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
           finalPath;
+
+      // 诊断：确认最终照片文件的实际像素尺寸（排查横向拉伸）
+      try {
+        final fb = await File(finalPath).readAsBytes();
+        final decoder = img.findDecoderForData(fb);
+        final info = decoder?.startDecode(fb);
+        debugPrint('[capture] 照片文件实际尺寸: ${info?.width}x${info?.height} '
+            'ratio=${info != null && info.height != 0 ? (info.width / info.height).toStringAsFixed(4) : "?"}');
+      } catch (e) {
+        debugPrint('[capture] 读取照片尺寸失败: $e');
+      }
     } catch (e) {
       debugPrint('[capture] process failed: $e');
     } finally {
@@ -834,7 +847,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
   }
 
   /// 缩放回调：接收真实倍数，clamp 到设备支持范围后下发到相机。
-  /// 由 _ZoomTabBar 倍数切换或水平拖动触发。
+  /// 由 _ZoomDial 倍数切换或水平拖动触发。
   /// 比例切换的视觉效果由取景器容器大小变化 + cover 裁切自动实现，无需 zoom 补偿。
   void _onZoomChanged(double multiplier) {
     final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
@@ -1053,16 +1066,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
             ),
           ),
 
-          // 4.5 抽屉浮层（工具栏上方，不挤压布局）
-          //    全屏 / 试用模式隐藏
-          //    使用 Positioned 独立浮层，bottom 偏移 = 底部安全区 + 按钮行 + 工具栏高度
-          if (!isFullscreen && !isTrialMode)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: MediaQuery.of(context).padding.bottom + 140,
-              child: _AnimatedToolDrawer(rawCaptureKey: _viewfinderCaptureKey),
-            ),
+          // 4.5 抽屉浮层已移除，恢复 Column 流式布局
 
           // 5. 参数面板（底部滑入，使用 AnimatedPositioned，必须在 Stack 内）
           const ParamPanel(),
@@ -1383,12 +1387,13 @@ class _BottomControlArea extends StatelessWidget {
           children: [
             // 缩放Tab栏（全屏 / 试用模式隐藏）
             if (!isFullscreen && !isTrialMode)
-              _ZoomTabBar(onChanged: onZoomChanged),
+              _ZoomBar(onChanged: onZoomChanged),
 
-            // 工具栏（全屏 / 试用模式隐藏）
-            // 抽屉已移至主 Stack 作为独立浮层，不再挤压工具栏
-            if (!isFullscreen && !isTrialMode)
+            // 工具栏 + 抽屉（全屏 / 试用模式隐藏）
+            if (!isFullscreen && !isTrialMode) ...[
               const _CaptureToolbar(),
+              _AnimatedToolDrawer(rawCaptureKey: rawCaptureKey),
+            ],
 
             // 拍摄按钮行（试用模式下快门替换为锁定态，不响应拍照）
             _CaptureButtonRow(
@@ -1405,7 +1410,7 @@ class _BottomControlArea extends StatelessWidget {
   }
 }
 
-/// 底部工具栏：一排图标按钮（模板/场景/参数/补光）— 毛玻璃胶囊设计
+/// 底部工具栏：一排图标按钮（模板/场景/参数/补光）— 圆角矩形半透明背景
 /// 点击未激活的工具 → 激活并展开抽屉
 /// 点击已激活的工具 → 收起抽屉
 /// 点击"参数" → 直接打开 ParamPanel
@@ -1432,47 +1437,27 @@ class _CaptureToolbar extends ConsumerWidget {
         ? _tools
         : _tools.where((t) => t.id != 'fillLight').toList();
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ClipRRect(
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.4),
         borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF141416).withOpacity(0.75),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: Colors.white.withOpacity(0.1),
-                width: 0.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: Colors.white.withOpacity(0.05),
-                  blurRadius: 1,
-                  offset: const Offset(0, 0.5),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: tools.map((tool) {
-                final active = activeTool == tool.id;
-                return _ToolButton(
-                  tool: tool,
-                  active: active,
-                  onTap: () => _onTap(ref, tool.id, active),
-                );
-              }).toList(),
-            ),
-          ),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.08),
+          width: 0.5,
         ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: tools.map((tool) {
+          final active = activeTool == tool.id;
+          return _ToolButton(
+            tool: tool,
+            active: active,
+            onTap: () => _onTap(ref, tool.id, active),
+          );
+        }).toList(),
       ),
     );
   }
@@ -1587,7 +1572,7 @@ class _AnimatedToolDrawer extends ConsumerWidget {
         // 参数面板由 ParamPanel（底部滑入）处理，抽屉不显示额外内容
         return const SizedBox.shrink();
       case 'filter':
-        return FilterPicker(rawCaptureKey: rawCaptureKey);
+        return const FilterPicker();
       case 'fillLight':
         return const _FillLightPanel();
       default:
@@ -2412,35 +2397,38 @@ class _SavedColorDot extends StatelessWidget {
   }
 }
 
-/// 缩放Tab栏：快捷倍数切换 + 水平拖动展开轮盘精细调整
+/// 缩放栏：默认胶囊 Tab + 拖动弹出 iPhone 原生风格旋转轮盘
 ///
-/// 预设倍数根据设备能力动态生成（deviceMaxZoomProvider /
-/// supportsUltraWideProvider）。默认 1x。点击 Tab 快速切换到对应倍数。
-/// 水平拖动时显示轮盘 overlay，可精细调整缩放（0.1x 步进）。
-class _ZoomTabBar extends ConsumerStatefulWidget {
-  const _ZoomTabBar({required this.onChanged});
+/// 默认状态：半透明胶囊容器，显示预设倍数 Tab，点击快速切换。
+/// 后置摄像头：水平拖动胶囊时弹出旋转轮盘（从底部滑入），可精细调整缩放。
+/// 轮盘旋转，指针固定在顶部不动（与 iPhone 原生相机一致）。
+/// 前置摄像头：仅支持点按 Tab 切换，不支持拖动精细调整。
+class _ZoomBar extends ConsumerStatefulWidget {
+  const _ZoomBar({required this.onChanged});
 
   final ValueChanged<double> onChanged;
 
   @override
-  ConsumerState<_ZoomTabBar> createState() => _ZoomTabBarState();
+  ConsumerState<_ZoomBar> createState() => _ZoomBarState();
 }
 
-class _ZoomTabBarState extends ConsumerState<_ZoomTabBar> {
-  /// 是否正在显示轮盘（水平拖动中）
-  bool _showWheel = false;
+class _ZoomBarState extends ConsumerState<_ZoomBar> {
+  /// 是否正在显示弧形轮盘（水平拖动中）
+  bool _showDial = false;
 
-  /// 轮盘拖动起始时的倍数
+  /// 拖动起始时的倍数
   double _dragStartMultiplier = 1.0;
 
-  /// 轮盘拖动起始的水平位置
-  double _dragStartX = 0;
+  /// 拖动起始时的水平位置
+  double _dragStartX = 0.0;
+
+  /// 轮盘滑入动画控制器
+  double _dialOffset = 1.0; // 1.0 = 完全隐藏（底部），0.0 = 完全显示
+
+  /// 上一次触发震动的倍数（用于检测刻度变化）
+  double _lastHapticMultiplier = -1.0;
 
   /// 根据设备能力动态生成预设倍数列表。
-  ///
-  /// 前置摄像头通常 maxZoom 较小（多数机型 1.5x-2x），且数字变焦画质差，
-  /// 故前置不生成 2x/3x/5x 预设，避免显示用户点击后无明显变化的 Tab。
-  /// 仅后置摄像头根据 maxZoom 动态生成多档预设。
   List<double> _getZoomPresets(String facing, double maxZoom, bool supportsUltraWide) {
     final base = <double>[1.0];
     if (facing == 'back') {
@@ -2467,104 +2455,158 @@ class _ZoomTabBarState extends ConsumerState<_ZoomTabBar> {
   }
 
   void _onHorizontalDragStart(DragStartDetails details) {
+    final facing = ref.read(CaptureState.cameraFacingProvider);
+    if (facing != 'back') return;
     _dragStartMultiplier = ref.read(CaptureState.apparentZoomProvider);
     _dragStartX = details.globalPosition.dx;
-    setState(() => _showWheel = true);
+    _lastHapticMultiplier = _dragStartMultiplier;
+    setState(() => _showDial = true);
+    _animateDialIn();
   }
 
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    final facing = ref.read(CaptureState.cameraFacingProvider);
+    if (facing != 'back') return;
     final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
     final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
     final deltaX = details.globalPosition.dx - _dragStartX;
-    // 每 40px 像素 = 0.1x 倍数变化（向右增加，向左减少）
-    final deltaMultiplier = (deltaX / 40).round() * 0.1;
+    // 每 30px = 0.1x 倍数变化
+    final deltaMultiplier = (deltaX / 30) * 0.1;
     var newMultiplier = _dragStartMultiplier + deltaMultiplier;
     newMultiplier = newMultiplier.clamp(minZoom, maxZoom);
     widget.onChanged(newMultiplier);
+
+    // 每变化 0.1x 触发一次震动反馈
+    final roundedNew = (newMultiplier * 10).round() / 10.0;
+    final roundedLast = (_lastHapticMultiplier * 10).round() / 10.0;
+    if (roundedNew != roundedLast) {
+      HapticFeedback.lightImpact();
+      _lastHapticMultiplier = newMultiplier;
+    }
   }
 
   void _onHorizontalDragEnd(DragEndDetails _) {
-    setState(() => _showWheel = false);
+    HapticFeedback.mediumImpact();
+    _animateDialOut();
+  }
+
+  void _animateDialIn() {
+    double start = 1.0;
+    double end = 0.0;
+    const duration = Duration(milliseconds: 250);
+    final startTime = DateTime.now();
+
+    void tick() {
+      final elapsed = DateTime.now().difference(startTime);
+      final t = (elapsed.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+      final eased = 1 - math.pow(1 - t, 3).toDouble();
+      setState(() {
+        _dialOffset = start + (end - start) * eased;
+      });
+      if (t < 1.0) {
+        Future.delayed(const Duration(milliseconds: 16), tick);
+      }
+    }
+    tick();
+  }
+
+  void _animateDialOut() {
+    double start = _dialOffset;
+    double end = 1.0;
+    const duration = Duration(milliseconds: 200);
+    final startTime = DateTime.now();
+
+    void tick() {
+      final elapsed = DateTime.now().difference(startTime);
+      final t = (elapsed.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+      final eased = t * t;
+      setState(() {
+        _dialOffset = start + (end - start) * eased;
+      });
+      if (t < 1.0) {
+        Future.delayed(const Duration(milliseconds: 16), tick);
+      } else {
+        setState(() => _showDial = false);
+      }
+    }
+    tick();
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
     final facing = ref.watch(CaptureState.cameraFacingProvider);
     final multiplier = ref.watch(CaptureState.apparentZoomProvider);
     final maxZoom = ref.watch(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final minZoom = ref.watch(CaptureState.deviceMinZoomProvider) ?? 1.0;
     final supportsUltraWide = ref.watch(CaptureState.supportsUltraWideProvider);
     final presets = _getZoomPresets(facing, maxZoom, supportsUltraWide);
     final activeIndex = _nearestPresetIndex(multiplier, presets);
+    final canDrag = facing == 'back';
 
     return GestureDetector(
-      onHorizontalDragStart: _onHorizontalDragStart,
-      onHorizontalDragUpdate: _onHorizontalDragUpdate,
-      onHorizontalDragEnd: _onHorizontalDragEnd,
+      onHorizontalDragStart: canDrag ? _onHorizontalDragStart : null,
+      onHorizontalDragUpdate: canDrag ? _onHorizontalDragUpdate : null,
+      onHorizontalDragEnd: canDrag ? _onHorizontalDragEnd : null,
       behavior: HitTestBehavior.opaque,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          // Tab 栏 — 毛玻璃胶囊容器
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141416).withOpacity(0.75),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.1),
-                    width: 0.5,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.25),
-                      blurRadius: 20,
-                      offset: const Offset(0, 4),
-                    ),
-                    BoxShadow(
-                      color: Colors.white.withOpacity(0.05),
-                      blurRadius: 1,
-                      offset: const Offset(0, 0.5),
+      child: SizedBox(
+        height: 60,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.bottomCenter,
+          children: [
+            // 默认胶囊 Tab 栏
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < presets.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 2),
+                    _ZoomTab(
+                      label: presets[i] == presets[i].toInt()
+                          ? '${presets[i].toInt()}'
+                          : presets[i].toStringAsFixed(1),
+                      active: i == activeIndex && !_showDial,
+                      onTap: () {
+                        widget.onChanged(presets[i]);
+                      },
                     ),
                   ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var i = 0; i < presets.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 4),
-                      _ZoomTab(
-                        label: '${presets[i].toStringAsFixed(presets[i] == presets[i].toInt() ? 0 : 1)}x',
-                        active: i == activeIndex && !_showWheel,
-                        onTap: () {
-                          widget.onChanged(presets[i]);
-                        },
-                      ),
-                    ],
-                  ],
-                ),
+                ],
               ),
             ),
-          ),
-          // 轮盘 overlay（水平拖动时显示）
-          if (_showWheel)
-            Positioned(
-              top: -50,
-              child: _ZoomWheelIndicator(multiplier: multiplier),
-            ),
-        ],
+            // 圆形轮盘 overlay（后置拖动时从底部滑入）
+            if (_showDial)
+              Positioned(
+                bottom: 0 + 80 * _dialOffset,
+                left: 0,
+                right: 0,
+                child: SizedBox(
+                  width: screenWidth,
+                  height: screenWidth / 2,
+                  child: _HalfCircleDial(
+                    multiplier: multiplier,
+                    presets: presets,
+                    activeIndex: activeIndex,
+                    minZoom: minZoom,
+                    maxZoom: maxZoom,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// 单个缩放 Tab 按钮
+/// 单个缩放 Tab 按钮 — iPhone 原生风格
 class _ZoomTab extends StatelessWidget {
   const _ZoomTab({required this.label, required this.active, required this.onTap});
   final String label;
@@ -2576,30 +2618,19 @@ class _ZoomTab extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: active
-              ? const Color(0xFFC9A96E)
-              : Colors.transparent,
+          color: active ? const Color(0xFFF0C040) : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: active
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFC9A96E).withOpacity(0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: active ? Colors.black : Colors.white.withOpacity(0.5),
-            fontSize: 12,
-            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            color: active ? Colors.black : Colors.white.withOpacity(0.85),
+            fontSize: 13,
+            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+            letterSpacing: 0.2,
           ),
         ),
       ),
@@ -2607,37 +2638,245 @@ class _ZoomTab extends StatelessWidget {
   }
 }
 
-/// 缩放轮盘指示器（水平拖动时显示当前精细倍数）
-class _ZoomWheelIndicator extends StatelessWidget {
-  const _ZoomWheelIndicator({required this.multiplier});
+/// 半圆缩放轮盘 — 完整圆形只显示上半部分
+///
+/// 直径 = 屏幕宽度 100%，圆心在底部中央。
+/// 半透明黑色圆形背景，只显示上半圆。
+class _HalfCircleDial extends StatelessWidget {
+  const _HalfCircleDial({
+    required this.multiplier,
+    required this.presets,
+    required this.activeIndex,
+    required this.minZoom,
+    required this.maxZoom,
+  });
+
   final double multiplier;
+  final List<double> presets;
+  final int activeIndex;
+  final double minZoom;
+  final double maxZoom;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFC9A96E), width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.unfold_more, color: Color(0xFFC9A96E), size: 14),
-          const SizedBox(width: 6),
-          Text(
-            '${multiplier.toStringAsFixed(1)}x',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final radius = screenWidth / 2;
+
+    final totalRange = maxZoom - minZoom;
+    final currentT = totalRange > 0 ? (multiplier - minZoom) / totalRange : 0.0;
+    // 与 iPhone 原生一致：半圆弧（180°），从左侧经顶部到右侧
+    const tickStartAngle = -math.pi;
+    const tickSweepAngle = math.pi;
+    final currentAngleOnDial = tickStartAngle + currentT * tickSweepAngle;
+    final rotationAngle = (-math.pi / 2) - currentAngleOnDial;
+
+    return SizedBox(
+      width: screenWidth,
+      height: radius,
+      child: ClipRect(
+        child: OverflowBox(
+          maxHeight: screenWidth,
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            width: screenWidth,
+            height: screenWidth,
+            child: Stack(
+              children: [
+                // 半透明黑色圆形背景
+                Container(
+                  width: screenWidth,
+                  height: screenWidth,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.55),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                // 旋转轮盘（刻度 + 数字标签一起旋转，指针固定）
+                Transform.rotate(
+                  angle: rotationAngle,
+                  child: SizedBox(
+                    width: screenWidth,
+                    height: screenWidth,
+                    child: Stack(
+                      children: [
+                        CustomPaint(
+                          painter: _HalfCircleTickPainter(
+                            radius: radius,
+                            startAngle: tickStartAngle,
+                            sweepAngle: tickSweepAngle,
+                            totalRange: totalRange,
+                          ),
+                        ),
+                        // 数字标签与刻度同层旋转，反向旋转保持正立
+                        ..._buildUprightLabels(radius, rotationAngle, totalRange, tickStartAngle, tickSweepAngle),
+                      ],
+                    ),
+                  ),
+                ),
+                // 固定指针
+                Positioned(
+                  top: screenWidth * 0.04,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: CustomPaint(painter: _PointerPainter()),
+                  ),
+                ),
+                // 当前倍数显示
+                Positioned(
+                  top: screenWidth * 0.15,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0C040),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${multiplier.toStringAsFixed(1)}x',
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
+
+  List<Widget> _buildUprightLabels(double radius, double rotationAngle, double totalRange, double tickStartAngle, double tickSweepAngle) {
+    final widgets = <Widget>[];
+    for (var i = 0; i < presets.length; i++) {
+      final preset = presets[i];
+      final t = totalRange > 0 ? (preset - minZoom) / totalRange : 0.0;
+      final angle = tickStartAngle + t * tickSweepAngle;
+      final isMajor = i == activeIndex;
+
+      final labelRadius = radius * 0.82 - 22;
+      final centerX = radius;
+      final centerY = radius;
+      final labelX = centerX + labelRadius * math.cos(angle);
+      final labelY = centerY + labelRadius * math.sin(angle);
+
+      final label = preset == preset.toInt()
+          ? '${preset.toInt()}'
+          : preset.toStringAsFixed(1);
+
+      widgets.add(
+        Positioned(
+          left: labelX,
+          top: labelY,
+          child: Transform.rotate(
+            angle: -rotationAngle,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isMajor ? const Color(0xFFF0C040) : Colors.white.withOpacity(0.8),
+                fontSize: isMajor ? 15 : 12,
+                fontWeight: isMajor ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return widgets;
+  }
+}
+
+/// 半圆刻度绘制器（随轮盘旋转）
+class _HalfCircleTickPainter extends CustomPainter {
+  _HalfCircleTickPainter({
+    required this.radius,
+    required this.startAngle,
+    required this.sweepAngle,
+    required this.totalRange,
+  });
+
+  final double radius;
+  final double startAngle;
+  final double sweepAngle;
+  final double totalRange;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    final arcR = radius * 0.82;
+
+    // 1. 绘制弧线
+    final arcPaint = Paint()
+      ..color = Colors.white.withOpacity(0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(centerX, centerY), radius: arcR),
+      startAngle,
+      sweepAngle,
+      false,
+      arcPaint,
+    );
+
+    // 2. 绘制密集刻度线
+    final stepCount = ((totalRange / 0.1).round()).clamp(10, 200);
+    for (var i = 0; i <= stepCount; i++) {
+      final t = i / stepCount;
+      final angle = startAngle + t * sweepAngle;
+      final isMajorTick = i % 10 == 0;
+      final tickLength = isMajorTick ? 14.0 : 6.0;
+      final tickWidth = isMajorTick ? 1.5 : 0.7;
+
+      final outerR = arcR;
+      final innerR = arcR - tickLength;
+
+      final p1 = Offset(
+        centerX + outerR * math.cos(angle),
+        centerY + outerR * math.sin(angle),
+      );
+      final p2 = Offset(
+        centerX + innerR * math.cos(angle),
+        centerY + innerR * math.sin(angle),
+      );
+
+      canvas.drawLine(
+        p1, p2,
+        Paint()
+          ..color = Colors.white.withOpacity(isMajorTick ? 0.75 : 0.35)
+          ..strokeWidth = tickWidth,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HalfCircleTickPainter oldDelegate) => false;
+}
+
+/// 顶部固定指针绘制器（金黄色向下小三角）
+class _PointerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFFF0C040);
+    final s = 6.0;
+    final path = Path()
+      ..moveTo(0, s)
+      ..lineTo(-s * 0.8, -s * 0.5)
+      ..lineTo(s * 0.8, -s * 0.5)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// 拍摄按钮行：角标缩略图 + 拍摄按钮 + 翻转摄像头
@@ -2994,15 +3233,29 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
   final swDecode = Stopwatch()..start();
   try {
     final bytes = await File(params.inputPath).readAsBytes();
-    // 降采样解码（C 优化）：限制解码尺寸，避免全尺寸 4000px 解码
-    final codec = await ui.instantiateImageCodec(
-      bytes,
-      targetWidth: kDecodeTargetDim,
-      targetHeight: kDecodeTargetDim,
+    // 高效降采样解码：先用 ImageDescriptor 读取原始宽高，再按比例缩放到
+    // 不超过 kDecodeTargetDim 的包围盒内（保持原始宽高比，避免拉伸）。
+    // 相比固定 targetWidth:1600（竖屏 3:4 会解出 1600x2133），竖屏 3:4 只需
+    // 解 1200x1600，少解约 1.8 倍像素，显著降低 OHOS 大 JPEG 解码耗时。
+    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    final descriptor = await ui.ImageDescriptor.encoded(buffer);
+    final srcW = descriptor.width;
+    final srcH = descriptor.height;
+    final decodeScale = math.min(
+      kDecodeTargetDim / srcW,
+      kDecodeTargetDim / srcH,
+    ).clamp(0.0, 1.0); // 小图不放大
+    final resizedW = (srcW * decodeScale).round().clamp(1, kDecodeTargetDim);
+    final resizedH = (srcH * decodeScale).round().clamp(1, kDecodeTargetDim);
+    final codec = await descriptor.instantiateCodec(
+      targetWidth: resizedW,
+      targetHeight: resizedH,
     );
     final frame = await codec.getNextFrame();
     final srcImage = frame.image;
     codec.dispose();
+    descriptor.dispose();
+    buffer.dispose();
     swDecode.stop();
     debugPrint('[perf] gpu decode JPEG: ${swDecode.elapsedMilliseconds}ms (src=${srcImage.width}x${srcImage.height})');
 
@@ -3035,18 +3288,52 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     final iOutW = outW.round();
     final iOutH = outH.round();
 
-    // 旋转后图像在画布空间中的有效宽高
+    // cover 缩放（等比，不改变内容比例）：在原始图像坐标系中计算，
+    // 让旋转后的图像完全覆盖输出画布，溢出部分由画布边界自动裁剪。
+    //
+    // 关键数学：canvas 变换顺序是 scale → rotate（先写的先应用到源图坐标）。
+    // 对源点 (x, y)，经过均匀 scale(s) 再 rotate 90°：
+    //   rotate 90° 矩阵: [0, 1, -1, 0]
+    //   (x·s, y·s) → (y·s, -x·s)
+    // 因此：
+    //   - 源宽 srcW 映射到输出 Y 轴范围: ±srcW·s/2，需 ≥ outH/2 → s ≥ outH / srcW
+    //   - 源高 srcH 映射到输出 X 轴范围: ±srcH·s/2，需 ≥ outW/2 → s ≥ outW / srcH
+    // 不旋转时：s ≥ outW / srcW 且 s ≥ outH / srcH
+    // 取较大值（cover 定义：完全覆盖画布，允许溢出）
     final swapDims = alignRotation == 90 || alignRotation == 270;
-    final effImgW = swapDims ? srcImage.height.toDouble() : srcImage.width.toDouble();
-    final effImgH = swapDims ? srcImage.width.toDouble() : srcImage.height.toDouble();
-
-    // cover 缩放：让图像完全覆盖输出区域
-    final coverScale = math.max(outW / effImgW, outH / effImgH);
+    final double coverScale;
+    if (swapDims) {
+      coverScale = math.max(
+        outW / srcImage.height.toDouble(), // 源高 → 输出宽
+        outH / srcImage.width.toDouble(),  // 源宽 → 输出高
+      );
+    } else {
+      coverScale = math.max(
+        outW / srcImage.width.toDouble(),
+        outH / srcImage.height.toDouble(),
+      );
+    }
+    debugPrint('[capture] transform: src=${srcImage.width}x${srcImage.height}, '
+        'isPortrait=${params.isPortrait}, isFront=${params.isFront}, '
+        'jpegIsLandscape=$jpegIsLandscape, needRotate=$needRotate, '
+        'alignRotation=${alignRotation}°, swapDims=$swapDims, '
+        'targetRatio=${params.targetRatio.toStringAsFixed(4)}, '
+        'out=$iOutW x $iOutH (ratio=${(iOutW / iOutH).toStringAsFixed(4)}), '
+        'coverScale=${coverScale.toStringAsFixed(5)}');
+    final rotatedImgW = swapDims ? srcImage.height * coverScale : srcImage.width * coverScale;
+    final rotatedImgH = swapDims ? srcImage.width * coverScale : srcImage.height * coverScale;
+    debugPrint('[capture] 旋转后图像尺寸: ${rotatedImgW.toStringAsFixed(1)}x${rotatedImgH.toStringAsFixed(1)} '
+        '(覆盖画布 $iOutW x $iOutH: X方向${rotatedImgW >= iOutW - 0.5 ? "✓" : "❌(拉伸!"}'
+        ' Y方向${rotatedImgH >= iOutH - 0.5 ? "✓" : "❌(拉伸!"})');
 
     // 构造色彩矩阵
     final matrix = composePostProcessMatrix(params.postProcess);
 
     // 单次 Canvas：方向对齐 + cover 裁剪 + 镜像 + 缩放 + ColorMatrix（一步完成）
+    //
+    // 关键：scale 和 mirror 必须在 rotate 之前应用（在原始图像坐标系中）。
+    // rotate 之后画布 X/Y 轴互换，若 scale 在 rotate 之后会导致宽高缩放因子被交换→拉伸；
+    // mirror 在 rotate 之后会导致左右镜像变成上下翻转。
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
 
@@ -3054,11 +3341,11 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     paint.colorFilter = ui.ColorFilter.matrix(matrix);
 
     canvas.translate(outW / 2.0, outH / 2.0);
-    canvas.rotate(alignRotation * math.pi / 180.0);
     canvas.scale(
       (needMirror ? -1.0 : 1.0) * coverScale,
       coverScale,
     );
+    canvas.rotate(alignRotation * math.pi / 180.0);
     canvas.drawImage(
       srcImage,
       ui.Offset(-srcImage.width / 2.0, -srcImage.height / 2.0),

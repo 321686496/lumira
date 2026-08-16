@@ -213,11 +213,20 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
                         child: leadingWidget,
                       ),
                       // 居中标题 / wordmark
+                      // 用水平内边距预留两侧 leading/actions 的空间，
+                      // 避免标题与较宽的右侧按钮（如编辑页的收藏+保存）重叠。
                       if (centerWidget != null)
                         Positioned(
                           left: 0,
                           right: 0,
-                          child: Center(child: centerWidget),
+                          child: Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: widget.horizontalPadding + 72,
+                              ),
+                              child: centerWidget,
+                            ),
+                          ),
                         ),
                       // 右侧
                       Positioned(

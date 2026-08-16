@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/theme_tokens.dart';
+
 /// 共享后处理滑块行：细线轨道（3px）+ 圆形把手（16px，命中区域 24x24）+ 品牌色填充
 /// 用 LayoutBuilder + Stack 实现，支持拖拽（onPanStart + onPanUpdate）。
 ///
 /// 拍摄页（ParamPanel）与预览/后期修图页（PreviewEditPanel）共用此组件，统一两处观感。
 /// 修复要点：使用绝对位置（details.localPosition.dx）而非增量（delta.dx），
 /// 避免多次 pan 事件共用过时 t 导致拖拽不灵敏；移除重复的轨道 GestureDetector。
+///
+/// [tokens] 提供时使用浅色主题配色（后期修图页暖白背景）；为 null 时沿用
+/// 拍摄/预览页的半透明深色配色，保证两处观感各自正确。
 class PostProcessSliderRow extends StatelessWidget {
   final String label;
   final double value;
@@ -16,6 +21,9 @@ class PostProcessSliderRow extends StatelessWidget {
   /// 可选提示文字（如"导出后生效"），显示在滑块下方。
   final String? hint;
 
+  /// 浅色主题色板；为 null 时使用默认半透明深色配色。
+  final ThemeTokens? tokens;
+
   const PostProcessSliderRow({
     super.key,
     required this.label,
@@ -24,10 +32,20 @@ class PostProcessSliderRow extends StatelessWidget {
     required this.max,
     required this.onChanged,
     this.hint,
+    this.tokens,
   });
 
   @override
   Widget build(BuildContext context) {
+    // 配色：提供 tokens 时用浅色主题，否则用半透明深色（拍摄/预览页）
+    final t = tokens;
+    final labelColor = t?.textSecondary ?? Colors.white70;
+    final trackColor = t?.divider ?? Colors.white24;
+    final fillColor = t?.brand ?? const Color(0xFFE5C07B);
+    final thumbColor = t?.surface ?? Colors.white;
+    final valueColor = t?.textSecondary ?? Colors.white54;
+    final hintColor = t?.textTertiary ?? Colors.white38;
+
     final slider = Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: LayoutBuilder(
@@ -75,8 +93,8 @@ class PostProcessSliderRow extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: Text(
                         label,
-                        style: const TextStyle(
-                            fontSize: 11, color: Colors.white70),
+                        style: TextStyle(
+                            fontSize: 11, color: labelColor),
                       ),
                     ),
                   ),
@@ -88,7 +106,7 @@ class PostProcessSliderRow extends StatelessWidget {
                     height: trackHeight,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white24,
+                        color: trackColor,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -101,7 +119,7 @@ class PostProcessSliderRow extends StatelessWidget {
                     height: trackHeight,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE5C07B),
+                        color: fillColor,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -113,10 +131,10 @@ class PostProcessSliderRow extends StatelessWidget {
                     child: Container(
                       width: thumbSize,
                       height: thumbSize,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
+                      decoration: BoxDecoration(
+                        color: thumbColor,
                         shape: BoxShape.circle,
-                        boxShadow: [
+                        boxShadow: const [
                           BoxShadow(
                             color: Color(0x44000000),
                             blurRadius: 4,
@@ -136,8 +154,8 @@ class PostProcessSliderRow extends StatelessWidget {
                       alignment: Alignment.centerRight,
                       child: Text(
                         value.toStringAsFixed(0),
-                        style: const TextStyle(
-                            fontSize: 11, color: Colors.white54),
+                        style: TextStyle(
+                            fontSize: 11, color: valueColor),
                       ),
                     ),
                   ),
@@ -159,7 +177,7 @@ class PostProcessSliderRow extends StatelessWidget {
           padding: const EdgeInsets.only(left: 64, bottom: 2),
           child: Text(
             hint!,
-            style: const TextStyle(fontSize: 9, color: Colors.white38),
+            style: TextStyle(fontSize: 9, color: hintColor),
           ),
         ),
       ],

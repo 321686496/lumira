@@ -4,14 +4,21 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_tokens.dart';
+import '../../capture/domain/photo_template.dart';
 
-/// 可拖拽裁剪框叠加层
+/// 可拖拽裁剪框 + 可缩放照片叠加层（iPhone 原生风格）
 ///
-/// 在图片上方绘制半透明遮罩，中间留出裁剪区域（透明）。
-/// 裁剪区域四角和四边有 8 个拖拽手柄，用户可以拖拽调整裁剪区域大小和位置。
+/// 混合交互模型：
+/// - 单指按住裁剪框边缘/角手柄 → 缩放裁剪框（改变裁剪区域）
+/// - 单指在裁剪框内部滑动 → 移动裁剪框位置
+/// - 双指捏合 / 双指拖动 → 缩放 / 平移照片
 ///
-/// 坐标系统：裁剪区域用 Rect（相对坐标 0.0-1.0）表示，
-/// 便于跨不同图片尺寸使用，导出时转为像素坐标。
+/// 裁剪框与照片是两层独立变换：
+/// - 裁剪框（[Rect]，相对坐标 0.0-1.0）决定"保留哪块区域"
+/// - 照片变换（缩放 + 平移）决定"区域内的照片内容"
+/// 最终保留区域 = 裁剪框经照片变换反算出的照片区域，通过 [onChanged] 回调。
+///
+/// 坐标系统：裁剪框与照片均用相对坐标 0.0-1.0，便于跨图片尺寸使用。
 ///
 /// 手柄类型（8 个）：
 /// - 4 角：topLeft, topRight, bottomLeft, bottomRight（可同时调整宽高）
@@ -20,10 +27,15 @@ import '../../../core/theme/theme_tokens.dart';
 ///
 /// 约束：
 /// - 手柄触摸区域 >= 32x32 像素（hitTest 半径 24px → 48x48 命中区）
-/// - 裁剪框不超出 0.0-1.0 边界
-/// - 最小尺寸 _minSize，防止裁剪区域过小
+/// - 裁剪框不超出 0.0-1.0 边界，最小尺寸 _minSize
 /// - 可选 aspectRatio 锁定宽高比
+/// - 照片最小缩放 1.0（铺满裁剪区），最大缩放 _maxPhotoScale；
+///   平移被夹紧，保证照片始终覆盖裁剪框（不露出空白）
 class CropOverlay extends StatefulWidget {
+  /// 照片 widget（渲染在裁剪区，可被缩放/平移）。
+  /// 需填满整个裁剪区（使用 BoxFit.fill），由本组件叠加变换。
+  final Widget photo;
+
   /// 初始裁剪区域（相对坐标 0.0-1.0）。
   /// 为 null 时自动计算默认居中区域（按 aspectRatio 居中最大化）。
   final Rect? initialRect;
@@ -40,12 +52,18 @@ class CropOverlay extends StatefulWidget {
   /// 为 null 时使用默认白色。
   final ThemeTokens? tokens;
 
+  /// 照片变换（旋转/翻转/拉直），叠加在照片上，使裁剪面板下方的操作所见即所得。
+  /// 为 null 或恒等变换时不应用。
+  final TransformParams? transform;
+
   const CropOverlay({
     super.key,
+    required this.photo,
     this.initialRect,
     this.aspectRatio,
     this.onChanged,
     this.tokens,
+    this.transform,
   });
 
   @override
@@ -70,14 +88,33 @@ class _CropOverlayState extends State<CropOverlay> {
   /// 当前裁剪区域（相对坐标 0.0-1.0）
   late Rect _cropRect;
 
-  /// 当前激活的手柄类型（拖拽中）
+  /// 当前激活的手柄类型（单指拖拽中）
   _HandleType _activeHandle = _HandleType.none;
+
+  /// 照片缩放倍数（1.0 = 铺满裁剪区，最小；可放大）
+  double _photoScale = 1.0;
+
+  /// 照片平移（相对坐标，相对裁剪区中心）
+  Offset _photoOffset = Offset.zero;
+
+  /// 双指手势中上一次的 scale（用于计算增量）
+  double _lastScale = 1.0;
+
+  /// 当前是否处于照片变换手势（双指）
+  bool _inPhotoGesture = false;
+
+  /// 最近一次回调上层的区域（用于识别"自身回调的回显"，避免重复重置）
+  Rect? _lastEmitted;
 
   /// 最小裁剪尺寸（相对值），防止裁剪区域过小
   static const double _minSize = 0.1;
 
   /// 手柄触摸半径（像素），>= 16 保证命中区 >= 32x32
   static const double _touchRadius = 24.0;
+
+  /// 照片最小/最大缩放
+  static const double _minPhotoScale = 1.0;
+  static const double _maxPhotoScale = 5.0;
 
   @override
   void initState() {
@@ -88,11 +125,36 @@ class _CropOverlayState extends State<CropOverlay> {
   @override
   void didUpdateWidget(CropOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 外部变化时重新计算裁剪区域（如切换比例、重置、加载保存的裁剪）
-    if (widget.initialRect != oldWidget.initialRect ||
-        widget.aspectRatio != oldWidget.aspectRatio) {
+    final ratioChanged = widget.aspectRatio != oldWidget.aspectRatio;
+    // 忽略"自身回调被上层回显"导致 initialRect 变化的情况，
+    // 仅在外部真正改变（切换比例 / 重置 / 加载保存的裁剪）时重置。
+    // 用容差比较：上层通过 Rect.fromLTWH(x,y,w,h) 回显时，浮点 round 会让
+    // left+width ≠ right（差一个 ULP），精确 == 会误判为外部变化，导致裁剪
+    // 框与照片状态被重置，表现为双指缩放/拖拽时图片抖动、裁剪区域跳动。
+    final externalRectChanged =
+        !_rectNearEqual(widget.initialRect, oldWidget.initialRect) &&
+            !_rectNearEqual(widget.initialRect, _lastEmitted);
+    if (ratioChanged || externalRectChanged) {
       _cropRect = widget.initialRect ?? _computeDefaultRect();
+      _resetPhoto();
     }
+  }
+
+  /// 容差比较两个裁剪矩形（相对坐标），忽略 ULP 级浮点误差。
+  bool _rectNearEqual(Rect? a, Rect? b, {double eps = 1e-6}) {
+    if (a == null || b == null) return a == b;
+    return (a.left - b.left).abs() < eps &&
+        (a.top - b.top).abs() < eps &&
+        (a.right - b.right).abs() < eps &&
+        (a.bottom - b.bottom).abs() < eps;
+  }
+
+  /// 重置照片变换为基准（铺满裁剪区，居中）
+  void _resetPhoto() {
+    _photoScale = 1.0;
+    _photoOffset = Offset.zero;
+    _lastScale = 1.0;
+    _inPhotoGesture = false;
   }
 
   /// 计算默认居中裁剪区域
@@ -105,13 +167,8 @@ class _CropOverlayState extends State<CropOverlay> {
   }
 
   /// 在 0-1 范围内计算给定宽高比的最大居中 Rect
-  ///
-  /// [aspect] = width / height
-  /// 留 5% 边距，不完全贴边
   Rect _centerMaxRect(double aspect) {
     double w, h;
-    // 尝试占满宽度（w=1），h = 1/aspect
-    // 如果 h > 1，则占满高度（h=1），w = aspect
     if (aspect >= 1.0) {
       w = 1.0;
       h = 1.0 / aspect;
@@ -137,7 +194,6 @@ class _CropOverlayState extends State<CropOverlay> {
 
   /// 命中测试：根据触摸位置（像素）确定手柄类型
   _HandleType _hitTest(Offset localPos, Size size) {
-    // 转换为像素坐标的裁剪区域
     final crop = Rect.fromLTRB(
       _cropRect.left * size.width,
       _cropRect.top * size.height,
@@ -145,7 +201,6 @@ class _CropOverlayState extends State<CropOverlay> {
       _cropRect.bottom * size.height,
     );
 
-    // 优先检查四角（触摸半径内）
     if ((localPos - crop.topLeft).distance <= _touchRadius) {
       return _HandleType.topLeft;
     }
@@ -159,7 +214,6 @@ class _CropOverlayState extends State<CropOverlay> {
       return _HandleType.bottomRight;
     }
 
-    // 检查四边中点
     if ((localPos - Offset(crop.center.dx, crop.top)).distance <= _touchRadius) {
       return _HandleType.topCenter;
     }
@@ -176,7 +230,6 @@ class _CropOverlayState extends State<CropOverlay> {
       return _HandleType.rightCenter;
     }
 
-    // 检查裁剪区域内部（拖拽整个区域）
     if (crop.contains(localPos)) {
       return _HandleType.body;
     }
@@ -184,19 +237,169 @@ class _CropOverlayState extends State<CropOverlay> {
     return _HandleType.none;
   }
 
-  void _onPanStart(DragStartDetails details, Size size) {
-    _activeHandle = _hitTest(details.localPosition, size);
+  // === 手势统一入口（onScale 同时处理单指与多指） ===
+
+  void _onScaleStart(ScaleStartDetails details, Size size) {
+    _lastScale = 1.0;
+    if (details.pointerCount == 1) {
+      _activeHandle = _hitTest(details.localFocalPoint, size);
+      _inPhotoGesture = false;
+    } else {
+      _activeHandle = _HandleType.none;
+      _inPhotoGesture = true;
+    }
   }
 
-  void _onPanUpdate(DragUpdateDetails details, Size size) {
-    if (_activeHandle == _HandleType.none) return;
+  void _onScaleUpdate(ScaleUpdateDetails details, Size size) {
+    final isMulti = details.pointerCount >= 2;
+    if (isMulti != _inPhotoGesture) {
+      // 手指数量变化，重置累计基数
+      _lastScale = 1.0;
+      _inPhotoGesture = isMulti;
+      if (isMulti) {
+        _activeHandle = _HandleType.none;
+      } else {
+        _activeHandle = _hitTest(details.localFocalPoint, size);
+      }
+    }
 
-    // 像素增量转相对增量
-    final dx = details.delta.dx / size.width;
-    final dy = details.delta.dy / size.height;
+    if (isMulti) {
+      // 双指：缩放 + 平移照片
+      final scaleChange = details.scale / _lastScale;
+      _lastScale = details.scale;
+      _applyPhotoZoom(scaleChange, details.localFocalPoint, size);
+      _applyPhotoPan(details.focalPointDelta, size);
+    } else {
+      // 单指：编辑裁剪框
+      if (_activeHandle == _HandleType.body) {
+        _moveFrame(details.focalPointDelta, size);
+      } else if (_activeHandle != _HandleType.none) {
+        _resizeFrame(_activeHandle, details.focalPointDelta, size);
+      }
+    }
+
+    _emit();
+    if (mounted) setState(() {});
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) {
+    setState(() {
+      _activeHandle = _HandleType.none;
+      _lastScale = 1.0;
+      _inPhotoGesture = false;
+    });
+  }
+
+  // === 照片变换 ===
+
+  /// 以焦点为中心缩放照片。
+  /// [focalPx] 为焦点像素坐标，缩放后保持焦点下的照片内容不动。
+  void _applyPhotoZoom(double scaleChange, Offset focalPx, Size size) {
+    final s0 = _photoScale;
+    final s1 = (s0 * scaleChange).clamp(_minPhotoScale, _maxPhotoScale);
+    _photoScale = s1;
+    final actual = s1 / s0;
+    if (actual == 1.0) return;
+    final f = Offset(focalPx.dx / size.width, focalPx.dy / size.height);
+    const c = Offset(0.5, 0.5);
+    final o0 = _photoOffset;
+    final o1 = f - c - (f - c - o0) * actual;
+    _photoOffset = o1;
+    _clampPhotoOffset();
+  }
+
+  /// 平移照片（像素增量 → 相对增量）
+  void _applyPhotoPan(Offset deltaPx, Size size) {
+    _photoOffset += Offset(deltaPx.dx / size.width, deltaPx.dy / size.height);
+    _clampPhotoOffset();
+  }
+
+  /// 夹紧照片平移，保证照片始终覆盖裁剪框（不露出空白）。
+  /// 照片屏幕覆盖范围 X ∈ [0.5 - 0.5s + ox, 0.5 + 0.5s + ox]，
+  /// 需覆盖裁剪框 [F.left, F.right]。
+  void _clampPhotoOffset() {
+    final s = _photoScale;
+    final f = _cropRect;
+    final minX = f.right - 0.5 - 0.5 * s;
+    final maxX = f.left - 0.5 + 0.5 * s;
+    final minY = f.bottom - 0.5 - 0.5 * s;
+    final maxY = f.top - 0.5 + 0.5 * s;
+    _photoOffset = Offset(
+      _photoOffset.dx.clamp(minX, maxX),
+      _photoOffset.dy.clamp(minY, maxY),
+    );
+  }
+
+  /// 照片变换矩阵（相对裁剪区中心缩放到铺满，再平移）
+  Matrix4 _photoMatrix(Size size) {
+    final s = _photoScale;
+    final c = Offset(size.width / 2, size.height / 2);
+    final oPx = Offset(_photoOffset.dx * size.width, _photoOffset.dy * size.height);
+    return Matrix4.identity()
+      ..translate(c.dx * (1 - s) + oPx.dx, c.dy * (1 - s) + oPx.dy, 0)
+      ..scale(s);
+  }
+
+  /// 叠加旋转/翻转/拉直变换到照片上（与全屏预览一致，所见即所得）。
+  /// 使用 Transform 而非 RotatedBox，避免改变布局盒导致照片被拉伸/留黑边。
+  Widget _applyTransform(Widget child) {
+    final t = widget.transform;
+    if (t == null || t.isIdentity) return child;
+    return Transform.rotate(
+      angle: t.rotation * math.pi / 180.0,
+      child: Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..scale(t.flipH ? -1.0 : 1.0, t.flipV ? -1.0 : 1.0, 1.0),
+        child: Transform.rotate(
+          angle: t.straighten * math.pi / 180.0,
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  /// 计算最终保留的照片区域（裁剪框经照片变换反算，相对 0-1）
+  Rect _photoRectInFrame() {
+    final s = _photoScale;
+    final ox = _photoOffset.dx;
+    final oy = _photoOffset.dy;
+    final f = _cropRect;
+    return Rect.fromLTRB(
+      (f.left - 0.5 - ox) / s + 0.5,
+      (f.top - 0.5 - oy) / s + 0.5,
+      (f.right - 0.5 - ox) / s + 0.5,
+      (f.bottom - 0.5 - oy) / s + 0.5,
+    );
+  }
+
+  /// 回调上层当前保留区域
+  void _emit() {
+    final rect = _photoRectInFrame();
+    _lastEmitted = rect;
+    widget.onChanged?.call(rect);
+  }
+
+  // === 裁剪框编辑 ===
+
+  void _moveFrame(Offset deltaPx, Size size) {
+    final dx = deltaPx.dx / size.width;
+    final dy = deltaPx.dy / size.height;
+    final newLeft = (_cropRect.left + dx)
+        .clamp(0.0, math.max(0.0, 1.0 - _cropRect.width))
+        .toDouble();
+    final newTop = (_cropRect.top + dy)
+        .clamp(0.0, math.max(0.0, 1.0 - _cropRect.height))
+        .toDouble();
+    _cropRect = Rect.fromLTWH(newLeft, newTop, _cropRect.width, _cropRect.height);
+  }
+
+  /// 通过手柄缩放裁剪框。[deltaPx] 为本次手势增量（像素）。
+  void _resizeFrame(_HandleType handle, Offset deltaPx, Size size) {
+    final dx = deltaPx.dx / size.width;
+    final dy = deltaPx.dy / size.height;
 
     Rect newRect = _cropRect;
-    final handle = _activeHandle;
 
     switch (handle) {
       case _HandleType.topLeft:
@@ -264,47 +467,18 @@ class _CropOverlayState extends State<CropOverlay> {
         );
         break;
       case _HandleType.body:
-        // 拖拽整个区域（不改变大小）
-        final newLeft = (_cropRect.left + dx)
-            .clamp(0.0, math.max(0.0, 1.0 - _cropRect.width))
-            .toDouble();
-        final newTop = (_cropRect.top + dy)
-            .clamp(0.0, math.max(0.0, 1.0 - _cropRect.height))
-            .toDouble();
-        newRect = Rect.fromLTWH(
-            newLeft, newTop, _cropRect.width, _cropRect.height);
-        break;
       case _HandleType.none:
         return;
     }
 
-    // 如果锁定宽高比，调整 rect 以保持比例
-    if (widget.aspectRatio != null && handle != _HandleType.body) {
+    if (widget.aspectRatio != null) {
       newRect = _enforceAspectRatio(newRect, widget.aspectRatio!, handle);
     }
 
-    // 确保 rect 不超出 0-1 边界
-    newRect = _clampToBounds(newRect);
-
-    setState(() {
-      _cropRect = newRect;
-    });
-    widget.onChanged?.call(newRect);
-  }
-
-  void _onPanEnd(DragEndDetails details) {
-    setState(() {
-      _activeHandle = _HandleType.none;
-    });
+    _cropRect = _clampToBounds(newRect);
   }
 
   /// 在拖拽手柄时保持宽高比
-  ///
-  /// [aspect] = width / height
-  /// 策略：
-  /// - 角手柄：以宽度为主，高度 = width / aspect，保持对角不动
-  /// - 上/下边手柄：以高度为主，宽度 = height * aspect，保持中心 x 不变
-  /// - 左/右边手柄：以宽度为主，高度 = width / aspect，保持中心 y 不变
   Rect _enforceAspectRatio(Rect rect, double aspect, _HandleType handle) {
     switch (handle) {
       case _HandleType.topLeft:
@@ -359,10 +533,8 @@ class _CropOverlayState extends State<CropOverlay> {
 
   /// 确保 rect 不超出 0-1 边界
   Rect _clampToBounds(Rect rect) {
-    // 如果宽高超出 1，截断
     final width = rect.width.clamp(0.0, 1.0).toDouble();
     final height = rect.height.clamp(0.0, 1.0).toDouble();
-    // 位置约束
     final left =
         rect.left.clamp(0.0, math.max(0.0, 1.0 - width)).toDouble();
     final top =
@@ -375,17 +547,35 @@ class _CropOverlayState extends State<CropOverlay> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanStart: (d) => _onPanStart(d, size),
-          onPanUpdate: (d) => _onPanUpdate(d, size),
-          onPanEnd: _onPanEnd,
-          child: CustomPaint(
-            size: size,
-            painter: _CropOverlayPainter(
-              cropRect: _cropRect,
-              activeHandle: _activeHandle,
-              tokens: widget.tokens,
+        return ClipRect(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onScaleStart: (d) => _onScaleStart(d, size),
+            onScaleUpdate: (d) => _onScaleUpdate(d, size),
+            onScaleEnd: _onScaleEnd,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // 照片层（可缩放/平移 + 叠加旋转/翻转/拉直）
+                Positioned.fill(
+                  child: Transform(
+                    transform: _photoMatrix(size),
+                    child: IgnorePointer(child: _applyTransform(widget.photo)),
+                  ),
+                ),
+                // 裁剪框层（固定不随照片变换）
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: _CropOverlayPainter(
+                        cropRect: _cropRect,
+                        activeHandle: _activeHandle,
+                        tokens: widget.tokens,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -402,13 +592,8 @@ class _CropOverlayState extends State<CropOverlay> {
 /// 3. 三分线辅助网格
 /// 4. 8 个拖拽手柄（圆形 + 描边）
 class _CropOverlayPainter extends CustomPainter {
-  /// 裁剪区域（相对坐标 0.0-1.0）
   final Rect cropRect;
-
-  /// 当前激活的手柄（用于高亮显示）
   final _HandleType activeHandle;
-
-  /// 主题色板
   final ThemeTokens? tokens;
 
   _CropOverlayPainter({
@@ -419,7 +604,6 @@ class _CropOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 相对坐标 → 像素坐标
     final pixelRect = Rect.fromLTRB(
       cropRect.left * size.width,
       cropRect.top * size.height,
@@ -428,7 +612,6 @@ class _CropOverlayPainter extends CustomPainter {
     );
 
     // === 1. 半透明遮罩 ===
-    // 使用 evenOdd 路径：全区域 + 裁剪区域 → 中心镂空
     final maskPaint = Paint()..color = Colors.black.withOpacity(0.5);
     final maskPath = Path()
       ..addRect(Rect.fromLTWH(0, 0, size.width, size.height))
@@ -449,13 +632,11 @@ class _CropOverlayPainter extends CustomPainter {
       ..color = Colors.white.withOpacity(0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.5;
-    // 垂直线
     for (int i = 1; i < 3; i++) {
       final x = pixelRect.left + pixelRect.width * i / 3;
       canvas.drawLine(
           Offset(x, pixelRect.top), Offset(x, pixelRect.bottom), gridPaint);
     }
-    // 水平线
     for (int i = 1; i < 3; i++) {
       final y = pixelRect.top + pixelRect.height * i / 3;
       canvas.drawLine(
@@ -472,7 +653,6 @@ class _CropOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
 
-    // 手柄位置（像素坐标）
     final handlePositions = <Offset>[
       pixelRect.topLeft,
       Offset(pixelRect.center.dx, pixelRect.top),

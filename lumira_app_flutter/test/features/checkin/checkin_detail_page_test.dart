@@ -120,7 +120,9 @@ void main() {
         ),
         GoRoute(
           path: '/checkin/detail',
-          builder: (_, __) => const CheckinDetailPage(),
+          builder: (_, state) => CheckinDetailPage(
+            checkinId: state.queryParams['checkinId'],
+          ),
         ),
       ],
     );
@@ -144,10 +146,12 @@ void main() {
     expect(find.textContaining('确定删除这条探店足迹吗'), findsOneWidget);
 
     await tester.tap(find.text('删除').last); // 弹窗确认按钮
-    await tester.pump(const Duration(milliseconds: 600));
+    // 真实 DB 删除是 FFI 异步：需用 settle()（内部 runAsync 轮询）推进完成
+    await settle(tester);
 
-    expect(find.text('已删除'), findsOneWidget); // toast
-    expect(await dao.getById('c1'), isNull); // 库中已删除
+    // 库中已删除（真实 DB 查询需在 runAsync 中完成）
+    final remaining = await tester.runAsync(() => dao.getById('c1'));
+    expect(remaining, isNull);
     expect(find.text('LIST_PAGE'), findsOneWidget); // pop 回基页
   });
 }

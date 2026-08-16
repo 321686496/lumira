@@ -9,7 +9,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -17,6 +16,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
 import '../widgets/preview_edit_panel.dart';
+import '../../gallery/widgets/photo_crop_layer.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
 import '../services/compare_image_generator.dart';
@@ -124,6 +124,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 保存进行中标志（避免重复点击保存按钮）
   bool _isSaving = false;
 
+  /// 是否已修改照片（编辑态右上角保存按钮出现条件）
+  bool _isEdited = false;
+
   /// 抽屉栏实时高度（拖拽时直接更新，实现跟手效果）
   late final ValueNotifier<double> _sheetHeightNotifier;
 
@@ -139,8 +142,23 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 抽屉栏模式：hidden（默认，只显示悬浮按钮组）或 expanded（展开抽屉栏）
   _SheetMode _sheetMode = _SheetMode.hidden;
 
-  /// 是否已编辑过图片（用于折叠操作栏的"保存"按钮显隐）
-  bool _isEdited = false;
+  /// 裁剪工具是否激活（在照片本身上叠加裁剪框）
+  bool _isCropMode = false;
+
+  /// 将裁剪比例字符串解析为数值宽高比（width/height），null 表示自由裁剪。
+  static double? _parseCropAspectRatio(String ratio) {
+    if (ratio == 'free' || ratio == 'none' || ratio == 'fullscreen') {
+      return null;
+    }
+    if (ratio == '1:1') return 1.0;
+    final parts = ratio.split(':');
+    if (parts.length == 2) {
+      final w = double.tryParse(parts[0]);
+      final h = double.tryParse(parts[1]);
+      if (w != null && h != null && w > 0 && h > 0) return w / h;
+    }
+    return null;
+  }
 
   // ===== 历史照片左右滑动查看（问题7）=====
 
@@ -157,9 +175,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 当前查看的照片 ID（随左右滑动更新，替代 widget.photoId 的只读限制）
   String? _currentPhotoId;
 
-  /// quarter 档位高度（屏幕高度的 35%）
+  /// quarter 档位高度（屏幕高度的 50%）
+  ///
+  /// 从 35% 提高到 50%：为 quarter 档底部「心情+场景露出区 + 上滑提示」让出空间，
+  /// 避免压缩编辑面板导致图标条 RenderFlex overflow。
   static double _quarterHeight(BuildContext c) =>
-      MediaQuery.of(c).size.height * 0.35;
+      MediaQuery.of(c).size.height * 0.50;
 
   /// threeQuarter 档位高度（屏幕高度的 75%）
   static double _threeQuarterHeight(BuildContext c) =>
@@ -170,8 +191,9 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     super.initState();
     _photoUrl =
         widget.photoUrl ?? CapturePreviewMockData.lastCapturedPhotoUrl;
+    // 拍摄后默认不选择任何心情（全部非激活），用户可在编辑页选择或点击「跳过」
     _moods = CapturePreviewMockData.moods
-        .map((m) => m.copyWith(active: m.active))
+        .map((m) => m.copyWith(active: false))
         .toList();
     // _localPostProcess 是用户在编辑页调整的【增量】参数（初始为默认值 0）。
     // 照片已烘焙 _bakedPostProcess 参数，预览页仅叠加增量 → 所见即所得。
@@ -248,7 +270,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 从历史照片记录恢复所有预览状态（滑动切换时调用）。
   ///
   /// 更新：photoUrl / originalPath / isReadOnly / localPostProcess /
-  /// localTransform / selectedSceneId / isEdited
+  /// localTransform / selectedSceneId
   void _applyPhotoFromHistory(GalleryItemRecord record) {
     final initial = ref.read(CaptureState.effectivePostProcessProvider);
     setState(() {
@@ -263,6 +285,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       _localTransform = record.transform ?? const TransformParams();
       _selectedSceneId = record.sceneId;
       _isEdited = false;
+      // 恢复该照片的心情选中状态
+      _moods = _moods
+          .map((m) => m.copyWith(active: m.name == record.mood))
+          .toList();
     });
   }
 
@@ -406,7 +432,11 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
     // 接近 closed 高度 → 折叠为 hidden
     if ((current - h1).abs() < 50) {
-      setState(() => _sheetMode = _SheetMode.hidden);
+      setState(() {
+        _sheetMode = _SheetMode.hidden;
+        // 退出编辑时隐藏裁剪框（抽屉被整体销毁重建，tab 会重置，需同步收起裁剪框）
+        _isCropMode = false;
+      });
       _sheetHeightNotifier.value = h1;
       return;
     }
@@ -440,6 +470,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   }
 
   void _onSkip() {
+    setState(() {
+      // 跳过 = 不选择任何心情（全部取消激活）
+      for (var i = 0; i < _moods.length; i++) {
+        _moods[i] = _moods[i].copyWith(active: false);
+      }
+    });
     LumiraToast.show(context, '已跳过');
   }
 
@@ -525,6 +561,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
   /// 顶部 nav 分享按钮：弹出底部 Sheet
   Future<void> _onShare() async {
+    final tokens = ref.read(themeTokensProvider);
     await showLumiraBottomSheet<void>(
       context: context,
       builder: (ctx) => Column(
@@ -533,6 +570,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
           _ShareOption(
             icon: Icons.save_alt_outlined,
             text: '保存到相册',
+            tokens: tokens,
             onTap: () {
               Navigator.of(ctx).pop();
               _onSave();
@@ -541,6 +579,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
           _ShareOption(
             icon: Icons.ios_share_outlined,
             text: '分享到系统',
+            tokens: tokens,
             onTap: () {
               Navigator.of(ctx).pop();
               _onShareSystem();
@@ -549,6 +588,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
           _ShareOption(
             icon: Icons.content_paste_outlined,
             text: '生成 EXIF 海报',
+            tokens: tokens,
             onTap: () {
               Navigator.of(ctx).pop();
               _onExifPoster();
@@ -558,6 +598,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
           _ShareOption(
             icon: Icons.close,
             text: '取消',
+            tokens: tokens,
             onTap: () => Navigator.of(ctx).pop(),
           ),
           const SizedBox(height: 8),
@@ -647,6 +688,26 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         _moods[i] = _moods[i].copyWith(active: _moods[i].name == selected.name);
       }
     });
+    // 同步更新数据库中的心情标记（与 _selectScene 一致，让相册详情页能读到）
+    final photoId = _currentPhotoId ?? widget.photoId;
+    if (photoId != null) {
+      ref.read(galleryDaoProvider.future).then((dao) async {
+        try {
+          await dao.updateMood(photoId, _activeMoodName());
+          ref.invalidate(galleryDaoProvider);
+        } catch (e) {
+          debugPrint('[preview] 更新心情失败: $e');
+        }
+      });
+    }
+  }
+
+  /// 当前激活的心情名称；未选择时返回 null
+  String? _activeMoodName() {
+    for (final m in _moods) {
+      if (m.active) return m.name;
+    }
+    return null;
   }
 
   void _selectScene(String? id) {
@@ -667,47 +728,23 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
-  /// 显示保存对话框，返回是否保留原图（null = 用户取消）
-  Future<bool?> _showSaveDialog() async {
-    bool keepOriginal = true;
-    return showLumiraDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(builder: (ctx, setState) {
-          return LumiraAlertDialog(
-            title: const Text('保存到相册'),
-            content: LumiraCheckboxListTile(
-              value: keepOriginal,
-              onChanged: (v) => setState(() => keepOriginal = v ?? true),
-              title: const Text('保留原图（可再次编辑）'),
-            ),
-            actions: [
-              LumiraButton(
-                variant: ButtonVariant.ghost,
-                onPressed: () => Navigator.pop(ctx, null),
-                child: const Text('取消'),
-              ),
-              LumiraButton(
-                variant: ButtonVariant.primary,
-                onPressed: () => Navigator.pop(ctx, keepOriginal),
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        });
-      },
-    );
+  /// 另存为时生成一个不冲突的新文件路径。
+  String _makeDuplicatePath(String sourcePath) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final dot = sourcePath.lastIndexOf('.');
+    if (dot <= 0) return '${sourcePath}_$now.jpg';
+    return '${sourcePath.substring(0, dot)}_$now${sourcePath.substring(dot)}';
   }
 
   /// 保存到系统相册（非破坏性编辑：从原图重新应用完整参数）
   ///
   /// 流程：
   /// 1. 检查只读模式（originalPath == null）→ 提示并返回
-  /// 2. 显示保存对话框，让用户选择是否保留原图
+  /// 2. 弹出保存方式选择（替换原图 / 另存为新照片），用户取消则返回
   /// 3. 从 originalPath 重新处理（应用 _localPostProcess + _localTransform 全量参数）
-  /// 4. 输出到原 processedPath（覆盖当前显示的照片）
+  /// 4. 替换原图时覆盖当前文件，另存为时写入新文件路径
   /// 5. evict FileImage 缓存（避免显示旧版本）
-  /// 6. 更新 GalleryItemRecord（filePath / originalPath / transform / postProcess）
+  /// 6. 替换原图时更新 GalleryItemRecord，另存为时创建新记录
   /// 7. 调用原生通道保存到系统相册
   /// 8. 延迟返回相册页
   Future<void> _onSave() async {
@@ -726,9 +763,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       return;
     }
 
-    // 弹出保存对话框
-    final keepOriginal = await _showSaveDialog();
-    if (keepOriginal == null) return; // 用户取消
+    // 弹出保存方式选择：替换原图 / 另存为新照片
+    final saveMode = await showLumiraSaveModeSheet(context: context);
+    if (saveMode == null) return; // 用户取消
+    final isDuplicate = saveMode == SaveMode.duplicate;
 
     setState(() => _isSaving = true);
 
@@ -744,14 +782,17 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       }
 
       // 从原图重新处理（全量参数 = baked + local增量）
-      // - outputPath=photoPath：覆盖当前显示的照片文件
+      // - 替换原图：outputPath=photoPath，覆盖当前显示的照片文件
+      // - 另存为：写入不冲突的新文件路径，不影响原图
       final fullParams = _bakedPostProcess.merge(_localPostProcess);
+      final outputPath =
+          isDuplicate ? _makeDuplicatePath(photoPath) : photoPath;
       final processedPath = await PhotoPostProcessor.processFile(
         inputPath: originalPath,
         params: fullParams,
         transform: _localTransform,
         aspectRatio: captureAspectRatio,
-        outputPath: photoPath,
+        outputPath: outputPath,
       );
 
       // Evict FileImage 缓存（避免显示旧版本）
@@ -760,30 +801,49 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         PaintingBinding.instance.imageCache.evict(FileImage(File(originalPath)));
       } catch (_) {}
 
-      // 更新数据库记录（使用 _currentPhotoId 以支持滑动切换后的当前照片）
+      // 操作数据库记录（使用 _currentPhotoId 以支持滑动切换后的当前照片）
       final currentPhotoId = _currentPhotoId ?? widget.photoId;
-      if (currentPhotoId != null) {
+      if (isDuplicate) {
+        // 另存为：创建新记录，原图记录保持不变
+        final newPhotoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+        final old = (_currentIndex >= 0 &&
+                _currentIndex < _historyPhotos.length)
+            ? _historyPhotos[_currentIndex]
+            : null;
+        final dao = await ref.read(galleryDaoProvider.future);
+        final newRecord = GalleryItemRecord(
+          id: newPhotoId,
+          dataUrl: null,
+          filePath: processedPath,
+          originalPath: originalPath,
+          transform: _localTransform,
+          postProcess: fullParams,
+          sceneId: _selectedSceneId,
+          templateId: old?.templateId,
+          kitId: old?.kitId,
+          mood: _activeMoodName() ?? old?.mood,
+          lut: old?.lut,
+          isFavorite: false,
+          createdAt: DateTime.now().millisecondsSinceEpoch,
+        );
+        await dao.insert(newRecord);
+        ref.invalidate(galleryDaoProvider);
+      } else if (currentPhotoId != null) {
         try {
           final dao = await ref.read(galleryDaoProvider.future);
-          final newOriginalPath = keepOriginal ? originalPath : null;
-          // 不保留原图时，删除原图文件
-          if (!keepOriginal) {
-            try {
-              await File(originalPath).delete();
-            } catch (_) {}
-          }
+          // 替换原图：保留原图（可再次编辑），更新当前记录
           await dao.updateEdit(
             id: currentPhotoId,
             filePath: processedPath,
-            originalPath: newOriginalPath,
+            originalPath: originalPath,
             transform: _localTransform,
             postProcess: _localPostProcess,
           );
           ref.invalidate(galleryDaoProvider);
           if (mounted) {
             setState(() {
-              _originalPath = newOriginalPath;
-              _isReadOnly = newOriginalPath == null;
+              _originalPath = originalPath;
+              _isReadOnly = false;
               // 保存后照片已用 fullParams（baked+local）重新处理（烘焙），
               // 更新 _bakedPostProcess 为全量参数，_localPostProcess 重置为增量 0。
               _bakedPostProcess = fullParams;
@@ -796,7 +856,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                   id: currentPhotoId,
                   dataUrl: old.dataUrl,
                   filePath: processedPath,
-                  originalPath: newOriginalPath,
+                  originalPath: originalPath,
                   transform: _localTransform,
                   postProcess: fullParams,
                   sceneId: _selectedSceneId,
@@ -868,9 +928,62 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
+  /// 悬浮"保存"按钮：仅保存当前照片（含编辑结果）到系统相册。
+  /// 不弹出替换/另存选择、不改数据库、不跳转。
+  Future<void> _onSaveToAlbum() async {
+    if (_isSaving) return;
+    final photoPath = _photoUrl;
+    if (photoPath.isEmpty || photoPath.startsWith('http')) {
+      LumiraToast.show(context, '网络图片不支持保存到系统相册');
+      return;
+    }
+    if (_isReadOnly || _originalPath == null) {
+      LumiraToast.show(context, '原图未保留，无法重新处理');
+      return;
+    }
+    setState(() => _isSaving = true);
+    String? tmpPath;
+    try {
+      // 从原图重新处理（应用当前编辑参数），写出到临时文件
+      final fullParams = _bakedPostProcess.merge(_localPostProcess);
+      tmpPath = _makeDuplicatePath(photoPath);
+      final processedPath = await PhotoPostProcessor.processFile(
+        inputPath: _originalPath!,
+        params: fullParams,
+        transform: _localTransform,
+        aspectRatio: widget.aspectRatio ?? 'fullscreen',
+        outputPath: tmpPath,
+      );
+      final result = await _photoSaverChannel.invokeMethod('saveToAlbum', {
+        'path': processedPath,
+      });
+      final success = result != null && result['success'] == true;
+      if (!mounted) return;
+      LumiraToast.show(
+        context,
+        success ? '已保存到系统相册' : '保存失败：${result?['error'] ?? "未知错误"}',
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      debugPrint('[save] 系统相册异常: $e');
+      if (!mounted) return;
+      LumiraToast.show(context, '保存失败：$e');
+    } finally {
+      // 清理临时导出文件
+      if (tmpPath != null) {
+        try {
+          final f = File(tmpPath);
+          if (await f.exists()) await f.delete();
+        } catch (_) {}
+      }
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final tokens = ref.watch(themeTokensProvider);
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
 
     // 预选当前场景（修复 Issue 8：拍摄后自动选择该场景）
     // 仅在首次构建且用户未手动改过时设置；通过 postFrameCallback 避免在 build 中调用 setState
@@ -906,7 +1019,35 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                     _uiVisible && _sheetMode == _SheetMode.expanded
                         ? sheetHeight
                         : 0,
-                child: GestureDetector(
+                child: _isCropMode
+                    // 裁剪模式：把裁剪框直接叠加在照片本体上（iPhone 风格）
+                    ? PhotoCropLayer(
+                        photoUrl: _photoUrl,
+                        initialCrop: _localPostProcess.customCropRect != null
+                            ? Rect.fromLTWH(
+                                _localPostProcess.customCropRect!.x,
+                                _localPostProcess.customCropRect!.y,
+                                _localPostProcess.customCropRect!.w,
+                                _localPostProcess.customCropRect!.h,
+                              )
+                            : null,
+                        aspectRatio: _parseCropAspectRatio(
+                            _localPostProcess.cropRatio),
+                        transform: _localTransform,
+                        onChanged: (rect) => setState(() {
+                          _localPostProcess = _localPostProcess.copyWith(
+                            customCropRect: CropRect(
+                              x: rect.left,
+                              y: rect.top,
+                              w: rect.width,
+                              h: rect.height,
+                            ),
+                          );
+                          _isEdited = true;
+                        }),
+                        tokens: tokens,
+                      )
+                    : GestureDetector(
                   // 点击照片切换 UI 显隐（不影响 PageView 水平滑动）
                   onTap: () => setState(() => _uiVisible = !_uiVisible),
                   child: _historyPhotos.isEmpty
@@ -967,6 +1108,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                       tokens: tokens,
                       onBack: _back,
                       onShare: _onShare,
+                      onSave: _onSave,
+                      showSave: _sheetMode == _SheetMode.expanded && _isEdited,
                     ),
                     // 只读模式横幅：原图未保留时显示（位于导航栏下方）
                     if (_isReadOnly)
@@ -976,17 +1119,17 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                           horizontal: 16,
                           vertical: 8,
                         ),
-                        color: const Color(0xFFFFB74D).withOpacity(0.15),
+                        color: tokens.dangerSubtle,
                         child: Row(
-                          children: const [
+                          children: [
                             Icon(Icons.lock_outline,
-                                size: 16, color: Color(0xFFFFB74D)),
-                            SizedBox(width: 8),
+                                size: 16, color: tokens.danger),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '此照片未保留原图，仅可查看，无法编辑',
                                 style: TextStyle(
-                                    fontSize: 12, color: Color(0xFFFFB74D)),
+                                    fontSize: 12, color: tokens.danger),
                               ),
                             ),
                           ],
@@ -1024,19 +1167,20 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         onSkip: _onSkip,
                         onCompareCard: _onCompareCard,
                         onExifCard: _onExifCard,
-                        onSave: _onSave,
-                        isSaving: _isSaving,
                         localPostProcess: _localPostProcess,
                         bakedPostProcess: _bakedPostProcess,
                         onUpdateLocalPostProcess: _updateLocalPostProcess,
                         localTransform: _localTransform,
                         onUpdateLocalTransform: _updateLocalTransform,
                         // 折叠操作栏相关
-                        isEdited: _isEdited,
                         onCompareStart: _onCompareStart,
                         onCompareEnd: _onCompareEnd,
                         onExpandToQuarter: () {
                           _sheetHeightNotifier.value = _quarterHeight(context);
+                        },
+                        onExpandToFull: () {
+                          _sheetHeightNotifier.value =
+                              _threeQuarterHeight(context);
                         },
                         // 抽屉栏拖拽相关
                         currentHeight: height,
@@ -1049,6 +1193,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         onDragUpdate: _onSheetDragUpdate,
                         onDragEnd: (details) =>
                             _onSheetDragEnd(context, details),
+                        onCropModeChanged: (isCrop) =>
+                            setState(() => _isCropMode = isCrop),
                       ),
                     ),
                   );
@@ -1069,8 +1215,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                   child: Center(
                     child: Container(
                       decoration: BoxDecoration(
-                        // 半透明深色背景（80% 不透明）
-                        color: const Color(0xCC333333),
+                        // 半透明深色背景（80% 不透明），使用主题色
+                        color: tokens.canvasDeep.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(28),
                       ),
                       padding: const EdgeInsets.symmetric(
@@ -1081,19 +1227,22 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                           _FloatingActionButton(
                             icon: Icons.compare,
                             label: '对比',
+                            tokens: tokens,
                             onPressStart: _onCompareStart,
                             onPressEnd: _onCompareEnd,
                           ),
                           const SizedBox(width: 24),
                           _FloatingActionButton(
-                            icon: Icons.save_alt,
-                            label: '保存到相册',
-                            onTap: _onSave,
+                            icon: Icons.save_outlined,
+                            label: '保存到系统相册',
+                            tokens: tokens,
+                            onTap: _onSaveToAlbum,
                           ),
                           const SizedBox(width: 24),
                           _FloatingActionButton(
                             icon: Icons.tune,
                             label: '编辑',
+                            tokens: tokens,
                             onTap: () {
                               setState(() => _sheetMode = _SheetMode.expanded);
                               _sheetHeightNotifier.value =
@@ -1148,11 +1297,17 @@ class _PreviewNav extends StatelessWidget {
     required this.tokens,
     required this.onBack,
     required this.onShare,
+    this.onSave,
+    this.showSave = false,
   });
 
   final ThemeTokens tokens;
   final VoidCallback onBack;
   final VoidCallback onShare;
+
+  /// 编辑态右上角保存按钮：仅当 showSave 为 true 时显示
+  final VoidCallback? onSave;
+  final bool showSave;
 
   @override
   Widget build(BuildContext context) {
@@ -1162,17 +1317,54 @@ class _PreviewNav extends StatelessWidget {
       child: LumiraNav(
         title: '照片预览',
         transparent: true,
-        leading: _NavBackButton(onTap: onBack),
+        leading: _NavBackButton(
+          onTap: onBack,
+          color: tokens.textInverse,
+        ),
         actions: [
+          if (showSave && onSave != null)
+            GestureDetector(
+              onTap: onSave,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                margin: const EdgeInsets.only(right: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [tokens.brand, tokens.brandDeep],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.save_outlined,
+                        size: 14, color: tokens.textInverse),
+                    const SizedBox(width: 4),
+                    Text(
+                      '保存',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.textInverse,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           GestureDetector(
             onTap: onShare,
             behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.all(8),
+            child: Padding(
+              padding: const EdgeInsets.all(8),
               child: Icon(
                 Icons.ios_share_outlined,
                 size: 22,
-                color: Colors.white,
+                color: tokens.textInverse,
               ),
             ),
           ),
@@ -1183,21 +1375,21 @@ class _PreviewNav extends StatelessWidget {
 }
 
 class _NavBackButton extends StatelessWidget {
-  const _NavBackButton({required this.onTap});
+  const _NavBackButton({required this.onTap, required this.color});
   final VoidCallback onTap;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: const Padding(
-        padding: EdgeInsets.all(8),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
         child: Icon(
           Icons.arrow_back_ios_new,
           size: 20,
-          // 硬编码颜色，与 uni-app 一致 (nav-back-icon color #ffffff)
-          color: Colors.white,
+          color: color,
         ),
       ),
     );
@@ -1426,18 +1618,17 @@ class _BottomSheet extends StatelessWidget {
     required this.onSkip,
     required this.onCompareCard,
     required this.onExifCard,
-    required this.onSave,
-    required this.isSaving,
     required this.localPostProcess,
     required this.bakedPostProcess,
     required this.onUpdateLocalPostProcess,
     required this.localTransform,
     required this.onUpdateLocalTransform,
     // 折叠操作栏相关
-    required this.isEdited,
     required this.onCompareStart,
     required this.onCompareEnd,
     required this.onExpandToQuarter,
+    // 点击「上滑查看更多」露出区：展开到 threeQuarter 查看完整心情/场景
+    required this.onExpandToFull,
     // 抽屉栏拖拽相关
     required this.currentHeight,
     required this.closedHeight,
@@ -1448,6 +1639,7 @@ class _BottomSheet extends StatelessWidget {
     required this.onDragStart,
     required this.onDragUpdate,
     required this.onDragEnd,
+    required this.onCropModeChanged,
   });
 
   final ThemeTokens tokens;
@@ -1458,10 +1650,6 @@ class _BottomSheet extends StatelessWidget {
   final VoidCallback onSkip;
   final VoidCallback onCompareCard;
   final VoidCallback onExifCard;
-  final VoidCallback onSave;
-
-  /// 保存进行中标志（用于禁用保存按钮 + 显示进度指示器）
-  final bool isSaving;
 
   /// 预览页本地后期参数（仅影响当前照片，不回写 CaptureState）
   final PostProcess localPostProcess;
@@ -1478,9 +1666,6 @@ class _BottomSheet extends StatelessWidget {
   /// 本地变换参数更新回调
   final ValueChanged<TransformParams> onUpdateLocalTransform;
 
-  /// 是否已编辑过图片（控制折叠操作栏的"保存"按钮显隐）
-  final bool isEdited;
-
   /// 对比按钮按下开始（按住显示原图）
   final VoidCallback onCompareStart;
 
@@ -1489,6 +1674,9 @@ class _BottomSheet extends StatelessWidget {
 
   /// 点击"编辑"按钮：展开抽屉栏到 quarter
   final VoidCallback onExpandToQuarter;
+
+  /// 点击「上滑查看更多」露出区：展开抽屉栏到 threeQuarter
+  final VoidCallback onExpandToFull;
 
   // ===== 抽屉栏拖拽相关 =====
 
@@ -1519,13 +1707,17 @@ class _BottomSheet extends StatelessWidget {
   /// 拖拽结束回调（吸附到最近档位）
   final void Function(DragEndDetails) onDragEnd;
 
+  /// 裁剪工具激活状态回调（切到「裁剪旋转」Tab 时在照片上叠加裁剪框）
+  final ValueChanged<bool> onCropModeChanged;
+
   @override
   Widget build(BuildContext context) {
     // 半透明深色背景（抽屉栏风格，浮在照片上方）
+    // 使用主题 canvasDeep 色，确保深色/浅色主题下与照片对比度足够
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: const Color(0xF0303030), // 深色 94% 不透明
+        color: tokens.canvasDeep.withOpacity(0.94),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
@@ -1576,7 +1768,7 @@ class _BottomSheet extends StatelessWidget {
           return _buildCollapsedActions();
         }
         if (!isFullExpanded) {
-          // quarter：PreviewEditPanel + 保存按钮
+          // quarter：PreviewEditPanel + 保存按钮 + 底部「心情/场景露出区」
           return Column(
             children: [
               Expanded(
@@ -1586,10 +1778,19 @@ class _BottomSheet extends StatelessWidget {
                   transform: localTransform,
                   onPostProcessChanged: onUpdateLocalPostProcess,
                   onTransformChanged: onUpdateLocalTransform,
+                  onCropModeChanged: onCropModeChanged,
                 ),
               ),
               const SizedBox(height: 8),
-              _SaveButton(onTap: onSave, isSaving: isSaving),
+              // 露出区：展示心情/场景 pill 一角 + 上滑提示，点击展开到 threeQuarter
+              _QuarterPeek(
+                tokens: tokens,
+                moods: moods,
+                selectedSceneId: selectedSceneId,
+                onSelectMood: onSelectMood,
+                onSelectScene: onSelectScene,
+                onExpand: onExpandToFull,
+              ),
             ],
           );
         }
@@ -1600,36 +1801,37 @@ class _BottomSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
-                height: 280,
+                // 收紧高度：让色彩/细节 Tab 内容（图标条+单滑块）贴合面板，
+                // 避免在滑块下方与「今天的心情」之间留出大片空白。
+                height: 176,
                 child: PreviewEditPanel(
                   postProcess: localPostProcess,
                   bakedPostProcess: bakedPostProcess,
                   transform: localTransform,
                   onPostProcessChanged: onUpdateLocalPostProcess,
                   onTransformChanged: onUpdateLocalTransform,
+                  onCropModeChanged: onCropModeChanged,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _MoodSection(
                 tokens: tokens,
                 moods: moods,
                 onSelectMood: onSelectMood,
                 onSkip: onSkip,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               _SceneSection(
                 tokens: tokens,
                 selectedSceneId: selectedSceneId,
                 onSelectScene: onSelectScene,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               _ActionRow(
                 tokens: tokens,
                 onCompareCard: onCompareCard,
                 onExifCard: onExifCard,
               ),
-              const SizedBox(height: 12),
-              _SaveButton(onTap: onSave, isSaving: isSaving),
             ],
           ),
         );
@@ -1638,39 +1840,29 @@ class _BottomSheet extends StatelessWidget {
   }
 
   /// 折叠操作按钮组（closed 状态下显示）
-  /// [对比] [保存到相册] [编辑] [保存*]
+  /// [对比] [编辑]
   Widget _buildCollapsedActions() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // 对比按钮（按住生效）
           _CollapsedActionButton(
             icon: Icons.compare,
             label: '对比',
+            tokens: tokens,
             onPressStart: onCompareStart,
             onPressEnd: onCompareEnd,
           ),
-          // 保存到系统相册
-          _CollapsedActionButton(
-            icon: Icons.save_alt,
-            label: '保存到相册',
-            onTap: onSave,
-          ),
+          const SizedBox(width: 48),
           // 编辑（展开抽屉栏到 quarter）
           _CollapsedActionButton(
             icon: Icons.tune,
             label: '编辑',
+            tokens: tokens,
             onTap: onExpandToQuarter,
           ),
-          // 保存（仅编辑过时显示）
-          if (isEdited)
-            _CollapsedActionButton(
-              icon: Icons.check,
-              label: '保存',
-              onTap: onSave,
-            ),
         ],
       ),
     );
@@ -1693,7 +1885,7 @@ class _SheetHandle extends StatelessWidget {
         height: 4,
         decoration: BoxDecoration(
           // 拖拽指示器：浅色（适配深色背景）
-          color: Colors.white.withOpacity(0.4),
+          color: tokens.textTertiary.withOpacity(0.5),
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -1723,6 +1915,7 @@ class _MoodSection extends StatelessWidget {
           title: '今天的心情是？',
           linkText: '跳过',
           onLinkTap: onSkip,
+          tokens: tokens,
         ),
         const SizedBox(height: 12),
         SingleChildScrollView(
@@ -1736,12 +1929,142 @@ class _MoodSection extends StatelessWidget {
                   text: moods[i].name,
                   active: moods[i].active,
                   onTap: () => onSelectMood(moods[i]),
+                  tokens: tokens,
                 ),
               ],
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// quarter 档底部的「露出区」：同时预览心情 + 拍摄场景 pill 一角 + 上滑提示。
+///
+/// 解决心情/场景功能被"藏"在需上滑到 70% 档才可见的问题——
+/// 在 quarter 档就同时露出心情与场景选项，并明确提示可上滑查看更多（操作行）。
+/// 点击露出区空白处展开到 threeQuarter；点击 pill 直接选择，选择后停留在当前档。
+class _QuarterPeek extends StatelessWidget {
+  const _QuarterPeek({
+    required this.tokens,
+    required this.moods,
+    required this.selectedSceneId,
+    required this.onSelectMood,
+    required this.onSelectScene,
+    required this.onExpand,
+  });
+
+  final ThemeTokens tokens;
+  final List<MoodOption> moods;
+  final String? selectedSceneId;
+  final ValueChanged<MoodOption> onSelectMood;
+  final ValueChanged<String?> onSelectScene;
+  final VoidCallback onExpand;
+
+  @override
+  Widget build(BuildContext context) {
+    const scenes = CapturePreviewMockData.sceneOptions;
+    return GestureDetector(
+      onTap: onExpand,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: 112,
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              tokens.surfaceAlt.withOpacity(0.08),
+              tokens.surfaceAlt.withOpacity(0.55),
+            ],
+          ),
+          border: Border.all(color: tokens.divider, width: 1),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 提示行：露出标题 + 上滑查看更多
+            Row(
+              children: [
+                Icon(Icons.auto_awesome,
+                    size: 14, color: tokens.brand),
+                const SizedBox(width: 6),
+                Text(
+                  '心情 / 拍摄场景',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.expand_less,
+                    size: 16, color: tokens.textSecondary),
+                const SizedBox(width: 2),
+                Text(
+                  '上滑查看更多',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: tokens.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            // 露出心情 pill（可点击，选择后停留在当前档）
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  for (var i = 0; i < moods.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    _Pill(
+                      icon: moods[i].icon,
+                      text: moods[i].name,
+                      active: moods[i].active,
+                      onTap: () => onSelectMood(moods[i]),
+                      tokens: tokens,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // 露出场景 pill（可点击，选择后停留在当前档）
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  for (var i = 0; i < scenes.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    _Pill(
+                      icon: scenes[i].icon,
+                      text: scenes[i].name,
+                      active: selectedSceneId == scenes[i].id,
+                      onTap: () => onSelectScene(scenes[i].id),
+                      tokens: tokens,
+                    ),
+                  ],
+                  const SizedBox(width: 8),
+                  _Pill(
+                    text: '不标记',
+                    active: selectedSceneId == null,
+                    onTap: () => onSelectScene(null),
+                    tokens: tokens,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1763,7 +2086,7 @@ class _SceneSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionTitle(title: '拍摄场景'),
+        _SectionTitle(title: '拍摄场景', tokens: tokens),
         const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -1776,6 +2099,7 @@ class _SceneSection extends StatelessWidget {
                   text: scenes[i].name,
                   active: selectedSceneId == scenes[i].id,
                   onTap: () => onSelectScene(scenes[i].id),
+                  tokens: tokens,
                 ),
               ],
               const SizedBox(width: 8),
@@ -1783,6 +2107,7 @@ class _SceneSection extends StatelessWidget {
                 text: '不标记',
                 active: selectedSceneId == null,
                 onTap: () => onSelectScene(null),
+                tokens: tokens,
               ),
             ],
           ),
@@ -1797,11 +2122,13 @@ class _SectionTitleRow extends StatelessWidget {
     required this.title,
     required this.linkText,
     required this.onLinkTap,
+    required this.tokens,
   });
 
   final String title;
   final String linkText;
   final VoidCallback onLinkTap;
+  final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
@@ -1809,7 +2136,7 @@ class _SectionTitleRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Expanded(
-          child: _SectionTitle(title: title),
+          child: _SectionTitle(title: title, tokens: tokens),
         ),
         GestureDetector(
           onTap: onLinkTap,
@@ -1818,10 +2145,9 @@ class _SectionTitleRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             child: Text(
               linkText,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                // 硬编码颜色，与 uni-app 一致 (section-link color $color-text-tertiary — 白色 sheet 上用深灰)
-                color: Color(0xFF999999),
+                color: tokens.textTertiary,
               ),
             ),
           ),
@@ -1832,8 +2158,9 @@ class _SectionTitleRow extends StatelessWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title});
+  const _SectionTitle({required this.title, required this.tokens});
   final String title;
+  final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
@@ -1841,12 +2168,11 @@ class _SectionTitle extends StatelessWidget {
       title,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
+      style: TextStyle(
         fontFamily: 'Noto Serif SC',
         fontSize: 15,
         fontWeight: FontWeight.w600,
-        // 硬编码颜色，与 uni-app 一致 (section-title color $color-text-primary — 白色 sheet 上用深色)
-        color: Color(0xFF1A1A1A),
+        color: tokens.textPrimary,
       ),
     );
   }
@@ -1859,12 +2185,14 @@ class _Pill extends StatelessWidget {
     required this.text,
     required this.active,
     required this.onTap,
+    required this.tokens,
   });
 
   final IconData? icon;
   final String text;
   final bool active;
   final VoidCallback onTap;
+  final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
@@ -1874,20 +2202,17 @@ class _Pill extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(
-          // 硬编码颜色，与 uni-app 一致 (pill.active linear-gradient(135deg, #C9A96E 0%, #A88550 100%))
           gradient: active
-              ? const LinearGradient(
+              ? LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
+                  colors: [tokens.brand, tokens.brandDeep],
                 )
               : null,
-          // 硬编码颜色，与 uni-app 一致 (pill border $color-border — 白色 sheet 上用浅灰)
           border: active
               ? Border.all(color: Colors.transparent, width: 1.5)
-              : Border.all(color: const Color(0xFFE5E0D8), width: 1.5),
-          // 硬编码颜色，与 uni-app 一致 (pill bg $color-bg-card — 白色 sheet 上用浅米色)
-          color: active ? null : const Color(0xFFFAF7F2),
+              : Border.all(color: tokens.divider, width: 1.5),
+          color: active ? null : tokens.surface,
           borderRadius: BorderRadius.circular(9999),
         ),
         child: Row(
@@ -1897,8 +2222,7 @@ class _Pill extends StatelessWidget {
               Icon(
                 icon,
                 size: 14,
-                // 硬编码颜色，与 uni-app 一致 (pill active icon #ffffff / inactive $color-text-secondary)
-                color: active ? Colors.white : const Color(0xFF666666),
+                color: active ? tokens.textInverse : tokens.textSecondary,
               ),
               const SizedBox(width: 6),
             ],
@@ -1909,8 +2233,7 @@ class _Pill extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                // 硬编码颜色，与 uni-app 一致 (pill.active color #ffffff / inactive $color-text-secondary)
-                color: active ? Colors.white : const Color(0xFF666666),
+                color: active ? tokens.textInverse : tokens.textSecondary,
                 height: 1,
               ),
             ),
@@ -1942,6 +2265,7 @@ class _ActionRow extends StatelessWidget {
             icon: Icons.bar_chart_outlined,
             text: '生成对比图',
             onTap: onCompareCard,
+            tokens: tokens,
           ),
         ),
         const SizedBox(width: 10),
@@ -1950,6 +2274,7 @@ class _ActionRow extends StatelessWidget {
             icon: Icons.content_paste_outlined,
             text: '生成 EXIF 卡片',
             onTap: onExifCard,
+            tokens: tokens,
           ),
         ),
       ],
@@ -1963,6 +2288,7 @@ class _CollapsedActionButton extends StatelessWidget {
   const _CollapsedActionButton({
     required this.icon,
     required this.label,
+    required this.tokens,
     this.onTap,
     this.onPressStart,
     this.onPressEnd,
@@ -1970,6 +2296,7 @@ class _CollapsedActionButton extends StatelessWidget {
 
   final IconData icon;
   final String label;
+  final ThemeTokens tokens;
   final VoidCallback? onTap;
   final VoidCallback? onPressStart;
   final VoidCallback? onPressEnd;
@@ -1987,11 +2314,11 @@ class _CollapsedActionButton extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: Colors.white),
+            Icon(icon, size: 22, color: tokens.textPrimary),
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(fontSize: 10, color: Colors.white70),
+              style: TextStyle(fontSize: 10, color: tokens.textSecondary),
             ),
           ],
         ),
@@ -2006,6 +2333,7 @@ class _FloatingActionButton extends StatelessWidget {
   const _FloatingActionButton({
     required this.icon,
     required this.label,
+    required this.tokens,
     this.onTap,
     this.onPressStart,
     this.onPressEnd,
@@ -2013,6 +2341,7 @@ class _FloatingActionButton extends StatelessWidget {
 
   final IconData icon;
   final String label;
+  final ThemeTokens tokens;
   final VoidCallback? onTap;
   final VoidCallback? onPressStart;
   final VoidCallback? onPressEnd;
@@ -2028,11 +2357,11 @@ class _FloatingActionButton extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 24, color: Colors.white),
+          Icon(icon, size: 24, color: tokens.textPrimary),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(fontSize: 11, color: Colors.white),
+            style: TextStyle(fontSize: 11, color: tokens.textSecondary),
           ),
         ],
       ),
@@ -2045,11 +2374,13 @@ class _ActionButton extends StatelessWidget {
     required this.icon,
     required this.text,
     required this.onTap,
+    required this.tokens,
   });
 
   final IconData icon;
   final String text;
   final VoidCallback onTap;
+  final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
@@ -2059,8 +2390,7 @@ class _ActionButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         decoration: BoxDecoration(
-          // 硬编码颜色，与 uni-app 一致 (action-btn border $color-border)
-          border: Border.all(color: const Color(0xFFE5E0D8), width: 1.5),
+          border: Border.all(color: tokens.divider, width: 1.5),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -2069,8 +2399,7 @@ class _ActionButton extends StatelessWidget {
             Icon(
               icon,
               size: 16,
-              // 硬编码颜色，与 uni-app 一致 (action-icon color $color-text-secondary)
-              color: const Color(0xFF666666),
+              color: tokens.textSecondary,
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -2078,68 +2407,14 @@ class _ActionButton extends StatelessWidget {
                 text,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  // 硬编码颜色，与 uni-app 一致 (action-text color $color-text-primary)
-                  color: Color(0xFF1A1A1A),
+                  color: tokens.textPrimary,
                 ),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 保存到相册主按钮
-class _SaveButton extends StatelessWidget {
-  const _SaveButton({required this.onTap, required this.isSaving});
-  final VoidCallback onTap;
-  final bool isSaving;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: isSaving ? null : onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        decoration: BoxDecoration(
-          // 硬编码颜色，与 uni-app 一致 (save-btn bg #1A1A1A)
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: isSaving
-              ? [
-                  SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: LumiraProgress.circular(strokeWidth: 2),
-                  ),
-                ]
-              : const [
-                  Icon(
-                    Icons.save_outlined,
-                    size: 16,
-                    // 硬编码颜色，与 uni-app 一致 (save-icon color #FAF7F2)
-                    color: Color(0xFFFAF7F2),
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    '保存到系统相册',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      // 硬编码颜色，与 uni-app 一致 (save-text color #FAF7F2)
-                      color: Color(0xFFFAF7F2),
-                      height: 1,
-                    ),
-                  ),
-                ],
         ),
       ),
     );
@@ -2151,22 +2426,24 @@ class _ShareOption extends StatelessWidget {
     required this.icon,
     required this.text,
     required this.onTap,
+    required this.tokens,
   });
 
   final IconData icon;
   final String text;
   final VoidCallback onTap;
+  final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
     return LumiraListTile(
-      leading: Icon(icon, size: 22, color: const Color(0xFF1A1A1A)),
+      leading: Icon(icon, size: 22, color: tokens.textPrimary),
       title: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w500,
-          color: Color(0xFF1A1A1A),
+          color: tokens.textPrimary,
         ),
       ),
       onTap: onTap,

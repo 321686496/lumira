@@ -96,30 +96,50 @@ class DartPhotoPipeline implements PhotoPipeline {
         paint.colorFilter = ui.ColorFilter.matrix(matrix);
       }
 
-      // 计算变换：translate → rotate → scale（方向旋转 + 镜像 + cover 缩放）
+      // 计算变换参数
       final alignRotation = needRotate ? (isPortrait ? 90 : 270) : 0;
       final totalRotation =
           (alignRotation + userRotation) * math.pi / 180.0;
       final totalFlipH = needMirror != userFlipH; // XOR
       final totalFlipV = userFlipV;
 
-      // 旋转后图像在画布空间中的有效宽高
+      // cover 缩放（等比，不改变内容比例）：在原始图像坐标系中计算，
+      // 让旋转后的图像完全覆盖输出画布，溢出部分由画布边界自动裁剪。
+      //
+      // 关键数学：canvas 变换顺序是 scale → rotate（先写的先应用到源图坐标）。
+      // 对源点 (x, y)，经过均匀 scale(s) 再 rotate 90°：
+      //   rotate 90° 矩阵: [0, 1, -1, 0]
+      //   (x·s, y·s) → (y·s, -x·s)
+      // 因此：
+      //   - 源宽 srcW 映射到输出 Y 轴 → s ≥ outH / srcW
+      //   - 源高 srcH 映射到输出 X 轴 → s ≥ outW / srcH
+      // 不旋转时：s ≥ outW / srcW 且 s ≥ outH / srcH
+      // 取较大值（cover 定义：完全覆盖画布，允许溢出）
       final swapDims = (alignRotation == 90 || alignRotation == 270) ||
           userRotation == 90 ||
           userRotation == 270;
-      final effImgW = swapDims ? srcImage.height.toDouble() : srcImage.width.toDouble();
-      final effImgH = swapDims ? srcImage.width.toDouble() : srcImage.height.toDouble();
+      final double coverScale;
+      if (swapDims) {
+        coverScale = math.max(
+          outW / srcImage.height.toDouble(), // 源高 → 输出宽
+          outH / srcImage.width.toDouble(),  // 源宽 → 输出高
+        );
+      } else {
+        coverScale = math.max(
+          outW / srcImage.width.toDouble(),
+          outH / srcImage.height.toDouble(),
+        );
+      }
 
-      // cover 缩放：让图像完全覆盖输出区域
-      final coverScale =
-          math.max(outW / effImgW, outH / effImgH);
-
+      // 关键：scale 和 mirror 必须在 rotate 之前应用（在原始图像坐标系中）。
+      // rotate 之后画布 X/Y 轴互换，若 scale 在 rotate 之后会导致宽高缩放因子被交换→拉伸；
+      // mirror 在 rotate 之后会导致左右镜像变成上下翻转。
       canvas.translate(outW / 2.0, outH / 2.0);
-      canvas.rotate(totalRotation);
       canvas.scale(
         (totalFlipH ? -1.0 : 1.0) * coverScale,
         (totalFlipV ? -1.0 : 1.0) * coverScale,
       );
+      canvas.rotate(totalRotation);
       canvas.drawImage(
         srcImage,
         ui.Offset(-srcImage.width / 2.0, -srcImage.height / 2.0),

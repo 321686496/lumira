@@ -74,12 +74,16 @@ class DiaryPhoto {
     required this.id,
     required this.img,
     required this.tags,
+    this.mood,
   });
 
   /// 照片 ID，用于点击跳转详情页
   final String id;
   final String img;
   final List<DiaryTag> tags;
+
+  /// 照片心情（可空，用于叠加在照片角上展示）
+  final String? mood;
 }
 
 /// 日记 entry 照片标签

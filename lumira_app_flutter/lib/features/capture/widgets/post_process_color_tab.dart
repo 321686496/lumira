@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../domain/photo_template.dart';
-import 'post_process_slider_row.dart';
+import 'post_process_adjust_panel.dart';
 
 /// 共享色彩编辑 Tab（受控纯展示）。
 ///
@@ -11,109 +12,23 @@ class PostProcessColorTab extends StatelessWidget {
   final PostProcess full;
   final ValueChanged<PostProcess> onChanged;
 
+  /// 浅色主题色板；为 null 时滑块使用默认半透明深色配色。
+  final ThemeTokens? tokens;
+
   const PostProcessColorTab({
     super.key,
     required this.full,
     required this.onChanged,
+    this.tokens,
   });
 
   @override
   Widget build(BuildContext context) {
-    final c = full.color;
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      children: [
-        PostProcessSliderRow(
-          label: '亮度',
-          value: c.brightness,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(brightness: v),
-          )),
-        ),
-        PostProcessSliderRow(
-          label: '对比度',
-          value: c.contrast,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(contrast: v),
-          )),
-        ),
-        PostProcessSliderRow(
-          label: '饱和度',
-          value: c.saturation,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(saturation: v),
-          )),
-        ),
-        PostProcessSliderRow(
-          label: '色温',
-          value: c.temperature,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(temperature: v),
-          )),
-        ),
-        PostProcessSliderRow(
-          label: '色调',
-          value: c.tint,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(tint: v),
-          )),
-        ),
-        PostProcessSliderRow(
-          label: '高光',
-          value: c.highlights ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(highlights: v),
-          )),
-        ),
-        PostProcessSliderRow(
-          label: '阴影',
-          value: c.shadows ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(shadows: v),
-          )),
-        ),
-        PostProcessSliderRow(
-          label: '黑点',
-          value: c.blackPoint ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(blackPoint: v),
-          )),
-        ),
-        PostProcessSliderRow(
-          label: '自然饱和度',
-          value: c.vibrance ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(vibrance: v),
-          )),
-        ),
-        PostProcessSliderRow(
-          label: '明亮度',
-          value: c.brilliance ?? 0,
-          min: -100,
-          max: 100,
-          onChanged: (v) => onChanged(full.copyWith(
-            color: c.copyWith(brilliance: v),
-          )),
-        ),
-      ],
+    return AdjustPanel(
+      defs: colorAdjustDefs(),
+      full: full,
+      onChanged: onChanged,
+      tokens: tokens,
     );
   }
 }

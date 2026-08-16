@@ -215,11 +215,11 @@ void main() {
           reason: '/splash must be a declared route (it is the initial location)');
     });
 
-    test('router configuration has 65 routes', () {
+    test('router configuration has 66 routes', () {
       final router = container.read(routerProvider);
       // Count routes by traversing the configuration.
       // 本任务所有路由均为顶层 GoRoute（无 ShellRoute、无子路由），
-      // Forced fix: 加上 Flutter 新增的 13 条后变为 65 条。
+      // Forced fix: 加上 Flutter 新增的 13 条后变为 65 条，再加 1 条新增路由。
       int count = 0;
       void countRoutes(List<RouteBase> routes) {
         for (final route in routes) {
@@ -230,8 +230,8 @@ void main() {
         }
       }
       countRoutes(router.routeConfiguration.routes);
-      expect(count, 65,
-          reason: 'router must declare 65 top-level GoRoute entries (34 from uni-app + 13 Flutter additions)');
+      expect(count, 66,
+          reason: 'router must declare 66 top-level GoRoute entries (34 from uni-app + 13 Flutter additions + 1 new)');
     });
 
     test('router resolves all 47 paths without error', () {

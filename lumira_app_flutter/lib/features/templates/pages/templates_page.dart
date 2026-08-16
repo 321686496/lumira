@@ -311,9 +311,10 @@ class _HeroSection extends ConsumerWidget {
               data: (list) {
                 if (list.isEmpty) return const SizedBox.shrink();
                 return SizedBox(
-                  height: 244, // Forced fix: 220 不够容纳 130*4/3=173.33 图片 + 名字 + 2 行 reason (~241.73dp)；改为 244
+                  height: 252, // 244 + 8px 阴影空间（shadowConvex blurRadius 14 + offset 6 → 阴影延伸 ~20px）
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
+                    clipBehavior: Clip.none, // 允许阴影溢出裁剪边界
                     padding: const EdgeInsets.symmetric(horizontal: 20), // 40rpx → 20dp
                     itemCount: list.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 10), // gap 20rpx → 10dp

@@ -189,6 +189,15 @@ class GalleryDao {
     );
   }
 
+  Future<int> updateMood(String photoId, String? mood) async {
+    return _db.update(
+      Tables.galleryItems,
+      {Tables.colMood: mood},
+      where: '${Tables.colId} = ?',
+      whereArgs: [photoId],
+    );
+  }
+
   /// 更新编辑后的照片信息（非破坏性编辑保存）
   Future<int> updateEdit({
     required String id,

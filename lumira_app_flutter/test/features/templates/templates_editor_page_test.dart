@@ -143,8 +143,12 @@ void main() {
       await tester.pump();
     } else {
       // 先让真实 async（DAO 查询/写入）完成，再 settle；顺序颠倒会导致 pumpAndSettle 超时
-      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      // 并行全量负载下 _loadStyleOptions 的 DB 查询可能超过单次 50ms，轮询多次以稳定通过
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(
+            () => Future.delayed(const Duration(milliseconds: 50)));
+        await tester.pump();
+      }
       await tester.pumpAndSettle();
     }
   }

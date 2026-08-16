@@ -28,6 +28,7 @@ export 'buttons/lumira_icon_button.dart';
 export 'dialog/lumira_dialog.dart';
 export 'dialog/lumira_bottom_sheet.dart';
 export 'dialog/lumira_menu.dart';
+export 'dialog/lumira_save_mode_sheet.dart';
 
 // === Phase 3：表单 ===
 export 'form/lumira_text_field.dart';

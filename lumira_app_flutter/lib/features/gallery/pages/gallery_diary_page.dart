@@ -27,7 +27,6 @@ class GalleryDiaryPage extends ConsumerStatefulWidget {
 }
 
 class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
-  String _viewTab = kDiaryTabOutfit; // 'outfit' / 'shoot'
   String? _selectedMood;
   final ScrollController _scrollController = ScrollController();
 
@@ -59,7 +58,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     if (picked == null || !mounted) return;
 
     final entries = ref
-        .read(diaryEntriesProvider(DiaryFilter(tab: _viewTab, mood: _selectedMood)))
+        .read(diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, mood: _selectedMood)))
         .valueOrNull;
     if (entries == null || entries.isEmpty) {
       LumiraToast.show(context, '暂无照片数据', duration: const Duration(milliseconds: 1200));
@@ -111,7 +110,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     final dao = await ref.read(galleryDaoProvider.future);
     await dao.delete(photoId);
     ref.invalidate(
-        diaryEntriesProvider(DiaryFilter(tab: _viewTab, mood: _selectedMood)));
+        diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, mood: _selectedMood)));
     ref.invalidate(diaryStreakProvider);
     ref.invalidate(diaryTotalCountProvider);
     if (mounted) {
@@ -124,15 +123,14 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final entriesAsync = ref.watch(
-        diaryEntriesProvider(DiaryFilter(tab: _viewTab, mood: _selectedMood)));
+        diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, mood: _selectedMood)));
     final streak = ref.watch(diaryStreakProvider).valueOrNull ?? 0;
     final monthStats = ref.watch(diaryMonthlyStatsProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
       appBar: LumiraNav(
-        // title 与 active tab 同步：outfit→'穿搭日记'，shoot→'拍摄日记'
-        title: _viewTab == kDiaryTabOutfit ? '穿搭日记' : '拍摄日记',
+        title: '拍摄日记',
         transparent: true,
         leading: _BackButton(tokens: tokens),
         actions: [
@@ -155,24 +153,16 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                 controller: _scrollController,
                 padding: const EdgeInsets.only(bottom: 100),
                 children: [
-                  // 视图切换
-                  FadeUp(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      child: _DiaryViewToggle(
-                        activeTab: _viewTab,
-                        onTap: (t) => setState(() => _viewTab = t),
-                        tokens: tokens,
-                      ),
-                    ),
-                  ),
                   // 心情筛选
                   FadeUp(
                     delay: const Duration(milliseconds: 50),
-                    child: _MoodFilterRow(
-                      selectedMood: _selectedMood,
-                      onSelect: (mood) => setState(() => _selectedMood = mood),
-                      tokens: tokens,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _MoodFilterRow(
+                        selectedMood: _selectedMood,
+                        onSelect: (mood) => setState(() => _selectedMood = mood),
+                        tokens: tokens,
+                      ),
                     ),
                   ),
                   // 连续打卡 banner（本月进度 + 里程碑徽章）
@@ -324,62 +314,6 @@ class _CalendarAction extends StatelessWidget {
   }
 }
 
-class _DiaryViewToggle extends ConsumerWidget {
-  const _DiaryViewToggle({
-    required this.activeTab,
-    required this.onTap,
-    required this.tokens,
-  });
-  final String activeTab;
-  final void Function(String) onTap;
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: isNeu ? tokens.surface : tokens.surfaceAlt,
-        borderRadius: BorderRadius.circular(1000),
-        boxShadow: isNeu ? tokens.shadowConcaveSubtle : null,
-      ),
-      padding: const EdgeInsets.all(3),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _item('穿搭日记', kDiaryTabOutfit, activeTab == kDiaryTabOutfit),
-          _item('拍摄日记', kDiaryTabShoot, activeTab == kDiaryTabShoot),
-        ],
-      ),
-    );
-  }
-
-  Widget _item(String label, String key, bool active) {
-    return GestureDetector(
-      onTap: () => onTap(key),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? tokens.canvas : Colors.transparent,
-          borderRadius: BorderRadius.circular(1000),
-          boxShadow: active ? tokens.shadowConvexSubtle : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: active ? tokens.textPrimary : tokens.textTertiary,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 心情筛选行：横向滚动 pill，复用 CapturePreviewMockData.moods 的 7 个文案
 class _MoodFilterRow extends StatelessWidget {
   const _MoodFilterRow({
     required this.selectedMood,
@@ -468,7 +402,7 @@ class _StreakBanner extends StatelessWidget {
     }
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 24),
+      margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
