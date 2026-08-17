@@ -181,7 +181,7 @@ export interface TemplateCategory {
   key: string;
   name: string;
   parentKey: string | null;
-  level: number; // 1=type / 2=style / 3=method
+  level: number; // 1=type / 2=majorStyle / 3=subStyle / 4=method
   iconUrl: string;
   sortOrder: number;
   isSystem: boolean;

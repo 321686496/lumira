@@ -56,7 +56,8 @@ export class UpdateTemplateDto {
   tagIds?: string[];
 
   @IsOptional()
-  classification?: { type: string; style: string; method: string };
+  // style 为旧 admin 前端的兼容字段（仅提交 style 时按 subStyle 存储）
+  classification?: { type: string; majorStyle: string; subStyle: string; method: string; style?: string };
 
   @IsOptional()
   @IsInt()

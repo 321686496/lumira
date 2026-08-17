@@ -2,7 +2,7 @@
 // Admin 分类管理业务逻辑（spec 3.3 + 11.4 三级分类扩展）
 
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and, asc, sql, isNull } from 'drizzle-orm';
+import { eq, and, or, asc, sql, isNull } from 'drizzle-orm';
 import * as fs from 'fs';
 import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
@@ -52,8 +52,8 @@ function deleteCategoryFiles(uploadDir: string, key: string): void {
   }
 }
 
-/** 最大层级（三级：type/style/method） */
-const MAX_LEVEL = 3;
+/** 最大层级（四级：type/majorStyle/subStyle/method） */
+const MAX_LEVEL = 4;
 
 @Injectable()
 export class AdminCategoriesService {
@@ -97,13 +97,13 @@ export class AdminCategoriesService {
     // 推算 level
     let level = 1;
     if (parentKey !== null) {
-      // 父分类 key 匹配且 level <= 2（level 3 是叶子，不能作为父）
+      // 父分类 key 匹配且 level <= 3（level 4 是叶子，不能作为父）
       // 同名 key 跨 level 时取 level 最小的（即最接近根的），保证唯一确定
       const parentCandidates = await db.select().from(templateCategories)
         .where(eq(templateCategories.key, parentKey))
         .orderBy(asc(templateCategories.level))
         .limit(2);
-      const parent = parentCandidates.find((r) => r.level <= 2);
+      const parent = parentCandidates.find((r) => r.level <= 3);
       if (!parent) {
         throw new BadRequestException(`Parent category not found: ${parentKey}`);
       }
@@ -271,17 +271,22 @@ export class AdminCategoriesService {
   /**
    * 统计引用该分类的模板数量。
    * - level 1：templates.category = key
-   * - level 2：classification_json 的 style 字段 = key
-   * - level 3：classification_json 的 method 字段 = key
+   * - level >= 2：classification_json 任一字段（type/majorStyle/subStyle/method）命中 key 即算。
+   *   不按 level 映射单一字段，因为人像为四级而其余题材为浅层（L2 可能是 subStyle 语义、L3 可能是 method 语义），
+   *   直接匹配全部字段可兼容混合层级。
    */
   private async countTemplateReferences(key: string, level: number): Promise<number> {
     const db = this.dbService.getDb();
-    const jsonField = level === 1 ? '$.type' : level === 2 ? '$.style' : '$.method';
     const rows = await db.select({ count: sql<number>`count(*)` })
       .from(templates)
       .where(level === 1
         ? eq(templates.category, key)
-        : sql`JSON_UNQUOTE(JSON_EXTRACT(${templates.classificationJson}, ${jsonField})) = ${key}`);
+        : or(
+          sql`JSON_UNQUOTE(JSON_EXTRACT(${templates.classificationJson}, '$.type')) = ${key}`,
+          sql`JSON_UNQUOTE(JSON_EXTRACT(${templates.classificationJson}, '$.majorStyle')) = ${key}`,
+          sql`JSON_UNQUOTE(JSON_EXTRACT(${templates.classificationJson}, '$.subStyle')) = ${key}`,
+          sql`JSON_UNQUOTE(JSON_EXTRACT(${templates.classificationJson}, '$.method')) = ${key}`,
+        ));
     return rows[0]?.count ?? 0;
   }
 }

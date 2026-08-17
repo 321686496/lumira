@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/modules/templates/templates.service.ts
 
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and, gt, asc, desc } from 'drizzle-orm';
+import { eq, and, or, gt, asc, desc, sql, inArray, type SQL } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { ownedTemplates, templatePrices, templates, templateCategories } from '../../database/schema';
 import { PointsService } from '../points/points.service';
@@ -163,16 +163,36 @@ export class TemplatesService {
 
   // ===== 客户端：后端动态模板列表 / 详情 / 分类（spec 3.2）=====
 
-  /** 客户端拉取后端动态模板 meta 列表（仅 isActive=1）*/
-  async listRemoteTemplates(since?: number, category?: string): Promise<RemoteTemplateListResponse> {
+  /**
+   * 客户端拉取后端动态模板 meta 列表（仅 isActive=1）。
+   * @param subtreeKeys 可选的子树 key 集合（含自身及所有后代 key）：
+   *   模板任一 classification 字段（type/majorStyle/subStyle/method）或 category 命中集合即返回，
+   *   用于「该分类族内所有后代挂的模板」的查询（四级分类钻取）。
+   */
+  async listRemoteTemplates(
+    since?: number,
+    category?: string,
+    subtreeKeys?: string[],
+  ): Promise<RemoteTemplateListResponse> {
     const db = this.dbService.getDb();
 
-    // 构建条件：isActive=1 + 可选 since + 可选 category
+    // 构建条件：isActive=1 + 可选 since + 可选 category / 可选 subtree 集合
     const conditions = [eq(templates.isActive, 1)];
     if (since !== undefined && !Number.isNaN(since)) {
       conditions.push(gt(templates.updatedAt, since));
     }
-    if (category) {
+    if (subtreeKeys && subtreeKeys.length > 0) {
+      // 子树集合匹配：任一 classification 字段命中集合即算（含 category 直接命中）
+      const keyList = sql.join(subtreeKeys.map((k) => sql`${k}`), sql`, `) as SQL;
+      const jsonIn = (field: string) => sql`JSON_UNQUOTE(JSON_EXTRACT(${templates.classificationJson}, ${field})) IN (${keyList})`;
+      conditions.push(or(
+        inArray(templates.category, subtreeKeys),
+        jsonIn('$.type'),
+        jsonIn('$.majorStyle'),
+        jsonIn('$.subStyle'),
+        jsonIn('$.method'),
+      ) as SQL);
+    } else if (category) {
       conditions.push(eq(templates.category, category));
     }
 
@@ -294,11 +314,12 @@ function safeParseStringArray(json: string): string[] {
   }
 }
 
-function safeParseClassification(json: string): { type: string; style: string; method: string } {
+function safeParseClassification(json: string): { type: string; majorStyle: string; subStyle: string; method: string } {
   const obj = safeParseObject(json);
   return {
     type: typeof obj.type === 'string' ? obj.type : '',
-    style: typeof obj.style === 'string' ? obj.style : '',
+    majorStyle: typeof obj.majorStyle === 'string' ? obj.majorStyle : '',
+    subStyle: typeof obj.subStyle === 'string' ? obj.subStyle : '',
     method: typeof obj.method === 'string' ? obj.method : '',
   };
 }

@@ -259,7 +259,8 @@ export class AdminTemplatesService {
       classificationJson: JSON.stringify({
         // 自动同步：classification.type = category（spec 11.4）
         type: meta.category,
-        style: meta.classification?.style || '',
+        majorStyle: meta.classification?.majorStyle || '',
+        subStyle: meta.classification?.subStyle || '',
         method: meta.classification?.method || '',
       }),
       sortOrder: meta.sortOrder ?? 0,
@@ -399,7 +400,9 @@ export class AdminTemplatesService {
       const existingCls = safeParseClassification(existing.classificationJson);
       updateData.classificationJson = JSON.stringify({
         type: finalCategory,
-        style: meta.classification?.style ?? existingCls.style,
+        majorStyle: meta.classification?.majorStyle ?? existingCls.majorStyle,
+        // 兼容旧 admin 前端：仅提交 style 时将其作为 subStyle 存储，避免分类数据丢失
+        subStyle: meta.classification?.subStyle ?? meta.classification?.style ?? existingCls.subStyle,
         method: meta.classification?.method ?? existingCls.method,
       });
     }
@@ -486,12 +489,13 @@ function safeParse(json: string): Record<string, unknown> {
   }
 }
 
-/** 解析 classification_json，提取 type/style/method 字符串 */
-function safeParseClassification(json: string): { type: string; style: string; method: string } {
+/** 解析 classification_json，提取 type/majorStyle/subStyle/method 字符串 */
+function safeParseClassification(json: string): { type: string; majorStyle: string; subStyle: string; method: string } {
   const obj = safeParse(json);
   return {
     type: typeof obj.type === 'string' ? obj.type : '',
-    style: typeof obj.style === 'string' ? obj.style : '',
+    majorStyle: typeof obj.majorStyle === 'string' ? obj.majorStyle : '',
+    subStyle: typeof obj.subStyle === 'string' ? obj.subStyle : '',
     method: typeof obj.method === 'string' ? obj.method : '',
   };
 }

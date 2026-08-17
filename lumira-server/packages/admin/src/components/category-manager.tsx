@@ -66,29 +66,33 @@ function flattenTree(
 
 const LEVEL_LABEL: Record<number, string> = {
   1: '一级（题材）',
-  2: '二级（风格）',
-  3: '三级（方式）',
+  2: '二级（大风格）',
+  3: '三级（子风格）',
+  4: '四级（方法）',
 };
 
-/** 层级徽标样式（与后台 Morandi 主题色对齐：蓝灰 / 鼠尾草 / 陶土） */
+/** 层级徽标样式（与后台 Morandi 主题色对齐：蓝灰 / 鼠尾草 / 陶土 / 赭石） */
 const LEVEL_BADGE: Record<number, { label: string; className: string }> = {
   1: { label: '一级', className: 'bg-primary/10 text-primary border-primary/20' },
   2: { label: '二级', className: 'bg-success/10 text-success border-success/20' },
   3: { label: '三级', className: 'bg-warning/10 text-warning border-warning/20' },
+  4: { label: '四级', className: 'bg-accent/10 text-accent border-accent/25' },
 };
 
 /** 非一级分类在名称前的层级色点 */
 const LEVEL_DOT: Record<number, string> = {
   2: 'bg-success/70',
   3: 'bg-warning/70',
+  4: 'bg-accent/70',
 };
 
 interface FormState {
   key: string;
   name: string;
-  level: 1 | 2 | 3;
+  level: 1 | 2 | 3 | 4;
+  /** 祖先路径（root → 父分类），用于通用逐级选父：path 长度 = level - 1 */
+  path: string[];
   parentKey: string;       // 实际父分类 key（一级为空）
-  grandparentKey: string;  // 仅三级：用于筛选二级父分类的一级 key
   sortOrder: number;
   isActive: boolean;
 }
@@ -97,8 +101,8 @@ const EMPTY_FORM: FormState = {
   key: '',
   name: '',
   level: 1,
+  path: [],
   parentKey: '',
-  grandparentKey: '',
   sortOrder: 0,
   isActive: true,
 };
@@ -125,9 +129,9 @@ export function CategoryManager({
 
   // 层级统计（用于工具栏概览）
   const levelCounts = useMemo(() => {
-    const counts = { 1: 0, 2: 0, 3: 0 };
+    const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
     for (const c of categories) {
-      if (c.level === 1 || c.level === 2 || c.level === 3) counts[c.level] += 1;
+      if (c.level >= 1 && c.level <= 4) counts[c.level as 1 | 2 | 3 | 4] += 1;
     }
     return counts;
   }, [categories]);
@@ -145,6 +149,30 @@ export function CategoryManager({
   }, [tree, flatRows, search]);
   const hasSearch = search.trim().length > 0;
 
+  // 通用逐级选父：path 第 index 位（level=index+1）的可选项
+  // index=0 选题材（根）；其后第 i 位可选项 = 上一级选中项的直接子级
+  const getPathOptions = (index: number) => {
+    const targetLevel = index + 1;
+    const parentKey = index === 0 ? null : form.path[index - 1] ?? null;
+    return categories
+      .filter((c) => c.level === targetLevel && (parentKey === null ? c.parentKey === null : c.parentKey === parentKey))
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
+  };
+
+  // 计算分类的祖先 key 链（root → 自身），用于重建逐级选父路径
+  const getAncestorKeys = (cat: TemplateCategory): string[] => {
+    const chain: string[] = [];
+    let cur: TemplateCategory | undefined = cat;
+    const guard = new Set<string>();
+    while (cur && !guard.has(cur.key)) {
+      guard.add(cur.key);
+      chain.unshift(cur.key);
+      if (!cur.parentKey) break;
+      cur = categories.find((c) => c.key === cur!.parentKey && c.level === cur!.level - 1);
+    }
+    return chain;
+  };
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -159,17 +187,6 @@ export function CategoryManager({
   const [reorderKey, setReorderKey] = useState<string | null>(null);
   const [reorderPending, startReorderTransition] = useTransition();
 
-  // 一级分类列表（用于二三级父分类选择）
-  const level1Categories = useMemo(
-    () => categories.filter((c) => c.level === 1).sort((a, b) => a.sortOrder - b.sortOrder),
-    [categories],
-  );
-  // 二级分类列表（按 grandparentKey 筛选，用于三级的父分类选择）
-  const level2ByGrandparent = useMemo(
-    () => categories.filter((c) => c.level === 2 && c.parentKey === form.grandparentKey),
-    [categories, form.grandparentKey],
-  );
-
   // 打开新建对话框
   const openCreate = () => {
     setEditingKey(null);
@@ -179,17 +196,17 @@ export function CategoryManager({
     setDialogOpen(true);
   };
 
-  // 快速添加子分类：预填层级与父分类
+  // 快速添加子分类：预填层级与祖先路径
   const openCreateChild = (parent: TemplateCategory) => {
-    if (parent.level >= 3) return;
-    const level = (parent.level + 1) as 1 | 2 | 3;
+    if (parent.level >= 4) return;
+    const level = (parent.level + 1) as 1 | 2 | 3 | 4;
     setEditingKey(null);
     setForm({
       key: '',
       name: '',
       level,
+      path: getAncestorKeys(parent),
       parentKey: parent.key,
-      grandparentKey: level === 3 ? (parent.parentKey ?? '') : '',
       sortOrder: 0,
       isActive: true,
     });
@@ -201,17 +218,12 @@ export function CategoryManager({
   // 打开编辑对话框
   const openEdit = (cat: TemplateCategory) => {
     setEditingKey(cat.key);
-    let grandparentKey = '';
-    if (cat.level === 3 && cat.parentKey) {
-      const parent = categories.find((c) => c.key === cat.parentKey);
-      grandparentKey = parent?.parentKey ?? '';
-    }
     setForm({
       key: cat.key,
       name: cat.name,
-      level: cat.level as 1 | 2 | 3,
+      level: cat.level as 1 | 2 | 3 | 4,
+      path: cat.level > 1 ? getAncestorKeys(cat).slice(0, -1) : [],
       parentKey: cat.parentKey ?? '',
-      grandparentKey,
       sortOrder: cat.sortOrder,
       isActive: cat.isActive,
     });
@@ -233,14 +245,15 @@ export function CategoryManager({
     return undefined;
   }, [dialogOpen]);
 
-  // 切换层级时重置父分类
-  const handleLevelChange = (level: 1 | 2 | 3) => {
-    setForm({ ...form, level, parentKey: '', grandparentKey: '' });
+  // 切换层级时重置祖先路径与父分类
+  const handleLevelChange = (level: 1 | 2 | 3 | 4) => {
+    setForm({ ...form, level, path: [], parentKey: '' });
   };
 
-  // 三级：切换一级分类时重置二级父分类
-  const handleGrandparentChange = (grandparentKey: string) => {
-    setForm({ ...form, grandparentKey, parentKey: '' });
+  // 逐级选父：选择 path 第 index 位（level=index+1），清空其后路径
+  const handlePathChange = (index: number, key: string) => {
+    const path = [...form.path.slice(0, index), key];
+    setForm({ ...form, path, parentKey: path[path.length - 1] ?? '' });
   };
 
   // 新建场景下的创建位置提示（面包屑）
@@ -248,13 +261,10 @@ export function CategoryManager({
     if (f.level === 1) return `将创建一级分类（题材）`;
     const parent = categories.find((c) => c.key === f.parentKey);
     if (!parent) {
-      return f.level === 2
-        ? '将创建二级分类（风格），请先选择父分类'
-        : '将创建三级分类（方式），请先选择所属一级与二级分类';
+      return `将创建${LEVEL_LABEL[f.level]}，请先选择父分类`;
     }
-    if (f.level === 2) return `将创建「${parent.name}」下的二级分类`;
-    const grand = categories.find((c) => c.key === f.grandparentKey);
-    return `将创建「${grand?.name ?? '…'} › ${parent.name}」下的三级分类`;
+    const crumbs = f.path.map((key) => categories.find((c) => c.key === key)?.name ?? key);
+    return `将创建「${crumbs.join(' › ')}」下的${LEVEL_LABEL[f.level]}`;
   };
 
   const handleSubmit = async () => {
@@ -285,7 +295,8 @@ export function CategoryManager({
 
     const fd = new FormData();
     fd.set('meta', JSON.stringify(meta));
-    if (iconFile && form.level === 1) fd.set('icon', iconFile);
+    // 一二级分类支持上传图标（作为封面/图标展示）
+    if (iconFile && form.level <= 2) fd.set('icon', iconFile);
 
     startSubmitTransition(async () => {
       // 二三级分类需传父分类 key 消歧（同名 key 可跨父级重复）
@@ -444,8 +455,9 @@ export function CategoryManager({
         <div className="flex flex-wrap items-center gap-2">
           {[
             { label: '一级 · 题材', count: levelCounts[1], dot: 'bg-primary' },
-            { label: '二级 · 风格', count: levelCounts[2], dot: 'bg-success' },
-            { label: '三级 · 方式', count: levelCounts[3], dot: 'bg-warning' },
+            { label: '二级 · 大风格', count: levelCounts[2], dot: 'bg-success' },
+            { label: '三级 · 子风格', count: levelCounts[3], dot: 'bg-warning' },
+            { label: '四级 · 方法', count: levelCounts[4], dot: 'bg-accent' },
           ].map((s) => (
             <div
               key={s.label}
@@ -505,8 +517,8 @@ export function CategoryManager({
                 const { node: c, depth, hasChildren, guides } = row;
                 const icon = toAssetUrl(c.iconUrl, backendUrl);
                 const isCollapsed = collapsedKeys.has(c.key);
-                const levelBadge = LEVEL_BADGE[c.level as 1 | 2 | 3];
-                const dot = LEVEL_DOT[c.level as 2 | 3];
+                const levelBadge = LEVEL_BADGE[c.level as 1 | 2 | 3 | 4];
+                const dot = LEVEL_DOT[c.level as 2 | 3 | 4];
                 const { canUp, canDown } = reorderBoundary(c);
                 return (
                   <TableRow key={`${c.parentKey ?? 'root'}|${c.key}`} className="group">
@@ -543,7 +555,7 @@ export function CategoryManager({
                     {/* 名称：图标 / 层级色点 + 名称 + key */}
                     <TableCell className="py-2.5">
                       <div className="flex items-center gap-3">
-                        {c.level === 1 ? (
+                        {c.level <= 2 ? (
                           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-input bg-muted">
                             {icon ? (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -658,7 +670,7 @@ export function CategoryManager({
                     {/* 操作（图标按钮） */}
                     <TableCell className="py-2.5 text-right">
                       <div className="flex items-center justify-end gap-0.5">
-                        {c.level < 3 && (
+                        {c.level < 4 && (
                           <button
                             type="button"
                             title={`在「${c.name}」下添加子分类`}
@@ -713,7 +725,7 @@ export function CategoryManager({
             <DialogDescription className="text-left">
               {editingKey
                 ? `修改分类「${editingKey}」的属性。系统分类的 key 不可更改。`
-                : '分类支持三级树形结构：一级（题材）→ 二级（风格）→ 三级（方式）。'}
+                : '分类支持四级树形结构：一级（题材）→ 二级（大风格）→ 三级（子风格）→ 四级（方法）。'}
             </DialogDescription>
           </DialogHeader>
 
@@ -730,7 +742,7 @@ export function CategoryManager({
               <Label>层级 *</Label>
               <Select
                 value={String(form.level)}
-                onValueChange={(v) => handleLevelChange(Number(v) as 1 | 2 | 3)}
+                onValueChange={(v) => handleLevelChange(Number(v) as 1 | 2 | 3 | 4)}
                 disabled={Boolean(editingKey)}
               >
                 <SelectTrigger><SelectValue placeholder="选择层级" /></SelectTrigger>
@@ -738,6 +750,7 @@ export function CategoryManager({
                   <SelectItem value="1">{LEVEL_LABEL[1]}</SelectItem>
                   <SelectItem value="2">{LEVEL_LABEL[2]}</SelectItem>
                   <SelectItem value="3">{LEVEL_LABEL[3]}</SelectItem>
+                  <SelectItem value="4">{LEVEL_LABEL[4]}</SelectItem>
                 </SelectContent>
               </Select>
               {editingKey && (
@@ -745,53 +758,44 @@ export function CategoryManager({
               )}
             </div>
 
-            {/* 三级：先选一级（祖父），再选二级（父） */}
-            {form.level === 3 && (
-              <div className="space-y-2">
-                <Label>所属一级分类 *</Label>
-                <Select
-                  value={form.grandparentKey}
-                  onValueChange={handleGrandparentChange}
-                  disabled={Boolean(editingKey)}
-                >
-                  <SelectTrigger><SelectValue placeholder="选择一级分类" /></SelectTrigger>
-                  <SelectContent>
-                    {level1Categories.map((c) => (
-                      <SelectItem key={c.key} value={c.key}>
-                        {c.name} ({c.key})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {editingKey && (
-                  <p className="text-xs text-muted-foreground">已有分类的所属一级不可修改。</p>
-                )}
-              </div>
-            )}
-
-            {/* 二三级：父分类选择 */}
+            {/* 通用逐级选父：按层级依次选择祖先，最后一个即父分类 */}
             {form.level !== 1 && (
-              <div className="space-y-2">
-                <Label>
-                  父分类 * {form.level === 3 && <span className="text-xs text-muted-foreground">（二级）</span>}
-                </Label>
-                <Select
-                  value={form.parentKey}
-                  onValueChange={(v) => setForm({ ...form, parentKey: v })}
-                  disabled={form.level === 3 && !form.grandparentKey}
-                >
-                  <SelectTrigger><SelectValue placeholder="选择父分类" /></SelectTrigger>
-                  <SelectContent>
-                    {(form.level === 2 ? level1Categories : level2ByGrandparent).map((c) => (
-                      <SelectItem key={c.key} value={c.key}>
-                        {c.name} ({c.key})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {form.level === 3 && !form.grandparentKey && (
-                  <p className="text-xs text-muted-foreground">请先选择一级分类。</p>
-                )}
+              <div className="space-y-3">
+                {Array.from({ length: form.level - 1 }, (_, i) => {
+                  const targetLevel = i + 1;
+                  const options = getPathOptions(i);
+                  const selected = form.path[i] ?? '';
+                  const parentReady = i === 0 ? true : Boolean(form.path[i - 1]);
+                  return (
+                    <div key={targetLevel} className="space-y-2">
+                      <Label>
+                        所属{LEVEL_LABEL[targetLevel]}
+                        {targetLevel === form.level - 1 && (
+                          <span className="text-xs text-muted-foreground">（父分类）</span>
+                        )}{' '}*
+                      </Label>
+                      <Select
+                        value={selected}
+                        onValueChange={(v) => handlePathChange(i, v)}
+                        disabled={Boolean(editingKey) || !parentReady}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={`选择${LEVEL_LABEL[targetLevel]}`} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.map((c) => (
+                            <SelectItem key={`${c.parentKey ?? 'root'}|${c.key}`} value={c.key}>
+                              {c.name} ({c.key})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!parentReady && (
+                        <p className="text-xs text-muted-foreground">请先选择上一级分类。</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -852,15 +856,15 @@ export function CategoryManager({
               </div>
             </div>
 
-            {/* 图标上传仅一级分类显示 */}
-            {form.level === 1 && (
+            {/* 图标上传仅一二级分类显示（二级封面） */}
+            {form.level <= 2 && (
               <FileUpload
                 label="分类图标（可选）"
                 accept="image/*"
                 maxSize={5 * 1024 * 1024}
                 value={iconFile}
                 onChange={setIconFile}
-                hint="建议 5MB 以内的 png/svg/jpg；为空时使用 Flutter 内置图标映射。"
+                hint="建议 5MB 以内的 png/svg/jpg；一二级分类的图标会作为封面展示，为空时使用默认占位。"
                 previewUrl={
                   editingKey
                     ? toAssetUrl(editingCat?.iconUrl, backendUrl) || undefined

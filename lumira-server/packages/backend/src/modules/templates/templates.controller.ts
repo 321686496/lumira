@@ -18,9 +18,13 @@ export class TemplatesController {
   async listRemote(
     @Query('since') since?: string,
     @Query('category') category?: string,
+    @Query('subtree') subtree?: string,
   ) {
     const sinceNum = since !== undefined ? parseInt(since, 10) : undefined;
-    return this.templatesService.listRemoteTemplates(sinceNum, category);
+    // subtree：逗号分隔的子树 key 集合（含自身及所有后代 key），
+    // 匹配「该分类族内所有后代挂的模板」——模板任一 classification 字段命中集合即算
+    const subtreeKeys = subtree ? subtree.split(',').map((k) => k.trim()).filter(Boolean) : undefined;
+    return this.templatesService.listRemoteTemplates(sinceNum, category, subtreeKeys);
   }
 
   @Get('owned')

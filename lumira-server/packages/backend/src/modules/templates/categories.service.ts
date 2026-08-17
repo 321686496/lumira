@@ -60,11 +60,11 @@ export class CategoriesService {
   /**
    * 判断指定分类是否有子分类。
    * @param key 分类 key
-   * @param level 该分类的 level（level=3 永远无子分类，直接返回 false 避免 key 歧义）
+   * @param level 该分类的 level（level=4 永远无子分类，直接返回 false 避免 key 歧义）
    */
   async hasChildren(key: string, level?: number): Promise<boolean> {
-    if (level === 3) {
-      return false; // 三级分类是叶子节点
+    if (level === 4) {
+      return false; // 四级分类是叶子节点
     }
     const db = this.dbService.getDb();
     // 若已知 level，查 level = level+1 的子分类，避免跨层级同名 key 歧义
@@ -81,8 +81,8 @@ export class CategoriesService {
 }
 
 /**
- * 将扁平分类列表构造为三级树。
- * 一级（parentKey=null）为根节点，二级挂到对应一级下，三级挂到对应二级下。
+ * 将扁平分类列表构造为多级树。
+ * 一级（parentKey=null）为根节点，其余层级挂到对应父分类下。
  */
 export function buildTree(flat: TemplateCategory[]): TemplateCategoryTree[] {
   const map = new Map<string, TemplateCategoryTree>();

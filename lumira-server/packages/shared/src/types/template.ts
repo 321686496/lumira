@@ -9,7 +9,7 @@ export interface TemplateCategory {
   iconUrl: string;
   /** 父分类 key；一级分类为 null */
   parentKey: string | null;
-  /** 层级：1=type / 2=style / 3=method */
+  /** 层级：1=type / 2=majorStyle / 3=subStyle / 4=method */
   level: number;
   sortOrder: number;
   isSystem: boolean;
@@ -44,7 +44,7 @@ export interface RemoteTemplateMeta {
   referenceSource: string;
   tags: string[];
   tagIds: string[];
-  classification: { type: string; style: string; method: string };
+  classification: { type: string; majorStyle: string; subStyle: string; method: string };
   sortOrder: number;
   updatedAt: number;
 }
@@ -86,7 +86,7 @@ export interface AdminTemplateDetail extends AdminTemplateListItem {
   referenceSource: string;
   tags: string[];
   tagIds: string[];
-  classification: { type: string; style: string; method: string };
+  classification: { type: string; majorStyle: string; subStyle: string; method: string };
   composition: Record<string, unknown>;
   pose: Record<string, unknown>;
   camera: Record<string, unknown>;
@@ -104,7 +104,7 @@ export interface CreateTemplateRequest {
   referenceSource?: string;
   tags?: string[];
   tagIds?: string[];
-  classification?: { type: string; style: string; method: string };
+  classification?: { type: string; majorStyle: string; subStyle: string; method: string };
   sortOrder?: number;
   isActive?: boolean;
   composition?: Record<string, unknown>;
