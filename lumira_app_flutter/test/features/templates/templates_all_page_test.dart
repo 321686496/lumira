@@ -16,6 +16,7 @@ import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/templates/data/templates_browse_mock_data.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_all_page.dart';
+import 'package:lumira_app_flutter/features/templates/pages/templates_category_page.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -71,8 +72,21 @@ void main() {
         GoRoute(
           path: '/templates/all',
           name: 'templatesAll',
-          builder: (_, __) =>
-              TemplatesAllPage(scene: scene, category: category),
+          // 二级分类独立页 push 本路由时带 ?category=，需从 queryParams 读取；
+          // 直接测试传 scene/category 参数时优先用闭包值（与真实 router.dart 行为一致）。
+          builder: (_, state) => TemplatesAllPage(
+            scene: scene ?? state.queryParams[RouteNames.paramScene],
+            category:
+                category ?? state.queryParams[RouteNames.paramCategory],
+          ),
+        ),
+        GoRoute(
+          path: RouteNames.templatesCategory,
+          name: 'templatesCategory',
+          builder: (_, state) {
+            final category = state.queryParams[RouteNames.paramCategory];
+            return TemplatesCategoryPage(category: category);
+          },
         ),
         GoRoute(
           path: RouteNames.templatesDetail,
@@ -122,20 +136,23 @@ void main() {
   Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
     // 阶段 1：轮询等待内容渲染（最多 ~1.5s）。
     // 内容出现的标志：找到 '浏览分类' 文本（overview 模式）、
-    // '全部模板' LumiraNav（category 模式）、或 '加载失败'（error 状态）。
+    // '全部模板' LumiraNav（category 模式）、'选择一个子分类继续'/'该题材暂无子分类'
+    // （二级分类独立页）、或 '加载失败'（error 状态）。
     for (var i = 0; i < 15; i++) {
       await tester.pump();
       await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
       await tester.pump();
       final loaded = find.text('浏览分类').evaluate().isNotEmpty ||
           find.widgetWithText(LumiraNav, '全部模板').evaluate().isNotEmpty ||
+          find.text('选择一个子分类继续').evaluate().isNotEmpty ||
+          find.text('该题材暂无子分类').evaluate().isNotEmpty ||
           find.text('加载失败').evaluate().isNotEmpty;
       if (loaded) break;
     }
-    // 阶段 2：等待 FutureBuilder 用新 _loadData 结果重建。
-    // 点击分类卡片后，FutureBuilder 仍持有旧 future 的快照（snapshot.inState(waiting) + 旧 data），
-    // 会先用旧数据渲染 category view，直到新 future 完成。
-    // 这里再轮询若干轮，让新 future 完成并触发重建。
+    // 阶段 2：等待 FutureBuilder 用最终结果重建。
+    // 页面存在多次 async 屏障（templatesDaoProvider + DAO 查询 + push 导航过渡），
+    // FutureBuilder 在旧 future 快照完成前仍会渲染旧数据；轮询若干轮
+    // 让真实 future 完成并触发重建。
     for (var i = 0; i < 10; i++) {
       await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
       await tester.pump();
@@ -228,10 +245,10 @@ void main() {
   });
 
   // ============================================================
-  // 分类 2: 分类视图（点击分类卡片后）
+  // 分类 2: 两级钻取导航（一级 → 二级独立页 → 模板列表）
   // ============================================================
-  group('TemplatesAllPage — category view (after tap)', () {
-    testWidgets('tapping 人像 category shows hero + filter + grid',
+  group('TemplatesAllPage — two-level drill navigation', () {
+    testWidgets('tapping 一级分类 navigates to 二级分类独立页',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
@@ -243,11 +260,99 @@ void main() {
       // 默认分类概览
       expect(find.text('浏览分类'), findsOneWidget);
 
-      // 点击 '人像' category card（在概览中仅出现 1 次）
+      // 点击 '人像' category card → push 二级分类独立页（不再原地切到模板列表）
       await tester.tap(find.text('人像'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 切换到 category view：LumiraNav 标题变为 '全部模板'
+      // 二级独立页：LumiraNav 标题为题材名 '人像'，展示直接子分类卡片
+      expect(find.widgetWithText(LumiraNav, '人像'), findsOneWidget);
+      expect(find.text('选择一个子分类继续'), findsOneWidget);
+      expect(find.text('日系'), findsOneWidget);
+      expect(find.text('情绪'), findsOneWidget);
+      expect(find.text('胶片'), findsOneWidget);
+      expect(find.text('欧美'), findsOneWidget);
+      // 尚未进入模板列表
+      expect(find.widgetWithText(LumiraNav, '全部模板'), findsNothing);
+    });
+
+    testWidgets('tapping 二级分类 shows template list with subtree filtering',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        themeKey: ThemeKey.warmWhite,
+        uiStyle: UIStyle.neumorphic,
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 一级 → 二级独立页 → 模板列表
+      await tester.tap(find.text('人像'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.tap(find.text('日系'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 模板列表：LumiraNav '全部模板' + HeroCard
+      expect(find.widgetWithText(LumiraNav, '全部模板'), findsOneWidget);
+      expect(find.text('模板库'), findsOneWidget);
+      // japanese 子树 = {japanese, selfie, other, overhead}，
+      // 咖啡馆人像 style=japanese 命中（spec §6.3 包含子孙级）
+      expect(find.text('咖啡馆人像'), findsOneWidget);
+    });
+
+    testWidgets('back from template list returns to 二级分类独立页',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        themeKey: ThemeKey.warmWhite,
+        uiStyle: UIStyle.neumorphic,
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('人像'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      await tester.tap(find.text('日系'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.widgetWithText(LumiraNav, '全部模板'), findsOneWidget);
+
+      // 返回 → pop 回二级分类独立页（不再原地切回概览）
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('选择一个子分类继续'), findsOneWidget);
+      expect(find.widgetWithText(LumiraNav, '全部模板'), findsNothing);
+    });
+
+    testWidgets('shallow 题材 without 二级分类 shows fallback entry',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        themeKey: ThemeKey.warmWhite,
+        uiStyle: UIStyle.neumorphic,
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 微距 在测试种子中无二级分类 → 浅层兜底视图
+      await tester.tap(find.text('微距'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('该题材暂无子分类'), findsOneWidget);
+      expect(find.text('查看全部模板'), findsOneWidget);
+    });
+  });
+
+  // ============================================================
+  // 分类 3: 分类视图（category 参数直接进入，含子树过滤 + 级联筛选）
+  // ============================================================
+  group('TemplatesAllPage — category view (via category param)', () {
+    testWidgets('category=portrait shows hero + filter + subtree grid',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+        themeKey: ThemeKey.warmWhite,
+        uiStyle: UIStyle.neumorphic,
+        category: 'portrait',
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 直接进入 category view：LumiraNav 标题变为 '全部模板'
       expect(find.widgetWithText(LumiraNav, '全部模板'), findsOneWidget);
 
       // HeroCard: '模板库' + '10 个模板等你探索' + '已解锁 6 个'（独立文本）
@@ -255,55 +360,31 @@ void main() {
       expect(find.text('10 个模板等你探索'), findsOneWidget);
       expect(find.text('已解锁 6 个'), findsOneWidget);
 
-      // FilterSection: STYLE_MAP['portrait'] = [日系, 情绪, 胶片, 欧美]
+      // 级联筛选：portrait 的直接子分类 = [日系, 情绪, 胶片, 欧美]
       expect(find.text('日系'), findsOneWidget);
       expect(find.text('情绪'), findsOneWidget);
       expect(find.text('胶片'), findsOneWidget);
       expect(find.text('欧美'), findsOneWidget);
+      // 未选 style 时无 method 层
+      expect(find.text('自拍'), findsNothing);
 
-      // TemplateGrid: builtin portraits = [咖啡馆人像]（_showCustom=false）
+      // 子树过滤：portrait 族 = {portrait, japanese, emotional, film, european,
+      // selfie, other, overhead}；builtin 命中 = 咖啡馆人像（_showCustom=false）
       expect(find.text('咖啡馆人像'), findsOneWidget);
     });
 
-    testWidgets('renders style pills in category view', (tester) async {
+    testWidgets('tapping style pill cascades to method options', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
+        category: 'portrait',
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 进入 人像 分类视图
-      await tester.tap(find.text('人像'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // v17 后一级分类（type pills）已从分类视图移除，仅展示二三级级联筛选；
-      // 人像分类下应渲染 4 个 style pills（来自 template_categories 二级数据）
-      expect(find.text('日系'), findsOneWidget);
-      expect(find.text('情绪'), findsOneWidget);
-      expect(find.text('胶片'), findsOneWidget);
-      expect(find.text('欧美'), findsOneWidget);
-      // 未选择 style 时无 method 层
-      expect(find.text('自拍'), findsNothing);
-    });
-
-    testWidgets('tapping style pill shows METHOD_MAP options', (tester) async {
-      setLargeViewport(tester);
-      await tester.pumpWidget(wrap(
-        themeKey: ThemeKey.warmWhite,
-        uiStyle: UIStyle.neumorphic,
-      ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 进入 人像 分类视图
-      await tester.tap(find.text('人像'));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 选 japanese style
+      // 选 japanese style → method 层 = japanese 的子分类 [自拍, 他拍, 俯拍]
       await tester.tap(find.text('日系'));
       await settleOrPump(tester, UIStyle.neumorphic);
-
-      // METHOD_MAP['japanese'] = 3 个 method：自拍 / 他拍 / 俯拍
       expect(find.text('自拍'), findsOneWidget);
       expect(find.text('他拍'), findsOneWidget);
       expect(find.text('俯拍'), findsOneWidget);
@@ -315,12 +396,11 @@ void main() {
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
+        category: 'portrait',
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 进入 人像 分类视图，默认显示 builtin '咖啡馆人像'
-      await tester.tap(find.text('人像'));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      // 默认显示 builtin '咖啡馆人像'
       expect(find.text('咖啡馆人像'), findsOneWidget);
 
       // 点击 '我的' toggle
@@ -338,11 +418,8 @@ void main() {
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
+        category: 'portrait',
       ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 进入 人像 分类视图
-      await tester.tap(find.text('人像'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 默认不显示 ActionRow
@@ -364,12 +441,11 @@ void main() {
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
+        category: 'macro',
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 进入 微距 分类视图（builtin macro = macro_flower，无 custom macro）
-      await tester.tap(find.text('微距'));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      // builtin macro = [微距花卉]，无 custom macro
       expect(find.text('微距花卉'), findsOneWidget);
 
       // 切换到 '我的'（无自定义 macro 模板）
@@ -384,21 +460,16 @@ void main() {
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
+        category: 'landscape',
       ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 进入 风光 分类视图（golden_landscape 为免费 builtin；付费模板均为 custom）
-      await tester.tap(find.text('风光').first);
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 默认"全部"：显示免费 builtin golden_landscape
       expect(find.text('金色风光'), findsOneWidget);
 
-      // 点击"付费"筛选
+      // 点击"付费"筛选 → builtin 视图无付费模板 → 空态
       await tester.tap(find.text('付费'));
       await settleOrPump(tester, UIStyle.neumorphic);
-
-      // builtin 视图无付费模板 → 空态
       expect(find.text('该分类暂无模板'), findsOneWidget);
 
       // 点击"免费" → 恢复显示免费 builtin 模板
@@ -412,12 +483,11 @@ void main() {
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
+        category: 'portrait',
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 进入 人像 分类视图（cafe_portrait 免费）
-      await tester.tap(find.text('人像'));
-      await settleOrPump(tester, UIStyle.neumorphic);
+      // cafe_portrait 免费
       expect(find.text('咖啡馆人像'), findsOneWidget);
 
       // 点击"付费"筛选 → 人像分类无付费模板 → 空状态
@@ -425,7 +495,7 @@ void main() {
       await settleOrPump(tester, UIStyle.neumorphic);
       expect(find.text('该分类暂无模板'), findsOneWidget);
 
-      // 点击"免费"筛选（筛选行在网格上方，.last 排除卡片上的"免费"角标）→ 恢复显示免费模板
+      // 点击"免费"筛选（.last 排除卡片上的"免费"角标）→ 恢复显示免费模板
       await tester.tap(find.text('免费').last);
       await settleOrPump(tester, UIStyle.neumorphic);
       expect(find.text('咖啡馆人像'), findsOneWidget);
@@ -437,11 +507,8 @@ void main() {
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
+        category: 'portrait',
       ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 进入 人像 分类视图
-      await tester.tap(find.text('人像'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 点击 '咖啡馆人像' card
@@ -458,11 +525,8 @@ void main() {
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
+        category: 'portrait',
       ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 进入 人像 分类视图
-      await tester.tap(find.text('人像'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 先切到 '我的'
@@ -502,11 +566,8 @@ void main() {
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
+        category: 'portrait',
       ));
-      await settleOrPump(tester, UIStyle.neumorphic);
-
-      // 进入 人像 分类视图
-      await tester.tap(find.text('人像'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       expect(find.widgetWithText(LumiraNav, '全部模板'), findsOneWidget);
@@ -514,7 +575,7 @@ void main() {
   });
 
   // ============================================================
-  // 分类 3: 跨主题 / 跨风格 smoke test
+  // 分类 4: 跨主题 / 跨风格 smoke test
   // ============================================================
   group('TemplatesAllPage — smoke tests', () {
     testWidgets('renders correctly across all 8 themes', (tester) async {

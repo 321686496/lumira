@@ -61,6 +61,7 @@ import '../features/scenes/pages/scenes_page.dart';
 import '../features/shootkit/pages/shootkit_editor_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_all_page.dart';
+import '../features/templates/pages/templates_category_page.dart';
 import '../features/templates/pages/templates_detail_page.dart';
 import '../features/templates/pages/templates_drafts_page.dart';
 import '../features/templates/pages/templates_editor_page.dart';
@@ -227,6 +228,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           final scene = state.queryParams[RouteNames.paramScene];
           final category = state.queryParams[RouteNames.paramCategory];
           return TemplatesAllPage(scene: scene, category: category);
+        },
+      ),
+      // 二级分类独立页：一级题材 → 二级大风格/浅层风格（spec 2026-08-17-template-category-4level-design.md §6）
+      GoRoute(
+        path: RouteNames.templatesCategory,
+        name: 'templatesCategory',
+        builder: (context, state) {
+          final category = state.queryParams[RouteNames.paramCategory];
+          return TemplatesCategoryPage(category: category);
         },
       ),
       GoRoute(

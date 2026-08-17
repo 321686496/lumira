@@ -462,6 +462,39 @@ class TemplatesDao {
     return getCategoriesByParent(styleKey, activeOnly: activeOnly);
   }
 
+  /// 获取指定分类的子树 key 集合（含自身 + 所有后代 key）。
+  ///
+  /// 用于「该分类下的模板 = 包含子孙级」的过滤：模板列表按此集合筛，
+  /// 模板的分类叶子路径命中的即算（spec 2026-08-17-template-category-4level-design.md §6.3）。
+  ///
+  /// - 一级点击 → 二级独立页（[TemplatesCategoryPage]）；
+  /// - 二级点击 → 模板列表页 `TemplatesAllPage(category=该二级key)`，
+  ///   此时把该二级 key 及其所有后代 key 展开成集合，用于 subtree 模板查询。
+  Future<Set<String>> getSubtreeKeys(
+    String key, {
+    bool activeOnly = true,
+  }) async {
+    final all = await getCategories(activeOnly: activeOnly);
+    final byParent = <String, List<TemplateCategoryRecord>>{};
+    for (final c in all) {
+      if (c.parentKey != null) {
+        byParent.putIfAbsent(c.parentKey!, () => []).add(c);
+      }
+    }
+    final result = <String>{key};
+    final queue = <String>[key];
+    while (queue.isNotEmpty) {
+      final current = queue.removeAt(0);
+      final children = byParent[current] ?? const <TemplateCategoryRecord>[];
+      for (final child in children) {
+        if (result.add(child.key)) {
+          queue.add(child.key);
+        }
+      }
+    }
+    return result;
+  }
+
   /// 获取完整的三级分类树。
   ///
   /// 返回一级分类列表，每个一级分类的 [TemplateCategoryNode.children] 含二级节点，

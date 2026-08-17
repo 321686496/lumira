@@ -358,6 +358,8 @@ class AllTemplateItem {
     required this.isCustom,
     this.cover,
     this.coverData,
+    this.majorStyle,
+    this.subStyle,
   });
   final String id;
   final String name;
@@ -373,6 +375,27 @@ class AllTemplateItem {
 
   /// 自定义模板 base64 data URL（如 `data:image/jpeg;base64,xxx`）
   final String? coverData;
+
+  /// v4level（spec 2026-08-17-template-category-4level-design.md）：
+  /// 四级分类扩展字段。老模板无 majorStyle/subStyle，为 null。
+  /// - majorStyle：大风格（L2，如 emotional）
+  /// - subStyle：子风格（L3，如 broken_cold；迁移前老字段为 style）
+  final String? majorStyle;
+  final String? subStyle;
+
+  /// 判断该模板是否命中某个分类子树 key 集合。
+  ///
+  /// 「该分类下的模板 = 包含子孙级」：模板的分类叶子路径（category/type、
+  /// style、majorStyle、subStyle、method）中任意一个 key 命中集合即算。
+  /// 兼容老模板（style 字段）与四级新模板（majorStyle/subStyle）。
+  bool matchesSubtree(Set<String> keys) {
+    if (keys.contains(category)) return true;
+    if (style != null && keys.contains(style)) return true;
+    if (method != null && keys.contains(method)) return true;
+    if (majorStyle != null && keys.contains(majorStyle)) return true;
+    if (subStyle != null && keys.contains(subStyle)) return true;
+    return false;
+  }
 }
 
 /// 推荐页 mock 数据（recommend.vue verbatim）

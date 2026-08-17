@@ -186,9 +186,27 @@ UNIQUE(key, parent_key)
 - ✅ `pnpm --filter @lumira/admin exec tsc --noEmit` 通过
 - ✅ `pnpm --filter @lumira/admin test` 通过
 
-### Flutter（App）阶段 ⏳ 未开始
+### Flutter（App）阶段 ✅ 完成并通过验证
 
-见第六节：二级分类独立页 + 固定两级钻取 + 子树模板归属查询。后端 `subtreeKeys` 已就绪，可直接调用。
+见第六节：二级分类独立页 + 固定两级钻取 + 子树模板归属查询。后端 `subtreeKeys` 已就绪，Flutter 侧采用「前端取回完整分类树 → 递归展开子树 key 集合 → 内存过滤」方案（模板量级内开销可忽略，且与本地 sqflite 同步的分类表天然契合）。
+
+文件改动（`lumira_app_flutter/`）：
+
+| 文件 | 改动 |
+|---|---|
+| `lib/core/db/dao/templates_dao.dart` | 新增 `getSubtreeKeys(key)`：从 sqflite 分类表递归收集指定分类的子树 key 集合（含自身 + 所有后代 key） |
+| `lib/core/router/route_names.dart` | 新增 `templatesCategory = '/templates/category'` 路由路径与 `paramTypeKey` 参数名 |
+| `lib/features/templates/pages/templates_category_page.dart`（新增） | 「二级分类独立页」：展示题材的直接子分类（大风格 / 浅层风格）卡片，封面用 `iconUrl`（非空网络图 / 空回退 Material Icon）；浅层题材（无子分类）显示「查看全部模板」兜底入口 |
+| `lib/app/router.dart` | 注册 `templatesCategory` 路由（`?category=` 传入一级题材 key）并 import 新页面 |
+| `lib/features/templates/pages/templates_all_page.dart` | 概览点击一级分类 → push 二级分类独立页（不再原地切模板列表）；分类视图按所选分类的子树 key 集合过滤模板 |
+| `lib/features/templates/data/templates_browse_mock_data.dart` | `AllTemplateItem` 新增 `majorStyle` / `subStyle` 字段与 `matchesSubtree(Set<String>)`：模板的分类叶子路径（category/type、style、majorStyle、subStyle、method）任一命中集合即算（兼容老模板 style 字段与四级新模板） |
+| `test/features/templates/templates_all_page_test.dart` | 新增「两级钻取导航」用例组：一级 → 二级独立页 → 子树过滤模板列表 → 返回栈路径；浅层题材兜底；测试 seed 扩展二级/三级分类 |
+
+验证结果：
+
+- ✅ `flutter analyze` 通过（328 个 info 级既有问题，无 error/warning，改动文件零新增告警）
+- ✅ `flutter test test/features/templates/templates_all_page_test.dart` 22/22 通过
+- ✅ `flutter test test/features/templates/` 全套 157/157 通过
 
 ### 推送状态 ⏳ 待确认
 

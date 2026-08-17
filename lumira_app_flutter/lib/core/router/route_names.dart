@@ -23,6 +23,7 @@ class RouteNames {
   static const String templatesEditor = '/templates/editor';
   static const String templatesDrafts = '/templates/drafts';
   static const String templatesRecommend = '/templates/recommend';
+  static const String templatesCategory = '/templates/category';
   static const String templatesAll = '/templates/all';
   static const String templatesExportDetail = '/templates/export-detail';
   static const String challengeDetail = '/challenge/detail';
@@ -87,6 +88,7 @@ class RouteNames {
   static const String paramMode = 'mode';
   static const String paramKitId = 'kitId';
   static const String paramCategory = 'category';
+  static const String paramTypeKey = 'typeKey';
   static const String paramFrom = 'from';
   static const String paramTrial = 'trial';
 

@@ -1,0 +1,442 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/database_provider.dart';
+import '../../../core/router/route_names.dart';
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
+import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../data/builtin_category_icons.dart';
+
+/// 二级分类独立页
+///
+/// 视觉规格来源：spec 2026-08-17-template-category-4level-design.md §6.1
+///
+/// 固定两级钻取的第一层：进入某题材（一级分类）后，展示该题材的
+/// **直接子分类**（大风格 / 浅层风格）卡片，封面用 [TemplateCategoryRecord.iconUrl]。
+///
+/// - 分类数据来自已扁平同步到 sqflite 的远程分类表（已有 `level/parentKey/iconUrl`），
+///   按 `parentKey === 题材.key` 过滤（[TemplatesDao.getCategoriesByParent]）。
+/// - 点击某个二级分类 → 跳转 `TemplatesAllPage(category=该二级key)`，
+///   模板列表按该二级分类的子树 key 集合过滤（见 spec §6.3）。
+class TemplatesCategoryPage extends ConsumerStatefulWidget {
+  const TemplatesCategoryPage({super.key, this.category});
+
+  /// 一级分类 key（题材，如 portrait），来自 `templatesAll` 概览导航传入
+  final String? category;
+
+  @override
+  ConsumerState<TemplatesCategoryPage> createState() =>
+      _TemplatesCategoryPageState();
+}
+
+class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
+  /// 题材名称（用于导航栏标题与页头），从分类表按 key 读取
+  String _typeName = '分类';
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveTypeName();
+  }
+
+  /// 从 sqflite 读取题材名称（level=1 且 key 匹配）。
+  /// 标题在 data 加载前先用 key 兜底，加载完成后刷新。
+  Future<void> _resolveTypeName() async {
+    final dao = await ref.read(templatesDaoProvider.future);
+    final cats = await dao.getCategories(activeOnly: true, level: 1);
+    for (final c in cats) {
+      if (c.key == widget.category) {
+        if (mounted) setState(() => _typeName = c.name);
+        return;
+      }
+    }
+  }
+
+  void _goTemplates(String categoryKey) {
+    GoRouter.of(context).push(
+      RouteNames.build(
+        RouteNames.templatesAll,
+        {RouteNames.paramCategory: categoryKey},
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = ref.watch(themeTokensProvider);
+    final asyncDao = ref.watch(templatesDaoProvider);
+    final typeKey = widget.category;
+
+    return Scaffold(
+      backgroundColor: tokens.canvas,
+      extendBodyBehindAppBar: true,
+      body: Stack(
+        children: [
+          _BackgroundDecoration(tokens: tokens),
+          SafeArea(
+            top: false,
+            bottom: false,
+            child: Column(
+              children: [
+                LumiraNav(
+                  title: _typeName,
+                  transparent: true,
+                  leading: _BackButton(
+                    tokens: tokens,
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                ),
+                Expanded(
+                  child: asyncDao.when(
+                    loading: () => Center(child: LumiraProgress.circular()),
+                    error: (e, _) => const Center(child: Text('加载失败')),
+                    data: (dao) => FutureBuilder<List<TemplateCategoryRecord>>(
+                      future: dao.getCategoriesByParent(typeKey ?? ''),
+                      builder: (context, snap) {
+                        if (!snap.hasData) {
+                          return Center(child: LumiraProgress.circular());
+                        }
+                        final children = snap.data!;
+                        if (children.isEmpty) {
+                          // 浅层题材：无二级分类，直接提供进入模板列表入口
+                          return _ShallowFallback(
+                            tokens: tokens,
+                            onTap: () => _goTemplates(typeKey!),
+                          );
+                        }
+                        return _SubCategoryGrid(
+                          tokens: tokens,
+                          typeName: _typeName,
+                          categories: children,
+                          onTap: _goTemplates,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 背景径向渐变装饰（glass 风格 backdrop-filter 可见性，与 TemplatesAllPage 一致）
+class _BackgroundDecoration extends StatelessWidget {
+  const _BackgroundDecoration({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(-0.6, -0.8),
+              radius: 1.4,
+              colors: [
+                tokens.brandSubtle.withOpacity(0.45),
+                tokens.canvas.withOpacity(0),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BackButton extends StatelessWidget {
+  const _BackButton({required this.tokens, required this.onTap});
+  final ThemeTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          Icons.arrow_back_ios_new,
+          size: 20,
+          color: tokens.textPrimary,
+        ),
+      ),
+    );
+  }
+}
+
+/// 二级分类卡片网格
+///
+/// 展示一级分类下的直接子分类（大风格 / 浅层风格），封面用 iconUrl
+/// （非空用 Image.network，为空回退 Material Icon 映射）。
+class _SubCategoryGrid extends ConsumerWidget {
+  const _SubCategoryGrid({
+    required this.tokens,
+    required this.typeName,
+    required this.categories,
+    required this.onTap,
+  });
+
+  final ThemeTokens tokens;
+  final String typeName;
+  final List<TemplateCategoryRecord> categories;
+  final void Function(String categoryKey) onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+    final left = <Widget>[];
+    final right = <Widget>[];
+    for (var i = 0; i < categories.length; i++) {
+      final cat = categories[i];
+      final card = _SubCategoryCard(
+        tokens: tokens,
+        record: cat,
+        onTap: () => onTap(cat.key),
+      );
+      if (i % 2 == 0) {
+        left.add(card);
+      } else {
+        right.add(card);
+      }
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 32),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isNeu ? tokens.surface : null,
+                gradient: isNeu
+                    ? null
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          tokens.brandSubtle,
+                          tokens.brand.withOpacity(0.08)
+                        ],
+                      ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: isNeu ? tokens.shadowConvex : null,
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.layers_outlined, size: 28, color: tokens.brand),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          typeName,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: tokens.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '选择一个子分类继续',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: Column(children: left)),
+                const SizedBox(width: 12),
+                Expanded(child: Column(children: right)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 单个二级分类卡片
+///
+/// 封面：iconUrl 非空用 Image.network 展示（二级封面图），
+/// 为空回退到 [categoryIconForKey] Material Icon。
+class _SubCategoryCard extends StatelessWidget {
+  const _SubCategoryCard({
+    required this.tokens,
+    required this.record,
+    required this.onTap,
+  });
+
+  final ThemeTokens tokens;
+  final TemplateCategoryRecord record;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallbackIcon = categoryIconForKey(record.key);
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: FadeUp(
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: NeuCard(
+            padding: EdgeInsets.zero,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 封面（3:4）：iconUrl 网络图 / Material Icon 回退
+                AspectRatio(
+                  aspectRatio: 3 / 4,
+                  child: record.iconUrl.isNotEmpty
+                      ? Image.network(
+                          record.iconUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: tokens.surfaceAlt,
+                            child: Icon(
+                              fallbackIcon,
+                              size: 40,
+                              color: tokens.textTertiary,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: tokens.surfaceAlt,
+                          child: Icon(
+                            fallbackIcon,
+                            size: 40,
+                            color: tokens.textTertiary,
+                          ),
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          record.name,
+                          style: TextStyle(
+                            fontFamily: 'Noto Serif SC',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: tokens.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 12,
+                        color: tokens.textTertiary,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 浅层题材兜底视图：题材下无二级分类时，提供直接进入模板列表的入口
+class _ShallowFallback extends ConsumerWidget {
+  const _ShallowFallback({required this.tokens, required this.onTap});
+
+  final ThemeTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Opacity(
+              opacity: 0.35,
+              child: Icon(
+                Icons.category_outlined,
+                size: 60,
+                color: tokens.textTertiary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '该题材暂无子分类',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: tokens.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '可直接查看该题材下的全部模板',
+              style: TextStyle(
+                fontSize: 12,
+                color: tokens.textTertiary,
+              ),
+            ),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient:
+                      LinearGradient(colors: [tokens.brand, tokens.brandDeep]),
+                  borderRadius: BorderRadius.circular(9999),
+                  boxShadow: tokens.shadowConvexBrand,
+                ),
+                child: const Text(
+                  '查看全部模板',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

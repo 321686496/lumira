@@ -116,16 +116,24 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
 
     // v17 修复筛选 bug：三级级联过滤（原代码仅按 type 过滤，style/method 不生效）
     var filtered = _showCustom ? customWithImported : builtinItems;
+    // v4level（spec 2026-08-17-template-category-4level-design.md §6.3）：
+    // 「该分类下的模板」= 包含子孙级。把所选分类的子树 key 集合展开后，
+    // 模板的分类叶子路径（type/style/majorStyle/subStyle/method）命中即算。
+    // 兼容老模板（style 字段）与四级新模板（majorStyle/subStyle）。
     if (_selectedType != null) {
-      filtered = filtered.where((t) => t.category == _selectedType).toList();
+      final subtree = await dao.getSubtreeKeys(_selectedType!);
+      filtered =
+          filtered.where((t) => t.matchesSubtree(subtree)).toList();
     }
     if (_selectedStyle != null) {
+      final subtree = await dao.getSubtreeKeys(_selectedStyle!);
       filtered =
-          filtered.where((t) => t.style == _selectedStyle).toList();
+          filtered.where((t) => t.matchesSubtree(subtree)).toList();
     }
     if (_selectedMethod != null) {
+      final subtree = await dao.getSubtreeKeys(_selectedMethod!);
       filtered =
-          filtered.where((t) => t.method == _selectedMethod).toList();
+          filtered.where((t) => t.matchesSubtree(subtree)).toList();
     }
     // 价格筛选：免费（price == 0）/ 付费（price > 0）/ 全部
     if (_priceFilter == PriceFilter.free) {
@@ -191,22 +199,14 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     );
   }
 
-  /// 选中某个一级分类，进入二级分类页面
+  /// 选中某个一级分类，进入二级分类独立页
   void _selectCategory(String category) {
-    setState(() {
-      _selectedType = category;
-      _selectedStyle = null;
-      _selectedMethod = null;
-    });
-  }
-
-  /// 返回分类概览
-  void _backToCategories() {
-    setState(() {
-      _selectedType = null;
-      _selectedStyle = null;
-      _selectedMethod = null;
-    });
+    GoRouter.of(context).push(
+      RouteNames.build(
+        RouteNames.templatesCategory,
+        {RouteNames.paramCategory: category},
+      ),
+    );
   }
 
   @override
@@ -231,9 +231,12 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                 LumiraNav(
                   title: isOverview ? '模板库' : '全部模板',
                   transparent: true,
+                  // v4level（spec 2026-08-17-template-category-4level-design.md §6.2）：
+                  // 本页通过 push 进入（概览页 / 二级分类独立页 / 带 category 的模板列表），
+                  // 返回一律 pop 回上一页；无法 pop 时回退到模板入口页。
                   leading: _BackButton(
                     tokens: tokens,
-                    onTap: isOverview ? _back : _backToCategories,
+                    onTap: _back,
                   ),
                 ),
                 Expanded(
@@ -465,8 +468,9 @@ class _FilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 一级分类（Type pills）不再展示：用户从模板库概览页已选中一级分类进入，
-    // 返回按钮可回到概览页切换。此处仅展示二三级级联筛选 + "我的" toggle。
+    // 一级分类（Type pills）不再展示：用户通过「一级 → 二级独立页」进入本页时，
+    // category 参数（二级 key）已确定分类范围（spec 2026-08-17-template-category-4level-design.md §6.2）。
+    // 此处仅展示该分类下的级联子分类（子风格/方法）pill + "我的" toggle。
     final styleLabels = styleOptions
         .map((c) => LabelValue(c.key, c.name))
         .toList();
@@ -1497,6 +1501,9 @@ AllTemplateItem _recordToItem(TemplateRecord r, {required bool isCustom}) {
     category: r.category,
     style: (r.classification['style'] as String?),
     method: (r.classification['method'] as String?),
+    // v4level：四级分类扩展字段（spec 2026-08-17-template-category-4level-design.md §4.1）
+    majorStyle: (r.classification['majorStyle'] as String?),
+    subStyle: (r.classification['subStyle'] as String?),
     coverSeed: r.id,
     cover: r.cover.isEmpty
         ? null
