@@ -35,7 +35,7 @@ String formatAbsoluteTime(int timestampMs) {
   return '$y-$m-$d $h:$min';
 }
 
-/// 格式化日期为 "M月D日"（探店打卡等场景）
+/// 格式化日期为 "M月D日"（探店足迹等场景）
 String formatDateOnly(int timestampMs) {
   final dt = DateTime.fromMillisecondsSinceEpoch(timestampMs);
   return '${dt.month}月${dt.day}日';

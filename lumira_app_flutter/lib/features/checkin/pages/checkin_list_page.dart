@@ -364,7 +364,7 @@ class _CheckinCard extends StatelessWidget {
                         onTap: () {
                           final stars =
                               '★' * record.rating + '☆' * (5 - record.rating);
-                          final text = '探店：${record.name}\n'
+                          final text = '探店足迹：${record.name}\n'
                               '评分：$stars\n'
                               '地点：${record.place}'
                               '${record.note.isNotEmpty ? '\n备注：${record.note}' : ''}';
