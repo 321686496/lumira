@@ -12,11 +12,11 @@ import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_providers.dart';
 import '../widgets/achievement_wall_card.dart';
+import '../widgets/challenge_rules_card.dart';
 import '../widgets/challenge_tip_card.dart';
 import '../widgets/daily_flip_card.dart';
 import '../widgets/flip_summary_widgets.dart';
 import '../widgets/main_challenge_card.dart';
-import '../widgets/streak_card.dart';
 import '../widgets/sub_challenge_row.dart';
 import '../widgets/weekly_calendar_card.dart';
 
@@ -473,17 +473,10 @@ class _RevealedView extends ConsumerWidget {
           child: ChallengeTipCard(),
         ),
         const SizedBox(height: 32),
-        // 6. 连续打卡
+        // 6. 挑战规则说明
         const FadeUp(
           delay: Duration(milliseconds: 480),
-          child: StreakCard(
-            streak: StreakInfo(
-              currentStreak: 1,
-              totalDays: 1,
-              nextRewardXP: 50,
-              tipMessage: '完成今日挑战获得 XP 奖励',
-            ),
-          ),
+          child: ChallengeRulesCard(),
         ),
       ],
     );
