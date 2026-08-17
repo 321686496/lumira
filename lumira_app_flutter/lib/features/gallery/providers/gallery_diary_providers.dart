@@ -6,6 +6,42 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../data/gallery_models.dart';
 
+/// 本周某一天打卡状态（与首页 HomeStreakStatus 结构对齐）
+class WeekDay {
+  final String label;
+  final bool done;
+  final bool today;
+
+  const WeekDay({required this.label, required this.done, required this.today});
+}
+
+/// 统一拍摄打卡状态
+class ShootingCheckin {
+  final int streakDays;
+  final List<WeekDay> weekDays;
+  final bool shotToday;
+
+  const ShootingCheckin({
+    required this.streakDays,
+    required this.weekDays,
+    required this.shotToday,
+  });
+
+  static const empty = ShootingCheckin(
+    streakDays: 0,
+    weekDays: [
+      WeekDay(label: '一', done: false, today: false),
+      WeekDay(label: '二', done: false, today: false),
+      WeekDay(label: '三', done: false, today: false),
+      WeekDay(label: '四', done: false, today: false),
+      WeekDay(label: '五', done: false, today: false),
+      WeekDay(label: '六', done: false, today: false),
+      WeekDay(label: '日', done: false, today: false),
+    ],
+    shotToday: false,
+  );
+}
+
 /// 拍摄日记筛选条件：tab（穿搭/拍摄）+ 可选心情
 class DiaryFilter {
   const DiaryFilter({required this.tab, this.mood});
@@ -147,6 +183,66 @@ final diaryStreakProvider = FutureProvider<int>((ref) async {
     cursor = cursor.subtract(const Duration(days: 1));
   }
   return streak;
+});
+
+/// 统一拍摄打卡状态 Provider：由相册照片表计算连续拍摄天数、本周 7 天状态、今日是否已拍
+final shootingCheckinProvider = FutureProvider<ShootingCheckin>((ref) async {
+  final dao = await ref.watch(galleryDaoProvider.future);
+  final records = await dao.getAll();
+
+  // 格式化日期工具函数
+  String _formatDate(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  // 构建已拍摄日期集合
+  final shotDates = <String>{};
+  for (final r in records) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(r.createdAt);
+    shotDates.add(_formatDate(dt));
+  }
+
+  // 计算本周 7 天状态（周一到周日）
+  final now = DateTime.now();
+  final dayOfWeek = now.weekday; // 1=Mon..7=Sun
+  final monday = DateTime(now.year, now.month, now.day).subtract(Duration(days: dayOfWeek - 1));
+  final today = DateTime(now.year, now.month, now.day);
+  final todayStr = _formatDate(today);
+  const labels = ['一', '二', '三', '四', '五', '六', '日'];
+
+  final weekDays = <WeekDay>[];
+  for (var i = 0; i < 7; i++) {
+    final d = monday.add(Duration(days: i));
+    final ds = _formatDate(d);
+    weekDays.add(WeekDay(
+      label: labels[i],
+      done: shotDates.contains(ds),
+      today: ds == todayStr,
+    ));
+  }
+
+  // 计算连续拍摄天数：从今天往回数，今天已拍则从今天起算；否则从昨天往回数
+  int streak = 0;
+  if (shotDates.contains(todayStr)) {
+    streak = 1;
+    var cursor = today.subtract(const Duration(days: 1));
+    while (shotDates.contains(_formatDate(cursor))) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+  } else {
+    final yesterday = today.subtract(const Duration(days: 1));
+    var cursor = yesterday;
+    while (shotDates.contains(_formatDate(cursor))) {
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+  }
+
+  return ShootingCheckin(
+    streakDays: streak,
+    weekDays: weekDays,
+    shotToday: shotDates.contains(todayStr),
+  );
 });
 
 /// 照片总数
