@@ -19,6 +19,7 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../challenge/widgets/challenge_overlay_bar.dart';
 import '../../home/providers/banner_recommendation_provider.dart';
 import '../../points/data/points_repository.dart';
+import '../../sign_in/data/sign_in_repository.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -155,6 +156,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 每日首次拍摄积分是否已在本会话尝试过。
   /// 仅用于减少重复请求；最终幂等由服务端 point_earn_events 唯一约束保证。
   bool _dailyShootEarned = false;
+  bool _dailyAutoSignInDone = false; // 同一会话避免重复自动签到
 
   @override
   void initState() {
@@ -726,6 +728,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
           _earnDailyShootPoints();
         }
 
+        // === 自动签到：每日首拍自动触发 ===
+        if (!_dailyAutoSignInDone) {
+          _dailyAutoSignInDone = true;
+          _autoSignIn();
+        }
+
         // 套件使用次数 +1（仅在套用 kit 进入时）
         if (widget.kitId != null) {
           try {
@@ -843,6 +851,22 @@ class _CapturePageState extends ConsumerState<CapturePage>
     } catch (e) {
       // 离线/网络异常静默，不打扰拍摄
       debugPrint('[capture] earn daily shoot points failed: $e');
+    }
+  }
+
+  /// 每日首拍自动签到（fire-and-forget）。
+  /// 服务端幂等；失败静默，绝不阻塞拍照流程。
+  Future<void> _autoSignIn() async {
+    try {
+      final repo = await ref.read(signInRepositoryProvider.future);
+      await repo.signIn();
+      // 签到成功后刷新状态
+      ref.invalidate(signInRepositoryProvider);
+      ref.invalidate(pointsRepositoryProvider);
+      debugPrint('[auto-signin] daily first shoot auto signin success');
+    } catch (e) {
+      // 网络错误 / 重复签到都静默，绝不阻塞拍照
+      debugPrint('[auto-signin] auto signin failed (silent): $e');
     }
   }
 
