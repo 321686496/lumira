@@ -9,8 +9,6 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
-import '../../../shared/widgets/lumira/lumira.dart'
-    show ButtonVariant, LumiraButton;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../sign_in/data/sign_in_repository.dart';
 import '../data/points_models.dart';
@@ -33,7 +31,6 @@ class PointsWalletPage extends ConsumerStatefulWidget {
 class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
   final ScrollController _scrollController = ScrollController();
   bool _scrolled = false;
-  bool _signingIn = false;
 
   static const double _scrollThreshold = 12.0;
 
@@ -61,73 +58,6 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
     ref.invalidate(pointsRepositoryProvider);
     ref.invalidate(signInRepositoryProvider);
     setState(() {});
-  }
-
-  Future<void> _onSignIn() async {
-    if (_signingIn) return;
-    final tokens = ref.read(themeTokensProvider);
-    setState(() => _signingIn = true);
-    try {
-      final repo = await ref.read(signInRepositoryProvider.future);
-      final result = await repo.signIn();
-      if (!mounted) return;
-      _showSnack(
-        tokens,
-        result.success
-            ? '签到成功，获得 ${result.pointsEarned} 积分'
-            : '今日已签到',
-        isSuccess: result.success,
-      );
-      // 签到成功后刷新余额 + 状态
-      ref.invalidate(pointsRepositoryProvider);
-      ref.invalidate(signInRepositoryProvider);
-    } on ApiException catch (e) {
-      if (mounted) {
-        // 409 = 服务端判定今日已签到（客户端状态可能因时区/缓存不同步），按成功处理
-        final alreadySigned = e.kind == ApiErrorKind.conflict;
-        _showSnack(
-          tokens,
-          alreadySigned ? '今日已签到，明天再来吧' : '签到失败：${e.message}',
-          isSuccess: alreadySigned,
-        );
-        if (alreadySigned) {
-          // 刷新余额 + 签到状态，让按钮恢复"已签到"
-          ref.invalidate(pointsRepositoryProvider);
-          ref.invalidate(signInRepositoryProvider);
-        }
-      }
-    } finally {
-      if (mounted) setState(() => _signingIn = false);
-    }
-  }
-
-  void _showSnack(
-    ThemeTokens tokens,
-    String message, {
-    bool isSuccess = false,
-  }) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              isSuccess ? Icons.check_circle_outline : Icons.info_outline,
-              size: 18,
-              color: isSuccess ? tokens.success : tokens.danger,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(fontSize: 13, color: tokens.textPrimary),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: tokens.surface,
-        duration: const Duration(milliseconds: 1500),
-      ),
-    );
   }
 
   @override
@@ -171,8 +101,6 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
                       child: _SignInCard(
                         tokens: tokens,
                         asyncValue: signInAsync,
-                        signingIn: _signingIn,
-                        onSignIn: _onSignIn,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -404,18 +332,11 @@ class _BalanceError extends StatelessWidget {
   }
 }
 
-/// 签到卡：连签天数 + 签到按钮
+/// 签到卡：连签天数 + 自动签到状态
 class _SignInCard extends StatelessWidget {
-  const _SignInCard({
-    required this.tokens,
-    required this.asyncValue,
-    required this.signingIn,
-    required this.onSignIn,
-  });
+  const _SignInCard({required this.tokens, required this.asyncValue});
   final ThemeTokens tokens;
   final AsyncValue<SignInRepository> asyncValue;
-  final bool signingIn;
-  final VoidCallback onSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -442,12 +363,7 @@ class _SignInCard extends StatelessWidget {
                 );
               }
               final status = snap.data!;
-              return _SignInRow(
-                tokens: tokens,
-                status: status,
-                signingIn: signingIn,
-                onSignIn: onSignIn,
-              );
+              return _SignInRow(tokens: tokens, status: status);
             },
           );
         },
@@ -457,16 +373,9 @@ class _SignInCard extends StatelessWidget {
 }
 
 class _SignInRow extends StatelessWidget {
-  const _SignInRow({
-    required this.tokens,
-    required this.status,
-    required this.signingIn,
-    required this.onSignIn,
-  });
+  const _SignInRow({required this.tokens, required this.status});
   final ThemeTokens tokens;
   final SignInStatus status;
-  final bool signingIn;
-  final VoidCallback onSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -499,23 +408,24 @@ class _SignInRow extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 signedToday
-                    ? '今日已签到 · 连签 ${status.consecutiveDays} 天'
-                    : '连签 ${status.consecutiveDays} 天 · 签到领积分',
-                style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+                    ? '今日已自动签到（当日首拍）'
+                    : '今日未拍摄，拍摄后自动签到',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: signedToday ? tokens.success : tokens.textTertiary,
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(width: 8),
-        LumiraButton(
-          variant: signedToday ? ButtonVariant.ghost : ButtonVariant.primary,
-          onPressed: (signedToday || signingIn) ? null : onSignIn,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-          child: Text(signingIn
-              ? '签到中...'
-              : signedToday
-                  ? '已签到'
-                  : '立即签到'),
+        Text(
+          '连签 ${status.consecutiveDays} 天',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: tokens.brand,
+          ),
         ),
       ],
     );
