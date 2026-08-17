@@ -28,7 +28,7 @@ import '../widgets/tip_card.dart';
 /// 1. LumiraNav（带位置 + 通知/二维码 actions）
 /// 2. HeroCard（今日灵感）
 /// 3. QuickActions（4 快捷入口）
-/// 4. StreakCard（连续打卡）
+/// 4. StreakCard（连续拍摄）
 /// 5. TipCard（今日拍摄小贴士）
 /// 6. SceneRecoCard 网格（场景推荐，2 列）
 /// 7. RecentShotCard 网格（最近拍摄，2 列）

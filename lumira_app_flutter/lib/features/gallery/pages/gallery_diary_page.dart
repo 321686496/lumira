@@ -17,7 +17,7 @@ import '../widgets/diary_timeline_entry.dart';
 /// 拍摄日记页（接入 GalleryDao）
 ///
 /// 视觉规格来源：lumira-app/src/pages/gallery/diary.vue（433 行）
-/// - LumiraNav + 视图切换 + 连续打卡 banner + 时间轴 + FAB
+/// - LumiraNav + 视图切换 + 连续拍摄 banner + 时间轴 + FAB
 /// - 数据：通过 diaryEntriesProvider 异步读取近 50 张照片并按天分组
 class GalleryDiaryPage extends ConsumerStatefulWidget {
   const GalleryDiaryPage({super.key});
@@ -468,9 +468,9 @@ class _StreakBanner extends StatelessWidget {
           Text(
             streak > 0
                 ? badgeLabel != null
-                    ? '已连续打卡 $streak 天，已获得「$badgeLabel」徽章'
-                    : '已连续打卡 $streak 天，距离「周更达人」还差 ${7 - streak} 天'
-                : '今天开始打卡，记录你的拍摄轨迹',
+                    ? '已连续拍摄 $streak 天，已获得「$badgeLabel」徽章'
+                    : '已连续拍摄 $streak 天，距离「周更达人」还差 ${7 - streak} 天'
+                : '今天开始拍摄，记录你的拍摄轨迹',
             style: TextStyle(fontSize: 12, color: tokens.textSecondary),
           ),
         ],

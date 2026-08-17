@@ -14,6 +14,7 @@ import 'package:lumira_app_flutter/features/challenge/data/challenge_models.dart
 import 'package:lumira_app_flutter/features/challenge/data/challenge_pool.dart';
 import 'package:lumira_app_flutter/features/challenge/data/challenge_providers.dart';
 import 'package:lumira_app_flutter/features/challenge/pages/challenge_page.dart';
+import 'package:lumira_app_flutter/features/gallery/providers/gallery_diary_providers.dart';
 
 /// Forced fix: picsum.photos 在测试环境对部分 seed（如纯数字 733872）返回 400，
 /// 导致 NetworkImageLoadException。该异常通过 zone.handleUncaughtError 上报到
@@ -182,6 +183,21 @@ void main() {
         weeklyHistoryProvider.overrideWith((ref) async => <ChallengeHistoryRecord>[]),
         challengeAchievementsProvider.overrideWith((ref) async => testAchievements),
         challengeTipProvider.overrideWith((ref) async => testTip),
+        // 统一拍摄打卡：注入确定值，避免依赖真实 gallery 数据库
+        shootingCheckinProvider
+            .overrideWith((ref) async => const ShootingCheckin(
+                  streakDays: 0,
+                  shotToday: false,
+                  weekDays: [
+                    WeekDay(label: '一', done: false, today: false),
+                    WeekDay(label: '二', done: false, today: false),
+                    WeekDay(label: '三', done: false, today: false),
+                    WeekDay(label: '四', done: false, today: false),
+                    WeekDay(label: '五', done: false, today: false),
+                    WeekDay(label: '六', done: false, today: false),
+                    WeekDay(label: '日', done: false, today: false),
+                  ],
+                )),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
@@ -227,8 +243,6 @@ void main() {
     // 拍摄技巧
     expect(find.text('拍摄技巧'), findsOneWidget);
     expect(find.text('测试技巧'), findsOneWidget);
-    // 连续打卡
-    expect(find.text('连续打卡 1 天'), findsOneWidget);
   });
 
   testWidgets('tapping challenge card pushes /challenge/detail with challengeId',

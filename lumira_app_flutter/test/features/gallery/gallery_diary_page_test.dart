@@ -147,10 +147,10 @@ void main() {
     await pumpDiaryPage(tester);
     await tester.pumpAndSettle();
 
-    // 本月打卡进度（今天+昨天共 2 天）；连续打卡 = 2（今天 + 昨天均有照片）
+    // 本月打卡进度（今天+昨天共 2 天）；连续拍摄 = 2（今天 + 昨天均有照片）
     final daysInMonth = DateTime.now().day;
     expect(find.text('本月打卡 2/$daysInMonth 天'), findsOneWidget);
-    expect(find.textContaining('已连续打卡 2 天'), findsOneWidget);
+    expect(find.textContaining('已连续拍摄 2 天'), findsOneWidget);
 
     // 月度聚合条
     expect(find.text('本月照片'), findsOneWidget);

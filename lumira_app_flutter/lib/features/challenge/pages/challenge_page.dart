@@ -27,7 +27,7 @@ import '../widgets/weekly_calendar_card.dart';
 /// 2. 翻牌流程（每天首次进入触发，3 张卡牌选 1）
 /// 3. 主挑战卡 + 附加挑战
 /// 4. 本周日历 / 挑战成就 / 拍摄技巧
-/// 5. 连续打卡
+/// 5. 连续拍摄
 class ChallengePage extends ConsumerStatefulWidget {
   const ChallengePage({super.key});
 

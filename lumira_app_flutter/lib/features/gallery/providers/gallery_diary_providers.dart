@@ -166,23 +166,11 @@ final diaryEntriesProvider =
   }).toList();
 });
 
-/// 连续打卡天数（从今天起向前连续有照片的天数）
+/// 连续拍摄天数：复用 [shootingCheckinProvider] 的统一语义
+/// （今天已拍从今天起算，今天未拍从昨天往回数），保证与首页/挑战页数字一致
 final diaryStreakProvider = FutureProvider<int>((ref) async {
-  final dao = await ref.watch(galleryDaoProvider.future);
-  final records = await dao.getAll();
-  final daySet = <DateTime>{};
-  for (final r in records) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(r.createdAt);
-    daySet.add(DateTime(dt.year, dt.month, dt.day));
-  }
-  final now = DateTime.now();
-  var cursor = DateTime(now.year, now.month, now.day);
-  var streak = 0;
-  while (daySet.contains(cursor)) {
-    streak++;
-    cursor = cursor.subtract(const Duration(days: 1));
-  }
-  return streak;
+  final checkin = await ref.watch(shootingCheckinProvider.future);
+  return checkin.streakDays;
 });
 
 /// 统一拍摄打卡状态 Provider：由相册照片表计算连续拍摄天数、本周 7 天状态、今日是否已拍
