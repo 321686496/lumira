@@ -208,6 +208,10 @@ UNIQUE(key, parent_key)
 - ✅ `flutter test test/features/templates/templates_all_page_test.dart` 22/22 通过
 - ✅ `flutter test test/features/templates/` 全套 157/157 通过
 
-### 推送状态 ⏳ 待确认
+### 推送状态 ✅ 已完成
 
-按项目规则（后端/后台改动需 commit + push 到 origin(gitee) 与 github 两个远程），因迁移种子来自第七节草稿、需用户确认分组后再推送。
+按项目规则已 commit + push 到两个远程（用户已确认第七节人像大风格分组草稿）：
+
+- `03d50c7` 后端/后台四级化改动（此前会话已提交）
+- `5102ec0` Flutter 二级分类独立页 + 固定两级钻取 + 子树模板过滤（本次提交，8 文件 +687/-91）
+- 双远程验证：`origin`（gitee）与 `github` 的 `master` 均指向 `5102ec0`，完全同步
