@@ -60,8 +60,9 @@ export async function createCategory(formData: FormData) {
 
 /**
  * 更新分类。系统分类的 key 不可改（由后端拒绝），formData 同 createCategory。
+ * @param parentKey 二三级分类需传入父分类 key 用于消歧（同名 key 可跨层级/父级重复）
  */
-export async function updateCategory(key: string, formData: FormData) {
+export async function updateCategory(key: string, formData: FormData, parentKey?: string | null) {
   const meta = formData.get('meta');
   if (!meta || typeof meta !== 'string') {
     return { error: '缺少分类元数据 (meta)' };
@@ -73,7 +74,7 @@ export async function updateCategory(key: string, formData: FormData) {
   }
 
   try {
-    await api.updateCategory(key, formData);
+    await api.updateCategory(key, formData, parentKey ?? null);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };
@@ -84,9 +85,9 @@ export async function updateCategory(key: string, formData: FormData) {
   return { success: true };
 }
 
-export async function deleteCategory(key: string) {
+export async function deleteCategory(key: string, parentKey?: string | null) {
   try {
-    await api.deleteCategory(key);
+    await api.deleteCategory(key, parentKey ?? null);
   } catch (e) {
     if (e instanceof UnauthenticatedError) redirect('/login');
     return { error: (e as Error).message };
@@ -96,9 +97,9 @@ export async function deleteCategory(key: string) {
   return { success: true };
 }
 
-export async function toggleCategoryActive(key: string) {
+export async function toggleCategoryActive(key: string, parentKey?: string | null) {
   try {
-    const result = await api.toggleCategoryActive(key);
+    const result = await api.toggleCategoryActive(key, parentKey ?? null);
     revalidatePath('/dashboard/categories');
     revalidatePath('/dashboard/templates');
     return { success: true, isActive: result.isActive };

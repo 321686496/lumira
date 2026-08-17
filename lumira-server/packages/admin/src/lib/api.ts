@@ -218,20 +218,24 @@ export const api = {
       body: formData,
     }),
 
-  updateCategory: (key: string, formData: FormData) =>
-    adminFetch<TemplateCategory>(`/categories/${key}`, {
-      method: 'PATCH',
-      body: formData,
-    }),
+  updateCategory: (key: string, formData: FormData, parentKey?: string | null) =>
+    adminFetch<TemplateCategory>(
+      `/categories/${key}${parentKey ? `?parentKey=${encodeURIComponent(parentKey)}` : ''}`,
+      {
+        method: 'PATCH',
+        body: formData,
+      },
+    ),
 
-  deleteCategory: (key: string) =>
-    adminFetch<{ success: boolean }>(`/categories/${key}`, {
-      method: 'DELETE',
-    }),
+  deleteCategory: (key: string, parentKey?: string | null) =>
+    adminFetch<{ success: boolean }>(
+      `/categories/${key}${parentKey ? `?parentKey=${encodeURIComponent(parentKey)}` : ''}`,
+      { method: 'DELETE' },
+    ),
 
-  toggleCategoryActive: (key: string) =>
+  toggleCategoryActive: (key: string, parentKey?: string | null) =>
     adminFetch<{ success: boolean; isActive: boolean }>(
-      `/categories/${key}/toggle-active`,
+      `/categories/${key}/toggle-active${parentKey ? `?parentKey=${encodeURIComponent(parentKey)}` : ''}`,
       { method: 'POST' },
     ),
 

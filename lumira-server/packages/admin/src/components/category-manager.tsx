@@ -19,7 +19,9 @@ import {
 } from '@/components/ui/dialog';
 import {
   Plus, PencilSimple, Trash, Lock, CaretDown, CaretRight,
+  MagnifyingGlass, ArrowUp, ArrowDown, FolderPlus, ImageSquare,
 } from '@phosphor-icons/react/dist/ssr';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { FileUpload } from '@/components/ui/file-upload';
 import {
@@ -33,28 +35,32 @@ interface FlatRow {
   node: TemplateCategoryTreeNode;
   depth: number;
   hasChildren: boolean;
+  /** 树形连接线：guides[i] 表示在深度 i 处需要绘制垂直引导线（该节点存在跨行的祖先兄弟） */
+  guides: boolean[];
 }
 
 /** 树的最大递归深度（三级分类 + 余量）。超过即截断，防止异常数据导致栈溢出。 */
 const MAX_TREE_DEPTH = 8;
 
-/** 将树扁平化为带缩进层级的行，跳过折叠节点的子级。 */
+/** 将树扁平化为带缩进层级的行，跳过折叠节点的子级，并计算树形连接线信息。 */
 function flattenTree(
   tree: TemplateCategoryTreeNode[],
   collapsedKeys: Set<string>,
 ): FlatRow[] {
   const rows: FlatRow[] = [];
-  const walk = (nodes: TemplateCategoryTreeNode[], depth: number) => {
+  const walk = (nodes: TemplateCategoryTreeNode[], depth: number, guides: boolean[]) => {
     if (depth > MAX_TREE_DEPTH) return;
-    for (const n of nodes) {
+    nodes.forEach((n, idx) => {
       const hasChildren = n.children.length > 0;
-      rows.push({ node: n, depth, hasChildren });
+      const isLast = idx === nodes.length - 1;
+      rows.push({ node: n, depth, hasChildren, guides });
       if (hasChildren && !collapsedKeys.has(n.key)) {
-        walk(n.children, depth + 1);
+        // 子级的引导线 = 当前引导线 + 当前节点是否还有后续兄弟
+        walk(n.children, depth + 1, [...guides, !isLast]);
       }
-    }
+    });
   };
-  walk(tree, 0);
+  walk(tree, 0, []);
   return rows;
 }
 
@@ -62,6 +68,19 @@ const LEVEL_LABEL: Record<number, string> = {
   1: '一级（题材）',
   2: '二级（风格）',
   3: '三级（方式）',
+};
+
+/** 层级徽标样式（与后台 Morandi 主题色对齐：蓝灰 / 鼠尾草 / 陶土） */
+const LEVEL_BADGE: Record<number, { label: string; className: string }> = {
+  1: { label: '一级', className: 'bg-primary/10 text-primary border-primary/20' },
+  2: { label: '二级', className: 'bg-success/10 text-success border-success/20' },
+  3: { label: '三级', className: 'bg-warning/10 text-warning border-warning/20' },
+};
+
+/** 非一级分类在名称前的层级色点 */
+const LEVEL_DOT: Record<number, string> = {
+  2: 'bg-success/70',
+  3: 'bg-warning/70',
 };
 
 interface FormState {
@@ -104,6 +123,28 @@ export function CategoryManager({
 
   const flatRows = useMemo(() => flattenTree(tree, collapsedKeys), [tree, collapsedKeys]);
 
+  // 层级统计（用于工具栏概览）
+  const levelCounts = useMemo(() => {
+    const counts = { 1: 0, 2: 0, 3: 0 };
+    for (const c of categories) {
+      if (c.level === 1 || c.level === 2 || c.level === 3) counts[c.level] += 1;
+    }
+    return counts;
+  }, [categories]);
+
+  // 搜索：按名称或 key 过滤；搜索时自动展开全部子级
+  const [search, setSearch] = useState('');
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const rows = q ? flattenTree(tree, new Set()) : flatRows;
+    if (!q) return rows;
+    return rows.filter(
+      ({ node }) =>
+        node.name.toLowerCase().includes(q) || node.key.toLowerCase().includes(q),
+    );
+  }, [tree, flatRows, search]);
+  const hasSearch = search.trim().length > 0;
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -112,9 +153,11 @@ export function CategoryManager({
   const [submitPending, startSubmitTransition] = useTransition();
   const [pendingToggleKey, setPendingToggleKey] = useState<string | null>(null);
   const [togglePending, startToggleTransition] = useTransition();
-  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ key: string; parentKey: string | null } | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
+  const [reorderKey, setReorderKey] = useState<string | null>(null);
+  const [reorderPending, startReorderTransition] = useTransition();
 
   // 一级分类列表（用于二三级父分类选择）
   const level1Categories = useMemo(
@@ -131,6 +174,25 @@ export function CategoryManager({
   const openCreate = () => {
     setEditingKey(null);
     setForm(EMPTY_FORM);
+    setIconFile(null);
+    setError(null);
+    setDialogOpen(true);
+  };
+
+  // 快速添加子分类：预填层级与父分类
+  const openCreateChild = (parent: TemplateCategory) => {
+    if (parent.level >= 3) return;
+    const level = (parent.level + 1) as 1 | 2 | 3;
+    setEditingKey(null);
+    setForm({
+      key: '',
+      name: '',
+      level,
+      parentKey: parent.key,
+      grandparentKey: level === 3 ? (parent.parentKey ?? '') : '',
+      sortOrder: 0,
+      isActive: true,
+    });
     setIconFile(null);
     setError(null);
     setDialogOpen(true);
@@ -181,6 +243,20 @@ export function CategoryManager({
     setForm({ ...form, grandparentKey, parentKey: '' });
   };
 
+  // 新建场景下的创建位置提示（面包屑）
+  const getCreateContext = (f: FormState): string | null => {
+    if (f.level === 1) return `将创建一级分类（题材）`;
+    const parent = categories.find((c) => c.key === f.parentKey);
+    if (!parent) {
+      return f.level === 2
+        ? '将创建二级分类（风格），请先选择父分类'
+        : '将创建三级分类（方式），请先选择所属一级与二级分类';
+    }
+    if (f.level === 2) return `将创建「${parent.name}」下的二级分类`;
+    const grand = categories.find((c) => c.key === f.grandparentKey);
+    return `将创建「${grand?.name ?? '…'} › ${parent.name}」下的三级分类`;
+  };
+
   const handleSubmit = async () => {
     setError(null);
     if (!editingKey && !form.key.trim()) {
@@ -212,8 +288,10 @@ export function CategoryManager({
     if (iconFile && form.level === 1) fd.set('icon', iconFile);
 
     startSubmitTransition(async () => {
+      // 二三级分类需传父分类 key 消歧（同名 key 可跨父级重复）
+      const updateParentKey = form.level === 1 ? null : form.parentKey;
       const result = editingKey
-        ? await updateCategory(editingKey, fd)
+        ? await updateCategory(editingKey, fd, updateParentKey)
         : await createCategory(fd);
       if (result?.error) {
         setError(result.error);
@@ -228,21 +306,24 @@ export function CategoryManager({
     });
   };
 
-  const handleDelete = async (key: string) => {
-    // 客户端预校验：有子分类则禁止删除
-    const hasChildren = categories.some((c) => c.parentKey === key);
+  // 点击删除：先校验是否存在子分类，再弹出确认框
+  const requestDelete = (cat: TemplateCategory) => {
+    const hasChildren = categories.some((c) => c.parentKey === cat.key);
     if (hasChildren) {
       toast({
         variant: 'destructive',
         title: '无法删除',
-        description: '请先删除子分类',
+        description: '该分类下存在子分类，请先删除子分类',
       });
-      setConfirmDeleteKey(null);
       return;
     }
-    setDeletingKey(key);
+    setConfirmDelete({ key: cat.key, parentKey: cat.parentKey });
+  };
+
+  const handleDelete = async (target: { key: string; parentKey: string | null }) => {
+    setDeletingKey(target.key);
     startDeleteTransition(async () => {
-      const result = await deleteCategory(key);
+      const result = await deleteCategory(target.key, target.parentKey);
       setDeletingKey(null);
       if (result?.error) {
         toast({
@@ -252,7 +333,36 @@ export function CategoryManager({
         });
       } else {
         toast({ title: '已删除', description: '分类已删除' });
-        setConfirmDeleteKey(null);
+        setConfirmDelete(null);
+        router.refresh();
+      }
+    });
+  };
+
+  // 快速排序：与相邻兄弟节点交换 sortOrder
+  const handleReorder = (cat: TemplateCategory, dir: -1 | 1) => {
+    const siblings = categories
+      .filter((x) => x.parentKey === cat.parentKey && x.level === cat.level)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
+    const idx = siblings.findIndex((s) => s.key === cat.key);
+    const target = siblings[idx + dir];
+    if (idx < 0 || !target) return;
+
+    setReorderKey(cat.key);
+    startReorderTransition(async () => {
+      const fdA = new FormData();
+      fdA.set('meta', JSON.stringify({ sortOrder: target.sortOrder }));
+      const fdB = new FormData();
+      fdB.set('meta', JSON.stringify({ sortOrder: cat.sortOrder }));
+      const results = await Promise.all([
+        updateCategory(cat.key, fdA, cat.parentKey),
+        updateCategory(target.key, fdB, target.parentKey),
+      ]);
+      setReorderKey(null);
+      const err = results.find((r) => r?.error);
+      if (err) {
+        toast({ variant: 'destructive', title: '排序失败', description: err.error });
+      } else {
         router.refresh();
       }
     });
@@ -275,87 +385,240 @@ export function CategoryManager({
     }
   };
 
-  const editingCat = editingKey ? categories.find((c) => c.key === editingKey) : null;
+  // 按 (key, parentKey) 精确匹配分类（同名 key 可跨父级/层级重复，需复合定位）
+  const findCategory = (key: string, parentKey: string | null) =>
+    categories.find((c) => c.key === key && (c.parentKey ?? null) === parentKey);
+
+  const editingCat = editingKey
+    ? findCategory(editingKey, form.level === 1 ? null : form.parentKey)
+    : null;
+  const confirmCat = confirmDelete
+    ? findCategory(confirmDelete.key, confirmDelete.parentKey)
+    : null;
+  const reorderDisabled = (key: string) => reorderPending && reorderKey === key;
+
+  // 计算某分类在兄弟节点中的位置，用于禁用边界排序按钮
+  const reorderBoundary = (cat: TemplateCategory) => {
+    const siblings = categories
+      .filter((x) => x.parentKey === cat.parentKey && x.level === cat.level)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
+    const idx = siblings.findIndex((s) => s.key === cat.key);
+    return { canUp: idx > 0, canDown: idx >= 0 && idx < siblings.length - 1 };
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={toggleAll} disabled={tree.length === 0}>
-          {allCollapsed ? '全部展开' : '全部折叠'}
-        </Button>
-        <Button onClick={openCreate}>
-          <Plus size={16} className="mr-1" /> 新建分类
-        </Button>
+    <div className="space-y-5">
+      {/* 页头：标题 + 搜索 + 操作 */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-baseline gap-2.5">
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">分类管理</h2>
+            <span className="hidden text-xs text-muted-foreground md:inline">
+              题材 → 风格 → 方式
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <MagnifyingGlass
+                size={15}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="搜索名称或 key"
+                className="h-9 w-48 pl-8 sm:w-56"
+              />
+            </div>
+            <Button variant="outline" size="sm" onClick={toggleAll} disabled={tree.length === 0}>
+              {allCollapsed ? '全部展开' : '全部折叠'}
+            </Button>
+            <Button size="sm" onClick={openCreate}>
+              <Plus size={16} className="mr-1" /> 新建分类
+            </Button>
+          </div>
+        </div>
+
+        {/* 层级统计胶囊 */}
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { label: '一级 · 题材', count: levelCounts[1], dot: 'bg-primary' },
+            { label: '二级 · 风格', count: levelCounts[2], dot: 'bg-success' },
+            { label: '三级 · 方式', count: levelCounts[3], dot: 'bg-warning' },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-1.5"
+            >
+              <span className={cn('h-2 w-2 rounded-full', s.dot)} />
+              <span className="text-sm font-semibold tabular-nums leading-none">
+                {s.count}
+              </span>
+              <span className="text-xs text-muted-foreground">{s.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="rounded-md border border-border bg-card">
+      <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/30 hover:bg-muted/30">
-              <TableHead className="w-10"></TableHead>
-              <TableHead className="w-16">图标</TableHead>
-              <TableHead className="w-40">Key</TableHead>
-              <TableHead>名称</TableHead>
-              <TableHead className="w-20">层级</TableHead>
-              <TableHead className="w-24">排序</TableHead>
-              <TableHead className="w-24">类型</TableHead>
-              <TableHead className="w-32">状态</TableHead>
-              <TableHead className="w-44">操作</TableHead>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead className="w-12"></TableHead>
+              <TableHead className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                名称
+              </TableHead>
+              <TableHead className="w-24 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                层级
+              </TableHead>
+              <TableHead className="w-28 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                排序
+              </TableHead>
+              <TableHead className="w-24 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                类型
+              </TableHead>
+              <TableHead className="w-28 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                状态
+              </TableHead>
+              <TableHead className="w-32 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                操作
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {flatRows.length === 0 ? (
+            {filteredRows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                  暂无分类
+                <TableCell colSpan={7} className="py-16 text-center">
+                  <div className="mx-auto flex max-w-sm flex-col items-center gap-2">
+                    <ImageSquare size={28} className="text-muted-foreground/40" />
+                    <p className="text-sm text-muted-foreground">
+                      {hasSearch
+                        ? `未找到匹配「${search.trim()}」的分类`
+                        : '暂无分类，点击右上角「新建分类」创建'}
+                    </p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
-              flatRows.map(({ node: c, depth, hasChildren }) => {
+              filteredRows.map((row) => {
+                const { node: c, depth, hasChildren, guides } = row;
                 const icon = toAssetUrl(c.iconUrl, backendUrl);
                 const isCollapsed = collapsedKeys.has(c.key);
+                const levelBadge = LEVEL_BADGE[c.level as 1 | 2 | 3];
+                const dot = LEVEL_DOT[c.level as 2 | 3];
+                const { canUp, canDown } = reorderBoundary(c);
                 return (
-                  <TableRow key={c.key}>
-                    <TableCell>
-                      {hasChildren ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleCollapse(c.key)}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-muted"
-                          title={isCollapsed ? '展开' : '折叠'}
-                          style={{ marginLeft: depth * 20 }}
-                        >
-                          {isCollapsed ? <CaretRight size={14} /> : <CaretDown size={14} />}
-                        </button>
-                      ) : (
-                        <span style={{ display: 'inline-block', width: 24, marginLeft: depth * 20 }} />
-                      )}
+                  <TableRow key={`${c.parentKey ?? 'root'}|${c.key}`} className="group">
+                    {/* 树形控制（连接线 + 缩进 + 折叠） */}
+                    <TableCell className="py-2.5">
+                      <div className="flex h-9 items-center">
+                        {guides.map((show, i) => (
+                          <span key={i} className="relative h-full w-5 shrink-0">
+                            {show && (
+                              <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-border" />
+                            )}
+                          </span>
+                        ))}
+                        {depth > 0 && (
+                          <span className="relative h-full w-5 shrink-0">
+                            <span className="absolute left-0 top-1/2 h-px w-full bg-border" />
+                          </span>
+                        )}
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleCollapse(c.key)}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                            title={isCollapsed ? '展开' : '折叠'}
+                          >
+                            {isCollapsed ? <CaretRight size={14} /> : <CaretDown size={14} />}
+                          </button>
+                        ) : (
+                          <span className="w-6 shrink-0" />
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell>
-                      {c.level === 1 ? (
-                        <div className="h-8 w-8 overflow-hidden rounded-md bg-muted border border-input flex items-center justify-center">
-                          {icon ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={icon} alt={c.name} className="h-full w-full object-cover" />
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground">默认</span>
-                          )}
+
+                    {/* 名称：图标 / 层级色点 + 名称 + key */}
+                    <TableCell className="py-2.5">
+                      <div className="flex items-center gap-3">
+                        {c.level === 1 ? (
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-input bg-muted">
+                            {icon ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={icon}
+                                alt={c.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="flex h-full w-full items-center justify-center">
+                                <ImageSquare size={16} className="text-muted-foreground/60" />
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
+                            <span className={cn('h-2 w-2 rounded-full', dot)} />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium text-foreground">
+                              {c.name}
+                            </span>
+                          </div>
+                          <code className="block max-w-[220px] truncate font-mono text-xs text-muted-foreground/70">
+                            {c.key}
+                          </code>
                         </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      </div>
                     </TableCell>
-                    <TableCell>
-                      <code className="text-xs font-mono bg-muted/40 px-1.5 py-0.5 rounded">
-                        {c.key}
-                      </code>
+
+                    {/* 层级徽标 */}
+                    <TableCell className="py-2.5">
+                      <span
+                        className={cn(
+                          'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+                          levelBadge.className,
+                        )}
+                      >
+                        {levelBadge.label}
+                      </span>
                     </TableCell>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell>
-                      <span className="text-xs text-muted-foreground">{c.level}级</span>
+
+                    {/* 排序（数字 + 上移/下移） */}
+                    <TableCell className="py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 text-center text-sm font-medium tabular-nums text-muted-foreground">
+                          {c.sortOrder}
+                        </span>
+                        <div className="flex flex-col gap-px">
+                          <button
+                            type="button"
+                            title={canUp ? '上移' : '已是第一个'}
+                            disabled={reorderDisabled(c.key) || !canUp}
+                            onClick={() => handleReorder(c, -1)}
+                            className="inline-flex h-4 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
+                          >
+                            <ArrowUp size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            title={canDown ? '下移' : '已是最后一个'}
+                            disabled={reorderDisabled(c.key) || !canDown}
+                            onClick={() => handleReorder(c, 1)}
+                            className="inline-flex h-4 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
+                          >
+                            <ArrowDown size={11} />
+                          </button>
+                        </div>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{c.sortOrder}</TableCell>
-                    <TableCell>
+
+                    {/* 类型 */}
+                    <TableCell className="py-2.5">
                       {c.isSystem ? (
                         <Badge variant="secondary">
                           <Lock size={10} className="mr-1" /> 系统
@@ -364,7 +627,9 @@ export function CategoryManager({
                         <Badge variant="outline">自定义</Badge>
                       )}
                     </TableCell>
-                    <TableCell>
+
+                    {/* 状态 */}
+                    <TableCell className="py-2.5">
                       <div className="flex items-center gap-2">
                         <Switch
                           checked={c.isActive}
@@ -372,7 +637,7 @@ export function CategoryManager({
                           onCheckedChange={() => {
                             setPendingToggleKey(c.key);
                             startToggleTransition(async () => {
-                              const result = await toggleCategoryActive(c.key);
+                              const result = await toggleCategoryActive(c.key, c.parentKey);
                               setPendingToggleKey(null);
                               if (result?.error) {
                                 toast({
@@ -389,46 +654,44 @@ export function CategoryManager({
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => openEdit(c)}>
-                          <PencilSimple size={14} className="mr-1" /> 编辑
-                        </Button>
+
+                    {/* 操作（图标按钮） */}
+                    <TableCell className="py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-0.5">
+                        {c.level < 3 && (
+                          <button
+                            type="button"
+                            title={`在「${c.name}」下添加子分类`}
+                            onClick={() => openCreateChild(c)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          >
+                            <FolderPlus size={15} />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          title="编辑"
+                          onClick={() => openEdit(c)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        >
+                          <PencilSimple size={15} />
+                        </button>
                         {c.isSystem ? (
                           <span
                             title="系统分类不可删除"
-                            className="inline-flex items-center text-xs text-muted-foreground px-2 py-1 cursor-not-allowed"
+                            className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md text-muted-foreground/35"
                           >
-                            <Lock size={12} className="mr-1" /> 不可删
+                            <Lock size={15} />
                           </span>
-                        ) : confirmDeleteKey === c.key ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              disabled={deletePending && deletingKey === c.key}
-                              onClick={() => handleDelete(c.key)}
-                            >
-                              确认删除
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setConfirmDeleteKey(null)}
-                              disabled={deletePending && deletingKey === c.key}
-                            >
-                              取消
-                            </Button>
-                          </>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setConfirmDeleteKey(c.key)}
+                          <button
+                            type="button"
+                            title="删除"
+                            onClick={() => requestDelete(c)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                           >
-                            <Trash size={14} className="mr-1" /> 删除
-                          </Button>
+                            <Trash size={15} />
+                          </button>
                         )}
                       </div>
                     </TableCell>
@@ -440,6 +703,7 @@ export function CategoryManager({
         </Table>
       </div>
 
+      {/* 新建 / 编辑对话框 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -454,6 +718,13 @@ export function CategoryManager({
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* 新建时的创建位置提示 */}
+            {!editingKey && (
+              <div className="rounded-md border-l-2 border-primary bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                {getCreateContext(form)}
+              </div>
+            )}
+
             {/* 层级选择 */}
             <div className="space-y-2">
               <Label>层级 *</Label>
@@ -569,7 +840,7 @@ export function CategoryManager({
               </div>
               <div className="space-y-2">
                 <Label>是否显示</Label>
-                <div className="flex items-center gap-2 h-10">
+                <div className="flex h-10 items-center gap-2">
                   <Switch
                     checked={form.isActive}
                     onCheckedChange={(checked) => setForm({ ...form, isActive: checked })}
@@ -592,10 +863,7 @@ export function CategoryManager({
                 hint="建议 5MB 以内的 png/svg/jpg；为空时使用 Flutter 内置图标映射。"
                 previewUrl={
                   editingKey
-                    ? toAssetUrl(
-                        categories.find((c) => c.key === editingKey)?.iconUrl,
-                        backendUrl,
-                      ) || undefined
+                    ? toAssetUrl(editingCat?.iconUrl, backendUrl) || undefined
                     : undefined
                 }
               />
@@ -614,6 +882,38 @@ export function CategoryManager({
             </Button>
             <Button onClick={handleSubmit} disabled={submitPending}>
               {submitPending ? '保存中…' : editingKey ? '保存' : '创建'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 删除确认对话框 */}
+      <Dialog
+        open={confirmDelete !== null}
+        onOpenChange={(open) => !open && setConfirmDelete(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-left">删除分类</DialogTitle>
+            <DialogDescription className="text-left">
+              确定要删除分类「{confirmCat?.name}」({confirmCat?.key}) 吗？此操作不可撤销，
+              引用该分类的模板需重新归类。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmDelete(null)}
+              disabled={deletePending && deletingKey === confirmDelete?.key}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deletePending && deletingKey === confirmDelete?.key}
+              onClick={() => confirmDelete && handleDelete(confirmDelete)}
+            >
+              {deletePending && deletingKey === confirmDelete?.key ? '删除中…' : '确认删除'}
             </Button>
           </DialogFooter>
         </DialogContent>
