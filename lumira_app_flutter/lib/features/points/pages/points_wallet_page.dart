@@ -542,7 +542,7 @@ class _EarnWaysCard extends StatelessWidget {
   final ThemeTokens tokens;
 
   static const _ways = <_EarnWay>[
-    _EarnWay(Icons.calendar_today_outlined, '每日签到', '+2 积分/天，连签 7 天额外 +14'),
+    _EarnWay(Icons.calendar_today_outlined, '每日签到', '+2 积分/天，连签 7 天额外 +14（每日首拍自动完成）'),
     _EarnWay(Icons.photo_camera_outlined, '每日首次拍摄', '+2 积分/天'),
     _EarnWay(Icons.emoji_events_outlined, '完成挑战', '+5 积分/次'),
     _EarnWay(Icons.card_giftcard, '邀请好友 / 兑换码', '按邀请阶梯发放'),
