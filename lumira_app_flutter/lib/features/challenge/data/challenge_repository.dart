@@ -125,10 +125,37 @@ class LocalChallengeRepository implements ChallengeRepository {
     final distinctCategories = await _challengeDao.countDistinctCompletedCategories();
     final portraitCount = await _challengeDao.countByCategory(ChallengeCategory.portrait);
     final landscapeCount = await _challengeDao.countByCategory(ChallengeCategory.landscape);
+    // 获取连续拍摄天数（需要从 galleryDao 计算）
+    final allPhotos = await _galleryDao.getAll();
+    final shotDates = <String>{};
+    for (final p in allPhotos) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(p.createdAt);
+      final ds = '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      shotDates.add(ds);
+    }
+    // 计算连续天数
+    int currentStreak = 0;
+    final today = _now();
+    final todayStr = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    if (shotDates.contains(todayStr)) {
+      currentStreak = 1;
+      var cursor = today.subtract(const Duration(days: 1));
+      while (shotDates.contains('${cursor.year.toString().padLeft(4, '0')}-${cursor.month.toString().padLeft(2, '0')}-${cursor.day.toString().padLeft(2, '0')}')) {
+        currentStreak++;
+        cursor = cursor.subtract(const Duration(days: 1));
+      }
+    } else {
+      final yesterday = today.subtract(const Duration(days: 1));
+      var cursor = yesterday;
+      while (shotDates.contains('${cursor.year.toString().padLeft(4, '0')}-${cursor.month.toString().padLeft(2, '0')}-${cursor.day.toString().padLeft(2, '0')}')) {
+        currentStreak++;
+        cursor = cursor.subtract(const Duration(days: 1));
+      }
+    }
     return [
       ChallengeAchievement(id: 'first_challenge', title: '初出茅庐', description: '完成第 1 个挑战', icon: Icons.flag_outlined, unlocked: completedCount >= 1, progress: (completedCount / 1).clamp(0.0, 1.0)),
-      ChallengeAchievement(id: 'streak_7', title: '七日坚持', description: '连续打卡 7 天', icon: Icons.local_fire_department_outlined, unlocked: false, progress: 0),
-      ChallengeAchievement(id: 'streak_15', title: '半月之星', description: '连续打卡 15 天', icon: Icons.star_outline, unlocked: false, progress: 0),
+      ChallengeAchievement(id: 'streak_7', title: '七日坚持', description: '连续拍摄 7 天', icon: Icons.local_fire_department_outlined, unlocked: currentStreak >= 7, progress: (currentStreak / 7).clamp(0.0, 1.0)),
+      ChallengeAchievement(id: 'streak_15', title: '半月之星', description: '连续拍摄 15 天', icon: Icons.star_outline, unlocked: currentStreak >= 15, progress: (currentStreak / 15).clamp(0.0, 1.0)),
       ChallengeAchievement(id: 'explorer_3', title: '探索者', description: '尝试 3 个不同分类', icon: Icons.explore_outlined, unlocked: distinctCategories >= 3, progress: (distinctCategories / 3).clamp(0.0, 1.0)),
       ChallengeAchievement(id: 'explorer_all', title: '全领域', description: '尝试全部 7 个分类', icon: Icons.category_outlined, unlocked: distinctCategories >= 7, progress: (distinctCategories / 7).clamp(0.0, 1.0)),
       ChallengeAchievement(id: 'portrait_master', title: '人像大师', description: '完成 10 个人像挑战', icon: Icons.face_outlined, unlocked: portraitCount >= 10, progress: (portraitCount / 10).clamp(0.0, 1.0)),
