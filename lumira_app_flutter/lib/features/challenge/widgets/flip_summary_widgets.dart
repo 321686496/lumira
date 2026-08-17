@@ -8,32 +8,29 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_providers.dart';
+import '../../gallery/providers/gallery_diary_providers.dart';
 
-/// 翻牌页下方：连续打卡进度条
+/// 翻牌页下方：连续拍摄进度条
 ///
-/// 数据源：weeklyHistoryProvider（本周挑战历史）+ 连续打卡计算
+/// 数据源：shootingCheckinProvider（统一拍摄打卡状态）
 class FlipStreakBar extends ConsumerWidget {
   const FlipStreakBar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final historyAsync = ref.watch(weeklyHistoryProvider);
+    final checkinAsync = ref.watch(shootingCheckinProvider);
 
-    return historyAsync.when(
+    return checkinAsync.when(
       loading: () => _SkeletonBar(tokens: tokens),
       error: (_, __) => _SkeletonBar(tokens: tokens),
-      data: (history) {
-        // 计算本周完成数
-        final weeklyDone = history
-            .where((r) => r.status == ChallengeStatus.done)
-            .length;
+      data: (checkin) {
+        // 本周完成数 = 本周已拍天数
+        final weeklyDone = checkin.weekDays.where((d) => d.done).length;
         const weeklyTotal = 7;
         final progress = (weeklyDone / weeklyTotal).clamp(0.0, 1.0);
 
-        // 计算连续打卡天数
-        final streak = _computeStreak(history);
-        final tipMessage = _buildTipMessage(streak, weeklyDone);
+        final tipMessage = _buildTipMessage(checkin.streakDays, weeklyDone);
 
         return NeuCard(
           padding: const EdgeInsets.all(16),
@@ -46,7 +43,7 @@ class FlipStreakBar extends ConsumerWidget {
                       size: 18, color: tokens.brand),
                   const SizedBox(width: 6),
                   Text(
-                    '连续打卡 $streak 天',
+                    '连续拍摄 ${checkin.streakDays} 天',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -55,7 +52,7 @@ class FlipStreakBar extends ConsumerWidget {
                   ),
                   const Spacer(),
                   Text(
-                    '本周 $weeklyDone/$weeklyTotal',
+                    '本周拍摄 $weeklyDone/$weeklyTotal',
                     style: TextStyle(
                       fontSize: 12,
                       color: tokens.textSecondary,
@@ -83,43 +80,8 @@ class FlipStreakBar extends ConsumerWidget {
     );
   }
 
-  /// 从历史记录计算连续打卡天数
-  /// 规则：从今天往回数，今天已打卡则从今天开始；否则从昨天往回数
-  int _computeStreak(List<ChallengeHistoryRecord> history) {
-    final completedDates = <String>{};
-    for (final r in history) {
-      if (r.status == ChallengeStatus.done) {
-        completedDates.add(r.date);
-      }
-    }
-    final now = DateTime.now();
-    String fmt(DateTime d) =>
-        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-    final todayStr = fmt(DateTime(now.year, now.month, now.day));
-    int streak = 0;
-    if (completedDates.contains(todayStr)) {
-      streak = 1;
-      var cursor = DateTime(now.year, now.month, now.day)
-          .subtract(const Duration(days: 1));
-      while (completedDates.contains(fmt(cursor))) {
-        streak++;
-        cursor = cursor.subtract(const Duration(days: 1));
-      }
-    } else {
-      final yesterday =
-          DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
-      var cursor = yesterday;
-      while (completedDates.contains(fmt(cursor))) {
-        streak++;
-        cursor = cursor.subtract(const Duration(days: 1));
-      }
-    }
-    return streak;
-  }
-
   String _buildTipMessage(int streak, int weeklyDone) {
-    if (streak == 0) return '今天翻牌并完成挑战开启打卡';
+    if (streak == 0) return '今天拍摄一张照片开启打卡';
     if (streak >= 7) return '已坚持一周，再接再厉！';
     final remain = 7 - streak;
     return '再坚持 $remain 天获得额外 50 XP';
@@ -138,7 +100,7 @@ class _SkeletonBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '连续打卡 - 天',
+            '连续拍摄 - 天',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
