@@ -18,7 +18,7 @@ import '../data/points_repository.dart';
 ///
 /// 4 个 section：
 /// 1. BalanceCard（当前积分余额大字号 + 累计获得 / 累计消耗）
-/// 2. SignInCard（今日签到 / 已签到按钮 + 连签天数）
+/// 2. SignInCard（自动签到状态 + 连签天数）
 /// 3. InviteEntry（邀请有礼入口卡片）
 /// 4. TransactionsList（积分流水列表，按时间倒序）
 class PointsWalletPage extends ConsumerStatefulWidget {
