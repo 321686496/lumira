@@ -133,7 +133,7 @@ void main() {
     expect(find.text('相册'), findsOneWidget);
 
     // Section 4: StreakCard
-    expect(find.text('连续打卡'), findsOneWidget);
+    expect(find.text('连续拍摄'), findsOneWidget);
     expect(find.text('7'), findsOneWidget);
     expect(find.text('天'), findsOneWidget);
 
