@@ -1,7 +1,7 @@
 // lib/features/home/data/home_providers.dart
 //
 // 首页真实数据 Provider：
-// - homeStreakProvider：连续打卡 + 本周打卡状态（来自挑战历史）
+// - homeStreakProvider：连续拍摄 + 本周拍摄状态（来自 shootingCheckinProvider 统一打卡数据）
 // - homeRecentShotsProvider：最近拍摄 5 张（来自 GalleryDao，含真实图片源）
 // - homeStatsProvider：收藏 / 总经验 / 作品数（来自 GalleryDao + GrowthDao）
 // - homeSceneRecosProvider：场景推荐 4 个（SceneRecommendationService 3+1 算法）
@@ -15,8 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/network/api_client.dart';
-import '../../challenge/data/challenge_models.dart';
-import '../../challenge/data/challenge_providers.dart';
+import '../../gallery/providers/gallery_diary_providers.dart' as gallery;
 import '../../profile/providers/growth_providers.dart';
 import '../data/home_mock_data.dart';
 import '../data/inspiration_models.dart';
@@ -61,63 +60,21 @@ class HomeStats {
       HomeStats(favorites: 0, totalXp: 0, totalPhotos: 0);
 }
 
-String _formatDate(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-/// 首页连续打卡 Provider
-/// 实现：从 ChallengeRepository.getWeeklyHistory() 计算本周打卡状态 + 连续天数
+/// 首页连续拍摄 Provider
+/// 实现：基于 shootingCheckinProvider 统一拍摄打卡数据（连续天数 + 本周 7 天状态）
 final homeStreakProvider = FutureProvider<HomeStreakStatus>((ref) async {
-  final repo = await ref.watch(challengeRepositoryProvider.future);
-  final history = await repo.getWeeklyHistory();
-
-  final now = DateTime.now();
-  final dayOfWeek = now.weekday; // 1=Mon..7=Sun
-  final monday =
-      DateTime(now.year, now.month, now.day).subtract(Duration(days: dayOfWeek - 1));
-  final today = DateTime(now.year, now.month, now.day);
-
-  // 构建打卡日期集合（YYYY-MM-DD）
-  final completedDates = <String>{};
-  for (final h in history) {
-    if (h.status == ChallengeStatus.done) {
-      completedDates.add(h.date);
-    }
-  }
-
-  // 本周 7 天状态
-  const labels = ['一', '二', '三', '四', '五', '六', '日'];
-  final todayStr = _formatDate(today);
-  final weekDays = <WeekDay>[];
-  for (var i = 0; i < 7; i++) {
-    final d = monday.add(Duration(days: i));
-    final ds = _formatDate(d);
-    weekDays.add(WeekDay(
-      label: labels[i],
-      done: completedDates.contains(ds),
-      today: ds == todayStr,
-    ));
-  }
-
-  // 连续打卡天数：从今天往回数（今天已打卡才有连续）
-  int streak = 0;
-  if (completedDates.contains(todayStr)) {
-    streak = 1;
-    var cursor = today.subtract(const Duration(days: 1));
-    while (completedDates.contains(_formatDate(cursor))) {
-      streak++;
-      cursor = cursor.subtract(const Duration(days: 1));
-    }
-  } else {
-    // 今天未打卡：统计昨日往回的连续历史（用作"已连续"展示）
-    final yesterday = today.subtract(const Duration(days: 1));
-    var cursor = yesterday;
-    while (completedDates.contains(_formatDate(cursor))) {
-      streak++;
-      cursor = cursor.subtract(const Duration(days: 1));
-    }
-  }
-
-  return HomeStreakStatus(streakDays: streak, weekDays: weekDays);
+  final checkin = await ref.watch(gallery.shootingCheckinProvider.future);
+  // 直接复用 shootingCheckin 的 weekDays 与 streakDays
+  return HomeStreakStatus(
+    streakDays: checkin.streakDays,
+    weekDays: checkin.weekDays
+        .map((wd) => WeekDay(
+              label: wd.label,
+              done: wd.done,
+              today: wd.today,
+            ))
+        .toList(),
+  );
 });
 
 /// 首页最近拍摄 Provider

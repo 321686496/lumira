@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../data/home_mock_data.dart';
 import '../data/home_providers.dart';
 
-/// 连续打卡卡片
+/// 连续拍摄卡片
 ///
 /// 视觉规格来源：lumira-app/src/pages/home/index.vue line 68-90 + style line 484-569
 /// - streak-head: title (icon+text) + num (大数字+单位)
 /// - streak-week: 7 个圆点（done 实心+对号；today 虚线圆+日期数字）
 ///
-/// 数据来源：homeStreakProvider（基于挑战历史记录真实计算）
+/// 数据来源：homeStreakProvider（基于 shootingCheckinProvider 统一拍摄打卡数据）
 class StreakCard extends ConsumerWidget {
   const StreakCard({super.key});
 
@@ -27,10 +29,15 @@ class StreakCard extends ConsumerWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20), // 40rpx → 20dp
-      child: NeuCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      child: GestureDetector(
+        onTap: () {
+          GoRouter.of(context).push(RouteNames.galleryDiary);
+        },
+        behavior: HitTestBehavior.opaque,
+        child: NeuCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             // streak-head
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -47,7 +54,7 @@ class StreakCard extends ConsumerWidget {
                     ),
                     const SizedBox(width: 8), // 16rpx → 8dp
                     Text(
-                      '连续打卡',
+                      '连续拍摄',
                       style: TextStyle(
                         fontSize: 15, // 30rpx → 15dp
                         fontWeight: FontWeight.w600,
@@ -94,6 +101,7 @@ class StreakCard extends ConsumerWidget {
                   .toList(),
             ),
           ],
+        ),
         ),
       ),
     );
