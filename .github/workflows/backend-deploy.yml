@@ -105,19 +105,19 @@ jobs:
             git log --oneline -1
 
             echo "==> [2/5] 同步部署用 docker-compose 文件"
-            cp deploy/docker-compose.prod.yml $DEPLOY_PATH/docker-compose.prod.yml
+            sudo cp deploy/docker-compose.prod.yml $DEPLOY_PATH/docker-compose.prod.yml
 
             echo "==> [3/5] 确保数据目录存在"
-            mkdir -p $DEPLOY_PATH/data
-            mkdir -p $DEPLOY_PATH/data/mysql
+            sudo mkdir -p $DEPLOY_PATH/data
+            sudo mkdir -p $DEPLOY_PATH/data/mysql
 
             echo "==> [4/5] 构建后端镜像（git reset 已确保代码最新，Docker 会自动失效受影响的缓存层）"
             cd $DEPLOY_PATH
-            docker compose -f docker-compose.prod.yml --env-file .env build
+            sudo docker compose -f docker-compose.prod.yml --env-file .env build
 
             echo "==> [5/5] 重启容器（--force-recreate 强制重建容器，确保新镜像生效）"
-            docker compose -f docker-compose.prod.yml --env-file .env up -d --force-recreate
-            docker image prune -f
+            sudo docker compose -f docker-compose.prod.yml --env-file .env up -d --force-recreate
+            sudo docker image prune -f
 
             echo "==> 部署完成，等待 15 秒后查看日志："
             sleep 15
