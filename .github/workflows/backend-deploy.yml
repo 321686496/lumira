@@ -78,6 +78,9 @@ jobs:
             echo "==> [1/5] 拉取最新代码"
             cd $DEPLOY_PATH/repo
 
+            # 解决 Git "dubious ownership" 错误（目录所有者与当前用户不一致时）
+            git config --global --add safe.directory $DEPLOY_PATH/repo
+
             # 国内服务器无法直接访问 GitHub 时，通过 GIT_MIRROR_URL 切换到 Gitee 镜像
             # 在 GitHub Actions Secrets 中设置 GIT_MIRROR_URL=https://gitee.com/xxx/lumira.git
             if [ -n "$GIT_MIRROR_URL" ]; then
