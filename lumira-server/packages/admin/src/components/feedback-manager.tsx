@@ -51,7 +51,8 @@ export function FeedbackManager({ initialData, backendUrl }: {
 
   async function toggle(item: FeedbackAdminItem) {
     const next = item.status === 'handled' ? 'pending' : 'handled';
-    await updateFeedbackStatusAction(item.id, next);
+    const res = await updateFeedbackStatusAction(item.id, next);
+    if (res && 'error' in res) return; // 后端失败时不乐观更新 UI
     setData((prev) => ({
       ...prev,
       data: prev.data.map((x) => (x.id === item.id ? { ...x, status: next } : x)),
