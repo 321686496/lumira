@@ -78,6 +78,9 @@ jobs:
             echo "==> [1/5] 拉取最新代码"
             cd $DEPLOY_PATH/repo
 
+            # 修复目录权限（确保当前用户有写权限）
+            sudo chown -R $USER:$USER $DEPLOY_PATH/repo
+
             # 解决 Git "dubious ownership" 错误（目录所有者与当前用户不一致时）
             git config --global --add safe.directory $DEPLOY_PATH/repo
 
@@ -97,7 +100,7 @@ jobs:
               echo "==> git fetch 失败（第 $attempt 次），5 秒后重试..."
               sleep 5
             done
-            git reset --hard $GIT_REMOTE/master
+            sudo git reset --hard $GIT_REMOTE/master
             echo "当前代码版本："
             git log --oneline -1
 
