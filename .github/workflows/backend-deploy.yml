@@ -85,7 +85,7 @@ jobs:
             git config --global --add safe.directory $DEPLOY_PATH/repo
 
             # 国内服务器无法直接访问 GitHub 时，通过 GIT_MIRROR_URL 切换到 Gitee 镜像
-            # 在 GitHub Actions Secrets 中设置 GIT_MIRROR_URL=https://gitee.com/xxx/lumira.git
+            # 在 GitHub Actions Secrets 中设置 GIT_MIRROR_URL=git@gitee.com:xxx/lumira.git（SSH 格式）
             if [ -n "$GIT_MIRROR_URL" ]; then
               echo "==> 检测到 GIT_MIRROR_URL，切换到镜像源：$GIT_MIRROR_URL"
               git remote set-url $GIT_REMOTE "$GIT_MIRROR_URL"
@@ -100,7 +100,7 @@ jobs:
               echo "==> git fetch 失败（第 $attempt 次），5 秒后重试..."
               sleep 5
             done
-            sudo git reset --hard $GIT_REMOTE/master
+            git reset --hard $GIT_REMOTE/master
             echo "当前代码版本："
             git log --oneline -1
 
