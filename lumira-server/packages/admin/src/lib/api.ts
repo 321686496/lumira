@@ -22,6 +22,8 @@ import type {
   TemplateOption,
   UserPointsDetail,
   GrantPointsResponse,
+  FeedbackAdminItem,
+  FeedbackListResponse,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -248,5 +250,22 @@ export const api = {
     adminFetch<GrantPointsResponse>(`/devices/${deviceId}/points/grant`, {
       method: 'POST',
       body: JSON.stringify({ delta, reason }),
+    }),
+
+  // ===== 反馈管理 =====
+  listFeedbacks: (params: { page?: number; pageSize?: number; type?: string; status?: string } = {}) => {
+    const search = new URLSearchParams();
+    if (params.page) search.set('page', String(params.page));
+    if (params.pageSize) search.set('pageSize', String(params.pageSize));
+    if (params.type) search.set('type', params.type);
+    if (params.status) search.set('status', params.status);
+    const qs = search.toString();
+    return adminFetch<FeedbackListResponse>(`/feedbacks${qs ? `?${qs}` : ''}`);
+  },
+
+  updateFeedbackStatus: (id: string, status: string) =>
+    adminFetch<{ success: boolean; id: string; status: string }>(`/feedbacks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
     }),
 };

@@ -269,3 +269,23 @@ export interface CreateCategoryRequest {
 }
 
 export interface UpdateCategoryRequest extends Partial<Omit<CreateCategoryRequest, 'key'>> {}
+
+// ===== 意见反馈管理 =====
+export interface FeedbackAdminItem {
+  id: string;
+  deviceId: string;
+  type: string;
+  content: string;
+  contact: string | null;
+  status: string;
+  screenshots: string[];
+  createdAt: number;
+  clientIp: string | null;
+}
+
+export interface FeedbackListResponse {
+  data: FeedbackAdminItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
