@@ -40,15 +40,16 @@ jobs:
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/opt/lumira/backend' }}
           GIT_REMOTE: ${{ secrets.GIT_REMOTE || 'origin' }}
+          GIT_MIRROR_URL: ${{ secrets.GIT_MIRROR_URL || '' }}
           TRIGGER_REASON: ${{ github.event.inputs.reason || github.event_name }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: DEPLOY_PATH,GIT_REMOTE,TRIGGER_REASON
-          # 首次构建可能需要 5-15 分钟（pnpm install + tsc build），给足超时
-          command_timeout: 30m
+          envs: DEPLOY_PATH,GIT_REMOTE,GIT_MIRROR_URL,TRIGGER_REASON
+          # 国内服务器网络较慢，给足超时（60 分钟）
+          command_timeout: 60m
           script: |
             set -e
             echo "==> 触发原因：$TRIGGER_REASON"
@@ -76,6 +77,14 @@ jobs:
 
             echo "==> [1/5] 拉取最新代码"
             cd $DEPLOY_PATH/repo
+
+            # 国内服务器无法直接访问 GitHub 时，通过 GIT_MIRROR_URL 切换到 Gitee 镜像
+            # 在 GitHub Actions Secrets 中设置 GIT_MIRROR_URL=https://gitee.com/xxx/lumira.git
+            if [ -n "$GIT_MIRROR_URL" ]; then
+              echo "==> 检测到 GIT_MIRROR_URL，切换到镜像源：$GIT_MIRROR_URL"
+              git remote set-url $GIT_REMOTE "$GIT_MIRROR_URL"
+            fi
+
             # GitHub 偶发 "Empty reply from server"（HTTP/2 连接被中间网络重置），强制 HTTP/1.1 并重试
             git config http.version HTTP/1.1
             for attempt in 1 2 3 4 5; do
