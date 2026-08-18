@@ -2,7 +2,10 @@
 'use client';
 
 import { useState } from 'react';
-import { api } from '@/lib/api';
+import {
+  listFeedbacks as listFeedbacksAction,
+  updateFeedbackStatus as updateFeedbackStatusAction,
+} from '@/actions/feedback';
 import { toAssetUrl } from '@/lib/asset-url';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -32,12 +35,13 @@ export function FeedbackManager({ initialData, backendUrl }: {
   async function refresh(nextPage = 1) {
     setLoading(true);
     try {
-      const resp = await api.listFeedbacks({
+      const resp = await listFeedbacksAction({
         page: nextPage,
         pageSize: 20,
         type: type !== 'all' ? type : undefined,
         status: status !== 'all' ? status : undefined,
       });
+      if (!resp) return;
       setData(resp);
       setPage(resp.page);
     } finally {
@@ -47,7 +51,7 @@ export function FeedbackManager({ initialData, backendUrl }: {
 
   async function toggle(item: FeedbackAdminItem) {
     const next = item.status === 'handled' ? 'pending' : 'handled';
-    await api.updateFeedbackStatus(item.id, next);
+    await updateFeedbackStatusAction(item.id, next);
     setData((prev) => ({
       ...prev,
       data: prev.data.map((x) => (x.id === item.id ? { ...x, status: next } : x)),
