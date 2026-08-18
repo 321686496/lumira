@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS `feedbacks` (
   `content` TEXT NOT NULL,
   `contact` TEXT,
   `status` VARCHAR(16) NOT NULL DEFAULT 'pending',
-  `screenshots_json` TEXT NOT NULL DEFAULT '[]',
+  `screenshots_json` TEXT NOT NULL,
   `client_ip` TEXT,
   `created_at` INT NOT NULL
 );
