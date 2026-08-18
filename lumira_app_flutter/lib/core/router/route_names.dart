@@ -60,6 +60,7 @@ class RouteNames {
   static const String profileFragmentDetail = '/profile/fragment-detail';
   static const String profileNotifications = '/profile/notifications';
   static const String profileAbout = '/profile/about';
+  static const String feedback = '/profile/feedback';
   static const String profileComplianceAgreement = '/profile/settings/agreement';
   static const String profileCompliancePrivacy = '/profile/settings/privacy';
   static const String profileComplianceSdk = '/profile/settings/sdk';

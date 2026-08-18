@@ -53,6 +53,7 @@ import '../features/profile/pages/profile_share_code_page.dart';
 import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
+import '../features/profile/feedback/pages/feedback_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
 import '../features/points/pages/points_wallet_page.dart';
 import '../features/redeem/pages/redeem_page.dart';
@@ -527,6 +528,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileAbout,
         name: 'profileAbout',
         builder: (context, state) => const ProfileAboutPage(),
+      ),
+      GoRoute(
+        path: RouteNames.feedback,
+        name: 'feedback',
+        builder: (context, state) => const FeedbackPage(),
       ),
       GoRoute(
         path: RouteNames.profileComplianceAgreement,

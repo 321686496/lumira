@@ -152,6 +152,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       delay: const Duration(milliseconds: 500),
                       child: _MenuCard(onTap: (p) => _goPage(p)),
                     ),
+                    // 7. FeedbackEntryCard
+                    const SizedBox(height: 20),
+                    _FeedbackEntryCard(
+                      onTap: () => _goPage(RouteNames.feedback),
+                      tokens: tokens,
+                    ),
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -1049,6 +1055,58 @@ class _MenuItemRow extends StatelessWidget {
                 ),
               ),
             ),
+            Icon(Icons.chevron_right, size: 18, color: tokens.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// FeedbackEntryCard：个人中心醒目「意见反馈」入口（brand 渐变底 + 反馈 icon + 副文案 + 右箭头）
+class _FeedbackEntryCard extends StatelessWidget {
+  const _FeedbackEntryCard({required this.onTap, required this.tokens});
+  final VoidCallback onTap;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              tokens.brandSubtle.withOpacity(0.6),
+              tokens.brandLight.withOpacity(0.3),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: tokens.brand.withOpacity(0.25)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.feedback_outlined, size: 22, color: tokens.brand),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '意见反馈',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ),
+            Text(
+              '有 Bug / 想法 / 想要的模板？告诉我们',
+              style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+            ),
+            const SizedBox(width: 8),
             Icon(Icons.chevron_right, size: 18, color: tokens.textTertiary),
           ],
         ),

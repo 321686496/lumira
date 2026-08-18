@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -112,19 +113,40 @@ class ProfileAboutPage extends ConsumerWidget {
                     children: [
                       _InfoRow(
                         label: '官方邮箱',
-                        value: 'hello@lumira.app',
+                        value: '15575712021@163.com',
                         tokens: tokens,
+                        onTap: () => Clipboard.setData(
+                          const ClipboardData(text: '15575712021@163.com'),
+                        ),
                       ),
                       _InfoRow(
-                        label: '用户反馈',
-                        value: 'feedback@lumira.app',
+                        label: '微信号',
+                        value: 'h15575712021',
                         tokens: tokens,
+                        onTap: () => Clipboard.setData(
+                          const ClipboardData(text: 'h15575712021'),
+                        ),
                       ),
-                      _InfoRow(
-                        label: '官方社区',
-                        value: '@如画Lumira',
-                        tokens: tokens,
-                        isLast: true,
+                      const SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: () => GoRouter.of(context).push(RouteNames.feedback),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: tokens.brandSubtle,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: tokens.brand.withOpacity(0.25)),
+                          ),
+                          child: Text(
+                            '去反馈',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.brand,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -374,37 +396,52 @@ class _InfoRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.tokens,
+    this.onTap,
     this.isLast = false,
   });
   final String label;
   final String value;
   final ThemeTokens tokens;
+  final VoidCallback? onTap;
   final bool isLast;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final content = Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: tokens.textTertiary,
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: tokens.textTertiary,
+              ),
             ),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: tokens.textPrimary,
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: tokens.textPrimary,
+              ),
             ),
           ),
         ],
       ),
+    );
+
+    if (onTap == null) return content;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: content,
     );
   }
 }

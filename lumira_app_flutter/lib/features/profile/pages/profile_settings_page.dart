@@ -340,6 +340,12 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         tokens: tokens,
                       ),
                       _SettingItem(
+                        icon: Icons.feedback_outlined,
+                        label: '意见反馈',
+                        onTap: () => GoRouter.of(context).push(RouteNames.feedback),
+                        tokens: tokens,
+                      ),
+                      _SettingItem(
                         icon: Icons.info_outline,
                         label: '关于如画',
                         onTap: () => GoRouter.of(context).push(RouteNames.profileAbout),
