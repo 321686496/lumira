@@ -185,3 +185,16 @@ export const templates = mysqlTable('templates', {
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });
+
+// ===== 意见反馈（spec 2026-08-18-feedback-design）=====
+export const feedbacks = mysqlTable('feedbacks', {
+  id: text('id').primaryKey(),
+  deviceId: text('device_id').notNull(),
+  type: text('type').notNull(),
+  content: text('content').notNull(),
+  contact: text('contact'),
+  status: text('status').notNull().default('pending'),
+  screenshotsJson: text('screenshots_json').notNull().default('[]'),
+  clientIp: text('client_ip'),
+  createdAt: int('created_at').notNull(),
+});
