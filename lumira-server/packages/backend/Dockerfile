@@ -1,10 +1,6 @@
-# syntax=docker/dockerfile:1
-
 # =============================================================================
 # Base — install all dependencies (pnpm workspace, hoisted node-linker)
 # =============================================================================
-# 国内服务器使用 Docker 镜像加速（通过 docker-compose 环境变量注入）
-# 默认使用 DaoCloud 镜像源，可在 .env 中设置 DOCKER_REGISTRY_MIRROR 自定义
 FROM node:20-alpine AS base
 
 # 切换为阿里云 Alpine 镜像源（解决国内服务器无法访问 dl-cdn.alpinelinux.org 的问题）
