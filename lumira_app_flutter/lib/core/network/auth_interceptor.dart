@@ -26,6 +26,9 @@ class AuthInterceptor extends Interceptor {
     final statusCode = err.response?.statusCode;
     if (statusCode == 401) {
       _auth.invalidateRegistration();
+      // 触发重新注册：旧 token 失效后立即获取新 token，
+      // 避免后续请求继续使用无效 token（如 token 过期或服务器 JWT_SECRET 变更）
+      _auth.registerIfNeeded();
     }
     handler.next(err);
   }
