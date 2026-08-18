@@ -12,4 +12,4 @@ CREATE TABLE IF NOT EXISTS `feedbacks` (
   `client_ip` TEXT,
   `created_at` INT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS `idx_feedbacks_created` ON `feedbacks` (`created_at`);
+CREATE INDEX `idx_feedbacks_created` ON `feedbacks` (`created_at`);
