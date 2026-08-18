@@ -61,6 +61,29 @@ class ApiClient {
     }
   }
 
+  /// multipart POST（文本字段 + 文件，用于意见反馈截图上传）
+  Future<T> multipartPost<T>(
+    String path, {
+    required Map<String, String> fields,
+    required List<MultipartFile> files,
+    String fileField = 'screenshots',
+    required T Function(Object? json) fromJson,
+  }) async {
+    try {
+      final form = FormData();
+      fields.forEach((key, value) {
+        form.fields.add(MapEntry(key, value));
+      });
+      for (final file in files) {
+        form.files.add(MapEntry(fileField, file));
+      }
+      final resp = await _dio.post(path, data: form);
+      return fromJson(resp.data);
+    } on DioError catch (e) {
+      throw classifyDioError(e);
+    }
+  }
+
   /// PATCH 请求
   Future<T?> patch<T>(
     String path, {
