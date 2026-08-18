@@ -84,6 +84,10 @@ jobs:
             # 解决 Git "dubious ownership" 错误（目录所有者与当前用户不一致时）
             git config --global --add safe.directory $DEPLOY_PATH/repo
 
+            # 信任 Gitee 的 SSH host key（避免首次连接时要求确认）
+            mkdir -p ~/.ssh
+            ssh-keyscan -t rsa,ecdsa,ed25519 gitee.com >> ~/.ssh/known_hosts 2>/dev/null
+
             # 国内服务器无法直接访问 GitHub 时，通过 GIT_MIRROR_URL 切换到 Gitee 镜像
             # 在 GitHub Actions Secrets 中设置 GIT_MIRROR_URL=git@gitee.com:xxx/lumira.git（SSH 格式）
             if [ -n "$GIT_MIRROR_URL" ]; then
@@ -113,12 +117,18 @@ jobs:
 
             echo "==> [4/5] 构建后端镜像（git reset 已确保代码最新，Docker 会自动失效受影响的缓存层）"
             cd $DEPLOY_PATH
-            sudo docker compose -f docker-compose.prod.yml --env-file .env build
+            # 兼容 Docker Compose V1 和 V2
+            if docker compose version &>/dev/null; then
+              COMPOSE_CMD="docker compose"
+            else
+              COMPOSE_CMD="docker-compose"
+            fi
+            sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env build
 
             echo "==> [5/5] 重启容器（--force-recreate 强制重建容器，确保新镜像生效）"
-            sudo docker compose -f docker-compose.prod.yml --env-file .env up -d --force-recreate
+            sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env up -d --force-recreate
             sudo docker image prune -f
 
             echo "==> 部署完成，等待 15 秒后查看日志："
             sleep 15
-            docker compose -f docker-compose.prod.yml logs --tail=30
+            $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=30
