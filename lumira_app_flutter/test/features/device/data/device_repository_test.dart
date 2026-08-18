@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/core/network/api_client.dart';
 import 'package:lumira_app_flutter/features/device/data/device_models.dart';
@@ -37,6 +38,17 @@ class _FakeApiClient implements ApiClient {
     required T Function(Object? json) fromJson,
   }) async {
     throw UnimplementedError('PATCH $path');
+  }
+
+  @override
+  Future<T> multipartPost<T>(
+    String path, {
+    required Map<String, String> fields,
+    required List<MultipartFile> files,
+    String fileField = 'screenshots',
+    required T Function(Object? json) fromJson,
+  }) async {
+    throw UnimplementedError('MULTIPART $path');
   }
 }
 
