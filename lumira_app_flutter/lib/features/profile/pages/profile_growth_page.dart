@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
+import '../../../features/points/data/points_repository.dart';
 import '../../../shared/services/poster_generator.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
@@ -14,6 +15,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/growth_models.dart';
 import '../providers/growth_providers.dart';
+import '../services/growth_xp_service.dart';
 
 /// 成长中心页
 ///
@@ -33,7 +35,13 @@ class ProfileGrowthPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
 
+    // 进入成长中心触发一次升级奖励补发（离线失败静默，联网后下次再补）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _claimPendingRewards(ref, context);
+    });
+
     final levelAsync = ref.watch(growthLevelProvider);
+    final breakdownAsync = ref.watch(growthXpBreakdownProvider);
     final achievementsAsync = ref.watch(growthAchievementsProvider);
     final trajectoryAsync = ref.watch(growthTrajectoryProvider);
     final heatmapAsync = ref.watch(growthHeatmapProvider);
@@ -82,6 +90,17 @@ class ProfileGrowthPage extends ConsumerWidget {
                       ),
                       const SizedBox(height: 20),
                       FadeUp(
+                        delay: const Duration(milliseconds: 50),
+                        child: _XpBreakdownCard(
+                          tokens: tokens,
+                          entries: breakdownAsync.maybeWhen(
+                            data: (e) => e,
+                            orElse: () => const [],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      FadeUp(
                         delay: const Duration(milliseconds: 100),
                         child: _AchievementCard(
                           tokens: tokens,
@@ -123,6 +142,25 @@ class ProfileGrowthPage extends ConsumerWidget {
   }
 }
 
+/// 进入成长中心时补发升级积分奖励（离线失败静默，联网后下次再补）。
+Future<void> _claimPendingRewards(WidgetRef ref, BuildContext context) async {
+  try {
+    final db = await ref.read(databaseProvider.future);
+    final repo = await ref.read(pointsRepositoryProvider.future);
+    final svc = GrowthXpService(
+      db,
+      earnLevelReward: (level) =>
+          repo.earn(type: 'level_reward', refId: level),
+    );
+    final newCount = await svc.claimLevelRewards();
+    if (newCount > 0 && context.mounted) {
+      LumiraToast.show(context, '升级奖励 +$newCount 笔积分已到账');
+    }
+  } catch (e) {
+    debugPrint('[growth] claim level rewards failed: $e');
+  }
+}
+
 class _BackButton extends StatelessWidget {
   const _BackButton({required this.tokens});
   final ThemeTokens tokens;
@@ -154,12 +192,14 @@ class _LevelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 当前等级上限（level * 500）：作为右栏展示与进度条分母。
-    final levelMaxXp = summary.level * 500;
-    // 等级内进度：((currentXp - (level-1)*500) / 500 * 100).clamp(0, 100)
-    // 解释：level = xp ~/ 500 + 1，所以 (level-1)*500 是当前等级下界。
-    final xpIntoLevel = summary.currentXp - (summary.level - 1) * 500;
-    final xpPercent = ((xpIntoLevel / 500) * 100).round().clamp(0, 100);
+    // 当前等级下界与下一级上界（阈值表）
+    final cur = LEVEL_THRESHOLDS.where((t) => t.level == summary.level).toList();
+    final curFloor = cur.isEmpty ? 0 : cur.first.xp;
+    final nxt = LEVEL_THRESHOLDS.where((t) => t.level == summary.level + 1).toList();
+    final nxtCeil = nxt.isEmpty ? summary.currentXp : nxt.first.xp;
+    final span = nxtCeil - curFloor;
+    final xpIntoLevel = summary.currentXp - curFloor;
+    final xpPercent = (span <= 0 ? 0.0 : (xpIntoLevel / span) * 100).round().clamp(0, 100);
 
     return NeuCard(
       child: Column(
@@ -249,8 +289,66 @@ class _LevelCard extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  '${formatThousands(levelMaxXp)} XP',
+                  nxt.isEmpty
+                      ? '已达最高等级'
+                      : '${formatThousands(nxtCeil)} XP',
                   textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Courier New',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: nxt.isEmpty
+                        ? tokens.textTertiary
+                        : tokens.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _XpBreakdownCard extends StatelessWidget {
+  const _XpBreakdownCard({required this.tokens, required this.entries});
+  final ThemeTokens tokens;
+  final List<XpBreakdownEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.isEmpty) return const SizedBox.shrink();
+    return NeuCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '经验来源',
+            style: TextStyle(
+              fontFamily: 'Noto Serif SC',
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          for (final e in entries) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    e.label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${e.amount} XP',
                   style: TextStyle(
                     fontFamily: 'Courier New',
                     fontSize: 12,
@@ -258,9 +356,26 @@ class _LevelCard extends StatelessWidget {
                     color: tokens.textSecondary,
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: SizedBox(
+                height: 6,
+                child: Stack(
+                  children: [
+                    Container(color: tokens.brand.withOpacity(0.15)),
+                    FractionallySizedBox(
+                      widthFactor: e.ratio < 0 ? 0 : e.ratio,
+                      child: Container(color: tokens.brand),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+          ],
         ],
       ),
     );

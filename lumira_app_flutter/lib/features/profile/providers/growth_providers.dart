@@ -13,15 +13,12 @@ final growthDaoProvider = FutureProvider<GrowthDao>((ref) async {
 
 final growthLevelProvider = FutureProvider<GrowthSummary>((ref) async {
   final dao = await ref.watch(growthDaoProvider.future);
-  final xp = await dao.getTotalXP();
-  final level = await dao.getLevel();
-  final xpToNext = ((level) * 500) - xp; // 当前等级剩余 XP
-  return GrowthSummary(
-    level: level,
-    currentXp: xp,
-    xpToNextLevel: xpToNext < 0 ? 0 : xpToNext,
-    levelName: _levelName(level),
-  );
+  return dao.getSummary();
+});
+
+final growthXpBreakdownProvider = FutureProvider<List<XpBreakdownEntry>>((ref) async {
+  final dao = await ref.watch(growthDaoProvider.future);
+  return dao.getXpBreakdown();
 });
 
 final growthAchievementsProvider = FutureProvider<List<AchievementRecord>>((ref) async {
@@ -38,13 +35,6 @@ final growthHeatmapProvider = FutureProvider<Map<String, int>>((ref) async {
   final dao = await ref.watch(growthDaoProvider.future);
   return dao.getDailyActivity();
 });
-
-String _levelName(int level) {
-  if (level >= 10) return '大师';
-  if (level >= 5) return '专家';
-  if (level >= 2) return '进阶';
-  return '新手';
-}
 
 /// 个人中心 UserProfile Provider
 /// 聚合 GrowthDao（等级/XP）+ GalleryDao（作品数/收藏数）+ TemplatesDao（模板数）
@@ -77,5 +67,5 @@ final userProfileProvider = FutureProvider<UserProfile>((ref) async {
 /// 下一等级名称（用于 _HeroCard 底部「升级至 XX」文案）
 final nextLevelNameProvider = FutureProvider<String>((ref) async {
   final growth = await ref.watch(growthLevelProvider.future);
-  return _levelName(growth.level + 1);
+  return levelNameFor(growth.level + 1) ?? '';
 });
