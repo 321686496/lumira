@@ -68,6 +68,18 @@ class AcademyTables {
     )
   ''';
 
+  // === academy_course_favorite ===
+  static const courseFavorite = 'academy_course_favorite';
+  static const cfColCourseId = 'course_id';
+  static const cfColFavoritedAt = 'favorited_at';
+
+  static const cfCreateSql = '''
+    CREATE TABLE IF NOT EXISTS $courseFavorite (
+      $cfColCourseId TEXT PRIMARY KEY,
+      $cfColFavoritedAt INTEGER NOT NULL
+    )
+  ''';
+
   // === academy_learning_trajectory ===
   // 注：表名与列名常量在 Tables 类中定义（Plan A v4 迁移添加）
   // 这里仅引用，不重复声明
@@ -227,6 +239,39 @@ class AcademyDao {
       AcademyTables.knowledgeFavorite,
       where: '${AcademyTables.kfColCardId} = ?',
       whereArgs: [cardId],
+    );
+  }
+
+  // === 课程收藏 ===
+
+  Future<bool> isCourseFavorited(String courseId) async {
+    final rows = await _db.query(
+      AcademyTables.courseFavorite,
+      where: '${AcademyTables.cfColCourseId} = ?',
+      whereArgs: [courseId],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
+  }
+
+  Future<Set<String>> getFavoriteCourseIds() async {
+    final rows = await _db.query(AcademyTables.courseFavorite);
+    return rows.map((r) => r[AcademyTables.cfColCourseId] as String).toSet();
+  }
+
+  Future<void> addCourseFavorite(String courseId, int timestamp) async {
+    await _db.insert(
+      AcademyTables.courseFavorite,
+      {AcademyTables.cfColCourseId: courseId, AcademyTables.cfColFavoritedAt: timestamp},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> removeCourseFavorite(String courseId) async {
+    await _db.delete(
+      AcademyTables.courseFavorite,
+      where: '${AcademyTables.cfColCourseId} = ?',
+      whereArgs: [courseId],
     );
   }
 

@@ -21,7 +21,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 24;
+const int _kDbVersion = 25;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -301,6 +301,7 @@ Future<void> _onCreate(Database db, int version) async {
   await db.execute(AcademyTables.cpCreateSql);
   await db.execute(AcademyTables.asCreateSql);
   await db.execute(AcademyTables.kfCreateSql);
+  await db.execute(AcademyTables.cfCreateSql);
 
   await db.execute(CompositionKitsTable.createSql);
   await db.execute(AcademyLearningTrajectoryTable.createSql);
@@ -875,6 +876,14 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_item_tags_item ON ${Tables.itemTags}(${Tables.colItemType}, ${Tables.colItemId})');
     } catch (e) {
       debugPrint('v24 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 25) {
+    try {
+      await db.execute(AcademyTables.cfCreateSql);
+    } catch (e) {
+      debugPrint('v25 migration failed (silent fallback): $e');
     }
   }
 }
