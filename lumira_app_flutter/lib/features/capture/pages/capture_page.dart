@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io' show File;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
-import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat;
+import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat, instantiateImageCodec;
 
 import 'package:flutter/services.dart' show HapticFeedback;
 
@@ -32,6 +32,7 @@ import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
 import '../services/capture_worker.dart';
+import '../services/ohos_native_processor.dart';
 import '../watermark/data/watermark_providers.dart';
 import '../watermark/models/watermark_template.dart';
 import '../watermark/widgets/watermark_animation_overlay.dart';
@@ -491,16 +492,55 @@ class _CapturePageState extends ConsumerState<CapturePage>
     try {
       // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
       final sw = Stopwatch()..start();
-      final result = await cameraService.capture(
-        config: CaptureConfig(
-          facing: facing,
-          zoomMultiplier: zoom,
-          flashMode: _mapFlashMode(flashMode),
-        ),
-      );
-      debugPrint('[perf] cameraService.capture: ${sw.elapsedMilliseconds}ms');
 
-      // === 水印相框入场动画（立即触发） ===
+      // 【抗手抖-单帧快拍】单次 capture 拿到的 JPEG 即为"按下快门瞬间"的画面，
+      // 保证成片内容就是快门时刻（杜绝连拍选帧在用户移动手机时选到"移动后画面"的漏洞）。
+      // 之后再对该帧做清晰度评分，若判定为手抖模糊（needsDeblur），后处理会
+      // 自动增强锐化去模糊（仍是原有算法，不新增逻辑）。
+      final CaptureResult r;
+      try {
+        r = await cameraService.capture(
+          config: CaptureConfig(
+            facing: facing,
+            zoomMultiplier: zoom,
+            flashMode: _mapFlashMode(flashMode),
+          ),
+        );
+      } catch (e) {
+        debugPrint('[capture] capture failed: $e');
+        if (!mounted) return;
+        LumiraToast.show(
+          context,
+          '拍照失败',
+          duration: const Duration(seconds: 2),
+        );
+        return;
+      }
+      final bestPath = r.filePath;
+      debugPrint('[perf] single capture: ${sw.elapsedMilliseconds}ms');
+
+      // 对该帧做清晰度评分（拉普拉斯方差），返回 needsDeblur + 240px 小图预览。
+      // 【OHOS 性能优化】用主 isolate 的 dart:ui（OS 加速解码）把该帧降采样到
+      // 240px 的 rawRgba 传给 worker 直接评分，避免 worker 里纯 Dart 全量解码
+      // 4000px JPEG（每帧 0.3-0.8s，是 OHOS 变慢的主因）。
+      final swScore = Stopwatch()..start();
+      final smallFrames = await _decodeBurstThumbnails([bestPath]);
+      final scoreResult = await CaptureWorker.instance.scoreFrames(
+        [bestPath],
+        smallRgba: smallFrames?.rgbaList,
+        smallW: smallFrames?.widthList,
+        smallH: smallFrames?.heightList,
+      );
+      debugPrint('[perf] scoreFrames: ${swScore.elapsedMilliseconds}ms '
+          'score=${scoreResult.bestScore}');
+
+      // 渐进显示：立即把该帧的原图预览放进角标（后处理完成后会替换为成品）
+      if (scoreResult.previewBytes != null) {
+        ref.read(captureThumbnailProvider.notifier)
+            .setQuickResult(scoreResult.previewBytes!);
+      }
+
+      // === 水印相框入场动画（使用选中的最清晰帧） ===
       // 快门按下并拿到原始 JPEG 后立即播放动画，使用原始照片 + CustomPaint
       // 叠加水印（与最终渲染水印视觉一致），后处理在队列中并行执行。
       // 这样用户按下快门即可看到水印动画，无需等待 GPU/isolate/落库完成。
@@ -512,7 +552,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
       if (shouldAnimateNow && mounted) {
         setState(() {
           _showWatermarkAnimation = true;
-          _animationPhotoPath = result.filePath;
+          _animationPhotoPath = bestPath;
           _animationTemplate = wmTemplate;
           _animationTargetRect = _getThumbnailGlobalRect();
         });
@@ -523,7 +563,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
         };
       }
 
-      // 后处理异步执行，不阻塞下次 capture 调用（支持连拍）
+      // 仅选中的一帧进入后处理队列（后处理异步执行，不阻塞下次 capture 调用）
       final postProcess = ref.read(CaptureState.effectivePostProcessProvider);
       debugPrint('[capture] postProcess for isolate: '
           'brightness=${postProcess.color.brightness}, '
@@ -535,11 +575,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
           'brilliance=${postProcess.color.brilliance}, '
           'vibrance=${postProcess.color.vibrance}');
       _processCaptureQueue.add(_CaptureProcessParams(
-        inputPath: result.filePath,
+        inputPath: bestPath,
         targetRatio: targetRatio,
         isPortrait: isPortrait,
         isFront: facing == 'front',
         postProcess: postProcess,
+        needsDeblur: scoreResult.needsDeblur,
       ));
       _processCaptureQueueItem();
     } catch (e, st) {
@@ -551,6 +592,49 @@ class _CapturePageState extends ConsumerState<CapturePage>
         duration: const Duration(seconds: 2),
       );
     }
+  }
+
+  /// 连拍帧的 240px 降采样 RGBA 小图（供 worker 评分，避免 worker 纯 Dart 全量解码）。
+  static const int _kBurstThumbDim = 240;
+
+  /// 用 dart:ui（OS 加速解码）把连拍帧降到 [_kBurstThumbDim]px 的 rawRgba。
+  /// 返回 null 表示全部解码失败（调用方会回退到 worker 内自行读文件解码）。
+  /// 返回的字节是"紧凑拷贝"（offset 0、长度精确），保证跨 isolate 传递后
+  /// img.Image.fromBytes(bytes: rgba.buffer) 能正确读取。
+  Future<_BurstThumbnails?> _decodeBurstThumbnails(List<String> paths) async {
+    final sw = Stopwatch()..start();
+    final rgbaList = <Uint8List>[];
+    final widthList = <int>[];
+    final heightList = <int>[];
+    for (final p in paths) {
+      try {
+        final bytes = await File(p).readAsBytes();
+        final codec = await ui.instantiateImageCodec(
+          bytes,
+          targetWidth: _kBurstThumbDim,
+          targetHeight: _kBurstThumbDim,
+        );
+        final frame = await codec.getNextFrame();
+        final image = frame.image;
+        final w = image.width, h = image.height;
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+        codec.dispose();
+        image.dispose();
+        if (byteData == null) throw StateError('toByteData null');
+        rgbaList.add(Uint8List.fromList(
+          byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+        ));
+        widthList.add(w);
+        heightList.add(h);
+        debugPrint('[capture] burst thumb $p decoded ${w}x${h}, '
+            'rgbaLen=${byteData.lengthInBytes} (expect ${w * h * 4}) target=$_kBurstThumbDim');
+      } catch (e) {
+        debugPrint('[capture] decode burst thumb $p failed: $e');
+      }
+    }
+    debugPrint('[perf] decodeBurstThumbnails x${rgbaList.length}: ${sw.elapsedMilliseconds}ms');
+    if (rgbaList.isEmpty || rgbaList.length != paths.length) return null;
+    return _BurstThumbnails(rgbaList, widthList, heightList);
   }
 
   /// 拍照后处理队列（串行消费，避免 isolate 并发创建开销和内存峰值）
@@ -585,6 +669,109 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
     final swTotal = Stopwatch()..start();
     try {
+      final swNative = Stopwatch()..start();
+      String? nativeFinalPath;
+      int nativeW = 0;
+      int nativeH = 0;
+      final canUseNative = OhosNativeProcessor.isSupported &&
+          !needWatermark && // 原生路径不返回 rawRgba，水印需走 GPU/isolate 通道
+          OhosNativeProcessor.capabilityCovers(params.postProcess);
+      if (canUseNative) {
+        final exists = await OhosNativeProcessor.inputExists(params.inputPath);
+        if (exists) {
+          final nativeOut = '${params.inputPath.replaceAll(RegExp(r'\.jpg$'), '')}_native.jpg';
+          final res = await OhosNativeProcessor.process(
+            inputPath: params.inputPath,
+            outputPath: nativeOut,
+            params: _applyDeblurToNative(params),
+            targetRatio: params.targetRatio,
+            isPortrait: params.isPortrait,
+            facing: params.isFront ? 'front' : 'back',
+          );
+          swNative.stop();
+          debugPrint('[perf] OHOS原生全尺寸: ${res.ok ? 'ok' : 'fail'} '
+              '${res.width}x${res.height} ${res.elapsedMs}ms ${res.error}');
+          if (res.ok && res.width > 0) {
+            nativeFinalPath = res.outputPath;
+            nativeW = res.width;
+            nativeH = res.height;
+          }
+        } else {
+          swNative.stop();
+          debugPrint('[perf] OHOS原生: input 不存在，跳过');
+        }
+      } else {
+        swNative.stop();
+        debugPrint('[perf] OHOS原生: 跳过 (isSupported=${OhosNativeProcessor.isSupported}, '
+            'needWatermark=$needWatermark, capability=${OhosNativeProcessor.capabilityCovers(params.postProcess)})');
+      }
+
+      // 全尺寸处理成功后直接走落库流程（跳过下方 GPU/isolate 1280px 链路）
+      if (nativeFinalPath != null) {
+        // 原图备份在 GPU 分支中并行执行；此处需单独备份
+        String? originalPath = '${params.inputPath}.original.jpg';
+        try {
+          await File(params.inputPath).copy(originalPath);
+        } catch (e) {
+          debugPrint('[capture] 原图保留失败（不阻塞）: $e');
+          originalPath = null;
+        }
+
+        final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+        try {
+          final dao = await ref.read(galleryDaoProvider.future);
+          final templateId = ref.read(CaptureState.currentTemplateIdProvider);
+          final sceneId = ref.read(CaptureState.activeScenePresetIdProvider);
+          final lut = params.postProcess.lut;
+          final record = GalleryItemRecord(
+            id: photoId,
+            filePath: nativeFinalPath!,
+            originalPath: originalPath,
+            postProcess: params.postProcess,
+            dataUrl: null,
+            sceneId: sceneId,
+            templateId: templateId,
+            kitId: widget.kitId,
+            mood: null,
+            lut: (lut == 'none' || lut.isEmpty) ? null : lut,
+            createdAt: DateTime.now().millisecondsSinceEpoch,
+          );
+          await dao.insert(record);
+          ref.invalidate(galleryDaoProvider);
+          ref.invalidate(bannerRecommendationProvider);
+          debugPrint('[capture] 自动保存到应用相册(原生): ${record.id}');
+
+          if (!_dailyShootEarned) {
+            _dailyShootEarned = true;
+            _earnDailyShootPoints();
+          }
+          if (!_dailyAutoSignInDone) {
+            _dailyAutoSignInDone = true;
+            _autoSignIn();
+          }
+        } catch (e) {
+          debugPrint('[capture] 落库失败(原生): $e');
+        }
+
+        ref.read(captureThumbnailProvider.notifier)
+            .setFinalResult(nativeFinalPath!, photoId);
+        ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
+            nativeFinalPath!;
+
+        try {
+          final fb = await File(nativeFinalPath!).readAsBytes();
+          final decoder = img.findDecoderForData(fb);
+          final info = decoder?.startDecode(fb);
+          debugPrint('[capture] 照片文件实际尺寸(原生): ${info?.width}x${info?.height} '
+              'ratio=${info != null && info.height != 0 ? (info.width / info.height).toStringAsFixed(4) : "?"}');
+        } catch (e) {
+          debugPrint('[capture] 读取照片尺寸失败: $e');
+        }
+
+        _isProcessingCapture = false;
+        return;
+      }
+
       final swGpu = Stopwatch()..start();
       // 【所见即所得修复】先在主 isolate 中用 dart:ui GPU 管线应用色彩矩阵，
       // 与取景器 ColorFiltered 使用完全相同的渲染管线。
@@ -3190,12 +3377,24 @@ class _CaptureProcessParams {
     required this.isPortrait,
     required this.isFront,
     required this.postProcess,
+    this.needsDeblur = false,
   });
   final String inputPath;
   final double targetRatio; // 目标宽高比（正向像素）
   final bool isPortrait;
   final bool isFront;
   final PostProcess postProcess;
+
+  /// 选帧后最佳帧清晰度仍低于阈值（严重模糊），后处理应额外锐化去模糊
+  final bool needsDeblur;
+}
+
+/// 连拍帧的 240px 降采样 RGBA 小图集合（并行列表，与路径一一对应）。
+class _BurstThumbnails {
+  const _BurstThumbnails(this.rgbaList, this.widthList, this.heightList);
+  final List<Uint8List> rgbaList;
+  final List<int> widthList;
+  final List<int> heightList;
 }
 
 /// 后处理输出最大边（px）。
@@ -3392,12 +3591,17 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         'toByteData(rawRgba): ${swRgba.elapsedMilliseconds}ms (out=$iOutW x $iOutH)');
     if (byteData == null) return null;
 
+    // 动态锐化增强：单帧快拍无连拍兜底，始终至少应用 kDeblurMinSharpen 抗手抖锐化；
+    // 当选帧后仍判定为严重模糊（needsDeblur）时额外提升 40%。自由模式用户默认
+    // sharpen=0，若按 0×1.4=0 会让去模糊完全失效，因此用 clamp(min) 保证强度。
+    final effectiveSharpen = _effectiveSharpen(params);
+
     return _GpuProcessedData(
       rgbaBytes: byteData.buffer.asUint8List(),
       width: iOutW,
       height: iOutH,
       outputPath: params.inputPath,
-      sharpen: params.postProcess.sharpen,
+      sharpen: effectiveSharpen,
       clarity: params.postProcess.color.clarity,
       grain: params.postProcess.grain,
       smoothStrength: params.postProcess.smoothStrength,
@@ -3408,4 +3612,31 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     debugPrint('[capture] GPU 色彩矩阵处理失败: $e\n$st');
     return null;
   }
+}
+
+/// 为原生全尺寸路径计算去模糊增强后的 [PostProcess]。
+///
+/// 与 GPU/isolate 路径（[_applyColorMatrixOnGpu] 内的 effectiveSharpen）保持完全一致：
+/// 单帧快拍没有连拍可选"更清晰帧"，因此无论评分如何都保证至少应用
+/// [kDeblurMinSharpen] 强度的锐化抗手抖；当判定为手抖模糊（needsDeblur）时额外提升 40%。
+/// 这样原生路径与回退的 GPU 路径在去模糊决策上语义一致，且不砍任何效果。
+PostProcess _applyDeblurToNative(_CaptureProcessParams params) {
+  final sharpen = _effectiveSharpen(params);
+  if (sharpen == params.postProcess.sharpen) return params.postProcess;
+  return params.postProcess.copyWith(sharpen: sharpen);
+}
+
+/// 计算统一的去模糊锐化强度（单帧快拍抗手抖核心）。
+///
+/// 单帧快拍无法再从连拍中挑选"最清晰帧"，因此始终钳制到至少 [kDeblurMinSharpen]，
+/// 以补偿手抖导致的轻微模糊；检测到严重模糊（needsDeblur）时再提升 70%。
+const double kDeblurBoost = 1.7;
+const int kDeblurMinSharpen = 28;
+
+int _effectiveSharpen(_CaptureProcessParams params) {
+  final base = params.postProcess.sharpen < kDeblurMinSharpen
+      ? kDeblurMinSharpen // 单帧无连拍兜底：即便用户 sharpen=0 也保证抗手抖锐化
+      : params.postProcess.sharpen;
+  if (!params.needsDeblur) return base;
+  return (base * kDeblurBoost).round().clamp(kDeblurMinSharpen, 100);
 }

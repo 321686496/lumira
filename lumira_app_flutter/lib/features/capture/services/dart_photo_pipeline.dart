@@ -9,6 +9,7 @@ import 'package:image/image.dart' as img;
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
+import 'ohos_native_processor.dart';
 import 'photo_pipeline.dart';
 import 'photo_post_processor.dart';
 import 'skin_smoother.dart';
@@ -199,6 +200,35 @@ class DartPhotoPipeline implements PhotoPipeline {
   }) async {
     final sw = Stopwatch()..start();
     final finalOutputPath = outputPath ?? inputPath.replaceAll('.jpg', '_final.jpg');
+
+    // ── 首选：OHOS 原生全尺寸路径 ──────────────────────────────────────
+    // 在 OHOS 上且能力覆盖（变换恒等、无自定义裁剪框）时，直接用原生
+    // image 硬件解码/锐化/编码，输出全尺寸 4000px，目标 ≤800ms，六效果齐全。
+    // 若原生失败或能力不足，自动回退到下方 CPU isolate 链路。
+    if (OhosNativeProcessor.isSupported &&
+        OhosNativeProcessor.capabilityCovers(params, transform: transform)) {
+      final exists = await OhosNativeProcessor.inputExists(inputPath);
+      if (exists) {
+        final result = await OhosNativeProcessor.process(
+          inputPath: inputPath,
+          outputPath: finalOutputPath,
+          params: params,
+          targetRatio: OhosNativeProcessor.computeTargetRatio(aspectRatio, isPortrait),
+          isPortrait: isPortrait,
+          facing: facing,
+        );
+        debugPrint(
+            '[fullProcess] OHOS原生全尺寸: ${result.ok ? 'ok' : 'fail'} '
+            '${result.width}x${result.height} ${result.elapsedMs}ms ${result.error}');
+        if (result.ok && result.width > 0) {
+          return FullResult(
+            filePath: result.outputPath,
+            width: result.width,
+            height: result.height,
+          );
+        }
+      }
+    }
 
     try {
       // 1. 主 Isolate 读取原图字节

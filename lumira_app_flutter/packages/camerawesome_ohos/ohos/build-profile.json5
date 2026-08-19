@@ -1,0 +1,15 @@
+{
+  "apiType": "stageMode",
+  "buildOption": {
+    "sourceOption": {
+      "workers": [
+        "./src/main/ets/components/workers/GetImageWorker.ets"
+      ]
+    }
+  },
+  "targets": [
+    {
+      "name": "default"
+    }
+  ]
+}

@@ -27,11 +27,10 @@ dependencies:
   # Fix: 改用 CPF-Flutter Harmony 适配版本 camerawesome_ohos 1.0.2（对应原库名 camerawesome 1.4.0）
   # 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md 第 81 行
   # pub.dev 版本无 ohos 实现，导致 Harmony 端取景器一直转圈；改用 gitcode fork 的 ohos 子目录包
+  # Fix(ohos 连拍提速): 由 git 依赖改为本地 vendor 包 packages/camerawesome_ohos，
+  # 打原生补丁：colorMatrix 为空时跳过 解码+重编码 直写文件、旋转角缓存，连拍 3 帧从 ~2s 降至 ~1s。
   camerawesome_ohos:
-    git:
-      url: https://gitcode.com/CPF-Flutter/fluttertpc_camerawesome.git
-      ref: master
-      path: ohos
+    path: packages/camerawesome_ohos
 
   # 原版 camerawesome（iOS/Android 用，包名不同于 camerawesome_ohos）
   # Fix(ios WYSIWYG): 原版 1.4.0 预览 cover 算法有 bug（竖屏纹理永远按高度适配），
