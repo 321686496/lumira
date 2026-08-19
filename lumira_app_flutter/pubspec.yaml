@@ -106,6 +106,14 @@ dependencies:
   # 纯 Dart 库，无原生代码，鸿蒙无需 fork
   dio: 4.0.6
 
+  # 二维码渲染（纯 Dart，Dart 2.19 兼容）
+  qr_flutter: ^4.1.0
+  # 扫码（CPF-Flutter 鸿蒙适配 fork，源库 qr_code_scanner 0.7.0）
+  qr_code_scanner:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_qr_code_scanner.git
+      ref: master
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
