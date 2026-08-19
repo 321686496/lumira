@@ -15,6 +15,7 @@ import 'dao/api_cache_dao.dart';
 import 'dao/settings_dao.dart';
 import 'dao/watermark_dao.dart';
 import 'dao/tutorial_read_dao.dart';
+import 'dao/tags_dao.dart';
 import '../../core/auth/auth_dao.dart';
 import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
@@ -100,6 +101,11 @@ final watermarkDaoProvider = FutureProvider<WatermarkDao>((ref) async {
 final tutorialReadDaoProvider = FutureProvider<TutorialReadDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return TutorialReadDao(db);
+});
+
+final userTagsDaoProvider = FutureProvider<TagsDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return TagsDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
