@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/src/database/schema.ts
 
-import { mysqlTable, text, int, longtext, uniqueIndex } from 'drizzle-orm/mysql-core';
+import { mysqlTable, text, int, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
 
 export const devices = mysqlTable('devices', {
   deviceId: text('device_id').primaryKey(),
@@ -12,7 +12,14 @@ export const devices = mysqlTable('devices', {
   firstSeenAt: int('first_seen_at').notNull(),
   lastSeenAt: int('last_seen_at').notNull(),
   ipRegion: text('ip_region'),
-});
+  recoverySecretHash: text('recovery_secret_hash'),
+  recoverySecretCreatedAt: int('recovery_secret_created_at'),
+  email: varchar('email', { length: 255 }),
+  emailVerifiedAt: int('email_verified_at'),
+  sessionEpoch: int('session_epoch').notNull().default(0),
+}, (table) => ({
+  emailIdx: uniqueIndex('uq_devices_email').on(table.email),
+}));
 
 export const userProfiles = mysqlTable('user_profiles', {
   deviceId: text('device_id').primaryKey().references(() => devices.deviceId),
@@ -198,3 +205,18 @@ export const feedbacks = mysqlTable('feedbacks', {
   clientIp: text('client_ip'),
   createdAt: int('created_at').notNull(),
 });
+
+// ===== 账号恢复（spec 2026-08-19-account-recovery-design）=====
+export const accountOtp = mysqlTable('account_otp', {
+  id: int('id').primaryKey().autoincrement(),
+  email: varchar('email', { length: 255 }).notNull(),
+  deviceId: text('device_id'),
+  purpose: varchar('purpose', { length: 16 }).notNull(),
+  codeHash: varchar('code_hash', { length: 64 }).notNull(),
+  expiresAt: int('expires_at').notNull(),
+  consumedAt: int('consumed_at'),
+  attempts: int('attempts').notNull().default(0),
+  createdAt: int('created_at').notNull(),
+}, (table) => ({
+  emailPurposeIdx: index('idx_account_otp_email_purpose').on(table.email, table.purpose),
+}));
