@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/core/db/dao/growth_dao.dart';
@@ -18,46 +19,90 @@ void main() {
 
   tearDown(() async => db.close());
 
-  test('getTotalXP returns user_progress.xp when row exists', () async {
-    await db.update(Tables.userProgress, {Tables.colXp: 350},
+  test('getTotalXP sums xp_events ledger only (not user_progress.xp)', () async {
+    await db.insert(XpEventsTable.name, {
+      'id': 'challenge:c1', XpEventsTable.colSource: 'challenge',
+      XpEventsTable.colAmount: 80, XpEventsTable.colRefId: 'c1',
+      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+    });
+    await db.insert(XpEventsTable.name, {
+      'id': 'course:c2', XpEventsTable.colSource: 'course',
+      XpEventsTable.colAmount: 120, XpEventsTable.colRefId: 'c2',
+      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+    });
+    // 即便 user_progress.xp 有残留，也以台账为准
+    await db.update(Tables.userProgress, {Tables.colXp: 999},
         where: '${Tables.colId} = ?', whereArgs: [1]);
     final dao = GrowthDao(db);
-    expect(await dao.getTotalXP(), 350);
+    expect(await dao.getTotalXP(), 200); // 80 + 120，忽略 user_progress.xp=999
   });
 
-  test('getTotalXP falls back to challenge_history sum when xp=0', () async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await db.insert(ChallengeHistoryTable.name, {
-      ChallengeHistoryTable.colId: 'ch_1',
-      ChallengeHistoryTable.colDate: '2026-07-25',
-      ChallengeHistoryTable.colChallengeId: 'c1',
-      ChallengeHistoryTable.colCategory: 'portrait',
-      ChallengeHistoryTable.colTitle: 'T1',
-      ChallengeHistoryTable.colRewardXp: 80,
-      ChallengeHistoryTable.colStatus: 'done',
-      ChallengeHistoryTable.colSelectedAt: now,
-      ChallengeHistoryTable.colCompletedAt: now,
-    });
-    await db.insert(ChallengeHistoryTable.name, {
-      ChallengeHistoryTable.colId: 'ch_2',
-      ChallengeHistoryTable.colDate: '2026-07-25',
-      ChallengeHistoryTable.colChallengeId: 'c2',
-      ChallengeHistoryTable.colCategory: 'landscape',
-      ChallengeHistoryTable.colTitle: 'T2',
-      ChallengeHistoryTable.colRewardXp: 50,
-      ChallengeHistoryTable.colStatus: 'done',
-      ChallengeHistoryTable.colSelectedAt: now,
-      ChallengeHistoryTable.colCompletedAt: now,
-    });
+  test('getTotalXP is idempotent: same source+ref inserts only once', () async {
+    for (var i = 0; i < 2; i++) {
+      await db.insert(XpEventsTable.name, {
+        'id': 'challenge:c1', XpEventsTable.colSource: 'challenge',
+        XpEventsTable.colAmount: 80, XpEventsTable.colRefId: 'c1',
+        XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
     final dao = GrowthDao(db);
-    expect(await dao.getTotalXP(), 130); // 80 + 50
+    expect(await dao.getTotalXP(), 80);
   });
 
-  test('getLevel returns xp/500 + 1', () async {
-    await db.update(Tables.userProgress, {Tables.colXp: 1200},
-        where: '${Tables.colId} = ?', whereArgs: [1]);
-    final dao = GrowthDao(db);
-    expect(await dao.getLevel(), 3); // 1200/500 + 1 = 3 (整数除法)
+  test('getLevel uses threshold table boundaries', () async {
+    Future<int> levelAt(int xp) async {
+      // 每个边界独立评估：清空台账，使总XP恰为 xp
+      await db.delete(XpEventsTable.name);
+      await db.insert(XpEventsTable.name, {
+        'id': 'shoot_daily:t$xp', XpEventsTable.colSource: 'shoot_daily',
+        XpEventsTable.colAmount: xp, XpEventsTable.colRefId: 't$xp',
+        XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+      });
+      return GrowthDao(db).getLevel();
+    }
+    expect(await levelAt(0), 1);
+    expect(await levelAt(99), 1);
+    expect(await levelAt(100), 2);
+    expect(await levelAt(300), 3);
+    expect(await levelAt(999), 4);
+    expect(await levelAt(1000), 5);
+  });
+
+  test('getSummary computes level progress against threshold table', () async {
+    await db.insert(XpEventsTable.name, {
+      'id': 'challenge:c1', XpEventsTable.colSource: 'challenge',
+      XpEventsTable.colAmount: 100, XpEventsTable.colRefId: 'c1',
+      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+    });
+    final s = await GrowthDao(db).getSummary();
+    expect(s.level, 2);          // 100 → Lv.2
+    expect(s.currentXp, 100);
+    expect(s.xpToNextLevel, 200); // Lv.3 阈值 300 - 100
+    expect(s.levelName, isNotEmpty);
+  });
+
+  test('getXpBreakdown groups and computes ratios', () async {
+    await db.insert(XpEventsTable.name, {
+      'id': 'challenge:c1', XpEventsTable.colSource: 'challenge',
+      XpEventsTable.colAmount: 60, XpEventsTable.colRefId: 'c1',
+      XpEventsTable.colCreatedAt: 1,
+    });
+    await db.insert(XpEventsTable.name, {
+      'id': 'course:c2', XpEventsTable.colSource: 'course',
+      XpEventsTable.colAmount: 40, XpEventsTable.colRefId: 'c2',
+      XpEventsTable.colCreatedAt: 2,
+    });
+    final list = await GrowthDao(db).getXpBreakdown();
+    expect(list.length, 2);
+    expect(list.first.source, 'challenge');
+    expect(list.first.amount, 60);
+    expect(list.first.ratio, closeTo(0.6, 0.001));
+    expect(list.last.source, 'course');
+    expect(list.last.ratio, closeTo(0.4, 0.001));
+  });
+
+  test('getXpBreakdown returns empty when no ledger', () async {
+    expect(await GrowthDao(db).getXpBreakdown(), isEmpty);
   });
 
   test('getAchievements returns 6 placeholder when achievements_json is []', () async {
@@ -127,4 +172,6 @@ Future<void> _onCreate(db, version) async {
     )
   ''');
   await db.execute(AcademyTables.cpCreateSql);
+  await db.execute(XpEventsTable.createSql);
+  await db.execute(XpEventsTable.indexSql);
 }
