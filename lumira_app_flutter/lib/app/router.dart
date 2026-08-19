@@ -68,6 +68,7 @@ import '../features/templates/pages/templates_drafts_page.dart';
 import '../features/templates/pages/templates_editor_page.dart';
 import '../features/templates/pages/templates_page.dart';
 import '../features/templates/pages/templates_recommend_page.dart';
+import '../features/templates/pages/templates_search_page.dart';
 import '../features/templates/pages/templates_unlock_page.dart';
 import '../features/templates/pages/export_detail_page.dart';
 
@@ -234,6 +235,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final category = state.queryParams[RouteNames.paramCategory];
           return TemplatesAllPage(scene: scene, category: category);
         },
+      ),
+      GoRoute(
+        path: RouteNames.templatesSearch,
+        name: 'templatesSearch',
+        builder: (context, state) => const TemplatesSearchPage(),
       ),
       // 二级分类独立页：一级题材 → 二级大风格/浅层风格（spec 2026-08-17-template-category-4level-design.md §6）
       GoRoute(

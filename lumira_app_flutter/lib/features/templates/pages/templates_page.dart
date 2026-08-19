@@ -98,6 +98,14 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
         horizontalPadding: 24,
         actions: [
           GestureDetector(
+            onTap: () => GoRouter.of(context).push(RouteNames.templatesSearch),
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Icon(Icons.search, size: 20),
+            ),
+          ),
+          GestureDetector(
             onTap: _goAll,
             behavior: HitTestBehavior.opaque,
             child: const Padding(

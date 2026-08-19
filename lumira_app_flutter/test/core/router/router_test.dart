@@ -215,11 +215,12 @@ void main() {
           reason: '/splash must be a declared route (it is the initial location)');
     });
 
-    test('router configuration has 68 routes', () {
+    test('router configuration has 69 routes', () {
       final router = container.read(routerProvider);
       // Count routes by traversing the configuration.
       // 本任务所有路由均为顶层 GoRoute（无 ShellRoute、无子路由），
-      // 分享/深链任务新增导出详情页、积分钱包等路由后为 68 条。
+      // 分享/深链任务新增导出详情页、积分钱包等路由后为 68 条；
+      // 模板搜索页新增 /templates/search 后为 69 条。
       int count = 0;
       void countRoutes(List<RouteBase> routes) {
         for (final route in routes) {
@@ -230,8 +231,8 @@ void main() {
         }
       }
       countRoutes(router.routeConfiguration.routes);
-      expect(count, 68,
-          reason: 'router must declare 68 top-level GoRoute entries (34 from uni-app + 13 Flutter additions + 21 new)');
+      expect(count, 69,
+          reason: 'router must declare 69 top-level GoRoute entries (34 from uni-app + 13 Flutter additions + 21 new + 1 templates search)');
     });
 
     test('router resolves all 47 paths without error', () {
