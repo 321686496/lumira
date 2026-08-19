@@ -10,7 +10,8 @@ export type PointTransactionType =
   | 'ad'               // 看广告（预留）
   | 'admin_grant'      // 后台发放
   | 'shoot_daily'      // 每日首次拍摄
-  | 'challenge';       // 完成挑战
+  | 'challenge'        // 完成挑战
+  | 'level_reward';    // 达到指定等级发积分（一级一次）
 
 // 积分流水记录
 export interface PointTransaction {

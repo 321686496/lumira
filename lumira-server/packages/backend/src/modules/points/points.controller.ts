@@ -28,7 +28,7 @@ export class PointsController {
 
   /**
    * 事件型积分领取：每日首次拍摄（type='shoot_daily'）、完成挑战（type='challenge', refId=challengeId）、
-   * 每日首次分享（type='share'）。
+   * 每日首次分享（type='share'）、达到指定等级（type='level_reward', refId=level）。
    * 幂等：同一设备同一事件只发放一次；重复领取返回 { granted: false }（200，不抛错）。
    */
   @Post('earn')
@@ -40,7 +40,7 @@ export class PointsController {
     const refId = (body?.refId ?? '').trim() || null;
     return this.pointsService.earnEvent(
       deviceId,
-      type as 'shoot_daily' | 'challenge' | 'share',
+      type as 'shoot_daily' | 'challenge' | 'share' | 'level_reward',
       refId,
     );
   }

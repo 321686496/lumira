@@ -13,12 +13,19 @@ import { getUtc8DateStr } from '../../common/utils/date.util';
 type PointTransactionType =
   | 'invite' | 'sign_in' | 'share' | 'redeem_code'
   | 'exchange_template' | 'ad' | 'admin_grant'
-  | 'shoot_daily' | 'challenge';
+  | 'shoot_daily' | 'challenge'
+  | 'level_reward';
 
 // 事件型积分规则：type → 单次积分值
 const DAILY_SHOOT_POINTS = 2; // 每日首次拍摄
 const CHALLENGE_POINTS = 5;   // 每次完成挑战
 const SHARE_POINTS = 2;       // 每日首次分享
+
+// 升级积分奖励真值源（key=等级，与前端 LEVEL_REWARD_MAP 一致）
+const LEVEL_REWARD_MAP: Record<number, number> = {
+  2: 25, 3: 25, 4: 50, 5: 100, 6: 50, 7: 50, 8: 50, 9: 50, 10: 250,
+  11: 50, 12: 50, 13: 50, 14: 50, 15: 150, 16: 50, 17: 50, 18: 50, 19: 50, 20: 500,
+};
 
 interface BalanceRow {
   deviceId: string;
@@ -116,6 +123,17 @@ export class PointsService {
       points = SHARE_POINTS;
       // 每日首次分享：refId 按 UTC+8 自然日计算（与 shoot_daily 同模式，幂等）
       eventRefId = getUtc8DateStr();
+    } else if (type === 'level_reward') {
+      if (!refId) {
+        throw new BadRequestException('refId (level) is required for level_reward');
+      }
+      const level = parseInt(refId, 10);
+      if (!Object.prototype.hasOwnProperty.call(LEVEL_REWARD_MAP, level)) {
+        throw new BadRequestException(`Invalid level reward: ${refId}`);
+      }
+      points = LEVEL_REWARD_MAP[level];
+      // 归一化等级字符串（如 "05" → "5"），保证同一等级在同一级幂等键下只发一次
+      eventRefId = String(level);
     } else {
       throw new BadRequestException(`Unsupported earn type: ${type}`);
     }
