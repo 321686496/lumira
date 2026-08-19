@@ -35,6 +35,7 @@ import '../features/inspiration/pages/tutorial_detail_page.dart';
 import '../features/onboarding/pages/questionnaire_page.dart';
 import '../features/academy/pages/academy_assignment_page.dart';
 import '../features/academy/pages/academy_detail_page.dart';
+import '../features/academy/pages/academy_favorites_page.dart';
 import '../features/academy/pages/academy_knowledge_page.dart';
 import '../features/academy/pages/academy_page.dart';
 import '../features/academy/pages/academy_trajectory_page.dart';
@@ -505,6 +506,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.academyTrajectory,
         name: 'academyTrajectory',
         builder: (context, state) => const AcademyTrajectoryPage(),
+      ),
+      GoRoute(
+        path: RouteNames.academyFavorites,
+        name: 'academyFavorites',
+        builder: (context, state) => const AcademyFavoritesPage(),
       ),
       GoRoute(
         path: RouteNames.profileCollections,

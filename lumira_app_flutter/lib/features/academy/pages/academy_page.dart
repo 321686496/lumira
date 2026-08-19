@@ -54,7 +54,20 @@ class _AcademyPageState extends ConsumerState<AcademyPage> {
     return Scaffold(
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
-      appBar: const LumiraNav(title: '摄影美学院', transparent: true),
+      appBar: LumiraNav(
+        title: '摄影美学院',
+        transparent: true,
+        actions: [
+          GestureDetector(
+            onTap: () => GoRouter.of(context).push(RouteNames.academyFavorites),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(Icons.favorite_border, size: 22, color: tokens.textPrimary),
+            ),
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           const Positioned.fill(

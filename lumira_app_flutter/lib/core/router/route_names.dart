@@ -70,6 +70,7 @@ class RouteNames {
   static const String myTags = '/my-tags';
   static const String shootkitEditor = '/shootkit/editor';
   static const String academyTrajectory = '/academy/trajectory';
+  static const String academyFavorites = '/academy/favorites';
   static const String profileCompositionKits = '/profile/composition-kits';
   static const String profileCompositionKitDetail = '/profile/composition-kit-detail';
   static const String profileRewards = '/profile/rewards';
