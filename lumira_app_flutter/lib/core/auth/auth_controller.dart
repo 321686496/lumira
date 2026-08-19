@@ -223,6 +223,28 @@ Future<String> defaultResolveDeviceId(AuthDao dao) async {
   return 'fallback-${DateTime.now().millisecondsSinceEpoch}';
 }
 
+/// 平台采集结果：OS 级唯一标识 + 稳定硬件属性。
+class DeviceAttributes {
+  final String? osId;
+  final List<String?> stableParts;
+
+  const DeviceAttributes({this.osId, this.stableParts = const []});
+}
+
+/// 将稳定硬件属性聚合生成确定性设备标识。
+/// 返回 'comp-' + FNV-1a 哈希；所有属性为空时返回空串。
+String compositeDeviceId({required List<String?> parts}) {
+  final nonEmpty = parts.where((p) => p != null && p.isNotEmpty).cast<String>().toList();
+  if (nonEmpty.isEmpty) return '';
+  return 'comp-${fnv1a64Hex(nonEmpty)}';
+}
+
+/// 解析稳定设备标识：优先 OS 级唯一标识；缺失时退回属性聚合哈希。
+String resolveStableDeviceId({String? osId, required List<String?> stableParts}) {
+  if (osId != null && osId.isNotEmpty) return osId;
+  return compositeDeviceId(parts: stableParts);
+}
+
 /// FNV-1a 64 位稳定哈希，转十六进制。
 ///
 /// 不依赖 crypto 包，跨实例/跨进程可复现。元素间以 '|' 分隔参与者，
