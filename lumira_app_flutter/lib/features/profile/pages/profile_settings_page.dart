@@ -211,6 +211,13 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         onTap: () => GoRouter.of(context)
                             .push('${RouteNames.onboarding}?from=settings'),
                         tokens: tokens,
+                      ),
+                      _SettingItem(
+                        icon: Icons.security_outlined,
+                        label: '账号保护',
+                        value: '二维码/邮箱',
+                        onTap: () => GoRouter.of(context).push(RouteNames.accountProtection),
+                        tokens: tokens,
                         isLast: true,
                       ),
                     ],
