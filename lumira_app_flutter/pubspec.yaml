@@ -88,6 +88,9 @@ dependencies:
   # 分享（brief ^12.0.1 → 调整为 ^7.2.2，7.x 兼容 Dart 2.18+，8+ 需 Dart 3.3+）
   share_plus: ^7.2.2
 
+  # URL 深链接收（仅 Android/iOS 注册原生实现；OHOS 走自研 MethodChannel，见 ohos DeepLinkPlugin）
+  uni_links: ^0.5.1
+
   # 设备信息（brief ^12.3.0 → CPF-Flutter 3.7 Harmony 适配版本 9.1.2；未回合上游，见 dependency_overrides）
   device_info_plus: 9.1.2  # Harmony 3.7 适配版本 (CPF-Flutter)
 

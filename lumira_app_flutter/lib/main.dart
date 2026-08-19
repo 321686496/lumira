@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'app/router.dart';
 import 'core/auth/auth_controller.dart';
@@ -9,12 +10,18 @@ import 'core/auth/auth_dao.dart';
 import 'core/config/app_config.dart';
 import 'core/db/database_provider.dart';
 import 'core/network/api_client.dart';
+import 'core/router/route_names.dart';
+import 'core/services/deep_link_service.dart';
 import 'core/theme/theme_controller.dart';
 import 'core/utils/share_reporter.dart';
+import 'features/capture/data/capture_state.dart';
 import 'features/points/data/points_repository.dart';
 import 'features/profile/data/profile_dao.dart';
 import 'features/profile/data/profile_models.dart';
 import 'features/profile/providers/profile_providers.dart';
+import 'features/templates/services/template_import_service.dart';
+import 'features/templates/services/template_share_code.dart';
+import 'features/templates/widgets/template_import_sheet.dart';
 
 /// 应用根 Widget（接入 ProviderScope + routerProvider + appThemeProvider）
 class MyApp extends ConsumerWidget {
@@ -78,6 +85,12 @@ Future<void> main() async {
       // 网络/鉴权失败静默，不影响分享主流程
     }
   };
+
+  // 4.6 深链监听：冷启动链接 + 运行中链接
+  // ignore: unawaited_futures
+  DeepLinkService.instance.start(
+    onTemplateLink: (link) => _handleTemplateLink(container, link),
+  );
 
   // 5. 设备信息补传（修复历史版本平台信息缺失/误判，不阻塞启动）
   //
@@ -192,4 +205,37 @@ Future<void> _reportDeviceInfo(ProviderContainer container, String os) async {
   } catch (_) {
     // 网络/鉴权失败不影响启动
   }
+}
+
+/// 处理模板深链：完整 JSON → 直接导入；否则打开导入面板让用户手动操作。
+void _handleTemplateLink(ProviderContainer container, String link) {
+  final parsed = TemplateShareCode.parseLink(link);
+  if (parsed == null || !(parsed['meta'] is Map)) {
+    // 无法解析或为轻量形式 → 打开导入面板手动粘贴/选择
+    final ctx = rootNavigatorKey.currentContext;
+    if (ctx != null && ctx.mounted) {
+      TemplateImportSheet.show(ctx, onImported: (_) {});
+    }
+    return;
+  }
+
+  // 完整 JSON → 直接导入本地
+  // ignore: unawaited_futures
+  container.read(templatesDaoProvider.future).then((dao) async {
+    final result = await TemplateImportService.importJson(
+      parsed,
+      dao: dao,
+      invalidateTemplates: () async {
+        container.invalidate(CaptureState.allTemplatesProvider);
+      },
+    );
+    final ctx = rootNavigatorKey.currentContext;
+    if (ctx == null || !ctx.mounted) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+      content: Text(result.ok ? result.message : '导入失败：${result.error}'),
+    ));
+    if (result.ok) {
+      GoRouter.of(ctx).go(RouteNames.profileMyTemplates);
+    }
+  });
 }

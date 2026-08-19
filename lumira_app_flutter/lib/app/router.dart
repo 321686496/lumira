@@ -71,12 +71,16 @@ import '../features/templates/pages/templates_recommend_page.dart';
 import '../features/templates/pages/templates_unlock_page.dart';
 import '../features/templates/pages/export_detail_page.dart';
 
+/// 全局导航 key：供深链/后台任务在无页面 context 时唤起 UI
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 /// GoRouter Provider
 /// 34 个路由与 uni-app pages.json 1:1 对应
 final routerProvider = Provider<GoRouter>((ref) {
   final observer = ref.watch(lumiraRouteObserverProvider);
 
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: RouteNames.splash,
     observers: [observer],
     routes: [
