@@ -223,6 +223,27 @@ Future<String> defaultResolveDeviceId(AuthDao dao) async {
   return 'fallback-${DateTime.now().millisecondsSinceEpoch}';
 }
 
+/// FNV-1a 64 位稳定哈希，转十六进制。
+///
+/// 不依赖 crypto 包，跨实例/跨进程可复现。元素间以 '|' 分隔参与者，
+/// 避免 ["ab","c"] 与 ["a","bc"] 这类排列产生相同哈希。
+/// 注：Dart int 为 64 位有符号，offset basis 用其有符号等价形式，
+/// 乘法依赖原生 64 位回绕得到正确哈希，返回前清除符号位得到规范十六进制。
+String fnv1a64Hex(Iterable<String> parts) {
+  // FNV-1a 64-bit offset basis 的有符号等价（14695981039346656037 - 2^64）
+  var hash = -3750763034362895579;
+  const prime = 1099511628211; // 0x100000001b3
+  for (final part in parts) {
+    for (final unit in part.codeUnits) {
+      hash = (hash ^ unit) * prime;
+    }
+    // 段分隔符
+    hash = (hash ^ 0x7C) * prime; // '|'
+  }
+  hash &= 0x7FFFFFFFFFFFFFFF; // 清除符号位，转成非负十六进制
+  return hash.toRadixString(16);
+}
+
 /// 默认的 os 解析器
 ///
 /// 鸿蒙识别：CPF-Flutter（ohos 分支）下 Platform.operatingSystem 返回 'ohos'，
