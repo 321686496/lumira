@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../core/router/route_names.dart';
 import '../core/router/route_observers.dart';
+import '../features/account/pages/account_protection_page.dart';
+import '../features/account/pages/recover_account_page.dart';
 import '../features/capture/pages/capture_page.dart';
 import '../features/capture/pages/capture_preview_page.dart';
 import '../features/capture/pages/capture_preview_template_page.dart';
@@ -59,6 +61,8 @@ import '../features/points/pages/points_wallet_page.dart';
 import '../features/redeem/pages/redeem_page.dart';
 import '../features/rewards/pages/rewards_page.dart';
 import '../features/scenes/pages/scenes_page.dart';
+import '../features/scenes/pages/scenes_search_page.dart';
+import '../features/tags/pages/my_tags_page.dart';
 import '../features/shootkit/pages/shootkit_editor_page.dart';
 import '../features/splash/pages/splash_page.dart';
 import '../features/templates/pages/templates_all_page.dart';
@@ -430,6 +434,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ProfileThemePage(),
       ),
       GoRoute(
+        path: RouteNames.accountProtection,
+        name: 'accountProtection',
+        builder: (context, state) => const AccountProtectionPage(),
+      ),
+      GoRoute(
+        path: RouteNames.accountRecover,
+        name: 'accountRecover',
+        builder: (context, state) => const RecoverAccountPage(),
+      ),
+      GoRoute(
         path: RouteNames.profileSettingsWatermark,
         name: 'profileSettingsWatermark',
         builder: (context, state) => const WatermarkManagePage(),
@@ -607,6 +621,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.scenes,
         name: 'scenes',
         builder: (context, state) => const ScenesPage(),
+      ),
+      GoRoute(
+        path: RouteNames.scenesSearch,
+        name: 'scenesSearch',
+        builder: (context, state) => const ScenesSearchPage(),
+      ),
+
+      // === 我的标签 ===
+      GoRoute(
+        path: RouteNames.myTags,
+        name: 'myTags',
+        builder: (context, state) => const MyTagsPage(),
       ),
 
       // === 拍摄套件 ===

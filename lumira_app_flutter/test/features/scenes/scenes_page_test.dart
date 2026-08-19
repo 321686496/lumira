@@ -103,6 +103,11 @@ void main() {
           },
         ),
         GoRoute(
+          path: RouteNames.scenesSearch,
+          name: 'scenesSearch',
+          builder: (_, __) => const _StubPage(text: 'SEARCH_PAGE'),
+        ),
+        GoRoute(
           path: RouteNames.home,
           name: 'home',
           builder: (_, __) => const _StubPage(text: 'HOME_PAGE'),
@@ -298,7 +303,7 @@ void main() {
       expect(find.text('MANAGE_PAGE:tab=custom'), findsOneWidget);
     });
 
-    testWidgets('tapping search icon shows SnackBar 搜索功能开发中',
+    testWidgets('tapping search icon navigates to scene search page',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
@@ -308,7 +313,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.search));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      expect(find.text('搜索功能开发中'), findsOneWidget);
+      expect(find.text('SEARCH_PAGE'), findsOneWidget);
     });
   });
 

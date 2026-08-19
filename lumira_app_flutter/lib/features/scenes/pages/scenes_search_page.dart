@@ -2,38 +2,35 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/tags_dao.dart';
-import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/lumira/lumira.dart';
+import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../tags/tag_filter_logic.dart';
-import '../data/templates_browse_mock_data.dart';
-import '../widgets/template_cover_image.dart';
 
-/// 模板搜索页：关键词（名称/分类/系统标签）+ 标签筛选 + 结果 2 列网格。
-class TemplatesSearchPage extends ConsumerStatefulWidget {
-  const TemplatesSearchPage({super.key});
+/// 场景搜索页：关键词（名称/氛围/分类）+ 用户标签筛选 + 结果 2 列网格。
+class ScenesSearchPage extends ConsumerStatefulWidget {
+  const ScenesSearchPage({super.key});
 
   @override
-  ConsumerState<TemplatesSearchPage> createState() =>
-      _TemplatesSearchPageState();
+  ConsumerState<ScenesSearchPage> createState() => _ScenesSearchPageState();
 }
 
-class _TemplatesSearchPageState extends ConsumerState<TemplatesSearchPage> {
+class _ScenesSearchPageState extends ConsumerState<ScenesSearchPage> {
   final TextEditingController _controller = TextEditingController();
   String _keyword = '';
   // 已被选中的用户标签 tagId
   final Set<int> _selectedTagIds = <int>{};
-  // 已加载的全部模板
-  List<TemplateRecord> _allTemplates = const [];
+  // 已加载的全部场景
+  List<SceneRecord> _allScenes = const [];
   // 全部用户标签（name -> tagId,count）
   List<TagWithCount> _allTags = const [];
   // 用户标签 AND 过滤后的结果（Task 8）
-  List<TemplateRecord> _userTagFiltered = const [];
+  List<SceneRecord> _userTagFiltered = const [];
 
   @override
   void initState() {
@@ -42,14 +39,13 @@ class _TemplatesSearchPageState extends ConsumerState<TemplatesSearchPage> {
   }
 
   Future<void> _load() async {
-    final tDao = await ref.read(templatesDaoProvider.future);
+    final sDao = await ref.read(scenesDaoProvider.future);
     final tagDao = await ref.read(userTagsDaoProvider.future);
-    final builtin = await tDao.getBuiltinAndRemote();
-    final customs = await tDao.getCustomOnly();
-    final tags = await tagDao.allTags(itemType: TagItemType.template);
+    final scenes = await sDao.getAll();
+    final tags = await tagDao.allTags(itemType: TagItemType.scene);
     if (!mounted) return;
     setState(() {
-      _allTemplates = [...builtin, ...customs];
+      _allScenes = scenes;
       _allTags = tags;
     });
   }
@@ -60,16 +56,16 @@ class _TemplatesSearchPageState extends ConsumerState<TemplatesSearchPage> {
     super.dispose();
   }
 
-  /// 关键词命中的模板（名称/分类/系统标签）。
-  List<TemplateRecord> _keywordHits() {
+  /// 关键词命中的场景。
+  List<SceneRecord> _keywordHits() {
     final q = _keyword.trim();
-    return _allTemplates
-        .where((t) => templateMatchesKeyword(t.name, t.category, t.tags, q))
+    return _allScenes
+        .where((s) => sceneMatchesKeyword(s.name, s.vibe, s.category, q))
         .toList();
   }
 
-  /// 在关键词命中结果上叠加「用户标签 AND」过滤（Task 8）。
-  Future<void> _refreshUserTagFilter(List<TemplateRecord> keywordHits) async {
+  /// 在关键词命中结果上叠加「用户标签 AND」过滤。
+  Future<void> _refreshUserTagFilter(List<SceneRecord> keywordHits) async {
     if (_selectedTagIds.isEmpty) {
       if (!mounted) return;
       setState(() => _userTagFiltered = keywordHits);
@@ -79,12 +75,12 @@ class _TemplatesSearchPageState extends ConsumerState<TemplatesSearchPage> {
     var keep = keywordHits.map((e) => e.id).toSet();
     for (final tagId in _selectedTagIds) {
       final ids = (await dao.itemIdsByTag(
-        itemType: TagItemType.template,
+        itemType: TagItemType.scene,
         tagId: tagId,
       )).toSet();
       keep = keep.intersection(ids);
     }
-    final filtered = keywordHits.where((t) => keep.contains(t.id)).toList();
+    final filtered = keywordHits.where((s) => keep.contains(s.id)).toList();
     if (!mounted) return;
     setState(() => _userTagFiltered = filtered);
   }
@@ -135,7 +131,7 @@ class _TemplatesSearchPageState extends ConsumerState<TemplatesSearchPage> {
 
   Widget _buildNav(ThemeTokens tokens) {
     return LumiraNav(
-      title: '搜索模板',
+      title: '搜索场景',
       transparent: true,
       leading: LumiraIconButton(
         icon: Icons.arrow_back_ios_new,
@@ -159,7 +155,7 @@ class _TemplatesSearchPageState extends ConsumerState<TemplatesSearchPage> {
         controller: _controller,
         onChanged: _updateKeyword,
         decoration: InputDecoration(
-          hintText: '搜索模板名称、分类或标签',
+          hintText: '搜索场景名称或氛围',
           prefixIcon: Icon(Icons.search, size: 18, color: tokens.textSecondary),
           isDense: true,
           filled: true,
@@ -207,13 +203,11 @@ class _TemplatesSearchPageState extends ConsumerState<TemplatesSearchPage> {
   }
 
   Widget _buildResults(ThemeTokens tokens) {
-    // 展示用户标签 AND 过滤后的结果（由 _updateKeyword / _toggleTag 触发 _refreshUserTagFilter）。
     final results = _userTagFiltered;
-
     if (results.isEmpty) {
       return const Padding(
         padding: EdgeInsets.only(top: 40),
-        child: Center(child: Text('未找到相关模板')),
+        child: Center(child: Text('未找到相关场景')),
       );
     }
     return GridView.builder(
@@ -224,30 +218,32 @@ class _TemplatesSearchPageState extends ConsumerState<TemplatesSearchPage> {
         crossAxisCount: 2,
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: 0.56,
+        childAspectRatio: 0.58,
       ),
       itemCount: results.length,
       itemBuilder: (_, index) {
-        final t = results[index];
+        final s = results[index];
         return GestureDetector(
           onTap: () => GoRouter.of(context).push(
-            RouteNames.withTemplateId(RouteNames.templatesDetail, t.id),
+            RouteNames.withSceneId(RouteNames.captureSceneDetail, s.id),
           ),
-          child: _SearchTplCard(template: t, tokens: tokens),
+          child: _SceneSearchCard(scene: s, tokens: tokens),
         );
       },
     );
   }
 }
 
-class _SearchTplCard extends ConsumerWidget {
-  const _SearchTplCard({required this.template, required this.tokens});
+class _SceneSearchCard extends StatelessWidget {
+  const _SceneSearchCard({required this.scene, required this.tokens});
 
-  final TemplateRecord template;
+  final SceneRecord scene;
   final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final first =
+        scene.exampleImages.isNotEmpty ? scene.exampleImages.first : null;
     return Container(
       decoration: BoxDecoration(
         color: tokens.surface,
@@ -256,42 +252,30 @@ class _SearchTplCard extends ConsumerWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AspectRatio(
-            aspectRatio: 3 / 4,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                TemplateCoverImage(
-                  cover: template.cover.isEmpty ? null : template.cover,
-                  coverData: template.coverData,
-                  fit: BoxFit.cover,
-                  fallback: Container(
-                    color: tokens.surfaceAlt,
-                    child: Icon(Icons.photo_outlined,
-                        color: tokens.textTertiary, size: 28),
-                  ),
-                  errorFallback: Container(
-                    color: tokens.surfaceAlt,
-                    child: Icon(Icons.broken_image_outlined,
-                        color: tokens.textTertiary),
-                  ),
-                ),
-              ],
+          Expanded(
+            child: Container(
+              color: tokens.brandSubtle,
+              child: first != null
+                  ? Image.network(
+                      first,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _placeholder(tokens),
+                    )
+                  : _placeholder(tokens),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  template.name,
+                  scene.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontFamily: 'Noto Serif SC',
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: tokens.textPrimary,
@@ -299,8 +283,14 @@ class _SearchTplCard extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  TemplatesBrowseMockData.categoryLabel(template.category),
-                  style: TextStyle(fontSize: 11, color: tokens.brand),
+                  scene.vibe,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    color: tokens.brand,
+                  ),
                 ),
               ],
             ),
@@ -309,4 +299,8 @@ class _SearchTplCard extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _placeholder(ThemeTokens tokens) => Center(
+        child: Icon(Icons.image_outlined, size: 28, color: tokens.brand),
+      );
 }

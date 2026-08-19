@@ -7,7 +7,7 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton, LumiraProgress, LumiraToast;
+import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton, LumiraProgress;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_scene_mock_data.dart';
 
@@ -90,7 +90,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 
   void _onSearch() {
-    LumiraToast.show(context, '搜索功能开发中');
+    GoRouter.of(context).push(RouteNames.scenesSearch);
   }
 
   void _goDetail(String id) {

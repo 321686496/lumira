@@ -66,6 +66,8 @@ class RouteNames {
   static const String profileCompliancePrivacy = '/profile/settings/privacy';
   static const String profileComplianceSdk = '/profile/settings/sdk';
   static const String scenes = '/scenes';
+  static const String scenesSearch = '/scenes/search';
+  static const String myTags = '/my-tags';
   static const String shootkitEditor = '/shootkit/editor';
   static const String academyTrajectory = '/academy/trajectory';
   static const String profileCompositionKits = '/profile/composition-kits';
@@ -74,6 +76,10 @@ class RouteNames {
   static const String profileRedeem = '/profile/redeem';
   static const String pointsWallet = '/points/wallet';
   static const String invite = '/invite';
+
+  // === 账号保护 / 恢复 ===
+  static const String accountProtection = '/profile/account-protection';
+  static const String accountRecover = '/account/recover';
 
   // === 查询参数键名 ===
   static const String paramTemplateId = 'templateId';
