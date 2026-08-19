@@ -2,37 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
+import '../domain/photo_template.dart';
 
-/// 所有系统滤镜名称（与 filter_recipe.dart 中 systemFilterLabel 的 keys 一致）。
-const _allSystemFilters = [
-  'none',
-  'vivid',
-  'vivid_warm',
-  'vivid_cool',
-  'mono',
-  'silver',
-  'noir',
-];
+/// 统一滤镜库（单一滤镜库，去重合并系统滤镜与 LUT 预设）。
+/// 定义见 filter_recipe.dart `unifiedFilters`。
+const List<String> _allFilters = unifiedFilters;
 
-/// 所有 LUT 预设名称（与 filter_recipe.dart 中 lutLabel 的 keys 一致）。
-const _allLuts = [
-  'none',
-  'cinematic',
-  'vintage',
-  'bw',
-  'warm_film',
-  'cool_film',
-  'pastel',
-  'fuji',
-  'portrait',
-  'japanese',
-  'cyberpunk',
-  'sepia_classic',
-  'mist',
-  'rouge',
-  'twilight',
-  'cyan',
-];
+/// 旧系统滤镜 → 统一滤镜库 key 的映射（用于高亮旧模板已选中的系统滤镜）。
+const Map<String, String> _legacySystemToUnified = {
+  'vivid': 'fuji',
+  'vivid_warm': 'warm_film',
+  'vivid_cool': 'cool_film',
+  'mono': 'fine_art_bw',
+  'silver': 'silver',
+  'noir': 'noir',
+};
 
 /// 静态预览图 URL（替代实时取景，减少 GPU 开销）
 const _staticLandscapeImage =
@@ -45,14 +29,22 @@ const _staticPortraitImage =
 class FilterPicker extends ConsumerWidget {
   const FilterPicker({super.key});
 
-  void _selectSystemFilter(WidgetRef ref, String filter) {
-    final target = filter == 'none' ? null : filter;
-    CaptureState.updatePostProcess(
-        ref, (p) => p.copyWith(systemFilter: target));
+  void _selectFilter(WidgetRef ref, String filter) {
+    // 统一滤镜库：一律写入 lut，并清空旧的 systemFilter（避免叠加）。
+    CaptureState.updatePostProcess(ref, (p) => p.copyWith(
+          lut: filter,
+          systemFilter: filter == 'none' ? null : p.systemFilter,
+        ));
   }
 
-  void _selectLut(WidgetRef ref, String lut) {
-    CaptureState.updatePostProcess(ref, (p) => p.copyWith(lut: lut));
+  /// 当前高亮的统一滤镜 key。
+  String _activeFilter(PostProcess post) {
+    if (post.lut != 'none') return post.lut;
+    final sf = post.systemFilter;
+    if (sf != null && sf.isNotEmpty) {
+      return _legacySystemToUnified[sf] ?? sf;
+    }
+    return 'none';
   }
 
   @override
@@ -78,50 +70,27 @@ class FilterPicker extends ConsumerWidget {
         color: Colors.black.withOpacity(0.2),
       ),
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _FilterSection(
-            label: '系统滤镜',
-            filters: _allSystemFilters,
-            activeFilter: post.systemFilter ?? 'none',
-            previewImageUrl: previewImageUrl,
-            filterKind: _FilterKind.system,
-            onSelect: (filter) => _selectSystemFilter(ref, filter),
-          ),
-          const SizedBox(height: 4),
-          _FilterSection(
-            label: 'LUT 预设',
-            filters: _allLuts,
-            activeFilter: post.lut,
-            previewImageUrl: previewImageUrl,
-            filterKind: _FilterKind.lut,
-            onSelect: (lut) => _selectLut(ref, lut),
-          ),
-        ],
+      child: _FilterSection(
+        filters: _allFilters,
+        activeFilter: _activeFilter(post),
+        previewImageUrl: previewImageUrl,
+        onSelect: (filter) => _selectFilter(ref, filter),
       ),
     );
   }
 }
 
-enum _FilterKind { system, lut }
-
 class _FilterSection extends StatelessWidget {
   const _FilterSection({
-    required this.label,
     required this.filters,
     required this.activeFilter,
     required this.previewImageUrl,
-    required this.filterKind,
     required this.onSelect,
   });
 
-  final String label;
   final List<String> filters;
   final String activeFilter;
   final String previewImageUrl;
-  final _FilterKind filterKind;
   final ValueChanged<String> onSelect;
 
   @override
@@ -133,7 +102,7 @@ class _FilterSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           child: Text(
-            label,
+            '滤镜',
             style: const TextStyle(
               color: Colors.white70,
               fontSize: 11,
@@ -153,11 +122,8 @@ class _FilterSection extends StatelessWidget {
               final active = activeFilter == f ||
                   (f == 'none' && activeFilter.isEmpty);
               return _FilterThumbCard(
-                name: filterKind == _FilterKind.system
-                    ? systemFilterLabel(f)
-                    : lutLabel(f),
+                name: lutLabel(f),
                 filterName: f,
-                filterKind: filterKind,
                 active: active,
                 previewImageUrl: previewImageUrl,
                 onTap: () => onSelect(f),
@@ -175,7 +141,6 @@ class _FilterThumbCard extends StatelessWidget {
   const _FilterThumbCard({
     required this.name,
     required this.filterName,
-    required this.filterKind,
     required this.active,
     required this.previewImageUrl,
     required this.onTap,
@@ -183,7 +148,6 @@ class _FilterThumbCard extends StatelessWidget {
 
   final String name;
   final String filterName;
-  final _FilterKind filterKind;
   final bool active;
   final String previewImageUrl;
   final VoidCallback onTap;
@@ -192,10 +156,7 @@ class _FilterThumbCard extends StatelessWidget {
     if (filterName == 'none') {
       return const ColorFilter.mode(Colors.transparent, BlendMode.dst);
     }
-    final matrix = filterKind == _FilterKind.system
-        ? composeSystemFilterMatrix(filterName)
-        : composeLutMatrix(filterName);
-    return ColorFilter.matrix(matrix);
+    return ColorFilter.matrix(composeLutMatrix(filterName));
   }
 
   @override

@@ -346,6 +346,105 @@ List<double> composeLutMatrix(String name) {
           _multiplyMatrices(_tintMatrix(22), _saturationMatrix(10)),
         ),
       );
+    // ─── 统一滤镜库新增（去重合并系统滤镜 + 新增风格）───
+    // 黑白类（由 mono / bw 合并）
+    case 'noir':
+      // grayscale(1) contrast(1.3) brightness(0.95) → B·C·Grayscale
+      return _multiplyMatrices(
+        _brightnessMatrix(-5),
+        _multiplyMatrices(_contrastMatrix(30), _grayscaleMatrix),
+      );
+    case 'fine_art_bw':
+      // grayscale(1) contrast(1.35) brightness(1.05) → B·C·Grayscale
+      return _multiplyMatrices(
+        _brightnessMatrix(5),
+        _multiplyMatrices(_contrastMatrix(35), _grayscaleMatrix),
+      );
+    case 'silver':
+      // grayscale(1) sepia(0.2) contrast(0.95) brightness(1.08) → B·C·Sepia·Grayscale
+      return _multiplyMatrices(
+        _brightnessMatrix(8),
+        _multiplyMatrices(
+          _contrastMatrix(-5),
+          _multiplyMatrices(_sepiaMatrix(0.2), _grayscaleMatrix),
+        ),
+      );
+    // 日系清新
+    case 'japanese_fresh':
+      // saturate(0.82) contrast(0.88) brightness(1.15) hue-rotate(4deg) → Tint·B·C·S
+      return _multiplyMatrices(
+        _tintMatrix(4.4),
+        _multiplyMatrices(
+          _brightnessMatrix(15),
+          _multiplyMatrices(_contrastMatrix(-12), _saturationMatrix(-18)),
+        ),
+      );
+    // 奶油感
+    case 'cream':
+      // sepia(0.1) saturate(0.95) contrast(0.94) brightness(1.12) hue-rotate(-5deg) → Tint·B·C·S·Sepia
+      return _multiplyMatrices(
+        _tintMatrix(-5.5),
+        _multiplyMatrices(
+          _brightnessMatrix(12),
+          _multiplyMatrices(
+            _contrastMatrix(-6),
+            _multiplyMatrices(_saturationMatrix(-5), _sepiaMatrix(0.1)),
+          ),
+        ),
+      );
+    // 夜景赛博
+    case 'night_cyber':
+      // saturate(1.35) contrast(1.15) hue-rotate(30deg) brightness(0.85) → B·Tint·C·S
+      return _multiplyMatrices(
+        _brightnessMatrix(-15),
+        _multiplyMatrices(
+          _tintMatrix(33),
+          _multiplyMatrices(_contrastMatrix(15), _saturationMatrix(35)),
+        ),
+      );
+    // 港风霓虹
+    case 'hk_neon':
+      // saturate(1.3) contrast(1.1) hue-rotate(-55deg) brightness(1.05) → B·Tint·C·S
+      return _multiplyMatrices(
+        _brightnessMatrix(5),
+        _multiplyMatrices(
+          _tintMatrix(-60.5),
+          _multiplyMatrices(_contrastMatrix(10), _saturationMatrix(30)),
+        ),
+      );
+    // 莫兰迪
+    case 'morandi':
+      // saturate(0.65) sepia(0.08) contrast(1.1) brightness(1.08) → B·C·Sepia·S
+      return _multiplyMatrices(
+        _brightnessMatrix(8),
+        _multiplyMatrices(
+          _contrastMatrix(10),
+          _multiplyMatrices(_sepiaMatrix(0.08), _saturationMatrix(-35)),
+        ),
+      );
+    // 低饱和高级灰
+    case 'muted_gray':
+      // saturate(0.4) sepia(0.1) contrast(1.15) brightness(1.04) → B·C·Sepia·S
+      return _multiplyMatrices(
+        _brightnessMatrix(4),
+        _multiplyMatrices(
+          _contrastMatrix(15),
+          _multiplyMatrices(_sepiaMatrix(0.1), _saturationMatrix(-60)),
+        ),
+      );
+    // 浓厚胶片
+    case 'heavy_film':
+      // sepia(0.45) contrast(1.25) saturate(0.9) brightness(0.98) hue-rotate(-8deg) → Tint·B·S·C·Sepia
+      return _multiplyMatrices(
+        _tintMatrix(-8.8),
+        _multiplyMatrices(
+          _brightnessMatrix(-2),
+          _multiplyMatrices(
+            _saturationMatrix(-10),
+            _multiplyMatrices(_contrastMatrix(25), _sepiaMatrix(0.45)),
+          ),
+        ),
+      );
     default:
       return List.from(_identityMatrix);
   }
@@ -426,25 +525,52 @@ ColorFilter fromPostProcess(PostProcess process) {
 
 // ─── Display Labels ───
 
-/// Returns the display name for a LUT preset.
+/// 统一滤镜库（单一滤镜库，去重合并系统滤镜与 LUT 预设）。
+///
+/// 合并规则：
+///  - 黑白：mono / noir / bw → fine_art_bw（黑白艺术）+ noir（黑白）
+///  - 暖色：vivid_warm → warm_film
+///  - 冷色：vivid_cool → cool_film
+///  - 鲜明：vivid → fuji
+const List<String> unifiedFilters = [
+  'none', 'cinematic', 'vintage', 'warm_film', 'cool_film', 'pastel', 'fuji',
+  'portrait', 'japanese', 'japanese_fresh', 'cream', 'cyberpunk', 'night_cyber',
+  'hk_neon', 'sepia_classic', 'mist', 'rouge', 'twilight', 'cyan',
+  'noir', 'fine_art_bw', 'silver', 'morandi', 'muted_gray', 'heavy_film',
+];
+
+/// 统一滤镜库的显示名。
+String unifiedFilterLabel(String name) => lutLabel(name);
+
+/// Returns the display name for a LUT preset (统一滤镜库).
 String lutLabel(String lutName) {
   const map = {
     'none': '原图',
     'cinematic': '电影感',
     'vintage': '复古胶片',
-    'bw': '黑白',
+    'bw': '黑白', // 旧 key，向后兼容
     'warm_film': '暖色胶片',
     'cool_film': '冷色胶片',
     'pastel': '柔色',
     'fuji': '富士感',
     'portrait': '人像',
     'japanese': '日系',
+    'japanese_fresh': '日系清新',
+    'cream': '奶油感',
     'cyberpunk': '赛博朋克',
+    'night_cyber': '夜景赛博',
+    'hk_neon': '港风霓虹',
     'sepia_classic': '褐调',
     'mist': '薄雾',
     'rouge': '胭脂',
     'twilight': '暮光',
     'cyan': '青调',
+    'noir': '黑白',
+    'fine_art_bw': '黑白艺术',
+    'silver': '银盐感',
+    'morandi': '莫兰迪',
+    'muted_gray': '低饱和高级灰',
+    'heavy_film': '浓厚胶片',
   };
   return map[lutName] ?? '原图';
 }

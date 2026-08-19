@@ -116,15 +116,25 @@ class PreviewTemplateOptions {
     PreviewTemplateOption(label: '连续', value: 'continuous'),
   ];
 
-  // lutOptions（8 个，preview-template.vue line 408-417）
+  // lutOptions（统一滤镜库）
   static const List<PreviewTemplateOption> lutPreset = [
     PreviewTemplateOption(label: '原图', value: 'none'),
     PreviewTemplateOption(label: '电影感', value: 'cinematic'),
     PreviewTemplateOption(label: '复古', value: 'vintage'),
-    PreviewTemplateOption(label: '黑白', value: 'bw'),
     PreviewTemplateOption(label: '暖色', value: 'warm_film'),
     PreviewTemplateOption(label: '冷色', value: 'cool_film'),
     PreviewTemplateOption(label: '柔色', value: 'pastel'),
     PreviewTemplateOption(label: '富士', value: 'fuji'),
+    PreviewTemplateOption(label: '人像', value: 'portrait'),
+    PreviewTemplateOption(label: '日系', value: 'japanese'),
+    PreviewTemplateOption(label: '日系清新', value: 'japanese_fresh'),
+    PreviewTemplateOption(label: '奶油感', value: 'cream'),
+    PreviewTemplateOption(label: '赛博朋克', value: 'cyberpunk'),
+    PreviewTemplateOption(label: '夜景赛博', value: 'night_cyber'),
+    PreviewTemplateOption(label: '港风霓虹', value: 'hk_neon'),
+    PreviewTemplateOption(label: '莫兰迪', value: 'morandi'),
+    PreviewTemplateOption(label: '黑白', value: 'noir'),
+    PreviewTemplateOption(label: '黑白艺术', value: 'fine_art_bw'),
+    PreviewTemplateOption(label: '浓厚胶片', value: 'heavy_film'),
   ];
 }

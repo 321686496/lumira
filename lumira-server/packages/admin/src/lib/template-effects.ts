@@ -152,10 +152,12 @@ function sepiaMatrix(t: number): number[] {
   return sepia.map((v, i) => IDENTITY[i] * (1 - t) + v * t);
 }
 
+/** 统一滤镜库名称（与 filter_recipe.dart unifiedFilters 一致） */
 const LUT_NAMES = [
-  'none', 'cinematic', 'vintage', 'bw', 'warm_film', 'cool_film',
-  'pastel', 'fuji', 'portrait', 'japanese', 'cyberpunk', 'sepia_classic',
-  'mist', 'rouge', 'twilight', 'cyan',
+  'none', 'cinematic', 'vintage', 'warm_film', 'cool_film', 'pastel', 'fuji',
+  'portrait', 'japanese', 'japanese_fresh', 'cream', 'cyberpunk', 'night_cyber',
+  'hk_neon', 'sepia_classic', 'mist', 'rouge', 'twilight', 'cyan',
+  'noir', 'fine_art_bw', 'silver', 'morandi', 'muted_gray', 'heavy_film',
 ];
 
 /** LUT 预设矩阵（与 filter_recipe.dart composeLutMatrix 逐字一致） */
@@ -278,6 +280,95 @@ function composeLutMatrix(lutName: string): number[] | null {
         multiplyMatrices(
           contrastMatrix(5),
           multiplyMatrices(tintMatrix(22), saturationMatrix(10)),
+        ),
+      );
+    // ─── 统一滤镜库新增（去重合并系统滤镜 + 新增风格，与 filter_recipe.dart 逐字一致）───
+    // 黑白类（由 mono / bw 合并）
+    case 'noir':
+      return multiplyMatrices(
+        brightnessMatrix(-5),
+        multiplyMatrices(contrastMatrix(30), grayscaleMatrix()),
+      );
+    case 'fine_art_bw':
+      return multiplyMatrices(
+        brightnessMatrix(5),
+        multiplyMatrices(contrastMatrix(35), grayscaleMatrix()),
+      );
+    case 'silver':
+      return multiplyMatrices(
+        brightnessMatrix(8),
+        multiplyMatrices(
+          contrastMatrix(-5),
+          multiplyMatrices(sepiaMatrix(0.2), grayscaleMatrix()),
+        ),
+      );
+    // 日系清新
+    case 'japanese_fresh':
+      return multiplyMatrices(
+        tintMatrix(4.4),
+        multiplyMatrices(
+          brightnessMatrix(15),
+          multiplyMatrices(contrastMatrix(-12), saturationMatrix(-18)),
+        ),
+      );
+    // 奶油感
+    case 'cream':
+      return multiplyMatrices(
+        tintMatrix(-5.5),
+        multiplyMatrices(
+          brightnessMatrix(12),
+          multiplyMatrices(
+            contrastMatrix(-6),
+            multiplyMatrices(saturationMatrix(-5), sepiaMatrix(0.1)),
+          ),
+        ),
+      );
+    // 夜景赛博
+    case 'night_cyber':
+      return multiplyMatrices(
+        brightnessMatrix(-15),
+        multiplyMatrices(
+          tintMatrix(33),
+          multiplyMatrices(contrastMatrix(15), saturationMatrix(35)),
+        ),
+      );
+    // 港风霓虹
+    case 'hk_neon':
+      return multiplyMatrices(
+        brightnessMatrix(5),
+        multiplyMatrices(
+          tintMatrix(-60.5),
+          multiplyMatrices(contrastMatrix(10), saturationMatrix(30)),
+        ),
+      );
+    // 莫兰迪
+    case 'morandi':
+      return multiplyMatrices(
+        brightnessMatrix(8),
+        multiplyMatrices(
+          contrastMatrix(10),
+          multiplyMatrices(sepiaMatrix(0.08), saturationMatrix(-35)),
+        ),
+      );
+    // 低饱和高级灰
+    case 'muted_gray':
+      return multiplyMatrices(
+        brightnessMatrix(4),
+        multiplyMatrices(
+          contrastMatrix(15),
+          multiplyMatrices(sepiaMatrix(0.1), saturationMatrix(-60)),
+        ),
+      );
+    // 浓厚胶片
+    case 'heavy_film':
+      return multiplyMatrices(
+        tintMatrix(-8.8),
+        multiplyMatrices(
+          brightnessMatrix(-2),
+          multiplyMatrices(
+            saturationMatrix(-10),
+            multiplyMatrices(contrastMatrix(25), sepiaMatrix(0.45)),
+          ),
         ),
       );
     default:

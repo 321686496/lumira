@@ -30,26 +30,49 @@ const WHITE_BALANCES = ['daylight', 'cloudy', 'shade', 'tungsten', 'fluorescent'
 const FLASH_MODES = ['off', 'on', 'auto', 'torch'] as const;
 const FOCUS_MODES = ['auto', 'manual', 'continuous'] as const;
 const LENS_SUGGESTIONS = ['wide', 'main', 'telephoto', 'ultra_wide'] as const;
-const LUTS = ['none', 'cinematic', 'vintage', 'bw', 'warm_film', 'cool_film', 'pastel', 'fuji', 'portrait', 'japanese', 'cyberpunk', 'sepia_classic', 'mist', 'rouge', 'twilight', 'cyan'] as const;
+// 统一滤镜库（单一滤镜库，去重合并系统滤镜与 LUT 预设）
+// 既有滤镜合并规则：
+//  - 黑白：mono / noir / bw → fine_art_bw（黑白艺术）+ noir（黑白）
+//  - 暖色：vivid_warm → warm_film
+//  - 冷色：vivid_cool → cool_film
+//  - 鲜明：vivid → fuji
+const LUTS = [
+  'none', 'cinematic', 'vintage', 'warm_film', 'cool_film', 'pastel', 'fuji',
+  'portrait', 'japanese', 'japanese_fresh', 'cream', 'cyberpunk', 'night_cyber',
+  'hk_neon', 'sepia_classic', 'mist', 'rouge', 'twilight', 'cyan',
+  'noir', 'fine_art_bw', 'silver', 'morandi', 'muted_gray', 'heavy_film',
+] as const;
 
 const LUT_LABELS: Record<string, string> = {
   none: '原图',
   cinematic: '电影感',
   vintage: '复古胶片',
-  bw: '黑白',
   warm_film: '暖色胶片',
   cool_film: '冷色胶片',
   pastel: '柔色',
   fuji: '富士感',
   portrait: '人像',
   japanese: '日系',
+  japanese_fresh: '日系清新',
+  cream: '奶油感',
   cyberpunk: '赛博朋克',
+  night_cyber: '夜景赛博',
+  hk_neon: '港风霓虹',
   sepia_classic: '褐调',
   mist: '薄雾',
   rouge: '胭脂',
   twilight: '暮光',
   cyan: '青调',
+  noir: '黑白',
+  fine_art_bw: '黑白艺术',
+  silver: '银盐感',
+  morandi: '莫兰迪',
+  muted_gray: '低饱和高级灰',
+  heavy_film: '浓厚胶片',
 };
+
+// 高级色彩字段（可空，默认不启用）
+const ADVANCED_COLOR_KEYS = ['highlights', 'shadows', 'blackPoint', 'clarity', 'vibrance', 'brilliance'] as const;
 
 const NONE_VALUE = '__none__';
 
@@ -72,6 +95,11 @@ const schema = z.object({
   poseRotation: z.coerce.number().min(-45).max(45).default(0),
   overlayType: z.enum(OVERLAY_TYPES).default('rule_of_thirds'),
   gridType: z.string().optional().default(''),
+  // 主体框（subjectFrame）相对坐标 0-1
+  subjectFrameX: z.coerce.number().min(0).max(1).optional(),
+  subjectFrameY: z.coerce.number().min(0).max(1).optional(),
+  subjectFrameW: z.coerce.number().min(0).max(1).optional(),
+  subjectFrameH: z.coerce.number().min(0).max(1).optional(),
   aspectRatio: z.string().default('3:4'),
   opacity: z.coerce.number().min(0).max(1).default(0.5),
   compositionDescription: z.string().optional().default(''),
@@ -97,11 +125,24 @@ const schema = z.object({
   colorSaturation: z.coerce.number().int().min(-100).max(100).default(0),
   colorTemperature: z.coerce.number().int().min(-100).max(100).default(0),
   colorTint: z.coerce.number().int().min(-100).max(100).default(0),
+  // 高级色彩（可空，未填则不启用）
+  colorHighlights: z.coerce.number().int().min(-100).max(100).optional(),
+  colorShadows: z.coerce.number().int().min(-100).max(100).optional(),
+  colorBlackPoint: z.coerce.number().int().min(-100).max(100).optional(),
+  colorClarity: z.coerce.number().int().min(-100).max(100).optional(),
+  colorVibrance: z.coerce.number().int().min(-100).max(100).optional(),
+  colorBrilliance: z.coerce.number().int().min(-100).max(100).optional(),
   smoothStrength: z.coerce.number().int().min(0).max(100).default(0),
   sharpen: z.coerce.number().int().min(0).max(100).default(0),
   vignette: z.coerce.number().int().min(0).max(100).default(0),
   grain: z.coerce.number().int().min(0).max(100).default(0),
   lut: z.enum(LUTS).default('none'),
+  // 系统滤镜（统一滤镜库的子集，可空；默认 none）
+  systemFilter: z.enum(LUTS).optional().default('none'),
+  // 补光灯 fillLight（启用时生效）
+  fillLightEnabled: z.boolean().optional().default(false),
+  fillLightColor: z.string().optional().default('#FFE5B4'),
+  fillLightIntensity: z.coerce.number().min(0).max(1).optional().default(0.8),
   sortOrder: z.coerce.number().int().default(0),
   isActive: z.boolean().default(true),
 });
@@ -176,6 +217,10 @@ export default function TemplateForm({
         poseRotation: 0,
         overlayType: 'rule_of_thirds',
         gridType: '',
+        subjectFrameX: undefined,
+        subjectFrameY: undefined,
+        subjectFrameW: undefined,
+        subjectFrameH: undefined,
         aspectRatio: '3:4',
         opacity: 0.5,
         compositionDescription: '',
@@ -201,11 +246,21 @@ export default function TemplateForm({
         colorSaturation: 0,
         colorTemperature: 0,
         colorTint: 0,
+        colorHighlights: undefined,
+        colorShadows: undefined,
+        colorBlackPoint: undefined,
+        colorClarity: undefined,
+        colorVibrance: undefined,
+        colorBrilliance: undefined,
         smoothStrength: 0,
         sharpen: 0,
         vignette: 0,
         grain: 0,
         lut: 'none',
+        systemFilter: 'none',
+        fillLightEnabled: false,
+        fillLightColor: '#FFE5B4',
+        fillLightIntensity: 0.8,
         sortOrder: 0,
         isActive: true,
       };
@@ -237,6 +292,10 @@ export default function TemplateForm({
       poseRotation: num(pose.rotation, 0),
       overlayType: (composition.overlayType as FormValues['overlayType']) ?? 'rule_of_thirds',
       gridType: (composition.gridType as string) ?? '',
+      subjectFrameX: (() => { const sf = composition.subjectFrame as Record<string, unknown> | undefined; return sf ? num(sf.x) : undefined; })(),
+      subjectFrameY: (() => { const sf = composition.subjectFrame as Record<string, unknown> | undefined; return sf ? num(sf.y) : undefined; })(),
+      subjectFrameW: (() => { const sf = composition.subjectFrame as Record<string, unknown> | undefined; return sf ? num(sf.w) : undefined; })(),
+      subjectFrameH: (() => { const sf = composition.subjectFrame as Record<string, unknown> | undefined; return sf ? num(sf.h) : undefined; })(),
       aspectRatio: (composition.aspectRatio as string) ?? '3:4',
       opacity: num(composition.opacity, 0.5),
       compositionDescription: (composition.description as string) ?? '',
@@ -262,11 +321,21 @@ export default function TemplateForm({
       colorSaturation: num(color.saturation, 0),
       colorTemperature: num(color.temperature, 0),
       colorTint: num(color.tint, 0),
+      colorHighlights: color.highlights == null ? undefined : num(color.highlights),
+      colorShadows: color.shadows == null ? undefined : num(color.shadows),
+      colorBlackPoint: color.blackPoint == null ? undefined : num(color.blackPoint),
+      colorClarity: color.clarity == null ? undefined : num(color.clarity),
+      colorVibrance: color.vibrance == null ? undefined : num(color.vibrance),
+      colorBrilliance: color.brilliance == null ? undefined : num(color.brilliance),
       smoothStrength: num(postProcess.smoothStrength, 0),
       sharpen: num(postProcess.sharpen, 0),
       vignette: num(postProcess.vignette, 0),
       grain: num(postProcess.grain, 0),
       lut: (postProcess.lut as FormValues['lut']) ?? 'none',
+      systemFilter: (postProcess.systemFilter as FormValues['systemFilter']) ?? 'none',
+      fillLightEnabled: (() => { const fl = postProcess.fillLight as Record<string, unknown> | undefined; return fl ? Boolean(fl.enabled) : false; })(),
+      fillLightColor: (() => { const fl = postProcess.fillLight as Record<string, unknown> | undefined; const c = fl?.color != null ? Number(fl.color) : 0xFFFFE5B4; return `#${(c & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase()}`; })(),
+      fillLightIntensity: (() => { const fl = postProcess.fillLight as Record<string, unknown> | undefined; return fl?.intensity != null ? Number(fl.intensity) : 0.8; })(),
       sortOrder: initial.sortOrder ?? 0,
       isActive: initial.isActive,
     };
@@ -310,6 +379,11 @@ export default function TemplateForm({
       if (typeof composition.opacity === 'number') setValue('opacity', composition.opacity);
       if (typeof composition.gridType === 'string') setValue('gridType', composition.gridType);
       if (typeof composition.description === 'string') setValue('compositionDescription', composition.description);
+      const sf = (composition.subjectFrame ?? {}) as Record<string, unknown>;
+      if (typeof sf.x === 'number') setValue('subjectFrameX', sf.x);
+      if (typeof sf.y === 'number') setValue('subjectFrameY', sf.y);
+      if (typeof sf.w === 'number') setValue('subjectFrameW', sf.w);
+      if (typeof sf.h === 'number') setValue('subjectFrameH', sf.h);
 
       if (silhouette.type) setValue('silhouetteType', silhouette.type as FormValues['silhouetteType']);
       if (typeof silhouette.data === 'string') setValue('silhouetteBuiltinKey', silhouette.data);
@@ -343,11 +417,22 @@ export default function TemplateForm({
       if (typeof color.saturation === 'number') setValue('colorSaturation', color.saturation);
       if (typeof color.temperature === 'number') setValue('colorTemperature', color.temperature);
       if (typeof color.tint === 'number') setValue('colorTint', color.tint);
+      if (typeof color.highlights === 'number') setValue('colorHighlights', color.highlights);
+      if (typeof color.shadows === 'number') setValue('colorShadows', color.shadows);
+      if (typeof color.blackPoint === 'number') setValue('colorBlackPoint', color.blackPoint);
+      if (typeof color.clarity === 'number') setValue('colorClarity', color.clarity);
+      if (typeof color.vibrance === 'number') setValue('colorVibrance', color.vibrance);
+      if (typeof color.brilliance === 'number') setValue('colorBrilliance', color.brilliance);
       if (typeof postProcess.smoothStrength === 'number') setValue('smoothStrength', postProcess.smoothStrength);
       if (typeof postProcess.sharpen === 'number') setValue('sharpen', postProcess.sharpen);
       if (typeof postProcess.vignette === 'number') setValue('vignette', postProcess.vignette);
       if (typeof postProcess.grain === 'number') setValue('grain', postProcess.grain);
       if (postProcess.lut) setValue('lut', postProcess.lut as FormValues['lut']);
+      if (postProcess.systemFilter) setValue('systemFilter', postProcess.systemFilter as FormValues['systemFilter']);
+      const fl = (postProcess.fillLight ?? {}) as Record<string, unknown>;
+      if (typeof fl.enabled === 'boolean') setValue('fillLightEnabled', fl.enabled);
+      if (typeof fl.color === 'number') setValue('fillLightColor', `#${(fl.color & 0xFFFFFF).toString(16).padStart(6, '0').toUpperCase()}`);
+      if (typeof fl.intensity === 'number') setValue('fillLightIntensity', fl.intensity);
 
       setPptplFile(file);
       toast({
@@ -406,6 +491,19 @@ export default function TemplateForm({
         aspectRatio: data.aspectRatio,
         opacity: data.opacity,
         description: data.compositionDescription ?? '',
+        ...(data.subjectFrameX != null &&
+        data.subjectFrameY != null &&
+        data.subjectFrameW != null &&
+        data.subjectFrameH != null
+          ? {
+              subjectFrame: {
+                x: data.subjectFrameX,
+                y: data.subjectFrameY,
+                w: data.subjectFrameW,
+                h: data.subjectFrameH,
+              },
+            }
+          : {}),
       },
       pose,
       camera: {
@@ -436,12 +534,26 @@ export default function TemplateForm({
           saturation: data.colorSaturation,
           temperature: data.colorTemperature,
           tint: data.colorTint,
+          ...(data.colorHighlights != null ? { highlights: data.colorHighlights } : {}),
+          ...(data.colorShadows != null ? { shadows: data.colorShadows } : {}),
+          ...(data.colorBlackPoint != null ? { blackPoint: data.colorBlackPoint } : {}),
+          ...(data.colorClarity != null ? { clarity: data.colorClarity } : {}),
+          ...(data.colorVibrance != null ? { vibrance: data.colorVibrance } : {}),
+          ...(data.colorBrilliance != null ? { brilliance: data.colorBrilliance } : {}),
         },
         smoothStrength: data.smoothStrength,
         sharpen: data.sharpen,
         vignette: data.vignette,
         grain: data.grain,
         lut: data.lut,
+        ...(data.systemFilter && data.systemFilter !== 'none' ? { systemFilter: data.systemFilter } : {}),
+        fillLight: (data.fillLightEnabled && data.fillLightColor && data.fillLightIntensity != null)
+          ? {
+              enabled: data.fillLightEnabled,
+              color: parseInt((data.fillLightColor as string).replace(/^#/, ''), 16),
+              intensity: data.fillLightIntensity,
+            }
+          : undefined,
       },
     };
 
@@ -888,6 +1000,29 @@ export default function TemplateForm({
                 <Label htmlFor="compositionDescription">构图描述</Label>
                 <Textarea id="compositionDescription" rows={3} {...register('compositionDescription')} />
               </div>
+
+              <fieldset className="space-y-3 rounded-md border border-input p-4">
+                <legend className="px-2 text-sm font-medium">主体框（subjectFrame，相对坐标 0-1）</legend>
+                <p className="text-xs text-muted-foreground">可选。指定画面中主体（人物/物体）所在位置与占比，用于构图引导。全部留空则使用默认居中。</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="subjectFrameX">x</Label>
+                    <Input id="subjectFrameX" type="number" step={0.01} min={0} max={1} {...register('subjectFrameX')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="subjectFrameY">y</Label>
+                    <Input id="subjectFrameY" type="number" step={0.01} min={0} max={1} {...register('subjectFrameY')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="subjectFrameW">w</Label>
+                    <Input id="subjectFrameW" type="number" step={0.01} min={0} max={1} {...register('subjectFrameW')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="subjectFrameH">h</Label>
+                    <Input id="subjectFrameH" type="number" step={0.01} min={0} max={1} {...register('subjectFrameH')} />
+                  </div>
+                </div>
+              </fieldset>
             </div>
           )}
 
@@ -1095,6 +1230,104 @@ export default function TemplateForm({
                   <div className="space-y-2">
                     <Label htmlFor="colorTint">色调</Label>
                     <Input id="colorTint" type="number" min={-100} max={100} {...register('colorTint')} />
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset className="space-y-3 rounded-md border border-input p-4">
+                <legend className="px-2 text-sm font-medium">高级色彩（可选，留空则不启用）</legend>
+                <p className="text-xs text-muted-foreground">精细色彩微调，仅在模板预设中用到时填写。</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="colorHighlights">高光 (-100~100)</Label>
+                    <Input id="colorHighlights" type="number" min={-100} max={100} {...register('colorHighlights')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="colorShadows">阴影</Label>
+                    <Input id="colorShadows" type="number" min={-100} max={100} {...register('colorShadows')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="colorBlackPoint">黑场</Label>
+                    <Input id="colorBlackPoint" type="number" min={-100} max={100} {...register('colorBlackPoint')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="colorClarity">清晰度</Label>
+                    <Input id="colorClarity" type="number" min={-100} max={100} {...register('colorClarity')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="colorVibrance">自然饱和</Label>
+                    <Input id="colorVibrance" type="number" min={-100} max={100} {...register('colorVibrance')} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="colorBrilliance">光耀度</Label>
+                    <Input id="colorBrilliance" type="number" min={-100} max={100} {...register('colorBrilliance')} />
+                  </div>
+                </div>
+              </fieldset>
+
+              <fieldset className="space-y-3 rounded-md border border-input p-4">
+                <legend className="px-2 text-sm font-medium">系统滤镜</legend>
+                <div className="space-y-2">
+                  <Controller
+                    control={control}
+                    name="systemFilter"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {LUTS.map((v) => (
+                            <SelectItem key={v} value={v}>{LUT_LABELS[v] ?? v}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+              </fieldset>
+
+              <fieldset className="space-y-3 rounded-md border border-input p-4">
+                <legend className="px-2 text-sm font-medium">补光（fillLight）</legend>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>启用</Label>
+                    <div className="flex items-center gap-2 h-10">
+                      <Controller
+                        control={control}
+                        name="fillLightEnabled"
+                        render={({ field }) => (
+                          <input
+                            type="checkbox"
+                            checked={field.value}
+                            onChange={(e) => field.onChange(e.target.checked)}
+                            className="h-4 w-4"
+                          />
+                        )}
+                      />
+                      <span className="text-sm text-muted-foreground">应用补光</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fillLightColor">补光色（HEX）</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="fillLightColor"
+                        value={watch('fillLightColor')}
+                        onChange={(e) => setValue('fillLightColor', e.target.value)}
+                        disabled={!watch('fillLightEnabled')}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fillLightIntensity">强度 (0-1)</Label>
+                    <Input
+                      id="fillLightIntensity"
+                      type="number"
+                      step={0.05}
+                      min={0}
+                      max={1}
+                      {...register('fillLightIntensity')}
+                      disabled={!watch('fillLightEnabled')}
+                    />
                   </div>
                 </div>
               </fieldset>

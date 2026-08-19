@@ -217,16 +217,6 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
 }
 
 // === Filter Tab ===
-const editSystemFilterLabels = <String, String>{
-  'none': '原图',
-  'vivid': '鲜艳',
-  'vivid_warm': '暖艳',
-  'vivid_cool': '冷艳',
-  'mono': '黑白',
-  'silver': '银盐',
-  'noir': '黑色电影',
-};
-
 const editLutLabels = <String, String>{
   'none': '原图',
   'cinematic': '电影感',
@@ -238,12 +228,32 @@ const editLutLabels = <String, String>{
   'fuji': '富士',
   'portrait': '人像',
   'japanese': '日系',
+  'japanese_fresh': '日系清新',
+  'cream': '奶油感',
   'cyberpunk': '赛博朋克',
+  'night_cyber': '夜景赛博',
+  'hk_neon': '港风霓虹',
   'sepia_classic': '棕褐',
   'mist': '薄雾',
   'rouge': '胭脂',
   'twilight': '暮光',
   'cyan': '青调',
+  'noir': '黑白',
+  'fine_art_bw': '黑白艺术',
+  'silver': '银盐感',
+  'morandi': '莫兰迪',
+  'muted_gray': '低饱和高级灰',
+  'heavy_film': '浓厚胶片',
+};
+
+/// 旧系统滤镜 → 统一滤镜库 key 的映射（用于高亮旧数据中的系统滤镜）。
+const _editLegacySystemToUnified = <String, String>{
+  'vivid': 'fuji',
+  'vivid_warm': 'warm_film',
+  'vivid_cool': 'cool_film',
+  'mono': 'fine_art_bw',
+  'silver': 'silver',
+  'noir': 'noir',
 };
 
 class FilterTab extends StatelessWidget {
@@ -264,41 +274,28 @@ class FilterTab extends StatelessWidget {
     required this.tokens,
   });
 
+  /// 当前高亮的统一滤镜 key。
+  String _activeFilter() {
+    if (postProcess.lut != 'none' && postProcess.lut.isNotEmpty) {
+      return postProcess.lut;
+    }
+    final sf = postProcess.systemFilter;
+    if (sf != null && sf.isNotEmpty) {
+      return _editLegacySystemToUnified[sf] ?? sf;
+    }
+    return 'none';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final systemFilters = [
-      'none',
-      'vivid',
-      'vivid_warm',
-      'vivid_cool',
-      'mono',
-      'silver',
-      'noir',
-    ];
-    final luts = [
-      'none',
-      'cinematic',
-      'vintage',
-      'bw',
-      'warm_film',
-      'cool_film',
-      'pastel',
-      'fuji',
-      'portrait',
-      'japanese',
-      'cyberpunk',
-      'sepia_classic',
-      'mist',
-      'rouge',
-      'twilight',
-      'cyan',
-    ];
+    final activeFilter = _activeFilter();
+    const filters = unifiedFilters;
 
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
         Text(
-          '系统滤镜',
+          '滤镜',
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -310,50 +307,21 @@ class FilterTab extends StatelessWidget {
           height: 96,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: systemFilters.length,
+            itemCount: filters.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
-              final name = systemFilters[i];
-              final selected = postProcess.systemFilter == name;
-              return FilterThumbnail(
-                label: editSystemFilterLabels[name] ?? name,
-                selected: selected,
-                tokens: tokens,
-                matrix: composeSystemFilterMatrix(name),
-                previewImagePath: previewImagePath,
-                onTap: () => onChanged(postProcess.copyWith(
-                  systemFilter: name == 'none' ? null : name,
-                )),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 11),
-        Text(
-          'LUT 预设',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: tokens.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 5),
-        SizedBox(
-          height: 96,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: luts.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (_, i) {
-              final name = luts[i];
-              final selected = postProcess.lut == name;
+              final name = filters[i];
+              final selected = activeFilter == name;
               return FilterThumbnail(
                 label: editLutLabels[name] ?? name,
                 selected: selected,
                 tokens: tokens,
                 matrix: composeLutMatrix(name),
                 previewImagePath: previewImagePath,
-                onTap: () => onChanged(postProcess.copyWith(lut: name)),
+                onTap: () => onChanged(postProcess.copyWith(
+                  lut: name,
+                  systemFilter: null,
+                )),
               );
             },
           ),

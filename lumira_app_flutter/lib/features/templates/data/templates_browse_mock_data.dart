@@ -57,7 +57,7 @@ const Map<String, String> _lensLabelMap = {
   'ultra_wide': '超广角',
 };
 
-/// LUT 标签
+/// LUT 标签（统一滤镜库）
 const Map<String, String> _lutLabelMap = {
   'none': '无',
   'cinematic': '电影感',
@@ -67,6 +67,24 @@ const Map<String, String> _lutLabelMap = {
   'cool_film': '冷色胶片',
   'pastel': '柔色',
   'fuji': '富士',
+  'portrait': '人像',
+  'japanese': '日系',
+  'japanese_fresh': '日系清新',
+  'cream': '奶油感',
+  'cyberpunk': '赛博朋克',
+  'night_cyber': '夜景赛博',
+  'hk_neon': '港风霓虹',
+  'sepia_classic': '褐调',
+  'mist': '薄雾',
+  'rouge': '胭脂',
+  'twilight': '暮光',
+  'cyan': '青调',
+  'noir': '黑白',
+  'fine_art_bw': '黑白艺术',
+  'silver': '银盐感',
+  'morandi': '莫兰迪',
+  'muted_gray': '低饱和高级灰',
+  'heavy_film': '浓厚胶片',
 };
 
 /// 场景 → 分类映射（mock 简化版，Task 2.9 替换为完整 scenePresets）

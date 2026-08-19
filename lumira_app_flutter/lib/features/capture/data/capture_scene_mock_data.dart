@@ -370,18 +370,33 @@ class CaptureSceneMockData {
   static List<SceneTag> getTagsByIds(List<String> ids) =>
       tags.where((t) => ids.contains(t.id)).toList();
 
-  // ===== LUT 选项 =====
+  // ===== LUT 选项（统一滤镜库）=====
   static const List<LutOption> lutOptions = [
     LutOption(value: 'none', label: '原图'),
     LutOption(value: 'cinematic', label: '电影感'),
     LutOption(value: 'vintage', label: '复古'),
-    LutOption(value: 'bw', label: '黑白'),
     LutOption(value: 'warm_film', label: '暖色胶片'),
     LutOption(value: 'cool_film', label: '冷色胶片'),
     LutOption(value: 'pastel', label: '柔色'),
     LutOption(value: 'fuji', label: '富士'),
+    LutOption(value: 'portrait', label: '人像'),
+    LutOption(value: 'japanese', label: '日系'),
+    LutOption(value: 'japanese_fresh', label: '日系清新'),
+    LutOption(value: 'cream', label: '奶油感'),
     LutOption(value: 'cyberpunk', label: '赛博朋克'),
+    LutOption(value: 'night_cyber', label: '夜景赛博'),
+    LutOption(value: 'hk_neon', label: '港风霓虹'),
+    LutOption(value: 'sepia_classic', label: '褐调'),
     LutOption(value: 'mist', label: '薄雾'),
+    LutOption(value: 'rouge', label: '胭脂'),
+    LutOption(value: 'twilight', label: '暮光'),
+    LutOption(value: 'cyan', label: '青调'),
+    LutOption(value: 'noir', label: '黑白'),
+    LutOption(value: 'fine_art_bw', label: '黑白艺术'),
+    LutOption(value: 'silver', label: '银盐感'),
+    LutOption(value: 'morandi', label: '莫兰迪'),
+    LutOption(value: 'muted_gray', label: '低饱和高级灰'),
+    LutOption(value: 'heavy_film', label: '浓厚胶片'),
   ];
 
   /// LUT 标签查找
