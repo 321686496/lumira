@@ -5,6 +5,14 @@ import 'package:sqflite/sqflite.dart';
 import '../tables.dart';
 import '../../../features/profile/data/growth_models.dart';
 
+/// 经验来源 → 展示文案
+const Map<String, String> kXpSourceLabel = {
+  'shoot_daily': '每日首拍',
+  'challenge': '完成挑战',
+  'course': '学习课程',
+  'share': '每日首享',
+};
+
 /// 成长中心只读 DAO
 /// 聚合 user_progress / challenge_history / gallery_items / academy_course_progress 表
 class GrowthDao {
@@ -12,20 +20,12 @@ class GrowthDao {
 
   final Database _db;
 
-  /// 获取总 XP。
-  /// 优先用 user_progress.xp；若为 0 则降级到 challenge_history.reward_xp 求和。
+  /// 获取总 XP：经验台账 xp_events 求和（真实数据）。
   Future<int> getTotalXP() async {
-    final rows = await _db.query(Tables.userProgress, where: '${Tables.colId} = ?', whereArgs: [1]);
-    if (rows.isNotEmpty) {
-      final xp = (rows.first[Tables.colXp] as num?)?.toInt() ?? 0;
-      if (xp > 0) return xp;
-    }
-    // 降级：challenge_history 求和（注意：状态值与 ChallengeStatus.name 对齐 = 'done'）
-    final sumRows = await _db.rawQuery(
-      'SELECT COALESCE(SUM(${ChallengeHistoryTable.colRewardXp}), 0) AS s FROM ${ChallengeHistoryTable.name} WHERE ${ChallengeHistoryTable.colStatus} = ?',
-      ['done'],
+    final rows = await _db.rawQuery(
+      'SELECT COALESCE(SUM(${XpEventsTable.colAmount}), 0) AS s FROM ${XpEventsTable.name}',
     );
-    return Sqflite.firstIntValue(sumRows) ?? 0;
+    return Sqflite.firstIntValue(rows) ?? 0;
   }
 
   /// 获取用户累计拍摄照片数（user_progress.total_photos）。
@@ -51,22 +51,75 @@ class GrowthDao {
     return Sqflite.firstIntValue(cntRows) ?? 0;
   }
 
-  /// 等级 = XP / 500 + 1
+  /// 当前等级（阶梯阈值表 Lv.1–20）。
   Future<int> getLevel() async {
     final xp = await getTotalXP();
-    return xp ~/ 500 + 1;
+    return levelForXp(xp);
+  }
+
+  /// 当前等级称号。
+  Future<String> getLevelName() async {
+    final level = await getLevel();
+    return levelNameFor(level) ?? '';
+  }
+
+  /// 成长总览（等级进度）。
+  Future<GrowthSummary> getSummary() async {
+    final xp = await getTotalXP();
+    final level = levelForXp(xp);
+    // 距下一级 = 下一级阈值 - 当前总XP；已达最高级(Lv.20)则为 0
+    final next = LEVEL_THRESHOLDS.where((t) => t.level == level + 1).toList();
+    final raw = next.isEmpty ? 0 : (next.first.xp - xp);
+    return GrowthSummary(
+      level: level,
+      currentXp: xp,
+      xpToNextLevel: raw < 0 ? 0 : raw,
+      levelName: levelNameFor(level) ?? '',
+    );
+  }
+
+  /// 经验来源明细：按 source 求和 + 占比，固定展示顺序（shoot_daily, challenge, course, share）。
+  Future<List<XpBreakdownEntry>> getXpBreakdown() async {
+    final rows = await _db.rawQuery('''
+      SELECT ${XpEventsTable.colSource} AS src,
+             SUM(${XpEventsTable.colAmount}) AS s
+      FROM ${XpEventsTable.name}
+      GROUP BY ${XpEventsTable.colSource}
+    ''');
+    var total = 0;
+    for (final r in rows) {
+      total += (r['s'] as num?)?.toInt() ?? 0;
+    }
+    if (total <= 0) return const [];
+    int sourceOrder(String key) => kXpSourceLabel.keys.toList().indexOf(key);
+    final list = <XpBreakdownEntry>[];
+    for (final r in rows) {
+      final src = r['src'] as String? ?? '';
+      final amount = (r['s'] as num?)?.toInt() ?? 0;
+      if (amount <= 0) continue;
+      list.add(XpBreakdownEntry(
+        source: src,
+        amount: amount,
+        label: kXpSourceLabel[src] ?? src,
+        ratio: amount / total,
+      ));
+    }
+    list.sort((a, b) => sourceOrder(a.source).compareTo(sourceOrder(b.source)));
+    return list;
   }
 
   /// 获取成就墙（6 项）。
   /// 优先从 user_progress.achievements_json 反序列化；无记录时返回 6 项占位。
   Future<List<AchievementRecord>> getAchievements() async {
     final rows = await _db.query(Tables.userProgress, where: '${Tables.colId} = ?', whereArgs: [1]);
-    if (rows.isEmpty) return kPlaceholderAchievements;
+    if (rows.isEmpty) return _withRealLevel(kPlaceholderAchievements);
+
     final raw = rows.first[Tables.colAchievementsJson] as String?;
-    if (raw == null || raw.isEmpty || raw == '[]') return kPlaceholderAchievements;
+    if (raw == null || raw.isEmpty || raw == '[]') {
+      return _withRealLevel(kPlaceholderAchievements);
+    }
     try {
       final list = jsonDecode(raw) as List<dynamic>;
-      // 反序列化每条成就，与占位合并（占位提供 name/description/iconKey）
       final unlockedMap = <String, int>{};
       for (final item in list) {
         final m = item as Map<String, dynamic>;
@@ -74,7 +127,7 @@ class GrowthDao {
         final ts = m['unlockedAt'] as int?;
         if (id != null) unlockedMap[id] = ts ?? 0;
       }
-      return kPlaceholderAchievements.map((a) {
+      final result = kPlaceholderAchievements.map((a) {
         if (unlockedMap.containsKey(a.id)) {
           return AchievementRecord(
             id: a.id,
@@ -87,9 +140,27 @@ class GrowthDao {
         }
         return a;
       }).toList();
+      return await _withRealLevel(result);
     } catch (_) {
-      return kPlaceholderAchievements;
+      return _withRealLevel(kPlaceholderAchievements);
     }
+  }
+
+  /// 按真实等级（阈值表）修正 ach_level_5 解锁状态：真实等级 ≥ 5 则强制解锁。
+  Future<List<AchievementRecord>> _withRealLevel(List<AchievementRecord> source) async {
+    final level = await getLevel();
+    if (level < 5) return source;
+    return source.map((a) {
+      if (a.id != 'ach_level_5' || a.unlocked) return a;
+      return AchievementRecord(
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        iconKey: a.iconKey,
+        unlocked: true,
+        unlockedAt: a.unlockedAt ?? DateTime.now().millisecondsSinceEpoch,
+      );
+    }).toList();
   }
 
   /// 获取成长轨迹（最近 4 条，时间倒序）。
