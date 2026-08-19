@@ -315,9 +315,9 @@ class _CoverHeader extends StatelessWidget {
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
-                                children: [
+                                children: const [
                                   Icon(Icons.thumb_up_alt_outlined, size: 11, color: Colors.white),
-                                  const SizedBox(width: 4),
+                                  SizedBox(width: 4),
                                   Text(
                                     '值得一去',
                                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white),
