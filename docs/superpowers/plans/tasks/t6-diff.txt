@@ -1,0 +1,120 @@
+Diff for Task 6 review. Base: 09c2540, Head: fefe75d (note: this range also includes the earlier chore commit de4eca6 for jest.config.js, which is NOT part of Task 6 — ignore it; the Task 6 change is in account.service.ts only).
+
+---- account.service.ts ----
+
+diff --git a/lumira-server/packages/backend/src/modules/account/account.service.ts b/lumira-server/packages/backend/src/modules/account/account.service.ts
+index 55c4de2..841cee3 100644
+--- a/lumira-server/packages/backend/src/modules/account/account.service.ts
++++ b/lumira-server/packages/backend/src/modules/account/account.service.ts
+@@ -1,14 +1,21 @@
+ import { BadRequestException, Injectable } from '@nestjs/common';
+-import { eq } from 'drizzle-orm';
++import { and, eq, desc } from 'drizzle-orm';
+ import { DatabaseService } from '../../database/database.service';
+-import { devices } from '../../database/schema';
+-import { sha256Hex, generateSecret } from './hash';
++import { devices, accountOtp } from '../../database/schema';
++import { sha256Hex, generateSecret, generateOtp } from './hash';
++import { MailService } from './mail.service';
+
+ const RECOVERY_SECRET_TTL_DAYS = 30;
++const OTP_TTL_SECONDS = 60 * 10;      // 10 分钟
++const OTP_SEND_COOLDOWN = 60;          // 同邮箱每 60s
++const OTP_MAX_ATTEMPTS = 5;
+
+ @Injectable()
+ export class AccountService {
+-  constructor(private readonly dbService: DatabaseService) {}
++  constructor(
++    private readonly dbService: DatabaseService,
++    private readonly mailService: MailService,
++  ) {}
+
+   async rotateRecoverySecret(deviceId: string) {
+     const db = this.dbService.getDb();
+@@ -53,4 +60,84 @@ export class AccountService {
+
+     return { deviceId: row.deviceId };
+   }
++
++  /** 取该邮箱+purpose 的最新一条 OTP（按 id 倒序），再判未消费/未过期 */
++  private async latestOtp(email: string, purpose: string) {
++    const rows = await this.dbService.getDb().select().from(accountOtp)
++      .where(and(eq(accountOtp.email, email), eq(accountOtp.purpose, purpose)))
++      .orderBy(desc(accountOtp.id)).limit(1);
++    return rows[0];
++  }
++
++  async sendEmailCode(email: string, purpose: 'bind' | 'recover') {
++    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
++      throw new BadRequestException('邮箱格式不正确');
++    }
++    const db = this.dbService.getDb();
++    const now = Math.floor(Date.now() / 1000);
++    const latest = await this.latestOtp(email, purpose);
++    if (latest && latest.consumedAt === null && latest.createdAt + OTP_SEND_COOLDOWN > now) {
++      throw new BadRequestException('发送过于频繁，请稍后再试');
++    }
++    const code = generateOtp();
++    await db.insert(accountOtp).values({
++      email,
++      deviceId: null,
++      purpose,
++      codeHash: sha256Hex(code),
++      expiresAt: now + OTP_TTL_SECONDS,
++      consumedAt: null,
++      attempts: 0,
++      createdAt: now,
++    });
++    await this.mailService.sendCode(email, code);
++    return { sent: true as const };
++  }
++
++  async bindEmail(deviceId: string, email: string, code: string) {
++    const db = this.dbService.getDb();
++    const otp = await this.latestOtp(email, 'bind');
++    const err = this.validateOtp(otp, email, code);
++    if (err) throw new BadRequestException(err);
++    await db.update(accountOtp).set({ consumedAt: Math.floor(Date.now() / 1000) })
++      .where(eq(accountOtp.id, otp!.id));
++    const now = Math.floor(Date.now() / 1000);
++    await db.update(devices).set({ email, emailVerifiedAt: now })
++      .where(eq(devices.deviceId, deviceId));
++    return { success: true as const };
++  }
++
++  private validateOtp(otp: { id: number; email: string; codeHash: string; expiresAt: number; consumedAt: number | null; attempts: number } | undefined, email: string, code: string): string | null {
++    const now = Math.floor(Date.now() / 1000);
++    if (!otp) return '验证码不存在，请先获取';
++    if (otp.email !== email) return '验证码与邮箱不匹配';
++    if (otp.consumedAt !== null) return '验证码已使用';
++    if (otp.expiresAt < now) return '验证码已过期';
++    if (otp.attempts >= OTP_MAX_ATTEMPTS) return '验证码错误次数过多，请重新获取';
++    if (otp.codeHash !== sha256Hex(code)) {
++      // 记一次错误尝试（fire-and-forget，不阻塞返回）
++      void this.dbService.getDb().update(accountOtp)
++        .set({ attempts: otp.attempts + 1 })
++        .where(eq(accountOtp.id, otp.id));
++      return '验证码错误';
++    }
++    return null;
++  }
++
++  async recoverByEmail(email: string, code: string) {
++    const db = this.dbService.getDb();
++    const otp = await this.latestOtp(email, 'recover');
++    const err = this.validateOtp(otp, email, code);
++    if (err) throw new BadRequestException(err);
++    await db.update(accountOtp).set({ consumedAt: Math.floor(Date.now() / 1000) })
++      .where(eq(accountOtp.id, otp!.id));
+
++    const device = (
++      await db.select().from(devices).where(eq(devices.email, email))
++    )[0];
++    if (!device) throw new BadRequestException('该邮箱尚未绑定账号');
++    await db.update(devices).set({ sessionEpoch: (device.sessionEpoch ?? 0) + 1 })
++      .where(eq(devices.deviceId, device.deviceId));
++    return { deviceId: device.deviceId };
++  }
+ }
++

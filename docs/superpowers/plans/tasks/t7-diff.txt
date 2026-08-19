@@ -1,0 +1,66 @@
+Diff for Task 7 review. Relevant account changes across fefe75d..d4a0fa9 (account module + app.module + account.e2e-spec only). Parallel agent's total test suite result: 10 suites / 63 e2e cases all green.
+
+---- app.module.ts ----
+@@ imports: [...FeedbackModule, AccountModule]  (added AccountModule import + to imports array)
+
+---- account.controller.ts (new) ----
+@Controller('account')
+export class AccountController {
+  constructor(private readonly accountService: AccountService) {}
+
+  @Post('recovery-qr')
+  @UseGuards(DeviceAuthGuard)
+  recoveryQr(@Req() req: any) { return this.accountService.rotateRecoverySecret(req.deviceId); }
+
+  @Post('recover-by-qr')
+  recoverByQr(@Body() dto: RecoverByQrDto) { return this.accountService.recoverByQr(dto.secret); }
+
+  @Post('email/send-code')
+  sendCode(@Body() dto: SendCodeDto) { return this.accountService.sendEmailCode(dto.email, dto.purpose); }
+
+  @Post('email/bind')
+  @UseGuards(DeviceAuthGuard)
+  bind(@Req() req: any, @Body() dto: EmailCodeDto) { return this.accountService.bindEmail(req.deviceId, dto.email, dto.code); }
+
+  @Post('email/recover')
+  recoverByEmail(@Body() dto: EmailCodeDto) { return this.accountService.recoverByEmail(dto.email, dto.code); }
+}
+
+---- account.module.ts (new) ----
+@Module({
+  imports: [DatabaseModule, DeviceModule],
+  controllers: [AccountController],
+  providers: [AccountService, MailService],
+  exports: [AccountService],
+})
+export class AccountModule {}
+
+---- account.service.ts hardening ----
+bindEmail:
+- adds device-exists check BEFORE consuming OTP:
+    const device = (await db.select().from(devices).where(eq(devices.deviceId, deviceId)))[0];
+    if (!device) throw new BadRequestException('设备不存在，请先注册');
+- consume now: .where(and(eq(accountOtp.id, otp!.id), eq(accountOtp.consumedAt, null)));
+
+recoverByEmail:
+- MOVED device-exists check BEFORE consuming OTP:
+    const device = (await db.select().from(devices).where(eq(devices.email, email)))[0];
+    if (!device) throw new BadRequestException('该邮箱尚未绑定账号');
+- consume now: .where(and(eq(accountOtp.id, otp!.id), eq(accountOtp.consumedAt, null)));
+
+Note: implementer used `eq(accountOtp.consumedAt, null)` instead of drizzle's `isNull()` — brief allowed either; they hit a runtime ReferenceError with isNull under ts-jest isolatedModules. Functionally equivalent SQL.
+
+---- DTOs (new) ----
+recover-by-qr.dto.ts: RecoverByQrDto { @IsString @MinLength(8) @MaxLength(128) secret }
+send-code.dto.ts: SendCodeDto { @IsEmail email; @IsIn(['bind','recover']) purpose }
+email-code.dto.ts: EmailCodeDto { @IsEmail email; @IsString @Matches(/^\d{6}$/) code }
+
+---- account.e2e-spec.ts (new, 6 tests) ----
+1. recovery-qr 生成并轮换密钥 (201, secret length 43, qrPayload contains lumira://account-recover, rotation differs)
+2. recover-by-qr 用密钥取回 deviceId 并作废旧 token (201 → deviceId matches; old token then 401)
+3. recover-by-qr 非法密钥返回 400
+4. email send-code 与限频 (201 first, second [429,400])
+5. email bind / recover 成功闭环 (re-register for fresh token since recover-by-qr bumped epoch; insert known-codeHash OTP directly via dbService; bind 201 success:true; recover 201 deviceId matches; old token then 401)
+6. 未绑定邮箱的 recover 返回 400
+
+NOTE made by implementer: test5 originally used the already-invalidated old token for the guarded bind (would fail); fixed by re-registering to get a fresh token. This is a sound fix.
