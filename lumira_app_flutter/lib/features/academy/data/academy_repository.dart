@@ -30,6 +30,11 @@ abstract class AcademyRepository {
   Future<void> toggleFavorite(String cardId);
   Future<Set<String>> getFavoriteCardIds();
 
+  // 课程收藏
+  Future<bool> isCourseFavorited(String courseId);
+  Future<void> toggleCourseFavorite(String courseId);
+  Future<Set<String>> getFavoriteCourseIds();
+
   // 学习轨迹
   Future<bool> isCourseFullyCompleted(String courseId);
   Future<List<AcademyTrajectoryRecord>> getAllTrajectory();
@@ -249,6 +254,25 @@ class LocalAcademyRepository implements AcademyRepository {
 
   @override
   Future<Set<String>> getFavoriteCardIds() => _dao.getFavoriteCardIds();
+
+  // === 课程收藏 ===
+
+  @override
+  Future<bool> isCourseFavorited(String courseId) =>
+      _dao.isCourseFavorited(courseId);
+
+  @override
+  Future<void> toggleCourseFavorite(String courseId) async {
+    final isFav = await _dao.isCourseFavorited(courseId);
+    if (isFav) {
+      await _dao.removeCourseFavorite(courseId);
+    } else {
+      await _dao.addCourseFavorite(courseId, _now().millisecondsSinceEpoch);
+    }
+  }
+
+  @override
+  Future<Set<String>> getFavoriteCourseIds() => _dao.getFavoriteCourseIds();
 
   // === 学习轨迹 ===
 
