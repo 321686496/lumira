@@ -18,6 +18,7 @@ type PointTransactionType =
 // 事件型积分规则：type → 单次积分值
 const DAILY_SHOOT_POINTS = 2; // 每日首次拍摄
 const CHALLENGE_POINTS = 5;   // 每次完成挑战
+const SHARE_POINTS = 2;       // 每日首次分享
 
 interface BalanceRow {
   deviceId: string;
@@ -111,6 +112,10 @@ export class PointsService {
         throw new BadRequestException('refId is required for challenge');
       }
       eventRefId = refId;
+    } else if (type === 'share') {
+      points = SHARE_POINTS;
+      // 每日首次分享：refId 按 UTC+8 自然日计算（与 shoot_daily 同模式，幂等）
+      eventRefId = getUtc8DateStr();
     } else {
       throw new BadRequestException(`Unsupported earn type: ${type}`);
     }
