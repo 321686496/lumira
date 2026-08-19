@@ -49,10 +49,27 @@ class ExifCardGenerator {
       const cardW = 1080;
       const cardH = 1620;
       const padding = 48;
-      const thumbH = 600;
-      final thumbW = (srcImage.width * thumbH / srcImage.height).round();
 
-      // 3. 绘制
+      // 3. 顶部照片区：铺满 1080x980，center-crop
+      const photoTop = 110;
+      const photoH = 980;
+      final photoRect = ui.Rect.fromLTWH(
+          0, photoTop.toDouble(), cardW.toDouble(), photoH.toDouble());
+
+      // 计算 center-crop 源矩形（对齐目标比例后居中裁剪，横/竖图均不留两侧空白）
+      final srcW = srcImage.width.toDouble();
+      final srcH = srcImage.height.toDouble();
+      const dstAspect = cardW / photoH; // 1080 / 980
+      final srcAspect = srcW / srcH;
+      final srcRect = srcAspect > dstAspect
+          ? ui.Rect.fromLTWH(
+              (srcW - srcH * dstAspect) / 2, 0,
+              srcH * dstAspect, srcH)
+          : ui.Rect.fromLTWH(
+              0, (srcH - srcW / dstAspect) / 2,
+              srcW, srcW / dstAspect);
+
+      // 4. 绘制
       final recorder = ui.PictureRecorder();
       final canvas = ui.Canvas(recorder);
       // 背景
@@ -74,22 +91,19 @@ class ExifCardGenerator {
       titlePainter.layout();
       titlePainter.paint(canvas, ui.Offset(padding.toDouble(), 32));
 
-      // 缩略图（居中）
-      final thumbX = (cardW - thumbW) / 2;
+      // 照片（center-crop 铺满）
       canvas.drawImageRect(
         srcImage,
-        ui.Rect.fromLTWH(0, 0, srcImage.width.toDouble(),
-            srcImage.height.toDouble()),
-        ui.Rect.fromLTWH(thumbX, 110, thumbW.toDouble(), thumbH.toDouble()),
+        srcRect,
+        photoRect,
         ui.Paint()..filterQuality = ui.FilterQuality.medium,
       );
       srcImage.dispose();
 
-      // 信息行
-      double y = 110 + thumbH + 40;
+      // 5. 参数区：两列网格（label 上 / value 下，紧凑排布）
       const labelStyle = TextStyle(
         color: ui.Color(0xFFC9A96E),
-        fontSize: 22,
+        fontSize: 20,
         fontWeight: ui.FontWeight.w600,
       );
       const valueStyle = TextStyle(
@@ -97,27 +111,40 @@ class ExifCardGenerator {
         fontSize: 22,
       );
 
-      void drawRow(String label, String? value) {
-        if (value == null || value.isEmpty) return;
-        final tp = TextPainter(textDirection: ui.TextDirection.ltr)
-          ..text = TextSpan(
-            text: '$label    ',
-            style: labelStyle,
-            children: [TextSpan(text: value, style: valueStyle)],
-          );
-        tp.layout(maxWidth: (cardW - padding * 2).toDouble());
-        tp.paint(canvas, ui.Offset(padding.toDouble(), y));
-        y += 40;
-      }
+      // Dart 2.19 不支持 records，用 MapEntry 承载 label/value
+      final items = <MapEntry<String, String>>[
+        MapEntry('相机', exif.cameraModel ?? ''),
+        MapEntry('焦距', exif.focalLength ?? ''),
+        MapEntry('光圈', exif.fNumber ?? ''),
+        MapEntry('ISO', exif.iso ?? ''),
+        MapEntry('快门', exif.shutterSpeed ?? ''),
+        MapEntry('时间', exif.timestamp ?? ''),
+        MapEntry('场景', exif.sceneName ?? ''),
+        MapEntry('模板', exif.template ?? ''),
+      ].where((it) => it.value.isNotEmpty).toList();
 
-      drawRow('相机', exif.cameraModel);
-      drawRow('焦距', exif.focalLength);
-      drawRow('光圈', exif.fNumber);
-      drawRow('ISO', exif.iso);
-      drawRow('快门', exif.shutterSpeed);
-      drawRow('时间', exif.timestamp);
-      drawRow('场景', exif.sceneName);
-      drawRow('模板', exif.template);
+      const gap = 32;
+      final colW = (cardW - padding * 2 - gap) / 2;
+      const rowH = 70;
+      final gridTop = photoTop + photoH + 48;
+
+      for (var i = 0; i < items.length; i++) {
+        final item = items[i];
+        final col = i % 2;
+        final row = i ~/ 2;
+        final x = padding + col * (colW + gap);
+        final y = (gridTop + row * rowH).toDouble();
+
+        final labelTp = TextPainter(textDirection: ui.TextDirection.ltr)
+          ..text = TextSpan(text: item.key, style: labelStyle);
+        labelTp.layout(maxWidth: colW);
+        labelTp.paint(canvas, ui.Offset(x, y));
+
+        final valueTp = TextPainter(textDirection: ui.TextDirection.ltr)
+          ..text = TextSpan(text: item.value, style: valueStyle);
+        valueTp.layout(maxWidth: colW);
+        valueTp.paint(canvas, ui.Offset(x, y + 30));
+      }
 
       // 底部水印
       final watermark = TextPainter(textDirection: ui.TextDirection.ltr)
