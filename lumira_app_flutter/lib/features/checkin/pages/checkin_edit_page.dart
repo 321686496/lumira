@@ -538,7 +538,7 @@ class _CategorySelector extends StatelessWidget {
   }
 }
 
-/// ????3 ? grid????????? 9 ?
+/// 照片区：3 列网格，最多 9 张
 class _CheckinPhotosSection extends StatelessWidget {
   const _CheckinPhotosSection({
     required this.tokens,
@@ -579,7 +579,7 @@ class _CheckinPhotosSection extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '??',
+                '照片',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -619,7 +619,7 @@ class _CheckinPhotosSection extends StatelessWidget {
                         Icon(Icons.add, size: 14, color: tokens.brand),
                         const SizedBox(width: 2),
                         Text(
-                          '??',
+                          '添加',
                           style: TextStyle(
                             fontSize: 12,
                             color: tokens.brand,
@@ -676,7 +676,7 @@ class _CheckinPhotosSection extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  '???????????',
+                  '第一张作为封面',
                   style: TextStyle(
                     fontSize: 11,
                     color: tokens.textTertiary,
@@ -729,7 +729,7 @@ class _AddPhotoPrompt extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              '????',
+              '添加照片',
               style: TextStyle(
                 fontSize: 13,
                 color: tokens.textSecondary,
@@ -738,7 +738,7 @@ class _AddPhotoPrompt extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              '??????',
+              '从相册选择，最多 9 张',
               style: TextStyle(
                 fontSize: 11,
                 color: tokens.textTertiary,
@@ -764,7 +764,7 @@ class _AddPhotoCell extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: tokens.surface,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: tokens.brand.withOpacity(0.25),
             width: 1.5,
@@ -789,7 +789,7 @@ class _AddPhotoCell extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '??',
+              '添加',
               style: TextStyle(
                 fontSize: 11,
                 color: tokens.brand,
@@ -821,13 +821,13 @@ class _PhotoEditCell extends StatelessWidget {
     final url = photo?.dataUrl ?? photo?.filePath;
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: tokens.shadowConvexSubtle,
       ),
       child: Stack(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             child: url == null || url.isEmpty
                 ? Container(
                     color: tokens.surfaceAlt,
@@ -842,7 +842,7 @@ class _PhotoEditCell extends StatelessWidget {
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -866,7 +866,7 @@ class _PhotoEditCell extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: tokens.brand,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
                       color: tokens.brand.withOpacity(0.3),
@@ -885,7 +885,7 @@ class _PhotoEditCell extends StatelessWidget {
                     ),
                     SizedBox(width: 2),
                     Text(
-                      '??',
+                      '封面',
                       style: TextStyle(
                         fontSize: 10,
                         color: Colors.white,
@@ -928,7 +928,7 @@ class _PhotoEditCell extends StatelessWidget {
   }
 }
 
-/// ??????? Sheet
+/// 选择照片的底部弹窗
 class _CheckinPhotoPickerSheet extends ConsumerStatefulWidget {
   const _CheckinPhotoPickerSheet({
     required this.tokens,
@@ -984,7 +984,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
     } else if (_selected.length < widget.maxCount) {
       setState(() => _selected.add(id));
     } else {
-      LumiraToast.show(context, '???? 9 ???',
+      LumiraToast.show(context, '最多选择 9 张照片',
           duration: const Duration(milliseconds: 1500));
     }
   }
@@ -1033,7 +1033,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '????',
+                        '选择照片',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -1042,7 +1042,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '?? ${_selected.length} / ${widget.maxCount}',
+                        '已选 ${_selected.length} / ${widget.maxCount}',
                         style: TextStyle(
                           fontSize: 12,
                           color: tokens.textTertiary,
@@ -1079,7 +1079,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                             vertical: 10,
                           ),
                           child: const Text(
-                            '??',
+                            '确定',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
@@ -1114,7 +1114,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              '????????',
+                              '相册还没有照片',
                               style: TextStyle(
                                 color: tokens.textTertiary,
                                 fontSize: 14,
