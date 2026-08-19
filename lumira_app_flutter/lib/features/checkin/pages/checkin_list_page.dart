@@ -50,7 +50,27 @@ class _CheckinListPageState extends ConsumerState<CheckinListPage> {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      body: SafeArea(
+      body: Stack(
+        children: [
+          // 渐变背景叠层（手帐风淡入氛围）
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(-0.7, -0.8),
+                    radius: 1.3,
+                    colors: [
+                      tokens.brandSubtle.withOpacity(0.5),
+                      tokens.canvas.withOpacity(0),
+                    ],
+                    stops: const [0.0, 0.62],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
         child: Column(
           children: [
             LumiraNav(
@@ -125,7 +145,9 @@ class _CheckinListPageState extends ConsumerState<CheckinListPage> {
             ),
           ],
         ),
-      ),
+        ),
+          ],
+        ),
     );
   }
 
@@ -165,20 +187,30 @@ class _StatsCard extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _statCell('${stats?.total ?? 0}', '足迹总数'),
-            _statCell('${stats?.highRated ?? 0}', '好评店铺'),
-            _statCell(avg > 0 ? avg.toStringAsFixed(1) : '-', '平均评分'),
-            _statCell('${stats?.thisYear ?? 0}', '今年新增'),
+            _statCell('${stats?.total ?? 0}', '足迹总数', Icons.place_outlined),
+            _statCell('${stats?.highRated ?? 0}', '好评店铺', Icons.thumb_up_alt_outlined),
+            _statCell(avg > 0 ? avg.toStringAsFixed(1) : '-', '平均评分', Icons.star_outline),
+            _statCell('${stats?.thisYear ?? 0}', '今年新增', Icons.local_fire_department_outlined),
           ],
         ),
       ),
     );
   }
 
-  Widget _statCell(String num, String label) {
+  Widget _statCell(String num, String label, IconData icon) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: tokens.brandSubtle,
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, size: 17, color: tokens.brand),
+        ),
+        const SizedBox(height: 6),
         Text(
           num,
           style: TextStyle(
@@ -331,10 +363,10 @@ class _CheckinCard extends StatelessWidget {
         children: [
           // 封面更大更圆润
           ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             child: SizedBox(
-              width: 80,
-              height: 80,
+              width: 84,
+              height: 84,
               child: _cover(item, tokens),
             ),
           ),
@@ -423,11 +455,19 @@ class _CheckinCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      Text(
-                        formatCheckinDate(record.visitedAt),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.textTertiary,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: tokens.surfaceAlt,
+                          borderRadius: BorderRadius.circular(1000),
+                        ),
+                        child: Text(
+                          formatCheckinDate(record.visitedAt),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: tokens.textSecondary,
+                          ),
                         ),
                       ),
                     ],
@@ -453,7 +493,7 @@ class _CheckinCard extends StatelessWidget {
         child: Icon(category.icon, size: 32, color: category.iconColor),
       );
     }
-    return CheckinPhotoImage(url: url, tokens: tokens, width: 80, height: 80);
+    return CheckinPhotoImage(url: url, tokens: tokens, width: 84, height: 84);
   }
 }
 
