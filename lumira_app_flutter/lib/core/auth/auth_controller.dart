@@ -192,6 +192,39 @@ class AuthController extends StateNotifier<AuthState> {
     _dao.clearToken(); // 只清 token，不清 deviceId，避免重注册被判为新设备导致数据隔离
     state = const AuthState(status: AuthStatus.fresh);
   }
+
+  /// 账号恢复：以目标 [deviceId] 为身份直接注册（新机取回旧标识）。
+  ///
+  /// 供「恢复账号」页在拿到旧 deviceId 后调用：复用 [_doRegister] 走注册，
+  /// 把 [AuthRecord] 写库、[AuthState] 置为 registered，旧数据随之恢复。
+  Future<bool> recoverAccount(String deviceId) async {
+    if (deviceId.isEmpty) return false;
+    if (_registering) return true; // 已有注册进行中，避免并发覆盖
+    final os = _resolveOs();
+    final resp = await _doRegister(deviceId: deviceId, os: os);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final record = AuthRecord(
+      deviceId: deviceId,
+      os: os,
+      token: resp.token,
+      isNewDevice: resp.isNewDevice,
+      registeredAt: now,
+    );
+    await _dao.save(record);
+    try {
+      await _onRegistered?.call(resp);
+    } catch (_) {
+      // 资料落库失败不阻塞恢复
+    }
+    state = AuthState(
+      status: AuthStatus.registered,
+      token: resp.token,
+      deviceId: deviceId,
+      os: os,
+      isNewDevice: resp.isNewDevice,
+    );
+    return true;
+  }
 }
 
 /// 默认的 deviceId 解析器
