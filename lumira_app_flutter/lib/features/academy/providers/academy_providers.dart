@@ -222,5 +222,6 @@ class AcademyActionNotifier extends StateNotifier<AcademyActionState> {
     _ref.invalidate(sortedCoursesProvider);
     _ref.invalidate(assignmentSubmissionProvider);
     _ref.invalidate(favoriteCardIdsProvider);
+    _ref.invalidate(favoriteCourseIdsProvider);
   }
 }
