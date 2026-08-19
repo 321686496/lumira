@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lumira_app_flutter/core/auth/auth_controller.dart';
+import 'package:lumira_app_flutter/core/auth/auth_dao.dart';
 
 void main() {
   group('fnv1a64Hex', () {
@@ -53,4 +54,78 @@ void main() {
       expect(id, startsWith('comp-'));
     });
   });
+
+  group('defaultResolveDeviceId', () {
+    test('无本地记录时，用注入采集到的 ODID 作为 deviceId', () async {
+      final id = await defaultResolveDeviceId(
+        _ResolverFakeDao(initial: null),
+        collect: (platform) async {
+          expect(platform, defaultResolveOs());
+          return const DeviceAttributes(
+            osId: 'ODID-open-123',
+            stableParts: ['HUAWEI', 'Mate 60 Pro'],
+          );
+        },
+      );
+      expect(id, 'ODID-open-123');
+    });
+
+    test('有本地记录时优先复用本地 deviceId，不触发采集', () async {
+      var collected = false;
+      final id = await defaultResolveDeviceId(
+        _ResolverFakeDao(initial: 'saved-device'),
+        collect: (platform) async {
+          collected = true;
+          return const DeviceAttributes(osId: 'ODID-other');
+        },
+      );
+      expect(id, 'saved-device');
+      expect(collected, false);
+    });
+
+    test('osId 与稳定属性全空时落到 fallback（非确定值）', () async {
+      final a = await defaultResolveDeviceId(
+        _ResolverFakeDao(initial: null),
+        collect: (platform) async => const DeviceAttributes(),
+      );
+      final b = await defaultResolveDeviceId(
+        _ResolverFakeDao(initial: null),
+        collect: (platform) async => const DeviceAttributes(),
+      );
+      expect(a, startsWith('fallback-'));
+      expect(a, isNot(b)); // 时间戳不同 → 两次不同（记录为已知局限）
+    });
+
+    test('无法采集时（collect 抛异常）仍回退到聚合哈希或 fallback', () async {
+      final id = await defaultResolveDeviceId(
+        _ResolverFakeDao(initial: null),
+        collect: (platform) async => throw Exception('plugin down'),
+      );
+      expect(id, isNotEmpty);
+    });
+  });
+}
+
+class _ResolverFakeDao implements AuthDaoLike {
+  final String? savedDeviceId;
+  _ResolverFakeDao({String? initial}) : savedDeviceId = initial;
+
+  @override
+  Future<AuthRecord?> load() async {
+    if (savedDeviceId == null) return null;
+    return AuthRecord(
+      deviceId: savedDeviceId!,
+      os: 'harmonyos',
+      token: 'jwt',
+      isNewDevice: false,
+      registeredAt: 1700000000,
+    );
+  }
+
+  @override
+  Future<void> save(AuthRecord r) async {}
+  @override
+  Future<void> clear() async {}
+  @override
+  Future<void> clearToken() async {}
 }

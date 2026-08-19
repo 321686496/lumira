@@ -8,6 +8,9 @@ import 'auth_dao.dart';
 import 'auth_state.dart';
 import '../../features/profile/data/profile_models.dart';
 
+/// 采集设备属性回调，测试时注入以隔离真实插件。
+typedef DeviceAttributeCollector = Future<DeviceAttributes?> Function(String platform);
+
 /// 设备注册结果
 ///
 /// 注：原 plan 使用 Dart 3.0+ record 语法 `({String token, bool isNewDevice})`，
@@ -190,37 +193,59 @@ class AuthController extends StateNotifier<AuthState> {
 ///   鸿蒙兼容 Android API 同样可用）
 /// - iOS: IosInfo.identifierForVendor
 /// - 其他 fallback: UUID v4 持久化到 sqflite
-Future<String> defaultResolveDeviceId(AuthDao dao) async {
-  // 优先复用本地已保存的 deviceId：
-  // 注册时先查 auth 表是否有记录，有则沿用，避免任何采集抖动/失败把 deviceId
-  // 换成新值——那会让后端误判为新设备（isNewDevice=true）而隔离原有数据。
+Future<String> defaultResolveDeviceId(
+  AuthDaoLike dao, {
+  DeviceAttributeCollector? collect,
+}) async {
+  // 第一道防线：优先复用本地已存的 deviceId，避免任何采集抖动把它换成新值。
   try {
     final saved = await dao.load();
     if (saved != null && saved.deviceId.isNotEmpty) return saved.deviceId;
+  } catch (_) {}
+
+  final os = defaultResolveOs();
+  DeviceAttributes? attrs;
+  try {
+    attrs = collect != null ? await collect(os) : await _collectViaPlugin(os);
   } catch (_) {
-    // 读取失败则继续走平台采集
+    // 采集异常（含注入回调抛异常）：忽略，落入聚合哈希 / fallback
   }
-  if (Platform.isAndroid || Platform.operatingSystem == 'ohos') {
-    try {
-      final info = await DeviceInfoPlugin().androidInfo;
-      return info.id;
-    } catch (_) {
-      // 鸿蒙/部分设备采集失败：回退，避免注册在取 deviceId 时抛异常而卡在 splash
-    }
-  }
-  if (Platform.isIOS) {
-    try {
-      final info = await DeviceInfoPlugin().iosInfo;
-      final id = info.identifierForVendor;
-      if (id != null && id.isNotEmpty) return id;
-    } catch (_) {
-      // 采集失败：同上回退
-    }
-  }
-  // Fallback: 复用上次生成的 UUID（存于 auth 表 deviceId 字段，os='unknown'）
-  // 此处仅返回临时 UUID，由 AuthController.save 持久化
-  // 注意：UUID 生成不依赖 uuid 包，用 DateTime 拼接避免新依赖
+  final id = resolveStableDeviceId(
+    osId: attrs?.osId,
+    stableParts: attrs?.stableParts ?? const [],
+  );
+  if (id.isNotEmpty) return id;
+
+  // 最后兜底：OS 未暴露任何稳定标识且本地无记录（已知局限，重装会变，
+  // 由后续「账号恢复」功能兜住）。返回临时 UUID。
   return 'fallback-${DateTime.now().millisecondsSinceEpoch}';
+}
+
+/// 通过 device_info_plus 采集各平台稳定标识与属性。
+Future<DeviceAttributes> _collectViaPlugin(String platform) async {
+  try {
+    if (platform == 'harmonyos') {
+      final info = await DeviceInfoPlugin().ohosInfo;
+      return DeviceAttributes(
+        osId: info.odID,
+        stableParts: [info.manufacture, info.brand, info.marketName ?? info.productModel],
+      );
+    }
+    if (platform == 'android') {
+      final info = await DeviceInfoPlugin().androidInfo;
+      return DeviceAttributes(
+        osId: info.id,
+        stableParts: [info.manufacturer, info.brand, info.model],
+      );
+    }
+    if (platform == 'ios') {
+      final info = await DeviceInfoPlugin().iosInfo;
+      return DeviceAttributes(osId: info.identifierForVendor);
+    }
+  } catch (_) {
+    // 采集异常：忽略，落入聚合哈希 / fallback
+  }
+  return const DeviceAttributes();
 }
 
 /// 平台采集结果：OS 级唯一标识 + 稳定硬件属性。
