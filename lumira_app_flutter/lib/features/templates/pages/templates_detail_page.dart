@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -13,6 +14,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/tags/user_tags_section.dart';
 import '../data/owned_templates_repository.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
@@ -340,6 +342,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                   tokens: tokens,
                   onNewTag: () => _showSnack('新建标签功能即将上线'),
                 ),
+              UserTagsSection(
+                itemType: TagItemType.template,
+                itemId: template.id,
+                systemTags: template.tags,
+              ),
               _SceneGuideCard(
                 template: template,
                 tokens: tokens,

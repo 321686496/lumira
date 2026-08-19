@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/dao/scenes_dao.dart';
+import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
@@ -14,6 +15,7 @@ import '../data/capture_scene_mock_data.dart';
 import '../widgets/scene_achievement_card.dart';
 import '../widgets/scene_filter_badge.dart';
 import '../widgets/add_to_composition_sheet.dart';
+import '../../../shared/widgets/tags/user_tags_section.dart';
 
 /// 场景详情页（Task 2.10）
 ///
@@ -182,6 +184,10 @@ class _CaptureSceneDetailPageState
                         tagSheetVisible: _tagSheetVisible,
                         onToggleTagSheet: _openTagSheet,
                         onToggleTag: _toggleTag,
+                      ),
+                      UserTagsSection(
+                        itemType: TagItemType.scene,
+                        itemId: scene.id,
                       ),
                       _FilterSection(scene: scene),
                       _TipsSection(scene: scene),
