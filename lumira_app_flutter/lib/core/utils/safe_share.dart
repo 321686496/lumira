@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'share_reporter.dart';
+
 /// 安全分享包装器，在 share_plus 插件未注册时降级到剪贴板复制。
 ///
 /// 鸿蒙设备上 pub.dev 版 share_plus 缺少 ohos 原生实现，
@@ -28,6 +30,7 @@ class SafeShare {
       debugPrint('[safe_share] shareXFiles 异常: $e');
       await _fallbackToClipboard(files.first.path);
     }
+    ShareReporter.notify();
   }
 
   /// 分享文本，失败时降级到剪贴板复制。
@@ -44,6 +47,7 @@ class SafeShare {
       debugPrint('[safe_share] share 异常: $e');
       await _fallbackToClipboardText(text);
     }
+    ShareReporter.notify();
   }
 
   static Future<void> _fallbackToClipboard(String filePath) async {

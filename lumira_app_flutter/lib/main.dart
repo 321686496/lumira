@@ -10,6 +10,8 @@ import 'core/config/app_config.dart';
 import 'core/db/database_provider.dart';
 import 'core/network/api_client.dart';
 import 'core/theme/theme_controller.dart';
+import 'core/utils/share_reporter.dart';
+import 'features/points/data/points_repository.dart';
 import 'features/profile/data/profile_dao.dart';
 import 'features/profile/data/profile_models.dart';
 import 'features/profile/providers/profile_providers.dart';
@@ -67,15 +69,33 @@ Future<void> main() async {
     ],
   );
 
-  // 5. 已注册设备：启动补传设备信息（修复历史版本平台信息缺失/误判，不阻塞启动）
-  // 注意用 defaultResolveOs() 而非 state.os——旧设备可能存了错误的 'android'
-  if (!authController.state.needsRegistration) {
-    // ignore: unawaited_futures
-    _reportDeviceInfo(container, defaultResolveOs());
-  }
+  // 4.5 分享积分上报：调起系统分享即计分（每日首享 +2，幂等由后端保证）
+  ShareReporter.onShare = () async {
+    try {
+      final repo = await container.read(pointsRepositoryProvider.future);
+      await repo.earn(type: 'share');
+    } catch (_) {
+      // 网络/鉴权失败静默，不影响分享主流程
+    }
+  };
 
-  // 6. 初始化个人资料：拉取/补传（不阻塞启动）
-  container.read(profileSyncServiceProvider.future).then((sync) async {
+  // 5. 设备信息补传（修复历史版本平台信息缺失/误判，不阻塞启动）
+  //
+  // 注意：原来的 `if (!needsRegistration)` 判断会误触发——registerIfNeeded() 调用后
+  // 状态已同步变为 loading，needsRegistration 立即为 false，导致未注册设备也提前
+  // 发出 PATCH /device/info（token 尚未就绪）→ 无 Authorization → 401。
+  // 统一改为先等待注册完成拿到有效 token，再执行鉴权请求。
+  // ignore: unawaited_futures
+  authController.ensureRegistered().then((ok) {
+    if (!ok) return; // 注册失败：静默，splash 会显示重试入口
+    _reportDeviceInfo(container, defaultResolveOs());
+  });
+
+  // 6. 初始化个人资料：拉取/补传。同样等待注册完成拿到 token 后再执行。
+  // ignore: unawaited_futures
+  authController.ensureRegistered().then((ok) async {
+    if (!ok) return;
+    final sync = await container.read(profileSyncServiceProvider.future);
     await sync.ensureLoadedIfMissing();
     await sync.syncPendingIfNeeded();
   });
