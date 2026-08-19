@@ -305,7 +305,23 @@ jobs:
         if: ${{ inputs.sign != true }}
         run: |
           cd ${{ env.WORKSPACE }}
-          flutter build ios --release --no-codesign
+          # 关键：Flutter 3.7.x 在无签名构建真正失败时会掩盖真实错误，只输出误导性的
+          # "Building a deployable iOS app requires a selected Development Team"（见
+          # flutter_tools mac.dart 的 _missingDevelopmentTeam + diagnoseXcodeBuildFailure，
+          # PhaseScriptExecution 错误还会被 xcresult discarder 丢弃）。
+          # 因此这里用 -v 保留完整 xcodebuild 输出并落盘，失败时打印真实错误。
+          flutter build ios --release --no-codesign -v > "$RUNNER_TEMP/ios_no_codesign.log" 2>&1 || true
+
+          if [ ! -f build/ios/iphoneos/Runner.app ]; then
+            echo "::error::iOS 无签名构建失败，真实错误如下（完整日志: $RUNNER_TEMP/ios_no_codesign.log）"
+            echo "===== 1. 错误关键字相关行 ====="
+            grep -niE 'error:|fatal|nonzero exit code|Command PhaseScriptExecution|The sandbox|no such file|permission denied|cannot find|DT_TOOLCHAIN_DIR|clang:|ld: |SwiftCompile|error\b' \
+              "$RUNNER_TEMP/ios_no_codesign.log" | tail -100 || true
+            echo "===== 2. 日志尾部 120 行 ====="
+            tail -120 "$RUNNER_TEMP/ios_no_codesign.log" || true
+            exit 1
+          fi
+          echo "iOS 无签名构建成功"
 
       - name: Build IPA (signed)
         if: ${{ inputs.sign == true }}
