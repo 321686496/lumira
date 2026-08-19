@@ -49,17 +49,20 @@ class _SplashPageState extends ConsumerState<SplashPage> {
     super.initState();
     // 1.8s 后跳转 home（用 context.go 替换路由栈，对齐 uni-app 的 reLaunch 语义）
     _redirectTimer = Timer(_redirectDelay, _maybeNavigate);
-    // 监听 auth 状态：重试成功（registered）时自动跳转
-    // 注意：ref.listen 只能在 build 中使用，initState 中需用 ref.listenManual
+    // 监听 auth 状态：重试成功（registered）时自动跳转，并在注册完成后补传未同步问卷。
+    // 注意：ref.listen 只能在 build 中使用，initState 中需用 ref.listenManual。
+    // 不要在 failed 时自动拉起注册（ensureRegistered 会这样做）——那会把稳定的重试按钮
+    // 瞬间替换成 loading，让用户觉得“点了重试没反应”。
+    // 问卷同步也放到这里：等收敛到 registered（token 就绪）后再发鉴权请求，避免 401。
     ref.listenManual<AuthState>(authControllerProvider, (previous, next) {
       if (!_navigated && mounted && next.status == AuthStatus.registered) {
         _maybeNavigate();
       }
+      final wasRegistered = previous?.status == AuthStatus.registered;
+      if (!wasRegistered && next.status == AuthStatus.registered) {
+        _syncPendingQuestionnaire();
+      }
     });
-    // 启动时补传未同步的问卷（fire-and-forget）
-    ref.read(questionnaireSyncServiceProvider.future).then((service) {
-      service.syncPendingIfNeeded();
-    }).catchError((_) {});
   }
 
   @override
@@ -71,8 +74,12 @@ class _SplashPageState extends ConsumerState<SplashPage> {
   void _maybeNavigate() {
     if (_navigated || !mounted) return;
     final auth = ref.read(authControllerProvider);
-    // failed 时不跳转，留在 splash 显示重试按钮
-    if (auth.status == AuthStatus.failed) return;
+    // 只有 token 就绪（registered）才跳转。
+    // loading/fresh：注册进行中，此时 currentToken 可能为 null（旧 token 已被
+    // 401 失效清除），提前跳 home 会带空 token 发请求再次 401——表现为“进不去”。
+    // 改为让 splash 转圈等待，注册完成后由 listenManual 收到 registered 再跳。
+    // （这样即使服务器更换 JWT_SECRET 导致本地 token 失效，也能 401 自动重注册自愈进入。）
+    if (auth.status != AuthStatus.registered) return;
     _navigated = true;
     // 新设备首次注册且未填问卷 → 跳问卷页；否则跳首页
     _routeAfterSplash(auth.isNewDevice);
@@ -96,6 +103,13 @@ class _SplashPageState extends ConsumerState<SplashPage> {
 
   void _retryRegistration() {
     ref.read(authControllerProvider.notifier).registerIfNeeded();
+  }
+
+  /// 注册完成后补传未同步的问卷（fire-and-forget，失败静默）
+  void _syncPendingQuestionnaire() {
+    ref.read(questionnaireSyncServiceProvider.future).then((service) {
+      service.syncPendingIfNeeded();
+    }).catchError((_) {});
   }
 
   @override

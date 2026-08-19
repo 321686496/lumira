@@ -82,7 +82,7 @@ void main() {
       expect(ctrl.state.lastError, contains('network down'));
     });
 
-    test('invalidateRegistration clears state and dao', () async {
+    test('invalidateRegistration clears token but preserves deviceId', () async {
       final saved = AuthRecord(
         deviceId: 'saved-id',
         os: 'ios',
@@ -102,7 +102,11 @@ void main() {
       ctrl.invalidateRegistration();
       expect(ctrl.state.status, AuthStatus.fresh);
       expect(ctrl.state.token, isNull);
-      expect(dao.cleared, true);
+      // 只清 token，不清 deviceId：重注册沿用原 deviceId，避免后端误判新设备丢数据
+      final rec = await dao.load();
+      expect(rec, isNotNull);
+      expect(rec!.token, '');
+      expect(rec!.deviceId, 'saved-id');
     });
 
     test('registerIfNeeded skips when already registered', () async {
@@ -151,5 +155,18 @@ class _FakeDao implements AuthDaoLike {
   Future<void> clear() async {
     _record = null;
     cleared = true;
+  }
+
+  @override
+  Future<void> clearToken() async {
+    if (_record != null) {
+      _record = AuthRecord(
+        deviceId: _record!.deviceId,
+        os: _record!.os,
+        token: '',
+        isNewDevice: _record!.isNewDevice,
+        registeredAt: _record!.registeredAt,
+      );
+    }
   }
 }

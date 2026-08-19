@@ -7,6 +7,12 @@ abstract class AuthDaoLike {
   Future<AuthRecord?> load();
   Future<void> save(AuthRecord r);
   Future<void> clear();
+
+  /// 仅清空 token，保留 deviceId。
+  ///
+  /// token 失效 ≠ 设备换新：401 后需要重新注册拿新 token，但必须沿用
+  /// 同一个 deviceId，否则后端会误判为新设备、创建一套新数据（旧数据被隔离）。
+  Future<void> clearToken();
 }
 
 /// 本地持久化的鉴权记录
@@ -64,5 +70,15 @@ class AuthDao implements AuthDaoLike {
   @override
   Future<void> clear() async {
     await _db.delete(Tables.auth, where: 'id = ?', whereArgs: [1]);
+  }
+
+  @override
+  Future<void> clearToken() async {
+    await _db.update(
+      Tables.auth,
+      {Tables.colToken: ''},
+      where: 'id = ?',
+      whereArgs: [1],
+    );
   }
 }

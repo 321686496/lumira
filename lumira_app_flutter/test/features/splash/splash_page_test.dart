@@ -21,6 +21,8 @@ class _NoopDao implements AuthDaoLike {
   Future<void> save(AuthRecord r) async {}
   @override
   Future<void> clear() async {}
+  @override
+  Future<void> clearToken() async {}
 }
 
 /// 测试用 AuthController stub
