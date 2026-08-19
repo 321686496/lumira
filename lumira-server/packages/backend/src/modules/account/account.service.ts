@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { and, eq, desc } from 'drizzle-orm';
+import { isNull } from 'drizzle-orm/sql/expressions/conditions';
 import { DatabaseService } from '../../database/database.service';
 import { devices, accountOtp } from '../../database/schema';
 import { sha256Hex, generateSecret, generateOtp } from './hash';
@@ -106,7 +107,7 @@ export class AccountService {
     if (!device) throw new BadRequestException('设备不存在，请先注册');
     // 一次性消费（带 consumedAt 防空值防竞态）
     await db.update(accountOtp).set({ consumedAt: Math.floor(Date.now() / 1000) })
-      .where(and(eq(accountOtp.id, otp!.id), eq(accountOtp.consumedAt, null)));
+      .where(and(eq(accountOtp.id, otp!.id), isNull(accountOtp.consumedAt)));
     const now = Math.floor(Date.now() / 1000);
     await db.update(devices).set({ email, emailVerifiedAt: now })
       .where(eq(devices.deviceId, deviceId));
@@ -142,7 +143,7 @@ export class AccountService {
     if (!device) throw new BadRequestException('该邮箱尚未绑定账号');
     // 一次性消费（带 consumedAt 防空值防竞态）
     await db.update(accountOtp).set({ consumedAt: Math.floor(Date.now() / 1000) })
-      .where(and(eq(accountOtp.id, otp!.id), eq(accountOtp.consumedAt, null)));
+      .where(and(eq(accountOtp.id, otp!.id), isNull(accountOtp.consumedAt)));
     await db.update(devices).set({ sessionEpoch: (device.sessionEpoch ?? 0) + 1 })
       .where(eq(devices.deviceId, device.deviceId));
     return { deviceId: device.deviceId };

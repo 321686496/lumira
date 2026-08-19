@@ -111,6 +111,13 @@ describe('Account (e2e)', () => {
       .expect(201);
     expect(bind.body.success).toBe(true);
 
+    // 同一 code 二次 bind 应因已消费被拒（一次性消费）
+    await request(app.getHttpServer())
+      .post('/api/v1/account/email/bind')
+      .set('Authorization', `Bearer ${freshToken}`)
+      .send({ email, code })
+      .expect(400);
+
     // recover：换「同设备」场景——用 email recover 前先 send-code recover
     await request(app.getHttpServer())
       .post('/api/v1/account/email/send-code')
