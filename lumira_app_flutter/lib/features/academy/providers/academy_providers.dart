@@ -140,6 +140,12 @@ final favoriteCardIdsProvider = FutureProvider<Set<String>>((ref) async {
   return repo.getFavoriteCardIds();
 });
 
+/// 收藏课程 ID 集合
+final favoriteCourseIdsProvider = FutureProvider<Set<String>>((ref) async {
+  final repo = await ref.watch(academyRepositoryProvider.future);
+  return repo.getFavoriteCourseIds();
+});
+
 // === 状态变更通知器 ===
 
 /// 操作后刷新用的状态
@@ -177,6 +183,12 @@ class AcademyActionNotifier extends StateNotifier<AcademyActionState> {
   Future<void> toggleFavorite(String cardId) async {
     final repo = await _ref.read(academyRepositoryProvider.future);
     await repo.toggleFavorite(cardId);
+    _refresh();
+  }
+
+  Future<void> toggleCourseFavorite(String courseId) async {
+    final repo = await _ref.read(academyRepositoryProvider.future);
+    await repo.toggleCourseFavorite(courseId);
     _refresh();
   }
 
