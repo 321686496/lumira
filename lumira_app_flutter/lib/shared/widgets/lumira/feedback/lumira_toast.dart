@@ -42,7 +42,28 @@ class LumiraToast {
     Duration duration = const Duration(seconds: 2),
     ToastPosition position = ToastPosition.top,
   }) {
-    final overlay = Overlay.of(context, rootOverlay: true);
+    showWithOverlay(
+      Overlay.of(context, rootOverlay: true),
+      message,
+      action: action,
+      duration: duration,
+      position: position,
+    );
+  }
+
+  /// 通过 [OverlayState] 直接显示 Toast。
+  ///
+  /// 用于无页面 context 的全局回调（如分享降级）：此时不能调用
+  /// `Overlay.of(navigatorKey.currentContext!)`——Navigator 自身的 context
+  /// 位于它创建的 Overlay 之上，向上查找会抛 "No Overlay widget found"。
+  /// 应通过 `NavigatorState.overlay` 拿到 OverlayState 后调用本方法。
+  static void showWithOverlay(
+    OverlayState overlay,
+    String message, {
+    ToastAction? action,
+    Duration duration = const Duration(seconds: 2),
+    ToastPosition position = ToastPosition.top,
+  }) {
     late OverlayEntry entry;
     late _LumiraToastController controller;
 

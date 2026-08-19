@@ -1,0 +1,15 @@
+Diff for Task 8 review. Commit 2f267d8 (pubspec.yaml +8 lines, pubspec.lock +25 lines).
+
+pubspec.yaml additions:
+```
+  # 二维码渲染（纯 Dart，Dart 2.19 兼容）
+  qr_flutter: ^4.1.0
+  # 扫码（CPF-Flutter 鸿蒙适配 fork，源库 qr_code_scanner 0.7.0）
+  qr_code_scanner:
+    git:
+      url: https://gitcode.com/CPF-Flutter/fluttertpc_qr_code_scanner.git
+      ref: master
+```
+(inserted after dio: 4.0.6 in dependencies. pubspec.lock records the resolved qr_flutter + qr_code_scanner entries.)
+
+Context: Dart 2.19.6 / Flutter 3.7.12, Harmony-first project. flutter pub get succeeded with no conflicts, no dependency_overrides added. Camera permissions already present on all 3 platforms.

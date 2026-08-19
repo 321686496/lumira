@@ -1,0 +1,16 @@
+Diff for Task 10 review. Commit a4f542c (2 files, +64).
+
+Created: lumira_app_flutter/lib/features/account/data/account_api.dart (52 lines):
+- RecoveryQrData { String secret; String qrPayload; int expiresAt; const ctor; factory fromJson }
+- RecoverResult { final String deviceId; const RecoverResult(this.deviceId); }
+- AccountApi { final ApiClient client; const AccountApi(this.client);
+  - rotateRecoverySecret() → client.post('/account/recovery-qr', fromJson: RecoveryQrData.fromJson)
+  - recoverByQr(secret) → client.post('/account/recover-by-qr', body:{secret}, fromJson: RecoverResult(deviceId))
+  - sendCode({email,purpose}) → client.post('/account/email/send-code', body:{...}, fromJson: (_)=>null)
+  - bindEmail({email,code}) → client.post('/account/email/bind', body:{...}, fromJson: (_)=>null)
+  - recoverByEmail({email,code}) → client.post('/account/email/recover', body:{...}, fromJson: RecoverResult(deviceId))
+}
+
+Created: test/features/account/account_api_test.dart (12 lines): one test 'RecoveryQr model 解析' asserting secret/qrPayload parse.
+
+Context: Dart 2.19.6. ApiClient.post signature (String path, {Object? body, required T Function(Object? json) fromJson}); fromJson: (_)=>null returns null for the void methods (T inferred). Test passes per implementer.

@@ -18,11 +18,11 @@ export default class EntryAbility extends FlutterAbility {
     flutterEngine.getPlugins()?.add(new DeepLinkPlugin());
   }
 
-  // ⚠️ best-effort：若 flutter_ohos 的 FlutterAbility 未暴露 onCreate/onNewWant，
-  // 编译报错时去掉 super 调用，仅保留静态记录（见 DeepLinkPlugin.notifyNewLink）。
-  override onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
-    super.onCreate(want, launchParam);
+  // ⚠️ best-effort：flutter_ohos 的 onCreate 返回 Promise，须以 async 方式重写；
+  // super.onCreate 会 attach 插件并读取 latestLaunchUri，故先记录 uri 再调用。
+  override async onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): Promise<void> {
     DeepLinkPlugin.notifyNewLink(this.extractUri(want));
+    await super.onCreate(want, launchParam);
   }
 
   override onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
@@ -32,7 +32,7 @@ export default class EntryAbility extends FlutterAbility {
 
   private extractUri(want: Want): string {
     // 从 want 中取 uri 字段（深链 want 的 uri 在 want.uri）
-    const uri: string | undefined = (want as Want & { uri?: string }).uri;
+    const uri: string | undefined = want.uri;
     return (uri && uri.length > 0) ? uri : '';
   }
 }

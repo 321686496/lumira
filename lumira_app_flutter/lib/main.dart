@@ -90,9 +90,12 @@ Future<void> main() async {
 
   // 4.55 分享降级反馈：share_plus 不可用（鸿蒙）降级到剪贴板时，Toast 告知用户结果
   SafeShare.onFallback = (message) {
-    final ctx = rootNavigatorKey.currentContext;
-    if (ctx == null || !ctx.mounted) return;
-    LumiraToast.show(ctx, message);
+    // 注意：不能用 Overlay.of(rootNavigatorKey.currentContext!)——Navigator 自身的
+    // context 位于它创建的 Overlay 之上，向上查找会抛 "No Overlay widget found"。
+    // 应通过 NavigatorState.overlay 获取 OverlayState 后直接显示。
+    final overlay = rootNavigatorKey.currentState?.overlay;
+    if (overlay == null) return;
+    LumiraToast.showWithOverlay(overlay, message);
   };
 
   // 4.6 深链监听：冷启动链接 + 运行中链接
