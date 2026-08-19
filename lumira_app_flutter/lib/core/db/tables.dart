@@ -126,8 +126,10 @@ class Tables {
   static const String colFavorites = 'favorites';
   static const String colStreakDays = 'streak_days';
   static const String colLastCheckInDate = 'last_check_in_date';
-  static const String colFragmentsJson = 'fragments_json';
-  static const String colAchievementsJson = 'achievements_json';
+  static const colFragmentsJson = 'fragments_json';
+  static const colAchievementsJson = 'achievements_json';
+  /// 已领取升级积分奖励的最高等级（v26 迁移新增；0=未领取任何）
+  static const String colXpRewardClaimedLevel = 'xp_reward_claimed_level';
 
   // === user_settings ===
   static const String userSettings = 'user_settings';
@@ -339,5 +341,27 @@ class WatermarkTemplatesTable {
 
   static const String indexCreatedAtSql =
       'CREATE INDEX IF NOT EXISTS idx_watermark_templates_created_at ON $name (${Tables.colCreatedAt} DESC)';
+}
+
+/// 经验台账表（v26 迁移新增）
+/// 单行真实数据源：等级 = SUM(amount)；id = "{source}:{refId}" 保证幂等。
+class XpEventsTable {
+  static const name = 'xp_events';
+  static const colSource = 'source'; // 'shoot_daily'|'challenge'|'course'|'share'
+  static const colAmount = 'amount';
+  static const colRefId = 'ref_id';
+  static const colCreatedAt = 'created_at';
+
+  static const createSql = '''
+    CREATE TABLE IF NOT EXISTS $name (
+      id TEXT PRIMARY KEY,
+      $colSource TEXT NOT NULL,
+      $colAmount INTEGER NOT NULL,
+      $colRefId TEXT NOT NULL,
+      $colCreatedAt INTEGER NOT NULL
+    )
+  ''';
+  static const indexSql =
+      'CREATE UNIQUE INDEX IF NOT EXISTS uq_xp_events_source_ref ON $name ($colSource, $colRefId)';
 }
 

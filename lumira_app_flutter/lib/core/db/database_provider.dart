@@ -16,12 +16,13 @@ import 'dao/settings_dao.dart';
 import 'dao/watermark_dao.dart';
 import 'dao/tutorial_read_dao.dart';
 import 'dao/tags_dao.dart';
+import '../../features/academy/data/academy_content.dart';
 import '../../core/auth/auth_dao.dart';
 import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 25;
+const int _kDbVersion = 26;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -384,6 +385,22 @@ Future<void> _onCreate(Database db, int version) async {
   // === v20: 自定义水印模板表 ===
   await db.execute(WatermarkTemplatesTable.createSql);
   await db.execute(WatermarkTemplatesTable.indexCreatedAtSql);
+
+  // === v26: xp_events 经验台账表 ===
+  await db.execute(XpEventsTable.createSql);
+  await db.execute(XpEventsTable.indexSql);
+  await _addColumnIfNotExists(
+    db,
+    Tables.userProgress,
+    Tables.colXpRewardClaimedLevel,
+    'INTEGER NOT NULL DEFAULT 0',
+  );
+  // 回填历史真实经验（challenge + course；失败静默）
+  try {
+    await _backfillXpLedger(db);
+  } catch (e) {
+    debugPrint('xp_events backfill (onCreate) failed: $e');
+  }
 
   // === 种子化预置数据（修复：fresh install 时不触发 _onUpgrade，需在 _onCreate 中显式调用 seeder） ===
   // _onUpgrade 仅在 oldVersion < 4 时调用 BuiltinDataSeeder.seedAll，
@@ -886,6 +903,22 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       debugPrint('v25 migration failed (silent fallback): $e');
     }
   }
+  if (oldVersion < 26) {
+    try {
+      await db.execute(XpEventsTable.createSql);
+      await db.execute(XpEventsTable.indexSql);
+      await _addColumnIfNotExists(
+        db,
+        Tables.userProgress,
+        Tables.colXpRewardClaimedLevel,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+      // 回填历史真实经验，确保老用户经验曲线不跳变
+      await _backfillXpLedger(db);
+    } catch (e) {
+      debugPrint('v26 migration failed (silent fallback): $e');
+    }
+  }
 }
 
 /// 修复 template_categories 表中的 corrupted 数据（v18 迁移）。
@@ -926,6 +959,55 @@ Future<void> _fixCategoryData(Database db) async {
     CREATE UNIQUE INDEX IF NOT EXISTS uq_category_key_parent_null_safe
     ON ${Tables.templateCategories}(${Tables.colKey}, IFNULL(${Tables.colParentKey}, ''))
   ''');
+}
+
+/// 从历史表回填 xp_events 台账（INSERT OR IGNORE 幂等）。
+/// - challenge：challenge_history 已完成 → source='challenge', amount=reward_xp, ref_id=id
+/// - course：academy_course_progress status='completed' → source='course',
+///   amount=该课 rewardXP（AcademyContent 构建 id→rewardXP 映射，找不到的跳过避免虚增）
+Future<void> _backfillXpLedger(Database db) async {
+  // --- challenge ---
+  final chRows = await db.rawQuery('''
+    SELECT ${ChallengeHistoryTable.colId} AS id,
+           ${ChallengeHistoryTable.colRewardXp} AS xp
+    FROM ${ChallengeHistoryTable.name}
+    WHERE ${ChallengeHistoryTable.colStatus} = 'done'
+  ''');
+  for (final r in chRows) {
+    final id = r['id'] as String?;
+    final xp = (r['xp'] as num?)?.toInt() ?? 0;
+    if (id == null || id.isEmpty || xp <= 0) continue;
+    await db.insert(XpEventsTable.name, {
+      'id': 'challenge:$id',
+      XpEventsTable.colSource: 'challenge',
+      XpEventsTable.colAmount: xp,
+      XpEventsTable.colRefId: id,
+      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
+
+  // --- course（id→rewardXP 映射来自 AcademyContent.courses） ---
+  final Map<String, int> courseXp = {};
+  for (final c in AcademyContent.courses) {
+    courseXp[c.id] = c.rewardXP;
+  }
+  final cpRows = await db.rawQuery('''
+    SELECT ${AcademyTables.cpColCourseId} AS cid
+    FROM ${AcademyTables.courseProgress}
+    WHERE ${AcademyTables.cpColStatus} = 'completed'
+  ''');
+  for (final r in cpRows) {
+    final cid = r['cid'] as String?;
+    final xp = cid == null ? 0 : (courseXp[cid] ?? 0);
+    if (cid == null || cid.isEmpty || xp <= 0) continue;
+    await db.insert(XpEventsTable.name, {
+      'id': 'course:$cid',
+      XpEventsTable.colSource: 'course',
+      XpEventsTable.colAmount: xp,
+      XpEventsTable.colRefId: cid,
+      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+  }
 }
 
 /// 安全添加列：若列已存在则跳过（迁移幂等）
