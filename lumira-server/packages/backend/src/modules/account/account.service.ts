@@ -99,8 +99,14 @@ export class AccountService {
     const otp = await this.latestOtp(email, 'bind');
     const err = this.validateOtp(otp, email, code);
     if (err) throw new BadRequestException(err);
+    // 绑定前确认设备存在，不存在抛 400
+    const device = (
+      await db.select().from(devices).where(eq(devices.deviceId, deviceId))
+    )[0];
+    if (!device) throw new BadRequestException('设备不存在，请先注册');
+    // 一次性消费（带 consumedAt 防空值防竞态）
     await db.update(accountOtp).set({ consumedAt: Math.floor(Date.now() / 1000) })
-      .where(eq(accountOtp.id, otp!.id));
+      .where(and(eq(accountOtp.id, otp!.id), eq(accountOtp.consumedAt, null)));
     const now = Math.floor(Date.now() / 1000);
     await db.update(devices).set({ email, emailVerifiedAt: now })
       .where(eq(devices.deviceId, deviceId));
@@ -129,13 +135,14 @@ export class AccountService {
     const otp = await this.latestOtp(email, 'recover');
     const err = this.validateOtp(otp, email, code);
     if (err) throw new BadRequestException(err);
-    await db.update(accountOtp).set({ consumedAt: Math.floor(Date.now() / 1000) })
-      .where(eq(accountOtp.id, otp!.id));
-
+    // 先校验设备存在再消费（未绑定则不消费 OTP）
     const device = (
       await db.select().from(devices).where(eq(devices.email, email))
     )[0];
     if (!device) throw new BadRequestException('该邮箱尚未绑定账号');
+    // 一次性消费（带 consumedAt 防空值防竞态）
+    await db.update(accountOtp).set({ consumedAt: Math.floor(Date.now() / 1000) })
+      .where(and(eq(accountOtp.id, otp!.id), eq(accountOtp.consumedAt, null)));
     await db.update(devices).set({ sessionEpoch: (device.sessionEpoch ?? 0) + 1 })
       .where(eq(devices.deviceId, device.deviceId));
     return { deviceId: device.deviceId };
