@@ -11,6 +11,14 @@ import '../../features/profile/data/profile_models.dart';
 /// 采集设备属性回调，测试时注入以隔离真实插件。
 typedef DeviceAttributeCollector = Future<DeviceAttributes?> Function(String platform);
 
+/// fallback 兜底设备标识的进程内单调计数器。
+///
+/// 仅靠 `DateTime.now().millisecondsSinceEpoch` 精度为毫秒，同一毫秒内连续
+/// 两次走到 fallback 会返回相同值（测试偶发 FLAKY）。叠加该计数器后，即便
+/// 落在同一毫秒也能保证进程内唯一；
+/// 重启后计数器归零，但毫秒时间戳在跨重启时仍然不同。
+var _fallbackCounter = 0;
+
 /// 设备注册结果
 ///
 /// 注：原 plan 使用 Dart 3.0+ record 语法 `({String token, bool isNewDevice})`，
@@ -218,7 +226,8 @@ Future<String> defaultResolveDeviceId(
 
   // 最后兜底：OS 未暴露任何稳定标识且本地无记录（已知局限，重装会变，
   // 由后续「账号恢复」功能兜住）。返回临时 UUID。
-  return 'fallback-${DateTime.now().millisecondsSinceEpoch}';
+  // 叠加进程内单调计数器保证同一毫秒内连续生成也唯一（避免测试 FLAKY）。
+  return 'fallback-${_fallbackCounter++}-${DateTime.now().millisecondsSinceEpoch}';
 }
 
 /// 通过 device_info_plus 采集各平台稳定标识与属性。
