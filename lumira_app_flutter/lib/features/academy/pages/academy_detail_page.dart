@@ -23,21 +23,9 @@ class AcademyDetailPage extends ConsumerStatefulWidget {
 }
 
 class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
-  bool _bookmarked = false;
-
   @override
   void initState() {
     super.initState();
-  }
-
-  void _toggleBookmark() {
-    setState(() => _bookmarked = !_bookmarked);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_bookmarked ? '已收藏' : '已取消收藏'),
-        duration: const Duration(milliseconds: 1000),
-      ),
-    );
   }
 
   void _markComplete() {
@@ -62,6 +50,11 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     final academyId = widget.academyId;
+    final courseFavAsync = ref.watch(favoriteCourseIdsProvider);
+    final isFav = courseFavAsync.maybeWhen(
+      data: (ids) => ids.contains(academyId),
+      orElse: () => false,
+    );
     final detail = academyId != null ? ref.watch(courseDetailProvider(academyId)) : null;
     final progressAsync = academyId != null ? ref.watch(courseProgressProvider(academyId)) : null;
 
@@ -91,14 +84,25 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
         transparent: true,
         actions: [
           GestureDetector(
-            onTap: _toggleBookmark,
+            onTap: () {
+              if (academyId == null) return;
+              ref
+                  .read(academyActionsProvider.notifier)
+                  .toggleCourseFavorite(academyId!);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(isFav ? '已取消收藏' : '已收藏'),
+                  duration: const Duration(milliseconds: 1000),
+                ),
+              );
+            },
             behavior: HitTestBehavior.opaque,
             child: Padding(
               padding: const EdgeInsets.all(8),
               child: Icon(
-                _bookmarked ? Icons.bookmark : Icons.bookmark_border,
+                isFav ? Icons.favorite : Icons.favorite_border,
                 size: 22,
-                color: tokens.textPrimary,
+                color: isFav ? tokens.danger : tokens.textPrimary,
               ),
             ),
           ),
