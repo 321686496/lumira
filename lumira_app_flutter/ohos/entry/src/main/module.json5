@@ -29,6 +29,21 @@
             "actions": [
               "action.system.home"
             ]
+          },
+          {
+            "entities": [
+              "entity.system.viewData"
+            ],
+            "actions": [
+              "ohos.want.action.viewData"
+            ],
+            "uris": [
+              {
+                "scheme": "lumira",
+                "host": "tpl",
+                "pathStartWith": "/"
+              }
+            ]
           }
         ]
       }
