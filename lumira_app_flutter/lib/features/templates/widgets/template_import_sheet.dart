@@ -14,6 +14,7 @@ import '../../capture/data/capture_state.dart';
 import '../../capture/data/template_registry.dart';
 import '../services/pptpl_format.dart';
 import '../services/template_mapper.dart';
+import '../services/template_share_code.dart';
 
 /// 模板导入 BottomSheet
 ///
@@ -230,7 +231,7 @@ class TemplateImportSheet extends ConsumerWidget {
       return;
     }
 
-    final parsed = _parseTemplateLink(url.trim());
+    final parsed = TemplateShareCode.parseLink(url.trim());
     if (parsed == null) {
       if (context.mounted) {
         navigator.pop();
@@ -303,7 +304,7 @@ class TemplateImportSheet extends ConsumerWidget {
       return;
     }
 
-    final parsed = _parseTemplateCode(code.trim());
+    final parsed = TemplateShareCode.parseCode(code.trim());
     if (parsed == null) {
       if (context.mounted) {
         navigator.pop();
@@ -393,89 +394,6 @@ class TemplateImportSheet extends ConsumerWidget {
         };
       }
       return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// 解析分享链接
-  /// 支持格式：
-  /// - lumira://tpl/{base64(json)}
-  /// - https://lumira.app/tpl/{base64(json)}
-  /// - https://lumira.app/tpl?name=xxx&category=xxx
-  Map<String, dynamic>? _parseTemplateLink(String url) {
-    try {
-      Uri? uri;
-      try {
-        uri = Uri.parse(url);
-      } catch (_) {
-        return null;
-      }
-
-      // 路径形式：lumira://tpl/{base64}
-      if (uri.scheme == 'lumira' && uri.host == 'tpl') {
-        final segments = uri.pathSegments;
-        if (segments.isNotEmpty) {
-          final decoded = _safeBase64Decode(segments.last);
-          if (decoded != null) {
-            final data = jsonDecode(decoded);
-            if (data is Map<String, dynamic>) {
-              final name = data['name'];
-              if (name is String && name.isNotEmpty) return data;
-            }
-          }
-        }
-      }
-
-      // https://lumira.app/tpl?name=xxx&category=xxx
-      if (uri.scheme == 'https' && uri.host.endsWith('lumira.app')) {
-        final params = uri.queryParameters;
-        if (params.containsKey('name') && params['name']!.isNotEmpty) {
-          return {
-            'name': params['name'],
-            'category': params['category'] ?? 'still-life',
-            'tags': params['tags']?.split(',') ?? <String>[],
-            'coverSeed': params['coverSeed'],
-          };
-        }
-      }
-
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// 解析分享码（LUMIRA-分类-名称）
-  Map<String, dynamic>? _parseTemplateCode(String code) {
-    if (!code.startsWith('LUMIRA-')) return null;
-
-    final parts = code.split('-');
-    if (parts.length < 3) return null;
-
-    final category = _normalizeCategory(parts[1].toLowerCase());
-    final name = parts.sublist(2).join('-');
-
-    return {
-      'name': name,
-      'category': category,
-      'tags': <String>['导入'],
-      'coverSeed': 'qr-$code',
-    };
-  }
-
-  String _normalizeCategory(String s) {
-    const valid = {
-      'portrait', 'landscape', 'food', 'street', 'night', 'macro', 'still-life'
-    };
-    return valid.contains(s) ? s : 'still-life';
-  }
-
-  String? _safeBase64Decode(String s) {
-    try {
-      final normalized = s.replaceAll('-', '+').replaceAll('_', '/');
-      final padded = normalized + '=' * ((4 - normalized.length % 4) % 4);
-      return utf8.decode(base64.decode(padded));
     } catch (_) {
       return null;
     }
