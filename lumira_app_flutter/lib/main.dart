@@ -13,6 +13,7 @@ import 'core/network/api_client.dart';
 import 'core/router/route_names.dart';
 import 'core/services/deep_link_service.dart';
 import 'core/theme/theme_controller.dart';
+import 'core/utils/safe_share.dart';
 import 'core/utils/share_reporter.dart';
 import 'features/capture/data/capture_state.dart';
 import 'features/points/data/points_repository.dart';
@@ -22,6 +23,7 @@ import 'features/profile/providers/profile_providers.dart';
 import 'features/templates/services/template_import_service.dart';
 import 'features/templates/services/template_share_code.dart';
 import 'features/templates/widgets/template_import_sheet.dart';
+import 'shared/widgets/lumira/feedback/lumira_toast.dart';
 
 /// 应用根 Widget（接入 ProviderScope + routerProvider + appThemeProvider）
 class MyApp extends ConsumerWidget {
@@ -84,6 +86,13 @@ Future<void> main() async {
     } catch (_) {
       // 网络/鉴权失败静默，不影响分享主流程
     }
+  };
+
+  // 4.55 分享降级反馈：share_plus 不可用（鸿蒙）降级到剪贴板时，Toast 告知用户结果
+  SafeShare.onFallback = (message) {
+    final ctx = rootNavigatorKey.currentContext;
+    if (ctx == null || !ctx.mounted) return;
+    LumiraToast.show(ctx, message);
   };
 
   // 4.6 深链监听：冷启动链接 + 运行中链接

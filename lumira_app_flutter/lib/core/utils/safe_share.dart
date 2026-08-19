@@ -10,6 +10,12 @@ import 'share_reporter.dart';
 /// 调用 shareXFiles() / share() 会抛出 MissingPluginException。
 /// 此包装器捕获异常后回退到将内容复制到剪贴板。
 class SafeShare {
+  /// 降级反馈钩子：share_plus 不可用降级到剪贴板时调用，向用户展示可见提示。
+  ///
+  /// 由 main.dart 注入 UI 展示逻辑（LumiraToast），核心层不依赖 Flutter UI，
+  /// 避免 SafeShare → router 的循环依赖。未注入时静默（保持原有行为）。
+  static void Function(String message)? onFallback;
+
   /// 分享多个文件，失败时降级为复制第一个文件路径到剪贴板。
   static Future<void> shareXFiles(
     List<XFile> files, {
@@ -53,6 +59,7 @@ class SafeShare {
     try {
       await Clipboard.setData(ClipboardData(text: filePath));
       debugPrint('[safe_share] 已复制文件路径到剪贴板: $filePath');
+      onFallback?.call('系统分享不可用，已复制文件路径到剪贴板，请粘贴使用');
     } catch (e) {
       debugPrint('[safe_share] 剪贴板降级也失败: $e');
     }
@@ -62,6 +69,7 @@ class SafeShare {
     try {
       await Clipboard.setData(ClipboardData(text: text));
       debugPrint('[safe_share] 已复制文本到剪贴板');
+      onFallback?.call('系统分享不可用，已复制内容到剪贴板，请粘贴使用');
     } catch (e) {
       debugPrint('[safe_share] 剪贴板降级也失败: $e');
     }
