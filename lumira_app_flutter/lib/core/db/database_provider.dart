@@ -20,7 +20,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 23;
+const int _kDbVersion = 24;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -265,6 +265,26 @@ Future<void> _onCreate(Database db, int version) async {
     Tables.colId: 1,
     Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
   });
+
+  // === user_tags / item_tags 表（v24，用户自定义标签 + 搜索） ===
+  batch.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.userTags} (
+      ${Tables.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+      ${Tables.colName} TEXT NOT NULL UNIQUE,
+      ${Tables.colCreatedAt} INTEGER NOT NULL
+    )
+  ''');
+  batch.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.itemTags} (
+      ${Tables.colItemType} TEXT NOT NULL,
+      ${Tables.colItemId} TEXT NOT NULL,
+      ${Tables.colTagId} INTEGER NOT NULL REFERENCES ${Tables.userTags}(${Tables.colId}) ON DELETE CASCADE,
+      ${Tables.colCreatedAt} INTEGER NOT NULL,
+      PRIMARY KEY (${Tables.colItemType}, ${Tables.colItemId}, ${Tables.colTagId})
+    )
+  ''');
+  batch.execute('CREATE INDEX IF NOT EXISTS idx_item_tags_tag_id ON ${Tables.itemTags}(${Tables.colTagId})');
+  batch.execute('CREATE INDEX IF NOT EXISTS idx_item_tags_item ON ${Tables.itemTags}(${Tables.colItemType}, ${Tables.colItemId})');
 
   await batch.commit(noResult: true);
 
@@ -824,6 +844,31 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       ''');
     } catch (e) {
       debugPrint('v23 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 24) {
+    try {
+      // v24: 用户自定义标签表（标签字典 + 绑定关系）
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.userTags} (
+          ${Tables.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+          ${Tables.colName} TEXT NOT NULL UNIQUE,
+          ${Tables.colCreatedAt} INTEGER NOT NULL
+        )
+      ''');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.itemTags} (
+          ${Tables.colItemType} TEXT NOT NULL,
+          ${Tables.colItemId} TEXT NOT NULL,
+          ${Tables.colTagId} INTEGER NOT NULL REFERENCES ${Tables.userTags}(${Tables.colId}) ON DELETE CASCADE,
+          ${Tables.colCreatedAt} INTEGER NOT NULL,
+          PRIMARY KEY (${Tables.colItemType}, ${Tables.colItemId}, ${Tables.colTagId})
+        )
+      ''');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_item_tags_tag_id ON ${Tables.itemTags}(${Tables.colTagId})');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_item_tags_item ON ${Tables.itemTags}(${Tables.colItemType}, ${Tables.colItemId})');
+    } catch (e) {
+      debugPrint('v24 migration failed (silent fallback): $e');
     }
   }
 }

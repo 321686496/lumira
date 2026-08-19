@@ -195,6 +195,14 @@ class Tables {
   // colId 复用已声明常量（值 'id'）
   static const String tutorialReads = 'tutorial_reads';
   static const String colTutorialReadAt = 'read_at';
+
+  // === user_tags / item_tags 表（v24 迁移新增，用户自定义标签 + 搜索） ===
+  // colId / colName / colCreatedAt 复用前面已声明的同名常量
+  static const String userTags = 'user_tags';
+  static const String itemTags = 'item_tags';
+  static const String colItemType = 'item_type';
+  static const String colItemId = 'item_id';
+  static const String colTagId = 'tag_id';
 }
 
 class ChallengeHistoryTable {
