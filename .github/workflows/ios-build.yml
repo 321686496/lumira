@@ -312,7 +312,9 @@ jobs:
           # 因此这里用 -v 保留完整 xcodebuild 输出并落盘，失败时打印真实错误。
           flutter build ios --release --no-codesign -v > "$RUNNER_TEMP/ios_no_codesign.log" 2>&1 || true
 
-          if [ ! -f build/ios/iphoneos/Runner.app ]; then
+          # 注意：Runner.app 是目录（app bundle），必须用 -d 而非 -f（-f 只对普通文件为真，
+          # 对目录恒为假会导致已成功构建也被误判为失败）。
+          if [ ! -d build/ios/iphoneos/Runner.app ]; then
             echo "::error::iOS 无签名构建失败，真实错误如下（完整日志: $RUNNER_TEMP/ios_no_codesign.log）"
             echo "===== 1. 错误关键字相关行 ====="
             grep -niE 'error:|fatal|nonzero exit code|Command PhaseScriptExecution|The sandbox|no such file|permission denied|cannot find|DT_TOOLCHAIN_DIR|clang:|ld: |SwiftCompile|error\b' \
