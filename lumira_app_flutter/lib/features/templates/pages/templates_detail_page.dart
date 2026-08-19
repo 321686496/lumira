@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +8,7 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/safe_share.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -16,6 +18,7 @@ import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../data/templates_editor_mock_data.dart' show parseAspectRatio;
 import '../services/template_exporter.dart';
+import '../services/template_share_code.dart';
 import '../widgets/pose_silhouette.dart';
 import '../widgets/template_cover_image.dart';
 
@@ -188,6 +191,34 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
             onTap: () => Navigator.pop(ctx, 'lumira'),
           ),
           LumiraListTile(
+            leading: Icon(Icons.link_outlined, color: tokens.brand),
+            title: const Text('复制分享链接'),
+            subtitle: const Text('粘贴到微信/聊天，对方用如画导入'),
+            onTap: () {
+              Navigator.pop(ctx, null);
+              _copyShareLink(record);
+            },
+          ),
+          if (record.isBuiltin)
+            LumiraListTile(
+              leading: Icon(Icons.qr_code_2_outlined, color: tokens.brand),
+              title: const Text('复制分享码'),
+              subtitle: const Text('内置模板：对方输入分享码即可导入'),
+              onTap: () {
+                Navigator.pop(ctx, null);
+                _copyShareCode(record);
+              },
+            ),
+          LumiraListTile(
+            leading: Icon(Icons.chat_bubble_outline, color: tokens.brand),
+            title: const Text('以文本分享'),
+            subtitle: const Text('发送模板名 + 链接 + 分享码'),
+            onTap: () {
+              Navigator.pop(ctx, null);
+              _shareAsText(record);
+            },
+          ),
+          LumiraListTile(
             title: Center(
               child: Text(
                 '取消',
@@ -212,12 +243,39 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
           'filePath': filePath,
           'templateName': record.name,
           'usePptpl': usePptpl,
+          'shareLink': TemplateShareCode.buildShareLink(record, usePptpl: usePptpl),
+          'shareCode':
+              record.isBuiltin ? TemplateShareCode.buildShareCode(record) : null,
         },
       );
     } catch (e) {
       if (!mounted) return;
       LumiraToast.show(context, '导出失败：$e');
     }
+  }
+
+  /// 复制分享链接到剪贴板（完整 JSON 形式，对方可用如画粘贴导入）。
+  Future<void> _copyShareLink(TemplateRecord record) async {
+    final link = TemplateShareCode.buildShareLink(record);
+    await Clipboard.setData(ClipboardData(text: link));
+    _showSnack('分享链接已复制');
+  }
+
+  /// 复制分享码到剪贴板（内置模板专用，对方输入分享码即可导入）。
+  Future<void> _copyShareCode(TemplateRecord record) async {
+    final code = TemplateShareCode.buildShareCode(record);
+    await Clipboard.setData(ClipboardData(text: code));
+    _showSnack('分享码已复制');
+  }
+
+  /// 以文本形式分享（模板名 + 链接 + 分享码）。
+  Future<void> _shareAsText(TemplateRecord record) async {
+    final link = TemplateShareCode.buildShareLink(record);
+    final code = TemplateShareCode.buildShareCode(record);
+    await SafeShare.share(
+      '我用如画分享了模板「${record.name}」\n链接：$link\n分享码：$code',
+      subject: '如画模板：${record.name}',
+    );
   }
 
   /// 构建模板详情内容（v14 重构：接收 template 参数，支持 mock / DAO / remote 来源）。

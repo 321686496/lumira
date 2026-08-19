@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
@@ -20,11 +21,15 @@ class ExportDetailPage extends ConsumerStatefulWidget {
     required this.filePath,
     required this.templateName,
     required this.usePptpl,
+    this.shareLink,
+    this.shareCode,
   });
 
   final String filePath;
   final String templateName;
   final bool usePptpl;
+  final String? shareLink;
+  final String? shareCode;
 
   @override
   ConsumerState<ExportDetailPage> createState() => _ExportDetailPageState();
@@ -179,6 +184,21 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
       if (!mounted) return;
       LumiraToast.show(context, '分享失败: $e');
     }
+  }
+
+  Future<void> _copyText(String text, String toast) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    LumiraToast.show(context, toast);
+  }
+
+  Future<void> _shareAsText() async {
+    final link = widget.shareLink ?? '';
+    final code = widget.shareCode ?? '';
+    await SafeShare.share(
+      '我用如画分享了模板「${widget.templateName}」\n链接：$link\n分享码：$code',
+      subject: '如画模板：${widget.templateName}',
+    );
   }
 
   void _back() {
@@ -368,6 +388,49 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
                 Icon(Icons.share_outlined, size: 20),
                 const SizedBox(width: 8),
                 const Text('分享文件'),
+              ],
+            ),
+          ),
+          if (widget.shareLink != null) ...[
+            const SizedBox(height: 12),
+            LumiraButton(
+              variant: ButtonVariant.secondary,
+              onPressed: () => _copyText(widget.shareLink!, '分享链接已复制'),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.link_outlined, size: 20),
+                  const SizedBox(width: 8),
+                  const Text('复制分享链接'),
+                ],
+              ),
+            ),
+          ],
+          if (widget.shareCode != null) ...[
+            const SizedBox(height: 12),
+            LumiraButton(
+              variant: ButtonVariant.secondary,
+              onPressed: () => _copyText(widget.shareCode!, '分享码已复制'),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.qr_code_2_outlined, size: 20),
+                  const SizedBox(width: 8),
+                  const Text('复制分享码'),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          LumiraButton(
+            variant: ButtonVariant.secondary,
+            onPressed: _shareAsText,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.chat_bubble_outline, size: 20),
+                const SizedBox(width: 8),
+                const Text('以文本分享'),
               ],
             ),
           ),

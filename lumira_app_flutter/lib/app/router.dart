@@ -247,22 +247,30 @@ final routerProvider = Provider<GoRouter>((ref) {
           String filePath;
           String templateName;
           bool usePptpl;
+          String? shareLink;
+          String? shareCode;
 
           final extra = state.extra as Map<String, dynamic>?;
           if (extra != null) {
             filePath = extra['filePath'] as String? ?? '';
             templateName = extra['templateName'] as String? ?? '';
             usePptpl = (extra['usePptpl'] as bool?) ?? false;
+            shareLink = extra['shareLink'] as String?;
+            shareCode = extra['shareCode'] as String?;
           } else {
             filePath = state.queryParams['filePath'] ?? '';
             templateName = state.queryParams['templateName'] ?? '';
             usePptpl = state.queryParams['usePptpl'] == 'true';
+            shareLink = state.queryParams['shareLink'];
+            shareCode = state.queryParams['shareCode'];
           }
 
           return ExportDetailPage(
             filePath: filePath,
             templateName: templateName,
             usePptpl: usePptpl,
+            shareLink: shareLink,
+            shareCode: shareCode,
           );
         },
       ),
