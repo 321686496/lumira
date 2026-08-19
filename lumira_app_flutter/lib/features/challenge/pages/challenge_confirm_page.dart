@@ -241,16 +241,20 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
       // 2. 关联 photoId 到挑战历史记录（用于详情页"完成的作品"展示）
       await dao.attachPhoto(historyId, widget.photoId);
 
-      // 3'. 完成挑战经验写台账（幂等）+ 结算升级奖励
-      final db = await ref.read(databaseProvider.future);
-      final repo = await ref.read(pointsRepositoryProvider.future);
-      await awardAndClaim(
-        db: db,
-        repo: repo,
-        source: 'challenge',
-        amount: poolItem.rewardXP,
-        refId: poolItem.id,
-      );
+      // 3'. 完成挑战经验写台账（幂等）+ 结算升级奖励（失败静默，不阻塞提交）
+      try {
+        final db = await ref.read(databaseProvider.future);
+        final repo = await ref.read(pointsRepositoryProvider.future);
+        await awardAndClaim(
+          db: db,
+          repo: repo,
+          source: 'challenge',
+          amount: poolItem.rewardXP,
+          refId: poolItem.id,
+        );
+      } catch (e) {
+        debugPrint('[challenge] xp ledger/claim failed: $e');
+      }
 
       // 4. 失效相关 provider 触发刷新
       ref.invalidate(growthDaoProvider);
