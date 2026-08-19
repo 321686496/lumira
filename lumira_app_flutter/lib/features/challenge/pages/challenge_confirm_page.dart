@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
-import '../../../core/db/tables.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -16,6 +15,7 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../points/data/points_repository.dart';
+import '../../profile/services/growth_xp_provider.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_pool.dart';
 import '../data/challenge_providers.dart';
@@ -241,19 +241,16 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
       // 2. 关联 photoId 到挑战历史记录（用于详情页"完成的作品"展示）
       await dao.attachPhoto(historyId, widget.photoId);
 
-      // 3. 累加 XP 到 user_progress（单行表 id=1）
+      // 3'. 完成挑战经验写台账（幂等）+ 结算升级奖励
       final db = await ref.read(databaseProvider.future);
-      await db.rawInsert('''
-        INSERT OR IGNORE INTO ${Tables.userProgress}
-          (${Tables.colId}, ${Tables.colXp}, ${Tables.colTotalPhotos}, ${Tables.colUpdatedAt})
-        VALUES (1, 0, 0, ?)
-      ''', [nowMs]);
-      await db.rawUpdate('''
-        UPDATE ${Tables.userProgress}
-        SET ${Tables.colXp} = ${Tables.colXp} + ?,
-            ${Tables.colUpdatedAt} = ?
-        WHERE ${Tables.colId} = 1
-      ''', [poolItem.rewardXP, nowMs]);
+      final repo = await ref.read(pointsRepositoryProvider.future);
+      await awardAndClaim(
+        db: db,
+        repo: repo,
+        source: 'challenge',
+        amount: poolItem.rewardXP,
+        refId: poolItem.id,
+      );
 
       // 4. 失效相关 provider 触发刷新
       ref.invalidate(growthDaoProvider);

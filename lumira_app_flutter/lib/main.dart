@@ -17,9 +17,11 @@ import 'core/utils/safe_share.dart';
 import 'core/utils/share_reporter.dart';
 import 'features/capture/data/capture_state.dart';
 import 'features/points/data/points_repository.dart';
+import 'features/profile/data/growth_models.dart';
 import 'features/profile/data/profile_dao.dart';
 import 'features/profile/data/profile_models.dart';
 import 'features/profile/providers/profile_providers.dart';
+import 'features/profile/services/growth_xp_provider.dart';
 import 'features/templates/services/template_import_service.dart';
 import 'features/templates/services/template_share_code.dart';
 import 'features/templates/widgets/template_import_sheet.dart';
@@ -83,6 +85,19 @@ Future<void> main() async {
     try {
       final repo = await container.read(pointsRepositoryProvider.future);
       await repo.earn(type: 'share');
+      // 每日首享经验（+20）写台账 + 结算升级奖励
+      try {
+        final db = await container.read(databaseProvider.future);
+        await awardAndClaim(
+          db: db,
+          repo: repo,
+          source: 'share',
+          amount: 20,
+          refId: utc8DateStr(),
+        );
+      } catch (_) {
+        // 网络/鉴权失败静默
+      }
     } catch (_) {
       // 网络/鉴权失败静默，不影响分享主流程
     }

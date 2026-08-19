@@ -19,6 +19,8 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../challenge/widgets/challenge_overlay_bar.dart';
 import '../../home/providers/banner_recommendation_provider.dart';
 import '../../points/data/points_repository.dart';
+import '../../profile/data/growth_models.dart';
+import '../../profile/services/growth_xp_provider.dart';
 import '../../sign_in/data/sign_in_repository.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
@@ -844,6 +846,19 @@ class _CapturePageState extends ConsumerState<CapturePage>
   Future<void> _earnDailyShootPoints() async {
     try {
       final repo = await ref.read(pointsRepositoryProvider.future);
+      // 每日首拍经验（+10）写台账 + 结算升级奖励
+      try {
+        final db = await ref.read(databaseProvider.future);
+        await awardAndClaim(
+          db: db,
+          repo: repo,
+          source: 'shoot_daily',
+          amount: 10,
+          refId: utc8DateStr(),
+        );
+      } catch (e) {
+        debugPrint('[capture] daily shoot xp failed: $e');
+      }
       final result = await repo.earn(type: 'shoot_daily');
       if (result.granted && mounted) {
         LumiraToast.show(context, '每日首拍 +${result.delta} 积分');

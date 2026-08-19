@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'academy_dao.dart';
 import 'academy_content.dart';
 import 'academy_models.dart';
@@ -43,12 +45,15 @@ abstract class AcademyRepository {
 class LocalAcademyRepository implements AcademyRepository {
   final AcademyDao _dao;
   final DateTime Function() _now;
+  final Future<void> Function(String courseId, int rewardXp)? _onCourseCompleted;
 
   LocalAcademyRepository({
     required AcademyDao dao,
     DateTime Function()? now,
+    Future<void> Function(String courseId, int rewardXp)? onCourseCompleted,
   })  : _dao = dao,
-        _now = now ?? DateTime.now;
+        _now = now ?? DateTime.now,
+        _onCourseCompleted = onCourseCompleted;
 
   String _formatDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -180,6 +185,16 @@ class LocalAcademyRepository implements AcademyRepository {
           completedAt: completedAt,
           sequence: maxSeq + 1,
         );
+      }
+    }
+
+    // 学完课程经验写台账 + 结算升级奖励（失败不影响课程完成状态）
+    final course = AcademyContent.getCourse(courseId);
+    if (course != null && _onCourseCompleted != null) {
+      try {
+        await _onCourseCompleted!(courseId, course.rewardXP);
+      } catch (e) {
+        debugPrint('[academy] course xp failed: $e');
       }
     }
   }

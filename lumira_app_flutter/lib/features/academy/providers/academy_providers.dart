@@ -5,12 +5,27 @@ import '../data/academy_repository.dart';
 import '../data/academy_models.dart';
 import '../data/academy_content.dart';
 import '../data/academy_trajectory_models.dart';
+import '../../points/data/points_repository.dart';
+import '../../profile/services/growth_xp_provider.dart';
 
 // === DAO & Repository ===
 
 final academyRepositoryProvider = FutureProvider<AcademyRepository>((ref) async {
   final dao = await ref.watch(academyDaoProvider.future);
-  return LocalAcademyRepository(dao: dao);
+  return LocalAcademyRepository(
+    dao: dao,
+    onCourseCompleted: (courseId, xp) async {
+      final db = await ref.read(databaseProvider.future);
+      final repo = await ref.read(pointsRepositoryProvider.future);
+      await awardAndClaim(
+        db: db,
+        repo: repo,
+        source: 'course',
+        amount: xp,
+        refId: courseId,
+      );
+    },
+  );
 });
 
 // === 课程数据 ===
