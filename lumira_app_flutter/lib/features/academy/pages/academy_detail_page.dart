@@ -88,7 +88,7 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
               if (academyId == null) return;
               ref
                   .read(academyActionsProvider.notifier)
-                  .toggleCourseFavorite(academyId!);
+                  .toggleCourseFavorite(academyId);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(isFav ? '已取消收藏' : '已收藏'),
