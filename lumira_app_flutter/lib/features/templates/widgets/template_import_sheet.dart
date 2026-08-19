@@ -13,6 +13,7 @@ import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../capture/data/capture_state.dart';
 import '../../capture/data/template_registry.dart';
 import '../services/pptpl_format.dart';
+import '../services/template_import_service.dart';
 import '../services/template_mapper.dart';
 import '../services/template_share_code.dart';
 
@@ -170,41 +171,33 @@ class TemplateImportSheet extends ConsumerWidget {
         return;
       }
 
-      final now = DateTime.now().millisecondsSinceEpoch;
-      var record = TemplateMapper.recordFromImportedJson(
-        parsed,
-        createdAt: now,
-      );
-      debugPrint('[TemplateImport] recordFromImportedJson ok, '
-          'id=${record.id}, name=${record.name}, coverDataLen=${record.coverData?.length ?? 0}, '
-          'source=${record.source}');
-
-      // ID 冲突处理：已存在则追加 _imported_ 时间戳后缀
       final dao = await ref.read(templatesDaoProvider.future);
-      var finalId = record.id;
-      while (await dao.getById(finalId) != null) {
-        finalId = '${finalId}_imported_$now';
-      }
-      if (finalId != record.id) {
-        record = record.copyWith(id: finalId);
-      }
-      debugPrint('[TemplateImport] final id: $finalId');
+      final result = await TemplateImportService.importJson(
+        parsed,
+        dao: dao,
+        invalidateTemplates: () async =>
+            ref.invalidate(CaptureState.allTemplatesProvider),
+      );
+      debugPrint('[TemplateImport] importJson ok=${result.ok}, '
+          'id=${result.id}, error=${result.error}');
 
-      await dao.upsert(record);
-      debugPrint('[TemplateImport] dao.upsert ok');
-      // 刷新 Capture 页模板缓存（系统 + 自定义），使新导入的模板立即出现
-      ref.invalidate(CaptureState.allTemplatesProvider);
+      if (!result.ok) {
+        if (context.mounted) {
+          navigator.pop();
+          _showToast(context, '导入失败：${result.error}');
+        }
+        return;
+      }
 
       if (context.mounted) {
         // 版本兼容性校验
-        final warnings = PptplFormat.validate(parsed);
-        if (warnings.isNotEmpty) {
-          _showWarningsDialog(context, warnings);
+        if (result.warnings.isNotEmpty) {
+          _showWarningsDialog(context, result.warnings);
         }
-        _showToast(context, '已导入模板：${record.name}');
+        _showToast(context, result.message);
         navigator.pop();
       }
-      onImported(record.id);
+      onImported(result.id!);
     } catch (e, st) {
       debugPrint('[TemplateImport] FAILED: $e\n$st');
       if (context.mounted) {
@@ -251,34 +244,30 @@ class TemplateImportSheet extends ConsumerWidget {
 
     // 完整 JSON 形式 → 走 DAO 持久化
     try {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final warnings = PptplFormat.validate(parsed);
-      var record = TemplateMapper.recordFromImportedJson(
+      final dao = await ref.read(templatesDaoProvider.future);
+      final result = await TemplateImportService.importJson(
         parsed,
-        createdAt: now,
+        dao: dao,
+        invalidateTemplates: () async =>
+            ref.invalidate(CaptureState.allTemplatesProvider),
       );
 
-      final dao = await ref.read(templatesDaoProvider.future);
-      var finalId = record.id;
-      while (await dao.getById(finalId) != null) {
-        finalId = '${finalId}_imported_$now';
+      if (!result.ok) {
+        if (context.mounted) {
+          navigator.pop();
+          _showToast(context, '导入失败：${result.error}');
+        }
+        return;
       }
-      if (finalId != record.id) {
-        record = record.copyWith(id: finalId);
-      }
-
-      await dao.upsert(record);
-      // 刷新 Capture 页模板缓存（系统 + 自定义），使新导入的模板立即出现
-      ref.invalidate(CaptureState.allTemplatesProvider);
 
       if (context.mounted) {
-        _showToast(context, '已导入模板：${record.name}');
-        if (warnings.isNotEmpty) {
-          _showWarningsDialog(context, warnings);
+        _showToast(context, result.message);
+        if (result.warnings.isNotEmpty) {
+          _showWarningsDialog(context, result.warnings);
         }
         navigator.pop();
       }
-      onImported(record.id);
+      onImported(result.id!);
     } catch (e, st) {
       debugPrint('[TemplateImport] link FAILED: $e\n$st');
       if (context.mounted) {
