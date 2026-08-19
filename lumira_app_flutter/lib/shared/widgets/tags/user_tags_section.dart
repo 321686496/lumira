@@ -69,6 +69,7 @@ class _UserTagsSectionState extends ConsumerState<UserTagsSection> {
       itemId: widget.itemId,
       name: name,
     );
+    if (!mounted) return;
     _controller.clear();
     setState(() {
       _suggestions = const [];
