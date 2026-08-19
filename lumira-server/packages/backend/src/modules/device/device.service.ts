@@ -44,7 +44,7 @@ export class DeviceService {
         })
         .where(eq(devices.deviceId, deviceId));
 
-      const token = this.jwtService.sign({ deviceId });
+      const token = this.jwtService.sign({ deviceId, epoch: existing.sessionEpoch ?? 0 });
       const profile = await this.profileService.getOrCreateProfile(deviceId);
       return { token, isNewDevice: false, profile };
     }
@@ -61,7 +61,7 @@ export class DeviceService {
       ipRegion: ip,
     });
 
-    const token = this.jwtService.sign({ deviceId });
+    const token = this.jwtService.sign({ deviceId, epoch: 0 });
     const profile = await this.profileService.getOrCreateProfile(deviceId);
     return { token, isNewDevice: true, profile };
   }

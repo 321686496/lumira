@@ -3,9 +3,13 @@ import { NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify
 import { AppModule } from '../src/app.module';
 import request from 'supertest';
 import { resetTestDatabase } from './test-db';
+import { DatabaseService } from '../src/database/database.service';
+import { devices as devicesTable } from '../src/database/schema';
+import { eq } from 'drizzle-orm';
 
 describe('DeviceController (e2e)', () => {
   let app: NestFastifyApplication;
+  let dbService!: DatabaseService;
 
   beforeAll(async () => {
     process.env.DB_HOST = process.env.DB_HOST || '127.0.0.1';
@@ -24,7 +28,8 @@ describe('DeviceController (e2e)', () => {
     app.setGlobalPrefix('api/v1');
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
-  });
+    dbService = moduleRef.get<DatabaseService>(DatabaseService);
+  }, 30000);
 
   afterAll(async () => {
     await app.close();
@@ -92,5 +97,43 @@ describe('DeviceController (e2e)', () => {
       .set('Authorization', 'Bearer invalid-token')
       .send({ platform: 'android' })
       .expect(401);
+  });
+
+  it('PATCH /api/v1/device/info — should 401 after session_epoch changes', async () => {
+    const devId = '11111111-1111-4111-8111-111111111101';
+    const reg = await request(app.getHttpServer())
+      .post('/api/v1/device/register')
+      .send({ deviceId: devId })
+      .expect(201);
+    const token = reg.body.token as string;
+    // 基线：旧 token 先能通过
+    await request(app.getHttpServer())
+      .patch('/api/v1/device/info')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ platform: 'android' })
+      .expect(200);
+
+    // 模拟账号找回：递增 session_epoch
+    await dbService.getDb().update(devicesTable)
+      .set({ sessionEpoch: 1 })
+      .where(eq(devicesTable.deviceId, devId));
+
+    // 旧 epoch=0 的 token 应失效
+    await request(app.getHttpServer())
+      .patch('/api/v1/device/info')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ platform: 'android' })
+      .expect(401);
+
+    // 重新注册拿到 epoch=1 新 token 后恢复通过
+    const reg2 = await request(app.getHttpServer())
+      .post('/api/v1/device/register')
+      .send({ deviceId: devId })
+      .expect(201);
+    await request(app.getHttpServer())
+      .patch('/api/v1/device/info')
+      .set('Authorization', `Bearer ${reg2.body.token}`)
+      .send({ platform: 'harmonyos' })
+      .expect(200);
   });
 });
