@@ -65,85 +65,85 @@ jobs:
             -o ServerAliveCountMax=60 \
             "$SSH_USER@$SSH_HOST" \
             "export DEPLOY_PATH=\"$DEPLOY_PATH\" GIT_REMOTE=\"$GIT_REMOTE\" GIT_MIRROR_URL=\"$GIT_MIRROR_URL\" TRIGGER_REASON=\"$TRIGGER_REASON\"; bash -s" <<'REMOTE_SCRIPT'
-set -e
-echo "==> 触发原因：$TRIGGER_REASON"
+          set -e
+          echo "==> 触发原因：$TRIGGER_REASON"
 
-# 检查部署目录是否已初始化
-if [ ! -d "$DEPLOY_PATH/repo/.git" ]; then
-  echo "::error::部署目录 $DEPLOY_PATH/repo 未初始化"
-  echo "::error::请先在服务器上执行以下命令完成初始化："
-  echo "::error::  sudo mkdir -p $DEPLOY_PATH && sudo chown \$USER:\$USER $DEPLOY_PATH"
-  echo "::error::  cd $DEPLOY_PATH"
-  echo "::error::  git clone <仓库URL> repo"
-  echo "::error::  cp repo/deploy/docker-compose.prod.yml ."
-  echo "::error::  mkdir -p data"
-  echo "::error::  cat > .env <<EOF"
-  echo "::error::  JWT_SECRET=\$(openssl rand -hex 32)"
-  echo "::error::  ADMIN_TOKEN=\$(openssl rand -hex 32)"
-  echo "::error::  MYSQL_ROOT_PASSWORD=\$(openssl rand -hex 16)"
-  echo "::error::  MYSQL_DATABASE=lumira"
-  echo "::error::  MYSQL_USER=lumira"
-  echo "::error::  MYSQL_PASSWORD=\$(openssl rand -hex 16)"
-  echo "::error::  EOF"
-  echo "::error::详细步骤见 .github/DEPLOY.md"
-  exit 1
-fi
+          # 检查部署目录是否已初始化
+          if [ ! -d "$DEPLOY_PATH/repo/.git" ]; then
+            echo "::error::部署目录 $DEPLOY_PATH/repo 未初始化"
+            echo "::error::请先在服务器上执行以下命令完成初始化："
+            echo "::error::  sudo mkdir -p $DEPLOY_PATH && sudo chown \$USER:\$USER $DEPLOY_PATH"
+            echo "::error::  cd $DEPLOY_PATH"
+            echo "::error::  git clone <仓库URL> repo"
+            echo "::error::  cp repo/deploy/docker-compose.prod.yml ."
+            echo "::error::  mkdir -p data"
+            echo "::error::  cat > .env <<EOF"
+            echo "::error::  JWT_SECRET=\$(openssl rand -hex 32)"
+            echo "::error::  ADMIN_TOKEN=\$(openssl rand -hex 32)"
+            echo "::error::  MYSQL_ROOT_PASSWORD=\$(openssl rand -hex 16)"
+            echo "::error::  MYSQL_DATABASE=lumira"
+            echo "::error::  MYSQL_USER=lumira"
+            echo "::error::  MYSQL_PASSWORD=\$(openssl rand -hex 16)"
+            echo "::error::  EOF"
+            echo "::error::详细步骤见 .github/DEPLOY.md"
+            exit 1
+          fi
 
-echo "==> [1/5] 拉取最新代码"
-cd $DEPLOY_PATH/repo
+          echo "==> [1/5] 拉取最新代码"
+          cd $DEPLOY_PATH/repo
 
-# 修复目录权限（确保当前用户有写权限）
-sudo chown -R $USER:$USER $DEPLOY_PATH/repo
+          # 修复目录权限（确保当前用户有写权限）
+          sudo chown -R $USER:$USER $DEPLOY_PATH/repo
 
-# 解决 Git "dubious ownership" 错误（目录所有者与当前用户不一致时）
-git config --global --add safe.directory $DEPLOY_PATH/repo
+          # 解决 Git "dubious ownership" 错误（目录所有者与当前用户不一致时）
+          git config --global --add safe.directory $DEPLOY_PATH/repo
 
-# 信任 Gitee 的 SSH host key（避免首次连接时要求确认）
-mkdir -p ~/.ssh
-ssh-keyscan -t rsa,ecdsa,ed25519 gitee.com >> ~/.ssh/known_hosts 2>/dev/null
+          # 信任 Gitee 的 SSH host key（避免首次连接时要求确认）
+          mkdir -p ~/.ssh
+          ssh-keyscan -t rsa,ecdsa,ed25519 gitee.com >> ~/.ssh/known_hosts 2>/dev/null
 
-# 国内服务器无法直接访问 GitHub 时，通过 GIT_MIRROR_URL 切换到 Gitee 镜像
-# 在 GitHub Actions Secrets 中设置 GIT_MIRROR_URL=git@gitee.com:xxx/lumira.git（SSH 格式）
-if [ -n "$GIT_MIRROR_URL" ]; then
-  echo "==> 检测到 GIT_MIRROR_URL，切换到镜像源：$GIT_MIRROR_URL"
-  git remote set-url $GIT_REMOTE "$GIT_MIRROR_URL"
-fi
+          # 国内服务器无法直接访问 GitHub 时，通过 GIT_MIRROR_URL 切换到 Gitee 镜像
+          # 在 GitHub Actions Secrets 中设置 GIT_MIRROR_URL=git@gitee.com:xxx/lumira.git（SSH 格式）
+          if [ -n "$GIT_MIRROR_URL" ]; then
+            echo "==> 检测到 GIT_MIRROR_URL，切换到镜像源：$GIT_MIRROR_URL"
+            git remote set-url $GIT_REMOTE "$GIT_MIRROR_URL"
+          fi
 
-# GitHub 偶发 "Empty reply from server"（HTTP/2 连接被中间网络重置），强制 HTTP/1.1 并重试
-git config http.version HTTP/1.1
-for attempt in 1 2 3 4 5; do
-  if git fetch --all; then
-    break
-  fi
-  echo "==> git fetch 失败（第 $attempt 次），5 秒后重试..."
-  sleep 5
-done
-git reset --hard $GIT_REMOTE/master
-echo "当前代码版本："
-git log --oneline -1
+          # GitHub 偶发 "Empty reply from server"（HTTP/2 连接被中间网络重置），强制 HTTP/1.1 并重试
+          git config http.version HTTP/1.1
+          for attempt in 1 2 3 4 5; do
+            if git fetch --all; then
+              break
+            fi
+            echo "==> git fetch 失败（第 $attempt 次），5 秒后重试..."
+            sleep 5
+          done
+          git reset --hard $GIT_REMOTE/master
+          echo "当前代码版本："
+          git log --oneline -1
 
-echo "==> [2/5] 同步部署用 docker-compose 文件"
-sudo cp deploy/docker-compose.prod.yml $DEPLOY_PATH/docker-compose.prod.yml
+          echo "==> [2/5] 同步部署用 docker-compose 文件"
+          sudo cp deploy/docker-compose.prod.yml $DEPLOY_PATH/docker-compose.prod.yml
 
-echo "==> [3/5] 确保数据目录存在"
-sudo mkdir -p $DEPLOY_PATH/data
-sudo mkdir -p $DEPLOY_PATH/data/mysql
+          echo "==> [3/5] 确保数据目录存在"
+          sudo mkdir -p $DEPLOY_PATH/data
+          sudo mkdir -p $DEPLOY_PATH/data/mysql
 
-echo "==> [4/5] 构建后端镜像（git reset 已确保代码最新，Docker 会自动失效受影响的缓存层）"
-cd $DEPLOY_PATH
-# 兼容 Docker Compose V1 和 V2
-if docker compose version &>/dev/null; then
-  COMPOSE_CMD="docker compose"
-else
-  COMPOSE_CMD="docker-compose"
-fi
-sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env build
+          echo "==> [4/5] 构建后端镜像（git reset 已确保代码最新，Docker 会自动失效受影响的缓存层）"
+          cd $DEPLOY_PATH
+          # 兼容 Docker Compose V1 和 V2
+          if docker compose version &>/dev/null; then
+            COMPOSE_CMD="docker compose"
+          else
+            COMPOSE_CMD="docker-compose"
+          fi
+          sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env build
 
-echo "==> [5/5] 重启容器（--force-recreate 强制重建容器，确保新镜像生效）"
-sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env up -d --force-recreate
-sudo docker image prune -f
+          echo "==> [5/5] 重启容器（--force-recreate 强制重建容器，确保新镜像生效）"
+          sudo $COMPOSE_CMD -f docker-compose.prod.yml --env-file .env up -d --force-recreate
+          sudo docker image prune -f
 
-echo "==> 部署完成，等待 15 秒后查看日志："
-sleep 15
-$COMPOSE_CMD -f docker-compose.prod.yml logs --tail=30
-REMOTE_SCRIPT
+          echo "==> 部署完成，等待 15 秒后查看日志："
+          sleep 15
+          $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=30
+          REMOTE_SCRIPT
