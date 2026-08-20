@@ -22,7 +22,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 26;
+const int _kDbVersion = 27;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -372,7 +372,15 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colUsername} TEXT NOT NULL,
       ${Tables.colAvatarSeed} TEXT NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL,
-      ${Tables.colSyncedAt} INTEGER
+      ${Tables.colSyncedAt} INTEGER,
+      ${Tables.colGender} TEXT,
+      ${Tables.colFavoriteCategoriesJson} TEXT,
+      ${Tables.colPainPointsJson} TEXT,
+      ${Tables.colSkillLevel} TEXT,
+      ${Tables.colExpectationsJson} TEXT,
+      ${Tables.colCommonScenesJson} TEXT,
+      ${Tables.colShootFrequency} TEXT,
+      ${Tables.colAvatarUrl} TEXT
     )
   ''');
 
@@ -917,6 +925,22 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await _backfillXpLedger(db);
     } catch (e) {
       debugPrint('v26 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 27) {
+    try {
+      // v27: user_profile 新增 8 列（性别/偏好/技能/期望/场景/频率/自定义头像）
+      await _addColumnIfNotExists(db, Tables.userProfile, Tables.colGender, 'TEXT');
+      await _addColumnIfNotExists(db, Tables.userProfile, Tables.colFavoriteCategoriesJson, 'TEXT');
+      await _addColumnIfNotExists(db, Tables.userProfile, Tables.colPainPointsJson, 'TEXT');
+      await _addColumnIfNotExists(db, Tables.userProfile, Tables.colSkillLevel, 'TEXT');
+      await _addColumnIfNotExists(db, Tables.userProfile, Tables.colExpectationsJson, 'TEXT');
+      await _addColumnIfNotExists(db, Tables.userProfile, Tables.colCommonScenesJson, 'TEXT');
+      await _addColumnIfNotExists(db, Tables.userProfile, Tables.colShootFrequency, 'TEXT');
+      await _addColumnIfNotExists(db, Tables.userProfile, Tables.colAvatarUrl, 'TEXT');
+    } catch (e) {
+      debugPrint('v27 migration failed (silent fallback): $e');
     }
   }
 }

@@ -18,7 +18,9 @@ class BuiltinProfiles {
     '麦田守望者', '旧巷拾影', '月亮邮差', '森林呼吸',
   ];
 
-  /// 根据 seed 拼出头像 URL
-  static String avatarUrl(String seed) =>
-      'https://picsum.photos/seed/$seed/200/200';
+  /// 头像 URL：customUrl 非空用自定义，否则用 picsum seed
+  static String avatarUrl(String seed, {String? customUrl}) {
+    if (customUrl != null && customUrl.isNotEmpty) return customUrl;
+    return 'https://picsum.photos/seed/$seed/200/200';
+  }
 }

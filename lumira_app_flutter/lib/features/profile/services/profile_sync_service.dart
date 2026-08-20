@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../../../core/network/api_error.dart';
 import '../data/profile_dao.dart';
 import '../data/profile_models.dart';
@@ -29,7 +31,18 @@ class ProfileSyncService {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     await _dao.upsert(profile, now);
     try {
-      await _repo.update(username: profile.username, avatarSeed: profile.avatarSeed);
+      await _repo.update(
+        username: profile.username,
+        avatarSeed: profile.avatarSeed,
+        gender: profile.gender,
+        favoriteCategories: profile.favoriteCategories,
+        painPoints: profile.painPoints,
+        skillLevel: profile.skillLevel,
+        expectations: profile.expectations,
+        commonScenes: profile.commonScenes,
+        shootFrequency: profile.shootFrequency,
+        avatarUrl: profile.avatarUrl,
+      );
       await _dao.markSynced(now);
       return const ProfileSaveResult(success: true, synced: true);
     } on ApiException catch (e) {
@@ -60,11 +73,27 @@ class ProfileSyncService {
     final local = await _dao.get();
     if (local == null) return;
     try {
-      await _repo.update(username: local.username, avatarSeed: local.avatarSeed);
+      await _repo.update(
+        username: local.username,
+        avatarSeed: local.avatarSeed,
+        gender: local.gender,
+        favoriteCategories: local.favoriteCategories,
+        painPoints: local.painPoints,
+        skillLevel: local.skillLevel,
+        expectations: local.expectations,
+        commonScenes: local.commonScenes,
+        shootFrequency: local.shootFrequency,
+        avatarUrl: local.avatarUrl,
+      );
       final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       await _dao.markSynced(now);
     } catch (_) {
       // 静默失败，下次启动再试
     }
+  }
+
+  /// 上传自定义头像字节流，返回后端生成的 {avatarUrl}
+  Future<String> uploadAvatar(Uint8List bytes, String filename) {
+    return _repo.uploadAvatarBytes(bytes, filename);
   }
 }

@@ -23,7 +23,15 @@ void main() {
             username TEXT NOT NULL,
             avatar_seed TEXT NOT NULL,
             updated_at INTEGER NOT NULL,
-            synced_at INTEGER
+            synced_at INTEGER,
+            gender TEXT,
+            favorite_categories_json TEXT,
+            pain_points_json TEXT,
+            skill_level TEXT,
+            expectations_json TEXT,
+            common_scenes_json TEXT,
+            shoot_frequency TEXT,
+            avatar_url TEXT
           )
         ''');
       },
@@ -64,5 +72,45 @@ void main() {
     await dao.markSynced(1700000100);
     expect(await dao.hasUnsynced(), isFalse);
     expect((await dao.get())!.syncedAt, 1700000100);
+  });
+
+  test('upsert/get roundtrip preserves new fields (json lists, null, empty)', () async {
+    const full = ProfileData(
+      username: '丰富昵称',
+      avatarSeed: 'seed',
+      gender: 'female',
+      favoriteCategories: ['portrait', 'food'],
+      painPoints: ['blurry', 'light'],
+      skillLevel: 'intermediate',
+      expectations: ['growth'],
+      commonScenes: ['street'],
+      shootFrequency: 'weekly',
+      avatarUrl: 'https://cdn.example.com/avatar/a.png',
+    );
+    await dao.upsert(full, 1700000000);
+    final loaded = await dao.get();
+    expect(loaded!.username, '丰富昵称');
+    expect(loaded.gender, 'female');
+    expect(loaded.favoriteCategories, ['portrait', 'food']);
+    expect(loaded.painPoints, ['blurry', 'light']);
+    expect(loaded.skillLevel, 'intermediate');
+    expect(loaded.expectations, ['growth']);
+    expect(loaded.commonScenes, ['street']);
+    expect(loaded.shootFrequency, 'weekly');
+    expect(loaded.avatarUrl, 'https://cdn.example.com/avatar/a.png');
+  });
+
+  test('upsert/get roundtrip with empty lists and null optionals', () async {
+    await dao.upsert(const ProfileData(username: '空资料', avatarSeed: 'seed2'), 1700000001);
+    final loaded = await dao.get();
+    expect(loaded!.username, '空资料');
+    expect(loaded.gender, isNull);
+    expect(loaded.favoriteCategories, isEmpty);
+    expect(loaded.painPoints, isEmpty);
+    expect(loaded.skillLevel, isNull);
+    expect(loaded.expectations, isEmpty);
+    expect(loaded.commonScenes, isEmpty);
+    expect(loaded.shootFrequency, isNull);
+    expect(loaded.avatarUrl, isNull);
   });
 }

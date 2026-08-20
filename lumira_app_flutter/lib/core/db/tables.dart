@@ -186,6 +186,14 @@ class Tables {
   static const String colUsername = 'username';
   static const String colAvatarSeed = 'avatar_seed';
   // colSyncedAt 复用 questionnaire 段声明（值同为 'synced_at'），此处不重复声明
+  static const String colGender = 'gender';
+  static const String colFavoriteCategoriesJson = 'favorite_categories_json';
+  static const String colPainPointsJson = 'pain_points_json';
+  static const String colSkillLevel = 'skill_level';
+  static const String colExpectationsJson = 'expectations_json';
+  static const String colCommonScenesJson = 'common_scenes_json';
+  static const String colShootFrequency = 'shoot_frequency';
+  static const String colAvatarUrl = 'avatar_url';
 
   // === watermark_templates 表（v20 迁移新增，自定义水印模板） ===
   // colId / colName / colCreatedAt 复用前面已声明的同名常量
