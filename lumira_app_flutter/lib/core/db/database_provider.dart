@@ -21,9 +21,10 @@ import '../../features/academy/data/academy_content.dart';
 import '../../core/auth/auth_dao.dart';
 import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
+import '../../features/notification/data/notification_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 31;
+const int _kDbVersion = 32;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -113,6 +114,11 @@ final userTagsDaoProvider = FutureProvider<TagsDao>((ref) async {
 final usageDaoProvider = FutureProvider<UsageDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return UsageDao(db);
+});
+
+final notificationDaoProvider = FutureProvider<NotificationDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return NotificationDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -423,6 +429,26 @@ Future<void> _onCreate(Database db, int version) async {
     await _createUsageTables(db);
   } catch (e) {
     debugPrint('usage tables (onCreate) failed: $e');
+  }
+
+  // === v32: notifications 表（本地通知中心） ===
+  try {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${Tables.notifications} (
+        ${Tables.colId} TEXT PRIMARY KEY,
+        ${Tables.colSource} TEXT NOT NULL,
+        ${Tables.colRemoteId} TEXT,
+        ${Tables.colKind} TEXT NOT NULL,
+        ${Tables.colTitleN} TEXT NOT NULL,
+        ${Tables.colBodyN} TEXT NOT NULL,
+        ${Tables.colTimeMs} INTEGER NOT NULL,
+        ${Tables.colRead} INTEGER NOT NULL DEFAULT 0,
+        ${Tables.colCleared} INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_notifications_cleared ON ${Tables.notifications}(${Tables.colCleared})');
+  } catch (e) {
+    debugPrint('notifications table (onCreate) failed: $e');
   }
 
   // === 种子化预置数据（修复：fresh install 时不触发 _onUpgrade，需在 _onCreate 中显式调用 seeder） ===
@@ -1009,6 +1035,27 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v31 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 32) {
+    try {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.notifications} (
+          ${Tables.colId} TEXT PRIMARY KEY,
+          ${Tables.colSource} TEXT NOT NULL,
+          ${Tables.colRemoteId} TEXT,
+          ${Tables.colKind} TEXT NOT NULL,
+          ${Tables.colTitleN} TEXT NOT NULL,
+          ${Tables.colBodyN} TEXT NOT NULL,
+          ${Tables.colTimeMs} INTEGER NOT NULL,
+          ${Tables.colRead} INTEGER NOT NULL DEFAULT 0,
+          ${Tables.colCleared} INTEGER NOT NULL DEFAULT 0
+        )
+      ''');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_notifications_cleared ON ${Tables.notifications}(${Tables.colCleared})');
+    } catch (e) {
+      debugPrint('v32 migration failed (silent fallback): $e');
     }
   }
 }

@@ -227,6 +227,18 @@ class Tables {
   static const String usageStats = 'usage_stats';
   static const String colCount = 'count';
   // colUpdatedAt 复用 custom_templates 段声明（值同为 'updated_at'）
+
+  // === notifications 表（v32 迁移新增，通知中心） ===
+  // colId / colSource 复用前面已声明的同名常量（值 'id' / 'source'）
+  static const String notifications = 'notifications';
+  static const String colRemoteId = 'remote_id';
+  static const String colKind = 'kind';
+  static const String colRead = 'read';          // 0 未读 1 已读
+  static const String colCleared = 'cleared';    // 0 未清除 1 已清除
+  static const String colTimeMs = 'time_ms';
+  // title/body 用独立常量 colTitleN / colBodyN，避免与既有 colName 等成员冲突
+  static const String colTitleN = 'title';
+  static const String colBodyN = 'body';
 }
 
 class ChallengeHistoryTable {
