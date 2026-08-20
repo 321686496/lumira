@@ -12,6 +12,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { WeatherModule } from './modules/weather/weather.module';
 import { QuestionnaireModule } from './modules/questionnaire/questionnaire.module';
 import { TemplatesModule } from './modules/templates/templates.module';
+import { UsageModule } from './modules/usage/usage.module';
 import { SignInModule } from './modules/sign-in/sign-in.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { AccountModule } from './modules/account/account.module';
@@ -20,7 +21,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { GlobalValidationPipe } from './common/pipes/global-validation.pipe';
 
 @Module({
-  imports: [DatabaseModule, DeviceModule, ProfileModule, InviteModule, RedeemModule, RewardsModule, AdminModule, WeatherModule, QuestionnaireModule, TemplatesModule, SignInModule, FeedbackModule, AccountModule],
+  imports: [DatabaseModule, DeviceModule, ProfileModule, InviteModule, RedeemModule, RewardsModule, AdminModule, WeatherModule, QuestionnaireModule, TemplatesModule, UsageModule, SignInModule, FeedbackModule, AccountModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
