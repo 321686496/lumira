@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database_provider.dart';
 import 'data/notification_dao.dart';
+import 'local_notification_generator.dart';
 import 'notification_models.dart';
 import 'notification_repository.dart';
 
@@ -58,6 +59,8 @@ final remoteNotificationsSyncProvider = FutureProvider<void>((ref) async {
 final notificationsProvider = FutureProvider<List<NotificationItem>>((ref) async {
   // 点火远程同步（远程公告 → sqflite 缓存）；网络失败静默，不影响本地列表
   ref.watch(remoteNotificationsSyncProvider);
+  // 点火本地应用事件生成（未读本地通知 → sqflite）；失败静默，不影响列表
+  ref.watch(unreadLocalGeneratedProvider);
   final dao = await ref.watch(notificationDaoProvider.future);
   final records = await dao.list();
   return records.map(NotificationItem.fromRecord).toList();
