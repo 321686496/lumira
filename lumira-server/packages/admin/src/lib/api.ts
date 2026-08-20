@@ -108,22 +108,14 @@ export interface UsageStatsItem {
 }
 
 /**
- * 模板/场景使用次数汇总。
- * 注意：后端 `/api/v1/usage/stats` 不在 `/admin` 前缀下，且走 DeviceAuthGuard，
- * 不能复用 adminFetch。这里做 best-effort 读取：任何失败都静默返回 []，
- * 不影响主列表渲染（视 admin token 是否兼容而定）。
+ * 模板/场景使用次数汇总（admin 专用，走 AdminAuthGuard）。
+ * best-effort 读取：任何失败都静默返回 []，不影响主列表渲染。
  */
 export async function getUsageStats(
   itemType: 'template' | 'scene',
 ): Promise<UsageStatsItem[]> {
   try {
-    const token = cookies().get(AUTH_COOKIE_NAME)?.value;
-    const res = await fetch(`${BACKEND_URL}/api/v1/usage/stats?itemType=${itemType}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      cache: 'no-store',
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as { items?: UsageStatsItem[] };
+    const data = await adminFetch<{ items?: UsageStatsItem[] }>(`/usage/stats?itemType=${itemType}`);
     return Array.isArray(data?.items) ? data.items : [];
   } catch {
     return [];

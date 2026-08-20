@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '../../database/database.module';
 import { UsageController } from './usage.controller';
+import { AdminUsageController } from './admin-usage.controller';
 import { UsageService } from './usage.service';
 
 @Module({
@@ -13,7 +14,7 @@ import { UsageService } from './usage.service';
       signOptions: { expiresIn: '30d' },
     }),
   ],
-  controllers: [UsageController],
+  controllers: [UsageController, AdminUsageController],
   providers: [UsageService],
   exports: [UsageService],
 })
