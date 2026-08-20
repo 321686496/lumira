@@ -192,8 +192,8 @@ class InspirationService {
     if (_inGoldenHourWindow(now, weather.sunset)) {
       final golden = _goldenHourFromSunset(weather.sunset);
       description = (golden.isNotEmpty
-          ? '现在是黄金时刻窗口（约 $golden 前后），'
-          : '现在是黄金时刻窗口，') + description;
+          ? '现在正处黄金时刻（约在 $golden），'
+          : '现在正处黄金时刻，') + description;
     }
 
     // 天气行（含城市名 + 真实位置黄金/蓝调时刻）
@@ -204,7 +204,7 @@ class InspirationService {
       parts.add('${weather.temperature}°C ${weather.condition}');
       final golden = _goldenHourFromSunset(weather.sunset);
       if (golden.isNotEmpty) {
-        parts.add('黄金时刻 $golden');
+        parts.add('黄金时刻在 $golden');
       }
       weatherText = parts.join(' · ');
     } else if (slot == _TimeSlot.dusk) {
