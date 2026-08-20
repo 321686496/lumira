@@ -38,6 +38,18 @@ export class CreateTemplateDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(10)
+  shortDesc?: string;
+
+  @IsOptional()
+  ambience?: {
+    seasons?: string[];
+    weathers?: string[];
+    timeTones?: string[];
+  };
+
+  @IsOptional()
+  @IsString()
   @MaxLength(256)
   referenceSource?: string;
 
