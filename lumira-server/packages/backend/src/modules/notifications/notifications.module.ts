@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '../../database/database.module';
 import { NotificationsController } from './notifications.controller';
+import { AdminNotificationsController } from './admin-notifications.controller';
 import { NotificationsService } from './notifications.service';
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { NotificationsService } from './notifications.service';
       signOptions: { expiresIn: '30d' },
     }),
   ],
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, AdminNotificationsController],
   providers: [NotificationsService],
   exports: [NotificationsService],
 })
