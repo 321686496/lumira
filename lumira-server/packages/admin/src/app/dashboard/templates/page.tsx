@@ -1,6 +1,6 @@
 // src/app/dashboard/templates/page.tsx
 import { redirect } from 'next/navigation';
-import { api, getUsageStats } from '@/lib/api';
+import { api, getUsageStats, getBuiltinTemplates } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
 import { TemplateCardGrid } from '@/components/template-card-grid';
 
@@ -25,6 +25,9 @@ export default async function TemplatesPage() {
   const usageArr = await getUsageStats('template');
   const usage = Object.fromEntries(usageArr.map((u) => [u.itemId, u]));
 
+  // 内置模板（App 同步注册）；best-effort，失败返回空数组
+  const builtinArr = await getBuiltinTemplates();
+
   return (
     <div>
       <TemplateCardGrid
@@ -32,6 +35,7 @@ export default async function TemplatesPage() {
         categories={categories}
         backendUrl={BACKEND_URL}
         usage={usage}
+        builtinTemplates={builtinArr}
       />
     </div>
   );

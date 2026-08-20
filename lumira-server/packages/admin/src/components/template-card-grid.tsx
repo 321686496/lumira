@@ -19,13 +19,14 @@ import { toAssetUrl } from '@/lib/asset-url';
 import { useToast } from '@/hooks/use-toast';
 import { toggleTemplateActive, deleteTemplate } from '@/actions/templates';
 import type { AdminTemplateListItem, TemplateCategory } from '@/types/admin';
-import type { UsageStatsItem } from '@/lib/api';
+import type { UsageStatsItem, BuiltinTemplate } from '@/lib/api';
 
 interface TemplateCardGridProps {
   templates: AdminTemplateListItem[];
   categories: TemplateCategory[];
   backendUrl?: string;
   usage?: Record<string, Pick<UsageStatsItem, 'useShoot' | 'openDetail'>>;
+  builtinTemplates?: BuiltinTemplate[];
 }
 
 export function TemplateCardGrid({
@@ -33,6 +34,7 @@ export function TemplateCardGrid({
   categories,
   backendUrl = 'http://localhost:3000',
   usage = {},
+  builtinTemplates = [],
 }: TemplateCardGridProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -68,6 +70,12 @@ export function TemplateCardGrid({
       );
     });
   }, [templates, query, activeCategory]);
+
+  // 内置模板（排除已在主网格展示的后端模板 id，避免重复）
+  const builtinRecords = useMemo(() => {
+    const backendIds = new Set(templates.map((t) => t.id));
+    return builtinTemplates.filter((b) => !backendIds.has(b.id));
+  }, [builtinTemplates, templates]);
 
   const handleToggle = (t: AdminTemplateListItem) => {
     setPendingToggleId(t.id);
@@ -301,6 +309,52 @@ export function TemplateCardGrid({
           })}
         </div>
       )}
+
+      {/* 内置模板分区（App 内嵌，后端只读展示名称与次数） */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 pt-2">
+          <h2 className="text-sm font-semibold text-foreground">内置模板</h2>
+          <Badge variant="secondary" className="text-xs">
+            {builtinRecords.length}
+          </Badge>
+        </div>
+        {builtinRecords.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border bg-card py-10 text-center text-sm text-muted-foreground">
+            暂未获取到内置模板记录，App 同步后展示
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+            {builtinRecords.map((b) => {
+              const u = usage[b.id];
+              return (
+                <div
+                  key={b.id}
+                  className="flex flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+                >
+                  <div className="relative aspect-[3/4] w-full bg-muted">
+                    <span className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                      无封面
+                    </span>
+                    <span className="absolute left-2 top-2 rounded-full bg-indigo-500/85 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">
+                      内置
+                    </span>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1 p-3">
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {b.name || b.id}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">{b.id}</span>
+                    <span className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
+                      <span>拍摄 {u?.useShoot ?? 0}</span>
+                      <span>查看 {u?.openDetail ?? 0}</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* 删除确认弹窗 */}
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>

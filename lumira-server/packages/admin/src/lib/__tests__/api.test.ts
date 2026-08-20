@@ -47,4 +47,19 @@ describe('api client', () => {
     const { api } = await import('../api');
     await expect(api.getBatchDetail(9999)).rejects.toThrow('API_ERROR: 404');
   });
+
+  it('getBuiltinTemplates calls /usage/builtin-templates and returns items', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ items: [{ id: 'soft_portrait', name: '柔和人像' }] }),
+    });
+    const { getBuiltinTemplates } = await import('../api');
+    const items = await getBuiltinTemplates();
+    expect(items).toEqual([{ id: 'soft_portrait', name: '柔和人像' }]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/admin/usage/builtin-templates'),
+      expect.anything(),
+    );
+  });
 });

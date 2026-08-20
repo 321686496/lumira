@@ -122,6 +122,23 @@ export async function getUsageStats(
   }
 }
 
+export interface BuiltinTemplate {
+  id: string;
+  name: string;
+}
+
+/**
+ * 后台读取 App 内置模板 id/名称。best-effort：失败静默返回 []，不影响主列表。
+ */
+export async function getBuiltinTemplates(): Promise<BuiltinTemplate[]> {
+  try {
+    const data = await adminFetch<{ items?: BuiltinTemplate[] }>('/usage/builtin-templates');
+    return Array.isArray(data?.items) ? data.items : [];
+  } catch {
+    return [];
+  }
+}
+
 export const api = {
   getStats: () => adminFetch<StatsResponse>('/stats'),
 
