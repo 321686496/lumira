@@ -228,3 +228,40 @@ export const accountOtp = mysqlTable('account_otp', {
 }, (table) => ({
   emailPurposeIdx: index('idx_account_otp_email_purpose').on(table.email, table.purpose),
 }));
+
+// ===== 使用次数统计（spec 2026-08-20-usage-stats-recommend-design）=====
+export const usageEvents = mysqlTable('usage_events', {
+  id: int('id').primaryKey().autoincrement(),
+  deviceId: text('device_id').notNull().references(() => devices.deviceId),
+  clientEventId: text('client_event_id').notNull(),
+  itemType: text('item_type').notNull(),
+  itemId: text('item_id').notNull(),
+  itemSource: text('item_source').notNull(),
+  eventType: text('event_type').notNull(),
+  occurredAt: int('occurred_at').notNull(),
+}, (table) => ({
+  clientEventIdx: uniqueIndex('uq_usage_client_event').on(table.clientEventId),
+}));
+
+export const systemScenes = mysqlTable('system_scenes', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  category: text('category').notNull(),
+  style: text('style').notNull().default(''),
+  icon: text('icon').notNull().default(''),
+  vibe: text('vibe').notNull().default(''),
+  description: text('description').notNull().default(''),
+  filterJson: longtext('filter_json').notNull().default('{}'),
+  tipsJson: text('tips_json').notNull().default('[]'),
+  exampleImagesJson: text('example_images_json').notNull().default('[]'),
+  whereToShoot: text('where_to_shoot').notNull().default(''),
+  bestTime: text('best_time').notNull().default(''),
+  relatedCategory: text('related_category').notNull().default(''),
+  recommendedTagIdsJson: text('recommended_tag_ids_json').notNull().default('[]'),
+  sortOrder: int('sort_order').notNull().default(0),
+  isActive: int('is_active').notNull().default(1),
+  createdAt: int('created_at').notNull(),
+  updatedAt: int('updated_at').notNull(),
+}, (table) => ({
+  activeIdx: index('idx_system_scenes_active').on(table.isActive),
+}));

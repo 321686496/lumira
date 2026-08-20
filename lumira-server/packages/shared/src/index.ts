@@ -5,3 +5,4 @@ export * from './types/redeem';
 export * from './types/rewards';
 export * from './types/questionnaire';
 export * from './types/template';
+export * from './types/usage';
