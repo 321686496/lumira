@@ -78,7 +78,6 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
   }
 
   Future<void> _onCopy(WatermarkTemplate template) async {
-    final container = ProviderScope.containerOf(context, listen: false);
     final copy = WatermarkTemplate(
       id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
       name: '${template.name}副本',
