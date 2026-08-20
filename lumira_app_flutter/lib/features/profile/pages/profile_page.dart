@@ -15,9 +15,12 @@ import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../../templates/widgets/template_import_sheet.dart';
+import '../data/builtin_profiles.dart';
 import '../data/profile_mock_data.dart';
 import '../providers/fragments_providers.dart';
 import '../providers/growth_providers.dart';
+import '../providers/profile_providers.dart';
+import '../widgets/pref_selector.dart';
 
 /// 个人中心主页
 ///
@@ -123,6 +126,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                     // 1. HeroCard
                     const FadeUp(child: _HeroCard()),
                     const SizedBox(height: 20),
+                    // 1.5 摄影偏好摘要卡
+                    FadeUp(
+                      delay: const Duration(milliseconds: 150),
+                      child: _ProfilePrefsCard(onEdit: () => _goPage(RouteNames.profileEdit)),
+                    ),
+                    const SizedBox(height: 20),
                     // 2. StatsCard
                     const FadeUp(
                       delay: Duration(milliseconds: 100),
@@ -188,6 +197,15 @@ class _HeroCard extends ConsumerWidget {
     final isNeu = appTheme.style == UIStyle.neumorphic;
     final user = ref.watch(userProfileProvider).valueOrNull ?? ProfileMockData.userProfile;
     final nextLevelName = ref.watch(nextLevelNameProvider).valueOrNull ?? '进阶学徒';
+    // 名称/头像改用真实资料；profile 为 null（未分配本地资料）时回退 mock
+    final profile = ref.watch(profileDataProvider).valueOrNull;
+    final displayName = (profile != null && profile.username.isNotEmpty)
+        ? profile.username
+        : user.name;
+    final avatarUrl = BuiltinProfiles.avatarUrl(
+      profile?.avatarSeed ?? user.avatarSeed,
+      customUrl: profile?.avatarUrl,
+    );
     // 硬编码颜色，与 uni-app 一致
     return Container(
       padding: const EdgeInsets.fromLTRB(32, 32, 24, 24), // 64rpx/48rpx/48rpx → 32/24/24dp
@@ -217,13 +235,13 @@ class _HeroCard extends ConsumerWidget {
       ),
       child: Column(
         children: [
-          // 头像 + 徽章（点击进入编辑资料）
-          GestureDetector(
-            onTap: () => context.push(RouteNames.profileEdit),
-            behavior: HitTestBehavior.opaque,
-            child: Column(
-              children: [
-                Stack(
+          // 头像 + 徽章：头像点击打开大图预览，右下角编辑角标单独点击进编辑资料（名字只读，不再包 tap）
+          Column(
+            children: [
+              GestureDetector(
+                onTap: () => _showAvatarFullScreen(context, avatarUrl),
+                behavior: HitTestBehavior.opaque,
+                child: Stack(
                   clipBehavior: Clip.none,
                   children: [
                     Container(
@@ -245,7 +263,7 @@ class _HeroCard extends ConsumerWidget {
                       ),
                       child: ClipOval(
                         child: Image.network(
-                          'https://picsum.photos/seed/${user.avatarSeed}/200/200',
+                          avatarUrl,
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -253,41 +271,45 @@ class _HeroCard extends ConsumerWidget {
                     Positioned(
                       bottom: 0,
                       right: 0,
-                      child: Container(
-                        width: 22, // 44rpx → 22dp
-                        height: 22,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          // 硬编码颜色：linear-gradient(135deg, #C9A96E, #A88550)
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
+                      child: GestureDetector(
+                        onTap: () => context.push(RouteNames.profileEdit),
+                        behavior: HitTestBehavior.opaque,
+                        child: Container(
+                          width: 22, // 44rpx → 22dp
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            // 硬编码颜色：linear-gradient(135deg, #C9A96E, #A88550)
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
+                            ),
+                            border: Border.all(color: Colors.white, width: 2.5),
                           ),
-                          border: Border.all(color: Colors.white, width: 2.5),
-                        ),
-                        child: const Icon(
-                          Icons.edit,
-                          size: 16,
-                          color: Colors.white,
+                          child: const Icon(
+                            Icons.edit,
+                            size: 16,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16), // 32rpx → 16dp
-                // 名字
-                Text(
-                  user.name,
-                  style: TextStyle(
-                    fontFamily: 'Noto Serif SC',
-                    fontSize: 24, // 48rpx → 24dp
-                    fontWeight: FontWeight.w600,
-                    // neumorphic 风格：tokens.textPrimary
-                    color: isNeu ? tokens.textPrimary : const Color(0xFF3D2817),
-                    letterSpacing: 0.02 * 24,
-                  ),
+              ),
+              const SizedBox(height: 16), // 32rpx → 16dp
+              // 名字（只读）
+              Text(
+                displayName,
+                style: TextStyle(
+                  fontFamily: 'Noto Serif SC',
+                  fontSize: 24, // 48rpx → 24dp
+                  fontWeight: FontWeight.w600,
+                  // neumorphic 风格：tokens.textPrimary
+                  color: isNeu ? tokens.textPrimary : const Color(0xFF3D2817),
+                  letterSpacing: 0.02 * 24,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
           const SizedBox(height: 10), // 20rpx → 10dp
           // 等级徽章
@@ -406,6 +428,155 @@ class _HeroCard extends ConsumerWidget {
       ),
     );
   }
+
+  /// 头像大图预览：全屏对话框 + 支持手势缩放平移
+  void _showAvatarFullScreen(BuildContext context, String url) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: InteractiveViewer(
+            child: Image.network(url, fit: BoxFit.contain),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 摄影偏好摘要卡：未填显示空态引导，已填显示性别/水平/频率/场景中文摘要
+class _ProfilePrefsCard extends ConsumerWidget {
+  const _ProfilePrefsCard({required this.onEdit});
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    final p = ref.watch(profileDataProvider).valueOrNull;
+    // 收集已填条目，按 gender / skillLevel / shootFrequency / commonScenes 优先
+    final entries = <_PrefEntry>[];
+    if (p?.gender != null) entries.add(_PrefEntry('性别', PrefOptions.gender[p!.gender] ?? p.gender!));
+    if (p?.skillLevel != null) entries.add(_PrefEntry('摄影水平', PrefOptions.skillLevel[p!.skillLevel] ?? p.skillLevel!));
+    if (p?.shootFrequency != null) entries.add(_PrefEntry('拍摄频率', PrefOptions.shootFrequency[p!.shootFrequency] ?? p.shootFrequency!));
+    if ((p?.commonScenes ?? const []).isNotEmpty) {
+      final labels = p!.commonScenes.map((k) => PrefOptions.commonScenes[k] ?? k).join(' / ');
+      entries.add(_PrefEntry('常用场景', labels));
+    }
+    if (entries.isEmpty) {
+      // 未填引导
+      return NeuCard(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: GestureDetector(
+            onTap: onEdit,
+            behavior: HitTestBehavior.opaque,
+            child: Row(
+              children: [
+                Icon(Icons.tune, color: tokens.brand),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '完善摄影偏好',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '告诉我们你的性别、水平、拍摄场景与频率',
+                        style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, size: 18, color: tokens.textTertiary),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return NeuCard(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_fix_high, size: 18, color: tokens.brand),
+                const SizedBox(width: 6),
+                Text(
+                  '摄影偏好',
+                  style: TextStyle(
+                    fontFamily: 'Noto Serif SC',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: onEdit,
+                  behavior: HitTestBehavior.opaque,
+                  child: Text(
+                    '编辑 ›',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: tokens.brand,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            for (final e in entries)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Text(
+                      e.label,
+                      style: TextStyle(fontSize: 13, color: tokens.textTertiary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        e.value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: tokens.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// （label, value）偏好条目，替代 Dart 3 record 语法
+class _PrefEntry {
+  const _PrefEntry(this.label, this.value);
+  final String label;
+  final String value;
 }
 
 /// StatsCard：3 列等宽 Bento（作品 / 模板 / 收藏）

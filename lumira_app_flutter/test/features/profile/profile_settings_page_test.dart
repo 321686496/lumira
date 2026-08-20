@@ -120,6 +120,8 @@ void main() {
       expect(find.text('主题选择'), findsOneWidget);
       expect(find.text('风格选择'), findsOneWidget);
       expect(find.text('语言'), findsOneWidget);
+      // 偏好问卷入口已移除
+      expect(find.text('偏好问卷'), findsNothing);
       // 显示组
       expect(find.text('网格显示'), findsOneWidget);
       expect(find.text('水平仪'), findsOneWidget);

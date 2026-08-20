@@ -13,7 +13,6 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/watermark/data/watermark_providers.dart';
-import '../../onboarding/data/questionnaire_providers.dart';
 import '../data/profile_mock_data.dart';
 
 /// 设置页
@@ -145,9 +144,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     final styleLabel = ProfileMockData.styles
         .firstWhere((s) => s.style == currentUiStyle)
         .label;
-    // 问卷完成状态（用于"偏好问卷"入口显示）
-    final questionnaireCompleted =
-        ref.watch(questionnaireCompletedProvider).valueOrNull ?? false;
     // 水印设置（总开关 / 动画开关）+ 当前选中模板名称
     final watermarkSettings = ref.watch(watermarkSettingsProvider);
     final watermarkTemplate = ref.watch(currentWatermarkTemplateProvider);
@@ -202,14 +198,6 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         icon: Icons.language_outlined,
                         label: '语言',
                         value: '简体中文',
-                        tokens: tokens,
-                      ),
-                      _SettingItem(
-                        icon: Icons.assignment_outlined,
-                        label: '偏好问卷',
-                        value: questionnaireCompleted ? '已填' : '未填',
-                        onTap: () => GoRouter.of(context)
-                            .push('${RouteNames.onboarding}?from=settings'),
                         tokens: tokens,
                       ),
                       _SettingItem(

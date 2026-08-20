@@ -10,8 +10,10 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/profile/data/profile_mock_data.dart';
+import 'package:lumira_app_flutter/features/profile/data/profile_models.dart';
 import 'package:lumira_app_flutter/features/profile/pages/profile_page.dart';
 import 'package:lumira_app_flutter/features/profile/providers/fragments_providers.dart';
+import 'package:lumira_app_flutter/features/profile/providers/profile_providers.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -74,6 +76,11 @@ void main() {
           name: 'profileCollections',
           builder: (_, __) => const Scaffold(body: Center(child: Text('PROFILE_COLLECTIONS'))),
         ),
+        GoRoute(
+          path: RouteNames.profileEdit,
+          name: 'profileEdit',
+          builder: (_, __) => const Scaffold(body: Center(child: Text('PROFILE_EDIT'))),
+        ),
       ],
     );
     HttpOverrides.global = TestHttpOverrides();
@@ -101,6 +108,20 @@ void main() {
           FragmentItem(name: '美食', icon: Icons.restaurant_outlined, current: 1, max: 5),
           FragmentItem(name: '街拍', icon: Icons.photo_camera_outlined, current: 4, max: 5),
         ]),
+        // 本地资料依赖 sqflite DB，测试环境无真实库，按仓库惯例 override 为 null
+        profileDataProvider.overrideWith((ref) async => null),
+      ],
+      child: MaterialApp.router(routerConfig: router),
+    );
+  }
+
+  /// 带自定义 profile 的 wrap，用于验证偏好摘要详情态
+  Widget wrapWithProfile(ThemeKey themeKey, UIStyle uiStyle, ProfileData profile) {
+    return ProviderScope(
+      overrides: [
+        themeKeyProvider.overrideWith((ref) => themeKey),
+        uiStyleProvider.overrideWith((ref) => uiStyle),
+        profileDataProvider.overrideWith((ref) async => profile),
       ],
       child: MaterialApp.router(routerConfig: router),
     );
@@ -264,6 +285,56 @@ void main() {
         expect(find.byType(ProfilePage), findsOneWidget, reason: 'style=$style');
         expect(find.text('小美'), findsOneWidget, reason: 'style=$style');
       }
+    });
+
+    testWidgets('prefs card shows empty state when no profile', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('完善摄影偏好'), findsOneWidget);
+      expect(find.text('告诉我们你的性别、水平、拍摄场景与频率'), findsOneWidget);
+    });
+
+    testWidgets('tapping prefs card empty state pushes /profile/edit', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('完善摄影偏好'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('PROFILE_EDIT'), findsOneWidget);
+    });
+
+    testWidgets('prefs card shows detail state from real profile', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrapWithProfile(
+        ThemeKey.warmWhite,
+        UIStyle.neumorphic,
+        const ProfileData(
+          username: '小鹿',
+          avatarSeed: 'lumira-avatar-01',
+          gender: 'male',
+          skillLevel: 'beginner',
+          shootFrequency: 'weekly',
+          commonScenes: ['cafe', 'travel'],
+        ),
+      ));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // HeroCard 用真实资料昵称
+      expect(find.text('小鹿'), findsOneWidget);
+      // 偏好摘要详情态
+      expect(find.text('摄影偏好'), findsOneWidget);
+      expect(find.text('性别'), findsOneWidget);
+      expect(find.text('男'), findsOneWidget);
+      expect(find.text('摄影水平'), findsOneWidget);
+      expect(find.text('新手'), findsOneWidget);
+      expect(find.text('拍摄频率'), findsOneWidget);
+      expect(find.text('每周'), findsOneWidget);
+      expect(find.text('常用场景'), findsOneWidget);
+      expect(find.text('咖啡馆 / 旅行'), findsOneWidget);
     });
   });
 }
