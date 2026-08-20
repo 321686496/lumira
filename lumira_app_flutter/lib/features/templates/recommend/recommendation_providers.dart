@@ -86,10 +86,13 @@ final recommendationProvider = FutureProvider<RecommendationResult>((ref) async 
 
   // 全站使用次数 -> 合并流行度（templateId -> use_shoot*2 + open_detail）
   final popularityByTemplateId = <String, int>{};
+  final counts = await usageDao.countMap(
+    'template',
+    templateRecords.map((t) => t.id).toList(),
+  );
   for (final t in templateRecords) {
-    final useS = await usageDao.countFor('template', t.id, 'use_shoot');
-    final openD = await usageDao.countFor('template', t.id, 'open_detail');
-    popularityByTemplateId[t.id] = useS * 2 + openD;
+    final e = counts[t.id];
+    popularityByTemplateId[t.id] = (e?.useShoot ?? 0) * 2 + (e?.openDetail ?? 0);
   }
 
   final engine = RecommendationEngine();

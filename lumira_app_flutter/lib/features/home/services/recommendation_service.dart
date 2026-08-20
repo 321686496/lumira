@@ -399,10 +399,11 @@ class RecommendationService {
     if (dao == null) return const {};
     final picks = await _templatesDao.getBuiltin(isRecommended: true);
     final result = <String, int>{};
+    final counts =
+        await dao.countMap('template', picks.map((t) => t.id).toList());
     for (final t in picks) {
-      final useS = await dao.countFor('template', t.id, 'use_shoot');
-      final openD = await dao.countFor('template', t.id, 'open_detail');
-      result[t.id] = useS * 2 + openD;
+      final e = counts[t.id];
+      result[t.id] = (e?.useShoot ?? 0) * 2 + (e?.openDetail ?? 0);
     }
     return result;
   }

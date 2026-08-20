@@ -63,6 +63,10 @@ class ScenesSyncService {
   }
 
   SceneRecord _toRecord(Map<String, dynamic> scene, String id) {
+    // 后端 updatedAt 为秒（约 1.7e9），本地其它路径语义为毫秒（约 1.7e12）。
+    // 换算为毫秒口径，避免排序/显示错乱；已是毫秒则原样。
+    final raw = ((scene['updatedAt'] ?? 0) as num).toInt();
+    final updatedAt = raw > 0 && raw < 100000000000 ? raw * 1000 : raw;
     return SceneRecord(
       id: id,
       name: scene['name'] as String,
@@ -85,7 +89,7 @@ class ScenesSyncService {
       creator: 'system',
       isFavorite: false,
       createdAt: DateTime.now().millisecondsSinceEpoch,
-      updatedAt: ((scene['updatedAt'] ?? 0) as num).toInt(),
+      updatedAt: updatedAt,
     );
   }
 

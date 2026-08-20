@@ -201,7 +201,8 @@ void main() {
 
     final updated = await scenesDao.getById('sys_s1');
     expect(updated!.name, '新数据');
-    expect(updated.updatedAt, 9);
+    // 后端 updatedAt 为秒，M4 修复后换算为毫秒（9s -> 9000ms）
+    expect(updated.updatedAt, 9000);
     // 用户场景不受影响
     final userScene = await scenesDao.getById('user_1');
     expect(userScene, isNotNull);

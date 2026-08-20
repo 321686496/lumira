@@ -30,7 +30,6 @@ import '../../usage/usage_providers.dart';
 import '../data/capture_state.dart';
 import '../data/capture_thumbnail_state.dart';
 import '../data/custom_fill_light_colors.dart';
-import '../data/scene_presets_data.dart';
 import '../domain/filter_recipe.dart' show composePostProcessMatrix;
 import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
@@ -725,10 +724,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
         ref.invalidate(galleryDaoProvider);
         ref.invalidate(bannerRecommendationProvider);
         debugPrint('[capture] 自动保存到应用相册: ${record.id}');
-        // 埋点：拍摄成片成功（模板 builtin/remote + 系统场景），失败静默不阻断
-        _reportUseShoot(record.templateId, record.sceneId);
-        // 埋点成功后触发使用次数同步（上报未同步事件 + 拉取全站次数；失败静默）
-        _triggerUsageSync();
+        // 埋点：拍摄成片成功（模板 builtin/remote + 系统场景），失败静默不阻断；
+        // 先 report（事件入队）再 sync，避免 sync 先于新事件完成导致延迟上报
+        // ignore: unawaited_futures
+        _reportAndSync(record.templateId, record.sceneId);
 
         // 每日首次拍摄积分（后台幂等；失败静默，绝不阻塞拍照流程）
         if (!_dailyShootEarned) {
@@ -905,7 +904,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 拍摄成片成功埋点：
   /// - 模板：source∈{builtin,remote} 上报 useShoot；自定义 source 被 Recorder 静默过滤。
-  /// - 场景：仅系统内置场景（id 命中 [ScenePresetsData] code 常量）上报 useShoot。
+  /// - 场景：仅系统内置场景（按 scenes 表 creator=='system' 判定）上报 useShoot。
   /// 全部失败静默，绝不阻断拍照流程。
   Future<void> _reportUseShoot(String? templateId, String? sceneId) async {
     try {
@@ -922,17 +921,30 @@ class _CapturePageState extends ConsumerState<CapturePage>
           );
         }
       }
-      if (sceneId != null &&
-          sceneId.isNotEmpty &&
-          ScenePresetsData.getScenePreset(sceneId) != null) {
-        await recorder.recordScene(
-          sceneId: sceneId,
-          creator: 'system',
-          event: UsageEventType.useShoot,
-        );
+      if (sceneId != null && sceneId.isNotEmpty) {
+        final sDao = await ref.read(scenesDaoProvider.future);
+        final sRecord = await sDao.getById(sceneId);
+        if (sRecord != null && sRecord.creator == 'system') {
+          await recorder.recordScene(
+            sceneId: sceneId,
+            creator: sRecord.creator,
+            event: UsageEventType.useShoot,
+          );
+        }
       }
     } catch (_) {
       // 埋点失败静默
+    }
+  }
+
+  /// 先完成拍摄埋点（事件入队），再触发使用次数同步，避免 sync 先于新事件 insert 完成导致本次事件延迟上报。
+  /// 整体 fire-and-forget，失败静默不阻塞拍照流程。
+  Future<void> _reportAndSync(String? templateId, String? sceneId) async {
+    try {
+      await _reportUseShoot(templateId, sceneId);
+      await _triggerUsageSync();
+    } catch (_) {
+      // 埋点/同步失败静默，不影响拍照
     }
   }
 

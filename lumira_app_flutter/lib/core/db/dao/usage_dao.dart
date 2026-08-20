@@ -106,4 +106,39 @@ class UsageDao {
     if (rows.isNotEmpty) return (rows.first[Tables.colCount] as num).toInt();
     return 0;
   }
+
+  /// 一次查询取回多个 item 的三类事件次数（WHERE item_type=? AND item_id IN (...)）。
+  Future<Map<String, ItemUsageCounts>> countMap(
+      String itemType, List<String> itemIds) async {
+    if (itemIds.isEmpty) return const {};
+    final placeholders = List.filled(itemIds.length, '?').join(',');
+    final rows = await _db.query(
+      Tables.usageStats,
+      where:
+          '${Tables.colItemType} = ? AND ${Tables.colItemId} IN ($placeholders)',
+      whereArgs: [itemType, ...itemIds],
+    );
+    final result = <String, ItemUsageCounts>{};
+    for (final r in rows) {
+      final id = r[Tables.colItemId] as String;
+      final et = r[Tables.colEventType] as String;
+      final c = (r[Tables.colCount] as num).toInt();
+      final e = result.putIfAbsent(id, () => ItemUsageCounts());
+      if (et == 'use_shoot') {
+        e.useShoot = c;
+      } else if (et == 'open_detail') {
+        e.openDetail = c;
+      } else if (et == 'scene_select') {
+        e.sceneSelect = c;
+      }
+    }
+    return result;
+  }
+}
+
+/// 某个 item 三类事件次数汇总。
+class ItemUsageCounts {
+  int useShoot = 0;
+  int openDetail = 0;
+  int sceneSelect = 0;
 }

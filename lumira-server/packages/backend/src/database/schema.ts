@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/src/database/schema.ts
 
-import { mysqlTable, text, int, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
+import { mysqlTable, text, int, bigint, longtext, uniqueIndex, varchar, index } from 'drizzle-orm/mysql-core';
 
 export const devices = mysqlTable('devices', {
   deviceId: text('device_id').primaryKey(),
@@ -238,7 +238,7 @@ export const usageEvents = mysqlTable('usage_events', {
   itemId: text('item_id').notNull(),
   itemSource: text('item_source').notNull(),
   eventType: text('event_type').notNull(),
-  occurredAt: int('occurred_at').notNull(),
+  occurredAt: bigint('occurred_at', { mode: 'number' }).notNull(),
 }, (table) => ({
   clientEventIdx: uniqueIndex('uq_usage_client_event').on(table.clientEventId),
 }));

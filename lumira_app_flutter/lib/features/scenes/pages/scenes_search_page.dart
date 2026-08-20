@@ -50,11 +50,14 @@ class _ScenesSearchPageState extends ConsumerState<ScenesSearchPage> {
     try {
       final usageDao = await ref.read(usageDaoProvider.future);
       pop = <String, int>{};
+      final counts = await usageDao.countMap(
+        'scene',
+        scenes.map((s) => s.id).toList(),
+      );
       for (final s in scenes) {
-        final useS = await usageDao.countFor('scene', s.id, 'use_shoot');
-        final openD = await usageDao.countFor('scene', s.id, 'open_detail');
-        final sel = await usageDao.countFor('scene', s.id, 'scene_select');
-        pop[s.id] = (useS * 55 + openD * 25 + sel * 20);
+        final e = counts[s.id];
+        if (e == null) continue;
+        pop[s.id] = (e.useShoot * 55 + e.openDetail * 25 + e.sceneSelect * 20);
       }
     } catch (_) {
       pop = const {};
