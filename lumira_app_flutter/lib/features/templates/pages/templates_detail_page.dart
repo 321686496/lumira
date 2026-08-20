@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/dao/tags_dao.dart';
+import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../features/usage/usage_providers.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/safe_share.dart';
@@ -60,6 +62,9 @@ class TemplatesDetailPage extends ConsumerStatefulWidget {
 
 class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   bool _tagSelectorVisible = false;
+
+  /// 防止重复上报详情打开事件（同一实例只上报一次）。
+  bool _openDetailReported = false;
 
   /// mock 快路径：从 [TemplatesBrowseMockData.findDetailById] 同步查找。
   /// 覆盖内置 29 模板 + mock 详情列表。返回 null 时走 [templateDetailProvider] 慢路径。
@@ -411,6 +416,35 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     );
   }
 
+  /// 上报模板详情打开事件（仅首次成功加载时上报一次，失败静默）。
+  ///
+  /// source 判定：mock 快路径（内置）直接传 [knownSource]；慢路径从库中
+  /// 读取 [TemplateRecord.source]（'builtin'|'custom'|'remote'），自定义模板不写入。
+  Future<void> _maybeReportOpenDetail(
+    String templateId, {
+    String? knownSource,
+  }) async {
+    if (_openDetailReported) return;
+    _openDetailReported = true;
+    try {
+      final recorder = await ref.read(usageEventRecorderProvider.future);
+      var source = knownSource;
+      if (source == null) {
+        final dao = await ref.read(templatesDaoProvider.future);
+        final record = await dao.getById(templateId);
+        source = record?.source;
+      }
+      if (source == null) return;
+      await recorder.recordTemplate(
+        templateId: templateId,
+        source: source,
+        event: UsageEventType.openDetail,
+      );
+    } catch (_) {
+      // 上报失败静默，不影响详情加载
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
@@ -418,6 +452,10 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     ref.watch(ownedTemplatesLoaderProvider);
     final ownedIds = ref.watch(ownedTemplateIdsProvider);
     final mockTemplate = _template;
+    // 埋点：mock 快路径（内置 29 模板）详情打开，source=builtin
+    if (mockTemplate != null) {
+      _maybeReportOpenDetail(mockTemplate.id, knownSource: 'builtin');
+    }
 
     // 付费模板是否被锁定（未解锁）：已解锁或免费模板不锁定
     bool computeLocked(TemplateDetail t) => !_isOwned(t.price, ownedIds, t.id);
@@ -479,13 +517,19 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                               templateDetailProvider(widget.templateId!),
                             ),
                           ),
-                          data: (detail) => detail == null
-                              ? _EmptyState(tokens: tokens)
-                              : _buildDetailContent(
-                                  detail,
-                                  tokens,
-                                  isLocked: computeLocked(detail),
-                                ),
+                          data: (detail) {
+                            // 埋点：慢路径（remote/custom 模板）详情打开，source 从库读取
+                            if (detail != null) {
+                              _maybeReportOpenDetail(detail.id);
+                            }
+                            return detail == null
+                                ? _EmptyState(tokens: tokens)
+                                : _buildDetailContent(
+                                    detail,
+                                    tokens,
+                                    isLocked: computeLocked(detail),
+                                  );
+                          },
                         ),
                 ),
               ],

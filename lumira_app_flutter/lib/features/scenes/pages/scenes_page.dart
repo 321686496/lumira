@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../usage/usage_providers.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton, LumiraProgress;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_scene_mock_data.dart';
@@ -97,6 +99,24 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     GoRouter.of(context).push(
       RouteNames.withSceneId(RouteNames.captureSceneDetail, id),
     );
+    _reportSceneOpen(id);
+  }
+
+  /// 上报场景详情打开事件。仅系统内置场景（creator=='system'）上报，用户场景跳过。
+  Future<void> _reportSceneOpen(String sceneId) async {
+    try {
+      final dao = await ref.read(scenesDaoProvider.future);
+      final scene = await dao.getById(sceneId);
+      if (scene == null || scene.creator != 'system') return;
+      final recorder = await ref.read(usageEventRecorderProvider.future);
+      await recorder.recordScene(
+        sceneId: sceneId,
+        creator: 'system',
+        event: UsageEventType.openDetail,
+      );
+    } catch (_) {
+      // 上报失败静默
+    }
   }
 
   void _goCreate() {

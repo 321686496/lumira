@@ -16,19 +16,21 @@ import 'package:screen/screen.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
+import '../../../core/db/dao/usage_dao.dart';
+import '../../../core/router/route_names.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../../challenge/widgets/challenge_overlay_bar.dart';
 import '../../home/providers/banner_recommendation_provider.dart';
 import '../../points/data/points_repository.dart';
 import '../../profile/data/growth_models.dart';
 import '../../profile/services/growth_xp_provider.dart';
 import '../../sign_in/data/sign_in_repository.dart';
-import '../../../core/router/route_names.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../shared/widgets/lumira/lumira.dart';
 import '../../templates/data/remote_templates_providers.dart';
+import '../../usage/usage_providers.dart';
 import '../data/capture_state.dart';
 import '../data/capture_thumbnail_state.dart';
 import '../data/custom_fill_light_colors.dart';
+import '../data/scene_presets_data.dart';
 import '../domain/filter_recipe.dart' show composePostProcessMatrix;
 import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
@@ -723,6 +725,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
         ref.invalidate(galleryDaoProvider);
         ref.invalidate(bannerRecommendationProvider);
         debugPrint('[capture] 自动保存到应用相册: ${record.id}');
+        // 埋点：拍摄成片成功（模板 builtin/remote + 系统场景），失败静默不阻断
+        _reportUseShoot(record.templateId, record.sceneId);
 
         // 每日首次拍摄积分（后台幂等；失败静默，绝不阻塞拍照流程）
         if (!_dailyShootEarned) {
@@ -895,6 +899,39 @@ class _CapturePageState extends ConsumerState<CapturePage>
     ref.read(CaptureState.apparentZoomProvider.notifier).state = clamped;
     ref.read(CaptureState.zoomProvider.notifier).state = clamped;
     ref.read(cameraServiceProvider).setZoomMultiplier(clamped);
+  }
+
+  /// 拍摄成片成功埋点：
+  /// - 模板：source∈{builtin,remote} 上报 useShoot；自定义 source 被 Recorder 静默过滤。
+  /// - 场景：仅系统内置场景（id 命中 [ScenePresetsData] code 常量）上报 useShoot。
+  /// 全部失败静默，绝不阻断拍照流程。
+  Future<void> _reportUseShoot(String? templateId, String? sceneId) async {
+    try {
+      final recorder = await ref.read(usageEventRecorderProvider.future);
+      if (templateId != null && templateId.isNotEmpty) {
+        final dao = await ref.read(templatesDaoProvider.future);
+        final record = await dao.getById(templateId);
+        final source = record?.source;
+        if (source != null) {
+          await recorder.recordTemplate(
+            templateId: templateId,
+            source: source,
+            event: UsageEventType.useShoot,
+          );
+        }
+      }
+      if (sceneId != null &&
+          sceneId.isNotEmpty &&
+          ScenePresetsData.getScenePreset(sceneId) != null) {
+        await recorder.recordScene(
+          sceneId: sceneId,
+          creator: 'system',
+          event: UsageEventType.useShoot,
+        );
+      }
+    } catch (_) {
+      // 埋点失败静默
+    }
   }
 
   @override

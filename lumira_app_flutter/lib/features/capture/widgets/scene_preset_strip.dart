@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/capture_state.dart';
 import '../data/scene_presets_data.dart';
+import '../../usage/usage_providers.dart';
+import '../../../core/db/dao/usage_dao.dart';
 
 /// 场景预设横向滚动条。
 /// `compact=true` 显示前 6 个场景（底部条），`compact=false` 显示全部 18 个（展开面板）。
@@ -60,6 +62,7 @@ class ScenePresetStrip extends ConsumerWidget {
                 }
               } else {
                 // 选中场景：同步 LUT 和 systemFilter
+                _reportSceneSelect(ref, preset.id);
                 final currentPost = ref.read(
                     CaptureState.freeModePostProcessProvider);
                 ref.read(CaptureState.freeModePostProcessProvider.notifier).state =
@@ -178,5 +181,21 @@ class ScenePresetStrip extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  /// 上报场景选择事件。仅系统内置场景（id 命中 [ScenePresetsData] code 常量）上报，
+  /// 用户自定义场景 id 未命中时直接跳过，不报错。
+  Future<void> _reportSceneSelect(WidgetRef ref, String sceneId) async {
+    if (ScenePresetsData.getScenePreset(sceneId) == null) return;
+    try {
+      final recorder = await ref.read(usageEventRecorderProvider.future);
+      await recorder.recordScene(
+        sceneId: sceneId,
+        creator: 'system',
+        event: UsageEventType.sceneSelect,
+      );
+    } catch (_) {
+      // 上报失败静默
+    }
   }
 }
