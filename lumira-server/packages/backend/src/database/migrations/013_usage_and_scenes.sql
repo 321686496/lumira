@@ -1,4 +1,4 @@
--- lumira-server/packages/backend/src/database/migrations/005_usage_and_scenes.sql
+-- lumira-server/packages/backend/src/database/migrations/013_usage_and_scenes.sql
 CREATE TABLE IF NOT EXISTS `usage_events` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `device_id` TEXT NOT NULL,
