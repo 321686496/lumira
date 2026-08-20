@@ -76,6 +76,74 @@ const ADVANCED_COLOR_KEYS = ['highlights', 'shadows', 'blackPoint', 'clarity', '
 
 const NONE_VALUE = '__none__';
 
+const SEASONS_OPTIONS = [
+  { value: 'spring', label: '春' },
+  { value: 'summer', label: '夏' },
+  { value: 'autumn', label: '秋' },
+  { value: 'winter', label: '冬' },
+];
+
+const WEATHERS_OPTIONS = [
+  { value: 'sunny', label: '晴' },
+  { value: 'cloudy', label: '多云' },
+  { value: 'overcast', label: '阴' },
+  { value: 'rain', label: '雨' },
+  { value: 'snow', label: '雪' },
+  { value: 'fog', label: '雾' },
+];
+
+const TIME_TONES_OPTIONS = [
+  { value: 'goldenHour', label: '黄金小时' },
+  { value: 'day', label: '白天' },
+  { value: 'night', label: '夜晚' },
+  { value: 'warm', label: '暖调' },
+  { value: 'cool', label: '冷调' },
+];
+
+/** 通用多选渲染：可切换的 checkbox chips */
+function AmbienceChecklist({
+  id,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  options: { value: string; label: string }[];
+  value: string[];
+  onChange: (next: string[]) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => {
+          const active = value.includes(opt.value);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() =>
+                onChange(
+                  active ? value.filter((v) => v !== opt.value) : [...value, opt.value],
+                )
+              }
+              className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+                active
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input text-muted-foreground hover:bg-accent'
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const schema = z.object({
   name: z.string().min(1, '请输入模板名称').max(100),
   category: z.string().min(1, '请选择分类'),
@@ -84,6 +152,10 @@ const schema = z.object({
   classificationMethod: z.string().optional().default(NONE_VALUE),
   price: z.coerce.number().int().min(0, '价格不能为负'),
   description: z.string().optional().default(''),
+  shortDesc: z.string().max(10, '短简介最多 10 字').optional().default(''),
+  ambienceSeasons: z.array(z.string()).optional().default([]),
+  ambienceWeathers: z.array(z.string()).optional().default([]),
+  ambienceTimeTones: z.array(z.string()).optional().default([]),
   author: z.string().optional().default('Lumira'),
   tags: z.string().optional().default(''),
   referenceSource: z.string().optional().default(''),
@@ -207,6 +279,10 @@ export default function TemplateForm({
         classificationMethod: NONE_VALUE,
         price: 0,
         description: '',
+        shortDesc: '',
+        ambienceSeasons: [],
+        ambienceWeathers: [],
+        ambienceTimeTones: [],
         author: 'Lumira',
         tags: '',
         referenceSource: '',
@@ -283,6 +359,10 @@ export default function TemplateForm({
       classificationMethod: initial.classification?.method || NONE_VALUE,
       price: initial.price,
       description: initial.description ?? '',
+      shortDesc: initial.shortDesc ?? '',
+      ambienceSeasons: initial.ambience?.seasons ?? [],
+      ambienceWeathers: initial.ambience?.weathers ?? [],
+      ambienceTimeTones: initial.ambience?.timeTones ?? [],
       author: initial.author ?? 'Lumira',
       tags: (initial.tags ?? []).join(', '),
       referenceSource: initial.referenceSource ?? '',
@@ -477,6 +557,12 @@ export default function TemplateForm({
       category: data.category,
       price: data.price,
       description: data.description ?? '',
+      shortDesc: (data.shortDesc ?? '').trim(),
+      ambience: {
+        seasons: data.ambienceSeasons ?? [],
+        weathers: data.ambienceWeathers ?? [],
+        timeTones: data.ambienceTimeTones ?? [],
+      },
       author: data.author || 'Lumira',
       referenceSource: data.referenceSource ?? '',
       tags: parseCommaList(data.tags),
@@ -858,6 +944,61 @@ export default function TemplateForm({
                 <Label htmlFor="description">描述</Label>
                 <Textarea id="description" rows={3} {...register('description')} />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="shortDesc">短简介（≤10字）</Label>
+                <div className="relative">
+                  <Input
+                    id="shortDesc"
+                    maxLength={10}
+                    placeholder="一句话亮点（≤10字）"
+                    {...register('shortDesc')}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    {watch('shortDesc')?.length ?? 0}/10
+                  </span>
+                </div>
+              </div>
+
+              <Controller
+                control={control}
+                name="ambienceSeasons"
+                render={({ field }) => (
+                  <AmbienceChecklist
+                    id="ambienceSeasons"
+                    label="适用季节（不选=不限）"
+                    options={SEASONS_OPTIONS}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+              <Controller
+                control={control}
+                name="ambienceWeathers"
+                render={({ field }) => (
+                  <AmbienceChecklist
+                    id="ambienceWeathers"
+                    label="适用天气（不选=不限）"
+                    options={WEATHERS_OPTIONS}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
+              <Controller
+                control={control}
+                name="ambienceTimeTones"
+                render={({ field }) => (
+                  <AmbienceChecklist
+                    id="ambienceTimeTones"
+                    label="时段/色调（不选=不限）"
+                    options={TIME_TONES_OPTIONS}
+                    value={field.value}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
