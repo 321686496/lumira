@@ -1,8 +1,11 @@
+export type Gender = 'male' | 'female' | 'prefer_not';
+
 export type QuestionId =
-  | 'source' | 'favorite_categories' | 'pain_points' | 'skill_level'
+  | 'gender' | 'source' | 'favorite_categories' | 'pain_points' | 'skill_level'
   | 'expectations' | 'common_scenes' | 'shoot_frequency';
 
 export interface QuestionnaireAnswers {
+  gender: Gender | null;
   source: string | null;
   favorite_categories: string[];
   pain_points: string[];

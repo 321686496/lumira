@@ -7,6 +7,11 @@ import { Type } from 'class-transformer';
 export class QuestionnaireAnswersDto {
   @IsOptional()
   @IsString()
+  @IsIn(['male', 'female', 'prefer_not'])
+  gender?: string | null;
+
+  @IsOptional()
+  @IsString()
   @IsIn(['app_store', 'social_media', 'friend', 'search', 'article', 'other'])
   source?: string | null;
 
