@@ -32,6 +32,16 @@ export interface TemplateCategoryTreeResponse {
 
 // ===== 后端动态模板 meta（列表用，轻量）=====
 
+/** 模板适用的季节/天气/时段色调（后续季节/天气推荐使用） */
+export interface TemplateAmbience {
+  /** 适用季节：spring / summer / autumn / winter，空数组=不限 */
+  seasons: ('spring' | 'summer' | 'autumn' | 'winter')[];
+  /** 适用天气：sunny / cloudy / overcast / rain / snow / fog（对齐 WeatherService 中文描述） */
+  weathers: ('sunny' | 'cloudy' | 'overcast' | 'rain' | 'snow' | 'fog')[];
+  /** 时段/色调倾向：goldenHour / day / night / warm / cool */
+  timeTones: ('goldenHour' | 'day' | 'night' | 'warm' | 'cool')[];
+}
+
 export interface RemoteTemplateMeta {
   id: string;
   name: string;
@@ -45,6 +55,10 @@ export interface RemoteTemplateMeta {
   tags: string[];
   tagIds: string[];
   classification: { type: string; majorStyle: string; subStyle: string; method: string };
+  /** 季节/天气/时段元数据 */
+  ambience: TemplateAmbience;
+  /** 短简介（≤10字） */
+  shortDesc: string;
   sortOrder: number;
   updatedAt: number;
 }
@@ -92,6 +106,10 @@ export interface AdminTemplateDetail extends AdminTemplateListItem {
   camera: Record<string, unknown>;
   sceneGuide: Record<string, unknown>;
   postProcess: Record<string, unknown>;
+  /** 季节/天气/时段元数据 */
+  ambience: TemplateAmbience;
+  /** 短简介（≤10字） */
+  shortDesc: string;
 }
 
 export interface CreateTemplateRequest {
@@ -105,6 +123,10 @@ export interface CreateTemplateRequest {
   tags?: string[];
   tagIds?: string[];
   classification?: { type: string; majorStyle: string; subStyle: string; method: string };
+  /** 季节/天气/时段元数据（可选，缺省按空结构存储） */
+  ambience?: TemplateAmbience;
+  /** 短简介（≤10字，可选） */
+  shortDesc?: string;
   sortOrder?: number;
   isActive?: boolean;
   composition?: Record<string, unknown>;
