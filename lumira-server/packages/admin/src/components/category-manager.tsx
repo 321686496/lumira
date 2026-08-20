@@ -120,9 +120,25 @@ export function CategoryManager({
   const tree = useMemo(() => buildCategoryTree(categories), [categories]);
 
   const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(new Set());
+
+  // 递归收集所有有子级的节点 key（含二/三/四级），供「全部折叠/展开」与全折叠判断使用
+  const allBranchKeys = useMemo(() => {
+    const keys: string[] = [];
+    const collect = (nodes: TemplateCategoryTreeNode[]) => {
+      for (const n of nodes) {
+        if (n.children.length > 0) {
+          keys.push(n.key);
+          collect(n.children);
+        }
+      }
+    };
+    collect(tree);
+    return keys;
+  }, [tree]);
+
   const allCollapsed = useMemo(
-    () => tree.every((n) => n.children.length === 0 || collapsedKeys.has(n.key)),
-    [tree, collapsedKeys],
+    () => allBranchKeys.every((key) => collapsedKeys.has(key)),
+    [allBranchKeys, collapsedKeys],
   );
 
   const flatRows = useMemo(() => flattenTree(tree, collapsedKeys), [tree, collapsedKeys]);
@@ -392,7 +408,8 @@ export function CategoryManager({
     if (allCollapsed) {
       setCollapsedKeys(new Set());
     } else {
-      setCollapsedKeys(new Set(tree.filter((n) => n.children.length > 0).map((n) => n.key)));
+      // 收集所有层级（一/二/三/四）中有子级的节点，全部折叠
+      setCollapsedKeys(new Set(allBranchKeys));
     }
   };
 
