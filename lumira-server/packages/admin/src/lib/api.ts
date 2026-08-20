@@ -78,7 +78,7 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
-// ===== 场景管理 / 使用次数（非 /admin 前缀）=====
+// ===== 场景管理 / 使用次数（admin 前缀）=====
 export interface AdminScene {
   id: string;
   name: string;
@@ -314,8 +314,7 @@ export const api = {
     }),
 
   // ===== 场景管理 =====
-  listScenes: () =>
-    adminFetch<{ scenes?: AdminScene[] }>('/scenes', { next: { revalidate: 0 } }),
+  listScenes: () => adminFetch<{ scenes?: AdminScene[] }>('/scenes'),
 
   createScene: (payload: Record<string, unknown>) =>
     adminFetch<AdminScene>('/scenes', {
