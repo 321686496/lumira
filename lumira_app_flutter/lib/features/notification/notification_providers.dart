@@ -34,7 +34,7 @@ final remoteNotificationsSyncProvider = FutureProvider<void>((ref) async {
     for (final n in resp.notifications) {
       final startAt = n.startAt;
       await dao.upsertRemote(NotificationRecord(
-        id: 'remote:${n.id}',
+        id: n.id,
         source: 'remote',
         remoteId: n.id,
         kind: n.category.isEmpty ? 'announcement' : n.category,
