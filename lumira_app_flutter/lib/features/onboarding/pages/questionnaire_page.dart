@@ -8,6 +8,7 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../profile/providers/profile_providers.dart';
 import '../data/questionnaire_answers.dart';
 import '../data/questionnaire_data.dart';
 import '../services/questionnaire_sync_providers.dart';
@@ -85,6 +86,9 @@ class _QuestionnairePageState extends ConsumerState<QuestionnairePage> {
     setState(() => _submitting = true);
 
     final answers = QuestionnaireAnswers(
+      gender: _answers['gender']?.isEmpty == true
+          ? null
+          : _answers['gender']?.first,
       source: _answers['source']?.isEmpty == true
           ? null
           : _answers['source']?.first,
@@ -106,6 +110,34 @@ class _QuestionnairePageState extends ConsumerState<QuestionnairePage> {
       await syncService.submit(answers);
     } catch (_) {
       // 同步失败不阻塞跳转（本地已落库）
+    }
+
+    final current = await ref.read(profileDataProvider.future);
+    if (current != null) {
+      final updated = current.copyWith(
+        gender: answers.gender,
+        favoriteCategories: answers.favoriteCategories.isNotEmpty
+            ? answers.favoriteCategories
+            : current.favoriteCategories,
+        painPoints: answers.painPoints.isNotEmpty
+            ? answers.painPoints
+            : current.painPoints,
+        skillLevel: answers.skillLevel,
+        expectations: answers.expectations.isNotEmpty
+            ? answers.expectations
+            : current.expectations,
+        commonScenes: answers.commonScenes.isNotEmpty
+            ? answers.commonScenes
+            : current.commonScenes,
+        shootFrequency: answers.shootFrequency,
+      );
+      try {
+        final profileSync = await ref.read(profileSyncServiceProvider.future);
+        await profileSync.save(updated);
+        ref.invalidate(profileDataProvider);
+      } catch (_) {
+        // 个人资料同步失败不阻塞问卷跳转（后端 Task3 仍会同步偏好）
+      }
     }
 
     if (!mounted) return;

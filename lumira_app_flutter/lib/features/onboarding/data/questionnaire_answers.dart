@@ -5,6 +5,7 @@ import 'dart:convert';
 /// 字段名与后端 JSON key 一致（snake_case），便于直接序列化。
 /// 单选题跳过为 null，多选题跳过为空数组。
 class QuestionnaireAnswers {
+  final String? gender;
   final String? source;
   final List<String> favoriteCategories;
   final List<String> painPoints;
@@ -14,6 +15,7 @@ class QuestionnaireAnswers {
   final String? shootFrequency;
 
   const QuestionnaireAnswers({
+    this.gender,
     this.source,
     required this.favoriteCategories,
     required this.painPoints,
@@ -25,6 +27,7 @@ class QuestionnaireAnswers {
 
   /// 全空答案（整体跳过时使用）
   factory QuestionnaireAnswers.empty() => const QuestionnaireAnswers(
+        gender: null,
         source: null,
         favoriteCategories: [],
         painPoints: [],
@@ -36,6 +39,7 @@ class QuestionnaireAnswers {
 
   factory QuestionnaireAnswers.fromJson(Map<String, dynamic> json) {
     return QuestionnaireAnswers(
+      gender: json['gender'] as String?,
       source: json['source'] as String?,
       favoriteCategories:
           (json['favorite_categories'] as List<dynamic>?)?.cast<String>() ?? [],
@@ -50,6 +54,7 @@ class QuestionnaireAnswers {
   }
 
   Map<String, dynamic> toJson() => {
+        'gender': gender,
         'source': source,
         'favorite_categories': favoriteCategories,
         'pain_points': painPoints,
@@ -63,6 +68,7 @@ class QuestionnaireAnswers {
 
   /// 是否完全未填写（所有题都跳过）
   bool get isAllSkipped =>
+      gender == null &&
       source == null &&
       favoriteCategories.isEmpty &&
       painPoints.isEmpty &&

@@ -25,8 +25,18 @@ class QuestionDef {
   });
 }
 
-/// 7 道问卷题目（文案集中此文件，便于未来抽 i18n）
+/// 8 道问卷题目（文案集中此文件，便于未来抽 i18n）
 const List<QuestionDef> kQuestionnaireQuestions = [
+  QuestionDef(
+    id: 'gender',
+    title: '你的性别？',
+    type: QuestionType.single,
+    options: [
+      QuestionOption('male', '男'),
+      QuestionOption('female', '女'),
+      QuestionOption('prefer_not', '不方便透露'),
+    ],
+  ),
   QuestionDef(
     id: 'source',
     title: '你从哪里知道 Lumira？',
