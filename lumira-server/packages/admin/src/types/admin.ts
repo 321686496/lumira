@@ -238,7 +238,7 @@ export interface AdminTemplateDetail extends AdminTemplateListItem {
   referenceSource: string;
   tags: string[];
   tagIds: string[];
-  classification: { type: string; style: string; method: string };
+  classification: { type: string; majorStyle: string; subStyle: string; method: string };
   composition: Record<string, unknown>;
   pose: Record<string, unknown>;
   camera: Record<string, unknown>;
@@ -256,7 +256,7 @@ export interface CreateTemplateRequest {
   referenceSource?: string;
   tags?: string[];
   tagIds?: string[];
-  classification?: { type: string; style: string; method: string };
+  classification?: { type: string; majorStyle: string; subStyle: string; method: string };
   sortOrder?: number;
   isActive?: boolean;
   composition?: Record<string, unknown>;

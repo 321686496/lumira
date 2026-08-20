@@ -79,7 +79,8 @@ const NONE_VALUE = '__none__';
 const schema = z.object({
   name: z.string().min(1, '请输入模板名称').max(100),
   category: z.string().min(1, '请选择分类'),
-  classificationStyle: z.string().optional().default(NONE_VALUE),
+  classificationMajorStyle: z.string().optional().default(NONE_VALUE),
+  classificationSubStyle: z.string().optional().default(NONE_VALUE),
   classificationMethod: z.string().optional().default(NONE_VALUE),
   price: z.coerce.number().int().min(0, '价格不能为负'),
   description: z.string().optional().default(''),
@@ -201,7 +202,8 @@ export default function TemplateForm({
       return {
         name: '',
         category: typeCategories[0]?.key ?? 'portrait',
-        classificationStyle: NONE_VALUE,
+        classificationMajorStyle: NONE_VALUE,
+        classificationSubStyle: NONE_VALUE,
         classificationMethod: NONE_VALUE,
         price: 0,
         description: '',
@@ -276,7 +278,8 @@ export default function TemplateForm({
     return {
       name: initial.name,
       category: initial.category,
-      classificationStyle: initial.classification?.style || NONE_VALUE,
+      classificationMajorStyle: initial.classification?.majorStyle || NONE_VALUE,
+      classificationSubStyle: initial.classification?.subStyle || NONE_VALUE,
       classificationMethod: initial.classification?.method || NONE_VALUE,
       price: initial.price,
       description: initial.description ?? '',
@@ -480,7 +483,8 @@ export default function TemplateForm({
       tagIds: [],
       classification: {
         type: data.category,
-        style: data.classificationStyle === NONE_VALUE ? '' : (data.classificationStyle ?? ''),
+        majorStyle: data.classificationMajorStyle === NONE_VALUE ? '' : (data.classificationMajorStyle ?? ''),
+        subStyle: data.classificationSubStyle === NONE_VALUE ? '' : (data.classificationSubStyle ?? ''),
         method: data.classificationMethod === NONE_VALUE ? '' : (data.classificationMethod ?? ''),
       },
       sortOrder: data.sortOrder,
@@ -599,12 +603,16 @@ export default function TemplateForm({
 
   const watchSilhouetteType = watch('silhouetteType');
   const watchCategory = watch('category');
-  const watchStyleField = watch('classificationStyle') || NONE_VALUE;
-  const watchStyleKey = watchStyleField === NONE_VALUE ? '' : watchStyleField;
+  const majStyleField = watch('classificationMajorStyle') || NONE_VALUE;
+  const majStyleKey = majStyleField === NONE_VALUE ? '' : majStyleField;
+  const subStyleField = watch('classificationSubStyle') || NONE_VALUE;
+  const subStyleKey = subStyleField === NONE_VALUE ? '' : subStyleField;
 
   const typeCategories = categories.filter((c) => c.level === 1);
-  const styleOptions = categories.filter((c) => c.level === 2 && c.parentKey === watchCategory);
-  const methodOptions = categories.filter((c) => c.level === 3 && c.parentKey === watchStyleKey);
+  // 四级动态级联：按父子链逐级展开，父级无子级则该层不显示
+  const majorStyleOptions = categories.filter((c) => c.level === 2 && c.parentKey === watchCategory);
+  const subStyleOptions = categories.filter((c) => c.level === 3 && c.parentKey === majStyleKey);
+  const methodOptions = categories.filter((c) => c.level === 4 && c.parentKey === subStyleKey);
 
   const coverPreviewUrl = isEdit && initial?.coverUrl
     ? toAssetUrl(initial.coverUrl, backendUrl) ?? undefined
@@ -720,8 +728,8 @@ export default function TemplateForm({
               </div>
 
               <div className="space-y-2">
-                <Label>分类（三级级联）*</Label>
-                <div className="grid grid-cols-3 gap-2">
+                <Label>分类（四级动态级联）*</Label>
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">一级（题材）</Label>
                     <Controller
@@ -732,7 +740,8 @@ export default function TemplateForm({
                           value={field.value}
                           onValueChange={(v) => {
                             field.onChange(v);
-                            setValue('classificationStyle', NONE_VALUE);
+                            setValue('classificationMajorStyle', NONE_VALUE);
+                            setValue('classificationSubStyle', NONE_VALUE);
                             setValue('classificationMethod', NONE_VALUE);
                           }}
                         >
@@ -748,60 +757,94 @@ export default function TemplateForm({
                       )}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">二级（风格）</Label>
-                    <Controller
-                      control={control}
-                      name="classificationStyle"
-                      render={({ field }) => (
-                        <Select
-                          value={field.value || NONE_VALUE}
-                          onValueChange={(v) => {
-                            field.onChange(v);
-                            setValue('classificationMethod', NONE_VALUE);
-                          }}
-                        >
-                          <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NONE_VALUE}>无</SelectItem>
-                            {styleOptions.map((c) => (
-                              <SelectItem key={c.key} value={c.key}>
-                                {c.name} ({c.key})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">三级（方式）</Label>
-                    <Controller
-                      control={control}
-                      name="classificationMethod"
-                      render={({ field }) => (
-                        <Select
-                          value={field.value || NONE_VALUE}
-                          onValueChange={field.onChange}
-                          disabled={!watchStyleKey}
-                        >
-                          <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NONE_VALUE}>无</SelectItem>
-                            {methodOptions.map((c) => (
-                              <SelectItem key={c.key} value={c.key}>
-                                {c.name} ({c.key})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
+                  {majorStyleOptions.length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">二级（大风格）</Label>
+                      <Controller
+                        control={control}
+                        name="classificationMajorStyle"
+                        render={({ field }) => (
+                          <Select
+                            value={field.value || NONE_VALUE}
+                            onValueChange={(v) => {
+                              field.onChange(v);
+                              setValue('classificationSubStyle', NONE_VALUE);
+                              setValue('classificationMethod', NONE_VALUE);
+                            }}
+                          >
+                            <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NONE_VALUE}>无</SelectItem>
+                              {majorStyleOptions.map((c) => (
+                                <SelectItem key={c.key} value={c.key}>
+                                  {c.name} ({c.key})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  )}
+                  {subStyleOptions.length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">三级（子风格）</Label>
+                      <Controller
+                        control={control}
+                        name="classificationSubStyle"
+                        render={({ field }) => (
+                          <Select
+                            value={field.value || NONE_VALUE}
+                            onValueChange={(v) => {
+                              field.onChange(v);
+                              setValue('classificationMethod', NONE_VALUE);
+                            }}
+                          >
+                            <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NONE_VALUE}>无</SelectItem>
+                              {subStyleOptions.map((c) => (
+                                <SelectItem key={c.key} value={c.key}>
+                                  {c.name} ({c.key})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  )}
+                  {methodOptions.length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">四级（方法）</Label>
+                      <Controller
+                        control={control}
+                        name="classificationMethod"
+                        render={({ field }) => (
+                          <Select
+                            value={field.value || NONE_VALUE}
+                            onValueChange={field.onChange}
+                            disabled={subStyleOptions.length === 0}
+                          >
+                            <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NONE_VALUE}>无</SelectItem>
+                              {methodOptions.map((c) => (
+                                <SelectItem key={c.key} value={c.key}>
+                                  {c.name} ({c.key})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  )}
                 </div>
                 {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                 <p className="text-xs text-muted-foreground">
-                  一级（题材）为必选；二三级可选「无」。提交时 category = 一级 key，classification.type 与之相同。
+                  题材必选；二/三/四级按父子链动态展开，深度随题材而定（人像可达四级，浅层题材至二三级）。
+                  提交时 category = 一级 key，classification 中 type=一级 / majorStyle=二级 / subStyle=三级 / method=四级。
                 </p>
               </div>
 
