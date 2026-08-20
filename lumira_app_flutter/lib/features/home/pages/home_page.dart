@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../features/notification/notification_providers.dart';
 import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
@@ -102,6 +103,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    // 未读通知数：provider 同步失败/未就绪时静默为 0，不阻断首页首帧。
+    final unreadCount = ref.watch(unreadCountProvider).value ?? 0;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -118,6 +121,7 @@ class _HomePageState extends ConsumerState<HomePage> {
           _NavAction(
             icon: Icons.notifications_outlined,
             tokens: tokens,
+            badgeCount: unreadCount,
             onTap: () => GoRouter.of(context).push(RouteNames.profileNotifications),
           ),
           _NavAction(
@@ -265,25 +269,45 @@ class _NavAction extends StatelessWidget {
   const _NavAction({
     required this.icon,
     required this.tokens,
+    this.badgeCount,
     required this.onTap,
   });
 
   final IconData icon;
   final ThemeTokens tokens;
+
+  /// 未读通知角标数量；<=0 或 null 时不显示角标。
+  final int? badgeCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final Widget iconWidget = Icon(
+      icon,
+      size: 20, // 40rpx → 20dp
+      color: tokens.textSecondary,
+    );
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.all(8),
-        child: Icon(
-          icon,
-          size: 20, // 40rpx → 20dp
-          color: tokens.textSecondary,
-        ),
+        child: (badgeCount != null && badgeCount! > 0)
+            ? Badge(
+                label: Text(
+                  badgeCount! > 99 ? '99+' : '$badgeCount',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: tokens.textInverse,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                backgroundColor: tokens.brand,
+                smallSize: 8,
+                child: iconWidget,
+              )
+            : iconWidget,
       ),
     );
   }

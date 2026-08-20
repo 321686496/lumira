@@ -2,55 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/lumira/lumira.dart';
+import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../notification/notification_models.dart';
+import '../../notification/notification_providers.dart';
 
-/// 通知中心页（占位实现）
-/// 展示 5 条 mock 通知，长按可清除单条。
-class ProfileNotificationsPage extends ConsumerStatefulWidget {
+/// 通知中心页（真实数据实现）
+///
+/// 进入时 watch [notificationsProvider]，自动触发后端公告同步 + 本地事件生成。
+/// 数据源为合并后的 [NotificationItem] 列表（remote 公告 + local 应用事件）。
+class ProfileNotificationsPage extends ConsumerWidget {
   const ProfileNotificationsPage({super.key});
 
-  @override
-  ConsumerState<ProfileNotificationsPage> createState() =>
-      _ProfileNotificationsPageState();
-}
-
-class _NotificationItem {
-  final String id;
-  final String title;
-  final String body;
-  final String time;
-  final IconData icon;
-  const _NotificationItem({
-    required this.id,
-    required this.title,
-    required this.body,
-    required this.time,
-    required this.icon,
-  });
-}
-
-const List<_NotificationItem> _kMockNotifications = [
-  _NotificationItem(id: 'n1', title: '连续打卡', body: '你的连续打卡已 7 天', time: '今天', icon: Icons.local_fire_department_outlined),
-  _NotificationItem(id: 'n2', title: '模板更新', body: '新模板已上线', time: '今天', icon: Icons.layers_outlined),
-  _NotificationItem(id: 'n3', title: '挑战提醒', body: '今日挑战尚未完成', time: '昨天', icon: Icons.emoji_events_outlined),
-  _NotificationItem(id: 'n4', title: '成就解锁', body: '你解锁了「初次拍摄」成就', time: '2 天前', icon: Icons.star_outline),
-  _NotificationItem(id: 'n5', title: '系统通知', body: '如画 v1.2 已发布', time: '3 天前', icon: Icons.info_outline),
-];
-
-class _ProfileNotificationsPageState extends ConsumerState<ProfileNotificationsPage> {
-  late List<_NotificationItem> _items;
-
-  @override
-  void initState() {
-    super.initState();
-    _items = List.of(_kMockNotifications);
-  }
-
-  void _back() {
+  void _back(BuildContext context) {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
@@ -58,73 +26,235 @@ class _ProfileNotificationsPageState extends ConsumerState<ProfileNotificationsP
     }
   }
 
-  void _onLongPress(int index) {
-    setState(() {
-      _items.removeAt(index);
-    });
-    LumiraToast.show(context, '已清除', duration: const Duration(milliseconds: 800));
+  /// 全部标记已读。
+  Future<void> _markAll(WidgetRef ref) async {
+    final dao = await ref.read(notificationDaoProvider.future);
+    await dao.markAllRead();
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(unreadCountProvider);
+  }
+
+  /// 清空全部（软删）。
+  Future<void> _clearAll(WidgetRef ref) async {
+    final dao = await ref.read(notificationDaoProvider.future);
+    await dao.clearAll();
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(unreadCountProvider);
+  }
+
+  /// 标记单条已读（经 provider，自动刷新未读数与列表）。
+  Future<void> _markRead(WidgetRef ref, String id) async {
+    await ref.read(markAsReadProvider)(id);
+  }
+
+  /// 清除单条（经 provider，自动刷新未读数与列表）。
+  Future<void> _clearOne(WidgetRef ref, String id) async {
+    await ref.read(clearNotificationProvider)(id);
+  }
+
+  /// 点击一行：后端公告只标记已读；本地通知标记已读后跳转对应页面。
+  void _onTap(WidgetRef ref, BuildContext context, NotificationItem n) {
+    _markRead(ref, n.id);
+    if (n.source != 'local') return;
+    final String? route = _localRoute(n.kind);
+    if (route != null) {
+      GoRouter.of(context).push(route);
+    }
+  }
+
+  /// 本地通知类别 → 目标路由（打卡/挑战/成就/模板）。
+  String? _localRoute(String kind) {
+    switch (kind) {
+      case 'streak':
+        return RouteNames.checkinList; // 连续打卡
+      case 'challenge':
+        return RouteNames.challenge; // 今日挑战
+      case 'achievement':
+        return RouteNames.profileGrowth; // 成就/成长
+      case 'template':
+        return RouteNames.templates; // 模板库
+      case 'system':
+      default:
+        return null; // 系统类无对应页面，仅标记已读
+    }
+  }
+
+  IconData _iconFor(String kind) {
+    switch (kind) {
+      case 'streak':
+        return Icons.local_fire_department_outlined;
+      case 'challenge':
+        return Icons.emoji_events_outlined;
+      case 'achievement':
+        return Icons.star_outline;
+      case 'template':
+        return Icons.layers_outlined;
+      case 'system':
+        return Icons.info_outline;
+      case 'announcement':
+        return Icons.campaign_outlined;
+      default:
+        return Icons.notifications_outlined;
+    }
+  }
+
+  String _formatTime(int timeMs) {
+    final now = DateTime.now();
+    final dt = DateTime.fromMillisecondsSinceEpoch(timeMs);
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(dt.year, dt.month, dt.day);
+    final diff = today.difference(day).inDays;
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    if (diff == 0) return '今天 $hh:$mm';
+    if (diff == 1) return '昨天 $hh:$mm';
+    if (dt.year == now.year) return '${dt.month}月${dt.day}日';
+    return '${dt.year}/${dt.month}/${dt.day}';
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
+    final notifications = ref.watch(notificationsProvider).value ?? const <NotificationItem>[];
+
     return Scaffold(
       backgroundColor: tokens.canvas,
       appBar: LumiraNav(
         title: '通知中心',
         transparent: true,
-        leading: _BackButton(tokens: tokens, onTap: _back),
+        leading: _BackButton(tokens: tokens, onTap: () => _back(context)),
+        actions: [
+          LumiraNavButton(
+            icon: Icons.done_all_outlined,
+            tooltip: '全部已读',
+            onPressed: () => _markAll(ref),
+          ),
+          LumiraNavButton(
+            icon: Icons.delete_outline,
+            tooltip: '清空',
+            onPressed: () => _clearAll(ref),
+          ),
+        ],
       ),
-      body: _items.isEmpty
+      body: notifications.isEmpty
           ? Center(
               child: Text('暂无通知', style: TextStyle(color: tokens.textTertiary)),
             )
-          : ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: _items.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: tokens.divider),
+          : ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: notifications.length,
               itemBuilder: (_, i) {
-                final n = _items[i];
-                return GestureDetector(
-                  onLongPress: () => _onLongPress(i),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    color: tokens.surface,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: tokens.brandSubtle,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(n.icon, size: 20, color: tokens.brandText),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(n.title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: tokens.textPrimary)),
-                                  const Spacer(),
-                                  Text(n.time, style: TextStyle(fontSize: 11, color: tokens.textTertiary)),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(n.body, style: TextStyle(fontSize: 13, color: tokens.textSecondary)),
-                            ],
-                          ),
-                        ),
-                      ],
+                final n = notifications[i];
+                return Dismissible(
+                  key: ValueKey('notif_${n.id}'),
+                  direction: DismissDirection.endToStart,
+                  onDismissed: (_) => _clearOne(ref, n.id),
+                  background: Container(
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    decoration: BoxDecoration(
+                      color: tokens.dangerSubtle,
+                      borderRadius: BorderRadius.circular(28),
                     ),
+                    child: Icon(Icons.delete_outline, color: tokens.danger),
+                  ),
+                  child: _NotificationRow(
+                    item: n,
+                    icon: _iconFor(n.kind),
+                    timeText: _formatTime(n.timeMs),
+                    onTap: () => _onTap(ref, context, n),
+                    tokens: tokens,
                   ),
                 );
               },
             ),
+    );
+  }
+}
+
+/// 单条通知卡片行（风格自适应）
+class _NotificationRow extends ConsumerWidget {
+  const _NotificationRow({
+    required this.item,
+    required this.icon,
+    required this.timeText,
+    required this.onTap,
+    required this.tokens,
+  });
+
+  final NotificationItem item;
+  final IconData icon;
+  final String timeText;
+  final VoidCallback onTap;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = !item.read;
+    return NeuCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      onTap: onTap,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 未读左侧指示点
+          Container(
+            width: 8,
+            height: 8,
+            margin: const EdgeInsets.only(top: 5),
+            decoration: BoxDecoration(
+              color: unread ? tokens.brand : Colors.transparent,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: tokens.brandSubtle,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 18, color: tokens.brandText),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: unread ? FontWeight.w700 : FontWeight.w600,
+                          color: tokens.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      timeText,
+                      style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  item.body,
+                  style: TextStyle(fontSize: 13, color: tokens.textSecondary),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
