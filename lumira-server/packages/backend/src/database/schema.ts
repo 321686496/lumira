@@ -25,6 +25,14 @@ export const userProfiles = mysqlTable('user_profiles', {
   deviceId: text('device_id').primaryKey().references(() => devices.deviceId),
   username: text('username').notNull(),
   avatarSeed: text('avatar_seed').notNull(),
+  gender: text('gender'),
+  favoriteCategoriesJson: text('favorite_categories_json'),
+  painPointsJson: text('pain_points_json'),
+  skillLevel: text('skill_level'),
+  expectationsJson: text('expectations_json'),
+  commonScenesJson: text('common_scenes_json'),
+  shootFrequency: text('shoot_frequency'),
+  avatarUrl: text('avatar_url'),
   updatedAt: int('updated_at').notNull(),
 });
 
