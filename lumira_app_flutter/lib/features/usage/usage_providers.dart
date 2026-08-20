@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/network/api_client.dart';
+import 'builtin_template_sync_service.dart';
 import 'usage_event_recorder.dart';
 import 'usage_sync_service.dart';
 
@@ -17,4 +18,11 @@ final usageSyncServiceProvider = FutureProvider<UsageSyncService>((ref) async {
   final dao = await ref.watch(usageDaoProvider.future);
   final api = await ref.watch(apiClientProvider.future);
   return UsageSyncService(dao, DioUsageNetwork(api));
+});
+
+/// 内置模板名称同步服务。
+final builtinTemplateSyncServiceProvider =
+    FutureProvider<BuiltinTemplateSyncService>((ref) async {
+  final api = await ref.watch(apiClientProvider.future);
+  return BuiltinTemplateSyncService(DioBuiltinTemplateNetwork(api));
 });

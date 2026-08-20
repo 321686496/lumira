@@ -157,6 +157,18 @@ Future<void> main() async {
     }
   });
 
+  // 6.6 内置模板名称同步（同步 id/名称到后端；失败静默不阻塞启动）
+  // ignore: unawaited_futures
+  authController.ensureRegistered().then((ok) async {
+    if (!ok) return;
+    try {
+      final bts = await container.read(builtinTemplateSyncServiceProvider.future);
+      await bts.syncBuiltinTemplates();
+    } catch (_) {
+      // 网络/鉴权失败静默
+    }
+  });
+
   runApp(
     UncontrolledProviderScope(
       container: container,
