@@ -15,4 +15,9 @@ export class AdminUsageController {
       itemType === 'scene' ? 'scene' : itemType === 'template' ? 'template' : undefined,
     );
   }
+
+  @Get('builtin-templates')
+  async builtinTemplates() {
+    return this.usageService.listBuiltinTemplates();
+  }
 }

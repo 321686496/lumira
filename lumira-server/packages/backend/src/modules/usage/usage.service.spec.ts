@@ -53,4 +53,24 @@ describe('UsageService', () => {
     const res = await service.stats('template');
     expect(res.items).toEqual([{ itemId: 't1', itemType: 'template', useShoot: 2, openDetail: 0, sceneSelect: 0 }]);
   });
+
+  it('upsertBuiltinTemplates 空数组返回 0，非空逐条 upsert', async () => {
+    const { service, execute } = buildService({
+      execImpl: () => Promise.resolve([{ affectedRows: 1 }]),
+    });
+    expect((await service.upsertBuiltinTemplates([])).upserted).toBe(0);
+    const res = await service.upsertBuiltinTemplates([{ id: 'soft_portrait', name: '柔和人像' }]);
+    expect(res.upserted).toBe(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('listBuiltinTemplates 返回 id/名称列表', async () => {
+    const rows = [
+      { id: 'night_cityscape', name: '夜拍城市' },
+      { id: 'soft_portrait', name: '柔和人像' },
+    ];
+    const { service } = buildService({ execRows: rows });
+    const res = await service.listBuiltinTemplates();
+    expect(res.items).toEqual(rows);
+  });
 });

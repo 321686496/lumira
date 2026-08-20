@@ -2,9 +2,9 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { usageEvents } from '../../database/schema';
+import { usageEvents, builtinTemplates } from '../../database/schema';
 import type { EventInputDto } from './dto/batch-events.dto';
-import type { UsageStatsResponse, UsageStatsItem, UsageItemType } from '@lumira/shared';
+import type { UsageStatsResponse, UsageStatsItem, UsageItemType, BuiltinTemplateListResponse } from '@lumira/shared';
 
 @Injectable()
 export class UsageService {
@@ -47,5 +47,34 @@ export class UsageService {
       summary.set(key, item);
     }
     return { items: [...summary.values()] };
+  }
+
+  /** App 全量上报内置模板 id/名称，主键幂等 upsert。 */
+  async upsertBuiltinTemplates(items: { id: string; name: string }[]): Promise<{ upserted: number }> {
+    if (items.length === 0) return { upserted: 0 };
+    const db = this.dbService.getDb();
+    const now = Date.now();
+    for (const it of items) {
+      await db.execute(sql`
+        INSERT INTO ${builtinTemplates} (${builtinTemplates.id}, ${builtinTemplates.name}, ${builtinTemplates.updatedAt})
+        VALUES (${it.id}, ${it.name}, ${now})
+        ON DUPLICATE KEY UPDATE \`name\` = VALUES(\`name\`), \`updated_at\` = VALUES(\`updated_at\`)
+      `);
+    }
+    return { upserted: items.length };
+  }
+
+  /** 后台读取内置模板 id/名称列表。 */
+  async listBuiltinTemplates(): Promise<BuiltinTemplateListResponse> {
+    const db = this.dbService.getDb();
+    const rows = await db.execute(sql`
+      SELECT ${builtinTemplates.id}, ${builtinTemplates.name}
+      FROM ${builtinTemplates} ORDER BY ${builtinTemplates.id}
+    `);
+    const items = (rows[0] as unknown as Array<Record<string, unknown>>).map((r) => ({
+      id: String(r.id),
+      name: String(r.name),
+    }));
+    return { items };
   }
 }
