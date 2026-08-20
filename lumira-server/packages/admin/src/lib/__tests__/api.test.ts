@@ -62,4 +62,19 @@ describe('api client', () => {
       expect.anything(),
     );
   });
+
+  it('getBuiltinScenes calls /usage/builtin-scenes and returns items', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ items: [{ id: 'cafe-window', name: '咖啡馆' }] }),
+    });
+    const { getBuiltinScenes } = await import('../api');
+    const items = await getBuiltinScenes();
+    expect(items).toEqual([{ id: 'cafe-window', name: '咖啡馆' }]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/admin/usage/builtin-scenes'),
+      expect.anything(),
+    );
+  });
 });

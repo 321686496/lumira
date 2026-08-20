@@ -1,6 +1,6 @@
 // src/app/dashboard/scenes/page.tsx
 import { redirect } from 'next/navigation';
-import { api, getUsageStats } from '@/lib/api';
+import { api, getUsageStats, getBuiltinScenes } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
 import { SceneManager } from '@/components/scene-manager';
 
@@ -18,9 +18,12 @@ export default async function ScenesPage() {
   const usageArr = await getUsageStats('scene');
   const usage = Object.fromEntries(usageArr.map((u) => [u.itemId, u]));
 
+  // 内置场景（App 同步注册）；best-effort，失败返回空数组
+  const builtinArr = await getBuiltinScenes();
+
   return (
     <div className="space-y-4">
-      <SceneManager scenes={scenes} usage={usage} />
+      <SceneManager scenes={scenes} usage={usage} builtinScenes={builtinArr} />
     </div>
   );
 }

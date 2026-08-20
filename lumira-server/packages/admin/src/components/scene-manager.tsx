@@ -1,7 +1,7 @@
 // src/components/scene-manager.tsx
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   saveScene, removeScene, setSceneActive,
 } from '@/actions/scenes';
-import type { AdminScene, UsageStatsItem } from '@/lib/api';
+import type { AdminScene, UsageStatsItem, BuiltinScene } from '@/lib/api';
 
 const CATEGORY_OPTIONS = [
   { value: 'light', label: '光线' },
@@ -63,9 +63,11 @@ const EMPTY_FORM: FormState = {
 export function SceneManager({
   scenes,
   usage = {},
+  builtinScenes = [],
 }: {
   scenes: AdminScene[];
   usage?: Record<string, Pick<UsageStatsItem, 'useShoot' | 'openDetail' | 'sceneSelect'>>;
+  builtinScenes?: BuiltinScene[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -90,6 +92,12 @@ export function SceneManager({
       (CATEGORY_LABEL[s.category] || s.category).toLowerCase().includes(q)
     );
   });
+
+  // 内置场景（排除已在主网格展示的系统场景 id，避免重复）
+  const builtinRecords = useMemo(() => {
+    const backendIds = new Set(scenes.map((s) => s.id));
+    return builtinScenes.filter((b) => !backendIds.has(b.id));
+  }, [builtinScenes, scenes]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -334,6 +342,50 @@ export function SceneManager({
           })}
         </div>
       )}
+
+      {/* 内置场景分区（App 内嵌，后端只读展示名称与次数） */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 pt-2">
+          <h2 className="text-sm font-semibold text-foreground">内置场景</h2>
+          <Badge variant="secondary" className="text-xs">
+            {builtinRecords.length}
+          </Badge>
+        </div>
+        {builtinRecords.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border bg-card py-10 text-center text-sm text-muted-foreground">
+            暂未获取到内置场景记录，App 同步后展示
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {builtinRecords.map((b) => {
+              const u = usage[b.id];
+              return (
+                <div
+                  key={b.id}
+                  className="flex flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+                >
+                  <div className="flex h-16 w-full items-center justify-center bg-muted">
+                    <span className="rounded-full bg-indigo-500/85 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur">
+                      内置
+                    </span>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1 p-3">
+                    <span className="truncate text-sm font-medium text-foreground">
+                      {b.name || b.id}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">{b.id}</span>
+                    <span className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
+                      <span>拍摄 {u?.useShoot ?? 0}</span>
+                      <span>查看 {u?.openDetail ?? 0}</span>
+                      <span>选场 {u?.sceneSelect ?? 0}</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* 新建 / 编辑对话框 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
