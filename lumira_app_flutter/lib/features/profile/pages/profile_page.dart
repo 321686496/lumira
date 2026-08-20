@@ -8,7 +8,6 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
@@ -16,6 +15,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../data/builtin_profiles.dart';
+import '../data/profile_models.dart';
 import '../data/profile_mock_data.dart';
 import '../providers/fragments_providers.dart';
 import '../providers/growth_providers.dart';
@@ -89,6 +89,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         scrolled: _scrolled,
         showBackButton: false,
         horizontalPadding: 24,
+        actions: [
+          LumiraNavButton(
+            icon: Icons.settings_outlined,
+            onPressed: () => _goPage(RouteNames.profileSettings),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -116,52 +122,42 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 // 用 viewPadding.top（不被 widget 消费）+ nav 内容高度 48dp 精确占位
                 padding: EdgeInsets.fromLTRB(
                   24,
-                  MediaQuery.of(context).viewPadding.top + 48,
+                  MediaQuery.of(context).viewPadding.top + 48 + 12,
                   24,
                   100,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // 1. HeroCard
-                    const FadeUp(child: _HeroCard()),
-                    const SizedBox(height: 20),
-                    // 1.5 摄影偏好摘要卡
+                    // 1. 头部信息条（头像+名字+等级/偏好签名+数据区）
                     FadeUp(
-                      delay: const Duration(milliseconds: 150),
-                      child: _ProfilePrefsCard(onEdit: () => _goPage(RouteNames.profileEdit)),
+                      child: _ProfileHeader(onEdit: (p) => _goPage(p)),
                     ),
                     const SizedBox(height: 20),
-                    // 2. StatsCard
+                    // 2. ContentCard（我的内容宫格）
                     const FadeUp(
                       delay: Duration(milliseconds: 100),
-                      child: _StatsCard(),
-                    ),
-                    const SizedBox(height: 20),
-                    // 3. ContentCard（我的内容）
-                    const FadeUp(
-                      delay: Duration(milliseconds: 200),
                       child: _ContentCard(),
                     ),
                     const SizedBox(height: 20),
-                    // 4. FragmentCard
+                    // 3. FragmentCard
                     const FadeUp(
-                      delay: Duration(milliseconds: 300),
+                      delay: Duration(milliseconds: 200),
                       child: _FragmentCard(),
                     ),
                     const SizedBox(height: 20),
-                    // 5. QuickActionsRow
+                    // 4. QuickActionsRow（2×2 工具宫格）
                     FadeUp(
-                      delay: const Duration(milliseconds: 400),
+                      delay: const Duration(milliseconds: 300),
                       child: _QuickActionsRow(onTap: (p) => _goPage(p)),
                     ),
                     const SizedBox(height: 20),
-                    // 6. MenuCard
+                    // 5. MenuCard（常用功能列表）
                     FadeUp(
-                      delay: const Duration(milliseconds: 500),
+                      delay: const Duration(milliseconds: 400),
                       child: _MenuCard(onTap: (p) => _goPage(p)),
                     ),
-                    // 7. FeedbackEntryCard
+                    // 6. FeedbackEntryCard
                     const SizedBox(height: 20),
                     _FeedbackEntryCard(
                       onTap: () => _goPage(RouteNames.feedback),
@@ -186,9 +182,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 }
 
-/// HeroCard：用户头像 + 名字 + 等级徽章 + 经验进度
-class _HeroCard extends ConsumerWidget {
-  const _HeroCard();
+/// 头部信息条：左对齐头像 + 名字 + 等级徽章 + 偏好签名 + 底部数据区
+/// 替代原居中 HeroCard + 独立 StatsCard + 偏好卡；偏好未填时显示引导链接
+class _ProfileHeader extends ConsumerWidget {
+  const _ProfileHeader({required this.onEdit});
+  final void Function(String path) onEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -196,7 +194,6 @@ class _HeroCard extends ConsumerWidget {
     final tokens = appTheme.tokens;
     final isNeu = appTheme.style == UIStyle.neumorphic;
     final user = ref.watch(userProfileProvider).valueOrNull ?? ProfileMockData.userProfile;
-    final nextLevelName = ref.watch(nextLevelNameProvider).valueOrNull ?? '进阶学徒';
     // 名称/头像改用真实资料；profile 为 null（未分配本地资料）时回退 mock
     final profile = ref.watch(profileDataProvider).valueOrNull;
     final displayName = (profile != null && profile.username.isNotEmpty)
@@ -206,221 +203,138 @@ class _HeroCard extends ConsumerWidget {
       profile?.avatarSeed ?? user.avatarSeed,
       customUrl: profile?.avatarUrl,
     );
-    // 硬编码颜色，与 uni-app 一致
-    return Container(
-      padding: const EdgeInsets.fromLTRB(32, 32, 24, 24), // 64rpx/48rpx/48rpx → 32/24/24dp
-      decoration: BoxDecoration(
-        // neumorphic 风格：移除渐变 / 边框，使用 tokens.surface + 双向凸起阴影
-        color: isNeu ? tokens.surface : null,
-        // 硬编码颜色：linear-gradient(145deg, #FFF8EE 0%, #F5EDDB 40%, #EDE3D0 100%)
-        gradient: isNeu
-            ? null
-            : const LinearGradient(
-                begin: Alignment(-0.4, -1),
-                end: Alignment(0.4, 1),
-                colors: [Color(0xFFFFF8EE), Color(0xFFF5EDDB), Color(0xFFEDE3D0)],
-                stops: [0.0, 0.4, 1.0],
-              ),
-        border: isNeu ? null : Border.all(color: const Color(0xFFC9A96E).withOpacity(0.12), width: 1),
-        borderRadius: BorderRadius.circular(isNeu ? 16 : 24), // 48rpx → 24dp；neumorphic 用 16
-        boxShadow: isNeu
-            ? tokens.shadowConvex
-            : [
-                BoxShadow(
-                  color: const Color(0xFFC9A96E).withOpacity(0.08),
-                  offset: const Offset(0, 4),
-                  blurRadius: 24,
-                ),
-              ],
-      ),
+
+    return NeuCard(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
-          // 头像 + 徽章：头像点击打开大图预览，右下角编辑角标单独点击进编辑资料（名字只读，不再包 tap）
-          Column(
-            children: [
-              GestureDetector(
-                onTap: () => _showAvatarFullScreen(context, avatarUrl),
-                behavior: HitTestBehavior.opaque,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: 88, // 176rpx → 88dp
-                      height: 88,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        // neumorphic 风格：移除白边框，使用 tokens.shadowConvexSubtle
-                        border: isNeu ? null : Border.all(color: Colors.white, width: 3),
-                        boxShadow: isNeu
-                            ? tokens.shadowConvexSubtle
-                            : [
-                                BoxShadow(
-                                  color: const Color(0xFFC9A96E).withOpacity(0.2),
-                                  offset: const Offset(0, 4),
-                                  blurRadius: 16,
-                                ),
-                              ],
-                      ),
-                      child: ClipOval(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // 头像（点击看大图）+ 编辑角标
+                GestureDetector(
+                  onTap: () => _showAvatarFullScreen(context, avatarUrl),
+                  behavior: HitTestBehavior.opaque,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ClipOval(
                         child: Image.network(
                           avatarUrl,
+                          width: 64,
+                          height: 64,
                           fit: BoxFit.cover,
                         ),
                       ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: GestureDetector(
-                        onTap: () => context.push(RouteNames.profileEdit),
-                        behavior: HitTestBehavior.opaque,
-                        child: Container(
-                          width: 22, // 44rpx → 22dp
-                          height: 22,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            // 硬编码颜色：linear-gradient(135deg, #C9A96E, #A88550)
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: GestureDetector(
+                          onTap: () => onEdit(RouteNames.profileEdit),
+                          behavior: HitTestBehavior.opaque,
+                          child: Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              // 硬编码颜色：金色编辑角标
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
+                              ),
+                              border: Border.all(color: Colors.white, width: 2.5),
                             ),
-                            border: Border.all(color: Colors.white, width: 2.5),
-                          ),
-                          child: const Icon(
-                            Icons.edit,
-                            size: 16,
-                            color: Colors.white,
+                            child: const Icon(Icons.edit, size: 13, color: Colors.white),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16), // 32rpx → 16dp
-              // 名字（只读）
-              Text(
-                displayName,
-                style: TextStyle(
-                  fontFamily: 'Noto Serif SC',
-                  fontSize: 24, // 48rpx → 24dp
-                  fontWeight: FontWeight.w600,
-                  // neumorphic 风格：tokens.textPrimary
-                  color: isNeu ? tokens.textPrimary : const Color(0xFF3D2817),
-                  letterSpacing: 0.02 * 24,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10), // 20rpx → 10dp
-          // 等级徽章
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5), // 28rpx/10rpx → 14/5dp
-            decoration: BoxDecoration(
-              // neumorphic 风格：tokens.brandSubtle 纯色 + 凸起阴影
-              color: isNeu ? tokens.brandSubtle : null,
-              // 硬编码颜色：linear-gradient(135deg, #F5EDDB, #EDE0C8)
-              gradient: isNeu
-                  ? null
-                  : const LinearGradient(
-                      colors: [Color(0xFFF5EDDB), Color(0xFFEDE0C8)],
-                    ),
-              borderRadius: BorderRadius.circular(1000),
-              border: isNeu ? null : Border.all(color: const Color(0xFF8C7340).withOpacity(0.15), width: 1),
-              boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.military_tech_outlined,
-                  size: 13,
-                  // neumorphic 风格：tokens.brandText
-                  color: isNeu ? tokens.brandText : const Color(0xFF8C7340),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'Lv.${user.level} ${user.levelName}',
-                  style: TextStyle(
-                    fontSize: 12, // 24rpx → 12dp
-                    fontWeight: FontWeight.w600,
-                    // neumorphic 风格：tokens.brandText
-                    color: isNeu ? tokens.brandText : const Color(0xFF8C7340),
-                    letterSpacing: 0.04 * 12,
+                const SizedBox(width: 16),
+                // 名字 + 等级徽章 + 偏好签名
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Noto Serif SC',
+                                fontSize: 20,
+                                fontWeight: FontWeight.w600,
+                                // neumorphic 风格：tokens.textPrimary
+                                color: isNeu ? tokens.textPrimary : const Color(0xFF3D2817),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // 紧凑等级徽章
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: isNeu ? tokens.brandSubtle : null,
+                              gradient: isNeu
+                                  ? null
+                                  : const LinearGradient(
+                                      colors: [Color(0xFFF5EDDB), Color(0xFFEDE0C8)],
+                                    ),
+                              borderRadius: BorderRadius.circular(1000),
+                              border: isNeu
+                                  ? null
+                                  : Border.all(color: const Color(0xFF8C7340).withOpacity(0.15), width: 1),
+                              boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.military_tech_outlined,
+                                  size: 12,
+                                  color: isNeu ? tokens.brandText : const Color(0xFF8C7340),
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'Lv.${user.level}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isNeu ? tokens.brandText : const Color(0xFF8C7340),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      // 偏好签名 / 未填引导
+                      _PrefsSubline(
+                        profile: profile,
+                        onEdit: () => onEdit(RouteNames.profileEdit),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20), // 40rpx → 20dp
-          // 经验进度
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 260), // 520rpx → 260dp
-            child: Column(
+          // 数据区
+          Divider(height: 1, thickness: 1, color: tokens.divider),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '经验',
-                      style: TextStyle(
-                        fontSize: 12, // 24rpx → 12dp
-                        fontWeight: FontWeight.w500,
-                        // neumorphic 风格：tokens.textSecondary
-                        color: isNeu ? tokens.textSecondary : const Color(0xFF8C7340),
-                      ),
-                    ),
-                    Text(
-                      '${formatThousands(user.currentXp)} / ${formatThousands(user.maxXp)} XP',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontFamily: 'Courier New',
-                        fontWeight: FontWeight.w600,
-                        // neumorphic 风格：tokens.textSecondary
-                        color: isNeu ? tokens.textSecondary : const Color(0xFF8C7340),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8), // 16rpx → 8dp
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3), // 6rpx → 3dp
-                  child: SizedBox(
-                    height: 6, // 12rpx → 6dp
-                    child: Stack(
-                      children: [
-                        Container(
-                          color: const Color(0xFFC9A96E).withOpacity(0.18),
-                        ),
-                        FractionallySizedBox(
-                          widthFactor: user.xpPercent / 100.0,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              // neumorphic 风格：tokens.brand 纯色填充
-                              color: isNeu ? tokens.brand : null,
-                              // 硬编码颜色：linear-gradient(90deg, #C9A96E, #D4B57A)
-                              gradient: isNeu
-                                  ? null
-                                  : const LinearGradient(
-                                      colors: [Color(0xFFC9A96E), Color(0xFFD4B57A)],
-                                    ),
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '还差 ${formatThousands(user.xpRemaining)} XP 升级至$nextLevelName',
-                  style: TextStyle(
-                    fontSize: 11, // 22rpx → 11dp
-                    // neumorphic 风格：tokens.textSecondary
-                    color: isNeu ? tokens.textSecondary : const Color(0xFFB89860),
-                    letterSpacing: 0.02 * 11,
-                  ),
-                ),
+                Expanded(child: _HeaderStatCell(num: user.photosCount, label: '作品', divider: true, tokens: tokens)),
+                Expanded(child: _HeaderStatCell(num: user.templatesCount, label: '模板', divider: true, tokens: tokens)),
+                Expanded(child: _HeaderStatCell(num: user.collectionsCount, label: '收藏', divider: false, tokens: tokens)),
               ],
             ),
           ),
@@ -447,176 +361,81 @@ class _HeroCard extends ConsumerWidget {
   }
 }
 
-/// 摄影偏好摘要卡：未填显示空态引导，已填显示性别/水平/频率/场景中文摘要
-class _ProfilePrefsCard extends ConsumerWidget {
-  const _ProfilePrefsCard({required this.onEdit});
+/// 头部偏好签名行：已填显示中文摘要，未填显示「完善摄影偏好 ›」引导链接
+class _PrefsSubline extends ConsumerWidget {
+  const _PrefsSubline({required this.profile, required this.onEdit});
+  final ProfileData? profile;
   final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final p = ref.watch(profileDataProvider).valueOrNull;
-    // 收集已填条目，按 gender / skillLevel / shootFrequency / commonScenes 优先
-    final entries = <_PrefEntry>[];
-    if (p?.gender != null) entries.add(_PrefEntry('性别', PrefOptions.gender[p!.gender] ?? p.gender!));
-    if (p?.skillLevel != null) entries.add(_PrefEntry('摄影水平', PrefOptions.skillLevel[p!.skillLevel] ?? p.skillLevel!));
-    if (p?.shootFrequency != null) entries.add(_PrefEntry('拍摄频率', PrefOptions.shootFrequency[p!.shootFrequency] ?? p.shootFrequency!));
-    if ((p?.commonScenes ?? const []).isNotEmpty) {
-      final labels = p!.commonScenes.map((k) => PrefOptions.commonScenes[k] ?? k).join(' / ');
-      entries.add(_PrefEntry('常用场景', labels));
+    final p = profile;
+    final parts = <String>[];
+    if (p != null) {
+      final gender = p.gender;
+      if (gender != null) {
+        parts.add(PrefOptions.gender[gender] ?? gender);
+      }
+      final skillLevel = p.skillLevel;
+      if (skillLevel != null) {
+        parts.add(PrefOptions.skillLevel[skillLevel] ?? skillLevel);
+      }
+      final shootFrequency = p.shootFrequency;
+      if (shootFrequency != null) {
+        parts.add(PrefOptions.shootFrequency[shootFrequency] ?? shootFrequency);
+      }
+      if (p.commonScenes.isNotEmpty) {
+        parts.add(p.commonScenes.take(2).map((k) => PrefOptions.commonScenes[k] ?? k).join('/'));
+      }
     }
-    if (entries.isEmpty) {
-      // 未填引导
-      return NeuCard(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: GestureDetector(
-            onTap: onEdit,
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: [
-                Icon(Icons.tune, color: tokens.brand),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '完善摄影偏好',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '告诉我们你的性别、水平、拍摄场景与频率',
-                        style: TextStyle(fontSize: 12, color: tokens.textTertiary),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right, size: 18, color: tokens.textTertiary),
-              ],
+    if (parts.isEmpty) {
+      return GestureDetector(
+        onTap: onEdit,
+        behavior: HitTestBehavior.opaque,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.tune, size: 13, color: tokens.brand),
+            const SizedBox(width: 4),
+            Text(
+              '完善摄影偏好 ›',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: tokens.brand,
+              ),
             ),
-          ),
+          ],
         ),
       );
     }
-    return NeuCard(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.auto_fix_high, size: 18, color: tokens.brand),
-                const SizedBox(width: 6),
-                Text(
-                  '摄影偏好',
-                  style: TextStyle(
-                    fontFamily: 'Noto Serif SC',
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: onEdit,
-                  behavior: HitTestBehavior.opaque,
-                  child: Text(
-                    '编辑 ›',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: tokens.brand,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            for (final e in entries)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Text(
-                      e.label,
-                      style: TextStyle(fontSize: 13, color: tokens.textTertiary),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        e.value,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: tokens.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
+    return Text(
+      parts.join(' · '),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 12, color: tokens.textSecondary),
     );
   }
 }
 
-/// （label, value）偏好条目，替代 Dart 3 record 语法
-class _PrefEntry {
-  const _PrefEntry(this.label, this.value);
-  final String label;
-  final String value;
-}
-
-/// StatsCard：3 列等宽 Bento（作品 / 模板 / 收藏）
-class _StatsCard extends ConsumerWidget {
-  const _StatsCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(themeTokensProvider);
-    final user = ref.watch(userProfileProvider).valueOrNull ?? ProfileMockData.userProfile;
-
-    return NeuCard(
-      padding: EdgeInsets.zero,
-      child: Row(
-        children: [
-          Expanded(child: _StatsCell(num: user.photosCount, label: '拍摄作品', tokens: tokens, divider: true)),
-          Expanded(child: _StatsCell(num: user.templatesCount, label: '使用模板', tokens: tokens, divider: true)),
-          Expanded(child: _StatsCell(num: user.collectionsCount, label: '收藏', tokens: tokens, divider: false)),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatsCell extends StatelessWidget {
-  const _StatsCell({
+/// 头部数据区单格（作品 / 模板 / 收藏）
+class _HeaderStatCell extends StatelessWidget {
+  const _HeaderStatCell({
     required this.num,
     required this.label,
-    required this.tokens,
     required this.divider,
+    required this.tokens,
   });
   final int num;
   final String label;
-  final ThemeTokens tokens;
   final bool divider;
+  final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 8), // 44rpx/16rpx → 22/8dp
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: divider
           ? BoxDecoration(
               border: Border(
@@ -631,17 +450,17 @@ class _StatsCell extends StatelessWidget {
             '$num',
             style: TextStyle(
               fontFamily: 'Noto Serif SC',
-              fontSize: 26, // 52rpx → 26dp
+              fontSize: 20,
               fontWeight: FontWeight.w600,
               color: tokens.textPrimary,
               height: 1,
             ),
           ),
-          const SizedBox(height: 6), // 12rpx → 6dp
+          const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12, // 24rpx → 12dp
+              fontSize: 12,
               color: tokens.textTertiary,
               letterSpacing: 0.04 * 12,
             ),
@@ -1121,7 +940,6 @@ class _MenuCard extends ConsumerWidget {
       _MenuItem(icon: Icons.card_giftcard_outlined, title: '我的奖励'),
       _MenuItem(icon: Icons.account_balance_wallet_outlined, title: '我的积分'),
       _MenuItem(icon: Icons.redeem_outlined, title: '兑换码'),
-      _MenuItem(icon: Icons.settings_outlined, title: '设置'),
       _MenuItem(icon: Icons.info_outline, title: '关于如画'),
     ];
 
@@ -1164,8 +982,6 @@ class _MenuCard extends ConsumerWidget {
       onNav(RouteNames.pointsWallet);
     } else if (title == '兑换码') {
       onNav(RouteNames.profileRedeem);
-    } else if (title == '设置') {
-      onNav(RouteNames.profileSettings);
     } else if (title == '关于如画') {
       onNav(RouteNames.profileAbout);
     }

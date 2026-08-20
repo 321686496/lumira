@@ -22,7 +22,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 27;
+const int _kDbVersion = 28;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -941,6 +941,26 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await _addColumnIfNotExists(db, Tables.userProfile, Tables.colAvatarUrl, 'TEXT');
     } catch (e) {
       debugPrint('v27 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 28) {
+    try {
+      // v28: user_settings 新增 theme_key / ui_style 列（主题与 UI 风格持久化）
+      // 老库升级需显式补列，否则启动时 SettingsDao 查询会报 no such column。
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colThemeKey,
+        "TEXT NOT NULL DEFAULT 'warmWhite'",
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colUiStyle,
+        "TEXT NOT NULL DEFAULT 'neumorphic'",
+      );
+    } catch (e) {
+      debugPrint('v28 migration failed (silent fallback): $e');
     }
   }
 }

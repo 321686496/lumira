@@ -119,6 +119,10 @@ Future<void> main() async {
     onTemplateLink: (link) => _handleTemplateLink(container, link),
   );
 
+  // 4.7 恢复持久化的主题与 UI 风格（写回 StateProvider，供首帧生效）
+  // ignore: unawaited_futures
+  restoreThemePreferences(container);
+
   // 5. 设备信息补传（修复历史版本平台信息缺失/误判，不阻塞启动）
   //
   // 注意：原来的 `if (!needsRegistration)` 判断会误触发——registerIfNeeded() 调用后

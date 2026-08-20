@@ -157,8 +157,8 @@ class _BodyContent extends ConsumerWidget {
 
     return ListView(
       controller: scrollController,
-      // body 从 appBar 下方开始，无需 top padding 占位。
-      padding: EdgeInsets.zero,
+      // 顶部留 12 与标题栏做间距，避免内容顶在导航栏下。
+      padding: const EdgeInsets.only(top: 12),
       children: [
         // === 模板库 section（上）===
         FadeUp(child: _TemplateSectionHeader()),

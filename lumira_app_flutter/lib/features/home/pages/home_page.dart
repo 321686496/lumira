@@ -141,7 +141,8 @@ class _HomePageState extends ConsumerState<HomePage> {
             bottom: false,
             child: ListView(
               controller: _scrollController,
-              padding: const EdgeInsets.only(bottom: 100), // 给 FloatingTabBar 留空间
+              // 给 FloatingTabBar 留空间；顶部留 12 与标题栏做间距，避免内容顶在导航栏下
+              padding: const EdgeInsets.fromLTRB(0, 12, 0, 100),
               children: [
                 // Section 0: Banner 轮播
                 // Forced fix: 改为 const HomeBanner()，由 widget 内部 watch

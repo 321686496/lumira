@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart' show getApplicationDocumentsDirectory;
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
@@ -949,6 +953,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
   List<GalleryItemRecord> _photos = const [];
   final Set<String> _selected = <String>{};
   bool _isLoading = true;
+  bool _importing = false;
 
   @override
   void initState() {
@@ -987,6 +992,95 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
       LumiraToast.show(context, '最多选择 9 张照片',
           duration: const Duration(milliseconds: 1500));
     }
+  }
+
+  /// 从系统相册选择照片，写入 App 本地目录并导入相册（gallery_items）。
+  ///
+  /// 每次最多再选 `widget.maxCount - _selected.length` 张；选中的照片与本弹窗
+  /// App 相册已选合并，由「确定」统一返回。
+  Future<void> _importFromSystemGallery() async {
+    if (_importing) return;
+    final remaining = widget.maxCount - _selected.length;
+    if (remaining <= 0) {
+      LumiraToast.show(context, '最多选择 9 张照片',
+          duration: const Duration(milliseconds: 1500));
+      return;
+    }
+    setState(() => _importing = true);
+    try {
+      final galleryDao = await ref.read(galleryDaoProvider.future);
+      final files = await FilePickerService.pickImages(allowMultiple: true);
+      final picked = files ?? const <PickedFile>[];
+      final slots = picked.take(remaining).toList();
+
+      // 批量导入前先确定目标目录
+      final dir = await getApplicationDocumentsDirectory();
+      final folder = Directory('${dir.path}/lumira_import');
+      if (!await folder.exists()) {
+        await folder.create(recursive: true);
+      }
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final newRecords = <GalleryItemRecord>[];
+      for (var i = 0; i < slots.length; i++) {
+        final full = await FilePickerService.ensureFullBytes(slots[i]);
+        final bytes = full.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
+        final ext = _imageExtFrom(full);
+        final path = '${folder.path}/import_${now}_$i.$ext';
+        await File(path).writeAsBytes(bytes);
+        final rec = GalleryItemRecord(
+          id: 'photo_${now}_$i',
+          filePath: path,
+          createdAt: now,
+        );
+        await galleryDao.insert(rec);
+        newRecords.add(rec);
+      }
+      ref.invalidate(galleryDaoProvider);
+
+      if (newRecords.isNotEmpty && mounted) {
+        setState(() {
+          for (final r in newRecords) {
+            _photos = [r, ..._photos.where((p) => p.id != r.id)];
+            if (_selected.length < widget.maxCount) _selected.add(r.id);
+          }
+        });
+      }
+
+      if (!mounted) return;
+      if (picked.isEmpty) {
+        // 用户取消系统相册，静默
+      } else if (newRecords.isEmpty) {
+        LumiraToast.show(context, '本次未导入到照片，请重试',
+            duration: const Duration(seconds: 2));
+      } else if (slots.length < picked.length) {
+        LumiraToast.show(context, '最多只能再选 $remaining 张，其余未导入',
+            duration: const Duration(seconds: 2));
+      }
+    } catch (e) {
+      if (mounted) {
+        LumiraToast.show(context, '导入失败：$e',
+            duration: const Duration(seconds: 2));
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+  }
+
+  /// 从 [PickedFile] 推断图片扩展名；无法推断时回退 jpg（保证可解码）。
+  String _imageExtFrom(PickedFile f) {
+    final r = RegExp(r'^(jpg|jpeg|png|gif|bmp|webp|heic|heif)$');
+    final extRaw = f.extension;
+    final ext = (extRaw == null ? '' : extRaw.trim()).toLowerCase();
+    if (ext.isNotEmpty && r.hasMatch(ext)) return ext == 'jpeg' ? 'jpg' : ext;
+    final name = f.name;
+    final idx = name.lastIndexOf('.');
+    if (idx >= 0 && idx < name.length - 1) {
+      final ext2 = name.substring(idx + 1).toLowerCase();
+      if (r.hasMatch(ext2)) return ext2 == 'jpeg' ? 'jpg' : ext2;
+    }
+    return 'jpg';
   }
 
   @override
@@ -1051,6 +1145,51 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                     ],
                   ),
                 ),
+                if (_importing || widget.maxCount - _selected.length > 0)
+                  GestureDetector(
+                    onTap: _importing ? null : _importFromSystemGallery,
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tokens.brand.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_importing)
+                            SizedBox(
+                              width: 13,
+                              height: 13,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: tokens.brand,
+                              ),
+                            )
+                          else
+                            Icon(
+                              Icons.add_photo_alternate_outlined,
+                              size: 15,
+                              color: tokens.brand,
+                            ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _importing ? '导入中' : '系统相册',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.brand,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (_importing) const SizedBox(width: 8),
                 if (_selected.isNotEmpty)
                   Container(
                     decoration: BoxDecoration(

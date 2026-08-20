@@ -33,14 +33,18 @@ class _ProfileThemePageState extends ConsumerState<ProfileThemePage> {
   bool _followSystem = false;
 
   void _selectTheme(ThemeKey key) {
-    ref.read(themeKeyProvider.notifier).state = key;
     final label = ProfileMockData.themes.firstWhere((t) => t.key == key).label;
+    // 切换即生效 + 持久化到本地
+    // ignore: unawaited_futures
+    persistTheme(ref, key);
     LumiraToast.show(context, '已切换至$label', duration: const Duration(milliseconds: 1000));
   }
 
   void _selectStyle(UIStyle style) {
-    ref.read(uiStyleProvider.notifier).state = style;
     final label = ProfileMockData.styles.firstWhere((s) => s.style == style).label;
+    // 切换即生效 + 持久化到本地
+    // ignore: unawaited_futures
+    persistUiStyle(ref, style);
     LumiraToast.show(context, '已切换至$label风格', duration: const Duration(milliseconds: 1000));
   }
 

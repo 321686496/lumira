@@ -8,7 +8,6 @@ import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/buttons/lumira_button.dart';
 import '../../../shared/widgets/lumira/form/lumira_text_field.dart';
@@ -167,11 +166,10 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
     return sync.save(updated);
   }
 
-  /// 选图 + 上传自定义头像；成功后立即持久化，便于用户直接离开页面
-  Future<void> _pickAndUploadAvatar() async {
-    if (_uploadingAvatar) return;
+  /// 选择 + 上传自定义头像；返回新 URL，失败/取消返回 null
+  Future<String?> _pickAndUpload() async {
     final picked = await FilePickerService.pickSingleImage();
-    if (picked == null) return; // 用户取消
+    if (picked == null) return null; // 用户取消
     final full = await FilePickerService.ensureFullBytes(picked);
     final bytes = full.bytes;
     if (bytes == null || bytes.isEmpty) {
@@ -179,72 +177,152 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('图片读取失败')));
       }
-      return;
+      return null;
     }
     setState(() => _uploadingAvatar = true);
     try {
       final sync = await ref.read(profileSyncServiceProvider.future);
-      final url = await sync.uploadAvatar(
+      return await sync.uploadAvatar(
         Uint8List.fromList(bytes),
         full.name.isNotEmpty ? full.name : 'avatar.txt.png',
       );
-      if (!mounted) return;
-      setState(() => _avatarUrl = url);
-      await _persist();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('上传失败：$e')));
       }
+      return null;
     } finally {
       if (mounted) setState(() => _uploadingAvatar = false);
     }
   }
 
-  void _restoreBuiltinAvatar() {
-    setState(() => _avatarUrl = null);
-  }
+  /// 弹出头像选择器（底部弹层）：本地选择，点「确认」才写回页面状态
+  Future<void> _showAvatarSheet() async {
+    var sheetSeed = _selectedSeed ?? BuiltinProfiles.avatarSeeds.first;
+    var sheetAvatarUrl = _avatarUrl;
 
-  /// 自定义头像上传/恢复区：左侧当前头像预览，右侧上传与恢复按钮
-  Widget _buildAvatarUpload(ThemeTokens tokens) {
-    final customActive = _avatarUrl != null && _avatarUrl!.isNotEmpty;
-    final imgUrl = customActive
-        ? BuiltinProfiles.avatarUrl('_custom', customUrl: _avatarUrl)
-        : BuiltinProfiles.avatarUrl(
-            _selectedSeed ?? BuiltinProfiles.avatarSeeds.first);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        ClipOval(
-          child: Image.network(
-            imgUrl,
-            width: 72,
-            height: 72,
-            fit: BoxFit.cover,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              LumiraButton(
-                variant: ButtonVariant.secondary,
-                onPressed: _uploadingAvatar ? null : _pickAndUploadAvatar,
-                child: Text(_uploadingAvatar ? '上传中…' : '上传自定义头像'),
-              ),
-              if (customActive) ...[
-                const SizedBox(height: 8),
-                LumiraButton(
-                  variant: ButtonVariant.ghost,
-                  onPressed: _uploadingAvatar ? null : _restoreBuiltinAvatar,
-                  child: const Text('恢复内置头像'),
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        final tokens = ref.watch(themeTokensProvider);
+        final isFemale = ref.watch(appThemeProvider).style == UIStyle.female;
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final customActive = sheetAvatarUrl != null && sheetAvatarUrl!.isNotEmpty;
+            // 自定义头像置顶展示，其后为内置头像
+            final seeds = <String?>[
+              if (customActive) '_custom',
+              ...BuiltinProfiles.avatarSeeds,
+            ];
+            return SafeArea(
+              top: false,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: tokens.surface,
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(isFemale ? 28 : 20),
+                  ),
                 ),
-              ],
-            ],
-          ),
-        ),
-      ],
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '选择头像',
+                          style: TextStyle(
+                            fontFamily: 'Noto Serif SC',
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: tokens.textPrimary,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          padding: EdgeInsets.zero,
+                          icon: Icon(Icons.close, color: tokens.textTertiary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final s in seeds)
+                          _AvatarTile(
+                            seed: s,
+                            url: s == '_custom'
+                                ? sheetAvatarUrl!
+                                : BuiltinProfiles.avatarUrl(s!),
+                            selected: s == '_custom'
+                                ? customActive
+                                : (!customActive && s == sheetSeed),
+                            isFemale: isFemale,
+                            tokens: tokens,
+                            onTap: () {
+                              if (s != '_custom') {
+                                sheetSeed = s!;
+                                sheetAvatarUrl = null;
+                              }
+                              setSheetState(() {});
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    LumiraButton(
+                      variant: ButtonVariant.secondary,
+                      onPressed: _uploadingAvatar
+                          ? null
+                          : () async {
+                              setSheetState(() {});
+                              final url = await _pickAndUpload();
+                              if (url != null) {
+                                sheetAvatarUrl = url;
+                                sheetSeed = BuiltinProfiles.avatarSeeds.first;
+                              }
+                              if (ctx.mounted) setSheetState(() {});
+                            },
+                      child: Text(_uploadingAvatar ? '上传中…' : '上传自定义头像'),
+                    ),
+                    if (customActive) ...[
+                      const SizedBox(height: 8),
+                      Center(
+                        child: TextButton(
+                          onPressed: () {
+                            sheetAvatarUrl = null;
+                            setSheetState(() {});
+                          },
+                          child: const Text('恢复内置头像'),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    LumiraButton(
+                      variant: ButtonVariant.primary,
+                      onPressed: () {
+                        setState(() {
+                          _selectedSeed = sheetSeed;
+                          _avatarUrl = sheetAvatarUrl;
+                        });
+                        Navigator.pop(ctx);
+                      },
+                      child: const Text('确认'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -292,32 +370,21 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _SectionTitle(text: '选择头像', tokens: tokens),
+                    _SectionTitle(text: '基本信息', tokens: tokens),
                     const SizedBox(height: 12),
-                    // 头像 2 列 × 4 行网格
-                    GridView(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 14,
-                        mainAxisExtent: 104,
-                      ),
-                      children: [
-                        for (final seed in BuiltinProfiles.avatarSeeds)
-                          _AvatarCell(
-                            seed: seed,
-                            selected: seed == _selectedSeed,
-                            isFemale: isFemale,
-                            tokens: tokens,
-                            onTap: () => setState(() => _selectedSeed = seed),
-                          ),
-                      ],
+                    _BasicInfoHeader(
+                      seed: _selectedSeed,
+                      avatarUrl: _avatarUrl,
+                      isFemale: isFemale,
+                      tokens: tokens,
+                      onAvatarTap: _showAvatarSheet,
+                      controller: _usernameController,
+                      random: _randomUsername,
+                      onChanged: (_) => setState(() {}),
                     ),
-                    const SizedBox(height: 20),
-                    _buildAvatarUpload(tokens),
                     const SizedBox(height: 28),
+                    _SectionTitle(text: '摄影偏好', tokens: tokens),
+                    const SizedBox(height: 12),
                     PrefSingleSelector(
                       title: '性别',
                       options: PrefOptions.gender,
@@ -389,28 +456,6 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                       onChanged: (v) => setState(() => _selectedShootFrequency = v),
                       tokens: tokens,
                     ),
-                    const SizedBox(height: 28),
-                    _SectionTitle(text: '用户名', tokens: tokens),
-                    const SizedBox(height: 12),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: LumiraTextField(
-                            controller: _usernameController,
-                            maxLength: 20,
-                            hintText: '请输入用户名',
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        LumiraButton(
-                          variant: ButtonVariant.secondary,
-                          onPressed: _randomUsername,
-                          child: const Text('随机换一个'),
-                        ),
-                      ],
-                    ),
                     const SizedBox(height: 40),
                     LumiraButton(
                       variant: ButtonVariant.primary,
@@ -429,18 +474,19 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   }
 }
 
-/// 单个头像选择项：NeuCard 包裹圆形头像，
-/// 选中态 = 品牌色圆形描边（female 1.2 / 其余 2）+ 右下角金色对勾角标
-class _AvatarCell extends StatelessWidget {
-  const _AvatarCell({
+/// 头像选择器里的单个头像：无套娃卡片，选中态 = 品牌色描边环 + 金色对勾角标
+class _AvatarTile extends StatelessWidget {
+  const _AvatarTile({
     required this.seed,
+    required this.url,
     required this.selected,
     required this.isFemale,
     required this.tokens,
     required this.onTap,
   });
 
-  final String seed;
+  final String? seed; // '_custom' 表示自定义头像，否则为内置 seed
+  final String url;
   final bool selected;
   final bool isFemale;
   final ThemeTokens tokens;
@@ -448,61 +494,169 @@ class _AvatarCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCustom = seed == '_custom';
     final borderWidth = isFemale ? 1.2 : 2.0;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: NeuCard(
-        padding: const EdgeInsets.all(8),
-        child: Center(
-          child: Stack(
-            children: [
-              ClipOval(
-                child: Image.network(
-                  BuiltinProfiles.avatarUrl(seed),
-                  width: 88, // 176rpx → 88dp
-                  height: 88,
-                  fit: BoxFit.cover,
+      child: SizedBox(
+        width: 64,
+        height: 64,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            ClipOval(
+              child: Image.network(url, width: 64, height: 64, fit: BoxFit.cover),
+            ),
+            if (selected)
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: tokens.brand, width: borderWidth),
                 ),
               ),
-              if (selected)
-                Container(
-                  width: 88,
-                  height: 88,
+            if (selected)
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 20,
+                  height: 20,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: tokens.brand,
-                      width: borderWidth,
+                    // 硬编码颜色：金色对勾角标
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
                     ),
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: const Icon(Icons.check, size: 13, color: Colors.white),
+                ),
+              ),
+            if (isCustom)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black54,
+                  ),
+                  child: const Icon(
+                    Icons.photo_camera_outlined,
+                    size: 10,
+                    color: Colors.white,
                   ),
                 ),
-              if (selected)
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      // 硬编码颜色：与 HeroCard 角标一致 linear-gradient(135deg, #C9A96E, #A88550)
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
-                      ),
-                      border: Border.all(color: Colors.white, width: 2),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 编辑资料页顶部基本信息区：左侧头像（点击弹出选择器）+ 右侧用户名输入
+class _BasicInfoHeader extends StatelessWidget {
+  const _BasicInfoHeader({
+    required this.seed,
+    required this.avatarUrl,
+    required this.isFemale,
+    required this.tokens,
+    required this.onAvatarTap,
+    required this.controller,
+    required this.random,
+    required this.onChanged,
+  });
+
+  final String? seed;
+  final String? avatarUrl;
+  final bool isFemale;
+  final ThemeTokens tokens;
+  final VoidCallback onAvatarTap;
+  final TextEditingController controller;
+  final VoidCallback random;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final customActive = avatarUrl != null && avatarUrl!.isNotEmpty;
+    final url = customActive
+        ? BuiltinProfiles.avatarUrl('_custom', customUrl: avatarUrl)
+        : BuiltinProfiles.avatarUrl(seed ?? BuiltinProfiles.avatarSeeds.first);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: onAvatarTap,
+          behavior: HitTestBehavior.opaque,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipOval(
+                child: Image.network(url, width: 72, height: 72, fit: BoxFit.cover),
+              ),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    // 硬编码颜色：金色编辑角标（与选择器内风格一致）
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFC9A96E), Color(0xFFA88550)],
                     ),
-                    child: const Icon(
-                      Icons.check,
-                      size: 14,
-                      color: Colors.white,
-                    ),
+                    border: Border.all(color: Colors.white, width: 2.5),
                   ),
+                  child: const Icon(Icons.edit, size: 14, color: Colors.white),
                 ),
+              ),
             ],
           ),
         ),
-      ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '用户名',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: tokens.textTertiary,
+                  letterSpacing: 0.04 * 13,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: LumiraTextField(
+                      controller: controller,
+                      maxLength: 20,
+                      hintText: '请输入用户名',
+                      onChanged: onChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  LumiraButton(
+                    variant: ButtonVariant.secondary,
+                    onPressed: random,
+                    child: const Text('随机换一个'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

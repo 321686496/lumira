@@ -229,8 +229,8 @@ class _FlipView extends StatelessWidget {
     final theme = Theme.of(context);
     return ListView(
       controller: scrollController,
-      // body 从 appBar 下方开始，无需 top padding 占位。
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+      // 顶部留 12 与标题栏做间距，避免内容顶在导航栏下。
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
       children: [
         FadeUp(
           child: Column(
@@ -375,8 +375,8 @@ class _RevealedView extends ConsumerWidget {
 
     return ListView(
       controller: scrollController,
-      // body 从 appBar 下方开始，无需 top padding 占位。
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+      // 顶部留 12 与标题栏做间距，避免内容顶在导航栏下。
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
       children: [
         // 1. 主挑战卡（pending 态带"去拍照"按钮，直接跳拍摄页）
         FadeUp(

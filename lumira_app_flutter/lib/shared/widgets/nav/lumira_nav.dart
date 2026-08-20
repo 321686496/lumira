@@ -107,43 +107,37 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
-    final isGlass = appTheme.style == UIStyle.glass;
-    // Forced fix: 目标 sigma——非 glass 14, glass 28；与颜色动画同步 400ms easeOut
-    final double targetSigma = isGlass ? 28.0 : 14.0;
+    final UIStyle style = appTheme.style;
+    final bool isGlass = style == UIStyle.glass;
 
-    // Forced fix: glass 风格默认就启用半透明 + blur（不只 scrolled 时），
-    // 让导航栏在 glass 风格下也有毛玻璃效果。
-    final Color backgroundColor;
+    // Forced fix(风格自适): 半透明 + 毛玻璃(blur) 仅属于「玻璃拟态」。
+    // 其余风格一律实心表面，避免出现不属于该风格的半透明/模糊观感。
+    final double targetSigma;
+
+    // Forced fix: 按「当前 UI 风格」解析滚动后的背景/描边/阴影
+    final BoxDecoration decoration;
     if (isGlass) {
-      // glass 风格：默认半透明白 0.55，scrolled 时加深至 0.72
-      backgroundColor = Colors.white.withOpacity(widget.scrolled ? 0.72 : 0.55);
-    } else if (widget.transparent && !widget.scrolled) {
-      backgroundColor = Colors.transparent;
+      // 玻璃拟态：始终半透明毛玻璃，滚动时加深，仅此风格保留 blur 动画
+      targetSigma = 28.0;
+      decoration = BoxDecoration(
+        color: Colors.white.withOpacity(widget.scrolled ? 0.72 : 0.55),
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withOpacity(0.4), width: 0.5),
+        ),
+      );
     } else if (widget.scrolled) {
-      // .lumira-nav.scrolled: rgba(canvas, 0.72) + blur 28px saturate 1.8
-      backgroundColor = tokens.canvas.withOpacity(0.72);
+      // 非玻璃风格滚动后：实心表面，无 blur
+      targetSigma = 0.0;
+      decoration = _scrolledDecoration(style, tokens);
     } else {
-      backgroundColor = tokens.canvas;
+      // 未滚动：透明。不能用 Colors.transparent（RGB 为黑），
+      // 否则与 scrolled 的 canvas/表面之间的补间会经过"黑色半透明中间色"导致闪帧。
+      // 用 canvas 自身 alpha=0 保持色相一致的透明。
+      targetSigma = 0.0;
+      decoration = BoxDecoration(
+        color: widget.transparent ? tokens.canvas.withOpacity(0) : tokens.canvas,
+      );
     }
-
-    final border = widget.scrolled || isGlass
-        ? Border(
-            bottom: BorderSide(
-              color: isGlass ? Colors.white.withOpacity(0.4) : tokens.divider,
-              width: 0.5,
-            ),
-          )
-        : null;
-
-    final shadow = widget.scrolled
-        ? const [
-            BoxShadow(
-              color: Color(0x08000000),
-              offset: Offset(0, 0.5),
-              blurRadius: 6,
-            ),
-          ]
-        : null;
 
     // Forced fix: 计算 leading widget
     // - 如果显式传了 leading，用它
@@ -194,11 +188,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeOutCubic,
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          border: border,
-          boxShadow: shadow,
-        ),
+        decoration: decoration,
         child: SafeArea(
           bottom: false,
           child: SizedBox(
@@ -259,6 +249,48 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
         ),
       ),
     );
+  }
+
+  /// 非玻璃风格「滚动后」的导航栏表面装饰。
+  /// 各风格使用自身设计语言，不再借用玻璃风格的半透明/模糊观感：
+  /// - neumorphic：实心 surface + 细描边（叠在内容之上的表面，不做外模糊/浮雕阴影）
+  /// - flat：实心 surface + 实色细分隔线，无阴影
+  /// - female：品牌渐变基底 + 品牌色细描边 + 柔和投影
+  /// - glass：该分支由 build() 的 isGlass 提前接管，不会走到这里
+  BoxDecoration _scrolledDecoration(UIStyle style, ThemeTokens tokens) {
+    switch (style) {
+      case UIStyle.neumorphic:
+        return BoxDecoration(
+          color: tokens.surface,
+          border: Border(
+            bottom: BorderSide(color: tokens.divider, width: 0.5),
+          ),
+        );
+      case UIStyle.flat:
+        return BoxDecoration(
+          color: tokens.surface,
+          border: Border(
+            bottom: BorderSide(color: tokens.divider, width: 1),
+          ),
+        );
+      case UIStyle.female:
+        return BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              tokens.brandSubtle.withOpacity(0.75),
+              tokens.surface.withOpacity(0.85),
+            ],
+          ),
+          border: Border(
+            bottom: BorderSide(color: tokens.brand.withOpacity(0.25), width: 0.5),
+          ),
+          boxShadow: tokens.shadowFloat,
+        );
+      case UIStyle.glass:
+        return const BoxDecoration(color: Colors.white);
+    }
   }
 }
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
 import '../tables.dart';
+import '../../theme/theme_tokens.dart';
 import '../../../features/capture/domain/photo_template.dart';
 import '../../../features/capture/watermark/models/watermark_settings.dart';
 
@@ -14,6 +15,74 @@ class SettingsDao {
   SettingsDao(this._db);
 
   final Database _db;
+
+  /// 读取主题 key（user_settings.theme_key，默认 warmWhite）
+  Future<ThemeKey> getThemeKey() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colThemeKey],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return ThemeKey.warmWhite;
+    final raw = rows.first[Tables.colThemeKey] as String?;
+    return _parseThemeKey(raw);
+  }
+
+  /// 保存主题 key
+  Future<void> setThemeKey(ThemeKey key) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colThemeKey: key.name,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 读取 UI 风格（user_settings.ui_style，默认 neumorphic）
+  Future<UIStyle> getUiStyle() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colUiStyle],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return UIStyle.neumorphic;
+    final raw = rows.first[Tables.colUiStyle] as String?;
+    return _parseUiStyle(raw);
+  }
+
+  /// 保存 UI 风格
+  Future<void> setUiStyle(UIStyle style) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colUiStyle: style.name,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 按枚举名解析主题 key，非法值回退默认
+  ThemeKey _parseThemeKey(String? raw) {
+    for (final k in ThemeKey.values) {
+      if (k.name == raw) return k;
+    }
+    return ThemeKey.warmWhite;
+  }
+
+  /// 按枚举名解析 UI 风格，非法值回退默认
+  UIStyle _parseUiStyle(String? raw) {
+    for (final s in UIStyle.values) {
+      if (s.name == raw) return s;
+    }
+    return UIStyle.neumorphic;
+  }
 
   /// 读取自动去模糊开关（默认 true）
   Future<bool> getAutoDeblur() async {
