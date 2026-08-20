@@ -13,7 +13,7 @@ export class NotificationsService {
 
   async listForDevice(deviceId: string) {
     const db = this.dbService.getDb();
-    const now = Date.now();
+    const now = Math.floor(Date.now() / 1000);
     const rows = await db.select()
       .from(notifications)
       .where(eq(notifications.isActive, 1))
@@ -81,7 +81,7 @@ export class NotificationsService {
       const existing = await db.select().from(notifications).where(eq(notifications.id, id)).limit(1);
       if (existing.length > 0) throw new ConflictException(`Notification id already exists: ${id}`);
     }
-    const now = Date.now();
+    const now = Math.floor(Date.now() / 1000);
     const row = {
       id,
       title: dto.title,
@@ -105,7 +105,7 @@ export class NotificationsService {
   async update(id: string, dto: UpdateNotificationDto) {
     const db = this.dbService.getDb();
     await this.requireExists(id);
-    const patch: Record<string, unknown> = { updatedAt: Date.now() };
+    const patch: Record<string, unknown> = { updatedAt: Math.floor(Date.now() / 1000) };
     if (dto.title !== undefined) patch.title = dto.title;
     if (dto.body !== undefined) patch.body = dto.body;
     if (dto.iconKey !== undefined) patch.iconKey = dto.iconKey;
@@ -133,7 +133,7 @@ export class NotificationsService {
     const n = await this.requireExists(id);
     const next = n.isActive ? 0 : 1;
     await db.update(notifications)
-      .set({ isActive: next, updatedAt: Date.now() })
+      .set({ isActive: next, updatedAt: Math.floor(Date.now() / 1000) })
       .where(eq(notifications.id, id));
     return { id, isActive: next === 1 };
   }
