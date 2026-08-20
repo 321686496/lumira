@@ -313,3 +313,31 @@ export interface FeedbackListResponse {
   page: number;
   pageSize: number;
 }
+
+// ===== 通知公告管理 =====
+export interface NotificationAdminItem {
+  id: string; title: string; body: string;
+  iconKey: string; category: string;
+  targetScope: 'all' | 'devices' | 'criteria';
+  targetDeviceIds: string[];        // 从 targetDeviceIdsJson 解析
+  targetCriteria: Record<string, string[]>;
+  startAt?: number | null; endAt?: number | null;
+  isActive: number; sortOrder: number;
+  createdAt: number; updatedAt: number;
+}
+
+/** 通知公告 payload（发送给后端时，JSON 字段需序列化为字符串键 targetDeviceIdsJson / targetCriteriaJson） */
+export interface NotificationPayload {
+  id?: string;
+  title?: string;
+  body?: string;
+  iconKey?: string;
+  category?: string;
+  targetScope?: 'all' | 'devices' | 'criteria';
+  targetDeviceIdsJson?: string;
+  targetCriteriaJson?: string;
+  startAt?: number | null;
+  endAt?: number | null;
+  isActive?: boolean;
+  sortOrder?: number;
+}

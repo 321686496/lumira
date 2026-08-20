@@ -24,6 +24,8 @@ import type {
   GrantPointsResponse,
   FeedbackAdminItem,
   FeedbackListResponse,
+  NotificationAdminItem,
+  NotificationPayload,
 } from '@/types/admin';
 
 // 重新导出纯函数，供 server-only 调用方使用（客户端组件请直接从 @/lib/category-tree 导入）
@@ -153,6 +155,44 @@ export async function getBuiltinScenes(): Promise<BuiltinScene[]> {
     return Array.isArray(data?.items) ? data.items : [];
   } catch {
     return [];
+  }
+}
+
+// ===== 通知公告（admin 前缀）=====
+
+/** 后端 /admin/notifications 返回的原始行：JSON 字段为字符串、isActive 为 0/1、时间为毫秒 */
+interface NotificationAdminRow {
+  id: string; title: string; body: string;
+  iconKey: string; category: string;
+  targetScope: string;
+  targetDeviceIdsJson: string;
+  targetCriteriaJson: string;
+  startAt: number | null; endAt: number | null;
+  isActive: number; sortOrder: number;
+  createdAt: number; updatedAt: number;
+}
+
+function parseJsonArray(value: string): string[] {
+  try {
+    const arr = JSON.parse(value || '[]') as unknown;
+    return Array.isArray(arr) ? arr.filter((x) => x != null).map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseJsonCriteria(value: string): Record<string, string[]> {
+  try {
+    const obj = JSON.parse(value || '{}') as Record<string, unknown>;
+    const out: Record<string, string[]> = {};
+    if (obj && typeof obj === 'object') {
+      for (const [k, v] of Object.entries(obj)) {
+        out[k] = Array.isArray(v) ? v.filter((x) => x != null).map(String) : [];
+      }
+    }
+    return out;
+  } catch {
+    return {};
   }
 }
 
@@ -370,6 +410,54 @@ export const api = {
   toggleScene: (id: string) =>
     adminFetch<{ id: string; isActive: boolean }>(
       `/scenes/${encodeURIComponent(id)}/toggle`,
+      { method: 'POST' },
+    ),
+
+  // ===== 通知公告管理 =====
+  /**
+   * 返回通知列表。后端返回原始行（JSON 字段为字符串），此处解析成结构化的
+   * targetDeviceIds / targetCriteria 以便前端直接渲染。
+   */
+  listNotifications: async (): Promise<NotificationAdminItem[]> => {
+    const rows = await adminFetch<NotificationAdminRow[]>('/notifications');
+    return (Array.isArray(rows) ? rows : []).map((r) => ({
+      id: r.id,
+      title: r.title,
+      body: r.body,
+      iconKey: r.iconKey,
+      category: r.category,
+      targetScope: r.targetScope as NotificationAdminItem['targetScope'],
+      targetDeviceIds: parseJsonArray(r.targetDeviceIdsJson),
+      targetCriteria: parseJsonCriteria(r.targetCriteriaJson),
+      startAt: r.startAt ?? null,
+      endAt: r.endAt ?? null,
+      isActive: r.isActive,
+      sortOrder: r.sortOrder,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+  },
+
+  createNotification: (payload: NotificationPayload) =>
+    adminFetch<NotificationAdminRow>('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateNotification: (id: string, payload: NotificationPayload) =>
+    adminFetch<NotificationAdminRow>(`/notifications/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteNotification: (id: string) =>
+    adminFetch<{ success: boolean }>(`/notifications/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  toggleNotification: (id: string) =>
+    adminFetch<{ id: string; isActive: boolean }>(
+      `/notifications/${encodeURIComponent(id)}/toggle`,
       { method: 'POST' },
     ),
 };
