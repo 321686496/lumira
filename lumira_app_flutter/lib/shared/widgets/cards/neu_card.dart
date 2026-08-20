@@ -37,6 +37,7 @@ class NeuCard extends ConsumerWidget {
     this.enableHoverScale = false,
     this.shadowVariant = NeuShadowVariant.convex,
     this.backgroundColor,
+    this.overlayOnImage = false,
   });
 
   final Widget child;
@@ -50,6 +51,12 @@ class NeuCard extends ConsumerWidget {
 
   /// 自定义背景色（覆盖默认 surface；为 null 时使用 tokens.surface）
   final Color? backgroundColor;
+
+  /// 本卡片是否叠在照片等非纯色底之上。
+  /// 为 true 时，新拟态风格将放弃双向浮雕外阴影（照片无法承接同色阴影，
+  /// 阴影会像光晕般发散），改用实心 surface + 细描边表达表面。
+  /// 其余风格不受影响（它们本就不依赖双向浮雕）。
+  final bool overlayOnImage;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -82,6 +89,19 @@ class NeuCard extends ConsumerWidget {
       case UIStyle.neumorphic:
         // Forced fix: 新拟态需卡片与背景同色 + 双向阴影才有效果。
         // 使用 surface（接近 canvas 但稍亮）增强阴影对比，避免与背景完全融合看不见。
+        // 叠在照片上（overlayOnImage）时放弃双向浮雕阴影（照片无法承接），
+        // 改用实心 surface + 细描边表达表面，避免阴影在照片上"发光/发散"。
+        if (overlayOnImage) {
+          return Container(
+            padding: padding,
+            decoration: BoxDecoration(
+              color: backgroundColor ?? tokens.surface,
+              borderRadius: BorderRadius.circular(radius),
+              border: Border.all(color: tokens.divider, width: 1),
+            ),
+            child: child,
+          );
+        }
         List<BoxShadow> shadows;
         switch (shadowVariant) {
           case NeuShadowVariant.convex:

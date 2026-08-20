@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,11 +8,16 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/checkin_categories.dart';
 import '../data/checkin_models.dart';
 import '../data/checkin_providers.dart';
 import '../widgets/checkin_common.dart';
+
+/// 封面底部预留的浮层重叠带（dp）：信息卡向上浮动 _coverFloat，
+/// 封面正文需用等量底部留白让出该区域，避免遮挡日期等真实内容。
+const double _coverFloat = 34;
 
 /// 探店足迹详情页（精致手帐风）
 ///
@@ -33,6 +40,14 @@ class _CheckinDetailPageState extends ConsumerState<CheckinDetailPage> {
     GoRouter.of(context).push(RouteNames.build(
       RouteNames.checkinEdit,
       {RouteNames.paramCheckinId: id},
+    ));
+  }
+
+  /// 打开全屏多图查看器（从当前选中封面开始）
+  void _openViewer(List<String> urls, int index) {
+    if (urls.isEmpty) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FullscreenImageGallery(urls: urls, initialIndex: index),
     ));
   }
 
@@ -61,6 +76,7 @@ class _CheckinDetailPageState extends ConsumerState<CheckinDetailPage> {
                 detail: detail,
                 coverIndex: _coverIndex,
                 onThumbTap: (i) => setState(() => _coverIndex = i),
+                onOpenViewer: _openViewer,
               );
             },
           ),
@@ -71,18 +87,18 @@ class _CheckinDetailPageState extends ConsumerState<CheckinDetailPage> {
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
               child: Row(
                 children: [
-                  _FrostedIconButton(
+                  _FloatingControl(
                     icon: Icons.chevron_left,
                     onTap: () => Navigator.of(context).maybePop(),
                   ),
                   const Spacer(),
                   if (hasDetail && id != null) ...[
-                    _FrostedIconButton(
+                    _FloatingControl(
                       icon: Icons.edit_outlined,
                       onTap: () => _goEdit(id),
                     ),
                     const SizedBox(width: 10),
-                    _FrostedIconButton(
+                    _FloatingControl(
                       icon: Icons.delete_outline,
                       onTap: _onDelete,
                     ),
@@ -150,12 +166,14 @@ class _DetailContent extends StatelessWidget {
     required this.detail,
     required this.coverIndex,
     required this.onThumbTap,
+    required this.onOpenViewer,
   });
 
   final ThemeTokens tokens;
   final CheckinDetail detail;
   final int coverIndex;
   final ValueChanged<int> onThumbTap;
+  final void Function(List<String> urls, int index) onOpenViewer;
 
   @override
   Widget build(BuildContext context) {
@@ -169,18 +187,20 @@ class _DetailContent extends StatelessWidget {
     final screenH = MediaQuery.of(context).size.height;
     final coverH = screenH * 0.57;
     final active = photoUrls.isEmpty ? 0 : (coverIndex >= photoUrls.length ? 0 : coverIndex);
-    const infoOverlap = 28.0;
     final hasInfo = record.place.isNotEmpty || record.note.isNotEmpty;
+
+    void openViewer() {
+      if (photoUrls.isNotEmpty) onOpenViewer(photoUrls, active);
+    }
 
     return SingleChildScrollView(
       padding: EdgeInsets.zero,
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Column(
         children: [
-          // 基础流：先占满封面高度 + 尾部留白区，供浮层卡被 Stack 定位
+          // 沉浸式封面（正文底部预留 _coverFloat 供信息卡上浮，不遮挡日期）
           SizedBox(
             width: double.infinity,
-            height: coverH + 40, // 预留缩略图带空间
+            height: coverH,
             child: _CoverHeader(
               tokens: tokens,
               category: category,
@@ -188,18 +208,19 @@ class _DetailContent extends StatelessWidget {
               active: active,
               record: record,
               onThumbTap: onThumbTap,
+              onOpenViewer: openViewer,
             ),
           ),
-          // 浮层信息卡：与封面重叠 infoOverlap
+          // 浮层信息卡：整块在流式布局中，向上 Transform 浮动 _coverFloat
           if (hasInfo)
-            Positioned(
-              left: 24,
-              right: 24,
-              top: coverH + 40 - infoOverlap,
-              child: _InfoCard(tokens: tokens, record: record),
+            Transform.translate(
+              offset: const Offset(0, -_coverFloat),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: _InfoCard(tokens: tokens, record: record),
+              ),
             ),
-          if (!hasInfo)
-            const SizedBox.shrink(),
+          if (hasInfo) const SizedBox(height: _coverFloat),
         ],
       ),
     );
@@ -215,6 +236,7 @@ class _CoverHeader extends StatelessWidget {
     required this.active,
     required this.record,
     required this.onThumbTap,
+    required this.onOpenViewer,
   });
 
   final ThemeTokens tokens;
@@ -223,6 +245,7 @@ class _CoverHeader extends StatelessWidget {
   final int active;
   final CheckinRecord record;
   final ValueChanged<int> onThumbTap;
+  final VoidCallback onOpenViewer;
 
   @override
   Widget build(BuildContext context) {
@@ -232,7 +255,7 @@ class _CoverHeader extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 大封面（首张 或 缩略图选中项）
+          // 大封面（首张 或 缩略图选中项）；有点击时按下微缩反馈，点击进全屏
           ClipRRect(
             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
             child: photoUrls.isEmpty
@@ -241,7 +264,10 @@ class _CoverHeader extends StatelessWidget {
                     alignment: Alignment.center,
                     child: Icon(category.icon, size: 96, color: category.iconColor),
                   )
-                : CheckinPhotoImage(url: photoUrls[active], tokens: tokens, fit: BoxFit.cover),
+                : _PressScale(
+                    onTap: onOpenViewer,
+                    child: CheckinPhotoImage(url: photoUrls[active], tokens: tokens, fit: BoxFit.cover),
+                  ),
           ),
           // 上下渐变遮罩
           Positioned.fill(
@@ -280,7 +306,7 @@ class _CoverHeader extends StatelessWidget {
                   const SizedBox(height: 12),
                 ],
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, _coverFloat),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -337,6 +363,10 @@ class _CoverHeader extends StatelessWidget {
                             formatCheckinDate(record.visitedAt),
                             style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.9)),
                           ),
+                          if (photoUrls.isNotEmpty) ...[
+                            const Spacer(),
+                            _FullscreenChip(onTap: onOpenViewer),
+                          ],
                         ],
                       ),
                     ],
@@ -411,6 +441,8 @@ class _InfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NeuCard(
+      // 叠在封面上：新拟态放弃双向浮雕阴影，避免照片上"发光"
+      overlayOnImage: true,
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -498,11 +530,90 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-/// 白色毛玻璃胶囊按钮（叠层专用；遮罩上白图标，依赖黑色遮罩保证对比）
-class _FrostedIconButton extends StatelessWidget {
-  const _FrostedIconButton({required this.icon, required this.onTap});
+/// 叠在照片上的风格自适应浮层圆钮（返回/编辑/删除）
+///
+/// 严格遵循「风格不混搭」规范：组件叠在照片等非纯色底之上时，新拟态的
+/// 双向浮雕外阴影无法被照片承接，会像光晕般发散——因此叠图表面一律**不做
+/// 外阴影**，改用当前风格的表面 + 细描边表达；只有玻璃风格本身保留其玻璃底。
+class _FloatingControl extends ConsumerWidget {
+  const _FloatingControl({
+    required this.icon,
+    required this.onTap,
+  });
 
   final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final app = ref.watch(appThemeProvider);
+    final tokens = app.tokens;
+
+    late final Color bg;
+    final Color iconColor;
+    final bool useGlass;
+    Border? border;
+    switch (app.style) {
+      case UIStyle.neumorphic:
+        // 压图表面：实心 surface + 细描边，无外阴影、无模糊
+        bg = tokens.surface;
+        border = Border.all(color: tokens.divider, width: 1);
+        iconColor = tokens.textPrimary;
+        useGlass = false;
+        break;
+      case UIStyle.flat:
+        bg = tokens.surfaceAlt.withOpacity(0.78);
+        border = Border.all(color: tokens.divider, width: 1);
+        iconColor = tokens.textPrimary;
+        useGlass = false;
+        break;
+      case UIStyle.glass:
+        bg = Colors.white.withOpacity(0.45);
+        border = Border.all(color: Colors.white.withOpacity(0.5), width: 1);
+        iconColor = Colors.white;
+        useGlass = true;
+        break;
+      case UIStyle.female:
+        bg = tokens.brandSubtle.withOpacity(0.6);
+        border = Border.all(color: Colors.white.withOpacity(0.6), width: 0.8);
+        iconColor = tokens.textInverse;
+        useGlass = false;
+        break;
+    }
+
+    Widget circle = Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: bg,
+        shape: BoxShape.circle,
+        border: border,
+      ),
+      child: Icon(icon, size: 20, color: iconColor),
+    );
+
+    // 仅玻璃风格保留其自身的玻璃底
+    if (useGlass) {
+      circle = ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: circle,
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: circle,
+    );
+  }
+}
+
+/// 全屏入口提示胶囊（叠在封面暗渐变遮罩上，属通用叠加层）
+class _FullscreenChip extends StatelessWidget {
+  const _FullscreenChip({required this.onTap});
+
   final VoidCallback onTap;
 
   @override
@@ -511,17 +622,57 @@ class _FrostedIconButton extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        width: 38,
-        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.22),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withOpacity(0.22), width: 1),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 10, offset: const Offset(0, 4)),
+          color: Colors.black.withOpacity(0.30),
+          borderRadius: BorderRadius.circular(1000),
+          border: Border.all(color: Colors.white.withOpacity(0.4), width: 1),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.open_in_full, size: 11, color: Colors.white),
+            SizedBox(width: 4),
+            Text(
+              '看大图',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white),
+            ),
           ],
         ),
-        child: Icon(icon, size: 20, color: Colors.white),
+      ),
+    );
+  }
+}
+
+/// 按压缩放反馈容器（tap 反馈）
+class _PressScale extends StatefulWidget {
+  const _PressScale({required this.onTap, required this.child});
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  State<_PressScale> createState() => _PressScaleState();
+}
+
+class _PressScaleState extends State<_PressScale> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: widget.child,
       ),
     );
   }
