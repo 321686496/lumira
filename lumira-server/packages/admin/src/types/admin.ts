@@ -231,6 +231,12 @@ export interface AdminTemplateListResponse {
   pageSize: number;
 }
 
+export interface TemplateAmbience {
+  seasons: string[];
+  weathers: string[];
+  timeTones: string[];
+}
+
 export interface AdminTemplateDetail extends AdminTemplateListItem {
   author: string;
   version: string;
@@ -244,6 +250,8 @@ export interface AdminTemplateDetail extends AdminTemplateListItem {
   camera: Record<string, unknown>;
   sceneGuide: Record<string, unknown>;
   postProcess: Record<string, unknown>;
+  ambience: TemplateAmbience;
+  shortDesc: string;
 }
 
 export interface CreateTemplateRequest {
@@ -257,6 +265,8 @@ export interface CreateTemplateRequest {
   tags?: string[];
   tagIds?: string[];
   classification?: { type: string; majorStyle: string; subStyle: string; method: string };
+  ambience?: TemplateAmbience;
+  shortDesc?: string;
   sortOrder?: number;
   isActive?: boolean;
   composition?: Record<string, unknown>;
