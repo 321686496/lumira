@@ -1,10 +1,10 @@
-import 'package:flutter/painting.dart' show TextAlign;
+import 'package:flutter/painting.dart' show Color, TextAlign;
 
 import '../models/watermark_template.dart';
 
 /// 预置水印模板集合。
 ///
-/// 5 款精选水印覆盖简约/胶片/艺术/杂志/画框五种风格，元素坐标均为相对值
+/// 6 款精选水印覆盖简约/胶片/艺术/杂志/画框/拍立得六种风格，元素坐标均为相对值
 /// （0.0~1.0），由 [WatermarkRenderer] 按目标图像尺寸缩放为绝对像素。
 /// 预置模板 id 以 `preset_` 前缀标识，type 固定为 [WatermarkTemplateType.preset]。
 List<WatermarkTemplate> getPresetWatermarks() {
@@ -14,6 +14,7 @@ List<WatermarkTemplate> getPresetWatermarks() {
     _artSignature(),
     _magazineLayout(),
     _frameBorder(),
+    _polaroid(),
   ];
 }
 
@@ -211,6 +212,42 @@ WatermarkTemplate _frameBorder() {
         fontSize: 0.026,
         textAlign: TextAlign.center,
         letterSpacing: 1.5,
+      ),
+    ],
+  );
+}
+
+WatermarkTemplate _polaroid() {
+  return WatermarkTemplate(
+    id: 'preset_polaroid',
+    name: '拍立得',
+    type: WatermarkTemplateType.preset,
+    createdAt: DateTime(2026, 8, 20),
+    frame: const WatermarkFrame(
+      type: WatermarkFrameType.polaroid,
+      color: Color(0xFFFFFFFF),
+      borderRatio: 0.05,
+      borderRadius: 0.0,
+      bottomPlate: true,
+      bottomRatio: 0.18,
+      shadowColor: Color(0xFF000000),
+      shadowOpacity: 0.22,
+      shadowBlur: 0.02,
+    ),
+    elements: [
+      WatermarkElement(
+        id: 'preset_polaroid_date',
+        type: WatermarkElementType.dateTime,
+        text: '2026.08.20',
+        x: 0.5,
+        y: 0.5,
+        fontSize: 0.045,
+        color: const Color(0xFF444444),
+        shadowColor: const Color(0x00000000),
+        space: WatermarkElementSpace.frame,
+        textAlign: TextAlign.center,
+        fontFamily: 'serif',
+        italic: true,
       ),
     ],
   );
