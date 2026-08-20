@@ -116,7 +116,9 @@ export class ProfileService {
   async saveAvatar(deviceId: string, buffer: Buffer, ext: string): Promise<{ avatarUrl: string }> {
     await this.getOrCreateProfile(deviceId);
     const uploadDir = process.env.UPLOAD_DIR || path.resolve('./data/uploads');
-    const dir = path.join(uploadDir, 'users', deviceId);
+    // 白名单清洗 deviceId，防止路径逃逸（deviceId 源自 JWT，注册时用户自报）
+    const safeId = deviceId.replace(/[^0-9a-zA-Z_-]/g, '');
+    const dir = path.join(uploadDir, 'users', safeId);
     fs.mkdirSync(dir, { recursive: true });
 
     // 删除旧头像
@@ -136,7 +138,7 @@ export class ProfileService {
     fs.writeFileSync(path.join(dir, filename), buffer);
 
     const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
-    const avatarUrl = `${base}/uploads/users/${deviceId}/${filename}`;
+    const avatarUrl = `${base}/uploads/users/${safeId}/${filename}`;
     await this.updateProfile(deviceId, { avatarUrl });
     return { avatarUrl };
   }
