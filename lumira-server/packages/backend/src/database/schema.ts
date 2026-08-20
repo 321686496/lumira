@@ -288,7 +288,7 @@ export const builtinScenes = mysqlTable('builtin_scenes', {
 
 // ===== 通知公告（spec 2026-08-20-notifications-center）=====
 export const notifications = mysqlTable('notifications', {
-  id: text('id').primaryKey(),
+  id: varchar('id', { length: 64 }).primaryKey(),
   title: text('title').notNull(),
   body: text('body').notNull(),
   iconKey: text('icon_key').notNull().default('announcement'),

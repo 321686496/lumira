@@ -2,7 +2,7 @@
 -- 通知公告表（spec 2026-08-20-notifications-center）。
 -- 幂等：由 _migrations 表记录，仅执行一次。
 CREATE TABLE IF NOT EXISTS `notifications` (
-  `id` TEXT NOT NULL,
+  `id` VARCHAR(64) NOT NULL,
   `title` TEXT NOT NULL,
   `body` TEXT NOT NULL,
   `icon_key` TEXT NOT NULL DEFAULT ('announcement'),
