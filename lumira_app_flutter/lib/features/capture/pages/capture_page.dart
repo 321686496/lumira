@@ -727,6 +727,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
         debugPrint('[capture] 自动保存到应用相册: ${record.id}');
         // 埋点：拍摄成片成功（模板 builtin/remote + 系统场景），失败静默不阻断
         _reportUseShoot(record.templateId, record.sceneId);
+        // 埋点成功后触发使用次数同步（上报未同步事件 + 拉取全站次数；失败静默）
+        _triggerUsageSync();
 
         // 每日首次拍摄积分（后台幂等；失败静默，绝不阻塞拍照流程）
         if (!_dailyShootEarned) {
@@ -931,6 +933,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
     } catch (_) {
       // 埋点失败静默
+    }
+  }
+
+  /// 拍摄成片后触发使用次数同步（fire-and-forget，失败静默不阻断拍照流程）。
+  Future<void> _triggerUsageSync() async {
+    try {
+      final service = await ref.read(usageSyncServiceProvider.future);
+      await service.runSync();
+    } catch (_) {
+      // 网络/鉴权失败静默，下次拍摄或启动时再同步
     }
   }
 

@@ -25,6 +25,7 @@ import 'features/profile/services/growth_xp_provider.dart';
 import 'features/templates/services/template_import_service.dart';
 import 'features/templates/services/template_share_code.dart';
 import 'features/templates/widgets/template_import_sheet.dart';
+import 'features/usage/usage_providers.dart';
 import 'shared/widgets/lumira/feedback/lumira_toast.dart';
 
 /// 应用根 Widget（接入 ProviderScope + routerProvider + appThemeProvider）
@@ -142,6 +143,18 @@ Future<void> main() async {
     final sync = await container.read(profileSyncServiceProvider.future);
     await sync.ensureLoadedIfMissing();
     await sync.syncPendingIfNeeded();
+  });
+
+  // 6.5 使用次数同步（启动时上报未同步埋点 + 拉取全站次数；失败静默不阻塞启动）
+  // ignore: unawaited_futures
+  authController.ensureRegistered().then((ok) async {
+    if (!ok) return;
+    try {
+      final us = await container.read(usageSyncServiceProvider.future);
+      await us.runSync();
+    } catch (_) {
+      // 网络/鉴权失败静默
+    }
   });
 
   runApp(
