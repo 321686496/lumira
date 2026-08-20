@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../models/watermark_template.dart';
 
-/// 水印预览组件：在深色（仿照片）背景上以 [CustomPaint] + [TextPainter]
-/// 渲染 [WatermarkTemplate] 的元素，供水印管理页与编辑页共用。
+/// 水印预览组件：默认在深色（仿照片）背景上，传入 [background] 时改为在
+/// 真实照片底图上以 [CustomPaint] + [TextPainter] 渲染 [WatermarkTemplate]
+/// 的元素，供水印管理页（照片底）与编辑页（深色底）共用。
 ///
 /// 绘制约定与 [WatermarkRenderer] 一致：
 /// - 锚点 = `element.x * size.width`, `element.y * size.height`
@@ -14,6 +15,9 @@ import '../models/watermark_template.dart';
 /// - letterSpacing 按 `size.width / 400` 缩放（参考宽度 400）
 /// - textAlign 决定相对锚点的水平偏移（left=0 / right=-w / center=-w/2）
 /// - 旋转 / 透明度 / bold / italic / shadow 均按元素属性应用
+///
+/// 照片底图按 [BoxFit.cover] 铺满预览区；水印元素坐标统一按整个预览矩形
+/// 换算（近似，不做画框缩放），保证小尺寸缩略图中叠加观感真实可读。
 class WatermarkPreview extends StatelessWidget {
   const WatermarkPreview({
     super.key,
@@ -27,7 +31,10 @@ class WatermarkPreview extends StatelessWidget {
   final WatermarkTemplate template;
   final double width;
   final double height;
-  final Color? background;
+
+  /// 可选照片底图。提供时以 [Stack] 将照片铺在底层、水印叠加在上层；
+  /// 未提供时保持深色仿照片底，用于编辑页等场景。
+  final ImageProvider? background;
   final double borderRadius;
 
   /// 深色仿照片背景：浅灰文字在深色背景上清晰可辨
@@ -35,17 +42,27 @@ class WatermarkPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget content;
+    if (background != null) {
+      content = Stack(
+        fit: StackFit.expand,
+        children: [
+          Image(image: background!, fit: BoxFit.cover),
+          CustomPaint(painter: _WatermarkPreviewPainter(template)),
+        ],
+      );
+    } else {
+      content = CustomPaint(painter: _WatermarkPreviewPainter(template));
+    }
     return Container(
       width: width,
       height: height,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: background ?? _defaultBackground,
+        color: _defaultBackground,
         borderRadius: BorderRadius.circular(borderRadius),
       ),
-      child: CustomPaint(
-        painter: _WatermarkPreviewPainter(template),
-      ),
+      child: content,
     );
   }
 }

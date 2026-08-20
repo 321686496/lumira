@@ -96,6 +96,28 @@ Future<void> loadCustomWatermarks(ProviderContainer container) async {
   }
 }
 
+/// 切换水印管理页布局（list/grid）并持久化。
+///
+/// 顶部「单列/双列」切换按钮调用；立即更新 [watermarkSettingsProvider]，
+/// 经 [scheduleWatermarkPersist] 防抖写入本地。
+void setWatermarkManageLayout(
+  ProviderContainer container,
+  WatermarkManageLayout layout,
+) {
+  container.read(watermarkSettingsProvider.notifier).state =
+      container.read(watermarkSettingsProvider).copyWith(manageLayout: layout);
+  scheduleWatermarkPersist(container);
+}
+
+/// 选中水印模板（preset/custom 均可）并持久化。
+void setWatermarkActive(ProviderContainer container, String templateId) {
+  container.read(watermarkSettingsProvider.notifier).state =
+      container
+          .read(watermarkSettingsProvider)
+          .copyWith(activeTemplateId: templateId);
+  scheduleWatermarkPersist(container);
+}
+
 /// 防抖持久化水印设置（500ms 内多次变更只写一次）。
 ///
 /// 在设置页 toggle / 水印管理页模板选择的 onChanged 中调用。
