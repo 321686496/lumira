@@ -21,6 +21,7 @@ import '../../../core/utils/time_format.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/providers/collection_providers.dart';
+import '../../watermark/data/watermark_providers.dart';
 import '../providers/gallery_diary_providers.dart';
 
 /// 相册照片详情页（查看为主）
@@ -464,6 +465,36 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     }
   }
 
+  /// 二次添加水印：读取当前照片路径与当前水印模板，跳转应用模式编辑器。
+  /// 编辑器保存后以"另存新照片"入相册，返回后刷新画廊列表 provider。
+  Future<void> _onAddWatermark() async {
+    final photo = _photo;
+    if (photo == null) return;
+    final photoPath = photo.filePath;
+    if (photoPath == null || photoPath.isEmpty) {
+      LumiraToast.show(
+        context,
+        '仅支持本地照片添加水印',
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+    final templateId = ref.read(currentWatermarkTemplateProvider)?.id;
+    final target = RouteNames.build(
+      RouteNames.galleryWatermarkApply,
+      {
+        RouteNames.paramPhoto: photoPath,
+        if (templateId != null && templateId.isNotEmpty)
+          RouteNames.paramTemplateId: templateId,
+      },
+    );
+    debugPrint('[gallery-detail] onAddWatermark push target=$target');
+    await GoRouter.of(context).push(target);
+    if (!mounted) return;
+    debugPrint('[gallery-detail] onAddWatermark after push uri=${GoRouter.of(context).routerDelegate.currentConfiguration.uri}');
+    ref.invalidate(galleryDaoProvider);
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -489,6 +520,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
               onOutfitMark: _onOutfitMark,
               onShare: _onShare,
               onDelete: _onDelete,
+              onAddWatermark: _onAddWatermark,
             ),
         ],
       ),
@@ -684,7 +716,7 @@ class _DarkBackButton extends StatelessWidget {
   }
 }
 
-/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"记录探店" / "标记为穿搭日记" / "分享照片" / "删除照片"操作。
+/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"记录探店" / "标记为穿搭日记" / "分享照片" / "添加水印" / "删除照片"操作。
 class _MoreAction extends StatelessWidget {
   const _MoreAction({
     required this.tokens,
@@ -692,6 +724,7 @@ class _MoreAction extends StatelessWidget {
     required this.onOutfitMark,
     required this.onShare,
     required this.onDelete,
+    required this.onAddWatermark,
   });
 
   final ThemeTokens tokens;
@@ -699,6 +732,7 @@ class _MoreAction extends StatelessWidget {
   final Future<void> Function() onOutfitMark;
   final Future<void> Function() onShare;
   final Future<void> Function() onDelete;
+  final Future<void> Function() onAddWatermark;
 
   @override
   Widget build(BuildContext context) {
@@ -744,6 +778,14 @@ class _MoreAction extends StatelessWidget {
           Divider(height: 1, color: tokens.divider),
           _MoreSheetOption(
             tokens: tokens,
+            icon: Icons.photo_filter_outlined,
+            label: '添加水印',
+            color: tokens.brand,
+            onTap: () => Navigator.of(ctx).pop('watermark'),
+          ),
+          Divider(height: 1, color: tokens.divider),
+          _MoreSheetOption(
+            tokens: tokens,
             icon: Icons.delete_outline,
             label: '删除照片',
             isDanger: true,
@@ -760,6 +802,8 @@ class _MoreAction extends StatelessWidget {
       await onOutfitMark();
     } else if (result == 'share') {
       await onShare();
+    } else if (result == 'watermark') {
+      await onAddWatermark();
     } else if (result == 'delete') {
       await onDelete();
     }

@@ -39,6 +39,7 @@ class RouteNames {
   static const String gallery = '/gallery';
   static const String galleryDetail = '/gallery/detail';
   static const String galleryEdit = '/gallery/edit';
+  static const String galleryWatermarkApply = '/gallery/watermark/apply';
   static const String galleryDiary = '/gallery/diary';
   static const String galleryStats = '/gallery/stats';
   static const String galleryMonthlyDigest = '/gallery/monthly-digest';
@@ -91,6 +92,8 @@ class RouteNames {
   static const String paramDate = 'date';
   static const String paramCheckinId = 'checkinId';
   static const String paramPhotoId = 'photoId';
+  // 「相册二次添加水印」应用模式：传递照片本地文件路径（避免路径中的 / 与 ? 破坏路由）
+  static const String paramPhoto = 'photo';
   static const String paramCollectionId = 'collectionId';
   static const String paramAcademyId = 'academyId';
   static const String paramTutorialId = 'tutorialId';

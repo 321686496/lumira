@@ -375,6 +375,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           return GalleryEditPage(photoId: photoId);
         },
       ),
+      // 相册详情「更多 → 添加水印」：应用模式编辑器（photoPath 非空）
+      GoRoute(
+        path: RouteNames.galleryWatermarkApply,
+        name: 'galleryWatermarkApply',
+        builder: (context, state) => WatermarkEditorPage(
+          photoPath: state.queryParams[RouteNames.paramPhoto],
+          templateId: state.queryParams[RouteNames.paramTemplateId],
+        ),
+      ),
       GoRoute(
         path: RouteNames.galleryDiary,
         name: 'galleryDiary',
