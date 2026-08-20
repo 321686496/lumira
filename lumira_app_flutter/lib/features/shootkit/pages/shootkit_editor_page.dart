@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -564,10 +566,10 @@ class _TemplateCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Image.network(
-                coverUrl,
+              child: CachedNetworkImage(
+                url: coverUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorWidget: Container(
                   color: tokens.brandSubtle,
                   child: Icon(
                     Icons.image_outlined,
@@ -786,10 +788,10 @@ class _PreviewSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
         child: AspectRatio(
           aspectRatio: 3 / 2,
-          child: Image.network(
-            coverUrl,
+          child: CachedNetworkImage(
+            url: coverUrl,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
+            errorWidget: Container(
               color: tokens.brandSubtle,
               child: Icon(
                 Icons.image_outlined,

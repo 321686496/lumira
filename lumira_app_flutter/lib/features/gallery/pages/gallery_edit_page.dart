@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -945,8 +947,8 @@ class _CanvasArea extends StatelessWidget {
 
     // 强制图片填满取景框，让 BoxFit.contain 居中，避免 InteractiveViewer 左上对齐产生右侧空白
     Widget imageWidget = url.startsWith('http')
-        ? Image.network(url, width: double.infinity, height: double.infinity,
-            fit: BoxFit.contain)
+        ? CachedNetworkImage(url: url, width: double.infinity,
+            height: double.infinity, fit: BoxFit.contain)
         : Image.file(
             File(url),
             width: double.infinity,

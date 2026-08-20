@@ -8,6 +8,7 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
@@ -273,10 +274,10 @@ class _Swiper extends ConsumerWidget {
       height: 240, // 480rpx → 240dp
       child: PageView.builder(
         itemCount: images.length,
-        itemBuilder: (context, idx) => Image.network(
-          images[idx],
+        itemBuilder: (context, idx) => CachedNetworkImage(
+          url: images[idx],
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
+          errorWidget: Container(
             color: tokens.brand.withOpacity(0.12),
             child: Center(
               child: Icon(

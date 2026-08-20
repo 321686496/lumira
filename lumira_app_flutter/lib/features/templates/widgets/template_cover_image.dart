@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/image_cache.dart';
+
 /// 模板封面图统一渲染组件。
 ///
 /// 解决：自定义模板的封面图以 base64 data URL 形式存储在 `coverData` 字段，
@@ -64,16 +66,12 @@ class TemplateCoverImage extends StatelessWidget {
               errorFallback ?? _defaultError(context),
         );
       }
-      // 2c. http(s) URL
+      // 2c. http(s) URL → 走统一缓存组件（磁盘缓存 + 按需降采样）
       if (cover!.startsWith('http')) {
-        return Image.network(
-          cover!,
+        return CachedNetworkImage(
+          url: cover!,
           fit: fit,
-          frameBuilder: _fadeInFrameBuilder,
-          // 网络图片下载期间显示占位底色，避免空白闪烁
-          loadingBuilder: _networkLoadingBuilder,
-          errorBuilder: (_, __, ___) =>
-              errorFallback ?? _defaultError(context),
+          errorWidget: errorFallback ?? _defaultError(context),
         );
       }
     }
@@ -95,21 +93,6 @@ class TemplateCoverImage extends StatelessWidget {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
       child: child,
-    );
-  }
-
-  /// 网络图片下载中显示占位底色（下载完成后由 child 淡入替换）。
-  static Widget _networkLoadingBuilder(
-    BuildContext context,
-    Widget child,
-    ImageChunkEvent? loadingProgress,
-  ) {
-    if (loadingProgress == null) return child;
-    return Builder(
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return ColoredBox(color: theme.colorScheme.surfaceVariant);
-      },
     );
   }
 

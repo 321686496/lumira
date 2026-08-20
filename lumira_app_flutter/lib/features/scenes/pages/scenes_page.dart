@@ -8,6 +8,7 @@ import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/image_cache.dart';
 import '../../usage/usage_providers.dart';
 import '../scenes_sync_service.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton, LumiraProgress;
@@ -642,11 +643,10 @@ class _SceneCard extends ConsumerWidget {
                 fit: StackFit.expand,
                 children: [
                   firstImage != null
-                      ? Image.network(
-                          firstImage,
+                      ? CachedNetworkImage(
+                          url: firstImage,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const _ImgPlaceholder(),
+                          errorWidget: const _ImgPlaceholder(),
                         )
                       : const _ImgPlaceholder(),
                   if (hasBadge)

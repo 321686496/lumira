@@ -1,13 +1,23 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
+import '../data/scene_manage_providers.dart';
+import '../data/scene_record_mapper.dart';
 
 /// 场景管理页（Task 2.10）
 ///
@@ -17,14 +27,9 @@ import '../data/capture_scene_mock_data.dart';
 /// - Tab 1（我的收藏）：收藏场景列表 + 取消收藏按钮 / 空状态
 /// - Tab 2（自定义场景）：列表 + 新建场景按钮 / 新建-编辑表单
 ///
-/// 简化决策（brief §8）：
-/// - TagSelector：用内嵌 chip 多选列表代替
-/// - ScenePresetView：直接渲染行内卡片，复用 mock 数据
-/// - addCustomScene / updateCustomScene / deleteCustomScene：mock 内存修改，不持久化
-/// - showActionSheet / showModal：用 LumiraAlertDialog + LumiraToast 代替
-///
-/// 注：组合套件功能已迁移至独立的 CompositionKitsPage（lib/features/profile/pages/composition_kits_page.dart），
-/// 由 DB 持久化，本页不再承载 "我的组合" Tab。
+/// 数据来源：以本地 scenes 表为准（真实数据），自定义场景增删改实时落盘；
+/// 收藏标记存 DB is_favorite，内置预设场景完整数据由代码常量提供。
+/// 表单支持封面图上传（base64 data URL）、校验与字段分组。
 class CaptureSceneManagePage extends ConsumerStatefulWidget {
   const CaptureSceneManagePage({super.key, this.initialTab});
 
@@ -45,18 +50,13 @@ class _CaptureSceneManagePageState
   String? _editingId;
   late _SceneFormData _formData;
   bool _formDirty = false;
-
-  // 内存中的自定义场景与收藏（mock）
-  late List<CustomScenePreset> _customScenes;
-  late List<String> _favoriteIds;
+  String? _formError;
 
   @override
   void initState() {
     super.initState();
     _tab = _parseTab(widget.initialTab);
     _formData = _SceneFormData.empty();
-    _customScenes = [CaptureSceneMockData.customSceneExample];
-    _favoriteIds = List<String>.from(CaptureSceneMockData.favoritePresetIds);
   }
 
   _ManageTab _parseTab(String? tab) {
@@ -87,28 +87,25 @@ class _CaptureSceneManagePageState
     );
   }
 
-  // ===== 收藏 =====
-  void _toggleFav(String id) {
-    setState(() {
-      if (_favoriteIds.contains(id)) {
-        _favoriteIds.remove(id);
-      } else {
-        _favoriteIds.add(id);
-      }
-    });
-    LumiraToast.show(
-      context,
-      _favoriteIds.contains(id) ? '已收藏场景' : '已取消收藏',
-    );
+  // ===== 收藏（真实数据：写 scenes 表 is_favorite） =====
+  Future<void> _toggleFav(String id) async {
+    final dao = await ref.read(scenesDaoProvider.future);
+    final favs = await dao.getFavorites();
+    final isFav = favs.any((r) => r.id == id);
+    await dao.setFavorite(id, !isFav);
+    _invalidateScenes();
+    if (!mounted) return;
+    LumiraToast.show(context, isFav ? '已取消收藏' : '已收藏场景');
   }
 
-  // ===== 自定义场景 CRUD =====
+  // ===== 自定义场景 CRUD（真实数据：读/写 scenes 表） =====
   void _onNew() {
     setState(() {
       _editingId = null;
       _formData = _SceneFormData.empty();
       _formVisible = true;
       _formDirty = false;
+      _formError = null;
     });
   }
 
@@ -118,6 +115,7 @@ class _CaptureSceneManagePageState
       _formData = _SceneFormData.from(scene);
       _formVisible = true;
       _formDirty = false;
+      _formError = null;
     });
   }
 
@@ -141,6 +139,7 @@ class _CaptureSceneManagePageState
                 _formVisible = false;
                 _editingId = null;
                 _formDirty = false;
+                _formError = null;
               });
             },
             child: const Text('确定'),
@@ -151,15 +150,24 @@ class _CaptureSceneManagePageState
       setState(() {
         _formVisible = false;
         _editingId = null;
+        _formError = null;
       });
     }
   }
 
-  void _onSaveForm() {
-    if (_formData.name.trim().isEmpty) {
-      LumiraToast.show(context, '请输入场景名称');
+  Future<void> _onSaveForm() async {
+    final name = _formData.name.trim();
+    if (name.isEmpty) {
+      setState(() => _formError = '请填写场景名称');
       return;
     }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final isEdit = _editingId != null;
+
+    final dao = await ref.read(scenesDaoProvider.future);
+    final existing = isEdit ? await dao.getById(_editingId!) : null;
+    final isFav = existing?.isFavorite ?? false;
+
     final exampleImages = _formData.exampleImageSeeds
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
@@ -170,84 +178,49 @@ class _CaptureSceneManagePageState
         .map((t) => t.trim())
         .where((t) => t.isNotEmpty)
         .toList();
+    final bestTime = _formData.bestTime.trim();
 
-    if (_editingId != null) {
-      // 编辑：找到现有并替换
-      final idx = _customScenes.indexWhere((s) => s.id == _editingId);
-      if (idx >= 0) {
-        final old = _customScenes[idx];
-        _customScenes[idx] = CustomScenePreset(
-          id: old.id,
-          name: _formData.name.trim(),
-          icon: _formData.icon,
-          category: _formData.category,
-          style: _formData.style,
-          filter: SceneFilter(
-            lut: _formData.filterLut,
-            systemFilter: _formData.filterSystemFilter,
-            reason: _formData.filterReason.trim(),
-          ),
-          vibe: _formData.vibe.trim(),
-          description: _formData.description.trim(),
-          exampleImages: exampleImages,
-          tips: tips,
-          whereToShoot: _formData.whereToShoot.trim(),
-          bestTime: _formData.bestTime.trim(),
-          sceneGuide: SceneGuide(
-            lightDirection: _formData.lightDirection,
-            shootingDistance: _formData.shootingDistance,
-            background: _formData.background,
-            props: const [],
-            bestTime: _formData.bestTime.trim(),
-            tips: tips,
-          ),
-          relatedCategory: _formData.relatedCategory,
-          tagIds: List<String>.from(_formData.tagIds),
-          createdAt: old.createdAt,
-          updatedAt: DateTime.now().millisecondsSinceEpoch,
-        );
-      }
-      LumiraToast.show(context, '已保存');
-    } else {
-      // 新建
-      final newScene = CustomScenePreset(
-        id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
-        name: _formData.name.trim(),
-        icon: _formData.icon,
-        category: _formData.category,
-        style: _formData.style,
-        filter: SceneFilter(
-          lut: _formData.filterLut,
-          systemFilter: _formData.filterSystemFilter,
-          reason: _formData.filterReason.trim(),
-        ),
-        vibe: _formData.vibe.trim(),
-        description: _formData.description.trim(),
-        exampleImages: exampleImages,
+    final preset = CustomScenePreset(
+      id: _editingId ?? 'custom_$now',
+      name: name,
+      icon: _formData.icon,
+      category: _formData.category,
+      style: _formData.style,
+      filter: SceneFilter(
+        lut: _formData.filterLut,
+        systemFilter: _formData.filterSystemFilter,
+        reason: _formData.filterReason.trim(),
+      ),
+      vibe: _formData.vibe.trim(),
+      description: _formData.description.trim(),
+      exampleImages: exampleImages,
+      tips: tips,
+      whereToShoot: _formData.whereToShoot.trim(),
+      bestTime: bestTime,
+      sceneGuide: SceneGuide(
+        lightDirection: _formData.lightDirection,
+        shootingDistance: _formData.shootingDistance,
+        background: _formData.background,
+        props: const [],
+        bestTime: bestTime,
         tips: tips,
-        whereToShoot: _formData.whereToShoot.trim(),
-        bestTime: _formData.bestTime.trim(),
-        sceneGuide: SceneGuide(
-          lightDirection: _formData.lightDirection,
-          shootingDistance: _formData.shootingDistance,
-          background: _formData.background,
-          props: const [],
-          bestTime: _formData.bestTime.trim(),
-          tips: tips,
-        ),
-        relatedCategory: _formData.relatedCategory,
-        tagIds: List<String>.from(_formData.tagIds),
-        createdAt: DateTime.now().millisecondsSinceEpoch,
-        updatedAt: DateTime.now().millisecondsSinceEpoch,
-      );
-      _customScenes.add(newScene);
-      LumiraToast.show(context, '已创建');
-    }
+      ),
+      relatedCategory: _formData.relatedCategory,
+      tagIds: List<String>.from(_formData.tagIds),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      cover: _formData.cover,
+    );
+    await dao.upsert(customToRecord(preset, isFavorite: isFav));
+    _invalidateScenes();
+    if (!mounted) return;
     setState(() {
       _formVisible = false;
       _editingId = null;
       _formDirty = false;
+      _formError = null;
     });
+    LumiraToast.show(context, isEdit ? '已保存' : '已创建');
   }
 
   void _onMore(CustomScenePreset scene) {
@@ -278,8 +251,8 @@ class _CaptureSceneManagePageState
     );
   }
 
-  void _confirmDelete(CustomScenePreset scene) {
-    LumiraAlertDialog.show<void>(
+  Future<void> _confirmDelete(CustomScenePreset scene) async {
+    await LumiraAlertDialog.show<void>(
       context: context,
       title: const Text('删除场景'),
       content: Text('确定删除「${scene.name}」吗？'),
@@ -291,12 +264,12 @@ class _CaptureSceneManagePageState
         ),
         LumiraButton(
           variant: ButtonVariant.danger,
-          onPressed: () {
+          onPressed: () async {
             Navigator.of(context).pop();
-            setState(() {
-              _customScenes.removeWhere((s) => s.id == scene.id);
-            });
-            LumiraToast.show(context, '已删除');
+            final dao = await ref.read(scenesDaoProvider.future);
+            await dao.delete(scene.id);
+            _invalidateScenes();
+            if (mounted) LumiraToast.show(context, '已删除');
           },
           child: const Text('删除'),
         ),
@@ -305,17 +278,25 @@ class _CaptureSceneManagePageState
   }
 
   void _onFormChange() {
-    if (_formVisible && !_formDirty) {
-      setState(() {
-        _formDirty = true;
-      });
+    if (_formError != null) {
+      setState(() => _formError = null);
+    } else if (_formVisible && !_formDirty) {
+      setState(() => _formDirty = true);
     }
+  }
+
+  void _invalidateScenes() {
+    ref.invalidate(customScenesProvider);
+    ref.invalidate(favoriteScenesProvider);
   }
 
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    final customScenes = ref.watch(customScenesProvider).valueOrNull ?? const [];
+    final favoriteScenes =
+        ref.watch(favoriteScenesProvider).valueOrNull ?? const [];
     return Scaffold(
       backgroundColor: tokens.canvas,
       body: SafeArea(
@@ -329,15 +310,16 @@ class _CaptureSceneManagePageState
             Expanded(
               child: _tab == _ManageTab.fav
                   ? _FavTab(
-                      favoriteIds: _favoriteIds,
+                      favoriteScenes: favoriteScenes,
                       onToggleFav: _toggleFav,
                       onGoGuide: _goGuide,
-                      onTapScene: (_) => _goGuide(),
+                      onTapScene: _goSceneDetail,
                     )
                   : _formVisible
                       ? _CustomForm(
                           formData: _formData,
                           editingId: _editingId,
+                          errorText: _formError,
                           onChange: _onFormChange,
                           onCancel: _onCancelForm,
                           onSave: _onSaveForm,
@@ -347,7 +329,7 @@ class _CaptureSceneManagePageState
                           },
                         )
                       : _CustomTab(
-                          customScenes: _customScenes,
+                          customScenes: customScenes,
                           onNew: _onNew,
                           onMore: _onMore,
                           onTapScene: _goSceneDetail,
@@ -381,6 +363,7 @@ class _SceneFormData {
   List<String> exampleImageSeeds;
   String tipsText;
   List<String> tagIds;
+  String cover;
 
   _SceneFormData({
     required this.name,
@@ -401,6 +384,7 @@ class _SceneFormData {
     required this.exampleImageSeeds,
     required this.tipsText,
     required this.tagIds,
+    this.cover = '',
   });
 
   factory _SceneFormData.empty() => _SceneFormData(
@@ -452,6 +436,7 @@ class _SceneFormData {
       ],
       tipsText: s.tips.join('\n'),
       tagIds: List<String>.from(s.tagIds),
+      cover: s.cover,
     );
   }
 }
@@ -573,30 +558,30 @@ class _EmptyState extends ConsumerWidget {
           Icon(
             icon,
             size: 40, // 80rpx → 40dp
-            color: tokens.textTertiary, // 跟随主题
+            color: tokens.textTertiary,
           ),
-          const SizedBox(height: 12), // 24rpx → 12dp
+          const SizedBox(height: 12),
           Text(
             title,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: tokens.textPrimary, // 跟随主题
+              color: tokens.textPrimary,
             ),
           ),
-          const SizedBox(height: 6), // 12rpx → 6dp
+          const SizedBox(height: 6),
           Text(
             desc,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
               height: 1.5,
-              color: tokens.textTertiary, // 跟随主题
+              color: tokens.textTertiary,
             ),
           ),
           if (btnText != null && onBtnTap != null) ...[
-            const SizedBox(height: 20), // 40rpx → 20dp
+            const SizedBox(height: 20),
             GestureDetector(
               onTap: onBtnTap,
               behavior: HitTestBehavior.opaque,
@@ -604,7 +589,6 @@ class _EmptyState extends ConsumerWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                 decoration: BoxDecoration(
-                  // 品牌渐变改为跟随主题
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -617,7 +601,7 @@ class _EmptyState extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: tokens.textInverse, // 跟随主题（品牌底上的前景色）
+                    color: tokens.textInverse,
                   ),
                 ),
               ),
@@ -632,13 +616,13 @@ class _EmptyState extends ConsumerWidget {
 /// Tab 1：我的收藏
 class _FavTab extends ConsumerWidget {
   const _FavTab({
-    required this.favoriteIds,
+    required this.favoriteScenes,
     required this.onToggleFav,
     required this.onGoGuide,
     required this.onTapScene,
   });
 
-  final List<String> favoriteIds;
+  final List<ScenePreset> favoriteScenes;
   final ValueChanged<String> onToggleFav;
   final VoidCallback onGoGuide;
   final ValueChanged<String> onTapScene;
@@ -646,9 +630,7 @@ class _FavTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
-    final favScenes = CaptureSceneMockData.presetScenes
-        .where((p) => favoriteIds.contains(p.id))
-        .toList();
+    final favScenes = favoriteScenes;
 
     if (favScenes.isEmpty) {
       return SingleChildScrollView(
@@ -675,11 +657,11 @@ class _FavTab extends ConsumerWidget {
                 onTap: () => onToggleFav(favScenes[i].id),
                 behavior: HitTestBehavior.opaque,
                 child: Padding(
-                  padding: const EdgeInsets.all(4), // 8rpx → 4dp
+                  padding: const EdgeInsets.all(4),
                   child: Icon(
                     Icons.star,
-                    size: 18, // 36rpx → 18dp
-                    color: tokens.brand, // 跟随主题
+                    size: 18,
+                    color: tokens.brand,
                   ),
                 ),
               ),
@@ -692,6 +674,7 @@ class _FavTab extends ConsumerWidget {
 }
 
 /// 场景预设行（简化版 ScenePresetView）
+/// 封面优先使用自定义场景的 cover；否则回退到示例图第一张。
 class _ScenePresetRow extends ConsumerWidget {
   const _ScenePresetRow({
     required this.scene,
@@ -706,71 +689,68 @@ class _ScenePresetRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
-    final firstImage =
-        scene.exampleImages.isNotEmpty ? scene.exampleImages.first : null;
+    // 封面优先使用自定义场景的 cover；否则回退到示例图第一张。
+    // 注：scene 是 Widget 字段（非局部变量），Dart 不做字段类型提升，需显式类型判断。
+    String? cover;
+    if (scene is CustomScenePreset && (scene as CustomScenePreset).cover.isNotEmpty) {
+      cover = (scene as CustomScenePreset).cover;
+    } else if (scene.exampleImages.isNotEmpty) {
+      cover = scene.exampleImages.first;
+    }
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          color: tokens.surfaceAlt, // 跟随主题（浅底）
+          color: tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(12),
         ),
         clipBehavior: Clip.antiAlias,
         child: SizedBox(
-          height: 80, // 160rpx → 80dp（固定行高，避免在 ScrollView 中 stretch 导致无限高度）
+          height: 80,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
-                width: 80, // 160rpx → 80dp
+                width: 80,
                 height: 80,
-              child: firstImage != null
-                  ? Image.network(
-                      firstImage,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: tokens.brand.withOpacity(0.12), // 跟随主题
+                child: cover != null ? _CoverImage(url: cover) : null,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        scene.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textPrimary,
+                        ),
                       ),
-                    )
-                  : Container(
-                      color: tokens.brand.withOpacity(0.12), // 跟随主题
-                    ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      scene.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary, // 跟随主题
+                      const SizedBox(height: 2),
+                      Text(
+                        scene.vibe,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: tokens.textSecondary,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      scene.vibe,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                        color: tokens.textSecondary, // 跟随主题
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            if (action != null) Padding(padding: const EdgeInsets.all(8), child: action!),
-          ],
+              if (action != null)
+                Padding(padding: const EdgeInsets.all(8), child: action!),
+            ],
           ),
         ),
       ),
@@ -824,7 +804,7 @@ class _CustomTab extends ConsumerWidget {
                   child: Icon(
                     Icons.more_horiz,
                     size: 18,
-                    color: tokens.textTertiary, // 跟随主题
+                    color: tokens.textTertiary,
                   ),
                 ),
               ),
@@ -836,30 +816,30 @@ class _CustomTab extends ConsumerWidget {
             onTap: onNew,
             behavior: HitTestBehavior.opaque,
             child: Container(
-              padding: const EdgeInsets.all(16), // 32rpx → 16dp
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: tokens.divider, // 跟随主题
+                  color: tokens.divider,
                   width: 1.5,
                 ),
-                color: tokens.surface, // 跟随主题
-                borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
                     Icons.add,
-                    size: 18, // 36rpx → 18dp
-                    color: tokens.brand, // 跟随主题
+                    size: 18,
+                    color: tokens.brand,
                   ),
-                  const SizedBox(width: 6), // 12rpx → 6dp
+                  const SizedBox(width: 6),
                   Text(
                     '新建场景',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: tokens.brand, // 跟随主题
+                      color: tokens.brand,
                     ),
                   ),
                 ],
@@ -877,6 +857,7 @@ class _CustomForm extends ConsumerWidget {
   const _CustomForm({
     required this.formData,
     required this.editingId,
+    required this.errorText,
     required this.onChange,
     required this.onCancel,
     required this.onSave,
@@ -885,6 +866,7 @@ class _CustomForm extends ConsumerWidget {
 
   final _SceneFormData formData;
   final String? editingId;
+  final String? errorText;
   final VoidCallback onChange;
   final VoidCallback onCancel;
   final VoidCallback onSave;
@@ -896,10 +878,10 @@ class _CustomForm extends ConsumerWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
       child: Container(
-        padding: const EdgeInsets.all(20), // 40rpx → 20dp
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: tokens.surface, // 跟随主题
-          borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
+          color: tokens.surface,
+          borderRadius: BorderRadius.circular(14),
           boxShadow: const [
             BoxShadow(
               color: Color(0x14000000),
@@ -914,17 +896,42 @@ class _CustomForm extends ConsumerWidget {
             Text(
               editingId != null ? '编辑场景' : '新建场景',
               style: TextStyle(
-                fontSize: 17, // 34rpx → 17dp
+                fontSize: 17,
                 fontWeight: FontWeight.w600,
-                color: tokens.textPrimary, // 跟随主题
+                color: tokens.textPrimary,
               ),
             ),
-            const SizedBox(height: 16), // 32rpx → 16dp
+            if (errorText != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.error_outline, size: 16, color: tokens.danger),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      errorText!,
+                      style: TextStyle(fontSize: 13, color: tokens.danger),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            // === 封面图 ===
+            _CoverPicker(
+              cover: formData.cover,
+              onChanged: (v) => onMutate(() => formData.cover = v),
+            ),
+            const SizedBox(height: 4),
+            const _SectionTitle('基本信息'),
             _FormTextField(
               label: '场景名称',
               value: formData.name,
               placeholder: '如：夕阳人像',
               maxLength: 20,
+              errorText: errorText != null && formData.name.trim().isEmpty
+                  ? '请填写场景名称'
+                  : null,
               onChanged: (v) => onMutate(() => formData.name = v),
             ),
             _FormTextField(
@@ -944,10 +951,10 @@ class _CustomForm extends ConsumerWidget {
                   .map((t) => _PillOption(value: t, label: Target.label(t)))
                   .toList(),
               selected: formData.relatedCategory,
-              onSelect: (v) => onMutate(() {
-                formData.relatedCategory = v;
-              }),
+              onSelect: (v) =>
+                  onMutate(() => formData.relatedCategory = v),
             ),
+            const _SectionTitle('拍摄参考'),
             _FormTextField(
               label: '光线方向',
               value: formData.lightDirection,
@@ -978,6 +985,7 @@ class _CustomForm extends ConsumerWidget {
               placeholder: '如：下午 14:00-17:00',
               onChanged: (v) => onMutate(() => formData.bestTime = v),
             ),
+            const _SectionTitle('滤镜'),
             _PillPicker(
               label: 'LUT 滤镜',
               options: CaptureSceneMockData.lutOptions
@@ -1004,6 +1012,7 @@ class _CustomForm extends ConsumerWidget {
               placeholder: '如：让画面像被夕阳包住一样温柔',
               onChanged: (v) => onMutate(() => formData.filterReason = v),
             ),
+            const _SectionTitle('参考与分享'),
             _ExampleImagesEditor(
               seeds: formData.exampleImageSeeds,
               onChange: (idx, val) =>
@@ -1034,7 +1043,7 @@ class _CustomForm extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        color: tokens.surfaceAlt, // 跟随主题
+                        color: tokens.surfaceAlt,
                         borderRadius: BorderRadius.circular(9999),
                       ),
                       alignment: Alignment.center,
@@ -1043,7 +1052,7 @@ class _CustomForm extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: tokens.textPrimary, // 跟随主题
+                          color: tokens.textPrimary,
                         ),
                       ),
                     ),
@@ -1057,7 +1066,6 @@ class _CustomForm extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
-                        // 品牌渐变跟随主题
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -1071,7 +1079,7 @@ class _CustomForm extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: tokens.textInverse, // 跟随主题（品牌底前景）
+                          color: tokens.textInverse,
                         ),
                       ),
                     ),
@@ -1083,6 +1091,275 @@ class _CustomForm extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// 表单分组标题
+class _SectionTitle extends ConsumerWidget {
+  const _SectionTitle(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    return Padding(
+      padding: const EdgeInsets.only(top: 20, bottom: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 14,
+            decoration: BoxDecoration(
+              color: tokens.brand,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 封面图选择控件（支持 base64 data URL / http URL 预览）
+class _CoverPicker extends ConsumerWidget {
+  const _CoverPicker({required this.cover, required this.onChanged});
+  final String cover;
+  final ValueChanged<String> onChanged;
+
+  Future<void> _pickCover(BuildContext context, WidgetRef ref) async {
+    final tokens = ref.read(appThemeProvider).tokens;
+    await showLumiraBottomSheet<void>(
+      context: context,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '选择封面图',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+            ),
+          ),
+          LumiraListTile(
+            leading: Icon(Icons.photo_outlined, color: tokens.brand),
+            title: const Text('从相册选择'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickCoverFromGallery(context, ref);
+            },
+          ),
+          LumiraListTile(
+            leading: Icon(Icons.camera_alt_outlined, color: tokens.brand),
+            title: const Text('拍照'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _pickCoverFromCamera(context, ref);
+            },
+          ),
+          if (cover.isNotEmpty)
+            LumiraListTile(
+              leading: Icon(Icons.delete_outline, color: tokens.danger),
+              title: Text('移除封面', style: TextStyle(color: tokens.danger)),
+              onTap: () {
+                Navigator.pop(ctx);
+                onChanged('');
+              },
+            ),
+          LumiraListTile(
+            title: Center(
+              child: Text('取消', style: TextStyle(color: tokens.textSecondary)),
+            ),
+            onTap: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickCoverFromGallery(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    try {
+      final file = await FilePickerService.pickSingleImage();
+      if (file == null) return;
+      final fullFile = await FilePickerService.ensureFullBytes(file);
+      final bytes = fullFile.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        if (context.mounted) {
+          LumiraToast.show(context, '读取图片失败，请重试');
+        }
+        return;
+      }
+      final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      onChanged(dataUrl);
+      if (context.mounted) LumiraToast.show(context, '封面图已设置');
+    } catch (e) {
+      if (context.mounted) {
+        LumiraToast.show(context, '设置封面图失败：$e');
+      }
+    }
+  }
+
+  Future<void> _pickCoverFromCamera(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    // OHOS: image_picker 无 OHOS 实现，提示从相册选择
+    if (Platform.operatingSystem == 'ohos') {
+      if (context.mounted) {
+        LumiraToast.show(context, '当前系统暂不支持系统拍照，请从相册选择');
+      }
+      return;
+    }
+    try {
+      final picker = ImagePicker();
+      final xfile = await picker.pickImage(source: ImageSource.camera);
+      if (xfile == null) return;
+      final bytes = await xfile.readAsBytes();
+      final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      onChanged(dataUrl);
+      if (context.mounted) LumiraToast.show(context, '封面图已设置');
+    } catch (e) {
+      if (context.mounted) {
+        LumiraToast.show(context, '设置封面图失败：$e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '封面图',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: tokens.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => _pickCover(context, ref),
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              height: 140,
+              width: double.infinity,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: tokens.surfaceAlt,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: tokens.divider,
+                  width: 1,
+                ),
+              ),
+              child: cover.isNotEmpty
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _CoverImage(url: cover, fit: BoxFit.cover),
+                        Positioned(
+                          right: 8,
+                          bottom: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              '点击更换封面',
+                              style: TextStyle(fontSize: 11, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_photo_alternate_outlined,
+                          size: 32,
+                          color: tokens.textTertiary,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '点击添加封面图',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: tokens.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 渲染封面图：优先 base64 data URL，其次网络/路径地址。
+/// 黑色半透明遮罩属于跨风格通用「叠加视觉」，符合设计规范。
+class _CoverImage extends ConsumerWidget {
+  const _CoverImage({required this.url, this.fit = BoxFit.cover});
+  final String url;
+  final BoxFit fit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    if (url.startsWith('data:image/')) {
+      final bytes = _dataUrlBytes(url);
+      if (bytes != null) {
+        return Image.memory(
+          bytes,
+          fit: fit,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => Container(color: tokens.brand),
+        );
+      }
+    }
+    return CachedNetworkImage(
+      url: url,
+      fit: fit,
+      errorWidget: Container(color: tokens.brand),
+    );
+  }
+
+  static Uint8List? _dataUrlBytes(String url) {
+    final comma = url.indexOf(',');
+    if (comma < 0) return null;
+    try {
+      return base64Decode(url.substring(comma + 1));
+    } catch (_) {
+      return null;
+    }
   }
 }
 
@@ -1101,6 +1378,7 @@ class _FormTextField extends StatefulWidget {
     this.maxLength,
     this.maxLines = 1,
     this.padding,
+    this.errorText,
   });
 
   final String? label;
@@ -1110,6 +1388,7 @@ class _FormTextField extends StatefulWidget {
   final int? maxLength;
   final int maxLines;
   final EdgeInsetsGeometry? padding;
+  final String? errorText;
 
   @override
   State<_FormTextField> createState() => _FormTextFieldState();
@@ -1151,6 +1430,7 @@ class _FormTextFieldState extends State<_FormTextField> {
         hintText: widget.placeholder,
         maxLength: widget.maxLength,
         maxLines: widget.maxLines,
+        errorText: widget.errorText,
         onChanged: widget.onChanged,
       ),
     );
@@ -1176,7 +1456,7 @@ class _IconPicker extends ConsumerWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: tokens.textSecondary, // 跟随主题
+              color: tokens.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
@@ -1190,16 +1470,16 @@ class _IconPicker extends ConsumerWidget {
                     onTap: () => onSelect(icons[i]),
                     behavior: HitTestBehavior.opaque,
                     child: Container(
-                      width: 40, // 80rpx → 40dp
+                      width: 40,
                       height: 40,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: selected == icons[i]
-                            ? tokens.brand.withOpacity(0.12) // 跟随主题
-                            : tokens.surfaceAlt, // 跟随主题
+                            ? tokens.brand.withOpacity(0.12)
+                            : tokens.surfaceAlt,
                         border: Border.all(
                           color: selected == icons[i]
-                              ? tokens.brand // 跟随主题
+                              ? tokens.brand
                               : Colors.transparent,
                           width: 1,
                         ),
@@ -1209,8 +1489,8 @@ class _IconPicker extends ConsumerWidget {
                         CaptureSceneMockData.iconFromString(icons[i]),
                         size: 18,
                         color: selected == icons[i]
-                            ? tokens.brand // 跟随主题
-                            : tokens.textPrimary, // 跟随主题
+                            ? tokens.brand
+                            : tokens.textPrimary,
                       ),
                     ),
                   ),
@@ -1252,7 +1532,7 @@ class _PillPicker extends ConsumerWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: tokens.textSecondary, // 跟随主题
+              color: tokens.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
@@ -1269,12 +1549,10 @@ class _PillPicker extends ConsumerWidget {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: active
-                        ? tokens.brand.withOpacity(0.12) // 跟随主题
-                        : tokens.surfaceAlt, // 跟随主题
+                        ? tokens.brand.withOpacity(0.12)
+                        : tokens.surfaceAlt,
                     border: Border.all(
-                      color: active
-                          ? tokens.brand // 跟随主题
-                          : Colors.transparent,
+                      color: active ? tokens.brand : Colors.transparent,
                       width: 1,
                     ),
                     borderRadius: BorderRadius.circular(9999),
@@ -1285,8 +1563,8 @@ class _PillPicker extends ConsumerWidget {
                       fontSize: 13,
                       fontWeight: active ? FontWeight.w500 : FontWeight.normal,
                       color: active
-                          ? tokens.brand // 跟随主题
-                          : tokens.textSecondary, // 跟随主题
+                          ? tokens.brand
+                          : tokens.textSecondary,
                     ),
                   ),
                 ),
@@ -1317,7 +1595,7 @@ class _ExampleImagesEditor extends ConsumerWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: tokens.textSecondary, // 跟随主题
+              color: tokens.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
@@ -1352,7 +1630,7 @@ class _TipsEditor extends ConsumerWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: tokens.textSecondary, // 跟随主题
+              color: tokens.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
@@ -1387,7 +1665,7 @@ class _TagPicker extends ConsumerWidget {
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: tokens.textSecondary, // 跟随主题
+              color: tokens.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
@@ -1403,13 +1681,9 @@ class _TagPicker extends ConsumerWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: selected
-                        ? tokens.brand // 跟随主题
-                        : tokens.surfaceAlt, // 跟随主题
+                    color: selected ? tokens.brand : tokens.surfaceAlt,
                     border: Border.all(
-                      color: selected
-                          ? tokens.brand // 跟随主题
-                          : Colors.transparent,
+                      color: selected ? tokens.brand : Colors.transparent,
                       width: 1,
                     ),
                     borderRadius: BorderRadius.circular(9999),
@@ -1419,8 +1693,8 @@ class _TagPicker extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 13,
                       color: selected
-                          ? tokens.textInverse // 跟随主题（品牌底前景）
-                          : tokens.textSecondary, // 跟随主题
+                          ? tokens.textInverse
+                          : tokens.textSecondary,
                     ),
                   ),
                 ),

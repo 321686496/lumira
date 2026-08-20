@@ -42,6 +42,7 @@ class Tables {
   // colTagIdsJson 已在 custom_templates 段声明（值同为 'tag_ids_json'），此处不重复声明
   static const String colCreator = 'creator';
   static const String colIsFavorite = 'is_favorite';
+  // 自定义场景封面图（base64 data URL）。colCoverUrl 常量在 composition_kits 段声明（值 'cover_url'），此处复用
 
   // === custom_templates 扩展列（v4 迁移新增） ===
   static const String colIsBuiltin = 'is_builtin';

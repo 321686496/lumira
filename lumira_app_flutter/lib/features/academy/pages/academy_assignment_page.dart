@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+
 import '../../../core/router/route_names.dart';
 import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -235,7 +237,7 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
                     aspectRatio: 4 / 3,
                     child: _photoPath != null
                         ? Image.file(File(_photoPath!), fit: BoxFit.cover)
-                        : Image.network(_photoUrl!, fit: BoxFit.cover),
+                        : CachedNetworkImage(url: _photoUrl!, fit: BoxFit.cover),
                   ),
                 ),
                 const SizedBox(height: 12),

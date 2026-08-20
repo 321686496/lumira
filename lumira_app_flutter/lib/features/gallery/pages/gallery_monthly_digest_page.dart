@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
@@ -245,10 +247,10 @@ class _PhotoGridSection extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               child: AspectRatio(
                 aspectRatio: ratio,
-                child: Image.network(
-                  p.img,
+                child: CachedNetworkImage(
+                  url: p.img,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt),
+                  errorWidget: Container(color: tokens.surfaceAlt),
                 ),
               ),
             );
@@ -312,10 +314,10 @@ class _SelectedSection extends StatelessWidget {
                     child: SizedBox(
                       width: 80,
                       height: 80,
-                      child: Image.network(
-                        s.img,
+                      child: CachedNetworkImage(
+                        url: s.img,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt),
+                        errorWidget: Container(color: tokens.surfaceAlt),
                       ),
                     ),
                   ),

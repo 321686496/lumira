@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
@@ -454,10 +455,10 @@ class _SceneCard extends ConsumerWidget {
                 width: 100,
                 height: 100,
               child: firstImage != null
-                  ? Image.network(
-                      firstImage,
+                  ? CachedNetworkImage(
+                      url: firstImage,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const _ImgPlaceholder(),
+                      errorWidget: const _ImgPlaceholder(),
                     )
                   : const _ImgPlaceholder(),
             ),

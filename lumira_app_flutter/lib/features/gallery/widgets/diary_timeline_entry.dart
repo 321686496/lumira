@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../data/gallery_models.dart';
@@ -382,10 +384,10 @@ class _PhotoImage extends StatelessWidget {
       );
     }
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(
-        url,
+      return CachedNetworkImage(
+        url: url,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
+        errorWidget: Container(
           color: tokens.surfaceAlt,
           child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
         ),

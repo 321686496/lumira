@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
@@ -624,12 +625,12 @@ class _PhotoEditCell extends StatelessWidget {
                     ),
                   )
                 : url.startsWith('http')
-                    ? Image.network(
-                        url,
+                    ? CachedNetworkImage(
+                        url: url,
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: double.infinity,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorWidget: Container(
                           color: tokens.surfaceAlt,
                           child: Icon(Icons.broken_image_outlined,
                               color: tokens.textTertiary),
@@ -910,8 +911,8 @@ class _PhotoPickerSheetState extends ConsumerState<_PhotoPickerSheet> {
       );
     }
     return url.startsWith('http')
-        ? Image.network(url, fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
+        ? CachedNetworkImage(url: url, fit: BoxFit.cover,
+            errorWidget: Container(
                   color: tokens.surfaceAlt,
                   child: Icon(Icons.broken_image_outlined,
                       color: tokens.textTertiary, size: 20),

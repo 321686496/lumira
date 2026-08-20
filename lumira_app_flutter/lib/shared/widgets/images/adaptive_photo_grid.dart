@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/image_cache.dart';
 
 /// 自适应九宫格图片展示
 ///
@@ -103,10 +104,10 @@ class _ImageCell extends ConsumerWidget {
       child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary),
     );
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(
-        url,
+      return CachedNetworkImage(
+        url: url,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => fallback,
+        errorWidget: fallback,
       );
     }
     // 本地文件路径

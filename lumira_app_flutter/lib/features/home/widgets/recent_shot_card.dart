@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -288,10 +289,10 @@ class RecentShotCard extends ConsumerWidget {
     }
 
     // 4. picsum 占位
-    return Image.network(
-      'https://picsum.photos/seed/${recent.imageSeed}/400/600',
+    return CachedNetworkImage(
+      url: 'https://picsum.photos/seed/${recent.imageSeed}/400/600',
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stack) => _fallbackImage(tokens),
+      errorWidget: _fallbackImage(tokens),
     );
   }
 

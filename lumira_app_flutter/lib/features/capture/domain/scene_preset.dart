@@ -205,11 +205,14 @@ class CustomScenePreset extends ScenePreset {
     required this.tagIds,
     required this.createdAt,
     required this.updatedAt,
+    this.cover = '',
   });
 
   final List<String> tagIds;
   final int createdAt;
   final int updatedAt;
+  /// 自定义场景封面图（base64 data URL 或远程/路径 URL），空串表示未设置
+  final String cover;
 }
 
 /// 场景成就（对应 TS SceneAchievement）

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 import '../data/capture_state.dart';
 import '../data/scene_presets_data.dart';
 import '../../usage/usage_providers.dart';
@@ -107,10 +108,10 @@ class ScenePresetStrip extends ConsumerWidget {
                               size: 24,
                             ),
                           )
-                        : Image.network(
-                            cover,
+                        : CachedNetworkImage(
+                            url: cover,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorWidget: Container(
                               color: Colors.white12,
                               child: Icon(
                                 Icons.place,

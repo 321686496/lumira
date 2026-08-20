@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -496,10 +498,10 @@ class _SubmissionPhotos extends ConsumerWidget {
                                         size: 20, color: tokens.textTertiary),
                                   ),
                                 )
-                              : Image.network(
-                                  sub.photoUrl!,
+                              : CachedNetworkImage(
+                                  url: sub.photoUrl!,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  errorWidget: Container(
                                     color: tokens.surfaceAlt,
                                     child: Icon(Icons.broken_image_outlined,
                                         size: 20, color: tokens.textTertiary),
@@ -578,22 +580,10 @@ class _PhotoViewerDialog extends StatelessWidget {
                                 size: 40, color: tokens.textTertiary),
                           ),
                         )
-                      : Image.network(
-                          submission.photoUrl!,
+                      : CachedNetworkImage(
+                          url: submission.photoUrl!,
                           fit: BoxFit.contain,
-                          loadingBuilder: (_, child, progress) {
-                            if (progress == null) return child;
-                            return SizedBox(
-                              width: 60, height: 60,
-                              child: CircularProgressIndicator(
-                                value: progress.cumulativeBytesLoaded /
-                                    (progress.expectedTotalBytes ?? 1),
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            );
-                          },
-                          errorBuilder: (_, __, ___) => Container(
+                          errorWidget: Container(
                             width: 120, height: 120,
                             color: tokens.surfaceAlt,
                             child: Icon(Icons.broken_image_outlined,

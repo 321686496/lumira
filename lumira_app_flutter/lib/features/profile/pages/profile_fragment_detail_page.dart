@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -273,8 +274,8 @@ class _FragmentDetailCard extends StatelessWidget {
 
   Widget _buildGridImage(String url) {
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(url, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
+      return CachedNetworkImage(url: url, fit: BoxFit.cover,
+          errorWidget: Container(
                 color: Colors.grey.shade300,
                 child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
               ));

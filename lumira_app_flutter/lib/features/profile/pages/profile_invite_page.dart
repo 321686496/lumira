@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
@@ -218,8 +219,8 @@ class _HeroCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             child: AspectRatio(
               aspectRatio: 5 / 3,
-              child: Image.network(
-                'https://picsum.photos/seed/1926773/400/240',
+              child: CachedNetworkImage(
+                url: 'https://picsum.photos/seed/1926773/400/240',
                 fit: BoxFit.cover,
               ),
             ),

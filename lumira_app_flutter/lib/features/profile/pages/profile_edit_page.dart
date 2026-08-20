@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/app_theme.dart';
@@ -506,7 +507,7 @@ class _AvatarTile extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             ClipOval(
-              child: Image.network(url, width: 64, height: 64, fit: BoxFit.cover),
+              child: CachedNetworkImage(url: url, width: 64, height: 64, fit: BoxFit.cover),
             ),
             if (selected)
               Container(
@@ -598,7 +599,7 @@ class _BasicInfoHeader extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               ClipOval(
-                child: Image.network(url, width: 72, height: 72, fit: BoxFit.cover),
+                child: CachedNetworkImage(url: url, width: 72, height: 72, fit: BoxFit.cover),
               ),
               Positioned(
                 right: 0,

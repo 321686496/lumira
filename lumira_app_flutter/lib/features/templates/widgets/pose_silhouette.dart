@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../data/builtin_silhouettes.dart';
 
@@ -129,21 +130,17 @@ class PoseSilhouette extends StatelessWidget {
         }
         if (silhouetteData.startsWith('http://') ||
             silhouetteData.startsWith('https://')) {
-          return Image.network(
-            silhouetteData,
+          return CachedNetworkImage(
+            url: silhouetteData,
             key: ValueKey(silhouetteData),
-            gaplessPlayback: true,
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.contain,
-            errorBuilder: (_, error, ___) {
-              debugPrint('[PoseSilhouette] Network image error: $error');
-              return Icon(
-                Icons.broken_image_outlined,
-                color: effectiveColor,
-                size: baseWidth * 0.8,
-              );
-            },
+            errorWidget: Icon(
+              Icons.broken_image_outlined,
+              color: effectiveColor,
+              size: baseWidth * 0.8,
+            ),
           );
         }
         return Image.memory(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/capture_state.dart';
 import '../data/template_registry.dart';
 import '../domain/photo_template.dart';
+import '../../../core/utils/image_cache.dart';
 
 /// 模板横向滚动条。
 /// `compact=true` 显示前 6 个模板（底部条），`compact=false` 显示全部模板（展开面板）。
@@ -73,10 +74,10 @@ class TemplateStrip extends ConsumerWidget {
         errorBuilder: (_, __, ___) => placeholder,
       );
     }
-    return Image.network(
-      cover,
+    return CachedNetworkImage(
+      url: cover,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => placeholder,
+      errorWidget: placeholder,
     );
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
@@ -573,10 +574,10 @@ class _CoverThumbState extends ConsumerState<_CoverThumb> {
       width: size,
       height: size,
       child: url.startsWith('http')
-          ? Image.network(
-              url,
+          ? CachedNetworkImage(
+              url: url,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _buildPlaceholder(size),
+              errorWidget: _buildPlaceholder(size),
             )
           : Image.file(
               File(url),
@@ -602,10 +603,10 @@ class _CoverThumbState extends ConsumerState<_CoverThumb> {
             final u = p.dataUrl ?? p.filePath;
             if (u == null || u.isEmpty) return _buildPlaceholder(size / 2);
             return u.startsWith('http')
-                ? Image.network(
-                    u,
+                ? CachedNetworkImage(
+                    url: u,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildPlaceholder(size / 2),
+                    errorWidget: _buildPlaceholder(size / 2),
                   )
                 : Image.file(
                     File(u),

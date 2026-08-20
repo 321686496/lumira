@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/challenge_models.dart';
@@ -206,10 +207,10 @@ class MainChallengeCard extends ConsumerWidget {
   Widget _buildCoverOrPlaceholder() {
     final cover = challenge.coverImage;
     if (cover != null && cover.isNotEmpty) {
-      return Image.network(
-        cover,
+      return CachedNetworkImage(
+        url: cover,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _workPlaceholder(),
+        errorWidget: _workPlaceholder(),
       );
     }
     return _workPlaceholder();

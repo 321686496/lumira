@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
 import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
+import 'package:lumira_app_flutter/features/templates/data/remote_template_dto.dart';
 import 'package:lumira_app_flutter/features/templates/services/template_mapper.dart';
 
 void main() {
@@ -77,6 +78,41 @@ void main() {
       expect(record.camera['iso'], 400);
       expect(record.sceneGuide['lightDirection'], '侧光 45°');
       expect(record.postProcess['lut'], 'warm_film');
+    });
+  });
+
+  group('TemplateMapper.metaToRecord (四级别分类保留)', () {
+    test('remote meta → TemplateRecord 保留 majorStyle/subStyle', () {
+      final meta = RemoteTemplateMetaDto.fromJson({
+        'id': 'srv_test',
+        'name': '测试模板',
+        'author': 'Lumira',
+        'version': '1.0.0',
+        'category': 'portrait',
+        'price': 0,
+        'coverUrl': 'https://example.com/cover.jpg',
+        'description': '',
+        'referenceSource': '',
+        'tags': <String>[],
+        'tagIds': <String>[],
+        'sortOrder': 0,
+        'updatedAt': 1700000000000,
+        // 后台四级分类：type=一级 / majorStyle=二级 / subStyle=三级 / method=四级
+        'classification': {
+          'type': 'portrait',
+          'majorStyle': 'emotional',
+          'subStyle': 'broken_cold',
+          'method': 'selfie',
+        },
+      });
+
+      final record = TemplateMapper.metaToRecord(meta);
+
+      expect(record.category, 'portrait');
+      expect(record.classification['type'], 'portrait');
+      expect(record.classification['majorStyle'], 'emotional');
+      expect(record.classification['subStyle'], 'broken_cold');
+      expect(record.classification['method'], 'selfie');
     });
   });
 

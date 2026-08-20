@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
+import '../../../core/utils/image_cache.dart';
 
 /// 统一滤镜库（单一滤镜库，去重合并系统滤镜与 LUT 预设）。
 /// 定义见 filter_recipe.dart `unifiedFilters`。
@@ -189,10 +190,10 @@ class _FilterThumbCard extends StatelessWidget {
               children: [
                 ColorFiltered(
                   colorFilter: _buildColorFilter(),
-                  child: Image.network(
-                    previewImageUrl,
+                  child: CachedNetworkImage(
+                    url: previewImageUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorWidget: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,

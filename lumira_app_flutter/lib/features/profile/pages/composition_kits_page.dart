@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/templates_dao.dart';
@@ -268,10 +269,10 @@ class _KitCard extends StatelessWidget {
                 width: 80,
                 height: 80,
                 child: kit.coverUrl != null && kit.coverUrl!.isNotEmpty
-                    ? Image.network(
-                        kit.coverUrl!,
+                    ? CachedNetworkImage(
+                        url: kit.coverUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _CoverPlaceholder(tokens: tokens),
+                        errorWidget: _CoverPlaceholder(tokens: tokens),
                       )
                     : _CoverPlaceholder(tokens: tokens),
               ),

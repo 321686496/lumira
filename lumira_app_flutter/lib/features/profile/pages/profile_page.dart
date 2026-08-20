@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
@@ -221,8 +222,8 @@ class _ProfileHeader extends ConsumerWidget {
                     clipBehavior: Clip.none,
                     children: [
                       ClipOval(
-                        child: Image.network(
-                          avatarUrl,
+                        child: CachedNetworkImage(
+                          url: avatarUrl,
                           width: 64,
                           height: 64,
                           fit: BoxFit.cover,
@@ -353,7 +354,7 @@ class _ProfileHeader extends ConsumerWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: InteractiveViewer(
-            child: Image.network(url, fit: BoxFit.contain),
+            child: CachedNetworkImage(url: url, fit: BoxFit.contain),
           ),
         ),
       ),

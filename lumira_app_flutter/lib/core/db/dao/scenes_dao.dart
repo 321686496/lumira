@@ -23,6 +23,7 @@ class SceneRecord {
   final List<String> tagIds;
   final String creator; // 'user' | 'system'
   final bool isFavorite;
+  final String coverUrl; // 自定义场景封面图（base64 data URL 或网络/路径），空串表示无
   final int createdAt;
   final int updatedAt;
 
@@ -47,6 +48,7 @@ class SceneRecord {
     required this.isFavorite,
     required this.createdAt,
     required this.updatedAt,
+    this.coverUrl = '',
   });
 
   Map<String, Object?> toRow() {
@@ -69,6 +71,7 @@ class SceneRecord {
       Tables.colTagIdsJson: jsonEncode(tagIds),
       Tables.colCreator: creator,
       Tables.colIsFavorite: isFavorite ? 1 : 0,
+      Tables.colCoverUrl: coverUrl,
       Tables.colCreatedAt: createdAt,
       Tables.colUpdatedAt: updatedAt,
     };
@@ -94,6 +97,7 @@ class SceneRecord {
       tagIds: _decodeJsonList(row[Tables.colTagIdsJson]),
       creator: (row[Tables.colCreator] as String?) ?? 'user',
       isFavorite: (row[Tables.colIsFavorite] as num?)?.toInt() == 1,
+      coverUrl: (row[Tables.colCoverUrl] as String?) ?? '',
       createdAt: (row[Tables.colCreatedAt] as num).toInt(),
       updatedAt: (row[Tables.colUpdatedAt] as num).toInt(),
     );

@@ -11,6 +11,7 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_preview_mock_data.dart';
@@ -1418,10 +1419,10 @@ class _FullScreenPhoto extends StatelessWidget {
     final bool isNetworkUrl = photoUrl.startsWith('http');
 
     Widget buildImage() => isNetworkUrl
-        ? Image.network(
-            photoUrl,
+        ? CachedNetworkImage(
+            url: photoUrl,
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Center(
+            errorWidget: const Center(
               child: Icon(Icons.broken_image, color: Colors.white38, size: 64),
             ),
           )
@@ -1516,10 +1517,10 @@ class _PhotoFrame extends StatelessWidget {
     final bool isNetworkUrl = photoUrl.startsWith('http');
 
     Widget buildImage() => isNetworkUrl
-        ? Image.network(
-            photoUrl,
+        ? CachedNetworkImage(
+            url: photoUrl,
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => _PhotoEmptyState(tokens: tokens),
+            errorWidget: _PhotoEmptyState(tokens: tokens),
           )
         : Image.file(
             File(photoUrl),

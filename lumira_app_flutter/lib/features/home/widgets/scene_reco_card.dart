@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -171,10 +172,10 @@ class SceneRecoCard extends ConsumerWidget {
         ),
       );
     }
-    return Image.network(
-      'https://picsum.photos/seed/${scene.imageSeed}/400/600',
+    return CachedNetworkImage(
+      url: 'https://picsum.photos/seed/${scene.imageSeed}/400/600',
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stack) => Container(
+      errorWidget: Container(
         color: tokens.surfaceAlt,
         child: Icon(
           Icons.image_outlined,

@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/time_format.dart';
 import '../data/checkin_categories.dart';
@@ -106,12 +108,12 @@ class CheckinPhotoImage extends StatelessWidget {
       return _fallback();
     }
     final Widget image = u.startsWith('http')
-        ? Image.network(
-            u,
+        ? CachedNetworkImage(
+            url: u,
             fit: fit,
             width: width,
             height: height,
-            errorBuilder: (_, __, ___) => _fallback(),
+            errorWidget: _fallback(),
           )
         : Image.file(
             File(u),

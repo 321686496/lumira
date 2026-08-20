@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/tags_dao.dart';
@@ -286,10 +287,10 @@ class _SceneSearchCard extends StatelessWidget {
             child: Container(
               color: tokens.brandSubtle,
               child: first != null
-                  ? Image.network(
-                      first,
+                  ? CachedNetworkImage(
+                      url: first,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _placeholder(tokens),
+                      errorWidget: _placeholder(tokens),
                     )
                   : _placeholder(tokens),
             ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -99,10 +100,10 @@ class _CoverPreview extends StatelessWidget {
       child: AspectRatio(
         aspectRatio: 3.0 / 4.0,
         child: kit.coverUrl != null && kit.coverUrl!.isNotEmpty
-            ? Image.network(
-                kit.coverUrl!,
+            ? CachedNetworkImage(
+                url: kit.coverUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _CoverFallback(tokens: tokens),
+                errorWidget: _CoverFallback(tokens: tokens),
               )
             : _CoverFallback(tokens: tokens),
       ),

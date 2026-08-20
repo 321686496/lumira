@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
@@ -308,10 +309,10 @@ class _CoverThumbState extends ConsumerState<_CoverThumb> {
                 ),
               )
             : url.startsWith('http')
-                ? Image.network(
-                    url,
+                ? CachedNetworkImage(
+                    url: url,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorWidget: Container(
                       color: widget.tokens.surfaceAlt,
                       child: Icon(Icons.broken_image_outlined,
                           color: widget.tokens.textTertiary),
@@ -430,10 +431,10 @@ class _PhotoCell extends StatelessWidget {
                   color: tokens.textTertiary),
             )
           : url.startsWith('http')
-              ? Image.network(
-                  url,
+              ? CachedNetworkImage(
+                  url: url,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorWidget: Container(
                     color: tokens.surfaceAlt,
                     child: Icon(Icons.broken_image_outlined,
                         color: tokens.textTertiary),

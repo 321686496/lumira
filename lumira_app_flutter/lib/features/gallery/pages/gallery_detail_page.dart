@@ -10,6 +10,8 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/safe_share.dart';
 
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/templates_dao.dart';
@@ -1117,8 +1119,8 @@ class _ReadOnlyCanvas extends StatelessWidget {
     // 强制图片填满整个取景框，让 BoxFit.contain 在框内水平居中；
     // 否则 InteractiveViewer 会把小于视口的图片按左上角对齐，导致右侧大片空白。
     Widget imageWidget = url.startsWith('http')
-        ? Image.network(
-            url,
+        ? CachedNetworkImage(
+            url: url,
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.contain,
@@ -1848,8 +1850,8 @@ class _FullscreenViewer extends StatelessWidget {
                 scaleEnabled: true,
                 boundaryMargin: const EdgeInsets.all(20),
                 child: url.startsWith('http')
-                    ? Image.network(
-                        url,
+                    ? CachedNetworkImage(
+                        url: url,
                         fit: BoxFit.contain,
                         width: double.infinity,
                         height: double.infinity,

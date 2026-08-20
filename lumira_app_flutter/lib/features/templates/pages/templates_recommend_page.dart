@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -566,15 +567,10 @@ class _TemplateCover extends StatelessWidget {
       );
     }
     if (item.cover.isNotEmpty) {
-      return Image.network(
-        item.cover,
+      return CachedNetworkImage(
+        url: item.cover,
         fit: BoxFit.cover,
-        loadingBuilder: (_, child, progress) {
-          if (progress == null) return child;
-          return Container(color: const Color(0xFFF0EDE8));
-        },
-        errorBuilder: (_, __, ___) =>
-            Container(color: const Color(0xFFF0EDE8)),
+        errorWidget: Container(color: const Color(0xFFF0EDE8)),
       );
     }
     return Container(color: const Color(0xFFF0EDE8));

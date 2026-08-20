@@ -23,7 +23,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 30;
+const int _kDbVersion = 31;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -195,6 +195,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
       ${Tables.colCreator} TEXT NOT NULL DEFAULT 'user',
       ${Tables.colIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCoverUrl} TEXT NOT NULL DEFAULT '',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
@@ -994,6 +995,20 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
         'ALTER TABLE ${Tables.templateCategories} ADD COLUMN ${Tables.colDescription} TEXT NOT NULL DEFAULT \'\'');
     } catch (e) {
       debugPrint('v30 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 31) {
+    try {
+      // v31: scenes 新增 cover_url 列（自定义场景封面图，存 base64 data URL）
+      await _addColumnIfNotExists(
+        db,
+        Tables.scenes,
+        Tables.colCoverUrl,
+        "TEXT NOT NULL DEFAULT ''",
+      );
+    } catch (e) {
+      debugPrint('v31 migration failed (silent fallback): $e');
     }
   }
 }

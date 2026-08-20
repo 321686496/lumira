@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/services/poster_generator.dart';
@@ -229,8 +230,8 @@ class _PhotoGrid extends StatelessWidget {
       child: Icon(Icons.image_outlined, size: 24, color: tokens.brand),
     );
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(url, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => fallback);
+      return CachedNetworkImage(url: url, fit: BoxFit.cover,
+          errorWidget: fallback);
     }
     return Image.file(File(url), fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => fallback);

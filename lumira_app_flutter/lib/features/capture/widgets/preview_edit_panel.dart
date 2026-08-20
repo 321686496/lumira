@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
@@ -379,7 +380,8 @@ class FilterThumbnail extends StatelessWidget {
                         ? ColorFiltered(
                             colorFilter: ColorFilter.matrix(matrix),
                             child: previewImagePath!.startsWith('http')
-                                ? Image.network(previewImagePath!,
+                                ? CachedNetworkImage(
+                                    url: previewImagePath!,
                                     fit: BoxFit.cover)
                                 : Image.file(File(previewImagePath!),
                                     fit: BoxFit.cover),

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/image_cache.dart';
 import '../data/gallery_models.dart';
 
 class PhotoCell extends ConsumerWidget {
@@ -79,31 +80,18 @@ class PhotoCell extends ConsumerWidget {
     if (url == null || url.isEmpty) {
       return placeholder;
     }
-    // 性能优化：相册为 3 列网格，格子仅约 1/3 屏宽。
-    // 只传 cacheWidth（不传 cacheHeight）按「格子实际像素 × DPR」降采样解码，
-    // 引擎会按原图宽高比自动计算高度，避免拉伸变形；既省解码量又保比例。
-    final mq = MediaQuery.of(context);
-    final cellLogical =
-        (((mq.size.width - 48 - 12) / 3).clamp(64.0, 300.0)).toDouble();
-    final cachePx = (cellLogical * mq.devicePixelRatio).round();
-    // frameBuilder：解码完成前先显示占位底色，避免白块闪烁
-    Widget buildFrame(BuildContext context, Widget child, int? frame, bool wasSync) {
-      return frame == null ? placeholder : child;
-    }
+    // 走统一缓存组件：磁盘缓存 + 自动按格子尺寸×DPR 降采样，避免重新下载与全尺寸解码
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      return Image.network(
-        url,
+      return CachedNetworkImage(
+        url: url,
         fit: BoxFit.cover,
-        cacheWidth: cachePx,
-        frameBuilder: buildFrame,
-        errorBuilder: (context, error, stack) => placeholder,
+        placeholder: placeholder,
+        errorWidget: placeholder,
       );
     }
     return Image.file(
       File(url),
       fit: BoxFit.cover,
-      cacheWidth: cachePx,
-      frameBuilder: buildFrame,
       errorBuilder: (context, error, stack) => placeholder,
     );
   }
