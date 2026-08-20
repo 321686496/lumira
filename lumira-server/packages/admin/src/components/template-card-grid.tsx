@@ -261,15 +261,13 @@ export function TemplateCardGrid({
                     </span>
                   </div>
 
-                  {/* 使用次数 */}
+                  {/* 使用次数（始终显示，无数据时为 0） */}
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                     <span>{t.price > 0 ? `${t.price} 积分` : '免费'}</span>
-                    {u && (
-                      <span className="ml-auto flex items-center gap-2 tabular-nums">
-                        <span>拍摄 {u.useShoot}</span>
-                        <span>查看 {u.openDetail}</span>
-                      </span>
-                    )}
+                    <span className="ml-auto flex items-center gap-2 tabular-nums">
+                      <span>拍摄 {u?.useShoot ?? 0}</span>
+                      <span>查看 {u?.openDetail ?? 0}</span>
+                    </span>
                   </div>
 
                   {/* 操作区 */}
