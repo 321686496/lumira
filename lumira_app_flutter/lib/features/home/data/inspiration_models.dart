@@ -10,6 +10,7 @@ class WeatherInfo {
   final String condition; // 晴/多云/阴/雨/雪/雾/阵雨/雷雨
   final String sunrise; // ISO 8601
   final String sunset; // ISO 8601
+  final String city; // 城市名（按客户端 IP 反查，可能为空）
   final int fetchedAt;
 
   const WeatherInfo({
@@ -17,6 +18,7 @@ class WeatherInfo {
     required this.condition,
     required this.sunrise,
     required this.sunset,
+    required this.city,
     required this.fetchedAt,
   });
 
@@ -26,6 +28,7 @@ class WeatherInfo {
       condition: (json['condition'] as String?) ?? '晴',
       sunrise: (json['sunrise'] as String?) ?? '',
       sunset: (json['sunset'] as String?) ?? '',
+      city: (json['city'] as String?) ?? '',
       fetchedAt: (json['fetchedAt'] as num?)?.toInt() ?? 0,
     );
   }
@@ -35,6 +38,7 @@ class WeatherInfo {
     condition: '',
     sunrise: '',
     sunset: '',
+    city: '',
     fetchedAt: 0,
   );
 

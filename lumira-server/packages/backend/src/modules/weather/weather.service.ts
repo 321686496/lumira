@@ -1,7 +1,12 @@
 // lumira-server/packages/backend/src/modules/weather/weather.service.ts
 //
 // 天气代理服务：调用 open-meteo 免费 API（无需 key），按经纬度返回简化天气信息。
-// 内存缓存 30 分钟，避免重复调用。失败抛标准 Nest 异常，由过滤器转 500。
+// 支持两种取数模式：
+//   1) 显式传经纬度：getWeather(lat, lon)；
+//   2) 仅传客户端 IP：getWeatherForIp(ip)，先用 ipwho.is 反查近似城市经纬度，
+//      再取当地天气，返回天气 + 城市名（用于"今日灵感"卡片按真实位置给建议）。
+// 均为内存缓存：天气 30 分钟、IP→位置 6 小时，避免重复调用上游。
+// 失败抛标准 Nest 异常，由过滤器转 500。
 //
 // open-meteo 文档：https://open-meteo.com/en/docs
 // 接口示例：
@@ -23,15 +28,28 @@ export interface WeatherResult {
   sunset: string;
   /** 数据获取时间戳（毫秒） */
   fetchedAt: number;
+  /** 城市名（按 client IP 反查，缺省或定位失败时为空字符串） */
+  city?: string;
 }
 
-interface CacheEntry {
-  data: WeatherResult;
+interface CacheEntry<T> {
+  data: T;
   expiresAt: number;
 }
 
-/** 缓存有效期 30 分钟 */
+/** IP → 近似位置 */
+interface GeoResult {
+  lat: number;
+  lon: number;
+  city: string;
+}
+
+/** 天气缓存有效期 30 分钟 */
 const CACHE_TTL_MS = 30 * 60 * 1000;
+/** IP 定位缓存有效期 6 小时（位置相对稳定的场景足够） */
+const GEO_TTL_MS = 6 * 60 * 60 * 1000;
+/** IP 定位失败时的兜底位置（上海） */
+const DEFAULT_GEO: GeoResult = { lat: 31.2304, lon: 121.4737, city: '上海' };
 
 /** WMO weather code → 中文描述 */
 function describeWeatherCode(code: number): string {
@@ -48,12 +66,14 @@ function describeWeatherCode(code: number): string {
 
 @Injectable()
 export class WeatherService {
-  /** 按 "lat,lon" 缓存 */
-  private readonly cache = new Map<string, CacheEntry>();
+  /** 天气缓存，按 "lat,lon" */
+  private readonly weatherCache = new Map<string, CacheEntry<WeatherResult>>();
+  /** IP 定位缓存，按 "ip" */
+  private readonly geoCache = new Map<string, CacheEntry<GeoResult>>();
 
   async getWeather(lat: number, lon: number): Promise<WeatherResult> {
     const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
-    const cached = this.cache.get(key);
+    const cached = this.weatherCache.get(key);
     const now = Date.now();
     if (cached && cached.expiresAt > now) {
       return cached.data;
@@ -89,7 +109,43 @@ export class WeatherService {
       fetchedAt: now,
     };
 
-    this.cache.set(key, { data: result, expiresAt: now + CACHE_TTL_MS });
+    this.weatherCache.set(key, { data: result, expiresAt: now + CACHE_TTL_MS });
     return result;
+  }
+
+  /** 根据客户端 IP 反查位置并取当地天气（含城市名）。失败时回退默认城市，绝不抛异常。 */
+  async getWeatherForIp(ip: string): Promise<WeatherResult> {
+    const geo = await this.geocodeIp(ip);
+    const weather = await this.getWeather(geo.lat, geo.lon);
+    return { ...weather, city: geo.city };
+  }
+
+  /** IP → 近似经纬度 + 城市名（内存缓存 6 小时，失败回退上海）。 */
+  private async geocodeIp(ip: string): Promise<GeoResult> {
+    const key = ip && ip !== '0.0.0.0' ? ip : 'unknown';
+    const cached = this.geoCache.get(key);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) return cached.data;
+
+    let geo = DEFAULT_GEO;
+    try {
+      const resp = await fetch(`https://ipwho.is/${encodeURIComponent(key)}`);
+      if (resp.ok) {
+        const json = (await resp.json()) as any;
+        // ipwho.is 对保留/内网 IP 返回 { success:false }，此时保持默认位置
+        if (json?.success !== false && typeof json?.latitude === 'number') {
+          geo = {
+            lat: json.latitude,
+            lon: json.longitude,
+            city: (json.city as string) || (json.region as string) || '',
+          };
+        }
+      }
+    } catch (e) {
+      // 定位失败（网络/上游异常）→ 回退默认位置
+    }
+
+    this.geoCache.set(key, { data: geo, expiresAt: now + GEO_TTL_MS });
+    return geo;
   }
 }

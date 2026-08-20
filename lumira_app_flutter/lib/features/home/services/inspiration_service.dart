@@ -45,6 +45,18 @@ String _blueHourFromSunset(String sunsetIso) {
   }
 }
 
+/// 是否处于"黄金时刻窗口"：日落前 1 小时到日落之间（随真实位置本地日落变化）
+bool _inGoldenHourWindow(DateTime now, String sunsetIso) {
+  if (sunsetIso.isEmpty) return false;
+  try {
+    final sunset = DateTime.parse(sunsetIso);
+    final start = sunset.subtract(const Duration(hours: 1));
+    return !now.isBefore(start) && now.isBefore(sunset);
+  } catch (_) {
+    return false;
+  }
+}
+
 enum _TimeSlot { morning, noon, dusk, night }
 
 _TimeSlot _slotOf(DateTime t) {
@@ -172,15 +184,11 @@ class InspirationService {
   InspirationService({
     required GalleryDao galleryDao,
     required ApiClient apiClient,
-    this.defaultLat = 31.2304, // 上海
-    this.defaultLon = 121.4737,
   })  : _galleryDao = galleryDao,
         _apiClient = apiClient;
 
   final GalleryDao _galleryDao;
   final ApiClient _apiClient;
-  final double defaultLat;
-  final double defaultLon;
 
   /// 构建今日灵感
   /// 失败时返回 fallback，绝不抛异常
@@ -215,29 +223,33 @@ class InspirationService {
       debugPrint('InspirationService topCategory failed: $e');
     }
 
-    // 天气（失败时为空）
+    // 天气（失败时为空）。不再写死上海坐标：
+    // 后端 /weather 在未传经纬度时按客户端 IP 反查当地天气，返回城市名与真实日出/日落。
     WeatherInfo weather = WeatherInfo.empty;
     try {
       weather = await _apiClient.get(
         '/weather',
-        query: {
-          'lat': defaultLat.toString(),
-          'lon': defaultLon.toString(),
-        },
-        fromJson: (json) =>
-            WeatherInfo.fromJson(json as Map<String, dynamic>),
+        fromJson: (json) => WeatherInfo.fromJson(json as Map<String, dynamic>),
       );
     } catch (e) {
       debugPrint('InspirationService weather fetch failed: $e');
     }
 
-    // 描述
-    final description = _buildDescription(slot, topCat, weather.condition);
+    // 描述（处于真实位置的黄金时刻窗口内时，强化"当下最有效"建议）
+    String description = _buildDescription(slot, topCat, weather.condition);
+    if (_inGoldenHourWindow(now, weather.sunset)) {
+      final golden = _goldenHourFromSunset(weather.sunset);
+      description = (golden.isNotEmpty
+          ? '现在是黄金时刻窗口（约 $golden 前后），'
+          : '现在是黄金时刻窗口，') + description;
+    }
 
-    // 天气行
+    // 天气行（含城市名 + 真实位置黄金/蓝调时刻）
     String weatherText = '';
     if (!weather.isEmpty) {
-      final parts = <String>['${weather.temperature}°C ${weather.condition}'];
+      final parts = <String>[];
+      if (weather.city.isNotEmpty) parts.add(weather.city);
+      parts.add('${weather.temperature}°C ${weather.condition}');
       final golden = _goldenHourFromSunset(weather.sunset);
       if (golden.isNotEmpty) {
         parts.add('黄金时刻 $golden');
