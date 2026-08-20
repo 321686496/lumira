@@ -1,56 +1,116 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'dart:io';
+import 'dart:ui' as ui;
 
-import '../../../core/db/database_provider.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image/image.dart' as img;
+
+import '../../../core/db/dao/gallery_dao.dart' show GalleryItemRecord;
+import '../../../core/db/database_provider.dart'
+    show galleryDaoProvider, watermarkDaoProvider;
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/lumira/lumira.dart'
+    show LumiraToast, showLumiraSaveModeSheet;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/watermark_providers.dart';
 import '../models/watermark_template.dart';
-import '../widgets/watermark_preview.dart';
 
-/// 水印编辑页：基于预置模板复制为自定义模板，可编辑文本与全局样式参数。
+/// 底部操作栏的 Tab。
+enum _EditorTab { element, style, border }
+
+/// 全屏沉浸式水印编辑器。
+///
+/// 双模式：
+/// - 模板模式（[templateId] 非空，或两者皆空 → 新建空白模板）：编辑并保存水印模板。
+/// - 应用模式（[photoPath] 非空）：读取真实照片，把水印渲染到照片上并另存为新照片。
 ///
 /// 布局：
-/// - 顶部：200×260 灰色预览区（[WatermarkPreview]）
-/// - 底部：参数 ListView
-///   - 每个文本元素一个 [TextField]（文本内容）
-///   - 全局样式：字号 / 透明度 / X / Y / 旋转 Slider + 粗体 / 斜体 FilterChip
+/// - 顶部 [LumiraNav]（取消 / 标题 / 保存）
+/// - 全屏照片预览（`BoxFit.contain` 等比适配，周围黑色留白）
+/// - 底部可收起操作栏（展开含「元素 / 样式 / 边框」三个 Tab）
 ///
-/// 字号 Slider 范围 6~40（对应参考宽度 400px 下的绝对像素），存储为相对值
-/// （`element.fontSize = sliderValue / 400`），与 [WatermarkRenderer] 约定一致。
-/// 全局样式控件作用于所有文本元素（水印视为整体：统一字号/透明度/位置/旋转/粗斜体）。
+/// 预览/手势：点选元素、单指拖拽移动、双指捏合缩放。
 class WatermarkEditorPage extends ConsumerStatefulWidget {
-  const WatermarkEditorPage({super.key, this.templateId});
+  const WatermarkEditorPage({super.key, this.templateId, this.photoPath});
 
+  /// 模板模式：要编辑的模板 id（预置或自定义）。为空则新建空白模板。
   final String? templateId;
+
+  /// 应用模式：真实照片的本地文件路径。非空时进入"保存并应用"。
+  final String? photoPath;
 
   @override
   ConsumerState<WatermarkEditorPage> createState() =>
-      _WatermarkEditorPageState();
+      WatermarkEditorPageState();
 }
 
-class _WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
-  static const double _referenceWidth = 400.0;
+class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
+  /// 模板模式下用于预览的示例照片资源。
+  static const String _sampleAsset = 'assets/images/watermark_sample.jpg';
+  static const double _collapsedHeight = 40.0;
 
-  late final WatermarkTemplate _template;
-  late final List<TextEditingController> _textControllers;
-  late final List<WatermarkElement> _textElements;
+  /// 深拷贝时保证元素 id 唯一（同一编辑会话内多次拷贝不冲突）。
+  static int _copyCounter = 0;
 
-  // X/Y 滑块拖动前的初始位置快照：以 DELTA 方式应用调整，
-  // 避免将同一绝对值写入所有文本元素而破坏多元素相对布局
-  // （例如四角水印会塌缩到同一坐标）。
-  final Map<String, double> _initialX = {};
-  final Map<String, double> _initialY = {};
-  late final double _initialSliderX;
-  late final double _initialSliderY;
+  late WatermarkTemplate _template;
+  String? _selectedElementId;
+  bool _expanded = true;
+  _EditorTab _tab = _EditorTab.element;
+
+  /// 背景照片字节（模板模式为示例照片，应用模式为真实照片）。
+  Uint8List? _photoBytes;
+  double? _sourceAspect;
+
+  late final TextEditingController _textEditController;
+  bool _isSaving = false;
+
+  // 拖拽 / 缩放起始快照。
+  double? _scaleStartFontSize;
+
+  /// 测试钩子：当前正在编辑的模板（含最新元素/画框状态）。
+  @visibleForTesting
+  WatermarkTemplate get template => _template;
+
+  /// 测试钩子：当前选中的元素 id。
+  @visibleForTesting
+  String? get selectedElementId => _selectedElementId;
+
+  WatermarkElement? get _selectedElement {
+    final id = _selectedElementId;
+    if (id == null) return null;
+    for (final e in _template.elements) {
+      if (e.id == id) return e;
+    }
+    return null;
+  }
+
+  bool get _isApplyMode => widget.photoPath != null;
 
   @override
   void initState() {
     super.initState();
+    _textEditController = TextEditingController();
+    _initTemplate();
+    _loadBaseImage();
+  }
+
+  @override
+  void dispose() {
+    _textEditController.dispose();
+    super.dispose();
+  }
+
+  // === 模板初始化 ===
+
+  void _initTemplate() {
     final presets = ref.read(presetWatermarksProvider);
+    final customs = ref.read(customWatermarksProvider);
+
     WatermarkTemplate? source;
+
     if (widget.templateId != null) {
       for (final t in presets) {
         if (t.id == widget.templateId) {
@@ -58,57 +118,39 @@ class _WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           break;
         }
       }
+      if (source == null) {
+        for (final t in customs) {
+          if (t.id == widget.templateId) {
+            source = t;
+            break;
+          }
+        }
+      }
+    } else if (_isApplyMode) {
+      // 应用模式：取当前选中模板，否则用首个预置。
+      source = ref.read(currentWatermarkTemplateProvider);
+      source ??= presets.isNotEmpty ? presets.first : null;
     }
-    source ??= presets.isNotEmpty ? presets.first : _fallbackTemplate();
 
-    // 复制为自定义模板（独立元素实例，避免污染预置列表）
-    _template = WatermarkTemplate(
-      id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
-      name: '${source.name}（副本）',
-      type: WatermarkTemplateType.custom,
-      createdAt: DateTime.now(),
-      elements: source.elements
-          .map((e) => e.copyWith(id: '${e.id}_copy'))
-          .toList(),
-    );
-
-    _textElements = _template.elements
-        .where((e) => e.type != WatermarkElementType.image)
-        .toList();
-
-    // Capture each text element's initial position so X/Y sliders can apply
-    // a delta from this baseline rather than overwriting with an absolute
-    // value (which would collapse multi-element layouts).
-    for (final e in _textElements) {
-      _initialX[e.id] = e.x;
-      _initialY[e.id] = e.y;
+    if (source == null) {
+      // 新建空白模板（模板模式 + templateId == null）。
+      _template = _newBlankTemplate();
+    } else {
+      _template = _deepCopyTemplate(source);
     }
-    _initialSliderX = _textElements.isNotEmpty ? _textElements.first.x : 0.5;
-    _initialSliderY = _textElements.isNotEmpty ? _textElements.first.y : 0.5;
-
-    _textControllers = _textElements
-        .map((e) => TextEditingController(text: e.text))
-        .toList(growable: false);
   }
 
-  @override
-  void dispose() {
-    for (final c in _textControllers) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  /// 预置列表为空时的兜底模板（极端情况，正常不会触发）。
-  WatermarkTemplate _fallbackTemplate() {
+  WatermarkTemplate _newBlankTemplate() {
+    final now = DateTime.now();
+    final id = _nextId();
     return WatermarkTemplate(
-      id: 'preset_empty',
-      name: '空白水印',
-      type: WatermarkTemplateType.preset,
-      createdAt: DateTime.now(),
+      id: 'custom_${now.millisecondsSinceEpoch}',
+      name: '新水印',
+      type: WatermarkTemplateType.custom,
+      createdAt: now,
       elements: [
         WatermarkElement(
-          id: 'fallback_text',
+          id: id,
           type: WatermarkElementType.text,
           text: 'LUMIRA',
           x: 0.5,
@@ -117,28 +159,152 @@ class _WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           textAlign: TextAlign.center,
         ),
       ],
+      frame: const WatermarkFrame(),
     );
   }
 
-  WatermarkElement? get _firstText =>
-      _textElements.isNotEmpty ? _textElements.first : null;
-
-  /// 将变更应用到所有文本元素并刷新预览。
-  void _applyToAllText(void Function(WatermarkElement) mutate) {
-    for (final e in _textElements) {
-      mutate(e);
-    }
-    setState(() {});
+  WatermarkTemplate _deepCopyTemplate(WatermarkTemplate source) {
+    final now = DateTime.now();
+    return WatermarkTemplate(
+      id: 'custom_${now.millisecondsSinceEpoch}',
+      name: source.name.isEmpty ? '自定义水印' : '${source.name}（副本）',
+      type: WatermarkTemplateType.custom,
+      createdAt: now,
+      elements:
+          source.elements.map((e) => e.copyWith(id: _nextId())).toList(),
+      // WatermarkFrame 为不可变对象，可直接共享引用。
+      frame: source.frame,
+    );
   }
 
-  Future<void> _save() async {
-    // 在 await 之前捕获 container，避免 async gap 后使用 BuildContext
+  static String _nextId() {
+    _copyCounter += 1;
+    return 'el_${DateTime.now().microsecondsSinceEpoch}_$_copyCounter';
+  }
+
+  Future<void> _loadBaseImage() async {
+    try {
+      final Uint8List bytes;
+      if (_isApplyMode) {
+        bytes = await File(widget.photoPath!).readAsBytes();
+      } else {
+        final data = await rootBundle.load(_sampleAsset);
+        bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      }
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final w = image.width;
+      final h = image.height;
+      image.dispose();
+      codec.dispose();
+      if (!mounted) return;
+      setState(() {
+        _photoBytes = bytes;
+        _sourceAspect = (w > 0 && h > 0) ? w / h : 1.0;
+      });
+    } catch (e) {
+      debugPrint('[watermark-editor] load base image failed: $e');
+      if (!mounted) return;
+      setState(() {});
+    }
+  }
+
+  // === 元素操作 ===
+
+  void _selectElement(WatermarkElement el) {
+    setState(() {
+      _selectedElementId = el.id;
+      _textEditController.text = el.text;
+    });
+  }
+
+  void _addElement(WatermarkElementType type) {
+    final isDate = type == WatermarkElementType.dateTime;
+    final el = WatermarkElement(
+      id: _nextId(),
+      type: type,
+      text: isDate ? '2026.08.20' : '',
+      x: 0.5,
+      y: 0.9,
+      fontSize: 0.04,
+      textAlign: TextAlign.center,
+    );
+    setState(() {
+      _template.elements.add(el);
+      _selectedElementId = el.id;
+      _textEditController.text = el.text;
+    });
+  }
+
+  void _copyElement(WatermarkElement el) {
+    final copy = el.copyWith(id: _nextId());
+    final index = _template.elements.indexOf(el);
+    setState(() {
+      _template.elements.insert(index + 1, copy);
+      _selectedElementId = copy.id;
+      _textEditController.text = copy.text;
+    });
+  }
+
+  void _removeElement(WatermarkElement el) {
+    setState(() {
+      _template.elements.removeWhere((e) => e.id == el.id);
+      if (_selectedElementId == el.id) {
+        _selectedElementId = null;
+      }
+    });
+  }
+
+  void _updateFrame(WatermarkFrame Function(WatermarkFrame) mutate) {
+    setState(() {
+      _template = WatermarkTemplate(
+        id: _template.id,
+        name: _template.name,
+        type: _template.type,
+        createdAt: _template.createdAt,
+        elements: _template.elements,
+        frame: mutate(_template.frame),
+      );
+    });
+  }
+
+  void _setFrameType(WatermarkFrameType t) {
+    _updateFrame((f) {
+      switch (t) {
+        case WatermarkFrameType.none:
+          return f.copyWith(type: WatermarkFrameType.none);
+        case WatermarkFrameType.polaroid:
+          return f.copyWith(
+            type: WatermarkFrameType.polaroid,
+            color: const Color(0xFFFFFFFF),
+            borderRatio: 0.05,
+            borderRadius: 0.0,
+            bottomPlate: true,
+            bottomRatio: 0.18,
+            shadowOpacity: 0.22,
+          );
+        case WatermarkFrameType.innerBorder:
+          return f.copyWith(
+            type: WatermarkFrameType.innerBorder,
+            color: const Color(0xFFFFFFFF),
+            borderRatio: 0.02,
+            borderRadius: 0.0,
+          );
+      }
+    });
+  }
+
+  // === 保存 ===
+
+  Future<void> _saveTemplate() async {
+    if (_template.name.isEmpty) {
+      _template.name = '自定义水印';
+    }
     final container = ProviderScope.containerOf(context, listen: false);
-    // 1. 持久化自定义模板到 DAO
     try {
       final dao = await ref.read(watermarkDaoProvider.future);
       await dao.insert(_template);
-      // 2. 同步追加到内存缓存，使 currentWatermarkTemplateProvider 立即命中
       ref.read(customWatermarksProvider.notifier).state = [
         ...ref.read(customWatermarksProvider),
         _template,
@@ -146,144 +312,300 @@ class _WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     } catch (e) {
       debugPrint('[watermark-editor] persist custom template failed: $e');
     }
-    // 3. 切换 settings.activeTemplateId 到刚保存的模板
-    final current = ref.read(watermarkSettingsProvider);
-    ref.read(watermarkSettingsProvider.notifier).state =
-        current.copyWith(activeTemplateId: _template.id);
-    // 4. 防抖持久化 settings
-    scheduleWatermarkPersist(container);
-    // 5. 返回上一页（await 后需检查 mounted）
-    if (!mounted) return;
-    if (context.canPop()) {
-      context.pop();
+    setWatermarkActive(container, _template.id);
+    if (mounted) Navigator.of(context).maybePop();
+  }
+
+  Future<void> _saveApply() async {
+    if (_isSaving || _photoBytes == null) return;
+    final saveMode = await showLumiraSaveModeSheet(context: context);
+    if (saveMode == null || !mounted) return;
+    setState(() => _isSaving = true);
+
+    ui.Image? sourceImage;
+    try {
+      final codec = await ui.instantiateImageCodec(_photoBytes!);
+      final frame = await codec.getNextFrame();
+      sourceImage = frame.image;
+      codec.dispose();
+
+      final renderer = ref.read(watermarkRendererProvider);
+      final r =
+          await renderer.render(sourceImage: sourceImage, template: _template);
+      final output = img.Image.fromBytes(
+        width: r.width,
+        height: r.height,
+        bytes: r.rgbaBytes.buffer,
+        numChannels: 4,
+        order: img.ChannelOrder.rgba,
+      );
+      final jpegBytes = img.encodeJpg(output, quality: 90);
+
+      // 应用模式以「另存新照片」为主：不管 replace/duplicate 均写入新文件。
+      final sourcePath = widget.photoPath!;
+      final outPath = _makeDuplicatePath(sourcePath);
+      await File(outPath).writeAsBytes(jpegBytes);
+
+      final dao = await ref.read(galleryDaoProvider.future);
+      await dao.insert(GalleryItemRecord(
+        id: 'photo_${DateTime.now().millisecondsSinceEpoch}',
+        filePath: outPath,
+        originalPath: sourcePath,
+        templateId: _template.id,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      ));
+      ref.invalidate(galleryDaoProvider);
+
+      if (mounted) {
+        LumiraToast.show(context, '已另存为新照片',
+            duration: const Duration(seconds: 1));
+        Navigator.of(context).maybePop();
+      }
+    } catch (e, st) {
+      debugPrint('[watermark-editor] apply save failed: $e\n$st');
+      if (mounted) {
+        LumiraToast.show(context, '保存失败：$e');
+      }
+    } finally {
+      sourceImage?.dispose();
+      if (mounted) setState(() => _isSaving = false);
     }
   }
+
+  String _makeDuplicatePath(String sourcePath) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final dot = sourcePath.lastIndexOf('.');
+    if (dot <= 0) return '${sourcePath}_$now.jpg';
+    return '${sourcePath.substring(0, dot)}_$now${sourcePath.substring(dot)}';
+  }
+
+  void _cancel() {
+    Navigator.of(context).maybePop();
+  }
+
+  // === build ===
 
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final style = ref.watch(uiStyleProvider);
 
     return Scaffold(
-      backgroundColor: tokens.canvas,
-      extendBodyBehindAppBar: true,
-      appBar: LumiraNav(
-        title: '编辑水印',
-        transparent: true,
-        actions: [
-          GestureDetector(
-            onTap: _save,
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(color: tokens.canvas, child: _buildNav(tokens)),
+            Expanded(child: _buildPreviewArea(tokens, style)),
+            _buildBottomPanel(tokens, style),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNav(ThemeTokens tokens) {
+    return LumiraNav(
+      title: _isApplyMode ? '添加水印' : '编辑水印',
+      leading: GestureDetector(
+        onTap: _cancel,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Text(
+            '取消',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: tokens.textSecondary,
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        GestureDetector(
+          onTap: _isApplyMode ? _saveApply : _saveTemplate,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            child: Text(
+              _isApplyMode ? '保存并应用' : '保存',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: tokens.brand,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPreviewArea(ThemeTokens tokens, UIStyle style) {
+    final aspect = (_sourceAspect != null && _sourceAspect! > 0)
+        ? _sourceAspect!
+        : 1.0;
+    return Container(
+      key: const ValueKey('wm-preview-area'),
+      color: Colors.black,
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: aspect,
+          child: ClipRect(
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final photoRect = Offset.zero & c.biggest;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    if (_photoBytes != null && _photoBytes!.isNotEmpty)
+                      Image.memory(
+                        _photoBytes!,
+                        fit: BoxFit.fill,
+                        gaplessPlayback: true,
+                      ),
+                    if (_template.frame.type == WatermarkFrameType.polaroid)
+                      _buildFrameOverlay(photoRect, _template.frame),
+                    ..._template.elements.map(
+                        (e) => _buildElementOverlay(e, photoRect)),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 拍立得白边在预览中的近似呈现（完整渲染由渲染器负责）。
+  Widget _buildFrameOverlay(Rect r, WatermarkFrame frame) {
+    final borderW = (frame.borderRatio * r.width).clamp(0.0, 24.0);
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            border: Border.all(color: frame.color, width: borderW),
+            borderRadius:
+                BorderRadius.circular(frame.borderRadius * r.width),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 元素定位基准矩形：按 space 选择照片矩形或拍立得白板矩形（近似）。
+  Rect _baseRectFor(WatermarkElementSpace space, Rect photoRect) {
+    if (space == WatermarkElementSpace.frame) {
+      final f = _template.frame;
+      if (f.type == WatermarkFrameType.polaroid && f.bottomPlate) {
+        final plateH = f.bottomRatio * photoRect.height;
+        return Rect.fromLTRB(
+          photoRect.left,
+          photoRect.top,
+          photoRect.right,
+          photoRect.bottom + plateH,
+        );
+      }
+      return photoRect;
+    }
+    return photoRect;
+  }
+
+  Widget _buildElementOverlay(WatermarkElement e, Rect photoRect) {
+    final base = _baseRectFor(e.space, photoRect);
+    final fontSize = (e.fontSize * base.width).clamp(4.0, 220.0);
+    final left = base.left + e.x * base.width - fontSize * 0.5;
+    final top = base.top + e.y * base.height - fontSize;
+    final selected = e.id == _selectedElementId;
+
+    return Positioned(
+          left: left,
+          top: top,
+          child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-              child: Text(
-                '保存',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.brand,
+            onTap: () => _selectElement(e),
+            // 单指拖拽 = 焦点位移（focalPointDelta），双指捏合 = scale。
+            // scale 手势是 pan 的超集，不能同时声明两者。
+            onScaleStart: (_) {
+              _scaleStartFontSize = e.fontSize;
+            },
+            onScaleUpdate: (d) {
+              setState(() {
+                final dx = d.focalPointDelta.dx / base.width;
+                final dy = d.focalPointDelta.dy / base.height;
+                e.x = (e.x + dx).clamp(-0.2, 1.2).toDouble();
+                e.y = (e.y + dy).clamp(-0.2, 1.2).toDouble();
+                final startF = _scaleStartFontSize ?? e.fontSize;
+                e.fontSize =
+                    (startF * d.scale).clamp(0.01, 0.6).toDouble();
+              });
+            },
+            child: Container(
+              foregroundDecoration: selected
+                  ? BoxDecoration(
+                      border:
+                          Border.all(color: Colors.white, width: 1.5),
+                    )
+                  : null,
+              child: Transform.rotate(
+                angle: e.rotation,
+                child: Text(
+                  e.text,
+                  maxLines: 1,
+                  textAlign: e.textAlign,
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    color: e.color,
+                    fontWeight: e.bold ? FontWeight.bold : FontWeight.normal,
+                    fontStyle: e.italic ? FontStyle.italic : FontStyle.normal,
+                    letterSpacing: e.letterSpacing,
+                  ),
                 ),
               ),
             ),
           ),
-        ],
+        );
+  }
+
+  // === 底部操作栏 ===
+
+  Widget _buildBottomPanel(ThemeTokens tokens, UIStyle style) {
+    final isGlass = style == UIStyle.glass;
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border(
+          top: BorderSide(color: tokens.divider, width: isGlass ? 0.5 : 1),
+        ),
       ),
-      body: SafeArea(
-        child: Column(
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: _expanded ? _buildExpandedPanel(tokens) : _buildCollapsedBar(tokens),
+      ),
+    );
+  }
+
+  Widget _buildCollapsedBar(ThemeTokens tokens) {
+    return GestureDetector(
+      key: const ValueKey('wm-panel-expand'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _expanded = true),
+      child: SizedBox(
+        height: _collapsedHeight,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(height: 8),
-            // 顶部预览区
-            WatermarkPreview(
-              template: _template,
-              width: 200,
-              height: 260,
-            ),
-            const SizedBox(height: 12),
-            Divider(height: 1, color: tokens.divider),
-            // 底部参数区
-            Expanded(
-              child: _textElements.isEmpty
-                  ? _emptyState(tokens)
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                      children: [
-                        ..._buildTextFields(tokens),
-                        const SizedBox(height: 8),
-                        _sectionTitle('样式', tokens),
-                        _buildSlider(
-                          tokens: tokens,
-                          label: '字号',
-                          valueLabel:
-                              '${((_firstText?.fontSize ?? 0.04) * _referenceWidth).round()}',
-                          value: (_firstText?.fontSize ?? 0.04) *
-                              _referenceWidth,
-                          min: 6,
-                          max: 40,
-                          divisions: 34,
-                          onChanged: (v) => _applyToAllText(
-                              (e) => e.fontSize = v / _referenceWidth),
-                        ),
-                        _buildSlider(
-                          tokens: tokens,
-                          label: '透明度',
-                          valueLabel: (_firstText?.opacity ?? 1.0)
-                              .toStringAsFixed(2),
-                          value: _firstText?.opacity ?? 1.0,
-                          min: 0.1,
-                          max: 1.0,
-                          divisions: 18,
-                          onChanged: (v) =>
-                              _applyToAllText((e) => e.opacity = v),
-                        ),
-                        _buildSlider(
-                          tokens: tokens,
-                          label: 'X 位置',
-                          valueLabel: (_firstText?.x ?? 0.0)
-                              .toStringAsFixed(2),
-                          value: _firstText?.x ?? 0.0,
-                          min: 0.0,
-                          max: 1.0,
-                          divisions: 20,
-                          onChanged: (v) {
-                            final delta = v - _initialSliderX;
-                            _applyToAllText(
-                              (e) => e.x = ((_initialX[e.id] ?? 0.0) + delta)
-                                  .clamp(0.0, 1.0),
-                            );
-                          },
-                        ),
-                        _buildSlider(
-                          tokens: tokens,
-                          label: 'Y 位置',
-                          valueLabel: (_firstText?.y ?? 0.0)
-                              .toStringAsFixed(2),
-                          value: _firstText?.y ?? 0.0,
-                          min: 0.0,
-                          max: 1.0,
-                          divisions: 20,
-                          onChanged: (v) {
-                            final delta = v - _initialSliderY;
-                            _applyToAllText(
-                              (e) => e.y = ((_initialY[e.id] ?? 0.0) + delta)
-                                  .clamp(0.0, 1.0),
-                            );
-                          },
-                        ),
-                        _buildSlider(
-                          tokens: tokens,
-                          label: '旋转',
-                          valueLabel: (_firstText?.rotation ?? 0.0)
-                              .toStringAsFixed(2),
-                          value: _firstText?.rotation ?? 0.0,
-                          min: -0.5,
-                          max: 0.5,
-                          divisions: 20,
-                          onChanged: (v) =>
-                              _applyToAllText((e) => e.rotation = v),
-                        ),
-                        const SizedBox(height: 8),
-                        _buildChips(tokens),
-                      ],
-                    ),
+            Icon(Icons.keyboard_arrow_up,
+                size: 20, color: tokens.textSecondary),
+            const SizedBox(width: 4),
+            Text(
+              '展开操作栏',
+              style: TextStyle(fontSize: 12, color: tokens.textSecondary),
             ),
           ],
         ),
@@ -291,177 +613,655 @@ class _WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  Widget _emptyState(ThemeTokens tokens) {
-    return Center(
-      child: Text(
-        '该模板无可编辑的文本元素',
-        style: TextStyle(fontSize: 13, color: tokens.textTertiary),
-      ),
-    );
-  }
-
-  List<Widget> _buildTextFields(ThemeTokens tokens) {
-    final List<Widget> fields = [];
-    for (var i = 0; i < _textElements.length; i++) {
-      fields.add(
+  Widget _buildExpandedPanel(ThemeTokens tokens) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 收起
         Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Row(
             children: [
-              Text(
-                '文本 ${i + 1}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: tokens.textTertiary,
-                  fontWeight: FontWeight.w500,
+              const Spacer(),
+              GestureDetector(
+                key: const ValueKey('wm-panel-collapse'),
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _expanded = false),
+                child: Row(
+                  children: [
+                    Text(
+                      '收起',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: tokens.textSecondary,
+                      ),
+                    ),
+                    Icon(Icons.keyboard_arrow_down,
+                        size: 18, color: tokens.textSecondary),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _textControllers[i],
-                style: TextStyle(
-                  fontSize: 14,
-                  color: tokens.textPrimary,
-                ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: tokens.divider),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: tokens.divider),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: tokens.brand, width: 1.2),
-                  ),
-                ),
-                onChanged: (value) {
-                  _textElements[i].text = value;
-                  setState(() {});
-                },
               ),
             ],
           ),
         ),
-      );
-    }
-    return fields;
+        // Tab 行
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            children: [
+              _buildTabButton(_EditorTab.element, '元素',
+                  'wm-tab-element', tokens),
+              const SizedBox(width: 6),
+              _buildTabButton(_EditorTab.style, '样式', 'wm-tab-style', tokens),
+              const SizedBox(width: 6),
+              _buildTabButton(_EditorTab.border, '边框',
+                  'wm-tab-border', tokens),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: tokens.divider),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 320),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            child: Center(
+              child: _buildTabContent(tokens),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
-  Widget _sectionTitle(String text, ThemeTokens tokens) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 4),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          color: tokens.textTertiary,
-          fontWeight: FontWeight.w500,
+  Widget _buildTabButton(
+      _EditorTab tab, String label, String key, ThemeTokens tokens) {
+    final active = _tab == tab;
+    return Expanded(
+      child: GestureDetector(
+        key: ValueKey(key),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _tab = tab),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: active ? tokens.brandSubtle : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              color: active ? tokens.brandText : tokens.textSecondary,
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildSlider({
-    required ThemeTokens tokens,
-    required String label,
-    required String valueLabel,
-    required double value,
-    required double min,
-    required double max,
-    required int divisions,
-    required ValueChanged<double> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 64,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                color: tokens.textSecondary,
-              ),
-            ),
+  Widget _buildTabContent(ThemeTokens tokens) {
+    switch (_tab) {
+      case _EditorTab.element:
+        return _buildElementTab(tokens);
+      case _EditorTab.style:
+        return _buildStyleTab(tokens);
+      case _EditorTab.border:
+        return _buildBorderTab(tokens);
+    }
+  }
+
+  // --- 元素 Tab ---
+
+  Widget _buildElementTab(ThemeTokens tokens) {
+    final selected = _selectedElement;
+    if (_template.elements.isEmpty) {
+      return Text(
+        '暂无元素，点「＋文本」新增',
+        style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 44,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final e in _template.elements)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _elementChip(e, tokens),
+                ),
+            ],
           ),
-          Expanded(
-            child: Slider(
-              value: value.clamp(min, max),
-              min: min,
-              max: max,
-              divisions: divisions,
-              activeColor: tokens.brand,
-              thumbColor: tokens.brand,
-              label: valueLabel,
-              onChanged: onChanged,
-            ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            _miniButton('＋文本', () => _addElement(WatermarkElementType.text),
+                tokens),
+            const SizedBox(width: 8),
+            _miniButton(
+                '＋日期', () => _addElement(WatermarkElementType.dateTime),
+                tokens),
+            const Spacer(),
+            if (selected != null) ...[
+              _miniButton('复制', () => _copyElement(selected), tokens),
+              const SizedBox(width: 8),
+              _miniButton('删除', () => _removeElement(selected), tokens,
+                  danger: true),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _elementChip(WatermarkElement e, ThemeTokens tokens) {
+    final label = e.text.isNotEmpty
+        ? e.text
+        : (e.type == WatermarkElementType.dateTime ? '日期时间' : '文本');
+    final selected = e.id == _selectedElementId;
+    return GestureDetector(
+      onTap: () => _selectElement(e),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: selected ? tokens.brandSubtle : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? tokens.brand : tokens.divider,
+            width: 1,
           ),
-          SizedBox(
-            width: 48,
-            child: Text(
-              valueLabel,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 12,
-                color: tokens.textTertiary,
-              ),
-            ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: selected ? tokens.brandText : tokens.textSecondary,
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildChips(ThemeTokens tokens) {
-    final bold = _firstText?.bold ?? false;
-    final italic = _firstText?.italic ?? false;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          FilterChip(
-            label: const Text('粗体'),
-            selected: bold,
-            selectedColor: tokens.brandSubtle,
-            checkmarkColor: tokens.brandText,
-            labelStyle: TextStyle(
-              fontSize: 13,
-              color: bold ? tokens.brandText : tokens.textSecondary,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(color: tokens.divider),
-            ),
-            onSelected: (v) => _applyToAllText((e) => e.bold = v),
+  Widget _miniButton(String label, VoidCallback onTap, ThemeTokens tokens,
+      {bool danger = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: tokens.brand.withOpacity(0.35)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: danger ? tokens.danger : tokens.brandText,
           ),
-          const SizedBox(width: 12),
-          FilterChip(
-            label: const Text('斜体'),
-            selected: italic,
-            selectedColor: tokens.brandSubtle,
-            checkmarkColor: tokens.brandText,
-            labelStyle: TextStyle(
-              fontSize: 13,
-              color: italic ? tokens.brandText : tokens.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  // --- 样式 Tab ---
+
+  Widget _buildStyleTab(ThemeTokens tokens) {
+    final el = _selectedElement;
+    if (el == null) {
+      return Text(
+        '先在上方选中一个元素，再编辑样式',
+        style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+      );
+    }
+    final frame = _template.frame;
+    final frameReady =
+        frame.type == WatermarkFrameType.polaroid && frame.bottomPlate;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (el.type == WatermarkElementType.text)
+          TextField(
+            controller: _textEditController,
+            style: TextStyle(fontSize: 14, color: tokens.textPrimary),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: '输入文本',
+              hintStyle:
+                  TextStyle(fontSize: 14, color: tokens.textTertiary),
+              contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: tokens.divider),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: tokens.divider),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: tokens.brand, width: 1.2),
+              ),
             ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(color: tokens.divider),
+            onChanged: (v) {
+              el.text = v;
+              setState(() {});
+            },
+          ),
+        const SizedBox(height: 12),
+        // 照片 / 白边
+        Row(
+          children: [
+            _spaceOption('照片', WatermarkElementSpace.photo, el, tokens),
+            const SizedBox(width: 8),
+            _spaceOption('白边', WatermarkElementSpace.frame, el, tokens,
+                enabled: frameReady),
+          ],
+        ),
+        if (!frameReady)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              '「白边」需在边框 Tab 使用拍立得白板',
+              style: TextStyle(fontSize: 11, color: tokens.textTertiary),
             ),
-            onSelected: (v) => _applyToAllText((e) => e.italic = v),
+          ),
+        const SizedBox(height: 8),
+        _sliderRow(
+          label: '字号',
+          value: el.fontSize * 400,
+          min: 6,
+          max: 200,
+          divisions: 48,
+          onChanged: (v) => setState(() => el.fontSize = v / 400),
+          tokens: tokens,
+        ),
+        _sliderRow(
+          label: '透明度',
+          value: el.opacity,
+          min: 0.1,
+          max: 1.0,
+          divisions: 18,
+          onChanged: (v) => setState(() => el.opacity = v),
+          tokens: tokens,
+        ),
+        _sliderRow(
+          label: '旋转',
+          value: el.rotation,
+          min: -0.5,
+          max: 0.5,
+          divisions: 20,
+          onChanged: (v) => setState(() => el.rotation = v),
+          tokens: tokens,
+        ),
+        _sliderRow(
+          label: '字间距',
+          value: el.letterSpacing,
+          min: 0,
+          max: 8,
+          divisions: 16,
+          onChanged: (v) => setState(() => el.letterSpacing = v),
+          tokens: tokens,
+        ),
+        const SizedBox(height: 6),
+        _buildElementPalette(el, tokens),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _toggleChip('粗体', el.bold, (v) => setState(() => el.bold = v),
+                tokens),
+            const SizedBox(width: 8),
+            _toggleChip('斜体', el.italic, (v) => setState(() => el.italic = v),
+                tokens),
+            const SizedBox(width: 8),
+            _alignChip(TextAlign.left, '左', el, tokens),
+            const SizedBox(width: 4),
+            _alignChip(TextAlign.center, '中', el, tokens),
+            const SizedBox(width: 4),
+            _alignChip(TextAlign.right, '右', el, tokens),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _spaceOption(String label, WatermarkElementSpace space,
+      WatermarkElement el, ThemeTokens tokens,
+      {bool enabled = true}) {
+    final active = el.space == space;
+    return GestureDetector(
+      key: ValueKey('wm-space-$label'),
+      behavior: HitTestBehavior.opaque,
+      onTap: enabled ? () => setState(() => el.space = space) : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 9),
+        decoration: BoxDecoration(
+          color: active ? tokens.brandSubtle : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: active ? tokens.brand : tokens.divider,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: enabled
+                ? (active ? tokens.brandText : tokens.textSecondary)
+                : tokens.textTertiary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildElementPalette(WatermarkElement el, ThemeTokens tokens) {
+    final colors = <Color>[
+      const Color(0xFFFFFFFF),
+      const Color(0xFF000000),
+      tokens.brand,
+      tokens.brandText,
+      tokens.textPrimary,
+      tokens.textSecondary,
+    ];
+    return Row(
+      children: [
+        for (final c in colors)
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: GestureDetector(
+              onTap: () => setState(() => el.color = c),
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: c,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: el.color == c ? tokens.brand : tokens.divider,
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _toggleChip(String label, bool value, ValueChanged<bool> onChanged,
+      ThemeTokens tokens) {
+    final active = value;
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: active ? tokens.brandSubtle : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(8),
+          border:
+              Border.all(color: active ? tokens.brand : tokens.divider),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: active ? tokens.brandText : tokens.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _alignChip(TextAlign align, String label, WatermarkElement el,
+      ThemeTokens tokens) {
+    final active = el.textAlign == align;
+    return GestureDetector(
+      onTap: () => setState(() => el.textAlign = align),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 30,
+        height: 30,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? tokens.brandSubtle : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(6),
+          border:
+              Border.all(color: active ? tokens.brand : tokens.divider),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: active ? tokens.brandText : tokens.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- 边框 Tab ---
+
+  Widget _buildBorderTab(ThemeTokens tokens) {
+    final frame = _template.frame;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            _frameOption('无', WatermarkFrameType.none, tokens),
+            const SizedBox(width: 8),
+            _frameOption('拍立得', WatermarkFrameType.polaroid, tokens),
+            const SizedBox(width: 8),
+            _frameOption('内描边', WatermarkFrameType.innerBorder, tokens),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (frame.type == WatermarkFrameType.polaroid) ...[
+          _sliderRow(
+            label: '白边厚度',
+            value: frame.borderRatio,
+            min: 0,
+            max: 0.2,
+            divisions: 20,
+            onChanged: (v) => _updateFrame((f) => f.copyWith(borderRatio: v)),
+            tokens: tokens,
+          ),
+          _toggleRow('白板', frame.bottomPlate,
+              (v) => _updateFrame((f) => f.copyWith(bottomPlate: v)), tokens),
+          if (frame.bottomPlate)
+            _sliderRow(
+              label: '白板比例',
+              value: frame.bottomRatio,
+              min: 0.05,
+              max: 0.4,
+              divisions: 14,
+              onChanged: (v) => _updateFrame((f) => f.copyWith(bottomRatio: v)),
+              tokens: tokens,
+            ),
+          _sliderRow(
+            label: '圆角',
+            value: frame.borderRadius,
+            min: 0,
+            max: 0.08,
+            divisions: 16,
+            onChanged: (v) => _updateFrame((f) => f.copyWith(borderRadius: v)),
+            tokens: tokens,
+          ),
+          _toggleRow('投影', frame.shadowOpacity > 0, (v) => _updateFrame((f) =>
+              f.copyWith(shadowOpacity: v ? 0.22 : 0.0)), tokens),
+          if (frame.shadowOpacity > 0)
+            _sliderRow(
+              label: '投影强度',
+              value: frame.shadowOpacity,
+              min: 0,
+              max: 0.6,
+              divisions: 12,
+              onChanged: (v) =>
+                  _updateFrame((f) => f.copyWith(shadowOpacity: v)),
+              tokens: tokens,
+            ),
+        ] else if (frame.type == WatermarkFrameType.innerBorder) ...[
+          _buildFramePalette(frame, tokens),
+          const SizedBox(height: 8),
+          _sliderRow(
+            label: '描边厚度',
+            value: frame.borderRatio,
+            min: 0.005,
+            max: 0.08,
+            divisions: 15,
+            onChanged: (v) => _updateFrame((f) => f.copyWith(borderRatio: v)),
+            tokens: tokens,
+          ),
+          _sliderRow(
+            label: '圆角',
+            value: frame.borderRadius,
+            min: 0,
+            max: 0.08,
+            divisions: 16,
+            onChanged: (v) => _updateFrame((f) => f.copyWith(borderRadius: v)),
+            tokens: tokens,
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _frameOption(String label, WatermarkFrameType t, ThemeTokens tokens) {
+    final active = _template.frame.type == t;
+    return GestureDetector(
+      key: ValueKey('wm-frame-$label'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _setFrameType(t),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+        decoration: BoxDecoration(
+          color: active ? tokens.brandSubtle : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: active ? tokens.brand : tokens.divider,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: active ? tokens.brandText : tokens.textSecondary,
+          ),
+        ),
       ),
+    );
+  }
+
+  Widget _buildFramePalette(WatermarkFrame frame, ThemeTokens tokens) {
+    final colors = <Color>[
+      const Color(0xFFFFFFFF),
+      const Color(0xFF000000),
+      tokens.brand,
+      tokens.textPrimary,
+    ];
+    return Row(
+      children: [
+        for (final c in colors)
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: GestureDetector(
+              onTap: () =>
+                  _updateFrame((f) => f.copyWith(color: c)),
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: c,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: frame.color == c ? tokens.brand : tokens.divider,
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _toggleRow(String label, bool value, ValueChanged<bool> onChanged,
+      ThemeTokens tokens) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+        ),
+        const Spacer(),
+        Switch(
+          value: value,
+          activeColor: tokens.brand,
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+
+  Widget _sliderRow({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required ValueChanged<double> onChanged,
+    required ThemeTokens tokens,
+    int? divisions,
+  }) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 56,
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: divisions,
+            activeColor: tokens.brand,
+            thumbColor: tokens.brand,
+            onChanged: onChanged,
+          ),
+        ),
+        SizedBox(
+          width: 40,
+          child: Text(
+            value.toStringAsFixed(2),
+            textAlign: TextAlign.right,
+            style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+          ),
+        ),
+      ],
     );
   }
 }
