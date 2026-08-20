@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../shared/searchengine/search_scope.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraProgress;
@@ -58,6 +59,17 @@ class _AcademyPageState extends ConsumerState<AcademyPage> {
         title: '摄影美学院',
         transparent: true,
         actions: [
+          GestureDetector(
+            onTap: () => GoRouter.of(context).push(
+              RouteNames.withScope(RouteNames.search, SearchScope.academy.name),
+            ),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child:
+                  Icon(Icons.search, size: 22, color: tokens.textPrimary),
+            ),
+          ),
           GestureDetector(
             onTap: () => GoRouter.of(context).push(RouteNames.academyFavorites),
             behavior: HitTestBehavior.opaque,

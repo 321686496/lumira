@@ -8,6 +8,7 @@ import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/searchengine/search_scope.dart';
 import '../../../core/utils/image_cache.dart';
 import '../../usage/usage_providers.dart';
 import '../scenes_sync_service.dart';
@@ -123,7 +124,9 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 
   void _onSearch() {
-    GoRouter.of(context).push(RouteNames.scenesSearch);
+    GoRouter.of(context).push(
+      RouteNames.withScope(RouteNames.search, SearchScope.scene.name),
+    );
   }
 
   void _goDetail(String id) {

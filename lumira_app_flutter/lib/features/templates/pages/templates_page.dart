@@ -6,6 +6,7 @@ import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/searchengine/search_scope.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
@@ -108,7 +109,9 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
         horizontalPadding: 24,
         actions: [
           GestureDetector(
-            onTap: () => GoRouter.of(context).push(RouteNames.templatesSearch),
+            onTap: () => GoRouter.of(context).push(
+              RouteNames.withScope(RouteNames.search, SearchScope.all.name),
+            ),
             behavior: HitTestBehavior.opaque,
             child: const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),

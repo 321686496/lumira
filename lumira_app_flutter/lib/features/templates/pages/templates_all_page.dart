@@ -8,6 +8,7 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/searchengine/search_scope.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -264,6 +265,19 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                     tokens: tokens,
                     onTap: _back,
                   ),
+                  actions: [
+                    GestureDetector(
+                      onTap: () => GoRouter.of(context).push(
+                        RouteNames.withScope(
+                            RouteNames.search, SearchScope.template.name),
+                      ),
+                      behavior: HitTestBehavior.opaque,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Icon(Icons.search, size: 20),
+                      ),
+                    ),
+                  ],
                 ),
                 Expanded(
                   child: asyncDao.when(

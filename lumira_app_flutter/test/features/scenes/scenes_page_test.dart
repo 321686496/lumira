@@ -103,8 +103,8 @@ void main() {
           },
         ),
         GoRoute(
-          path: RouteNames.scenesSearch,
-          name: 'scenesSearch',
+          path: RouteNames.search,
+          name: 'search',
           builder: (_, __) => const _StubPage(text: 'SEARCH_PAGE'),
         ),
         GoRoute(

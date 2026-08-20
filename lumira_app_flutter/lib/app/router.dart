@@ -62,7 +62,6 @@ import '../features/points/pages/points_wallet_page.dart';
 import '../features/redeem/pages/redeem_page.dart';
 import '../features/rewards/pages/rewards_page.dart';
 import '../features/scenes/pages/scenes_page.dart';
-import '../features/scenes/pages/scenes_search_page.dart';
 import '../features/tags/pages/my_tags_page.dart';
 import '../features/shootkit/pages/shootkit_editor_page.dart';
 import '../features/splash/pages/splash_page.dart';
@@ -73,9 +72,10 @@ import '../features/templates/pages/templates_drafts_page.dart';
 import '../features/templates/pages/templates_editor_page.dart';
 import '../features/templates/pages/templates_page.dart';
 import '../features/templates/pages/templates_recommend_page.dart';
-import '../features/templates/pages/templates_search_page.dart';
 import '../features/templates/pages/templates_unlock_page.dart';
 import '../features/templates/pages/export_detail_page.dart';
+import '../features/search/pages/global_search_page.dart';
+import '../shared/searchengine/search_scope.dart';
 
 /// 全局导航 key：供深链/后台任务在无页面 context 时唤起 UI
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -242,9 +242,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: RouteNames.templatesSearch,
-        name: 'templatesSearch',
-        builder: (context, state) => const TemplatesSearchPage(),
+        path: RouteNames.search,
+        name: 'search',
+        builder: (context, state) => GlobalSearchPage(
+          scope: SearchScopeExt.fromName(state.queryParams[RouteNames.paramScope]),
+        ),
       ),
       // 二级分类独立页：一级题材 → 二级大风格/浅层风格（spec 2026-08-17-template-category-4level-design.md §6）
       GoRoute(
@@ -638,11 +640,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         // 透传 category 查询参数：发现页点击场景分类卡片时，直接进入该分类的场景列表
         builder: (context, state) =>
             ScenesPage(category: state.queryParams[RouteNames.paramCategory]),
-      ),
-      GoRoute(
-        path: RouteNames.scenesSearch,
-        name: 'scenesSearch',
-        builder: (context, state) => const ScenesSearchPage(),
       ),
 
       // === 我的标签 ===

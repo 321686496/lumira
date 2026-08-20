@@ -25,7 +25,6 @@ class RouteNames {
   static const String templatesRecommend = '/templates/recommend';
   static const String templatesCategory = '/templates/category';
   static const String templatesAll = '/templates/all';
-  static const String templatesSearch = '/templates/search';
   static const String templatesExportDetail = '/templates/export-detail';
   static const String challengeDetail = '/challenge/detail';
   static const String challengeHistory = '/challenge/history';
@@ -67,9 +66,9 @@ class RouteNames {
   static const String profileCompliancePrivacy = '/profile/settings/privacy';
   static const String profileComplianceSdk = '/profile/settings/sdk';
   static const String scenes = '/scenes';
-  static const String scenesSearch = '/scenes/search';
   static const String myTags = '/my-tags';
   static const String shootkitEditor = '/shootkit/editor';
+  static const String search = '/search';
   static const String academyTrajectory = '/academy/trajectory';
   static const String academyFavorites = '/academy/favorites';
   static const String profileCompositionKits = '/profile/composition-kits';
@@ -103,6 +102,7 @@ class RouteNames {
   static const String paramTypeKey = 'typeKey';
   static const String paramFrom = 'from';
   static const String paramTrial = 'trial';
+  static const String paramScope = 'scope';
 
   // === 工具方法 ===
   /// 构建 templateId 查询参数 URL
@@ -114,6 +114,12 @@ class RouteNames {
   /// 构建 sceneId 查询参数 URL
   static String withSceneId(String path, String sceneId) {
     return '$path?$paramSceneId=$sceneId';
+  }
+
+  /// 构建搜索页 URL（scope 决定默认搜索范围）
+  /// scope 取值为 SearchScope.name：all / template / scene / academy
+  static String withScope(String path, String scope) {
+    return '$path?$paramScope=$scope';
   }
 
   /// 构建多参数 URL
