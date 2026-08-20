@@ -93,7 +93,8 @@ void main() {
       expect(t.cardBorder, isNull);
       expect(t.multiGradient, isNotNull,
           reason: '女性美学风格必须提供多渐变规格');
-      expect(t.multiGradient!.linear.colors.length, 2);
+      // 线性渐变 3 色（高光→表面→暖调），径向氛围光 2 色
+      expect(t.multiGradient!.linear.colors.length, 3);
       expect(t.multiGradient!.radialHighlight.colors.length, 2);
     });
   });

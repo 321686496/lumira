@@ -635,7 +635,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.scenes,
         name: 'scenes',
-        builder: (context, state) => const ScenesPage(),
+        // 透传 category 查询参数：发现页点击场景分类卡片时，直接进入该分类的场景列表
+        builder: (context, state) =>
+            ScenesPage(category: state.queryParams[RouteNames.paramCategory]),
       ),
       GoRoute(
         path: RouteNames.scenesSearch,

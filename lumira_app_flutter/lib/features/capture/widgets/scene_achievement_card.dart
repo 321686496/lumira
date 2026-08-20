@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/capture_scene_mock_data.dart';
 
 /// 场景成就卡片（对应 uni-app SceneAchievementCard.vue）
 ///
 /// 视觉规格来源：lumira-app/src/components/SceneAchievementCard.vue
 /// - 三段式：照片统计 / 进度条（level < 5 时显示） / 排行榜
-/// - 背景 rgba(0,0,0,0.04) + 20rpx 圆角 + 24rpx padding
-class SceneAchievementCard extends StatelessWidget {
+/// - 背景跟随主题 surfaceAlt + 20rpx 圆角 + 24rpx padding
+class SceneAchievementCard extends ConsumerWidget {
   const SceneAchievementCard({
     super.key,
     required this.achievement,
@@ -30,12 +33,14 @@ class SceneAchievementCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：颜色随设置里的 UI 风格 / 主题色切换
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return Container(
       padding: const EdgeInsets.all(12), // 24rpx → 12dp
       decoration: BoxDecoration(
-        // 硬编码颜色，与 uni-app 一致 (achievement-card bg rgba(0,0,0,0.04))
-        color: const Color.fromRGBO(0, 0, 0, 0.04),
+        // 卡片底色跟随主题 surfaceAlt
+        color: tokens.surfaceAlt,
         borderRadius: BorderRadius.circular(10), // 20rpx → 10dp
       ),
       child: Column(
@@ -49,20 +54,20 @@ class SceneAchievementCard extends StatelessWidget {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.photo_library_outlined, // ph-images-square → Icons.photo_library_outlined
                     size: 16, // 32rpx → 16dp
-                    // 硬编码颜色，与 uni-app 一致 (ach-icon #2A2520 继承)
-                    color: Color(0xFF2A2520),
+                    // 图标色跟随主题 textPrimary
+                    color: tokens.textPrimary,
                   ),
                   const SizedBox(width: 4), // 8rpx → 4dp
                   Text(
                     '${achievement.photoCount} 张',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13, // 26rpx → 13dp
                       fontWeight: FontWeight.w500,
-                      // 硬编码颜色，与 uni-app 一致 (ach-value #2A2520)
-                      color: Color(0xFF2A2520),
+                      // 文字色跟随主题 textPrimary
+                      color: tokens.textPrimary,
                     ),
                   ),
                 ],
@@ -71,18 +76,20 @@ class SceneAchievementCard extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.emoji_events_outlined, // ph-trophy → Icons.emoji_events_outlined
                       size: 16,
-                      color: Color(0xFFC9A876),
+                      // 奖杯图标色跟随主题 brand
+                      color: tokens.brand,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       '$sceneName ${achievement.levelName} Lv.${achievement.level}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF2A2520),
+                        // 文字色跟随主题 textPrimary
+                        color: tokens.textPrimary,
                       ),
                     ),
                   ],
@@ -100,21 +107,21 @@ class SceneAchievementCard extends StatelessWidget {
                     child: LinearProgressIndicator(
                       value: _progressPercent / 100,
                       minHeight: 6, // 12rpx → 6dp
-                      // 硬编码颜色，与 uni-app 一致 (ach-progress-bar bg rgba(0,0,0,0.08))
-                      backgroundColor: const Color.fromRGBO(0, 0, 0, 0.08),
-                      // 硬编码颜色，与 uni-app 一致 (ach-progress-fill #C9A876)
+                      // 进度条底色跟随主题 surfaceAlt
+                      backgroundColor: tokens.surfaceAlt,
+                      // 进度条填充色跟随主题 brand
                       valueColor:
-                          const AlwaysStoppedAnimation<Color>(Color(0xFFC9A876)),
+                          AlwaysStoppedAnimation<Color>(tokens.brand),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8), // 16rpx → 8dp
                 Text(
                   '${achievement.photoCount}/${achievement.nextLevelCount}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11, // 22rpx → 11dp
-                    // 硬编码颜色，与 uni-app 一致 (ach-progress-text #6B635A)
-                    color: Color(0xFF6B635A),
+                    // 文字色跟随主题 textSecondary
+                    color: tokens.textSecondary,
                   ),
                 ),
               ],
@@ -125,20 +132,20 @@ class SceneAchievementCard extends StatelessWidget {
           if (rank != null)
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.local_fire_department_outlined, // ph-fire → Icons.local_fire_department_outlined
                   size: 14, // 28rpx → 14dp
-                  // 硬编码颜色，与 uni-app 一致 (ach-rank-icon 继承)
-                  color: Color(0xFFC9A876),
+                  // 图标色跟随主题 brand
+                  color: tokens.brand,
                 ),
                 const SizedBox(width: 4), // 8rpx → 4dp
                 Text(
                   '$rankLabel热门 #$rank',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12, // 24rpx → 12dp
                     fontWeight: FontWeight.w600,
-                    // 硬编码颜色，与 uni-app 一致 (ach-rank-text #C9A876)
-                    color: Color(0xFFC9A876),
+                    // 文字色跟随主题 brand
+                    color: tokens.brand,
                   ),
                 ),
               ],

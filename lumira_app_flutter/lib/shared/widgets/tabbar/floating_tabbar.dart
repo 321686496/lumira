@@ -174,7 +174,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
   }
 }
 
-class _TabItem extends StatelessWidget {
+class _TabItem extends StatefulWidget {
   const _TabItem({
     required this.icon,
     required this.label,
@@ -192,20 +192,93 @@ class _TabItem extends StatelessWidget {
   final bool isFemale;
 
   @override
+  State<_TabItem> createState() => _TabItemState();
+}
+
+class _TabItemState extends State<_TabItem>
+    with SingleTickerProviderStateMixin {
+  // 女性美学：选中态「呼吸光晕」脉冲动画（FemaleAestheticDesignSystem §4.4 焦点引导）。
+  AnimationController? _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isFemale && widget.active) {
+      _startPulse();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _TabItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final shouldPulse = widget.isFemale && widget.active;
+    final wasPulsing = _pulseController != null;
+    if (shouldPulse && !wasPulsing) {
+      _startPulse();
+    } else if (!shouldPulse && wasPulsing) {
+      _pulseController?.dispose();
+      _pulseController = null;
+    }
+  }
+
+  void _startPulse() {
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+    _pulseController = controller;
+  }
+
+  @override
+  void dispose() {
+    _pulseController?.dispose();
+    _pulseController = null;
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = active ? tokens.brand : tokens.textTertiary;
+    final color = widget.active ? widget.tokens.brand : widget.tokens.textTertiary;
+    // 女性美学呼吸光晕：0→1→0 的柔和呼吸，仅选中态触发；透明则无动画。
+    final Widget iconGlow = AnimatedBuilder(
+      animation: _pulseController ?? const AlwaysStoppedAnimation(0.0),
+      builder: (context, child) {
+        final t = _pulseController?.value ?? 0.0;
+        final alpha = 0.45 * (1 - (t * 2 - 1).abs());
+        final spread = 2 + 3 * (1 - (t * 2 - 1).abs());
+        return Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: _pulseController == null
+                ? null
+                : [
+                    BoxShadow(
+                      color: widget.tokens.brand.withOpacity(alpha),
+                      blurRadius: 12,
+                      spreadRadius: spread,
+                    ),
+                  ],
+          ),
+          child: child,
+        );
+      },
+      child: Icon(widget.icon, size: 22, color: color),
+    );
+
     return Expanded(
       child: GestureDetector(
-        onTap: onTap,
+        onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: color), // 44rpx → 22dp
+            SizedBox(height: 26, child: Center(child: iconGlow)),
             const SizedBox(height: 1), // gap 2rpx → 1dp
             Text(
-              label,
+              widget.label,
               style: TextStyle(
                 fontSize: 10, // 20rpx → 10dp
                 color: color,

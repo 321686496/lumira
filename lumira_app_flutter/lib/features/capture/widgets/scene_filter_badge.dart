@@ -24,8 +24,8 @@ class SceneFilterBadge extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(12), // 24rpx → 12dp
       decoration: BoxDecoration(
-        // 硬编码颜色，与 uni-app 一致 (filter-badge bg rgba(0,0,0,0.04))
-        color: const Color.fromRGBO(0, 0, 0, 0.04),
+        // 表面底色跟随主题（原先写死 rgba(0,0,0,0.04)）
+        color: tokens.surfaceAlt,
         borderRadius: BorderRadius.circular(10), // 20rpx → 10dp
       ),
       child: Row(
@@ -49,11 +49,11 @@ class SceneFilterBadge extends ConsumerWidget {
                         lutName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14, // 28rpx → 14dp
                           fontWeight: FontWeight.w600,
-                          // 硬编码颜色，与 uni-app 一致 (filter-name #2A2520)
-                          color: Color(0xFF2A2520),
+                          // 主文字色跟随主题（原先写死 #2A2520）
+                          color: tokens.textPrimary,
                         ),
                       ),
                     ),
@@ -63,16 +63,16 @@ class SceneFilterBadge extends ConsumerWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 1), // 12rpx×2rpx → 6dp×1dp
                         decoration: BoxDecoration(
-                          // 硬编码颜色，与 uni-app 一致 (filter-systemFilter bg rgba(201,168,118,0.12))
-                          color: const Color.fromRGBO(201, 168, 118, 0.12),
+                          // 标签底色用品牌色低透明（原先写死 rgba(201,168,118,0.12)）
+                          color: tokens.brand.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(9999),
                         ),
                         child: Text(
                           systemFilterLabel,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 11, // 22rpx → 11dp
-                            // 硬编码颜色，与 uni-app 一致 (filter-systemFilter #C9A876)
-                            color: Color(0xFFC9A876),
+                            // 品牌色文字（原先写死 #C9A876）
+                            color: tokens.brand,
                           ),
                         ),
                       ),
@@ -82,11 +82,11 @@ class SceneFilterBadge extends ConsumerWidget {
                 const SizedBox(height: 4), // 8rpx → 4dp
                 Text(
                   filter.reason,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12, // 24rpx → 12dp
                     height: 1.5,
-                    // 硬编码颜色，与 uni-app 一致 (filter-reason #6B635A)
-                    color: Color(0xFF6B635A),
+                    // 次要文字色跟随主题（原先写死 #6B635A）
+                    color: tokens.textSecondary,
                   ),
                 ),
               ],

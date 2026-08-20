@@ -77,6 +77,16 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
     );
   }
 
+  /// 下拉刷新：重新拉取远程模板/分类并同步到本地。
+  Future<void> _onRefresh() async {
+    ref.invalidate(remoteCategoriesSyncProvider);
+    ref.invalidate(remoteTemplatesSyncProvider);
+    await Future.wait([
+      ref.read(remoteCategoriesSyncProvider.future).catchError((_) {}),
+      ref.read(remoteTemplatesSyncProvider.future).catchError((_) {}),
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -122,9 +132,14 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
           // Forced fix: glass 风格彩色斑点背景
           const Positioned.fill(child: GlassBackground(variant: GlassBackgroundVariant.templates)),
           // 主内容（extendBodyBehindAppBar 让内容延伸到 nav 下方，需 top padding 占位避免被遮挡）
-          _BodyContent(
-            scrollController: _scrollController,
-            onTap: _goDetail,
+          RefreshIndicator(
+            color: tokens.brand,
+            backgroundColor: tokens.surface,
+            onRefresh: _onRefresh,
+            child: _BodyContent(
+              scrollController: _scrollController,
+              onTap: _goDetail,
+            ),
           ),
           // FloatingTabBar
           const Positioned(
@@ -157,6 +172,7 @@ class _BodyContent extends ConsumerWidget {
 
     return ListView(
       controller: scrollController,
+      physics: const AlwaysScrollableScrollPhysics(), // 支持下拉刷新
       // 顶部留 12 与标题栏做间距，避免内容顶在导航栏下。
       padding: const EdgeInsets.only(top: 12),
       children: [

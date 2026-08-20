@@ -37,6 +37,9 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   List<SceneRecord> _scenes = [];
   /// 是否正在加载
   bool _isLoading = false;
+  /// 是否通过路由 category 参数直接进入分类（如发现页点场景分类卡片）。
+  /// 为 true 时，返回按钮应退出本页回到上级，而不是回到分类概览。
+  late final bool _enteredWithCategory = widget.category != null;
 
   @override
   void initState() {
@@ -51,6 +54,29 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 
   bool get _isOverview => _activeCategoryId == null;
+
+  /// 顶部导航标题：分类模式显示当前场景分类名。
+  String get _navTitle {
+    if (_isOverview) return '场景库';
+    final group = CaptureSceneMockData.categories.firstWhere(
+      (g) => g.category == _activeCategoryId,
+      orElse: () => CaptureSceneMockData.categories.first,
+    );
+    return group.name;
+  }
+
+  /// 下拉刷新：重新联网同步系统场景元数据，并重新加载当前列表。
+  Future<void> _onRefresh() async {
+    try {
+      final service = await ref.read(scenesSyncServiceProvider.future);
+      await service.syncSystem();
+    } catch (_) {
+      // 同步失败静默，本地种子仍可用
+    }
+    if (mounted) {
+      await _loadScenes();
+    }
+  }
 
   Future<void> _loadScenes() async {
     setState(() => _isLoading = true);
@@ -79,8 +105,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   }
 
   void _back() {
-    if (_activeCategoryId != null) {
-      // 从二级分类返回到分类概览
+    // 非通过路由参数进入时：从二级分类返回到分类概览
+    if (_activeCategoryId != null && !_enteredWithCategory) {
       setState(() {
         _activeCategoryId = null;
         _scenes = [];
@@ -150,19 +176,29 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         child: Column(
           children: [
             _ScenesNav(
-              title: _isOverview ? '场景库' : '全部场景',
+              title: _navTitle,
               onBack: _back,
               onSearch: _onSearch,
             ),
             Expanded(
               child: _isOverview
-                  ? _SceneCategoryOverview(
-                      tokens: tokens,
-                      onSelectCategory: _onCategorySelect,
+                  ? RefreshIndicator(
+                      color: tokens.brand,
+                      backgroundColor: tokens.surface,
+                      onRefresh: _onRefresh,
+                      child: _SceneCategoryOverview(
+                        tokens: tokens,
+                        onSelectCategory: _onCategorySelect,
+                      ),
                     )
-                  : _isLoading
-                      ? Center(child: LumiraProgress.circular())
-                      : _SceneGrid(scenes: _scenes, onTap: _goDetail),
+                  : RefreshIndicator(
+                      color: tokens.brand,
+                      backgroundColor: tokens.surface,
+                      onRefresh: _onRefresh,
+                      child: _isLoading
+                          ? Center(child: LumiraProgress.circular())
+                          : _SceneGrid(scenes: _scenes, onTap: _goDetail),
+                    ),
             ),
           ],
         ),
@@ -284,6 +320,7 @@ class _SceneCategoryOverview extends StatelessWidget {
     }
 
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(), // 支持下拉刷新
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 80),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -522,14 +559,23 @@ class _SceneGrid extends ConsumerWidget {
     final tokens = ref.watch(themeTokensProvider);
 
     if (scenes.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 40), // 80rpx → 40dp
-          child: Text(
-            '暂无场景',
-            style: TextStyle(
-              fontSize: 13,
-              color: tokens.textTertiary,
+      // 空状态也保持可滚动，支持下拉刷新
+      return LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(
+            height: constraints.maxHeight,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40), // 80rpx → 40dp
+                child: Text(
+                  '暂无场景',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: tokens.textTertiary,
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -537,6 +583,7 @@ class _SceneGrid extends ConsumerWidget {
     }
 
     return GridView.builder(
+      physics: const AlwaysScrollableScrollPhysics(), // 支持下拉刷新
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 80), // 24rpx + FAB 底部空间
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,

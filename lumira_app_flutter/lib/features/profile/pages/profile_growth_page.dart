@@ -670,17 +670,17 @@ class _CalendarCard extends StatelessWidget {
   final ThemeTokens tokens;
   final Map<String, int> heatmap;
 
-  /// 热力图色块颜色（硬编码，与 uni-app 一致）
+  /// 热力图色块颜色，跟随主题品牌色（原先写死 #C9A96E）
   Color _heatColor(int level) {
     switch (level) {
       case 0:
         return tokens.divider;
       case 1:
-        return const Color(0xFFC9A96E).withOpacity(0.2);
+        return tokens.brand.withOpacity(0.2);
       case 2:
-        return const Color(0xFFC9A96E).withOpacity(0.4);
+        return tokens.brand.withOpacity(0.4);
       case 3:
-        return const Color(0xFFC9A96E).withOpacity(0.6);
+        return tokens.brand.withOpacity(0.6);
       case 4:
         return tokens.brand;
       default:

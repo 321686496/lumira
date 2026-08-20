@@ -48,7 +48,7 @@ class PhotoCell extends ConsumerWidget {
                     height: 20,
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? const Color(0xFFC9A96E)
+                          ? tokens.brand
                           : Colors.black.withOpacity(0.4),
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white70, width: 1.5),
@@ -61,7 +61,7 @@ class PhotoCell extends ConsumerWidget {
                 ),
               if (isSelected)
                 Container(
-                  color: const Color(0xFFC9A96E).withOpacity(0.2),
+                  color: tokens.brand.withOpacity(0.2),
                 ),
             ],
           ),

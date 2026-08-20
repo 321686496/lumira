@@ -122,17 +122,17 @@ class SceneRecoCard extends ConsumerWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.photo_library_outlined,
                             size: 12, // 24rpx → 12dp
-                            color: Color(0xFFC9A876), // scene-stat-icon 色
+                            color: tokens.brand, // 跟随主题
                           ),
                           const SizedBox(width: 4), // 8rpx → 4dp
                           Text(
                             '${scene.photoCount}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11, // 22rpx → 11dp
-                              color: Color(0xFF6B635A),
+                              color: tokens.textSecondary, // 跟随主题
                               fontWeight: FontWeight.w500,
                               height: 1.2,
                             ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/effects/breathing_tap.dart';
 import '../data/templates_mock_data.dart';
 import 'template_cover_image.dart';
 
@@ -29,15 +30,21 @@ class TemplateGridCard extends ConsumerWidget {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final tpl = template;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
+    final isFlat = appTheme.style == UIStyle.flat;
 
-    return GestureDetector(
+    // 卡片统一使用不透明表面底色（各风格取各自的表面色/边框），
+    // 使底部标题/分类文字与页面背景形成对比，不再「像嵌在背景里」；
+    // 新拟态保留双向浮雕阴影，扁平化用 surfaceAlt + 细分隔线。
+    return BreathingTap(
       onTap: onTap,
+      pressedScale: appTheme.style == UIStyle.female ? 0.96 : 0.98,
       child: Container(
         decoration: BoxDecoration(
-          color: appTheme.style == UIStyle.neumorphic ? tokens.surface : null,
+          color: isFlat ? tokens.surfaceAlt : tokens.surface,
           borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
-          boxShadow:
-              appTheme.style == UIStyle.neumorphic ? tokens.shadowConvex : null,
+          boxShadow: isNeu ? tokens.shadowConvex : null,
+          border: isFlat ? Border.all(color: tokens.divider, width: 1) : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(

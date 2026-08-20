@@ -12,6 +12,7 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/builtin_category_icons.dart';
+import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../services/template_mapper.dart';
 import '../widgets/template_cover_image.dart';
@@ -189,6 +190,18 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     }
   }
 
+  /// 下拉刷新：重新拉取远程模板/分类并同步到本地，随后重载并重新筛选列表。
+  Future<void> _onRefresh() async {
+    ref.invalidate(remoteCategoriesSyncProvider);
+    ref.invalidate(remoteTemplatesSyncProvider);
+    await Future.wait([
+      ref.read(remoteCategoriesSyncProvider.future).catchError((_) {}),
+      ref.read(remoteTemplatesSyncProvider.future).catchError((_) {}),
+    ]);
+    // 重新触发 _loadData：FutureBuilder 的 future 在 build 时会重新生成并读取最新 DAO 数据。
+    if (mounted) setState(() {});
+  }
+
   void _showImportSheet() {
     TemplateImportSheet.show(
       context,
@@ -253,55 +266,61 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                         }
                         final data = snap.data!;
                         final filtered = data.filtered;
-                        return SingleChildScrollView(
-                          padding: const EdgeInsets.only(bottom: 32),
-                          child: isOverview
-                              ? _CategoryOverview(
-                                  tokens: tokens,
-                                  allCount: data.allCount,
-                                  unlockedCount: data.unlockedCount,
-                                  categoryCounts: data.categoryCounts,
-                                  onSelectCategory: _selectCategory,
-                                  categories: data.categories,
-                                )
-                              : Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    _HeroCard(
-                                      tokens: tokens,
-                                      allCount: data.allCount,
-                                      unlockedCount: data.unlockedCount,
-                                    ),
-                                    _FilterSection(
-                                      tokens: tokens,
-                                      categories: data.categories,
-                                      styleOptions: data.styleOptions,
-                                      methodOptions: data.methodOptions,
-                                      selectedType: _selectedType,
-                                      selectedStyle: _selectedStyle,
-                                      selectedMethod: _selectedMethod,
-                                      showCustom: _showCustom,
-                                      priceFilter: _priceFilter,
-                                      onLayerSelect: _onLayerSelect,
-                                      onToggleCustom: _toggleCustom,
-                                      onPriceFilter: _onPriceFilter,
-                                    ),
-                                    if (_showCustom)
-                                      _ActionRow(
+                        return RefreshIndicator(
+                          color: tokens.brand,
+                          backgroundColor: tokens.surface,
+                          onRefresh: _onRefresh,
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.only(bottom: 32),
+                            child: isOverview
+                                ? _CategoryOverview(
+                                    tokens: tokens,
+                                    allCount: data.allCount,
+                                    unlockedCount: data.unlockedCount,
+                                    categoryCounts: data.categoryCounts,
+                                    onSelectCategory: _selectCategory,
+                                    categories: data.categories,
+                                  )
+                                : Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      _HeroCard(
                                         tokens: tokens,
-                                        onImport: _showImportSheet,
-                                        onCreate: _goEditor,
+                                        allCount: data.allCount,
+                                        unlockedCount: data.unlockedCount,
                                       ),
-                                    if (filtered.isEmpty)
-                                      _EmptyState(tokens: tokens)
-                                    else
-                                      _TemplateGrid(
+                                      _FilterSection(
                                         tokens: tokens,
-                                        templates: filtered,
+                                        categories: data.categories,
+                                        styleOptions: data.styleOptions,
+                                        methodOptions: data.methodOptions,
+                                        selectedType: _selectedType,
+                                        selectedStyle: _selectedStyle,
+                                        selectedMethod: _selectedMethod,
+                                        showCustom: _showCustom,
+                                        priceFilter: _priceFilter,
+                                        onLayerSelect: _onLayerSelect,
+                                        onToggleCustom: _toggleCustom,
+                                        onPriceFilter: _onPriceFilter,
                                       ),
-                                  ],
-                                ),
+                                      if (_showCustom)
+                                        _ActionRow(
+                                          tokens: tokens,
+                                          onImport: _showImportSheet,
+                                          onCreate: _goEditor,
+                                        ),
+                                      if (filtered.isEmpty)
+                                        _EmptyState(tokens: tokens)
+                                      else
+                                        _TemplateGrid(
+                                          tokens: tokens,
+                                          templates: filtered,
+                                        ),
+                                    ],
+                                  ),
+                          ),
                         );
                       },
                     ),
@@ -1076,8 +1095,8 @@ class _FreeBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        // 硬编码颜色，与 uni-app 一致 (rgba(90, 122, 72, 0.85))
-        color: const Color(0xFF5A7A48).withOpacity(0.85),
+        // 免费徽标绿（色值跟随主题 success 色）
+        color: tokens.success.withOpacity(0.85),
         borderRadius: BorderRadius.circular(9999),
       ),
       child: const Text(

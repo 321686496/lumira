@@ -380,23 +380,24 @@ class _TagChip extends ConsumerWidget {
 }
 
 /// 场景卡片列表
-class _SceneList extends StatelessWidget {
+class _SceneList extends ConsumerWidget {
   const _SceneList({required this.scenes, required this.onTap});
 
   final List<ScenePreset> scenes;
   final ValueChanged<String> onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
     if (scenes.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 40), // 80rpx → 40dp
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 40), // 80rpx → 40dp
         child: Center(
           child: Text(
             '暂无匹配场景',
             style: TextStyle(
               fontSize: 13,
-              color: Color(0xFF6B635A),
+              color: tokens.textSecondary, // 跟随主题
             ),
           ),
         ),
@@ -535,18 +536,19 @@ class _SceneCard extends ConsumerWidget {
   }
 }
 
-class _ImgPlaceholder extends StatelessWidget {
+class _ImgPlaceholder extends ConsumerWidget {
   const _ImgPlaceholder();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
     return Container(
-      color: const Color.fromRGBO(201, 168, 118, 0.12),
-      child: const Center(
+      color: tokens.brand.withOpacity(0.12), // 跟随主题
+      child: Center(
         child: Icon(
           Icons.image_outlined,
           size: 28, // 56rpx → 28dp
-          color: Color(0xFFC9A876),
+          color: tokens.brand, // 跟随主题
         ),
       ),
     );

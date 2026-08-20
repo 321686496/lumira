@@ -12,8 +12,14 @@ import '../../../core/db/database_provider.dart'
     show galleryDaoProvider, watermarkDaoProvider;
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/effects/breathing_tap.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
-    show LumiraToast, showLumiraSaveModeSheet;
+    show
+        LumiraSlider,
+        LumiraSwitch,
+        LumiraTextField,
+        LumiraToast,
+        showLumiraSaveModeSheet;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/watermark_providers.dart';
 import '../models/watermark_template.dart';
@@ -51,6 +57,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   /// 模板模式下用于预览的示例照片资源。
   static const String _sampleAsset = 'assets/images/watermark_sample.jpg';
   static const double _collapsedHeight = 40.0;
+  // 叠照片深色沉浸底兜底常量（跨风格叠加视觉的合法例外，非主题色硬编码）。
+  static const Color _immersiveDeep = Color(0xFF1B1A18);
 
   /// 深拷贝时保证元素 id 唯一（同一编辑会话内多次拷贝不冲突）。
   static int _copyCounter = 0;
@@ -383,6 +391,143 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     Navigator.of(context).maybePop();
   }
 
+  /// 深色沉浸预览底：优先取 [ThemeTokens.canvasDeep]（ink 主题即 0xFF151310）；
+  /// 对暖/浅主题（canvasDeep 过浅）用 [_immersiveDeep] 兜底，保证任何主题下都有沉浸感。
+  Color _previewBg(ThemeTokens tokens) {
+    final deep = tokens.canvasDeep;
+    if (deep.computeLuminance() > 0.3) return _immersiveDeep;
+    return deep;
+  }
+
+  /// 按压缩放系数：女性美学 0.96，其余 0.98。
+  double _scaleFor(UIStyle style) => style == UIStyle.female ? 0.96 : 0.98;
+
+  /// 全页面小按钮/芯片/选项的统一风格自适应背景解析。
+  /// [active] 选中态；[raised] 指示"常驻凸起钮"（新拟态下即使未选中也带轻微浮雕）；
+  /// [danger] 让激活边框/底对应 danger 语义。
+  BoxDecoration _chipDeco(ThemeTokens tokens, UIStyle style,
+      {required bool active,
+      required double radius,
+      bool danger = false,
+      bool raised = false}) {
+    final Color activeBg = danger ? tokens.dangerSubtle : tokens.brandSubtle;
+    final Color accent = danger ? tokens.danger : tokens.brand;
+    final BorderRadius r = BorderRadius.circular(radius);
+    switch (style) {
+      case UIStyle.neumorphic:
+        return BoxDecoration(
+          color: active
+              ? activeBg
+              : (raised ? tokens.surface : tokens.surfaceAlt),
+          borderRadius: r,
+          boxShadow: (raised || active) ? tokens.shadowConvexSubtle : const [],
+        );
+      case UIStyle.flat:
+        return BoxDecoration(
+          color: active
+              ? activeBg
+              : (raised ? tokens.surface : tokens.surfaceAlt),
+          borderRadius: r,
+          border: Border.all(
+            color: active ? accent : tokens.divider,
+            width: 1,
+          ),
+        );
+      case UIStyle.glass:
+        return BoxDecoration(
+          color: active
+              ? Colors.white.withOpacity(0.4)
+              : Colors.white.withOpacity(raised ? 0.2 : 0.0),
+          borderRadius: r,
+          border: Border.all(
+            color: active
+                ? Colors.white.withOpacity(0.6)
+                : Colors.white.withOpacity(raised ? 0.3 : 0.0),
+            width: 1,
+          ),
+        );
+      case UIStyle.female:
+        if (active) {
+          return BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                activeBg.withOpacity(0.8),
+                tokens.surface.withOpacity(0.55),
+              ],
+            ),
+            borderRadius: r,
+            border: Border.all(
+              color: accent.withOpacity(0.35),
+              width: 0.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: tokens.brand.withOpacity(0.18),
+                offset: const Offset(0, 4),
+                blurRadius: 12,
+              ),
+            ],
+          );
+        }
+        return BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: r,
+          border: Border.all(
+            color: raised
+                ? tokens.brand.withOpacity(0.2)
+                : tokens.brand.withOpacity(0.12),
+            width: 0.8,
+          ),
+        );
+    }
+  }
+
+  /// 底部操作栏面板表面（按 4 风格）。外壳在纯色画布上 → 新拟态可用实心凸起/细边；
+  /// 玻璃用本风格半透明白；女性用 brandSubtle→surface 渐变。
+  BoxDecoration _panelDecoration(ThemeTokens tokens, UIStyle style) {
+    switch (style) {
+      case UIStyle.neumorphic:
+        return BoxDecoration(
+          color: tokens.surface,
+          border: Border(
+            top: BorderSide(color: tokens.divider, width: 0.5),
+          ),
+        );
+      case UIStyle.flat:
+        return BoxDecoration(
+          color: tokens.surface,
+          border: Border(top: BorderSide(color: tokens.divider, width: 1)),
+        );
+      case UIStyle.glass:
+        return BoxDecoration(
+          color: Colors.white.withOpacity(0.55),
+          border: Border(
+            top: BorderSide(color: Colors.white.withOpacity(0.4), width: 1),
+          ),
+        );
+      case UIStyle.female:
+        return BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [tokens.brandSubtle, tokens.surface],
+          ),
+          border: Border(
+            top: BorderSide(color: tokens.brand.withOpacity(0.25), width: 1),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: tokens.brand.withOpacity(0.12),
+              offset: const Offset(0, -2),
+              blurRadius: 12,
+            ),
+          ],
+        );
+    }
+  }
+
   // === build ===
 
   @override
@@ -391,15 +536,13 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     final style = ref.watch(uiStyleProvider);
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(color: tokens.canvas, child: _buildNav(tokens)),
-            Expanded(child: _buildPreviewArea(tokens, style)),
-            _buildBottomPanel(tokens, style),
-          ],
-        ),
+      backgroundColor: tokens.canvas,
+      body: Column(
+        children: [
+          _buildNav(tokens),
+          Expanded(child: _buildPreviewArea(tokens, style)),
+          _buildBottomPanel(tokens, style),
+        ],
       ),
     );
   }
@@ -448,7 +591,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
         : 1.0;
     return Container(
       key: const ValueKey('wm-preview-area'),
-      color: Colors.black,
+      color: _previewBg(tokens),
       child: Center(
         child: AspectRatio(
           aspectRatio: aspect,
@@ -573,19 +716,18 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   // === 底部操作栏 ===
 
   Widget _buildBottomPanel(ThemeTokens tokens, UIStyle style) {
-    final isGlass = style == UIStyle.glass;
-    return Container(
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        border: Border(
-          top: BorderSide(color: tokens.divider, width: isGlass ? 0.5 : 1),
+    return SafeArea(
+      top: false, // Home indicator 区域由面板 surface 承接，消除黑边
+      child: Container(
+        decoration: _panelDecoration(tokens, style),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: _expanded
+              ? _buildExpandedPanel(tokens, style)
+              : _buildCollapsedBar(tokens),
         ),
-      ),
-      child: AnimatedSize(
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOutCubic,
-        alignment: Alignment.topCenter,
-        child: _expanded ? _buildExpandedPanel(tokens) : _buildCollapsedBar(tokens),
       ),
     );
   }
@@ -613,7 +755,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  Widget _buildExpandedPanel(ThemeTokens tokens) {
+  Widget _buildExpandedPanel(ThemeTokens tokens, UIStyle style) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -650,12 +792,13 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           child: Row(
             children: [
               _buildTabButton(_EditorTab.element, '元素',
-                  'wm-tab-element', tokens),
+                  'wm-tab-element', tokens, style),
               const SizedBox(width: 6),
-              _buildTabButton(_EditorTab.style, '样式', 'wm-tab-style', tokens),
+              _buildTabButton(_EditorTab.style, '样式', 'wm-tab-style', tokens,
+                  style),
               const SizedBox(width: 6),
               _buildTabButton(_EditorTab.border, '边框',
-                  'wm-tab-border', tokens),
+                  'wm-tab-border', tokens, style),
             ],
           ),
         ),
@@ -665,7 +808,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
             child: Center(
-              child: _buildTabContent(tokens),
+              child: _buildTabContent(tokens, style),
             ),
           ),
         ),
@@ -673,21 +816,20 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  Widget _buildTabButton(
-      _EditorTab tab, String label, String key, ThemeTokens tokens) {
+  Widget _buildTabButton(_EditorTab tab, String label, String key,
+      ThemeTokens tokens, UIStyle style) {
     final active = _tab == tab;
+    final double radius = style == UIStyle.flat ? 8 : 12;
     return Expanded(
-      child: GestureDetector(
-        key: ValueKey(key),
-        behavior: HitTestBehavior.opaque,
+      child: BreathingTap(
         onTap: () => setState(() => _tab = tab),
+        pressedScale: _scaleFor(style),
         child: Container(
+          key: ValueKey(key),
           padding: const EdgeInsets.symmetric(vertical: 9),
           alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: active ? tokens.brandSubtle : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
+          decoration: _chipDeco(tokens, style,
+              active: active, radius: radius, raised: true),
           child: Text(
             label,
             style: TextStyle(
@@ -701,20 +843,20 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  Widget _buildTabContent(ThemeTokens tokens) {
+  Widget _buildTabContent(ThemeTokens tokens, UIStyle style) {
     switch (_tab) {
       case _EditorTab.element:
-        return _buildElementTab(tokens);
+        return _buildElementTab(tokens, style);
       case _EditorTab.style:
-        return _buildStyleTab(tokens);
+        return _buildStyleTab(tokens, style);
       case _EditorTab.border:
-        return _buildBorderTab(tokens);
+        return _buildBorderTab(tokens, style);
     }
   }
 
   // --- 元素 Tab ---
 
-  Widget _buildElementTab(ThemeTokens tokens) {
+  Widget _buildElementTab(ThemeTokens tokens, UIStyle style) {
     final selected = _selectedElement;
     if (_template.elements.isEmpty) {
       return Text(
@@ -734,7 +876,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
               for (final e in _template.elements)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: _elementChip(e, tokens),
+                  child: _elementChip(e, tokens, style),
                 ),
             ],
           ),
@@ -743,17 +885,20 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
         Row(
           children: [
             _miniButton('＋文本', () => _addElement(WatermarkElementType.text),
-                tokens),
+                tokens,
+                style: style),
             const SizedBox(width: 8),
             _miniButton(
                 '＋日期', () => _addElement(WatermarkElementType.dateTime),
-                tokens),
+                tokens,
+                style: style),
             const Spacer(),
             if (selected != null) ...[
-              _miniButton('复制', () => _copyElement(selected), tokens),
+              _miniButton('复制', () => _copyElement(selected), tokens,
+                  style: style),
               const SizedBox(width: 8),
               _miniButton('删除', () => _removeElement(selected), tokens,
-                  danger: true),
+                  danger: true, style: style),
             ],
           ],
         ),
@@ -761,7 +906,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  Widget _elementChip(WatermarkElement e, ThemeTokens tokens) {
+  Widget _elementChip(WatermarkElement e, ThemeTokens tokens, UIStyle style) {
     final label = e.text.isNotEmpty
         ? e.text
         : (e.type == WatermarkElementType.dateTime ? '日期时间' : '文本');
@@ -772,14 +917,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       child: Container(
         alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: selected ? tokens.brandSubtle : tokens.surfaceAlt,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? tokens.brand : tokens.divider,
-            width: 1,
-          ),
-        ),
+        decoration: _chipDeco(tokens, style,
+            active: selected, radius: 18, raised: true),
         child: Text(
           label,
           style: TextStyle(
@@ -792,17 +931,14 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   }
 
   Widget _miniButton(String label, VoidCallback onTap, ThemeTokens tokens,
-      {bool danger = false}) {
-    return GestureDetector(
+      {bool danger = false, UIStyle style = UIStyle.neumorphic}) {
+    return BreathingTap(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      pressedScale: _scaleFor(style),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: tokens.surfaceAlt,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: tokens.brand.withOpacity(0.35)),
-        ),
+        decoration: _chipDeco(tokens, style,
+            active: false, radius: 10, danger: danger, raised: true),
         child: Text(
           label,
           style: TextStyle(
@@ -817,7 +953,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
 
   // --- 样式 Tab ---
 
-  Widget _buildStyleTab(ThemeTokens tokens) {
+  Widget _buildStyleTab(ThemeTokens tokens, UIStyle style) {
     final el = _selectedElement;
     if (el == null) {
       return Text(
@@ -834,29 +970,9 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (el.type == WatermarkElementType.text)
-          TextField(
+          LumiraTextField(
             controller: _textEditController,
-            style: TextStyle(fontSize: 14, color: tokens.textPrimary),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: '输入文本',
-              hintStyle:
-                  TextStyle(fontSize: 14, color: tokens.textTertiary),
-              contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.divider),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.divider),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: tokens.brand, width: 1.2),
-              ),
-            ),
+            hintText: '输入文本',
             onChanged: (v) {
               el.text = v;
               setState(() {});
@@ -866,9 +982,9 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
         // 照片 / 白边
         Row(
           children: [
-            _spaceOption('照片', WatermarkElementSpace.photo, el, tokens),
+            _spaceOption('照片', WatermarkElementSpace.photo, el, tokens, style),
             const SizedBox(width: 8),
-            _spaceOption('白边', WatermarkElementSpace.frame, el, tokens,
+            _spaceOption('白边', WatermarkElementSpace.frame, el, tokens, style,
                 enabled: frameReady),
           ],
         ),
@@ -923,16 +1039,16 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
         Row(
           children: [
             _toggleChip('粗体', el.bold, (v) => setState(() => el.bold = v),
-                tokens),
+                tokens, style),
             const SizedBox(width: 8),
             _toggleChip('斜体', el.italic, (v) => setState(() => el.italic = v),
-                tokens),
+                tokens, style),
             const SizedBox(width: 8),
-            _alignChip(TextAlign.left, '左', el, tokens),
+            _alignChip(TextAlign.left, '左', el, tokens, style),
             const SizedBox(width: 4),
-            _alignChip(TextAlign.center, '中', el, tokens),
+            _alignChip(TextAlign.center, '中', el, tokens, style),
             const SizedBox(width: 4),
-            _alignChip(TextAlign.right, '右', el, tokens),
+            _alignChip(TextAlign.right, '右', el, tokens, style),
           ],
         ),
       ],
@@ -940,7 +1056,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   }
 
   Widget _spaceOption(String label, WatermarkElementSpace space,
-      WatermarkElement el, ThemeTokens tokens,
+      WatermarkElement el, ThemeTokens tokens, UIStyle style,
       {bool enabled = true}) {
     final active = el.space == space;
     return GestureDetector(
@@ -949,14 +1065,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       onTap: enabled ? () => setState(() => el.space = space) : null,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? tokens.brandSubtle : tokens.surfaceAlt,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: active ? tokens.brand : tokens.divider,
-            width: 1,
-          ),
-        ),
+        decoration: _chipDeco(tokens, style,
+            active: active, radius: 10, raised: true),
         child: Text(
           label,
           style: TextStyle(
@@ -994,7 +1104,9 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
                   color: c,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: el.color == c ? tokens.brand : tokens.divider,
+                    color: el.color == c
+                        ? tokens.brand
+                        : tokens.textTertiary.withOpacity(0.35),
                     width: 2,
                   ),
                 ),
@@ -1006,19 +1118,15 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   }
 
   Widget _toggleChip(String label, bool value, ValueChanged<bool> onChanged,
-      ThemeTokens tokens) {
+      ThemeTokens tokens, UIStyle style) {
     final active = value;
     return GestureDetector(
       onTap: () => onChanged(!value),
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? tokens.brandSubtle : tokens.surfaceAlt,
-          borderRadius: BorderRadius.circular(8),
-          border:
-              Border.all(color: active ? tokens.brand : tokens.divider),
-        ),
+        decoration: _chipDeco(tokens, style,
+            active: active, radius: 8, raised: true),
         child: Text(
           label,
           style: TextStyle(
@@ -1031,7 +1139,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   }
 
   Widget _alignChip(TextAlign align, String label, WatermarkElement el,
-      ThemeTokens tokens) {
+      ThemeTokens tokens, UIStyle style) {
     final active = el.textAlign == align;
     return GestureDetector(
       onTap: () => setState(() => el.textAlign = align),
@@ -1040,12 +1148,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
         width: 30,
         height: 30,
         alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? tokens.brandSubtle : tokens.surfaceAlt,
-          borderRadius: BorderRadius.circular(6),
-          border:
-              Border.all(color: active ? tokens.brand : tokens.divider),
-        ),
+        decoration: _chipDeco(tokens, style,
+            active: active, radius: 6, raised: true),
         child: Text(
           label,
           style: TextStyle(
@@ -1059,7 +1163,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
 
   // --- 边框 Tab ---
 
-  Widget _buildBorderTab(ThemeTokens tokens) {
+  Widget _buildBorderTab(ThemeTokens tokens, UIStyle style) {
     final frame = _template.frame;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1067,11 +1171,11 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       children: [
         Row(
           children: [
-            _frameOption('无', WatermarkFrameType.none, tokens),
+            _frameOption('无', WatermarkFrameType.none, tokens, style),
             const SizedBox(width: 8),
-            _frameOption('拍立得', WatermarkFrameType.polaroid, tokens),
+            _frameOption('拍立得', WatermarkFrameType.polaroid, tokens, style),
             const SizedBox(width: 8),
-            _frameOption('内描边', WatermarkFrameType.innerBorder, tokens),
+            _frameOption('内描边', WatermarkFrameType.innerBorder, tokens, style),
           ],
         ),
         const SizedBox(height: 12),
@@ -1145,7 +1249,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  Widget _frameOption(String label, WatermarkFrameType t, ThemeTokens tokens) {
+  Widget _frameOption(
+    String label, WatermarkFrameType t, ThemeTokens tokens, UIStyle style) {
     final active = _template.frame.type == t;
     return GestureDetector(
       key: ValueKey('wm-frame-$label'),
@@ -1153,14 +1258,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       onTap: () => _setFrameType(t),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? tokens.brandSubtle : tokens.surfaceAlt,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: active ? tokens.brand : tokens.divider,
-            width: 1,
-          ),
-        ),
+        decoration: _chipDeco(tokens, style,
+            active: active, radius: 10, raised: true),
         child: Text(
           label,
           style: TextStyle(
@@ -1195,7 +1294,9 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
                   color: c,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: frame.color == c ? tokens.brand : tokens.divider,
+                    color: frame.color == c
+                        ? tokens.brand
+                        : tokens.textTertiary.withOpacity(0.35),
                     width: 2,
                   ),
                 ),
@@ -1215,9 +1316,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           style: TextStyle(fontSize: 12, color: tokens.textSecondary),
         ),
         const Spacer(),
-        Switch(
+        LumiraSwitch(
           value: value,
-          activeColor: tokens.brand,
           onChanged: onChanged,
         ),
       ],
@@ -1243,13 +1343,11 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           ),
         ),
         Expanded(
-          child: Slider(
+          child: LumiraSlider(
             value: value.clamp(min, max),
             min: min,
             max: max,
             divisions: divisions,
-            activeColor: tokens.brand,
-            thumbColor: tokens.brand,
             onChanged: onChanged,
           ),
         ),

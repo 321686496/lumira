@@ -9,9 +9,11 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/effects/breathing_tap.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/builtin_category_icons.dart';
+import '../data/remote_templates_providers.dart';
 
 /// 二级分类独立页
 ///
@@ -67,6 +69,21 @@ class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
     );
   }
 
+  /// 下拉刷新：重新拉取远程分类/模板并同步到本地，随后重载当前分类下的子分类。
+  Future<void> _onRefresh() async {
+    ref.invalidate(remoteCategoriesSyncProvider);
+    ref.invalidate(remoteTemplatesSyncProvider);
+    await Future.wait([
+      ref.read(remoteCategoriesSyncProvider.future).catchError((_) {}),
+      ref.read(remoteTemplatesSyncProvider.future).catchError((_) {}),
+    ]);
+    // 重新触发 FutureBuilder + 刷新题材名称兜底。
+    if (mounted) {
+      setState(() {});
+      _resolveTypeName();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
@@ -93,30 +110,35 @@ class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
                   ),
                 ),
                 Expanded(
-                  child: asyncDao.when(
-                    loading: () => Center(child: LumiraProgress.circular()),
-                    error: (e, _) => const Center(child: Text('加载失败')),
-                    data: (dao) => FutureBuilder<List<TemplateCategoryRecord>>(
-                      future: dao.getCategoriesByParent(typeKey ?? ''),
-                      builder: (context, snap) {
-                        if (!snap.hasData) {
-                          return Center(child: LumiraProgress.circular());
-                        }
-                        final children = snap.data!;
-                        if (children.isEmpty) {
-                          // 浅层题材：无二级分类，直接提供进入模板列表入口
-                          return _ShallowFallback(
+                  child: RefreshIndicator(
+                    color: tokens.brand,
+                    backgroundColor: tokens.surface,
+                    onRefresh: _onRefresh,
+                    child: asyncDao.when(
+                      loading: () => Center(child: LumiraProgress.circular()),
+                      error: (e, _) => const Center(child: Text('加载失败')),
+                      data: (dao) => FutureBuilder<List<TemplateCategoryRecord>>(
+                        future: dao.getCategoriesByParent(typeKey ?? ''),
+                        builder: (context, snap) {
+                          if (!snap.hasData) {
+                            return Center(child: LumiraProgress.circular());
+                          }
+                          final children = snap.data!;
+                          if (children.isEmpty) {
+                            // 浅层题材：无二级分类，直接提供进入模板列表入口
+                            return _ShallowFallback(
+                              tokens: tokens,
+                              onTap: () => _goTemplates(typeKey!),
+                            );
+                          }
+                          return _SubCategoryGrid(
                             tokens: tokens,
-                            onTap: () => _goTemplates(typeKey!),
+                            typeName: _typeName,
+                            categories: children,
+                            onTap: _goTemplates,
                           );
-                        }
-                        return _SubCategoryGrid(
-                          tokens: tokens,
-                          typeName: _typeName,
-                          categories: children,
-                          onTap: _goTemplates,
-                        );
-                      },
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -214,6 +236,7 @@ class _SubCategoryGrid extends ConsumerWidget {
     }
 
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(), // 支持下拉刷新
       padding: const EdgeInsets.only(bottom: 32),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
@@ -287,7 +310,7 @@ class _SubCategoryGrid extends ConsumerWidget {
 ///
 /// 封面：iconUrl 非空用 Image.network 展示（二级封面图），
 /// 为空回退到 [categoryIconForKey] Material Icon。
-class _SubCategoryCard extends StatelessWidget {
+class _SubCategoryCard extends ConsumerWidget {
   const _SubCategoryCard({
     required this.tokens,
     required this.record,
@@ -299,11 +322,12 @@ class _SubCategoryCard extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final fallbackIcon = categoryIconForKey(record.key);
-    return GestureDetector(
+    final appTheme = ref.watch(appThemeProvider);
+    return BreathingTap(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      pressedScale: appTheme.style == UIStyle.female ? 0.96 : 0.98,
       child: FadeUp(
         child: Container(
           margin: const EdgeInsets.only(bottom: 12),

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
-import '../../../../core/theme/theme_tokens.dart';
 
 /// Lumira 通用按钮组件
 ///
@@ -59,6 +58,12 @@ class LumiraButton extends ConsumerStatefulWidget {
 class _LumiraButtonState extends ConsumerState<LumiraButton> {
   bool _pressed = false;
 
+  // 呼吸按压动画（FemaleAestheticDesignSystem §4.4）：
+  // 按下 140ms 快速内缩到 0.96（模拟物理按压）；
+  // 松手 300ms 用 easeOutBack 弹性回弹，略超 1.0 再回落，形成有生命感的「呼吸」回弹。
+  static const Duration _pressDuration = Duration(milliseconds: 140);
+  static const Duration _releaseDuration = Duration(milliseconds: 300);
+
   bool get _disabled => widget.onPressed == null;
 
   void _handleTapDown(TapDownDetails _) {
@@ -66,10 +71,9 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
   }
 
   void _handleTapUp(TapUpDetails _) {
-    if (!_disabled) {
-      setState(() => _pressed = false);
-      widget.onPressed!();
-    }
+    if (_disabled) return;
+    setState(() => _pressed = false);
+    widget.onPressed!();
   }
 
   void _handleTapCancel() {
@@ -80,31 +84,33 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
-    final style = appTheme.style;
     final visual = appTheme.buttonVisual(widget.variant);
 
     final radius = (widget.radius ?? appTheme.buttonRadius / 2);
-    final pressedScale = style == UIStyle.female ? 0.96 : 0.97;
 
     Color background = visual.background;
     Color foreground = visual.foreground;
     Border? border = visual.border;
     List<BoxShadow> shadows = visual.shadows;
+    LinearGradient? gradient = visual.gradient;
 
     if (_disabled) {
       // disabled 态：背景降透明度 0.5，文字 textTertiary
       background = visual.background.withOpacity(0.5);
       foreground = tokens.textTertiary;
       shadows = const [];
+      gradient = null;
     } else if (widget.variant == ButtonVariant.ghost && _pressed) {
       // ghost 按下时加 brandSubtle 背景
       background = tokens.brandSubtle;
+      gradient = null;
     }
 
     Widget content = Container(
       padding: widget.padding,
       decoration: BoxDecoration(
-        color: background,
+        color: gradient == null ? background : null,
+        gradient: gradient,
         borderRadius: BorderRadius.circular(radius),
         border: border,
         boxShadow: shadows,
@@ -130,10 +136,14 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
         onTapDown: _handleTapDown,
         onTapUp: _handleTapUp,
         onTapCancel: _handleTapCancel,
-        child: AnimatedScale(
-          scale: _pressed ? pressedScale : 1.0,
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
+        child: TweenAnimationBuilder<double>(
+          // 每次 _pressed 变化触发往返补间（无需 Ticker 手动管理）
+          tween: Tween(end: _pressed ? 0.96 : 1.0),
+          duration: _pressed ? _pressDuration : _releaseDuration,
+          // 按下 easeIn 平滑收缩；松手 easeOutBack 弹性回弹（略超 1.0 → 呼吸感）
+          curve: _pressed ? Curves.easeIn : Curves.easeOutBack,
+          builder: (context, scale, child) =>
+              Transform.scale(scale: scale, child: child),
           child: content,
         ),
       );

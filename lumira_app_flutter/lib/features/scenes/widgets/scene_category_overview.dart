@@ -80,10 +80,15 @@ class SceneCategoryOverview extends ConsumerWidget {
     final right = <Widget>[];
     for (var i = 0; i < _categories.length; i++) {
       final cat = _categories[i];
+      // 品牌金色类别（indoor）渐变改为跟随主题色；其余保留分类身份色
+      final catGradient = cat.id == 'indoor'
+          ? <Color>[tokens.brand, tokens.brandDeep]
+          : cat.gradient;
       final card = _SceneCategoryCard(
         meta: cat,
         count: _countForCategory(cat.id),
         tokens: tokens,
+        gradient: catGradient,
         onTap: () => _goScenesWithCategory(context, cat.id),
       );
       if (i % 2 == 0) {
@@ -167,12 +172,14 @@ class _SceneCategoryCard extends StatelessWidget {
     required this.meta,
     required this.count,
     required this.tokens,
+    required this.gradient,
     required this.onTap,
   });
 
   final _SceneCategoryMeta meta;
   final int count;
   final ThemeTokens tokens;
+  final List<Color> gradient;
   final VoidCallback onTap;
 
   @override
@@ -187,7 +194,7 @@ class _SceneCategoryCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: meta.gradient.last.withOpacity(0.25),
+              color: gradient.last.withOpacity(0.25),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -202,7 +209,7 @@ class _SceneCategoryCard extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: meta.gradient,
+                  colors: gradient,
                 ),
               ),
             ),

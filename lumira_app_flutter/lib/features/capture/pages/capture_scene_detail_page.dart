@@ -6,7 +6,6 @@ import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -154,7 +153,8 @@ class _CaptureSceneDetailPageState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = ref.watch(themeTokensProvider);
+    // 主题 token：页面底色随主题切换
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     final scene = _scene;
 
     return Scaffold(
@@ -246,23 +246,25 @@ class _DetailNav extends StatelessWidget {
 }
 
 /// 示例图轮播（mock：水平滚动 + 多图）
-class _Swiper extends StatelessWidget {
+class _Swiper extends ConsumerWidget {
   const _Swiper({required this.scene});
   final ScenePreset scene;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：占位底色 / 占位图标色跟随主题 brand
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     final images = scene.exampleImages;
     if (images.isEmpty) {
       return Container(
         height: 240, // 480rpx → 240dp
-        // 硬编码颜色，与 uni-app 一致 (placeholder)
-        color: const Color.fromRGBO(201, 168, 118, 0.12),
-        child: const Center(
+        // 占位底色跟随主题 brand 半透明
+        color: tokens.brand.withOpacity(0.12),
+        child: Center(
           child: Icon(
             Icons.image_outlined,
             size: 40,
-            color: Color(0xFFC9A876),
+            color: tokens.brand,
           ),
         ),
       );
@@ -275,12 +277,12 @@ class _Swiper extends StatelessWidget {
           images[idx],
           fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => Container(
-            color: const Color.fromRGBO(201, 168, 118, 0.12),
-            child: const Center(
+            color: tokens.brand.withOpacity(0.12),
+            child: Center(
               child: Icon(
                 Icons.image_outlined,
                 size: 40,
-                color: Color(0xFFC9A876),
+                color: tokens.brand,
               ),
             ),
           ),
@@ -291,12 +293,14 @@ class _Swiper extends StatelessWidget {
 }
 
 /// 标题区（图标 + 名称 + vibe）
-class _Header extends StatelessWidget {
+class _Header extends ConsumerWidget {
   const _Header({required this.scene});
   final ScenePreset scene;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：图标 / 主次文字色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 16, 12, 8), // 24rpx×2/32rpx/16rpx
       child: Column(
@@ -307,7 +311,7 @@ class _Header extends StatelessWidget {
               Icon(
                 CaptureSceneMockData.iconFromString(scene.icon),
                 size: 24, // 48rpx → 24dp
-                color: const Color(0xFF2A2520),
+                color: tokens.textPrimary,
               ),
               const SizedBox(width: 8),
               Flexible(
@@ -315,10 +319,10 @@ class _Header extends StatelessWidget {
                   scene.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20, // 40rpx → 20dp
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF2A2520),
+                    color: tokens.textPrimary,
                   ),
                 ),
               ),
@@ -327,10 +331,10 @@ class _Header extends StatelessWidget {
           const SizedBox(height: 6), // 12rpx → 6dp
           Text(
             scene.vibe,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14, // 28rpx → 14dp
               fontStyle: FontStyle.italic,
-              color: Color(0xFF6B635A),
+              color: tokens.textSecondary,
             ),
           ),
         ],
@@ -340,14 +344,16 @@ class _Header extends StatelessWidget {
 }
 
 /// 通用 section 容器
-class _Section extends StatelessWidget {
+class _Section extends ConsumerWidget {
   const _Section({required this.title, required this.child});
 
   final String title;
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：标题色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), // 24rpx/16rpx
       child: Column(
@@ -355,10 +361,10 @@ class _Section extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14, // 28rpx → 14dp
               fontWeight: FontWeight.w600,
-              color: Color(0xFF2A2520),
+              color: tokens.textPrimary,
             ),
           ),
           const SizedBox(height: 8), // 16rpx → 8dp
@@ -370,19 +376,21 @@ class _Section extends StatelessWidget {
 }
 
 /// 氛围卡片
-class _AtmosphereSection extends StatelessWidget {
+class _AtmosphereSection extends ConsumerWidget {
   const _AtmosphereSection({required this.scene});
   final ScenePreset scene;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：卡片底色 / 描述文字色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return _Section(
       title: '氛围',
       child: Container(
         padding: const EdgeInsets.all(12), // 24rpx → 12dp
         decoration: BoxDecoration(
-          // 硬编码颜色，与 uni-app 一致 (section-card bg rgba(0,0,0,0.04))
-          color: const Color.fromRGBO(0, 0, 0, 0.04),
+          // 卡片底色跟随主题 surfaceAlt
+          color: tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(10), // 20rpx → 10dp
         ),
         child: Column(
@@ -390,10 +398,10 @@ class _AtmosphereSection extends StatelessWidget {
           children: [
             Text(
               scene.description,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13, // 26rpx → 13dp
                 height: 1.6,
-                color: Color(0xFF2A2520),
+                color: tokens.textPrimary,
               ),
             ),
             const SizedBox(height: 8), // 16rpx → 8dp
@@ -407,19 +415,21 @@ class _AtmosphereSection extends StatelessWidget {
   }
 }
 
-class _MetaRow extends StatelessWidget {
+class _MetaRow extends ConsumerWidget {
   const _MetaRow({required this.icon, required this.text});
   final IconData icon;
   final String text;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：图标 / 文字色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return Row(
       children: [
         Icon(
           icon,
           size: 14, // 28rpx → 14dp
-          color: const Color(0xFF6B635A),
+          color: tokens.textSecondary,
         ),
         const SizedBox(width: 6),
         Expanded(
@@ -427,9 +437,9 @@ class _MetaRow extends StatelessWidget {
             text,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12, // 24rpx → 12dp
-              color: Color(0xFF6B635A),
+              color: tokens.textSecondary,
             ),
           ),
         ),
@@ -439,7 +449,7 @@ class _MetaRow extends StatelessWidget {
 }
 
 /// 标签区
-class _TagsSection extends StatelessWidget {
+class _TagsSection extends ConsumerWidget {
   const _TagsSection({
     required this.scene,
     required this.editableTagIds,
@@ -455,7 +465,9 @@ class _TagsSection extends StatelessWidget {
   final ValueChanged<String> onToggleTag;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：空态 / 添加标签 chip 色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     final isCustom = scene.isCustom;
     final tagIds = isCustom ? editableTagIds : scene.recommendedTagIds;
     final tags = CaptureSceneMockData.getTagsByIds(tagIds);
@@ -472,11 +484,11 @@ class _TagsSection extends StatelessWidget {
               for (final t in tags)
                 _TagChip(name: t.name, golden: true),
               if (tags.isEmpty && !isCustom)
-                const Text(
+                Text(
                   '暂无标签',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Color(0xFF9C9690),
+                    color: tokens.textTertiary,
                   ),
                 ),
               if (isCustom)
@@ -488,26 +500,26 @@ class _TagsSection extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(9999),
                       border: Border.all(
-                        color: const Color(0xFFC9A876),
+                        color: tokens.brand,
                         width: 1, // 2rpx → 1dp
                       ),
-                      color: const Color.fromRGBO(201, 168, 118, 0.08),
+                      color: tokens.brand.withOpacity(0.08),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         Icon(
                           Icons.add,
                           size: 12, // 24rpx → 12dp
-                          color: Color(0xFFC9A876),
+                          color: tokens.brand,
                         ),
-                        SizedBox(width: 3), // 6rpx → 3dp
+                        const SizedBox(width: 3), // 6rpx → 3dp
                         Text(
                           '添加标签',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
-                            color: Color(0xFFC9A876),
+                            color: tokens.brand,
                           ),
                         ),
                       ],
@@ -529,20 +541,22 @@ class _TagsSection extends StatelessWidget {
   }
 }
 
-class _TagChip extends StatelessWidget {
+class _TagChip extends ConsumerWidget {
   const _TagChip({required this.name, this.golden = false});
   final String name;
   final bool golden;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：金色标签 / 普通标签色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), // 20rpx×8rpx
       decoration: BoxDecoration(
-        // 硬编码颜色，与 uni-app 一致 (lumira-tag-gold bg rgba(201,168,118,0.15))
+        // 金色标签用 brand 半透明底，普通标签用 surfaceAlt 底
         color: golden
-            ? const Color.fromRGBO(201, 168, 118, 0.15)
-            : const Color.fromRGBO(0, 0, 0, 0.04),
+            ? tokens.brand.withOpacity(0.15)
+            : tokens.surfaceAlt,
         borderRadius: BorderRadius.circular(9999),
       ),
       child: Text(
@@ -550,7 +564,7 @@ class _TagChip extends StatelessWidget {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w500,
-          color: golden ? const Color(0xFF8C7340) : const Color(0xFF2A2520),
+          color: golden ? tokens.brandDeep : tokens.textPrimary,
         ),
       ),
     );
@@ -558,7 +572,7 @@ class _TagChip extends StatelessWidget {
 }
 
 /// TagSelector 简化版（内嵌 chip 列表，brief §8）
-class _TagSelectorSheet extends StatelessWidget {
+class _TagSelectorSheet extends ConsumerWidget {
   const _TagSelectorSheet({
     required this.selectedIds,
     required this.onToggle,
@@ -568,12 +582,14 @@ class _TagSelectorSheet extends StatelessWidget {
   final ValueChanged<String> onToggle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：选中 / 未选中 chip 色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     const allTags = CaptureSceneMockData.tags;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color.fromRGBO(0, 0, 0, 0.04),
+        color: tokens.surfaceAlt,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Wrap(
@@ -588,13 +604,11 @@ class _TagSelectorSheet extends StatelessWidget {
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: selected
-                    ? const Color(0xFFC9A876)
-                    : Colors.white.withOpacity(0.6),
+                    ? tokens.brand
+                    : tokens.surface.withOpacity(0.6),
                 borderRadius: BorderRadius.circular(9999),
                 border: Border.all(
-                  color: selected
-                      ? const Color(0xFFC9A876)
-                      : const Color(0xFFEAE5DC),
+                  color: selected ? tokens.brand : tokens.divider,
                   width: 1,
                 ),
               ),
@@ -603,7 +617,7 @@ class _TagSelectorSheet extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
-                  color: selected ? Colors.white : const Color(0xFF2A2520),
+                  color: selected ? tokens.textInverse : tokens.textPrimary,
                 ),
               ),
             ),
@@ -627,18 +641,20 @@ class _FilterSection extends StatelessWidget {
   }
 }
 
-class _TipsSection extends StatelessWidget {
+class _TipsSection extends ConsumerWidget {
   const _TipsSection({required this.scene});
   final ScenePreset scene;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：贴士卡片底色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return _Section(
       title: '拍摄小贴士',
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color.fromRGBO(0, 0, 0, 0.04),
+          color: tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
@@ -655,20 +671,22 @@ class _TipsSection extends StatelessWidget {
   }
 }
 
-class _TipRow extends StatelessWidget {
+class _TipRow extends ConsumerWidget {
   const _TipRow({required this.text});
   final String text;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：圆点 / 文字色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '•',
           style: TextStyle(
             fontSize: 13,
-            color: Color(0xFFC9A876),
+            color: tokens.brand,
             height: 1.5,
           ),
         ),
@@ -676,10 +694,10 @@ class _TipRow extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               height: 1.5,
-              color: Color(0xFF2A2520),
+              color: tokens.textPrimary,
             ),
           ),
         ),
@@ -713,27 +731,29 @@ class _AchievementSection extends StatelessWidget {
 }
 
 /// 空状态（场景未找到）
-class _EmptyState extends StatelessWidget {
+class _EmptyState extends ConsumerWidget {
   const _EmptyState({required this.onBack});
   final VoidCallback onBack;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：空状态图标 / 文字色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
+          Icon(
             Icons.error_outline,
             size: 48,
-            color: Color(0xFF9C9690),
+            color: tokens.textTertiary,
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             '场景未找到',
             style: TextStyle(
               fontSize: 16,
-              color: Color(0xFF2A2520),
+              color: tokens.textPrimary,
             ),
           ),
           const SizedBox(height: 16),
@@ -749,17 +769,19 @@ class _EmptyState extends StatelessWidget {
 }
 
 /// 底部双按钮
-class _BottomButtons extends StatelessWidget {
+class _BottomButtons extends ConsumerWidget {
   const _BottomButtons({required this.onCapture, required this.onCreateKit});
   final VoidCallback onCapture;
   final VoidCallback onCreateKit;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 主题 token：底部面板底 / 主副按钮色跟随主题
+    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 16), // 24rpx + safe-area
-      decoration: const BoxDecoration(
-        color: Color(0xFFFAF7F2), // 硬编码：与页面背景一致
+      decoration: BoxDecoration(
+        color: tokens.canvas, // 与页面背景一致
       ),
       child: Row(
         children: [
@@ -770,17 +792,17 @@ class _BottomButtons extends StatelessWidget {
               child: Container(
                 height: 44, // 88rpx → 44dp
                 decoration: BoxDecoration(
-                  // 硬编码颜色，与 uni-app 一致 (btn-primary bg #2A2520)
-                  color: const Color(0xFF2A2520),
+                  // 主按钮底色跟随主题 textPrimary
+                  color: tokens.textPrimary,
                   borderRadius: BorderRadius.circular(22), // 44rpx → 22dp
                 ),
                 alignment: Alignment.center,
-                child: const Text(
+                child: Text(
                   '用此场景拍照',
                   style: TextStyle(
                     fontSize: 14, // 28rpx → 14dp
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: tokens.textInverse,
                   ),
                 ),
               ),
@@ -794,17 +816,17 @@ class _BottomButtons extends StatelessWidget {
               child: Container(
                 height: 44,
                 decoration: BoxDecoration(
-                  // 硬编码颜色，与 uni-app 一致 (btn-secondary bg rgba(201,168,118,0.15))
-                  color: const Color.fromRGBO(201, 168, 118, 0.15),
+                  // 副按钮底色跟随主题 brand 半透明
+                  color: tokens.brand.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(22),
                 ),
                 alignment: Alignment.center,
-                child: const Text(
+                child: Text(
                   '加入组合',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFFC9A876),
+                    color: tokens.brand,
                   ),
                 ),
               ),

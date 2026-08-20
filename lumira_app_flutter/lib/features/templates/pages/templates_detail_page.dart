@@ -1327,13 +1327,13 @@ class _PoseReferenceCard extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(14),
-                    // 硬编码颜色，与 uni-app 一致
-                    gradient: const LinearGradient(
+                    // 品牌色浅渐变（色值跟随主题 brand，原与 uni-app 一致）
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        Color.fromRGBO(201, 169, 110, 0.08),
-                        Color.fromRGBO(201, 169, 110, 0.02),
+                        tokens.brand.withOpacity(0.08),
+                        tokens.brand.withOpacity(0.02),
                       ],
                     ),
                   ),

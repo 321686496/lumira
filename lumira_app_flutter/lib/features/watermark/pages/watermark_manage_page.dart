@@ -171,6 +171,7 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final style = ref.watch(uiStyleProvider);
     final settings = ref.watch(watermarkSettingsProvider);
     final presets = ref.watch(presetWatermarksProvider);
     final customs = ref.watch(customWatermarksProvider);
@@ -206,7 +207,7 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(child: _layoutHeader(tokens, layout)),
+            SliverToBoxAdapter(child: _layoutHeader(tokens, layout, style)),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 2, 16, 32),
               sliver: isGrid
@@ -219,7 +220,8 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
     );
   }
 
-  Widget _layoutHeader(ThemeTokens tokens, WatermarkManageLayout layout) {
+  Widget _layoutHeader(
+    ThemeTokens tokens, WatermarkManageLayout layout, UIStyle style) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
       child: Row(
@@ -240,6 +242,7 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
               next,
             ),
             tokens: tokens,
+            style: style,
           ),
         ],
       ),
@@ -304,43 +307,63 @@ class _WatermarkManagePageState extends ConsumerState<WatermarkManagePage> {
   }
 }
 
-/// 布局切换分段控件：单列 / 双列
+/// 布局切换分段控件：单列 / 双列（风格自适应）
 class _LayoutSegments extends StatelessWidget {
   const _LayoutSegments({
     required this.value,
     required this.onChanged,
     required this.tokens,
+    required this.style,
   });
 
   final WatermarkManageLayout value;
   final ValueChanged<WatermarkManageLayout> onChanged;
   final ThemeTokens tokens;
+  final UIStyle style;
 
   @override
   Widget build(BuildContext context) {
+    final double radius =
+        style == UIStyle.flat ? 8 : (style == UIStyle.female ? 16 : 12);
+    // 容器底：female 用 brandSubtle 淡底；其余 surfaceAlt 淡底
+    final Color track =
+        style == UIStyle.female ? tokens.brandSubtle : tokens.surfaceAlt;
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
-        borderRadius: BorderRadius.circular(10),
+        color: track,
+        borderRadius: BorderRadius.circular(radius),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _seg(tokens, Icons.view_agenda, WatermarkManageLayout.list),
+          _seg(Icons.view_agenda, WatermarkManageLayout.list, radius),
           const SizedBox(width: 3),
-          _seg(tokens, Icons.grid_view, WatermarkManageLayout.grid),
+          _seg(Icons.grid_view, WatermarkManageLayout.grid, radius),
         ],
       ),
     );
   }
 
   Widget _seg(
-    ThemeTokens tokens,
     IconData icon,
     WatermarkManageLayout layout,
+    double radius,
   ) {
     final active = value == layout;
+    final List<BoxShadow> shadow = active
+        ? (style == UIStyle.female
+            ? [
+                BoxShadow(
+                  color: tokens.brand.withOpacity(0.15),
+                  offset: const Offset(0, 4),
+                  blurRadius: 12,
+                ),
+              ]
+            : style == UIStyle.neumorphic
+                ? tokens.shadowConvexSubtle
+                : const [])
+        : const [];
     return GestureDetector(
       onTap: () => onChanged(layout),
       behavior: HitTestBehavior.opaque,
@@ -348,9 +371,31 @@ class _LayoutSegments extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? tokens.surface : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: active ? Border.all(color: tokens.brand, width: 1) : null,
+          // female 激活用 gradient；其余激活用 surface 凸起 + 品牌描边；glass 激活用白 0.4
+          gradient: active && style == UIStyle.female
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    tokens.brandSubtle.withOpacity(0.9),
+                    tokens.surface,
+                  ],
+                )
+              : null,
+          color: active
+              ? (style == UIStyle.glass
+                  ? Colors.white.withOpacity(0.4)
+                  : style == UIStyle.female
+                      ? tokens.surface
+                      : tokens.surface)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(radius - 3),
+          border: active
+              ? (style == UIStyle.neumorphic
+                  ? null
+                  : Border.all(color: tokens.brand, width: 1))
+              : null,
+          boxShadow: shadow,
         ),
         child: Icon(
           icon,

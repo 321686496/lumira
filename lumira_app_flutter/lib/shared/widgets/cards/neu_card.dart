@@ -44,6 +44,9 @@ class NeuCard extends ConsumerWidget {
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry? margin;
   final VoidCallback? onTap;
+
+  /// 保留的兼容参数（历史上用于开关按压缩放）。
+  /// 现衷：所有可点击卡片统一提供「呼吸」按压反馈，不再由该参数门控。
   final bool enableHoverScale;
 
   /// 新拟态阴影变体（仅 neumorphic 风格生效）
@@ -67,14 +70,15 @@ class NeuCard extends ConsumerWidget {
 
     Widget card = _buildCard(appTheme, tokens, radius);
 
-    if (enableHoverScale && onTap != null) {
+    // 卡片点击「呼吸」按压反馈（FemaleAestheticDesignSystem §4.4）：
+    // 所有可点击卡片统一启用；女性美学取 0.96 更强的呼吸回弹，其余风格 0.98 轻微按压。
+    // 该反馈存在时启用 _ScaleTap 的弹性补间（press 内缩 + release easeOutBack 回弹）。
+    if (onTap != null) {
       card = _ScaleTap(
         scale: appTheme.style == UIStyle.female ? 0.96 : 0.98,
         onTap: onTap!,
         child: card,
       );
-    } else if (onTap != null) {
-      card = GestureDetector(onTap: onTap, child: card);
     }
 
     if (margin != null) {
@@ -121,6 +125,8 @@ class NeuCard extends ConsumerWidget {
             borderRadius: BorderRadius.circular(radius),
             boxShadow: shadows,
           ),
+          // Bug fix: 裁剪内容到圆角内部，避免卡片内的封面图/子组件溢出圆角
+          clipBehavior: Clip.antiAlias,
           child: child,
         );
 
@@ -133,6 +139,8 @@ class NeuCard extends ConsumerWidget {
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(color: tokens.divider, width: 1),
           ),
+          // Bug fix: 裁剪内容到圆角内部，避免封面图/子组件溢出圆角
+          clipBehavior: Clip.antiAlias,
           child: child,
         );
 
@@ -224,47 +232,30 @@ class NeuCard extends ConsumerWidget {
         );
 
       case UIStyle.female:
-        // Forced fix: 女性美学加强渐变对比与高光，增加品牌色饱和度。
-        // 多渐变卡片：5 层视觉
-        //
-        // Bug fix: 之前 CustomPaint 放在 padding 内部，导致径向高光只绘制在
-        // 内容区域，padding 区域只有底层 LinearGradient，两层渐变不一致，
-        // 视觉上出现"边框带"效果。改为用 Stack 结构，让径向高光覆盖整个卡片
-        // （包括 padding 区域），再用 Padding 包裹 child。
+        // Forced fix: 女性美学卡片重做，去「反光玻璃」观感。
+        // 采用：不透明柔和扁平微渐变（纸面感）+ 极淡氛围光（非明亮光斑）+ 细腻暖色 hairline
+        // 边框（替代刺眼白边）+ 单一柔和品牌色投影（去玻璃高光顶边）。
+        // Bug fix: 用 Stack 结构让径向氛围光覆盖整个卡片（含 padding），
+        // 再以 Padding 包裹内容，避免“边框带”效果。
         final mg = appTheme.multiGradient!;
         return Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                tokens.brandSubtle.withOpacity(0.85),
-                tokens.surface.withOpacity(0.65),
-                tokens.brandLight.withOpacity(0.45),
-              ],
-              stops: const [0.0, 0.5, 1.0],
-            ),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.7),
-              width: 0.8,
-            ),
+            gradient: mg.linear,
+            border: mg.hairlineBorder,
             boxShadow: [
               BoxShadow(
-                color: tokens.brand.withOpacity(0.20),
+                color: tokens.brand.withOpacity(0.16),
                 offset: const Offset(0, 10),
-                blurRadius: 32,
-              ),
-              BoxShadow(
-                color: tokens.brandLight.withOpacity(0.15),
-                offset: const Offset(0, -2),
-                blurRadius: 8,
+                blurRadius: 28,
               ),
             ],
           ),
+          // Bug fix: 裁剪内容到圆角内部，避免顶部封面图/子组件溢出圆角
+          clipBehavior: Clip.antiAlias,
           child: Stack(
             children: [
-              // 层 1: 径向高光（覆盖整个卡片，包括 padding 区域）
+              // 层 1: 极淡暖色氛围光（覆盖整个卡片，包括 padding 区域）
               // Bug fix: 传入 radius 让 painter 用 drawRRect 绘制圆角矩形，
               // 避免覆盖 Container 的 borderRadius 导致圆角视觉消失。
               Positioned.fill(
@@ -333,6 +324,10 @@ class _ScaleTap extends StatefulWidget {
 class _ScaleTapState extends State<_ScaleTap> {
   bool _pressed = false;
 
+  // 呼吸按压：按下 140ms 内缩；松手 300ms easeOutBack 弹性回弹略超 1.0（女性「呼吸感」）。
+  static const Duration _pressDuration = Duration(milliseconds: 140);
+  static const Duration _releaseDuration = Duration(milliseconds: 300);
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -342,10 +337,13 @@ class _ScaleTapState extends State<_ScaleTap> {
         widget.onTap();
       },
       onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? widget.scale : 1.0,
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: _pressed ? widget.scale : 1.0),
+        duration: _pressed ? _pressDuration : _releaseDuration,
+        // 按下 easeIn 平滑收缩；松手 easeOutBack 弹性回弹（略超 1.0 → 呼吸感）
+        curve: _pressed ? Curves.easeIn : Curves.easeOutBack,
+        builder: (context, scale, child) =>
+            Transform.scale(scale: scale, child: child),
         child: widget.child,
       ),
     );

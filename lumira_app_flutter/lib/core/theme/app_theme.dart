@@ -153,6 +153,35 @@ class AppThemeData {
   ButtonVisual buttonVisual(ButtonVariant variant) {
     switch (variant) {
       case ButtonVariant.primary:
+        // 女性美学：核心按钮采用「扁平微渐变」（brandLight→brand→brandDeep，135°），
+        // 模拟自然光影，避免纯色生硬感（FemaleAestheticDesignSystem §4.1）。其余风格保留纯色。
+        if (style == UIStyle.female) {
+          return ButtonVisual(
+            background: tokens.brand,
+            foreground: tokens.textInverse,
+            border: null,
+            shadows: <BoxShadow>[
+              BoxShadow(
+                color: tokens.brand.withOpacity(0.25),
+                offset: const Offset(0, 6),
+                blurRadius: 20,
+              ),
+            ],
+            // 135° 微渐变（扁平微渐变，模拟自然光影）：Top-Left 高光 → 品牌色。
+            // 用【稍亮的品牌浅色】而非 brandDeep 做收尾，避免按钮出现厚重/暗沉的
+            // 底部，保持低饱和、高明度的治愈温馨感（FemaleAestheticDesignSystem §4.1）。
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.lerp(tokens.brandLight, Colors.white, 0.35)!,
+                tokens.brandLight,
+                tokens.brand,
+              ],
+              stops: const [0.0, 0.32, 1.0],
+            ),
+          );
+        }
         return ButtonVisual(
           background: tokens.brand,
           foreground: tokens.textInverse,
@@ -285,6 +314,10 @@ class AppThemeData {
   /// 层 3: 表面 75% 透明度（surfaceAlpha）
   /// 层 4: 白色 1px 边框（女性美学实际 cardBorder 为 null，但多渐变卡片本身需细边框强化层次）
   /// 层 5: 品牌色 0.15 阴影（cardShadow 已提供）
+  /// 女性美学多渐变卡片规格。
+  /// 设计取向：低饱和、高明度的「治愈温馨」纸质卡片，而非玻璃/反光质感——
+  /// 线性渐变整体不透明（纯色纸面），径向仅是极淡的暖暖氛围光（低透明度），
+  /// 避免 top-left 明亮光斑造成的「反光玻璃」观感（FemaleAestheticDesignSystem §4.1）。
   MultiGradientSpec? get multiGradient {
     if (style != UIStyle.female) return null;
     return MultiGradientSpec(
@@ -292,19 +325,24 @@ class AppThemeData {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          tokens.brandSubtle.withOpacity(0.75),
-          tokens.surface.withOpacity(0.75),
+          tokens.brandSubtle,
+          tokens.surface,
+          Color.lerp(tokens.brandLight, tokens.surface, 0.6)!,
         ],
+        stops: const [0.0, 0.6, 1.0],
       ),
       radialHighlight: RadialGradient(
         center: Alignment.topLeft,
-        radius: 0.85,
+        radius: 1.15,
         colors: [
-          tokens.brandLight.withOpacity(0.45),
+          tokens.brandLight.withOpacity(0.16),
           tokens.brandLight.withOpacity(0.0),
         ],
       ),
-      hairlineBorder: Border.all(color: const Color(0xFFFFFFFF).withOpacity(0.6), width: 0.5),
+      hairlineBorder: Border.all(
+        color: tokens.brand.withOpacity(0.10),
+        width: 0.6,
+      ),
     );
   }
 
@@ -356,11 +394,16 @@ class ButtonVisual {
   final Border? border;
   final List<BoxShadow> shadows;
 
+  /// 可选背景渐变（女性美学「扁平微渐变」，见 §4.1）。
+  /// 非空时优先于 [background] 作为按钮底色；其余风格为 null 保持纯色。
+  final LinearGradient? gradient;
+
   const ButtonVisual({
     required this.background,
     required this.foreground,
     required this.border,
     required this.shadows,
+    this.gradient,
   });
 }
 
