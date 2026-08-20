@@ -71,3 +71,18 @@ export interface CreateSceneRequest {
 }
 
 export interface UpdateSceneRequest extends Partial<Omit<CreateSceneRequest, 'id'>> {}
+
+// ===== 内置模板注册表 =====
+export interface BuiltinTemplate {
+  id: string;
+  name: string;
+}
+
+/** App 全量上报内置模板（id + 当前名称）。 */
+export interface BuiltinTemplateSyncInput {
+  items: BuiltinTemplate[];
+}
+
+export interface BuiltinTemplateListResponse {
+  items: BuiltinTemplate[];
+}

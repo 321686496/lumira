@@ -269,3 +269,10 @@ export const systemScenes = mysqlTable('system_scenes', {
 }, (table) => ({
   activeIdx: index('idx_system_scenes_active').on(table.isActive),
 }));
+
+// ===== 内置模板注册表（App 同步，后台展示内置模板名称）=====
+export const builtinTemplates = mysqlTable('builtin_templates', {
+  id: varchar('id', { length: 128 }).primaryKey(),
+  name: text('name').notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});
