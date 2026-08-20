@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/network/api_client.dart';
+import 'builtin_scene_sync_service.dart';
 import 'builtin_template_sync_service.dart';
 import 'usage_event_recorder.dart';
 import 'usage_sync_service.dart';
@@ -25,4 +26,11 @@ final builtinTemplateSyncServiceProvider =
     FutureProvider<BuiltinTemplateSyncService>((ref) async {
   final api = await ref.watch(apiClientProvider.future);
   return BuiltinTemplateSyncService(DioBuiltinTemplateNetwork(api));
+});
+
+/// 内置场景名称同步服务。
+final builtinSceneSyncServiceProvider =
+    FutureProvider<BuiltinSceneSyncService>((ref) async {
+  final api = await ref.watch(apiClientProvider.future);
+  return BuiltinSceneSyncService(DioBuiltinSceneNetwork(api));
 });

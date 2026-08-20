@@ -169,6 +169,18 @@ Future<void> main() async {
     }
   });
 
+  // 6.7 内置场景名称同步（同步 id/名称到后端；失败静默不阻塞启动）
+  // ignore: unawaited_futures
+  authController.ensureRegistered().then((ok) async {
+    if (!ok) return;
+    try {
+      final bss = await container.read(builtinSceneSyncServiceProvider.future);
+      await bss.syncBuiltinScenes();
+    } catch (_) {
+      // 网络/鉴权失败静默
+    }
+  });
+
   runApp(
     UncontrolledProviderScope(
       container: container,
