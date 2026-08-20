@@ -1,4 +1,4 @@
-﻿// lumira-server/packages/backend/src/main.ts
+// lumira-server/packages/backend/src/main.ts
 
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, NestFastifyApplication } from "@nestjs/platform-fastify";
@@ -66,9 +66,13 @@ async function bootstrap() {
   if (!fs.existsSync(uploadRoot)) {
     fs.mkdirSync(uploadRoot, { recursive: true });
   }
+  // 上传图片静态服务：URL 含类别/id/文件名，基本不可变 → 用强缓存减少 App 冷启动重复下载。
   await app.register(fastifyStatic, {
     root: uploadRoot,
     prefix: "/uploads/",
+    setHeaders(res) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    },
   });
 
   // Static file serving for public website
