@@ -1,8 +1,10 @@
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -14,6 +16,8 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/builtin_profiles.dart';
 import '../data/profile_models.dart';
 import '../providers/profile_providers.dart';
+import '../services/profile_sync_service.dart';
+import '../widgets/pref_selector.dart';
 
 /// 编辑资料页（头像选择 + 用户名）
 ///
@@ -32,6 +36,18 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   String? _selectedSeed;
   bool _saving = false;
 
+  // Task6 新增：原始资料（copyWith 基础）+ 各偏好选择值
+  ProfileData? _base;
+  String? _selectedGender;
+  final Set<String> _favoriteCategories = {};
+  final Set<String> _painPoints = {};
+  String? _selectedSkillLevel;
+  final Set<String> _expectations = {};
+  final Set<String> _commonScenes = {};
+  String? _selectedShootFrequency;
+  String? _avatarUrl; // 自定义头像 URL（null/空 表示用内置 seed）
+  bool _uploadingAvatar = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,8 +64,25 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
     final profile = await ref.read(profileDataProvider.future);
     if (!mounted) return;
     setState(() {
+      _base = profile;
       _usernameController.text = profile?.username ?? '';
       _selectedSeed = profile?.avatarSeed ?? BuiltinProfiles.avatarSeeds.first;
+      _selectedGender = profile?.gender;
+      _favoriteCategories
+        ..clear()
+        ..addAll(profile?.favoriteCategories ?? const []);
+      _painPoints
+        ..clear()
+        ..addAll(profile?.painPoints ?? const []);
+      _selectedSkillLevel = profile?.skillLevel;
+      _expectations
+        ..clear()
+        ..addAll(profile?.expectations ?? const []);
+      _commonScenes
+        ..clear()
+        ..addAll(profile?.commonScenes ?? const []);
+      _selectedShootFrequency = profile?.shootFrequency;
+      _avatarUrl = profile?.avatarUrl;
     });
   }
 
@@ -68,16 +101,118 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   Future<void> _save() async {
     if (!_dirty || _saving) return;
     setState(() => _saving = true);
+    try {
+      final result = await _persist();
+      if (!mounted) return;
+      ref.invalidate(profileDataProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.synced ? '已保存' : '已保存到本地，稍后自动同步')),
+      );
+      Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// 组装 ProfileData 并调用 sync.save（离线优先，不抛异常）
+  Future<ProfileSaveResult> _persist() async {
+    final base = _base;
     final username = _usernameController.text.trim();
-    final profile = ProfileData(username: username, avatarSeed: _selectedSeed!);
-    final sync = await ref.read(profileSyncServiceProvider.future);
-    final result = await sync.save(profile);
-    if (!mounted) return;
-    ref.invalidate(profileDataProvider);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(result.synced ? '已保存' : '已保存到本地，稍后自动同步')),
+    final updated = (base ?? ProfileData(username: username, avatarSeed: 'lumira-avatar-01')).copyWith(
+      username: username,
+      avatarSeed: _selectedSeed,
+      gender: _selectedGender,
+      favoriteCategories: _favoriteCategories.toList(),
+      painPoints: _painPoints.toList(),
+      skillLevel: _selectedSkillLevel,
+      expectations: _expectations.toList(),
+      commonScenes: _commonScenes.toList(),
+      shootFrequency: _selectedShootFrequency,
+      avatarUrl: _avatarUrl == null || _avatarUrl!.isEmpty ? null : _avatarUrl,
     );
-    Navigator.of(context).pop();
+    final sync = await ref.read(profileSyncServiceProvider.future);
+    return sync.save(updated);
+  }
+
+  /// 选图 + 上传自定义头像；成功后立即持久化，便于用户直接离开页面
+  Future<void> _pickAndUploadAvatar() async {
+    if (_uploadingAvatar) return;
+    final picked = await FilePickerService.pickSingleImage();
+    if (picked == null) return; // 用户取消
+    final full = await FilePickerService.ensureFullBytes(picked);
+    final bytes = full.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('图片读取失败')));
+      }
+      return;
+    }
+    setState(() => _uploadingAvatar = true);
+    try {
+      final sync = await ref.read(profileSyncServiceProvider.future);
+      final url = await sync.uploadAvatar(
+        Uint8List.fromList(bytes),
+        full.name.isNotEmpty ? full.name : 'avatar.txt.png',
+      );
+      if (!mounted) return;
+      setState(() => _avatarUrl = url);
+      await _persist();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('上传失败：$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingAvatar = false);
+    }
+  }
+
+  void _restoreBuiltinAvatar() {
+    setState(() => _avatarUrl = null);
+  }
+
+  /// 自定义头像上传/恢复区：左侧当前头像预览，右侧上传与恢复按钮
+  Widget _buildAvatarUpload(ThemeTokens tokens) {
+    final customActive = _avatarUrl != null && _avatarUrl!.isNotEmpty;
+    final imgUrl = customActive
+        ? BuiltinProfiles.avatarUrl('_custom', customUrl: _avatarUrl)
+        : BuiltinProfiles.avatarUrl(
+            _selectedSeed ?? BuiltinProfiles.avatarSeeds.first);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        ClipOval(
+          child: Image.network(
+            imgUrl,
+            width: 72,
+            height: 72,
+            fit: BoxFit.cover,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              LumiraButton(
+                variant: ButtonVariant.secondary,
+                onPressed: _uploadingAvatar ? null : _pickAndUploadAvatar,
+                child: Text(_uploadingAvatar ? '上传中…' : '上传自定义头像'),
+              ),
+              if (customActive) ...[
+                const SizedBox(height: 8),
+                LumiraButton(
+                  variant: ButtonVariant.ghost,
+                  onPressed: _uploadingAvatar ? null : _restoreBuiltinAvatar,
+                  child: const Text('恢复内置头像'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -146,6 +281,80 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
                             onTap: () => setState(() => _selectedSeed = seed),
                           ),
                       ],
+                    ),
+                    const SizedBox(height: 20),
+                    _buildAvatarUpload(tokens),
+                    const SizedBox(height: 28),
+                    PrefSingleSelector(
+                      title: '性别',
+                      options: PrefOptions.gender,
+                      value: _selectedGender,
+                      onChanged: (v) => setState(() => _selectedGender = v),
+                      tokens: tokens,
+                    ),
+                    const SizedBox(height: 28),
+                    PrefMultiSelector(
+                      title: '喜欢拍什么',
+                      options: PrefOptions.favoriteCategories,
+                      selected: _favoriteCategories,
+                      onToggle: (v) => setState(() {
+                            _favoriteCategories.contains(v)
+                                ? _favoriteCategories.remove(v)
+                                : _favoriteCategories.add(v);
+                          }),
+                      tokens: tokens,
+                    ),
+                    const SizedBox(height: 28),
+                    PrefMultiSelector(
+                      title: '拍摄烦恼',
+                      options: PrefOptions.painPoints,
+                      selected: _painPoints,
+                      onToggle: (v) => setState(() {
+                            _painPoints.contains(v)
+                                ? _painPoints.remove(v)
+                                : _painPoints.add(v);
+                          }),
+                      tokens: tokens,
+                    ),
+                    const SizedBox(height: 28),
+                    PrefMultiSelector(
+                      title: '拍摄期望',
+                      options: PrefOptions.expectations,
+                      selected: _expectations,
+                      onToggle: (v) => setState(() {
+                            _expectations.contains(v)
+                                ? _expectations.remove(v)
+                                : _expectations.add(v);
+                          }),
+                      tokens: tokens,
+                    ),
+                    const SizedBox(height: 28),
+                    PrefMultiSelector(
+                      title: '常用场景',
+                      options: PrefOptions.commonScenes,
+                      selected: _commonScenes,
+                      onToggle: (v) => setState(() {
+                            _commonScenes.contains(v)
+                                ? _commonScenes.remove(v)
+                                : _commonScenes.add(v);
+                          }),
+                      tokens: tokens,
+                    ),
+                    const SizedBox(height: 28),
+                    PrefSingleSelector(
+                      title: '摄影水平',
+                      options: PrefOptions.skillLevel,
+                      value: _selectedSkillLevel,
+                      onChanged: (v) => setState(() => _selectedSkillLevel = v),
+                      tokens: tokens,
+                    ),
+                    const SizedBox(height: 28),
+                    PrefSingleSelector(
+                      title: '拍摄频率',
+                      options: PrefOptions.shootFrequency,
+                      value: _selectedShootFrequency,
+                      onChanged: (v) => setState(() => _selectedShootFrequency = v),
+                      tokens: tokens,
                     ),
                     const SizedBox(height: 28),
                     _SectionTitle(text: '用户名', tokens: tokens),
