@@ -7,6 +7,8 @@ import { MagnifyingGlass } from '@phosphor-icons/react/dist/ssr';
 import { DevicesTable } from '@/components/devices-table';
 import { Pagination } from '@/components/pagination';
 
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';
+
 export default async function DevicesPage({
   searchParams,
 }: {
@@ -40,7 +42,7 @@ export default async function DevicesPage({
         </Button>
       </form>
 
-      <DevicesTable data={data} />
+      <DevicesTable data={data} backendUrl={BACKEND_URL} />
 
       <Pagination
         page={page}

@@ -26,6 +26,16 @@ export interface DeviceRecord {
   ipRegion: string | null;
   username: string | null;
   avatarSeed: string | null;
+  // 个人资料（个人中心 + 问卷同步）
+  gender: string | null;
+  favoriteCategories: string[];
+  painPoints: string[];
+  skillLevel: string | null;
+  expectations: string[];
+  commonScenes: string[];
+  shootFrequency: string | null;
+  avatarUrl: string | null;
+  profileUpdatedAt: number | null;
   pointsBalance: number | null;
 }
 

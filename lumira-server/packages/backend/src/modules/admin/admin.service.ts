@@ -16,6 +16,16 @@ import {
   templates,
 } from '../../database/schema';
 
+function parseArr(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 @Injectable()
 export class AdminService {
   constructor(
@@ -80,6 +90,16 @@ export class AdminService {
         ipRegion: devices.ipRegion,
         username: userProfiles.username,
         avatarSeed: userProfiles.avatarSeed,
+        // 个人资料（个人中心 + 问卷同步）
+        gender: userProfiles.gender,
+        favoriteCategoriesJson: userProfiles.favoriteCategoriesJson,
+        painPointsJson: userProfiles.painPointsJson,
+        skillLevel: userProfiles.skillLevel,
+        expectationsJson: userProfiles.expectationsJson,
+        commonScenesJson: userProfiles.commonScenesJson,
+        shootFrequency: userProfiles.shootFrequency,
+        avatarUrl: userProfiles.avatarUrl,
+        profileUpdatedAt: userProfiles.updatedAt,
         pointsBalance: userPoints.balance,
       })
       .from(devices)
@@ -106,7 +126,13 @@ export class AdminService {
       : await db.select({ value: count() }).from(devices);
 
     return {
-      data: records,
+      data: records.map((r) => ({
+        ...r,
+        favoriteCategories: parseArr(r.favoriteCategoriesJson),
+        painPoints: parseArr(r.painPointsJson),
+        expectations: parseArr(r.expectationsJson),
+        commonScenes: parseArr(r.commonScenesJson),
+      })),
       total: totalCount[0]?.value || 0,
       page,
       pageSize,
