@@ -1,4 +1,6 @@
 // lumira-server/packages/backend/src/modules/profile/profile.service.ts
+import * as fs from 'fs';
+import * as path from 'path';
 import { Injectable } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
@@ -108,5 +110,34 @@ export class ProfileService {
     if (Object.keys(fields).length > 1) {
       await db.update(userProfiles).set(fields).where(eq(userProfiles.deviceId, deviceId));
     }
+  }
+
+  /** 保存自定义头像到 {UPLOAD_DIR}/users/{deviceId}/avatar.{ext}，删除旧文件，写 avatar_url。 */
+  async saveAvatar(deviceId: string, buffer: Buffer, ext: string): Promise<{ avatarUrl: string }> {
+    await this.getOrCreateProfile(deviceId);
+    const uploadDir = process.env.UPLOAD_DIR || path.resolve('./data/uploads');
+    const dir = path.join(uploadDir, 'users', deviceId);
+    fs.mkdirSync(dir, { recursive: true });
+
+    // 删除旧头像
+    const db = this.dbService.getDb();
+    const oldRow = await db
+      .select({ url: userProfiles.avatarUrl })
+      .from(userProfiles)
+      .where(eq(userProfiles.deviceId, deviceId))
+      .limit(1);
+    const oldUrl = oldRow[0]?.url;
+    if (oldUrl) {
+      const oldName = oldUrl.split('/').pop();
+      if (oldName) fs.rmSync(path.join(dir, oldName), { force: true });
+    }
+
+    const filename = `avatar.${ext}`;
+    fs.writeFileSync(path.join(dir, filename), buffer);
+
+    const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
+    const avatarUrl = `${base}/uploads/users/${deviceId}/${filename}`;
+    await this.updateProfile(deviceId, { avatarUrl });
+    return { avatarUrl };
   }
 }
