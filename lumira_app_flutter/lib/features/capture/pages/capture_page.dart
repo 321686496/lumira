@@ -668,18 +668,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
           codec.dispose();
 
           final renderer = ref.read(watermarkRendererProvider);
-          final rgbaBytes = await renderer.render(
+          final wmResult = await renderer.render(
             sourceImage: sourceImage,
-            elements: watermarkTemplate.elements,
+            template: watermarkTemplate,
           );
 
           // 将 RGBA 字节编码为 JPEG（quality 90，与 worker 输出统一）
           // 注：Flutter 3.7 的 dart:ui toByteData 不支持 JPEG（ImageByteFormat.jpeg
           // 是较新版本 API），此处用 image 包纯 Dart 编码；1280px 下耗时已可接受。
           final outputImage = img.Image.fromBytes(
-            width: workerResult.width,
-            height: workerResult.height,
-            bytes: rgbaBytes.buffer,
+            width: wmResult.width,
+            height: wmResult.height,
+            bytes: wmResult.rgbaBytes.buffer,
             numChannels: 4,
             order: img.ChannelOrder.rgba,
           );

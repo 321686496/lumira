@@ -5,73 +5,149 @@ import 'package:flutter/painting.dart' show FontStyle, FontWeight, TextAlign;
 
 import '../models/watermark_template.dart';
 
-/// 水印渲染器：将 [WatermarkElement] 列表绘制到源图像上，返回 RGBA 原始字节。
+/// 水印渲染结果：合成后的 RGBA 原始字节 + 输出画布尺寸。
+///
+/// 画框（拍立得）会使输出画布向外扩展，超出原图尺寸，因此必须显式返回
+/// [width]/[height] 供调用方构造编码图像。
+class WatermarkRenderResult {
+  final Uint8List rgbaBytes;
+  final int width;
+  final int height;
+  const WatermarkRenderResult({
+    required this.rgbaBytes,
+    required this.width,
+    required this.height,
+  });
+}
+
+/// 水印渲染器：将 [WatermarkTemplate]（含画框 + 元素）绘制到源图像上，
+/// 返回 [WatermarkRenderResult]。
 ///
 /// 渲染流程：
-/// 1. 以 [ui.PictureRecorder] + [ui.Canvas] 录制绘制指令
-/// 2. 先绘制源图像作为底图
-/// 3. 对每个文本元素，使用 [ui.ParagraphBuilder] 构建段落
-/// 4. 字号按 `imageSize.width / 400` 缩放（参考分辨率 400px 设计）
-/// 5. 通过 `canvas.save/translate/rotate/restore` 应用旋转
-/// 6. 通过 [ui.Picture.toImage] 转换为 [ui.Image]
-/// 7. 通过 [ui.Image.toByteData] 取 rawRgba 字节返回
+/// 1. 依据模板画框（[WatermarkFrame]）计算输出画布尺寸与照片在画布上的位置
+/// 2. 以 [ui.PictureRecorder] + [ui.Canvas] 录制绘制指令
+/// 3. 绘制投影 / 白卡（拍立得）/ 照片 / 内描边
+/// 4. 每个元素按其 [WatermarkElement.space]（photo/frame）选择坐标基准矩形
+/// 5. 通过 [ui.Picture.toImage] 转为 [ui.Image] 并取 rawRgba 字节
 class WatermarkRenderer {
   /// 参考设计宽度（元素 fontSize 为相对值，按此宽度换算绝对像素）。
   static const double _referenceWidth = 400.0;
 
-  /// 将水印元素绘制到 [sourceImage] 上，返回合成后的 RGBA 字节。
-  Future<Uint8List> render({
+  /// 将 [template] 渲染到 [sourceImage] 上，返回合成结果（RGBA 字节 + 尺寸）。
+  Future<WatermarkRenderResult> render({
     required ui.Image sourceImage,
-    required List<WatermarkElement> elements,
+    required WatermarkTemplate template,
   }) async {
-    final imageWidth = sourceImage.width;
-    final imageHeight = sourceImage.height;
-    final scale = imageWidth / _referenceWidth;
+    final photoW = sourceImage.width.toDouble();
+    final photoH = sourceImage.height.toDouble();
+    final frame = template.frame;
+    final type = frame.type;
+    final scale = photoW / _referenceWidth;
+
+    // —— 画布尺寸 ——
+    double padX = 0, padTop = 0, padBottom = 0;
+    if (type == WatermarkFrameType.polaroid) {
+      final pad = frame.borderRatio * photoW;
+      padX = pad;
+      padTop = pad;
+      padBottom = pad + (frame.bottomPlate ? frame.bottomRatio * photoH : 0);
+    }
+    final shadow = (type == WatermarkFrameType.polaroid && frame.shadowOpacity > 0)
+        ? (frame.shadowBlur * photoW).clamp(2.0, 60.0)
+        : 0.0;
+    final outputW = (photoW + padX * 2).round();
+    final outputH = (photoH + padTop + padBottom + shadow).round();
+
+    final cardRect = ui.Rect.fromLTWH(0, 0, photoW + padX * 2, photoH + padTop + padBottom);
+    final photoOrigin = ui.Offset(padX, padTop);
+    final photoRect = ui.Rect.fromLTWH(padX, padTop, photoW, photoH);
+    final plateRect = (type == WatermarkFrameType.polaroid && frame.bottomPlate)
+        ? ui.Rect.fromLTWH(padX, padTop + photoH, photoW, padBottom - padX)
+        : photoRect;
 
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
 
-    // 1. 绘制源图像作为底图
-    canvas.drawImage(sourceImage, ui.Offset.zero, ui.Paint());
-
-    // 2. 依次绘制每个文本元素
-    for (final element in elements) {
-      if (element.type == WatermarkElementType.image) {
-        // 图片元素渲染待后续任务实现（当前仅支持文本/日期时间）
-        continue;
-      }
-      _drawTextElement(
-        canvas,
-        element,
-        imageWidth.toDouble(),
-        imageHeight.toDouble(),
-        scale,
+    // 投影（拍立得，仅底部）
+    if (shadow > 0) {
+      final paint = ui.Paint()
+        ..color = _withOpacity(frame.shadowColor, frame.shadowOpacity)
+        ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, shadow);
+      canvas.drawRect(
+        ui.Rect.fromLTWH(0, cardRect.bottom, outputW.toDouble(), shadow * 1.4),
+        paint,
       );
     }
 
-    // 3. 录制为 Picture 并转为 Image
-    final picture = recorder.endRecording();
-    final outputImage = await picture.toImage(imageWidth, imageHeight);
-
-    // 4. 取 RGBA 字节
-    final byteData = await outputImage.toByteData(
-      format: ui.ImageByteFormat.rawRgba,
-    );
-    outputImage.dispose();
-    if (byteData == null) {
-      throw StateError('WatermarkRenderer: failed to encode output image');
+    // 白卡（拍立得）/ 透明底（其余）
+    if (type == WatermarkFrameType.polaroid) {
+      final paint = ui.Paint()..color = frame.color;
+      if (frame.borderRadius > 0) {
+        canvas.drawRRect(
+          ui.RRect.fromRectAndRadius(cardRect, ui.Radius.circular(frame.borderRadius * photoW)),
+          paint,
+        );
+      } else {
+        canvas.drawRect(cardRect, paint);
+      }
     }
-    return byteData.buffer.asUint8List();
+
+    // 照片
+    canvas.drawImage(sourceImage, photoOrigin, ui.Paint());
+
+    // 内描边
+    if (type == WatermarkFrameType.innerBorder) {
+      final stroke = frame.borderRatio * photoW;
+      final paint = ui.Paint()
+        ..color = frame.color
+        ..style = ui.PaintingStyle.stroke
+        ..strokeWidth = stroke;
+      final inner = photoRect.deflate(stroke / 2);
+      if (frame.borderRadius > 0) {
+        canvas.drawRRect(
+          ui.RRect.fromRectAndRadius(inner, ui.Radius.circular(frame.borderRadius * photoW)),
+          paint,
+        );
+      } else {
+        canvas.drawRect(inner, paint);
+      }
+    }
+
+    // 元素
+    for (final element in template.elements) {
+      if (element.type == WatermarkElementType.image) continue;
+      final base = element.space == WatermarkElementSpace.frame ? plateRect : photoRect;
+      _drawTextElement(canvas, element, base, scale);
+    }
+
+    // 画布圆角裁剪（拍立得/内描边且 borderRadius>0）
+    if (type != WatermarkFrameType.none && frame.borderRadius > 0) {
+      final clipRect = ui.RRect.fromRectAndRadius(
+        ui.Rect.fromLTWH(0, 0, outputW.toDouble(), outputH.toDouble()),
+        ui.Radius.circular(frame.borderRadius * photoW),
+      );
+      canvas.clipRRect(clipRect);
+    }
+
+    final picture = recorder.endRecording();
+    final outputImage = await picture.toImage(outputW, outputH);
+    final byteData = await outputImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+    outputImage.dispose();
+    if (byteData == null) throw StateError('WatermarkRenderer: failed to encode output image');
+    return WatermarkRenderResult(
+      rgbaBytes: byteData.buffer.asUint8List(),
+      width: outputW,
+      height: outputH,
+    );
   }
 
   void _drawTextElement(
     ui.Canvas canvas,
     WatermarkElement element,
-    double imageWidth,
-    double imageHeight,
+    ui.Rect base, // 坐标空间基准矩形
     double scale,
   ) {
-    final absoluteFontSize = element.fontSize * imageWidth;
+    final absoluteFontSize = element.fontSize * base.width;
     final blurRadius = (absoluteFontSize * 0.08).clamp(0.5, 8.0);
 
     // 构建段落
@@ -103,18 +179,17 @@ class WatermarkRenderer {
       )
       ..addText(element.text);
 
-    // 约束宽度使用图像宽度（避免换行，使 maxIntrinsicWidth 反映真实文本宽度）
+    // 约束宽度使用基准矩形宽度
     final paragraph = builder.build()
-      ..layout(ui.ParagraphConstraints(width: imageWidth));
+      ..layout(ui.ParagraphConstraints(width: base.width));
 
     final textWidth = paragraph.maxIntrinsicWidth;
     final textHeight = paragraph.height;
 
-    // 计算锚点像素坐标（元素相对坐标 × 图像尺寸）
-    final anchorX = element.x * imageWidth;
-    final anchorY = element.y * imageHeight;
+    // 锚点：相对基准矩形换算绝对像素
+    final anchorX = element.x * base.width + base.left;
+    final anchorY = element.y * base.height + base.top;
 
-    // 根据对齐方式计算文本左上角坐标（相对锚点的偏移）
     double offsetX;
     switch (element.textAlign) {
       case TextAlign.right:
@@ -128,7 +203,6 @@ class WatermarkRenderer {
       default:
         offsetX = 0.0;
     }
-    // y 锚点视为文本基线顶部偏上一点，使视觉位置更贴合
     final offsetY = -textHeight * 0.85;
 
     canvas.save();
