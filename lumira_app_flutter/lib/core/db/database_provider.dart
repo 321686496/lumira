@@ -22,9 +22,10 @@ import '../../core/auth/auth_dao.dart';
 import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 import '../../features/notification/data/notification_dao.dart';
+import 'dao/search_history_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 32;
+const int _kDbVersion = 33;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -119,6 +120,11 @@ final usageDaoProvider = FutureProvider<UsageDao>((ref) async {
 final notificationDaoProvider = FutureProvider<NotificationDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return NotificationDao(db);
+});
+
+final searchHistoryDaoProvider = FutureProvider<SearchHistoryDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return SearchHistoryDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -449,6 +455,14 @@ Future<void> _onCreate(Database db, int version) async {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_notifications_cleared ON ${Tables.notifications}(${Tables.colCleared})');
   } catch (e) {
     debugPrint('notifications table (onCreate) failed: $e');
+  }
+
+  // === v33: search_history 表（统一全局搜索页，scope 隔离历史记录） ===
+  try {
+    await db.execute(SearchHistoryTable.createSql);
+    await db.execute(SearchHistoryTable.indexSql);
+  } catch (e) {
+    debugPrint('search_history table (onCreate) failed: $e');
   }
 
   // === 种子化预置数据（修复：fresh install 时不触发 _onUpgrade，需在 _onCreate 中显式调用 seeder） ===
@@ -1056,6 +1070,16 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_notifications_cleared ON ${Tables.notifications}(${Tables.colCleared})');
     } catch (e) {
       debugPrint('v32 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 33) {
+    try {
+      // v33: 搜索历史表（统一全局搜索页 scope 隔离历史记录）
+      await db.execute(SearchHistoryTable.createSql);
+      await db.execute(SearchHistoryTable.indexSql);
+    } catch (e) {
+      debugPrint('v33 migration failed (silent fallback): $e');
     }
   }
 }

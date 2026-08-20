@@ -399,3 +399,26 @@ class XpEventsTable {
       'CREATE UNIQUE INDEX IF NOT EXISTS uq_xp_events_source_ref ON $name ($colSource, $colRefId)';
 }
 
+/// 搜索历史表（v33 迁移新增，搜索模块）
+/// scope 取值：'template' | 'scene' | 'academy'（隔离三类内容，互不串扰）
+class SearchHistoryTable {
+  static const name = 'search_history';
+  static const colId = 'id';
+  static const colScope = 'scope';
+  static const colKeyword = 'keyword';
+  static const colSearchCount = 'search_count';
+  static const colLastSearchedAt = 'last_searched_at';
+
+  static const createSql = '''
+    CREATE TABLE IF NOT EXISTS $name (
+      $colId INTEGER PRIMARY KEY AUTOINCREMENT,
+      $colScope TEXT NOT NULL,
+      $colKeyword TEXT NOT NULL,
+      $colSearchCount INTEGER NOT NULL DEFAULT 1,
+      $colLastSearchedAt INTEGER NOT NULL
+    )
+  ''';
+  static const indexSql =
+      'CREATE INDEX IF NOT EXISTS idx_search_history_scope_time ON $name ($colScope, $colLastSearchedAt DESC)';
+}
+
