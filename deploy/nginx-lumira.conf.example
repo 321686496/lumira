@@ -23,6 +23,14 @@ upstream lumira_backend_upstream {
     keepalive_timeout 60s;
 }
 
+# 关键：正确区分「升级为 WebSocket」和「普通 HTTP 请求」的 Connection 头。
+# 若对所有请求都写死 "upgrade"，会强制后端每次处理完就关闭连接，
+# 导致上面的 upstream keepalive 完全失效，每张图片都重新建连 + 握手。
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      '';
+}
+
 # HTTP -> HTTPS 强制跳转（推荐生产开启）
 server {
     listen 80;
@@ -43,10 +51,16 @@ server {
 
 # HTTPS 主服务
 server {
-    listen 443 ssl;
+    listen 443 ssl http2;
     # 替换为你的域名
     server_name <<YOUR_API_DOMAIN>>;
 
+    # HTTP/2：关键提速点。一张页面上同时加载 N 张缩略图时，
+    # 所有图片在【同一条 TLS 连接】内多路复用，只握手一次，
+    # 不再每张图单独握手（实测单次 TLS 握手就要约 2s）。
+    # 注意：nginx 旧版（<1.25.1）用 "listen 443 ssl http2;"，
+    # 新版（>=1.25.1）改成独立的 "http2 on;" 指令（listen 里的 http2 会被忽略，
+    # 且新版本默认即开启 h2，无需重复配置）。
     # === SSL 证书 ===
     # 推荐使用 certbot 自动申请 Let's Encrypt 免费证书
     # certbot --nginx -d <<YOUR_API_DOMAIN>>
@@ -79,10 +93,10 @@ server {
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # WebSocket 支持（如未来需要）
+        # WebSocket 支持（如未来需要）：仅真正的 Upgrade 请求才带 upgrade，其余复用长连接
         proxy_http_version 1.1;
         proxy_set_header Upgrade    $http_upgrade;
-        proxy_set_header Connection "upgrade";
+        proxy_set_header Connection $connection_upgrade;
 
         # 超时设置（后端 SQLite 操作应很快，给足余量）
         proxy_connect_timeout 10s;
