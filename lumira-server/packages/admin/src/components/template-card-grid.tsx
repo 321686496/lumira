@@ -19,17 +19,20 @@ import { toAssetUrl } from '@/lib/asset-url';
 import { useToast } from '@/hooks/use-toast';
 import { toggleTemplateActive, deleteTemplate } from '@/actions/templates';
 import type { AdminTemplateListItem, TemplateCategory } from '@/types/admin';
+import type { UsageStatsItem } from '@/lib/api';
 
 interface TemplateCardGridProps {
   templates: AdminTemplateListItem[];
   categories: TemplateCategory[];
   backendUrl?: string;
+  usage?: Record<string, Pick<UsageStatsItem, 'useShoot' | 'openDetail'>>;
 }
 
 export function TemplateCardGrid({
   templates,
   categories,
   backendUrl = 'http://localhost:3000',
+  usage = {},
 }: TemplateCardGridProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -185,8 +188,9 @@ export function TemplateCardGrid({
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
           {filtered.map((t) => {
-            const cover = toAssetUrl(t.coverUrl, backendUrl);
-            const toggling = togglePending && pendingToggleId === t.id;
+          const cover = toAssetUrl(t.coverUrl, backendUrl);
+          const toggling = togglePending && pendingToggleId === t.id;
+          const u = usage[t.id];
             return (
               <div
                 key={t.id}
@@ -247,6 +251,17 @@ export function TemplateCardGrid({
                     <span className="ml-auto text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
                       序号 {t.sortOrder}
                     </span>
+                  </div>
+
+                  {/* 使用次数 */}
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <span>{t.price > 0 ? `${t.price} 积分` : '免费'}</span>
+                    {u && (
+                      <span className="ml-auto flex items-center gap-2 tabular-nums">
+                        <span>拍摄 {u.useShoot}</span>
+                        <span>查看 {u.openDetail}</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* 操作区 */}

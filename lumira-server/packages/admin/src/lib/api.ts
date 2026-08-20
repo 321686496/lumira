@@ -78,6 +78,58 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+// ===== 场景管理 / 使用次数（非 /admin 前缀）=====
+export interface AdminScene {
+  id: string;
+  name: string;
+  category: string; // light | outdoor | indoor | mood
+  style: string;
+  icon: string;
+  vibe: string;
+  description: string;
+  filter: Record<string, unknown>;
+  tips: string[];
+  exampleImages: string[];
+  whereToShoot: string;
+  bestTime: string;
+  relatedCategory: string;
+  recommendedTagIds: string[];
+  sortOrder: number;
+  isActive: boolean;
+  updatedAt: number;
+}
+
+export interface UsageStatsItem {
+  itemId: string;
+  itemType: 'template' | 'scene';
+  useShoot: number;
+  openDetail: number;
+  sceneSelect: number;
+}
+
+/**
+ * 模板/场景使用次数汇总。
+ * 注意：后端 `/api/v1/usage/stats` 不在 `/admin` 前缀下，且走 DeviceAuthGuard，
+ * 不能复用 adminFetch。这里做 best-effort 读取：任何失败都静默返回 []，
+ * 不影响主列表渲染（视 admin token 是否兼容而定）。
+ */
+export async function getUsageStats(
+  itemType: 'template' | 'scene',
+): Promise<UsageStatsItem[]> {
+  try {
+    const token = cookies().get(AUTH_COOKIE_NAME)?.value;
+    const res = await fetch(`${BACKEND_URL}/api/v1/usage/stats?itemType=${itemType}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      cache: 'no-store',
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { items?: UsageStatsItem[] };
+    return Array.isArray(data?.items) ? data.items : [];
+  } catch {
+    return [];
+  }
+}
+
 export const api = {
   getStats: () => adminFetch<StatsResponse>('/stats'),
 
@@ -268,4 +320,31 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+
+  // ===== 场景管理 =====
+  listScenes: () =>
+    adminFetch<{ scenes?: AdminScene[] }>('/scenes', { next: { revalidate: 0 } }),
+
+  createScene: (payload: Record<string, unknown>) =>
+    adminFetch<AdminScene>('/scenes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateScene: (id: string, payload: Record<string, unknown>) =>
+    adminFetch<AdminScene>(`/scenes/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteScene: (id: string) =>
+    adminFetch<{ success: boolean }>(`/scenes/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  toggleScene: (id: string) =>
+    adminFetch<{ id: string; isActive: boolean }>(
+      `/scenes/${encodeURIComponent(id)}/toggle`,
+      { method: 'POST' },
+    ),
 };

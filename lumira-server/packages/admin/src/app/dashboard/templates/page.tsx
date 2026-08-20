@@ -1,6 +1,6 @@
 // src/app/dashboard/templates/page.tsx
 import { redirect } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, getUsageStats } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
 import { TemplateCardGrid } from '@/components/template-card-grid';
 
@@ -21,12 +21,17 @@ export default async function TemplatesPage() {
     return <div className="text-destructive">加载失败：{(e as Error).message}</div>;
   }
 
+  // 使用次数 best-effort 读取（失败返回空，不影响卡片展示）
+  const usageArr = await getUsageStats('template');
+  const usage = Object.fromEntries(usageArr.map((u) => [u.itemId, u]));
+
   return (
     <div>
       <TemplateCardGrid
         templates={templates}
         categories={categories}
         backendUrl={BACKEND_URL}
+        usage={usage}
       />
     </div>
   );

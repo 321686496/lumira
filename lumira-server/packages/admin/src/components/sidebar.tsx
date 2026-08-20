@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import {
   ChartLineUp, Users, Ticket, Gift, ClipboardText,
-  SquaresFour, GridFour, DeviceMobile, ChatCircleText,
+  SquaresFour, GridFour, DeviceMobile, ChatCircleText, Camera,
 } from '@phosphor-icons/react/dist/ssr';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/dashboard/feedbacks', label: '反馈管理', icon: ChatCircleText },
   { href: '/dashboard/templates', label: '模板管理', icon: SquaresFour },
   { href: '/dashboard/categories', label: '分类管理', icon: GridFour },
+  { href: '/dashboard/scenes', label: '场景管理', icon: Camera },
 ];
 
 export function Sidebar({ activePath }: { activePath: string }) {

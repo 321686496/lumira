@@ -17,6 +17,7 @@ const titleMap: Record<string, string> = {
   '/dashboard/templates/new': '新建模板',
   '/dashboard/templates/[id]': '模板详情',
   '/dashboard/categories': '分类管理',
+  '/dashboard/scenes': '场景管理',
 };
 
 function resolveTitle(pathname: string): string {
