@@ -30,6 +30,7 @@ final recommendationProvider = FutureProvider<RecommendationResult>((ref) async 
   final templatesDao = await ref.watch(templatesDaoProvider.future);
   final scenesDao = await ref.watch(scenesDaoProvider.future);
   final questionnaireDao = await ref.watch(questionnaireDaoProvider.future);
+  final usageDao = await ref.watch(usageDaoProvider.future);
 
   // 并行读取本地数据
   final photos = await galleryDao.getAll(limit: 500);
@@ -83,6 +84,14 @@ final recommendationProvider = FutureProvider<RecommendationResult>((ref) async 
     );
   }).toList();
 
+  // 全站使用次数 -> 合并流行度（templateId -> use_shoot*2 + open_detail）
+  final popularityByTemplateId = <String, int>{};
+  for (final t in templateRecords) {
+    final useS = await usageDao.countFor('template', t.id, 'use_shoot');
+    final openD = await usageDao.countFor('template', t.id, 'open_detail');
+    popularityByTemplateId[t.id] = useS * 2 + openD;
+  }
+
   final engine = RecommendationEngine();
   return engine.build(RecommendationEngineInput(
     photos: photoSignals,
@@ -91,5 +100,6 @@ final recommendationProvider = FutureProvider<RecommendationResult>((ref) async 
     ownedTemplateIds: owned,
     questionnaire: questionnaire,
     nowMs: DateTime.now().millisecondsSinceEpoch,
+    popularityByTemplateId: popularityByTemplateId,
   ));
 });

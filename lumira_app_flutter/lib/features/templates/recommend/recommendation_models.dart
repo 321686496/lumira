@@ -92,6 +92,7 @@ class RecommendationEngineInput {
     required this.ownedTemplateIds,
     this.questionnaire,
     required this.nowMs,
+    this.popularityByTemplateId = const {},
   });
 
   final List<PhotoSignal> photos;
@@ -100,6 +101,8 @@ class RecommendationEngineInput {
   final Set<String> ownedTemplateIds;
   final QuestionnaireAnswers? questionnaire;
   final int nowMs;
+  /// 全站流行度（templateId -> 合并计数），供打分时融合
+  final Map<String, int> popularityByTemplateId;
 }
 
 /// 推荐结果：单个模板项（页面卡片数据）

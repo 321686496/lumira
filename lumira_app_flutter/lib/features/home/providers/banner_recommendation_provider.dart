@@ -19,6 +19,7 @@ final bannerRecommendationProvider =
     kitsDao: await ref.watch(compositionKitsDaoProvider.future),
     growthDao: await ref.watch(growthDaoProvider.future),
     questionnaireDao: await ref.watch(questionnaireDaoProvider.future),
+    usageDao: await ref.watch(usageDaoProvider.future),
   );
   return service.buildBanners();
 });

@@ -141,6 +141,13 @@ class RecommendationEngine {
     final maxStyle = _maxOr1(profile.styleWeights);
     final tagTotal = profile.tagWeights.values.fold(0.0, (a, b) => a + b);
 
+    // 流行度归一化基准：取所有候选模板的最大值（全为 0 时回退为 1）
+    var maxPop = 1;
+    for (final t in candidates) {
+      final p = input.popularityByTemplateId[t.id] ?? 0;
+      if (p > maxPop) maxPop = p;
+    }
+
     final scored = <RecommendItem>[];
     for (final t in candidates) {
       if (owned.contains(t.id) || used.contains(t.id)) continue;
@@ -173,6 +180,17 @@ class RecommendationEngine {
               wPost * postSim)
           .clamp(0.0, 1.0);
 
+      // 流行度融合：pop > 0 时按 α 权重把归一化流行度并入总分
+      final pop = input.popularityByTemplateId[t.id] ?? 0;
+      final double finalScore;
+      if (pop > 0) {
+        const alpha = 0.3;
+        final scorePop = (pop / maxPop).clamp(0.0, 1.0);
+        finalScore = score * (1 - alpha) + scorePop * alpha;
+      } else {
+        finalScore = score;
+      }
+
       scored.add(RecommendItem(
         templateId: t.id,
         name: t.name,
@@ -180,7 +198,7 @@ class RecommendationEngine {
         cover: t.cover,
         coverData: t.coverData,
         price: t.price,
-        matchScore: score,
+        matchScore: finalScore,
         reason: _guessReason(categorySim, tagSim, styleSim, postSim),
       ));
     }

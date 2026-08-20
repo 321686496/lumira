@@ -31,6 +31,8 @@ class _ScenesSearchPageState extends ConsumerState<ScenesSearchPage> {
   List<TagWithCount> _allTags = const [];
   // 用户标签 AND 过滤后的结果（Task 8）
   List<SceneRecord> _userTagFiltered = const [];
+  // 场景全站流行度（sceneId -> 合并计数），用于搜索结果排序
+  Map<String, int> _scenePopularity = const {};
 
   @override
   void initState() {
@@ -43,10 +45,25 @@ class _ScenesSearchPageState extends ConsumerState<ScenesSearchPage> {
     final tagDao = await ref.read(userTagsDaoProvider.future);
     final scenes = await sDao.getAll();
     final tags = await tagDao.allTags(itemType: TagItemType.scene);
+    // 全站流行度：离线/无 usage_stats 表（测试 fixture）时读取失败不降级，保持空 map
+    Map<String, int> pop = const {};
+    try {
+      final usageDao = await ref.read(usageDaoProvider.future);
+      pop = <String, int>{};
+      for (final s in scenes) {
+        final useS = await usageDao.countFor('scene', s.id, 'use_shoot');
+        final openD = await usageDao.countFor('scene', s.id, 'open_detail');
+        final sel = await usageDao.countFor('scene', s.id, 'scene_select');
+        pop[s.id] = (useS * 55 + openD * 25 + sel * 20);
+      }
+    } catch (_) {
+      pop = const {};
+    }
     if (!mounted) return;
     setState(() {
       _allScenes = scenes;
       _allTags = tags;
+      _scenePopularity = pop;
     });
   }
 
@@ -64,11 +81,11 @@ class _ScenesSearchPageState extends ConsumerState<ScenesSearchPage> {
         .toList();
   }
 
-  /// 在关键词命中结果上叠加「用户标签 AND」过滤。
+  /// 在关键词命中结果上叠加「用户标签 AND」过滤，并按全站流行度降序。
   Future<void> _refreshUserTagFilter(List<SceneRecord> keywordHits) async {
     if (_selectedTagIds.isEmpty) {
       if (!mounted) return;
-      setState(() => _userTagFiltered = keywordHits);
+      setState(() => _userTagFiltered = _sortByPopularity(keywordHits));
       return;
     }
     final dao = await ref.read(userTagsDaoProvider.future);
@@ -82,7 +99,15 @@ class _ScenesSearchPageState extends ConsumerState<ScenesSearchPage> {
     }
     final filtered = keywordHits.where((s) => keep.contains(s.id)).toList();
     if (!mounted) return;
-    setState(() => _userTagFiltered = filtered);
+    setState(() => _userTagFiltered = _sortByPopularity(filtered));
+  }
+
+  /// 按全站流行度（sceneId -> 合并计数）降序排序。
+  List<SceneRecord> _sortByPopularity(List<SceneRecord> list) {
+    final sorted = [...list];
+    final pop = _scenePopularity;
+    sorted.sort((a, b) => ((pop[b.id] ?? 0)).compareTo(pop[a.id] ?? 0));
+    return sorted;
   }
 
   void _updateKeyword(String v) {
@@ -192,7 +217,7 @@ class _ScenesSearchPageState extends ConsumerState<ScenesSearchPage> {
                 '${e.tag.name} (${e.count})',
                 style: TextStyle(
                   fontSize: 12,
-                  color: active ? Colors.white : tokens.textSecondary,
+                  color: active ? tokens.textInverse : tokens.textSecondary, // 跟随主题
                 ),
               ),
             ),
