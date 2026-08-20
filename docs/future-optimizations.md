@@ -26,6 +26,14 @@
   - 保留离线回退：网络不可达时仍可基于本机缓存展示，恢复网络后同步。
 - **状态**：⏳ 待优化
 
+### P2 · 通知中心「全部已读/清空」改为统一 Provider 调用
+
+- **模块**：通知中心（Flutter）
+- **优化点**：当前通知中心页对「全部已读/清空」通过 `notificationDaoProvider` 直接调用 DAO（`markAllRead`/`clearAll`）再手动 invalidate，而单条已读/清除走 `markAsReadProvider`/`clearNotificationProvider`，风格不一致。
+- **背景/动机**：保持状态操作入口统一、便于后续把读状态迁移到后端时统一收口。
+- **目标状态**：新增 `markAllReadProvider` / `clearAllProvider`（写操作 + invalidate），页面统一走 provider。
+- **状态**：⏳ 待优化
+
 ---
 
 <!-- 后续新增的“待优化”条目请追加到本文件末尾，遵循上方格式说明 -->
