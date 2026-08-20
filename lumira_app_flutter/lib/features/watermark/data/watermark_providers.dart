@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/db/database_provider.dart';
+import '../../../core/db/database_provider.dart';
 import '../models/watermark_settings.dart';
 import '../models/watermark_template.dart';
 import '../services/watermark_renderer.dart';

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
 import '../tables.dart';
-import '../../../features/capture/watermark/models/watermark_template.dart';
+import '../../../features/watermark/models/watermark_template.dart';
 
 /// 水印模板 DAO（自定义水印模板持久化）。
 ///

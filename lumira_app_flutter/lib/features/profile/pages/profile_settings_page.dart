@@ -12,7 +12,7 @@ import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../../capture/watermark/data/watermark_providers.dart';
+import '../../watermark/data/watermark_providers.dart';
 import '../data/profile_mock_data.dart';
 
 /// 设置页

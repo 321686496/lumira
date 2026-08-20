@@ -5,7 +5,7 @@ import 'package:sqflite/sqflite.dart';
 import '../tables.dart';
 import '../../theme/theme_tokens.dart';
 import '../../../features/capture/domain/photo_template.dart';
-import '../../../features/capture/watermark/models/watermark_settings.dart';
+import '../../../features/watermark/models/watermark_settings.dart';
 
 /// 用户设置 DAO（单行表 user_settings，id=1）
 ///

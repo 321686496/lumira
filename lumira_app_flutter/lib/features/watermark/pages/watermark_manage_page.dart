@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/router/route_names.dart';
-import '../../../../core/theme/theme_controller.dart';
-import '../../../../core/theme/theme_tokens.dart';
-import '../../../../shared/widgets/cards/neu_card.dart';
-import '../../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../core/router/route_names.dart';
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/watermark_providers.dart';
 import '../models/watermark_template.dart';
 import '../widgets/watermark_preview.dart';
