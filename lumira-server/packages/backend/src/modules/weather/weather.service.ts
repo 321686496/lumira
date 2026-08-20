@@ -30,6 +30,10 @@ export interface WeatherResult {
   fetchedAt: number;
   /** 城市名（按 client IP 反查，缺省或定位失败时为空字符串） */
   city?: string;
+  /** 纬度（近似定位，供客户端做粗略地域分带） */
+  latitude?: number;
+  /** 经度（近似定位） */
+  longitude?: number;
 }
 
 interface CacheEntry<T> {
@@ -107,6 +111,8 @@ export class WeatherService {
       sunrise: json?.daily?.sunrise?.[0] ?? '',
       sunset: json?.daily?.sunset?.[0] ?? '',
       fetchedAt: now,
+      latitude: lat,
+      longitude: lon,
     };
 
     this.weatherCache.set(key, { data: result, expiresAt: now + CACHE_TTL_MS });
@@ -117,7 +123,12 @@ export class WeatherService {
   async getWeatherForIp(ip: string): Promise<WeatherResult> {
     const geo = await this.geocodeIp(ip);
     const weather = await this.getWeather(geo.lat, geo.lon);
-    return { ...weather, city: geo.city };
+    return {
+      ...weather,
+      city: geo.city,
+      latitude: geo.lat,
+      longitude: geo.lon,
+    };
   }
 
   /** IP → 近似经纬度 + 城市名（内存缓存 6 小时，失败回退上海）。 */

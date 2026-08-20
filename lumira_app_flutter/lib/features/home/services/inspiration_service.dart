@@ -15,13 +15,16 @@ import 'package:flutter/foundation.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/network/api_client.dart';
 import '../data/inspiration_models.dart';
+import '../data/inspiration_rules.dart';
 
 /// 黄金时刻计算简化版：日落前 1 小时
-/// 返回 "HH:mm" 格式，失败返回空字符串
+/// 返回 "HH:mm" 格式（本地墙钟时刻），失败返回空字符串
+/// 注意：后端返回 ISO 带时区偏移（如 +08:00），Dart DateTime.parse 会解析成 UTC，
+/// 因此必须 toLocal() 取本地小时，否则 hour 会差一个时区偏移。
 String _goldenHourFromSunset(String sunsetIso) {
   if (sunsetIso.isEmpty) return '';
   try {
-    final sunset = DateTime.parse(sunsetIso);
+    final sunset = DateTime.parse(sunsetIso).toLocal();
     final golden = sunset.subtract(const Duration(hours: 1));
     final hh = golden.hour.toString().padLeft(2, '0');
     final mm = golden.minute.toString().padLeft(2, '0');
@@ -31,11 +34,11 @@ String _goldenHourFromSunset(String sunsetIso) {
   }
 }
 
-/// 蓝调时刻：日落后 30 分钟
+/// 蓝调时刻：日落后 30 分钟（本地墙钟时刻）
 String _blueHourFromSunset(String sunsetIso) {
   if (sunsetIso.isEmpty) return '';
   try {
-    final sunset = DateTime.parse(sunsetIso);
+    final sunset = DateTime.parse(sunsetIso).toLocal();
     final blue = sunset.add(const Duration(minutes: 30));
     final hh = blue.hour.toString().padLeft(2, '0');
     final mm = blue.minute.toString().padLeft(2, '0');
@@ -46,10 +49,11 @@ String _blueHourFromSunset(String sunsetIso) {
 }
 
 /// 是否处于"黄金时刻窗口"：日落前 1 小时到日落之间（随真实位置本地日落变化）
+/// 两者均转为本地时刻后比较即时戳，避免 UTC/本地混比。
 bool _inGoldenHourWindow(DateTime now, String sunsetIso) {
   if (sunsetIso.isEmpty) return false;
   try {
-    final sunset = DateTime.parse(sunsetIso);
+    final sunset = DateTime.parse(sunsetIso).toLocal();
     final start = sunset.subtract(const Duration(hours: 1));
     return !now.isBefore(start) && now.isBefore(sunset);
   } catch (_) {
@@ -81,102 +85,42 @@ Future<String?> _topCategory(GalleryDao galleryDao) async {
   return entries.first.key;
 }
 
-/// 智能 description 生成
-String _buildDescription(_TimeSlot slot, String? category, String weather) {
-  const fallback = '捕捉每一束光，让日常成为习惯';
-
-  // 无 category 数据时使用 fallback 文案
-  if (category == null) {
-    switch (slot) {
-      case _TimeSlot.morning:
-        return '清晨光线柔和，开启今天的拍摄之旅';
-      case _TimeSlot.noon:
-        return '正午光强，适合在阴影或室内取景';
-      case _TimeSlot.dusk:
-        return '黄金时刻将至，准备好你的镜头';
-      case _TimeSlot.night:
-        return '夜色温柔，捕捉城市的霓虹与故事';
-    }
+/// 时段 → 规则令牌名
+String _slotName(_TimeSlot s) {
+  switch (s) {
+    case _TimeSlot.morning:
+      return 'morning';
+    case _TimeSlot.noon:
+      return 'noon';
+    case _TimeSlot.dusk:
+      return 'dusk';
+    case _TimeSlot.night:
+      return 'night';
   }
+}
 
-  // 按 category × slot 组合文案
-  switch (category) {
-    case 'portrait':
-      switch (slot) {
-        case _TimeSlot.morning:
-          return weather == '晴'
-              ? '晨光柔均匀，适合清新人像'
-              : '清晨柔光下，自然光人像最佳';
-        case _TimeSlot.noon:
-          return '正午顶光强，建议阴影或室内人像';
-        case _TimeSlot.dusk:
-          return weather == '晴'
-              ? '黄金时刻侧逆光，人像显瘦又自然'
-              : '暮色柔光，适合情绪感人像';
-        case _TimeSlot.night:
-          return '夜色霓虹背景，人像故事感拉满';
-      }
-    case 'landscape':
-      switch (slot) {
-        case _TimeSlot.morning:
-          return '晨雾层次丰富，风光大片时段';
-        case _TimeSlot.noon:
-          return '正午光线硬，风光建议加偏振镜';
-        case _TimeSlot.dusk:
-          return weather == '晴'
-              ? '黄金时刻光线暖黄，风光最佳时段'
-              : '暮色云层层次丰富，记得低角度';
-        case _TimeSlot.night:
-          return '蓝调时刻城市风光，长曝光出片';
-      }
-    case 'food':
-      switch (slot) {
-        case _TimeSlot.morning:
-          return '晨光均匀，美食色彩还原准确';
-        case _TimeSlot.noon:
-          return '正午侧光，美食纹理更清晰';
-        case _TimeSlot.dusk:
-          return '暖色暮光，咖啡甜点更有氛围';
-        case _TimeSlot.night:
-          return '夜间用暖灯，避免闪光直射食物';
-      }
-    case 'street':
-      switch (slot) {
-        case _TimeSlot.morning:
-          return '清晨街道人少，捕捉市井安静';
-        case _TimeSlot.noon:
-          return '正午光影对比强，街拍更有张力';
-        case _TimeSlot.dusk:
-          return '暮色人流归家，故事感最强';
-        case _TimeSlot.night:
-          return '夜间霓虹雨后倒影，街拍出片';
-      }
-    case 'night':
-      return '夜色已至，长曝光与高 ISO 的平衡之道';
-    case 'macro':
-      switch (slot) {
-        case _TimeSlot.morning:
-          return '晨露未干，微距花草最佳时段';
-        case _TimeSlot.noon:
-          return '正午光强，微距注意阴影补光';
-        case _TimeSlot.dusk:
-          return '暮色柔光，微距纹理更细腻';
-        case _TimeSlot.night:
-          return '夜间微距需稳定光源，避免抖动';
-      }
-    case 'still-life':
-      switch (slot) {
-        case _TimeSlot.morning:
-          return '晨光透过窗，静物光影最自然';
-        case _TimeSlot.noon:
-          return '正午柔光帘，静物色彩更准';
-        case _TimeSlot.dusk:
-          return '暮色暖调，静物更有氛围';
-        case _TimeSlot.night:
-          return '夜间单光源，静物戏剧感强';
-      }
-  }
-  return fallback;
+/// 组合生成今日灵感描述文案
+/// 输入：时段 + 当月 + 温度 + 天气 + 纬度（信息不足时对应令牌为空，走兜底规则）。
+String _composeDescription({
+  required _TimeSlot slot,
+  required int month,
+  required int temperature,
+  required String weather,
+  double latitude = 0,
+  String? category,
+}) {
+  final c = InspirationContext(
+    slot: _slotName(slot),
+    season: seasonOf(month),
+    tempRange: tempRangeOf(temperature),
+    weather: weather,
+    region: regionOf(latitude),
+    category: category,
+  );
+  final light = matchRule(lightRules, c, '捕捉每一束光，让日常成为习惯');
+  final theme = matchRule(themeRules, c, '');
+  if (theme.isEmpty || theme == light) return light;
+  return '$light，$theme';
 }
 
 /// 灵感服务
@@ -196,23 +140,24 @@ class InspirationService {
     final now = DateTime.now();
     final slot = _slotOf(now);
 
-    // 日期文本：8月5日 星期二 · 光线极佳
+    // 日期文本：8月5日 星期二 · 夏季 · 光线极佳
     final weekday = _weekdayZh[now.weekday - 1];
-    String lightHint;
+    String slotHint;
     switch (slot) {
       case _TimeSlot.morning:
-        lightHint = '晨光柔均匀';
+        slotHint = '晨光柔均匀';
         break;
       case _TimeSlot.noon:
-        lightHint = '光线强烈';
+        slotHint = '光线强烈';
         break;
       case _TimeSlot.dusk:
-        lightHint = '光线极佳';
+        slotHint = '光线极佳';
         break;
       case _TimeSlot.night:
-        lightHint = '夜色温柔';
+        slotHint = '夜色温柔';
         break;
     }
+    final lightHint = '${seasonOf(now.month)} · $slotHint';
     final dateText = '${now.month}月${now.day}日 星期$weekday · $lightHint';
 
     // 主导 category
@@ -235,8 +180,15 @@ class InspirationService {
       debugPrint('InspirationService weather fetch failed: $e');
     }
 
-    // 描述（处于真实位置的黄金时刻窗口内时，强化"当下最有效"建议）
-    String description = _buildDescription(slot, topCat, weather.condition);
+    // 描述（数据驱动规则表；处于真实位置的黄金时刻窗口内时，强化"当下最有效"建议）
+    String description = _composeDescription(
+      slot: slot,
+      month: now.month,
+      temperature: weather.temperature,
+      weather: weather.condition,
+      latitude: weather.latitude,
+      category: topCat,
+    );
     if (_inGoldenHourWindow(now, weather.sunset)) {
       final golden = _goldenHourFromSunset(weather.sunset);
       description = (golden.isNotEmpty

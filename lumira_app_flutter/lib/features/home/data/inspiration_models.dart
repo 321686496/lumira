@@ -12,6 +12,8 @@ class WeatherInfo {
   final String sunset; // ISO 8601
   final String city; // 城市名（按客户端 IP 反查，可能为空）
   final int fetchedAt;
+  final double latitude; // 近似定位纬度（0 表示未知）
+  final double longitude; // 近似定位经度（0 表示未知）
 
   const WeatherInfo({
     required this.temperature,
@@ -20,6 +22,8 @@ class WeatherInfo {
     required this.sunset,
     required this.city,
     required this.fetchedAt,
+    this.latitude = 0,
+    this.longitude = 0,
   });
 
   factory WeatherInfo.fromJson(Map<String, dynamic> json) {
@@ -30,6 +34,8 @@ class WeatherInfo {
       sunset: (json['sunset'] as String?) ?? '',
       city: (json['city'] as String?) ?? '',
       fetchedAt: (json['fetchedAt'] as num?)?.toInt() ?? 0,
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
     );
   }
 
