@@ -94,8 +94,41 @@ class _ProfileEditPageState extends ConsumerState<ProfileEditPage> {
   }
 
   bool get _dirty {
+    final base = _base;
     final username = _usernameController.text.trim();
-    return _selectedSeed != null && username.isNotEmpty;
+    final seedChanged = _selectedSeed != null && _selectedSeed != base?.avatarSeed;
+    final userChanged = username.isNotEmpty && username != (base?.username ?? '');
+    final genderChanged = _selectedGender != base?.gender;
+    final skillChanged = _selectedSkillLevel != base?.skillLevel;
+    final freqChanged = _selectedShootFrequency != base?.shootFrequency;
+    final favChanged = !_listEq(_favoriteCategories.toList(), base?.favoriteCategories ?? const []);
+    final painChanged = !_listEq(_painPoints.toList(), base?.painPoints ?? const []);
+    final expChanged = !_listEq(_expectations.toList(), base?.expectations ?? const []);
+    final sceneChanged = !_listEq(_commonScenes.toList(), base?.commonScenes ?? const []);
+    final avatarChanged = (_avatarUrl ?? '') != (base?.avatarUrl ?? '');
+    return username.isNotEmpty &&
+        _selectedSeed != null &&
+        (seedChanged ||
+            userChanged ||
+            genderChanged ||
+            skillChanged ||
+            freqChanged ||
+            favChanged ||
+            painChanged ||
+            expChanged ||
+            sceneChanged ||
+            avatarChanged);
+  }
+
+  /// 集合语义比较两个 List<String>（忽略顺序），供 _dirty 判断偏好是否变化。
+  bool _listEq(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    final sa = [...a]..sort();
+    final sb = [...b]..sort();
+    for (var i = 0; i < sa.length; i++) {
+      if (sa[i] != sb[i]) return false;
+    }
+    return true;
   }
 
   Future<void> _save() async {
