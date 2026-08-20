@@ -285,3 +285,21 @@ export const builtinScenes = mysqlTable('builtin_scenes', {
   name: text('name').notNull(),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });
+
+// ===== 通知公告（spec 2026-08-20-notifications-center）=====
+export const notifications = mysqlTable('notifications', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  iconKey: text('icon_key').notNull().default('announcement'),
+  category: text('category').notNull().default('announcement'),
+  targetScope: text('target_scope').notNull().default('all'),
+  targetDeviceIdsJson: text('target_device_ids_json').notNull().default('[]'),
+  targetCriteriaJson: text('target_criteria_json').notNull().default('{}'),
+  startAt: int('start_at'),
+  endAt: int('end_at'),
+  isActive: int('is_active').notNull().default(1),
+  sortOrder: int('sort_order').notNull().default(0),
+  createdAt: int('created_at').notNull(),
+  updatedAt: int('updated_at').notNull(),
+});
