@@ -9,6 +9,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../usage/usage_providers.dart';
+import '../scenes_sync_service.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton, LumiraProgress;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_scene_mock_data.dart';
@@ -40,6 +41,9 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   @override
   void initState() {
     super.initState();
+    // 联网同步系统场景元数据（失败静默，本地种子兜底）
+    // ignore: unawaited_futures
+    ref.read(scenesSyncServiceProvider.future).then((s) => s.syncSystem());
     if (widget.category != null) {
       _activeCategoryId = widget.category;
       _loadScenes();
@@ -261,10 +265,15 @@ class _SceneCategoryOverview extends StatelessWidget {
     final right = <Widget>[];
     for (var i = 0; i < _categories.length; i++) {
       final cat = _categories[i];
+      // 品牌金色类别（indoor）渐变改为跟随主题色；其余保留分类身份色
+      final catGradient = cat.id == 'indoor'
+          ? <Color>[tokens.brand, tokens.brandDeep]
+          : cat.gradient;
       final card = _SceneCategoryCard(
         meta: cat,
         count: _countForCategory(cat.id),
         tokens: tokens,
+        gradient: catGradient,
         onTap: () => onSelectCategory(cat.id),
       );
       if (i % 2 == 0) {
@@ -371,12 +380,14 @@ class _SceneCategoryCard extends StatelessWidget {
     required this.meta,
     required this.count,
     required this.tokens,
+    required this.gradient,
     required this.onTap,
   });
 
   final _SceneCategoryMeta meta;
   final int count;
   final ThemeTokens tokens;
+  final List<Color> gradient;
   final VoidCallback onTap;
 
   @override
@@ -391,7 +402,7 @@ class _SceneCategoryCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: meta.gradient.last.withOpacity(0.25),
+              color: gradient.last.withOpacity(0.25),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -407,7 +418,7 @@ class _SceneCategoryCard extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: meta.gradient,
+                  colors: gradient,
                 ),
               ),
             ),
@@ -698,10 +709,10 @@ class _Fab extends ConsumerWidget {
           shape: BoxShape.circle,
           boxShadow: tokens.shadowFloat,
         ),
-        child: const Icon(
+        child: Icon(
           Icons.add,
           size: 24, // 48rpx → 24dp
-          color: Colors.white,
+          color: tokens.textInverse, // 跟随主题（品牌圆底上的前景色）
         ),
       ),
     );
