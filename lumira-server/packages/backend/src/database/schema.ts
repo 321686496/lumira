@@ -276,3 +276,10 @@ export const builtinTemplates = mysqlTable('builtin_templates', {
   name: text('name').notNull(),
   updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
 });
+
+// ===== 内置场景注册表（App 同步，后台展示内置场景名称）=====
+export const builtinScenes = mysqlTable('builtin_scenes', {
+  id: varchar('id', { length: 128 }).primaryKey(),
+  name: text('name').notNull(),
+  updatedAt: bigint('updated_at', { mode: 'number' }).notNull(),
+});

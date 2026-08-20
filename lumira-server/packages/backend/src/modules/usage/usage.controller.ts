@@ -4,7 +4,7 @@ import { UsageService } from './usage.service';
 import { BatchEventDto } from './dto/batch-events.dto';
 import { DeviceAuthGuard } from '../../common/guards/device-auth.guard';
 import { DeviceId } from '../../common/decorators';
-import type { BuiltinTemplateSyncInput } from '@lumira/shared';
+import type { BuiltinTemplateSyncInput, BuiltinSceneSyncInput } from '@lumira/shared';
 
 @Controller('usage')
 @UseGuards(DeviceAuthGuard)
@@ -26,5 +26,10 @@ export class UsageController {
   @Post('builtin-templates')
   async builtinTemplates(@Body() dto: BuiltinTemplateSyncInput) {
     return this.usageService.upsertBuiltinTemplates(dto.items);
+  }
+
+  @Post('builtin-scenes')
+  async builtinScenes(@Body() dto: BuiltinSceneSyncInput) {
+    return this.usageService.upsertBuiltinScenes(dto.items);
   }
 }

@@ -20,4 +20,9 @@ export class AdminUsageController {
   async builtinTemplates() {
     return this.usageService.listBuiltinTemplates();
   }
+
+  @Get('builtin-scenes')
+  async builtinScenes() {
+    return this.usageService.listBuiltinScenes();
+  }
 }

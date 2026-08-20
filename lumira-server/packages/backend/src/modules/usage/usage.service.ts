@@ -2,9 +2,9 @@
 import { Injectable } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { usageEvents, builtinTemplates } from '../../database/schema';
+import { usageEvents, builtinTemplates, builtinScenes } from '../../database/schema';
 import type { EventInputDto } from './dto/batch-events.dto';
-import type { UsageStatsResponse, UsageStatsItem, UsageItemType, BuiltinTemplateListResponse } from '@lumira/shared';
+import type { UsageStatsResponse, UsageStatsItem, UsageItemType, BuiltinTemplateListResponse, BuiltinSceneListResponse } from '@lumira/shared';
 
 @Injectable()
 export class UsageService {
@@ -70,6 +70,35 @@ export class UsageService {
     const rows = await db.execute(sql`
       SELECT ${builtinTemplates.id}, ${builtinTemplates.name}
       FROM ${builtinTemplates} ORDER BY ${builtinTemplates.id}
+    `);
+    const items = (rows[0] as unknown as Array<Record<string, unknown>>).map((r) => ({
+      id: String(r.id),
+      name: String(r.name),
+    }));
+    return { items };
+  }
+
+  /** App 全量上报内置场景 id/名称，主键幂等 upsert。 */
+  async upsertBuiltinScenes(items: { id: string; name: string }[]): Promise<{ upserted: number }> {
+    if (items.length === 0) return { upserted: 0 };
+    const db = this.dbService.getDb();
+    const now = Date.now();
+    for (const it of items) {
+      await db.execute(sql`
+        INSERT INTO ${builtinScenes} (${builtinScenes.id}, ${builtinScenes.name}, ${builtinScenes.updatedAt})
+        VALUES (${it.id}, ${it.name}, ${now})
+        ON DUPLICATE KEY UPDATE \`name\` = VALUES(\`name\`), \`updated_at\` = VALUES(\`updated_at\`)
+      `);
+    }
+    return { upserted: items.length };
+  }
+
+  /** 后台读取内置场景 id/名称列表。 */
+  async listBuiltinScenes(): Promise<BuiltinSceneListResponse> {
+    const db = this.dbService.getDb();
+    const rows = await db.execute(sql`
+      SELECT ${builtinScenes.id}, ${builtinScenes.name}
+      FROM ${builtinScenes} ORDER BY ${builtinScenes.id}
     `);
     const items = (rows[0] as unknown as Array<Record<string, unknown>>).map((r) => ({
       id: String(r.id),

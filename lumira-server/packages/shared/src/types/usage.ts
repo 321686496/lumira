@@ -86,3 +86,18 @@ export interface BuiltinTemplateSyncInput {
 export interface BuiltinTemplateListResponse {
   items: BuiltinTemplate[];
 }
+
+// ===== 内置场景注册表 =====
+export interface BuiltinScene {
+  id: string;
+  name: string;
+}
+
+/** App 全量上报内置场景（id + 当前名称）。 */
+export interface BuiltinSceneSyncInput {
+  items: BuiltinScene[];
+}
+
+export interface BuiltinSceneListResponse {
+  items: BuiltinScene[];
+}

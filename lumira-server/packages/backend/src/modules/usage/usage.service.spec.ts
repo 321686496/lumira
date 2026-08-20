@@ -73,4 +73,24 @@ describe('UsageService', () => {
     const res = await service.listBuiltinTemplates();
     expect(res.items).toEqual(rows);
   });
+
+  it('upsertBuiltinScenes 空数组返回 0，非空逐条 upsert', async () => {
+    const { service, execute } = buildService({
+      execImpl: () => Promise.resolve([{ affectedRows: 1 }]),
+    });
+    expect((await service.upsertBuiltinScenes([])).upserted).toBe(0);
+    const res = await service.upsertBuiltinScenes([{ id: 'cafe-window', name: '咖啡馆' }]);
+    expect(res.upserted).toBe(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('listBuiltinScenes 返回 id/名称列表', async () => {
+    const rows = [
+      { id: 'cafe-window', name: '咖啡馆' },
+      { id: 'sunset-silhouette', name: '黄昏剪影' },
+    ];
+    const { service } = buildService({ execRows: rows });
+    const res = await service.listBuiltinScenes();
+    expect(res.items).toEqual(rows);
+  });
 });
