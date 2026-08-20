@@ -213,6 +213,19 @@ class Tables {
   static const String colItemType = 'item_type';
   static const String colItemId = 'item_id';
   static const String colTagId = 'tag_id';
+
+  // === usage_events / usage_stats 表（v28 迁移新增，使用次数统计） ===
+  // colItemType / colItemId 复用 item_tags 段声明（值同为 'item_type' / 'item_id'）
+  static const String usageEvents = 'usage_events';
+  static const String colClientEventId = 'client_event_id';
+  static const String colItemSource = 'item_source';
+  static const String colEventType = 'event_type';
+  static const String colOccurredAt = 'occurred_at';
+  static const String colSynced = 'synced';
+
+  static const String usageStats = 'usage_stats';
+  static const String colCount = 'count';
+  // colUpdatedAt 复用 custom_templates 段声明（值同为 'updated_at'）
 }
 
 class ChallengeHistoryTable {

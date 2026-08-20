@@ -16,13 +16,14 @@ import 'dao/settings_dao.dart';
 import 'dao/watermark_dao.dart';
 import 'dao/tutorial_read_dao.dart';
 import 'dao/tags_dao.dart';
+import 'dao/usage_dao.dart';
 import '../../features/academy/data/academy_content.dart';
 import '../../core/auth/auth_dao.dart';
 import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 28;
+const int _kDbVersion = 29;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -107,6 +108,11 @@ final tutorialReadDaoProvider = FutureProvider<TutorialReadDao>((ref) async {
 final userTagsDaoProvider = FutureProvider<TagsDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return TagsDao(db);
+});
+
+final usageDaoProvider = FutureProvider<UsageDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return UsageDao(db);
 });
 
 Future<void> _onCreate(Database db, int version) async {
@@ -408,6 +414,13 @@ Future<void> _onCreate(Database db, int version) async {
     await _backfillXpLedger(db);
   } catch (e) {
     debugPrint('xp_events backfill (onCreate) failed: $e');
+  }
+
+  // === v29: usage_events / usage_stats 表（使用次数统计） ===
+  try {
+    await _createUsageTables(db);
+  } catch (e) {
+    debugPrint('usage tables (onCreate) failed: $e');
   }
 
   // === 种子化预置数据（修复：fresh install 时不触发 _onUpgrade，需在 _onCreate 中显式调用 seeder） ===
@@ -963,6 +976,14 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       debugPrint('v28 migration failed (silent fallback): $e');
     }
   }
+  if (oldVersion < 29) {
+    try {
+      // v29: usage_events / usage_stats 表（使用次数统计埋点）
+      await _createUsageTables(db);
+    } catch (e) {
+      debugPrint('v29 migration failed (silent fallback): $e');
+    }
+  }
 }
 
 /// 修复 template_categories 表中的 corrupted 数据（v18 迁移）。
@@ -1066,4 +1087,32 @@ Future<void> _addColumnIfNotExists(
   if (!exists) {
     await db.execute('ALTER TABLE $table ADD COLUMN $column $typeClause');
   }
+}
+
+/// 创建使用次数统计表（v29，幂等）。
+/// - usage_events：逐条埋点事件（client_event_id 唯一供幂等上报）
+/// - usage_stats：全站汇总快照（主键 item_type+item_id+event_type）
+Future<void> _createUsageTables(Database db) async {
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.usageEvents} (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ${Tables.colClientEventId} TEXT NOT NULL UNIQUE,
+      ${Tables.colItemType} TEXT NOT NULL,
+      ${Tables.colItemId} TEXT NOT NULL,
+      ${Tables.colItemSource} TEXT NOT NULL,
+      ${Tables.colEventType} TEXT NOT NULL,
+      ${Tables.colOccurredAt} INTEGER NOT NULL,
+      ${Tables.colSynced} INTEGER NOT NULL DEFAULT 0
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.usageStats} (
+      ${Tables.colItemType} TEXT NOT NULL,
+      ${Tables.colItemId} TEXT NOT NULL,
+      ${Tables.colEventType} TEXT NOT NULL,
+      ${Tables.colCount} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (${Tables.colItemType}, ${Tables.colItemId}, ${Tables.colEventType})
+    )
+  ''');
 }
