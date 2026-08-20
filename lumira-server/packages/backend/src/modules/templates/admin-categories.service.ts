@@ -134,6 +134,7 @@ export class AdminCategoriesService {
       iconUrl,
       parentKey,
       level,
+      description: meta.description ?? '',
       sortOrder: meta.sortOrder ?? 0,
       isSystem: 0,  // Admin 创建的分类永远不是系统分类
       isActive: meta.isActive === false ? 0 : 1,
@@ -171,6 +172,7 @@ export class AdminCategoriesService {
       iconUrl,
     };
     if (meta.name !== undefined) updateData.name = meta.name;
+    if (meta.description !== undefined) updateData.description = meta.description;
     if (meta.sortOrder !== undefined) updateData.sortOrder = meta.sortOrder;
     if (meta.isActive !== undefined) updateData.isActive = meta.isActive ? 1 : 0;
     // parentKey 不可改（meta 中即使传了也忽略）

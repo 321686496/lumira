@@ -271,6 +271,7 @@ export function rowToCategory(row: CategoryRow): TemplateCategory {
     key: row.key,
     name: row.name,
     iconUrl: normalizeAssetUrl(row.iconUrl),
+    description: row.description ?? '',
     parentKey: row.parentKey,
     level: row.level,
     sortOrder: row.sortOrder,

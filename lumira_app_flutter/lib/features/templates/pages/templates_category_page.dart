@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -40,6 +41,8 @@ class TemplatesCategoryPage extends ConsumerStatefulWidget {
 class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
   /// 题材名称（用于导航栏标题与页头），从分类表按 key 读取
   String _typeName = '分类';
+  /// 题材简短描述（可空，来自后端），用于页头副标题
+  String _typeDesc = '';
 
   @override
   void initState() {
@@ -47,14 +50,19 @@ class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
     _resolveTypeName();
   }
 
-  /// 从 sqflite 读取题材名称（level=1 且 key 匹配）。
+  /// 从 sqflite 读取题材名称与简短描述（level=1 且 key 匹配）。
   /// 标题在 data 加载前先用 key 兜底，加载完成后刷新。
   Future<void> _resolveTypeName() async {
     final dao = await ref.read(templatesDaoProvider.future);
     final cats = await dao.getCategories(activeOnly: true, level: 1);
     for (final c in cats) {
       if (c.key == widget.category) {
-        if (mounted) setState(() => _typeName = c.name);
+        if (mounted) {
+          setState(() {
+            _typeName = c.name;
+            _typeDesc = c.description;
+          });
+        }
         return;
       }
     }
@@ -134,6 +142,7 @@ class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
                           return _SubCategoryGrid(
                             tokens: tokens,
                             typeName: _typeName,
+                            typeDesc: _typeDesc,
                             categories: children,
                             onTap: _goTemplates,
                           );
@@ -207,102 +216,130 @@ class _SubCategoryGrid extends ConsumerWidget {
   const _SubCategoryGrid({
     required this.tokens,
     required this.typeName,
+    required this.typeDesc,
     required this.categories,
     required this.onTap,
   });
 
   final ThemeTokens tokens;
   final String typeName;
+  final String typeDesc;
   final List<TemplateCategoryRecord> categories;
   final void Function(String categoryKey) onTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
-    final left = <Widget>[];
-    final right = <Widget>[];
-    for (var i = 0; i < categories.length; i++) {
-      final cat = categories[i];
-      final card = _SubCategoryCard(
-        tokens: tokens,
-        record: cat,
-        onTap: () => onTap(cat.key),
-      );
-      if (i % 2 == 0) {
-        left.add(card);
-      } else {
-        right.add(card);
-      }
-    }
+    final daoAsync = ref.watch(templatesDaoProvider);
+    final subKeys = categories.map((c) => c.key).toList();
 
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(), // 支持下拉刷新
-      padding: const EdgeInsets.only(bottom: 32),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: isNeu ? tokens.surface : null,
-                gradient: isNeu
-                    ? null
-                    : LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          tokens.brandSubtle,
-                          tokens.brand.withOpacity(0.08)
-                        ],
-                      ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: isNeu ? tokens.shadowConvex : null,
-              ),
-              child: Row(
+    return daoAsync.when(
+      loading: () =>
+          Center(child: LumiraProgress.circular()),
+      error: (e, _) => Center(child: Text('加载失败', style: TextStyle(color: tokens.textTertiary))),
+      data: (dao) => FutureBuilder<Map<String, int>>(
+        future: dao.countTemplatesBySubtree(subKeys),
+        builder: (context, snap) {
+          final counts = snap.data ?? const <String, int>{};
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(), // 支持下拉刷新
+            padding: const EdgeInsets.only(bottom: 32),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.layers_outlined, size: 28, color: tokens.brand),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: isNeu ? tokens.surface : null,
+                      gradient: isNeu
+                          ? null
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                tokens.brandSubtle,
+                                tokens.brand.withOpacity(0.08)
+                              ],
+                            ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: isNeu ? tokens.shadowConvex : null,
+                    ),
+                    child: Row(
                       children: [
-                        Text(
-                          typeName,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: tokens.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '选择一个子分类继续',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.textSecondary,
+                        Icon(Icons.layers_outlined, size: 28, color: tokens.brand),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                typeName,
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: tokens.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                // 有后端简短描述时展示，否则回退默认文案
+                                typeDesc.isNotEmpty ? typeDesc : '选择一个子分类继续',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: tokens.textSecondary,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          children: _buildColumn(0, counts),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          children: _buildColumn(1, counts),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(child: Column(children: left)),
-                const SizedBox(width: 12),
-                Expanded(child: Column(children: right)),
-              ],
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+
+  /// 按列分隔构建二级分类卡片，偶数索引在左列、奇数在右列。
+  List<Widget> _buildColumn(int offset, Map<String, int> counts) {
+    final list = <Widget>[];
+    for (var i = offset; i < categories.length; i += 2) {
+      final cat = categories[i];
+      list.add(
+        _SubCategoryCard(
+          tokens: tokens,
+          record: cat,
+          templateCount: counts[cat.key] ?? 0,
+          onTap: () => onTap(cat.key),
+        ),
+      );
+    }
+    return list;
   }
 }
 
@@ -314,11 +351,14 @@ class _SubCategoryCard extends ConsumerWidget {
   const _SubCategoryCard({
     required this.tokens,
     required this.record,
+    required this.templateCount,
     required this.onTap,
   });
 
   final ThemeTokens tokens;
   final TemplateCategoryRecord record;
+  /// 该二级分类子树（含三级）下的模板数量
+  final int templateCount;
   final VoidCallback onTap;
 
   @override
@@ -340,10 +380,10 @@ class _SubCategoryCard extends ConsumerWidget {
                 AspectRatio(
                   aspectRatio: 3 / 4,
                   child: record.iconUrl.isNotEmpty
-                      ? Image.network(
-                          record.iconUrl,
+                      ? CachedNetworkImage(
+                          url: record.iconUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
+                          errorWidget: Container(
                             color: tokens.surfaceAlt,
                             child: Icon(
                               fallbackIcon,
@@ -366,16 +406,31 @@ class _SubCategoryCard extends ConsumerWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          record.name,
-                          style: TextStyle(
-                            fontFamily: 'Noto Serif SC',
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              record.name,
+                              style: TextStyle(
+                                fontFamily: 'Noto Serif SC',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: tokens.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '$templateCount 套模板',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: tokens.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
                       Icon(

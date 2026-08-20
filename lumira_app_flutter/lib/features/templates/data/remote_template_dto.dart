@@ -75,18 +75,26 @@ class RemoteTemplateMetaDto {
 
 /// 模板分类信息（meta 内嵌）。
 ///
-/// 对应 spec `RemoteTemplateMeta.classification`：
-/// `{ type: string; style: string; method: string }`
+/// 对应 spec `RemoteTemplateMeta.classification`（四级分类）：
+/// `{ type; majorStyle; subStyle; method }`。`style` 为 v17 之前旧后端的兼容字段，
+/// 迁移 009 后旧 `style` 已平移为 `subStyle`，新模板使用 `majorStyle`/`subStyle`。
 @immutable
 class RemoteTemplateClassificationDto {
   final String type;
+  /// 兼容保留：旧后端/旧数据可能返回 `style`，新后端已不使用（空字符串）。
   final String style;
   final String method;
+  /// 四级分类扩展：大风格（L2，如 emotional）
+  final String majorStyle;
+  /// 四级分类扩展：子风格（L3，迁移前老字段为 style）
+  final String subStyle;
 
   const RemoteTemplateClassificationDto({
     required this.type,
     this.style = '',
     this.method = '',
+    this.majorStyle = '',
+    this.subStyle = '',
   });
 
   factory RemoteTemplateClassificationDto.fromJson(Map<String, dynamic> j) {
@@ -94,6 +102,8 @@ class RemoteTemplateClassificationDto {
       type: j['type'] as String? ?? '',
       style: j['style'] as String? ?? '',
       method: j['method'] as String? ?? '',
+      majorStyle: j['majorStyle'] as String? ?? '',
+      subStyle: j['subStyle'] as String? ?? '',
     );
   }
 
@@ -101,6 +111,8 @@ class RemoteTemplateClassificationDto {
         'type': type,
         'style': style,
         'method': method,
+        'majorStyle': majorStyle,
+        'subStyle': subStyle,
       };
 }
 
@@ -243,6 +255,8 @@ class TemplateCategoryDto {
   /// 层级（v17 新增）：1=type / 2=style / 3=method。默认 1 兼容旧后端。
   final int level;
   final String iconUrl;
+  /// 简短描述（可为空，仅一/二级分类展示）
+  final String description;
   final int sortOrder;
   final bool isSystem;
   final bool isActive;
@@ -254,6 +268,7 @@ class TemplateCategoryDto {
     this.parentKey,
     this.level = 1,
     required this.iconUrl,
+    this.description = '',
     required this.sortOrder,
     required this.isSystem,
     required this.isActive,
@@ -267,6 +282,7 @@ class TemplateCategoryDto {
       parentKey: j['parentKey'] as String?,
       level: (j['level'] as num?)?.toInt() ?? 1,
       iconUrl: j['iconUrl'] as String? ?? '',
+      description: j['description'] as String? ?? '',
       sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
       isSystem: j['isSystem'] as bool? ?? false,
       isActive: j['isActive'] as bool? ?? true,

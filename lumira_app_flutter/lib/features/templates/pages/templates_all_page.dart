@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -110,9 +111,21 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     final allCount = allItems.length;
     final unlockedCount = allItems.where((t) => t.price == 0).length;
 
+    // 一级分类卡片计数改为「含子孙级」口径，与二级钻取页一致：
+    // 模板（含 custom/imported 全集）分类叶子路径命中该一级分类的子树 key 即算。
     final categoryCounts = <String, int>{};
-    for (final t in allItems) {
-      categoryCounts[t.category] = (categoryCounts[t.category] ?? 0) + 1;
+    if (categories.isNotEmpty) {
+      final subtreeByKey = <String, Set<String>>{};
+      for (final c in categories) {
+        subtreeByKey[c.key] = await dao.getSubtreeKeys(c.key);
+      }
+      for (final t in allItems) {
+        for (final c in categories) {
+          if (t.matchesSubtree(subtreeByKey[c.key]!)) {
+            categoryCounts[c.key] = (categoryCounts[c.key] ?? 0) + 1;
+          }
+        }
+      }
     }
 
     // v17 修复筛选 bug：三级级联过滤（原代码仅按 type 过滤，style/method 不生效）
@@ -1224,7 +1237,8 @@ class _CategoryOverview extends ConsumerWidget {
         name: cat.name,
         iconUrl: cat.iconUrl,
         icon: categoryIconForKey(cat.key),
-        desc: presentation.desc,
+        // 有后端简短描述时优先展示，否则回退内置文案
+        desc: cat.description.isNotEmpty ? cat.description : presentation.desc,
         gradient: presentation.gradient,
         height: presentation.height,
       );
@@ -1426,10 +1440,10 @@ class _CategoryCard extends StatelessWidget {
                     child: meta.iconUrl.isNotEmpty
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(10),
-                            child: Image.network(
-                              meta.iconUrl,
+                            child: CachedNetworkImage(
+                              url: meta.iconUrl,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Icon(
+                              errorWidget: Icon(
                                 meta.icon,
                                 size: 18,
                                 color: Colors.white,

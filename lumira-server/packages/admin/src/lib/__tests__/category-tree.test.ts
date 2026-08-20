@@ -9,6 +9,7 @@ function makeCat(over: Partial<TemplateCategory> & Pick<TemplateCategory, 'key' 
     id: 0,
     parentKey: null,
     iconUrl: '',
+    description: '',
     sortOrder: 0,
     isSystem: false,
     isActive: true,

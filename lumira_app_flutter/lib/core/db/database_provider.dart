@@ -23,7 +23,7 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 29;
+const int _kDbVersion = 30;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -161,6 +161,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colParentKey} TEXT,
       ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
       ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+      ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
       ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
@@ -753,6 +754,7 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
           ${Tables.colParentKey} TEXT,
           ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
           ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+          ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
           ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
           ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
           ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
@@ -764,9 +766,9 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute('''
         INSERT INTO template_categories_new
           (${Tables.colKey}, ${Tables.colName}, ${Tables.colParentKey}, ${Tables.colLevel},
-           ${Tables.colIconUrl}, ${Tables.colSortOrder}, ${Tables.colIsSystem}, ${Tables.colIsActive}, ${Tables.colUpdatedAt})
+           ${Tables.colIconUrl}, ${Tables.colDescription}, ${Tables.colSortOrder}, ${Tables.colIsSystem}, ${Tables.colIsActive}, ${Tables.colUpdatedAt})
         SELECT ${Tables.colKey}, ${Tables.colName}, NULL, 1,
-               ${Tables.colIconUrl}, ${Tables.colSortOrder}, ${Tables.colIsSystem}, ${Tables.colIsActive}, ${Tables.colUpdatedAt}
+               ${Tables.colIconUrl}, '', ${Tables.colSortOrder}, ${Tables.colIsSystem}, ${Tables.colIsActive}, ${Tables.colUpdatedAt}
         FROM ${Tables.templateCategories}
       ''');
       await db.execute('DROP TABLE IF EXISTS ${Tables.templateCategories}');
@@ -982,6 +984,16 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await _createUsageTables(db);
     } catch (e) {
       debugPrint('v29 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 30) {
+    try {
+      // v30: template_categories 新增 description 列（简短描述，可为空，仅一二级分类）
+      await db.execute(
+        'ALTER TABLE ${Tables.templateCategories} ADD COLUMN ${Tables.colDescription} TEXT NOT NULL DEFAULT \'\'');
+    } catch (e) {
+      debugPrint('v30 migration failed (silent fallback): $e');
     }
   }
 }

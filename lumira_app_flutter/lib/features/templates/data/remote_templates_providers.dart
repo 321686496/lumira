@@ -54,6 +54,7 @@ final remoteCategoriesSyncProvider = FutureProvider<void>((ref) async {
       parentKey: c.parentKey,
       level: c.level,
       iconUrl: c.iconUrl,
+      description: c.description,
       sortOrder: c.sortOrder,
       isSystem: c.isSystem,
       isActive: c.isActive,

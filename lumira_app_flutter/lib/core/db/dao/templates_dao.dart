@@ -495,6 +495,46 @@ class TemplatesDao {
     return result;
   }
 
+  /// 统计每个候选分类 key 下（含子孙级）的模板数量。
+  ///
+  /// 统计口径与模板列表过滤保持一致：模板的分类叶子路径
+  /// （category / style / majorStyle / subStyle / method）中任意一个 key
+  /// 命中该分类的子树 key 集合即算（spec-4level §6.3）。
+  /// 模板来源：builtin + remote（与模板库概览一致）。
+  /// 用于分类卡片下方的「N 套模板」展示。
+  Future<Map<String, int>> countTemplatesBySubtree(
+    List<String> categoryKeys, {
+    bool activeOnly = true,
+  }) async {
+    final result = <String, int>{for (final k in categoryKeys) k: 0};
+    if (categoryKeys.isEmpty) return result;
+
+    // 逐个候选分类展开子树 key 集合
+    final subtreeByKey = <String, Set<String>>{};
+    for (final k in categoryKeys) {
+      subtreeByKey[k] = await getSubtreeKeys(k, activeOnly: activeOnly);
+    }
+
+    final items = await getBuiltinAndRemote();
+    for (final t in items) {
+      final cls = t.classification;
+      final style = cls['style'] as String?;
+      final method = cls['method'] as String?;
+      final majorStyle = cls['majorStyle'] as String?;
+      final subStyle = cls['subStyle'] as String?;
+      for (final k in categoryKeys) {
+        final set = subtreeByKey[k]!;
+        if (set.contains(t.category) ||
+            (style != null && set.contains(style)) ||
+            (method != null && set.contains(method)) ||
+            (majorStyle != null && set.contains(majorStyle)) ||
+            (subStyle != null && set.contains(subStyle))) {
+          result[k] = result[k]! + 1;
+        }
+      }
+    }
+    return result;
+  }
   /// 获取完整的三级分类树。
   ///
   /// 返回一级分类列表，每个一级分类的 [TemplateCategoryNode.children] 含二级节点，
@@ -597,6 +637,8 @@ class TemplateCategoryRecord {
   final int level;
   /// 图标 URL（后端托管，空字符串表示使用 Flutter 端内置 Material Icons 回退映射）
   final String iconUrl;
+  /// 简短描述（可为空，仅一二级分类展示，来自后端）
+  final String description;
   final int sortOrder;
   /// 是否为系统保留分类（1=key 锁定不可改不可删，与后端 is_system 对齐）
   final bool isSystem;
@@ -611,6 +653,7 @@ class TemplateCategoryRecord {
     this.parentKey,
     this.level = 1,
     this.iconUrl = '',
+    this.description = '',
     this.sortOrder = 0,
     this.isSystem = false,
     this.isActive = true,
@@ -625,6 +668,7 @@ class TemplateCategoryRecord {
       Tables.colParentKey: parentKey,
       Tables.colLevel: level,
       Tables.colIconUrl: iconUrl,
+      Tables.colDescription: description,
       Tables.colSortOrder: sortOrder,
       Tables.colIsSystem: isSystem ? 1 : 0,
       Tables.colIsActive: isActive ? 1 : 0,
@@ -640,6 +684,7 @@ class TemplateCategoryRecord {
       parentKey: row[Tables.colParentKey] as String?,
       level: (row[Tables.colLevel] as num?)?.toInt() ?? 1,
       iconUrl: (row[Tables.colIconUrl] as String?) ?? '',
+      description: (row[Tables.colDescription] as String?) ?? '',
       sortOrder: (row[Tables.colSortOrder] as num?)?.toInt() ?? 0,
       isSystem: (row[Tables.colIsSystem] as num?)?.toInt() == 1,
       isActive: (row[Tables.colIsActive] as num?)?.toInt() == 1,
@@ -654,6 +699,7 @@ class TemplateCategoryRecord {
     String? parentKey,
     int? level,
     String? iconUrl,
+    String? description,
     int? sortOrder,
     bool? isSystem,
     bool? isActive,
@@ -666,6 +712,7 @@ class TemplateCategoryRecord {
       parentKey: parentKey ?? this.parentKey,
       level: level ?? this.level,
       iconUrl: iconUrl ?? this.iconUrl,
+      description: description ?? this.description,
       sortOrder: sortOrder ?? this.sortOrder,
       isSystem: isSystem ?? this.isSystem,
       isActive: isActive ?? this.isActive,

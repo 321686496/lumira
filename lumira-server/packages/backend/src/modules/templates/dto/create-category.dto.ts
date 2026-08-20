@@ -18,6 +18,12 @@ export class CreateCategoryDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(200)
+  /** 简短描述（可为空，仅一/二级分类使用） */
+  description?: string;
+
+  @IsOptional()
+  @IsString()
   iconUrl?: string;
 
   /** 父分类 key；省略或 null 表示一级分类 */

@@ -193,6 +193,8 @@ export interface TemplateCategory {
   parentKey: string | null;
   level: number; // 1=type / 2=majorStyle / 3=subStyle / 4=method
   iconUrl: string;
+  /** 简短描述（可为空，仅一/二级分类使用） */
+  description: string;
   sortOrder: number;
   isSystem: boolean;
   isActive: boolean;
@@ -284,6 +286,8 @@ export interface CreateCategoryRequest {
   parentKey: string | null; // 一级为 null
   level: number; // 1/2/3
   iconUrl?: string;
+  /** 简短描述（可为空，仅一/二级分类使用） */
+  description?: string;
   sortOrder?: number;
   isActive?: boolean;
 }

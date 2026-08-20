@@ -170,6 +170,8 @@ export const templateCategories = mysqlTable('template_categories', {
   sortOrder: int('sort_order').notNull().default(0),
   isSystem: int('is_system').notNull().default(0),
   isActive: int('is_active').notNull().default(1),
+  // 简短描述（可为空，仅一/二级分类使用）
+  description: text('description').notNull().default(''),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 }, (table) => ({

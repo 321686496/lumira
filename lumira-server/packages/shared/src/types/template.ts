@@ -7,6 +7,8 @@ export interface TemplateCategory {
   key: string;
   name: string;
   iconUrl: string;
+  /** 简短描述（可为空，仅一/二级分类使用） */
+  description: string;
   /** 父分类 key；一级分类为 null */
   parentKey: string | null;
   /** 层级：1=type / 2=majorStyle / 3=subStyle / 4=method */
@@ -142,6 +144,8 @@ export interface CreateCategoryRequest {
   key: string;
   name: string;
   iconUrl?: string;
+  /** 简短描述（可为空，仅一/二级分类使用） */
+  description?: string;
   /** 父分类 key；省略或 null 表示一级分类 */
   parentKey?: string | null;
   sortOrder?: number;

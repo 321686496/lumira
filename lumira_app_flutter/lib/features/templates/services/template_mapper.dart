@@ -72,6 +72,10 @@ class TemplateMapper {
         'type': meta.classification.type,
         'style': meta.classification.style,
         'method': meta.classification.method,
+        // v4level：后端四级分类扩展字段，必须随 meta 一并落到本地库，
+        // 否则按大风格/子风格钻取过滤（matchesSubtree）时永远匹配不到。
+        'majorStyle': meta.classification.majorStyle,
+        'subStyle': meta.classification.subStyle,
       },
       tags: List<String>.from(meta.tags),
       tagIds: List<String>.from(meta.tagIds),

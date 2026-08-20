@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -93,6 +94,8 @@ interface FormState {
   /** 祖先路径（root → 父分类），用于通用逐级选父：path 长度 = level - 1 */
   path: string[];
   parentKey: string;       // 实际父分类 key（一级为空）
+  /** 简短描述（可为空，仅一/二级分类展示） */
+  description: string;
   sortOrder: number;
   isActive: boolean;
 }
@@ -103,6 +106,7 @@ const EMPTY_FORM: FormState = {
   level: 1,
   path: [],
   parentKey: '',
+  description: '',
   sortOrder: 0,
   isActive: true,
 };
@@ -223,6 +227,7 @@ export function CategoryManager({
       level,
       path: getAncestorKeys(parent),
       parentKey: parent.key,
+      description: '',
       sortOrder: 0,
       isActive: true,
     });
@@ -240,6 +245,7 @@ export function CategoryManager({
       level: cat.level as 1 | 2 | 3 | 4,
       path: cat.level > 1 ? getAncestorKeys(cat).slice(0, -1) : [],
       parentKey: cat.parentKey ?? '',
+      description: cat.description ?? '',
       sortOrder: cat.sortOrder,
       isActive: cat.isActive,
     });
@@ -305,6 +311,10 @@ export function CategoryManager({
       sortOrder: Number(form.sortOrder) || 0,
       isActive: form.isActive,
     };
+    // 简题描述仅一二级分类提交
+    if (form.level <= 2) {
+      meta.description = form.description.trim();
+    }
     if (!editingKey) {
       meta.key = form.key.trim();
     }
@@ -848,6 +858,24 @@ export function CategoryManager({
                 placeholder="如：人像 / 日系 / 他拍"
               />
             </div>
+
+            {/* 简短描述仅一二级分类展示 */}
+            {form.level <= 2 && (
+              <div className="space-y-2">
+                <Label htmlFor="cat-desc">简短描述（可选）</Label>
+                <Textarea
+                  id="cat-desc"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="一句话介绍该分类，例如：日系清新人像，适合干净通透的日常照"
+                  rows={2}
+                  maxLength={200}
+                />
+                <p className="text-xs text-muted-foreground">
+                  将展示在 App 模板库的分类卡片上，可为空。
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
