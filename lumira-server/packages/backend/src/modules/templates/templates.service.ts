@@ -10,6 +10,7 @@ import type {
   RemoteTemplateListResponse,
   RemoteTemplateDetail,
   TemplateCategory,
+  TemplateAmbience,
 } from '@lumira/shared';
 
 @Injectable()
@@ -239,6 +240,8 @@ export function rowToMeta(row: TemplateRow): RemoteTemplateMeta {
     tags: safeParseStringArray(row.tagsJson),
     tagIds: safeParseStringArray(row.tagIdsJson),
     classification: safeParseClassification(row.classificationJson),
+    ambience: parseAmbience(row.ambienceJson),
+    shortDesc: row.shortDesc ?? '',
     sortOrder: row.sortOrder,
     updatedAt: row.updatedAt,
   };
@@ -322,4 +325,30 @@ function safeParseClassification(json: string): { type: string; majorStyle: stri
     subStyle: typeof obj.subStyle === 'string' ? obj.subStyle : '',
     method: typeof obj.method === 'string' ? obj.method : '',
   };
+}
+
+/** 清洗入口 ambience 输入为标准三数组结构（非法值丢弃） */
+export function sanitizeAmbience(input: unknown): TemplateAmbience {
+  const obj =
+    input && typeof input === 'object' && !Array.isArray(input)
+      ? (input as Record<string, unknown>)
+      : {};
+  const strArr = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  return {
+    seasons: strArr(obj['seasons']) as TemplateAmbience['seasons'],
+    weathers: strArr(obj['weathers']) as TemplateAmbience['weathers'],
+    timeTones: strArr(obj['timeTones']) as TemplateAmbience['timeTones'],
+  };
+}
+
+/** 解析 ambience_json 列（失败回退空结构） */
+export function parseAmbience(json: string): TemplateAmbience {
+  try {
+    const v = JSON.parse(json);
+    if (v && typeof v === 'object' && !Array.isArray(v)) return sanitizeAmbience(v);
+  } catch {
+    /* 非法 JSON 回退空结构 */
+  }
+  return { seasons: [], weathers: [], timeTones: [] };
 }

@@ -11,7 +11,7 @@ import { templates, templateCategories, templatePrices } from '../../database/sc
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { parsePptpl } from './utils/pptpl-parser';
-import { rowToDetail } from './templates.service';
+import { rowToDetail, sanitizeAmbience } from './templates.service';
 import type {
   AdminTemplateListItem,
   AdminTemplateDetail,
@@ -270,6 +270,8 @@ export class AdminTemplatesService {
       cameraJson: JSON.stringify(camera),
       sceneGuideJson: JSON.stringify(sceneGuide),
       postProcessJson: JSON.stringify(postProcess),
+      ambienceJson: JSON.stringify(sanitizeAmbience(meta.ambience)),
+      shortDesc: meta.shortDesc ?? '',
       createdAt: now,
       updatedAt: now,
     });
@@ -414,6 +416,8 @@ export class AdminTemplatesService {
     updateData.cameraJson = JSON.stringify(camera);
     updateData.sceneGuideJson = JSON.stringify(sceneGuide);
     updateData.postProcessJson = JSON.stringify(postProcess);
+    if (meta.ambience !== undefined) updateData.ambienceJson = JSON.stringify(sanitizeAmbience(meta.ambience));
+    if (meta.shortDesc !== undefined) updateData.shortDesc = meta.shortDesc;
 
     await db.update(templates).set(updateData).where(eq(templates.id, id));
 
