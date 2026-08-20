@@ -197,6 +197,10 @@ export const templates = mysqlTable('templates', {
   cameraJson: longtext('camera_json').notNull().default('{}'),
   sceneGuideJson: longtext('scene_guide_json').notNull().default('{}'),
   postProcessJson: longtext('post_process_json').notNull().default('{}'),
+  // 季节/天气/时段元数据（spec 2026-08-20）：{ seasons:[], weathers:[], timeTones:[] }
+  ambienceJson: longtext('ambience_json').notNull().default('{}'),
+  // 短简介（≤10字，banner/模板卡片展示用）
+  shortDesc: text('short_desc').notNull().default(''),
   createdAt: int('created_at').notNull(),
   updatedAt: int('updated_at').notNull(),
 });
