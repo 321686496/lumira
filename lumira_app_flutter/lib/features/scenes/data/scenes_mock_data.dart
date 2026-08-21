@@ -5,7 +5,6 @@ import '../../capture/data/capture_scene_mock_data.dart';
 /// 场景库页面分类 pill（与 uni-app scenes/index.vue categories 一致）
 ///
 /// 5 项：全部 / 光线 / 室外 / 室内 / 情绪
-/// 注意：与 capture_scene_guide_page 的「光线氛围/室外环境/室内空间/情绪氛围」不同，
 /// scenes 页使用短名（与 uni-app 源页面一致）。
 class ScenesCategoryPill {
   const ScenesCategoryPill({
