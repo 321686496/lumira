@@ -24,8 +24,8 @@ export interface UploadFile {
   mimetype: string;
 }
 
-/** 图片上传上限：封面 / 剪影 5MB */
-export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+/** 图片上传上限：封面 / 剪影 8MB */
+export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 /** .pptpl 上传上限（25MB）：文件内嵌 base64 封面图/剪影，体积远大于原始 JSON */
 export const MAX_PPTPL_BYTES = 25 * 1024 * 1024;
 

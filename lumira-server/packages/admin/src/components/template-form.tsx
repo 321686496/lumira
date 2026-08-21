@@ -1050,12 +1050,12 @@ export default function TemplateForm({
               <FileUpload
                 label="封面图片 *"
                 accept="image/png,image/jpeg,image/webp"
-                maxSize={5 * 1024 * 1024}
+                maxSize={8 * 1024 * 1024}
                 value={coverFile}
                 onChange={async (file) => {
                   setCoverFile(file ? await compressImage(file, { maxDim: 1080, quality: 0.8 }) : null);
                 }}
-                hint="JPG / PNG / WebP，≤5MB，建议 3:4 竖图。上传后自动压缩（PNG 转 WebP）。"
+                hint="JPG / PNG / WebP，≤8MB，建议 3:4 竖图。上传后自动压缩（PNG 转 WebP）。"
                 previewUrl={coverPreviewUrl}
               />
 
@@ -1089,12 +1089,12 @@ export default function TemplateForm({
                   <FileUpload
                     label="剪影图片"
                     accept="image/png,image/svg+xml"
-                    maxSize={5 * 1024 * 1024}
+                    maxSize={8 * 1024 * 1024}
                     value={silhouetteFile}
                     onChange={async (file) => {
                       setSilhouetteFile(file ? await compressImage(file, { maxDim: 640, quality: 0.8 }) : null);
                     }}
-                    hint="PNG / SVG，≤5MB。上传后自动压缩（PNG 转 WebP 保留透明通道）。"
+                    hint="PNG / SVG，≤8MB。上传后自动压缩（PNG 转 WebP 保留透明通道）。"
                   />
 
                   {silhouettePreviewSrc && (
