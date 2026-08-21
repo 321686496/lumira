@@ -12,6 +12,7 @@ export const devices = mysqlTable('devices', {
   firstSeenAt: int('first_seen_at').notNull(),
   lastSeenAt: int('last_seen_at').notNull(),
   ipRegion: text('ip_region'),
+  inviteCode: varchar('invite_code', { length: 16 }),
   recoverySecretHash: text('recovery_secret_hash'),
   recoverySecretCreatedAt: int('recovery_secret_created_at'),
   email: varchar('email', { length: 255 }),
@@ -19,6 +20,7 @@ export const devices = mysqlTable('devices', {
   sessionEpoch: int('session_epoch').notNull().default(0),
 }, (table) => ({
   emailIdx: uniqueIndex('uq_devices_email').on(table.email),
+  inviteCodeIdx: uniqueIndex('uq_devices_invite_code').on(table.inviteCode),
 }));
 
 export const userProfiles = mysqlTable('user_profiles', {
