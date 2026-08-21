@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:lumira_app_flutter/core/db/database_provider.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
@@ -22,8 +24,20 @@ import '../../../test/helpers/test_http_overrides.dart';
 /// 注意：测试名不要 overpromise（#59/#60/#61 教训）— 仅断言实际渲染的文本与组件。
 void main() {
   FlutterExceptionHandler? originalErrorHandler;
+  late ProviderContainer dbContainer;
+  late Database db;
 
-  setUp(() {
+  setUp(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    sqfliteFfiInit();
+    // Forced fix: 详情页 build 会经 ownedTemplatesLoaderProvider 惰性打开 sqflite。
+    // 在 setUp 的 real async zone 中预打开数据库（首个测试建库+seed），并在 wrap 的
+    // ProviderScope 中 override 复用该已打开的 Database 实例 —— pumpAndSettle
+    // （fake async）期间只发生 microtask 级查询，避免真实文件 IO 无法被 fake async
+    // 推进导致的超时。NoIsolate：DB 操作在主 isolate 同步执行。
+    databaseFactory = databaseFactoryFfiNoIsolate;
+    dbContainer = ProviderContainer();
+    db = await dbContainer.read(databaseProvider.future);
     HttpOverrides.global = TestHttpOverrides();
     originalErrorHandler = FlutterError.onError;
     FlutterError.onError = (FlutterErrorDetails details) {
@@ -35,6 +49,8 @@ void main() {
   });
 
   tearDown(() {
+    // 关闭数据库（databaseProvider 注册了 onDispose(db.close)）
+    dbContainer.dispose();
     HttpOverrides.global = null;
     FlutterError.onError = originalErrorHandler;
   });
@@ -68,6 +84,8 @@ void main() {
     );
     return ProviderScope(
       overrides: [
+        // 复用 setUp 预打开的 Database 实例，避免各测试重复建库/seed 及 fake async 文件 IO
+        databaseProvider.overrideWith((ref) async => db),
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
       ],
@@ -130,9 +148,9 @@ void main() {
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 测试环境无数据库/网络：详情 provider 进入 error 分支，显示重试 UI
-      expect(find.text('网络错误，无法加载完整内容'), findsOneWidget);
-      expect(find.text('重试'), findsOneWidget);
+      // 模板在 mock 快路径与本地库中均不存在 → 详情 provider 返回 null → 空态
+      expect(find.text('模板未找到'), findsOneWidget);
+      expect(find.text('该模板可能已被删除或链接错误'), findsOneWidget);
     });
 
     testWidgets('renders template name for free template', (tester) async {

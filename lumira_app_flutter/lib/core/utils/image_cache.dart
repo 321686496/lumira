@@ -223,15 +223,37 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final dpr = MediaQuery.of(context).devicePixelRatio;
-        int? cw = widget.cacheWidth;
         final mw = constraints.maxWidth;
-        if (cw == null && mw.isFinite && mw > 0) {
-          cw = (mw * dpr).round().clamp(1, 4096);
-        }
-        int? ch = widget.cacheHeight;
         final mh = constraints.maxHeight;
-        if (ch == null && mh.isFinite && mh > 0) {
-          ch = (mh * dpr).round().clamp(1, 4096);
+        final wPx = (mw.isFinite && mw > 0)
+            ? (mw * dpr).round().clamp(1, 4096)
+            : null;
+        final hPx = (mh.isFinite && mh > 0)
+            ? (mh * dpr).round().clamp(1, 4096)
+            : null;
+
+        int? cw = widget.cacheWidth;
+        int? ch = widget.cacheHeight;
+        if (cw == null && ch == null) {
+          // 只传「较大物理边长」一个维度做解码降采样，另一维度由引擎按原图宽高比推导。
+          // 若同时传 cacheWidth+cacheHeight，Flutter 会把解码图强制拉伸成容器比例——
+          // 当容器比例与图片原始比例不一致（如模板宽高比 16:9、封面实拍 4:3）时，
+          // 图片会被拉伸变形（模板详情封面"被拉伸"的根因）。
+          if (wPx != null && hPx != null) {
+            if (wPx >= hPx) {
+              cw = wPx;
+            } else {
+              ch = hPx;
+            }
+          } else if (wPx != null) {
+            cw = wPx;
+          } else {
+            ch = hPx;
+          }
+        } else if (cw == null) {
+          cw ??= wPx;
+        } else {
+          ch ??= hPx;
         }
 
         Widget image = Image.memory(

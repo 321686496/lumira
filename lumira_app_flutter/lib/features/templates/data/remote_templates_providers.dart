@@ -86,10 +86,12 @@ final remoteTemplatesSyncProvider = FutureProvider<void>((ref) async {
 
 /// 按需拉取单个远程模板完整内容 → upsert 到 sqflite → 返回 PhotoTemplate。
 ///
-/// 触发时机：详情页打开 source='remote' 且 sqflite 中 composition_json='{}' 的模板时。
+/// 触发时机：
+/// - 拍摄页 / 编辑器（capture_state / templates_editor_page）需要完整模板内容时；
+/// - 详情页历史版本曾依赖本 provider，现详情页（[templateDetailProvider]）改为
+///   每次进入直接走 Repository 拉取最新内容，不经过本 provider（避免全局缓存旧数据）。
 ///
 /// 返回值：成功返回填充完整的 [PhotoTemplate]；失败抛异常（UI 显示"网络错误"并禁用"套用拍摄"）。
-/// 注意：拉取成功后再次进入同一模板详情页时，sqflite 已缓存完整内容，无需再次拉取。
 final remoteTemplateDetailProvider =
     FutureProvider.family<PhotoTemplate?, String>((ref, id) async {
   final repo = await ref.watch(remoteTemplatesRepositoryProvider.future);
@@ -124,7 +126,7 @@ final remoteTemplateDetailProvider =
 /// - 远程拉取失败 → 抛异常（FutureProvider 进入 error 状态，UI 显示"网络错误"）
 /// - DAO 不可用 → 返回 mock 结果（可能为 null）
 final templateDetailProvider =
-    FutureProvider.family<TemplateDetail?, String>((ref, id) async {
+    FutureProvider.autoDispose.family<TemplateDetail?, String>((ref, id) async {
   // 1. 快路径：mock + TemplateRegistry（同步）
   final mock = TemplatesBrowseMockData.findDetailById(id);
   if (mock != null) return mock;
@@ -134,17 +136,29 @@ final templateDetailProvider =
   final record = await dao.getById(id);
   if (record == null) return null;
 
-  // 3. 若为 remote 且 composition 为空（仅 meta 缓存）→ 按需拉取完整内容
-  final needsRemoteFetch =
-      record.source == 'remote' && record.composition.isEmpty;
-  if (needsRemoteFetch) {
-    final remoteTemplate =
-        await ref.watch(remoteTemplateDetailProvider(id).future);
-    if (remoteTemplate == null) return null;
-    return TemplatesBrowseMockData.fromPhotoTemplate(remoteTemplate);
+  // 3. remote 模板：每次进入详情页都尝试拉取后端最新完整内容，
+  //    保证后台修改模板后 App 重新进入能看到更新；网络失败时降级本地缓存。
+  //    注意：此处直接用 Repository 拉取（而非 watch remoteTemplateDetailProvider），
+  //    避免命中其全局缓存导致数据仍是旧版本。
+  if (record.source == 'remote') {
+    try {
+      final repo = await ref.watch(remoteTemplatesRepositoryProvider.future);
+      final detail = await repo.fetchDetail(id);
+      await dao.upsert(TemplateMapper.detailToRecord(detail));
+      final refreshed = await dao.getById(id);
+      if (refreshed != null) {
+        return TemplatesBrowseMockData.fromPhotoTemplate(
+            TemplateMapper.toPhotoTemplate(refreshed));
+      }
+    } catch (_) {
+      // 网络失败：本地已有完整内容则降级展示；否则抛错让 UI 显示网络错误 + 重试
+      if (record.composition.isEmpty) rethrow;
+    }
+    return TemplatesBrowseMockData.fromPhotoTemplate(
+        TemplateMapper.toPhotoTemplate(record));
   }
 
-  // 4. 本地已有完整内容 → 直接转换
+  // 4. 本地（builtin/custom）已有完整内容 → 直接转换
   return TemplatesBrowseMockData.fromPhotoTemplate(
       TemplateMapper.toPhotoTemplate(record));
 });
