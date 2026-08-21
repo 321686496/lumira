@@ -152,7 +152,7 @@ const schema = z.object({
   classificationMethod: z.string().optional().default(NONE_VALUE),
   price: z.coerce.number().int().min(0, '价格不能为负'),
   description: z.string().optional().default(''),
-  shortDesc: z.string().max(10, '短简介最多 10 字').optional().default(''),
+  shortDesc: z.string().max(20, '短简介最多 20 字').optional().default(''),
   ambienceSeasons: z.array(z.string()).optional().default([]),
   ambienceWeathers: z.array(z.string()).optional().default([]),
   ambienceTimeTones: z.array(z.string()).optional().default([]),
@@ -960,16 +960,16 @@ export default function TemplateForm({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="shortDesc">短简介（≤10字）</Label>
+                <Label htmlFor="shortDesc">短简介（≤20字）</Label>
                 <div className="relative">
                   <Input
                     id="shortDesc"
-                    maxLength={10}
-                    placeholder="一句话亮点（≤10字）"
+                    maxLength={20}
+                    placeholder="一句话亮点（≤20字）"
                     {...register('shortDesc')}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
-                    {watch('shortDesc')?.length ?? 0}/10
+                    {watch('shortDesc')?.length ?? 0}/20
                   </span>
                 </div>
               </div>

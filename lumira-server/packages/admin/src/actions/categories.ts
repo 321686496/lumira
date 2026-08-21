@@ -34,12 +34,12 @@ export async function createCategory(formData: FormData) {
     return { error: '请填写分类名称' };
   }
   const level = Number(parsed.level);
-  if (![1, 2, 3].includes(level)) {
-    return { error: '请选择有效的层级（1/2/3）' };
+  if (![1, 2, 3, 4].includes(level)) {
+    return { error: '请选择有效的层级（1/2/3/4）' };
   }
-  // 二三级分类必须指定父分类
+  // 二/三/四级分类必须指定父分类
   if (level !== 1 && !parsed.parentKey) {
-    return { error: '二三级分类必须选择父分类' };
+    return { error: '二/三/四级分类必须选择父分类' };
   }
   // 一级分类的 parentKey 必须为 null
   if (level === 1 && parsed.parentKey) {
