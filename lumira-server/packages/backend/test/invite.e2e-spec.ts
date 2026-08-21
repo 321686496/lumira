@@ -115,6 +115,26 @@ describe('InviteController (e2e)', () => {
     expect(res.body.unlockedRewards).toHaveLength(1);
   });
 
+  it('GET /api/v1/invite/stats — should include myInviteCode/tiers/invitees', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/invite/stats')
+      .set('Authorization', `Bearer ${inviterToken}`)
+      .expect(200);
+
+    expect(res.body.myInviteCode).toBe(inviteCode);
+    expect(Array.isArray(res.body.tiers)).toBe(true);
+    expect(res.body.tiers.length).toBeGreaterThan(0);
+    expect(res.body.tiers[0]).toHaveProperty('done');
+    expect(res.body.tiers[0]).toHaveProperty('locked');
+    expect(res.body.tiers[0]).toHaveProperty('rewards');
+    // invitees 为真实被邀请记录（inviteeDeviceId 已在激活写入）
+    expect(res.body.invitees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ inviteeDeviceId, channel: 'direct' }),
+      ]),
+    );
+  });
+
   it('GET /api/v1/invite/stats — without auth should return 401', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/invite/stats')
