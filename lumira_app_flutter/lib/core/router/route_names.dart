@@ -14,7 +14,6 @@ class RouteNames {
   static const String capture = '/capture';
   static const String capturePreview = '/capture/preview';
   static const String capturePreviewTemplate = '/capture/preview-template';
-  static const String captureSceneGuide = '/capture/scene-guide';
   static const String captureSceneManage = '/capture/scene-manage';
   static const String captureSceneDetail = '/capture/scene-detail';
   static const String captureTutorial = '/capture/tutorial';
