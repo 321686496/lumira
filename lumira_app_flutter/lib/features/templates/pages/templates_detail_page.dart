@@ -16,6 +16,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
 import '../../../shared/widgets/tags/user_tags_section.dart';
 import '../data/owned_templates_repository.dart';
 import '../data/remote_templates_providers.dart';
@@ -25,6 +26,17 @@ import '../services/template_exporter.dart';
 import '../services/template_share_code.dart';
 import '../widgets/pose_silhouette.dart';
 import '../widgets/template_cover_image.dart';
+
+/// 全量分类记录列表（供详情页分类面包屑解析）。
+///
+/// 用 List 而非 key→name 扁平 map：L3 拍法 key（如 normal / wide）在同一 key 下会
+/// 出现在多个父分类（如 japanese→他拍、casual→随拍），扁平 map 会产生歧义，
+/// 需要按父分类路径精确解析每个分段的中文名。
+final templateCategoryProvider =
+    FutureProvider<List<TemplateCategoryRecord>>((ref) async {
+  final dao = await ref.watch(templatesDaoProvider.future);
+  return dao.getCategories(activeOnly: false);
+});
 
 /// 姿势参考卡片内容宽高比：按模板宽高比**字面**解析（不随设备方向自适应）。
 ///
@@ -61,8 +73,6 @@ class TemplatesDetailPage extends ConsumerStatefulWidget {
 }
 
 class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
-  bool _tagSelectorVisible = false;
-
   /// 防止重复上报详情打开事件（同一实例只上报一次）。
   bool _openDetailReported = false;
 
@@ -306,7 +316,6 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
       }
       return true;
     }();
-    final canEditTags = template.id.startsWith('custom_');
     final propsText = (template.sceneGuide.props).join('、');
     final ev = template.camera.exposureCompensation;
     final evDisplay = ev > 0 ? '+$ev' : '$ev';
@@ -339,18 +348,10 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
               _TitleAndTags(
                 template: template,
                 tokens: tokens,
-                canEditTags: canEditTags,
-                onAddTag: () => setState(() => _tagSelectorVisible = true),
               ),
-              if (_tagSelectorVisible && canEditTags)
-                _TagSelector(
-                  tokens: tokens,
-                  onNewTag: () => _showSnack('新建标签功能即将上线'),
-                ),
               UserTagsSection(
                 itemType: TagItemType.template,
                 itemId: template.id,
-                systemTags: template.tags,
               ),
               _SceneGuideCard(
                 template: template,
@@ -775,21 +776,40 @@ class _PreviewImage extends StatelessWidget {
   }
 }
 
-class _TitleAndTags extends StatelessWidget {
+class _TitleAndTags extends ConsumerWidget {
   const _TitleAndTags({
     required this.template,
     required this.tokens,
-    required this.canEditTags,
-    required this.onAddTag,
   });
 
   final TemplateDetail template;
   final ThemeTokens tokens;
-  final bool canEditTags;
-  final VoidCallback onAddTag;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 分类 breadcrumb：完整分类路径（categoryLabel(category) · majorStyle · subStyle · method）
+    final categories =
+        ref.watch(templateCategoryProvider).value ?? const <TemplateCategoryRecord>[];
+    // 按父分类路径精确解析名称：同 key 的 L3（如 normal）可能挂在不同父分类下，
+    // 优先取 parentKey 匹配的分段，避免出现"随拍/他拍"错名。
+    String? nameOf(String key, String? parentKey) {
+      final matches = categories.where((c) => c.key == key).toList();
+      if (matches.isEmpty) return null;
+      if (parentKey == null) return matches.first.name;
+      final byParent = matches.where((c) => c.parentKey == parentKey);
+      return (byParent.isNotEmpty ? byParent.first : matches.first).name;
+    }
+
+    final segments = <String?>[
+      TemplatesBrowseMockData.categoryLabel(template.category),
+      if (template.majorStyle != null && template.majorStyle!.isNotEmpty)
+        nameOf(template.majorStyle!, template.category),
+      if (template.subStyle != null && template.subStyle!.isNotEmpty)
+        nameOf(template.subStyle!, template.majorStyle),
+      if (template.method != null && template.method!.isNotEmpty)
+        nameOf(template.method!, template.majorStyle),
+    ].whereType<String>().toList();
+
     return FadeUp(
       delay: const Duration(milliseconds: 80),
       child: Padding(
@@ -837,156 +857,36 @@ class _TitleAndTags extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
+            // 分类面包屑（完整分类路径）
+            Row(
+              children: [
+                Icon(Icons.folder_outlined,
+                    size: 13, color: tokens.textTertiary),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    segments.join('  ·  '),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.textSecondary,
+                      height: 1.4,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             Wrap(
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final tag in template.tags)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: tokens.brandSubtle,
-                      borderRadius: BorderRadius.circular(9999),
-                    ),
-                    child: Text(
-                      tag,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: tokens.brandText,
-                      ),
-                    ),
-                  ),
-                if (canEditTags)
-                  GestureDetector(
-                    onTap: onAddTag,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: tokens.divider, width: 0.5),
-                        borderRadius: BorderRadius.circular(9999),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add, size: 12, color: tokens.brand),
-                          const SizedBox(width: 2),
-                          Text(
-                            '添加',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: tokens.brand,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                for (final tag in template.tags) TagChip(label: tag, kind: TagChipKind.system),
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TagSelector extends StatelessWidget {
-  const _TagSelector({required this.tokens, required this.onNewTag});
-  final ThemeTokens tokens;
-  final VoidCallback onNewTag;
-
-  @override
-  Widget build(BuildContext context) {
-    // 简化占位：一行 chips + 新建标签按钮（Task 2.8B/2.8C 接入真实 CRUD）
-    return FadeUp(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-        child: NeuCard(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '选择标签',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 36,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _TagChip('人像', tokens: tokens),
-                    _TagChip('柔光', tokens: tokens),
-                    _TagChip('日系', tokens: tokens),
-                    _TagChip('胶片', tokens: tokens),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: onNewTag,
-                      behavior: HitTestBehavior.opaque,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: tokens.brand, width: 0.5),
-                          borderRadius: BorderRadius.circular(9999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.add, size: 12, color: tokens.brand),
-                            const SizedBox(width: 4),
-                            Text(
-                              '新建标签',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: tokens.brand,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TagChip extends ConsumerWidget {
-  const _TagChip(this.label, {required this.tokens});
-  final String label;
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: isNeu ? tokens.surface : tokens.surfaceAlt,
-        borderRadius: BorderRadius.circular(9999),
-        boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          color: tokens.textSecondary,
         ),
       ),
     );

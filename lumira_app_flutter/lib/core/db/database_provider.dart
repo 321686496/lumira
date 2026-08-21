@@ -25,7 +25,7 @@ import '../../features/notification/data/notification_dao.dart';
 import 'dao/search_history_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 33;
+const int _kDbVersion = 34;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -1080,6 +1080,21 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute(SearchHistoryTable.indexSql);
     } catch (e) {
       debugPrint('v33 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 34) {
+    try {
+      // v34: user_settings 新增 template_info_card_hidden 列
+      // 套用模板时的可折叠模板信息卡是否被用户隐藏（持久化），老库升级需显式补列
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colTemplateInfoCardHidden,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+    } catch (e) {
+      debugPrint('v34 migration failed (silent fallback): $e');
     }
   }
 }

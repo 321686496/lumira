@@ -45,24 +45,29 @@ class WatermarkRenderer {
     final scale = photoW / _referenceWidth;
 
     // —— 画布尺寸 ——
-    double padX = 0, padTop = 0, padBottom = 0;
+    // 拍立得：四边白边独立向外扩展（照片区域保持不变，四周补白），
+    // 底部可再叠加白板；其余类型画布与照片同尺寸。
+    double padLeft = 0, padRight = 0, padTop = 0, padBottom = 0;
     if (type == WatermarkFrameType.polaroid) {
-      final pad = frame.borderRatio * photoW;
-      padX = pad;
-      padTop = pad;
-      padBottom = pad + (frame.bottomPlate ? frame.bottomRatio * photoH : 0);
+      padLeft = frame.borderLeft * photoW;
+      padRight = frame.borderRight * photoW;
+      padTop = frame.borderTop * photoW;
+      padBottom = frame.borderBottom * photoW +
+          (frame.bottomPlate ? frame.bottomRatio * photoH : 0);
     }
     final shadow = (type == WatermarkFrameType.polaroid && frame.shadowOpacity > 0)
         ? (frame.shadowBlur * photoW).clamp(2.0, 60.0)
         : 0.0;
-    final outputW = (photoW + padX * 2).round();
+    final outputW = (photoW + padLeft + padRight).round();
     final outputH = (photoH + padTop + padBottom + shadow).round();
 
-    final cardRect = ui.Rect.fromLTWH(0, 0, photoW + padX * 2, photoH + padTop + padBottom);
-    final photoOrigin = ui.Offset(padX, padTop);
-    final photoRect = ui.Rect.fromLTWH(padX, padTop, photoW, photoH);
+    final cardRect = ui.Rect.fromLTWH(
+        0, 0, photoW + padLeft + padRight, photoH + padTop + padBottom);
+    final photoOrigin = ui.Offset(padLeft, padTop);
+    final photoRect = ui.Rect.fromLTWH(padLeft, padTop, photoW, photoH);
     final plateRect = (type == WatermarkFrameType.polaroid && frame.bottomPlate)
-        ? ui.Rect.fromLTWH(padX, padTop + photoH, photoW, padBottom - padX)
+        ? ui.Rect.fromLTWH(
+            padLeft, photoRect.bottom, photoW + padLeft + padRight, padBottom)
         : photoRect;
 
     final recorder = ui.PictureRecorder();
@@ -79,9 +84,13 @@ class WatermarkRenderer {
       );
     }
 
-    // 白卡（拍立得）/ 透明底（其余）
     if (type == WatermarkFrameType.polaroid) {
-      final paint = ui.Paint()..color = frame.color;
+      final paint = ui.Paint();
+      if (frame.borderFill == WatermarkBorderFill.gradient) {
+        paint.shader = _frameGradientShader(frame, cardRect);
+      } else {
+        paint.color = frame.color;
+      }
       if (frame.borderRadius > 0) {
         canvas.drawRRect(
           ui.RRect.fromRectAndRadius(cardRect, ui.Radius.circular(frame.borderRadius * photoW)),
@@ -226,5 +235,55 @@ class WatermarkRenderer {
       color.green,
       color.blue,
     );
+  }
+
+  /// 拍立得卡片底渐变 shader：基于 [WatermarkFrame.color] →
+  /// [WatermarkFrame.gradientEndColor] 与 [WatermarkFrame.gradientDirection]。
+  ui.Shader? _frameGradientShader(WatermarkFrame frame, ui.Rect rect) {
+    return ui.Gradient.linear(
+      _gradientFrom(frame.gradientDirection, rect),
+      _gradientTo(frame.gradientDirection, rect),
+      [frame.color, frame.gradientEndColor],
+    );
+  }
+
+  /// 渐变起点。
+  ui.Offset _gradientFrom(WatermarkGradientDirection dir, ui.Rect rect) {
+    final c = rect.center;
+    switch (dir) {
+      case WatermarkGradientDirection.bottomToTop:
+        return ui.Offset(c.dx, rect.bottom);
+      case WatermarkGradientDirection.leftToRight:
+        return ui.Offset(rect.left, c.dy);
+      case WatermarkGradientDirection.rightToLeft:
+        return ui.Offset(rect.right, c.dy);
+      case WatermarkGradientDirection.topLeftToBottomRight:
+        return rect.topLeft;
+      case WatermarkGradientDirection.bottomLeftToTopRight:
+        return rect.bottomLeft;
+      case WatermarkGradientDirection.topToBottom:
+      default:
+        return ui.Offset(c.dx, rect.top);
+    }
+  }
+
+  /// 渐变终点。
+  ui.Offset _gradientTo(WatermarkGradientDirection dir, ui.Rect rect) {
+    final c = rect.center;
+    switch (dir) {
+      case WatermarkGradientDirection.bottomToTop:
+        return ui.Offset(c.dx, rect.top);
+      case WatermarkGradientDirection.leftToRight:
+        return ui.Offset(rect.right, c.dy);
+      case WatermarkGradientDirection.rightToLeft:
+        return ui.Offset(rect.left, c.dy);
+      case WatermarkGradientDirection.topLeftToBottomRight:
+        return rect.bottomRight;
+      case WatermarkGradientDirection.bottomLeftToTopRight:
+        return rect.topRight;
+      case WatermarkGradientDirection.topToBottom:
+      default:
+        return ui.Offset(c.dx, rect.bottom);
+    }
   }
 }

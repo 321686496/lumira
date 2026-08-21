@@ -11,7 +11,6 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../../scenes/widgets/scene_category_overview.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_mock_data.dart';
@@ -143,13 +142,6 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
               scrollController: _scrollController,
               onTap: _goDetail,
             ),
-          ),
-          // FloatingTabBar
-          const Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: FloatingTabBar(active: 'templates'),
           ),
         ],
       ),

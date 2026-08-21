@@ -11,16 +11,33 @@ import 'package:path_provider/path_provider.dart';
 /// 缓存目录：`<app_cache_dir>/image_cache/`，以 URL 的 hashCode 作为文件名。
 ///
 /// 流程：内存缓存 → 磁盘缓存 → 网络下载。磁盘缓存可跨启动复用，避免每次冷启动重新下载。
+///
+/// 2026-08 优化：加大下载超时 + 失败重试（修复"大图加载不出来"）；同一 URL
+/// 并发只下载一次（去重）；新增 [prefetch] 供网格可见时提前暖缓存；内存缓存带
+/// 大小上限与 FIFO 淘汰，避免全尺寸大图常驻内存导致 OOM。
 class ImageCacheUtil {
   ImageCacheUtil._();
 
   static final Dio _dio = Dio(BaseOptions(
-    connectTimeout: 5000,
-    receiveTimeout: 10000,
+    connectTimeout: 8000,
+    receiveTimeout: 30000,
   ));
 
   static Directory? _cacheDir;
   static final Map<String, Uint8List> _memoryCache = {};
+
+  /// 正在下载中的 URL → Future，避免同一 URL 被并发重复下载。
+  static final Map<String, Future<Uint8List?>> _inflight = {};
+
+  /// 内存缓存 FIFO 淘汰顺序（记录 URL 插入顺序）。
+  static final List<String> _memoryOrder = [];
+
+  /// 单文件超过该字节数时不进内存缓存（仅磁盘），避免大图常驻内存。
+  static const int _maxMemoryEntryBytes = 1024 * 1024;
+
+  /// 内存缓存总字节上限，超出后按 FIFO 淘汰最旧条目。
+  static const int _maxMemoryTotalBytes = 64 * 1024 * 1024;
+  static int _memoryTotalBytes = 0;
 
   static Future<Directory> _getCacheDir() async {
     _cacheDir ??= await getTemporaryDirectory();
@@ -57,37 +74,60 @@ class ImageCacheUtil {
     return null;
   }
 
-  /// 下载并缓存图片
+  /// 下载并缓存图片（失败自动重试，最多 3 次）。
   static Future<Uint8List?> _downloadAndCache(String url) async {
-    try {
-      final response = await _dio.get<Uint8List>(
-        url,
-        options: Options(
-          responseType: ResponseType.bytes,
-          headers: {'Accept': 'image/*, */*;q=0.8'},
-        ),
-      );
-      if (response.statusCode == 200 && response.data != null) {
-        try {
-          final dir = await _getCacheDir();
-          await File('${dir.path}/${_urlToHash(url)}').writeAsBytes(
-            response.data!,
-            flush: true,
-          );
-        } catch (_) {
-          // 写磁盘缓存失败不影响本次展示
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final response = await _dio.get<Uint8List>(
+          url,
+          options: Options(
+            responseType: ResponseType.bytes,
+            headers: {'Accept': 'image/*, */*;q=0.8'},
+          ),
+        );
+        if (response.statusCode == 200 && response.data != null) {
+          final bytes = response.data!;
+          try {
+            final dir = await _getCacheDir();
+            await File('${dir.path}/${_urlToHash(url)}').writeAsBytes(
+              bytes,
+              flush: true,
+            );
+          } catch (_) {
+            // 写磁盘缓存失败不影响本次展示
+          }
+          _storeMemory(url, bytes);
+          return bytes;
         }
-        _memoryCache[url] = response.data!;
-        return response.data;
+      } catch (_) {
+        // 下载失败，等待后重试
       }
-    } catch (_) {
-      // 下载失败，静默忽略
+      if (attempt < 2) {
+        await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
+      }
     }
     return null;
   }
 
-  /// 获取图片字节数据（内存缓存 → 磁盘缓存 → 下载）
+  /// 写入内存缓存（带大小上限 + FIFO 淘汰）。
+  static void _storeMemory(String url, Uint8List bytes) {
+    final size = bytes.length;
+    if (size > _maxMemoryEntryBytes) return; // 大图只走磁盘缓存
+    if (_memoryCache.containsKey(url)) return;
+    _memoryCache[url] = bytes;
+    _memoryOrder.add(url);
+    _memoryTotalBytes += size;
+    while (_memoryTotalBytes > _maxMemoryTotalBytes && _memoryOrder.isNotEmpty) {
+      final oldest = _memoryOrder.removeAt(0);
+      final removed = _memoryCache.remove(oldest);
+      if (removed != null) _memoryTotalBytes -= removed.length;
+    }
+  }
+
+  /// 获取图片字节数据（内存缓存 → 磁盘缓存 → 下载，下载去重）
   static Future<Uint8List?> getImageBytes(String url) async {
+    if (url.isEmpty) return null;
+
     // 1. 内存缓存
     final mem = _memoryCache[url];
     if (mem != null) {
@@ -99,20 +139,48 @@ class ImageCacheUtil {
       final cachedFile = await _getCachedFile(url);
       if (cachedFile != null) {
         final bytes = await cachedFile.readAsBytes();
-        _memoryCache[url] = bytes;
+        _storeMemory(url, bytes);
         return bytes;
       }
     } catch (_) {
       // 读取磁盘缓存失败则走下载
     }
 
-    // 3. 下载
-    return _downloadAndCache(url);
+    // 3. 下载（同一 URL 并发共享同一次下载）
+    return _inflight[url] ??= _downloadAndCache(url).whenComplete(() {
+      _inflight.remove(url);
+    });
+  }
+
+  /// 预取一组图片 URL（限并发），用于网格/列表可见时提前暖缓存。
+  ///
+  /// [concurrency] 默认 3：避免一次性开太多连接把弱网打爆，导致全部超时。
+  /// 已缓存/已下载的 URL 会命中缓存直接返回，重复调用是幂等的。
+  static Future<void> prefetch(
+    List<String> urls, {
+    int concurrency = 3,
+  }) async {
+    final pending = urls.where((u) => u.isNotEmpty).toList();
+    if (pending.isEmpty) return;
+    final workers = concurrency.clamp(1, 6);
+    var index = 0;
+    Future<void> worker() async {
+      while (true) {
+        final i = index++;
+        if (i >= pending.length) return;
+        await getImageBytes(pending[i]);
+      }
+    }
+
+    await Future.wait(List.generate(workers, (_) => worker()));
   }
 
   /// 清除所有缓存
   static Future<void> clearCache() async {
     _memoryCache.clear();
+    _memoryOrder.clear();
+    _memoryTotalBytes = 0;
+    _inflight.clear();
     try {
       final dir = await _getCacheDir();
       if (await dir.exists()) {

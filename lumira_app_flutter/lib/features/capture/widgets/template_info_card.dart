@@ -11,9 +11,12 @@ import '../domain/photo_template.dart';
 /// - 套用模板默认展开；切换模板（id 变化）时重置为展开
 /// - 视觉与 ChallengeOverlayBar 保持一致（深色半透明浮层 + 品牌色描边）
 class TemplateInfoCard extends ConsumerStatefulWidget {
-  const TemplateInfoCard({super.key, required this.template});
+  const TemplateInfoCard({super.key, required this.template, this.onHide});
 
   final PhotoTemplate template;
+
+  /// 用户点击卡内“隐藏”按钮时回调（由外层负责隐藏卡片并持久化偏好）。
+  final VoidCallback? onHide;
 
   @override
   ConsumerState<TemplateInfoCard> createState() => _TemplateInfoCardState();
@@ -109,6 +112,21 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                           color: Colors.white.withOpacity(0.7),
                         ),
                       ),
+                      const SizedBox(width: 6),
+                      // 隐藏按钮：点击后整卡消失并持久化（仅当外层提供回调时显示）
+                      if (widget.onHide != null)
+                        GestureDetector(
+                          onTap: widget.onHide,
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Icon(
+                              Icons.close,
+                              size: 15,
+                              color: Colors.white.withOpacity(0.7),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                   // 展开态：简介 + 注意点

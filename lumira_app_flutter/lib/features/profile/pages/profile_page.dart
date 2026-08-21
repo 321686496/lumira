@@ -13,7 +13,6 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../data/builtin_profiles.dart';
 import '../data/profile_models.dart';
@@ -169,13 +168,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                 ),
               ),
             ),
-          ),
-          // FloatingTabBar
-          const Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: FloatingTabBar(active: 'profile'),
           ),
         ],
       ),

@@ -113,6 +113,19 @@ void main() {
             'claimedAt': null,
           }
         ],
+        'myInviteCode': 'ABC123',
+        'tiers': [
+          {'tier': 1, 'requiredInvites': 3, 'rewards': [
+            {'type': 'template', 'id': 'tpl-1', 'label': '日系胶片模板'}
+          ], 'done': true, 'locked': false},
+          {'tier': 2, 'requiredInvites': 5, 'rewards': [
+            {'type': 'template', 'id': 'tpl-2', 'label': '氛围感包'}
+          ], 'done': false, 'locked': false},
+        ],
+        'invitees': [
+          {'inviteeDeviceId': 'dev-000001', 'channel': 'direct', 'activatedAt': 1700000001},
+          {'inviteeDeviceId': 'dev-000002', 'channel': 'qrcode', 'activatedAt': 1700000002},
+        ],
       });
       expect(stats.totalInvites, 5);
       expect(stats.currentTier, 2);
@@ -121,6 +134,29 @@ void main() {
       expect(stats.unlockedRewards.length, 1);
       expect(stats.unlockedRewards.first.id, 1);
       expect(stats.unlockedRewards.first.status, UnlockStatus.unlocked);
+      expect(stats.myInviteCode, 'ABC123');
+      expect(stats.tiers.length, 2);
+      expect(stats.tiers.first.tier, 1);
+      expect(stats.tiers.first.requiredInvites, 3);
+      expect(stats.tiers.first.rewards.first.label, '日系胶片模板');
+      expect(stats.tiers.first.done, isTrue);
+      expect(stats.tiers.last.locked, isFalse);
+      expect(stats.invitees.length, 2);
+      expect(stats.invitees.first.inviteeDeviceId, 'dev-000001');
+      expect(stats.invitees.first.channel, 'direct');
+      expect(stats.invitees.last.channel, 'qrcode');
+      expect(stats.invitees.first.activatedAt, 1700000001);
+    });
+
+    test('fromJson leaves tiers/invitees/myInviteCode empty defaults when absent', () {
+      final stats = InviteStats.fromJson({
+        'totalInvites': 0,
+        'currentTier': 0,
+        'unlockedRewards': <Object>[],
+      });
+      expect(stats.tiers, isEmpty);
+      expect(stats.invitees, isEmpty);
+      expect(stats.myInviteCode, isNull);
     });
   });
 

@@ -8,7 +8,6 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_providers.dart';
 import '../widgets/achievement_wall_card.dart';
@@ -194,13 +193,6 @@ class _ChallengePageState extends ConsumerState<ChallengePage> {
                 goDetailForDate: _goDetailForDate,
               );
             },
-          ),
-          // FloatingTabBar
-          const Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: FloatingTabBar(active: 'challenge'),
           ),
         ],
       ),

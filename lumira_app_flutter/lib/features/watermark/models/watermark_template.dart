@@ -11,20 +11,51 @@ enum WatermarkElementType { text, dateTime, image }
 /// 画框类型：none（无画框）/ polaroid（拍立得白边）/ innerBorder（内描边）
 enum WatermarkFrameType { none, polaroid, innerBorder }
 
+/// 拍立得白边填充方式：solid（纯色）/ gradient（渐变）
+enum WatermarkBorderFill { solid, gradient }
+
+/// 拍立得白边渐变方向
+enum WatermarkGradientDirection {
+  topToBottom,
+  bottomToTop,
+  leftToRight,
+  rightToLeft,
+  topLeftToBottomRight,
+  bottomLeftToTopRight,
+}
+
 /// 元素定位坐标系：photo（相对照片区域，默认）/ frame（相对画框/白板区域）
 enum WatermarkElementSpace { photo, frame }
 
 /// 水印画框：描述照片四周的边框/白边。
 ///
 /// polaroid：画布向外扩展（照片分辨率不变，四周加白边，底部可加宽白板），
-///   底部带投影；innerBorder：画布与照片同尺寸，沿边缘画内描边。
+///   四边可独立调宽，白边支持纯色 / 渐变填充，底部带投影；
+/// innerBorder：画布与照片同尺寸，沿边缘画内描边（厚度 = [borderRatio]）；
+/// none：无画框。
 class WatermarkFrame {
   final WatermarkFrameType type;
+
+  /// 拍立得白边基础色（纯色时即最终颜色，渐变时为起始色）。
   final ui.Color color;
-  final double borderRatio; // 边框厚度 = borderRatio × 照片宽（0~0.2）
+
+  /// 内描边厚度比例 = borderRatio × 照片宽（0~0.2），仅 innerBorder 使用。
+  final double borderRatio;
+
+  /// 拍立得四边独立白边宽度比例 = value × 照片宽（0~1）。
+  final double borderTop;
+  final double borderRight;
+  final double borderBottom;
+  final double borderLeft;
+
   final double borderRadius; // 圆角（相对照片宽的比例，0~0.08）
   final bool bottomPlate; // 拍立得底部白板开关
   final double bottomRatio; // 白板高 = bottomRatio × 照片高
+
+  final WatermarkBorderFill borderFill; // 白边填充：纯色 / 渐变
+  final ui.Color gradientEndColor; // 渐变结束色（borderFill==gradient 时生效）
+  final WatermarkGradientDirection gradientDirection; // 渐变方向
+
   final ui.Color shadowColor;
   final double shadowOpacity; // 0~1
   final double shadowBlur; // 投影模糊（相对照片宽的比例）
@@ -33,9 +64,16 @@ class WatermarkFrame {
     this.type = WatermarkFrameType.none,
     this.color = const ui.Color(0xFFFFFFFF),
     this.borderRatio = 0.05,
+    this.borderTop = 0.05,
+    this.borderRight = 0.05,
+    this.borderBottom = 0.05,
+    this.borderLeft = 0.05,
     this.borderRadius = 0.0,
     this.bottomPlate = true,
     this.bottomRatio = 0.18,
+    this.borderFill = WatermarkBorderFill.solid,
+    this.gradientEndColor = const ui.Color(0xFFFFFFFF),
+    this.gradientDirection = WatermarkGradientDirection.topToBottom,
     this.shadowColor = const ui.Color(0xFF000000),
     this.shadowOpacity = 0.25,
     this.shadowBlur = 0.02,
@@ -45,9 +83,16 @@ class WatermarkFrame {
     WatermarkFrameType? type,
     ui.Color? color,
     double? borderRatio,
+    double? borderTop,
+    double? borderRight,
+    double? borderBottom,
+    double? borderLeft,
     double? borderRadius,
     bool? bottomPlate,
     double? bottomRatio,
+    WatermarkBorderFill? borderFill,
+    ui.Color? gradientEndColor,
+    WatermarkGradientDirection? gradientDirection,
     ui.Color? shadowColor,
     double? shadowOpacity,
     double? shadowBlur,
@@ -56,9 +101,16 @@ class WatermarkFrame {
       type: type ?? this.type,
       color: color ?? this.color,
       borderRatio: borderRatio ?? this.borderRatio,
+      borderTop: borderTop ?? this.borderTop,
+      borderRight: borderRight ?? this.borderRight,
+      borderBottom: borderBottom ?? this.borderBottom,
+      borderLeft: borderLeft ?? this.borderLeft,
       borderRadius: borderRadius ?? this.borderRadius,
       bottomPlate: bottomPlate ?? this.bottomPlate,
       bottomRatio: bottomRatio ?? this.bottomRatio,
+      borderFill: borderFill ?? this.borderFill,
+      gradientEndColor: gradientEndColor ?? this.gradientEndColor,
+      gradientDirection: gradientDirection ?? this.gradientDirection,
       shadowColor: shadowColor ?? this.shadowColor,
       shadowOpacity: shadowOpacity ?? this.shadowOpacity,
       shadowBlur: shadowBlur ?? this.shadowBlur,
@@ -69,22 +121,42 @@ class WatermarkFrame {
         'type': type.name,
         'color': color.value,
         'borderRatio': borderRatio,
+        'borderTop': borderTop,
+        'borderRight': borderRight,
+        'borderBottom': borderBottom,
+        'borderLeft': borderLeft,
         'borderRadius': borderRadius,
         'bottomPlate': bottomPlate,
         'bottomRatio': bottomRatio,
+        'borderFill': borderFill.name,
+        'gradientEndColor': gradientEndColor.value,
+        'gradientDirection': gradientDirection.name,
         'shadowColor': shadowColor.value,
         'shadowOpacity': shadowOpacity,
         'shadowBlur': shadowBlur,
       };
 
   factory WatermarkFrame.fromJson(Map<String, dynamic> json) {
+    // 旧模板只有 borderRatio 时，四边默认继承该值，保证视觉不回退。
+    final borderRatio = (json['borderRatio'] as num?)?.toDouble() ?? 0.05;
+    final color = ui.Color((json['color'] as num?)?.toInt() ?? 0xFFFFFFFF);
     return WatermarkFrame(
       type: _parseFrameType(json['type'] as String?),
-      color: ui.Color((json['color'] as num?)?.toInt() ?? 0xFFFFFFFF),
-      borderRatio: (json['borderRatio'] as num?)?.toDouble() ?? 0.05,
+      color: color,
+      borderRatio: borderRatio,
+      borderTop: (json['borderTop'] as num?)?.toDouble() ?? borderRatio,
+      borderRight: (json['borderRight'] as num?)?.toDouble() ?? borderRatio,
+      borderBottom: (json['borderBottom'] as num?)?.toDouble() ?? borderRatio,
+      borderLeft: (json['borderLeft'] as num?)?.toDouble() ?? borderRatio,
       borderRadius: (json['borderRadius'] as num?)?.toDouble() ?? 0.0,
       bottomPlate: (json['bottomPlate'] as bool?) ?? true,
       bottomRatio: (json['bottomRatio'] as num?)?.toDouble() ?? 0.18,
+      borderFill: _parseBorderFill(json['borderFill'] as String?),
+      gradientEndColor: ui.Color(
+        (json['gradientEndColor'] as num?)?.toInt() ?? color.value.toInt(),
+      ),
+      gradientDirection:
+          _parseGradientDirection(json['gradientDirection'] as String?),
       shadowColor: ui.Color((json['shadowColor'] as num?)?.toInt() ?? 0xFF000000),
       shadowOpacity: (json['shadowOpacity'] as num?)?.toDouble() ?? 0.25,
       shadowBlur: (json['shadowBlur'] as num?)?.toDouble() ?? 0.02,
@@ -100,6 +172,34 @@ class WatermarkFrame {
       case 'none':
       default:
         return WatermarkFrameType.none;
+    }
+  }
+
+  static WatermarkBorderFill _parseBorderFill(String? value) {
+    switch (value) {
+      case 'gradient':
+        return WatermarkBorderFill.gradient;
+      case 'solid':
+      default:
+        return WatermarkBorderFill.solid;
+    }
+  }
+
+  static WatermarkGradientDirection _parseGradientDirection(String? value) {
+    switch (value) {
+      case 'bottomToTop':
+        return WatermarkGradientDirection.bottomToTop;
+      case 'leftToRight':
+        return WatermarkGradientDirection.leftToRight;
+      case 'rightToLeft':
+        return WatermarkGradientDirection.rightToLeft;
+      case 'topLeftToBottomRight':
+        return WatermarkGradientDirection.topLeftToBottomRight;
+      case 'bottomLeftToTopRight':
+        return WatermarkGradientDirection.bottomLeftToTopRight;
+      case 'topToBottom':
+      default:
+        return WatermarkGradientDirection.topToBottom;
     }
   }
 }

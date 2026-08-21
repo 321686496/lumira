@@ -25,16 +25,44 @@ class FloatingTabBar extends ConsumerStatefulWidget {
   const FloatingTabBar({
     super.key,
     required this.active,
+    this.onTabSelected,
   });
 
   /// 当前激活的 tab key：'home' | 'templates' | 'challenge' | 'profile'
   final String active;
+
+  /// 可选：tab 被点击时的外部回调（参数为 tab 序号 0/1/3/4，2 为中间的拍摄按钮）。
+  /// 提供后此组件不再自行跳转路由（用于由外部容器在本机切换 tab）；为 null 时保持默认 context.go 跳转。
+  final void Function(int tabIndex)? onTabSelected;
 
   @override
   ConsumerState<FloatingTabBar> createState() => _FloatingTabBarState();
 }
 
 class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
+  /// tab 点击统一入口：优先交给外部回调（本机切页，保留状态）；
+  /// 未提供时回退到默认的路由跳转（兼容 academy 等独立用例）。
+  void _handleTabTap(int tabIndex) {
+    final external = widget.onTabSelected;
+    if (external != null) {
+      external(tabIndex);
+      return;
+    }
+    switch (tabIndex) {
+      case 0:
+        context.go(RouteNames.home);
+        break;
+      case 1:
+        context.go(RouteNames.templates);
+        break;
+      case 3:
+        context.go(RouteNames.challenge);
+        break;
+      case 4:
+        context.go(RouteNames.profile);
+        break;
+    }
+  }
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -121,7 +149,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
                             icon: Icons.home_outlined,
                             label: '首页',
                             active: widget.active == 'home',
-                            onTap: () => context.go(RouteNames.home),
+                            onTap: () => _handleTabTap(0),
                             tokens: tokens,
                             isFemale: isFemale,
                           ),
@@ -129,7 +157,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
                             icon: Icons.grid_view_outlined,
                             label: '发现',
                             active: widget.active == 'templates',
-                            onTap: () => context.go(RouteNames.templates),
+                            onTap: () => _handleTabTap(1),
                             tokens: tokens,
                             isFemale: isFemale,
                           ),
@@ -139,7 +167,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
                             icon: Icons.flag_outlined,
                             label: '挑战',
                             active: widget.active == 'challenge',
-                            onTap: () => context.go(RouteNames.challenge),
+                            onTap: () => _handleTabTap(3),
                             tokens: tokens,
                             isFemale: isFemale,
                           ),
@@ -147,7 +175,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
                             icon: Icons.person_outline,
                             label: '我的',
                             active: widget.active == 'profile',
-                            onTap: () => context.go(RouteNames.profile),
+                            onTap: () => _handleTabTap(4),
                             tokens: tokens,
                             isFemale: isFemale,
                           ),
@@ -196,7 +224,7 @@ class _TabItem extends StatefulWidget {
 }
 
 class _TabItemState extends State<_TabItem>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // 女性美学：选中态「呼吸光晕」脉冲动画（FemaleAestheticDesignSystem §4.4 焦点引导）。
   AnimationController? _pulseController;
 

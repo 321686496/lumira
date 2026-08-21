@@ -163,6 +163,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   Future<void> _deleteSelected() async {
     final dao = ref.read(galleryDaoProvider).value;
     if (dao == null) return;
+    final deletedCount = _selectedIds.length;
     try {
       for (final id in _selectedIds) {
         await dao.delete(id);
@@ -172,8 +173,12 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         _isMultiSelectMode = false;
         _selectedIds.clear();
       });
+      // _photos 仅在首次 build 时加载（_isInitialLoaded 守卫），仅 invalidate provider
+      // 不会触发列表刷新。必须在此显式重拉当前视图，否则已删照片仍停留在列表中，
+      // 直到重新进入相册页才会消失。
+      await _loadPhotos(dao);
       if (mounted) {
-        LumiraToast.show(context, '已删除 ${_selectedIds.length} 张照片');
+        LumiraToast.show(context, '已删除 $deletedCount 张照片');
       }
     } catch (e) {
       if (mounted) {
@@ -559,12 +564,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
               }
             });
           } else {
-            GoRouter.of(context).push(
-              RouteNames.build(
-                RouteNames.galleryDetail,
-                {RouteNames.paramPhotoId: photo.id},
-              ),
-            );
+            _openDetail(photo);
           }
         },
         onLongPress: () {
@@ -575,6 +575,25 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
         },
       ),
     );
+  }
+
+  /// 打开照片详情；返回后刷新列表。
+  ///
+  /// 详情页可能删除当前照片或修改分类/收藏，而 _photos 仅在首次 build 时加载
+  /// （_isInitialLoaded 守卫），因此 pop 返回后必须显式重拉，否则已删照片仍留在列表中。
+  Future<void> _openDetail(GalleryPhoto photo) async {
+    await GoRouter.of(context).push(
+      RouteNames.build(
+        RouteNames.galleryDetail,
+        {RouteNames.paramPhotoId: photo.id},
+      ),
+    );
+    if (!mounted) return;
+    final dao = ref.read(galleryDaoProvider).value;
+    if (dao != null) {
+      setState(() => _isLoading = true);
+      await _loadPhotos(dao);
+    }
   }
 
   List<SceneFilterPill> _buildPills(List<GalleryItemRecord> photos) {

@@ -233,6 +233,13 @@ class _SubCategoryGrid extends ConsumerWidget {
     final daoAsync = ref.watch(templatesDaoProvider);
     final subKeys = categories.map((c) => c.key).toList();
 
+    // 预取二级分类封面图（限并发暖缓存），加速卡片封面显示
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ImageCacheUtil.prefetch(
+        categories.map((c) => c.iconUrl).toList(),
+      );
+    });
+
     return daoAsync.when(
       loading: () =>
           Center(child: LumiraProgress.circular()),
@@ -373,79 +380,162 @@ class _SubCategoryCard extends ConsumerWidget {
           margin: const EdgeInsets.only(bottom: 12),
           child: NeuCard(
             padding: EdgeInsets.zero,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 封面（3:4）：iconUrl 网络图 / Material Icon 回退
-                AspectRatio(
-                  aspectRatio: 3 / 4,
-                  child: record.iconUrl.isNotEmpty
-                      ? CachedNetworkImage(
-                          url: record.iconUrl,
-                          fit: BoxFit.cover,
-                          errorWidget: Container(
-                            color: tokens.surfaceAlt,
-                            child: Icon(
-                              fallbackIcon,
-                              size: 40,
-                              color: tokens.textTertiary,
-                            ),
-                          ),
-                        )
-                      : Container(
-                          color: tokens.surfaceAlt,
-                          child: Icon(
-                            fallbackIcon,
-                            size: 40,
-                            color: tokens.textTertiary,
-                          ),
-                        ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              record.name,
-                              style: TextStyle(
-                                fontFamily: 'Noto Serif SC',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: tokens.textPrimary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '$templateCount 套模板',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: tokens.textSecondary,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 12,
-                        color: tokens.textTertiary,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            // 有封面图：整卡平铺为封面大图；无封面图：保留原占位内容
+            child: record.iconUrl.isNotEmpty
+                ? _buildCoverCard(fallbackIcon)
+                : _buildPlaceholderCard(fallbackIcon),
           ),
         ),
       ),
+    );
+  }
+
+  /// 有封面图：封面平铺整卡为背景大图 + 底部渐变遮罩 + 信息叠加
+  Widget _buildCoverCard(IconData fallbackIcon) {
+    return AspectRatio(
+      aspectRatio: 3 / 4,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 封面大图
+          CachedNetworkImage(
+            url: record.iconUrl,
+            fit: BoxFit.cover,
+            placeholder: ColoredBox(color: tokens.surfaceAlt),
+            errorWidget: Container(
+              color: tokens.surfaceAlt,
+              child: Icon(
+                fallbackIcon,
+                size: 40,
+                color: tokens.textTertiary,
+              ),
+            ),
+          ),
+          // 底部渐变遮罩（提升文字可读性）
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.55),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // 信息（底部对齐）
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          record.name,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '$templateCount 套模板',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white.withOpacity(0.85),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 12,
+                    color: Colors.white70,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 无封面图：3:4 图标占位 + 名称/数量信息（占位内容）
+  Widget _buildPlaceholderCard(IconData fallbackIcon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AspectRatio(
+          aspectRatio: 3 / 4,
+          child: Container(
+            color: tokens.surfaceAlt,
+            child: Icon(
+              fallbackIcon,
+              size: 40,
+              color: tokens.textTertiary,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      record.name,
+                      style: TextStyle(
+                        fontFamily: 'Noto Serif SC',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$templateCount 套模板',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: tokens.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 12,
+                color: tokens.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

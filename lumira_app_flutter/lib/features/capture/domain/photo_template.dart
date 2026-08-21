@@ -69,6 +69,10 @@ class TemplateMeta {
   final String description;
   final String referenceSource;
 
+  /// 模板来源：'builtin'（系统内置）| 'custom'（用户自定义）| 'remote'（后端动态）。
+  /// 用于 UI 区分「我的」自定义模板与后端同步模板（如拍摄页模板条角标）。
+  final String source;
+
   const TemplateMeta({
     required this.id,
     required this.name,
@@ -83,6 +87,7 @@ class TemplateMeta {
     this.coverData,
     this.description = '',
     this.referenceSource = '',
+    this.source = 'builtin',
   });
 
   TemplateMeta copyWith({
@@ -99,6 +104,7 @@ class TemplateMeta {
     Object? coverData = _unset,
     String? description,
     String? referenceSource,
+    String? source,
   }) =>
       TemplateMeta(
         id: id ?? this.id,
@@ -116,6 +122,7 @@ class TemplateMeta {
             : coverData as String?,
         description: description ?? this.description,
         referenceSource: referenceSource ?? this.referenceSource,
+        source: source ?? this.source,
       );
 
   @override
@@ -134,30 +141,50 @@ class TemplateMeta {
           cover == other.cover &&
           coverData == other.coverData &&
           description == other.description &&
-          referenceSource == other.referenceSource;
+          referenceSource == other.referenceSource &&
+          source == other.source;
 
   @override
   int get hashCode => Object.hash(id, name, author, version, category, classification,
-      Object.hashAll(tags), Object.hashAll(tagIds), price, cover, coverData, description, referenceSource);
+      Object.hashAll(tags), Object.hashAll(tagIds), price, cover, coverData, description, referenceSource, source);
 }
 
 class TemplateClassification {
   final String type;
   final String style;
+  final String subStyle;
   final String method;
-  const TemplateClassification({required this.type, this.style = '', this.method = ''});
+  const TemplateClassification({
+    required this.type,
+    this.style = '',
+    this.subStyle = '',
+    this.method = '',
+  });
 
-  TemplateClassification copyWith({String? type, String? style, String? method}) =>
-      TemplateClassification(type: type ?? this.type, style: style ?? this.style, method: method ?? this.method);
+  TemplateClassification copyWith({
+    String? type,
+    String? style,
+    String? subStyle,
+    String? method,
+  }) =>
+      TemplateClassification(
+        type: type ?? this.type,
+        style: style ?? this.style,
+        subStyle: subStyle ?? this.subStyle,
+        method: method ?? this.method,
+      );
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is TemplateClassification &&
-          type == other.type && style == other.style && method == other.method;
+          type == other.type &&
+          style == other.style &&
+          subStyle == other.subStyle &&
+          method == other.method;
 
   @override
-  int get hashCode => Object.hash(type, style, method);
+  int get hashCode => Object.hash(type, style, subStyle, method);
 }
 
 class Composition {

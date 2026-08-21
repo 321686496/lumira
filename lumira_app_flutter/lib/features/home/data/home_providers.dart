@@ -88,9 +88,9 @@ final homeRecentShotsProvider =
   final photos = await galleryDao.getRecent(limit: 5);
   if (photos.isEmpty) return const [];
 
-  final result = <RecentShot>[];
-  for (var i = 0; i < photos.length; i++) {
-    final p = photos[i];
+  final result = await Future.wait(photos.asMap().entries.map((entry) async {
+    final i = entry.key;
+    final p = entry.value;
     String name = '作品 ${i + 1}';
     String category = '作品';
     IconData icon = Icons.image_outlined;
@@ -129,7 +129,7 @@ final homeRecentShotsProvider =
 
     final imageSeed = 'photo-${p.id}';
 
-    result.add(RecentShot(
+    return RecentShot(
       name: name,
       category: category,
       icon: icon,
@@ -146,8 +146,8 @@ final homeRecentShotsProvider =
       imageFilePath: p.filePath,
       imageDataUrl: p.dataUrl,
       imageOriginalPath: p.originalPath,
-    ));
-  }
+    );
+  }));
   return result;
 });
 
@@ -157,8 +157,10 @@ final homeStatsProvider = FutureProvider<HomeStats>((ref) async {
   final galleryDao = await ref.watch(galleryDaoProvider.future);
   final growthSummary = await ref.watch(growthLevelProvider.future);
 
-  final totalPhotos = await galleryDao.count();
-  final favorites = await galleryDao.getFavorites();
+  final totalPhotosFuture = galleryDao.count();
+  final favoritesFuture = galleryDao.getFavorites();
+  final totalPhotos = await totalPhotosFuture;
+  final favorites = await favoritesFuture;
   final totalXp = growthSummary.currentXp;
 
   return HomeStats(

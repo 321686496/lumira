@@ -28,7 +28,7 @@ void main() {
 
   tearDown(() async => db.close());
 
-  testWidgets('UserTagsSection 展示系统标签(只读)与加入输入框', (tester) async {
+  testWidgets('UserTagsSection 仅处理用户自定义标签（系统标签由详情页自身展示）', (tester) async {
     // 容器必须在 testWidgets body（fake-async zone）内创建，否则 provider 体内的
     // sqflite FFI 调用在 fake zone 中 await 会挂起（pumpAndSettle 永久等待）。
     final container = ProviderContainer(overrides: [
@@ -46,7 +46,6 @@ void main() {
             body: UserTagsSection(
               itemType: TagItemType.template,
               itemId: 'tpl-1',
-              systemTags: ['人像', '胶片'],
             ),
           ),
         ),
@@ -54,13 +53,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 系统标签（只读）以 chip 形式展示
-    expect(find.text('人像'), findsOneWidget);
-    expect(find.text('胶片'), findsOneWidget);
+    // 无用户自定义标签时不展示任何系统标签（去重后由详情页展示）
+    expect(find.byType(TextField), findsNothing);
     // 输入框未展开时展示"添加标签"入口
     expect(find.text('添加标签，方便日后查找'), findsOneWidget);
-    // 输入框默认未展开
-    expect(find.byType(TextField), findsNothing);
   });
 }
 

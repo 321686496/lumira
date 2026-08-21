@@ -142,7 +142,10 @@ class TemplateMapper {
         category: r.category,
         classification: TemplateClassification(
           type: (r.classification['type'] as String?) ?? r.category,
-          style: (r.classification['style'] as String?) ?? '',
+          style: (r.classification['style'] as String?) ??
+              (r.classification['majorStyle'] as String?) ??
+              '',
+          subStyle: (r.classification['subStyle'] as String?) ?? '',
           method: (r.classification['method'] as String?) ?? '',
         ),
         tags: List<String>.from(r.tags),
@@ -152,6 +155,7 @@ class TemplateMapper {
         coverData: r.coverData,
         description: r.description,
         referenceSource: r.referenceSource,
+        source: r.source,
       ),
       composition: _compositionFromJson(r.composition),
       pose: _poseFromJson(r.pose),

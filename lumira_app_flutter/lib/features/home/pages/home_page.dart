@@ -10,7 +10,6 @@ import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
-import '../../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../data/home_mock_data.dart';
 import '../data/home_providers.dart';
 import '../widgets/hero_card.dart';
@@ -250,13 +249,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ],
             ),
-          ),
-          // 3. FloatingTabBar
-          const Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: FloatingTabBar(active: 'home'),
           ),
         ],
       ),

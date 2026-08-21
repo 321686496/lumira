@@ -219,11 +219,23 @@ class TemplateDetail {
     required this.postProcess,
     required this.sceneGuide,
     required this.pose,
+    this.majorStyle,
+    this.subStyle,
+    this.method,
   });
 
   final String id;
   final String name;
   final String category; // 'portrait' / 'landscape' / ...
+
+  /// 完整分类路径的分级扩展字段（四级分类，spec-4level）。
+  /// - majorStyle：大风格（L2，如 emotional）
+  /// - subStyle：子风格（L3）
+  /// - method：拍法（L4，如 selfie / wide）
+  /// 老模板 / 静态 mock 无这些字段时均为 null，详情页仅展示已有分段。
+  final String? majorStyle;
+  final String? subStyle;
+  final String? method;
   final String coverSeed; // picsum seed（兼容旧 mock，新代码用 cover/coverData）
   /// 内置模板 assets 路径或远程模板 http URL（可能为空）
   final String? cover;
@@ -240,6 +252,37 @@ class TemplateDetail {
   final PostProcessData postProcess;
   final SceneGuideData sceneGuide;
   final PoseData pose;
+
+  /// 仅复制分类分级字段（majorStyle / subStyle / method），其余字段保持原样。
+  /// 用于 [TemplatesBrowseMockData.findDetailById] 从 TemplateRegistry 补齐
+  /// mock 详情缺失的分类分级，其余详细参数（构图/相机/后期）不受影响。
+  TemplateDetail copyWithClassification({
+    String? majorStyle,
+    String? subStyle,
+    String? method,
+  }) {
+    return TemplateDetail(
+      id: id,
+      name: name,
+      category: category,
+      coverSeed: coverSeed,
+      cover: cover,
+      coverData: coverData,
+      tags: tags,
+      tagIds: tagIds,
+      price: price,
+      referenceSource: referenceSource,
+      aspectRatio: aspectRatio,
+      composition: composition,
+      camera: camera,
+      postProcess: postProcess,
+      sceneGuide: sceneGuide,
+      pose: pose,
+      majorStyle: majorStyle ?? this.majorStyle,
+      subStyle: subStyle ?? this.subStyle,
+      method: method ?? this.method,
+    );
+  }
 }
 
 class CompositionData {
@@ -1458,7 +1501,11 @@ class TemplatesBrowseMockData {
   ///    并通过 [_fromPhotoTemplate] 转换为 [TemplateDetail] 格式
   static TemplateDetail? findDetailById(String id) {
     for (final t in details) {
-      if (t.id == id) return t;
+      if (t.id == id) {
+        // mock 详情缺失分类分级时，从 TemplateRegistry 补齐（registry 记录了权威
+        // 的 L2 style / L3 method），使详情页分类面包屑显示完整路径而非仅一级分类。
+        return _enrichDetailClassification(t);
+      }
     }
     // 回退：从 TemplateRegistry 查找（覆盖 17 个新增人像模板）
     final tpl = TemplateRegistry.getTemplate(id);
@@ -1466,6 +1513,45 @@ class TemplatesBrowseMockData {
       return fromPhotoTemplate(tpl);
     }
     return null;
+  }
+
+  /// mock 详情缺失分类时的兜底分级声明（仅覆盖不在 [TemplateRegistry] 中的 id，
+  /// 如 portrait_bokeh / still_life_warm 等，其二级分类无法从 registry 反向补齐）。
+  /// value 为三元素列表：[0]=二级 majorStyle、[1]=三级 subStyle、[2]=四级 method，
+  /// 空串表示该级不存在。key/value 均需是已预置分类树中的合法 key，保证面包屑可解析。
+  static const Map<String, List<String>> _detailClassificationFallback = {
+    'still_life_warm': ['minimal', '', 'single'],
+    'portrait_bokeh': ['emotional', '', 'wide'],
+    'landscape_panorama': ['epic', '', 'wide'],
+    'night_neon': ['neon', '', 'wide'],
+    'custom_golden_landscape': ['epic', '', 'wide'],
+    'custom_cafe_diary': ['minimal', '', 'single'],
+    'custom_portrait_soft': ['japanese', '', 'normal'],
+  };
+
+  /// 用兜底声明或 [TemplateRegistry] 中权威的分类分级补齐 mock 详情缺失的字段，
+  /// 使详情页分类面包屑能显示完整分类路径而非仅一级分类。
+  static TemplateDetail _enrichDetailClassification(TemplateDetail t) {
+    if (t.majorStyle != null && t.method != null) return t;
+    // 1) registry 外的 mock 详情（id 无权威来源）→ 使用显式兜底声明
+    final decl = _detailClassificationFallback[t.id];
+    if (decl != null) {
+      return t.copyWithClassification(
+        majorStyle: decl[0].isEmpty ? null : decl[0],
+        subStyle: decl[1].isEmpty ? null : decl[1],
+        method: decl[2].isEmpty ? null : decl[2],
+      );
+    }
+    // 2) registry 内模板 → 用权威分级补齐（L2 style → majorStyle、L3 method → method）
+    final tpl = TemplateRegistry.getTemplate(t.id);
+    if (tpl == null) return t;
+    final cls = tpl.meta.classification;
+    final newStyle = t.majorStyle ?? (cls.style.isEmpty ? null : cls.style);
+    final newMethod = t.method ?? (cls.method.isEmpty ? null : cls.method);
+    if (newStyle == t.majorStyle && newMethod == t.method) {
+      return t;
+    }
+    return t.copyWithClassification(majorStyle: newStyle, method: newMethod);
   }
 
   /// PhotoTemplate → TemplateDetail 转换
@@ -1476,6 +1562,7 @@ class TemplatesBrowseMockData {
   /// v14: 改为 public，供 [templateDetailProvider] 在加载远程模板完整内容后
   /// 转换为详情页所需格式。
   static TemplateDetail fromPhotoTemplate(PhotoTemplate tpl) {
+    final cls = tpl.meta.classification;
     return TemplateDetail(
       id: tpl.meta.id,
       name: tpl.meta.name,
@@ -1487,6 +1574,9 @@ class TemplatesBrowseMockData {
       tagIds: List<String>.from(tpl.meta.tagIds),
       price: tpl.meta.price,
       referenceSource: tpl.meta.referenceSource,
+      majorStyle: cls.style.isEmpty ? null : cls.style,
+      subStyle: cls.subStyle.isEmpty ? null : cls.subStyle,
+      method: cls.method.isEmpty ? null : cls.method,
       aspectRatio: tpl.composition.aspectRatio,
       composition: CompositionData(
         type: tpl.composition.overlayType,

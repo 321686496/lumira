@@ -66,40 +66,6 @@ class TrajectoryEntry {
   final String date; // 'YYYY-MM-DD'
 }
 
-/// 奖励阶梯项（invite_page reward-card）
-class RewardEntry {
-  const RewardEntry({
-    required this.icon,
-    required this.countLabel,
-    required this.name,
-    required this.done,
-    required this.locked,
-    required this.status,
-  });
-  final IconData icon;
-  final String countLabel; // '1 分享'
-  final String name;
-  final bool done;
-  final bool locked;
-  final String status; // '已达成' / '进行中' / ''
-}
-
-/// 邀请记录项（invite_page record-card）
-class InviteRecord {
-  const InviteRecord({
-    required this.icon,
-    required this.name,
-    required this.date,
-    required this.status,
-    required this.pending,
-  });
-  final IconData icon;
-  final String name;
-  final String date;
-  final String status;
-  final bool pending;
-}
-
 /// 主题预览信息（profile_theme_page）
 class ThemePreview {
   const ThemePreview({
@@ -231,29 +197,6 @@ class ProfileMockData {
 
   /// 本月拍摄数
   static const int monthlyPhotos = 42;
-
-  /// 邀请奖励阶梯（6 项，对应 uni-app rewards ref）
-  static const List<RewardEntry> rewards = [
-    RewardEntry(icon: Icons.movie_outlined, countLabel: '1 分享', name: '日系胶片模板', done: true, locked: false, status: '已达成'),
-    RewardEntry(icon: Icons.flag_outlined, countLabel: '3 分享', name: '法式复古包', done: true, locked: false, status: '已达成'),
-    RewardEntry(icon: Icons.star_outline, countLabel: '5 分享', name: '氛围感包', done: false, locked: false, status: '进行中'),
-    RewardEntry(icon: Icons.emoji_events_outlined, countLabel: '10 分享', name: '分享达人成就', done: false, locked: true, status: ''),
-    RewardEntry(icon: Icons.workspace_premium_outlined, countLabel: '15 分享', name: '全部精选模板', done: false, locked: true, status: ''),
-    RewardEntry(icon: Icons.bolt_outlined, countLabel: '20 分享', name: '裂变之神', done: false, locked: true, status: ''),
-  ];
-
-  /// 邀请进度（mock）
-  static const int invitedCount = 3;
-  static const int totalInvitedForNext = 5; // 再邀请 2 人解锁氛围感包
-  static const String nextRewardName = '氛围感包';
-  static const int inviteProgressPercent = 60; // 3/5 = 60%
-
-  /// 邀请记录（3 项，对应 uni-app records ref）
-  static const List<InviteRecord> inviteRecords = [
-    InviteRecord(icon: Icons.account_circle, name: '小雅', date: '2026-07-05', status: '已确认', pending: false),
-    InviteRecord(icon: Icons.account_circle_outlined, name: '小琳', date: '2026-07-07', status: '已确认', pending: false),
-    InviteRecord(icon: Icons.person_outline, name: '小悦', date: '2026-07-08', status: '待确认', pending: true),
-  ];
 
   /// 8 套主题预览（对应 uni-app THEME_METAS）
   /// 注意：颜色硬编码来自 uni-app theme-configs.ts，与 Flutter ThemeTokens 一致

@@ -9,8 +9,10 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/image_cache.dart';
+import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
 import '../data/capture_scene_mock_data.dart';
 import '../widgets/scene_achievement_card.dart';
 import '../widgets/scene_filter_badge.dart';
@@ -483,7 +485,7 @@ class _TagsSection extends ConsumerWidget {
             runSpacing: 6,
             children: [
               for (final t in tags)
-                _TagChip(name: t.name, golden: true),
+                TagChip(label: t.name, kind: TagChipKind.golden),
               if (tags.isEmpty && !isCustom)
                 Text(
                   '暂无标签',
@@ -493,39 +495,10 @@ class _TagsSection extends ConsumerWidget {
                   ),
                 ),
               if (isCustom)
-                GestureDetector(
+                TagChip(
+                  label: '添加标签',
+                  kind: TagChipKind.system,
                   onTap: onToggleTagSheet,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4), // 20rpx×8rpx
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(9999),
-                      border: Border.all(
-                        color: tokens.brand,
-                        width: 1, // 2rpx → 1dp
-                      ),
-                      color: tokens.brand.withOpacity(0.08),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.add,
-                          size: 12, // 24rpx → 12dp
-                          color: tokens.brand,
-                        ),
-                        const SizedBox(width: 3), // 6rpx → 3dp
-                        Text(
-                          '添加标签',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: tokens.brand,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
             ],
           ),
@@ -537,36 +510,6 @@ class _TagsSection extends ConsumerWidget {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _TagChip extends ConsumerWidget {
-  const _TagChip({required this.name, this.golden = false});
-  final String name;
-  final bool golden;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // 主题 token：金色标签 / 普通标签色跟随主题
-    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), // 20rpx×8rpx
-      decoration: BoxDecoration(
-        // 金色标签用 brand 半透明底，普通标签用 surfaceAlt 底
-        color: golden
-            ? tokens.brand.withOpacity(0.15)
-            : tokens.surfaceAlt,
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Text(
-        name,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: golden ? tokens.brandDeep : tokens.textPrimary,
-        ),
       ),
     );
   }
@@ -584,44 +527,19 @@ class _TagSelectorSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 主题 token：选中 / 未选中 chip 色跟随主题
-    final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
     const allTags = CaptureSceneMockData.tags;
-    return Container(
+    return NeuCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: tokens.surfaceAlt,
-        borderRadius: BorderRadius.circular(10),
-      ),
       child: Wrap(
         spacing: 6,
         runSpacing: 6,
         children: allTags.map((t) {
           final selected = selectedIds.contains(t.id);
-          return GestureDetector(
+          return TagChip(
+            label: t.name,
+            kind: TagChipKind.plain,
+            selected: selected,
             onTap: () => onToggle(t.id),
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: selected
-                    ? tokens.brand
-                    : tokens.surface.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(9999),
-                border: Border.all(
-                  color: selected ? tokens.brand : tokens.divider,
-                  width: 1,
-                ),
-              ),
-              child: Text(
-                t.name,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: selected ? tokens.textInverse : tokens.textPrimary,
-                ),
-              ),
-            ),
           );
         }).toList(),
       ),

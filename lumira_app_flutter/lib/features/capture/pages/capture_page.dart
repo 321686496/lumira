@@ -18,6 +18,7 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../challenge/widgets/challenge_overlay_bar.dart';
 import '../../home/providers/banner_recommendation_provider.dart';
@@ -49,6 +50,7 @@ import '../widgets/param_panel.dart';
 import '../widgets/param_pill_bar.dart';
 import '../widgets/scene_preset_strip.dart';
 import '../widgets/shutter_feedback.dart';
+import '../widgets/template_drawer_panel.dart';
 import '../widgets/template_info_card.dart';
 import '../widgets/template_strip.dart';
 
@@ -187,6 +189,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
       _returnResult = mode == 'return';
       // 加载持久化的前后置摄像头与照片比例（先于相机初始化，保证首次进入即恢复）
       await CaptureState.loadCameraPrefs(
+          ProviderScope.containerOf(context, listen: false));
+      // 加载模板信息卡隐藏偏好（用户上次点了隐藏则本次保持隐藏）
+      await CaptureState.loadTemplateInfoCardPreference(
           ProviderScope.containerOf(context, listen: false));
 
       // 修复 Bug（重复进入取景器卡加载）：
@@ -432,6 +437,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
     } else {
       GoRouter.of(context).go(RouteNames.home);
     }
+  }
+
+  /// 隐藏顶部模板信息卡并持久化（下次进入拍摄页保持隐藏）。
+  void _hideTemplateInfoCard() {
+    final container = ProviderScope.containerOf(context, listen: false);
+    ref.read(CaptureState.templateInfoCardHiddenProvider.notifier).state = true;
+    CaptureState.persistTemplateInfoCardHidden(container, true);
+  }
+
+  /// 重新显示顶部模板信息卡并持久化。
+  void _showTemplateInfoCard() {
+    final container = ProviderScope.containerOf(context, listen: false);
+    ref.read(CaptureState.templateInfoCardHiddenProvider.notifier).state = false;
+    CaptureState.persistTemplateInfoCardHidden(container, false);
   }
 
   /// 将 CaptureState 的 CaptureFlashMode 映射为 CameraService 的 CameraFlashMode。
@@ -969,6 +988,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
         thumbState.status == CaptureThumbnailStatus.processing;
     // 当前套用的模板（null = 自由模式）。用于顶部模板信息卡显示。
     final template = ref.watch(CaptureState.originalTemplateProvider);
+    // 模板信息卡是否被用户隐藏（持久化，用户点了隐藏后下次保持隐藏）
+    final templateInfoCardHidden =
+        ref.watch(CaptureState.templateInfoCardHiddenProvider);
     // 修复 Bug：watch facing 以在 facing 变化时重建 _viewfinderCaptureKey，
     // 强制 RepaintBoundary + CameraAwesomeBuilder 重建（切换 sensor）
     final facing = ref.watch(CaptureState.cameraFacingProvider);
@@ -1141,8 +1163,23 @@ class _CapturePageState extends ConsumerState<CapturePage>
                   ),
                 // 套用模板时显示可折叠模板信息卡（移至下方，避免挤压比例/参数选项）
                 // 试用模式隐藏（仅展示效果，不暴露参数）
+                // 用户隐藏后仅在页面角落显示一个透明小图标，点击可一键恢复显示
                 if (template != null && !isFullscreen && !isTrialMode)
-                  TemplateInfoCard(template: template),
+                  if (templateInfoCardHidden)
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6, top: 4),
+                        child: _TemplateInfoRestoreChip(
+                          onShow: _showTemplateInfoCard,
+                        ),
+                      ),
+                    )
+                  else
+                    TemplateInfoCard(
+                      template: template,
+                      onHide: _hideTemplateInfoCard,
+                    ),
               ],
             ),
           ),
@@ -1563,6 +1600,9 @@ class _CaptureToolbar extends ConsumerWidget {
   }
 
   void _onTap(WidgetRef ref, String toolId, bool active) {
+    // 任意工具栏点击都会收起模板「显示更多」大面板（回到横向模板条）
+    ref.read(CaptureState.templateDrawerExpandedProvider.notifier).state =
+        false;
     if (toolId == 'params') {
       // 参数 tab：直接打开 ParamPanel，同时高亮 params tab
       final panelExpanded = ref.read(CaptureState.panelExpandedProvider);
@@ -1665,7 +1705,15 @@ class _AnimatedToolDrawer extends ConsumerWidget {
   Widget _buildContent(String toolId, WidgetRef ref) {
     switch (toolId) {
       case 'templates':
-        return const TemplateStrip(compact: false);
+        // 「显示更多」展开为 60% 高度 + 搜索框的大面板，否则显示前 10 个模板条
+        final expanded =
+            ref.watch(CaptureState.templateDrawerExpandedProvider);
+        if (expanded) return const TemplateDrawerPanel();
+        return TemplateStrip(
+          onShowMore: () => ref
+              .read(CaptureState.templateDrawerExpandedProvider.notifier)
+              .state = true,
+        );
       case 'scenes':
         return const ScenePresetStrip();
       case 'params':
@@ -3483,5 +3531,39 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
   } catch (e, st) {
     debugPrint('[capture] GPU 色彩矩阵处理失败: $e\n$st');
     return null;
+  }
+}
+
+/// 用户隐藏模板信息卡后显示的恢复入口。
+///
+/// 仅显示一个小型图标并置于页面角落，背景透明、不遮挡拍摄画面；
+/// 点击后一键重新显示模板信息卡。
+class _TemplateInfoRestoreChip extends ConsumerWidget {
+  const _TemplateInfoRestoreChip({
+    required this.onShow,
+  });
+
+  final VoidCallback onShow;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    return Semantics(
+      label: '重新显示模板信息',
+      button: true,
+      child: GestureDetector(
+        onTap: onShow,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          // 扩大可点击区域但不产生可见背景，避免影响拍摄
+          padding: const EdgeInsets.all(10),
+          child: Icon(
+            Icons.auto_awesome,
+            size: 20,
+            color: tokens.brand.withOpacity(0.85),
+          ),
+        ),
+      ),
+    );
   }
 }

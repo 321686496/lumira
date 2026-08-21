@@ -1,7 +1,13 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:saver_gallery/saver_gallery.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
@@ -35,6 +41,7 @@ class ProfileInvitePage extends ConsumerStatefulWidget {
 
 class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
   final TextEditingController _codeController = TextEditingController();
+  final GlobalKey _posterKey = GlobalKey();
 
   @override
   void dispose() {
@@ -48,7 +55,10 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
       final repo = await ref.read(inviteRepositoryProvider.future);
       final code = await repo.generate();
       if (!mounted) return;
-      LumiraToast.show(toastContext, '邀请码已生成：${code.code}', duration: const Duration(milliseconds: 1500));
+      // 打开全屏邀请海报
+      await _showInvitePoster(code.code);
+      if (!mounted) return;
+      ref.invalidate(inviteStatsProvider); // 刷新 myInviteCode
     } on ApiException catch (e) {
       if (!mounted) return;
       LumiraToast.show(toastContext, '生成失败：${e.message}', duration: const Duration(milliseconds: 1500));
@@ -57,6 +67,16 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
       if (!mounted) return;
       LumiraToast.show(toastContext, '生成邀请卡片', duration: const Duration(milliseconds: 1000));
     }
+  }
+
+  Future<void> _showInvitePoster(String code) async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _InvitePosterSheet(code: code, posterKey: _posterKey),
+    );
   }
 
   Future<void> _confirmBindCode() async {
@@ -131,6 +151,11 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
                   },
                 ),
                 FadeUp(child: _HeroCard(tokens: tokens)),
+                const SizedBox(height: 20),
+                FadeUp(
+                  delay: const Duration(milliseconds: 60),
+                  child: _MyInviteCodeCard(tokens: tokens),
+                ),
                 const SizedBox(height: 20),
                 FadeUp(
                   delay: const Duration(milliseconds: 100),
@@ -257,7 +282,26 @@ class _RewardCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(inviteStatsProvider).valueOrNull;
-    final rewards = _buildRewardLadder(stats);
+    final tiers = stats?.tiers ?? const <InviteTierEntry>[];
+    final List<RewardEntry> rewards;
+    if (tiers.isEmpty) {
+      // 兜底：后端未返回 tiers 时用静态阶梯
+      rewards = _buildRewardLadder(stats);
+    } else {
+      rewards = tiers.map((t) {
+        final done = t.done;
+        final locked = t.locked;
+        final labelList = t.rewards.map((r) => r.label).join('、');
+        return RewardEntry(
+          icon: Icons.card_giftcard,
+          countLabel: '${t.requiredInvites} 分享',
+          name: labelList.isEmpty ? '第 ${t.tier} 档奖励' : labelList,
+          done: done,
+          locked: locked,
+          status: done ? '已达成' : (locked ? '' : '进行中'),
+        );
+      }).toList();
+    }
     return NeuCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,7 +608,7 @@ class _RecordCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(inviteStatsProvider).valueOrNull;
-    final records = _buildInviteRecords(stats);
+    final keepList = stats?.invitees ?? const <Invitee>[];
     return NeuCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -578,7 +622,7 @@ class _RecordCard extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          if (records.isEmpty)
+          if (keepList.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Center(
@@ -591,10 +635,10 @@ class _RecordCard extends ConsumerWidget {
           else
             Column(
               children: [
-                for (var i = 0; i < records.length; i++)
-                  _RecordRow(
-                    record: records[i],
-                    isLast: i == records.length - 1,
+                for (var i = 0; i < keepList.length; i++)
+                  _InviteeRow(
+                    invitee: keepList[i],
+                    isLast: i == keepList.length - 1,
                     tokens: tokens,
                   ),
               ],
@@ -605,53 +649,31 @@ class _RecordCard extends ConsumerWidget {
   }
 }
 
-/// 邀请记录条目（用于 UI 渲染）
-class InviteRecord {
-  const InviteRecord({
-    required this.icon,
-    required this.name,
-    required this.date,
-    required this.status,
-    required this.pending,
-  });
-  final IconData icon;
-  final String name;
-  final String date;
-  final String status;
-  final bool pending;
-}
-
-/// 从 InviteStats.unlockedRewards 构建 InviteRecord 列表
-List<InviteRecord> _buildInviteRecords(InviteStats? stats) {
-  if (stats == null || stats.unlockedRewards.isEmpty) return const [];
-  return stats.unlockedRewards.map((r) {
-    final name = r.rewardItems.isNotEmpty
-        ? r.rewardItems.map((e) => e.label).join('、')
-        : (r.sourceDetail ?? '奖励');
-    final date = _formatTimestamp(r.unlockedAt);
-    return InviteRecord(
-      icon: Icons.card_giftcard,
-      name: name,
-      date: date,
-      status: '已确认',
-      pending: false,
-    );
-  }).toList();
-}
-
-String _formatTimestamp(int ms) {
-  final d = DateTime.fromMillisecondsSinceEpoch(ms);
-  return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-}
-
-class _RecordRow extends StatelessWidget {
-  const _RecordRow({required this.record, required this.isLast, required this.tokens});
-  final InviteRecord record;
+/// 被邀请人单行（真实设备 ID）
+class _InviteeRow extends StatelessWidget {
+  const _InviteeRow({required this.invitee, required this.isLast, required this.tokens});
+  final Invitee invitee;
   final bool isLast;
   final ThemeTokens tokens;
 
+  static const _channelLabels = <String, String>{
+    'direct': '直接邀请',
+    'share_card': '分享卡片',
+    'qrcode': '二维码',
+  };
+  static const _channelIcons = <String, IconData>{
+    'direct': Icons.person_add_alt_1,
+    'share_card': Icons.share,
+    'qrcode': Icons.qr_code_2,
+  };
+
   @override
   Widget build(BuildContext context) {
+    final id = invitee.inviteeDeviceId;
+    final short = id.length > 12 ? '${id.substring(0, 6)}…${id.substring(id.length - 4)}' : id;
+    final channel = invitee.channel;
+    final label = _channelLabels[channel] ?? channel;
+    final date = _formatTimestamp(invitee.activatedAt);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: isLast
@@ -667,10 +689,14 @@ class _RecordRow extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: record.pending ? tokens.surface : tokens.brandSubtle,
+              color: tokens.brandSubtle,
               shape: BoxShape.circle,
             ),
-            child: Icon(record.icon, size: 20, color: tokens.brand),
+            child: Icon(
+              _channelIcons[channel] ?? Icons.person_add_alt_1,
+              size: 20,
+              color: tokens.brand,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -678,7 +704,7 @@ class _RecordRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  record.name,
+                  short,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -687,7 +713,7 @@ class _RecordRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  record.date,
+                  date,
                   style: TextStyle(
                     fontSize: 12,
                     fontFamily: 'Courier New',
@@ -697,23 +723,210 @@ class _RecordRow extends StatelessWidget {
               ],
             ),
           ),
-          // 右侧 tag
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: record.pending ? tokens.surfaceAlt : tokens.success,
+              color: tokens.success,
               borderRadius: BorderRadius.circular(1000),
             ),
             child: Text(
-              record.status,
-              style: TextStyle(
+              label,
+              style: const TextStyle(
                 fontSize: 11,
-                color: record.pending ? tokens.textTertiary : Colors.white,
+                color: Colors.white,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+String _formatTimestamp(int sec) {
+  final d = DateTime.fromMillisecondsSinceEpoch(sec * 1000);
+  return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+}
+
+/// 「我的邀请码」展示卡（Hero 之后）
+class _MyInviteCodeCard extends ConsumerWidget {
+  const _MyInviteCodeCard({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final code = ref.watch(inviteStatsProvider).valueOrNull?.myInviteCode;
+    return NeuCard(
+      child: Row(
+        children: [
+          Icon(Icons.tag, size: 20, color: tokens.brand),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              code == null ? '尚未生成邀请码' : '我的邀请码：$code',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: tokens.textPrimary),
+            ),
+          ),
+          if (code != null)
+            GestureDetector(
+              onTap: () async {
+                final overlay = Overlay.of(context, rootOverlay: true);
+                await Clipboard.setData(ClipboardData(text: code));
+                LumiraToast.showWithOverlay(overlay, '邀请码已复制', duration: const Duration(milliseconds: 1200));
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tokens.brandSubtle,
+                  borderRadius: BorderRadius.circular(1000),
+                ),
+                child: Text('复制', style: TextStyle(fontSize: 12, color: tokens.brandText)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 全屏邀请海报弹层（可保存到相册）
+class _InvitePosterSheet extends ConsumerWidget {
+  const _InvitePosterSheet({required this.code, required this.posterKey});
+  final String code;
+  final GlobalKey posterKey;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+
+    // 复制邀请码
+    void copyCode() async {
+      final messenger = ScaffoldMessenger.of(context);
+      await Clipboard.setData(ClipboardData(text: code));
+      messenger.showSnackBar(
+        SnackBar(content: Text('邀请码已复制：$code'), duration: const Duration(seconds: 1)),
+      );
+    }
+
+    // 保存海报：捕获 RepaintBoundary 为 PNG 存入相册
+    Future<void> savePoster() async {
+      final messenger = ScaffoldMessenger.of(context);
+      try {
+        final boundary = posterKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+        if (boundary == null) return;
+        final image = await boundary.toImage(pixelRatio: 2.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData == null) return;
+        await SaverGallery.saveImage(
+          Uint8List.fromList(byteData.buffer.asUint8List()),
+          name: 'lumira_invite_${DateTime.now().millisecondsSinceEpoch}',
+          quality: 95,
+          androidExistNotSave: false,
+        );
+        messenger.showSnackBar(
+          const SnackBar(content: Text('海报已保存到相册'), duration: Duration(seconds: 1)),
+        );
+      } catch (_) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('保存失败，请长按截图保存'), duration: Duration(seconds: 2)),
+        );
+      }
+    }
+
+    return SafeArea(
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.9,
+        margin: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: tokens.canvas,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('邀请卡片', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: tokens.textPrimary)),
+                  IconButton(
+                    icon: Icon(Icons.close, color: tokens.textPrimary),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: RepaintBoundary(
+                  key: posterKey,
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [tokens.brandSubtle, tokens.surface],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        Text('邀请好友，获得奖励',
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: tokens.textPrimary)),
+                        const SizedBox(height: 8),
+                        Text('输入我的邀请码，一起记录美好时光',
+                            style: TextStyle(fontSize: 13, color: tokens.textSecondary)),
+                        const SizedBox(height: 24),
+                        QrImageView(
+                          data: code,
+                          version: QrVersions.auto,
+                          size: 160,
+                          eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: tokens.textPrimary),
+                          dataModuleStyle: QrDataModuleStyle(
+                            dataModuleShape: QrDataModuleShape.square,
+                            color: tokens.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: tokens.canvas,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(code,
+                              style: TextStyle(
+                                  fontFamily: 'Courier New',
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 4,
+                                  color: tokens.textPrimary)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: LumiraButton(variant: ButtonVariant.secondary, onPressed: copyCode, child: const Text('复制邀请码')),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: LumiraButton(variant: ButtonVariant.primary, onPressed: savePoster, child: const Text('保存海报')),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

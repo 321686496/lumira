@@ -288,4 +288,29 @@ class SettingsDao {
       whereArgs: [1],
     );
   }
+
+  /// 读取套用模板时的顶部模板信息卡是否被隐藏（默认 false=显示）
+  Future<bool> getTemplateInfoCardHidden() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colTemplateInfoCardHidden],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return false;
+    return (rows.first[Tables.colTemplateInfoCardHidden] as int?) == 1;
+  }
+
+  /// 保存套用模板时的顶部模板信息卡显示偏好（true=隐藏，false=显示）
+  Future<void> setTemplateInfoCardHidden(bool hidden) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colTemplateInfoCardHidden: hidden ? 1 : 0,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
 }

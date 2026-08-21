@@ -5,23 +5,22 @@ import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../lumira/lumira.dart';
+import 'tag_chip.dart' show TagChip, TagChipKind;
 
 /// 用户自定义标签区块（可复用于模板/场景详情页）。
 ///
-/// - [itemType]/[itemId]：定位内容
-/// - [systemTags]：该内容自带系统标签（只读展示，带"系统"角标）
-/// - 用户标签可实时增删；输入时联想已有标签名。
+/// 仅负责用户自定义标签的展示与增删；系统标签由模板/场景详情页自身负责展示，
+/// 避免重复。输入时联想已有标签名。
 class UserTagsSection extends ConsumerStatefulWidget {
   const UserTagsSection({
     super.key,
     required this.itemType,
     required this.itemId,
-    this.systemTags = const [],
   });
 
   final String itemType;
   final String itemId;
-  final List<String> systemTags;
 
   @override
   ConsumerState<UserTagsSection> createState() => _UserTagsSectionState();
@@ -102,33 +101,37 @@ class _UserTagsSectionState extends ConsumerState<UserTagsSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '标签',
-            style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary),
+          Row(
+            children: [
+              Text(
+                '标签',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary),
+              ),
+              if (_userTags.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 6),
+                  child: Text(
+                    '${_userTags.length}',
+                    style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 10),
-          if (widget.systemTags.isNotEmpty || _userTags.isNotEmpty)
+          if (_userTags.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final s in widget.systemTags)
-                    _Chip(
-                      label: s,
-                      isSystem: true,
-                      tokens: tokens,
-                      onDeleted: null,
-                    ),
                   for (final t in _userTags)
-                    _Chip(
+                    TagChip(
                       label: t.name,
-                      isSystem: false,
-                      tokens: tokens,
+                      kind: TagChipKind.plain,
                       onDeleted: () => _remove(t.id),
                     ),
                 ],
@@ -157,10 +160,9 @@ class _UserTagsSectionState extends ConsumerState<UserTagsSection> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
+                LumiraTextField(
                   controller: _controller,
-                  autofocus: true,
-                  decoration: const InputDecoration(hintText: '输入标签名，回车添加'),
+                  hintText: '输入标签名，回车添加',
                   onChanged: _onChanged,
                   onSubmitted: _submit,
                 ),
@@ -172,64 +174,16 @@ class _UserTagsSectionState extends ConsumerState<UserTagsSection> {
                       runSpacing: 8,
                       children: [
                         for (final s in _suggestions)
-                          GestureDetector(
+                          TagChip(
+                            label: s,
+                            kind: TagChipKind.plain,
                             onTap: () => _submit(s),
-                            child: _Chip(
-                              label: s,
-                              isSystem: false,
-                              tokens: tokens,
-                              onDeleted: null,
-                            ),
                           ),
                       ],
                     ),
                   ),
               ],
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.label,
-    required this.isSystem,
-    required this.tokens,
-    this.onDeleted,
-  });
-
-  final String label;
-  final bool isSystem;
-  final ThemeTokens tokens;
-  final VoidCallback? onDeleted;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isSystem ? tokens.textTertiary : tokens.brand;
-    return Container(
-      padding: const EdgeInsets.only(left: 10, right: 4, top: 4, bottom: 4),
-      decoration: BoxDecoration(
-        color: isSystem ? tokens.surfaceAlt : tokens.brandSubtle,
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isSystem) ...[
-            Text(label, style: TextStyle(fontSize: 12, color: color)),
-            const SizedBox(width: 4),
-            Text('系统',
-                style: TextStyle(fontSize: 9, color: tokens.textTertiary)),
-          ] else ...[
-            Text(label, style: TextStyle(fontSize: 12, color: color)),
-            const SizedBox(width: 2),
-            GestureDetector(
-              onTap: onDeleted,
-              child: Icon(Icons.close, size: 14, color: color),
-            ),
-          ],
         ],
       ),
     );

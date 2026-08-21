@@ -151,6 +151,52 @@ void main() {
     expect(find.text('detail'), findsOneWidget);
   });
 
+  testWidgets('deleting a selected photo removes it from grid without re-entering', (tester) async {
+    tester.binding.window.physicalSizeTestValue = const Size(800, 1200);
+    tester.binding.window.devicePixelRatioTestValue = 1.0;
+    addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
+    addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
+
+    await dao.insert(GalleryItemRecord(
+      id: 'p1',
+      dataUrl: 'https://example.com/p1.jpg',
+      filePath: null,
+      sceneId: null,
+      templateId: null,
+      kitId: null,
+      mood: null,
+      lut: null,
+      createdAt: 1700000000000,
+    ));
+    await dao.insert(GalleryItemRecord(
+      id: 'p2',
+      dataUrl: 'https://example.com/p2.jpg',
+      filePath: null,
+      sceneId: null,
+      templateId: null,
+      kitId: null,
+      mood: null,
+      lut: null,
+      createdAt: 1700000001000,
+    ));
+
+    await _pumpGalleryPage(tester, container);
+    await tester.pumpAndSettle();
+    expect(find.text('2 张照片'), findsOneWidget);
+
+    // 长按第一张进入多选
+    await tester.longPress(find.byKey(const ValueKey('photo_cell_0')));
+    await tester.pumpAndSettle();
+
+    // 点击多选操作栏的删除按钮
+    await tester.tap(find.text('删除 (1)'));
+    await tester.pumpAndSettle();
+
+    // 删除后列表应立即刷新为 1 张，无需重新进页
+    expect(find.text('1 张照片'), findsOneWidget);
+    expect(find.text('2 张照片'), findsNothing);
+  });
+
   testWidgets('gallery AppBar no longer shows 精选集 entry', (tester) async {
     tester.binding.window.physicalSizeTestValue = const Size(800, 1200);
     tester.binding.window.devicePixelRatioTestValue = 1.0;

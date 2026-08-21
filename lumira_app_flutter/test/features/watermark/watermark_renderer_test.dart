@@ -30,6 +30,10 @@ void main() {
       frame: WatermarkFrame(
         type: type,
         borderRatio: 0.1,
+        borderTop: 0.1,
+        borderRight: 0.1,
+        borderBottom: 0.1,
+        borderLeft: 0.1,
         bottomPlate: true,
         bottomRatio: 0.2,
         shadowOpacity: 0.0,
@@ -66,7 +70,7 @@ void main() {
     final t = WatermarkTemplate(
       id: 't', name: 't', type: WatermarkTemplateType.custom, createdAt: DateTime(2026, 8, 20),
       elements: const <WatermarkElement>[],
-      frame: const WatermarkFrame(type: WatermarkFrameType.polaroid, borderRatio: 0.1, bottomPlate: false, shadowOpacity: 0.0),
+      frame: const WatermarkFrame(type: WatermarkFrameType.polaroid, borderTop: 0.1, borderRight: 0.1, borderBottom: 0.1, borderLeft: 0.1, bottomPlate: false, shadowOpacity: 0.0),
     );
     final r = await WatermarkRenderer().render(sourceImage: src, template: t);
     expect(r.height, 80 + 10 + 10);
@@ -80,11 +84,56 @@ void main() {
         WatermarkElement(id: 'd', type: WatermarkElementType.text, text: '2026.08.20')
             .copyWith(space: WatermarkElementSpace.frame),
       ],
-      frame: const WatermarkFrame(type: WatermarkFrameType.polaroid, borderRatio: 0.1, bottomPlate: true, bottomRatio: 0.2, shadowOpacity: 0.0),
+      frame: const WatermarkFrame(type: WatermarkFrameType.polaroid, borderRatio: 0.1, borderTop: 0.1, borderRight: 0.1, borderBottom: 0.1, borderLeft: 0.1, bottomPlate: true, bottomRatio: 0.2, shadowOpacity: 0.0),
     );
     final r = await WatermarkRenderer().render(sourceImage: src, template: t);
     expect(r.width, 120);
     expect(r.height, 116);
+    expect(r.rgbaBytes.length, r.width * r.height * 4);
+  });
+
+  test('拍立得四边白边可独立设置，输出尺寸按各边向外扩展', () async {
+    final src = await makeImage(100, 80, 0xFFFFFFFF);
+    final t = WatermarkTemplate(
+      id: 't', name: 't', type: WatermarkTemplateType.custom, createdAt: DateTime(2026, 8, 20),
+      elements: const <WatermarkElement>[],
+      frame: const WatermarkFrame(
+        type: WatermarkFrameType.polaroid,
+        borderLeft: 0.1,   // 10
+        borderRight: 0.2,  // 20
+        borderTop: 0.05,   // 5
+        borderBottom: 0.1, // 10
+        bottomPlate: false,
+        shadowOpacity: 0.0,
+      ),
+    );
+    final r = await WatermarkRenderer().render(sourceImage: src, template: t);
+    expect(r.width, 100 + 10 + 20);
+    expect(r.height, 80 + 5 + 10);
+    expect(r.rgbaBytes.length, r.width * r.height * 4);
+  });
+
+  test('拍立得渐变白边可正常渲染（含渐变方向）', () async {
+    final src = await makeImage(60, 50, 0xFFFFFFFF);
+    final t = WatermarkTemplate(
+      id: 't', name: 't', type: WatermarkTemplateType.custom, createdAt: DateTime(2026, 8, 20),
+      elements: const <WatermarkElement>[],
+      frame: const WatermarkFrame(
+        type: WatermarkFrameType.polaroid,
+        borderFill: WatermarkBorderFill.gradient,
+        color: ui.Color(0xFFFFF3E0),
+        gradientEndColor: ui.Color(0xFFE1BEE7),
+        gradientDirection: WatermarkGradientDirection.leftToRight,
+        borderTop: 0.05,
+        borderRight: 0.05,
+        borderBottom: 0.05,
+        borderLeft: 0.05,
+        bottomPlate: true,
+        bottomRatio: 0.2,
+        shadowOpacity: 0.0,
+      ),
+    );
+    final r = await WatermarkRenderer().render(sourceImage: src, template: t);
     expect(r.rgbaBytes.length, r.width * r.height * 4);
   });
 }

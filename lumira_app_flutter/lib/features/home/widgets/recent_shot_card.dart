@@ -39,6 +39,9 @@ class RecentShotCard extends ConsumerWidget {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+    // 性能：按卡片展示宽度换算物理像素，只解码缩略图尺寸，
+    // 避免整张大图全分辨率解码占用内存与 GPU 带宽。
+    final decodeW = _decodeWidth(context);
 
     return GestureDetector(
       onTap: onTap,
@@ -64,7 +67,7 @@ class RecentShotCard extends ConsumerWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    _buildImage(tokens),
+                    _buildImage(tokens, decodeW),
                     // 分类标签（左上）
                     Positioned(
                       top: 8,
@@ -247,8 +250,16 @@ class RecentShotCard extends ConsumerWidget {
     return '${t.month}月${t.day}日';
   }
 
+  /// 按卡片展示宽度换算物理像素，用于 `cacheWidth` 只解码缩略图（性能优化）。
+  int? _decodeWidth(BuildContext context) {
+    final mq = MediaQuery.of(context);
+    // 卡片约半屏宽（两列布局 + 外边距估算），再乘设备像素比得到物理像素。
+    final logical = (mq.size.width - 32) / 2;
+    return (logical * mq.devicePixelRatio).round().clamp(1, 1600);
+  }
+
   /// 按优先级渲染真实照片：filePath > dataUrl > originalPath > picsum 占位
-  Widget _buildImage(ThemeTokens tokens) {
+  Widget _buildImage(ThemeTokens tokens, int? decodeW) {
     // 1. filePath：本地文件
     final filePath = recent.imageFilePath;
     if (filePath != null && filePath.isNotEmpty) {
@@ -256,6 +267,7 @@ class RecentShotCard extends ConsumerWidget {
       return Image.file(
         file,
         fit: BoxFit.cover,
+        cacheWidth: decodeW,
         errorBuilder: (context, error, stack) => _fallbackImage(tokens),
       );
     }
@@ -270,6 +282,7 @@ class RecentShotCard extends ConsumerWidget {
         return Image.memory(
           bytes,
           fit: BoxFit.cover,
+          cacheWidth: decodeW,
           errorBuilder: (context, error, stack) => _fallbackImage(tokens),
         );
       } catch (_) {
@@ -284,6 +297,7 @@ class RecentShotCard extends ConsumerWidget {
       return Image.file(
         file,
         fit: BoxFit.cover,
+        cacheWidth: decodeW,
         errorBuilder: (context, error, stack) => _fallbackImage(tokens),
       );
     }

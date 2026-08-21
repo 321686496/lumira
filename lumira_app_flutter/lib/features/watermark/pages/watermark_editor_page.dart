@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -286,10 +287,16 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           return f.copyWith(
             type: WatermarkFrameType.polaroid,
             color: const Color(0xFFFFFFFF),
-            borderRatio: 0.05,
+            borderTop: 0.05,
+            borderRight: 0.05,
+            borderBottom: 0.05,
+            borderLeft: 0.05,
             borderRadius: 0.0,
             bottomPlate: true,
             bottomRatio: 0.18,
+            borderFill: WatermarkBorderFill.solid,
+            gradientEndColor: const Color(0xFFFFFFFF),
+            gradientDirection: WatermarkGradientDirection.topToBottom,
             shadowOpacity: 0.22,
           );
         case WatermarkFrameType.innerBorder:
@@ -586,6 +593,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   }
 
   Widget _buildPreviewArea(ThemeTokens tokens, UIStyle style) {
+    final frame = _template.frame;
     final aspect = (_sourceAspect != null && _sourceAspect! > 0)
         ? _sourceAspect!
         : 1.0;
@@ -593,44 +601,177 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       key: const ValueKey('wm-preview-area'),
       color: _previewBg(tokens),
       child: Center(
-        child: AspectRatio(
-          aspectRatio: aspect,
-          child: ClipRect(
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final photoRect = Offset.zero & c.biggest;
-                return Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    if (_photoBytes != null && _photoBytes!.isNotEmpty)
-                      Image.memory(
-                        _photoBytes!,
-                        fit: BoxFit.fill,
-                        gaplessPlayback: true,
-                      ),
-                    if (_template.frame.type == WatermarkFrameType.polaroid)
-                      _buildFrameOverlay(photoRect, _template.frame),
-                    ..._template.elements.map(
-                        (e) => _buildElementOverlay(e, photoRect)),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
+        child: frame.type == WatermarkFrameType.polaroid
+            ? _buildPolaroidPreview(tokens, style)
+            : AspectRatio(
+                aspectRatio: aspect,
+                child: ClipRect(
+                  child: LayoutBuilder(
+                    builder: (context, c) {
+                      final photoRect = Offset.zero & c.biggest;
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          _photoImage(),
+                          if (frame.type == WatermarkFrameType.innerBorder)
+                            _buildInnerBorderOverlay(photoRect, frame),
+                          ..._template.elements
+                              .map((e) => _buildElementOverlay(e, photoRect)),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
       ),
     );
   }
 
-  /// 拍立得白边在预览中的近似呈现（完整渲染由渲染器负责）。
-  Widget _buildFrameOverlay(Rect r, WatermarkFrame frame) {
-    final borderW = (frame.borderRatio * r.width).clamp(0.0, 24.0);
+  Widget _photoImage() {
+    final bytes = _photoBytes;
+    if (bytes == null || bytes.isEmpty) return const SizedBox.shrink();
+    return Image.memory(bytes, fit: BoxFit.fill, gaplessPlayback: true);
+  }
+
+  /// 拍立得预览：白边向外扩展，照片区域缩小并被四周白边包围；
+  /// 与真实渲染一致，因此配图围绕外扩的卡片底布局。
+  Widget _buildPolaroidPreview(ThemeTokens tokens, UIStyle style) {
+    final aspect = (_sourceAspect != null && _sourceAspect! > 0)
+        ? _sourceAspect!
+        : 1.0;
+    final f = _template.frame;
+    return LayoutBuilder(builder: (context, c) {
+      final availW = c.maxWidth;
+      final availH = c.maxHeight;
+      if (availW <= 0 || availH <= 0) return const SizedBox.shrink();
+
+      // 以照片高为 1 单位：photoW = aspect；边宽/白板均按 x 照片宽换算。
+      final photoW = aspect;
+      const photoH = 1.0;
+      final pL = f.borderLeft * photoW;
+      final pR = f.borderRight * photoW;
+      final pT = f.borderTop * photoW;
+      final pB = f.borderBottom * photoW +
+          (f.bottomPlate ? f.bottomRatio * photoH : 0.0);
+      final shadowOn = f.shadowOpacity > 0;
+      final shadowH = shadowOn ? photoW * 0.1 : 0.0;
+      final cardW = photoW + pL + pR;
+      final cardH = photoH + pT + pB;
+      final totalH = cardH + shadowH;
+
+      final scale = math.min(availW / cardW, availH / totalH);
+      if (scale <= 0) return const SizedBox.shrink();
+
+      final w = cardW * scale;
+      final h = totalH * scale;
+      final radius = BorderRadius.circular(f.borderRadius * cardW * scale);
+      final photoRect = Rect.fromLTWH(
+          pL * scale, pT * scale, photoW * scale, photoH * scale);
+
+      return SizedBox(
+        width: w,
+        height: h,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: 0,
+              top: 0,
+              width: cardW * scale,
+              height: cardH * scale,
+              child: DecoratedBox(
+                decoration: _frameCardDecoration(f, radius),
+              ),
+            ),
+            Positioned(
+              left: photoRect.left,
+              top: photoRect.top,
+              width: photoRect.width,
+              height: photoRect.height,
+              child: ClipRRect(
+                borderRadius: radius,
+                child: _photoImage(),
+              ),
+            ),
+            ..._template.elements.map((e) => _buildElementOverlay(e, photoRect)),
+          ],
+        ),
+      );
+    });
+  }
+
+  /// 卡片底（白边/白板）外观：纯色或渐变色 + 圆角 + 底部投影。
+  BoxDecoration _frameCardDecoration(WatermarkFrame f, BorderRadius radius) {
+    final gradient = f.borderFill == WatermarkBorderFill.gradient;
+    return BoxDecoration(
+      color: gradient ? null : f.color,
+      gradient: gradient
+          ? LinearGradient(
+              begin: _gradientBegin(f.gradientDirection),
+              end: _gradientEnd(f.gradientDirection),
+              colors: [f.color, f.gradientEndColor],
+            )
+          : null,
+      borderRadius: radius,
+      boxShadow: f.shadowOpacity > 0
+          ? [
+              BoxShadow(
+                color: f.shadowColor.withOpacity(f.shadowOpacity),
+                offset: const Offset(0, 6),
+                blurRadius: 12,
+              ),
+            ]
+          : null,
+    );
+  }
+
+  /// 渐变起点 Alignment。
+  Alignment _gradientBegin(WatermarkGradientDirection dir) {
+    switch (dir) {
+      case WatermarkGradientDirection.bottomToTop:
+        return Alignment.bottomCenter;
+      case WatermarkGradientDirection.leftToRight:
+        return Alignment.centerLeft;
+      case WatermarkGradientDirection.rightToLeft:
+        return Alignment.centerRight;
+      case WatermarkGradientDirection.topLeftToBottomRight:
+        return Alignment.topLeft;
+      case WatermarkGradientDirection.bottomLeftToTopRight:
+        return Alignment.bottomLeft;
+      case WatermarkGradientDirection.topToBottom:
+      default:
+        return Alignment.topCenter;
+    }
+  }
+
+  /// 渐变终点 Alignment。
+  Alignment _gradientEnd(WatermarkGradientDirection dir) {
+    switch (dir) {
+      case WatermarkGradientDirection.bottomToTop:
+        return Alignment.topCenter;
+      case WatermarkGradientDirection.leftToRight:
+        return Alignment.centerRight;
+      case WatermarkGradientDirection.rightToLeft:
+        return Alignment.centerLeft;
+      case WatermarkGradientDirection.topLeftToBottomRight:
+        return Alignment.bottomRight;
+      case WatermarkGradientDirection.bottomLeftToTopRight:
+        return Alignment.topRight;
+      case WatermarkGradientDirection.topToBottom:
+      default:
+        return Alignment.bottomCenter;
+    }
+  }
+
+  /// 内描边在预览中的呈现（沿边缘向内描边），使该功能可见。
+  Widget _buildInnerBorderOverlay(Rect r, WatermarkFrame frame) {
+    final stroke = (frame.borderRatio * r.width).clamp(0.0, 24.0);
     return Positioned.fill(
       child: IgnorePointer(
         child: Container(
           decoration: BoxDecoration(
             color: Colors.transparent,
-            border: Border.all(color: frame.color, width: borderW),
+            border: Border.all(color: frame.color, width: stroke),
             borderRadius:
                 BorderRadius.circular(frame.borderRadius * r.width),
           ),
@@ -1180,13 +1321,41 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
         ),
         const SizedBox(height: 12),
         if (frame.type == WatermarkFrameType.polaroid) ...[
+          _sectionLabel('白边宽度（四边独立）'),
           _sliderRow(
-            label: '白边厚度',
-            value: frame.borderRatio,
+            label: '上',
+            value: frame.borderTop,
             min: 0,
             max: 0.2,
             divisions: 20,
-            onChanged: (v) => _updateFrame((f) => f.copyWith(borderRatio: v)),
+            onChanged: (v) => _updateFrame((f) => f.copyWith(borderTop: v)),
+            tokens: tokens,
+          ),
+          _sliderRow(
+            label: '右',
+            value: frame.borderRight,
+            min: 0,
+            max: 0.2,
+            divisions: 20,
+            onChanged: (v) => _updateFrame((f) => f.copyWith(borderRight: v)),
+            tokens: tokens,
+          ),
+          _sliderRow(
+            label: '下',
+            value: frame.borderBottom,
+            min: 0,
+            max: 0.2,
+            divisions: 20,
+            onChanged: (v) => _updateFrame((f) => f.copyWith(borderBottom: v)),
+            tokens: tokens,
+          ),
+          _sliderRow(
+            label: '左',
+            value: frame.borderLeft,
+            min: 0,
+            max: 0.2,
+            divisions: 20,
+            onChanged: (v) => _updateFrame((f) => f.copyWith(borderLeft: v)),
             tokens: tokens,
           ),
           _toggleRow('白板', frame.bottomPlate,
@@ -1223,8 +1392,11 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
                   _updateFrame((f) => f.copyWith(shadowOpacity: v)),
               tokens: tokens,
             ),
+          const SizedBox(height: 8),
+          _buildPolaroidColorSettings(frame, tokens, style),
         ] else if (frame.type == WatermarkFrameType.innerBorder) ...[
-          _buildFramePalette(frame, tokens),
+          _colorSwatchRow('描边颜色', frame.color,
+              (c) => _updateFrame((f) => f.copyWith(color: c)), tokens),
           const SizedBox(height: 8),
           _sliderRow(
             label: '描边厚度',
@@ -1272,38 +1444,157 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  Widget _buildFramePalette(WatermarkFrame frame, ThemeTokens tokens) {
-    final colors = <Color>[
+  /// 白边可选的预设色板。
+  List<Color> _frameColors(ThemeTokens tokens) {
+    return <Color>[
       const Color(0xFFFFFFFF),
       const Color(0xFF000000),
       tokens.brand,
+      tokens.brandText,
       tokens.textPrimary,
+      tokens.textSecondary,
     ];
+  }
+
+  /// 一行「标签 + 可点选的色板」。
+  Widget _colorSwatchRow(String label, Color current, ValueChanged<Color> onSelect,
+      ThemeTokens tokens) {
     return Row(
       children: [
-        for (final c in colors)
-          Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: GestureDetector(
-              onTap: () =>
-                  _updateFrame((f) => f.copyWith(color: c)),
-              child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: c,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: frame.color == c
-                        ? tokens.brand
-                        : tokens.textTertiary.withOpacity(0.35),
-                    width: 2,
+        SizedBox(
+          width: 56,
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+          ),
+        ),
+        Flexible(
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              for (final c in _frameColors(tokens))
+                GestureDetector(
+                  onTap: () => onSelect(c),
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: c,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: current == c
+                            ? tokens.brand
+                            : tokens.textTertiary.withOpacity(0.35),
+                        width: 2,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+            ],
           ),
+        ),
       ],
+    );
+  }
+
+  /// 拍立得白边颜色设置：纯色 / 渐变切换 + 色板 + 渐变方向。
+  Widget _buildPolaroidColorSettings(
+      WatermarkFrame frame, ThemeTokens tokens, UIStyle style) {
+    final isGradient = frame.borderFill == WatermarkBorderFill.gradient;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            _toggleChip('纯色', !isGradient,
+                (_) => _updateFrame(
+                    (f) => f.copyWith(borderFill: WatermarkBorderFill.solid)),
+                tokens,
+                style),
+            const SizedBox(width: 8),
+            _toggleChip('渐变', isGradient,
+                (_) => _updateFrame(
+                    (f) => f.copyWith(borderFill: WatermarkBorderFill.gradient)),
+                tokens,
+                style),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (!isGradient) ...[
+          _colorSwatchRow('颜色', frame.color,
+              (c) => _updateFrame((f) => f.copyWith(color: c)), tokens),
+        ] else ...[
+          _colorSwatchRow('起始色', frame.color,
+              (c) => _updateFrame((f) => f.copyWith(color: c)), tokens),
+          const SizedBox(height: 6),
+          _colorSwatchRow('结束色', frame.gradientEndColor,
+              (c) => _updateFrame((f) => f.copyWith(gradientEndColor: c)),
+              tokens),
+          const SizedBox(height: 8),
+          _sectionLabel('渐变方向', tokens: tokens),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final d in WatermarkGradientDirection.values)
+                _dirChip(d, frame, tokens, style),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _dirChip(WatermarkGradientDirection dir, WatermarkFrame frame,
+      ThemeTokens tokens, UIStyle style) {
+    final active = frame.gradientDirection == dir;
+    return GestureDetector(
+      onTap: () => _updateFrame((f) => f.copyWith(gradientDirection: dir)),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration:
+            _chipDeco(tokens, style, active: active, radius: 8, raised: true),
+        child: Text(
+          _dirLabel(dir),
+          style: TextStyle(
+            fontSize: 11,
+            color: active ? tokens.brandText : tokens.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _dirLabel(WatermarkGradientDirection dir) {
+    switch (dir) {
+      case WatermarkGradientDirection.topToBottom:
+        return '上→下';
+      case WatermarkGradientDirection.bottomToTop:
+        return '下→上';
+      case WatermarkGradientDirection.leftToRight:
+        return '左→右';
+      case WatermarkGradientDirection.rightToLeft:
+        return '右→左';
+      case WatermarkGradientDirection.topLeftToBottomRight:
+        return '左上→右下';
+      case WatermarkGradientDirection.bottomLeftToTopRight:
+        return '左下→右上';
+    }
+  }
+
+  /// 分区小标题。
+  Widget _sectionLabel(String text, {ThemeTokens? tokens}) {
+    final ThemeTokens tk = tokens ?? ref.read(themeTokensProvider);
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: tk.textSecondary,
+      ),
     );
   }
 

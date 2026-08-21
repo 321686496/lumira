@@ -342,6 +342,10 @@ class CaptureState {
   static final freeModeCompositionProvider =
       StateProvider<Composition>((ref) => const Composition());
 
+  /// 套用模板时顶部的可折叠模板信息卡是否被用户隐藏（持久化到 user_settings）。
+  /// true=隐藏；false=显示（默认）。用户点了隐藏后，下次进入拍摄页保持隐藏。
+  static final templateInfoCardHiddenProvider = StateProvider<bool>((ref) => false);
+
   // ── 自由模式参数持久化（防抖写入 DAO）──
 
   /// 防抖 Timer：参数变更后 500ms 无新变更才写入 DAO
@@ -417,6 +421,35 @@ class CaptureState {
     } catch (e) {
       // 持久化失败静默，不影响本次拍摄
       debugPrint('[capture] persist aspect ratio failed: $e');
+    }
+  }
+
+  /// 从 DAO 加载模板信息卡是否被隐藏到 provider（capture_page initState 调用）。
+  /// 保证用户上次点了“隐藏”后，下次进入拍摄页时保持隐藏。
+  static Future<void> loadTemplateInfoCardPreference(
+    ProviderContainer container,
+  ) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      final hidden = await dao.getTemplateInfoCardHidden();
+      container.read(templateInfoCardHiddenProvider.notifier).state = hidden;
+    } catch (e) {
+      // 加载失败静默降级，保持默认显示
+      debugPrint('[capture] loadTemplateInfoCardPreference failed: $e');
+    }
+  }
+
+  /// 持久化模板信息卡显示偏好（用户点击隐藏/重新显示时调用）
+  static Future<void> persistTemplateInfoCardHidden(
+    ProviderContainer container,
+    bool hidden,
+  ) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      await dao.setTemplateInfoCardHidden(hidden);
+    } catch (e) {
+      // 持久化失败静默，不影响本次拍摄
+      debugPrint('[capture] persist template info card hidden failed: $e');
     }
   }
 
@@ -559,6 +592,10 @@ class CaptureState {
   /// 默认 null：进入拍摄页时抽屉收起，仅显示一排工具栏
   static final activeToolProvider = StateProvider<String?>((ref) => null);
 
+  /// 模板工具抽屉是否展开为「显示更多」大面板（约 60% 页面高度 + 搜索框）。
+  /// false = 显示横向模板条（前 10 个 + 显示更多按钮）；true = 展开大面板。
+  static final templateDrawerExpandedProvider = StateProvider<bool>((ref) => false);
+
   // ── 新增：补光（Fill Light）状态 ──
 
   /// 补光是否启用（默认关闭）
@@ -632,6 +669,7 @@ class CaptureState {
     //  editableTemplateProvider 会自动重置为 null）
     // 工具栏与补光状态
     container.read(activeToolProvider.notifier).state = null;
+    container.read(templateDrawerExpandedProvider.notifier).state = false;
     container.read(fillLightEnabledProvider.notifier).state = false;
     container.read(fillLightColorProvider.notifier).state =
         const Color(0xFFFFE5B4);

@@ -1,0 +1,14 @@
+﻿flutter : Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+At line:15 char:2491
++ ... pgrep\bin'; flutter test test/features/gallery/gallery_detail_page_mo ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Flutter assets ...st this source!:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin `screen` uses a deprecated version of the Android embedding.
+To avoid unexpected runtime failures, or future build failures, try to see if this plugin supports the Android V2 embed
+ding. Otherwise, consider removing it since a future release of Flutter will remove these deprecated APIs.
+If you are plugin author, take a look at the docs for migrating the plugin to the V2 embedding: https://flutter.dev/go/
+android-plugin-migration.
+00:00 +0: (setUpAll)
+00:00 +0: 更多菜单出现「添加水印」项，点击后跳转到应用模式编辑器

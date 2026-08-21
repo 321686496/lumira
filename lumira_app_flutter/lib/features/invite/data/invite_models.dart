@@ -120,23 +120,34 @@ class InviteStats {
   final int currentTier;
   final NextInviteTier? nextTier;
   final List<UnlockedReward> unlockedRewards;
+  final String? myInviteCode;
+  final List<InviteTierEntry> tiers;
+  final List<Invitee> invitees;
 
   const InviteStats({
     required this.totalInvites,
     required this.currentTier,
     this.nextTier,
     required this.unlockedRewards,
+    this.myInviteCode,
+    this.tiers = const [],
+    this.invitees = const [],
   });
 
   factory InviteStats.fromJson(Map<String, dynamic> j) {
     final nextTierRaw = j['nextTier'] as Map<String, dynamic>?;
-    final unlockedRaw = j['unlockedRewards'] as List<dynamic>;
+    final unlockedRaw = j['unlockedRewards'] as List<dynamic>? ?? const [];
+    final tiersRaw = j['tiers'] as List<dynamic>? ?? const [];
+    final inviteesRaw = j['invitees'] as List<dynamic>? ?? const [];
     return InviteStats(
       totalInvites: j['totalInvites'] as int,
       currentTier: j['currentTier'] as int,
       nextTier: nextTierRaw == null ? null : NextInviteTier.fromJson(nextTierRaw),
       unlockedRewards:
           unlockedRaw.map((e) => UnlockedReward.fromJson(e as Map<String, dynamic>)).toList(),
+      myInviteCode: j['myInviteCode'] as String?,
+      tiers: tiersRaw.map((e) => InviteTierEntry.fromJson(e as Map<String, dynamic>)).toList(),
+      invitees: inviteesRaw.map((e) => Invitee.fromJson(e as Map<String, dynamic>)).toList(),
     );
   }
 
@@ -151,6 +162,9 @@ class InviteStats {
                 'rewards': nextTier!.rewards.map((r) => r.toJson()).toList(),
               },
         'unlockedRewards': unlockedRewards.map((r) => r.toJson()).toList(),
+        'myInviteCode': myInviteCode,
+        'tiers': tiers.map((t) => t.toJson()).toList(),
+        'invitees': invitees.map((i) => i.toJson()).toList(),
       };
 }
 
@@ -164,4 +178,66 @@ class InviteCode {
   factory InviteCode.fromJson(Map<String, dynamic> j) {
     return InviteCode(code: j['inviteCode'] as String);
   }
+}
+
+/// 单档奖励阶梯（stats.tiers 动态数据）
+@immutable
+class InviteTierEntry {
+  final int tier;
+  final int requiredInvites;
+  final List<RewardItem> rewards;
+  final bool done;
+  final bool locked;
+
+  const InviteTierEntry({
+    required this.tier,
+    required this.requiredInvites,
+    required this.rewards,
+    required this.done,
+    required this.locked,
+  });
+
+  factory InviteTierEntry.fromJson(Map<String, dynamic> j) => InviteTierEntry(
+        tier: j['tier'] as int,
+        requiredInvites: j['requiredInvites'] as int,
+        rewards: (j['rewards'] as List<dynamic>)
+            .map((e) => RewardItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        done: j['done'] as bool? ?? false,
+        locked: j['locked'] as bool? ?? false,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'tier': tier,
+        'requiredInvites': requiredInvites,
+        'rewards': rewards.map((r) => r.toJson()).toList(),
+        'done': done,
+        'locked': locked,
+      };
+}
+
+/// 被邀请人记录（stats.invitees）
+@immutable
+class Invitee {
+  final String inviteeDeviceId;
+  final String channel;
+  final int activatedAt;
+
+  const Invitee({
+    required this.inviteeDeviceId,
+    required this.channel,
+    required this.activatedAt,
+  });
+
+  factory Invitee.fromJson(Map<String, dynamic> j) => Invitee(
+        inviteeDeviceId: j['inviteeDeviceId'] as String,
+        channel: j['channel'] as String? ?? 'direct',
+        activatedAt: j['activatedAt'] as int,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'inviteeDeviceId': inviteeDeviceId,
+        'channel': channel,
+        'activatedAt': activatedAt,
+      };
 }

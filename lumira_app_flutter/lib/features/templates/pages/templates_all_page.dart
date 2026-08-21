@@ -1239,6 +1239,12 @@ class _CategoryOverview extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+    // 预取一级分类封面图（限并发暖缓存），加速卡片整卡大图显示
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ImageCacheUtil.prefetch(
+        categories.map((c) => c.iconUrl).toList(),
+      );
+    });
     // 瀑布流：两列交替分布
     final left = <Widget>[];
     final right = <Widget>[];
@@ -1411,102 +1417,192 @@ class _CategoryCard extends StatelessWidget {
           ],
         ),
         clipBehavior: Clip.antiAlias,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // 渐变背景
-            Container(
+        // 有封面图：整卡平铺为封面大图；无封面图：保留渐变占位内容
+        child: meta.iconUrl.isNotEmpty
+            ? _buildCoverStack()
+            : _buildGradientStack(),
+      ),
+    );
+  }
+
+  /// 有封面图：封面平铺整卡为背景大图 + 底部渐变遮罩 + 信息叠加
+  Widget _buildCoverStack() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 封面大图（加载失败回退为渐变占位 + 分类图标）
+        CachedNetworkImage(
+          url: meta.iconUrl,
+          fit: BoxFit.cover,
+          placeholder: _buildGradientLayer(),
+          errorWidget: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildGradientLayer(),
+              Center(
+                child: Icon(meta.icon, size: 40, color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+        // 底部渐变遮罩（提升文字可读性）
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: meta.gradient,
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.55),
+                  ],
                 ),
               ),
             ),
-            // 装饰圆
-            Positioned(
-              top: -20,
-              right: -15,
-              child: Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.1),
-                ),
-              ),
-            ),
-            // 内容
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    // v14: iconUrl 非空用 Image.network，为空回退到 Material Icon
-                    child: meta.iconUrl.isNotEmpty
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: CachedNetworkImage(
-                              url: meta.iconUrl,
-                              fit: BoxFit.cover,
-                              errorWidget: Icon(
-                                meta.icon,
-                                size: 18,
-                                color: Colors.white,
-                              ),
-                            ),
-                          )
-                        : Icon(meta.icon, size: 18, color: Colors.white),
+          ),
+        ),
+        // 信息（底部对齐）
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  meta.name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    height: 1.2,
                   ),
-                  const Spacer(),
-                  Text(
-                    meta.name,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  meta.desc,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white.withOpacity(0.85),
+                    height: 1.4,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  child: Text(
+                    '$count 个模板',
                     style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
                       color: Colors.white,
-                      height: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    meta.desc,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white.withOpacity(0.85),
-                      height: 1.4,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(9999),
-                    ),
-                    child: Text(
-                      '$count 个模板',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 无封面图：渐变背景 + 装饰圆 + 左上角图标 + 信息（占位内容）
+  Widget _buildGradientStack() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _buildGradientLayer(),
+        // 装饰圆
+        Positioned(
+          top: -20,
+          right: -15,
+          child: Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.1),
+            ),
+          ),
+        ),
+        // 内容
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(meta.icon, size: 18, color: Colors.white),
+              ),
+              const Spacer(),
+              Text(
+                meta.name,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                meta.desc,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.white.withOpacity(0.85),
+                  height: 1.4,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(9999),
+                ),
+                child: Text(
+                  '$count 个模板',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 渐变占位层
+  Widget _buildGradientLayer() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: meta.gradient,
         ),
       ),
     );

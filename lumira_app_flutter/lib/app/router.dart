@@ -19,7 +19,6 @@ import '../features/challenge/pages/challenge_complete_page.dart';
 import '../features/challenge/pages/challenge_confirm_page.dart';
 import '../features/challenge/pages/challenge_detail_page.dart';
 import '../features/challenge/pages/challenge_history_page.dart';
-import '../features/challenge/pages/challenge_page.dart';
 import '../features/checkin/pages/checkin_detail_page.dart';
 import '../features/checkin/pages/checkin_edit_page.dart';
 import '../features/checkin/pages/checkin_list_page.dart';
@@ -29,7 +28,7 @@ import '../features/gallery/pages/gallery_edit_page.dart';
 import '../features/gallery/pages/gallery_monthly_digest_page.dart';
 import '../features/gallery/pages/gallery_page.dart';
 import '../features/gallery/pages/gallery_stats_page.dart';
-import '../features/home/pages/home_page.dart';
+import '../features/main_tabs/main_tabs_page.dart';
 import '../features/inspiration/pages/inspiration_page.dart';
 import '../features/inspiration/pages/tutorial_detail_page.dart';
 import '../features/onboarding/pages/questionnaire_page.dart';
@@ -54,7 +53,6 @@ import '../features/profile/pages/profile_notifications_page.dart';
 import '../features/profile/pages/profile_invite_page.dart';
 import '../features/profile/pages/profile_share_code_page.dart';
 import '../features/profile/pages/profile_my_templates_page.dart';
-import '../features/profile/pages/profile_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
 import '../features/profile/feedback/pages/feedback_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
@@ -70,7 +68,6 @@ import '../features/templates/pages/templates_category_page.dart';
 import '../features/templates/pages/templates_detail_page.dart';
 import '../features/templates/pages/templates_drafts_page.dart';
 import '../features/templates/pages/templates_editor_page.dart';
-import '../features/templates/pages/templates_page.dart';
 import '../features/templates/pages/templates_recommend_page.dart';
 import '../features/templates/pages/templates_unlock_page.dart';
 import '../features/templates/pages/export_detail_page.dart';
@@ -106,7 +103,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.home,
         name: 'home',
-        builder: (context, state) => const HomePage(),
+        builder: (context, state) => const MainTabsPage(initialIndex: 0),
       ),
 
       // === 拍摄流程 ===
@@ -191,7 +188,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.templates,
         name: 'templates',
-        builder: (context, state) => const TemplatesPage(),
+        builder: (context, state) => const MainTabsPage(initialIndex: 1),
       ),
       GoRoute(
         path: RouteNames.templatesDetail,
@@ -296,7 +293,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.challenge,
         name: 'challenge',
-        builder: (context, state) => const ChallengePage(),
+        builder: (context, state) => const MainTabsPage(initialIndex: 2),
       ),
       GoRoute(
         path: RouteNames.challengeDetail,
@@ -428,7 +425,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.profile,
         name: 'profile',
-        builder: (context, state) => const ProfilePage(),
+        builder: (context, state) => const MainTabsPage(initialIndex: 3),
       ),
       GoRoute(
         path: RouteNames.profileEdit,

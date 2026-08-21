@@ -37,6 +37,40 @@ void main() {
       expect(back.bottomRatio, 0.18);
       expect(back.shadowOpacity, 0.25);
     });
+    test('四边独立白边 + 渐变字段 roundtrip', () {
+      const f = WatermarkFrame(
+        type: WatermarkFrameType.polaroid,
+        borderTop: 0.03,
+        borderRight: 0.07,
+        borderBottom: 0.09,
+        borderLeft: 0.02,
+        borderFill: WatermarkBorderFill.gradient,
+        color: ui.Color(0xFFFFF3E0),
+        gradientEndColor: ui.Color(0xFFE1BEE7),
+        gradientDirection: WatermarkGradientDirection.bottomLeftToTopRight,
+      );
+      final back = WatermarkFrame.fromJson(f.toJson());
+      expect(back.borderTop, 0.03);
+      expect(back.borderRight, 0.07);
+      expect(back.borderBottom, 0.09);
+      expect(back.borderLeft, 0.02);
+      expect(back.borderFill, WatermarkBorderFill.gradient);
+      expect(back.gradientEndColor, const ui.Color(0xFFE1BEE7));
+      expect(back.gradientDirection,
+          WatermarkGradientDirection.bottomLeftToTopRight);
+    });
+    test('旧模板只有 borderRatio 时四边默认继承该值', () {
+      final f = WatermarkFrame.fromJson({
+        'type': 'polaroid',
+        'borderRatio': 0.1,
+        'color': 0xFFFFFFFF,
+      });
+      expect(f.borderTop, 0.1);
+      expect(f.borderRight, 0.1);
+      expect(f.borderBottom, 0.1);
+      expect(f.borderLeft, 0.1);
+      expect(f.borderFill, WatermarkBorderFill.solid);
+    });
     test('旧模板 JSON 缺省 frame 回退 none', () {
       final t = WatermarkTemplate.fromJson({
         'id': 'preset_x',

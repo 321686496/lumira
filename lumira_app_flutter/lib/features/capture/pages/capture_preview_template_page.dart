@@ -405,7 +405,12 @@ class _Viewfinder extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final tpl = template!;
-    final rawRatio = parseAspectRatio(tpl.composition.aspectRatio,
+    // 取景示意框比例与拍摄取景/出片保持一致：优先用裁剪比例 cropRatio，
+    // 为空时才回退构图比例 aspectRatio（与后台 phone-preview / silhouette-preview 的 effectiveRatio 规则一致）
+    final cropRatio = tpl.postProcess.cropRatio;
+    final effectiveRatio =
+        cropRatio.isNotEmpty ? cropRatio : tpl.composition.aspectRatio;
+    final rawRatio = parseAspectRatio(effectiveRatio,
         isPortrait: MediaQuery.of(context).orientation == Orientation.portrait);
     final aspectRatio = rawRatio < 0
         ? MediaQuery.of(context).size.width / MediaQuery.of(context).size.height

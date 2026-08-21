@@ -83,6 +83,10 @@ class Tables {
   static const String colCameraFacing = 'camera_facing';
   static const String colAspectRatio = 'aspect_ratio';
 
+  // === user_settings 扩展列（v34 迁移新增，模板信息卡显示偏好持久化） ===
+  // 套用模板时顶部的可折叠模板信息卡是否被用户隐藏（1=隐藏，0=显示，默认显示）
+  static const String colTemplateInfoCardHidden = 'template_info_card_hidden';
+
   // === composition_kits 表（M2 用，v4 迁移同步创建） ===
   // 注：colSceneId / colTemplateId 复用 gallery_items 段已声明的同名常量
   static const String compositionKits = 'composition_kits';

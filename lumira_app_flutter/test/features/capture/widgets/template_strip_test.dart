@@ -27,14 +27,15 @@ void main() {
       expect(find.byType(GestureDetector), findsNWidgets(6));
     });
 
-    testWidgets('expanded mode renders all template cards', (tester) async {
+    testWidgets('expanded mode renders top 10 + show-more button',
+        (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       // Expand the test viewport so the lazy ListView.builder builds all cards
       // (each card is 72px + 8px margin = 80px, need enough width for all)
       final templateCount = TemplateRegistry.allTemplates.length;
       tester.binding.window.physicalSizeTestValue =
-          Size(templateCount * 80 + 100, 600);
+          Size((templateCount + 1) * 80 + 100, 600);
       tester.binding.window.devicePixelRatioTestValue = 1.0;
       addTearDown(tester.binding.window.clearPhysicalSizeTestValue);
       addTearDown(tester.binding.window.clearDevicePixelRatioTestValue);
@@ -51,8 +52,16 @@ void main() {
       // (not the loading fallback).
       await tester.pumpAndSettle();
 
-      // In test environment, sortedTemplatesProvider falls back to system templates
-      expect(find.byType(GestureDetector), findsNWidgets(templateCount));
+      // In test environment, sortedTemplatesProvider falls back to system
+      // templates (29). 展开面板只显示前 10 个模板 + 1 个「显示更多」按钮。
+      final visibleCount = templateCount > 10 ? 10 : templateCount;
+      final expectCount = templateCount > 10
+          ? visibleCount + 1
+          : visibleCount;
+      expect(find.byType(GestureDetector), findsNWidgets(expectCount));
+      if (templateCount > 10) {
+        expect(find.text('显示更多'), findsOneWidget);
+      }
     });
 
     testWidgets('tapping a template card updates currentTemplateIdProvider',
@@ -103,15 +112,16 @@ void main() {
       expect(boxDecoration.border, isNotNull);
     });
 
-    testWidgets('custom template (not in TemplateRegistry) shows 我的 badge',
+    testWidgets('custom template (source=custom) shows 我的 badge',
         (tester) async {
-      // Use an id that does NOT exist in TemplateRegistry so isCustom == true.
+      // 使用 source=custom（用户自定义模板）触发「我的」角标。
       final customTemplate = PhotoTemplate(
         meta: TemplateMeta(
           id: 'custom_test_001',
           name: 'My Custom',
           category: 'portrait',
           classification: const TemplateClassification(type: 'portrait'),
+          source: 'custom',
         ),
         composition: const Composition(),
         pose: const Pose(),
@@ -140,6 +150,60 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('我的'), findsOneWidget);
+    });
+
+    testWidgets('remote template (source=remote) does NOT show 我的 badge',
+        (tester) async {
+      // 后端动态模板（source='remote'）不应被误标为「我的」。
+      final remote = PhotoTemplate(
+        meta: TemplateMeta(
+          id: 'srv_remote_test_001',
+          name: '后端模板',
+          category: 'portrait',
+          classification: const TemplateClassification(type: 'portrait'),
+          source: 'remote',
+        ),
+        composition: const Composition(),
+        pose: const Pose(),
+        camera: const CameraParams(),
+        sceneGuide: const SceneGuide(),
+        postProcess: const PostProcess(color: PostProcessColor()),
+      );
+      final builtin = PhotoTemplate(
+        meta: TemplateMeta(
+          id: 'builtin_test_001',
+          name: '内置模板',
+          category: 'portrait',
+          classification: const TemplateClassification(type: 'portrait'),
+          source: 'builtin',
+        ),
+        composition: const Composition(),
+        pose: const Pose(),
+        camera: const CameraParams(),
+        sceneGuide: const SceneGuide(),
+        postProcess: const PostProcess(color: PostProcessColor()),
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          CaptureState.sortedTemplatesProvider.overrideWith(
+            (ref) async => <PhotoTemplate>[remote, builtin],
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: TemplateStrip(compact: true)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('我的'), findsNothing);
     });
 
     testWidgets('empty template list shows 暂无模板 placeholder',

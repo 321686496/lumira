@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +17,18 @@ import 'package:lumira_app_flutter/features/rewards/data/rewards_models.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
+
+class _FakeInviteRepository implements InviteRepository {
+  @override
+  Future<InviteCode> generate() async => const InviteCode(code: 'ABC234');
+
+  @override
+  Future<ActivateInviteResponse> activate(ActivateInviteRequest req) async =>
+      const ActivateInviteResponse(inviterDeviceId: 'device');
+
+  @override
+  Future<InviteStats> stats() async => throw UnimplementedError();
+}
 
 void main() {
   late GoRouter router;
@@ -50,9 +63,34 @@ void main() {
       overrides: [
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
+        inviteRepositoryProvider.overrideWith((ref) async => _FakeInviteRepository()),
         inviteStatsProvider.overrideWith((ref) async => const InviteStats(
               totalInvites: 3,
               currentTier: 1,
+              myInviteCode: 'ABC234',
+              tiers: [
+                InviteTierEntry(
+                  tier: 1,
+                  requiredInvites: 1,
+                  rewards: [RewardItem(type: RewardType.template, id: 'jp-film', label: '日系胶片模板')],
+                  done: true,
+                  locked: false,
+                ),
+                InviteTierEntry(
+                  tier: 2,
+                  requiredInvites: 5,
+                  rewards: [RewardItem(type: RewardType.templatePack, id: 'atmosphere', label: '氛围感包')],
+                  done: false,
+                  locked: false,
+                ),
+              ],
+              invitees: [
+                Invitee(
+                  inviteeDeviceId: '33333333-3333-4333-8333-333333333333',
+                  channel: 'direct',
+                  activatedAt: 1700000001,
+                ),
+              ],
               nextTier: NextInviteTier(
                 tier: 2,
                 requiredInvites: 5,
@@ -124,7 +162,7 @@ void main() {
       expect(find.widgetWithText(LumiraNav, '邀请有礼'), findsOneWidget);
     });
 
-    testWidgets('renders all 5 sections', (tester) async {
+    testWidgets('renders all sections', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
@@ -132,43 +170,96 @@ void main() {
       // 1. HeroCard
       expect(find.text('邀请好友，获得奖励'), findsOneWidget);
       expect(find.text('邀请好友一起记录美好，解锁专属模板'), findsOneWidget);
-      // 2. RewardCard
+      // 2. 我的邀请码
+      expect(find.text('我的邀请码：ABC234'), findsOneWidget);
+      expect(find.text('复制'), findsOneWidget);
+      // 3. RewardCard（dynamic tiers）
       expect(find.text('奖励阶梯'), findsOneWidget);
       expect(find.text('日系胶片模板'), findsOneWidget);
-      expect(find.text('法式复古包'), findsOneWidget);
       expect(find.text('氛围感包'), findsOneWidget);
-      expect(find.text('分享达人成就'), findsOneWidget);
-      expect(find.text('全部精选模板'), findsOneWidget);
-      expect(find.text('裂变之神'), findsOneWidget);
-      // 3. ProgressCard
+      expect(find.text('已达成'), findsOneWidget);
+      // 4. ProgressCard
       expect(find.text('当前进度'), findsOneWidget);
       expect(find.text('已邀请 3 位'), findsOneWidget);
       expect(find.text('再邀请 2 人可解锁「氛围感包」'), findsOneWidget);
-      // 4. 生成邀请卡片 button
+      // 5. 生成邀请卡片 button
       expect(find.text('生成邀请卡片'), findsOneWidget);
-      // 5. CodeCard
+      // 6. CodeCard
       expect(find.text('输入好友邀请码'), findsOneWidget);
       expect(find.text('确认绑定'), findsOneWidget);
-      // 6. RecordCard
+      // 7. RecordCard（real invitee）
       expect(find.text('邀请记录'), findsOneWidget);
-      expect(find.text('小雅'), findsOneWidget);
-      expect(find.text('小琳'), findsOneWidget);
-      expect(find.text('小悦'), findsOneWidget);
+      expect(find.text('333333…3333'), findsOneWidget);
+      expect(find.text('直接邀请'), findsOneWidget);
     });
 
-    testWidgets('tapping 生成邀请卡片 shows SnackBar', (tester) async {
+    testWidgets('renders dynamic reward ladder from tiers', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 初始无 toast
+      expect(find.text('日系胶片模板'), findsOneWidget);
+      expect(find.text('氛围感包'), findsOneWidget);
+      expect(find.text('已达成'), findsOneWidget);
+    });
+
+    testWidgets('renders real invite records from invitees', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('333333…3333'), findsOneWidget);
+      expect(find.text('直接邀请'), findsOneWidget);
+      // activatedAt 为秒级；按本地时区计算期望日期（若按毫秒解析会渲出 1970-…）
+      final _t = DateTime.fromMillisecondsSinceEpoch(1700000001 * 1000);
+      final _date =
+          '${_t.year}-${_t.month.toString().padLeft(2, '0')}-${_t.day.toString().padLeft(2, '0')}';
+      expect(find.text(_date), findsOneWidget);
+    });
+
+    testWidgets('shows my invite code', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('我的邀请码：ABC234'), findsOneWidget);
+    });
+
+    testWidgets('copy my invite code', (tester) async {
+      setLargeViewport(tester);
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async => null,
+      );
+      addTearDown(() {
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        );
+      });
+
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('复制'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('邀请码已复制'), findsOneWidget);
+    });
+
+    testWidgets('tapping 生成邀请卡片 opens poster', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
       expect(find.text('生成邀请卡片'), findsOneWidget);
 
       await tester.tap(find.text('生成邀请卡片'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // LumiraToast（自定义 Overlay，非原生 SnackBar）显示 '生成邀请卡片'
-      expect(find.text('生成邀请卡片'), findsNWidgets(2)); // button + snackbar
+      expect(find.text('邀请卡片'), findsOneWidget);
+      expect(find.text('复制邀请码'), findsOneWidget);
+      expect(find.text('保存海报'), findsOneWidget);
     });
 
     testWidgets('tapping 确认绑定 with empty code shows error SnackBar', (tester) async {
