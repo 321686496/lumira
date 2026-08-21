@@ -265,6 +265,14 @@ export default function TemplateForm({
   const [silhouetteFile, setSilhouetteFile] = useState<File | null>(null);
   const [pptplFile, setPptplFile] = useState<File | null>(null);
   const pptplInputRef = React.useRef<HTMLInputElement>(null);
+  // 裁剪比例是否随构图比例联动：
+  // - 默认联动（改构图比例时裁剪比例同步为同值）
+  // - 用户单独设置过裁剪比例后解锁（以手动选择为准，不再自动跟随）
+  const [cropRatioLinked, setCropRatioLinked] = useState(() => {
+    const ar = (initial?.composition?.aspectRatio as string | undefined) ?? '3:4';
+    const cr = (initial?.postProcess?.cropRatio as string | undefined) ?? '3:4';
+    return ar === cr;
+  });
 
   const isEdit = Boolean(templateId && initial);
 
@@ -494,7 +502,13 @@ export default function TemplateForm({
       if (typeof sceneGuide.bestTime === 'string') setValue('bestTime', sceneGuide.bestTime);
       if (Array.isArray(sceneGuide.tips)) setValue('tips', (sceneGuide.tips as string[]).join(', '));
 
-      if (typeof postProcess.cropRatio === 'string') setValue('cropRatio', postProcess.cropRatio);
+      if (typeof postProcess.cropRatio === 'string') {
+        setValue('cropRatio', postProcess.cropRatio);
+        // 导入模板的裁剪比例与构图比例不同 → 视为单独设置过，解锁联动
+        const importedAr =
+          typeof composition.aspectRatio === 'string' ? composition.aspectRatio : '3:4';
+        if (postProcess.cropRatio !== importedAr) setCropRatioLinked(false);
+      }
       if (typeof color.brightness === 'number') setValue('colorBrightness', color.brightness);
       if (typeof color.contrast === 'number') setValue('colorContrast', color.contrast);
       if (typeof color.saturation === 'number') setValue('colorSaturation', color.saturation);
@@ -1156,7 +1170,14 @@ export default function TemplateForm({
                     control={control}
                     name="aspectRatio"
                     render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          // 默认联动：构图比例改动时，裁剪比例同步为同值
+                          if (cropRatioLinked) setValue('cropRatio', v);
+                        }}
+                      >
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {ASPECT_RATIOS.map((v) => (
@@ -1166,6 +1187,7 @@ export default function TemplateForm({
                       </Select>
                     )}
                   />
+                  <p className="text-xs text-muted-foreground">构图比例用于模板预览展示；裁剪比例决定取景与出片。修改宽高比时裁剪比例将自动同步，除非已单独设置过裁剪比例。</p>
                 </div>
               </div>
 
@@ -1362,7 +1384,14 @@ export default function TemplateForm({
                     control={control}
                     name="cropRatio"
                     render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          field.onChange(v);
+                          // 单独设置过裁剪比例后解锁联动，以手动选择为准
+                          setCropRatioLinked(false);
+                        }}
+                      >
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {ASPECT_RATIOS.map((v) => (
@@ -1372,6 +1401,7 @@ export default function TemplateForm({
                       </Select>
                     )}
                   />
+                  <p className="text-xs text-muted-foreground">决定取景器与最终出片比例，默认跟随构图比例；单独修改后以手动选择为准。</p>
                 </div>
                 <div className="space-y-2">
                   <Label>滤镜 LUT</Label>
