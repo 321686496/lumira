@@ -281,7 +281,7 @@ class _CtaButton extends StatelessWidget {
         final cta = tutorial.cta;
         if (cta.type == TutorialCtaType.scene) {
           GoRouter.of(context).push(
-            RouteNames.build(RouteNames.captureSceneGuide, {RouteNames.paramScene: cta.targetId}),
+            RouteNames.withSceneId(RouteNames.captureSceneDetail, cta.targetId),
           );
         } else {
           GoRouter.of(context).push(RouteNames.withTemplateId(RouteNames.templatesDetail, cta.targetId));
