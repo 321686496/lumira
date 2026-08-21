@@ -86,7 +86,7 @@ void main() {
       expect(banners.first.tag, '新手友好');
       expect(banners.first.title, '新手友好场景');
       expect(banners.first.subtitle, '从咖啡馆开始你的拍摄之旅');
-      expect(banners.first.route, '/capture/scene-guide?scene=preset_cafe');
+      expect(banners.first.route, '/capture/scene-detail?sceneId=preset_cafe');
 
       // 槽位 2：基于最近拍摄分类（portrait）
       // 应使用 tpl_p1（portrait 类别 recommended 模板）
@@ -155,7 +155,7 @@ void main() {
 
       // 槽位 1：新用户引导（无 template）
       expect(banners.first.id, 'banner_new_user_guide');
-      expect(banners.first.route, '/capture/scene-guide?scene=preset_cafe');
+      expect(banners.first.route, '/capture/scene-detail?sceneId=preset_cafe');
 
       // 槽位 2-5：均应跳转到 /templates/detail?templateId=xxx
       final templateRoutes = banners
@@ -233,7 +233,7 @@ void main() {
       final favBanner = banners.firstWhere((b) => b.id == 'banner_favorite_scene');
       expect(favBanner.title, '我的咖啡馆灵感');
       expect(favBanner.tag, '收藏场景');
-      expect(favBanner.route, '/capture/scene-guide?scene=scene_user_1');
+      expect(favBanner.route, '/capture/scene-detail?sceneId=scene_user_1');
     });
 
     test('HomeBannerItem 字段完整性：每条 banner 字段非空', () async {

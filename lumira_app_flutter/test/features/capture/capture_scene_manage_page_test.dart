@@ -53,9 +53,9 @@ void main() {
           },
         ),
         GoRoute(
-          path: RouteNames.captureSceneGuide,
-          name: 'captureSceneGuide',
-          builder: (_, __) => const _StubPage(text: 'GUIDE_PAGE'),
+          path: RouteNames.scenes,
+          name: 'scenes',
+          builder: (_, __) => const _StubPage(text: 'SCENES'),
         ),
       ],
     );

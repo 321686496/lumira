@@ -57,10 +57,10 @@ Widget _wrapWithRouter({ThemeKey theme = ThemeKey.warmWhite, UIStyle? style}) {
             const Scaffold(body: Center(child: Text('SCENES'))),
       ),
       GoRoute(
-        path: RouteNames.captureSceneGuide,
-        name: 'captureSceneGuide',
-        builder: (context, state) =>
-            const Scaffold(body: Center(child: Text('SCENE_GUIDE'))),
+        path: RouteNames.captureSceneDetail,
+        name: 'captureSceneDetail',
+        builder: (context, state) => const Scaffold(
+            body: Center(child: Text('SCENE_DETAIL'))),
       ),
       GoRoute(
         path: RouteNames.captureSceneManage,

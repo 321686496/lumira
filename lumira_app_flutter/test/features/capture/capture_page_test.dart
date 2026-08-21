@@ -87,12 +87,6 @@ void main() {
           builder: (_, __) =>
               const Scaffold(body: Center(child: Text('preview'))),
         ),
-        GoRoute(
-          path: '/capture/scene-guide',
-          name: 'captureSceneGuide',
-          builder: (_, __) =>
-              const Scaffold(body: Center(child: Text('scene-guide'))),
-        ),
       ],
     );
   });
