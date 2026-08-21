@@ -1,7 +1,7 @@
 // lumira-server/packages/backend/src/modules/invite/invite.service.ts
 
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and, count } from 'drizzle-orm';
+import { eq, and, count, desc } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { devices, inviteRecords, rewardTiers, rewardUnlocks } from '../../database/schema';
 import { generateInviteCode } from '../../shared/invite-code.generator';
@@ -10,7 +10,7 @@ import { generateInviteCode } from '../../shared/invite-code.generator';
 export class InviteService {
   constructor(private readonly dbService: DatabaseService) {}
 
-  // 生成或获取已有邀请码
+  // 生成或获取已有邀请码（存入 devices.invite_code 列）
   async generateInviteCode(deviceId: string): Promise<string> {
     const db = this.dbService.getDb();
 
@@ -18,12 +18,14 @@ export class InviteService {
       where: eq(devices.deviceId, deviceId),
     });
 
-    // 从 ip_region 字段读取已有邀请码（约定格式：invite:XXXXXX）
-    // 这是 MVP 简化方案 — 复用 devices.ip_region 字段存储邀请码
-    const existingCode = device?.ipRegion?.startsWith('invite:')
-      ? device.ipRegion.substring(7)
-      : null;
-
+    // 兼容读取：优先新列；为空但旧 ip_region 前缀存在则一次性迁移
+    let existingCode = device?.inviteCode ?? null;
+    if (!existingCode && device?.ipRegion?.startsWith('invite:')) {
+      existingCode = device.ipRegion.substring(7);
+      await db.update(devices)
+        .set({ inviteCode: existingCode })
+        .where(eq(devices.deviceId, deviceId));
+    }
     if (existingCode) {
       return existingCode;
     }
@@ -39,9 +41,8 @@ export class InviteService {
       }
     } while (await this.inviteCodeExists(code));
 
-    // 存储邀请码到 devices.ip_region 字段（加前缀区分）
     await db.update(devices)
-      .set({ ipRegion: `invite:${code}` })
+      .set({ inviteCode: code })
       .where(eq(devices.deviceId, deviceId));
 
     return code;
@@ -50,7 +51,7 @@ export class InviteService {
   private async inviteCodeExists(code: string): Promise<boolean> {
     const db = this.dbService.getDb();
     const result = await db.query.devices.findFirst({
-      where: eq(devices.ipRegion, `invite:${code}`),
+      where: eq(devices.inviteCode, code),
     });
     return !!result;
   }
@@ -59,7 +60,7 @@ export class InviteService {
   async findInviterByCode(code: string): Promise<string | null> {
     const db = this.dbService.getDb();
     const result = await db.query.devices.findFirst({
-      where: eq(devices.ipRegion, `invite:${code}`),
+      where: eq(devices.inviteCode, code),
     });
     return result?.deviceId || null;
   }
@@ -221,10 +222,43 @@ export class InviteService {
       };
     });
 
+    // 我的邀请码
+    const me = await db.query.devices.findFirst({
+      where: eq(devices.deviceId, deviceId),
+    });
+    const myInviteCode = me?.inviteCode ?? null;
+
+    // 全量活动阶梯 + done/locked 状态（供前端动态渲染）
+    const tierProgress = sortedTiers.map((t) => {
+      const done = totalInvites >= t.requiredInvites;
+      const isNext = nextTier && nextTier.tier === t.tier;
+      return {
+        tier: t.tier,
+        requiredInvites: t.requiredInvites,
+        rewards: JSON.parse(t.rewardsJson),
+        done,
+        locked: !done && !isNext,
+      };
+    });
+
+    // 被邀请人真实记录（作为邀请人的邀请）
+    const inviteesRows = await db.query.inviteRecords.findMany({
+      where: eq(inviteRecords.inviterDeviceId, deviceId),
+      orderBy: desc(inviteRecords.activatedAt),
+    });
+    const invitees = inviteesRows.map((r) => ({
+      inviteeDeviceId: r.inviteeDeviceId,
+      channel: r.channel,
+      activatedAt: r.activatedAt,
+    }));
+
     return {
       totalInvites,
       currentTier,
       nextTier,
+      myInviteCode,
+      tiers: tierProgress,
+      invitees,
       unlockedRewards: rewardsWithItems,
     };
   }
