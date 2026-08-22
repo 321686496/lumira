@@ -21,10 +21,12 @@ class RemoteTemplateMetaDto {
   final int price;
   final String coverUrl;
   final String description;
+  final String shortDesc;
   final String referenceSource;
   final List<String> tags;
   final List<String> tagIds;
   final RemoteTemplateClassificationDto classification;
+  final RemoteTemplateAmbienceDto ambience;
   final int sortOrder;
   final int updatedAt;
 
@@ -37,10 +39,12 @@ class RemoteTemplateMetaDto {
     required this.price,
     required this.coverUrl,
     required this.description,
+    this.shortDesc = '',
     required this.referenceSource,
     required this.tags,
     required this.tagIds,
     required this.classification,
+    this.ambience = const RemoteTemplateAmbienceDto(),
     required this.sortOrder,
     required this.updatedAt,
   });
@@ -55,6 +59,7 @@ class RemoteTemplateMetaDto {
       price: (j['price'] as num?)?.toInt() ?? 0,
       coverUrl: j['coverUrl'] as String? ?? '',
       description: j['description'] as String? ?? '',
+      shortDesc: j['shortDesc'] as String? ?? '',
       referenceSource: j['referenceSource'] as String? ?? '',
       tags: (j['tags'] as List<dynamic>?)
               ?.map((e) => e.toString())
@@ -67,10 +72,45 @@ class RemoteTemplateMetaDto {
       classification: RemoteTemplateClassificationDto.fromJson(
         (j['classification'] as Map<String, dynamic>?) ?? const {},
       ),
+      ambience: RemoteTemplateAmbienceDto.fromJson(
+        (j['ambience'] as Map<String, dynamic>?) ?? const {},
+      ),
       sortOrder: (j['sortOrder'] as num?)?.toInt() ?? 0,
       updatedAt: (j['updatedAt'] as num?)?.toInt() ?? 0,
     );
   }
+}
+
+/// 模板季节/天气/时段元数据（对应后端 TemplateAmbience，仅展示用）。
+@immutable
+class RemoteTemplateAmbienceDto {
+  const RemoteTemplateAmbienceDto({
+    this.seasons = const [],
+    this.weathers = const [],
+    this.timeTones = const [],
+  });
+
+  final List<String> seasons;
+  final List<String> weathers;
+  final List<String> timeTones;
+
+  bool get isEmpty =>
+      seasons.isEmpty && weathers.isEmpty && timeTones.isEmpty;
+
+  factory RemoteTemplateAmbienceDto.fromJson(Map<String, dynamic>? j) {
+    if (j == null) return const RemoteTemplateAmbienceDto();
+    return RemoteTemplateAmbienceDto(
+      seasons: (j['seasons'] as List<dynamic>?)?.cast<String>() ?? const [],
+      weathers: (j['weathers'] as List<dynamic>?)?.cast<String>() ?? const [],
+      timeTones: (j['timeTones'] as List<dynamic>?)?.cast<String>() ?? const [],
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'seasons': seasons,
+        'weathers': weathers,
+        'timeTones': timeTones,
+      };
 }
 
 /// 模板分类信息（meta 内嵌）。
@@ -158,10 +198,12 @@ class RemoteTemplateDetailDto {
   final int price;
   final String coverUrl;
   final String description;
+  final String shortDesc;
   final String referenceSource;
   final List<String> tags;
   final List<String> tagIds;
   final RemoteTemplateClassificationDto classification;
+  final RemoteTemplateAmbienceDto ambience;
   final int sortOrder;
   final int updatedAt;
 
@@ -181,10 +223,12 @@ class RemoteTemplateDetailDto {
     required this.price,
     required this.coverUrl,
     required this.description,
+    this.shortDesc = '',
     required this.referenceSource,
     required this.tags,
     required this.tagIds,
     required this.classification,
+    this.ambience = const RemoteTemplateAmbienceDto(),
     required this.sortOrder,
     required this.updatedAt,
     required this.composition,
@@ -212,10 +256,12 @@ class RemoteTemplateDetailDto {
       price: meta.price,
       coverUrl: meta.coverUrl,
       description: meta.description,
+      shortDesc: meta.shortDesc,
       referenceSource: meta.referenceSource,
       tags: meta.tags,
       tagIds: meta.tagIds,
       classification: meta.classification,
+      ambience: meta.ambience,
       sortOrder: meta.sortOrder,
       updatedAt: meta.updatedAt,
       composition: composition,
