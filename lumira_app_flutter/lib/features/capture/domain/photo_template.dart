@@ -1,6 +1,8 @@
 // lib/features/capture/domain/photo_template.dart
 import 'package:flutter/foundation.dart';
 
+import '../../templates/data/remote_template_dto.dart';
+
 /// 内部哨兵常量，用于区分 copyWith 中"未传入参数"与"显式传入 null"。
 /// 解决 `systemFilter ?? this.systemFilter` 无法将 nullable 字段清空的问题。
 const _unset = Object();
@@ -69,6 +71,13 @@ class TemplateMeta {
   final String description;
   final String referenceSource;
 
+  /// 短简介（卡片/详情展示用，来自后端 shortDesc）。
+  final String shortDesc;
+  /// 季节/天气/时段氛围元数据（详情展示用，来自后端 ambience）。
+  final RemoteTemplateAmbienceDto? ambience;
+  /// 后端更新时间戳（毫秒，详情展示用）。
+  final int updatedAt;
+
   /// 模板来源：'builtin'（系统内置）| 'custom'（用户自定义）| 'remote'（后端动态）。
   /// 用于 UI 区分「我的」自定义模板与后端同步模板（如拍摄页模板条角标）。
   final String source;
@@ -87,6 +96,9 @@ class TemplateMeta {
     this.coverData,
     this.description = '',
     this.referenceSource = '',
+    this.shortDesc = '',
+    this.ambience,
+    this.updatedAt = 0,
     this.source = 'builtin',
   });
 
@@ -104,6 +116,9 @@ class TemplateMeta {
     Object? coverData = _unset,
     String? description,
     String? referenceSource,
+    String? shortDesc,
+    Object? ambience = _unset,
+    int? updatedAt,
     String? source,
   }) =>
       TemplateMeta(
@@ -122,6 +137,11 @@ class TemplateMeta {
             : coverData as String?,
         description: description ?? this.description,
         referenceSource: referenceSource ?? this.referenceSource,
+        shortDesc: shortDesc ?? this.shortDesc,
+        ambience: identical(ambience, _unset)
+            ? this.ambience
+            : ambience as RemoteTemplateAmbienceDto?,
+        updatedAt: updatedAt ?? this.updatedAt,
         source: source ?? this.source,
       );
 
@@ -142,11 +162,15 @@ class TemplateMeta {
           coverData == other.coverData &&
           description == other.description &&
           referenceSource == other.referenceSource &&
+          shortDesc == other.shortDesc &&
+          ambience == other.ambience &&
+          updatedAt == other.updatedAt &&
           source == other.source;
 
   @override
   int get hashCode => Object.hash(id, name, author, version, category, classification,
-      Object.hashAll(tags), Object.hashAll(tagIds), price, cover, coverData, description, referenceSource, source);
+      Object.hashAll(tags), Object.hashAll(tagIds), price, cover, coverData, description, referenceSource,
+      shortDesc, ambience, updatedAt, source);
 }
 
 class TemplateClassification {

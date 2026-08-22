@@ -20,6 +20,8 @@ class TemplateRecord {
   final String? coverData;
   final String description;
   final String referenceSource;
+  final String shortDesc;
+  final String ambienceJson;
   final Map<String, dynamic> composition;
   final Map<String, dynamic> pose;
   final Map<String, dynamic> camera;
@@ -50,6 +52,8 @@ class TemplateRecord {
     this.coverData,
     required this.description,
     required this.referenceSource,
+    this.shortDesc = '',
+    this.ambienceJson = '{}',
     required this.composition,
     required this.pose,
     required this.camera,
@@ -77,6 +81,8 @@ class TemplateRecord {
       Tables.colCoverData: coverData,
       Tables.colDescription: description,
       Tables.colReferenceSource: referenceSource,
+      Tables.colShortDesc: shortDesc,
+      Tables.colAmbienceJson: ambienceJson,
       Tables.colCompositionJson: jsonEncode(composition),
       Tables.colPoseJson: jsonEncode(pose),
       Tables.colCameraJson: jsonEncode(camera),
@@ -105,6 +111,8 @@ class TemplateRecord {
       coverData: row[Tables.colCoverData] as String?,
       description: (row[Tables.colDescription] as String?) ?? '',
       referenceSource: (row[Tables.colReferenceSource] as String?) ?? '',
+      shortDesc: (row[Tables.colShortDesc] as String?) ?? '',
+      ambienceJson: (row[Tables.colAmbienceJson] as String?) ?? '{}',
       composition: _decodeJsonMap(row[Tables.colCompositionJson]),
       pose: _decodeJsonMap(row[Tables.colPoseJson]),
       camera: _decodeJsonMap(row[Tables.colCameraJson]),
@@ -136,6 +144,8 @@ class TemplateRecord {
     String? coverData,
     String? description,
     String? referenceSource,
+    String? shortDesc,
+    String? ambienceJson,
     Map<String, dynamic>? composition,
     Map<String, dynamic>? pose,
     Map<String, dynamic>? camera,
@@ -161,6 +171,8 @@ class TemplateRecord {
       coverData: coverData ?? this.coverData,
       description: description ?? this.description,
       referenceSource: referenceSource ?? this.referenceSource,
+      shortDesc: shortDesc ?? this.shortDesc,
+      ambienceJson: ambienceJson ?? this.ambienceJson,
       composition: composition ?? this.composition,
       pose: pose ?? this.pose,
       camera: camera ?? this.camera,

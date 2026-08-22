@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../capture/data/template_registry.dart';
 import '../../capture/domain/photo_template.dart';
+import 'remote_template_dto.dart';
 
 /// 模板浏览页（detail / all / recommend）共享 mock 数据
 ///
@@ -222,11 +223,21 @@ class TemplateDetail {
     this.majorStyle,
     this.subStyle,
     this.method,
+    this.shortDesc = '',
+    this.ambience,
+    this.updatedAt = 0,
   });
 
   final String id;
   final String name;
   final String category; // 'portrait' / 'landscape' / ...
+
+  /// 短简介（卡片/详情展示用，来自后端 shortDesc）。
+  final String shortDesc;
+  /// 季节/天气/时段氛围元数据（详情展示用，来自后端 ambience）。
+  final RemoteTemplateAmbienceDto? ambience;
+  /// 后端更新时间戳（毫秒，详情展示用）。
+  final int updatedAt;
 
   /// 完整分类路径的分级扩展字段（四级分类，spec-4level）。
   /// - majorStyle：大风格（L2，如 emotional）
@@ -281,6 +292,9 @@ class TemplateDetail {
       majorStyle: majorStyle ?? this.majorStyle,
       subStyle: subStyle ?? this.subStyle,
       method: method ?? this.method,
+      shortDesc: shortDesc,
+      ambience: ambience,
+      updatedAt: updatedAt,
     );
   }
 }
@@ -421,6 +435,9 @@ class AllTemplateItem {
     this.coverData,
     this.majorStyle,
     this.subStyle,
+    this.shortDesc = '',
+    this.description = '',
+    this.ambience,
   });
   final String id;
   final String name;
@@ -430,6 +447,13 @@ class AllTemplateItem {
   final String coverSeed;
   final int price; // 0 = 免费
   final bool isCustom;
+
+  /// 短简介（卡片展示用，来自后端 shortDesc）。
+  final String shortDesc;
+  /// 完整描述（卡片短简介为空时兜底展示）。
+  final String description;
+  /// 氛围元数据（chips 展示用）。
+  final RemoteTemplateAmbienceDto? ambience;
 
   /// 内置模板 assets 路径或远程模板 http URL（可能为空）
   final String? cover;
@@ -1574,6 +1598,9 @@ class TemplatesBrowseMockData {
       tagIds: List<String>.from(tpl.meta.tagIds),
       price: tpl.meta.price,
       referenceSource: tpl.meta.referenceSource,
+      shortDesc: tpl.meta.shortDesc,
+      ambience: tpl.meta.ambience,
+      updatedAt: tpl.meta.updatedAt,
       majorStyle: cls.style.isEmpty ? null : cls.style,
       subStyle: cls.subStyle.isEmpty ? null : cls.subStyle,
       method: cls.method.isEmpty ? null : cls.method,

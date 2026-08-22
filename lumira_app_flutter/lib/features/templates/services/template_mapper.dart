@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../../core/config/app_config.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../capture/domain/photo_template.dart';
@@ -42,6 +44,8 @@ class TemplateMapper {
       coverData: tpl.meta.coverData,
       description: tpl.meta.description,
       referenceSource: tpl.meta.referenceSource,
+      shortDesc: tpl.meta.shortDesc,
+      ambienceJson: ambienceToJson(tpl.meta.ambience ?? const RemoteTemplateAmbienceDto()),
       composition: _compositionToJson(tpl.composition),
       pose: _poseToJson(tpl.pose),
       camera: _cameraToJson(tpl.camera),
@@ -84,6 +88,8 @@ class TemplateMapper {
       coverData: null,
       description: meta.description,
       referenceSource: meta.referenceSource,
+      shortDesc: meta.shortDesc,
+      ambienceJson: ambienceToJson(meta.ambience),
       composition: const <String, dynamic>{},
       pose: const <String, dynamic>{},
       camera: const <String, dynamic>{},
@@ -114,10 +120,12 @@ class TemplateMapper {
       price: detail.price,
       coverUrl: detail.coverUrl,
       description: detail.description,
+      shortDesc: detail.shortDesc,
       referenceSource: detail.referenceSource,
       tags: detail.tags,
       tagIds: detail.tagIds,
       classification: detail.classification,
+      ambience: detail.ambience,
       sortOrder: detail.sortOrder,
       updatedAt: detail.updatedAt,
     );
@@ -155,6 +163,9 @@ class TemplateMapper {
         coverData: r.coverData,
         description: r.description,
         referenceSource: r.referenceSource,
+        shortDesc: r.shortDesc,
+        ambience: ambienceFromJson(r.ambienceJson),
+        updatedAt: r.updatedAt,
         source: r.source,
       ),
       composition: _compositionFromJson(r.composition),
@@ -401,6 +412,30 @@ class TemplateMapper {
   }
 
   // === Silhouette 序列化 ===
+
+  /// 氛围元数据 → JSON 字符串（落库用）。
+  static String ambienceToJson(RemoteTemplateAmbienceDto a) {
+    return jsonEncode({
+      'seasons': a.seasons,
+      'weathers': a.weathers,
+      'timeTones': a.timeTones,
+    });
+  }
+
+  /// JSON 字符串 → 氛围元数据。空/非法输入返回空对象。
+  static RemoteTemplateAmbienceDto ambienceFromJson(String json) {
+    if (json.isEmpty) return const RemoteTemplateAmbienceDto();
+    try {
+      final m = jsonDecode(json) as Map<String, dynamic>;
+      return RemoteTemplateAmbienceDto(
+        seasons: (m['seasons'] as List<dynamic>?)?.cast<String>() ?? const [],
+        weathers: (m['weathers'] as List<dynamic>?)?.cast<String>() ?? const [],
+        timeTones: (m['timeTones'] as List<dynamic>?)?.cast<String>() ?? const [],
+      );
+    } catch (_) {
+      return const RemoteTemplateAmbienceDto();
+    }
+  }
 
   /// PhotoTemplate 剪影 → JSON。
   /// builtin: 仅存 key；image: base64 data URL + filename + sizeKB；svg: inline SVG。
