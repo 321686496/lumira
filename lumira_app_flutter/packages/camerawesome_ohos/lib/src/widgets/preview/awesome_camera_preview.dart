@@ -108,7 +108,9 @@ class AwesomeCameraPreviewState extends State<AwesomeCameraPreview> {
       });
     });
 
-    if (defaultTargetPlatform == TargetPlatform.ohos) {
+    // 用 name 判断 OHOS：TargetPlatform.ohos 仅在 HarmonyOS fork 的 Flutter SDK 存在，
+    // 标准 Flutter（iOS/Android）无该枚举值，直接引用会在非 OHOS 构建时报编译错误。
+    if (defaultTargetPlatform.name == 'ohos') {
       _displayRotationStreamSub =
           CamerawesomePlugin.listenDisplayRotation()!.listen(
         (res) async {
