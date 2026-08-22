@@ -1027,7 +1027,7 @@ export class CameraState implements StreamHandler {
         let manualSupported: boolean = this.session.isWhiteBalanceModeSupported(camera.WhiteBalanceMode.MANUAL)
         if (manualSupported) {
           this.session?.setWhiteBalanceMode(camera.WhiteBalanceMode.MANUAL)
-          Logger.debug(TAG, `setWhiteBalanceFn switch to MANUAL mode first`);
+          Logger.info(TAG, `setWhiteBalanceFn switch to MANUAL mode first`);
         } else {
           Logger.error(TAG, `setWhiteBalanceFn: MANUAL mode NOT supported`);
         }
@@ -1037,11 +1037,11 @@ export class CameraState implements StreamHandler {
           value = Math.min(Math.max(k, range[0]), range[1])
         }
         this.session?.setWhiteBalance(value)
-        Logger.debug(TAG, `setWhiteBalanceFn set manual K: ${value}; MANUAL supported=${manualSupported}; range=${JSON.stringify(range)}`)
+        Logger.info(TAG, `setWhiteBalanceFn set manual K: ${value}; MANUAL supported=${manualSupported}; range=${JSON.stringify(range)}`)
         // 回读确认是否真正生效
         let curMode: camera.WhiteBalanceMode | undefined = this.session.getWhiteBalanceMode()
         let curVal: number | undefined = this.session.getWhiteBalance()
-        Logger.debug(TAG, `setWhiteBalanceFn AFTER: mode=${curMode}, value=${curVal}`)
+        Logger.info(TAG, `setWhiteBalanceFn AFTER: mode=${curMode}, value=${curVal}`)
         return
       }
       // 预设模式映射
@@ -1067,7 +1067,7 @@ export class CameraState implements StreamHandler {
       }
       if (this.session.isWhiteBalanceModeSupported(wbMode)) {
         this.session?.setWhiteBalanceMode(wbMode)
-        Logger.debug(TAG, `setWhiteBalanceFn set mode: ${wbMode}`);
+        Logger.info(TAG, `setWhiteBalanceFn set mode: ${wbMode}; supported=true`);
       } else {
         Logger.error(TAG, `setWhiteBalanceFn: mode not supported, mode: ${wbMode}`);
       }

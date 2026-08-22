@@ -287,7 +287,7 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
    * @param temperatureK 手动色温（开尔文），可选；提供时优先使用连续色温
    */
   setWhiteBalance(mode: string, temperatureK?: number): void {
-    Logger.debug(TAG, `setWhiteBalance is called, mode: ${mode}, temperatureK: ${temperatureK}`);
+    Logger.info(TAG, `setWhiteBalance is called, mode: ${mode}, temperatureK: ${temperatureK}`);
     this.cameraState?.setWhiteBalanceFn(mode, temperatureK)
   }
 

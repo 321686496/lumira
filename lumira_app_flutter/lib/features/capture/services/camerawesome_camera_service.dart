@@ -280,6 +280,8 @@ class CamerawesomeCameraService implements CameraService {
   @override
   void setWhiteBalance(WhiteBalanceSettings settings) {
     final mode = settings.mode.name;
+    debugPrint(
+        '[camera] setWhiteBalance DISPATCH mode=$mode k=${settings.temperatureK} platform=${_delegate.platformTag}');
     try {
       if (_delegate.platformTag == 'ohos') {
         ohos.CamerawesomePlugin.setWhiteBalance(mode, settings.temperatureK);
