@@ -344,6 +344,15 @@ class _CameraTab extends ConsumerWidget {
     WhiteBalanceMode.incandescent: '白炽',
   };
 
+  /// 预设 → 色温(K)。与 iOS 原生映射保持一致，用于 iOS/Android 预设点击
+  /// 时把滑块联动到对应档位（两者底层同为锁定色温）。OHOS 不使用。
+  static const _wbPresetK = <WhiteBalanceMode, int>{
+    WhiteBalanceMode.daylight: 5500,
+    WhiteBalanceMode.cloudy: 6500,
+    WhiteBalanceMode.fluorescent: 4200,
+    WhiteBalanceMode.incandescent: 3000,
+  };
+
   /// 应用白平衡设置：写入会话 provider + 实时下发取景器。
   /// 仅实时会话调节，**不写入 CameraParams**。
   static void _applyWhiteBalance(WidgetRef ref, WhiteBalanceSettings s) {
@@ -389,12 +398,17 @@ class _CameraTab extends ConsumerWidget {
                   // 切回 Auto：temperatureK 置 null，插件端 auto 复位
                   _applyWhiteBalance(ref, const WhiteBalanceSettings());
                 } else {
-                  // 非 Auto 预设：仅下发 mode，temperatureK 置 null，
-                  // 让三端原生预设分支生效（而非手动色温分支）。
-                  // 仅拖动色温滑块时才携带 temperatureK（手动分支）。
+                  // 非 Auto 预设。iOS/Android：预设与色温滑块底层同为"锁定色温"，
+                  // 预设点击时把 temperatureK 联动到对应档位，使滑块跟随；
+                  // OHOS：预设走原生 mode 分支，temperatureK 保持 null。
                   _applyWhiteBalance(
                     ref,
-                    WhiteBalanceSettings(mode: mode),
+                    showWbSlider
+                        ? WhiteBalanceSettings(
+                            mode: mode,
+                            temperatureK: _wbPresetK[mode],
+                          )
+                        : WhiteBalanceSettings(mode: mode),
                   );
                 }
               },
