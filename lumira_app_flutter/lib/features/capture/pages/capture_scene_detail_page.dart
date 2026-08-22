@@ -140,17 +140,9 @@ class _CaptureSceneDetailPageState
     );
   }
 
-  /// 照片显示源：filePath > dataUrl > originalPath，取首个非空
-  String? _photoSource(GalleryItemRecord p) {
-    for (final c in [p.filePath, p.dataUrl, p.originalPath]) {
-      if (c != null && c.isNotEmpty) return c;
-    }
-    return null;
-  }
-
   void _openViewer(int index) {
     final urls = _scenePhotos
-        .map(_photoSource)
+        .map(galleryItemSource)
         .where((u) => u != null && u.isNotEmpty)
         .cast<String>()
         .toList();
@@ -254,6 +246,14 @@ class _CaptureSceneDetailPageState
           scene == null ? null : _BottomButtons(onCapture: _goCapture, onCreateKit: _goCreateKit),
     );
   }
+}
+
+/// 照片显示源：filePath > dataUrl > originalPath，取首个非空
+String? galleryItemSource(GalleryItemRecord p) {
+  for (final c in [p.filePath, p.dataUrl, p.originalPath]) {
+    if (c != null && c.isNotEmpty) return c;
+  }
+  return null;
 }
 
 /// 由真实照片数构造场景成就（等级阈值：0 → 未开始；1-2 → 初遇 Lv1；3-9 → 熟悉 Lv2；10+ → 精通 Lv3）
@@ -746,12 +746,7 @@ class _ScenePhotosSection extends ConsumerWidget {
           itemCount: photos.length,
           separatorBuilder: (_, __) => const SizedBox(width: 8),
           itemBuilder: (context, i) {
-            final src =
-                [photos[i].filePath, photos[i].dataUrl, photos[i].originalPath]
-                    .where((c) => c != null && c.isNotEmpty)
-                    .cast<String>()
-                    .toList();
-            final url = src.isEmpty ? '' : src.first;
+            final url = galleryItemSource(photos[i]) ?? '';
             return GestureDetector(
               onTap: () => onOpenViewer(i),
               behavior: HitTestBehavior.opaque,
