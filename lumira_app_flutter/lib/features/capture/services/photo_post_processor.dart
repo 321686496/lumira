@@ -322,11 +322,13 @@ class PhotoPostProcessor {
       }
 
       // 5.5. 色域校正（iOS 宽色域）：原始 JPEG 为 Display P3，dart:ui 解码后的
-      // rawRgba 仍是 P3 数值，直接按 sRGB 编码保存会使肤色/暖色偏黄（取景器走原生
-      // P3 渲染因此正常）。检测到 P3 标签后先做 P3→sRGB 线性换算，保证成图一致。
-      if (_isDisplayP3Jpeg(bytes)) {
+      // rawRgba 是否是 P3 数值取决于运行时的颜色管理。这里加只读诊断，确认
+      // 实际行为后再决定是否/如何换算，避免方向错导致照片偏紫。
+      final p3 = _isDisplayP3Jpeg(bytes);
+      debugPrint('[p3dbg] input=${bytes.length}B p3tag=$p3 w=${resultImage.width} h=${resultImage.height} t=${sw.elapsedMilliseconds}ms');
+      if (p3) {
         resultImage = await _applyP3ToSrgbUi(resultImage);
-        debugPrint('[post-process] P3→sRGB 色域校正: ${sw.elapsedMilliseconds}ms');
+        debugPrint('[p3dbg] P3→sRGB applied @ ${sw.elapsedMilliseconds}ms');
       }
 
       // 6. 补光效果不应用到照片
@@ -456,7 +458,26 @@ class PhotoPostProcessor {
       numChannels: 4,
       order: img.ChannelOrder.rgba,
     );
-    _applyP3ToSrgb(imgImage);
+    // 诊断：采样 3 个代表性像素（竖直平分线 30%/50%/70%）对比换算前后，
+    // 用真实数值确认 rawRgba 到底是不是 P3，从而判断换算方向是否正确。
+    try {
+      final probes = [
+        imgImage.getPixel(src.width ~/ 2, (src.height * 0.30).round()),
+        imgImage.getPixel(src.width ~/ 2, src.height ~/ 2),
+        imgImage.getPixel(src.width ~/ 2, (src.height * 0.70).round()),
+      ];
+      final before = probes
+          .map((p) => '(${p.r.toInt()},${p.g.toInt()},${p.b.toInt()})')
+          .join(' | ');
+      _applyP3ToSrgb(imgImage);
+      final after = probes
+          .map((p) => '(${p.r.toInt()},${p.g.toInt()},${p.b.toInt()})')
+          .join(' | ');
+      debugPrint('[p3dbg] pixels before=$before');
+      debugPrint('[p3dbg] pixels after =$after');
+    } catch (_) {
+      _applyP3ToSrgb(imgImage);
+    }
     final outBytes = imgImage.getBytes(order: img.ChannelOrder.rgba);
     final buffer = await ui.ImmutableBuffer.fromUint8List(outBytes);
     final descriptor = ui.ImageDescriptor.raw(
