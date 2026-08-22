@@ -1020,8 +1020,14 @@ export class CameraState implements StreamHandler {
         Logger.error(TAG, `setWhiteBalanceFn: session not ready, skipped`);
         return
       }
-      // 手动色温：OHOS WhiteBalance 支持连续开尔文（API 20+）
+      // 手动色温：OHOS WhiteBalance 支持连续开尔文（API 20+）。
+      // 官方文档：setWhiteBalance 只有在白平衡模式为 MANUAL 时才生效；
+      // 若同时设置「模式」和「值」，只生效一种、模式优先。故必须先切到 MANUAL。
       if (k !== undefined && k !== null) {
+        if (this.session.isWhiteBalanceModeSupported(camera.WhiteBalanceMode.MANUAL)) {
+          this.session?.setWhiteBalanceMode(camera.WhiteBalanceMode.MANUAL)
+          Logger.debug(TAG, `setWhiteBalanceFn switch to MANUAL mode first`);
+        }
         let range: Array<number> = this.session.getWhiteBalanceRange()
         let value: number = k
         if (range && range.length >= 2) {
