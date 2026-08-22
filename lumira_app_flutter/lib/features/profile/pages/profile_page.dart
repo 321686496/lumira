@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_view/photo_view.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/router/route_names.dart';
@@ -208,7 +209,7 @@ class _ProfileHeader extends ConsumerWidget {
               children: [
                 // 头像（点击看大图）+ 编辑角标
                 GestureDetector(
-                  onTap: () => _showAvatarFullScreen(context, avatarUrl),
+                  onTap: () => _showAvatarFullScreen(context, avatarUrl, tokens),
                   behavior: HitTestBehavior.opaque,
                   child: Stack(
                     clipBehavior: Clip.none,
@@ -219,6 +220,10 @@ class _ProfileHeader extends ConsumerWidget {
                           width: 64,
                           height: 64,
                           fit: BoxFit.cover,
+                          backgroundColor: tokens.surfaceAlt,
+                          // 头像未加载出来/加载失败时显示占位（人形剪影）
+                          placeholder: _AvatarPlaceholder(size: 64, tokens: tokens),
+                          errorWidget: _AvatarPlaceholder(size: 64, tokens: tokens),
                         ),
                       ),
                       Positioned(
@@ -337,7 +342,7 @@ class _ProfileHeader extends ConsumerWidget {
   }
 
   /// 头像大图预览：全屏对话框 + 支持手势缩放平移
-  void _showAvatarFullScreen(BuildContext context, String url) {
+  void _showAvatarFullScreen(BuildContext context, String url, ThemeTokens tokens) {
     showDialog<void>(
       context: context,
       builder: (_) => Dialog(
@@ -345,8 +350,44 @@ class _ProfileHeader extends ConsumerWidget {
         insetPadding: const EdgeInsets.all(24),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
-          child: InteractiveViewer(
-            child: CachedNetworkImage(url: url, fit: BoxFit.contain),
+          child: PhotoView(
+            imageProvider: NetworkImage(url),
+            tightMode: true,
+            minScale: PhotoViewComputedScale.contained,
+            maxScale: 4.0,
+            backgroundDecoration:
+                const BoxDecoration(color: Colors.transparent),
+            loadingBuilder: (_, __) =>
+                _AvatarPlaceholder(size: 240, tokens: tokens),
+            errorBuilder: (_, __, ___) =>
+                _AvatarPlaceholder(size: 240, tokens: tokens),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 头像占位组件：头像 URL 为空 / 加载中 / 加载失败时显示的人形剪影。
+/// 底色取当前主题 surfaceAlt，图标为主品牌色，随设置里的 UI 风格 & 主题联动。
+class _AvatarPlaceholder extends StatelessWidget {
+  const _AvatarPlaceholder({required this.size, required this.tokens});
+
+  final double size;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ColoredBox(
+        color: tokens.surfaceAlt,
+        child: Center(
+          child: Icon(
+            Icons.person_outline,
+            size: size * 0.5,
+            color: tokens.textTertiary,
           ),
         ),
       ),

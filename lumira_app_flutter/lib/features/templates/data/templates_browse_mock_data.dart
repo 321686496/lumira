@@ -224,6 +224,7 @@ class TemplateDetail {
     this.subStyle,
     this.method,
     this.shortDesc = '',
+    this.description = '',
     this.ambience,
     this.updatedAt = 0,
   });
@@ -234,6 +235,8 @@ class TemplateDetail {
 
   /// 短简介（卡片/详情展示用，来自后端 shortDesc）。
   final String shortDesc;
+  /// 长描述（详情页展示用，来自后端 description）。
+  final String description;
   /// 季节/天气/时段氛围元数据（详情展示用，来自后端 ambience）。
   final RemoteTemplateAmbienceDto? ambience;
   /// 后端更新时间戳（毫秒，详情展示用）。
@@ -293,6 +296,7 @@ class TemplateDetail {
       subStyle: subStyle ?? this.subStyle,
       method: method ?? this.method,
       shortDesc: shortDesc,
+      description: description,
       ambience: ambience,
       updatedAt: updatedAt,
     );
@@ -345,6 +349,7 @@ class PostProcessData {
     this.brilliance,
     this.clarity,
     this.systemFilter,
+    this.fillLight,
     required this.smoothStrength,
     required this.sharpen,
     required this.vignette,
@@ -378,10 +383,26 @@ class PostProcessData {
 
   /// 系统滤镜预设（与 domain PostProcess.systemFilter 对齐）：null 表示未使用
   final String? systemFilter;
+
+  /// 补光灯（fillLight）配置：仅当模板启用补光灯时非空，否则详情页不显示补光灯栏。
+  final FillLightData? fillLight;
   final int smoothStrength; // 0..100
   final int sharpen; // 0..100
   final int vignette; // 0..100
   final int grain; // 0..100
+}
+
+/// 补光灯配置（与编辑器 fillLight 对齐）：color 为 ARGB int，intensity 为强度（0.1~1.5）。
+class FillLightData {
+  const FillLightData({
+    required this.enabled,
+    required this.color,
+    required this.intensity,
+  });
+
+  final bool enabled;
+  final int color;
+  final double intensity;
 }
 
 class SceneGuideData {
@@ -1585,7 +1606,10 @@ class TemplatesBrowseMockData {
   ///
   /// v14: 改为 public，供 [templateDetailProvider] 在加载远程模板完整内容后
   /// 转换为详情页所需格式。
-  static TemplateDetail fromPhotoTemplate(PhotoTemplate tpl) {
+  static TemplateDetail fromPhotoTemplate(
+    PhotoTemplate tpl, {
+    FillLightData? fillLight,
+  }) {
     final cls = tpl.meta.classification;
     return TemplateDetail(
       id: tpl.meta.id,
@@ -1599,6 +1623,7 @@ class TemplatesBrowseMockData {
       price: tpl.meta.price,
       referenceSource: tpl.meta.referenceSource,
       shortDesc: tpl.meta.shortDesc,
+      description: tpl.meta.description,
       ambience: tpl.meta.ambience,
       updatedAt: tpl.meta.updatedAt,
       majorStyle: cls.style.isEmpty ? null : cls.style,
@@ -1635,6 +1660,7 @@ class TemplatesBrowseMockData {
         brilliance: tpl.postProcess.color.brilliance?.round(),
         clarity: tpl.postProcess.color.clarity?.round(),
         systemFilter: tpl.postProcess.systemFilter,
+        fillLight: fillLight,
         smoothStrength: tpl.postProcess.smoothStrength,
         sharpen: tpl.postProcess.sharpen,
         vignette: tpl.postProcess.vignette,

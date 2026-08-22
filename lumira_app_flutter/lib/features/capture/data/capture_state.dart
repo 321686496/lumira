@@ -248,6 +248,37 @@ class CaptureState {
     return sorted;
   });
 
+  /// 工具栏展示的模板列表：把「当前使用的模板」提到第一位。
+  /// 基于 [sortedTemplatesProvider]（使用频率排序）同步派生：
+  /// - currentTemplateId 为空 → 直接返回排序列表（自由拍摄）
+  /// - 当前模板在列表中 → 移到第一位
+  /// - 当前模板不在列表中（如 URL 参数进入且 DAO 未加载）→ 从 [originalTemplateProvider] 解析并前置
+  /// 纯同步，切换模板时不会触发异步重排，避免列表闪动。
+  static final toolbarTemplatesProvider =
+      Provider<List<PhotoTemplate>>((ref) {
+    final currentId = ref.watch(currentTemplateIdProvider);
+    final sorted = ref.watch(sortedTemplatesProvider).maybeWhen(
+          data: (list) => list,
+          loading: () => TemplateRegistry.allTemplates,
+          error: (_, __) => TemplateRegistry.allTemplates,
+          orElse: () => TemplateRegistry.allTemplates,
+        );
+    if (currentId == null) return sorted;
+
+    final result = List<PhotoTemplate>.from(sorted);
+    final index = result.indexWhere((t) => t.meta.id == currentId);
+    if (index >= 0) {
+      final tpl = result.removeAt(index);
+      result.insert(0, tpl);
+    } else {
+      final original = ref.watch(originalTemplateProvider);
+      if (original != null && original.meta.id == currentId) {
+        result.insert(0, original);
+      }
+    }
+    return result;
+  });
+
   /// 原始模板（只读，派生自 currentTemplateIdProvider）
   /// 先查 TemplateRegistry（系统模板，同步快路径）
   /// 未找到 → 查 templateCacheProvider（含自定义模板的运行时缓存）

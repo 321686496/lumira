@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../core/utils/safe_share.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -14,6 +13,7 @@ import '../data/checkin_categories.dart';
 import '../data/checkin_models.dart';
 import '../data/checkin_providers.dart';
 import '../widgets/checkin_common.dart';
+import '../widgets/checkin_poster_generator.dart';
 
 /// 探店足迹列表页
 class CheckinListPage extends ConsumerStatefulWidget {
@@ -30,6 +30,9 @@ class _CheckinListPageState extends ConsumerState<CheckinListPage> {
   /// 当前选中的分类（null 表示全部）
   String? _selectedCategory;
 
+  /// 海报捕获用的全局 key（列表页单次只展示一个海报 Sheet）
+  final GlobalKey _posterKey = GlobalKey();
+
   void _goAdd() {
     GoRouter.of(context).push(RouteNames.checkinEdit);
   }
@@ -39,6 +42,17 @@ class _CheckinListPageState extends ConsumerState<CheckinListPage> {
       RouteNames.checkinDetail,
       {RouteNames.paramCheckinId: id},
     ));
+  }
+
+  /// 弹出探店足迹海报（生成 / 导出 / 分享）
+  Future<void> _showSharePoster(BuildContext context, CheckinListItem item) async {
+    final tokens = ref.read(appThemeProvider).tokens;
+    await showCheckinPoster(
+      context: context,
+      tokens: tokens,
+      item: item,
+      posterKey: _posterKey,
+    );
   }
 
   @override
@@ -134,6 +148,7 @@ class _CheckinListPageState extends ConsumerState<CheckinListPage> {
                             item: item,
                             tokens: tokens,
                             onTap: () => _goDetail(item.record.id),
+                            onShare: () => _showSharePoster(context, item),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -344,11 +359,13 @@ class _CheckinCard extends StatelessWidget {
     required this.item,
     required this.tokens,
     required this.onTap,
+    required this.onShare,
   });
 
   final CheckinListItem item;
   final ThemeTokens tokens;
   final VoidCallback onTap;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -391,17 +408,9 @@ class _CheckinCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // 分享按钮
+                      // 分享按钮（生成海报）
                       GestureDetector(
-                        onTap: () {
-                          final stars =
-                              '★' * record.rating + '☆' * (5 - record.rating);
-                          final text = '探店足迹：${record.name}\n'
-                              '评分：$stars\n'
-                              '地点：${record.place}'
-                              '${record.note.isNotEmpty ? '\n备注：${record.note}' : ''}';
-                          SafeShare.share(text, subject: '如画 LUMIRA · 探店足迹');
-                        },
+                        onTap: onShare,
                         behavior: HitTestBehavior.opaque,
                         child: Padding(
                           padding: const EdgeInsets.only(left: 6),

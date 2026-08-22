@@ -15,7 +15,6 @@ import '../../../shared/searchengine/search_filters.dart';
 import '../../../shared/searchengine/search_scope.dart';
 import '../../../shared/searchengine/search_store.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton;
-import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../academy/data/academy_content.dart';
 import '../../academy/data/academy_models.dart';
 import '../../academy/search/academy_search_service.dart';
@@ -272,10 +271,10 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     return Scaffold(
       backgroundColor: tokens.canvas,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
-            _buildNav(tokens),
-            _buildKeywordField(tokens),
+            _buildSearchBar(tokens),
             _buildScopeBar(tokens),
             const Divider(height: 1, thickness: 0.5),
             Expanded(
@@ -288,77 +287,121 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     );
   }
 
-  Widget _buildNav(ThemeTokens tokens) {
-    return LumiraNav(
-      title: '搜索',
-      transparent: true,
-      leading: LumiraIconButton(
-        icon: Icons.arrow_back_ios_new,
-        onPressed: () => Navigator.of(context).pop(),
-        size: 20,
-      ),
-    );
-  }
-
-  Widget _buildKeywordField(ThemeTokens tokens) {
+  /// 顶部搜索栏：返回按钮 + 搜索框 +（有关键词时）筛选入口。
+  /// 将搜索框直接嵌入导航栏，消除原先「导航标题 + 独立搜索框」两行的冗余排版。
+  Widget _buildSearchBar(ThemeTokens tokens) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-      child: TextField(
-        controller: _controller,
-        onChanged: _onKeywordChanged,
-        textInputAction: TextInputAction.search,
-        onSubmitted: (v) => _submitSearch(v),
-        decoration: InputDecoration(
-          hintText: '搜索模板 / 场景 / 美学院',
-          prefixIcon: Icon(Icons.search, size: 18, color: tokens.textSecondary),
-          suffixIcon: _keyword.isEmpty
-              ? null
-              : IconButton(
-                  icon: Icon(Icons.close, size: 16, color: tokens.textSecondary),
-                  onPressed: () {
-                    _controller.clear();
-                    _onKeywordChanged('');
-                  },
-                ),
-          isDense: true,
-          filled: true,
-          fillColor: tokens.surfaceAlt,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
+      padding: const EdgeInsets.fromLTRB(12, 8, 16, 4),
+      child: Row(
+        children: [
+          LumiraIconButton(
+            icon: Icons.arrow_back_ios_new,
+            onPressed: () => Navigator.of(context).pop(),
+            size: 20,
           ),
-        ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              onChanged: _onKeywordChanged,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (v) => _submitSearch(v),
+              decoration: InputDecoration(
+                hintText: '搜索模板 / 场景 / 美学院',
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 18,
+                  color: tokens.textSecondary,
+                ),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 34,
+                  maxHeight: 34,
+                ),
+                suffixIcon: _keyword.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: Icon(
+                          Icons.close,
+                          size: 16,
+                          color: tokens.textSecondary,
+                        ),
+                        onPressed: () {
+                          _controller.clear();
+                          _onKeywordChanged('');
+                        },
+                      ),
+                isDense: true,
+                filled: true,
+                fillColor: tokens.surfaceAlt,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(22),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          if (_keyword.trim().isNotEmpty) ...[
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: _openFilter,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.tune, size: 16, color: tokens.textPrimary),
+                    const SizedBox(width: 2),
+                    Text('筛选',
+                        style: TextStyle(
+                            fontSize: 13, color: tokens.textPrimary)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
 
   Widget _buildScopeBar(ThemeTokens tokens) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(20, 2, 20, 10),
       child: Row(
         children: [
           for (final s in SearchScope.values)
             Padding(
-              padding: const EdgeInsets.only(right: 20),
+              padding: const EdgeInsets.only(right: 10),
               child: GestureDetector(
                 onTap: () => _switchScope(s),
-                child: Text(
-                  s.label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight:
-                        _scope == s ? FontWeight.w700 : FontWeight.w500,
-                    color: _scope == s ? tokens.brand : tokens.textSecondary,
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: _scope == s ? tokens.brand : tokens.surfaceAlt,
+                    borderRadius: BorderRadius.circular(999),
+                    border: _scope == s
+                        ? null
+                        : Border.all(color: tokens.divider, width: 1),
+                  ),
+                  child: Text(
+                    s.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight:
+                          _scope == s ? FontWeight.w600 : FontWeight.w500,
+                      color: _scope == s
+                          ? tokens.textInverse
+                          : tokens.textSecondary,
+                    ),
                   ),
                 ),
               ),
-            ),
-          const Spacer(),
-          if (_keyword.trim().isNotEmpty)
-            GestureDetector(
-              onTap: _openFilter,
-              child: Text('筛选 ▾',
-                  style: TextStyle(fontSize: 13, color: tokens.textPrimary)),
             ),
         ],
       ),

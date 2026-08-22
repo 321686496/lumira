@@ -38,13 +38,8 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
   @override
   Widget build(BuildContext context) {
     final currentId = ref.watch(CaptureState.currentTemplateIdProvider);
-    final templatesAsync = ref.watch(CaptureState.sortedTemplatesProvider);
-    final templates = templatesAsync.maybeWhen(
-      data: (list) => list,
-      loading: () => const <PhotoTemplate>[],
-      error: (_, __) => const <PhotoTemplate>[],
-      orElse: () => const <PhotoTemplate>[],
-    );
+    // 工具栏模板列表：当前使用的模板被提到第一位（含选中状态）
+    final templates = ref.watch(CaptureState.toolbarTemplatesProvider);
 
     final panelHeight = MediaQuery.of(context).size.height * 0.6;
     final keyword = _query.trim().toLowerCase();

@@ -6,11 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_view/photo_view.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/safe_share.dart';
-
-import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
@@ -983,7 +982,7 @@ class _EmptyCanvas extends StatelessWidget {
 
 /// 只读照片预览区：直接显示已烘焙的 JPEG（filePath 已含 postProcess 色彩矩阵 +
 /// transform 变换）。不再叠加 ColorFiltered，避免"2x 参数"效果。
-/// 支持 InteractiveViewer 双指缩放与拖拽查看细节。
+/// 支持 photo_view 双指缩放与拖拽查看细节。
 ///
 /// 当 isComparing 为 true 且 photo.originalPath 存在时，切换显示原图
 /// （未应用后期参数的原始照片），便于与编辑后效果对比。
@@ -1034,17 +1033,29 @@ class _ReadOnlyCanvas extends StatelessWidget {
                     size: 32, color: tokens.textTertiary),
               ),
             )
-          : InteractiveViewer(
-              minScale: 1.0,
+          : PhotoView(
+              imageProvider: _providerFor(url),
+              minScale: PhotoViewComputedScale.contained,
               maxScale: 4.0,
-              panEnabled: true,
-              scaleEnabled: true,
-              boundaryMargin: EdgeInsets.zero,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: KeyedSubtree(
-                  key: ValueKey(url),
-                  child: _buildImage(url),
+              backgroundDecoration:
+                  const BoxDecoration(color: Colors.transparent),
+              filterQuality: FilterQuality.high,
+              // 不设 onTapUp：photo_view 在双击的第一击也会回调 onTapUp，
+              // 会误触发外层覆盖的节点打开全屏。单击打开全屏仍由外层 GestureDetector 接管。
+              errorBuilder: (_, __, ___) => Container(
+                color: tokens.surfaceAlt,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.broken_image_outlined,
+                          size: 32, color: tokens.textTertiary),
+                      const SizedBox(height: 8),
+                      Text('图片加载失败',
+                          style: TextStyle(
+                              fontSize: 12, color: tokens.textTertiary)),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1115,41 +1126,10 @@ class _ReadOnlyCanvas extends StatelessWidget {
     );
   }
 
-  Widget _buildImage(String url) {
-    // 强制图片填满整个取景框，让 BoxFit.contain 在框内水平居中；
-    // 否则 InteractiveViewer 会把小于视口的图片按左上角对齐，导致右侧大片空白。
-    Widget imageWidget = url.startsWith('http')
-        ? CachedNetworkImage(
-            url: url,
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.contain,
-          )
-        : Image.file(
-            File(url),
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Container(
-              color: tokens.surfaceAlt,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.broken_image_outlined,
-                        size: 32, color: tokens.textTertiary),
-                    const SizedBox(height: 8),
-                    Text('图片加载失败',
-                        style: TextStyle(fontSize: 12, color: tokens.textTertiary)),
-                  ],
-                ),
-              ),
-            ),
-          );
-
-    // JPEG 已烘焙 transform 变换（processFile 调用 _applyTransform），
-    // 此处不再叠加 RotatedBox/Transform，避免双重变换。
-    return imageWidget;
+  /// 生成 PhotoView 所需的 ImageProvider（相册本地文件用 File，云端数据用 Network）。
+  ImageProvider<Object> _providerFor(String url) {
+    if (url.startsWith('http')) return NetworkImage(url);
+    return FileImage(File(url));
   }
 }
 
@@ -1825,7 +1805,7 @@ class _PressableScaleState extends State<_PressableScale> {
   }
 }
 
-/// 全屏大图查看器：黑底 + InteractiveViewer 双指缩放/拖拽，点击图片或右上角关闭。
+/// 全屏大图查看器：黑底 + photo_view 双指缩放/拖拽，点击图片或右上角关闭。
 /// 用于从相册详情页点击照片预览后查看大图。
 class _FullscreenViewer extends StatelessWidget {
   const _FullscreenViewer({required this.url});
@@ -1834,34 +1814,28 @@ class _FullscreenViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ImageProvider<Object> provider;
+    if (url.startsWith('http')) {
+      provider = NetworkImage(url);
+    } else {
+      provider = FileImage(File(url));
+    }
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 图片主体：黑底居中，支持缩放/拖拽
+          // 图片主体：黑底居中，支持缩放/拖拽（photo_view 统一仲裁手势）
           Positioned.fill(
-            child: GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              behavior: HitTestBehavior.opaque,
-              child: InteractiveViewer(
-                minScale: 1.0,
-                maxScale: 5.0,
-                panEnabled: true,
-                scaleEnabled: true,
-                boundaryMargin: const EdgeInsets.all(20),
-                child: url.startsWith('http')
-                    ? CachedNetworkImage(
-                        url: url,
-                        fit: BoxFit.contain,
-                        width: double.infinity,
-                        height: double.infinity,
-                      )
-                    : Image.file(
-                        File(url),
-                        fit: BoxFit.contain,
-                        width: double.infinity,
-                        height: double.infinity,
-                      ),
+            child: PhotoView(
+              imageProvider: provider,
+              minScale: PhotoViewComputedScale.contained,
+              maxScale: 5.0,
+              backgroundDecoration: const BoxDecoration(color: Colors.black),
+              onTapUp: (_, __, ___) => Navigator.of(context).pop(),
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, __, ___) => const Center(
+                child: Icon(Icons.broken_image_outlined,
+                    size: 40, color: Colors.white54),
               ),
             ),
           ),

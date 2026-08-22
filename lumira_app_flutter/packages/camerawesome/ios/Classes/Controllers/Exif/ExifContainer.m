@@ -87,6 +87,10 @@ NSString const * kCGImagePropertyProjection = @"ProjectionType";
   [self setValue:projection forExifKey:kCGImagePropertyProjection];
 }
 
+- (void)addImageOrientation:(int)orientation {
+  self.imageMetadata[(NSString *)kCGImagePropertyOrientation] = @(orientation);
+}
+
 - (void)setValue:(NSString *)key forExifKey:(NSString *)value {
   [self.exifDictionary setObject:value forKey:key];
 }

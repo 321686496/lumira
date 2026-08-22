@@ -148,17 +148,34 @@ final templateDetailProvider =
       final refreshed = await dao.getById(id);
       if (refreshed != null) {
         return TemplatesBrowseMockData.fromPhotoTemplate(
-            TemplateMapper.toPhotoTemplate(refreshed));
+          TemplateMapper.toPhotoTemplate(refreshed),
+          fillLight: _fillLightFromRecord(refreshed),
+        );
       }
     } catch (_) {
       // 网络失败：本地已有完整内容则降级展示；否则抛错让 UI 显示网络错误 + 重试
       if (record.composition.isEmpty) rethrow;
     }
     return TemplatesBrowseMockData.fromPhotoTemplate(
-        TemplateMapper.toPhotoTemplate(record));
+      TemplateMapper.toPhotoTemplate(record),
+      fillLight: _fillLightFromRecord(record),
+    );
   }
 
   // 4. 本地（builtin/custom）已有完整内容 → 直接转换
   return TemplatesBrowseMockData.fromPhotoTemplate(
-      TemplateMapper.toPhotoTemplate(record));
+    TemplateMapper.toPhotoTemplate(record),
+    fillLight: _fillLightFromRecord(record),
+  );
 });
+
+/// 从模板记录 postProcess JSON 解析补光灯配置；未启用或不存在时返回 null。
+FillLightData? _fillLightFromRecord(TemplateRecord r) {
+  final fl = r.postProcess['fillLight'] as Map<String, dynamic>?;
+  if (fl == null) return null;
+  return FillLightData(
+    enabled: (fl['enabled'] as bool?) ?? false,
+    color: (fl['color'] as num?)?.toInt() ?? 0xFFFFE5B4,
+    intensity: (fl['intensity'] as num?)?.toDouble() ?? 0.8,
+  );
+}

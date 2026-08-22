@@ -1,0 +1,56 @@
+﻿diff --git a/lumira_app_flutter/lib/features/capture/services/camera_service.dart b/lumira_app_flutter/lib/features/capture/services/camera_service.dart
+index 996081b..9985b17 100644
+--- a/lumira_app_flutter/lib/features/capture/services/camera_service.dart
++++ b/lumira_app_flutter/lib/features/capture/services/camera_service.dart
+@@ -1,6 +1,8 @@
+ import 'dart:async';
+ import 'package:flutter/material.dart';
+ 
++import 'white_balance.dart';
++
+ /// 平台无关的相机服务接口。
+ /// 阶段一：三端实现各自封装 camerawesome（ohos fork / 原版 1.4.0）
+ /// 阶段二：替换为各端原生相机层，本接口零改动
+@@ -27,6 +29,9 @@ abstract class CameraService {
+   /// 用于将 EV 补偿映射到取景器亮度预览
+   void setBrightness(double brightness);
+ 
++  /// 设置传感器级白平衡（预设 + 手动色温 K）。取景实时生效，直出即带。
++  void setWhiteBalance(WhiteBalanceSettings settings);
++
+   /// 点击对焦
+   void focusOnPoint(Offset flutterPosition, Size flutterPreviewSize);
+ 
+diff --git a/lumira_app_flutter/lib/features/capture/services/camerawesome_camera_service.dart b/lumira_app_flutter/lib/features/capture/services/camerawesome_camera_service.dart
+index baae316..d529dac 100644
+--- a/lumira_app_flutter/lib/features/capture/services/camerawesome_camera_service.dart
++++ b/lumira_app_flutter/lib/features/capture/services/camerawesome_camera_service.dart
+@@ -9,6 +9,7 @@ import 'package:sqflite/sqflite.dart' show getDatabasesPath;
+ 
+ import 'camera_service.dart';
+ import 'camerawesome_delegate.dart';
++import 'white_balance.dart';
+ 
+ /// camerawesome 系列三端共用实现。
+ ///
+@@ -276,6 +277,20 @@ class CamerawesomeCameraService implements CameraService {
+     }
+   }
+ 
++  @override
++  void setWhiteBalance(WhiteBalanceSettings settings) {
++    final mode = settings.mode.name;
++    try {
++      if (_delegate.platformTag == 'ohos') {
++        ohos.CamerawesomePlugin.setWhiteBalance(mode, settings.temperatureK);
++      } else {
++        ca.CamerawesomePlugin.setWhiteBalance(mode, settings.temperatureK);
++      }
++    } catch (e) {
++      debugPrint('[camera] setWhiteBalance failed: $e');
++    }
++  }
++
+   @override
+   void focusOnPoint(Offset flutterPosition, Size flutterPreviewSize) {
+     try {

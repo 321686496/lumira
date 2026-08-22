@@ -17,7 +17,7 @@ import '../data/builtin_category_icons.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../services/template_mapper.dart';
-import '../widgets/ambience_label.dart';
+import '../widgets/ambience_badges.dart';
 import '../widgets/template_cover_image.dart';
 import '../widgets/template_import_sheet.dart';
 
@@ -972,31 +972,56 @@ class _TemplateGrid extends StatelessWidget {
   final List<AllTemplateItem> templates;
   final Map<String, int> usageCounts;
 
+  /// 估算单张模板卡片总高度，用于瀑布流双列按高度配平（仅分配用，非精确值）。
+  ///
+  /// 结构：图(宽×4/3) + 文字区(内边距 24 + 名称 20 + [短描述 3+30] + 间距 6 + 徽标行 22)。
+  double _estimateCardHeight(AllTemplateItem t, double cardWidth) {
+    final imageH = cardWidth * 4 / 3;
+    final hasDesc = t.shortDesc.isNotEmpty || t.description.isNotEmpty;
+    final textH = 20 + (hasDesc ? 33 : 0) + 6 + 22 + 24;
+    return imageH + textH;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = (screenWidth - 40 - 12) / 2; // 页面左右 padding 20 + 列间距 12
+
+    // 瀑布流双列：按估算高度累加，把下一张卡放到当前更矮的一列，视觉上近似等高收尾。
+    final left = <Widget>[];
+    final right = <Widget>[];
+    var leftH = 0.0;
+    var rightH = 0.0;
+    for (final t in templates) {
+      final card = Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: _TplCard(
+          tokens: tokens,
+          template: t,
+          usageCount: usageCounts[t.id] ?? 0,
+        ),
+      );
+      final h = _estimateCardHeight(t, cardWidth);
+      if (leftH <= rightH) {
+        left.add(card);
+        leftH += h;
+      } else {
+        right.add(card);
+        rightH += h;
+      }
+    }
+
     return FadeUp(
       delay: const Duration(milliseconds: 160),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            // Forced fix: 0.72 → 0.62 修复 emulator 上 32px 溢出，但在 360dp 小屏上仍会溢出 ~25px
-            // 计算小屏（360dp）：card_width=154 → image_h=205 + text_section=53 = 258 > card_h=248（0.62 ratio）
-            // 改为 0.56 → card_h=275，留 17dp 文字空间，与 home_page.dart 一致
-            // v35: 卡片新增短简介+使用次数共约 2 行，0.56 文字区不足 → 收窄到 0.50 防溢出
-            childAspectRatio: 0.50,
-          ),
-          itemCount: templates.length,
-          itemBuilder: (_, index) => _TplCard(
-            tokens: tokens,
-            template: templates[index],
-            usageCount: usageCounts[templates[index].id] ?? 0,
-          ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: left)),
+            const SizedBox(width: 12),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: right)),
+          ],
         ),
       ),
     );
@@ -1019,7 +1044,6 @@ class _TplCard extends StatelessWidget {
     final shortDesc = template.shortDesc.isNotEmpty
         ? template.shortDesc
         : _truncate(template.description);
-    final ambienceLabels = AmbienceLabel.labelsFor(template.ambience);
     return GestureDetector(
       onTap: () => GoRouter.of(context).push(
         '/templates/detail?templateId=${template.id}',
@@ -1135,22 +1159,11 @@ class _TplCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                            for (final label in ambienceLabels.take(2))
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: tokens.surfaceAlt,
-                                  borderRadius: BorderRadius.circular(9999),
-                                ),
-                                child: Text(
-                                  label,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: tokens.textTertiary,
-                                  ),
-                                ),
-                              ),
+                            AmbienceBadges(
+                              ambience: template.ambience,
+                              tokens: tokens,
+                              maxItems: 2,
+                            ),
                           ],
                         ),
                       ),

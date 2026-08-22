@@ -5,6 +5,18 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../config/app_config.dart';
+
+/// 由分类图标原图 URL + 分类 key 构造缩略图请求地址。
+///
+/// 网格/卡片只需要小尺寸封面，让后端按需生成缩略图，可显著减少首次加载
+/// 的下载字节量（避免把后台上传的全尺寸原图整张拉下来）。
+/// 若 [iconUrl] 为空则原样返回，由上层走内置 Material Icon 兜底。
+String categoryThumbUrl(String iconUrl, String key, {int w = 600}) {
+  if (iconUrl.isEmpty || key.isEmpty) return iconUrl;
+  return '${AppConfig.baseUrl}/thumbs/categories/$key?w=$w';
+}
+
 /// 轻量级网络图片缓存
 ///
 /// 使用 dio 下载 + 本地文件缓存，解决 Image.network 重复下载、加载慢的问题。
@@ -202,6 +214,7 @@ class CachedNetworkImage extends StatefulWidget {
   const CachedNetworkImage({
     super.key,
     required this.url,
+    this.fallbackUrl,
     this.fit = BoxFit.cover,
     this.width,
     this.height,
@@ -214,6 +227,11 @@ class CachedNetworkImage extends StatefulWidget {
   });
 
   final String url;
+
+  /// 主 URL 加载失败时的回退地址（如缩略图失败回退原图）。
+  /// 与 [url] 相同或为空时忽略。
+  final String? fallbackUrl;
+
   final BoxFit fit;
 
   /// 展示尺寸（非必填，未传时由父布局约束决定）
@@ -274,7 +292,14 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
       return;
     }
 
-    final bytes = await ImageCacheUtil.getImageBytes(widget.url);
+    var bytes = await ImageCacheUtil.getImageBytes(widget.url);
+
+    // 主 URL 失败且存在回退地址时，尝试回退原图。
+    final fb = widget.fallbackUrl;
+    if (bytes == null && fb != null && fb != widget.url && fb.isNotEmpty) {
+      bytes = await ImageCacheUtil.getImageBytes(fb);
+    }
+
     if (!mounted) return;
     setState(() {
       _bytes = bytes;

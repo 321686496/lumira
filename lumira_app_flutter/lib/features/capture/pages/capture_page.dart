@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat;
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart' show HapticFeedback;
 
 import 'package:flutter/material.dart';
@@ -197,6 +198,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 加载模板信息卡隐藏偏好（用户上次点了隐藏则本次保持隐藏）
       await CaptureState.loadTemplateInfoCardPreference(
           ProviderScope.containerOf(context, listen: false));
+
+      // 进入时幂等重应用模板补光配置：
+      // 退出拍摄页后 route observer 会 resetAll（关闭补光、模板/朝向归零），重新进入时
+      // 若 currentTemplateIdProvider 被设为与上次相同的值、且 loadCameraPrefs 恢复的朝向
+      // 恰好等于进入前的值，上方的「模板变化 / 朝向变化」两条 change-driven 监听都不会触发，
+      // 补光会停留在 resetAll 后的关闭态 → 补光丢失。
+      // 这里在朝向已由 loadCameraPrefs 稳定后，按「当前模板 + 当前朝向」主动幂等重建一次，
+      // 保证退出重进后模板补光始终被正确应用。
+      final entryTpl = ref.read(CaptureState.originalTemplateProvider);
+      if (entryTpl != null) {
+        _applyTemplateFillLight(entryTpl);
+      }
 
       // 修复 Bug（重复进入取景器卡加载）：
       // 1. 订阅相机就绪流，驱动取景器加载看门狗（超时未就绪自动重建）
@@ -407,6 +420,25 @@ class _CapturePageState extends ConsumerState<CapturePage>
         debugPrint('[capture] restore brightness failed: $e');
       }
     }();
+  }
+
+  /// 依据当前摄像头朝向，把模板的补光灯配置应用到补光状态。
+  /// 颜色/强度始终跟随模板；是否激活补光取决于「模板启用补光 + 前置摄像头」。
+  /// 前摄未激活时仅记录颜色/强度，切到后置不激活实时光强/悬浮取景器。
+  void _applyTemplateFillLight(PhotoTemplate next) {
+    final fl = next.postProcess.fillLight;
+    final enabled = fl != null && fl.enabled;
+    final onFront = ref.read(CaptureState.cameraFacingProvider) == 'front';
+    ref.read(CaptureState.fillLightColorProvider.notifier).state =
+        Color(fl?.color ?? 0xFFFFE5B4);
+    ref.read(CaptureState.fillLightIntensityProvider.notifier).state =
+        fl?.intensity ?? 0.8;
+    ref.read(CaptureState.fillLightEnabledProvider.notifier).state =
+        enabled && onFront;
+    debugPrint(
+        '[capture] 模板套用补光灯: enabled=${enabled && onFront} '
+        'color=#${(fl?.color ?? 0xFFFFE5B4).toRadixString(16)} '
+        'intensity=${fl?.intensity ?? 0.8} facing=${onFront ? 'front' : 'back'}');
   }
 
   @override
@@ -1085,20 +1117,29 @@ class _CapturePageState extends ConsumerState<CapturePage>
     ref.listen<PhotoTemplate?>(
         CaptureState.originalTemplateProvider, (prev, next) {
       if (next == null) return;
-      final fl = next.postProcess.fillLight;
-      final enabled = fl != null && fl.enabled;
-      final onFront =
-          ref.read(CaptureState.cameraFacingProvider) == 'front';
-      ref.read(CaptureState.fillLightColorProvider.notifier).state =
-          Color(fl?.color ?? 0xFFFFE5B4);
-      ref.read(CaptureState.fillLightIntensityProvider.notifier).state =
-          fl?.intensity ?? 0.8;
-      ref.read(CaptureState.fillLightEnabledProvider.notifier).state =
-          enabled && onFront;
-      if (fl != null) {
-        debugPrint(
-            '[capture] 模板套用补光灯: enabled=${enabled && onFront} '
-            'color=#${(fl.color).toRadixString(16)} intensity=${fl.intensity}');
+      _applyTemplateFillLight(next);
+    });
+
+    // 摄像头切换时，若当前模板启用了补光灯，则随前置/后置自动开启/关闭补光。
+    // 修复 Bug：退出拍摄页时 route observer 会 resetAll（将 cameraFacing 重置为
+    // back），重新进入时上面的模板监听以 back 判定补光 disabled，之后
+    // loadCameraPrefs 再恢复为 front 时不会再次应用模板补光 → 补光丢失。
+    // 增加对 facing 的监听后，无论 loadCameraPrefs 恢复还是用户手动切前置，
+    // 只要模板启用了补光就会自动重新开启，行为与"套用模板自动开补光"一致。
+    ref.listen<String>(CaptureState.cameraFacingProvider, (prev, next) {
+      if (prev == next) return;
+      final template = ref.read(CaptureState.originalTemplateProvider);
+      if (template == null) return;
+      final fl = template.postProcess.fillLight;
+      if (fl == null || !fl.enabled) return; // 模板未启用补光，不干预
+      final onFront = next == 'front';
+      ref.read(CaptureState.fillLightEnabledProvider.notifier).state = onFront;
+      if (!onFront) {
+        // 切后置时重置悬浮取景器（与 _switchCamera 对后置的处理一致）
+        ref.read(CaptureState.fillLightViewfinderScaleProvider.notifier).state =
+            0.5;
+        ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
+            Offset.zero;
       }
     });
 
@@ -1871,7 +1912,22 @@ class _FillLightPanel extends ConsumerWidget {
                   max: 1.5,
                   divisions: 28,
                   onChanged: enabled
-                      ? (v) => ref.read(CaptureState.fillLightIntensityProvider.notifier).state = v
+                      ? (v) {
+                          ref.read(CaptureState.fillLightIntensityProvider.notifier)
+                              .state = v;
+                          // 调试（Bug：亮度到一定值后补光色反而变暗）：
+                          // 与 _FloatingViewfinder 里 bgFull 完全相同的算法，逐帧输出供真机比对。
+                          if (kDebugMode) {
+                            final c = ref.read(
+                                CaptureState.fillLightColorProvider);
+                            final b = v > 1.0
+                                ? Color.lerp(c, Colors.white,
+                                    (v - 1.0).clamp(0.0, 0.5))
+                                : c.withOpacity(v.clamp(0.0, 1.0));
+                            debugPrint(
+                                '[fillLight] intensity=$v color=#${c.value.toRadixString(16).padLeft(8, '0')} bgFull=${b?.value.toRadixString(16).padLeft(8, '0')}');
+                          }
+                        }
                       : (double _) {},
                 ),
               ),

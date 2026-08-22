@@ -1,114 +1,43 @@
-# Task 1 报告：新增 HomeWordmarkStyle 枚举与 Provider
+# Task 1 报告 — 白平衡共享模型 + camerawesome 插件 Dart 接口
 
-## 任务概述
+状态：**DONE**
 
-执行计划文件 `docs/superpowers/plans/2026-07-24-lumira-brand-presentation.md` 中的 `## Task 1: 新增 HomeWordmarkStyle 枚举与 Provider`，按 Step 1 ~ Step 5 严格 TDD 流程完成。
+## 本任务产物
+- 新建 `lumira_app_flutter/lib/features/capture/services/white_balance.dart`
+  - `enum WhiteBalanceMode { auto, daylight, cloudy, fluorescent, incandescent }`
+  - `class WhiteBalanceSettings`：`mode` / `temperatureK` / `copyWith` / `isAuto` / `operator ==` / `hashCode`（用 `Object.hash(mode, temperatureK)`），无 Dart 3 records。
+- 新建（测试）`lumira_app_flutter/test/features/capture/services/white_balance_test.dart`（TDD：先写测试 → 确认 RED → 实现 → 确认 GREEN）。
+- 修改 `lumira_app_flutter/packages/camerawesome/lib/camerawesome_plugin.dart`：新增静态方法 `setWhiteBalance(String mode, int? k)`。
+- 修改 `lumira_app_flutter/packages/camerawesome_ohos/lib/camerawesome_plugin.dart`：新增同样签名的静态方法。
 
-## 环境
+## 两个包的通道命名惯例（关键发现）
+- **`camerawesome`（iOS/Android）**：`setBrightness(double)` 实现体调用 `CameraInterface().setCorrection(brightness)`（`pigeon.dart` 为 `Future<void> setCorrection(double arg_brightness)`）。即该包现有“画面校正”通道方法名是 **`setCorrection`**，并非预想中的 `setCorrectionBrightness`。
+- **`camerawesome_ohos`（HarmonyOS）**：同样调用 `CameraInterface().setCorrection(brightness)`（`pigeon.dart` 为 `Future<void> setCorrection(double arg_brightness)`）。
+- 两包 Pigeon `CameraInterface` **均无** `setWhiteBalance`（或任何 white/balance 相关）通道方法。
 
-- 工作目录：`d:\app\projects\photo_post\lumira_app_flutter`
-- Git 仓库根：`D:/app/projects/photo_post`
-- Flutter 包名：`lumira_app_flutter`
-- 现有 provider 风格参考：`lib/core/theme/theme_controller.dart`（`StateProvider<T>((ref) => default)`）
+## setWhiteBalance 实现方式（兼容写法）
+由于两个包当前 Pigeon 接口都没有接收 `(mode, k)` 的白平衡通道方法，若直接写 `CameraInterface().setWhiteBalance(mode, k)` 会触发 analyze “方法未定义”。因此按简报步骤 6 采用兼容写法：
 
-## 各步骤执行情况
-
-### Step 1: 写失败测试 ✅
-
-新建文件 `test/core/preferences/home_wordmark_style_test.dart`，内容与计划代码块完全一致（3 个测试用例）：
-
-1. `enum has exactly 3 variants in expected order` — 验证枚举值数量与顺序
-2. `provider defaults to logoEnglish` — 验证默认值
-3. `provider can be updated to other styles` — 验证可写
-
-文件路径：`d:\app\projects\photo_post\lumira_app_flutter\test\core\preferences\home_wordmark_style_test.dart`
-
-### Step 2: 运行测试验证失败 ✅
-
-命令：`flutter test test/core/preferences/home_wordmark_style_test.dart`
-
-结果：FAIL（exit code 1）。原因符合预期——实现文件 `lib/core/preferences/home_wordmark_style.dart` 不存在，编译报错：
-
-```
-test/core/preferences/home_wordmark_style_test.dart:3:8: Error: Error when reading 'lib/core/preferences/home_wordmark_style.dart': 系统找不到指定的路径。
-... Error: Undefined name 'HomeWordmarkStyle'. (×多处)
-... Error: Undefined name 'homeWordmarkStyleProvider'. (×多处)
-Failed to load ... Compilation failed
-00:00 +0 -1: Some tests failed.
+```dart
+// 原生通道由 Task 2/3/4 实现：届时将实现为
+// `return CameraInterface().setWhiteBalance(mode, k);`（Pigeon 接口当前尚无该通道方法）。
+static Future<void> setWhiteBalance(String mode, int? k) {
+  return Future<void>.value();
+}
 ```
 
-### Step 3: 创建枚举与 Provider ✅
+`mode`/`k` 参数保留（签名三端一致），实现体为占位，确保 analyze 通过；真调用由 Task 2/3/4 落点。两包签名完全一致。
 
-新建文件 `lib/core/preferences/home_wordmark_style.dart`，内容与计划代码块完全一致：
+## 验证
+- `flutter test test/features/capture/services/white_balance_test.dart` → **3/3 通过**（默认 auto + temperatureK null + isAuto true；copyWith 后非 auto；相等性与 hashCode 一致）。
+- `flutter analyze` → **无新增错误/警告**。全仓 403 条均为既有 `info` 级 lint（`avoid_print`、`unnecessary_import`、`prefer_const` 等，与本次改动无关）；本次新增/修改文件（`white_balance.dart`、测试、两个 plugin.dart）均无 error/warning。
 
-- `enum HomeWordmarkStyle { logoEnglish, logoEnglishChinese, englishChinese }`
-- `final homeWordmarkStyleProvider = StateProvider<HomeWordmarkStyle>((_) => HomeWordmarkStyle.logoEnglish);`
-- 包含计划中的全部 dartdoc 注释
+## Commit
+- Hash：`930e387`
+- 提交信息：`feat(camera): 白平衡共享模型与插件 Dart 接口`
+- 已推送：`origin`（gitee）+ `github` 均 `master → 930e387`。
+- 未触碰游离 WIP：`global_search_page.dart`、`templates_page.dart`（保持未暂存修改）。
 
-文件路径：`d:\app\projects\photo_post\lumira_app_flutter\lib\core\preferences\home_wordmark_style.dart`
-
-### Step 4: 运行测试验证通过 ✅
-
-命令：`flutter test test/core/preferences/home_wordmark_style_test.dart`
-
-结果：PASS（exit code 0，3 tests passed）
-
-```
-00:00 +0: HomeWordmarkStyle enum has exactly 3 variants in expected order
-00:00 +1: HomeWordmarkStyle provider defaults to logoEnglish
-00:00 +2: HomeWordmarkStyle provider can be updated to other styles
-00:00 +3: All tests passed!
-```
-
-### Step 4.5（任务要求补充）: flutter analyze ✅
-
-命令：`flutter analyze lib/core/preferences/home_wordmark_style.dart test/core/preferences/home_wordmark_style_test.dart`
-
-结果：No issues found（exit code 0）
-
-```
-Analyzing 2 items...
-No issues found! (ran in 2.6s)
-```
-
-### Step 5: git 提交 ✅
-
-命令（在 `lumira_app_flutter` 目录下执行）：
-
-```bash
-git add lib/core/preferences/home_wordmark_style.dart test/core/preferences/home_wordmark_style_test.dart
-git commit -m "feat(preferences): add HomeWordmarkStyle enum and provider"
-```
-
-结果：
-
-```
-[master 48b64ae] feat(preferences): add HomeWordmarkStyle enum and provider
- 2 files changed, 52 insertions(+)
- create mode 100644 lumira_app_flutter/lib/core/preferences/home_wordmark_style.dart
- create mode 100644 lumira_app_flutter/test/core/preferences/home_wordmark_style_test.dart
-```
-
-完整 commit hash：`48b64ae99420dfa435f49f73172f6a6f2520bf5f`
-
-## 文件改动摘要
-
-| 文件 | 类型 | 行数 |
-|------|------|------|
-| `lib/core/preferences/home_wordmark_style.dart` | 新增 | 30 行（含 dartdoc） |
-| `test/core/preferences/home_wordmark_style_test.dart` | 新增 | 22 行 |
-
-总计：2 files changed, 52 insertions(+)
-
-## 验证总结
-
-- ✅ TDD 流程完整：失败测试 → 实现 → 通过测试 → analyze → commit
-- ✅ 代码与计划代码块完全一致
-- ✅ Commit message 与计划一致：`feat(preferences): add HomeWordmarkStyle enum and provider`
-- ✅ 仅暂存并提交 Task 1 的 2 个文件，未误提交工作树中其他 task 的 WIP 修改
-
-## 备注
-
-- Git 仓库根目录在 `D:/app/projects/photo_post`（非 `lumira_app_flutter` 本身），因此 commit 显示的文件路径前缀为 `lumira_app_flutter/...`，属正常。
-- 工作树中存在其他 task 的未提交修改（home_page.dart、splash_page.dart、lumira_nav.dart、profile_about_page.dart、splash_page_test.dart 等），本任务未触碰这些文件。
-- Git 提示 `LF will be replaced by CRLF` 属 Windows 平台正常行为，不影响内容。
+## 关注点
+1. **占位实现**：`setWhiteBalance` 当前返回 `Future.value()`，未真正走通道。Task 2/3/4 需回归并替换为真实 `CameraInterface().setWhiteBalance(...)` 调用。
+2. **BOM 副作用**：编辑 `camerawesome_ohos/lib/camerawesome_plugin.dart` 时，文件首行原有的 UTF-8 BOM 被去除（diff 显示第 1 行 `import 'dart:async';` 变化）。不影响 Dart 编译/运行，但属计划外字节差异。

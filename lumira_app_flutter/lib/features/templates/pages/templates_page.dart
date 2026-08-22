@@ -107,23 +107,17 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
         showBackButton: false,
         horizontalPadding: 24,
         actions: [
-          GestureDetector(
-            onTap: () => GoRouter.of(context).push(
+          LumiraNavButton(
+            icon: Icons.search,
+            tooltip: '搜索',
+            onPressed: () => GoRouter.of(context).push(
               RouteNames.withScope(RouteNames.search, SearchScope.all.name),
             ),
-            behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Icon(Icons.search, size: 20),
-            ),
           ),
-          GestureDetector(
-            onTap: _goAll,
-            behavior: HitTestBehavior.opaque,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Icon(Icons.apps_outlined, size: 20),
-            ),
+          LumiraNavButton(
+            icon: Icons.apps_outlined,
+            tooltip: '查看全部模板',
+            onPressed: _goAll,
           ),
         ],
       ),

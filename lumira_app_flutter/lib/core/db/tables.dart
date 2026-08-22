@@ -124,6 +124,9 @@ class Tables {
   // === gallery_items 扩展列（v8 迁移新增） ===
   static const String colGalleryItemIsFavorite = 'is_favorite';
 
+  // === gallery_items 扩展列（v36 迁移新增，从系统相册引入、不在内部相册展示） ===
+  static const String colGalleryItemHidden = 'hidden';
+
   // === user_progress ===
   static const String userProgress = 'user_progress';
   static const String colLevel = 'level';

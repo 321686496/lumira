@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/capture_state.dart';
-import '../data/template_registry.dart';
 import '../domain/photo_template.dart';
 import '../../../core/utils/image_cache.dart';
 
@@ -23,15 +22,9 @@ class TemplateStrip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentId = ref.watch(CaptureState.currentTemplateIdProvider);
-    final templatesAsync = ref.watch(CaptureState.sortedTemplatesProvider);
+    // 工具栏模板列表：当前使用的模板被提到第一位（含选中状态）
+    final templates = ref.watch(CaptureState.toolbarTemplatesProvider);
 
-    // 统一解析模板列表，加载/错误时降级显示系统模板
-    final templates = templatesAsync.maybeWhen(
-      data: (list) => list,
-      loading: () => TemplateRegistry.allTemplates,
-      error: (_, __) => TemplateRegistry.allTemplates,
-      orElse: () => TemplateRegistry.allTemplates,
-    );
     final max = compact ? _compactMax : _drawerMax;
     // 「显示更多」入口仅在展开面板模式（compact=false）下显示，
     // compact 紧凑条保持纯前 N 个模板的语义。
@@ -91,7 +84,11 @@ class TemplateStrip extends ConsumerWidget {
     WidgetRef ref, {
     bool showMore = false,
   }) {
-    return ListView.builder(
+    // 横向 ListView 必须给定有界高度，否则在 AnimatedSize 的未约束高度下
+    // 抛出 "Horizontal viewport was given unbounded height"（与 ScenePresetStrip 一致）
+    return SizedBox(
+      height: compact ? 60 : 78,
+      child: ListView.builder(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       itemCount: templates.length + (showMore ? 1 : 0),
@@ -218,6 +215,7 @@ class TemplateStrip extends ConsumerWidget {
           ),
         );
       },
+      ),
     );
   }
 

@@ -103,18 +103,26 @@ previewPhotoSampleBuffer:(CMSampleBufferRef)previewPhotoSampleBuffer
                                                              previewPhotoSampleBuffer:previewPhotoSampleBuffer];
 #pragma clang diagnostic pop
   
-  UIImage *image = [UIImage imageWithCGImage:[UIImage imageWithData:data].CGImage
-                                       scale:1.0
-                                 orientation:[self getJpegOrientation]];
-
-  // WYSIWYG fix (iOS): save the full-resolution sensor photo without applying
-  // the plugin's aspect-ratio crop. The app's Dart pipeline crops the photo to
-  // the selected ratio afterwards, matching the viewfinder's visible area.
-  // The upstream crop here operates in raw sensor coordinates (mismatched with
-  // the oriented image size), so it double-crops the photo and makes it appear
-  // zoomed in compared to the viewfinder. Android (CameraX) and OHOS (Camera
-  // Kit) both save the full sensor photo, so this aligns iOS with them.
-  NSData *imageWithExif = [UIImageJPEGRepresentation(image, 1.0) addExif:container];
+  // Color fidelity fix (iOS): save the full-resolution sensor photo WITHOUT going
+  // through UIImage → UIImageJPEGRepresentation re-encoding.
+  //
+  // Why: on wide-gamut devices the camera's AVCapturePhoto JPEG is Display P3.
+  // UIImageJPEGRepresentation performs a non-perceptual P3 → sRGB conversion that
+  // over-saturates warm tones (e.g. skin), making the captured photo look yellow,
+  // while the viewfinder (AVCaptureVideoPreviewLayer) is rendered natively in the
+  // device P3 display space and therefore looks neutral.
+  //
+  // Fix: keep the sensor's original bytes and only overlay EXIF metadata
+  // (creation date / GPS / image orientation). addExif uses
+  // CGImageDestinationAddImageFromSource, which copies the source pixels and merges
+  // metadata WITHOUT re-encoding the color data, so the native color pipeline and its
+  // embedded color profile are preserved intact.
+  //
+  // This matches Android (CameraX) / OHOS (Camera Kit), which save the raw sensor
+  // photo and let the app's Dart pipeline crop to the selected ratio afterwards.
+  [container addImageOrientation:[self exifOrientationFromJpegOrientation:[self getJpegOrientation]]];
+  
+  NSData *imageWithExif = [data addExif:container];
   
   bool success = [imageWithExif writeToFile:_path atomically:YES];
   if (!success) {
@@ -188,6 +196,25 @@ previewPhotoSampleBuffer:(CMSampleBufferRef)previewPhotoSampleBuffer
       return (_sensor == Back) ? UIImageOrientationDown : UIImageOrientationUp;
     default:
       return UIImageOrientationLeft;
+  }
+}
+
+// 将 UIImageOrientation 映射为 EXIF Orientation(1-8)。
+// 相机原始 JPEG 已带传感器方向 EXIF，无需物理旋转像素；
+// 写落盘时仅用此值覆盖 EXIF 方向标记，与 getJpegOrientation 语义保持一致。
+- (NSInteger)exifOrientationFromJpegOrientation:(UIImageOrientation)orientation {
+  // EXIF: 1=Up, 2=UpMirrored, 3=Down, 4=DownMirrored,
+  //       5=LeftMirrored, 6=Rotate90CW, 7=RightMirrored, 8=Rotate270CW
+  switch (orientation) {
+    case UIImageOrientationDown:          return 3;
+    case UIImageOrientationLeft:          return 8;
+    case UIImageOrientationRight:         return 6;
+    case UIImageOrientationUpMirrored:    return 2;
+    case UIImageOrientationDownMirrored:  return 4;
+    case UIImageOrientationLeftMirrored:  return 5;
+    case UIImageOrientationRightMirrored: return 7;
+    case UIImageOrientationUp:
+    default:                              return 1;
   }
 }
 

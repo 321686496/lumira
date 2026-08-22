@@ -3,14 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart' show getApplicationDocumentsDirectory;
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/safe_temp_dir.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/checkin_categories.dart';
@@ -390,15 +391,12 @@ class _CheckinEditPageState extends ConsumerState<CheckinEditPage> {
           const SizedBox(height: 20),
           FadeUp(
             delay: const Duration(milliseconds: 360),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _CheckinPhotosSection(
+            child: _CheckinPhotosSection(
               tokens: tokens,
               photoIds: _photoIds,
               photoCache: _photoCache,
               onAdd: _openPhotoPicker,
               onRemove: _removePhoto,
-              ),
             ),
           ),
         ],
@@ -715,40 +713,43 @@ class _AddPhotoPrompt extends StatelessWidget {
           ),
           boxShadow: tokens.shadowConvexSubtle,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: tokens.brand.withOpacity(0.08),
-                shape: BoxShape.circle,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: tokens.brand.withOpacity(0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.add_photo_alternate_outlined,
+                  size: 24,
+                  color: tokens.brand,
+                ),
               ),
-              child: Icon(
-                Icons.add_photo_alternate_outlined,
-                size: 24,
-                color: tokens.brand,
+              const SizedBox(height: 8),
+              Text(
+                '添加照片',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: tokens.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '添加照片',
-              style: TextStyle(
-                fontSize: 13,
-                color: tokens.textSecondary,
-                fontWeight: FontWeight.w500,
+              const SizedBox(height: 2),
+              Text(
+                '从相册选择，最多 9 张',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.textTertiary,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              '从相册选择，最多 9 张',
-              style: TextStyle(
-                fontSize: 11,
-                color: tokens.textTertiary,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -775,32 +776,35 @@ class _AddPhotoCell extends StatelessWidget {
           ),
           boxShadow: tokens.shadowConvexSubtle,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: tokens.brand.withOpacity(0.1),
-                shape: BoxShape.circle,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: tokens.brand.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.add,
+                  size: 19,
+                  color: tokens.brand,
+                ),
               ),
-              child: Icon(
-                Icons.add,
-                size: 18,
-                color: tokens.brand,
+              const SizedBox(height: 6),
+              Text(
+                '添加',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.brand,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '添加',
-              style: TextStyle(
-                fontSize: 11,
-                color: tokens.brand,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -994,6 +998,24 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
     }
   }
 
+  /// 点击照片放大查看（全屏多图左右滑动 + 双指缩放）。
+  void _openViewer(int index) {
+    final p = _photos[index];
+    final target = p.dataUrl ?? p.filePath ?? '';
+    if (target.isEmpty) return;
+    final urls = _photos
+        .map((x) => x.dataUrl ?? x.filePath ?? '')
+        .where((u) => u.isNotEmpty)
+        .toList();
+    final initial = urls.indexOf(target);
+    Navigator.of(context).push(MaterialPageRoute<dynamic>(
+      builder: (_) => FullscreenImageGallery(
+        urls: urls,
+        initialIndex: initial < 0 ? 0 : initial,
+      ),
+    ));
+  }
+
   /// 从系统相册选择照片，写入 App 本地目录并导入相册（gallery_items）。
   ///
   /// 每次最多再选 `widget.maxCount - _selected.length` 张；选中的照片与本弹窗
@@ -1013,8 +1035,8 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
       final picked = files ?? const <PickedFile>[];
       final slots = picked.take(remaining).toList();
 
-      // 批量导入前先确定目标目录
-      final dir = await getApplicationDocumentsDirectory();
+      // 批量导入前先确定目标目录（path_provider 在鸿蒙未注册时自动降级）
+      final dir = await getSafeDocumentsDirectory();
       final folder = Directory('${dir.path}/lumira_import');
       if (!await folder.exists()) {
         await folder.create(recursive: true);
@@ -1033,6 +1055,8 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
           id: 'photo_${now}_$i',
           filePath: path,
           createdAt: now,
+          // 从系统相册引入的照片仅服务当前记录，不在内部相册展示
+          isHidden: true,
         );
         await galleryDao.insert(rec);
         newRecords.add(rec);
@@ -1052,15 +1076,15 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
       if (picked.isEmpty) {
         // 用户取消系统相册，静默
       } else if (newRecords.isEmpty) {
-        LumiraToast.show(context, '本次未导入到照片，请重试',
+        LumiraToast.show(context, '读取照片失败，请重试',
             duration: const Duration(seconds: 2));
       } else if (slots.length < picked.length) {
-        LumiraToast.show(context, '最多只能再选 $remaining 张，其余未导入',
+        LumiraToast.show(context, '最多只能再选 $remaining 张，其余未选择',
             duration: const Duration(seconds: 2));
       }
     } catch (e) {
       if (mounted) {
-        LumiraToast.show(context, '导入失败：$e',
+        LumiraToast.show(context, '读取照片失败：$e',
             duration: const Duration(seconds: 2));
       }
     } finally {
@@ -1093,16 +1117,8 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
       ),
       child: Column(
         children: [
-          // Drag handle
-          Container(
-            margin: const EdgeInsets.only(top: 12, bottom: 8),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: tokens.divider,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
+          // 说明：顶部拖柄由 LumiraBottomSheetContainer 统一提供，
+          // 这里不再重复绘制，避免出现两个下拉条。
           // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -1178,7 +1194,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                             ),
                           const SizedBox(width: 4),
                           Text(
-                            _importing ? '导入中' : '系统相册',
+                            _importing ? '选择中' : '系统相册',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -1189,7 +1205,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                       ),
                     ),
                   ),
-                if (_importing) const SizedBox(width: 8),
+                const SizedBox(width: 8),
                 if (_selected.isNotEmpty)
                   Container(
                     decoration: BoxDecoration(
@@ -1276,43 +1292,45 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                           final p = _photos[i];
                           final selected = _selected.contains(p.id);
                           return GestureDetector(
-                            onTap: () => _toggle(p.id),
+                            onTap: () => _openViewer(i),
                             behavior: HitTestBehavior.opaque,
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               child: Stack(
+                                fit: StackFit.expand,
                                 children: [
-                                  // Photo
+                                  // 照片主体：铺满整个格子
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(12),
                                     child: _buildThumb(p, tokens),
                                   ),
-                                  // Selection overlay
+                                  // 选中高亮描边
                                   AnimatedOpacity(
                                     opacity: selected ? 1.0 : 0.0,
                                     duration: const Duration(milliseconds: 200),
-                                    child: Positioned.fill(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: tokens.brand.withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: tokens.brand,
-                                            width: 2.5,
-                                          ),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: tokens.brand.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: tokens.brand,
+                                          width: 2.5,
                                         ),
                                       ),
                                     ),
                                   ),
-                                  // Checkbox
+                                  // 勾选按钮（独立可点，点击才勾选，不触发放大）
                                   Positioned(
                                     top: 6,
                                     right: 6,
-                                    child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
-                                      child: Container(
-                                        width: 22,
-                                        height: 22,
+                                    child: GestureDetector(
+                                      onTap: () => _toggle(p.id),
+                                      behavior: HitTestBehavior.opaque,
+                                      child: AnimatedContainer(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        width: 24,
+                                        height: 24,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
                                           color: selected
@@ -1326,7 +1344,8 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(0.15),
+                                              color: Colors.black
+                                                  .withOpacity(0.15),
                                               blurRadius: 4,
                                               offset: const Offset(0, 2),
                                             ),
@@ -1335,7 +1354,7 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                                         child: selected
                                             ? const Icon(
                                                 Icons.check_rounded,
-                                                size: 14,
+                                                size: 15,
                                                 color: Colors.white,
                                               )
                                             : null,

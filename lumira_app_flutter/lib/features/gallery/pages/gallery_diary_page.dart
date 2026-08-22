@@ -28,6 +28,9 @@ class GalleryDiaryPage extends ConsumerStatefulWidget {
 
 class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
   String? _selectedMood;
+
+  /// 当前筛选的日期（null 表示未筛选 / 「全部」）
+  DateTime? _pickedDate;
   final ScrollController _scrollController = ScrollController();
 
   /// 每个日期 entry 的 GlobalKey，用于日期跳转（Scrollable.ensureVisible）
@@ -49,17 +52,23 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
   }
 
   Future<void> _pickDate() async {
+    final entries = ref
+        .read(diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, mood: _selectedMood)))
+        .valueOrNull;
+
+    // 有照片的日期集合 → 日期选择器打点标记
+    final markedDates =
+        (entries ?? []).map((e) => e.day).toSet();
+
     final picked = await showLumiraDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
+      markedDates: markedDates,
     );
     if (picked == null || !mounted) return;
 
-    final entries = ref
-        .read(diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, mood: _selectedMood)))
-        .valueOrNull;
     if (entries == null || entries.isEmpty) {
       LumiraToast.show(context, '暂无照片数据', duration: const Duration(milliseconds: 1200));
       return;
@@ -75,6 +84,9 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
       );
       return;
     }
+
+    // 记录当前筛选取向的日期，按钮上回显「M月d日」
+    setState(() => _pickedDate = picked);
 
     // 通过 GlobalKey 定位目标 entry 并滚动到可视区（entry 高度不固定，不能用估算偏移）
     final key = _entryKeys[targetLabel];
@@ -134,7 +146,21 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
         transparent: true,
         leading: _BackButton(tokens: tokens),
         actions: [
-          _CalendarAction(tokens: tokens, onTap: _pickDate),
+          _CalendarAction(
+            tokens: tokens,
+            pickedDate: _pickedDate,
+            onTap: _pickDate,
+            onClear: _pickedDate == null
+                ? null
+                : () {
+                    setState(() => _pickedDate = null);
+                    _scrollController.animateTo(
+                      0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+          ),
         ],
       ),
       body: Stack(
@@ -297,18 +323,68 @@ class _BackButton extends StatelessWidget {
 }
 
 class _CalendarAction extends StatelessWidget {
-  const _CalendarAction({required this.tokens, required this.onTap});
+  const _CalendarAction({
+    required this.tokens,
+    required this.onTap,
+    required this.pickedDate,
+    this.onClear,
+  });
   final ThemeTokens tokens;
   final VoidCallback onTap;
 
+  /// 当前筛选日期（null 表示未筛选，显示「全部」）
+  final DateTime? pickedDate;
+
+  /// 长按清除筛选（非 null 时生效），用于回到「全部」
+  final VoidCallback? onClear;
+
   @override
   Widget build(BuildContext context) {
+    final hasFilter = pickedDate != null;
+    final label = hasFilter ? DateFormat('M月d日').format(pickedDate!) : '全部';
+
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onClear,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(Icons.calendar_today_outlined, size: 20, color: tokens.textPrimary),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: hasFilter ? tokens.brandSubtle : tokens.surface,
+          borderRadius: BorderRadius.circular(1000),
+          border: Border.all(
+            color: hasFilter ? tokens.brand.withOpacity(0.6) : tokens.divider,
+            width: 1,
+          ),
+          boxShadow: tokens.shadowConvexSubtle,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 15,
+              color: hasFilter ? tokens.brand : tokens.textSecondary,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: hasFilter ? tokens.brand : tokens.textPrimary,
+              ),
+            ),
+            if (hasFilter) ...[
+              const SizedBox(width: 6),
+              Icon(
+                Icons.close,
+                size: 12,
+                color: tokens.textTertiary,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

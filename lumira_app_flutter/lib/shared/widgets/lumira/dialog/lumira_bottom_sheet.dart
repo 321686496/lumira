@@ -94,9 +94,12 @@ class LumiraBottomSheetContainer extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 顶部拖柄：12dp 上 padding + 40×4 拖柄 + 16dp 下 padding
+        // 顶部拖柄：避开状态栏安全区 + 12dp 上 padding + 40×4 拖柄 + 16dp 下 padding
         Padding(
-          padding: const EdgeInsets.only(top: 12, bottom: 16),
+          padding: EdgeInsets.only(
+            top: (isScrollControlled ? MediaQuery.of(context).padding.top : 0) + 12,
+            bottom: 16,
+          ),
           child: Center(
             child: Container(
               width: 40,

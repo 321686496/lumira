@@ -7,7 +7,9 @@ import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
+import '../../../features/gallery/data/gallery_models.dart';
 import '../../../features/usage/usage_providers.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -24,8 +26,11 @@ import '../data/templates_browse_mock_data.dart';
 import '../data/templates_editor_mock_data.dart' show parseAspectRatio;
 import '../services/template_exporter.dart';
 import '../services/template_share_code.dart';
+import '../widgets/ambience_badges.dart';
+import '../widgets/ambience_label.dart';
 import '../widgets/pose_silhouette.dart';
 import '../widgets/template_cover_image.dart';
+import '../../../features/gallery/widgets/photo_cell.dart';
 
 /// 全量分类记录列表（供详情页分类面包屑解析）。
 ///
@@ -349,6 +354,10 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                 template: template,
                 tokens: tokens,
               ),
+              _MetaInfoCard(
+                template: template,
+                tokens: tokens,
+              ),
               UserTagsSection(
                 itemType: TagItemType.template,
                 itemId: template.id,
@@ -381,6 +390,12 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                   lutLabel: lutLabel,
                   signedNum: signedNum,
                 ),
+                if (template.postProcess.fillLight != null &&
+                    template.postProcess.fillLight!.enabled)
+                  _FillLightCard(
+                    fillLight: template.postProcess.fillLight!,
+                    tokens: tokens,
+                  ),
               ],
               if (hasSilhouette)
                 _PoseReferenceCard(
@@ -393,6 +408,10 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                 price: template.price,
               ),
               _ReferenceSource(
+                template: template,
+                tokens: tokens,
+              ),
+              _TemplatePhotosSection(
                 template: template,
                 tokens: tokens,
               ),
@@ -682,7 +701,7 @@ class _RemoteLoadError extends StatelessWidget {
                 color: tokens.brand,
                 borderRadius: BorderRadius.circular(9999),
               ),
-              child: Text(
+              child: const Text(
                 '重试',
                 style: TextStyle(
                   fontSize: 13,
@@ -1172,6 +1191,86 @@ class _PostProcessCard extends StatelessWidget {
   }
 }
 
+/// 补光灯信息卡：独立成卡展示补光颜色 + 强度。
+/// 颜色使用与拍摄页补光应用一致的 int 色值（Color(int)），确保所见即所得。
+class _FillLightCard extends StatelessWidget {
+  const _FillLightCard({
+    required this.fillLight,
+    required this.tokens,
+  });
+
+  final FillLightData fillLight;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Color(fillLight.color);
+    final hex = '#${fillLight.color.toRadixString(16).toUpperCase().padLeft(8, '0')}';
+    bool isLight = ThemeData.estimateBrightnessForColor(color) ==
+        Brightness.light;
+    final swatchText =
+        isLight ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.9);
+    return FadeUp(
+      delay: const Duration(milliseconds: 340),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+        child: NeuCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.lightbulb_outline,
+                      size: 18, color: tokens.brand),
+                  const SizedBox(width: 8),
+                  Text(
+                    '补光灯',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '强度 ${fillLight.intensity.toStringAsFixed(1)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              // 大矩形色块：用补光灯真实颜色填充，与拍摄页应用的颜色一致
+              Container(
+                width: double.infinity,
+                height: 76,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: tokens.divider),
+                ),
+                alignment: Alignment.bottomRight,
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Text(
+                  hex,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'Courier New',
+                    color: swatchText,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PoseReferenceCard extends StatelessWidget {
   const _PoseReferenceCard({
     required this.template,
@@ -1505,6 +1604,189 @@ class _LockedParamsCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 将毫秒时间戳格式化为 `yyyy-MM-dd`（模板更新日期展示用）。
+String _formatDate(int ms) {
+  if (ms <= 0) return '';
+  final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+  final y = dt.year.toString().padLeft(4, '0');
+  final m = dt.month.toString().padLeft(2, '0');
+  final d = dt.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
+}
+
+/// 模板信息卡（v35 新增，位于标题下）：短简介 + 氛围标签 + 更新日期。
+class _MetaInfoCard extends ConsumerWidget {
+  const _MetaInfoCard({required this.template, required this.tokens});
+
+  final TemplateDetail template;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final labels = AmbienceLabel.labelsFor(template.ambience);
+    final updatedText = _formatDate(template.updatedAt);
+    final hasUpdatedAt = updatedText.isNotEmpty;
+    final hasShortDesc = template.shortDesc.isNotEmpty;
+    final hasLongDesc =
+        template.description.isNotEmpty && template.description != template.shortDesc;
+    // 所有来源都为空时隐藏整卡
+    if (!hasShortDesc &&
+        !hasLongDesc &&
+        labels.isEmpty &&
+        !hasUpdatedAt) {
+      return const SizedBox.shrink();
+    }
+
+    return FadeUp(
+      delay: const Duration(milliseconds: 120),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+        child: NeuCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (hasShortDesc) ...[
+                Text(
+                  template.shortDesc,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+              if (hasLongDesc) ...[
+                if (hasShortDesc) const SizedBox(height: 8),
+                Text(
+                  template.description,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: tokens.textSecondary,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+              if (labels.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                AmbienceBadges(ambience: template.ambience, tokens: tokens),
+              ],
+              if (hasUpdatedAt) ...[
+                const SizedBox(height: 12),
+                Text(
+                  '更新于 $updatedText',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: tokens.textTertiary,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 「用此模板拍摄的照片」区（v35 新增，页面底部）：本机该模板最近 4 张横滑预览，
+/// 右上「查看全部」进入 [RouteNames.templatesPhotos] 网格页。
+class _TemplatePhotosSection extends ConsumerWidget {
+  const _TemplatePhotosSection({required this.template, required this.tokens});
+
+  final TemplateDetail template;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final daoAsync = ref.watch(galleryDaoProvider);
+    return daoAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (dao) => FutureBuilder<List<GalleryItemRecord>>(
+        future: dao.getByTemplate(template.id, limit: 4),
+        builder: (context, snap) {
+          final photos = snap.data ?? const <GalleryItemRecord>[];
+          if (photos.isEmpty) return const SizedBox.shrink();
+          return FadeUp(
+            delay: const Duration(milliseconds: 200),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '用此模板拍摄的照片',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textPrimary,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => GoRouter.of(context).push(
+                          RouteNames.build(RouteNames.templatesPhotos, {
+                            RouteNames.paramTemplateId: template.id,
+                          }),
+                        ),
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '查看全部',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: tokens.brand,
+                                ),
+                              ),
+                              Icon(Icons.chevron_right,
+                                  size: 16, color: tokens.brand),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 96,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: photos.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, i) {
+                        final record = photos[i];
+                        return SizedBox(
+                          width: 96,
+                          child: PhotoCell(
+                            photo: GalleryPhoto.fromRecord(record),
+                            onTap: () => GoRouter.of(context).push(
+                              RouteNames.build(RouteNames.galleryDetail, {
+                                RouteNames.paramPhotoId: record.id,
+                              }),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
