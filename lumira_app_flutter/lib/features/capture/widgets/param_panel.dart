@@ -8,14 +8,6 @@ import '../domain/photo_template.dart';
 import '../services/camera_service_provider.dart';
 import '../services/white_balance.dart';
 
-/// 白平衡会话状态（仅实时调节取景器，**不写入模板 CameraParams**）。
-///
-/// 之所以放在 provider 而非本地 StatefulWidget：TabBarView 在切换 Tab 时会
-/// dispose/重建非当前页的 child，本地 state 会丢失。放在顶层级 provider，
-/// 切换 Tab 后白平衡选择得以保留。
-final whiteBalanceSessionProvider =
-    StateProvider<WhiteBalanceSettings>((ref) => const WhiteBalanceSettings());
-
 /// 底部抽屉式参数编辑面板。
 /// 5 个 Tab：相机 / 色彩 / 细节 / 构图 / 场景。
 /// 通过 panelExpandedProvider 控制展开/收起（AnimatedPositioned）。

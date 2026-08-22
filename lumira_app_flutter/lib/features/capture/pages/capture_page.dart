@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show File;
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat;
@@ -36,6 +36,7 @@ import '../domain/photo_template.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
 import '../services/capture_worker.dart';
+import '../services/white_balance.dart';
 import '../../watermark/data/watermark_providers.dart';
 import '../../watermark/models/watermark_template.dart';
 import '../../watermark/widgets/watermark_animation_overlay.dart';
@@ -95,6 +96,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
     with WidgetsBindingObserver {
   bool _isLandscape = false;
   CameraPermissionStatus _permissionStatus = CameraPermissionStatus.unknown;
+
+  /// 是否 OHOS（HarmonyOS）：非 iOS 且非 Android。用于区分平台差异（白平衡等）。
+  bool get _isOhos => !Platform.isAndroid && !Platform.isIOS;
 
   /// 白闪动画触发器：每次拍照时递增，ShutterFeedback widget 监听变化播放动画。
   int _shutterTrigger = 0;
@@ -1049,6 +1053,52 @@ class _CapturePageState extends ConsumerState<CapturePage>
           ref.read(CaptureState.aspectRatioProvider.notifier).state = cropRatio;
           debugPrint('[capture] 模板切换，同步比例: $cropRatio');
         }
+      }
+    });
+
+    // 模板切换时自动套用模板的白平衡设置（预设 + 手动色温）。
+    // 取景器与直出都随传感器生效（WYSIWYG）。自由模式（next == null）不干预，
+    // 保留用户当前选择，与其它模板参数一致。
+    ref.listen<PhotoTemplate?>(
+        CaptureState.originalTemplateProvider, (prev, next) {
+      if (next == null) return;
+      final cam = next.camera;
+      // 模板 whiteBalance 为预设模式字符串（auto/daylight/cloudy/fluorescent/incandescent）。
+      final wbMode = whiteBalanceModeFromString(cam.whiteBalance);
+      // 「预设 + 色温」方向：iOS/Android 下发带 whiteBalanceK 的手动色温（原生手动分支优先）；
+      // OHOS 连续色温不可用，应下发改预设模式（temperatureK 置 null，走原生预设分支）。
+      final settings = _isOhos
+          ? WhiteBalanceSettings(mode: wbMode)
+          : WhiteBalanceSettings(mode: wbMode, temperatureK: cam.whiteBalanceK);
+      // 同步 UI 会话状态 + 下发传感器
+      ref.read(whiteBalanceSessionProvider.notifier).state = settings;
+      ref.read(cameraServiceProvider).setWhiteBalance(settings);
+      debugPrint(
+          '[capture] 模板套用白平衡: ${settings.mode} K=${settings.temperatureK}');
+    });
+
+    // 模板切换时自动套用补光灯配置：
+    // 模板启用了补光灯 → 自动开启并应用模板的颜色/强度（与拍摄页补光应用一致，保证所见即所得）；
+    // 模板未启用补光灯 → 关闭补光灯（跟随模板参数）。
+    // 补光仅前置摄像头生效，后置时只记录颜色/强度配置、不激活实时光强/悬浮取景器；
+    // 切到自由模式（next == null）时不干预，保留用户当前的补光设置。
+    ref.listen<PhotoTemplate?>(
+        CaptureState.originalTemplateProvider, (prev, next) {
+      if (next == null) return;
+      final fl = next.postProcess.fillLight;
+      final enabled = fl != null && fl.enabled;
+      final onFront =
+          ref.read(CaptureState.cameraFacingProvider) == 'front';
+      ref.read(CaptureState.fillLightColorProvider.notifier).state =
+          Color(fl?.color ?? 0xFFFFE5B4);
+      ref.read(CaptureState.fillLightIntensityProvider.notifier).state =
+          fl?.intensity ?? 0.8;
+      ref.read(CaptureState.fillLightEnabledProvider.notifier).state =
+          enabled && onFront;
+      if (fl != null) {
+        debugPrint(
+            '[capture] 模板套用补光灯: enabled=${enabled && onFront} '
+            'color=#${(fl.color).toRadixString(16)} intensity=${fl.intensity}');
       }
     });
 
