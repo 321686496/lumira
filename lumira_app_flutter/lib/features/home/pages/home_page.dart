@@ -198,13 +198,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                           GoRouter.of(context).push(RouteNames.scenes);
                           break;
                         case '收藏':
+                        case '管理':
                           GoRouter.of(context).push(RouteNames.build(
                             RouteNames.captureSceneManage,
-                            {RouteNames.paramTab: 'fav'},
+                            {RouteNames.paramTab: sceneManageTabFor(label)},
                           ));
-                          break;
-                        case '管理':
-                          GoRouter.of(context).push(RouteNames.captureSceneManage);
                           break;
                       }
                     },
@@ -607,5 +605,18 @@ class _RecentShotsGrid extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// 首页场景推荐标题右侧链接 → 场景管理 tab 参数
+/// 收藏落在「我的收藏」，管理落在「自定义场景」
+String sceneManageTabFor(String label) {
+  switch (label) {
+    case '管理':
+      return 'custom';
+    case '收藏':
+      return 'fav';
+    default:
+      return 'fav';
   }
 }
