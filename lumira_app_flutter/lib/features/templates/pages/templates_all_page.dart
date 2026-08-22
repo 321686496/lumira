@@ -17,6 +17,7 @@ import '../data/builtin_category_icons.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../services/template_mapper.dart';
+import '../widgets/ambience_label.dart';
 import '../widgets/template_cover_image.dart';
 import '../widgets/template_import_sheet.dart';
 
@@ -92,6 +93,9 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   ) async {
     final builtinsAndRemotes = await dao.getBuiltinAndRemote();
     final customs = await dao.getCustomOnly();
+    // v35: 各模板在本机已拍照片数（模板卡片右下角「已拍 N 张」用）
+    final galleryDao = await ref.read(galleryDaoProvider.future);
+    final usageCounts = await galleryDao.countByTemplate();
     // v17: 仅加载一级分类用于概览页（level=1, parent_key IS NULL）
     final categories = await dao.getCategories(activeOnly: true, level: 1);
     // v17: 按当前选中状态加载二三级分类选项（级联筛选）
@@ -161,6 +165,7 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
       allCount: allCount,
       unlockedCount: unlockedCount,
       categoryCounts: categoryCounts,
+      usageCounts: usageCounts,
       filtered: filtered,
       categories: categories,
       styleOptions: styleOptions,
@@ -344,6 +349,7 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                                         _TemplateGrid(
                                           tokens: tokens,
                                           templates: filtered,
+                                          usageCounts: data.usageCounts,
                                         ),
                                     ],
                                   ),
@@ -959,10 +965,12 @@ class _TemplateGrid extends StatelessWidget {
   const _TemplateGrid({
     required this.tokens,
     required this.templates,
+    required this.usageCounts,
   });
 
   final ThemeTokens tokens;
   final List<AllTemplateItem> templates;
+  final Map<String, int> usageCounts;
 
   @override
   Widget build(BuildContext context) {
@@ -980,12 +988,14 @@ class _TemplateGrid extends StatelessWidget {
             // Forced fix: 0.72 → 0.62 修复 emulator 上 32px 溢出，但在 360dp 小屏上仍会溢出 ~25px
             // 计算小屏（360dp）：card_width=154 → image_h=205 + text_section=53 = 258 > card_h=248（0.62 ratio）
             // 改为 0.56 → card_h=275，留 17dp 文字空间，与 home_page.dart 一致
-            childAspectRatio: 0.56,
+            // v35: 卡片新增短简介+使用次数共约 2 行，0.56 文字区不足 → 收窄到 0.50 防溢出
+            childAspectRatio: 0.50,
           ),
           itemCount: templates.length,
           itemBuilder: (_, index) => _TplCard(
             tokens: tokens,
             template: templates[index],
+            usageCount: usageCounts[templates[index].id] ?? 0,
           ),
         ),
       ),
@@ -994,13 +1004,22 @@ class _TemplateGrid extends StatelessWidget {
 }
 
 class _TplCard extends StatelessWidget {
-  const _TplCard({required this.tokens, required this.template});
+  const _TplCard({
+    required this.tokens,
+    required this.template,
+    required this.usageCount,
+  });
 
   final ThemeTokens tokens;
   final AllTemplateItem template;
+  final int usageCount;
 
   @override
   Widget build(BuildContext context) {
+    final shortDesc = template.shortDesc.isNotEmpty
+        ? template.shortDesc
+        : _truncate(template.description);
+    final ambienceLabels = AmbienceLabel.labelsFor(template.ambience);
     return GestureDetector(
       onTap: () => GoRouter.of(context).push(
         '/templates/detail?templateId=${template.id}',
@@ -1069,38 +1088,90 @@ class _TplCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
-                  // Forced fix: 原 Row 在 isCustom=true 时溢出 11px（category + 自定义 tag 超宽）。
-                  // 改用 Wrap 自动换行避免横向溢出。
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
+                  if (shortDesc.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      shortDesc,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.3,
+                        color: tokens.textSecondary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        TemplatesBrowseMockData.categoryLabel(
-                            template.category),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: tokens.brand,
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              TemplatesBrowseMockData.categoryLabel(
+                                  template.category),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: tokens.brand,
+                              ),
+                            ),
+                            if (template.isCustom)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: tokens.brandSubtle,
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: Text(
+                                  '自定义',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: tokens.brandText,
+                                  ),
+                                ),
+                              ),
+                            for (final label in ambienceLabels.take(2))
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: tokens.surfaceAlt,
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: Text(
+                                  label,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: tokens.textTertiary,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                      if (template.isCustom)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: tokens.brandSubtle,
-                            borderRadius: BorderRadius.circular(9999),
-                          ),
-                          child: Text(
-                            '自定义',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: tokens.brandText,
+                      if (usageCount > 0) ...[
+                        const SizedBox(width: 6),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.camera_alt_outlined,
+                                size: 12, color: tokens.textTertiary),
+                            const SizedBox(width: 3),
+                            Text(
+                              '已拍 $usageCount 张',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: tokens.textTertiary,
+                              ),
                             ),
-                          ),
+                          ],
                         ),
+                      ],
                     ],
                   ),
                 ],
@@ -1615,6 +1686,7 @@ class _AllPageData {
     required this.allCount,
     required this.unlockedCount,
     required this.categoryCounts,
+    required this.usageCounts,
     required this.filtered,
     required this.categories,
     required this.styleOptions,
@@ -1624,6 +1696,8 @@ class _AllPageData {
   final int allCount;
   final int unlockedCount;
   final Map<String, int> categoryCounts;
+  /// 各模板在本机已拍照片数（卡片右下角「已拍 N 张」用）。
+  final Map<String, int> usageCounts;
   final List<AllTemplateItem> filtered;
   /// v14: 从 sqflite template_categories 表加载的一级分类列表
   final List<TemplateCategoryRecord> categories;
@@ -1654,5 +1728,14 @@ AllTemplateItem _recordToItem(TemplateRecord r, {required bool isCustom}) {
     coverData: r.coverData,
     price: r.price,
     isCustom: isCustom,
+    shortDesc: r.shortDesc,
+    description: r.description,
+    ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
   );
+}
+
+/// 截断长描述到约 [maxLen] 字符并追加省略号（卡片短简介兜底用）。
+String _truncate(String s, {int maxLen = 24}) {
+  if (s.characters.length <= maxLen) return s;
+  return '${s.characters.take(maxLen)}…';
 }
