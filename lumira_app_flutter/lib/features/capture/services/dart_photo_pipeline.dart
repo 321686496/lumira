@@ -259,41 +259,8 @@ class DartPhotoPipeline implements PhotoPipeline {
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // 主 Isolate 辅助：dart:ui Canvas 变换
+  // 主 Isolate 辅助：判断 ColorMatrix
   // ─────────────────────────────────────────────────────────────────────
-
-  /// 应用变换（旋转/翻转/拉直）via GPU Canvas。
-  /// 从 PhotoPostProcessor._applyTransform 移植。
-  Future<ui.Image> _applyTransformUi(ui.Image src, TransformParams transform) async {
-    final radians = transform.rotation * math.pi / 180.0;
-    final straightenRad = transform.straighten * math.pi / 180.0;
-    final totalRotation = radians + straightenRad;
-
-    // For 90/270 rotations, swap dimensions
-    final swapDims = transform.rotation == 90 || transform.rotation == 270;
-    final outW = swapDims ? src.height : src.width;
-    final outH = swapDims ? src.width : src.height;
-
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(recorder);
-
-    canvas.translate(outW / 2, outH / 2);
-    canvas.rotate(totalRotation);
-    canvas.scale(
-      transform.flipH ? -1.0 : 1.0,
-      transform.flipV ? -1.0 : 1.0,
-    );
-    canvas.drawImage(
-      src,
-      ui.Offset(-src.width / 2, -src.height / 2),
-      ui.Paint(),
-    );
-
-    final picture = recorder.endRecording();
-    final result = await picture.toImage(outW, outH);
-    picture.dispose();
-    return result;
-  }
 
   /// 判断 4×5 ColorMatrix 是否为单位矩阵。
   /// 从 PhotoPostProcessor._isIdentityMatrix 移植。
@@ -307,70 +274,6 @@ class DartPhotoPipeline implements PhotoPipeline {
       if (m[i * 5 + 4].abs() > 0.001) return false;
     }
     return true;
-  }
-
-  // ─────────────────────────────────────────────────────────────────────
-  // 方向对齐（WYSIWYG：取景器所见即所得）
-  // ─────────────────────────────────────────────────────────────────────
-
-  /// 把 JPEG 像素旋转到与取景器显示方向一致。
-  ///
-  /// 核心原理：
-  /// - camerawesome 预览自动旋转 sensor 图像匹配设备方向（竖屏时 sensor 横→显示竖）
-  /// - 但 JPEG 保存为 sensor 原生方向（通常横向，如 4032x3024）
-  /// - 后处理必须先把 JPEG 旋转到显示方向，裁剪区域才能与取景器一致
-  ///
-  /// 判断逻辑（不依赖 EXIF，避免平台差异）：
-  /// - 如果 JPEG 横向但设备竖屏 → 顺时针旋转 90°
-  /// - 如果 JPEG 竖向但设备横屏 → 逆时针旋转 90°
-  /// - 方向已一致 → 不旋转
-  /// - 前置摄像头 → 额外水平翻转（预览是镜像的，照片也要镜像保持一致）
-  ///
-  /// 返回新图像（如果需要旋转/翻转），或原图（如果方向已对齐）。
-  Future<ui.Image> _alignOrientationUi(
-      ui.Image src, bool isPortrait, String facing) async {
-    final jpegIsLandscape = src.width > src.height;
-    final deviceIsPortrait = isPortrait;
-    final needRotate =
-        (deviceIsPortrait && jpegIsLandscape) || (!deviceIsPortrait && !jpegIsLandscape);
-    final needMirror = facing == 'front';
-
-    if (!needRotate && !needMirror) return src;
-
-    // 仅当需要旋转时才旋转并交换宽高；仅镜像时保持原尺寸与 0°，
-    // 避免"竖屏 JPEG + 前置镜像"时把图片旋转 90° 填入未交换的竖屏画布导致横向拉伸变形。
-    final int rotation;
-    final int outW;
-    final int outH;
-    if (needRotate) {
-      // 竖屏 + JPEG横向 → 顺时针 90°（EXIF orientation=6）
-      // 横屏 + JPEG竖向 → 逆时针 90°（EXIF orientation=8）
-      rotation = deviceIsPortrait ? 90 : 270;
-      outW = src.height;
-      outH = src.width;
-    } else {
-      rotation = 0;
-      outW = src.width;
-      outH = src.height;
-    }
-    final radians = rotation * math.pi / 180.0;
-
-    final recorder = ui.PictureRecorder();
-    final canvas = ui.Canvas(recorder);
-    canvas.translate(outW / 2.0, outH / 2.0);
-    canvas.rotate(radians);
-    // 前置摄像头水平翻转（与预览镜像一致）
-    canvas.scale(needMirror ? -1.0 : 1.0, 1.0);
-    canvas.drawImage(
-      src,
-      ui.Offset(-src.width / 2.0, -src.height / 2.0),
-      ui.Paint()..filterQuality = ui.FilterQuality.medium,
-    );
-
-    final picture = recorder.endRecording();
-    final result = await picture.toImage(outW, outH);
-    picture.dispose();
-    return result;
   }
 }
 
@@ -421,6 +324,80 @@ class _IsolateResult {
 // 纯 image 包实现，无 dart:ui 依赖
 // ─────────────────────────────────────────────────────────────────────────
 
+/// 判断 JPEG 是否内嵌 Display P3 / DCI-P3 的 ICC 配置文件（宽色域 iPhone 相机输出）。
+///
+/// image 包纯 Dart 解码忽略 ICC，需据此决定是否做 P3→sRGB 色域换算。
+/// 仅在 JPEG 字节里捜索 ICC 描述文本，命中概率极低、误判可忽略。
+bool _isDisplayP3Jpeg(Uint8List bytes) {
+  for (final marker in const ['Display P3', 'DCI-P3', 'P3D65', 'DISPLAY P3']) {
+    if (_bytesContainsAscii(bytes, marker)) return true;
+  }
+  return false;
+}
+
+/// 在字节流中查找 ASCII 子串（大小写敏感）。
+bool _bytesContainsAscii(Uint8List hay, String needle) {
+  final pat = needle.codeUnits;
+  final n = hay.length - pat.length;
+  if (n < 0) return false;
+  outer:
+  for (int i = 0; i <= n; i++) {
+    for (int j = 0; j < pat.length; j++) {
+      if (hay[i + j] != pat[j]) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
+// sRGB 传递函数的线性化与编码用查表（避免逐像素 pow 影响 800ms 预算）。
+final List<double> _srgbToLinearLut = _buildSrgbToLinearLut();
+final List<double> _srgbEncodeLut = _buildSrgbEncodeLut();
+
+List<double> _buildSrgbToLinearLut() {
+  return List<double>.generate(256, (i) {
+    final v = i / 255.0;
+    if (v <= 0.04045) return v / 12.92;
+    return math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  });
+}
+
+List<double> _buildSrgbEncodeLut() {
+  const steps = 4096;
+  return List<double>.generate(steps, (i) {
+    final c = i / (steps - 1);
+    if (c <= 0.0031308) return c * 12.92;
+    return (1.055 * math.pow(c, 1.0 / 2.4) - 0.055).clamp(0.0, 1.0).toDouble();
+  });
+}
+
+/// 将 image 包解码出的 Display P3（sRGB 传递函数 + P3 基色）像素就地换算为 sRGB。
+///
+/// P3 与 sRGB 同为 D65 白点、同为 sRGB 传递函数，仅基色不同，故只需线性化后乘
+/// P3→sRGB 线性基色转换矩阵，再按 sRGB 传递函数编码即可。
+///
+/// ⚠️ 方向铁律：此处必须用「sRGB→P3」矩阵的逆（P3→sRGB）。常见的
+/// [[0.8225,0.1774,0],[0.0332,0.9669,0],[0.0171,0.0724,0.9105]] 是 sRGB→P3（正向）
+/// 矩阵；把它当成 P3→sRGB 去乘 P3 像素会对肤色引入残余的黄色/偏暖（R 被压低、
+/// G/B 抬升）。正确的逆矩阵带负系数，能还原 P3 中超出 sRGB 色域的红色。
+void _applyP3ToSrgb(img.Image image) {
+  const steps = 4096;
+  for (final p in image) {
+    final r = p.r.toInt(), g = p.g.toInt(), b = p.b.toInt();
+    final lr = _srgbToLinearLut[r];
+    final lg = _srgbToLinearLut[g];
+    final lb = _srgbToLinearLut[b];
+    // P3(D65) → sRGB(D65) 线性基色转换矩阵（sRGB→P3 正向矩阵的逆）。
+    final sr = (1.2249 * lr - 0.2247 * lg).clamp(0.0, 1.0);
+    final sg = (-0.0420 * lr + 1.0419 * lg).clamp(0.0, 1.0);
+    final sb = (-0.0197 * lr - 0.0786 * lg + 1.0983 * lb).clamp(0.0, 1.0);
+    p
+      ..r = (_srgbEncodeLut[(sr * (steps - 1)).round()] * 255).round()
+      ..g = (_srgbEncodeLut[(sg * (steps - 1)).round()] * 255).round()
+      ..b = (_srgbEncodeLut[(sb * (steps - 1)).round()] * 255).round();
+  }
+}
+
 /// 在 worker Isolate 中执行完整照片后处理。
 ///
 /// 从 [PhotoPostProcessor] 移植全部逻辑到 image 包 API：
@@ -432,6 +409,14 @@ Future<_IsolateResult> _processInIsolate(_IsolateInput input) async {
     throw StateError('img.decodeJpg 返回 null');
   }
   var image = decoded;
+
+  // 1.2 iOS 宽色域照片的色域校正：宽色域 iPhone 相机 JPEG 内嵌 Display P3 的 ICC
+  //     配置文件，而 image 包纯 Dart 解码忽略 ICC，直接以 sRGB 解释 P3 数值，导致
+  //     肤色偏黄（取景器走 dart:ui / 系统色管，渲染 P3 正确，故两者不一致）。
+  //     检测到 P3 时做 P3→sRGB 线性矩阵变换，使保存成图与取景器一致。
+  if (_isDisplayP3Jpeg(input.inputBytes)) {
+    _applyP3ToSrgb(image);
+  }
 
   // 1.5 方向对齐：把 JPEG 像素旋转到与取景器显示方向一致（WYSIWYG）
   // 与 quickProcess._alignOrientationUi 使用相同逻辑，确保两条管线输出一致。
