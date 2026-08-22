@@ -1204,7 +1204,7 @@ class _FillLightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = Color(fillLight.color);
+    final color = Color(fillLight.color | 0xFF000000);
     final hex = '#${fillLight.color.toRadixString(16).toUpperCase().padLeft(8, '0')}';
     bool isLight = ThemeData.estimateBrightnessForColor(color) ==
         Brightness.light;

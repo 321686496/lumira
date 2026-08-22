@@ -430,7 +430,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final enabled = fl != null && fl.enabled;
     final onFront = ref.read(CaptureState.cameraFacingProvider) == 'front';
     ref.read(CaptureState.fillLightColorProvider.notifier).state =
-        Color(fl?.color ?? 0xFFFFE5B4);
+        Color((fl?.color ?? 0xFFFFE5B4) | 0xFF000000);
     ref.read(CaptureState.fillLightIntensityProvider.notifier).state =
         fl?.intensity ?? 0.8;
     ref.read(CaptureState.fillLightEnabledProvider.notifier).state =

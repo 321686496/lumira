@@ -722,7 +722,9 @@ class FillLightParams {
   factory FillLightParams.fromJson(Map<String, dynamic> json) =>
       FillLightParams(
         enabled: (json['enabled'] as bool?) ?? false,
-        color: (json['color'] as num?)?.toInt() ?? 0xFFFFE5B4,
+        // 兼容历史 24 位 RGB（Flutter Color(int) 会把缺省 alpha 判为透明导致颜色发暗/对不上），
+        // 统一归一到不透明 ARGB（alpha=FF）。
+        color: ((json['color'] as num?)?.toInt() ?? 0xFFFFE5B4) | 0xFF000000,
         intensity: (json['intensity'] as num?)?.toDouble() ?? 0.8,
       );
 

@@ -71,6 +71,18 @@ const LUT_LABELS: Record<string, string> = {
   heavy_film: '浓厚胶片',
 };
 
+// 补光预设色（暖白/粉/黄/蓝/绿/紫等常用米色系，点击即选用）
+const FILL_LIGHT_COLORS = [
+  '#FFE5B4', // 暖白
+  '#FFF4D6', // 奶白
+  '#FFD9E8', // 粉
+  '#FFF0C2', // 柠檬黄
+  '#E3F2FF', // 浅蓝
+  '#D4F5E4', // 浅绿
+  '#F3E8FF', // 淡紫
+  '#FFE1CC', // 杏
+];
+
 // 高级色彩字段（可空，默认不启用）
 const ADVANCED_COLOR_KEYS = ['highlights', 'shadows', 'blackPoint', 'clarity', 'vibrance', 'brilliance'] as const;
 
@@ -654,7 +666,9 @@ export default function TemplateForm({
         fillLight: (data.fillLightEnabled && data.fillLightColor && data.fillLightIntensity != null)
           ? {
               enabled: data.fillLightEnabled,
-              color: parseInt((data.fillLightColor as string).replace(/^#/, ''), 16),
+              // 存为 32 位不透明 ARGB（补 alpha=0xFF），与 Flutter Color(int) 的 ARGB 语义一致，
+              // 避免 24 位值被 Flutter 误判为透明导致补光色发暗/对不上。
+              color: (parseInt((data.fillLightColor as string).replace(/^#/, ''), 16) || 0) | 0xFF000000,
               intensity: data.fillLightIntensity,
             }
           : undefined,
@@ -1520,15 +1534,51 @@ export default function TemplateForm({
                       <span className="text-sm text-muted-foreground">应用补光</span>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="fillLightColor">补光色（HEX）</Label>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="fillLightColor">补光色</Label>
                     <div className="flex items-center gap-2">
+                      <label
+                        className="relative h-9 w-9 shrink-0 cursor-pointer overflow-hidden rounded-md border border-input shadow-sm"
+                        title="点击打开系统取色器"
+                      >
+                        <input
+                          id="fillLightColorPicker"
+                          type="color"
+                          value={/^#[0-9A-Fa-f]{6}$/.test(watch('fillLightColor')) ? watch('fillLightColor') : '#FFE5B4'}
+                          onChange={(e) => setValue('fillLightColor', e.target.value.toUpperCase())}
+                          disabled={!watch('fillLightEnabled')}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        />
+                        <span
+                          className="absolute inset-0"
+                          style={{ backgroundColor: watch('fillLightColor') }}
+                        />
+                      </label>
                       <Input
                         id="fillLightColor"
                         value={watch('fillLightColor')}
                         onChange={(e) => setValue('fillLightColor', e.target.value)}
+                        placeholder="#FFE5B4"
                         disabled={!watch('fillLightEnabled')}
+                        className="font-mono uppercase"
                       />
+                    </div>
+                    {/* 预设色盘：点击即选用 */}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {FILL_LIGHT_COLORS.map((c) => (
+                        <button
+                          type="button"
+                          key={c}
+                          title={c}
+                          onClick={() => { if (watch('fillLightEnabled')) setValue('fillLightColor', c); }}
+                          disabled={!watch('fillLightEnabled')}
+                          className={`h-6 w-6 rounded-full border transition-transform hover:scale-110 ${
+                            watch('fillLightColor').toLowerCase() === c.toLowerCase() ? 'ring-2 ring-ring ring-offset-1' : 'border-input'
+                          } disabled:opacity-40`}
+                          style={{ backgroundColor: c }}
+                          aria-label={`补光色 ${c}`}
+                        />
+                      ))}
                     </div>
                   </div>
                   <div className="space-y-2">

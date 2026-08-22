@@ -405,7 +405,8 @@ class TemplateMapper {
           ? null
           : editor.EditorFormFillLight(
               enabled: (fillLightJson['enabled'] as bool?) ?? false,
-              color: (fillLightJson['color'] as num?)?.toInt() ?? 0xFFFFE5B4,
+              color: ((fillLightJson['color'] as num?)?.toInt() ?? 0xFFFFE5B4) |
+                  0xFF000000,
               intensity: (fillLightJson['intensity'] as num?)?.toDouble() ?? 0.8,
             ),
     );
