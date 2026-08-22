@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -13,6 +17,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
+import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 import '../data/capture_scene_mock_data.dart';
 import '../data/scene_record_mapper.dart';
 import '../data/scene_presets_data.dart';
@@ -55,6 +60,7 @@ class _CaptureSceneDetailPageState
   bool _isFav = false;
   List<String> _editableTagIds = [];
   bool _tagSheetVisible = false;
+  List<GalleryItemRecord> _scenePhotos = [];
 
   @override
   void initState() {
@@ -81,6 +87,9 @@ class _CaptureSceneDetailPageState
         if (custom != null) {
           _editableTagIds = List<String>.from(custom.tagIds);
         }
+        // 加载该场景下拍摄的真实照片
+        final galleryDao = await ref.read(galleryDaoProvider.future);
+        _scenePhotos = await galleryDao.getByScene(id);
         return;
       }
     } catch (_) {
@@ -93,6 +102,8 @@ class _CaptureSceneDetailPageState
     if (preset is CustomScenePreset) {
       _editableTagIds = List<String>.from(preset.tagIds);
     }
+    final galleryDao = await ref.read(galleryDaoProvider.future);
+    _scenePhotos = await galleryDao.getByScene(id);
   }
 
   void _back() {
@@ -127,6 +138,27 @@ class _CaptureSceneDetailPageState
         RouteNames.paramScene: scene.id,
       }),
     );
+  }
+
+  /// 照片显示源：filePath > dataUrl > originalPath，取首个非空
+  String? _photoSource(GalleryItemRecord p) {
+    for (final c in [p.filePath, p.dataUrl, p.originalPath]) {
+      if (c != null && c.isNotEmpty) return c;
+    }
+    return null;
+  }
+
+  void _openViewer(int index) {
+    final urls = _scenePhotos
+        .map(_photoSource)
+        .where((u) => u != null && u.isNotEmpty)
+        .cast<String>()
+        .toList();
+    if (urls.isEmpty) return;
+    final i = index.clamp(0, urls.length - 1);
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FullscreenImageGallery(urls: urls, initialIndex: i),
+    ));
   }
 
   void _goCreateKit() {
@@ -198,6 +230,12 @@ class _CaptureSceneDetailPageState
                       ),
                       _FilterSection(scene: scene),
                       _TipsSection(scene: scene),
+                      _ScenePhotosSection(
+                        sceneName: scene.name,
+                        photos: _scenePhotos,
+                        onOpenViewer: _openViewer,
+                        onCapture: _goCapture,
+                      ),
                       _AchievementSection(scene: scene),
                       const SizedBox(height: 80), // detail-bottom-space
                     ],
@@ -626,6 +664,128 @@ class _TipRow extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+/// 该场景下拍摄的照片（真实数据，横向缩略 + 全屏查看；无照片引导拍摄）
+class _ScenePhotosSection extends ConsumerWidget {
+  const _ScenePhotosSection({
+    required this.sceneName,
+    required this.photos,
+    required this.onOpenViewer,
+    required this.onCapture,
+  });
+
+  final String sceneName;
+  final List<GalleryItemRecord> photos;
+  final void Function(int index) onOpenViewer;
+  final VoidCallback onCapture;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+
+    if (photos.isEmpty) {
+      // 空态：引导「用此场景拍照」
+      return _Section(
+        title: '此场景拍摄',
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
+          decoration: BoxDecoration(
+            color: tokens.surfaceAlt,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            children: [
+              Icon(Icons.photo_library_outlined,
+                  size: 36, color: tokens.textTertiary),
+              const SizedBox(height: 8),
+              Text(
+                '还没有用「$sceneName」拍过照片',
+                style: TextStyle(fontSize: 13, color: tokens.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              LumiraButton(
+                variant: ButtonVariant.primary,
+                onPressed: onCapture,
+                child: const Text('用此场景拍照'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return _Section(
+      title: '此场景拍摄',
+      child: SizedBox(
+        height: 140,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: photos.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, i) {
+            final src =
+                [photos[i].filePath, photos[i].dataUrl, photos[i].originalPath]
+                    .where((c) => c != null && c.isNotEmpty)
+                    .cast<String>()
+                    .toList();
+            final url = src.isEmpty ? '' : src.first;
+            return GestureDetector(
+              onTap: () => onOpenViewer(i),
+              behavior: HitTestBehavior.opaque,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 100,
+                  height: 140,
+                  child: _ScenePhotoThumb(url: url, tokens: tokens),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// 单张场景照片缩略：http / data / 本地文件 → 统一占位
+class _ScenePhotoThumb extends StatelessWidget {
+  const _ScenePhotoThumb({required this.url, required this.tokens});
+  final String url;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = Container(
+      color: tokens.surfaceAlt,
+      child: Icon(Icons.image_outlined, size: 28, color: tokens.textTertiary),
+    );
+    if (url.isEmpty) return placeholder;
+    if (url.startsWith('data:image/')) {
+      Widget decode() {
+        final comma = url.indexOf(',');
+        final b64 = comma >= 0 ? url.substring(comma + 1) : url;
+        return Image.memory(base64Decode(b64), fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => placeholder);
+      }
+      try {
+        return decode();
+      } catch (_) {
+        return placeholder;
+      }
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return CachedNetworkImage(
+        url: url,
+        fit: BoxFit.cover,
+        placeholder: placeholder,
+        errorWidget: placeholder,
+      );
+    }
+    return Image.file(File(url),
+        fit: BoxFit.cover, errorBuilder: (_, __, ___) => placeholder);
   }
 }
 
