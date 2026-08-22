@@ -9,6 +9,7 @@ import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
 import 'camera_service.dart';
 import 'camerawesome_delegate.dart';
+import 'white_balance.dart';
 
 /// camerawesome 系列三端共用实现。
 ///
@@ -273,6 +274,20 @@ class CamerawesomeCameraService implements CameraService {
       _cameraState?.sensorConfig?.setBrightness(brightness.clamp(0.0, 1.0));
     } catch (e) {
       debugPrint('[camera] setBrightness failed: $e');
+    }
+  }
+
+  @override
+  void setWhiteBalance(WhiteBalanceSettings settings) {
+    final mode = settings.mode.name;
+    try {
+      if (_delegate.platformTag == 'ohos') {
+        ohos.CamerawesomePlugin.setWhiteBalance(mode, settings.temperatureK);
+      } else {
+        ca.CamerawesomePlugin.setWhiteBalance(mode, settings.temperatureK);
+      }
+    } catch (e) {
+      debugPrint('[camera] setWhiteBalance failed: $e');
     }
   }
 
