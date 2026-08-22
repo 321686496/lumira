@@ -63,6 +63,7 @@ import '../features/scenes/pages/scenes_page.dart';
 import '../features/tags/pages/my_tags_page.dart';
 import '../features/shootkit/pages/shootkit_editor_page.dart';
 import '../features/splash/pages/splash_page.dart';
+import '../features/gallery/pages/template_photos_page.dart';
 import '../features/templates/pages/templates_all_page.dart';
 import '../features/templates/pages/templates_category_page.dart';
 import '../features/templates/pages/templates_detail_page.dart';
@@ -243,6 +244,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'search',
         builder: (context, state) => GlobalSearchPage(
           scope: SearchScopeExt.fromName(state.queryParams[RouteNames.paramScope]),
+        ),
+      ),
+      // 模板照片网格页：某模板在本机拍摄的全部照片（从模板详情页「查看全部」进入）
+      GoRoute(
+        path: RouteNames.templatesPhotos,
+        name: 'templatesPhotos',
+        builder: (context, state) => TemplatePhotosPage(
+          templateId: state.queryParams[RouteNames.paramTemplateId] ?? '',
         ),
       ),
       // 二级分类独立页：一级题材 → 二级大风格/浅层风格（spec 2026-08-17-template-category-4level-design.md §6）
