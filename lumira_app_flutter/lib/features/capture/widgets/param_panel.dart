@@ -392,13 +392,12 @@ class _CameraTab extends ConsumerWidget {
                   // 切回 Auto：temperatureK 置 null，插件端 auto 复位
                   _applyWhiteBalance(ref, const WhiteBalanceSettings());
                 } else {
-                  // 非 Auto：若无手动色温，默认 5500K
+                  // 非 Auto 预设：仅下发 mode，temperatureK 置 null，
+                  // 让三端原生预设分支生效（而非手动色温分支）。
+                  // 仅拖动色温滑块时才携带 temperatureK（手动分支）。
                   _applyWhiteBalance(
                     ref,
-                    WhiteBalanceSettings(
-                      mode: mode,
-                      temperatureK: wb.temperatureK ?? 5500,
-                    ),
+                    WhiteBalanceSettings(mode: mode),
                   );
                 }
               },
