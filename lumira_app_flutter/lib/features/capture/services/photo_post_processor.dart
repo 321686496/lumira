@@ -321,20 +321,10 @@ class PhotoPostProcessor {
         }
       }
 
-      // 5.5. 色域校正（iOS 宽色域）：原始 JPEG 为 Display P3，dart:ui 解码后的
-      // rawRgba 是否是 P3 数值取决于运行时的颜色管理。这里加只读诊断，确认
-      // 实际行为后再决定是否/如何换算，避免方向错导致照片偏紫。
-      final p3 = _isDisplayP3Jpeg(bytes);
-      debugPrint('[p3dbg] input=${bytes.length}B p3tag=$p3 w=${resultImage.width} h=${resultImage.height} t=${sw.elapsedMilliseconds}ms');
-      if (p3) {
-        resultImage = await _applyP3ToSrgbUi(resultImage);
-        debugPrint('[p3dbg] P3→sRGB applied @ ${sw.elapsedMilliseconds}ms');
-      }
-
-      // 6. 补光效果不应用到照片
+      // 5.5. 补光效果不应用到照片
       // 补光是屏幕发光照亮被摄物（物理光源），不应作为颜色滤镜叠加到照片上。
 
-      // 7. 编码 JPEG 并保存
+      // 6. 编码 JPEG 并保存
       final jpegBytes = await _encodeJpeg(resultImage);
       final finalPath = outputPath ?? inputPath;
       await File(finalPath).writeAsBytes(jpegBytes);
