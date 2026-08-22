@@ -14,6 +14,8 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
 import '../data/capture_scene_mock_data.dart';
+import '../data/scene_record_mapper.dart';
+import '../data/scene_presets_data.dart';
 import '../widgets/scene_achievement_card.dart';
 import '../widgets/scene_filter_badge.dart';
 import '../widgets/add_to_composition_sheet.dart';
@@ -63,31 +65,33 @@ class _CaptureSceneDetailPageState
   }
 
   Future<void> _loadScene() async {
-    // 先尝试 DAO
+    final id = widget.sceneId ?? '';
+    // 1. 优先真实 DB 数据
     try {
       final dao = await ref.read(scenesDaoProvider.future);
-      final record = await dao.getById(widget.sceneId ?? '');
+      final record = await dao.getById(id);
       if (record != null) {
         _sceneRecord = record;
         _isFav = record.isFavorite;
-        // 仍用 mock ScenePreset 提供完整 UI 字段（icon/filter/sceneGuide 结构体）
-        final mockScene = CaptureSceneMockData.getSceneById(widget.sceneId);
-        _scene = mockScene;
-        if (mockScene != null && mockScene.isCustom) {
-          _editableTagIds =
-              List<String>.from((mockScene as CustomScenePreset).tagIds);
+        // 按 creator 映射：user → 自定义场景；其它 → 内置/系统场景
+        _scene = record.creator == 'user'
+            ? sceneRecordToCustom(record)
+            : sceneRecordToPreset(record);
+        final custom = _scene as CustomScenePreset?;
+        if (custom != null) {
+          _editableTagIds = List<String>.from(custom.tagIds);
         }
         return;
       }
     } catch (_) {
-      // DAO 失败回退 mock
+      // DAO 异常 → 下方回退真实内置预设
     }
-    // 回退 mock
-    final s = CaptureSceneMockData.getSceneById(widget.sceneId);
-    _scene = s;
-    _isFav = s != null ? CaptureSceneMockData.isFavorite(s.id) : false;
-    if (s != null && s.isCustom) {
-      _editableTagIds = List<String>.from((s as CustomScenePreset).tagIds);
+    // 2. DB 无该场景 → 真实内置预设
+    final preset = ScenePresetsData.getScenePreset(id);
+    _scene = preset;
+    _isFav = false;
+    if (preset is CustomScenePreset) {
+      _editableTagIds = List<String>.from(preset.tagIds);
     }
   }
 
