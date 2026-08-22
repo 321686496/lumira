@@ -1,0 +1,1942 @@
+﻿diff --git a/lumira-server/packages/backend/src/modules/points/points.controller.ts b/lumira-server/packages/backend/src/modules/points/points.controller.ts
+index 7c4c046..6e995cf 100644
+--- a/lumira-server/packages/backend/src/modules/points/points.controller.ts
++++ b/lumira-server/packages/backend/src/modules/points/points.controller.ts
+@@ -28,7 +28,7 @@ export class PointsController {
+ 
+   /**
+    * 事件型积分领取：每日首次拍摄（type='shoot_daily'）、完成挑战（type='challenge', refId=challengeId）、
+-   * 每日首次分享（type='share'）。
++   * 每日首次分享（type='share'）、达到指定等级（type='level_reward', refId=level）。
+    * 幂等：同一设备同一事件只发放一次；重复领取返回 { granted: false }（200，不抛错）。
+    */
+   @Post('earn')
+@@ -40,7 +40,7 @@ export class PointsController {
+     const refId = (body?.refId ?? '').trim() || null;
+     return this.pointsService.earnEvent(
+       deviceId,
+-      type as 'shoot_daily' | 'challenge' | 'share',
++      type as 'shoot_daily' | 'challenge' | 'share' | 'level_reward',
+       refId,
+     );
+   }
+diff --git a/lumira-server/packages/backend/src/modules/points/points.service.ts b/lumira-server/packages/backend/src/modules/points/points.service.ts
+index c5c1946..e64faa6 100644
+--- a/lumira-server/packages/backend/src/modules/points/points.service.ts
++++ b/lumira-server/packages/backend/src/modules/points/points.service.ts
+@@ -13,13 +13,20 @@ import { getUtc8DateStr } from '../../common/utils/date.util';
+ type PointTransactionType =
+   | 'invite' | 'sign_in' | 'share' | 'redeem_code'
+   | 'exchange_template' | 'ad' | 'admin_grant'
+-  | 'shoot_daily' | 'challenge';
++  | 'shoot_daily' | 'challenge'
++  | 'level_reward';
+ 
+ // 事件型积分规则：type → 单次积分值
+ const DAILY_SHOOT_POINTS = 2; // 每日首次拍摄
+ const CHALLENGE_POINTS = 5;   // 每次完成挑战
+ const SHARE_POINTS = 2;       // 每日首次分享
+ 
++// 升级积分奖励真值源（key=等级，与前端 LEVEL_REWARD_MAP 一致）
++const LEVEL_REWARD_MAP: Record<number, number> = {
++  2: 25, 3: 25, 4: 50, 5: 100, 6: 50, 7: 50, 8: 50, 9: 50, 10: 250,
++  11: 50, 12: 50, 13: 50, 14: 50, 15: 150, 16: 50, 17: 50, 18: 50, 19: 50, 20: 500,
++};
++
+ interface BalanceRow {
+   deviceId: string;
+   balance: number;
+@@ -116,6 +123,17 @@ export class PointsService {
+       points = SHARE_POINTS;
+       // 每日首次分享：refId 按 UTC+8 自然日计算（与 shoot_daily 同模式，幂等）
+       eventRefId = getUtc8DateStr();
++    } else if (type === 'level_reward') {
++      if (!refId) {
++        throw new BadRequestException('refId (level) is required for level_reward');
++      }
++      const level = parseInt(refId, 10);
++      if (!Object.prototype.hasOwnProperty.call(LEVEL_REWARD_MAP, level)) {
++        throw new BadRequestException(`Invalid level reward: ${refId}`);
++      }
++      points = LEVEL_REWARD_MAP[level];
++      // 归一化等级字符串（如 "05" → "5"），保证同一等级在同一级幂等键下只发一次
++      eventRefId = String(level);
+     } else {
+       throw new BadRequestException(`Unsupported earn type: ${type}`);
+     }
+diff --git a/lumira-server/packages/backend/test/points.e2e-spec.ts b/lumira-server/packages/backend/test/points.e2e-spec.ts
+index eabaf77..d47c374 100644
+--- a/lumira-server/packages/backend/test/points.e2e-spec.ts
++++ b/lumira-server/packages/backend/test/points.e2e-spec.ts
+@@ -67,4 +67,38 @@ describe('PointsController (e2e)', () => {
+       .send({ type: 'not-a-type' })
+       .expect(400);
+   });
++
++  it('POST /api/v1/points/earn type=level_reward refId=10 → 首次 granted:true 且 delta:250', async () => {
++    const res = await request(app.getHttpServer())
++      .post('/api/v1/points/earn')
++      .set('Authorization', `Bearer ${token}`)
++      .send({ type: 'level_reward', refId: '10' })
++      .expect(201);
++    expect(res.body.granted).toBe(true);
++    expect(res.body.delta).toBe(250);
++  });
++
++  it('POST /api/v1/points/earn type=level_reward refId=10 → 重复 granted:false 且余额不变', async () => {
++    const before = await request(app.getHttpServer())
++      .post('/api/v1/points/earn')
++      .set('Authorization', `Bearer ${token}`)
++      .send({ type: 'level_reward', refId: '10' })
++      .expect(201);
++    const res = await request(app.getHttpServer())
++      .post('/api/v1/points/earn')
++      .set('Authorization', `Bearer ${token}`)
++      .send({ type: 'level_reward', refId: '10' })
++      .expect(201);
++    expect(res.body.granted).toBe(false);
++    expect(res.body.delta).toBe(0);
++    expect(res.body.balance).toBe(before.body.balance);
++  });
++
++  it('POST /api/v1/points/earn type=level_reward refId=999 (不在奖励表) → 400', async () => {
++    await request(app.getHttpServer())
++      .post('/api/v1/points/earn')
++      .set('Authorization', `Bearer ${token}`)
++      .send({ type: 'level_reward', refId: '999' })
++      .expect(400);
++  });
+ });
+diff --git a/lumira-server/packages/shared/src/types/points.ts b/lumira-server/packages/shared/src/types/points.ts
+index f2798aa..e19ef74 100644
+--- a/lumira-server/packages/shared/src/types/points.ts
++++ b/lumira-server/packages/shared/src/types/points.ts
+@@ -10,7 +10,8 @@ export type PointTransactionType =
+   | 'ad'               // 看广告（预留）
+   | 'admin_grant'      // 后台发放
+   | 'shoot_daily'      // 每日首次拍摄
+-  | 'challenge';       // 完成挑战
++  | 'challenge'        // 完成挑战
++  | 'level_reward';    // 达到指定等级发积分（一级一次）
+ 
+ // 积分流水记录
+ export interface PointTransaction {
+diff --git a/lumira_app_flutter/lib/app/router.dart b/lumira_app_flutter/lib/app/router.dart
+index c4c1211..06f4b3d 100644
+--- a/lumira_app_flutter/lib/app/router.dart
++++ b/lumira_app_flutter/lib/app/router.dart
+@@ -35,6 +35,7 @@ import '../features/inspiration/pages/tutorial_detail_page.dart';
+ import '../features/onboarding/pages/questionnaire_page.dart';
+ import '../features/academy/pages/academy_assignment_page.dart';
+ import '../features/academy/pages/academy_detail_page.dart';
++import '../features/academy/pages/academy_favorites_page.dart';
+ import '../features/academy/pages/academy_knowledge_page.dart';
+ import '../features/academy/pages/academy_page.dart';
+ import '../features/academy/pages/academy_trajectory_page.dart';
+@@ -506,6 +507,11 @@ final routerProvider = Provider<GoRouter>((ref) {
+         name: 'academyTrajectory',
+         builder: (context, state) => const AcademyTrajectoryPage(),
+       ),
++      GoRoute(
++        path: RouteNames.academyFavorites,
++        name: 'academyFavorites',
++        builder: (context, state) => const AcademyFavoritesPage(),
++      ),
+       GoRoute(
+         path: RouteNames.profileCollections,
+         name: 'profileCollections',
+diff --git a/lumira_app_flutter/lib/core/db/dao/growth_dao.dart b/lumira_app_flutter/lib/core/db/dao/growth_dao.dart
+index 38d84ac..c755a12 100644
+--- a/lumira_app_flutter/lib/core/db/dao/growth_dao.dart
++++ b/lumira_app_flutter/lib/core/db/dao/growth_dao.dart
+@@ -5,6 +5,14 @@ import 'package:sqflite/sqflite.dart';
+ import '../tables.dart';
+ import '../../../features/profile/data/growth_models.dart';
+ 
++/// 经验来源 → 展示文案
++const Map<String, String> kXpSourceLabel = {
++  'shoot_daily': '每日首拍',
++  'challenge': '完成挑战',
++  'course': '学习课程',
++  'share': '每日首享',
++};
++
+ /// 成长中心只读 DAO
+ /// 聚合 user_progress / challenge_history / gallery_items / academy_course_progress 表
+ class GrowthDao {
+@@ -12,20 +20,12 @@ class GrowthDao {
+ 
+   final Database _db;
+ 
+-  /// 获取总 XP。
+-  /// 优先用 user_progress.xp；若为 0 则降级到 challenge_history.reward_xp 求和。
++  /// 获取总 XP：经验台账 xp_events 求和（真实数据）。
+   Future<int> getTotalXP() async {
+-    final rows = await _db.query(Tables.userProgress, where: '${Tables.colId} = ?', whereArgs: [1]);
+-    if (rows.isNotEmpty) {
+-      final xp = (rows.first[Tables.colXp] as num?)?.toInt() ?? 0;
+-      if (xp > 0) return xp;
+-    }
+-    // 降级：challenge_history 求和（注意：状态值与 ChallengeStatus.name 对齐 = 'done'）
+-    final sumRows = await _db.rawQuery(
+-      'SELECT COALESCE(SUM(${ChallengeHistoryTable.colRewardXp}), 0) AS s FROM ${ChallengeHistoryTable.name} WHERE ${ChallengeHistoryTable.colStatus} = ?',
+-      ['done'],
++    final rows = await _db.rawQuery(
++      'SELECT COALESCE(SUM(${XpEventsTable.colAmount}), 0) AS s FROM ${XpEventsTable.name}',
+     );
+-    return Sqflite.firstIntValue(sumRows) ?? 0;
++    return Sqflite.firstIntValue(rows) ?? 0;
+   }
+ 
+   /// 获取用户累计拍摄照片数（user_progress.total_photos）。
+@@ -51,22 +51,75 @@ class GrowthDao {
+     return Sqflite.firstIntValue(cntRows) ?? 0;
+   }
+ 
+-  /// 等级 = XP / 500 + 1
++  /// 当前等级（阶梯阈值表 Lv.1–20）。
+   Future<int> getLevel() async {
+     final xp = await getTotalXP();
+-    return xp ~/ 500 + 1;
++    return levelForXp(xp);
++  }
++
++  /// 当前等级称号。
++  Future<String> getLevelName() async {
++    final level = await getLevel();
++    return levelNameFor(level) ?? '';
++  }
++
++  /// 成长总览（等级进度）。
++  Future<GrowthSummary> getSummary() async {
++    final xp = await getTotalXP();
++    final level = levelForXp(xp);
++    // 距下一级 = 下一级阈值 - 当前总XP；已达最高级(Lv.20)则为 0
++    final next = LEVEL_THRESHOLDS.where((t) => t.level == level + 1).toList();
++    final raw = next.isEmpty ? 0 : (next.first.xp - xp);
++    return GrowthSummary(
++      level: level,
++      currentXp: xp,
++      xpToNextLevel: raw < 0 ? 0 : raw,
++      levelName: levelNameFor(level) ?? '',
++    );
++  }
++
++  /// 经验来源明细：按 source 求和 + 占比，固定展示顺序（shoot_daily, challenge, course, share）。
++  Future<List<XpBreakdownEntry>> getXpBreakdown() async {
++    final rows = await _db.rawQuery('''
++      SELECT ${XpEventsTable.colSource} AS src,
++             SUM(${XpEventsTable.colAmount}) AS s
++      FROM ${XpEventsTable.name}
++      GROUP BY ${XpEventsTable.colSource}
++    ''');
++    var total = 0;
++    for (final r in rows) {
++      total += (r['s'] as num?)?.toInt() ?? 0;
++    }
++    if (total <= 0) return const [];
++    int sourceOrder(String key) => kXpSourceLabel.keys.toList().indexOf(key);
++    final list = <XpBreakdownEntry>[];
++    for (final r in rows) {
++      final src = r['src'] as String? ?? '';
++      final amount = (r['s'] as num?)?.toInt() ?? 0;
++      if (amount <= 0) continue;
++      list.add(XpBreakdownEntry(
++        source: src,
++        amount: amount,
++        label: kXpSourceLabel[src] ?? src,
++        ratio: amount / total,
++      ));
++    }
++    list.sort((a, b) => sourceOrder(a.source).compareTo(sourceOrder(b.source)));
++    return list;
+   }
+ 
+   /// 获取成就墙（6 项）。
+   /// 优先从 user_progress.achievements_json 反序列化；无记录时返回 6 项占位。
+   Future<List<AchievementRecord>> getAchievements() async {
+     final rows = await _db.query(Tables.userProgress, where: '${Tables.colId} = ?', whereArgs: [1]);
+-    if (rows.isEmpty) return kPlaceholderAchievements;
++    if (rows.isEmpty) return _withRealLevel(kPlaceholderAchievements);
++
+     final raw = rows.first[Tables.colAchievementsJson] as String?;
+-    if (raw == null || raw.isEmpty || raw == '[]') return kPlaceholderAchievements;
++    if (raw == null || raw.isEmpty || raw == '[]') {
++      return _withRealLevel(kPlaceholderAchievements);
++    }
+     try {
+       final list = jsonDecode(raw) as List<dynamic>;
+-      // 反序列化每条成就，与占位合并（占位提供 name/description/iconKey）
+       final unlockedMap = <String, int>{};
+       for (final item in list) {
+         final m = item as Map<String, dynamic>;
+@@ -74,7 +127,7 @@ class GrowthDao {
+         final ts = m['unlockedAt'] as int?;
+         if (id != null) unlockedMap[id] = ts ?? 0;
+       }
+-      return kPlaceholderAchievements.map((a) {
++      final result = kPlaceholderAchievements.map((a) {
+         if (unlockedMap.containsKey(a.id)) {
+           return AchievementRecord(
+             id: a.id,
+@@ -87,11 +140,29 @@ class GrowthDao {
+         }
+         return a;
+       }).toList();
++      return await _withRealLevel(result);
+     } catch (_) {
+-      return kPlaceholderAchievements;
++      return _withRealLevel(kPlaceholderAchievements);
+     }
+   }
+ 
++  /// 按真实等级（阈值表）修正 ach_level_5 解锁状态：真实等级 ≥ 5 则强制解锁。
++  Future<List<AchievementRecord>> _withRealLevel(List<AchievementRecord> source) async {
++    final level = await getLevel();
++    if (level < 5) return source;
++    return source.map((a) {
++      if (a.id != 'ach_level_5' || a.unlocked) return a;
++      return AchievementRecord(
++        id: a.id,
++        name: a.name,
++        description: a.description,
++        iconKey: a.iconKey,
++        unlocked: true,
++        unlockedAt: a.unlockedAt ?? DateTime.now().millisecondsSinceEpoch,
++      );
++    }).toList();
++  }
++
+   /// 获取成长轨迹（最近 4 条，时间倒序）。
+   /// 聚合 challenge_history.completed_at + gallery_items.created_at（milestone）
+   /// 简化：仅聚合这两条流；academy_course_progress 完成事件在 M6 任务接入
+diff --git a/lumira_app_flutter/lib/core/db/database_provider.dart b/lumira_app_flutter/lib/core/db/database_provider.dart
+index 8ab93a3..93a3f2f 100644
+--- a/lumira_app_flutter/lib/core/db/database_provider.dart
++++ b/lumira_app_flutter/lib/core/db/database_provider.dart
+@@ -16,12 +16,13 @@ import 'dao/settings_dao.dart';
+ import 'dao/watermark_dao.dart';
+ import 'dao/tutorial_read_dao.dart';
+ import 'dao/tags_dao.dart';
++import '../../features/academy/data/academy_content.dart';
+ import '../../core/auth/auth_dao.dart';
+ import '../../features/onboarding/data/questionnaire_dao.dart';
+ import '../../features/profile/data/profile_dao.dart';
+ 
+ const String _kDbName = 'lumira.db';
+-const int _kDbVersion = 25;
++const int _kDbVersion = 26;
+ 
+ /// 数据库 Provider
+ /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
+@@ -385,6 +386,22 @@ Future<void> _onCreate(Database db, int version) async {
+   await db.execute(WatermarkTemplatesTable.createSql);
+   await db.execute(WatermarkTemplatesTable.indexCreatedAtSql);
+ 
++  // === v26: xp_events 经验台账表 ===
++  await db.execute(XpEventsTable.createSql);
++  await db.execute(XpEventsTable.indexSql);
++  await _addColumnIfNotExists(
++    db,
++    Tables.userProgress,
++    Tables.colXpRewardClaimedLevel,
++    'INTEGER NOT NULL DEFAULT 0',
++  );
++  // 回填历史真实经验（challenge + course；失败静默）
++  try {
++    await _backfillXpLedger(db);
++  } catch (e) {
++    debugPrint('xp_events backfill (onCreate) failed: $e');
++  }
++
+   // === 种子化预置数据（修复：fresh install 时不触发 _onUpgrade，需在 _onCreate 中显式调用 seeder） ===
+   // _onUpgrade 仅在 oldVersion < 4 时调用 BuiltinDataSeeder.seedAll，
+   // 但 fresh install 直接创建 v10 数据库不会触发 _onUpgrade，导致模板表为空。
+@@ -886,6 +903,22 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+       debugPrint('v25 migration failed (silent fallback): $e');
+     }
+   }
++  if (oldVersion < 26) {
++    try {
++      await db.execute(XpEventsTable.createSql);
++      await db.execute(XpEventsTable.indexSql);
++      await _addColumnIfNotExists(
++        db,
++        Tables.userProgress,
++        Tables.colXpRewardClaimedLevel,
++        'INTEGER NOT NULL DEFAULT 0',
++      );
++      // 回填历史真实经验，确保老用户经验曲线不跳变
++      await _backfillXpLedger(db);
++    } catch (e) {
++      debugPrint('v26 migration failed (silent fallback): $e');
++    }
++  }
+ }
+ 
+ /// 修复 template_categories 表中的 corrupted 数据（v18 迁移）。
+@@ -928,6 +961,55 @@ Future<void> _fixCategoryData(Database db) async {
+   ''');
+ }
+ 
++/// 从历史表回填 xp_events 台账（INSERT OR IGNORE 幂等）。
++/// - challenge：challenge_history 已完成 → source='challenge', amount=reward_xp, ref_id=id
++/// - course：academy_course_progress status='completed' → source='course',
++///   amount=该课 rewardXP（AcademyContent 构建 id→rewardXP 映射，找不到的跳过避免虚增）
++Future<void> _backfillXpLedger(Database db) async {
++  // --- challenge ---
++  final chRows = await db.rawQuery('''
++    SELECT ${ChallengeHistoryTable.colId} AS id,
++           ${ChallengeHistoryTable.colRewardXp} AS xp
++    FROM ${ChallengeHistoryTable.name}
++    WHERE ${ChallengeHistoryTable.colStatus} = 'done'
++  ''');
++  for (final r in chRows) {
++    final id = r['id'] as String?;
++    final xp = (r['xp'] as num?)?.toInt() ?? 0;
++    if (id == null || id.isEmpty || xp <= 0) continue;
++    await db.insert(XpEventsTable.name, {
++      'id': 'challenge:$id',
++      XpEventsTable.colSource: 'challenge',
++      XpEventsTable.colAmount: xp,
++      XpEventsTable.colRefId: id,
++      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++    }, conflictAlgorithm: ConflictAlgorithm.ignore);
++  }
++
++  // --- course（id→rewardXP 映射来自 AcademyContent.courses） ---
++  final Map<String, int> courseXp = {};
++  for (final c in AcademyContent.courses) {
++    courseXp[c.id] = c.rewardXP;
++  }
++  final cpRows = await db.rawQuery('''
++    SELECT ${AcademyTables.cpColCourseId} AS cid
++    FROM ${AcademyTables.courseProgress}
++    WHERE ${AcademyTables.cpColStatus} = 'completed'
++  ''');
++  for (final r in cpRows) {
++    final cid = r['cid'] as String?;
++    final xp = cid == null ? 0 : (courseXp[cid] ?? 0);
++    if (cid == null || cid.isEmpty || xp <= 0) continue;
++    await db.insert(XpEventsTable.name, {
++      'id': 'course:$cid',
++      XpEventsTable.colSource: 'course',
++      XpEventsTable.colAmount: xp,
++      XpEventsTable.colRefId: cid,
++      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++    }, conflictAlgorithm: ConflictAlgorithm.ignore);
++  }
++}
++
+ /// 安全添加列：若列已存在则跳过（迁移幂等）
+ Future<void> _addColumnIfNotExists(
+   Database db,
+diff --git a/lumira_app_flutter/lib/core/db/tables.dart b/lumira_app_flutter/lib/core/db/tables.dart
+index b515307..d1321e1 100644
+--- a/lumira_app_flutter/lib/core/db/tables.dart
++++ b/lumira_app_flutter/lib/core/db/tables.dart
+@@ -126,8 +126,10 @@ class Tables {
+   static const String colFavorites = 'favorites';
+   static const String colStreakDays = 'streak_days';
+   static const String colLastCheckInDate = 'last_check_in_date';
+-  static const String colFragmentsJson = 'fragments_json';
+-  static const String colAchievementsJson = 'achievements_json';
++  static const colFragmentsJson = 'fragments_json';
++  static const colAchievementsJson = 'achievements_json';
++  /// 已领取升级积分奖励的最高等级（v26 迁移新增；0=未领取任何）
++  static const String colXpRewardClaimedLevel = 'xp_reward_claimed_level';
+ 
+   // === user_settings ===
+   static const String userSettings = 'user_settings';
+@@ -341,3 +343,25 @@ class WatermarkTemplatesTable {
+       'CREATE INDEX IF NOT EXISTS idx_watermark_templates_created_at ON $name (${Tables.colCreatedAt} DESC)';
+ }
+ 
++/// 经验台账表（v26 迁移新增）
++/// 单行真实数据源：等级 = SUM(amount)；id = "{source}:{refId}" 保证幂等。
++class XpEventsTable {
++  static const name = 'xp_events';
++  static const colSource = 'source'; // 'shoot_daily'|'challenge'|'course'|'share'
++  static const colAmount = 'amount';
++  static const colRefId = 'ref_id';
++  static const colCreatedAt = 'created_at';
++
++  static const createSql = '''
++    CREATE TABLE IF NOT EXISTS $name (
++      id TEXT PRIMARY KEY,
++      $colSource TEXT NOT NULL,
++      $colAmount INTEGER NOT NULL,
++      $colRefId TEXT NOT NULL,
++      $colCreatedAt INTEGER NOT NULL
++    )
++  ''';
++  static const indexSql =
++      'CREATE UNIQUE INDEX IF NOT EXISTS uq_xp_events_source_ref ON $name ($colSource, $colRefId)';
++}
++
+diff --git a/lumira_app_flutter/lib/core/router/route_names.dart b/lumira_app_flutter/lib/core/router/route_names.dart
+index afdc380..2b8a8c9 100644
+--- a/lumira_app_flutter/lib/core/router/route_names.dart
++++ b/lumira_app_flutter/lib/core/router/route_names.dart
+@@ -70,6 +70,7 @@ class RouteNames {
+   static const String myTags = '/my-tags';
+   static const String shootkitEditor = '/shootkit/editor';
+   static const String academyTrajectory = '/academy/trajectory';
++  static const String academyFavorites = '/academy/favorites';
+   static const String profileCompositionKits = '/profile/composition-kits';
+   static const String profileCompositionKitDetail = '/profile/composition-kit-detail';
+   static const String profileRewards = '/profile/rewards';
+diff --git a/lumira_app_flutter/lib/features/academy/data/academy_repository.dart b/lumira_app_flutter/lib/features/academy/data/academy_repository.dart
+index a5e98aa..28cc907 100644
+--- a/lumira_app_flutter/lib/features/academy/data/academy_repository.dart
++++ b/lumira_app_flutter/lib/features/academy/data/academy_repository.dart
+@@ -1,3 +1,5 @@
++import 'package:flutter/foundation.dart';
++
+ import 'academy_dao.dart';
+ import 'academy_content.dart';
+ import 'academy_models.dart';
+@@ -30,6 +32,11 @@ abstract class AcademyRepository {
+   Future<void> toggleFavorite(String cardId);
+   Future<Set<String>> getFavoriteCardIds();
+ 
++  // 课程收藏
++  Future<bool> isCourseFavorited(String courseId);
++  Future<void> toggleCourseFavorite(String courseId);
++  Future<Set<String>> getFavoriteCourseIds();
++
+   // 学习轨迹
+   Future<bool> isCourseFullyCompleted(String courseId);
+   Future<List<AcademyTrajectoryRecord>> getAllTrajectory();
+@@ -38,12 +45,15 @@ abstract class AcademyRepository {
+ class LocalAcademyRepository implements AcademyRepository {
+   final AcademyDao _dao;
+   final DateTime Function() _now;
++  final Future<void> Function(String courseId, int rewardXp)? _onCourseCompleted;
+ 
+   LocalAcademyRepository({
+     required AcademyDao dao,
+     DateTime Function()? now,
++    Future<void> Function(String courseId, int rewardXp)? onCourseCompleted,
+   })  : _dao = dao,
+-        _now = now ?? DateTime.now;
++        _now = now ?? DateTime.now,
++        _onCourseCompleted = onCourseCompleted;
+ 
+   String _formatDate(DateTime d) =>
+       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+@@ -177,6 +187,16 @@ class LocalAcademyRepository implements AcademyRepository {
+         );
+       }
+     }
++
++    // 学完课程经验写台账 + 结算升级奖励（失败不影响课程完成状态）
++    final course = AcademyContent.getCourse(courseId);
++    if (course != null && _onCourseCompleted != null) {
++      try {
++        await _onCourseCompleted!(courseId, course.rewardXP);
++      } catch (e) {
++        debugPrint('[academy] course xp failed: $e');
++      }
++    }
+   }
+ 
+   @override
+@@ -250,6 +270,25 @@ class LocalAcademyRepository implements AcademyRepository {
+   @override
+   Future<Set<String>> getFavoriteCardIds() => _dao.getFavoriteCardIds();
+ 
++  // === 课程收藏 ===
++
++  @override
++  Future<bool> isCourseFavorited(String courseId) =>
++      _dao.isCourseFavorited(courseId);
++
++  @override
++  Future<void> toggleCourseFavorite(String courseId) async {
++    final isFav = await _dao.isCourseFavorited(courseId);
++    if (isFav) {
++      await _dao.removeCourseFavorite(courseId);
++    } else {
++      await _dao.addCourseFavorite(courseId, _now().millisecondsSinceEpoch);
++    }
++  }
++
++  @override
++  Future<Set<String>> getFavoriteCourseIds() => _dao.getFavoriteCourseIds();
++
+   // === 学习轨迹 ===
+ 
+   @override
+diff --git a/lumira_app_flutter/lib/features/academy/pages/academy_detail_page.dart b/lumira_app_flutter/lib/features/academy/pages/academy_detail_page.dart
+index 425ff1d..d58fb6a 100644
+--- a/lumira_app_flutter/lib/features/academy/pages/academy_detail_page.dart
++++ b/lumira_app_flutter/lib/features/academy/pages/academy_detail_page.dart
+@@ -23,23 +23,11 @@ class AcademyDetailPage extends ConsumerStatefulWidget {
+ }
+ 
+ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
+-  bool _bookmarked = false;
+-
+   @override
+   void initState() {
+     super.initState();
+   }
+ 
+-  void _toggleBookmark() {
+-    setState(() => _bookmarked = !_bookmarked);
+-    ScaffoldMessenger.of(context).showSnackBar(
+-      SnackBar(
+-        content: Text(_bookmarked ? '已收藏' : '已取消收藏'),
+-        duration: const Duration(milliseconds: 1000),
+-      ),
+-    );
+-  }
+-
+   void _markComplete() {
+     if (widget.academyId == null) return;
+     ref.read(academyActionsProvider.notifier).markCompleted(widget.academyId!);
+@@ -62,6 +50,11 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
+   Widget build(BuildContext context) {
+     final tokens = ref.watch(themeTokensProvider);
+     final academyId = widget.academyId;
++    final courseFavAsync = ref.watch(favoriteCourseIdsProvider);
++    final isFav = courseFavAsync.maybeWhen(
++      data: (ids) => ids.contains(academyId),
++      orElse: () => false,
++    );
+     final detail = academyId != null ? ref.watch(courseDetailProvider(academyId)) : null;
+     final progressAsync = academyId != null ? ref.watch(courseProgressProvider(academyId)) : null;
+ 
+@@ -91,14 +84,25 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
+         transparent: true,
+         actions: [
+           GestureDetector(
+-            onTap: _toggleBookmark,
++            onTap: () {
++              if (academyId == null) return;
++              ref
++                  .read(academyActionsProvider.notifier)
++                  .toggleCourseFavorite(academyId);
++              ScaffoldMessenger.of(context).showSnackBar(
++                SnackBar(
++                  content: Text(isFav ? '已取消收藏' : '已收藏'),
++                  duration: const Duration(milliseconds: 1000),
++                ),
++              );
++            },
+             behavior: HitTestBehavior.opaque,
+             child: Padding(
+               padding: const EdgeInsets.all(8),
+               child: Icon(
+-                _bookmarked ? Icons.bookmark : Icons.bookmark_border,
++                isFav ? Icons.favorite : Icons.favorite_border,
+                 size: 22,
+-                color: tokens.textPrimary,
++                color: isFav ? tokens.danger : tokens.textPrimary,
+               ),
+             ),
+           ),
+diff --git a/lumira_app_flutter/lib/features/academy/pages/academy_favorites_page.dart b/lumira_app_flutter/lib/features/academy/pages/academy_favorites_page.dart
+new file mode 100644
+index 0000000..1c39231
+--- /dev/null
++++ b/lumira_app_flutter/lib/features/academy/pages/academy_favorites_page.dart
+@@ -0,0 +1,274 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++import 'package:go_router/go_router.dart';
++
++import '../../../core/router/route_names.dart';
++import '../../../core/theme/theme_controller.dart';
++import '../../../core/theme/theme_tokens.dart';
++import '../../../shared/widgets/common/glass_background.dart';
++import '../../../shared/widgets/nav/lumira_nav.dart';
++import '../../../shared/widgets/lumira/lumira.dart' show LumiraProgress, LumiraButton, ButtonVariant;
++import '../data/academy_models.dart';
++import '../providers/academy_providers.dart';
++
++/// 我的收藏：单页双分区展示已收藏课程 + 已收藏知识卡
++class AcademyFavoritesPage extends ConsumerWidget {
++  const AcademyFavoritesPage({super.key});
++
++  @override
++  Widget build(BuildContext context, WidgetRef ref) {
++    final tokens = ref.watch(themeTokensProvider);
++    final courseFavAsync = ref.watch(favoriteCourseIdsProvider);
++    final cardFavAsync = ref.watch(favoriteCardIdsProvider);
++    final allCourses = ref.watch(coursesProvider(null));
++    final allCards = ref.watch(knowledgeCardsProvider);
++
++    return Scaffold(
++      backgroundColor: tokens.canvas,
++      extendBodyBehindAppBar: true,
++      appBar: const LumiraNav(
++        title: '我的收藏',
++        transparent: true,
++        showBackButton: true,
++      ),
++      body: Stack(
++        children: [
++          const Positioned.fill(
++              child: GlassBackground(variant: GlassBackgroundVariant.profile)),
++          SafeArea(
++            top: false,
++            child: courseFavAsync.when(
++              loading: () => Center(child: LumiraProgress.circular()),
++              error: (_, __) => Center(
++                child: Text('加载失败', style: TextStyle(color: tokens.textTertiary)),
++              ),
++              data: (courseIds) => _buildContent(
++                context,
++                ref,
++                tokens,
++                courseIds: courseIds,
++                cardIds: cardFavAsync.maybeWhen(
++                    data: (s) => s, orElse: () => <String>{}),
++                allCourses: allCourses,
++                allCards: allCards,
++              ),
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++
++  Widget _buildContent(
++    BuildContext context,
++    WidgetRef ref,
++    ThemeTokens tokens, {
++    required Set<String> courseIds,
++    required Set<String> cardIds,
++    required List<AcademyCourse> allCourses,
++    required List<KnowledgeCard> allCards,
++  }) {
++    final favCourses =
++        allCourses.where((c) => courseIds.contains(c.id)).toList();
++    final favCards =
++        allCards.where((c) => cardIds.contains(c.id)).toList();
++
++    if (favCourses.isEmpty && favCards.isEmpty) {
++      return _EmptyState(tokens: tokens);
++    }
++
++    final topPadding = MediaQuery.of(context).viewPadding.top + 48;
++    return ListView(
++      padding: EdgeInsets.only(top: topPadding, bottom: 24),
++      children: [
++        if (favCourses.isNotEmpty) ...[
++          _SectionTitle(title: '已收藏课程', tokens: tokens),
++          for (final c in favCourses) _CourseRow(course: c, tokens: tokens),
++        ],
++        if (favCards.isNotEmpty) ...[
++          const SizedBox(height: 8),
++          _SectionTitle(title: '已收藏知识卡', tokens: tokens),
++          for (final kc in favCards) _KnowledgeRow(card: kc, tokens: tokens),
++        ],
++      ],
++    );
++  }
++}
++
++class _SectionTitle extends StatelessWidget {
++  const _SectionTitle({required this.title, required this.tokens});
++  final String title;
++  final ThemeTokens tokens;
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
++      child: Text(
++        title,
++        style: TextStyle(
++          fontFamily: 'Noto Serif SC',
++          fontSize: 17,
++          fontWeight: FontWeight.w600,
++          color: tokens.textPrimary,
++        ),
++      ),
++    );
++  }
++}
++
++class _CourseRow extends StatelessWidget {
++  const _CourseRow({required this.course, required this.tokens});
++  final AcademyCourse course;
++  final ThemeTokens tokens;
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
++      child: _FavoriteRow(
++        cover: course.coverImage,
++        title: '第${course.lessonNumber}课 · ${course.title}',
++        subtitle: course.meta,
++        tokens: tokens,
++        onTap: () => GoRouter.of(context).push(
++          RouteNames.build(
++            RouteNames.profileAcademyDetail,
++            {RouteNames.paramAcademyId: course.id},
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++class _KnowledgeRow extends StatelessWidget {
++  const _KnowledgeRow({required this.card, required this.tokens});
++  final KnowledgeCard card;
++  final ThemeTokens tokens;
++
++  @override
++  Widget build(BuildContext context) {
++    return Padding(
++      padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
++      child: _FavoriteRow(
++        cover: card.coverImage,
++        title: card.title,
++        subtitle: card.subtitle,
++        tokens: tokens,
++        onTap: () => GoRouter.of(context).push(
++          RouteNames.build(
++            RouteNames.profileAcademyKnowledge,
++            {RouteNames.paramAcademyId: card.id},
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++/// 总览页统一行卡片：封面 + 标题 + 副标题 + 取消收藏爱心
++class _FavoriteRow extends StatelessWidget {
++  const _FavoriteRow({
++    required this.cover,
++    required this.title,
++    required this.subtitle,
++    required this.tokens,
++    required this.onTap,
++  });
++  final String cover;
++  final String title;
++  final String subtitle;
++  final ThemeTokens tokens;
++  final VoidCallback onTap;
++
++  @override
++  Widget build(BuildContext context) {
++    return GestureDetector(
++      onTap: onTap,
++      behavior: HitTestBehavior.opaque,
++      child: Container(
++        decoration: BoxDecoration(
++          color: tokens.surface,
++          borderRadius: BorderRadius.circular(12),
++        ),
++        padding: const EdgeInsets.all(12),
++        clipBehavior: Clip.antiAlias,
++        child: Row(
++          children: [
++            ClipRRect(
++              borderRadius: BorderRadius.circular(8),
++              child: SizedBox(
++                width: 72,
++                height: 54,
++                child: Image.asset(
++                  cover,
++                  fit: BoxFit.cover,
++                  errorBuilder: (_, __, ___) => Container(
++                    color: tokens.surfaceAlt,
++                    child: Icon(Icons.broken_image_outlined,
++                        color: tokens.textTertiary),
++                  ),
++                ),
++              ),
++            ),
++            const SizedBox(width: 12),
++            Expanded(
++              child: Column(
++                crossAxisAlignment: CrossAxisAlignment.start,
++                children: [
++                  Text(
++                    title,
++                    style: TextStyle(
++                      fontSize: 14,
++                      fontWeight: FontWeight.w600,
++                      color: tokens.textPrimary,
++                    ),
++                    maxLines: 1,
++                    overflow: TextOverflow.ellipsis,
++                  ),
++                  const SizedBox(height: 4),
++                  Text(
++                    subtitle,
++                    style: TextStyle(fontSize: 12, color: tokens.textTertiary),
++                    maxLines: 2,
++                    overflow: TextOverflow.ellipsis,
++                  ),
++                ],
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++class _EmptyState extends StatelessWidget {
++  const _EmptyState({required this.tokens});
++  final ThemeTokens tokens;
++
++  @override
++  Widget build(BuildContext context) {
++    return Center(
++      child: Column(
++        mainAxisSize: MainAxisSize.min,
++        children: [
++          Icon(Icons.favorite_border, size: 48, color: tokens.textTertiary),
++          const SizedBox(height: 12),
++          Text('还没有收藏内容',
++              style: TextStyle(fontSize: 14, color: tokens.textTertiary)),
++          const SizedBox(height: 4),
++          Text('进入课程或知识卡片点心形图标即可收藏',
++              style: TextStyle(fontSize: 12, color: tokens.textTertiary)),
++          const SizedBox(height: 16),
++          LumiraButton(
++            variant: ButtonVariant.primary,
++            onPressed: () => GoRouter.of(context).pop(),
++            child: const Text('返回摄影美学院'),
++          ),
++        ],
++      ),
++    );
++  }
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/features/academy/pages/academy_page.dart b/lumira_app_flutter/lib/features/academy/pages/academy_page.dart
+index 65f5a5a..cb84e42 100644
+--- a/lumira_app_flutter/lib/features/academy/pages/academy_page.dart
++++ b/lumira_app_flutter/lib/features/academy/pages/academy_page.dart
+@@ -54,7 +54,20 @@ class _AcademyPageState extends ConsumerState<AcademyPage> {
+     return Scaffold(
+       backgroundColor: tokens.canvas,
+       extendBodyBehindAppBar: true,
+-      appBar: const LumiraNav(title: '摄影美学院', transparent: true),
++      appBar: LumiraNav(
++        title: '摄影美学院',
++        transparent: true,
++        actions: [
++          GestureDetector(
++            onTap: () => GoRouter.of(context).push(RouteNames.academyFavorites),
++            behavior: HitTestBehavior.opaque,
++            child: Padding(
++              padding: const EdgeInsets.all(8),
++              child: Icon(Icons.favorite_border, size: 22, color: tokens.textPrimary),
++            ),
++          ),
++        ],
++      ),
+       body: Stack(
+         children: [
+           const Positioned.fill(
+diff --git a/lumira_app_flutter/lib/features/academy/providers/academy_providers.dart b/lumira_app_flutter/lib/features/academy/providers/academy_providers.dart
+index 82af2b5..ad5a07a 100644
+--- a/lumira_app_flutter/lib/features/academy/providers/academy_providers.dart
++++ b/lumira_app_flutter/lib/features/academy/providers/academy_providers.dart
+@@ -5,12 +5,27 @@ import '../data/academy_repository.dart';
+ import '../data/academy_models.dart';
+ import '../data/academy_content.dart';
+ import '../data/academy_trajectory_models.dart';
++import '../../points/data/points_repository.dart';
++import '../../profile/services/growth_xp_provider.dart';
+ 
+ // === DAO & Repository ===
+ 
+ final academyRepositoryProvider = FutureProvider<AcademyRepository>((ref) async {
+   final dao = await ref.watch(academyDaoProvider.future);
+-  return LocalAcademyRepository(dao: dao);
++  return LocalAcademyRepository(
++    dao: dao,
++    onCourseCompleted: (courseId, xp) async {
++      final db = await ref.read(databaseProvider.future);
++      final repo = await ref.read(pointsRepositoryProvider.future);
++      await awardAndClaim(
++        db: db,
++        repo: repo,
++        source: 'course',
++        amount: xp,
++        refId: courseId,
++      );
++    },
++  );
+ });
+ 
+ // === 课程数据 ===
+@@ -140,6 +155,12 @@ final favoriteCardIdsProvider = FutureProvider<Set<String>>((ref) async {
+   return repo.getFavoriteCardIds();
+ });
+ 
++/// 收藏课程 ID 集合
++final favoriteCourseIdsProvider = FutureProvider<Set<String>>((ref) async {
++  final repo = await ref.watch(academyRepositoryProvider.future);
++  return repo.getFavoriteCourseIds();
++});
++
+ // === 状态变更通知器 ===
+ 
+ /// 操作后刷新用的状态
+@@ -180,6 +201,12 @@ class AcademyActionNotifier extends StateNotifier<AcademyActionState> {
+     _refresh();
+   }
+ 
++  Future<void> toggleCourseFavorite(String courseId) async {
++    final repo = await _ref.read(academyRepositoryProvider.future);
++    await repo.toggleCourseFavorite(courseId);
++    _refresh();
++  }
++
+   void _refresh() {
+     state = AcademyActionState(state.version + 1);
+     // 失效所有依赖 DAO 数据的 provider，确保下次读取时重新计算。
+@@ -195,5 +222,6 @@ class AcademyActionNotifier extends StateNotifier<AcademyActionState> {
+     _ref.invalidate(sortedCoursesProvider);
+     _ref.invalidate(assignmentSubmissionProvider);
+     _ref.invalidate(favoriteCardIdsProvider);
++    _ref.invalidate(favoriteCourseIdsProvider);
+   }
+ }
+diff --git a/lumira_app_flutter/lib/features/capture/pages/capture_page.dart b/lumira_app_flutter/lib/features/capture/pages/capture_page.dart
+index a2434ca..394d1b9 100644
+--- a/lumira_app_flutter/lib/features/capture/pages/capture_page.dart
++++ b/lumira_app_flutter/lib/features/capture/pages/capture_page.dart
+@@ -19,6 +19,8 @@ import '../../../core/db/dao/gallery_dao.dart';
+ import '../../challenge/widgets/challenge_overlay_bar.dart';
+ import '../../home/providers/banner_recommendation_provider.dart';
+ import '../../points/data/points_repository.dart';
++import '../../profile/data/growth_models.dart';
++import '../../profile/services/growth_xp_provider.dart';
+ import '../../sign_in/data/sign_in_repository.dart';
+ import '../../../core/router/route_names.dart';
+ import '../../../core/theme/app_theme.dart';
+@@ -844,6 +846,19 @@ class _CapturePageState extends ConsumerState<CapturePage>
+   Future<void> _earnDailyShootPoints() async {
+     try {
+       final repo = await ref.read(pointsRepositoryProvider.future);
++      // 每日首拍经验（+10）写台账 + 结算升级奖励
++      try {
++        final db = await ref.read(databaseProvider.future);
++        await awardAndClaim(
++          db: db,
++          repo: repo,
++          source: 'shoot_daily',
++          amount: 10,
++          refId: utc8DateStr(),
++        );
++      } catch (e) {
++        debugPrint('[capture] daily shoot xp failed: $e');
++      }
+       final result = await repo.earn(type: 'shoot_daily');
+       if (result.granted && mounted) {
+         LumiraToast.show(context, '每日首拍 +${result.delta} 积分');
+diff --git a/lumira_app_flutter/lib/features/challenge/pages/challenge_confirm_page.dart b/lumira_app_flutter/lib/features/challenge/pages/challenge_confirm_page.dart
+index 47c426a..5555b99 100644
+--- a/lumira_app_flutter/lib/features/challenge/pages/challenge_confirm_page.dart
++++ b/lumira_app_flutter/lib/features/challenge/pages/challenge_confirm_page.dart
+@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
+ 
+ import '../../../core/db/database_provider.dart';
+ import '../../../core/db/dao/gallery_dao.dart';
+-import '../../../core/db/tables.dart';
+ import '../../../core/router/route_names.dart';
+ import '../../../core/theme/theme_controller.dart';
+ import '../../../core/theme/theme_tokens.dart';
+@@ -16,6 +15,7 @@ import '../../../shared/widgets/common/fade_up.dart';
+ import '../../../shared/widgets/lumira/lumira.dart';
+ import '../../../shared/widgets/nav/lumira_nav.dart';
+ import '../../points/data/points_repository.dart';
++import '../../profile/services/growth_xp_provider.dart';
+ import '../data/challenge_models.dart';
+ import '../data/challenge_pool.dart';
+ import '../data/challenge_providers.dart';
+@@ -241,19 +241,20 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
+       // 2. 关联 photoId 到挑战历史记录（用于详情页"完成的作品"展示）
+       await dao.attachPhoto(historyId, widget.photoId);
+ 
+-      // 3. 累加 XP 到 user_progress（单行表 id=1）
+-      final db = await ref.read(databaseProvider.future);
+-      await db.rawInsert('''
+-        INSERT OR IGNORE INTO ${Tables.userProgress}
+-          (${Tables.colId}, ${Tables.colXp}, ${Tables.colTotalPhotos}, ${Tables.colUpdatedAt})
+-        VALUES (1, 0, 0, ?)
+-      ''', [nowMs]);
+-      await db.rawUpdate('''
+-        UPDATE ${Tables.userProgress}
+-        SET ${Tables.colXp} = ${Tables.colXp} + ?,
+-            ${Tables.colUpdatedAt} = ?
+-        WHERE ${Tables.colId} = 1
+-      ''', [poolItem.rewardXP, nowMs]);
++      // 3'. 完成挑战经验写台账（幂等）+ 结算升级奖励（失败静默，不阻塞提交）
++      try {
++        final db = await ref.read(databaseProvider.future);
++        final repo = await ref.read(pointsRepositoryProvider.future);
++        await awardAndClaim(
++          db: db,
++          repo: repo,
++          source: 'challenge',
++          amount: poolItem.rewardXP,
++          refId: poolItem.id,
++        );
++      } catch (e) {
++        debugPrint('[challenge] xp ledger/claim failed: $e');
++      }
+ 
+       // 4. 失效相关 provider 触发刷新
+       ref.invalidate(growthDaoProvider);
+diff --git a/lumira_app_flutter/lib/features/profile/data/growth_models.dart b/lumira_app_flutter/lib/features/profile/data/growth_models.dart
+index fd9a763..8e0b662 100644
+--- a/lumira_app_flutter/lib/features/profile/data/growth_models.dart
++++ b/lumira_app_flutter/lib/features/profile/data/growth_models.dart
+@@ -1,5 +1,78 @@
+ /// 成长中心数据模型（来自 DAO 的只读计算结果）
+ 
++/// 单一门槛等级定义（Lv.1–20）
++class LevelThreshold {
++  const LevelThreshold(this.level, this.xp, this.name);
++  final int level;
++  final int xp; // 达到该级所需最小总XP
++  final String name;
++}
++
++/// 阶梯阈值表（升序，Lv.1 阈值 0）
++// ignore: constant_identifier_names
++const List<LevelThreshold> LEVEL_THRESHOLDS = [
++  LevelThreshold(1, 0, '初学者'),
++  LevelThreshold(2, 100, '入门学徒'),
++  LevelThreshold(3, 300, '进阶学徒'),
++  LevelThreshold(4, 600, '熟练学徒'),
++  LevelThreshold(5, 1000, '摄影新手'),
++  LevelThreshold(6, 1500, '摄影爱好者'),
++  LevelThreshold(7, 2200, '摄影达人'),
++  LevelThreshold(8, 3000, '构图能手'),
++  LevelThreshold(9, 4000, '光影大师'),
++  LevelThreshold(10, 5500, '摄影专家'),
++  LevelThreshold(11, 7500, '摄影艺术家'),
++  LevelThreshold(12, 10000, '视觉创作者'),
++  LevelThreshold(13, 13500, '光影探索者'),
++  LevelThreshold(14, 17500, '视觉叙事师'),
++  LevelThreshold(15, 22000, '影像匠人'),
++  LevelThreshold(16, 27000, '光影诗人'),
++  LevelThreshold(17, 33000, '视觉艺术家'),
++  LevelThreshold(18, 40000, '影像大家'),
++  LevelThreshold(19, 48000, '光影宗师'),
++  LevelThreshold(20, 57000, '摄影大师'),
++];
++
++/// 升级积分奖励（key=等级；缺省该 key 表示该级无奖励；本表与后端 LEVEL_REWARD_MAP 必须一致）
++// ignore: constant_identifier_names
++const Map<int, int> LEVEL_REWARD_MAP = {
++  2: 25, 3: 25, 4: 50, 5: 100, 6: 50, 7: 50, 8: 50, 9: 50, 10: 250,
++  11: 50, 12: 50, 13: 50, 14: 50, 15: 150, 16: 50, 17: 50, 18: 50, 19: 50, 20: 500,
++};
++
++/// 根据总 XP 计算当前等级（Lv.1–20）。总 XP 超过 Lv.20 阈值也封顶返回 20。
++int levelForXp(int xp) {
++  var level = 1;
++  for (final t in LEVEL_THRESHOLDS) {
++    if (xp >= t.xp) {
++      level = t.level;
++    } else {
++      break;
++    }
++  }
++  return level;
++}
++
++/// 该级是否有（及多少）升级积分奖励；无奖励返回 null。
++int? levelReward(int level) => LEVEL_REWARD_MAP[level];
++
++/// 该级称号；未知等级返回 null（调用方兜底）。
++String? levelNameFor(int level) {
++  for (final t in LEVEL_THRESHOLDS) {
++    if (t.level == level) return t.name;
++  }
++  return null;
++}
++
++/// UTC+8 自然日字符串（YYYY-MM-DD），与后端 getUtc8DateStr 口径一致。
++String utc8DateStr([DateTime? now]) {
++  final local = (now ?? DateTime.now()).toUtc().add(const Duration(hours: 8));
++  final y = local.year.toString().padLeft(4, '0');
++  final m = local.month.toString().padLeft(2, '0');
++  final d = local.day.toString().padLeft(2, '0');
++  return '$y-$m-$d';
++}
++
+ class GrowthSummary {
+   final int level;
+   final int currentXp;
+@@ -16,11 +89,25 @@ class GrowthSummary {
+   static const GrowthSummary empty = GrowthSummary(
+     level: 1,
+     currentXp: 0,
+-    xpToNextLevel: 500,
+-    levelName: '新手',
++    xpToNextLevel: 100, // 默认到 Lv.2 阈值 100
++    levelName: '初学者',
+   );
+ }
+ 
++/// 经验来源明细（成长中心"来源明细卡"数据）
++class XpBreakdownEntry {
++  const XpBreakdownEntry({
++    required this.source,
++    required this.amount,
++    required this.label,
++    required this.ratio, // 0.0–1.0，占比
++  });
++  final String source;   // 'shoot_daily' | 'challenge' | 'course' | 'share'
++  final int amount;
++  final String label;    // 用户可见文案
++  final double ratio;
++}
++
+ class AchievementRecord {
+   final String id;
+   final String name;
+diff --git a/lumira_app_flutter/lib/features/profile/pages/profile_growth_page.dart b/lumira_app_flutter/lib/features/profile/pages/profile_growth_page.dart
+index 6aebca1..cd78cca 100644
+--- a/lumira_app_flutter/lib/features/profile/pages/profile_growth_page.dart
++++ b/lumira_app_flutter/lib/features/profile/pages/profile_growth_page.dart
+@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:go_router/go_router.dart';
+ 
+ import '../../../core/router/route_names.dart';
+-import '../../../core/theme/app_theme.dart';
+ import '../../../core/theme/theme_controller.dart';
++import '../../../core/db/database_provider.dart';
+ import '../../../core/theme/theme_tokens.dart';
+ import '../../../core/utils/number_format.dart';
++import '../../../features/points/data/points_repository.dart';
+ import '../../../shared/services/poster_generator.dart';
+ import '../../../shared/widgets/cards/neu_card.dart';
+ import '../../../shared/widgets/common/fade_up.dart';
+@@ -14,6 +15,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
+ import '../../../shared/widgets/nav/lumira_nav.dart';
+ import '../data/growth_models.dart';
+ import '../providers/growth_providers.dart';
++import '../services/growth_xp_service.dart';
+ 
+ /// 成长中心页
+ ///
+@@ -33,7 +35,13 @@ class ProfileGrowthPage extends ConsumerWidget {
+   Widget build(BuildContext context, WidgetRef ref) {
+     final tokens = ref.watch(themeTokensProvider);
+ 
++    // 进入成长中心触发一次升级奖励补发（离线失败静默，联网后下次再补）
++    WidgetsBinding.instance.addPostFrameCallback((_) {
++      _claimPendingRewards(ref, context);
++    });
++
+     final levelAsync = ref.watch(growthLevelProvider);
++    final breakdownAsync = ref.watch(growthXpBreakdownProvider);
+     final achievementsAsync = ref.watch(growthAchievementsProvider);
+     final trajectoryAsync = ref.watch(growthTrajectoryProvider);
+     final heatmapAsync = ref.watch(growthHeatmapProvider);
+@@ -81,6 +89,17 @@ class ProfileGrowthPage extends ConsumerWidget {
+                         ),
+                       ),
+                       const SizedBox(height: 20),
++                      FadeUp(
++                        delay: const Duration(milliseconds: 50),
++                        child: _XpBreakdownCard(
++                          tokens: tokens,
++                          entries: breakdownAsync.maybeWhen(
++                            data: (e) => e,
++                            orElse: () => const [],
++                          ),
++                        ),
++                      ),
++                      const SizedBox(height: 20),
+                       FadeUp(
+                         delay: const Duration(milliseconds: 100),
+                         child: _AchievementCard(
+@@ -123,6 +142,25 @@ class ProfileGrowthPage extends ConsumerWidget {
+   }
+ }
+ 
++/// 进入成长中心时补发升级积分奖励（离线失败静默，联网后下次再补）。
++Future<void> _claimPendingRewards(WidgetRef ref, BuildContext context) async {
++  try {
++    final db = await ref.read(databaseProvider.future);
++    final repo = await ref.read(pointsRepositoryProvider.future);
++    final svc = GrowthXpService(
++      db,
++      earnLevelReward: (level) =>
++          repo.earn(type: 'level_reward', refId: level),
++    );
++    final newCount = await svc.claimLevelRewards();
++    if (newCount > 0 && context.mounted) {
++      LumiraToast.show(context, '升级奖励 +$newCount 笔积分已到账');
++    }
++  } catch (e) {
++    debugPrint('[growth] claim level rewards failed: $e');
++  }
++}
++
+ class _BackButton extends StatelessWidget {
+   const _BackButton({required this.tokens});
+   final ThemeTokens tokens;
+@@ -154,12 +192,14 @@ class _LevelCard extends StatelessWidget {
+ 
+   @override
+   Widget build(BuildContext context) {
+-    // 当前等级上限（level * 500）：作为右栏展示与进度条分母。
+-    final levelMaxXp = summary.level * 500;
+-    // 等级内进度：((currentXp - (level-1)*500) / 500 * 100).clamp(0, 100)
+-    // 解释：level = xp ~/ 500 + 1，所以 (level-1)*500 是当前等级下界。
+-    final xpIntoLevel = summary.currentXp - (summary.level - 1) * 500;
+-    final xpPercent = ((xpIntoLevel / 500) * 100).round().clamp(0, 100);
++    // 当前等级下界与下一级上界（阈值表）
++    final cur = LEVEL_THRESHOLDS.where((t) => t.level == summary.level).toList();
++    final curFloor = cur.isEmpty ? 0 : cur.first.xp;
++    final nxt = LEVEL_THRESHOLDS.where((t) => t.level == summary.level + 1).toList();
++    final nxtCeil = nxt.isEmpty ? summary.currentXp : nxt.first.xp;
++    final span = nxtCeil - curFloor;
++    final xpIntoLevel = summary.currentXp - curFloor;
++    final xpPercent = (span <= 0 ? 0.0 : (xpIntoLevel / span) * 100).round().clamp(0, 100);
+ 
+     return NeuCard(
+       child: Column(
+@@ -249,13 +289,19 @@ class _LevelCard extends StatelessWidget {
+               ),
+               Expanded(
+                 child: Text(
+-                  '${formatThousands(levelMaxXp)} XP',
++                  nxt.isEmpty
++                      ? '已达最高等级'
++                      : '${formatThousands(nxtCeil)} XP',
+                   textAlign: TextAlign.right,
++                  maxLines: 1,
++                  overflow: TextOverflow.ellipsis,
+                   style: TextStyle(
+                     fontFamily: 'Courier New',
+                     fontSize: 12,
+                     fontWeight: FontWeight.w600,
+-                    color: tokens.textSecondary,
++                    color: nxt.isEmpty
++                        ? tokens.textTertiary
++                        : tokens.textSecondary,
+                   ),
+                 ),
+               ),
+@@ -267,6 +313,75 @@ class _LevelCard extends StatelessWidget {
+   }
+ }
+ 
++class _XpBreakdownCard extends StatelessWidget {
++  const _XpBreakdownCard({required this.tokens, required this.entries});
++  final ThemeTokens tokens;
++  final List<XpBreakdownEntry> entries;
++
++  @override
++  Widget build(BuildContext context) {
++    if (entries.isEmpty) return const SizedBox.shrink();
++    return NeuCard(
++      child: Column(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Text(
++            '经验来源',
++            style: TextStyle(
++              fontFamily: 'Noto Serif SC',
++              fontSize: 17,
++              fontWeight: FontWeight.w600,
++              color: tokens.textPrimary,
++            ),
++          ),
++          const SizedBox(height: 16),
++          for (final e in entries) ...[
++            Row(
++              children: [
++                Expanded(
++                  child: Text(
++                    e.label,
++                    style: TextStyle(
++                      fontSize: 14,
++                      color: tokens.textPrimary,
++                    ),
++                  ),
++                ),
++                Text(
++                  '${e.amount} XP',
++                  style: TextStyle(
++                    fontFamily: 'Courier New',
++                    fontSize: 12,
++                    fontWeight: FontWeight.w600,
++                    color: tokens.textSecondary,
++                  ),
++                ),
++              ],
++            ),
++            const SizedBox(height: 6),
++            ClipRRect(
++              borderRadius: BorderRadius.circular(3),
++              child: SizedBox(
++                height: 6,
++                child: Stack(
++                  children: [
++                    Container(color: tokens.brand.withOpacity(0.15)),
++                    FractionallySizedBox(
++                      widthFactor: e.ratio < 0 ? 0 : e.ratio,
++                      child: Container(color: tokens.brand),
++                    ),
++                  ],
++                ),
++              ),
++            ),
++            const SizedBox(height: 12),
++          ],
++        ],
++      ),
++    );
++  }
++}
++
+ class _AchievementCard extends ConsumerWidget {
+   const _AchievementCard({required this.tokens, required this.achievements});
+   final ThemeTokens tokens;
+diff --git a/lumira_app_flutter/lib/features/profile/providers/growth_providers.dart b/lumira_app_flutter/lib/features/profile/providers/growth_providers.dart
+index b8e398b..e2ee502 100644
+--- a/lumira_app_flutter/lib/features/profile/providers/growth_providers.dart
++++ b/lumira_app_flutter/lib/features/profile/providers/growth_providers.dart
+@@ -13,15 +13,12 @@ final growthDaoProvider = FutureProvider<GrowthDao>((ref) async {
+ 
+ final growthLevelProvider = FutureProvider<GrowthSummary>((ref) async {
+   final dao = await ref.watch(growthDaoProvider.future);
+-  final xp = await dao.getTotalXP();
+-  final level = await dao.getLevel();
+-  final xpToNext = ((level) * 500) - xp; // 当前等级剩余 XP
+-  return GrowthSummary(
+-    level: level,
+-    currentXp: xp,
+-    xpToNextLevel: xpToNext < 0 ? 0 : xpToNext,
+-    levelName: _levelName(level),
+-  );
++  return dao.getSummary();
++});
++
++final growthXpBreakdownProvider = FutureProvider<List<XpBreakdownEntry>>((ref) async {
++  final dao = await ref.watch(growthDaoProvider.future);
++  return dao.getXpBreakdown();
+ });
+ 
+ final growthAchievementsProvider = FutureProvider<List<AchievementRecord>>((ref) async {
+@@ -39,13 +36,6 @@ final growthHeatmapProvider = FutureProvider<Map<String, int>>((ref) async {
+   return dao.getDailyActivity();
+ });
+ 
+-String _levelName(int level) {
+-  if (level >= 10) return '大师';
+-  if (level >= 5) return '专家';
+-  if (level >= 2) return '进阶';
+-  return '新手';
+-}
+-
+ /// 个人中心 UserProfile Provider
+ /// 聚合 GrowthDao（等级/XP）+ GalleryDao（作品数/收藏数）+ TemplatesDao（模板数）
+ /// 对照：lumira-app/src/pages/profile/index.vue 的 userProfile computed
+@@ -77,5 +67,5 @@ final userProfileProvider = FutureProvider<UserProfile>((ref) async {
+ /// 下一等级名称（用于 _HeroCard 底部「升级至 XX」文案）
+ final nextLevelNameProvider = FutureProvider<String>((ref) async {
+   final growth = await ref.watch(growthLevelProvider.future);
+-  return _levelName(growth.level + 1);
++  return levelNameFor(growth.level + 1) ?? '';
+ });
+diff --git a/lumira_app_flutter/lib/features/profile/services/growth_xp_provider.dart b/lumira_app_flutter/lib/features/profile/services/growth_xp_provider.dart
+new file mode 100644
+index 0000000..b14d703
+--- /dev/null
++++ b/lumira_app_flutter/lib/features/profile/services/growth_xp_provider.dart
+@@ -0,0 +1,20 @@
++import 'package:sqflite/sqflite.dart';
++
++import '../../points/data/points_repository.dart';
++import 'growth_xp_service.dart';
++
++/// 无 ref 环境（main.dart / repository）构造 GrowthXpService，写台账 + 领取升级奖励。
++Future<void> awardAndClaim({
++  required Database db,
++  required PointsRepository repo,
++  required String source,
++  required int amount,
++  required String refId,
++}) async {
++  final svc = GrowthXpService(
++    db,
++    earnLevelReward: (level) => repo.earn(type: 'level_reward', refId: level),
++  );
++  await svc.award(source: source, amount: amount, refId: refId);
++  await svc.claimLevelRewards();
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/features/profile/services/growth_xp_service.dart b/lumira_app_flutter/lib/features/profile/services/growth_xp_service.dart
+new file mode 100644
+index 0000000..ddfe417
+--- /dev/null
++++ b/lumira_app_flutter/lib/features/profile/services/growth_xp_service.dart
+@@ -0,0 +1,82 @@
++import 'package:sqflite/sqflite.dart';
++
++import '../../../core/db/dao/growth_dao.dart';
++import '../../../core/db/tables.dart';
++import '../../points/data/points_models.dart';
++import '../data/growth_models.dart';
++
++/// 经验台账写入 + 升级积分领取服务。
++/// 各行为 Hook 在完成对应事件后调用 [award]；随后调用 [claimLevelRewards]。
++class GrowthXpService {
++  GrowthXpService(this.db, {required this.earnLevelReward});
++
++  final Database db;
++  final Future<PointEarnResult> Function(String level) earnLevelReward;
++
++  /// 写一条经验台账（幂等）。source: 'shoot_daily'|'challenge'|'course'|'share'。
++  /// 返回该记录是否首次写入（true=新增，false=已存在忽略）。
++  Future<bool> award({
++    required String source,
++    required int amount,
++    required String refId,
++  }) async {
++    if (amount <= 0 || refId.isEmpty) return false;
++    final count = await db.insert(
++      XpEventsTable.name,
++      {
++        'id': '$source:$refId',
++        XpEventsTable.colSource: source,
++        XpEventsTable.colAmount: amount,
++        XpEventsTable.colRefId: refId,
++        XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++      },
++      conflictAlgorithm: ConflictAlgorithm.ignore,
++    );
++    return count > 0;
++  }
++
++  /// 领取 (claimedLevel, currentLevel] 内所有存在奖励的等级。幂等：
++  /// 已领取的跳过；网络失败即停（保留未领取，下次再试）。返回本次新发放的等级数。
++  Future<int> claimLevelRewards() async {
++    final dao = GrowthDao(db);
++    final xp = await dao.getTotalXP();
++    final level = levelForXp(xp);
++
++    // 读当前已领取到哪一级
++    final rows = await db.query(
++      Tables.userProgress,
++      columns: [Tables.colXpRewardClaimedLevel],
++      where: '${Tables.colId} = ?',
++      whereArgs: [1],
++      limit: 1,
++    );
++    final claimed = rows.isEmpty
++        ? 0
++        : ((rows.first[Tables.colXpRewardClaimedLevel] as num?)?.toInt() ?? 0);
++
++    var newlyGranted = 0;
++    var nextClaimed = claimed;
++    for (var lv = claimed + 1; lv <= level; lv++) {
++      final reward = levelReward(lv);
++      if (reward == null) continue; // 该级无奖励，仍然推进但不发奖
++      try {
++        final result = await earnLevelReward('$lv');
++        // 后端幂等：granted 或已 granted 都视为已领取
++        nextClaimed = lv;
++        if (result.granted) newlyGranted++;
++      } catch (_) {
++        // 离线/网络异常：停在此级，保留下次重试（不推进 nextClaimed）
++        break;
++      }
++    }
++
++    if (nextClaimed > claimed) {
++      await db.rawUpdate('''
++        UPDATE ${Tables.userProgress}
++        SET ${Tables.colXpRewardClaimedLevel} = ?
++        WHERE ${Tables.colId} = 1
++      ''', [nextClaimed]);
++    }
++    return newlyGranted;
++  }
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/main.dart b/lumira_app_flutter/lib/main.dart
+index e81cd6e..862fadc 100644
+--- a/lumira_app_flutter/lib/main.dart
++++ b/lumira_app_flutter/lib/main.dart
+@@ -17,9 +17,11 @@ import 'core/utils/safe_share.dart';
+ import 'core/utils/share_reporter.dart';
+ import 'features/capture/data/capture_state.dart';
+ import 'features/points/data/points_repository.dart';
++import 'features/profile/data/growth_models.dart';
+ import 'features/profile/data/profile_dao.dart';
+ import 'features/profile/data/profile_models.dart';
+ import 'features/profile/providers/profile_providers.dart';
++import 'features/profile/services/growth_xp_provider.dart';
+ import 'features/templates/services/template_import_service.dart';
+ import 'features/templates/services/template_share_code.dart';
+ import 'features/templates/widgets/template_import_sheet.dart';
+@@ -83,6 +85,19 @@ Future<void> main() async {
+     try {
+       final repo = await container.read(pointsRepositoryProvider.future);
+       await repo.earn(type: 'share');
++      // 每日首享经验（+20）写台账 + 结算升级奖励
++      try {
++        final db = await container.read(databaseProvider.future);
++        await awardAndClaim(
++          db: db,
++          repo: repo,
++          source: 'share',
++          amount: 20,
++          refId: utc8DateStr(),
++        );
++      } catch (_) {
++        // 网络/鉴权失败静默
++      }
+     } catch (_) {
+       // 网络/鉴权失败静默，不影响分享主流程
+     }
+diff --git a/lumira_app_flutter/test/core/db/growth_dao_test.dart b/lumira_app_flutter/test/core/db/growth_dao_test.dart
+index e408758..11a4eec 100644
+--- a/lumira_app_flutter/test/core/db/growth_dao_test.dart
++++ b/lumira_app_flutter/test/core/db/growth_dao_test.dart
+@@ -1,4 +1,5 @@
+ import 'package:flutter_test/flutter_test.dart';
++import 'package:sqflite/sqflite.dart';
+ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+ import 'package:lumira_app_flutter/core/db/tables.dart';
+ import 'package:lumira_app_flutter/core/db/dao/growth_dao.dart';
+@@ -18,46 +19,90 @@ void main() {
+ 
+   tearDown(() async => db.close());
+ 
+-  test('getTotalXP returns user_progress.xp when row exists', () async {
+-    await db.update(Tables.userProgress, {Tables.colXp: 350},
++  test('getTotalXP sums xp_events ledger only (not user_progress.xp)', () async {
++    await db.insert(XpEventsTable.name, {
++      'id': 'challenge:c1', XpEventsTable.colSource: 'challenge',
++      XpEventsTable.colAmount: 80, XpEventsTable.colRefId: 'c1',
++      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++    });
++    await db.insert(XpEventsTable.name, {
++      'id': 'course:c2', XpEventsTable.colSource: 'course',
++      XpEventsTable.colAmount: 120, XpEventsTable.colRefId: 'c2',
++      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++    });
++    // 即便 user_progress.xp 有残留，也以台账为准
++    await db.update(Tables.userProgress, {Tables.colXp: 999},
+         where: '${Tables.colId} = ?', whereArgs: [1]);
+     final dao = GrowthDao(db);
+-    expect(await dao.getTotalXP(), 350);
++    expect(await dao.getTotalXP(), 200); // 80 + 120，忽略 user_progress.xp=999
+   });
+ 
+-  test('getTotalXP falls back to challenge_history sum when xp=0', () async {
+-    final now = DateTime.now().millisecondsSinceEpoch;
+-    await db.insert(ChallengeHistoryTable.name, {
+-      ChallengeHistoryTable.colId: 'ch_1',
+-      ChallengeHistoryTable.colDate: '2026-07-25',
+-      ChallengeHistoryTable.colChallengeId: 'c1',
+-      ChallengeHistoryTable.colCategory: 'portrait',
+-      ChallengeHistoryTable.colTitle: 'T1',
+-      ChallengeHistoryTable.colRewardXp: 80,
+-      ChallengeHistoryTable.colStatus: 'done',
+-      ChallengeHistoryTable.colSelectedAt: now,
+-      ChallengeHistoryTable.colCompletedAt: now,
++  test('getTotalXP is idempotent: same source+ref inserts only once', () async {
++    for (var i = 0; i < 2; i++) {
++      await db.insert(XpEventsTable.name, {
++        'id': 'challenge:c1', XpEventsTable.colSource: 'challenge',
++        XpEventsTable.colAmount: 80, XpEventsTable.colRefId: 'c1',
++        XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++      }, conflictAlgorithm: ConflictAlgorithm.ignore);
++    }
++    final dao = GrowthDao(db);
++    expect(await dao.getTotalXP(), 80);
++  });
++
++  test('getLevel uses threshold table boundaries', () async {
++    Future<int> levelAt(int xp) async {
++      // 每个边界独立评估：清空台账，使总XP恰为 xp
++      await db.delete(XpEventsTable.name);
++      await db.insert(XpEventsTable.name, {
++        'id': 'shoot_daily:t$xp', XpEventsTable.colSource: 'shoot_daily',
++        XpEventsTable.colAmount: xp, XpEventsTable.colRefId: 't$xp',
++        XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++      });
++      return GrowthDao(db).getLevel();
++    }
++    expect(await levelAt(0), 1);
++    expect(await levelAt(99), 1);
++    expect(await levelAt(100), 2);
++    expect(await levelAt(300), 3);
++    expect(await levelAt(999), 4);
++    expect(await levelAt(1000), 5);
++  });
++
++  test('getSummary computes level progress against threshold table', () async {
++    await db.insert(XpEventsTable.name, {
++      'id': 'challenge:c1', XpEventsTable.colSource: 'challenge',
++      XpEventsTable.colAmount: 100, XpEventsTable.colRefId: 'c1',
++      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
+     });
+-    await db.insert(ChallengeHistoryTable.name, {
+-      ChallengeHistoryTable.colId: 'ch_2',
+-      ChallengeHistoryTable.colDate: '2026-07-25',
+-      ChallengeHistoryTable.colChallengeId: 'c2',
+-      ChallengeHistoryTable.colCategory: 'landscape',
+-      ChallengeHistoryTable.colTitle: 'T2',
+-      ChallengeHistoryTable.colRewardXp: 50,
+-      ChallengeHistoryTable.colStatus: 'done',
+-      ChallengeHistoryTable.colSelectedAt: now,
+-      ChallengeHistoryTable.colCompletedAt: now,
++    final s = await GrowthDao(db).getSummary();
++    expect(s.level, 2);          // 100 → Lv.2
++    expect(s.currentXp, 100);
++    expect(s.xpToNextLevel, 200); // Lv.3 阈值 300 - 100
++    expect(s.levelName, isNotEmpty);
++  });
++
++  test('getXpBreakdown groups and computes ratios', () async {
++    await db.insert(XpEventsTable.name, {
++      'id': 'challenge:c1', XpEventsTable.colSource: 'challenge',
++      XpEventsTable.colAmount: 60, XpEventsTable.colRefId: 'c1',
++      XpEventsTable.colCreatedAt: 1,
+     });
+-    final dao = GrowthDao(db);
+-    expect(await dao.getTotalXP(), 130); // 80 + 50
++    await db.insert(XpEventsTable.name, {
++      'id': 'course:c2', XpEventsTable.colSource: 'course',
++      XpEventsTable.colAmount: 40, XpEventsTable.colRefId: 'c2',
++      XpEventsTable.colCreatedAt: 2,
++    });
++    final list = await GrowthDao(db).getXpBreakdown();
++    expect(list.length, 2);
++    expect(list.first.source, 'challenge');
++    expect(list.first.amount, 60);
++    expect(list.first.ratio, closeTo(0.6, 0.001));
++    expect(list.last.source, 'course');
++    expect(list.last.ratio, closeTo(0.4, 0.001));
+   });
+ 
+-  test('getLevel returns xp/500 + 1', () async {
+-    await db.update(Tables.userProgress, {Tables.colXp: 1200},
+-        where: '${Tables.colId} = ?', whereArgs: [1]);
+-    final dao = GrowthDao(db);
+-    expect(await dao.getLevel(), 3); // 1200/500 + 1 = 3 (整数除法)
++  test('getXpBreakdown returns empty when no ledger', () async {
++    expect(await GrowthDao(db).getXpBreakdown(), isEmpty);
+   });
+ 
+   test('getAchievements returns 6 placeholder when achievements_json is []', () async {
+@@ -127,4 +172,6 @@ Future<void> _onCreate(db, version) async {
+     )
+   ''');
+   await db.execute(AcademyTables.cpCreateSql);
++  await db.execute(XpEventsTable.createSql);
++  await db.execute(XpEventsTable.indexSql);
+ }
+diff --git a/lumira_app_flutter/test/core/db/migration_v26_test.dart b/lumira_app_flutter/test/core/db/migration_v26_test.dart
+new file mode 100644
+index 0000000..6d1fe28
+--- /dev/null
++++ b/lumira_app_flutter/test/core/db/migration_v26_test.dart
+@@ -0,0 +1,184 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:sqflite_common_ffi/sqflite_ffi.dart';
++import 'package:sqflite/sqflite.dart';
++import 'package:lumira_app_flutter/core/db/tables.dart';
++import 'package:lumira_app_flutter/features/academy/data/academy_dao.dart';
++import 'package:lumira_app_flutter/features/academy/data/academy_content.dart';
++
++/// v26 迁移测试：验证建 xp_events 表 + 唯一索引、user_progress 加
++/// xp_reward_claimed_level 默认 0，以及回填历史挑战/课程经验。
++///
++/// 仿 migration_v15_test.dart 模式：在测试内复制迁移逻辑（私有方法无法直接调用）。
++void main() {
++  sqfliteFfiInit();
++  databaseFactory = databaseFactoryFfi;
++
++  late Database db;
++
++  setUp(() async {
++    db = await openDatabase(
++      inMemoryDatabasePath,
++      version: 26,
++      onCreate: _onCreate,
++      onUpgrade: _onUpgrade,
++    );
++  });
++
++  tearDown(() async => db.close());
++
++  test('v26 creates xp_events table with columns + unique index', () async {
++    final tables = await db.rawQuery(
++      "SELECT name FROM sqlite_master WHERE type='table' AND name='xp_events'",
++    );
++    expect(tables.length, 1);
++    final cols = await db.rawQuery('PRAGMA table_info(xp_events)');
++    final names = cols.map((c) => c['name'] as String).toSet();
++    expect(names, containsAll(['id', 'source', 'amount', 'ref_id', 'created_at']));
++    final idx = await db.rawQuery(
++      "SELECT name FROM sqlite_master WHERE type='index' AND name='uq_xp_events_source_ref'",
++    );
++    expect(idx.length, 1);
++  });
++
++  test('v26 adds xp_reward_claimed_level to user_progress default 0', () async {
++    final cols = await db.rawQuery('PRAGMA table_info(user_progress)');
++    final col = cols.firstWhere((c) => c['name'] == 'xp_reward_claimed_level');
++    expect(col['dflt_value'], '0');
++    expect(col['notnull'], 1);
++  });
++
++  test('backfill: challenge_history done → xp_events.challenge', () async {
++    await db.insert(ChallengeHistoryTable.name, {
++      ChallengeHistoryTable.colId: 'ch_9',
++      ChallengeHistoryTable.colDate: '2026-08-01',
++      ChallengeHistoryTable.colChallengeId: 'c9',
++      ChallengeHistoryTable.colCategory: 'portrait',
++      ChallengeHistoryTable.colTitle: 'T9',
++      ChallengeHistoryTable.colRewardXp: 60,
++      ChallengeHistoryTable.colStatus: 'done',
++      ChallengeHistoryTable.colSelectedAt: 1,
++      ChallengeHistoryTable.colCompletedAt: 2,
++    });
++    await _backfillXpLedger(db);
++    final rows = await db.query(XpEventsTable.name);
++    expect(rows.length, 1);
++    expect(rows.first['source'], 'challenge');
++    expect(rows.first['amount'], 60);
++    expect(rows.first['ref_id'], 'ch_9');
++  });
++
++  test('backfill: completed course known in AcademyContent → xp_events.course', () async {
++    final known = AcademyContent.courses.first;
++    await db.insert(AcademyTables.courseProgress, {
++      AcademyTables.cpColCourseId: known.id,
++      AcademyTables.cpColStatus: 'completed',
++    });
++    await _backfillXpLedger(db);
++    final rows = await db.query(XpEventsTable.name);
++    expect(rows.length, 1);
++    expect(rows.first['source'], 'course');
++    expect(rows.first['amount'], known.rewardXP);
++    expect(rows.first['ref_id'], known.id);
++  });
++
++  test('backfill: unknown course id is skipped (no inflated xp)', () async {
++    await db.insert(AcademyTables.courseProgress, {
++      AcademyTables.cpColCourseId: 'not-a-real-course',
++      AcademyTables.cpColStatus: 'completed',
++    });
++    await _backfillXpLedger(db);
++    expect(await db.query(XpEventsTable.name), isEmpty);
++  });
++}
++
++/// 复制 v26 迁移（_onCreate 段）的最小结构：建 user_progress（含新列）、
++/// challenge_history、academy_course_progress、xp_events + 唯一索引，并回填。
++Future<void> _onCreate(Database db, int version) async {
++  await db.execute('''
++    CREATE TABLE ${Tables.userProgress} (
++      ${Tables.colId} INTEGER PRIMARY KEY DEFAULT 1,
++      ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
++      ${Tables.colLevelName} TEXT NOT NULL DEFAULT '新手',
++      ${Tables.colXp} INTEGER NOT NULL DEFAULT 0,
++      ${Tables.colXpToNextLevel} INTEGER NOT NULL DEFAULT 100,
++      ${Tables.colTotalPhotos} INTEGER NOT NULL DEFAULT 0,
++      ${Tables.colUsedTemplates} INTEGER NOT NULL DEFAULT 0,
++      ${Tables.colFavorites} INTEGER NOT NULL DEFAULT 0,
++      ${Tables.colStreakDays} INTEGER NOT NULL DEFAULT 0,
++      ${Tables.colLastCheckInDate} TEXT,
++      ${Tables.colFragmentsJson} TEXT NOT NULL DEFAULT '[]',
++      ${Tables.colAchievementsJson} TEXT NOT NULL DEFAULT '[]',
++      ${Tables.colUpdatedAt} INTEGER NOT NULL
++    )
++  ''');
++  await db.execute(
++    'ALTER TABLE ${Tables.userProgress} ADD COLUMN ${Tables.colXpRewardClaimedLevel} INTEGER NOT NULL DEFAULT 0',
++  );
++  await db.insert(Tables.userProgress, {
++    Tables.colId: 1,
++    Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
++  });
++  await db.execute(ChallengeHistoryTable.createSql);
++  await db.execute(AcademyTables.cpCreateSql);
++  await db.execute(XpEventsTable.createSql);
++  await db.execute(XpEventsTable.indexSql);
++  await _backfillXpLedger(db);
++}
++
++/// 复制 v26 迁移的 _onUpgrade 逻辑（oldVersion < 26 时最小迁移 + 回填）。
++Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
++  if (oldVersion < 26) {
++    await db.execute(XpEventsTable.createSql);
++    await db.execute(XpEventsTable.indexSql);
++    await db.execute(
++      'ALTER TABLE ${Tables.userProgress} ADD COLUMN ${Tables.colXpRewardClaimedLevel} INTEGER NOT NULL DEFAULT 0',
++    );
++    await _backfillXpLedger(db);
++  }
++}
++
++/// 复制 database_provider.dart 的私有 _backfillXpLedger 语义。
++Future<void> _backfillXpLedger(Database db) async {
++  // --- challenge ---
++  final chRows = await db.rawQuery('''
++    SELECT ${ChallengeHistoryTable.colId} AS id,
++           ${ChallengeHistoryTable.colRewardXp} AS xp
++    FROM ${ChallengeHistoryTable.name}
++    WHERE ${ChallengeHistoryTable.colStatus} = 'done'
++  ''');
++  for (final r in chRows) {
++    final id = r['id'] as String?;
++    final xp = (r['xp'] as num?)?.toInt() ?? 0;
++    if (id == null || id.isEmpty || xp <= 0) continue;
++    await db.insert(XpEventsTable.name, {
++      'id': 'challenge:$id',
++      XpEventsTable.colSource: 'challenge',
++      XpEventsTable.colAmount: xp,
++      XpEventsTable.colRefId: id,
++      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++    }, conflictAlgorithm: ConflictAlgorithm.ignore);
++  }
++
++  // --- course（id→rewardXP 映射来自 AcademyContent.courses） ---
++  final Map<String, int> courseXp = {};
++  for (final c in AcademyContent.courses) {
++    courseXp[c.id] = c.rewardXP;
++  }
++  final cpRows = await db.rawQuery('''
++    SELECT ${AcademyTables.cpColCourseId} AS cid
++    FROM ${AcademyTables.courseProgress}
++    WHERE ${AcademyTables.cpColStatus} = 'completed'
++  ''');
++  for (final r in cpRows) {
++    final cid = r['cid'] as String?;
++    final xp = cid == null ? 0 : (courseXp[cid] ?? 0);
++    if (cid == null || cid.isEmpty || xp <= 0) continue;
++    await db.insert(XpEventsTable.name, {
++      'id': 'course:$cid',
++      XpEventsTable.colSource: 'course',
++      XpEventsTable.colAmount: xp,
++      XpEventsTable.colRefId: cid,
++      XpEventsTable.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++    }, conflictAlgorithm: ConflictAlgorithm.ignore);
++  }
++}
+\ No newline at end of file
