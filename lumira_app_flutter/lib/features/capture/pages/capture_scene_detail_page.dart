@@ -236,7 +236,10 @@ class _CaptureSceneDetailPageState
                         onOpenViewer: _openViewer,
                         onCapture: _goCapture,
                       ),
-                      _AchievementSection(scene: scene),
+                      _AchievementSection(
+                        scene: scene,
+                        photoCount: _scenePhotos.length,
+                      ),
                       const SizedBox(height: 80), // detail-bottom-space
                     ],
                   ),
@@ -251,6 +254,24 @@ class _CaptureSceneDetailPageState
           scene == null ? null : _BottomButtons(onCapture: _goCapture, onCreateKit: _goCreateKit),
     );
   }
+}
+
+/// 由真实照片数构造场景成就（等级阈值：0 → 未开始；1-2 → 初遇 Lv1；3-9 → 熟悉 Lv2；10+ → 精通 Lv3）
+SceneAchievement buildSceneAchievement(String sceneId, int count) {
+  if (count == 0) {
+    return SceneAchievement(
+        sceneId: sceneId, level: 0, levelName: '未开始', photoCount: 0, nextLevelCount: 1);
+  }
+  if (count < 3) {
+    return SceneAchievement(
+        sceneId: sceneId, level: 1, levelName: '初遇', photoCount: count, nextLevelCount: 3);
+  }
+  if (count < 10) {
+    return SceneAchievement(
+        sceneId: sceneId, level: 2, levelName: '熟悉', photoCount: count, nextLevelCount: 10);
+  }
+  return SceneAchievement(
+      sceneId: sceneId, level: 3, levelName: '精通', photoCount: count, nextLevelCount: 30);
 }
 
 /// 顶部导航（返回 + 标题 + 收藏）
@@ -790,24 +811,19 @@ class _ScenePhotoThumb extends StatelessWidget {
 }
 
 class _AchievementSection extends StatelessWidget {
-  const _AchievementSection({required this.scene});
+  const _AchievementSection({required this.scene, required this.photoCount});
   final ScenePreset scene;
+  final int photoCount;
 
   @override
   Widget build(BuildContext context) {
-    final achievement = CaptureSceneMockData.getSceneAchievement(scene.id);
-    final rankEntry = CaptureSceneMockData.weeklyRanking
-        .where((e) => e.scene.id == scene.id)
-        .toList();
-    final rank = rankEntry.isEmpty ? null : rankEntry.first.rank;
-
+    final achievement = buildSceneAchievement(scene.id, photoCount);
     return _Section(
       title: '我的成就',
       child: SceneAchievementCard(
         achievement: achievement,
         sceneName: scene.name,
-        rank: rank,
-        rankLabel: '本周',
+        // rank 为空 → 不渲染排行榜
       ),
     );
   }
