@@ -1021,27 +1021,24 @@ export class CameraState implements StreamHandler {
         return
       }
       // 手动色温：OHOS WhiteBalance 支持连续开尔文（API 20+）。
-      // 官方文档：setWhiteBalance 只有在白平衡模式为 MANUAL 时才生效；
-      // 若同时设置「模式」和「值」，只生效一种、模式优先。故必须先切到 MANUAL。
+      // 官方 Method 2：直接用 getWhiteBalanceRange + setWhiteBalance，不切 MANUAL 模式。
+      // 若「模式 + 值」同时设置，只生效一种且模式优先，会覆盖掉手动值（回读恒为 0）。
       if (k !== undefined && k !== null) {
-        let manualSupported: boolean = this.session.isWhiteBalanceModeSupported(camera.WhiteBalanceMode.MANUAL)
-        if (manualSupported) {
-          this.session?.setWhiteBalanceMode(camera.WhiteBalanceMode.MANUAL)
-          Logger.info(TAG, `setWhiteBalanceFn switch to MANUAL mode first`);
-        } else {
-          Logger.error(TAG, `setWhiteBalanceFn: MANUAL mode NOT supported`);
+        let range: Array<number> = []
+        try {
+          range = this.session.getWhiteBalanceRange()
+        } catch (e) {
+          Logger.error(TAG, `setWhiteBalanceFn: getWhiteBalanceRange failed, err=${JSON.stringify(e)}`)
         }
-        let range: Array<number> = this.session.getWhiteBalanceRange()
         let value: number = k
         if (range && range.length >= 2) {
           value = Math.min(Math.max(k, range[0]), range[1])
         }
         this.session?.setWhiteBalance(value)
-        Logger.info(TAG, `setWhiteBalanceFn set manual K: ${value}; MANUAL supported=${manualSupported}; range=${JSON.stringify(range)}`)
+        Logger.info(TAG, `setWhiteBalanceFn set manual K: ${value}; range=${JSON.stringify(range)}`);
         // 回读确认是否真正生效
-        let curMode: camera.WhiteBalanceMode | undefined = this.session.getWhiteBalanceMode()
         let curVal: number | undefined = this.session.getWhiteBalance()
-        Logger.info(TAG, `setWhiteBalanceFn AFTER: mode=${curMode}, value=${curVal}`)
+        Logger.info(TAG, `setWhiteBalanceFn set manual AFTER: value=${curVal}`)
         return
       }
       // 预设模式映射
