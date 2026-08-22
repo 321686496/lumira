@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.params.RggbChannelVector
 import android.location.Location
 import android.os.Build
 import android.os.CountDownTimer
@@ -17,6 +19,8 @@ import android.util.Log
 import android.util.Rational
 import android.util.Size
 import androidx.camera.core.*
+import androidx.camera.camera2.interop.Camera2CameraControl
+import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.VideoRecordEvent
@@ -50,6 +54,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import kotlin.math.ln
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 
@@ -563,6 +569,92 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
                 actualBrightnessValue.roundToInt()
             )
         }
+    }
+
+    /**
+     * Sensor level white balance via Camera2Interop.
+     *
+     * - 预设 (k == null)：直接设 [CaptureRequest.CONTROL_AWB_MODE] 常量，交给设备 3A 处理。
+     * - 手动色温 (k != null，3000-8000K)：关掉自动 AWB，用 [CaptureRequest.COLOR_CORRECTION_GAINS]
+     *   设 Kelvin -> RGB 相对增益，取景实时生效、直出即带。
+     *
+     * 用 [Camera2CameraControl.setCaptureRequestOptions] 整体替换每次的选项，切回预设/自动时
+     * 会自动清掉之前手动设的 gains。
+     */
+    @SuppressLint("RestrictedApi")
+    override fun setWhiteBalance(mode: String, temperatureK: Int?) {
+        val control = cameraState.previewCamera?.cameraControl ?: return
+        try {
+            val camera2Control = Camera2CameraControl.from(control)
+            val options = CaptureRequestOptions.Builder().apply {
+                val k = temperatureK?.coerceIn(3000, 8000)
+                if (k != null) {
+                    setCaptureRequestOption(
+                        CaptureRequest.CONTROL_AWB_MODE,
+                        CaptureRequest.CONTROL_AWB_MODE_OFF,
+                    )
+                    setCaptureRequestOption(
+                        CaptureRequest.COLOR_CORRECTION_GAINS,
+                        gainsFromKelvin(k),
+                    )
+                } else {
+                    setCaptureRequestOption(
+                        CaptureRequest.CONTROL_AWB_MODE,
+                        awbModeFor(mode),
+                    )
+                }
+            }.build()
+            // 该选项会作用于该相机的所有 use case（预览 + 拍照直出）。
+            camera2Control.setCaptureRequestOptions(options)
+        } catch (e: Exception) {
+            Log.e("CameraAwesome", "setWhiteBalance failed", e)
+        }
+    }
+
+    private fun awbModeFor(mode: String): Int = when (mode) {
+        "daylight" -> CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT
+        "cloudy" -> CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT
+        "fluorescent" -> CaptureRequest.CONTROL_AWB_MODE_FLUORESCENT
+        "incandescent" -> CaptureRequest.CONTROL_AWB_MODE_INCANDESCENT
+        "auto" -> CaptureRequest.CONTROL_AWB_MODE_AUTO
+        else -> CaptureRequest.CONTROL_AWB_MODE_AUTO
+    }
+
+    /** Tanner Helland 逆算法近似：色温(K) -> (R,G,B)，归一化到 0..1。 */
+    private fun kelvinToRgb(kelvin: Int): Triple<Float, Float, Float> {
+        val t = kelvin / 100.0
+        var red = 0.0
+        var green = 0.0
+        var blue = 0.0
+        if (t <= 66.0) {
+            red = 255.0
+            green = 99.4708025861 * ln(t) - 161.1195681661
+        } else {
+            red = 329.698727446 * (t - 60.0).pow(-0.1332047592)
+            green = 288.1221695283 * (t - 60.0).pow(-0.0755148492)
+        }
+        if (t >= 66.0) {
+            blue = 255.0
+        } else if (t <= 19.0) {
+            blue = 0.0
+        } else {
+            blue = 138.5177312231 * ln(t - 10.0) - 305.0447927307
+        }
+        return Triple(
+            red.coerceIn(0.0, 255.0).toFloat() / 255f,
+            green.coerceIn(0.0, 255.0).toFloat() / 255f,
+            blue.coerceIn(0.0, 255.0).toFloat() / 255f,
+        )
+    }
+
+    /** 相对增益 = 目标色温 RGB / 参考点(5500K) RGB，钳制到 [1/4, 4]。 */
+    private fun gainsFromKelvin(kelvin: Int): RggbChannelVector {
+        val ref = kelvinToRgb(5500)
+        val target = kelvinToRgb(kelvin)
+        val r = (target.first / ref.first).coerceIn(0.25f, 4.0f)
+        val g = (target.second / ref.second).coerceIn(0.25f, 4.0f)
+        val b = (target.third / ref.third).coerceIn(0.25f, 4.0f)
+        return RggbChannelVector(r, g, g, b)
     }
 
     override fun getMaxZoom(): Double {

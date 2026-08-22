@@ -577,6 +577,7 @@ interface CameraInterface {
   fun setMirrorFrontCamera(mirror: Boolean)
   fun setSensor(sensor: String, deviceId: String?)
   fun setCorrection(brightness: Double)
+  fun setWhiteBalance(mode: String, temperatureK: Int?)
   fun getMaxZoom(): Double
   fun setCaptureMode(mode: String)
   fun setRecordingAudioMode(enableAudio: Boolean, callback: (Result<Boolean>) -> Unit)
@@ -979,6 +980,26 @@ interface CameraInterface {
             var wrapped: List<Any?>
             try {
               api.setCorrection(brightnessArg)
+              wrapped = listOf<Any?>(null)
+            } catch (exception: Throwable) {
+              wrapped = wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.CameraInterface.setWhiteBalance", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val modeArg = args[0] as String
+            val temperatureKArg = args[1] as Int?
+            var wrapped: List<Any?>
+            try {
+              api.setWhiteBalance(modeArg, temperatureKArg)
               wrapped = listOf<Any?>(null)
             } catch (exception: Throwable) {
               wrapped = wrapError(exception)
