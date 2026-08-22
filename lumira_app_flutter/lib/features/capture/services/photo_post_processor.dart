@@ -11,6 +11,84 @@ import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
 
+// ─────────────────────────────────────────────────────────────────────────
+// iOS 宽色域（Display P3）JPEG 的色域校正
+// ─────────────────────────────────────────────────────────────────────────
+//
+// iPhone 宽色域相机的 AVCapturePhoto JPEG（CameraPictureController.m 直接落盘原始
+// 传感器字节）内嵌 Display P3 的 ICC 配置。取景器（AVCaptureVideoPreviewLayer）在
+// 设备 P3 显示色域下原生渲染，故肤色自然；但成图侧 `ui.instantiateImageCodec` 解码
+// 后，`ImageByteFormat.rawRgba` 返回的仍是 P3 数值（dart:ui 不做 ICC 换算），再按
+// sRGB 编码保存就导致肤色/暖色偏黄（P3 与 sRGB 共享 D65 白点→中性色不受影响，
+// 唯暖色/肤色这些接近色域边缘的色调明显偏移，与症状完全吻合）。
+//
+// 修复：解码出合成后的像素里检测到 P3 标签时，做 P3→sRGB 线性基色矩阵换算，
+// 让保存成图与取景器保持一致。
+bool _isDisplayP3Jpeg(Uint8List bytes) {
+  for (final marker in const ['Display P3', 'DCI-P3', 'P3D65', 'DISPLAY P3', 'Apple P3']) {
+    if (_bytesContainsAscii(bytes, marker)) return true;
+  }
+  return false;
+}
+
+bool _bytesContainsAscii(Uint8List hay, String needle) {
+  final pat = needle.codeUnits;
+  final n = hay.length - pat.length;
+  if (n < 0) return false;
+  outer:
+  for (int i = 0; i <= n; i++) {
+    for (int j = 0; j < pat.length; j++) {
+      if (hay[i + j] != pat[j]) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
+// sRGB 传递函数的线性化与编码用查表（避免逐像素 pow 拖累 800ms 预算）。
+final List<double> _srgbToLinearLut = _buildSrgbToLinearLut();
+final List<double> _srgbEncodeLut = _buildSrgbEncodeLut();
+
+List<double> _buildSrgbToLinearLut() {
+  return List<double>.generate(256, (i) {
+    final v = i / 255.0;
+    if (v <= 0.04045) return v / 12.92;
+    return math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  });
+}
+
+List<double> _buildSrgbEncodeLut() {
+  const steps = 4096;
+  return List<double>.generate(steps, (i) {
+    final c = i / (steps - 1);
+    if (c <= 0.0031308) return c * 12.92;
+    return (1.055 * math.pow(c, 1.0 / 2.4) - 0.055).clamp(0.0, 1.0).toDouble();
+  });
+}
+
+/// 将 image 包像素就地做 P3(D65)→sRGB(D65) 线性基色换算。
+///
+/// P3 与 sRGB 同为 D65 白点、同为 sRGB 传递函数，仅基色不同，故线性化后乘
+/// 「sRGB→P3 正向矩阵的逆」再按 sRGB 传递函数编码即可。必须用带负系数的逆矩阵
+/// （正向矩阵会把 P3 的红色压低、G/B 抬高，对肤色引入残余黄色）。
+void _applyP3ToSrgb(img.Image image) {
+  const steps = 4096;
+  for (final p in image) {
+    final r = p.r.toInt(), g = p.g.toInt(), b = p.b.toInt();
+    final lr = _srgbToLinearLut[r];
+    final lg = _srgbToLinearLut[g];
+    final lb = _srgbToLinearLut[b];
+    // P3(D65) → sRGB(D65) 线性基色转换矩阵（sRGB→P3 正向矩阵的逆）。
+    final sr = (1.2249 * lr - 0.2247 * lg).clamp(0.0, 1.0);
+    final sg = (-0.0420 * lr + 1.0419 * lg).clamp(0.0, 1.0);
+    final sb = (-0.0197 * lr - 0.0786 * lg + 1.0983 * lb).clamp(0.0, 1.0);
+    p
+      ..r = (_srgbEncodeLut[(sr * (steps - 1)).round()] * 255).round()
+      ..g = (_srgbEncodeLut[(sg * (steps - 1)).round()] * 255).round()
+      ..b = (_srgbEncodeLut[(sb * (steps - 1)).round()] * 255).round();
+  }
+}
+
 /// 拍照后照片处理器（GPU 加速 + 单次 Canvas 合并版）
 ///
 /// 第 5 次优化：修复 RAW 模式下跳过裁剪导致非 WYSIWYG 的问题。
@@ -245,6 +323,42 @@ class PhotoPostProcessor {
 
       // 5.5. 补光效果不应用到照片
       // 补光是屏幕发光照亮被摄物（物理光源），不应作为颜色滤镜叠加到照片上。
+
+      // 5.6. 色域校正：iOS 宽色域照片的 P3→sRGB 转换
+      // 输入 JPEG 带 Display P3 ICC，dart:ui 解码后 rawRgba 返回 P3 数值，
+      // 但 image 包的 JPEG 编码器按 sRGB 编码且不嵌入 ICC，导致查看器把 P3 数值当 sRGB 解释，
+      // 肤色/暖色偏黄。必须在编码前做 P3→sRGB 线性基色矩阵换算。
+      final p3Tag = _isDisplayP3Jpeg(bytes);
+      if (p3Tag) {
+        final byteData = await resultImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+        if (byteData != null) {
+          final imgImage = img.Image.fromBytes(
+            width: resultImage.width,
+            height: resultImage.height,
+            bytes: byteData.buffer.asUint8List().buffer,
+            numChannels: 4,
+            order: img.ChannelOrder.rgba,
+          );
+          _applyP3ToSrgb(imgImage);
+          // 转回 ui.Image
+          final outBytes = imgImage.getBytes(order: img.ChannelOrder.rgba);
+          final buffer = await ui.ImmutableBuffer.fromUint8List(outBytes);
+          final descriptor = ui.ImageDescriptor.raw(
+            buffer,
+            width: resultImage.width,
+            height: resultImage.height,
+            pixelFormat: ui.PixelFormat.rgba8888,
+          );
+          final codec = await descriptor.instantiateCodec();
+          final frame = await codec.getNextFrame();
+          resultImage.dispose();
+          resultImage = frame.image;
+          buffer.dispose();
+          descriptor.dispose();
+          codec.dispose();
+          debugPrint('[p3dbg] P3→sRGB applied');
+        }
+      }
 
       // 6. 编码 JPEG 并保存
       final jpegBytes = await _encodeJpeg(resultImage);
