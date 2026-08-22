@@ -1024,9 +1024,12 @@ export class CameraState implements StreamHandler {
       // 官方文档：setWhiteBalance 只有在白平衡模式为 MANUAL 时才生效；
       // 若同时设置「模式」和「值」，只生效一种、模式优先。故必须先切到 MANUAL。
       if (k !== undefined && k !== null) {
-        if (this.session.isWhiteBalanceModeSupported(camera.WhiteBalanceMode.MANUAL)) {
+        let manualSupported: boolean = this.session.isWhiteBalanceModeSupported(camera.WhiteBalanceMode.MANUAL)
+        if (manualSupported) {
           this.session?.setWhiteBalanceMode(camera.WhiteBalanceMode.MANUAL)
           Logger.debug(TAG, `setWhiteBalanceFn switch to MANUAL mode first`);
+        } else {
+          Logger.error(TAG, `setWhiteBalanceFn: MANUAL mode NOT supported`);
         }
         let range: Array<number> = this.session.getWhiteBalanceRange()
         let value: number = k
@@ -1034,7 +1037,11 @@ export class CameraState implements StreamHandler {
           value = Math.min(Math.max(k, range[0]), range[1])
         }
         this.session?.setWhiteBalance(value)
-        Logger.debug(TAG, `setWhiteBalanceFn set manual K: ${value}`);
+        Logger.debug(TAG, `setWhiteBalanceFn set manual K: ${value}; MANUAL supported=${manualSupported}; range=${JSON.stringify(range)}`)
+        // 回读确认是否真正生效
+        let curMode: camera.WhiteBalanceMode | undefined = this.session.getWhiteBalanceMode()
+        let curVal: number | undefined = this.session.getWhiteBalance()
+        Logger.debug(TAG, `setWhiteBalanceFn AFTER: mode=${curMode}, value=${curVal}`)
         return
       }
       // 预设模式映射
