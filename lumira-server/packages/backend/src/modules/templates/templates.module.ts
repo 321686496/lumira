@@ -12,6 +12,8 @@ import { CategoriesController } from './categories.controller';
 import { CategoriesService } from './categories.service';
 import { AdminCategoriesController } from './admin-categories.controller';
 import { AdminCategoriesService } from './admin-categories.service';
+import { ThumbsController } from './thumbs.controller';
+import { ThumbsService } from './thumbs.service';
 
 @Module({
   imports: [
@@ -27,12 +29,14 @@ import { AdminCategoriesService } from './admin-categories.service';
     CategoriesController,
     AdminTemplatesController,
     AdminCategoriesController,
+    ThumbsController,
   ],
   providers: [
     TemplatesService,
     AdminTemplatesService,
     CategoriesService,
     AdminCategoriesService,
+    ThumbsService,
   ],
   exports: [TemplatesService],
 })
