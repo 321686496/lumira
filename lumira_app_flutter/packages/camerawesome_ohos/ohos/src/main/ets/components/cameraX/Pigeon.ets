@@ -739,6 +739,8 @@ export abstract class CameraInterface {
 
     abstract setFlashMode(mode: string): void;
 
+    abstract setWhiteBalance(mode: string, temperatureK: number | undefined): void;
+
     abstract handleAutoFocus(): void;
 
     /*
@@ -1175,6 +1177,31 @@ export abstract class CameraInterface {
                         let res: Array<Object> = [];
                         try {
                             api!.setFlashMode(args[0] as string);
+                            res.push(null);
+                        } catch (error) {
+                            let wrappedError: Array<Object> = wrapError(error);
+                            res = wrappedError;
+                        }
+                        reply.reply(res);
+                    }
+                });
+            } else {
+                channel.setMessageHandler(null);
+            }
+        }
+        {
+            let channel: BasicMessageChannel<Object> =
+                new BasicMessageChannel(
+                    binaryMessenger, "dev.flutter.pigeon.camerawesome.CameraInterface.setWhiteBalance",
+                    CameraInterface.getCodec());
+            if (api != null) {
+                channel.setMessageHandler({
+                    onMessage(message: Object, reply: Reply<Object>) {
+                        let args: Array<Object> = message as Array<Object>;
+                        let res: Array<Object> = [];
+                        try {
+                            api!.setWhiteBalance(args[0] as string,
+                                args.length > 1 && args[1] != null ? (args[1] as number) : undefined);
                             res.push(null);
                         } catch (error) {
                             let wrappedError: Array<Object> = wrapError(error);

@@ -281,6 +281,16 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
     this.cameraState?.setExposureBias(brightness)
   }
 
+  /**
+   * 设置白平衡模式与色温
+   * @param mode 预设模式：auto / daylight / cloudy / fluorescent / incandescent
+   * @param temperatureK 手动色温（开尔文），可选；提供时优先使用连续色温
+   */
+  setWhiteBalance(mode: string, temperatureK?: number): void {
+    Logger.debug(TAG, `setWhiteBalance is called, mode: ${mode}, temperatureK: ${temperatureK}`);
+    this.cameraState?.setWhiteBalanceFn(mode, temperatureK)
+  }
+
   getMaxZoom(): number {
     Logger.debug(TAG, `getMaxZoom is called`);
     return this.cameraState!!.getMaxZoom()

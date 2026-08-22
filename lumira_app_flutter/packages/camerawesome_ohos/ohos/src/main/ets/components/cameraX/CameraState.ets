@@ -1007,6 +1007,62 @@ export class CameraState implements StreamHandler {
     this.session?.setExposureBias(brightness)
   }
 
+  /**
+   * 设置白平衡（传感器级，取景实时生效、直出即带）。
+   * 预设：auto/daylight/cloudy/fluorescent/incandescent → 对应 WhiteBalanceMode。
+   * 手动 k（3000–8000）：CameraKit 支持连续开尔文，用 setWhiteBalance + getWhiteBalanceRange 真值。
+   * @param mode
+   * @param k 手动色温（开尔文），可选；提供时优先使用连续色温
+   */
+  setWhiteBalanceFn(mode: string, k?: number): void {
+    try {
+      if (!this.session) {
+        Logger.error(TAG, `setWhiteBalanceFn: session not ready, skipped`);
+        return
+      }
+      // 手动色温：OHOS WhiteBalance 支持连续开尔文（API 20+）
+      if (k !== undefined && k !== null) {
+        let range: Array<number> = this.session.getWhiteBalanceRange()
+        let value: number = k
+        if (range && range.length >= 2) {
+          value = Math.min(Math.max(k, range[0]), range[1])
+        }
+        this.session?.setWhiteBalance(value)
+        Logger.debug(TAG, `setWhiteBalanceFn set manual K: ${value}`);
+        return
+      }
+      // 预设模式映射
+      let wbMode: camera.WhiteBalanceMode = camera.WhiteBalanceMode.AUTO
+      switch (mode) {
+        case 'auto':
+          wbMode = camera.WhiteBalanceMode.AUTO
+          break
+        case 'cloudy':
+          wbMode = camera.WhiteBalanceMode.CLOUDY
+          break
+        case 'incandescent':
+          wbMode = camera.WhiteBalanceMode.INCANDESCENT
+          break
+        case 'fluorescent':
+          wbMode = camera.WhiteBalanceMode.FLUORESCENT
+          break
+        case 'daylight':
+          wbMode = camera.WhiteBalanceMode.DAYLIGHT
+          break
+        default:
+          wbMode = camera.WhiteBalanceMode.AUTO
+      }
+      if (this.session.isWhiteBalanceModeSupported(wbMode)) {
+        this.session?.setWhiteBalanceMode(wbMode)
+        Logger.debug(TAG, `setWhiteBalanceFn set mode: ${wbMode}`);
+      } else {
+        Logger.error(TAG, `setWhiteBalanceFn: mode not supported, mode: ${wbMode}`);
+      }
+    } catch (e) {
+      Logger.error(TAG, `setWhiteBalanceFn error: ${(e as BusinessError).code}`);
+    }
+  }
+
   getMaxZoom(): number {
     let zoomRatios = this.session?.getZoomRatioRange()
     if (zoomRatios == undefined) {
