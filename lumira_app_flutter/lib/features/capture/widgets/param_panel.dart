@@ -3,6 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
+import '../services/camera_service_provider.dart';
+import '../services/white_balance.dart';
+
+/// 白平衡会话状态（仅实时调节取景器，**不写入模板 CameraParams**）。
+///
+/// 之所以放在 provider 而非本地 StatefulWidget：TabBarView 在切换 Tab 时会
+/// dispose/重建非当前页的 child，本地 state 会丢失。放在顶层级 provider，
+/// 切换 Tab 后白平衡选择得以保留。
+final whiteBalanceSessionProvider =
+    StateProvider<WhiteBalanceSettings>((ref) => const WhiteBalanceSettings());
 
 /// 底部抽屉式参数编辑面板。
 /// 5 个 Tab：相机 / 色彩 / 细节 / 构图 / 场景。
@@ -331,9 +341,26 @@ class _PanelFooter extends StatelessWidget {
 // 相机 Tab
 // ─────────────────────────────────────────────────────────────────────
 class _CameraTab extends ConsumerWidget {
+  /// 白平衡预设 pill（mode → 显示名）。
+  static const _wbPresets = <WhiteBalanceMode, String>{
+    WhiteBalanceMode.auto: '自动',
+    WhiteBalanceMode.daylight: '日光',
+    WhiteBalanceMode.cloudy: '阴天',
+    WhiteBalanceMode.fluorescent: '荧光',
+    WhiteBalanceMode.incandescent: '白炽',
+  };
+
+  /// 应用白平衡设置：写入会话 provider + 实时下发取景器。
+  /// 仅实时会话调节，**不写入 CameraParams**。
+  static void _applyWhiteBalance(WidgetRef ref, WhiteBalanceSettings s) {
+    ref.read(whiteBalanceSessionProvider.notifier).state = s;
+    ref.read(cameraServiceProvider).setWhiteBalance(s);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cam = ref.watch(CaptureState.effectiveCameraProvider);
+    final wb = ref.watch(whiteBalanceSessionProvider);
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -352,6 +379,46 @@ class _CameraTab extends ConsumerWidget {
               onChanged: (v) => CaptureState.updateCamera(
                   ref, (c) => c.copyWith(exposureCompensation: v)),
             ),
+          ],
+        ),
+        _SectionCard(
+          title: '白平衡',
+          children: [
+            _WbPresetRow(
+              presets: _wbPresets,
+              selected: wb.mode,
+              onSelected: (mode) {
+                if (mode == WhiteBalanceMode.auto) {
+                  // 切回 Auto：temperatureK 置 null，插件端 auto 复位
+                  _applyWhiteBalance(ref, const WhiteBalanceSettings());
+                } else {
+                  // 非 Auto：若无手动色温，默认 5500K
+                  _applyWhiteBalance(
+                    ref,
+                    WhiteBalanceSettings(
+                      mode: mode,
+                      temperatureK: wb.temperatureK ?? 5500,
+                    ),
+                  );
+                }
+              },
+            ),
+            if (!wb.isAuto)
+              _SliderRow(
+                label: '色温',
+                value: (wb.temperatureK ?? 5500).toDouble(),
+                min: 3000,
+                max: 8000,
+                divisions: 50,
+                display: '${wb.temperatureK ?? 5500} K',
+                onChanged: (v) => _applyWhiteBalance(
+                  ref,
+                  WhiteBalanceSettings(
+                    mode: wb.mode,
+                    temperatureK: (v / 100).round() * 100,
+                  ),
+                ),
+              ),
           ],
         ),
         _SectionCard(
@@ -975,6 +1042,58 @@ class _PopupRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 白平衡预设 pill 行 — 胶囊式单选。
+class _WbPresetRow extends StatelessWidget {
+  final Map<WhiteBalanceMode, String> presets;
+  final WhiteBalanceMode selected;
+  final ValueChanged<WhiteBalanceMode> onSelected;
+  const _WbPresetRow({
+    required this.presets,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: presets.entries.map((e) {
+        final active = e.key == selected;
+        return GestureDetector(
+          onTap: () => onSelected(e.key),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: active
+                  ? const Color(0xFFC9A96E).withOpacity(0.18)
+                  : Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: active
+                    ? const Color(0xFFC9A96E).withOpacity(0.6)
+                    : Colors.white.withOpacity(0.08),
+                width: active ? 1 : 0.5,
+              ),
+            ),
+            child: Text(
+              e.value,
+              style: TextStyle(
+                color: active
+                    ? const Color(0xFFC9A96E)
+                    : Colors.white.withOpacity(0.7),
+                fontSize: 12,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
