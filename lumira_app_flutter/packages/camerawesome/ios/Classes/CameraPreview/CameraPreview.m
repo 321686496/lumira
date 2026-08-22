@@ -308,6 +308,44 @@
   }
 }
 
+- (void)setWhiteBalance:(NSString *)mode temperatureK:(NSNumber *_Nullable)k
+                  error:(FlutterError *_Nullable __autoreleasing *_Nonnull)error {
+  NSError *e = nil;
+  if (![_captureDevice lockForConfiguration:&e]) {
+    *error = [FlutterError errorWithCode:@"WB_LOCK_ERR" message:[e localizedDescription] details:nil];
+    return;
+  }
+
+  if (k != nil) {
+    // 手动色温：用目标 K 得到 gains，锁定
+    AVCaptureWhiteBalanceGains gains =
+        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:
+            AVCaptureWhiteBalanceTemperatureAndTintValuesMake([k floatValue], 0.0f)];
+    [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
+  } else if ([mode isEqualToString:@"auto"]) {
+    // 恢复自动（连续自动白平衡）
+    AVCaptureWhiteBalanceMode wbMode = AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance;
+    if ([_captureDevice isWhiteBalanceModeSupported:wbMode]) _captureDevice.whiteBalanceMode = wbMode;
+    else *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"continuous auto white balance not supported" details:nil];
+  } else {
+    // 模式预设：映射到目标 K 再锁定
+    float presetK = 5500.0f;
+    if      ([mode isEqualToString:@"daylight"])     presetK = 5500.0f;
+    else if ([mode isEqualToString:@"cloudy"])       presetK = 6500.0f;
+    else if ([mode isEqualToString:@"fluorescent"])  presetK = 4200.0f;
+    else if ([mode isEqualToString:@"incandescent"]) presetK = 3000.0f;
+    AVCaptureWhiteBalanceGains gains =
+        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:
+            AVCaptureWhiteBalanceTemperatureAndTintValuesMake(presetK, 0.0f)];
+    gains.redGain   = MAX(1.0f, MIN(_captureDevice.maxWhiteBalanceGain, gains.redGain));
+    gains.greenGain = MAX(1.0f, MIN(_captureDevice.maxWhiteBalanceGain, gains.greenGain));
+    gains.blueGain  = MAX(1.0f, MIN(_captureDevice.maxWhiteBalanceGain, gains.blueGain));
+    [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
+  }
+
+  [_captureDevice unlockForConfiguration];
+}
+
 - (void)setMirrorFrontCamera:(bool)value error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
   _mirrorFrontCamera = value;
 }

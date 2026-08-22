@@ -941,6 +941,26 @@ void CameraInterfaceSetup(id<FlutterBinaryMessenger> binaryMessenger, NSObject<C
   {
     FlutterBasicMessageChannel *channel =
       [[FlutterBasicMessageChannel alloc]
+        initWithName:@"dev.flutter.pigeon.CameraInterface.setWhiteBalance"
+        binaryMessenger:binaryMessenger
+        codec:CameraInterfaceGetCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(setWhiteBalanceMode:temperatureK:error:)], @"CameraInterface api (%@) doesn't respond to @selector(setWhiteBalanceMode:temperatureK:error:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        NSArray *args = message;
+        NSString *arg_mode = GetNullableObjectAtIndex(args, 0);
+        NSNumber *arg_temperatureK = GetNullableObjectAtIndex(args, 1);
+        FlutterError *error;
+        [api setWhiteBalanceMode:arg_mode temperatureK:arg_temperatureK error:&error];
+        callback(wrapResult(nil, error));
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
         initWithName:@"dev.flutter.pigeon.CameraInterface.getMaxZoom"
         binaryMessenger:binaryMessenger
         codec:CameraInterfaceGetCodec()];

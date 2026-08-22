@@ -343,12 +343,11 @@ class CamerawesomePlugin {
     return CameraInterface().setCorrection(brightness);
   }
 
-  // 原生通道由 Task 2/3/4 实现：届时将实现为
-  // `return CameraInterface().setWhiteBalance(mode, k);`（Pigeon 接口当前尚无该通道方法）。
   /// 设置白平衡模式与色温。
   /// mode ∈ {auto, daylight, cloudy, fluorescent, incandescent}; k 为 3000..8000 或 null。
   static Future<void> setWhiteBalance(String mode, int? k) {
-    return Future<void>.value();
+    // 共享 Pigeon 通道（iOS 已由 Task 2 实现；Android 端由 Task 3 实现）。
+    return CameraInterface().setWhiteBalance(mode, k);
   }
 
   /// returns the max zoom available on device
