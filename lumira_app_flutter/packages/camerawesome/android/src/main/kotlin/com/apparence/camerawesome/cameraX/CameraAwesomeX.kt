@@ -21,6 +21,7 @@ import android.util.Size
 import androidx.camera.core.*
 import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.CaptureRequestOptions
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.VideoRecordEvent
@@ -576,12 +577,13 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
      *
      * - 预设 (k == null)：直接设 [CaptureRequest.CONTROL_AWB_MODE] 常量，交给设备 3A 处理。
      * - 手动色温 (k != null，3000-8000K)：关掉自动 AWB，用 [CaptureRequest.COLOR_CORRECTION_GAINS]
-     *   设 Kelvin -> RGB 相对增益，取景实时生效、直出即带。
+     *   设「补偿式」相对增益（对假设处于该色温光源下的白做反向校正回中性），取景实时生效、直出即带。
      *
      * 用 [Camera2CameraControl.setCaptureRequestOptions] 整体替换每次的选项，切回预设/自动时
      * 会自动清掉之前手动设的 gains。
      */
     @SuppressLint("RestrictedApi")
+    @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
     override fun setWhiteBalance(mode: String, temperatureK: Int?) {
         val control = cameraState.previewCamera?.cameraControl ?: return
         try {
@@ -647,13 +649,21 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
         )
     }
 
-    /** 相对增益 = 目标色温 RGB / 参考点(5500K) RGB，钳制到 [1/4, 4]。 */
+    /**
+     * 补偿式相对增益 = 参考点(5500K) RGB / 目标色温 RGB。
+     * 对「假设处于当前色温光源下的白」做反向增益校正，把其色偏中和回中性（与 iOS
+     * deviceWhiteBalanceGainsForTemperatureAndTintValues 的补偿式语义一致）：
+     * - 暖光(3000K)：R 增益 < 1、B 增益 > 1，削减红并增强蓝来“降温”回中性。
+     * - 冷光(8000K)：R 增益 > 1、B 增益 < 1，削减蓝并增强红来“升温”回中性。
+     * - 5500K：各通道均为 1（等于参考点，不做补偿）。
+     * 钳制到 [1/4, 4] 以避免 RggbChannelVector 越界。
+     */
     private fun gainsFromKelvin(kelvin: Int): RggbChannelVector {
         val ref = kelvinToRgb(5500)
         val target = kelvinToRgb(kelvin)
-        val r = (target.first / ref.first).coerceIn(0.25f, 4.0f)
-        val g = (target.second / ref.second).coerceIn(0.25f, 4.0f)
-        val b = (target.third / ref.third).coerceIn(0.25f, 4.0f)
+        val r = (ref.first / target.first).coerceIn(0.25f, 4.0f)
+        val g = (ref.second / target.second).coerceIn(0.25f, 4.0f)
+        val b = (ref.third / target.third).coerceIn(0.25f, 4.0f)
         return RggbChannelVector(r, g, g, b)
     }
 
