@@ -187,7 +187,6 @@ final homeSceneRecosProvider =
     scenesDao: scenesDao,
   );
   final result = await service.build();
-  if (result.isEmpty) return HomeMockData.scenes; // fallback
   return result;
 });
 

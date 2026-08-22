@@ -32,6 +32,7 @@ class _SceneInfo {
   final bool isCustom; // 自定义场景（DB 有完整数据）
   final bool isPreset; // 内置预设
   final bool isFavorite;
+  final String coverUrl; // 场景封面（自定义=SceneRecord.coverUrl，预设=exampleImages 首图）
 
   const _SceneInfo({
     required this.id,
@@ -41,6 +42,7 @@ class _SceneInfo {
     required this.isCustom,
     required this.isPreset,
     required this.isFavorite,
+    this.coverUrl = '',
   });
 }
 
@@ -86,6 +88,7 @@ class SceneRecommendationService {
           isCustom: true,
           isPreset: false,
           isFavorite: s.isFavorite,
+          coverUrl: s.coverUrl,
         ));
       }
       for (final s in presetScenes) {
@@ -98,6 +101,7 @@ class SceneRecommendationService {
           isCustom: false,
           isPreset: true,
           isFavorite: customScenes.any((c) => c.id == s.id && c.isFavorite),
+          coverUrl: s.exampleImages.isNotEmpty ? s.exampleImages.first : '',
         ));
       }
 
@@ -254,6 +258,7 @@ class SceneRecommendationService {
       badgeText: badgeText,
       badgeBrand: brand,
       photoCount: photoCount,
+      coverUrl: s.coverUrl,
     );
   }
 }
