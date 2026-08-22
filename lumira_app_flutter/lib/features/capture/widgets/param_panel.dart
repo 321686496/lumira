@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -361,6 +363,9 @@ class _CameraTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cam = ref.watch(CaptureState.effectiveCameraProvider);
     final wb = ref.watch(whiteBalanceSessionProvider);
+    // OHOS 连续色温（setWhiteBalance/getWhiteBalanceRange）真机不可用，
+    // 传感器级手动值无法落地，仅保留预设 pill，隐藏色温滑块。
+    final showWbSlider = Platform.isAndroid || Platform.isIOS;
 
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -402,7 +407,7 @@ class _CameraTab extends ConsumerWidget {
                 }
               },
             ),
-            if (!wb.isAuto)
+            if (showWbSlider && !wb.isAuto)
               _SliderRow(
                 label: '色温',
                 value: (wb.temperatureK ?? 5500).toDouble(),
