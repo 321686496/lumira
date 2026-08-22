@@ -23,15 +23,18 @@ class SceneReco {
     required this.badgeText,
     required this.badgeBrand,
     required this.photoCount,
+    this.coverUrl = '',
   });
 
   final String id;
   final String name;
   final String vibe;
-  final String imageSeed; // picsum seed
+  final String imageSeed; // 不再用于 picsum 兜底；仅保留字段兼容
   final String badgeText;
   final bool badgeBrand;
   final int photoCount;
+  /// 真实封面：`data:image/` base64、http(s)、本地文件路径；空串表示无封面
+  final String coverUrl;
 }
 
 /// 最近拍摄项（最近拍摄 section）
