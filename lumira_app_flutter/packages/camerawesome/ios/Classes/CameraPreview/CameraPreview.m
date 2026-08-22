@@ -328,9 +328,9 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
 
   if (k != nil) {
     // 手动色温：用目标 K 得到 gains，锁定（渐进钳制避免越界崩溃）
+    AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = [k floatValue], .tint = 0.0f };
     AVCaptureWhiteBalanceGains gains =
-        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:
-            AVCaptureWhiteBalanceTemperatureAndTintValuesMake([k floatValue], 0.0f)];
+        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
     gains = ClampWhiteBalanceGains(gains, _captureDevice.maxWhiteBalanceGain);
     if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
       [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
@@ -349,9 +349,9 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
     else if ([mode isEqualToString:@"cloudy"])       presetK = 6500.0f;
     else if ([mode isEqualToString:@"fluorescent"])  presetK = 4200.0f;
     else if ([mode isEqualToString:@"incandescent"]) presetK = 3000.0f;
+    AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = presetK, .tint = 0.0f };
     AVCaptureWhiteBalanceGains gains =
-        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:
-            AVCaptureWhiteBalanceTemperatureAndTintValuesMake(presetK, 0.0f)];
+        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
     gains = ClampWhiteBalanceGains(gains, _captureDevice.maxWhiteBalanceGain);
     if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
       [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
