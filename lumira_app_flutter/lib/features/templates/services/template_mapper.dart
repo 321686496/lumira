@@ -258,7 +258,8 @@ class TemplateMapper {
 
     final classificationJson = <String, dynamic>{
       'type': form.meta.category,
-      'style': form.meta.style ?? '',
+      'majorStyle': form.meta.style ?? '',
+      'subStyle': form.meta.subStyle ?? '',
       'method': form.meta.method ?? '',
     };
 
@@ -276,6 +277,9 @@ class TemplateMapper {
       coverData: form.meta.coverImage,
       description: form.meta.description,
       referenceSource: form.meta.referenceSource,
+      shortDesc: form.meta.shortDesc,
+      ambienceJson: TemplateMapper.ambienceToJson(
+        form.meta.ambience ?? const RemoteTemplateAmbienceDto()),
       composition: compositionJson,
       pose: <String, dynamic>{
         'silhouette': editorSilhouetteToJson(form.pose.silhouette),
@@ -324,12 +328,27 @@ class TemplateMapper {
         tags: List<String>.from(r.tags),
         description: r.description,
         referenceSource: r.referenceSource,
-        style: (r.classification['style'] as String?)?.isNotEmpty == true
-            ? r.classification['style'] as String
+        // 向后兼容：旧 {type, style, method} 数据中 style 读到 style，
+        // subStyle 读到 method（旧 method 实为三级）；新四级数据读 majorStyle/subStyle。
+        style: (r.classification['majorStyle'] as String?)?.isNotEmpty == true
+            ? r.classification['majorStyle'] as String
+            : (r.classification['style'] as String?)?.isNotEmpty == true
+                ? r.classification['style'] as String
+                : null,
+        subStyle: (r.classification['subStyle'] as String?)?.isNotEmpty == true
+            ? r.classification['subStyle'] as String
+            : (r.classification['method'] as String?)?.isNotEmpty == true
+                ? r.classification['method'] as String
+                : null,
+        // 四级 method 仅在存在真正的四级 subStyle 时读取，
+        // 避免旧三级数据的 method 被误投到四级。
+        method: (r.classification['subStyle'] as String?)?.isNotEmpty == true
+            ? (r.classification['method'] as String?)?.isNotEmpty == true
+                ? r.classification['method'] as String
+                : null
             : null,
-        method: (r.classification['method'] as String?)?.isNotEmpty == true
-            ? r.classification['method'] as String
-            : null,
+        shortDesc: r.shortDesc,
+        ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
         coverImage: r.coverData,
       ),
       composition: editor.EditorFormComposition(
