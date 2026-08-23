@@ -14,6 +14,7 @@ import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_editor_page.dart';
+import 'package:lumira_app_flutter/features/templates/services/template_mapper.dart';
 import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_dropdown.dart';
 import 'package:lumira_app_flutter/shared/widgets/lumira/form/lumira_slider.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
@@ -362,6 +363,120 @@ void main() {
         matching: find.byType(LumiraDropdown<String>),
       );
       expect(updatedDropdown, findsOneWidget);
+    });
+
+    // Task6 — 基本信息 tab 新字段（短简介/四级下拉/ambience chips/标签新增）
+    testWidgets(
+        'Step 1: renders new basic info fields (短简介/四级下拉/ambience chips/标签新增)',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 短简介：label + 输入框（≤20 字占位）
+      expect(find.text('短简介'), findsOneWidget);
+      expect(find.text('一句话介绍（推荐 ≤20 字）'), findsOneWidget);
+
+      // 四级级联下拉：风格/子风格/方法
+      expect(find.text('风格'), findsWidgets);
+      expect(find.text('子风格'), findsOneWidget);
+      expect(find.text('方法'), findsOneWidget);
+
+      // ambience chips
+      expect(find.text('适用季节/天气/时段'), findsOneWidget);
+      expect(find.text('季节'), findsOneWidget);
+      expect(find.text('春'), findsOneWidget);
+      expect(find.text('冬'), findsOneWidget);
+      expect(find.text('天气'), findsOneWidget);
+      expect(find.text('晴'), findsOneWidget);
+      expect(find.text('雨'), findsOneWidget);
+      expect(find.text('时段'), findsOneWidget);
+      expect(find.text('黄金小时'), findsOneWidget);
+      expect(find.text('夜晚'), findsOneWidget);
+
+      // 标签：label + 新增输入（无候选标签时显示空态提示）
+      expect(find.text('标签'), findsOneWidget);
+      expect(find.text('+ 新增标签（回车添加）'), findsOneWidget);
+      expect(find.text('暂无候选标签，可在下方新增'), findsOneWidget);
+    });
+
+    testWidgets('Step 1: renders tag candidate chip from custom template',
+        (tester) async {
+      setLargeViewport(tester);
+      // 先种一条带标签的自定义模板，作为候选标签数据源（setUp 已清空表）
+      await tester.runAsync(() =>
+          _insertCustomTemplate(sharedDb, name: '候选模板', tags: const ['夜景', '街头']));
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 候选标签 chip 可见，且无空态提示
+      expect(find.text('夜景'), findsWidgets);
+      expect(find.text('街头'), findsOneWidget);
+      expect(find.text('暂无候选标签，可在下方新增'), findsNothing);
+      // 新增输入仍可见
+      expect(find.text('+ 新增标签（回车添加）'), findsOneWidget);
+    });
+
+    testWidgets('Step 1: saving persists shortDesc/ambience/tags smoke',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 名称（必填）
+      await tester.enterText(
+        find.byWidgetPredicate((w) =>
+            w is TextField &&
+            (w.decoration?.hintText ?? '') == '输入模板名称'),
+        '冒烟模板',
+      );
+      // 短简介
+      await tester.enterText(
+        find.byWidgetPredicate((w) =>
+            w is TextField &&
+            (w.decoration?.hintText ?? '') == '一句话介绍（推荐 ≤20 字）'),
+        '适合自然光人像',
+      );
+      // 选 春 ambience chip
+      await tester.tap(find.text('春'));
+      // 新增标签
+      await tester.enterText(
+        find.byWidgetPredicate((w) =>
+            w is TextField &&
+            (w.decoration?.hintText ?? '') == '+ 新增标签（回车添加）'),
+        '胶片感',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // 点击 保存（DAO upsert 为真实 async，走 runAsync 让其完成）
+      await tester.tap(find.text('保存'));
+      await tester
+          .runAsync(() => Future.delayed(const Duration(milliseconds: 200)));
+      await tester
+          .runAsync(() => Future.delayed(const Duration(milliseconds: 200)));
+
+      TemplateRecord? saved;
+      await tester.runAsync(() async {
+        final dao = TemplatesDao(sharedDb);
+        final all = await dao.getAll();
+        final matches =
+            all.where((t) => t.name == '冒烟模板').toList();
+        saved = matches.isNotEmpty ? matches.first : null;
+      });
+      expect(saved, isNotNull);
+      expect(saved!.shortDesc, '适合自然光人像');
+      final amb = TemplateMapper.ambienceFromJson(saved!.ambienceJson);
+      expect(amb.seasons, contains('spring'));
+      expect(saved!.tags, contains('胶片感'));
+
+      // 让 _onSave 内的 800ms 定时器触发并返回，避免测试收尾时报 pending timer
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 900));
+      await settleOrPump(tester, UIStyle.neumorphic);
     });
   });
 
@@ -994,6 +1109,8 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colCoverData} TEXT,
       ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
       ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
+      ${Tables.colShortDesc} TEXT NOT NULL DEFAULT '',
+      ${Tables.colAmbienceJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colPoseJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
@@ -1048,4 +1165,50 @@ Future<void> _seedCategories(Database db) async {
       Tables.colUpdatedAt: now,
     });
   }
+}
+
+/// 种入一条自定义模板（Task6：标签候选 chip 数据源）。
+Future<void> _insertCustomTemplate(
+  Database db, {
+  required String name,
+  List<String> tags = const [],
+}) async {
+  final now = DateTime.now().millisecondsSinceEpoch;
+  await db.insert(Tables.customTemplates, {
+    Tables.colId: 'test-${DateTime.now().microsecondsSinceEpoch}',
+    Tables.colName: name,
+    Tables.colAuthor: '',
+    Tables.colVersion: '1.0.0',
+    Tables.colCategory: 'portrait',
+    Tables.colClassificationJson: '{}',
+    Tables.colTagsJson: _jsonEncode(tags),
+    Tables.colTagIdsJson: '[]',
+    Tables.colPrice: 0,
+    Tables.colCover: '',
+    Tables.colCoverData: null,
+    Tables.colDescription: '',
+    Tables.colReferenceSource: '',
+    Tables.colShortDesc: '',
+    Tables.colAmbienceJson: '{}',
+    Tables.colCompositionJson: '{}',
+    Tables.colPoseJson: '{}',
+    Tables.colCameraJson: '{}',
+    Tables.colSceneGuideJson: '{}',
+    Tables.colPostProcessJson: '{}',
+    Tables.colIsBuiltin: 0,
+    Tables.colIsRecommended: 0,
+    Tables.colSource: 'custom',
+    Tables.colCreatedAt: now,
+    Tables.colUpdatedAt: now,
+  });
+}
+
+String _jsonEncode(List<String> list) {
+  final buf = StringBuffer('[');
+  for (var i = 0; i < list.length; i++) {
+    if (i > 0) buf.write(', ');
+    buf.write('"${list[i]}"');
+  }
+  buf.write(']');
+  return buf.toString();
 }

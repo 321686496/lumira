@@ -25,6 +25,8 @@ import '../../profile/pages/profile_my_templates_page.dart'
     show customTemplatesProvider;
 import '../data/preview_form_provider.dart';
 import '../data/builtin_silhouettes.dart';
+import '../data/custom_tag_options_provider.dart';
+import '../data/remote_template_dto.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_editor_mock_data.dart';
 import '../services/template_exporter.dart';
@@ -1211,6 +1213,8 @@ class _FieldInput extends StatefulWidget {
     this.multiline = false,
     this.keyboardType,
     this.onChanged,
+    this.onSubmitted,
+    this.maxLength,
   });
 
   final ThemeTokens tokens;
@@ -1220,6 +1224,10 @@ class _FieldInput extends StatefulWidget {
   final bool multiline;
   final TextInputType? keyboardType;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
+
+  /// 可选：限制输入最大长度，超长部分在 onChanged 中截断（controller 同步截断）。
+  final int? maxLength;
 
   @override
   State<_FieldInput> createState() => _FieldInputState();
@@ -1267,9 +1275,25 @@ class _FieldInputState extends State<_FieldInput> {
       controller: _internalController,
       hintText: widget.placeholder,
       keyboardType: widget.keyboardType,
-      onChanged: widget.onChanged,
+      onChanged: _onChanged,
+      onSubmitted: widget.onSubmitted,
       maxLines: widget.multiline ? 8 : 1,
     );
+  }
+
+  void _onChanged(String value) {
+    if (widget.maxLength != null && value.length > widget.maxLength!) {
+      final truncated = value.substring(0, widget.maxLength!);
+      // 同步截断 controller，保证输入框显示不超过上限
+      _internalController.value = TextEditingValue(
+        text: truncated,
+        selection:
+            TextSelection.collapsed(offset: truncated.length),
+      );
+      widget.onChanged?.call(truncated);
+    } else {
+      widget.onChanged?.call(value);
+    }
   }
 }
 
@@ -1561,27 +1585,41 @@ void _showCoverPreviewDialog(
 
 /// v17: Step1 表单状态。
 ///
-/// 分类选项（type/style/method）从 sqflite DAO 动态加载，支持三级级联：
-/// - type（一级）：initState 时加载 level=1 分类
-/// - style（二级）：type 变化时按 parentKey 重新加载
-/// - method（三级）：style 变化时按 parentKey 重新加载
+/// 分类选项（type/majorStyle/subStyle/method）从 sqflite DAO 动态加载，支持四级级联：
+/// - type（一级）：initState 时加载 level=1 分类 → `form.meta.category`
+/// - majorStyle（二级）：type 变化时按 parentKey 重新加载 → `form.meta.style`
+/// - subStyle（三级）：majorStyle 变化时按 parentKey 重新加载 → `form.meta.subStyle`
+/// - method（四级）：subStyle 变化时按 parentKey 重新加载 → `form.meta.method`
 ///
-/// 切换 type 时清空 style/method，切换 style 时清空 method，保证级联一致性。
+/// 级联一致性：切换 type 时清空 style/subStyle/method；切换 style 时清空 subStyle/method；
+/// 切换 subStyle 时清空 method。
 class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
   List<EditorOption> _typeOptions = const [];
   List<EditorOption> _styleOptions = const [];
-  List<EditorOption> _methodOptions = const [];
+  List<EditorOption> _subStyleOptions = const [];
+  List<EditorOption> _method4Options = const [];
 
-  /// 记录已加载过的 category/style，用于 didUpdateWidget 判断是否需要重新加载
+  /// “+ 新增标签”输入框控制器（标签 chips 下方的输入框）。
+  final TextEditingController _newTagController = TextEditingController();
+
+  /// 记录已加载过的 category/style/subStyle，用于 didUpdateWidget 判断是否需要重新加载
   String? _lastLoadedCategory;
   String? _lastLoadedStyle;
+  String? _lastLoadedSubStyle;
 
   @override
   void initState() {
     super.initState();
     _loadTypeOptions();
     _loadStyleOptions(widget.form.meta.category);
-    _loadMethodOptions(widget.form.meta.style);
+    _loadSubStyleOptions(widget.form.meta.style);
+    _loadMethod4Options(widget.form.meta.subStyle);
+  }
+
+  @override
+  void dispose() {
+    _newTagController.dispose();
+    super.dispose();
   }
 
   @override
@@ -1591,9 +1629,13 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     if (widget.form.meta.category != _lastLoadedCategory) {
       _loadStyleOptions(widget.form.meta.category);
     }
-    // style 变化时重新加载三级 method 选项
+    // style 变化时重新加载三级 subStyle 选项
     if (widget.form.meta.style != _lastLoadedStyle) {
-      _loadMethodOptions(widget.form.meta.style);
+      _loadSubStyleOptions(widget.form.meta.style);
+    }
+    // subStyle 变化时重新加载四级 method 选项
+    if (widget.form.meta.subStyle != _lastLoadedSubStyle) {
+      _loadMethod4Options(widget.form.meta.subStyle);
     }
   }
 
@@ -1628,10 +1670,10 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     }
   }
 
-  Future<void> _loadMethodOptions(String? styleKey) async {
+  Future<void> _loadSubStyleOptions(String? styleKey) async {
     _lastLoadedStyle = styleKey;
     if (styleKey == null || styleKey.isEmpty) {
-      if (mounted) setState(() => _methodOptions = const []);
+      if (mounted) setState(() => _subStyleOptions = const []);
       return;
     }
     try {
@@ -1639,11 +1681,167 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
       final cats = await dao.getCategoriesByParent(styleKey);
       if (!mounted) return;
       setState(() {
-        _methodOptions = cats.map((c) => EditorOption(c.key, c.name)).toList();
+        _subStyleOptions =
+            cats.map((c) => EditorOption(c.key, c.name)).toList();
       });
     } catch (e) {
-      debugPrint('Failed to load method categories: $e');
+      debugPrint('Failed to load subStyle categories: $e');
     }
+  }
+
+  Future<void> _loadMethod4Options(String? subStyleKey) async {
+    _lastLoadedSubStyle = subStyleKey;
+    if (subStyleKey == null || subStyleKey.isEmpty) {
+      if (mounted) setState(() => _method4Options = const []);
+      return;
+    }
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final cats = await dao.getCategoriesByParent(subStyleKey);
+      if (!mounted) return;
+      setState(() {
+        _method4Options = cats.map((c) => EditorOption(c.key, c.name)).toList();
+      });
+    } catch (e) {
+      debugPrint('Failed to load method4 categories: $e');
+    }
+  }
+
+  // ===== 标签 chips 操作 =====
+
+  void _toggleTag(String tag) {
+    widget.onChange(() {
+      final tags = List<String>.from(widget.form.meta.tags);
+      if (tags.contains(tag)) {
+        tags.remove(tag);
+      } else {
+        tags.add(tag);
+      }
+      widget.form.meta.tags = tags;
+    });
+  }
+
+  void _addNewTag(String raw) {
+    final tag = raw.trim();
+    if (tag.isEmpty) return;
+    widget.onChange(() {
+      final tags = List<String>.from(widget.form.meta.tags);
+      if (!tags.contains(tag)) tags.add(tag);
+      widget.form.meta.tags = tags;
+    });
+    _newTagController.clear();
+  }
+
+  // ===== 适用季节/天气/时段（ambience）chips =====
+
+  void _toggleSeason(String key) {
+    widget.onChange(() {
+      final a =
+          widget.form.meta.ambience ?? const RemoteTemplateAmbienceDto();
+      final list = List<String>.from(a.seasons);
+      if (list.contains(key)) {
+        list.remove(key);
+      } else {
+        list.add(key);
+      }
+      widget.form.meta.ambience = RemoteTemplateAmbienceDto(
+        seasons: list,
+        weathers: a.weathers,
+        timeTones: a.timeTones,
+      );
+    });
+  }
+
+  void _toggleWeather(String key) {
+    widget.onChange(() {
+      final a =
+          widget.form.meta.ambience ?? const RemoteTemplateAmbienceDto();
+      final list = List<String>.from(a.weathers);
+      if (list.contains(key)) {
+        list.remove(key);
+      } else {
+        list.add(key);
+      }
+      widget.form.meta.ambience = RemoteTemplateAmbienceDto(
+        seasons: a.seasons,
+        weathers: list,
+        timeTones: a.timeTones,
+      );
+    });
+  }
+
+  void _toggleTimeTone(String key) {
+    widget.onChange(() {
+      final a =
+          widget.form.meta.ambience ?? const RemoteTemplateAmbienceDto();
+      final list = List<String>.from(a.timeTones);
+      if (list.contains(key)) {
+        list.remove(key);
+      } else {
+        list.add(key);
+      }
+      widget.form.meta.ambience = RemoteTemplateAmbienceDto(
+        seasons: a.seasons,
+        weathers: a.weathers,
+        timeTones: list,
+      );
+    });
+  }
+
+  // ===== 标签候选 chips 渲染（customTagCandidatesProvider） =====
+
+  List<Widget> _buildTagCandidates(
+    ThemeTokens tokens,
+    AsyncValue<List<CustomTagOption>> async,
+  ) {
+    return async.when(
+      data: (options) {
+        if (options.isEmpty) {
+          return [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '暂无候选标签，可在下方新增',
+                style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+              ),
+            ),
+          ];
+        }
+        return [
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: options
+                .map((o) => _ToggleChip(
+                      tokens: tokens,
+                      label: o.name,
+                      active: widget.form.meta.tags.contains(o.name),
+                      onTap: () => _toggleTag(o.name),
+                    ))
+                .toList(),
+          ),
+        ];
+      },
+      loading: () => [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            '标签加载中…',
+            style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+          ),
+        ),
+      ],
+      error: (e, __) => [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            '标签加载失败',
+            style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -1652,17 +1850,47 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     final tokens = widget.tokens;
     final form = widget.form;
     final onChange = widget.onChange;
-    final tagsController = widget.tagsController;
-    final onTagsChanged = widget.onTagsChanged;
-    // style/method 为可选字段，首位加"不限"（空值 → null）
+    // style/subStyle/method 为可选字段，首位加"不限"（空值 → null）
     final styleOptions = <EditorOption>[
       const EditorOption('', '不限'),
       ..._styleOptions,
     ];
-    final methodOptions = <EditorOption>[
+    final subStyleOptions = <EditorOption>[
       const EditorOption('', '不限'),
-      ..._methodOptions,
+      ..._subStyleOptions,
     ];
+    final method4Options = <EditorOption>[
+      const EditorOption('', '不限'),
+      ..._method4Options,
+    ];
+    // 标签候选（异步聚合自定义模板 tags）
+    final tagCandidates = ref.watch(customTagCandidatesProvider);
+
+    // 适用季节/天气/时段 chips 选项（值对齐后端 ambience keys）
+    const seasonOptions = <EditorOption>[
+      EditorOption('spring', '春'),
+      EditorOption('summer', '夏'),
+      EditorOption('autumn', '秋'),
+      EditorOption('winter', '冬'),
+    ];
+    const weatherOptions = <EditorOption>[
+      EditorOption('sunny', '晴'),
+      EditorOption('cloudy', '多云'),
+      EditorOption('overcast', '阴'),
+      EditorOption('rain', '雨'),
+      EditorOption('snow', '雪'),
+      EditorOption('fog', '雾'),
+    ];
+    const timeToneOptions = <EditorOption>[
+      EditorOption('goldenHour', '黄金小时'),
+      EditorOption('day', '白天'),
+      EditorOption('night', '夜晚'),
+      EditorOption('warm', '暖调'),
+      EditorOption('cool', '冷调'),
+    ];
+
+    final ambience = form.meta.ambience;
+
     return _StepCard(
       tokens: tokens,
       title: '模板信息',
@@ -1685,14 +1913,24 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             options: _typeOptions,
             onChanged: (v) => onChange(() {
               form.meta.category = v;
-              // v17: 切换分类时清空 style/method（级联一致性）
+              // 切换分类时清空 style/subStyle/method（级联一致性）
               form.meta.style = null;
               form.meta.subStyle = null;
               form.meta.method = null;
             }),
           ),
           const SizedBox(height: 14),
-          // v17: 风格（style，可选，级联自分类）
+          // Task6: 短简介（≤20 字）
+          _FieldLabel(tokens: tokens, text: '短简介'),
+          _FieldInput(
+            tokens: tokens,
+            initialValue: form.meta.shortDesc,
+            placeholder: '一句话介绍（推荐 ≤20 字）',
+            maxLength: 20,
+            onChanged: (v) => onChange(() => form.meta.shortDesc = v),
+          ),
+          const SizedBox(height: 14),
+          // v17: 风格（style=二级 majorStyle，可选，级联自分类）
           _FieldLabel(tokens: tokens, text: '风格'),
           _FieldDropdown(
             tokens: tokens,
@@ -1700,29 +1938,69 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             options: styleOptions,
             onChanged: (v) => onChange(() {
               form.meta.style = v.isEmpty ? null : v;
+              // 切换风格时清空 subStyle/method（级联一致性）
               form.meta.subStyle = null;
-              // v17: 切换风格时清空 method（级联一致性）
               form.meta.method = null;
             }),
           ),
           const SizedBox(height: 14),
-          // v17: 方式（method，可选，级联自风格）
-          _FieldLabel(tokens: tokens, text: '方式'),
+          // Task6 四级级联第三级：子风格（subStyle，可选，级联自风格）
+          _FieldLabel(tokens: tokens, text: '子风格'),
           _FieldDropdown(
             tokens: tokens,
             value: form.meta.subStyle ?? '',
-            options: methodOptions,
+            options: subStyleOptions,
             onChanged: (v) => onChange(() {
               form.meta.subStyle = v.isEmpty ? null : v;
+              // 切换子风格时清空 method（级联一致性）
+              form.meta.method = null;
             }),
           ),
           const SizedBox(height: 14),
+          // Task6 四级级联第四级：方法（method，可选，级联自子风格）
+          _FieldLabel(tokens: tokens, text: '方法'),
+          _FieldDropdown(
+            tokens: tokens,
+            value: form.meta.method ?? '',
+            options: method4Options,
+            onChanged: (v) => onChange(() {
+              form.meta.method = v.isEmpty ? null : v;
+            }),
+          ),
+          const SizedBox(height: 14),
+          // Task6: 适用季节/天气/时段（ambience chips 多选）
+          _FieldLabel(tokens: tokens, text: '适用季节/天气/时段'),
+          _AmbienceChipGroup(
+            tokens: tokens,
+            label: '季节',
+            options: seasonOptions,
+            selected: ambience?.seasons ?? const [],
+            onToggle: _toggleSeason,
+          ),
+          _AmbienceChipGroup(
+            tokens: tokens,
+            label: '天气',
+            options: weatherOptions,
+            selected: ambience?.weathers ?? const [],
+            onToggle: _toggleWeather,
+          ),
+          _AmbienceChipGroup(
+            tokens: tokens,
+            label: '时段',
+            options: timeToneOptions,
+            selected: ambience?.timeTones ?? const [],
+            onToggle: _toggleTimeTone,
+          ),
+          const SizedBox(height: 2),
+          // Task6: 标签（候选 chips + 新增输入，替代原逗号文本框）
           _FieldLabel(tokens: tokens, text: '标签'),
+          ..._buildTagCandidates(tokens, tagCandidates),
+          const SizedBox(height: 8),
           _FieldInput(
             tokens: tokens,
-            controller: tagsController,
-            placeholder: '标签1, 标签2',
-            onChanged: onTagsChanged,
+            controller: _newTagController,
+            placeholder: '+ 新增标签（回车添加）',
+            onSubmitted: _addNewTag,
           ),
           const SizedBox(height: 14),
           _FieldLabel(tokens: tokens, text: '简介'),
@@ -1740,6 +2018,100 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             initialValue: form.meta.referenceSource,
             placeholder: '如：样片 EXIF',
             onChanged: (v) => onChange(() => form.meta.referenceSource = v),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Task6: 可切换 chip（用于标签/ambience 等多选），主题自适应。
+class _ToggleChip extends ConsumerWidget {
+  const _ToggleChip({
+    required this.tokens,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final ThemeTokens tokens;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          // neumorphic 风格下：激活用 brand + shadowConvex，非激活用 surface + shadowConvexSubtle
+          color: active
+              ? tokens.brand
+              : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
+          borderRadius: BorderRadius.circular(9999),
+          border: isNeumorphic
+              ? null
+              : Border.all(
+                  color: active ? tokens.brand : Colors.transparent,
+                  width: 1,
+                ),
+          boxShadow: isNeumorphic
+              ? (active ? tokens.shadowConvex : tokens.shadowConvexSubtle)
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: active ? tokens.textInverse : tokens.textSecondary,
+            height: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Task6: 单一 ambience 维度（季节/天气/时段）的 chips 分组，主题自适应。
+class _AmbienceChipGroup extends ConsumerWidget {
+  const _AmbienceChipGroup({
+    required this.tokens,
+    required this.label,
+    required this.options,
+    required this.selected,
+    required this.onToggle,
+  });
+
+  final ThemeTokens tokens;
+  final String label;
+  final List<EditorOption> options;
+  final List<String> selected;
+  final ValueChanged<String> onToggle;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FieldLabel(tokens: tokens, text: label),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: options
+                .map((o) => _ToggleChip(
+                      tokens: tokens,
+                      label: o.label,
+                      active: selected.contains(o.value),
+                      onTap: () => onToggle(o.value),
+                    ))
+                .toList(),
           ),
         ],
       ),
