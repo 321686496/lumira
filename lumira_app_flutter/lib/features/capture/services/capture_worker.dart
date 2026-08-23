@@ -16,10 +16,12 @@
 // （优化 B）编码耗时约降为原来的 39%，已可接受。
 
 import 'dart:async';
-import 'dart:io' show File, stderr;
+import 'dart:io' show File, Platform, stderr;
 import 'dart:isolate' show Isolate, ReceivePort, SendPort;
+import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import 'dart_photo_pipeline.dart'
@@ -162,6 +164,25 @@ void _workerEntry(SendPort mainPort) async {
         order: img.ChannelOrder.rgba,
       );
 
+      // 1.5. P3→sRGB 色域转换（iOS 宽色域相机输出）
+      // dart:ui 解码 P3 JPEG 后 rawRgba 返回 P3 像素值，但 image 包编码 JPEG
+      // 不嵌入 ICC 配置文件，查看器按 sRGB 解释导致偏黄。
+      // 注意：OHOS 也偏黄，说明问题可能不仅是 P3，需要进一步诊断。
+      if (Platform.isIOS) {
+        _applyP3ToSrgbInWorker(image);
+      }
+
+      // 1.6. 诊断：保存 GPU 处理后的 PNG（用于对比颜色偏移）
+      try {
+        final diagDir = Directory.systemTemp.createTempSync('lumira_diag');
+        final gpuPngPath = '${diagDir.path}/gpu_output.png';
+        final gpuPng = img.encodePng(image);
+        await File(gpuPngPath).writeAsBytes(gpuPng);
+        stderr.writeln('[capture-worker] 诊断 PNG 已保存: $gpuPngPath');
+      } catch (e) {
+        stderr.writeln('[capture-worker] 保存诊断 PNG 失败: $e');
+      }
+
       // 2. 逐像素 CPU 效果：锐化 + 清晰度 + 颗粒 + 磨皮 + 暗角
       applyPerPixelEffectsImg(
         image,
@@ -221,5 +242,52 @@ void _workerEntry(SendPort mainPort) async {
         'outputPath': outputPath,
       });
     }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// P3→sRGB 色域转换（worker isolate 内部）
+// ─────────────────────────────────────────────────────────────────────────
+
+/// sRGB 传递函数查表（避免逐像素 pow）
+final List<double> _srgbToLinearLut = _buildSrgbToLinearLut();
+final List<double> _srgbEncodeLut = _buildSrgbEncodeLut();
+
+List<double> _buildSrgbToLinearLut() {
+  return List<double>.generate(256, (i) {
+    final v = i / 255.0;
+    if (v <= 0.04045) return v / 12.92;
+    return math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  });
+}
+
+List<double> _buildSrgbEncodeLut() {
+  const steps = 4096;
+  return List<double>.generate(steps, (i) {
+    final c = i / (steps - 1);
+    if (c <= 0.0031308) return c * 12.92;
+    return (1.055 * math.pow(c, 1.0 / 2.4) - 0.055).clamp(0.0, 1.0).toDouble();
+  });
+}
+
+/// 将 P3(D65) 像素就地转换为 sRGB(D65)。
+///
+/// P3 与 sRGB 同为 D65 白点、同为 sRGB 传递函数，仅基色不同。
+/// 使用 sRGB→P3 正向矩阵的逆矩阵（带负系数）来正确还原 P3 中超出 sRGB 色域的红色。
+void _applyP3ToSrgbInWorker(img.Image image) {
+  const steps = 4096;
+  for (final p in image) {
+    final r = p.r.toInt(), g = p.g.toInt(), b = p.b.toInt();
+    final lr = _srgbToLinearLut[r];
+    final lg = _srgbToLinearLut[g];
+    final lb = _srgbToLinearLut[b];
+    // P3(D65) → sRGB(D65) 线性基色转换矩阵（sRGB→P3 正向矩阵的逆）
+    final sr = (1.2249 * lr - 0.2247 * lg).clamp(0.0, 1.0);
+    final sg = (-0.0420 * lr + 1.0419 * lg).clamp(0.0, 1.0);
+    final sb = (-0.0197 * lr - 0.0786 * lg + 1.0983 * lb).clamp(0.0, 1.0);
+    p
+      ..r = (_srgbEncodeLut[(sr * (steps - 1)).round()] * 255).round()
+      ..g = (_srgbEncodeLut[(sg * (steps - 1)).round()] * 255).round()
+      ..b = (_srgbEncodeLut[(sb * (steps - 1)).round()] * 255).round();
   }
 }
