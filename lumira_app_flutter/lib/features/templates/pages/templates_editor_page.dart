@@ -1668,6 +1668,7 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
               form.meta.category = v;
               // v17: 切换分类时清空 style/method（级联一致性）
               form.meta.style = null;
+              form.meta.subStyle = null;
               form.meta.method = null;
             }),
           ),
@@ -1680,6 +1681,7 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             options: styleOptions,
             onChanged: (v) => onChange(() {
               form.meta.style = v.isEmpty ? null : v;
+              form.meta.subStyle = null;
               // v17: 切换风格时清空 method（级联一致性）
               form.meta.method = null;
             }),
@@ -1689,10 +1691,10 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
           _FieldLabel(tokens: tokens, text: '方式'),
           _FieldDropdown(
             tokens: tokens,
-            value: form.meta.method ?? '',
+            value: form.meta.subStyle ?? '',
             options: methodOptions,
             onChanged: (v) => onChange(() {
-              form.meta.method = v.isEmpty ? null : v;
+              form.meta.subStyle = v.isEmpty ? null : v;
             }),
           ),
           const SizedBox(height: 14),
