@@ -4,7 +4,8 @@ import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat;
 
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kDebugMode;
 import 'package:flutter/services.dart' show HapticFeedback;
 
 import 'package:flutter/material.dart';
@@ -665,6 +666,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
       final swIso = Stopwatch()..start();
       // 常驻 worker isolate（A 优化），避免 compute() 每次创建 isolate 的开销
+      // P3→sRGB：iOS/OHOS 相机输出广色域 JPEG，image 包编码不含 ICC，
+      // 查看器按 sRGB 解释导致偏黄 → 需在编码前做色域换算。
+      final isWideGamut =
+          defaultTargetPlatform.name == 'ios' ||
+          defaultTargetPlatform.name == 'ohos';
       final workerResult = await CaptureWorker.instance.process(
         CaptureWorkerRequest(
           rgbaBytes: gpuData.rgbaBytes,
@@ -677,10 +683,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
           smoothStrength: gpuData.smoothStrength,
           vignette: gpuData.vignette,
           needRawRgba: gpuData.needRawRgba,
+          applyP3ToSrgb: isWideGamut,
         ),
       );
       swIso.stop();
-      debugPrint('[perf] CaptureWorker.process: ${swIso.elapsedMilliseconds}ms');
+      debugPrint('[perf] CaptureWorker.process: ${swIso.elapsedMilliseconds}ms '
+          'platform=${defaultTargetPlatform.name}, applyP3ToSrgb=$isWideGamut, '
+          'diagBefore=${workerResult.diagBefore}, diagAfter=${workerResult.diagAfter}');
       if (!mounted) {
         _isProcessingCapture = false;
         return;

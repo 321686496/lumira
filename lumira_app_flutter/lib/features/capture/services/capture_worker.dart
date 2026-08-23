@@ -16,12 +16,11 @@
 // （优化 B）编码耗时约降为原来的 39%，已可接受。
 
 import 'dart:async';
-import 'dart:io' show Directory, File, Platform, stderr;
+import 'dart:io' show File, stderr;
 import 'dart:isolate' show Isolate, ReceivePort, SendPort;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 
-import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import 'dart_photo_pipeline.dart'
@@ -40,6 +39,7 @@ class CaptureWorkerRequest {
     required this.smoothStrength,
     required this.vignette,
     required this.needRawRgba,
+    this.applyP3ToSrgb = false,
   });
 
   /// GPU 色彩矩阵处理后的 rawRgba（主 isolate 生成，dart:ui 管线，保证所见即所得）
@@ -56,6 +56,11 @@ class CaptureWorkerRequest {
   /// true：不编码 JPEG，回传 rawRgba 给主 isolate 做水印合成
   /// false：worker 直接编码 JPEG 写盘，仅回传路径
   final bool needRawRgba;
+
+  /// 是否对照片做 P3→sRGB 色域转换（iOS/OHOS 相机输出广色域 JPEG）。
+  /// dart:ui 解码后 rawRgba 是 P3 像素值，image 包编码 JPEG 不嵌 ICC，
+  /// 查看器按 sRGB 解释导致偏黄。由主 isolate 按平台决定。
+  final bool applyP3ToSrgb;
 }
 
 /// worker 处理结果。
@@ -66,6 +71,8 @@ class CaptureWorkerResult {
     required this.width,
     required this.height,
     required this.outputPath,
+    this.diagBefore,
+    this.diagAfter,
   });
   final bool ok;
 
@@ -74,6 +81,10 @@ class CaptureWorkerResult {
   final int width;
   final int height;
   final String outputPath;
+
+  /// 诊断：P3→sRGB 转换前/后的平均 RGB（[r, g, b]），用于验证偏黄方向。
+  final List<int>? diagBefore;
+  final List<int>? diagAfter;
 }
 
 /// 常驻 worker isolate 单例。
@@ -113,6 +124,7 @@ class CaptureWorker {
       'smoothStrength': request.smoothStrength,
       'vignette': request.vignette,
       'needRawRgba': request.needRawRgba,
+      'applyP3ToSrgb': request.applyP3ToSrgb,
     });
     try {
       final result = await replyPort.first as Map;
@@ -122,6 +134,8 @@ class CaptureWorker {
         width: result['width'] as int,
         height: result['height'] as int,
         outputPath: result['outputPath'] as String,
+        diagBefore: (result['diagBefore'] as List?)?.cast<int>(),
+        diagAfter: (result['diagAfter'] as List?)?.cast<int>(),
       );
     } finally {
       replyPort.close();
@@ -154,6 +168,7 @@ void _workerEntry(SendPort mainPort) async {
       final smoothStrength = msg['smoothStrength'] as int;
       final vignette = msg['vignette'] as int;
       final needRawRgba = msg['needRawRgba'] as bool;
+      final applyP3ToSrgb = msg['applyP3ToSrgb'] as bool? ?? false;
 
       // 1. 从 rawRgba 创建 img.Image
       final image = img.Image.fromBytes(
@@ -164,24 +179,14 @@ void _workerEntry(SendPort mainPort) async {
         order: img.ChannelOrder.rgba,
       );
 
-      // 1.5. P3→sRGB 色域转换（iOS 宽色域相机输出）
-      // dart:ui 解码 P3 JPEG 后 rawRgba 返回 P3 像素值，但 image 包编码 JPEG
-      // 不嵌入 ICC 配置文件，查看器按 sRGB 解释导致偏黄。
-      // 注意：OHOS 也偏黄，说明问题可能不仅是 P3，需要进一步诊断。
-      if (Platform.isIOS) {
+      // 1.5. 诊断：P3→sRGB 转换前后的颜色采样（用于验证偏黄方向）
+      final diagBefore = _sampleAvgRgb(image);
+
+      // 1.6. P3→sRGB 色域转换（iOS/OHOS 相机输出广色域 JPEG）
+      if (applyP3ToSrgb) {
         _applyP3ToSrgbInWorker(image);
       }
-
-      // 1.6. 诊断：保存 GPU 处理后的 PNG（用于对比颜色偏移）
-      try {
-        final diagDir = Directory.systemTemp.createTempSync('lumira_diag');
-        final gpuPngPath = '${diagDir.path}/gpu_output.png';
-        final gpuPng = img.encodePng(image);
-        await File(gpuPngPath).writeAsBytes(gpuPng);
-        stderr.writeln('[capture-worker] 诊断 PNG 已保存: $gpuPngPath');
-      } catch (e) {
-        stderr.writeln('[capture-worker] 保存诊断 PNG 失败: $e');
-      }
+      final diagAfter = _sampleAvgRgb(image);
 
       // 2. 逐像素 CPU 效果：锐化 + 清晰度 + 颗粒 + 磨皮 + 暗角
       applyPerPixelEffectsImg(
@@ -209,6 +214,8 @@ void _workerEntry(SendPort mainPort) async {
         'width': width,
         'height': height,
         'outputPath': outputPath,
+        'diagBefore': diagBefore,
+        'diagAfter': diagAfter,
       });
     } catch (e, st) {
       stderr.writeln('[capture-worker] postProcess failed: $e\n$st');
@@ -290,4 +297,26 @@ void _applyP3ToSrgbInWorker(img.Image image) {
       ..g = (_srgbEncodeLut[(sg * (steps - 1)).round()] * 255).round()
       ..b = (_srgbEncodeLut[(sb * (steps - 1)).round()] * 255).round();
   }
+}
+
+/// 采样整图平均 RGB（步进采样降低耗时），返回 [avgR, avgG, avgB]。
+/// 用于诊断偏黄方向：若 R 明显高于 G/B 则偏黄。
+List<int> _sampleAvgRgb(img.Image image, {int step = 8}) {
+  var r = 0.0, g = 0.0, b = 0.0;
+  var cnt = 0;
+  for (var y = 0; y < image.height; y += step) {
+    for (var x = 0; x < image.width; x += step) {
+      final p = image.getPixel(x, y);
+      r += p.r.toInt();
+      g += p.g.toInt();
+      b += p.b.toInt();
+      cnt++;
+    }
+  }
+  if (cnt == 0) return [0, 0, 0];
+  return [
+    (r / cnt).round(),
+    (g / cnt).round(),
+    (b / cnt).round(),
+  ];
 }
