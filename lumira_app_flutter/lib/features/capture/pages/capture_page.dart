@@ -5,7 +5,7 @@ import 'dart:typed_data' show ByteData, Uint8List;
 import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat;
 
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kDebugMode;
+    show compute, defaultTargetPlatform, kDebugMode;
 import 'package:flutter/services.dart' show HapticFeedback;
 
 import 'package:flutter/material.dart';
@@ -3496,6 +3496,26 @@ List<int> _sampleAvgRgbFromRgba(ByteData byteData) {
   return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
 }
 
+/// 诊断（compute 顶层函数）：用 image 包(CPU)解码 JPEG bytes 并采样平均 RGB。
+/// 对比 dart:ui 解码结果，判断偏黄是否来自 dart:ui 解码器色彩空间处理。
+List<int> imageDecodeSample(Uint8List bytes) {
+  final decoded = img.decodeJpg(bytes);
+  if (decoded == null) return [-1, -1, -1];
+  // 转换为 uint8 采样（仅诊断用）
+  var r = 0.0, g = 0.0, b = 0.0, cnt = 0;
+  for (var y = 0; y < decoded.height; y += 8) {
+    for (var x = 0; x < decoded.width; x += 8) {
+      final p = decoded.getPixel(x, y);
+      r += p.r.toInt();
+      g += p.g.toInt();
+      b += p.b.toInt();
+      cnt++;
+    }
+  }
+  if (cnt == 0) return [0, 0, 0];
+  return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
+}
+
 /// 在主 isolate 中用 dart:ui GPU 管线处理照片：
 /// 1. 解码 JPEG（降采样，C 优化）
 /// 2. 方向对齐 + cover 裁切 + 前置镜像 + 缩放到 kMaxProcessDim（B 优化）
@@ -3546,10 +3566,19 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
           await srcImage.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (srcByteData != null) {
         final ss = _sampleAvgRgbFromRgba(srcByteData);
-        debugPrint('[capture] 源图解码 rawRgba 平均RGB: $ss');
+        debugPrint('[capture] 源图解码 rawRgba 平均RGB(dart:ui): $ss');
       }
     } catch (e) {
       debugPrint('[capture] 源图采样失败: $e');
+    }
+
+    // 诊断：用 image 包(CPU)直接解码同一 JPEG 采样，与 dart:ui 解码结果对比。
+    // 若 image 包解码更接近中性（不偏黄），则说明偏黄来自 dart:ui 解码器色彩空间处理。
+    try {
+      final imgByteData = await compute(imageDecodeSample, bytes);
+      debugPrint('[capture] 源图解码 平均RGB(image包CPU): $imgByteData');
+    } catch (e) {
+      debugPrint('[capture] image包解码采样失败: $e');
     }
 
     // 计算方向对齐参数
