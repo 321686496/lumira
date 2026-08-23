@@ -175,6 +175,9 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
 
   takePhoto(path: string, result: Result<boolean>): void {
     Logger.debug(TAG, `takePhoto is called`);
+    // 优先走 photoAvailable 直出路径（原始 JPEG，绕过系统相册增强，避免拍照偏黄）。
+    this.cameraState!!.photoPathResult = { path: path, result: result }
+    // 保留相册路径作为回退（photoPathResult 触发过一次后即复位，不影响本路径）
     this.cameraState!!.handlePhotoCb = async (photoAsset: photoAccessHelper.PhotoAsset) => {
       await this.cameraState?.saveCameraPhoto(path, photoAsset, result)
     }

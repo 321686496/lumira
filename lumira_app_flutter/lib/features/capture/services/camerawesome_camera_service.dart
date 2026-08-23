@@ -17,7 +17,8 @@ import 'white_balance.dart';
 /// - setZoom 统一传 [0,1] 归一化值（camerawesome 默认语义）
 /// - buildPreview 使用默认 cover 填充
 /// - capture 走 camerawesome 默认 SaveConfig.photo 流程
-/// - onScaleZoom 直接透传归一化值，不做倍数转换
+/// - 双指捏合缩放在 App 层（CameraPreview._PinchZoomCamera）统一处理，
+///   不再使用 camerawesome 内置 onPreviewScale，仅保留点击对焦
 /// - 不查询设备真实 minZoom/maxZoom，不做任何重映射
 class CamerawesomeCameraService implements CameraService {
   CamerawesomeCameraService(this._delegate);
@@ -352,12 +353,6 @@ class CamerawesomeCameraService implements CameraService {
           );
         },
       ),
-      onPreviewScaleBuilder: (state) => ohos.OnPreviewScale(
-        onScale: (scale) {
-          // OHOS: scale 已是真实倍数，直接透传
-          config.onScaleZoom?.call(scale);
-        },
-      ),
     );
   }
 
@@ -384,15 +379,6 @@ class CamerawesomeCameraService implements CameraService {
             position,
             Size(flutterPreviewSize.width, flutterPreviewSize.height),
           );
-        },
-      ),
-      onPreviewScaleBuilder: (state) => ca.OnPreviewScale(
-        onScale: (scale) {
-          // native: scale 是 [0,1] 归一化，转真实倍数
-          final maxZoom = _cachedMaxZoom ?? 10.0;
-          final minZoom = _cachedMinZoom ?? 1.0;
-          final multiplier = minZoom + (maxZoom - minZoom) * scale;
-          config.onScaleZoom?.call(multiplier);
         },
       ),
     );

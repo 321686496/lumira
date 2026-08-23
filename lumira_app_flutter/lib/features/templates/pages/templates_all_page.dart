@@ -1093,6 +1093,37 @@ class _TplCard extends StatelessWidget {
                       child: _PremiumBadge(
                           tokens: tokens, price: template.price),
                     ),
+                  // 已拍照片数：叠在封面右下角（半透明深色 pill），
+                  // 避免占用下方信息行横向空间，导致季节/天气等氛围标签换行变纵向。
+                  if (usageCount > 0)
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(9999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.camera_alt_outlined,
+                                size: 12, color: Colors.white),
+                            const SizedBox(width: 4),
+                            Text(
+                              '已拍 $usageCount 张',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1167,24 +1198,6 @@ class _TplCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (usageCount > 0) ...[
-                        const SizedBox(width: 6),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.camera_alt_outlined,
-                                size: 12, color: tokens.textTertiary),
-                            const SizedBox(width: 3),
-                            Text(
-                              '已拍 $usageCount 张',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: tokens.textTertiary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
                     ],
                   ),
                 ],

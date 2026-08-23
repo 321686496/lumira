@@ -569,6 +569,26 @@ class CaptureState {
     }
   }
 
+  /// 将场景推荐滤镜套用到当前后期参数。
+  /// 有模板时基于 editableTemplate 的 postProcess 叠加，无模板时写 freeModePostProcessProvider。
+  /// 供场景条点击 / 场景路由进入两种入口复用，保证「套用场景即自动套用推荐滤镜」。
+  static void applySceneFilter(WidgetRef ref, SceneFilter filter) {
+    final current = ref.read(freeModePostProcessProvider);
+    ref.read(freeModePostProcessProvider.notifier).state = current.copyWith(
+      lut: filter.lut,
+      systemFilter: filter.systemFilter,
+    );
+    final editable = ref.read(editableTemplateProvider);
+    if (editable != null) {
+      ref.read(editableTemplateProvider.notifier).state = editable.copyWith(
+        postProcess: editable.postProcess.copyWith(
+          lut: filter.lut,
+          systemFilter: filter.systemFilter,
+        ),
+      );
+    }
+  }
+
   /// 统一更新后期参数的辅助方法
   static void updatePostProcess(WidgetRef ref, PostProcess Function(PostProcess) updater) {
     final editable = ref.read(editableTemplateProvider);

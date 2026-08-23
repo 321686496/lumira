@@ -74,8 +74,9 @@ class CameraPreview extends ConsumerWidget {
     this.rawCaptureKey,
   });
 
-  /// 双指缩放手势回调（传入真实倍数，1.0 = 1x）。
-  /// 注意：双指缩放现在直接同步 provider 状态，此字段保留供其他子组件复用回调。
+  /// 缩放回调（传入真实倍数，1.0 = 1x），由外部（缩放轮盘等）触发。
+  /// 取景器内的双指捏合缩放由本组件内置的 [_PinchZoomCamera] 处理，
+  /// 此回调保留供外部复用。
   final ValueChanged<double>? onZoomChanged;
 
   /// 表单覆盖参数（Bug 12 修复：模板预览页使用）
@@ -147,12 +148,6 @@ class CameraPreview extends ConsumerWidget {
               onTapFocus: (position, previewSize) {
                 cameraService.focusOnPoint(position, previewSize);
               },
-              onScaleZoom: (multiplier) {
-                // multiplier 已是真实倍数（service 层已按平台转换）
-                ref.read(CaptureState.apparentZoomProvider.notifier).state =
-                    multiplier;
-                ref.read(CaptureState.zoomProvider.notifier).state = multiplier;
-              },
             ),
           ),
         );
@@ -165,12 +160,17 @@ class CameraPreview extends ConsumerWidget {
         : cameraWidget;
 
     // 滤镜包裹（修复 Bug 2/3：使用 effectivePost，自由模式也应用）
-    final filteredCamera = applyFilter
-        ? ColorFiltered(
-            colorFilter: fromPostProcess(effectivePost),
-            child: rawCamera,
-          )
-        : rawCamera;
+    // 双指捏合缩放：最外层包 _PinchZoomCamera，在整个取景器上监听捏合手势，
+    // 从当前倍数出发按比例缩放并真正下发到相机（替代 camerawesome 内置的
+    // 仅更新状态、不下发相机的 onPreviewScale 流程）。
+    final filteredCamera = _PinchZoomCamera(
+      child: applyFilter
+          ? ColorFiltered(
+              colorFilter: fromPostProcess(effectivePost),
+              child: rawCamera,
+            )
+          : rawCamera,
+    );
 
     // 构图叠图（修复 Bug 2：使用 effectiveComp，自由模式也显示构图辅助线）
     final compositionOverlay =
@@ -311,3 +311,66 @@ class CameraPreview extends ConsumerWidget {
 
 /// 测试覆写 provider（生产环境为 null，测试中注入占位 widget）
 final cameraPreviewOverrideProvider = Provider<Widget?>((ref) => null);
+
+/// 双指捏合缩放包装：在取景器最外层监听 onScale 手势实现 iPhone 原生相机式缩放。
+///
+/// 行为说明：
+/// - 手势起始时记录当前缩放倍数（apparentZoomProvider），
+///   随手势 `details.scale` 按比例缩放（张开放大、捏合缩小），
+///   与外部缩放轮盘/水平拖动共用同一倍数语义，不产生跳变。
+/// - 同步更新 apparentZoomProvider（缩放轮盘指示器）/ zoomProvider（成片缩放），
+///   并真正调用 [CameraService.setZoomMultiplier] 下发到相机，
+///   保证取景器画面实时缩放（此前 camerawesome 内置手势只更新状态、不下发相机）。
+/// - 倍数变化 < 0.01 时不下发，避免高频原生调用。
+class _PinchZoomCamera extends ConsumerStatefulWidget {
+  const _PinchZoomCamera({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_PinchZoomCamera> createState() => _PinchZoomCameraState();
+}
+
+class _PinchZoomCameraState extends ConsumerState<_PinchZoomCamera> {
+  /// 本次手势起始时的缩放倍数（null = 尚未进入双指状态）
+  double? _startMultiplier;
+
+  /// 上一次实际下发到相机的倍数（用于节流）
+  double? _lastAppliedMultiplier;
+
+  /// 将目标倍数 clamp 到设备范围后更新状态并下发相机。
+  void _applyZoom(double target) {
+    final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
+    final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final clamped = target.clamp(minZoom, maxZoom);
+    final last = _lastAppliedMultiplier;
+    if (last != null && (clamped - last).abs() < 0.01) return;
+    _lastAppliedMultiplier = clamped;
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = clamped;
+    ref.read(CaptureState.zoomProvider.notifier).state = clamped;
+    ref.read(cameraServiceProvider).setZoomMultiplier(clamped);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onScaleStart: (_) {
+        _startMultiplier = null;
+        _lastAppliedMultiplier = null;
+      },
+      onScaleUpdate: (details) {
+        // 仅双指捏合触发缩放，单指拖动/点击不干扰（点击对焦仍由相机组件处理）
+        if (details.pointerCount < 2) return;
+        // 双指落下后的第一次 update 才取起始倍数，兼容“先单指再落双指”的情况
+        _startMultiplier ??= ref.read(CaptureState.apparentZoomProvider);
+        _applyZoom(_startMultiplier! * details.scale);
+      },
+      onScaleEnd: (_) {
+        _startMultiplier = null;
+        _lastAppliedMultiplier = null;
+      },
+      child: widget.child,
+    );
+  }
+}

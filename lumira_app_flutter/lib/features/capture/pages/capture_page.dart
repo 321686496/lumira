@@ -596,12 +596,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
           _showWatermarkAnimation = true;
           _animationPhotoPath = result.filePath;
           _animationTemplate = wmTemplate;
-          _animationTargetRect = _getThumbnailGlobalRect();
         });
         _onAnimationComplete = () {
-          if (mounted) {
-            setState(() => _showWatermarkAnimation = false);
-          }
+          if (!mounted) return;
+          setState(() => _showWatermarkAnimation = false);
+          // 动画淡出后直接跳转到拍摄预览页；
+          // 后处理为异步，需等最终照片落库完成后才能带上 finalPath 打开预览页。
+          _goToPreviewWhenReady();
         };
       }
 
@@ -871,24 +872,21 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
-  /// 读取角标缩略图在屏幕上的全局 Rect。
-  ///
-  /// 用于水印动画 Phase 4（缩小 + 平移到角标位置）。当 GlobalKey
-  /// 尚未挂载或 RenderBox 还没测量时，回退到一个合理的左下角矩形。
-  Rect _getThumbnailGlobalRect() {
-    final ctx = _thumbnailKey.currentContext;
-    if (ctx == null) return const Rect.fromLTWH(24, 0, 48, 48);
-    final renderBox = ctx.findRenderObject() as RenderBox?;
-    if (renderBox == null || !renderBox.hasSize) {
-      return const Rect.fromLTWH(24, 0, 48, 48);
+  /// 水印动画淡出后跳转拍摄预览页前的等待逻辑。
+  /// 后处理（GPU + worker isolate + 水印渲染 + 落库）为异步执行，动画播放期间
+  /// 通常已经完成；此处轮询 [captureThumbnailProvider] 直到 finalPath/photoId 就绪，
+  /// 若在上限内未就绪（处理失败等异常场景）则静默停留拍摄页，避免打开无效预览。
+  Future<void> _goToPreviewWhenReady() async {
+    const maxWait = Duration(milliseconds: 3000);
+    final sw = Stopwatch()..start();
+    while (mounted && sw.elapsed < maxWait) {
+      final state = ref.read(captureThumbnailProvider);
+      if (state.finalPath != null && state.photoId != null) {
+        _onThumbnailTap();
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 60));
     }
-    final position = renderBox.localToGlobal(Offset.zero);
-    return Rect.fromLTWH(
-      position.dx,
-      position.dy,
-      renderBox.size.width,
-      renderBox.size.height,
-    );
   }
 
   /// 切换摄像头：仅切换 `cameraFacingProvider` 状态。
@@ -1337,7 +1335,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: ShutterFeedback(trigger: _shutterTrigger),
           ),
 
-          // 9. 水印相框动画 overlay（最顶层，IgnorePointer 不拦截手势）
+          // 9. 水印定格动画 overlay（最顶层，IgnorePointer 不拦截手势）
           if (_showWatermarkAnimation &&
               _animationPhotoPath != null &&
               _animationTemplate != null)
@@ -1346,7 +1344,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
                 key: const ValueKey('watermark_anim'),
                 photoPath: _animationPhotoPath!,
                 watermarkTemplate: _animationTemplate!,
-                targetRect: _animationTargetRect,
                 onAnimationComplete: _onAnimationComplete ?? () {},
               ),
             ),

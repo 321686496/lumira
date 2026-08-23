@@ -5,28 +5,28 @@ import 'package:flutter/material.dart';
 
 import '../models/watermark_template.dart';
 
-/// 水印相框入场动画 overlay。
+/// 拍摄后水印定格动画 overlay。
 ///
 /// 拍照完成且水印 + 动画开关均开启时，由拍摄页挂到 Stack 顶层播放：
-/// - Phase 1 (0–14%)：照片淡入（冻结在屏幕中央）
-/// - Phase 2 (14–45%)：水印元素淡入 + 轻微放大 (0.8→1.0)
-/// - Phase 3 (45–68%)：保持显示
-/// - Phase 4 (68–86%)：照片 + 水印向角标缩略图目标矩形缩小并平移
-/// - Phase 5 (86–100%)：在目标位置最终淡出
+/// - Phase 1 (0–28%)：带水印的照片从很小状态放大到满（最大宽 = 页面宽 * 0.9）并淡入
+/// - Phase 2 (28–78%)：居中停顿，展示最终效果
+/// - Phase 3 (78–100%)：整体淡出
+/// - 动画结束后通过 [onAnimationComplete] 通知拍摄页直接跳转到拍摄预览页
+///
+/// 展示区域固定为「最大宽 = 页面宽 * 0.9」并居中，按照片原始比例（[AspectRatio]）
+/// 定高，因此照片与水印使用同一尺寸坐标系，水印位置 / 字号与最终渲染到照片上的一致。
 ///
 /// 使用 [IgnorePointer] 不拦截手势，[ui.Image] 与 [AnimationController]
 /// 在 dispose 中释放，[ui.Codec] 在抽帧后立即释放。
 class WatermarkAnimationOverlay extends StatefulWidget {
   final String photoPath;
   final WatermarkTemplate watermarkTemplate;
-  final Rect targetRect;
   final VoidCallback onAnimationComplete;
 
   const WatermarkAnimationOverlay({
     super.key,
     required this.photoPath,
     required this.watermarkTemplate,
-    required this.targetRect,
     required this.onAnimationComplete,
   });
 
@@ -37,10 +37,13 @@ class WatermarkAnimationOverlay extends StatefulWidget {
 
 class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     with SingleTickerProviderStateMixin {
+  /// 展示最大宽度占页面宽度的比例。
+  static const double _maxWidthRatio = 0.9;
+
   late AnimationController _controller;
-  late Animation<double> _photoFade;
-  late Animation<double> _watermarkFade;
-  late Animation<double> _shrink;
+  late Animation<double> _grow;
+  late Animation<double> _fadeIn;
+  late Animation<double> _fadeOut;
   ui.Image? _photoImage;
 
   @override
@@ -48,19 +51,21 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 1600),
     );
-    _photoFade = CurvedAnimation(
+    // Phase 1：从小放大到 1.0（easeOutBack 带轻微回弹），同步淡入
+    _grow = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(0.0, 0.14, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.28, curve: Curves.easeOutBack),
     );
-    _watermarkFade = CurvedAnimation(
+    _fadeIn = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(0.14, 0.45, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.28, curve: Curves.easeOut),
     );
-    _shrink = CurvedAnimation(
+    // Phase 2：保持显示；Phase 3：淡出
+    _fadeOut = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(0.68, 0.86, curve: Curves.easeInCubic),
+      curve: const Interval(0.78, 1.0, curve: Curves.easeIn),
     );
     _loadImage();
     _controller.forward();
@@ -97,81 +102,52 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        if (_photoImage == null) return const SizedBox.shrink();
+    final maxWidth = screenSize.width * _maxWidthRatio;
 
-        final photoOpacity = _photoFade.value;
-        final watermarkOpacity = _watermarkFade.value;
-        final shrinkValue = _shrink.value;
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          if (_photoImage == null) return const SizedBox.shrink();
 
-        // Phase 4：向目标缩略图位置缩小 + 平移
-        final scale = 1.0 - (shrinkValue * 0.85);
-        final photoOpacityFinal = shrinkValue > 0
-            ? photoOpacity * (1.0 - shrinkValue * 0.3)
-            : photoOpacity;
+          final image = _photoImage!;
+          final aspect = image.width / image.height;
 
-        // 平移：屏幕中心 → 目标矩形中心
-        final screenCenter =
-            Offset(screenSize.width / 2, screenSize.height / 2);
-        final targetCenter = widget.targetRect.center;
-        final dx = (targetCenter.dx - screenCenter.dx) * shrinkValue;
-        final dy = (targetCenter.dy - screenCenter.dy) * shrinkValue;
+          // 缩放：0.15（极小）→ 1.0，配合 easeOutBack 产生「从小变大」的定格效果
+          final scale = 0.15 + 0.85 * _grow.value;
+          // 透明度：淡入 × (1 - 淡出)
+          final opacity = _fadeIn.value * (1.0 - _fadeOut.value);
 
-        return IgnorePointer(
-          child: Stack(
-            children: [
-              // Phase 1~4：黑色半透明遮罩（随 shrink 一起淡出）
-              if (_controller.value < 0.86)
-                Container(
-                    color:
-                        Colors.black.withOpacity(0.4 * (1 - shrinkValue))),
-
-              // 照片
-              Center(
-                child: Transform.translate(
-                  offset: Offset(dx, dy),
-                  child: Transform.scale(
-                    scale: scale,
-                    child: Opacity(
-                      opacity: photoOpacityFinal,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8 * shrinkValue),
-                        child: SizedBox(
-                          width: screenSize.width,
-                          height: screenSize.height,
-                          child: RawImage(
-                            image: _photoImage,
-                            fit: BoxFit.contain,
+          return Center(
+            child: Transform.scale(
+              scale: scale,
+              child: Opacity(
+                opacity: opacity,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: aspect,
+                    child: SizedBox(
+                      width: maxWidth,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          RawImage(image: image, fit: BoxFit.cover),
+                          CustomPaint(
+                            painter: _WatermarkOverlayPainter(
+                              template: widget.watermarkTemplate,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
-
-              // 水印文本元素（Phase 2 淡入，与照片同步缩放/平移）
-              // 使用 CustomPaint + 自定义 Painter 复刻 WatermarkRenderer 的
-              // 绘制逻辑（textAlign X 偏移 / Y 偏移 / 旋转 / letterSpacing /
-              // shadow），确保动画 overlay 与最终渲染水印视觉一致。
-              if (watermarkOpacity > 0)
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _WatermarkOverlayPainter(
-                      template: widget.watermarkTemplate,
-                      screenSize: screenSize,
-                      opacity: watermarkOpacity,
-                      scale: scale * (0.8 + 0.2 * watermarkOpacity),
-                      translate: Offset(dx, dy),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        );
-      },
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -180,61 +156,47 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
 /// 的绘制约定，使动画中显示的水印与最终渲染到照片上的水印视觉一致。
 ///
 /// 关键约定（与渲染器对齐）：
-/// - absoluteFontSize = element.fontSize * screenSize.width
-/// - anchorX = element.x * screenSize.width, anchorY = element.y * screenSize.height
+/// - absoluteFontSize = element.fontSize * size.width
+/// - anchorX = element.x * size.width, anchorY = element.y * size.height
 /// - textAlign 偏移：left=0 / center=-width/2 / right=-width
 /// - Y 偏移：-textHeight * 0.85
-/// - letterSpacing: element.letterSpacing * (screenSize.width / 400)
+/// - letterSpacing: element.letterSpacing * (size.width / 400)
 /// - shadow: blurRadius=(absFontSize*0.08).clamp(0.5,8.0),
 ///           offset=(blurRadius*0.4, blurRadius*0.4)
 ///
-/// overlay 自身应用 opacity / scale / translate 变换（与照片同步缩放平移）。
+/// 尺寸 [size] 即为照片展示盒的尺寸（照片 + 水印共用），因此元素相对坐标
+/// 映射到实际照片区域是准确的；整体淡入淡出 / 缩放由外层 Opacity / Transform 负责。
 class _WatermarkOverlayPainter extends CustomPainter {
-  _WatermarkOverlayPainter({
-    required this.template,
-    required this.screenSize,
-    required this.opacity,
-    required this.scale,
-    required this.translate,
-  });
+  _WatermarkOverlayPainter({required this.template});
 
   static const double _referenceWidth = 400.0;
 
   final WatermarkTemplate template;
-  final Size screenSize;
-  final double opacity;
-  final double scale;
-  final Offset translate;
 
   @override
   void paint(Canvas canvas, Size size) {
-    // overlay 画布尺寸 = screenSize，元素坐标基于 screenSize 缩放
-    final scaleRef = screenSize.width / _referenceWidth;
+    final scaleRef = size.width / _referenceWidth;
 
     canvas.save();
-    // 应用与照片同步的平移 + 缩放变换
-    canvas.translate(translate.dx, translate.dy);
-    canvas.scale(scale);
-
     for (final element in template.elements) {
       if (element.type == WatermarkElementType.image) continue;
       if (element.text.isEmpty) continue;
-      _drawTextElement(canvas, element, scaleRef);
+      _drawTextElement(canvas, element, size, scaleRef);
     }
-
     canvas.restore();
   }
 
   void _drawTextElement(
     Canvas canvas,
     WatermarkElement element,
+    Size size,
     double scaleRef,
   ) {
-    final absoluteFontSize = element.fontSize * screenSize.width;
+    final absoluteFontSize = element.fontSize * size.width;
     final blurRadius = (absoluteFontSize * 0.08).clamp(0.5, 8.0);
 
     final textStyle = TextStyle(
-      color: _withOpacity(element.color, element.opacity * opacity),
+      color: element.color,
       fontSize: absoluteFontSize,
       fontWeight: element.bold ? FontWeight.bold : FontWeight.normal,
       fontStyle: element.italic ? FontStyle.italic : FontStyle.normal,
@@ -242,7 +204,7 @@ class _WatermarkOverlayPainter extends CustomPainter {
       letterSpacing: element.letterSpacing * scaleRef,
       shadows: [
         ui.Shadow(
-          color: _withOpacity(element.shadowColor, element.opacity * opacity),
+          color: element.shadowColor,
           blurRadius: blurRadius,
           offset: ui.Offset(blurRadius * 0.4, blurRadius * 0.4),
         ),
@@ -255,8 +217,8 @@ class _WatermarkOverlayPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
 
-    final anchorX = element.x * screenSize.width;
-    final anchorY = element.y * screenSize.height;
+    final anchorX = element.x * size.width;
+    final anchorY = element.y * size.height;
 
     double offsetX;
     switch (element.textAlign) {
@@ -286,18 +248,10 @@ class _WatermarkOverlayPainter extends CustomPainter {
     canvas.restore();
   }
 
-  /// 将 [color] 的 alpha 通道乘以 [opacity]（0.0~1.0），返回带透明度的颜色。
-  ui.Color _withOpacity(ui.Color color, double opacity) {
-    if (opacity >= 1.0) return color;
-    final clamped = opacity.clamp(0.0, 1.0);
-    final alpha = (color.alpha * clamped).round();
-    return ui.Color.fromARGB(alpha, color.red, color.green, color.blue);
-  }
-
   @override
   bool shouldRepaint(covariant _WatermarkOverlayPainter oldDelegate) {
     // 与预览 painter 一致：元素属性为可变对象就地修改，无法靠引用相等判断；
-    // 始终重绘以保证动画过程中元素变化即时反映。
+    // 始终重绘以保证元素变化即时反映。
     return true;
   }
 }

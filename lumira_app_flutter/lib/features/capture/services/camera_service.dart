@@ -98,13 +98,11 @@ class CameraPreviewConfig {
     this.fit = CameraPreviewFit.cover,
     this.onReady,
     this.onTapFocus,
-    this.onScaleZoom,
   });
   final String facing;
   final CameraPreviewFit fit;
   final VoidCallback? onReady;
   final void Function(Offset, Size)? onTapFocus;
-  final void Function(double)? onScaleZoom;
 }
 
 enum CameraPreviewFit { cover, contain }

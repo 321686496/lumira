@@ -502,13 +502,7 @@ class _CameraWidgetBuilder extends State<CameraAwesomeBuilder>
                               },
                             ),
                         onPreviewScale: widget.onPreviewScaleBuilder
-                                ?.call(snapshot.requireData) ??
-                            OnPreviewScale(
-                              onScale: (scale) {
-                                snapshot.requireData.sensorConfig
-                                    .setZoom(scale);
-                              },
-                            ),
+                            ?.call(snapshot.requireData),
                         interfaceBuilder: widget.builder,
                         previewDecoratorBuilder: widget.previewDecoratorBuilder,
                       ),

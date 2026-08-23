@@ -320,7 +320,13 @@ class _Swiper extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 主题 token：占位底色 / 占位图标色跟随主题 brand
     final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
-    final images = scene.exampleImages;
+    // 自定义场景封面优先展示；内置场景走 exampleImages。
+    // 将封面放入 images 首项（cover 可能为空，需过滤）。
+    final images = <String>[
+      if (scene is CustomScenePreset && (scene as CustomScenePreset).cover.isNotEmpty)
+        (scene as CustomScenePreset).cover,
+      ...scene.exampleImages,
+    ];
     if (images.isEmpty) {
       return Container(
         height: 240, // 480rpx → 240dp

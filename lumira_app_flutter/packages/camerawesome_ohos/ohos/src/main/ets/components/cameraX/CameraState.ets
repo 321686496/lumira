@@ -87,6 +87,11 @@ export class CameraState implements StreamHandler {
   // 拍照结果监听
   private _handlePhotoCb: (photoAsset: photoAccessHelper.PhotoAsset) => void = () => {
   }
+  // 拍照原始帧写盘路径与结果（photoAvailable 直出路径，绕过系统相册增强管线）
+  private _photoPath: string | undefined = undefined
+  private _photoResult: Result<boolean> | undefined = undefined
+  // photoAvailable 已直出写盘成功标记，photoAssetAvailable 同帧应跳过避免重复/覆盖
+  private _photoDirectDone: boolean = false
   private videoFd: number | undefined = undefined
   private degree: number = 0;
   private previewProfile: camera.Profile | undefined = undefined
@@ -902,6 +907,8 @@ export class CameraState implements StreamHandler {
       mirror: this.cameraPosition === camera.CameraPosition.CAMERA_POSITION_FRONT ? this._mirrorFrontCamera : false,
       rotation: this.getPhotoRotation(degree)
     };
+    // 每次拍摄前复位直出标记，避免上一帧残留状态导致本帧被误跳过/误覆盖。
+    this._photoDirectDone = false
 
     if (this._exifPreferences.getSaveGPSLocation()) {
       try {
@@ -943,11 +950,65 @@ export class CameraState implements StreamHandler {
       this.photoOutput!!.on('error', (data: BusinessError): void => {
         Logger.info(TAG, `photoOutPut data: ${JSON.stringify(data)}`);
       });
+      // 拍照原始帧直出（绕过系统相册增强管线，避免"取景器正常、拍照偏黄"）。
+      // photoAvailable 返回相机原始 JPEG buffer，直接写盘，不经过相册色彩增强。
+      this.photoOutput!!.on('photoAvailable',
+        (err: BusinessError, photo: camera.Photo) => {
+          Logger.info(TAG, 'photoAvailable begin');
+          if (err && err.code !== 0) {
+            Logger.error(TAG, `photoAvailable error: ${err.code}`);
+            this._photoResult?.success(false)
+            return
+          }
+          if (!photo || !photo.main) {
+            Logger.error(TAG, 'photoAvailable: photo or photo.main is null');
+            this._photoResult?.success(false)
+            return
+          }
+          const imageObj = photo.main
+          // 同步置位直出标记（在任何异步回调之前），确保同帧 photoAssetAvailable 被跳过，
+          // 不会用相册增强图覆盖原始 JPEG。仅在写盘失败时复位以允许增强图回退。
+          this._photoDirectDone = true
+          imageObj.getComponent(image.ComponentType.JPEG,
+            (errCode: BusinessError, component: image.Component) => {
+              if (!errCode && component && component.byteBuffer && this._photoPath) {
+                try {
+                  const buffer = component.byteBuffer as ArrayBuffer
+                  const file = fileIo.openSync(this._photoPath!, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE)
+                  const written = fileIo.writeSync(file.fd, buffer)
+                  fileIo.closeSync(file)
+                  Logger.info(TAG, `photoAvailable: saved raw JPEG bytes=${written} to ${this._photoPath}`)
+                  this._photoResult?.success(true)
+                } catch (e) {
+                  Logger.error(TAG, `photoAvailable save failed: ${JSON.stringify(e)}`)
+                  this._photoDirectDone = false
+                  this._photoResult?.success(false)
+                }
+              } else {
+                Logger.error(TAG, `photoAvailable getComponent failed: code=${errCode?.code}, path=${this._photoPath}`)
+                this._photoDirectDone = false
+                this._photoResult?.success(false)
+              }
+              imageObj.release()
+              // 复位参数
+              this._photoPath = undefined
+              this._photoResult = undefined
+            });
+        });
+
       this.photoOutput!!.on('photoAssetAvailable',
         (err: BusinessError, photoAsset: photoAccessHelper.PhotoAsset) => {
           Logger.info(TAG, 'photoAssetAvailable begin');
           if (err) {
             Logger.error(TAG, 'photo is err');
+            return;
+          }
+          // 若 photoAvailable 已直出写盘（原始 JPEG，绕过相册色彩增强），
+          // 则跳过相册增强图的 saveCameraPhoto，避免其异步回调覆盖直出文件。
+          // 仅当直出失败（_photoDirectDone 为 false）时才走增强图回退。
+          if (this._photoDirectDone) {
+            Logger.info(TAG, 'photoAssetAvailable skipped: raw JPEG already written');
+            this._photoDirectDone = false
             return;
           }
           this._handlePhotoCb(photoAsset);
@@ -1189,6 +1250,11 @@ export class CameraState implements StreamHandler {
 
   public set handlePhotoCb(value: (photoAsset: photoAccessHelper.PhotoAsset) => void) {
     this._handlePhotoCb = value
+  }
+
+  public set photoPathResult(value: { path: string, result: Result<boolean> }) {
+    this._photoPath = value.path
+    this._photoResult = value.result
   }
 
   public set mirrorFrontCamera(value: boolean) {
