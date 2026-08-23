@@ -196,11 +196,15 @@ final homeSceneRecosProvider =
 final homeInspirationProvider =
     FutureProvider<HeroInspiration>((ref) async {
   final galleryDao = await ref.watch(galleryDaoProvider.future);
+  final templatesDao = await ref.watch(templatesDaoProvider.future);
+  final usageDao = await ref.watch(usageDaoProvider.future);
   final apiClient = await ref.watch(apiClientProvider.future);
 
   final service = InspirationService(
     galleryDao: galleryDao,
     apiClient: apiClient,
+    templatesDao: templatesDao,
+    usageDao: usageDao,
   );
   try {
     return await service.build();
