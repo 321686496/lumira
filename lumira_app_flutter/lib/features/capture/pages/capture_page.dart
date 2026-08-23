@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data' show Uint8List;
+import 'dart:typed_data' show ByteData, Uint8List;
 import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByteFormat, ImageFilter, Paint, PictureRecorder, Offset, ImmutableBuffer, ImageDescriptor, PixelFormat;
 
 import 'package:flutter/foundation.dart'
@@ -666,11 +666,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
       final swIso = Stopwatch()..start();
       // 常驻 worker isolate（A 优化），避免 compute() 每次创建 isolate 的开销
-      // P3→sRGB：iOS/OHOS 相机输出广色域 JPEG，image 包编码不含 ICC，
-      // 查看器按 sRGB 解释导致偏黄 → 需在编码前做色域换算。
-      final isWideGamut =
-          defaultTargetPlatform.name == 'ios' ||
-          defaultTargetPlatform.name == 'ohos';
+      // P3→sRGB：诊断证明 OHOS(华为) 相机输出是 sRGB，非 P3；
+      // 强行转换反而加深偏黄（diagAfter R 164→165）。先关闭，待定位真正偏黄环节。
       final workerResult = await CaptureWorker.instance.process(
         CaptureWorkerRequest(
           rgbaBytes: gpuData.rgbaBytes,
@@ -683,12 +680,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
           smoothStrength: gpuData.smoothStrength,
           vignette: gpuData.vignette,
           needRawRgba: gpuData.needRawRgba,
-          applyP3ToSrgb: isWideGamut,
+          applyP3ToSrgb: false,
         ),
       );
       swIso.stop();
       debugPrint('[perf] CaptureWorker.process: ${swIso.elapsedMilliseconds}ms '
-          'platform=${defaultTargetPlatform.name}, applyP3ToSrgb=$isWideGamut, '
+          'platform=${defaultTargetPlatform.name}, '
           'diagBefore=${workerResult.diagBefore}, diagAfter=${workerResult.diagAfter}');
       if (!mounted) {
         _isProcessingCapture = false;
@@ -3479,6 +3476,26 @@ class _GpuProcessedData {
   final bool needRawRgba;
 }
 
+/// 诊断：对 rawRgba (ByteData) 做步进采样，返回平均 RGB 估算。
+/// 用于定位偏黄发生环节（解码 vs 绘制 vs 编码）。
+List<int> _sampleAvgRgbFromRgba(ByteData byteData) {
+  final length = byteData.lengthInBytes;
+  final pixelBytes = length ~/ 4;
+  if (pixelBytes <= 0) return [0, 0, 0];
+  // 步进采样（每 64 像素取一个），降低耗时
+  final step = (pixelBytes / 8192).ceil().clamp(1, 64);
+  var r = 0.0, g = 0.0, b = 0.0, cnt = 0;
+  for (var i = 0; i < length; i += 4 * step) {
+    if (i + 3 >= length) break;
+    r += byteData.getUint8(i);
+    g += byteData.getUint8(i + 1);
+    b += byteData.getUint8(i + 2);
+    cnt++;
+  }
+  if (cnt == 0) return [0, 0, 0];
+  return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
+}
+
 /// 在主 isolate 中用 dart:ui GPU 管线处理照片：
 /// 1. 解码 JPEG（降采样，C 优化）
 /// 2. 方向对齐 + cover 裁切 + 前置镜像 + 缩放到 kMaxProcessDim（B 优化）
@@ -3521,6 +3538,19 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     buffer.dispose();
     swDecode.stop();
     debugPrint('[perf] gpu decode JPEG: ${swDecode.elapsedMilliseconds}ms (src=${srcImage.width}x${srcImage.height})');
+
+    // 诊断：解码后、绘制前，直接采样源图 rawRgba 平均 RGB。
+    // 与 worker 收到的 diagBefore（GPU 绘制后）对比，可定位偏黄发生在解码还是绘制。
+    try {
+      final srcByteData =
+          await srcImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (srcByteData != null) {
+        final ss = _sampleAvgRgbFromRgba(srcByteData);
+        debugPrint('[capture] 源图解码 rawRgba 平均RGB: $ss');
+      }
+    } catch (e) {
+      debugPrint('[capture] 源图采样失败: $e');
+    }
 
     // 计算方向对齐参数
     final jpegIsLandscape = srcImage.width > srcImage.height;
