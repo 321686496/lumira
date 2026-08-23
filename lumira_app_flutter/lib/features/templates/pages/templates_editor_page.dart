@@ -30,8 +30,14 @@ import '../data/templates_editor_mock_data.dart';
 import '../services/template_exporter.dart';
 import '../services/template_mapper.dart';
 import '../widgets/composition_overlay.dart';
+import '../widgets/editor_tab_bar.dart';
 import '../widgets/pose_silhouette.dart';
 import '../widgets/silhouette_editor.dart';
+
+/// 编辑器顶部 6 个 tab 标题（与后台 STEPS 一致）。
+const List<String> _editorTabs = [
+  '基本信息', '封面与剪影', '构图', '相机参数', '场景引导', '后期处理',
+];
 
 /// 计算有效宽高比（处理 fullscreen 和方向自适应）
 double _effectiveAspectRatio(String ratio, BuildContext context) {
@@ -184,6 +190,9 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   /// 是否正在从 DAO 异步加载模板（编辑模式且 mock 中不存在时为 true）。
   /// 加载期间显示 loading 覆盖层，避免用户看到空白表单误以为模板未加载。
   bool _isLoadingFromDao = false;
+
+  /// 当前选中的顶部 Tab 下标（0-5）。
+  int _tabIndex = 0;
 
   @override
   void initState() {
@@ -844,74 +853,23 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                     _DraftsNavButton(tokens: tokens, onTap: _goDrafts),
                   ],
                 ),
+                EditorTabBar(
+                  tabs: _editorTabs,
+                  index: _tabIndex,
+                  onSelect: (i) => setState(() => _tabIndex = i),
+                ),
                 Expanded(
                   child: Stack(
                     children: [
-                      SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 120),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _Step1TemplateInfo(
-                              tokens: tokens,
-                              form: _form,
-                              tagsController: _tagsController,
-                              onTagsChanged: _onTagsChanged,
-                              onChange: _onChange,
-                              onPickCoverImage: _showCoverImagePicker,
-                            ),
-                            const SizedBox(height: 12),
-                            _Step2Composition(
-                              tokens: tokens,
-                              form: _form,
-                              onChange: _onChange,
-                            ),
-                            const SizedBox(height: 12),
-                            _Step3Pose(
-                              tokens: tokens,
-                              form: _form,
-                              compositionAspectRatio:
-                                  _form.composition.aspectRatio,
-                              isDragging: _isDraggingPose,
-                              poseVersionNotifier: _poseVersionNotifier,
-                              onSourceChange: _onSilhouetteSourceChange,
-                              onSelectBuiltin: _selectBuiltinSilhouette,
-                              onImportImage: _importSilhouetteImage,
-                              onOpenEditor: _openSilhouetteEditor,
-                              onChange: _onChange,
-                              onPoseDragStart: _onPoseDragStart,
-                              onPoseDragUpdate: _onPoseDragUpdate,
-                              onPoseDragEnd: _onPoseDragEnd,
-                              onPosePositionSliderChanged:
-                                  _onPosePositionSliderChanged,
-                              onScaleSliderChanged: _onScaleSliderChanged,
-                              onRotationSliderChanged: _onRotationSliderChanged,
-                            ),
-                            const SizedBox(height: 12),
-                            _Step4Camera(
-                              tokens: tokens,
-                              form: _form,
-                              onChange: _onChange,
-                              onIsoInput: _onIsoInput,
-                              onWbKInput: _onWbKInput,
-                            ),
-                            const SizedBox(height: 12),
-                            _Step5SceneGuide(
-                              tokens: tokens,
-                              form: _form,
-                              propsController: _propsController,
-                              tipsController: _tipsController,
-                              onPropsChanged: _onPropsChanged,
-                              onTipsChanged: _onTipsChanged,
-                              onChange: _onChange,
-                            ),
-                            const SizedBox(height: 12),
-                            _Step6PostProcess(
-                              tokens: tokens,
-                              form: _form,
-                              onChange: _onChange,
-                            ),
-                          ],
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 220),
+                        child: SingleChildScrollView(
+                          key: ValueKey(_tabIndex),
+                          padding: const EdgeInsets.fromLTRB(24, 4, 24, 120),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: _buildTabContent(_tabIndex),
+                          ),
                         ),
                       ),
                       _EditorFooter(
@@ -940,6 +898,159 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// 按当前 Tab 下标分发要渲染的 step 内容（封面图被抽到「封面与剪影」Tab）。
+  List<Widget> _buildTabContent(int i) {
+    final tokens = ref.read(themeTokensProvider);
+    final children = <Widget>[];
+    switch (i) {
+      case 0: // 基本信息
+        children.add(_Step1TemplateInfo(
+          tokens: tokens,
+          form: _form,
+          tagsController: _tagsController,
+          onTagsChanged: _onTagsChanged,
+          onChange: _onChange,
+        ));
+        break;
+      case 1: // 封面与剪影（封面图 + 姿势剪影）
+        children.add(_StepCard(
+          tokens: tokens,
+          title: '封面',
+          child: _buildCoverField(tokens),
+        ));
+        children.add(const SizedBox(height: 12));
+        children.add(_Step3Pose(
+          tokens: tokens,
+          form: _form,
+          compositionAspectRatio: _form.composition.aspectRatio,
+          isDragging: _isDraggingPose,
+          poseVersionNotifier: _poseVersionNotifier,
+          onSourceChange: _onSilhouetteSourceChange,
+          onSelectBuiltin: _selectBuiltinSilhouette,
+          onImportImage: _importSilhouetteImage,
+          onOpenEditor: _openSilhouetteEditor,
+          onChange: _onChange,
+          onPoseDragStart: _onPoseDragStart,
+          onPoseDragUpdate: _onPoseDragUpdate,
+          onPoseDragEnd: _onPoseDragEnd,
+          onPosePositionSliderChanged: _onPosePositionSliderChanged,
+          onScaleSliderChanged: _onScaleSliderChanged,
+          onRotationSliderChanged: _onRotationSliderChanged,
+        ));
+        break;
+      case 2: // 构图
+        children.add(_Step2Composition(
+          tokens: tokens,
+          form: _form,
+          onChange: _onChange,
+        ));
+        break;
+      case 3: // 相机参数
+        children.add(_Step4Camera(
+          tokens: tokens,
+          form: _form,
+          onChange: _onChange,
+          onIsoInput: _onIsoInput,
+          onWbKInput: _onWbKInput,
+        ));
+        break;
+      case 4: // 场景引导
+        children.add(_Step5SceneGuide(
+          tokens: tokens,
+          form: _form,
+          propsController: _propsController,
+          tipsController: _tipsController,
+          onPropsChanged: _onPropsChanged,
+          onTipsChanged: _onTipsChanged,
+          onChange: _onChange,
+        ));
+        break;
+      case 5: // 后期处理
+        children.add(_Step6PostProcess(
+          tokens: tokens,
+          form: _form,
+          onChange: _onChange,
+        ));
+        break;
+    }
+    return children;
+  }
+
+  /// 「封面与剪影」Tab 中的封面图字段（从 Step1 抽离出来的「效果图（封面图）」区块）。
+  Widget _buildCoverField(ThemeTokens tokens) {
+    final cover = _form.meta.coverImage;
+    final onPickCoverImage = _showCoverImagePicker;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(tokens: tokens, text: '效果图（封面图）'),
+        if (cover != null && cover.isNotEmpty)
+          GestureDetector(
+            onTap: () => _showCoverPreviewDialog(
+                context, cover, tokens, onPickCoverImage),
+            behavior: HitTestBehavior.opaque,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: FutureBuilder<ui.Image>(
+                future: _getCachedCoverImage(cover),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    final img = snapshot.data!;
+                    return AspectRatio(
+                      aspectRatio: img.width / img.height,
+                      child: Image.memory(
+                        _cachedCoverDecode(cover),
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, _) {
+                          debugPrint(
+                              '[Editor] Cover image decode error: $error');
+                          return _CoverPlaceholder(tokens: tokens);
+                        },
+                      ),
+                    );
+                  }
+                  if (snapshot.hasError) {
+                    debugPrint(
+                        '[Editor] Cover image decode error: ${snapshot.error}');
+                    return _CoverPlaceholder(tokens: tokens);
+                  }
+                  return Container(
+                    height: 200,
+                    width: double.infinity,
+                    color: tokens.canvasDeep,
+                    child: const Center(
+                        child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator())),
+                  );
+                },
+              ),
+            ),
+          )
+        else
+          GestureDetector(
+            onTap: onPickCoverImage,
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              height: 120,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: tokens.canvasDeep,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: tokens.divider,
+                  width: 0.5,
+                ),
+              ),
+              clipBehavior: Clip.hardEdge,
+              child: _CoverPlaceholder(tokens: tokens),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1019,14 +1130,12 @@ class _DraftsNavButton extends StatelessWidget {
 class _StepCard extends ConsumerWidget {
   const _StepCard({
     required this.tokens,
-    required this.stepNumber,
     required this.title,
     required this.child,
     this.delay = Duration.zero,
   });
 
   final ThemeTokens tokens;
-  final int stepNumber;
   final String title;
   final Widget child;
   final Duration delay;
@@ -1052,26 +1161,6 @@ class _StepCard extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: tokens.brand,
-                    shape: BoxShape.circle,
-                    boxShadow: tokens.shadowConvexBrand,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '$stepNumber',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                      height: 1,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
                 Text(
                   title,
                   style: TextStyle(
@@ -1346,7 +1435,6 @@ class _Step1TemplateInfo extends ConsumerStatefulWidget {
     required this.tagsController,
     required this.onTagsChanged,
     required this.onChange,
-    required this.onPickCoverImage,
   });
 
   final ThemeTokens tokens;
@@ -1354,7 +1442,6 @@ class _Step1TemplateInfo extends ConsumerStatefulWidget {
   final TextEditingController tagsController;
   final ValueChanged<String> onTagsChanged;
   final void Function(void Function() mutator) onChange;
-  final VoidCallback onPickCoverImage;
 
   @override
   ConsumerState<_Step1TemplateInfo> createState() => _Step1TemplateInfoState();
@@ -1565,10 +1652,8 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     final tokens = widget.tokens;
     final form = widget.form;
     final onChange = widget.onChange;
-    final onPickCoverImage = widget.onPickCoverImage;
     final tagsController = widget.tagsController;
     final onTagsChanged = widget.onTagsChanged;
-    final cover = form.meta.coverImage;
     // style/method 为可选字段，首位加"不限"（空值 → null）
     final styleOptions = <EditorOption>[
       const EditorOption('', '不限'),
@@ -1580,76 +1665,10 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     ];
     return _StepCard(
       tokens: tokens,
-      stepNumber: 1,
       title: '模板信息',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel(tokens: tokens, text: '效果图（封面图）'),
-          if (cover != null && cover.isNotEmpty)
-            GestureDetector(
-              onTap: () => _showCoverPreviewDialog(
-                  context, cover, tokens, onPickCoverImage),
-              behavior: HitTestBehavior.opaque,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: FutureBuilder<ui.Image>(
-                  future: _getCachedCoverImage(cover),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasData) {
-                      final img = snapshot.data!;
-                      return AspectRatio(
-                        aspectRatio: img.width / img.height,
-                        child: Image.memory(
-                          _cachedCoverDecode(cover),
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, _) {
-                            debugPrint(
-                                '[Editor] Cover image decode error: $error');
-                            return _CoverPlaceholder(tokens: tokens);
-                          },
-                        ),
-                      );
-                    }
-                    if (snapshot.hasError) {
-                      debugPrint(
-                          '[Editor] Cover image decode error: ${snapshot.error}');
-                      return _CoverPlaceholder(tokens: tokens);
-                    }
-                    return Container(
-                      height: 200,
-                      width: double.infinity,
-                      color: tokens.canvasDeep,
-                      child: const Center(
-                          child: SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator())),
-                    );
-                  },
-                ),
-              ),
-            )
-          else
-            GestureDetector(
-              onTap: onPickCoverImage,
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                height: 120,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: tokens.canvasDeep,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: tokens.divider,
-                    width: 0.5,
-                  ),
-                ),
-                clipBehavior: Clip.hardEdge,
-                child: _CoverPlaceholder(tokens: tokens),
-              ),
-            ),
-          const SizedBox(height: 14),
           _FieldLabel(tokens: tokens, text: '名称'),
           _FieldInput(
             tokens: tokens,
@@ -1775,7 +1794,6 @@ class _Step2Composition extends StatelessWidget {
   Widget build(BuildContext context) {
     return _StepCard(
       tokens: tokens,
-      stepNumber: 2,
       title: '构图叠图',
       delay: const Duration(milliseconds: 80),
       child: Column(
@@ -1913,7 +1931,6 @@ class _Step3Pose extends StatelessWidget {
   Widget build(BuildContext context) {
     return _StepCard(
       tokens: tokens,
-      stepNumber: 3,
       title: '姿势剪影',
       delay: const Duration(milliseconds: 160),
       child: Column(
@@ -2291,7 +2308,6 @@ class _Step4Camera extends StatelessWidget {
   Widget build(BuildContext context) {
     return _StepCard(
       tokens: tokens,
-      stepNumber: 4,
       title: '相机参数',
       delay: const Duration(milliseconds: 240),
       child: Column(
@@ -2433,7 +2449,6 @@ class _Step5SceneGuide extends StatelessWidget {
   Widget build(BuildContext context) {
     return _StepCard(
       tokens: tokens,
-      stepNumber: 5,
       title: '场景指南',
       delay: const Duration(milliseconds: 320),
       child: Column(
@@ -2512,7 +2527,6 @@ class _Step6PostProcess extends StatelessWidget {
   Widget build(BuildContext context) {
     return _StepCard(
       tokens: tokens,
-      stepNumber: 6,
       title: '后期参数',
       delay: const Duration(milliseconds: 400),
       child: Column(

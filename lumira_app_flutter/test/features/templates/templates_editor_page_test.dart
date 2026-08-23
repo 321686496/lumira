@@ -36,6 +36,12 @@ import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 /// Task A5 适配：`_onSave` 现通过 `templatesDaoProvider` 调用 DAO 持久化，
 /// 测试通过 sqflite_ffi + 共享内存 DB 覆盖 `templatesDaoProvider`，让
 /// "tapping 保存 with valid name" 测试在不依赖文件系统的情况下完成 upsert。
+
+/// 编辑器顶部 6 个 Tab 标题（Task 5 顶部 Tab 布局）。
+const List<String> _editorAllTabs = [
+  '基本信息', '封面与剪影', '构图', '相机参数', '场景引导', '后期处理',
+];
+
 void main() {
   FlutterExceptionHandler? originalErrorHandler;
   // 共享 DB 实例：在 setUpAll 中创建，所有测试通过 override 复用。
@@ -153,6 +159,13 @@ void main() {
     }
   }
 
+  Future<void> switchTab(
+      WidgetTester tester, UIStyle style, String title) async {
+    // 点击顶部 tab chip 切到对应 tab（AnimatedSwitcher 220ms 动画后内容可见）
+    await tester.tap(find.text(title).first);
+    await settleOrPump(tester, style);
+  }
+
   void setLargeViewport(WidgetTester tester) {
     tester.binding.window.physicalSizeTestValue = const Size(800, 4000);
     tester.binding.window.devicePixelRatioTestValue = 1.0;
@@ -229,24 +242,44 @@ void main() {
   // 分类 2: Step 1 模板信息（5 tests）
   // ============================================================
   group('TemplatesEditorPage — Step 1 模板信息', () {
-    testWidgets('renders 6 step cards with numbered badges', (tester) async {
+    testWidgets('renders 6 top tabs; each tab shows its card',
+        (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // 6 个 step 标题
-      expect(find.text('模板信息'), findsOneWidget);
-      expect(find.text('构图叠图'), findsOneWidget);
-      expect(find.text('姿势剪影'), findsOneWidget);
+      // 顶部 Tab 条渲染 6 个 tab 标题
+      expect(find.text('基本信息'), findsOneWidget);
+      expect(find.text('封面与剪影'), findsOneWidget);
+      expect(find.text('构图'), findsOneWidget);
       expect(find.text('相机参数'), findsOneWidget);
+      expect(find.text('场景引导'), findsOneWidget);
+      expect(find.text('后期处理'), findsOneWidget);
+
+      // 默认 tab（基本信息）：模板信息 卡片
+      expect(find.text('模板信息'), findsOneWidget);
+
+      // 封面与剪影 tab：封面 + 姿势剪影 两张卡
+      await switchTab(tester, UIStyle.neumorphic, '封面与剪影');
+      expect(find.text('封面'), findsOneWidget);
+      expect(find.text('姿势剪影'), findsOneWidget);
+
+      // 逐个切换验证其余卡片标题
+      await switchTab(tester, UIStyle.neumorphic, '构图');
+      expect(find.text('构图叠图'), findsOneWidget);
+
+      await switchTab(tester, UIStyle.neumorphic, '相机参数');
+      // tab chip + 卡片标题均为 '相机参数'
+      expect(find.text('相机参数'), findsNWidgets(2));
+
+      await switchTab(tester, UIStyle.neumorphic, '场景引导');
       expect(find.text('场景指南'), findsOneWidget);
+
+      await switchTab(tester, UIStyle.neumorphic, '后期处理');
+      // tab chip '后期处理' + 卡片标题 '后期参数'
+      expect(find.text('后期处理'), findsOneWidget);
       expect(find.text('后期参数'), findsOneWidget);
-      // 6 个 step 序号（Text '1' ~ '6'）— 用 findsNWidgets 验证数量
-      for (var i = 1; i <= 6; i++) {
-        expect(find.text('$i'), findsOneWidget,
-            reason: 'step number badge $i');
-      }
     });
 
     testWidgets('Step 1: name input accepts text', (tester) async {
@@ -342,6 +375,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '构图');
 
       // 默认 overlayType = 'rule_of_thirds'，显示 '三分法'
       expect(find.text('构图类型'), findsOneWidget);
@@ -354,6 +388,8 @@ void main() {
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
 
+      await switchTab(tester, UIStyle.neumorphic, '构图');
+
       expect(find.text('透明度'), findsOneWidget);
       // 默认 opacity=0.5，valueText 为 '0.5'
       expect(find.text('0.5'), findsOneWidget);
@@ -364,10 +400,11 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '构图');
 
       expect(find.text('宽高比'), findsOneWidget);
-      // '3:4' 出现 2 次：Step 2 aspectRatio + Step 6 cropRatio（默认值均为 '3:4'）
-      expect(find.text('3:4'), findsNWidgets(2));
+      // Tab 布局下仅构图 tab 可见，'3:4' 仅出现 1 次（后期参数 tab 未渲染）
+      expect(find.text('3:4'), findsOneWidget);
     });
 
     // Finding #4 — Step 2 行为测试：拖动透明度滑块 → valueText 更新
@@ -377,6 +414,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '构图');
 
       // 默认 opacity=0.5，valueText '0.5'
       expect(find.text('透明度'), findsOneWidget);
@@ -414,6 +452,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '封面与剪影');
 
       expect(find.text('来源'), findsOneWidget);
       expect(find.text('内置库'), findsOneWidget);
@@ -427,6 +466,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '封面与剪影');
 
       // 默认 source=builtin，显示 '选择剪影' 标签 + 5 个 thumbnail
       expect(find.text('选择剪影'), findsOneWidget);
@@ -443,6 +483,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '封面与剪影');
 
       // 点击 '导入图片' pill
       await tester.tap(find.text('导入图片'));
@@ -457,6 +498,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '封面与剪影');
 
       // 点击 '绘制剪影' pill
       await tester.tap(find.text('绘制剪影'));
@@ -471,6 +513,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '封面与剪影');
 
       // 切换到 svg 源
       await tester.tap(find.text('绘制剪影'));
@@ -504,6 +547,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '相机参数');
 
       // EV 默认值 0.0，valueText 为 '0.0'
       expect(find.text('EV'), findsOneWidget);
@@ -515,6 +559,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '相机参数');
 
       expect(find.text('ISO 模式'), findsOneWidget);
       // 默认 isoMode='auto'，'自动' pill 显示
@@ -528,6 +573,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '相机参数');
 
       expect(find.text('白平衡'), findsOneWidget);
       // 默认 whiteBalance='daylight'，显示 '日光'
@@ -541,6 +587,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '相机参数');
 
       final tokens = ThemeTokens.of(ThemeKey.warmWhite);
 
@@ -582,6 +629,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '场景引导');
 
       expect(find.text('光线方向'), findsOneWidget);
       expect(find.text('拍摄距离'), findsOneWidget);
@@ -600,6 +648,7 @@ void main() {
         initialLocation: '/templates/editor?draftId=draft-editor-1',
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '场景引导');
 
       // draftForm 已填充：lightDirection='侧面柔光 45°' / shootingDistance='1.5-2m' / bestTime='14:00-16:00'
       expect(find.text('侧面柔光 45°'), findsOneWidget);
@@ -616,6 +665,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '场景引导');
 
       // 道具 字段：占位符 '道具1, 道具2'
       expect(find.text('道具'), findsOneWidget);
@@ -647,6 +697,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '后期处理');
 
       expect(find.text('LUT'), findsOneWidget);
       // 默认 lut='none'，显示 '无'
@@ -659,6 +710,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '后期处理');
 
       expect(find.text('裁剪比'), findsOneWidget);
       expect(find.text('亮度'), findsOneWidget);
@@ -679,6 +731,7 @@ void main() {
       await tester.pumpWidget(
           wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '后期处理');
 
       // 默认 brightness=0，valueText '0'（多个 slider 默认 '0'，用 findsWidgets）
       expect(find.text('亮度'), findsOneWidget);
@@ -820,6 +873,7 @@ void main() {
         capturedPreviewUrls: capturedUrls,
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
+      await switchTab(tester, UIStyle.neumorphic, '封面与剪影');
 
       // 触发表单变更（切换 silhouette source → _onChange → _scheduleAutoSave）
       await tester.tap(find.text('导入图片'));
@@ -878,19 +932,13 @@ void main() {
             wrap(themeKey: combo.theme, uiStyle: combo.style));
         await settleOrPump(tester, combo.style);
 
-        // 验证关键元素渲染
+        // 默认 tab（基本信息）卡片 + 顶部 6 个 tab chip 正常渲染
         expect(find.text('模板信息'), findsOneWidget,
             reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('构图叠图'), findsOneWidget,
-            reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('姿势剪影'), findsOneWidget,
-            reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('相机参数'), findsOneWidget,
-            reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('场景指南'), findsOneWidget,
-            reason: 'theme=${combo.theme}, style=${combo.style}');
-        expect(find.text('后期参数'), findsOneWidget,
-            reason: 'theme=${combo.theme}, style=${combo.style}');
+        for (final tabTitle in _editorAllTabs) {
+          expect(find.text(tabTitle), findsOneWidget,
+              reason: 'theme=${combo.theme}, style=${combo.style}, tab=$tabTitle');
+        }
         // 重置 viewport 为下一次迭代
         await tester.pumpWidget(const SizedBox.shrink());
       }
