@@ -1844,6 +1844,28 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     );
   }
 
+  // 已选标签 chips 渲染（含不在候选列表中的新建标签）
+  List<Widget> _buildSelectedTags(ThemeTokens tokens) {
+    final tags = widget.form.meta.tags;
+    if (tags.isEmpty) return const [];
+    return [
+      const SizedBox(height: 8),
+      _FieldLabel(tokens: tokens, text: '已选标签'),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: tags
+            .map((t) => _ToggleChip(
+                  tokens: tokens,
+                  label: t,
+                  active: true,
+                  onTap: () => _toggleTag(t),
+                ))
+            .toList(),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     // 局部别名，避免 body 中大量 widget.xxx 前缀
@@ -1995,6 +2017,7 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
           // Task6: 标签（候选 chips + 新增输入，替代原逗号文本框）
           _FieldLabel(tokens: tokens, text: '标签'),
           ..._buildTagCandidates(tokens, tagCandidates),
+          ..._buildSelectedTags(tokens),
           const SizedBox(height: 8),
           _FieldInput(
             tokens: tokens,

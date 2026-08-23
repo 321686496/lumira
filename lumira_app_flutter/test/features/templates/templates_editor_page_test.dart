@@ -419,6 +419,40 @@ void main() {
       expect(find.text('+ 新增标签（回车添加）'), findsOneWidget);
     });
 
+    // Finding — 新增标签立即给出视觉反馈（已选标签 chips），不依赖候选列表
+    testWidgets(
+        'Step 1: newly added tag shows as removable chip and disappears on tap',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(
+          wrap(themeKey: ThemeKey.warmWhite, uiStyle: UIStyle.neumorphic));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 默认即 基本信息 tab，无候选标签（setUp 已清空表）
+      expect(find.text('暂无候选标签，可在下方新增'), findsOneWidget);
+
+      // 通过 hintText 定位 '+ 新增标签' 输入框并提交新标签（回车）
+      final tagFieldFinder = find.byWidgetPredicate(
+        (w) =>
+            w is TextField &&
+            (w.decoration?.hintText ?? '') == '+ 新增标签（回车添加）',
+      );
+      expect(tagFieldFinder, findsOneWidget);
+      await tester.enterText(tagFieldFinder, '胶片感');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      // 新标签虽不在候选列表，也必须作为「已选标签」chip 可见（视觉反馈）
+      expect(find.text('胶片感'), findsOneWidget);
+      expect(find.text('已选标签'), findsOneWidget);
+
+      // 点击该 chip → 移除标签 → chip 与标签区消失
+      await tester.tap(find.text('胶片感'));
+      await tester.pump();
+      expect(find.text('胶片感'), findsNothing);
+      expect(find.text('已选标签'), findsNothing);
+    });
+
     testWidgets('Step 1: saving persists shortDesc/ambience/tags smoke',
         (tester) async {
       setLargeViewport(tester);
