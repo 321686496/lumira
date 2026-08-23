@@ -63,5 +63,12 @@
 	     设为 false 后 App Store Connect 上传时不再每次弹出"App 加密文稿"问卷。 -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- 文件共享调试：允许在 iOS「文件」App → 本机 iPhone / 我的 iPhone 中查看
+	     本 App 的 Documents 目录。用于排查「拍照偏黄」问题（保存 raw/最终图 + 分阶段
+	     RGB 报告供人工核对）。仅调试需要，不影响功能。 -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 </dict>
 </plist>

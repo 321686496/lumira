@@ -690,8 +690,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
       final swIso = Stopwatch()..start();
       // 常驻 worker isolate（A 优化），避免 compute() 每次创建 isolate 的开销
-      // P3→sRGB：诊断证明 OHOS(华为) 相机输出是 sRGB，非 P3；
-      // 强行转换反而加深偏黄（diagAfter R 164→165）。先关闭，待定位真正偏黄环节。
+      // P3→sRGB：iOS(宽色域 iPhone) 相机输出是 Display P3 广色域 JPEG，
+      // dart:ui 解码后 rawRgba 仍是 P3 像素值，image 包 encodeJpg 不嵌 ICC、
+      // 按 sRGB 解释导致偏黄（取景器走系统色管按 P3 渲染故正常）。
+      // OHOS(华为) / Android 相机输出是 sRGB，禁用转换避免加深偏黄。
+      final applyP3ToSrgb = defaultTargetPlatform == TargetPlatform.iOS;
       final workerResult = await CaptureWorker.instance.process(
         CaptureWorkerRequest(
           rgbaBytes: gpuData.rgbaBytes,
@@ -704,14 +707,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
           smoothStrength: gpuData.smoothStrength,
           vignette: gpuData.vignette,
           needRawRgba: gpuData.needRawRgba,
-          applyP3ToSrgb: false,
+          applyP3ToSrgb: applyP3ToSrgb,
         ),
       );
       swIso.stop();
       debugPrint('[perf] CaptureWorker.process: ${swIso.elapsedMilliseconds}ms '
           'platform=${defaultTargetPlatform.name}, '
           'diagBefore=${workerResult.diagBefore}, '
-          'diagWb=${workerResult.diagWb}');
+          'diagAfter=${workerResult.diagAfter}');
       if (!mounted) {
         _isProcessingCapture = false;
         return;
@@ -786,6 +789,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
 
       final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+
+      // [偏黄诊断] 把原始图 / 处理结果 / 分阶段 RGB 报告写入 Documents，
+      // 便于在 iOS「文件」App 中人工核对黄色从哪一步进入（无需看控制台日志）。
+      try {
+        await _writeColorDiagnostics(
+          rawPath: originalPath,
+          processedPath: processedPath,
+          diagBefore: workerResult.diagBefore,
+          diagAfter: workerResult.diagAfter,
+          applyP3ToSrgb: applyP3ToSrgb,
+        );
+      } catch (e) {
+        debugPrint('[capture] 颜色诊断写盘失败（不影响拍照）: $e');
+      }
 
       // 落库到相册（原图备份 + GalleryItemRecord + provider 失效）
       try {
@@ -1058,6 +1075,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 修复 Bug：watch facing 以在 facing 变化时重建 _viewfinderCaptureKey，
     // 强制 RepaintBoundary + CameraAwesomeBuilder 重建（切换 sensor）
     final facing = ref.watch(CaptureState.cameraFacingProvider);
+    // 当前竖/横屏，供水印动画方向对齐（与成片管线一致）
+    final isPortrait =
+        MediaQuery.of(context).size.height >= MediaQuery.of(context).size.width;
     if (_lastFacingForKey != facing) {
       _viewfinderCaptureKey = GlobalKey(debugLabel: 'viewfinder_$facing');
       _lastFacingForKey = facing;
@@ -1344,6 +1364,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
                 key: const ValueKey('watermark_anim'),
                 photoPath: _animationPhotoPath!,
                 watermarkTemplate: _animationTemplate!,
+                isFront: facing == 'front',
+                isPortrait: isPortrait,
                 onAnimationComplete: _onAnimationComplete ?? () {},
               ),
             ),
@@ -3542,13 +3564,48 @@ List<int> imageDecodeSample(Uint8List bytes) {
 /// 2. 方向对齐 + cover 裁切 + 前置镜像 + 缩放到 kMaxProcessDim（B 优化）
 /// 3. 应用色彩矩阵（与取景器 ColorFiltered 使用完全相同的 GPU 渲染管线）
 /// 4. 导出 rawRgba 给常驻 worker isolate（capture_worker.dart）做后续 CPU 处理
-///
 /// 【所见即所得修复】
 /// 之前在 worker isolate 中用 image 包的 applyColorMatrixImg 逐像素应用色彩矩阵，
 /// 与取景器 GPU 渲染管线（dart:ui ColorFilter.matrix）存在色彩空间差异，
 /// 导致拍照后效果与取景器不一致。
 /// 现在改为在主 isolate 中用 dart:ui 的 Canvas + ColorFilter.matrix 处理，
 /// 与取景器使用完全相同的渲染管线，保证所见即所得。
+/// [偏黄诊断] 把拍照管线各阶段产物写入 Documents，可在 iOS「文件」App 中直接查看，
+/// 代替控制台日志定位黄色从哪一步进入：
+///  - raw_src.jpg     = rawPath（相机写盘、Dart 处理前的原始 JPEG）
+///  - final_out.jpg   = processedPath（worker 处理+编码后的最终 JPEG）
+///  - color_diag.txt  = 各阶段平均 RGB + 是否启用 P3→sRGB，供人工核对偏黄方向。
+/// 写盘失败不影响拍照正常流程。
+Future<void> _writeColorDiagnostics({
+  required String? rawPath,
+  required String processedPath,
+  required List<int>? diagBefore,
+  required List<int>? diagAfter,
+  required bool applyP3ToSrgb,
+}) async {
+  final dir = Directory(
+    '${(await getApplicationDocumentsDirectory()).path}/color_diag',
+  );
+  await dir.create(recursive: true);
+  final rawFile = File('${dir.path}/raw_src.jpg');
+  final outFile = File('${dir.path}/final_out.jpg');
+  if (rawPath != null && await File(rawPath).exists()) {
+    await File(rawPath).copy(rawFile.path);
+  }
+  await File(processedPath).copy(outFile.path);
+  final buf = StringBuffer()
+    ..writeln('拍照偏黄诊断 ${DateTime.now().toIso8601String()}')
+    ..writeln('platform=${defaultTargetPlatform.name} | applyP3ToSrgb=$applyP3ToSrgb')
+    ..writeln('diagBefore(dart:ui解码+ColorMatrix后, 平均RGB)=$diagBefore')
+    ..writeln('diagAfter(P3→sRGB转换后, 平均RGB)=$diagAfter')
+    ..writeln(
+        '参考判断：若 diagBefore 已明显 R>B（中性场景）→ 黄色在解码之前（相机片源）；'
+        '若 diagBefore≈中性而 final_out 偏黄 → 黄色在编码链路。')
+    ..writeln('请对照打开 raw_src.jpg 与 final_out.jpg：哪一个偏黄？');
+  await File('${dir.path}/color_diag.txt').writeAsString(buf.toString());
+  debugPrint('[capture] 颜色诊断已写入 ${dir.path}');
+}
+
 Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, {required bool needRawRgba}) async {
   // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
   final swDecode = Stopwatch()..start();
