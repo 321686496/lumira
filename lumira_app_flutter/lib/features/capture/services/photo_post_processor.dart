@@ -349,8 +349,8 @@ class PhotoPostProcessor {
       numChannels: 4,
       order: img.ChannelOrder.rgba,
     );
-    // 无条件 P3→sRGB 转换（iOS 相机默认输出 Display P3）
-    _applyP3ToSrgbInPlace(imgImage);
+    // 测试：不做任何色域转换，看 dart:ui 是否已经自动做了 P3→sRGB
+    // _applyP3ToSrgbInPlace(imgImage);
     return img.encodeJpg(imgImage, quality: 88);
   }
 
@@ -572,111 +572,3 @@ void _applyP3ToSrgbInPlace(img.Image image) {
       ..b = (srgbEncode[(sb * (steps - 1)).round()] * 255).round();
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────
-// iOS 宽色域检测 + sRGB ICC 注入
-// ─────────────────────────────────────────────────────────────────────────
-
-bool _isDisplayP3Jpeg(Uint8List bytes) {
-  for (final marker in const ['Display P3', 'DCI-P3', 'P3D65', 'DISPLAY P3', 'Apple P3']) {
-    if (_bytesContainsAscii(bytes, marker)) return true;
-  }
-  return false;
-}
-
-bool _bytesContainsAscii(Uint8List hay, String needle) {
-  final pat = needle.codeUnits;
-  final n = hay.length - pat.length;
-  if (n < 0) return false;
-  outer:
-  for (int i = 0; i <= n; i++) {
-    for (int j = 0; j < pat.length; j++) {
-      if (hay[i + j] != pat[j]) continue outer;
-    }
-    return true;
-  }
-  return false;
-}
-
-bool _jpegHasIccProfile(Uint8List jpegBytes) {
-  for (int i = 2; i < jpegBytes.length - 10; i++) {
-    if (jpegBytes[i] == 0xFF && (jpegBytes[i + 1] & 0xF0) == 0xE0) {
-      final segLen = (jpegBytes[i + 2] << 8) | jpegBytes[i + 3];
-      if (i + 4 + 12 <= jpegBytes.length) {
-        final marker = String.fromCharCodes(jpegBytes.sublist(i + 4, i + 4 + 11));
-        if (marker == 'ICC_PROFILE') return true;
-      }
-      i += 1 + segLen;
-    }
-  }
-  return false;
-}
-
-/// 在 JPEG 字节流中注入 sRGB IEC61966-2.1 ICC 配置文件（APP2 段）
-Uint8List _injectSrgbIccIntoJpeg(Uint8List jpegBytes) {
-  final iccProfile = _srgbIccProfileBytes();
-  if (iccProfile == null || iccProfile.isEmpty) return jpegBytes;
-
-  // 检查是否已有 ICC_PROFILE
-  if (_jpegHasIccProfile(jpegBytes)) return jpegBytes;
-
-  // 构建 APP2 段
-  final app2Payload = Uint8List(14 + iccProfile.length);
-  final headerBytes = 'ICC_PROFILE'.codeUnits;
-  for (int j = 0; j < 11; j++) app2Payload[j] = headerBytes[j];
-  app2Payload[11] = 0;
-  app2Payload[12] = 1;
-  app2Payload[13] = 1;
-  app2Payload.setRange(14, 14 + iccProfile.length, iccProfile);
-
-  final app2Seg = Uint8List(4 + app2Payload.length);
-  app2Seg[0] = 0xFF;
-  app2Seg[1] = 0xE2;
-  final totalLen = app2Payload.length + 2;
-  app2Seg[2] = (totalLen >> 8) & 0xFF;
-  app2Seg[3] = totalLen & 0xFF;
-  app2Seg.setRange(4, 4 + app2Payload.length, app2Payload);
-
-  // 在 SOI (FFD8) 之后插入
-  final result = Uint8List(2 + app2Seg.length + jpegBytes.length - 2);
-  result.setRange(0, 2, jpegBytes, 0);
-  result.setRange(2, 2 + app2Seg.length, app2Seg);
-  result.setRange(2 + app2Seg.length, result.length, jpegBytes, 2);
-  return result;
-}
-
-/// 标准 sRGB IEC61966-2.1 ICC 配置文件（3144 字节）
-Uint8List? _srgbIccProfileBytes() {
-  // 标准 sRGB IEC61966-2.1 profile，从 Apple ColorSync 提取
-  const base64Profile =
-      'AAAMSExpbnQyAAEAAAAwYXBwbAIgAAAAAABtbnRyUkdCIFhZWiAH0AACAA4ADAAAAABh'
-      'Y3NwQVBQTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA9tYAAQAAAADTLWFwcGwAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAApkZXNjAAAA'
-      'oAAAAG5kc2NtAAABCAAAChhjcHJ0AAAdQAAAACR3dHB0AAAdkAAAABRyWFlaAAAdoAAAABRn'
-      'WFlaAAAdtAAAABRiWFlaAAadyAAAABRyVFJDAAAd4AAAACBnVFJDAAAd4AAAACBiVFJDAAAd'
-      '4AAAACBjaHJtAAAd8AAAACRtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACYAAAAcAHMAUgBHAEIA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAADQAAAAcAEM'
-      'AbwBwAHkAcgBpAGcAaAB0ACAAKABjACkAIAAxADkAOQA4ACAASABlAHcAbABlAHQAdAAtAFA'
-      'AYQBjAGsAYQByAGQAIABDAG8AbQBwAGEAbgB5AABYWVogAAAAAAAA9tYAAQAAAADTLXNmMzI'
-      'AAAAAAEMGAAAF+gAAb9cAAAe7AAAHpQAA/Z0AABw2WFlaIAAAAAAAAG+iAAA49QAAA5BYWVog'
-      'AAAAAAAAJJ8AAA+EAAC2zlhZWiAAAAAAAABadQAAr4MAALZwY3VydgAAAAAAAAABAcgAAGN1'
-      'cnYAAAAAAAAAAQHIAABjdXJ2AAAAAAAAAAEB0AAABdmkZgAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
