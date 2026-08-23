@@ -233,18 +233,15 @@ class PhotoPostProcessor {
 
       // 5.5. 补光效果不应用到照片
 
-      // 5.6. 检测输入 JPEG 是否为 Display P3 色域
-      final isP3 = _isDisplayP3Jpeg(bytes);
-
-      // 6. 编码 JPEG 并保存（仅对 P3 输入做色域转换）
-      final jpegBytes = await _encodeJpeg(resultImage, isP3: isP3);
+      // 6. 编码 JPEG 并保存（无条件做 P3→sRGB 转换，iOS 宽色域相机输出 P3）
+      final jpegBytes = await _encodeJpeg(resultImage);
       resultImage.dispose();
 
-      // 写入诊断文件到 Documents 目录（真机可通过文件 app 访问）
+      // 写入诊断文件到临时目录（更容易访问）
       await _writeDiagnosticFile(
-        isP3: isP3,
         width: resultImage.width,
         height: resultImage.height,
+        outputPath: outputPath ?? inputPath,
       );
 
       final finalPath = outputPath ?? inputPath;
@@ -339,8 +336,8 @@ class PhotoPostProcessor {
   ///
   /// iOS 宽色域相机输出 Display P3 JPEG，dart:ui 解码后 rawRgba 返回 P3 像素值。
   /// image 包的 JPEG 编码器不嵌入 ICC 配置文件，查看器默认按 sRGB 解释 P3 数值
-  /// 会导致肤色/暖色偏黄。此处对 P3 输入做线性基色矩阵换算为 sRGB 后再编码。
-  static Future<Uint8List> _encodeJpeg(ui.Image image, {required bool isP3}) async {
+  /// 会导致肤色/暖色偏黄。无条件对输入做 P3→sRGB 线性基色矩阵换算后再编码。
+  static Future<Uint8List> _encodeJpeg(ui.Image image) async {
     final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
     if (rgba == null) {
       throw StateError('toByteData(rawRgba) 返回 null');
@@ -352,10 +349,8 @@ class PhotoPostProcessor {
       numChannels: 4,
       order: img.ChannelOrder.rgba,
     );
-    // 仅对 P3 输入做色域转换，避免误伤 sRGB 图片
-    if (isP3) {
-      _applyP3ToSrgbInPlace(imgImage);
-    }
+    // 无条件 P3→sRGB 转换（iOS 相机默认输出 Display P3）
+    _applyP3ToSrgbInPlace(imgImage);
     return img.encodeJpg(imgImage, quality: 88);
   }
 
@@ -503,23 +498,36 @@ class PhotoPostProcessor {
     return [x, y, w, h];
   }
 
-  /// 写入诊断数据到 Documents 目录（真机可通过文件 app 访问）
+  /// 写入诊断数据到 Documents 目录（真机可通过「文件」App 访问）
+  /// 同时写入临时目录一份
   static Future<void> _writeDiagnosticFile({
-    required bool isP3,
     required int width,
     required int height,
+    required String outputPath,
   }) async {
     try {
       final docDir = await pp.getApplicationDocumentsDirectory();
-      final file = File('${docDir.path}/color_diag.json');
+      final tmpDir = await pp.getTemporaryDirectory();
+
       final data = {
         'timestamp': DateTime.now().toIso8601String(),
-        'isP3': isP3,
         'size': '${width}x${height}',
-        'note': '如果 isP3=true 且照片偏黄，说明 P3→sRGB 转换未生效或方向错误',
+        'outputPath': outputPath,
+        'documentsDir': docDir.path,
+        'tempDir': tmpDir.path,
+        'note': 'P3→sRGB 转换已无条件启用。如仍偏黄说明矩阵方向错误或输入非 P3',
       };
-      await file.writeAsString(jsonEncode(data));
-      debugPrint('[diag] 诊断文件已写入: ${file.path}');
+      final json = jsonEncode(data);
+
+      // 写入 Documents 目录
+      final docFile = File('${docDir.path}/lumira_diag.json');
+      await docFile.writeAsString(json);
+      debugPrint('[diag] 诊断文件已写入 Documents: ${docFile.path}');
+
+      // 写入临时目录
+      final tmpFile = File('${tmpDir.path}/lumira_diag.json');
+      await tmpFile.writeAsString(json);
+      debugPrint('[diag] 诊断文件已写入 Temp: ${tmpFile.path}');
     } catch (e) {
       debugPrint('[diag] 写入诊断文件失败: $e');
     }
