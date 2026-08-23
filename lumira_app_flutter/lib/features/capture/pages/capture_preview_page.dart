@@ -794,6 +794,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         transform: _localTransform,
         aspectRatio: captureAspectRatio,
         outputPath: outputPath,
+        // 传入裁剪框（未拖拽过则为 null，此时 processFile 沿用比例裁剪）
+        customCropRect: _localPostProcess.customCropRect,
       );
 
       // Evict FileImage 缓存（避免显示旧版本）
@@ -876,24 +878,14 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         }
       }
 
-      // 调用原生保存到系统相册
-      try {
-        debugPrint('[save] 调用原生保存到系统相册: $processedPath');
-        final result = await _photoSaverChannel.invokeMethod('saveToAlbum', {
-          'path': processedPath,
-        });
-        debugPrint('[save] 原生保存结果: $result');
-        final success = result != null && result['success'] == true;
-        if (!mounted) return;
+      // 编辑态「保存」：仅保存到 app 相册（与后期修图页一致：重处理、更新 DB、toast、随后返回），
+      // 不写系统相册；系统相册由底部悬浮「保存到系统相册」按钮负责。
+      if (mounted) {
         LumiraToast.show(
           context,
-          success ? '已保存到相册' : '保存失败：${result?['error'] ?? "未知错误"}',
-          duration: const Duration(seconds: 2),
+          isDuplicate ? '已另存为新照片' : '已保存',
+          duration: const Duration(seconds: 1),
         );
-      } catch (e) {
-        debugPrint('[save] 系统相册异常: $e');
-        if (!mounted) return;
-        LumiraToast.show(context, '保存失败：$e');
       }
     } catch (e) {
       debugPrint('[save] 保存流程异常: $e');
@@ -954,6 +946,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         transform: _localTransform,
         aspectRatio: widget.aspectRatio ?? 'fullscreen',
         outputPath: tmpPath,
+        // 传入裁剪框，确保保存到系统相册的结果与编辑页框选一致
+        customCropRect: _localPostProcess.customCropRect,
       );
       final result = await _photoSaverChannel.invokeMethod('saveToAlbum', {
         'path': processedPath,
@@ -978,6 +972,74 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         } catch (_) {}
       }
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  /// 删除当前照片：确认后删除数据库记录与本地文件，并返回上一页。
+  Future<void> _onDelete() async {
+    if (_isSaving) return;
+    final tokens = ref.read(appThemeProvider).tokens;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: tokens.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '删除照片',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
+        ),
+        content: Text(
+          '确定删除这张照片吗？此操作不可撤销。',
+          style: TextStyle(fontSize: 14, color: tokens.textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('取消', style: TextStyle(color: tokens.textSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(
+              '删除',
+              style: TextStyle(color: tokens.danger, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      // 删除数据库记录（有记录时）
+      final pid = _currentPhotoId ?? widget.photoId;
+      if (pid != null) {
+        final dao = await ref.read(galleryDaoProvider.future);
+        await dao.delete(pid);
+        ref.invalidate(galleryDaoProvider);
+      }
+      // 删除本地结果/原图文件（忽略失败，避免阻塞删除流程）
+      for (final p in [_photoUrl, _originalPath]) {
+        if (p != null && p.isNotEmpty && !p.startsWith('http')) {
+          try {
+            final f = File(p);
+            if (await f.exists()) await f.delete();
+          } catch (_) {}
+        }
+      }
+      if (!mounted) return;
+      LumiraToast.show(
+        context,
+        '已删除',
+        duration: const Duration(milliseconds: 1000),
+      );
+      _back();
+    } catch (e) {
+      debugPrint('[delete] 删除照片失败: $e');
+      if (!mounted) return;
+      LumiraToast.show(context, '删除失败：$e', duration: const Duration(seconds: 2));
     }
   }
 
@@ -1050,7 +1112,16 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                       )
                     : GestureDetector(
                   // 点击照片切换 UI 显隐（不影响 PageView 水平滑动）
-                  onTap: () => setState(() => _uiVisible = !_uiVisible),
+                  onTap: () => setState(() {
+                    // 编辑抽屉展开时，点照片收起抽屉（不放大照片）；否则切换 UI 显隐
+                    if (_sheetMode == _SheetMode.expanded) {
+                      _sheetMode = _SheetMode.hidden;
+                      _isCropMode = false;
+                      _sheetHeightNotifier.value = _kClosedHeight;
+                    } else {
+                      _uiVisible = !_uiVisible;
+                    }
+                  }),
                   child: _historyPhotos.isEmpty
                       ? _FullScreenPhoto(
                           photoUrl: _photoUrl,
@@ -1221,7 +1292,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         borderRadius: BorderRadius.circular(28),
                       ),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
+                          horizontal: 16, vertical: 12),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1232,14 +1303,14 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                             onPressStart: _onCompareStart,
                             onPressEnd: _onCompareEnd,
                           ),
-                          const SizedBox(width: 24),
+                          const SizedBox(width: 16),
                           _FloatingActionButton(
                             icon: Icons.save_outlined,
                             label: '保存到系统相册',
                             tokens: tokens,
                             onTap: _onSaveToAlbum,
                           ),
-                          const SizedBox(width: 24),
+                          const SizedBox(width: 16),
                           _FloatingActionButton(
                             icon: Icons.tune,
                             label: '编辑',
@@ -1249,6 +1320,13 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                               _sheetHeightNotifier.value =
                                   _quarterHeight(context);
                             },
+                          ),
+                          const SizedBox(width: 16),
+                          _FloatingActionButton(
+                            icon: Icons.delete_outline,
+                            label: '删除',
+                            tokens: tokens,
+                            onTap: _onDelete,
                           ),
                         ],
                       ),
@@ -2330,7 +2408,8 @@ class _CollapsedActionButton extends StatelessWidget {
 
 /// 悬浮圆角按钮组中的按钮（图标 + 文字垂直排列）
 /// 用于 _sheetMode == hidden 时底部悬浮按钮组：对比 / 保存到相册 / 编辑
-class _FloatingActionButton extends StatelessWidget {
+/// 按压时轻微缩放 + 品牌色淡底，提供柔和触感反馈。
+class _FloatingActionButton extends StatefulWidget {
   const _FloatingActionButton({
     required this.icon,
     required this.label,
@@ -2348,23 +2427,56 @@ class _FloatingActionButton extends StatelessWidget {
   final VoidCallback? onPressEnd;
 
   @override
+  State<_FloatingActionButton> createState() => _FloatingActionButtonState();
+}
+
+class _FloatingActionButtonState extends State<_FloatingActionButton> {
+  bool _pressed = false;
+
+  void _pressStart() {
+    setState(() => _pressed = true);
+    widget.onPressStart?.call();
+  }
+
+  void _pressEnd() {
+    setState(() => _pressed = false);
+    widget.onPressEnd?.call();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final tokens = widget.tokens;
     return GestureDetector(
-      onTap: onTap,
-      onTapDown: (_) => onPressStart?.call(),
-      onTapUp: (_) => onPressEnd?.call(),
-      onTapCancel: () => onPressEnd?.call(),
+      onTap: widget.onTap,
+      onTapDown: (_) => _pressStart(),
+      onTapUp: (_) => _pressEnd(),
+      onTapCancel: _pressEnd,
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 24, color: tokens.textPrimary),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(fontSize: 11, color: tokens.textSecondary),
+      child: AnimatedScale(
+        scale: _pressed ? 0.9 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: Container(
+          // 适当扩大触控区，提升点击手感
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: _pressed
+              ? BoxDecoration(
+                  color: tokens.brand.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(18),
+                )
+              : null,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(widget.icon, size: 24, color: tokens.textPrimary),
+              const SizedBox(height: 4),
+              Text(
+                widget.label,
+                style: TextStyle(fontSize: 11, color: tokens.textSecondary),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

@@ -295,11 +295,14 @@
       [_captureDevice setExposureMode:exposureMode];
     }
     
+    // brightness∈[0,1] 编码 EV∈[-3,+3]（0.5=0EV，与应用侧滑块一致）。
+    // exposureTargetBias 单位即 EV，直接按 EV 解码以匹配原相机的曝光档位与步进，
+    // 避免把 [0,1] 线性映射到设备满量程（±8EV）导致小步进被放大数倍。
     CGFloat minExposureTargetBias = _captureDevice.minExposureTargetBias;
     CGFloat maxExposureTargetBias = _captureDevice.maxExposureTargetBias;
-    
-    CGFloat exposureTargetBias = minExposureTargetBias + (maxExposureTargetBias - minExposureTargetBias) * [brightness floatValue];
-    exposureTargetBias = MAX(minExposureTargetBias, MIN(maxExposureTargetBias, exposureTargetBias));
+
+    CGFloat ev = ((CGFloat)[brightness floatValue] - 0.5f) * 6.0f;
+    CGFloat exposureTargetBias = MAX(minExposureTargetBias, MIN(maxExposureTargetBias, ev));
     
     [_captureDevice setExposureTargetBias:exposureTargetBias completionHandler:nil];
     [_captureDevice unlockForConfiguration];

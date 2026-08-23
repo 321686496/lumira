@@ -51,6 +51,13 @@ export enum ConstantsPreview {
   PREVIEW_2448 = 2448
 }
 
+// photoAvailable 直出写盘所需的路径与结果回调。
+// ArkTS 强制对象类型必须显式声明为 class/interface，禁止匿名对象字面量类型。
+export interface PhotoPathResult {
+  path: string
+  result: Result<boolean>
+}
+
 const TAG: string = 'CameraState'
 
 export class CameraState implements StreamHandler {
@@ -1065,7 +1072,11 @@ export class CameraState implements StreamHandler {
    */
   setExposureBias(brightness: number): void {
     Logger.debug(TAG, `setCorrection is called`);
-    this.session?.setExposureBias(brightness)
+    // brightness∈[0,1] 编码 EV∈[-3,+3]（0.5=0EV，与应用侧滑块一致）。
+    // OHOS setExposureBias 的单位即 EV（stops），必须把 [0,1] 解码成真实 EV，
+    // 否则原字面 [0,1] 会被当成 [0,1]EV，导致 -3 曝光仍是中性（等效原相机 0 曝光）。
+    const ev = (brightness - 0.5) * 6.0;
+    this.session?.setExposureBias(ev)
   }
 
   /**
@@ -1252,7 +1263,7 @@ export class CameraState implements StreamHandler {
     this._handlePhotoCb = value
   }
 
-  public set photoPathResult(value: { path: string, result: Result<boolean> }) {
+  public set photoPathResult(value: PhotoPathResult) {
     this._photoPath = value.path
     this._photoResult = value.result
   }

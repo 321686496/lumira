@@ -56,6 +56,9 @@
 	<!-- 麦克风（camerawesome 相机组件要求：录制视频时采集声音） -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>录制视频时需要麦克风权限采集声音</string>
+	<!-- 仅添加照片到相册（PHPhotoLibrary addOnly 权限，用于"保存到系统相册"） -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要将处理后的照片保存到系统相册</string>
 	<!-- 定位（camerawesome 组件要求：可将拍摄位置 GPS 写入照片 Exif 信息） -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>用于将拍摄位置（GPS）写入照片的 Exif 信息</string>

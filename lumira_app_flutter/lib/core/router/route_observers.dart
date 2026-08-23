@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/capture/data/capture_state.dart';
+import '../../features/capture/services/camera_service_provider.dart';
 import 'route_names.dart';
 
 /// 监听路由变化，用于：
@@ -44,12 +45,45 @@ class LumiraRouteObserver extends RouteObserver<PageRoute<dynamic>> {
 
     final fromPath = _extractPath(from);
     final toPath = _extractPath(to);
+    final fromCapture = _isCapturePage(fromPath);
+    final toCapture = _isCapturePage(toPath);
 
-    // 离开拍摄页（capture/preview/preview-template）时清理模板状态
-    // 修复 uni-app 中"退出拍摄页后 currentTemplateId 残留影响后续自由拍摄"的 bug
-    if (_isCapturePage(fromPath) && !_isCapturePage(toPath)) {
+    // 离开拍摄页（capture/preview/preview-template）到非拍摄页时：
+    // 1. 清理模板状态；2. 显式释放相机。
+    // 修复 Bug：GoRouter 默认让被覆盖的路由 maintainState（retain 不销毁），
+    // 相机由 CameraPreview 内的 CameraAwesomeBuilder 持有，页面仅被覆盖时其 dispose
+    // 不会触发 → 退出拍摄页后原生相机一直被占用。这里在路由层面显式释放。
+    if (fromCapture && !toCapture) {
       _clearCaptureState();
+      _releaseCamera();
+      return;
     }
+
+    // 从非拍摄页返回拍摄页：通知拍摄页重建相机预览。
+    // 若返回的是被 retain 的旧拍摄页（未销毁），相机已在离开时被释放，
+    // 需要用版本号触发其重建 CameraAwesomeBuilder 以恢复取景器。
+    if (!fromCapture && toCapture) {
+      _renewCamera();
+    }
+  }
+
+  /// 离开拍摄页时释放相机（CameraService.dispose → CamerawesomePlugin.stop）。
+  /// 注意：不关闭服务内的 ready controller，保证再次进入拍摄页时就绪流仍可用。
+  void _releaseCamera() {
+    Future.microtask(() {
+      try {
+        _ref.read(cameraServiceProvider).dispose();
+      } catch (e) {
+        debugPrint('[camera] 路由离开拍摄页释放相机失败: $e');
+      }
+    });
+  }
+
+  /// 返回拍摄页时递增相机续命版本号，触发拍摄页重建相机预览。
+  void _renewCamera() {
+    Future.microtask(() {
+      _ref.read(CaptureState.cameraRenewVersionProvider.notifier).state++;
+    });
   }
 
   String? _extractPath(Route<dynamic>? route) {

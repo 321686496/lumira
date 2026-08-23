@@ -153,6 +153,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 当前相机是否已就绪（readyStream 最近一次事件）。
   bool _cameraReady = false;
 
+  /// 摄像头切换是否进行中（上一次切换尚未就绪）。
+  ///
+  /// 修复 Bug：快速连点镜头切换时，CameraAwesomeBuilder 会被反复销毁重建，
+  /// 而原生相机的 init/start（PreparingCameraState.start 内含 500ms 异步延迟且
+  /// dispose 不取消）会重叠执行，导致取景器黑屏卡住。切换期间置位该标志，
+  /// 忽略期间的所有再次切换（串行化），待新摄像头就绪（readyStream 发出 true）
+  /// 后复位。与 [_cameraReady] 分开：不要求"全局相机已就绪"才能切第一次，
+  /// 避免初始加载阶段无法切换（测试环境相机永不就绪时也不受影响）。
+  bool _cameraSwitchInProgress = false;
+
   /// 看门狗已触发的重建次数（上限 2 次，避免无限重建）。
   int _cameraReadyRebuildCount = 0;
 
@@ -175,6 +185,20 @@ class _CapturePageState extends ConsumerState<CapturePage>
   @override
   void initState() {
     super.initState();
+    // 从非拍摄页返回本拍摄页时，若本页面是被 retain（覆盖未销毁）的实例，
+    // 相机已在离开时被路由观察者释放，需重建相机预览才能恢复取景器。
+    // 通过 ref.listenManual 监听版本号自增；首次进入时相机尚未就绪（_cameraReady
+    // 为 false），据此跳过，避免新页面被多余地重建一次。
+    // 注意：flutter_riverpod 2.x 的 ref.listen 只能在 build 内使用（assert
+    // debugDoingBuild），initState 必须用 listenManual，否则 debug 构建进入拍摄页
+    // 直接断言崩溃；listenManual 在 widget unmount 时自动取消订阅。
+    ref.listenManual<int>(
+        CaptureState.cameraRenewVersionProvider, (previous, next) {
+      if (!mounted || previous == null) return;
+      if (next <= previous) return;
+      if (!_cameraReady) return;
+      _remountCameraOnReturn();
+    });
     // 挑战模式：重置缩略图状态，确保 provider 处于 idle 初始态，
     // 避免 StateNotifierProvider 残留 final_ 状态导致 ref.listen 误触发（直接跳转到确认页）。
     if (widget.challengeId != null && widget.challengeId!.isNotEmpty) {
@@ -223,8 +247,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
         if (!mounted) return;
         if (ready) {
           _cameraReady = true;
+          // 新摄像头就绪：解除切换防抖，允许下一次切换
+          _cameraSwitchInProgress = false;
           _cameraReadyWatchdog?.cancel();
           _cameraReadyWatchdog = null;
+          // 相机已就绪：重置重建计数，正常切换/重建多次不会耗尽看门狗预算，
+          // 保证后续某次相机意外卡住时看门狗仍能自动恢复。
+          _cameraReadyRebuildCount = 0;
         } else {
           _cameraReady = false;
         }
@@ -491,6 +520,19 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
+  /// 返回拍摄页时强制重建相机预览。
+  ///
+  /// 离开拍摄页到非拍摄页时，路由观察者已显式释放相机（CamerawesomePlugin.stop）。
+  /// 若本页是被 retain（覆盖未销毁）的实例，返回时不会重新 initState，这里的
+  /// CameraAwesomeBuilder 仍持有已释放的相机上下文，取景器会黑屏/卡住。
+  /// 递增 [_cameraRebuildKey]（ValueKey 变化）强制销毁旧实例并重建，重新初始化相机。
+  void _remountCameraOnReturn() {
+    if (!mounted) return;
+    debugPrint('[capture] 从其他页面返回拍摄页，强制重建相机预览');
+    _startCameraReadyWatchdog();
+    setState(() => _cameraRebuildKey++);
+  }
+
   void _onBack() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
@@ -690,11 +732,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
       final swIso = Stopwatch()..start();
       // 常驻 worker isolate（A 优化），避免 compute() 每次创建 isolate 的开销
-      // P3→sRGB：iOS(宽色域 iPhone) 相机输出是 Display P3 广色域 JPEG，
-      // dart:ui 解码后 rawRgba 仍是 P3 像素值，image 包 encodeJpg 不嵌 ICC、
-      // 按 sRGB 解释导致偏黄（取景器走系统色管按 P3 渲染故正常）。
-      // OHOS(华为) / Android 相机输出是 sRGB，禁用转换避免加深偏黄。
-      final applyP3ToSrgb = defaultTargetPlatform == TargetPlatform.iOS;
+      // P3→sRGB 诊断结论（2026-08-23，color_diag 实测）：
+      // Flutter 的 iOS 解码器已按 JPEG 内嵌 Display P3 profile 转成 sRGB，
+      // worker 收到的 rgbaBytes 本就是 sRGB。此时再按 P3 做一次 P3→sRGB，
+      // 会把像素当 P3 二次转换，diagBefore=[159,144,131] → diagAfter=[162,143,129]
+      // R 抬升 / B 下降，实测加深偏黄，而非还原 P3 红色。
+      // 三端（含 iOS）均禁用该额外转换，使成片色值与取景器 GPU 阶段完全一致。
+      final applyP3ToSrgb = false;
       final workerResult = await CaptureWorker.instance.process(
         CaptureWorkerRequest(
           rgbaBytes: gpuData.rgbaBytes,
@@ -910,6 +954,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// CameraPreview widget 会 watch 此 provider 并通过 CameraService 重建预览，
   /// onReady 回调中重新应用闪光灯/缩放/镜像等参数。
   void _switchCamera() {
+    // 防抖：上一次摄像头切换尚未就绪时忽略快速连点。
+    // 否则 CameraAwesomeBuilder 会被反复销毁重建，而原生相机的 init/start
+    // （PreparingCameraState.start 内含 500ms 异步延迟且 dispose 不取消）会
+    // 重叠执行，导致取景器黑屏卡住。切换完成后（readyStream 发出 true）
+    // 复位标志，允许下一次切换。
+    if (_cameraSwitchInProgress) return;
+    _cameraSwitchInProgress = true;
+
     final current = ref.read(CaptureState.cameraFacingProvider);
     final next = current == 'back' ? 'front' : 'back';
     ref.read(CaptureState.cameraFacingProvider.notifier).state = next;
@@ -944,6 +996,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 切换摄像头后将缩放重置为 1x
     ref.read(CaptureState.apparentZoomProvider.notifier).state = 1.0;
     ref.read(CaptureState.zoomProvider.notifier).state = 1.0;
+
+    // 切换后重启看门狗：若新摄像头未在超时内就绪（原生卡住/黑屏），
+    // 自动强制重建取景器恢复，避免停留在黑屏状态。
+    _startCameraReadyWatchdog();
   }
 
   /// 每日首次拍摄积分（fire-and-forget）。
@@ -1659,8 +1715,12 @@ class _BottomControlArea extends StatelessWidget {
       ),
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomPadding),
-        child: Column(
+        // clipBehavior: Clip.none 允许缩放轮盘向上溢出到取景器区域
+        // （此 OHOS fork 的 Column 不透传 clipBehavior，改用 Flex 显式指定）
+        child: Flex(
+          direction: Axis.vertical,
           mainAxisSize: MainAxisSize.min,
+          clipBehavior: Clip.none,
           children: [
             // 缩放Tab栏（全屏 / 试用模式隐藏）
             if (!isFullscreen && !isTrialMode)
@@ -2731,6 +2791,27 @@ class _ZoomBarState extends ConsumerState<_ZoomBar> {
   /// 上一次触发震动的倍数（用于检测刻度变化）
   double _lastHapticMultiplier = -1.0;
 
+  /// 当前活跃指针数：用于区分「单指横向滑动」与「双指捏合」。
+  /// 轮盘只在缩放 Tab 上单指左右滑动时弹出，捏合缩放不弹轮盘。
+  int _activePointers = 0;
+
+  void _onPointerDown(PointerDownEvent event) {
+    _activePointers++;
+    setState(() {});
+    // 第二根手指落下（开始捏合）时立即收起轮盘
+    if (_activePointers >= 2 && _showDial) {
+      _animateDialOut();
+    }
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    setState(() => _activePointers = (_activePointers - 1).clamp(0, 10));
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    setState(() => _activePointers = (_activePointers - 1).clamp(0, 10));
+  }
+
   /// 根据设备能力动态生成预设倍数列表。
   List<double> _getZoomPresets(String facing, double maxZoom, bool supportsUltraWide) {
     final base = <double>[1.0];
@@ -2760,6 +2841,8 @@ class _ZoomBarState extends ConsumerState<_ZoomBar> {
   void _onHorizontalDragStart(DragStartDetails details) {
     final facing = ref.read(CaptureState.cameraFacingProvider);
     if (facing != 'back') return;
+    // 仅单指横向滑动显示轮盘；双指捏合不显示（由 _PinchZoomCamera 处理缩放）
+    if (_activePointers != 1) return;
     _dragStartMultiplier = ref.read(CaptureState.apparentZoomProvider);
     _dragStartX = details.globalPosition.dx;
     _lastHapticMultiplier = _dragStartMultiplier;
@@ -2770,6 +2853,8 @@ class _ZoomBarState extends ConsumerState<_ZoomBar> {
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
     final facing = ref.read(CaptureState.cameraFacingProvider);
     if (facing != 'back') return;
+    // 拖动过程中第二根手指落下（变成捏合）时停止缩放调整
+    if (_activePointers != 1) return;
     final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
     final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
     final deltaX = details.globalPosition.dx - _dragStartX;
@@ -2847,41 +2932,49 @@ class _ZoomBarState extends ConsumerState<_ZoomBar> {
     final activeIndex = _nearestPresetIndex(multiplier, presets);
     final canDrag = facing == 'back';
 
-    return GestureDetector(
-      onHorizontalDragStart: canDrag ? _onHorizontalDragStart : null,
-      onHorizontalDragUpdate: canDrag ? _onHorizontalDragUpdate : null,
-      onHorizontalDragEnd: canDrag ? _onHorizontalDragEnd : null,
-      behavior: HitTestBehavior.opaque,
+    return Listener(
+      onPointerDown: _onPointerDown,
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerCancel,
+      behavior: HitTestBehavior.translucent,
       child: SizedBox(
         height: 60,
         child: Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.bottomCenter,
           children: [
-            // 默认胶囊 Tab 栏
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.35),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < presets.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 2),
-                    _ZoomTab(
-                      label: presets[i] == presets[i].toInt()
-                          ? '${presets[i].toInt()}'
-                          : presets[i].toStringAsFixed(1),
-                      active: i == activeIndex && !_showDial,
-                      onTap: () {
-                        widget.onChanged(presets[i]);
-                      },
-                    ),
+            // 默认胶囊 Tab 栏：仅在此胶囊上单指左右滑动才弹出轮盘
+            // （GestureDetector 只包住胶囊，避免整条空白区域误触发轮盘）
+            GestureDetector(
+              onHorizontalDragStart: canDrag ? _onHorizontalDragStart : null,
+              onHorizontalDragUpdate: canDrag ? _onHorizontalDragUpdate : null,
+              onHorizontalDragEnd: canDrag ? _onHorizontalDragEnd : null,
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < presets.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 2),
+                      _ZoomTab(
+                        label: presets[i] == presets[i].toInt()
+                            ? '${presets[i].toInt()}'
+                            : presets[i].toStringAsFixed(1),
+                        active: i == activeIndex && !_showDial,
+                        onTap: () {
+                          widget.onChanged(presets[i]);
+                        },
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             // 圆形轮盘 overlay（后置拖动时从底部滑入）
@@ -2977,9 +3070,11 @@ class _HalfCircleDial extends StatelessWidget {
       width: screenWidth,
       height: radius,
       child: ClipRect(
+        // topCenter：让完整圆从顶部开始向下溢出，只露出上半圆（∩ 形，圆心在底部中央）。
+        // 之前误用 bottomCenter 导致露出的是下半圆（∪ 形），上半弧上的刻度全被裁掉。
         child: OverflowBox(
           maxHeight: screenWidth,
-          alignment: Alignment.bottomCenter,
+          alignment: Alignment.topCenter,
           child: SizedBox(
             width: screenWidth,
             height: screenWidth,
@@ -2994,28 +3089,24 @@ class _HalfCircleDial extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                 ),
-                // 旋转轮盘（刻度 + 数字标签一起旋转，指针固定）
+                // 旋转刻度层（刻度随轮盘旋转，指针固定）
                 Transform.rotate(
                   angle: rotationAngle,
                   child: SizedBox(
                     width: screenWidth,
                     height: screenWidth,
-                    child: Stack(
-                      children: [
-                        CustomPaint(
-                          painter: _HalfCircleTickPainter(
-                            radius: radius,
-                            startAngle: tickStartAngle,
-                            sweepAngle: tickSweepAngle,
-                            totalRange: totalRange,
-                          ),
-                        ),
-                        // 数字标签与刻度同层旋转，反向旋转保持正立
-                        ..._buildUprightLabels(radius, rotationAngle, totalRange, tickStartAngle, tickSweepAngle),
-                      ],
+                    child: CustomPaint(
+                      painter: _HalfCircleTickPainter(
+                        radius: radius,
+                        startAngle: tickStartAngle,
+                        sweepAngle: tickSweepAngle,
+                        totalRange: totalRange,
+                      ),
                     ),
                   ),
                 ),
+                // 数字标签：按旋转后的屏幕坐标直接定位，保持正立且不被底部裁切
+                ..._buildUprightLabels(radius, rotationAngle, totalRange, tickStartAngle, tickSweepAngle),
                 // 固定指针
                 Positioned(
                   top: screenWidth * 0.04,
@@ -3025,9 +3116,9 @@ class _HalfCircleDial extends StatelessWidget {
                     child: CustomPaint(painter: _PointerPainter()),
                   ),
                 ),
-                // 当前倍数显示
+                // 当前倍数显示（居中于半圆中心，避免与顶部刻度数字重叠）
                 Positioned(
-                  top: screenWidth * 0.15,
+                  top: screenWidth * 0.25 - 14,
                   left: 0,
                   right: 0,
                   child: Center(
@@ -3058,17 +3149,23 @@ class _HalfCircleDial extends StatelessWidget {
 
   List<Widget> _buildUprightLabels(double radius, double rotationAngle, double totalRange, double tickStartAngle, double tickSweepAngle) {
     final widgets = <Widget>[];
+    const labelBoxW = 44.0;
+    const labelBoxH = 20.0;
+    final labelR = radius * 0.82 - 22;
+
     for (var i = 0; i < presets.length; i++) {
       final preset = presets[i];
       final t = totalRange > 0 ? (preset - minZoom) / totalRange : 0.0;
-      final angle = tickStartAngle + t * tickSweepAngle;
+      final markAngle = tickStartAngle + t * tickSweepAngle;
+      // 轮盘层旋转后，刻度在屏幕上的角度（0 = 正右，-π/2 = 正上）
+      final screenAngle = markAngle + rotationAngle;
       final isMajor = i == activeIndex;
 
-      final labelRadius = radius * 0.82 - 22;
-      final centerX = radius;
-      final centerY = radius;
-      final labelX = centerX + labelRadius * math.cos(angle);
-      final labelY = centerY + labelRadius * math.sin(angle);
+      // 标签中心落在旋转后的屏幕坐标（始终正立，无需反向旋转）
+      final cx = radius + labelR * math.cos(screenAngle);
+      var cy = radius + labelR * math.sin(screenAngle);
+      // 夹紧在上半圆内，避免位于基线（左右两端）的标签被底部裁掉一半
+      cy = cy.clamp(labelBoxH / 2 + 2, radius - labelBoxH / 2 - 2).toDouble();
 
       final label = preset == preset.toInt()
           ? '${preset.toInt()}'
@@ -3076,16 +3173,19 @@ class _HalfCircleDial extends StatelessWidget {
 
       widgets.add(
         Positioned(
-          left: labelX,
-          top: labelY,
-          child: Transform.rotate(
-            angle: -rotationAngle,
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isMajor ? const Color(0xFFF0C040) : Colors.white.withOpacity(0.8),
-                fontSize: isMajor ? 15 : 12,
-                fontWeight: isMajor ? FontWeight.w700 : FontWeight.w500,
+          left: cx - labelBoxW / 2,
+          top: cy - labelBoxH / 2,
+          child: SizedBox(
+            width: labelBoxW,
+            height: labelBoxH,
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: isMajor ? const Color(0xFFF0C040) : Colors.white.withOpacity(0.8),
+                  fontSize: isMajor ? 15 : 12,
+                  fontWeight: isMajor ? FontWeight.w700 : FontWeight.w500,
+                ),
               ),
             ),
           ),

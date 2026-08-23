@@ -93,19 +93,17 @@ class PhotoPostProcessor {
       debugPrint('[post-process] 裁剪区域（比例）: $cropRect');
 
       // 2.5. 自定义裁剪
+      // 裁剪框（PhotoCropLayer/CropOverlay）的坐标是相对整张图片 0~1 的
+      // （已含缩放/平移后的保留区域），因此这里必须相对于整张工作图计算，
+      // 否则先做比例裁剪再在子区域内解释会「叠加两次裁剪」导致所见与导出不一致。
+      // 未拖拽过裁剪框（customCropRect == null）时保持整张居中满铺的比例裁剪不变。
       if (customCropRect != null) {
-        final innerCrop = computeCustomCropRect(
+        cropRect = computeCustomCropRect(
           customCropRect,
-          cropRect[2],
-          cropRect[3],
+          workingImage.width,
+          workingImage.height,
         );
-        cropRect = [
-          cropRect[0] + innerCrop[0],
-          cropRect[1] + innerCrop[1],
-          innerCrop[2],
-          innerCrop[3],
-        ];
-        debugPrint('[post-process] 裁剪区域（自定义）: $cropRect');
+        debugPrint('[post-process] 裁剪区域（自定义●整图坐标）: $cropRect');
       }
 
       // 3. 计算降采样后的输出尺寸

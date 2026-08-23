@@ -34,6 +34,12 @@ class CaptureState {
   /// 仅展示模板效果：隐藏所有参数调整/工具栏、禁用快门、取景器铺水印。
   static final trialModeProvider = StateProvider<bool>((ref) => false);
 
+  /// 相机续命版本号：路由观察者检测到「非拍摄页 → 返回拍摄页」时自增。
+  /// 拍摄页监听该值变化并强制重建相机预览——因为离开拍摄页到其他页面时相机已被
+  /// 显式释放（服务单例 stop），但从被覆盖（retain）的拍摄页返回时页面不会重新
+  /// initState，必须重建 CameraAwesomeBuilder 才能恢复取景器预览。
+  static final cameraRenewVersionProvider = StateProvider<int>((ref) => 0);
+
   // ── 相机引擎状态（由 CameraPreview 通过 onCameraStateCreated 回调注入）──
   // 持有 camerawesome 的 CameraState 引用，用于实现真实拍照/缩放/摄像头切换/闪光灯同步。
   // 测试环境中为 null（cameraPreviewOverrideProvider 注入占位 widget，不创建真实 CameraState）。

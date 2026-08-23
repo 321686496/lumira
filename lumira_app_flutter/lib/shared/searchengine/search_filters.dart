@@ -1,5 +1,11 @@
 /// 排序方式。
-enum SearchSort { comprehensive, hot, latest }
+enum SearchSort {
+  comprehensive, // 综合（默认）
+  hot, // 火爆程度
+  latest, // 最新
+  photos, // 拍摄照片数
+  name, // 名称
+}
 
 /// 价格筛选（template 专用）。
 enum SearchPriceFilter { all, free, paid }

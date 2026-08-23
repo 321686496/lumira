@@ -51,9 +51,13 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   Map<String, int> _scenePopularity = const {};
   Map<String, String> _categoryLabelByKey = const {};
   List<TemplateCategoryRecord> _level1Categories = const [];
+  Map<String, int> _templateUsageCounts = const {};
 
   List<SearchResult> _results = const [];
   SearchStore? _store;
+
+  /// 结果布局：true=瀑布流（双列），false=单列列表。
+  bool _layoutWaterfall = true;
 
   @override
   void initState() {
@@ -80,6 +84,14 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     final scenes = await sDao.getAll();
     final tTags = await tagDao.allTags(itemType: TagItemType.template);
     final sTags = await tagDao.allTags(itemType: TagItemType.scene);
+
+    Map<String, int> templateUsage = const {};
+    try {
+      final usage = await ref.read(galleryDaoProvider.future);
+      templateUsage = await usage.countByTemplate();
+    } catch (_) {
+      templateUsage = const {};
+    }
     // 合并两类标签（按 tag.id 去重）
     final seenIds = <int>{};
     final mergedTags = <TagWithCount>[
@@ -109,6 +121,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       _allScenes = scenes;
       _allTags = mergedTags;
       _scenePopularity = scenePop;
+      _templateUsageCounts = templateUsage;
       _categoryLabelByKey = {for (final c in categories) c.key: c.name};
       _level1Categories =
           categories.where((c) => c.level == 1).toList();
@@ -157,9 +170,20 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       results.addAll(await _buildTemplateResults());
       results.addAll(await _buildSceneResults());
       results.addAll(_buildAcademyResults());
-      // all 混合排序：hot 按热度，其余保持类型分组顺序
-      if (_filters.sort == SearchSort.hot) {
-        results.sort((a, b) => _hotScore(b).compareTo(_hotScore(a)));
+      // all 混合排序：hot/photos 按热度/拍摄数，name 按名称，其余保持类型分组顺序
+      switch (_filters.sort) {
+        case SearchSort.hot:
+          results.sort((a, b) => _hotScore(b).compareTo(_hotScore(a)));
+          break;
+        case SearchSort.photos:
+          results.sort((a, b) => _photoScore(b).compareTo(_photoScore(a)));
+          break;
+        case SearchSort.name:
+          results.sort((a, b) => a.title.compareTo(b.title));
+          break;
+        case SearchSort.comprehensive:
+        case SearchSort.latest:
+          break;
       }
     } else if (_scope == SearchScope.template) {
       results.addAll(await _buildTemplateResults());
@@ -179,9 +203,15 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       filters: _filters,
       categoryLabelByKey: _categoryLabelByKey,
       allowedIds: allowed,
+      usageCounts: _templateUsageCounts,
     );
     return list
-        .map((t) => SearchResult(scope: SearchScope.template, template: t))
+        .map((t) => SearchResult(
+              scope: SearchScope.template,
+              template: t,
+              usageCount: _templateUsageCounts[t.id] ?? 0,
+              categoryLabels: _categoryLabelByKey,
+            ))
         .toList();
   }
 
@@ -259,6 +289,13 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       return r.template!.isRecommended ? 100 : 0;
     }
     if (r.course != null) return r.course!.rewardXP;
+    return 0;
+  }
+
+  /// 拍摄照片数得分（mixed 排序用）。
+  int _photoScore(SearchResult r) {
+    if (r.template != null) return r.usageCount;
+    if (r.scope == SearchScope.scene) return _scenePopularity[r.id] ?? 0;
     return 0;
   }
 
@@ -341,26 +378,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
               ),
             ),
           ),
-          if (_keyword.trim().isNotEmpty) ...[
-            const SizedBox(width: 4),
-            GestureDetector(
-              onTap: _openFilter,
-              behavior: HitTestBehavior.opaque,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.tune, size: 16, color: tokens.textPrimary),
-                    const SizedBox(width: 2),
-                    Text('筛选',
-                        style: TextStyle(
-                            fontSize: 13, color: tokens.textPrimary)),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -523,51 +540,190 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
 
   // === 结果页 ===
 
+  /// 工具栏展示的排序选项（用户要求的排序方式）。
+  static const List<SearchSort> _sortOptions = [
+    SearchSort.comprehensive,
+    SearchSort.hot,
+    SearchSort.photos,
+    SearchSort.name,
+    SearchSort.latest,
+  ];
+
+  static String _sortLabel(SearchSort s) {
+    switch (s) {
+      case SearchSort.comprehensive:
+        return '综合';
+      case SearchSort.hot:
+        return '火爆';
+      case SearchSort.photos:
+        return '拍摄数';
+      case SearchSort.name:
+        return '名称';
+      case SearchSort.latest:
+        return '最新';
+    }
+  }
+
   Widget _buildResultView(ThemeTokens tokens) {
     if (!_loaded) {
       return const Center(child: CircularProgressIndicator());
     }
-    return NotificationListener<ScrollNotification>(
-      onNotification: (n) {
-        if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200 &&
-            n.metrics.axis == Axis.vertical) {
-          _loadMore();
-        }
-        return false;
-      },
-      child: CustomScrollView(
-        slivers: [
-          if (_results.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: _buildEmpty(tokens),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 0.56,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final r = _results[index];
-                    return SearchResultCard(
-                      result: r,
-                      showTypeBadge: _scope == SearchScope.all,
-                      onTap: () => _openResult(r),
-                    );
-                  },
-                  childCount: _pager.visible.clamp(0, _results.length),
-                ),
+    if (_results.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 40),
+          child: _buildEmpty(tokens),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        _buildToolbar(tokens),
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onResultScroll,
+            child:
+                _layoutWaterfall ? _buildWaterfallView(tokens) : _buildListView(tokens),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 排序 chips + 布局切换。
+  Widget _buildToolbar(ThemeTokens tokens) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 8, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final s in _sortOptions) ...[
+                    _SortChip(
+                      label: _sortLabel(s),
+                      active: _filters.sort == s,
+                      tokens: tokens,
+                      onTap: () {
+                        if (_filters.sort == s) return;
+                        setState(() => _filters = _filters.copyWith(sort: s));
+                        _recompute();
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
               ),
             ),
-          SliverToBoxAdapter(child: _buildFooter(tokens)),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              _layoutWaterfall ? Icons.view_list : Icons.grid_view,
+              size: 20,
+              color: tokens.textSecondary,
+            ),
+            tooltip: _layoutWaterfall ? '切换到列表' : '切换到瀑布流',
+            onPressed: () => setState(() => _layoutWaterfall = !_layoutWaterfall),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.tune, size: 20, color: tokens.textSecondary),
+            tooltip: '筛选',
+            onPressed: _openFilter,
+          ),
         ],
       ),
+    );
+  }
+
+  bool _onResultScroll(ScrollNotification n) {
+    if (n.metrics.axis != Axis.vertical) return false;
+    if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
+      _loadMore();
+    }
+    return false;
+  }
+
+  /// 瀑布流：双列等高平衡，卡片各自固有高度（解决固定高网格导致的溢出）。
+  Widget _buildWaterfallView(ThemeTokens tokens) {
+    final screenW = MediaQuery.of(context).size.width;
+    final cardW = (screenW - 40 - 12) / 2; // 左右 padding 20*2 + 列间距 12
+    final n = _pager.visible.clamp(0, _results.length);
+
+    final left = <Widget>[];
+    final right = <Widget>[];
+    double lh = 0, rh = 0;
+    for (var i = 0; i < n; i++) {
+      final r = _results[i];
+      final card = SearchResultCard(
+        result: r,
+        showTypeBadge: _scope == SearchScope.all,
+        onTap: () => _openResult(r),
+      );
+      final h = _estimateCardHeight(r, cardW) + 12;
+      final item = Padding(
+          padding: const EdgeInsets.only(bottom: 12), child: card);
+      if (lh <= rh) {
+        left.add(item);
+        lh += h;
+      } else {
+        right.add(item);
+        rh += h;
+      }
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: Column(children: left)),
+              const SizedBox(width: 12),
+              Expanded(child: Column(children: right)),
+            ],
+          ),
+          _buildFooter(tokens),
+        ],
+      ),
+    );
+  }
+
+  /// 估算卡片高度（用于瀑布流左右列平衡分配，非精确值）。
+  double _estimateCardHeight(SearchResult r, double w) {
+    final coverRatio = r.scope == SearchScope.academy ? 4 / 3 : 3 / 4;
+    final coverH = w / coverRatio;
+    var body = 46.0; // 上下 padding + 标题行
+    if (r.template != null) {
+      body += r.shortDesc.isNotEmpty ? 3 + 14 : 0; // 描述行
+      body += 6 + 16; // 标签行
+    } else if (r.scene != null) {
+      body += 6 + 22;
+    } else {
+      body += 6 + 20;
+    }
+    return coverH + body;
+  }
+
+  /// 列表布局：单列横向卡。
+  Widget _buildListView(ThemeTokens tokens) {
+    final n = _pager.visible.clamp(0, _results.length);
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+      itemCount: n,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (_, i) {
+        final r = _results[i];
+        return SearchResultListTile(
+          result: r,
+          showTypeBadge: _scope == SearchScope.all,
+          onTap: () => _openResult(r),
+        );
+      },
     );
   }
 
@@ -684,4 +840,45 @@ class SearchInitialData {
     required this.academyTopics,
     required this.academyLevels,
   });
+}
+
+/// 排序 chip（工具栏用）。
+class _SortChip extends StatelessWidget {
+  const _SortChip({
+    required this.label,
+    required this.active,
+    required this.tokens,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final ThemeTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? tokens.brand : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(16),
+          border: active
+              ? null
+              : Border.all(color: tokens.divider, width: 1),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+            color: active ? tokens.textInverse : tokens.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
 }

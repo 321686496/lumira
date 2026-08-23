@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
+import '../../../core/router/route_names.dart';
 import '../../../core/utils/image_cache.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
+import '../../templates/data/owned_templates_repository.dart';
 
 /// 模板横向滚动条。
 /// `compact=true` 显示前 6 个模板（底部条），`compact=false` 显示前 10 个模板（展开面板）。
@@ -24,6 +28,9 @@ class TemplateStrip extends ConsumerWidget {
     final currentId = ref.watch(CaptureState.currentTemplateIdProvider);
     // 工具栏模板列表：当前使用的模板被提到第一位（含选中状态）
     final templates = ref.watch(CaptureState.toolbarTemplatesProvider);
+    // 触发已拥有模板加载（付费模板门禁判断依赖 ownedTemplateIdsProvider）
+    ref.watch(ownedTemplatesLoaderProvider);
+    final ownedIds = ref.watch(ownedTemplateIdsProvider);
 
     final max = compact ? _compactMax : _drawerMax;
     // 「显示更多」入口仅在展开面板模式（compact=false）下显示，
@@ -35,8 +42,10 @@ class TemplateStrip extends ConsumerWidget {
       return _buildEmptyState();
     }
     return _buildTemplateList(
+      context,
       visible,
       currentId,
+      ownedIds,
       ref,
       showMore: hasMore,
     );
@@ -79,8 +88,10 @@ class TemplateStrip extends ConsumerWidget {
 
   /// 构建模板横向列表（末尾可按需追加「显示更多」入口）
   Widget _buildTemplateList(
+    BuildContext context,
     List<PhotoTemplate> templates,
     String? currentId,
+    Set<String> ownedIds,
     WidgetRef ref, {
     bool showMore = false,
   }) {
@@ -102,8 +113,24 @@ class TemplateStrip extends ConsumerWidget {
         // 仅用户自定义模板（source='custom'）标记「我的」，
         // 后端动态模板（source='remote'）与系统内置模板不再误标。
         final isCustom = tpl.meta.source == 'custom';
+        // 付费模板且当前用户未解锁 → 锁定（点按跳详情页，不直接应用）
+        final isLocked = tpl.meta.price > 0 && !ownedIds.contains(tpl.meta.id);
         return GestureDetector(
           onTap: () {
+            if (isLocked) {
+              // 未解锁付费模板：不直接应用，跳详情页并提示需多少积分解锁
+              LumiraToast.show(
+                context,
+                '这是付费模板，需 ${tpl.meta.price} 积分解锁',
+              );
+              GoRouter.of(context).push(
+                RouteNames.withTemplateId(
+                  RouteNames.templatesDetail,
+                  tpl.meta.id,
+                ),
+              );
+              return;
+            }
             final next = active ? null : tpl.meta.id;
             ref
                 .read(CaptureState.currentTemplateIdProvider.notifier)
@@ -171,7 +198,7 @@ class TemplateStrip extends ConsumerWidget {
                   ),
                 ),
                 // 自定义模板标记
-                if (isCustom)
+                if (isCustom || isLocked)
                   Positioned(
                     top: 4,
                     left: 4,
@@ -182,13 +209,29 @@ class TemplateStrip extends ConsumerWidget {
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
-                        '我的',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 8,
-                        ),
-                      ),
+                      child: isLocked
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.lock,
+                                    size: 8, color: Colors.white),
+                                const SizedBox(width: 2),
+                                const Text(
+                                  '付费',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 8,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : const Text(
+                              '我的',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 8,
+                              ),
+                            ),
                     ),
                   ),
                 // 选中标记

@@ -321,6 +321,15 @@ class CamerawesomeCameraService implements CameraService {
       _cachedMaxZoom = null;
       _cachedMinZoom = null;
       _lastBuildFacing = config.facing;
+      // 摄像头切换开始：通知上层相机未就绪。
+      // 快速连点切换会触发 CameraAwesomeBuilder 反复销毁重建，而原生相机的
+      // init/start（PreparingCameraState.start 内含 500ms 异步延迟、且 dispose
+      // 不会取消该延迟任务）可能重叠执行，导致取景器黑屏卡住。
+      // 上层（capture_page）收到 false 后在切换完成（builder 回调发 true）前
+      // 忽略再次切换，串行化摄像头切换。
+      if (!_readyController.isClosed) {
+        _readyController.add(false);
+      }
     }
     if (_delegate.platformTag == 'ohos') {
       return _buildOhos(config);

@@ -1,5 +1,47 @@
 import 'dart:convert';
 
+import '../../../core/db/dao/scenes_dao.dart';
+import '../../../core/db/dao/templates_dao.dart';
+
+/// 组合封面来源（兼容 `TemplateCoverImage` 的 cover / coverData 双字段）。
+class KitCoverSource {
+  const KitCoverSource({this.cover = '', this.coverData});
+
+  /// http / assets / `data:` URL
+  final String cover;
+
+  /// base64 data URL
+  final String? coverData;
+
+  bool get hasImage => cover.isNotEmpty || (coverData != null && coverData!.isNotEmpty);
+}
+
+/// 派生组合封面：优先套件自带封面 → 场景封面（coverUrl / 示例图）→ 模板封面（coverData / cover）。
+KitCoverSource resolveKitCover(
+  CompositionKit kit, {
+  SceneRecord? scene,
+  TemplateRecord? template,
+}) {
+  final own = kit.coverUrl;
+  if (own != null && own.isNotEmpty) return KitCoverSource(cover: own);
+
+  if (scene != null) {
+    if (scene.coverUrl.isNotEmpty) return KitCoverSource(cover: scene.coverUrl);
+    if (scene.exampleImages.isNotEmpty) {
+      return KitCoverSource(cover: scene.exampleImages.first);
+    }
+  }
+
+  if (template != null) {
+    if (template.coverData != null && template.coverData!.isNotEmpty) {
+      return KitCoverSource(coverData: template.coverData);
+    }
+    if (template.cover.isNotEmpty) return KitCoverSource(cover: template.cover);
+  }
+
+  return const KitCoverSource();
+}
+
 /// 组合套件实体（对应 `composition_kits` 表）
 ///
 /// 一个套件绑定一个场景 + 可选模板 + 可选相机参数覆盖，

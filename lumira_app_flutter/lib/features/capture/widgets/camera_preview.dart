@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -332,11 +333,24 @@ class _PinchZoomCamera extends ConsumerStatefulWidget {
 }
 
 class _PinchZoomCameraState extends ConsumerState<_PinchZoomCamera> {
-  /// 本次手势起始时的缩放倍数（null = 尚未进入双指状态）
-  double? _startMultiplier;
+  /// 上一次 update 的 scale（用于相邻帧增量比，抵消初始跨度影响）
+  double _lastScale = 1.0;
+
+  /// 本次捏合手势的当前缩放倍数（增量累积）
+  double _currentMultiplier = 1.0;
+
+  /// 上一次 update 的指针数（用于检测手指重新落下时重新锚定）
+  int _lastPointerCount = 0;
 
   /// 上一次实际下发到相机的倍数（用于节流）
   double? _lastAppliedMultiplier;
+
+  void _resetGesture() {
+    _lastScale = 1.0;
+    _currentMultiplier = 1.0;
+    _lastPointerCount = 0;
+    _lastAppliedMultiplier = null;
+  }
 
   /// 将目标倍数 clamp 到设备范围后更新状态并下发相机。
   void _applyZoom(double target) {
@@ -355,21 +369,35 @@ class _PinchZoomCameraState extends ConsumerState<_PinchZoomCamera> {
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onScaleStart: (_) {
-        _startMultiplier = null;
-        _lastAppliedMultiplier = null;
-      },
+      // 用 start 让 Flutter 在手势被接受时重新捕获初始跨度，
+      // 避免“双指刚落下间距极小”导致初始 scale 巨大、一捏就跳最大倍数
+      dragStartBehavior: DragStartBehavior.start,
+      onScaleStart: (_) => _resetGesture(),
       onScaleUpdate: (details) {
-        // 仅双指捏合触发缩放，单指拖动/点击不干扰（点击对焦仍由相机组件处理）
-        if (details.pointerCount < 2) return;
-        // 双指落下后的第一次 update 才取起始倍数，兼容“先单指再落双指”的情况
-        _startMultiplier ??= ref.read(CaptureState.apparentZoomProvider);
-        _applyZoom(_startMultiplier! * details.scale);
+        final pc = details.pointerCount;
+        if (pc < 2) {
+          // 单指/点击不干扰（点击对焦仍由相机组件处理）
+          _lastPointerCount = pc;
+          return;
+        }
+        // 指针数从 <2 变为 >=2（新捏合或手指重新落下），重新锚定起始倍数，
+        // 防止 Flutter 重置初始跨度后 scale 跳变导致倍数突变
+        if (_lastPointerCount < 2) {
+          _lastPointerCount = pc;
+          _lastScale = details.scale;
+          _currentMultiplier = ref.read(CaptureState.apparentZoomProvider);
+          return;
+        }
+        _lastPointerCount = pc;
+        if (details.scale == 0 || _lastScale == 0) return;
+        // 增量缩放：用相邻两帧 scale 的比值（不受初始跨度影响），
+        // 让捏合缩放平滑连续，不再“一捏就跳到最大倍数”
+        final ratio = details.scale / _lastScale;
+        _lastScale = details.scale;
+        _currentMultiplier *= ratio;
+        _applyZoom(_currentMultiplier);
       },
-      onScaleEnd: (_) {
-        _startMultiplier = null;
-        _lastAppliedMultiplier = null;
-      },
+      onScaleEnd: (_) => _resetGesture(),
       child: widget.child,
     );
   }

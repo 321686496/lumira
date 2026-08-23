@@ -101,16 +101,6 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _section(tokens, '排序', [
-                      for (final s in SearchSort.values)
-                        _Pill(
-                          label: _sortLabel(s),
-                          active: _draft.sort == s,
-                          tokens: tokens,
-                          onTap: () =>
-                              setState(() => _draft = _draft.copyWith(sort: s)),
-                        ),
-                    ]),
                     if (scope == SearchScope.template) ...[
                       _categorySection(tokens),
                       _priceSection(tokens),
@@ -355,17 +345,6 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
         ],
       ),
     );
-  }
-
-  static String _sortLabel(SearchSort s) {
-    switch (s) {
-      case SearchSort.comprehensive:
-        return '综合';
-      case SearchSort.hot:
-        return '热度';
-      case SearchSort.latest:
-        return '最新';
-    }
   }
 
   static String _priceLabel(SearchPriceFilter p) {

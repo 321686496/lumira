@@ -22,8 +22,10 @@ import '../services/watermark_renderer.dart';
 /// - 复用 [WatermarkRenderer] 把水印元素与拍立得白边合成到照片上，
 ///   因此动画与成片（含拍立得白边）外观一致。
 ///
-/// 性能：为避免等待完整后处理管线（GPU + isolate + 落库，约数百 ms，会拖慢出片），
-/// 动画直接使用原始照片在本地降采样后做方向对齐 + 水印合成，几乎零延迟。
+/// 性能 / 可见性：
+/// - **快速路径**先解码原片并方向对齐，第一帧即可显示动画内容（不空白）；
+/// - **后台路径**再降采样 + 水印合成，完成后替换显示，避免等待完整后处理管线
+///   （GPU + isolate + 落库，约数百 ms，会拖慢出片），实现近乎零延迟。
 ///
 /// 使用 [IgnorePointer] 不拦截手势，[ui.Image] 与 [AnimationController]
 /// 在 dispose 中释放，[ui.Codec] 在取帧后立即释放。
@@ -53,16 +55,41 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
   /// 展示最大宽度占页面宽度的比例。
   static const double _maxWidthRatio = 0.9;
 
-  /// 本地合成目标尺寸上限（动画展示区域较小，无需解码/合成全尺寸原图）。
+  /// 后台合成目标尺寸上限（动画展示区域较小，无需解码/合成全尺寸原图）。
   static const int _decodeTargetDim = 1200;
 
   late AnimationController _controller;
   late Animation<double> _grow;
   late Animation<double> _fadeIn;
   late Animation<double> _fadeOut;
-  ui.Image? _compositeImage;
-  int _compositeW = 0;
-  int _compositeH = 0;
+
+  /// 当前展示的图片：先以「方向对齐后的原片」立即显示（保证动画不空白），
+  /// 成片（含水印 + 拍立得白边）合成完成后再替换为合成图。
+  ui.Image? _displayImage;
+  int _displayW = 0;
+  int _displayH = 0;
+  bool _compositeReady = false;
+  bool _disposed = false;
+
+  /// 应用展示图并释放上一张（避免泄漏）。
+  void _applyDisplay(ui.Image image, int w, int h) {
+    _displayImage?.dispose();
+    _displayImage = image;
+    _displayW = w;
+    _displayH = h;
+  }
+
+  /// 应用占位原片；若成片合成已就绪则丢弃占位原片，避免回退。
+  void _applyPlaceholder(ui.Image image, int w, int h) {
+    if (_compositeReady) {
+      image.dispose();
+      return;
+    }
+    _displayImage?.dispose();
+    _displayImage = image;
+    _displayW = w;
+    _displayH = h;
+  }
 
   @override
   void initState() {
@@ -85,6 +112,9 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
       parent: _controller,
       curve: const Interval(0.78, 1.0, curve: Curves.easeIn),
     );
+    // 快速路径：解码 + 方向对齐原片，立即显示，保证动画不空白。
+    _prepBase();
+    // 后台路径：水印（含拍立得白边）合成后替换显示。
     _buildComposite();
     _controller.forward();
     _controller.addStatusListener((status) {
@@ -94,31 +124,59 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     });
   }
 
-  /// 本地合成成片视觉：方向对齐 → 水印（含拍立得白边）合成 → RGBA 转 [ui.Image]。
-  Future<void> _buildComposite() async {
+  /// 快速路径：解码原片 → 方向对齐 → 立即显示。
+  Future<void> _prepBase() async {
     ui.Image? decoded;
-    ui.Image? aligned;
     try {
       final bytes = await File(widget.photoPath).readAsBytes();
-      final codec = await ui.instantiateImageCodec(
-        bytes,
-        targetWidth: _decodeTargetDim,
-      );
+      final codec = await ui.instantiateImageCodec(bytes);
       final frame = await codec.getNextFrame();
       decoded = frame.image;
       codec.dispose();
 
-      // 方向对齐：旋转 + 前置镜像（与成片管线 _alignOrientation 一致）
-      aligned = await _alignOrientation(decoded);
+      final aligned = await _alignOrientation(decoded);
       if (aligned != decoded) {
         decoded.dispose();
         decoded = aligned;
       }
+      if (!mounted) {
+        decoded.dispose();
+        return;
+      }
+      final ui.Image img = decoded;
+      setState(() {
+        _applyPlaceholder(img, img.width, img.height);
+      });
+    } catch (e) {
+      debugPrint('[watermark-anim] base prep failed: $e');
+    }
+  }
 
-      // 复用渲染器：把水印元素 + 拍立得白边合成到照片上，得到成片外观
+  /// 后台路径：把水印（含拍立得白边）合成到降采样后的照片上，完成后替换显示。
+  Future<void> _buildComposite() async {
+    ui.Image? source;
+    ui.Image? downscaled;
+    try {
+      final bytes = await File(widget.photoPath).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      source = frame.image;
+      codec.dispose();
+
+      final aligned = await _alignOrientation(source);
+      if (aligned != source) {
+        source.dispose();
+        source = aligned;
+      }
+
+      // 降采样到展示目标尺寸，避免全尺寸合成耗时（仅两次瞬时对齐用图）。
+      downscaled = await _downscale(source, _decodeTargetDim);
+      source.dispose();
+      source = null;
+
       final renderer = WatermarkRenderer();
       final result = await renderer.render(
-        sourceImage: decoded,
+        sourceImage: downscaled,
         template: widget.watermarkTemplate,
       );
 
@@ -127,20 +185,41 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
         result.width,
         result.height,
       );
-      if (!mounted) {
+      if (!mounted || _disposed) {
         composite.dispose();
         return;
       }
       setState(() {
-        _compositeW = result.width;
-        _compositeH = result.height;
-        _compositeImage = composite;
+        _compositeReady = true;
+        _applyDisplay(composite, result.width, result.height);
       });
     } catch (e) {
       debugPrint('[watermark-anim] composite build failed: $e');
     } finally {
-      decoded?.dispose();
+      downscaled?.dispose();
+      source?.dispose();
     }
+  }
+
+  /// 等比缩放到 [targetDim]（长边）以内，返回新图（调用方负责 dispose）。
+  Future<ui.Image> _downscale(ui.Image src, int targetDim) async {
+    final w = src.width.toDouble();
+    final h = src.height.toDouble();
+    final scale = (targetDim / (w > h ? w : h)).clamp(0.0, 1.0);
+    final nw = (w * scale).round().clamp(1, src.width);
+    final nh = (h * scale).round().clamp(1, src.height);
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    canvas.scale(scale);
+    canvas.drawImage(
+      src,
+      ui.Offset.zero,
+      ui.Paint()..filterQuality = ui.FilterQuality.medium,
+    );
+    final picture = recorder.endRecording();
+    final result = await picture.toImage(nw, nh);
+    picture.dispose();
+    return result;
   }
 
   /// 与后处理管线 `PhotoPostProcessor._alignOrientation` 一致的方向对齐。
@@ -206,7 +285,8 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
 
   @override
   void dispose() {
-    _compositeImage?.dispose();
+    _disposed = true;
+    _displayImage?.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -220,11 +300,11 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          final image = _compositeImage;
-          if (image == null || _compositeW == 0 || _compositeH == 0) {
+          final image = _displayImage;
+          if (image == null || _displayW == 0 || _displayH == 0) {
             return const SizedBox.shrink();
           }
-          final aspect = _compositeW / _compositeH;
+          final aspect = _displayW / _displayH;
 
           // 缩放：0.15（极小）→ 1.0，配合 easeOutBack 产生「从小变大」的定格效果
           final scale = 0.15 + 0.85 * _grow.value;
