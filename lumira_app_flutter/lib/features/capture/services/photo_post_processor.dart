@@ -234,13 +234,15 @@ class PhotoPostProcessor {
       // 5.5. 补光效果不应用到照片
 
       // 6. 编码 JPEG 并保存（无条件做 P3→sRGB 转换，iOS 宽色域相机输出 P3）
+      final imgWidth = resultImage.width;
+      final imgHeight = resultImage.height;
       final jpegBytes = await _encodeJpeg(resultImage);
       resultImage.dispose();
 
       // 写入诊断文件到临时目录（更容易访问）
       await _writeDiagnosticFile(
-        width: resultImage.width,
-        height: resultImage.height,
+        width: imgWidth,
+        height: imgHeight,
         outputPath: outputPath ?? inputPath,
       );
 
@@ -349,8 +351,8 @@ class PhotoPostProcessor {
       numChannels: 4,
       order: img.ChannelOrder.rgba,
     );
-    // 测试：不做任何色域转换，看 dart:ui 是否已经自动做了 P3→sRGB
-    // _applyP3ToSrgbInPlace(imgImage);
+    // 无条件 P3→sRGB 转换（iOS 相机默认输出 Display P3）
+    _applyP3ToSrgbInPlace(imgImage);
     return img.encodeJpg(imgImage, quality: 88);
   }
 
