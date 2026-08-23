@@ -16,7 +16,7 @@
 // （优化 B）编码耗时约降为原来的 39%，已可接受。
 
 import 'dart:async';
-import 'dart:io' show File, Platform, stderr;
+import 'dart:io' show Directory, File, Platform, stderr;
 import 'dart:isolate' show Isolate, ReceivePort, SendPort;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
