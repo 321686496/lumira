@@ -351,8 +351,8 @@ class PhotoPostProcessor {
       numChannels: 4,
       order: img.ChannelOrder.rgba,
     );
-    // 无条件 P3→sRGB 转换（iOS 相机默认输出 Display P3）
-    _applyP3ToSrgbInPlace(imgImage);
+    // 禁用 P3→sRGB 转换（测试：OHOS 也偏黄，说明不是 P3 色域问题）
+    // _applyP3ToSrgbInPlace(imgImage);
     return img.encodeJpg(imgImage, quality: 88);
   }
 
