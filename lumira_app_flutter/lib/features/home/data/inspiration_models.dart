@@ -80,3 +80,10 @@ class HeroInspiration {
     weatherText: '',
   );
 }
+
+/// 今日灵感推荐出的模板（仅 id + 名称，用于 CTA 按钮）
+class RecommendedTemplate {
+  final String id;
+  final String name;
+  const RecommendedTemplate({required this.id, required this.name});
+}
