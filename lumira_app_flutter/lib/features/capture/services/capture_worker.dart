@@ -73,6 +73,7 @@ class CaptureWorkerResult {
     required this.outputPath,
     this.diagBefore,
     this.diagAfter,
+    this.diagWb,
   });
   final bool ok;
 
@@ -85,6 +86,9 @@ class CaptureWorkerResult {
   /// 诊断：P3→sRGB 转换前/后的平均 RGB（[r, g, b]），用于验证偏黄方向。
   final List<int>? diagBefore;
   final List<int>? diagAfter;
+
+  /// 诊断：白平衡（灰世界）校正后的平均 RGB，用于验证偏黄是否缓解。
+  final List<int>? diagWb;
 }
 
 /// 常驻 worker isolate 单例。
@@ -136,6 +140,7 @@ class CaptureWorker {
         outputPath: result['outputPath'] as String,
         diagBefore: (result['diagBefore'] as List?)?.cast<int>(),
         diagAfter: (result['diagAfter'] as List?)?.cast<int>(),
+        diagWb: (result['diagWb'] as List?)?.cast<int>(),
       );
     } finally {
       replyPort.close();
@@ -198,6 +203,15 @@ void _workerEntry(SendPort mainPort) async {
       applySmoothSkinImg(image, smoothStrength: smoothStrength);
       applyVignetteImg(image, vignette: vignette);
 
+      // 2.5. 自适应白平衡校正（灰世界法）：
+      // 诊断证明拍照偏黄源于「相机/系统输出 JPEG 本身偏暖」（OHOS requestImageData
+      // 从相册读增强图、iOS P3 JPEG 未转 sRGB），与 Dart 管线无关。
+      // 这里把整体平均色向中性灰拉回，缓解偏黄，跨平台通用。
+      _applyGrayWorldWhiteBalance(image);
+
+      // 2.6. 白平衡校正后的颜色采样（诊断用）
+      final diagWb = _sampleAvgRgb(image);
+
       Uint8List? outRgba;
       if (needRawRgba) {
         // 有水印：不编码 JPEG，回传 rawRgba 给主 isolate 做水印合成
@@ -216,6 +230,7 @@ void _workerEntry(SendPort mainPort) async {
         'outputPath': outputPath,
         'diagBefore': diagBefore,
         'diagAfter': diagAfter,
+        'diagWb': diagWb,
       });
     } catch (e, st) {
       stderr.writeln('[capture-worker] postProcess failed: $e\n$st');
@@ -319,4 +334,45 @@ List<int> _sampleAvgRgb(img.Image image, {int step = 8}) {
     (g / cnt).round(),
     (b / cnt).round(),
   ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 自适应白平衡校正（灰世界法）
+//
+// 背景：诊断证明拍照偏黄源于「相机/系统输出 JPEG 本身偏暖」——
+//  - OHOS 拍照走 photoOutput.capture → requestImageData（系统相册增强管线），输出比取景器预览暖；
+//  - iOS 相机 JPEG 为 Display P3 广色域，未转 sRGB 时按 sRGB 解释会偏暖。
+// 两个独立解码器（dart:ui 与 image 包 CPU）解码结果一致偏暖 [R>G>B]，
+// 说明偏暖发生在解码之前的 JPEG 像素数据里，与 Dart 管线无关。
+//
+// 解法：对最终成片做一次灰世界（Gray World）白平衡：统计整图平均色，
+// 若整体偏暖（R 通道明显高于 G/B），则收敛各通道增益，把平均色拉回中性灰。
+// 增益限制在 ±10% 内，避免把正常暖光场景误打成冷色。
+// 跨平台统一生效（iOS / OHOS / Android 共用本 worker）。
+void _applyGrayWorldWhiteBalance(img.Image image) {
+  // 1. 统计平均 RGB（完整遍历，保证准确）
+  final avg = _sampleAvgRgb(image, step: 4);
+  final avgR = avg[0].toDouble(), avgG = avg[1].toDouble(), avgB = avg[2].toDouble();
+  final gray = (avgR + avgG + avgB) / 3.0;
+  if (gray <= 1) return; // 近乎纯黑，无校正必要
+
+  // 2. 计算增益，clamp 到 [0.9, 1.1]，限制过度校正
+  final gainR = (gray / avgR).clamp(0.9, 1.1);
+  final gainG = (gray / avgG).clamp(0.9, 1.1);
+  final gainB = (gray / avgB).clamp(0.9, 1.1);
+
+  // 若增益都 ≈1（画面本就中性），跳过
+  if (((gainR - 1.0).abs() < 0.005) &&
+      ((gainG - 1.0).abs() < 0.005) &&
+      ((gainB - 1.0).abs() < 0.005)) {
+    return;
+  }
+
+  // 3. 应用增益（就地逐像素）
+  for (final p in image) {
+    p
+      ..r = (p.r * gainR).clamp(0.0, 255.0)
+      ..g = (p.g * gainG).clamp(0.0, 255.0)
+      ..b = (p.b * gainB).clamp(0.0, 255.0);
+  }
 }

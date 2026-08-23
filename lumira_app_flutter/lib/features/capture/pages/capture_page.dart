@@ -33,8 +33,11 @@ import '../../usage/usage_providers.dart';
 import '../data/capture_state.dart';
 import '../data/capture_thumbnail_state.dart';
 import '../data/custom_fill_light_colors.dart';
+import '../data/scene_presets_data.dart';
+import '../data/scene_record_mapper.dart' show sceneFilterFromJson;
 import '../domain/filter_recipe.dart' show composePostProcessMatrix;
 import '../domain/photo_template.dart';
+import '../domain/scene_preset.dart' show SceneFilter;
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
 import '../services/capture_worker.dart';
@@ -153,15 +156,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 看门狗已触发的重建次数（上限 2 次，避免无限重建）。
   int _cameraReadyRebuildCount = 0;
 
-  /// 水印相框动画状态：拍照完成且水印 + 动画开关均开启时挂载 overlay。
+  /// 水印定格动画状态：拍照完成且水印 + 动画开关均开启时挂载 overlay。
+  /// 动画结束后自动跳转到拍摄预览页。
   bool _showWatermarkAnimation = false;
   String? _animationPhotoPath;
   WatermarkTemplate? _animationTemplate;
-  Rect _animationTargetRect = Rect.zero;
   VoidCallback? _onAnimationComplete;
 
-  /// 角标缩略图的 GlobalKey：水印动画 Phase 4 需要
-  /// 读取其在屏幕上的全局 Rect 作为缩小/平移的目标位置。
+  /// 角标缩略图的 GlobalKey：水印动画淡出后跳预览页之前，
+  /// 需要确保后处理落库完成（读取 finalPath/photoId）。
   final _thumbnailKey = GlobalKey(debugLabel: 'watermarkThumb');
 
   /// 每日首次拍摄积分是否已在本会话尝试过。
@@ -257,6 +260,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
     if (sceneId != null) {
       ref.read(CaptureState.activeScenePresetIdProvider.notifier).state =
           sceneId;
+      // 套用场景推荐滤镜（内置 + DB 自定义/系统场景均可命中）
+      final filter = await _resolveSceneFilter(sceneId);
+      if (filter != null) {
+        CaptureState.applySceneFilter(ref, filter);
+      }
     }
 
     if (kitId == null) return;
@@ -309,6 +317,21 @@ class _CapturePageState extends ConsumerState<CapturePage>
     } catch (e) {
       debugPrint('[capture] 加载套件失败: $e');
     }
+  }
+
+  /// 按场景 ID 解析推荐滤镜。
+  /// 优先级：内置静态预设 map → scenes 表 DB 记录（自定义/系统场景）。
+  Future<SceneFilter?> _resolveSceneFilter(String sceneId) async {
+    final builtIn = ScenePresetsData.getScenePreset(sceneId);
+    if (builtIn != null) return builtIn.filter;
+    try {
+      final dao = await ref.read(scenesDaoProvider.future);
+      final record = await dao.getById(sceneId);
+      if (record != null) return sceneFilterFromJson(record.filter);
+    } catch (_) {
+      // 解析失败静默返回 null，不阻断拍摄页初始化
+    }
+    return null;
   }
 
   /// 请求相机权限
@@ -686,7 +709,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
       swIso.stop();
       debugPrint('[perf] CaptureWorker.process: ${swIso.elapsedMilliseconds}ms '
           'platform=${defaultTargetPlatform.name}, '
-          'diagBefore=${workerResult.diagBefore}, diagAfter=${workerResult.diagAfter}');
+          'diagBefore=${workerResult.diagBefore}, '
+          'diagWb=${workerResult.diagWb}');
       if (!mounted) {
         _isProcessingCapture = false;
         return;
