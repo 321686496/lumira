@@ -350,6 +350,26 @@ class CamerawesomePlugin {
     return CameraInterface().setWhiteBalance(mode, k);
   }
 
+  /// 锁定/解锁对焦与曝光（长按锁定 AE/AF）。iOS 传归一化坐标，Android 传像素坐标。
+  static Future<void> setFocusAndExposureLock({
+    required bool locked,
+    Offset? position,
+    Size? previewSize,
+  }) {
+    final w = previewSize?.width ?? 1.0;
+    final h = previewSize?.height ?? 1.0;
+    double x, y;
+    if (Platform.isIOS) {
+      x = (position?.dx ?? w / 2) / w;
+      y = (position?.dy ?? h / 2) / h;
+    } else {
+      x = position?.dx ?? w / 2;
+      y = position?.dy ?? h / 2;
+    }
+    return CameraInterface().setFocusAndExposureLock(
+        locked, x, y, w, h);
+  }
+
   /// returns the max zoom available on device
   static Future<num?> getMaxZoom() {
     return CameraInterface().getMaxZoom();

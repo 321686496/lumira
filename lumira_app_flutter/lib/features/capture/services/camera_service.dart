@@ -35,6 +35,14 @@ abstract class CameraService {
   /// 点击对焦
   void focusOnPoint(Offset flutterPosition, Size flutterPreviewSize);
 
+  /// 锁定/解锁对焦与曝光（长按锁定 AE/AF）。
+  /// locked=true 时必传 position+previewSize；locked=false 时忽略坐标，恢复连续自动对焦/曝光。
+  void setFocusAndExposureLock({
+    required bool locked,
+    Offset? position,
+    Size? previewSize,
+  });
+
   /// 取景器 widget（平台实现负责构建原生预览）
   Widget buildPreview({required CameraPreviewConfig config});
 

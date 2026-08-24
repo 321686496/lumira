@@ -63,6 +63,8 @@ class CamerawesomeCameraService implements CameraService {
     } catch (e) {
       debugPrint('[camera] initialize stop failed: $e');
     }
+    // 兜底：上一会话若处于锁定态，重置为连续自动对焦/曝光（新会话原生默认即自动，此调用幂等）
+    setFocusAndExposureLock(locked: false);
   }
 
   @override
@@ -292,6 +294,25 @@ class CamerawesomeCameraService implements CameraService {
       }
     } catch (e) {
       debugPrint('[camera] setWhiteBalance failed: $e');
+    }
+  }
+
+  @override
+  void setFocusAndExposureLock({
+    required bool locked,
+    Offset? position,
+    Size? previewSize,
+  }) {
+    try {
+      if (_delegate.platformTag == 'ohos') {
+        ohos.CamerawesomePlugin.setFocusAndExposureLock(
+            locked: locked, position: position, previewSize: previewSize);
+      } else {
+        ca.CamerawesomePlugin.setFocusAndExposureLock(
+            locked: locked, position: position, previewSize: previewSize);
+      }
+    } catch (e) {
+      debugPrint('[camera] setFocusAndExposureLock failed: $e');
     }
   }
 
