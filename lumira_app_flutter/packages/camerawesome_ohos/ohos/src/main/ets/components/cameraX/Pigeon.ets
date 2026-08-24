@@ -741,6 +741,8 @@ export abstract class CameraInterface {
 
     abstract setWhiteBalance(mode: string, temperatureK: number | undefined): void;
 
+    abstract setFocusAndExposureLock(locked: boolean, x: number, y: number, previewWidth: number, previewHeight: number): void;
+
     abstract handleAutoFocus(): void;
 
     /*
@@ -1202,6 +1204,31 @@ export abstract class CameraInterface {
                         try {
                             api!.setWhiteBalance(args[0] as string,
                                 args.length > 1 && args[1] != null ? (args[1] as number) : undefined);
+                            res.push(null);
+                        } catch (error) {
+                            let wrappedError: Array<Object> = wrapError(error);
+                            res = wrappedError;
+                        }
+                        reply.reply(res);
+                    }
+                });
+            } else {
+                channel.setMessageHandler(null);
+            }
+        }
+        {
+            let channel: BasicMessageChannel<Object> =
+                new BasicMessageChannel(
+                    binaryMessenger, "dev.flutter.pigeon.camerawesome.CameraInterface.setFocusAndExposureLock",
+                    CameraInterface.getCodec());
+            if (api != null) {
+                channel.setMessageHandler({
+                    onMessage(message: Object, reply: Reply<Object>) {
+                        let args: Array<Object> = message as Array<Object>;
+                        let res: Array<Object> = [];
+                        try {
+                            api!.setFocusAndExposureLock(args[0] as boolean, args[1] as number,
+                                args[2] as number, args[3] as number, args[4] as number);
                             res.push(null);
                         } catch (error) {
                             let wrappedError: Array<Object> = wrapError(error);

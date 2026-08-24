@@ -294,6 +294,20 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
     this.cameraState?.setWhiteBalanceFn(mode, temperatureK)
   }
 
+  /**
+   * 长按锁定 AE/AF：locked=true 锁定曝光+对焦到触点；locked=false 恢复连续自动
+   * @param locked 是否锁定
+   * @param x 触点 x（像素，相对 previewWidth）
+   * @param y 触点 y（像素，相对 previewHeight）
+   * @param previewWidth 预览宽（像素）
+   * @param previewHeight 预览高（像素）
+   */
+  setFocusAndExposureLock(locked: boolean, x: number, y: number, previewWidth: number, previewHeight: number): void {
+    Logger.info(TAG, `setFocusAndExposureLock is called, locked: ${locked}`);
+    const previewSize = new PreviewSize(previewWidth, previewHeight);
+    this.cameraState?.setFocusAndExposureLockFn(locked, previewSize, x, y)
+  }
+
   getMaxZoom(): number {
     Logger.debug(TAG, `getMaxZoom is called`);
     return this.cameraState!!.getMaxZoom()

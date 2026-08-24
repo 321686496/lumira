@@ -1080,6 +1080,28 @@ export class CameraState implements StreamHandler {
   }
 
   /**
+   * 长按锁定 AE/AF：x/y 为像素坐标（相对 previewSize），与 focusOnPoint 一致。
+   * locked=true：对焦 AFA 到触点 + 曝光锁定到触点；locked=false：恢复连续自动。
+   */
+  setFocusAndExposureLockFn(locked: boolean, previewSize: PreviewSize, x: number, y: number): void {
+    if (locked) {
+      // 对焦：自动对焦到触点
+      this.setFocusMode(camera.FocusMode.FOCUS_MODE_AUTO)
+      this.setFocusPoint(previewSize, x, y)
+      // 曝光：锁定模式 + 测光点
+      if (this.session?.isExposureModeSupported(camera.ExposureMode.EXPOSURE_MODE_LOCKED)) {
+        this.session?.setMeteringPoint({ x: y / previewSize.getHeight(), y: 1 - x / previewSize.getWidth() })
+        this.session?.setExposureMode(camera.ExposureMode.EXPOSURE_MODE_LOCKED)
+      }
+    } else {
+      if (this.session?.isExposureModeSupported(camera.ExposureMode.EXPOSURE_MODE_AUTO)) {
+        this.session?.setExposureMode(camera.ExposureMode.EXPOSURE_MODE_AUTO)
+      }
+      this.setFocusMode(camera.FocusMode.FOCUS_MODE_CONTINUOUS_AUTO)
+    }
+  }
+
+  /**
    * 设置白平衡（传感器级，取景实时生效、直出即带）。
    * 预设：auto/daylight/cloudy/fluorescent/incandescent → 对应 WhiteBalanceMode。
    * 手动 k（3000–8000）：CameraKit 支持连续开尔文，用 setWhiteBalance + getWhiteBalanceRange 真值。
