@@ -141,3 +141,21 @@
 - **背景/动机**：图片量大后原图直出带宽/存储成本高、首屏慢；前端已用 `/uploads` 路径，改缩略图 URL 需后端产出。
 - **目标状态**：写入时基于尺寸生成多规格（原始图 + 缩略图），客户端列表用缩略图、详情用原图；后续接入对象存储时一并支持。
 - **状态**：⏳ 待优化
+
+---
+
+## 拍摄页点按对焦 + AE/AF 锁定（2026-08-24）
+
+### P1 · iOS 对焦锁定时机：fire-and-forget 自动对焦后立即锁 lensPosition
+- **模块**：拍摄页点按对焦 + AE/AF 锁定 · iOS（camerawesome `CameraPreview.m`）
+- **优化点**：iOS 端锁定采用「先触发自动对焦（fire-and-forget）后立即 `setFocusModeLocked(lensPosition:)`」的方式，锁定的镜头位置可能不是最终合焦位置，真机场景画面可能轻微失焦。
+- **背景/动机**：任务评审确认该实现为首版可行方案，但「锁定位置是否等于最终合焦位置」未在真机核验。
+- **目标状态**：真机核验锁定后画面清晰度；若失焦，改为等待对焦收敛（观察 `AVCaptureDevice.isAdjustingFocus`）后再读取 `lensPosition` 并锁定，或采用连续对焦收敛后锁定的策略。
+- **状态**：⏳ 待优化
+
+### P1 · OHOS 设备旋转一次后 AF 锁定静默回退为 CONTINUOUS_AUTO（AF/AE 不一致）
+- **模块**：拍摄页点按对焦 + AE/AF 锁定 · OHOS（camerawesome_ohos `CameraAwesomeX.ets`）
+- **优化点**：锁定调用 `setFocusPoint` 会注册一次性方向传感器监听（既有行为）；设备旋转一次后，AF 锁定会静默回退为 `CONTINUOUS_AUTO`，而 AE 仍保持 `LOCKED`，造成 AF/AE 状态不一致。
+- **背景/动机**：任务评审确认该回退为既有方向监听机制的副作用，非本功能引入，但破坏锁定语义。
+- **目标状态**：绕过方向传感器监听（锁定期间不响应旋转），或在 `setFocusAndExposureLockFn` 中加锁定状态守卫：处于 AE/AF 锁定态时忽略方向回调、保持锁定模式；解锁后再恢复旋转响应。
+- **状态**：⏳ 待优化
