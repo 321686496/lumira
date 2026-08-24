@@ -400,6 +400,39 @@ class TemplatesDao {
     return deleted;
   }
 
+  /// 删除本地已不在后端列表的分类（后台删除/停用后同步清理）。
+  ///
+  /// 用于分类全量同步流程：拉取后端分类后，比对本地 template_categories，
+  /// 删除后端已删除/已停用的分类，避免本地缓存膨胀、分类页残留已删除分类。
+  /// 分类 key 全局唯一（作为路由参数与模板引用），按 key 集合比对即可。
+  /// 当 [validKeys] 为空集时，删除所有本地分类（后端清空场景）。
+  Future<int> pruneStaleCategories(Set<String> validKeys) async {
+    final rows = await _db.query(
+      Tables.templateCategories,
+      columns: [Tables.colKey],
+    );
+    final localKeys =
+        rows.map((r) => r[Tables.colKey] as String).toSet().toList();
+    final toDelete =
+        localKeys.where((k) => !validKeys.contains(k)).toList();
+    if (toDelete.isEmpty) return 0;
+    // 分批删除（SQLite IN 子句参数上限考虑）
+    var deleted = 0;
+    const batchSize = 100;
+    for (var i = 0; i < toDelete.length; i += batchSize) {
+      final end =
+          (i + batchSize < toDelete.length) ? i + batchSize : toDelete.length;
+      final batch = toDelete.sublist(i, end);
+      final placeholders = List.filled(batch.length, '?').join(',');
+      deleted += await _db.delete(
+        Tables.templateCategories,
+        where: '${Tables.colKey} IN ($placeholders)',
+        whereArgs: batch,
+      );
+    }
+    return deleted;
+  }
+
   // === v14: 分类管理相关方法 ===
 
   /// 获取分类列表。

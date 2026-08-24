@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -48,6 +49,16 @@ class MyApp extends ConsumerWidget {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 放开横竖屏：让拍摄页等随设备旋转（对齐 iPhone 原生相机行为）。
+  // 此前应用未显式放开旋转，MediaQuery 恒为竖屏 → 拍摄页 isPortrait 恒为 true，
+  // 导致横屏持机时成片仍是竖图、模板拍摄指南也不随横屏适配。
+  // 仅允许竖屏上 / 两个横屏（与 iOS Info.plist 声明一致，不放开倒置竖屏）。
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
 
   // 1. 等待 sqflite 就绪并取出 AuthDao + UserProfileDao
   final daos = await _createBootstrapDaos();

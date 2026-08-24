@@ -73,15 +73,35 @@ class WatermarkRenderer {
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
 
+    // 画布底色：以卡片颜色（强制不透明）铺满整个输出，避免未绘制区域（透明）
+    // 被 JPEG 编码成黑色；同时给底部投影提供和卡片相协调的落色背景。
+    canvas.drawRect(
+      ui.Rect.fromLTWH(0, 0, outputW.toDouble(), outputH.toDouble()),
+      ui.Paint()..color = frame.color.withAlpha(0xFF),
+    );
+
     // 投影（拍立得，仅底部）
+    // 采用垂直线性渐变从卡片底边柔和渐入、到画布底缘前逐渐消失，避免旧实现
+    // （紧贴白边的模糊色块在画布底缘被硬裁切）在白边下方渲染出黑色硬边/黑线。
     if (shadow > 0) {
-      final paint = ui.Paint()
-        ..color = _withOpacity(frame.shadowColor, frame.shadowOpacity)
-        ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, shadow);
-      canvas.drawRect(
-        ui.Rect.fromLTWH(0, cardRect.bottom, outputW.toDouble(), shadow * 1.4),
-        paint,
-      );
+      final bandH = (outputH.toDouble() - cardRect.bottom).clamp(0.0, double.infinity);
+      if (bandH > 0) {
+        final paint = ui.Paint()
+          ..shader = ui.Gradient.linear(
+            ui.Offset(0, cardRect.bottom),
+            ui.Offset(0, outputH.toDouble()),
+            [
+              _withOpacity(frame.shadowColor, 0.0),
+              _withOpacity(frame.shadowColor, frame.shadowOpacity),
+              _withOpacity(frame.shadowColor, 0.0),
+            ],
+            const [0.0, 0.5, 1.0],
+          );
+        canvas.drawRect(
+          ui.Rect.fromLTWH(0, cardRect.bottom, outputW.toDouble(), bandH),
+          paint,
+        );
+      }
     }
 
     if (type == WatermarkFrameType.polaroid) {

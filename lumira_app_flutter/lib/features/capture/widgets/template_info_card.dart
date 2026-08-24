@@ -48,15 +48,24 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     final hasContent =
         template.meta.description.isNotEmpty || tips.isNotEmpty;
 
+    // 横屏时卡片宽度受限于屏宽的 ~70%，整体居中展示（避免全宽拉伸，呈“横屏样式”）
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final maxWidth = isLandscape
+        ? MediaQuery.of(context).size.width.clamp(0.0, 560.0).toDouble()
+        : double.infinity;
+
     return Align(
       alignment: Alignment.topCenter,
-      child: Material(
-        color: Colors.transparent,
-        child: AnimatedSize(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: GestureDetector(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: Material(
+          color: Colors.transparent,
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: GestureDetector(
             onTap: _toggle,
             behavior: HitTestBehavior.opaque,
             child: Container(
@@ -188,6 +197,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
           ),
         ),
       ),
+    ),
     );
   }
 }

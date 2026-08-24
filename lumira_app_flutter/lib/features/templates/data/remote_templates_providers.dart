@@ -35,14 +35,16 @@ final remoteTemplatesRepositoryProvider =
   return RemoteTemplatesRepositoryImpl(api);
 });
 
-/// 拉取后端分类列表 → upsert 到 sqflite template_categories 表。
+/// 拉取后端分类列表 → upsert 到 sqflite template_categories 表
+/// → prune 本地已不在后端列表的分类。
 ///
 /// 触发时机：
 /// - 进入模板页（templates_page.dart initState）
-/// - App 启动初始化（可选）
+/// - 模板分类页下拉刷新（templates_category_page.dart _onRefresh）
 ///
 /// 失败处理：网络失败静默忽略，UI 用本地缓存（含 7 个系统分类兜底）。
 /// 静默忽略通过 FutureProvider 的 error 状态实现，调用方不 await 此 future 即不抛错。
+/// 注意：prune 仅在拉取成功后执行；网络失败抛错进入 error 状态，不会误删本地缓存。
 final remoteCategoriesSyncProvider = FutureProvider<void>((ref) async {
   final repo = await ref.watch(remoteTemplatesRepositoryProvider.future);
   final dao = await ref.watch(templatesDaoProvider.future);
@@ -61,6 +63,10 @@ final remoteCategoriesSyncProvider = FutureProvider<void>((ref) async {
       updatedAt: c.updatedAt,
     ));
   }
+  // 阶段 2: 删除本地已不在后端列表的分类（后台删除/停用后同步清理），
+  // 避免分类页残留已删除分类（与 remoteTemplatesSyncProvider 的 prune 一致）。
+  final validKeys = cats.map((c) => c.key).toSet();
+  await dao.pruneStaleCategories(validKeys);
 });
 
 /// 拉取后端模板 meta 列表 → upsert 到 sqflite custom_templates（source='remote'）

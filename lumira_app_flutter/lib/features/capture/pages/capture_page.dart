@@ -1337,8 +1337,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 比例切换器（导航栏下方居中，全屏也显示，行为不变）
-                const Center(child: AspectRatioSelector()),
+                // 比例切换器（导航栏下方居中；全屏模式下隐藏，避免全屏时仍被比例胶囊遮挡）
+                if (!isFullscreen) const Center(child: AspectRatioSelector()),
                 // 比例切换器与参数 pill 栏之间的间隙
                 const SizedBox(height: 8),
                 // 参数 pill 栏（全屏 / 试用模式隐藏）
