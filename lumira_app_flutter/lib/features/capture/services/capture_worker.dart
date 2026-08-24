@@ -18,7 +18,6 @@
 import 'dart:async';
 import 'dart:io' show File, stderr;
 import 'dart:isolate' show Isolate, ReceivePort, SendPort;
-import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:image/image.dart' as img;
@@ -39,7 +38,7 @@ class CaptureWorkerRequest {
     required this.smoothStrength,
     required this.vignette,
     required this.needRawRgba,
-    this.applyP3ToSrgb = false,
+    this.applyDeYellow = false,
   });
 
   /// GPU 色彩矩阵处理后的 rawRgba（主 isolate 生成，dart:ui 管线，保证所见即所得）
@@ -57,10 +56,9 @@ class CaptureWorkerRequest {
   /// false：worker 直接编码 JPEG 写盘，仅回传路径
   final bool needRawRgba;
 
-  /// 是否对照片做 P3→sRGB 色域转换（iOS/OHOS 相机输出广色域 JPEG）。
-  /// dart:ui 解码后 rawRgba 是 P3 像素值，image 包编码 JPEG 不嵌 ICC，
-  /// 查看器按 sRGB 解释导致偏黄。由主 isolate 按平台决定。
-  final bool applyP3ToSrgb;
+  /// 是否对 iOS 成片做固定去黄校色（压低红、抬蓝，匹配取景器观感）。
+  /// 由主 isolate 按平台决定：仅 iOS 启用。
+  final bool applyDeYellow;
 }
 
 /// worker 处理结果。
@@ -124,7 +122,7 @@ class CaptureWorker {
       'smoothStrength': request.smoothStrength,
       'vignette': request.vignette,
       'needRawRgba': request.needRawRgba,
-      'applyP3ToSrgb': request.applyP3ToSrgb,
+      'applyDeYellow': request.applyDeYellow,
     });
     try {
       final result = await replyPort.first as Map;
@@ -168,7 +166,7 @@ void _workerEntry(SendPort mainPort) async {
       final smoothStrength = msg['smoothStrength'] as int;
       final vignette = msg['vignette'] as int;
       final needRawRgba = msg['needRawRgba'] as bool;
-      final applyP3ToSrgb = msg['applyP3ToSrgb'] as bool? ?? false;
+      final applyDeYellow = msg['applyDeYellow'] as bool? ?? false;
 
       // 1. 从 rawRgba 创建 img.Image
       final image = img.Image.fromBytes(
@@ -179,12 +177,12 @@ void _workerEntry(SendPort mainPort) async {
         order: img.ChannelOrder.rgba,
       );
 
-      // 1.5. 诊断：P3→sRGB 转换前后的颜色采样（用于验证偏黄方向）
+      // 1.5. 诊断：去黄校色前/后的平均 RGB（用于验证偏黄方向）
       final diagBefore = _sampleAvgRgb(image);
 
-      // 1.6. P3→sRGB 色域转换（iOS/OHOS 相机输出广色域 JPEG）
-      if (applyP3ToSrgb) {
-        _applyP3ToSrgbInWorker(image);
+      // 1.6. iOS 成片去黄校色（固定增益，压低红 / 抬亮蓝，匹配取景器观感）
+      if (applyDeYellow) {
+        _applyYellowCast(image);
       }
       final diagAfter = _sampleAvgRgb(image);
 
@@ -253,49 +251,26 @@ void _workerEntry(SendPort mainPort) async {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// P3→sRGB 色域转换（worker isolate 内部）
+// 成片去黄校色（worker isolate 内部）
 // ─────────────────────────────────────────────────────────────────────────
 
-/// sRGB 传递函数查表（避免逐像素 pow）
-final List<double> _srgbToLinearLut = _buildSrgbToLinearLut();
-final List<double> _srgbEncodeLut = _buildSrgbEncodeLut();
-
-List<double> _buildSrgbToLinearLut() {
-  return List<double>.generate(256, (i) {
-    final v = i / 255.0;
-    if (v <= 0.04045) return v / 12.92;
-    return math.pow((v + 0.055) / 1.055, 2.4).toDouble();
-  });
-}
-
-List<double> _buildSrgbEncodeLut() {
-  const steps = 4096;
-  return List<double>.generate(steps, (i) {
-    final c = i / (steps - 1);
-    if (c <= 0.0031308) return c * 12.92;
-    return (1.055 * math.pow(c, 1.0 / 2.4) - 0.055).clamp(0.0, 1.0).toDouble();
-  });
-}
-
-/// 将 P3(D65) 像素就地转换为 sRGB(D65)。
+/// iOS 相机 ISP 成片比取景器更暖（color_diag 中性灰实测 R>G>B，如 diagBefore=[128,108,100]）。
+/// 成片在 sRGB 语境下比取景器偏黄：raw_src（P3+ICC，系统相册正确校色）与 final_out（无 ICC
+/// 按 sRGB）都会被我们的渲染管线解释成偏暖。用固定增益压低红、抬蓝，把成片拉回与取景器一致。
 ///
-/// P3 与 sRGB 同为 D65 白点、同为 sRGB 传递函数，仅基色不同。
-/// 使用 sRGB→P3 正向矩阵的逆矩阵（带负系数）来正确还原 P3 中超出 sRGB 色域的红色。
-void _applyP3ToSrgbInWorker(img.Image image) {
-  const steps = 4096;
+/// 注意：这是**固定校色**，不是灰世界自适应（不做逐图平均校正，避免把暖调场景误漂白）；
+/// 仅 iOS 启用，OHOS 走原生管线不走此 worker 路径。
+/// 调参：参考 diagBefore=[128,108,100]，R×0.90→115、B×1.10→110，可将 R−B 从 +28 压到约 +5。
+const double kDeYellowR = 0.90; // 压低红（应对实测 R 偏高）
+const double kDeYellowG = 1.00; // 保持绿
+const double kDeYellowB = 1.10; // 抬蓝（应对实测 B 偏低）
+
+/// 对整图应用固定去黄校色（就地修改 [image] 像素）。
+void _applyYellowCast(img.Image image) {
   for (final p in image) {
-    final r = p.r.toInt(), g = p.g.toInt(), b = p.b.toInt();
-    final lr = _srgbToLinearLut[r];
-    final lg = _srgbToLinearLut[g];
-    final lb = _srgbToLinearLut[b];
-    // P3(D65) → sRGB(D65) 线性基色转换矩阵（sRGB→P3 正向矩阵的逆）
-    final sr = (1.2249 * lr - 0.2247 * lg).clamp(0.0, 1.0);
-    final sg = (-0.0420 * lr + 1.0419 * lg).clamp(0.0, 1.0);
-    final sb = (-0.0197 * lr - 0.0786 * lg + 1.0983 * lb).clamp(0.0, 1.0);
     p
-      ..r = (_srgbEncodeLut[(sr * (steps - 1)).round()] * 255).round()
-      ..g = (_srgbEncodeLut[(sg * (steps - 1)).round()] * 255).round()
-      ..b = (_srgbEncodeLut[(sb * (steps - 1)).round()] * 255).round();
+      ..r = (p.r * kDeYellowR).clamp(0, 255).toInt()
+      ..b = (p.b * kDeYellowB).clamp(0, 255).toInt();
   }
 }
 

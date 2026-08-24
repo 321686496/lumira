@@ -732,13 +732,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
       final swIso = Stopwatch()..start();
       // 常驻 worker isolate（A 优化），避免 compute() 每次创建 isolate 的开销
-      // P3→sRGB 诊断结论（2026-08-23，color_diag 实测）：
-      // Flutter 的 iOS 解码器已按 JPEG 内嵌 Display P3 profile 转成 sRGB，
-      // worker 收到的 rgbaBytes 本就是 sRGB。此时再按 P3 做一次 P3→sRGB，
-      // 会把像素当 P3 二次转换，diagBefore=[159,144,131] → diagAfter=[162,143,129]
-      // R 抬升 / B 下降，实测加深偏黄，而非还原 P3 红色。
-      // 三端（含 iOS）均禁用该额外转换，使成片色值与取景器 GPU 阶段完全一致。
-      final applyP3ToSrgb = false;
+      // 偏黄诊断结论（2026-08-24，color_diag 实测 diagBefore=[128,108,100]）：成片在 sRGB
+      // 语境下比取景器偏暖。这不是 P3 二次转换问题（实测对 sRGB 像素再套 P3→sRGB 会进一步
+      // 抬 R / 压 B，加重偏黄），而是 iOS 相机 ISP 成片固有的暖倾向。这里对 iOS 走 worker
+      // 固定去黄校色（压低红、抬亮蓝），使成片与取景器观感一致。
       final workerResult = await CaptureWorker.instance.process(
         CaptureWorkerRequest(
           rgbaBytes: gpuData.rgbaBytes,
@@ -751,7 +748,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           smoothStrength: gpuData.smoothStrength,
           vignette: gpuData.vignette,
           needRawRgba: gpuData.needRawRgba,
-          applyP3ToSrgb: applyP3ToSrgb,
+          applyDeYellow: defaultTargetPlatform == TargetPlatform.iOS,
         ),
       );
       swIso.stop();
@@ -842,7 +839,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           processedPath: processedPath,
           diagBefore: workerResult.diagBefore,
           diagAfter: workerResult.diagAfter,
-          applyP3ToSrgb: applyP3ToSrgb,
+          applyDeYellow: defaultTargetPlatform == TargetPlatform.iOS,
         );
       } catch (e) {
         debugPrint('[capture] 颜色诊断写盘失败（不影响拍照）: $e');
@@ -3674,14 +3671,14 @@ List<int> imageDecodeSample(Uint8List bytes) {
 /// 代替控制台日志定位黄色从哪一步进入：
 ///  - raw_src.jpg     = rawPath（相机写盘、Dart 处理前的原始 JPEG）
 ///  - final_out.jpg   = processedPath（worker 处理+编码后的最终 JPEG）
-///  - color_diag.txt  = 各阶段平均 RGB + 是否启用 P3→sRGB，供人工核对偏黄方向。
+///  - color_diag.txt  = 各阶段平均 RGB + 是否启用去黄校色，供人工核对偏黄方向。
 /// 写盘失败不影响拍照正常流程。
 Future<void> _writeColorDiagnostics({
   required String? rawPath,
   required String processedPath,
   required List<int>? diagBefore,
   required List<int>? diagAfter,
-  required bool applyP3ToSrgb,
+  required bool applyDeYellow,
 }) async {
   final dir = Directory(
     '${(await getApplicationDocumentsDirectory()).path}/color_diag',
@@ -3695,12 +3692,12 @@ Future<void> _writeColorDiagnostics({
   await File(processedPath).copy(outFile.path);
   final buf = StringBuffer()
     ..writeln('拍照偏黄诊断 ${DateTime.now().toIso8601String()}')
-    ..writeln('platform=${defaultTargetPlatform.name} | applyP3ToSrgb=$applyP3ToSrgb')
+    ..writeln('platform=${defaultTargetPlatform.name} | applyDeYellow=$applyDeYellow')
     ..writeln('diagBefore(dart:ui解码+ColorMatrix后, 平均RGB)=$diagBefore')
-    ..writeln('diagAfter(P3→sRGB转换后, 平均RGB)=$diagAfter')
+    ..writeln('diagAfter(去黄校色后, 平均RGB)=$diagAfter')
     ..writeln(
         '参考判断：若 diagBefore 已明显 R>B（中性场景）→ 黄色在解码之前（相机片源）；'
-        '若 diagBefore≈中性而 final_out 偏黄 → 黄色在编码链路。')
+        '若 diag占比无变化而 final_out 偏黄 → 黄色在编码链路。')
     ..writeln('请对照打开 raw_src.jpg 与 final_out.jpg：哪一个偏黄？');
   await File('${dir.path}/color_diag.txt').writeAsString(buf.toString());
   debugPrint('[capture] 颜色诊断已写入 ${dir.path}');

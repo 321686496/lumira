@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_view/photo_view.dart';
+import 'package:photo_view/photo_view_gallery.dart';
 
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
@@ -461,13 +463,108 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     }
   }
 
-  void _onCompareStart() {
-    setState(() => _isComparing = true);
+  /// 「对比」按钮点击：在「显示原图」与「显示滤镜后」之间切换（点击一次显原图，再点恢复）
+  void _onCompareToggle() {
+    if (!mounted) return;
+    setState(() => _isComparing = !_isComparing);
   }
 
-  void _onCompareEnd() {
+  /// 照片单击（来自 PhotoView 的单击回调，双击已交给内置缩放，不会触发此处）
+  /// - 编辑抽屉展开时：点击照片收起抽屉（不放大）
+  /// - 否则：切换 UI 显隐（纯净模式查看全图）
+  void _onPhotoTap(
+    BuildContext context,
+    TapUpDetails details,
+    PhotoViewControllerValue _,
+  ) {
     if (!mounted) return;
-    setState(() => _isComparing = false);
+    setState(() {
+      if (_sheetMode == _SheetMode.expanded) {
+        _sheetMode = _SheetMode.hidden;
+        _isCropMode = false;
+        _sheetHeightNotifier.value = _kClosedHeight;
+      } else {
+        _uiVisible = !_uiVisible;
+      }
+    });
+  }
+
+  /// 双击缩放循环：fit(整图) ↔ originalSize(2 倍放大)。
+  /// childSize = 2×视口，因此 initial/contained=0.5(整图)，originalSize(1.0)=2 倍放大。
+  PhotoViewScaleState _previewScaleCycle(PhotoViewScaleState state) {
+    switch (state) {
+      case PhotoViewScaleState.initial:
+      case PhotoViewScaleState.covering:
+      case PhotoViewScaleState.zoomedOut:
+        return PhotoViewScaleState.originalSize;
+      case PhotoViewScaleState.originalSize:
+      case PhotoViewScaleState.zoomedIn:
+        return PhotoViewScaleState.initial;
+    }
+  }
+
+  /// 构建单个照片的显示内容（含后期滤镜 + 旋转/翻转/拉直变换）。
+  /// 作为 PhotoView.buildContent 供 PhotoView.customChild / GalleryPageOptions.customChild 使用。
+  Widget _buildPhotoContent(
+    String photoUrl,
+    bool isComparing,
+    PostProcess postProcess,
+    TransformParams transform,
+  ) {
+    final bool isNetworkUrl = photoUrl.startsWith('http');
+
+    Widget buildImage() => isNetworkUrl
+        ? CachedNetworkImage(
+            url: photoUrl,
+            fit: BoxFit.contain,
+            errorWidget: const Center(
+              child:
+                  Icon(Icons.broken_image, color: Colors.white38, size: 64),
+            ),
+          )
+        : Image.file(
+            File(photoUrl),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Center(
+              child:
+                  Icon(Icons.broken_image, color: Colors.white38, size: 64),
+            ),
+          );
+
+    if (photoUrl.isEmpty) {
+      return const Center(
+        child: Icon(Icons.photo, color: Colors.white38, size: 64),
+      );
+    }
+
+    // 对比模式：显示原图色彩（透明滤镜 = 无后期），不应用变换
+    if (isComparing) {
+      return ColorFiltered(
+        colorFilter: const ColorFilter.mode(
+            Colors.transparent, BlendMode.dst),
+        child: buildImage(),
+      );
+    }
+
+    return RotatedBox(
+      quarterTurns: transform.rotation ~/ 90,
+      child: Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..scale(
+            transform.flipH ? -1.0 : 1.0,
+            transform.flipV ? -1.0 : 1.0,
+            1.0,
+          ),
+        child: Transform.rotate(
+          angle: transform.straighten * math.pi / 180.0,
+          child: ColorFiltered(
+            colorFilter: fromPostProcess(postProcess),
+            child: buildImage(),
+          ),
+        ),
+      ),
+    );
   }
 
   void _onSkip() {
@@ -1110,57 +1207,77 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         }),
                         tokens: tokens,
                       )
-                    : GestureDetector(
-                  // 点击照片切换 UI 显隐（不影响 PageView 水平滑动）
-                  onTap: () => setState(() {
-                    // 编辑抽屉展开时，点照片收起抽屉（不放大照片）；否则切换 UI 显隐
-                    if (_sheetMode == _SheetMode.expanded) {
-                      _sheetMode = _SheetMode.hidden;
-                      _isCropMode = false;
-                      _sheetHeightNotifier.value = _kClosedHeight;
-                    } else {
-                      _uiVisible = !_uiVisible;
-                    }
-                  }),
-                  child: _historyPhotos.isEmpty
-                      ? _FullScreenPhoto(
-                          photoUrl: _photoUrl,
-                          isComparing: _isComparing,
+                    : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final outer = constraints.biggest;
+                    // childSize = 2×视口：fit(contained=0.5) 显示整图，双击到 originalSize(1.0) = 2 倍放大。
+                    final childSize =
+                        Size(outer.width * 2, outer.height * 2);
+
+                    // 无历史照片：单张预览
+                    if (_historyPhotos.isEmpty) {
+                      return PhotoView.customChild(
+                        child: _buildPhotoContent(
+                          _photoUrl,
+                          _isComparing,
                           // 照片已烘焙 _bakedPostProcess，预览页仅应用增量 _localPostProcess。
-                          postProcess: _localPostProcess,
-                          transform: _localTransform,
-                        )
-                      : PageView.builder(
-                          controller: _pageController,
-                          itemCount: _historyPhotos.length,
-                          onPageChanged: _onPageChanged,
-                          // 允许首尾弹性回弹（与原生相机一致）
-                          physics: const BouncingScrollPhysics(),
-                          itemBuilder: (context, index) {
-                            final record = _historyPhotos[index];
-                            final url =
-                                record.filePath ?? record.dataUrl ?? '';
-                            // 当前页使用增量参数（delta = local - baked），
-                            // 其他页照片已烘焙各自的 record.postProcess，直接显示无需叠加滤镜。
-                            if (index == _currentIndex) {
-                              return _FullScreenPhoto(
-                                photoUrl: _photoUrl,
-                                isComparing: _isComparing,
-                                postProcess: _localPostProcess,
-                                transform: _localTransform,
-                              );
-                            }
-                            return _FullScreenPhoto(
-                              photoUrl: url,
-                              isComparing: false,
-                              // 非当前页：照片已烘焙参数，不叠加 ColorFiltered
-                              postProcess: const PostProcess(
-                                  color: PostProcessColor()),
-                              transform: record.transform ??
-                                  const TransformParams(),
-                            );
-                          },
+                          _localPostProcess,
+                          _localTransform,
                         ),
+                        childSize: childSize,
+                        minScale: PhotoViewComputedScale.contained,
+                        maxScale: 6.0,
+                        scaleStateCycle: _previewScaleCycle,
+                        onTapUp: _onPhotoTap,
+                        backgroundDecoration:
+                            const BoxDecoration(color: Colors.black),
+                      );
+                    }
+
+                    // 有历史照片：PhotoViewGallery 提供边界感知的横向切换：
+                    // - 未放大(整图)时横滑切换照片；
+                    // - 放大后横滑优先移动可视区域，触达左右边界才切换照片（与 PhotoView 内部
+                    //   HitCornersDetector + PhotoViewGestureRecognizer 的 shouldMove 逻辑一致）。
+                    return PhotoViewGallery.builder(
+                      itemCount: _historyPhotos.length,
+                      pageController: _pageController,
+                      onPageChanged: _onPageChanged,
+                      // 允许首尾弹性回弹（与原生相机一致）
+                      scrollPhysics: const BouncingScrollPhysics(),
+                      backgroundDecoration:
+                          const BoxDecoration(color: Colors.black),
+                      builder: (context, index) {
+                        final record = _historyPhotos[index];
+                        final url =
+                            record.filePath ?? record.dataUrl ?? '';
+                        final bool isCurrent = index == _currentIndex;
+                        // 当前页使用增量参数（delta = local - baked），
+                        // 其他页照片已烘焙各自的 record.postProcess，直接显示无需叠加滤镜。
+                        return PhotoViewGalleryPageOptions.customChild(
+                          child: isCurrent
+                              ? _buildPhotoContent(
+                                  _photoUrl,
+                                  _isComparing,
+                                  _localPostProcess,
+                                  _localTransform,
+                                )
+                              : _buildPhotoContent(
+                                  url,
+                                  false,
+                                  const PostProcess(
+                                      color: PostProcessColor()),
+                                  record.transform ??
+                                      const TransformParams(),
+                                ),
+                          childSize: childSize,
+                          minScale: PhotoViewComputedScale.contained,
+                          maxScale: 6.0,
+                          scaleStateCycle: _previewScaleCycle,
+                          onTapUp: _onPhotoTap,
+                        );
+                      },
+                    );
+                  },
                 ),
               );
             },
@@ -1245,8 +1362,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         localTransform: _localTransform,
                         onUpdateLocalTransform: _updateLocalTransform,
                         // 折叠操作栏相关
-                        onCompareStart: _onCompareStart,
-                        onCompareEnd: _onCompareEnd,
+                        onCompareToggle: _onCompareToggle,
+                        isComparing: _isComparing,
                         onExpandToQuarter: () {
                           _sheetHeightNotifier.value = _quarterHeight(context);
                         },
@@ -1300,8 +1417,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                             icon: Icons.compare,
                             label: '对比',
                             tokens: tokens,
-                            onPressStart: _onCompareStart,
-                            onPressEnd: _onCompareEnd,
+                            active: _isComparing,
+                            onTap: _onCompareToggle,
                           ),
                           const SizedBox(width: 16),
                           _FloatingActionButton(
@@ -1475,90 +1592,6 @@ class _NavBackButton extends StatelessWidget {
   }
 }
 
-/// 全屏照片显示（预览页用）
-///
-/// 照片铺满整个屏幕，BoxFit.contain 居中显示。
-/// 支持对比模式、旋转/翻转/拉直变换、后期滤镜实时预览。
-class _FullScreenPhoto extends StatelessWidget {
-  const _FullScreenPhoto({
-    required this.photoUrl,
-    required this.isComparing,
-    required this.postProcess,
-    required this.transform,
-  });
-
-  final String photoUrl;
-  final bool isComparing;
-  final PostProcess postProcess;
-  final TransformParams transform;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isNetworkUrl = photoUrl.startsWith('http');
-
-    Widget buildImage() => isNetworkUrl
-        ? CachedNetworkImage(
-            url: photoUrl,
-            fit: BoxFit.contain,
-            errorWidget: const Center(
-              child: Icon(Icons.broken_image, color: Colors.white38, size: 64),
-            ),
-          )
-        : Image.file(
-            File(photoUrl),
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => const Center(
-              child: Icon(Icons.broken_image, color: Colors.white38, size: 64),
-            ),
-          );
-
-    return Container(
-      color: Colors.black,
-      child: photoUrl.isNotEmpty
-          // InteractiveViewer：支持双指缩放与拖拽（放大后查看细节）
-          // minScale=1.0 不允许缩小（避免照片变小留黑边），maxScale=4.0 最大放大 4 倍
-          // boundaryMargin=zero：放大后不能拖出图片可见区域
-          ? InteractiveViewer(
-              minScale: 1.0,
-              maxScale: 4.0,
-              panEnabled: true,
-              scaleEnabled: true,
-              boundaryMargin: EdgeInsets.zero,
-              child: isComparing
-                  // 对比模式：显示原图色彩（透明滤镜 = 无后期），不应用变换
-                  // 保留 ColorFiltered 在树中以便测试验证滤镜切换
-                  ? ColorFiltered(
-                      colorFilter: const ColorFilter.mode(
-                          Colors.transparent, BlendMode.dst),
-                      child: buildImage(),
-                    )
-                  : RotatedBox(
-                      quarterTurns: transform.rotation ~/ 90,
-                      child: Transform(
-                        alignment: Alignment.center,
-                        transform: Matrix4.identity()
-                          ..scale(
-                            transform.flipH ? -1.0 : 1.0,
-                            transform.flipV ? -1.0 : 1.0,
-                            1.0,
-                          ),
-                        child: Transform.rotate(
-                          angle: transform.straighten * math.pi / 180.0,
-                          child: ColorFiltered(
-                            colorFilter: fromPostProcess(postProcess),
-                            child: buildImage(),
-                          ),
-                        ),
-                      ),
-                    ),
-            )
-          : const Center(
-              child: Icon(Icons.photo, color: Colors.white38, size: 64),
-            ),
-    );
-  }
-}
-
 /// 照片预览框
 /// 修复：
 /// 1. 原代码使用固定 3:4 AspectRatio + BoxFit.cover，改为自适应高度 + contain
@@ -1703,8 +1736,8 @@ class _BottomSheet extends StatelessWidget {
     required this.localTransform,
     required this.onUpdateLocalTransform,
     // 折叠操作栏相关
-    required this.onCompareStart,
-    required this.onCompareEnd,
+    required this.onCompareToggle,
+    required this.isComparing,
     required this.onExpandToQuarter,
     // 点击「上滑查看更多」露出区：展开到 threeQuarter 查看完整心情/场景
     required this.onExpandToFull,
@@ -1745,11 +1778,11 @@ class _BottomSheet extends StatelessWidget {
   /// 本地变换参数更新回调
   final ValueChanged<TransformParams> onUpdateLocalTransform;
 
-  /// 对比按钮按下开始（按住显示原图）
-  final VoidCallback onCompareStart;
+  /// 对比按钮点击：在「显示原图」与「显示滤镜后」之间切换
+  final VoidCallback onCompareToggle;
 
-  /// 对比按钮按下结束（恢复滤镜）
-  final VoidCallback onCompareEnd;
+  /// 当前是否处于对比（显示原图）状态
+  final bool isComparing;
 
   /// 点击"编辑"按钮：展开抽屉栏到 quarter
   final VoidCallback onExpandToQuarter;
@@ -1926,13 +1959,13 @@ class _BottomSheet extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // 对比按钮（按住生效）
+          // 对比按钮（点击切换显示原图/滤镜后）
           _CollapsedActionButton(
             icon: Icons.compare,
             label: '对比',
             tokens: tokens,
-            onPressStart: onCompareStart,
-            onPressEnd: onCompareEnd,
+            onTap: onCompareToggle,
+            active: isComparing,
           ),
           const SizedBox(width: 48),
           // 编辑（展开抽屉栏到 quarter）
@@ -2371,6 +2404,7 @@ class _CollapsedActionButton extends StatelessWidget {
     this.onTap,
     this.onPressStart,
     this.onPressEnd,
+    this.active = false,
   });
 
   final IconData icon;
@@ -2379,6 +2413,9 @@ class _CollapsedActionButton extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onPressStart;
   final VoidCallback? onPressEnd;
+
+  /// 是否为激活状态（如"对比"开启时高亮）
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -2393,7 +2430,9 @@ class _CollapsedActionButton extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: tokens.textPrimary),
+            Icon(icon,
+                size: 22,
+                color: active ? tokens.brand : tokens.textPrimary),
             const SizedBox(height: 4),
             Text(
               label,
@@ -2417,6 +2456,7 @@ class _FloatingActionButton extends StatefulWidget {
     this.onTap,
     this.onPressStart,
     this.onPressEnd,
+    this.active = false,
   });
 
   final IconData icon;
@@ -2425,6 +2465,9 @@ class _FloatingActionButton extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onPressStart;
   final VoidCallback? onPressEnd;
+
+  /// 是否为激活状态（如"对比"开启时高亮，提供视觉反馈）
+  final bool active;
 
   @override
   State<_FloatingActionButton> createState() => _FloatingActionButtonState();
@@ -2459,16 +2502,21 @@ class _FloatingActionButtonState extends State<_FloatingActionButton> {
         child: Container(
           // 适当扩大触控区，提升点击手感
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: _pressed
+          decoration: (_pressed || widget.active)
               ? BoxDecoration(
-                  color: tokens.brand.withOpacity(0.16),
+                  color: tokens.brand.withOpacity(
+                      _pressed ? 0.16 : 0.12),
                   borderRadius: BorderRadius.circular(18),
                 )
               : null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.icon, size: 24, color: tokens.textPrimary),
+              Icon(widget.icon,
+                  size: 24,
+                  color: widget.active
+                      ? tokens.brand
+                      : tokens.textPrimary),
               const SizedBox(height: 4),
               Text(
                 widget.label,

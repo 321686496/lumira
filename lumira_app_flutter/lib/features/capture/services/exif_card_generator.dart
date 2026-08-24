@@ -62,24 +62,26 @@ class ExifCardGenerator {
       const cardH = 1620;
       const padding = 52;
 
-      // 3. 顶部照片区：铺满 1080x820，center-crop（比例约 4:3，横/竖图均合适）
+      // 3. 顶部照片区：区域内 contain——整张图等比缩放完整显示（不裁剪内容），
+      //    四周留边（letterbox），确保横/竖图均不被切掉。
       const photoTop = 112;
       const photoH = 820;
-      final photoRect = ui.Rect.fromLTWH(
-          0, photoTop.toDouble(), cardW.toDouble(), photoH.toDouble());
+      final photoW = cardW.toDouble();
 
-      // 计算 center-crop 源矩形（对齐目标比例后居中裁剪，横/竖图均不留两侧空白）
+      // contain：源取整张图，目标为等比缩放后在区域内的居中矩形
       final srcW = srcImage.width.toDouble();
       final srcH = srcImage.height.toDouble();
-      const dstAspect = cardW / photoH; // 1080 / 820
-      final srcAspect = srcW / srcH;
-      final srcRect = srcAspect > dstAspect
-          ? ui.Rect.fromLTWH(
-              (srcW - srcH * dstAspect) / 2, 0,
-              srcH * dstAspect, srcH)
-          : ui.Rect.fromLTWH(
-              0, (srcH - srcW / dstAspect) / 2,
-              srcW, srcW / dstAspect);
+      final scale = (photoW / srcW) < (photoH / srcH)
+          ? photoW / srcW
+          : photoH.toDouble() / srcH;
+      final drawW = srcW * scale;
+      final drawH = srcH * scale;
+      final dstRect = ui.Rect.fromLTWH(
+        (photoW - drawW) / 2,
+        photoTop.toDouble() + (photoH - drawH) / 2,
+        drawW,
+        drawH,
+      );
 
       // 4. 绘制
       final recorder = ui.PictureRecorder();
@@ -104,12 +106,25 @@ class ExifCardGenerator {
       titlePainter.layout();
       titlePainter.paint(canvas, ui.Offset(padding.toDouble(), 30));
 
-      // 照片（center-crop 铺满）
+      // 照片（contain 完整显示，不裁剪；源矩形为整张图）
       canvas.drawImageRect(
         srcImage,
-        srcRect,
-        photoRect,
+        ui.Rect.fromLTWH(0, 0, srcW, srcH),
+        dstRect,
         ui.Paint()..filterQuality = ui.FilterQuality.medium,
+      );
+      // 照片边框：卡片上沿的浅色细分隔线/描边，让完整照片区域在深色背景上更清晰
+      canvas.drawRect(
+        ui.Rect.fromLTWH(
+          0,
+          photoTop.toDouble(),
+          photoW,
+          photoH.toDouble(),
+        ),
+        ui.Paint()
+          ..color = const ui.Color(0x333C3832)
+          ..style = ui.PaintingStyle.stroke
+          ..strokeWidth = 2,
       );
       srcImage.dispose();
 
