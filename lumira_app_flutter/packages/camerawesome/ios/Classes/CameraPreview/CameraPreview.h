@@ -88,6 +88,7 @@ AVCaptureAudioDataOutputSampleBufferDelegate>
 - (void)recordVideoAtPath:(NSString *)path withOptions:(VideoOptions *)options completion:(nonnull void (^)(FlutterError * _Nullable))completion;
 - (void)stopRecordingVideo:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion;
 - (void)focusOnPoint:(CGPoint)position preview:(CGSize)preview error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
+- (void)setFocusAndExposureLock:(BOOL)locked position:(CGPoint)position preview:(CGSize)preview error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
 - (void)dispose;
 - (NSArray *)getSensors:(AVCaptureDevicePosition)position;
 - (void)setSensor:(CameraSensor)sensor deviceId:(NSString *)captureDeviceId;

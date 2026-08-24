@@ -961,6 +961,29 @@ void CameraInterfaceSetup(id<FlutterBinaryMessenger> binaryMessenger, NSObject<C
   {
     FlutterBasicMessageChannel *channel =
       [[FlutterBasicMessageChannel alloc]
+        initWithName:@"dev.flutter.pigeon.CameraInterface.setFocusAndExposureLock"
+        binaryMessenger:binaryMessenger
+        codec:CameraInterfaceGetCodec()];
+    if (api) {
+      NSCAssert([api respondsToSelector:@selector(setFocusAndExposureLockLocked:x:y:previewWidth:previewHeight:error:)], @"CameraInterface api (%@) doesn't respond to @selector(setFocusAndExposureLockLocked:x:y:previewWidth:previewHeight:error:)", api);
+      [channel setMessageHandler:^(id _Nullable message, FlutterReply callback) {
+        NSArray *args = message;
+        NSNumber *arg_locked = GetNullableObjectAtIndex(args, 0);
+        NSNumber *arg_x = GetNullableObjectAtIndex(args, 1);
+        NSNumber *arg_y = GetNullableObjectAtIndex(args, 2);
+        NSNumber *arg_previewWidth = GetNullableObjectAtIndex(args, 3);
+        NSNumber *arg_previewHeight = GetNullableObjectAtIndex(args, 4);
+        FlutterError *error;
+        [api setFocusAndExposureLockLocked:arg_locked x:arg_x y:arg_y previewWidth:arg_previewWidth previewHeight:arg_previewHeight error:&error];
+        callback(wrapResult(nil, error));
+      }];
+    } else {
+      [channel setMessageHandler:nil];
+    }
+  }
+  {
+    FlutterBasicMessageChannel *channel =
+      [[FlutterBasicMessageChannel alloc]
         initWithName:@"dev.flutter.pigeon.CameraInterface.getMaxZoom"
         binaryMessenger:binaryMessenger
         codec:CameraInterfaceGetCodec()];

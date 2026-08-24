@@ -433,6 +433,50 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
   }
 }
 
+/// 长按锁定 AE/AF：position 为归一化 [0,1] 坐标（与 focusOnPoint 一致）。
+/// locked=YES：曝光与对焦均锁定在触点；locked=NO：恢复连续自动对焦/曝光。
+- (void)setFocusAndExposureLock:(BOOL)locked position:(CGPoint)position preview:(CGSize)preview error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
+  NSError *lockError;
+  if (locked) {
+    // —— 曝光锁定 ——
+    if ([_captureDevice isExposurePointOfInterestSupported] &&
+        [_captureDevice isExposureModeSupported:AVCaptureExposureModeLocked]) {
+      if ([_captureDevice lockForConfiguration:&lockError]) {
+        [_captureDevice setExposurePointOfInterest:position];
+        [_captureDevice setExposureMode:AVCaptureExposureModeLocked];
+        [_captureDevice unlockForConfiguration];
+      }
+    }
+    // —— 对焦锁定：先触发一次自动对焦到触点，再锁定到当前镜头位置 ——
+    if ([_captureDevice isFocusPointOfInterestSupported] &&
+        [_captureDevice isFocusModeSupported:AVCaptureFocusModeAutoFocus]) {
+      if ([_captureDevice lockForConfiguration:&lockError]) {
+        [_captureDevice setFocusPointOfInterest:position];
+        [_captureDevice setFocusMode:AVCaptureFocusModeAutoFocus];
+        [_captureDevice unlockForConfiguration];
+      }
+      if ([_captureDevice isFocusModeSupported:AVCaptureFocusModeLocked]) {
+        CGFloat currentLens = _captureDevice.lensPosition;
+        [_captureDevice setFocusModeLockedWithLensPosition:currentLens completionHandler:nil];
+      }
+    }
+  } else {
+    // —— 解锁：恢复连续自动 ——
+    if ([_captureDevice isFocusModeSupported:AVCaptureFocusModeContinuousAutoFocus]) {
+      if ([_captureDevice lockForConfiguration:&lockError]) {
+        [_captureDevice setFocusMode:AVCaptureFocusModeContinuousAutoFocus];
+        [_captureDevice unlockForConfiguration];
+      }
+    }
+    if ([_captureDevice isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure]) {
+      if ([_captureDevice lockForConfiguration:&lockError]) {
+        [_captureDevice setExposureMode:AVCaptureExposureModeContinuousAutoExposure];
+        [_captureDevice unlockForConfiguration];
+      }
+    }
+  }
+}
+
 - (void)receivedImageFromStream {
   [self.imageStreamController receivedImageFromStream];
 }

@@ -211,6 +211,8 @@ NSObject<FlutterMessageCodec> *CameraInterfaceGetCodec(void);
 - (void)setSensorSensor:(NSString *)sensor deviceId:(nullable NSString *)deviceId error:(FlutterError *_Nullable *_Nonnull)error;
 - (void)setCorrectionBrightness:(NSNumber *)brightness error:(FlutterError *_Nullable *_Nonnull)error;
 - (void)setWhiteBalanceMode:(NSString *)mode temperatureK:(nullable NSNumber *)temperatureK error:(FlutterError *_Nullable *_Nonnull)error;
+/// 锁定/解锁对焦与曝光（长按锁定 AE/AF）。
+- (void)setFocusAndExposureLockLocked:(NSNumber *)locked x:(NSNumber *)x y:(NSNumber *)y previewWidth:(NSNumber *)previewWidth previewHeight:(NSNumber *)previewHeight error:(FlutterError *_Nullable *_Nonnull)error;
 /// @return `nil` only when `error != nil`.
 - (nullable NSNumber *)getMaxZoomWithError:(FlutterError *_Nullable *_Nonnull)error;
 - (void)setCaptureModeMode:(NSString *)mode error:(FlutterError *_Nullable *_Nonnull)error;

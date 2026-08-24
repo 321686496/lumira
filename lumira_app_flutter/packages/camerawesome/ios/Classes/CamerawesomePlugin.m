@@ -196,6 +196,12 @@ FlutterEventSink physicalButtonEventSink;
 - (void)setWhiteBalanceMode:(nonnull NSString *)mode temperatureK:(NSNumber * _Nullable)k error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
   [_camera setWhiteBalance:mode temperatureK:k error:error];
 }
+- (void)setFocusAndExposureLockLocked:(NSNumber *)locked x:(NSNumber *)x y:(NSNumber *)y previewWidth:(NSNumber *)previewWidth previewHeight:(NSNumber *)previewHeight error:(FlutterError *_Nullable __autoreleasing *_Nonnull)error {
+  [_camera setFocusAndExposureLock:[locked boolValue]
+                          position:CGPointMake([x floatValue], [y floatValue])
+                            preview:CGSizeMake([previewWidth floatValue], [previewHeight floatValue])
+                              error:error];
+}
 - (void)setExifPreferencesExifPreferences:(ExifPreferences *)exifPreferences completion:(void(^)(NSNumber *_Nullable, FlutterError *_Nullable))completion{
   [self.camera setExifPreferencesGPSLocation: exifPreferences.saveGPSLocation completion:completion];
 }
