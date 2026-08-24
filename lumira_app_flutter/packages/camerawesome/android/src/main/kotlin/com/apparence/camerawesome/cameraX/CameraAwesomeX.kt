@@ -613,6 +613,35 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
         }
     }
 
+    @SuppressLint("RestrictedApi")
+    override fun setFocusAndExposureLock(locked: Boolean, x: Double, y: Double, previewWidth: Double, previewHeight: Double) {
+        val previewSize = PreviewSize(previewWidth, previewHeight)
+        if (locked) {
+            val factory: MeteringPointFactory = SurfaceOrientedMeteringPointFactory(
+                previewSize.width.toFloat(), previewSize.height.toFloat(),
+            )
+            val point = factory.createPoint(x.toFloat(), y.toFloat())
+            try {
+                cameraState.previewCamera!!.cameraControl.startFocusAndMetering(
+                    FocusMeteringAction.Builder(
+                        point,
+                        FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE or FocusMeteringAction.FLAG_AWB
+                    ).apply {
+                        disableAutoCancel() // 持久锁定，不自动回到被动对焦
+                    }.build()
+                )
+            } catch (e: CameraInfoUnavailableException) {
+                Log.e(CamerawesomePlugin.TAG, "setFocusAndExposureLock lock failed", e)
+            }
+        } else {
+            try {
+                cameraState.previewCamera!!.cameraControl.cancelFocusAndMetering()
+            } catch (e: CameraInfoUnavailableException) {
+                Log.e(CamerawesomePlugin.TAG, "setFocusAndExposureLock unlock failed", e)
+            }
+        }
+    }
+
     private fun awbModeFor(mode: String): Int = when (mode) {
         "daylight" -> CaptureRequest.CONTROL_AWB_MODE_DAYLIGHT
         "cloudy" -> CaptureRequest.CONTROL_AWB_MODE_CLOUDY_DAYLIGHT

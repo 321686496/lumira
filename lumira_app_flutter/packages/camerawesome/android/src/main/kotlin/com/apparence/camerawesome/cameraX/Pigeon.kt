@@ -578,6 +578,7 @@ interface CameraInterface {
   fun setSensor(sensor: String, deviceId: String?)
   fun setCorrection(brightness: Double)
   fun setWhiteBalance(mode: String, temperatureK: Int?)
+  fun setFocusAndExposureLock(locked: Boolean, x: Double, y: Double, previewWidth: Double, previewHeight: Double)
   fun getMaxZoom(): Double
   fun setCaptureMode(mode: String)
   fun setRecordingAudioMode(enableAudio: Boolean, callback: (Result<Boolean>) -> Unit)
@@ -1000,6 +1001,29 @@ interface CameraInterface {
             var wrapped: List<Any?>
             try {
               api.setWhiteBalance(modeArg, temperatureKArg)
+              wrapped = listOf<Any?>(null)
+            } catch (exception: Throwable) {
+              wrapped = wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.CameraInterface.setFocusAndExposureLock", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val lockedArg = args[0] as Boolean
+            val xArg = args[1] as Double
+            val yArg = args[2] as Double
+            val previewWidthArg = args[3] as Double
+            val previewHeightArg = args[4] as Double
+            var wrapped: List<Any?>
+            try {
+              api.setFocusAndExposureLock(lockedArg, xArg, yArg, previewWidthArg, previewHeightArg)
               wrapped = listOf<Any?>(null)
             } catch (exception: Throwable) {
               wrapped = wrapError(exception)
