@@ -142,7 +142,11 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     }
   }
 
-  Future<void> _submitSearch(String keyword) async {
+  /// 提交搜索。可选 [scope]：点击推荐卡片时切换到对应栏目后再搜索。
+  Future<void> _submitSearch(String keyword, {SearchScope? scope}) async {
+    if (scope != null && scope != _scope) {
+      setState(() => _scope = scope);
+    }
     final store = _store;
     if (store != null) {
       await store.record(_scope, keyword);
@@ -155,6 +159,10 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       await _recompute();
     }
   }
+
+  /// 点击推荐卡片：按卡片目标 scope 搜索。
+  void _submitFromRecommend(SearchRecommendItem item) =>
+      _submitSearch(item.keyword, scope: item.scope);
 
   Future<void> _recompute() async {
     _pager.reset();
@@ -459,33 +467,31 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
               SearchHotSection(keywords: d.hot, onTap: (k) => _submitSearch(k)),
               if (_scope == SearchScope.all) ...[
                 SearchRecommendTemplateSection(
-                  items: d.templateCategories,
-                  onTap: (k) => _submitSearch(k),
+                  items: d.templateItems,
+                  onTap: _submitFromRecommend,
                 ),
                 SearchRecommendSceneSection(
-                  styles: d.sceneStyles,
-                  onTap: (k) => _submitSearch(k),
+                  items: d.sceneItems,
+                  onTap: _submitFromRecommend,
                 ),
                 SearchRecommendAcademySection(
-                  topics: d.academyTopics,
-                  levels: d.academyLevels,
-                  onTap: (k) => _submitSearch(k),
+                  items: d.academyItems,
+                  onTap: _submitFromRecommend,
                 ),
               ] else if (_scope == SearchScope.template)
                 SearchRecommendTemplateSection(
-                  items: d.templateCategories,
-                  onTap: (k) => _submitSearch(k),
+                  items: d.templateItems,
+                  onTap: _submitFromRecommend,
                 )
               else if (_scope == SearchScope.scene)
                 SearchRecommendSceneSection(
-                  styles: d.sceneStyles,
-                  onTap: (k) => _submitSearch(k),
+                  items: d.sceneItems,
+                  onTap: _submitFromRecommend,
                 )
               else
                 SearchRecommendAcademySection(
-                  topics: d.academyTopics,
-                  levels: d.academyLevels,
-                  onTap: (k) => _submitSearch(k),
+                  items: d.academyItems,
+                  onTap: _submitFromRecommend,
                 ),
             ],
           ),
@@ -502,30 +508,119 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     final hot = store == null
         ? const <String>[]
         : await store.hotKeywords(_scope);
-    final templateCategories = _level1Categories
-        .map((c) => MapEntry(c.key, c.name))
-        .toList();
-    final sceneStyleSet = <String>{};
-    for (final s in _allScenes) {
-      if (s.style.isNotEmpty) sceneStyleSet.add(s.style);
-    }
-    final sceneStyles = sceneStyleSet.take(6).toList();
-    final academyTopics = <String>[
-      for (final t in AcademyTopic.values) t.label,
-    ];
-    final academyLevels = <String>[
-      for (final l in AcademyLevel.values) l.label,
-    ];
     return [
       SearchInitialData(
         history: history,
         hot: hot,
-        templateCategories: templateCategories,
-        sceneStyles: sceneStyles,
-        academyTopics: academyTopics,
-        academyLevels: academyLevels,
+        templateItems: _buildTemplateRecommendItems(),
+        sceneItems: _buildSceneRecommendItems(),
+        academyItems: _buildAcademyRecommendItems(),
       ),
     ];
+  }
+
+  // === 推荐卡片封面选取 ===
+
+  /// 模板推荐：每个一级分类取该关键词下「最火爆（拍摄数最多）的模板」做封面，
+  /// 火爆并列时取最新（createdAt 大）的模板；卡片展示分类中文名、在模板栏目内搜索。
+  List<SearchRecommendItem> _buildTemplateRecommendItems() {
+    final items = <SearchRecommendItem>[];
+    for (final c in _level1Categories) {
+      TemplateRecord? best;
+      var bestUsage = -1;
+      for (final t in _allTemplates) {
+        if (!TemplateSearchService.matchesKeyword(t, c.name,
+            categoryLabelByKey: _categoryLabelByKey)) {
+          continue;
+        }
+        final usage = _templateUsageCounts[t.id] ?? 0;
+        if (best == null ||
+            usage > bestUsage ||
+            (usage == bestUsage && t.createdAt > best.createdAt)) {
+          best = t;
+          bestUsage = usage;
+        }
+      }
+      items.add(SearchRecommendItem(
+        scope: SearchScope.template,
+        keyword: c.name,
+        label: c.name,
+        cover: best?.cover,
+        coverData: best?.coverData,
+        fallbackIcon: Icons.photo_camera_outlined,
+      ));
+    }
+    return items;
+  }
+
+  /// 场景推荐：按风格去重，每风格取该关键词下「最新日期（createdAt 大）的场景」做代表，
+  /// 日期相同时取第一个；卡片展示该场景的名称与封面、在场景栏目内按场景名搜索。
+  List<SearchRecommendItem> _buildSceneRecommendItems() {
+    final items = <SearchRecommendItem>[];
+    final seenStyles = <String>{};
+    for (final s in _allScenes) {
+      if (s.style.isEmpty || !seenStyles.add(s.style)) continue;
+      final rep = _latestSceneForStyle(s.style);
+      if (rep == null) continue;
+      final cover = rep.coverUrl.isNotEmpty
+          ? rep.coverUrl
+          : (rep.exampleImages.isNotEmpty ? rep.exampleImages.first : '');
+      items.add(SearchRecommendItem(
+        scope: SearchScope.scene,
+        keyword: rep.name,
+        label: rep.name,
+        cover: cover.isNotEmpty ? cover : null,
+        fallbackIcon: Icons.camera_roll_outlined,
+      ));
+      if (items.length >= 6) break;
+    }
+    return items;
+  }
+
+  /// 场景风格下最新日期的场景（_allScenes 已按 createdAt DESC，首个命中即最新/并列首个）。
+  SceneRecord? _latestSceneForStyle(String style) {
+    for (final s in _allScenes) {
+      if (s.style == style) return s;
+    }
+    return null;
+  }
+
+  /// 美学院推荐：主题 + 等级，各取该关键词下「第一个相关内容（课程优先、知识卡在后）的封面」。
+  List<SearchRecommendItem> _buildAcademyRecommendItems() {
+    final items = <SearchRecommendItem>[];
+    for (final t in AcademyTopic.values) {
+      items.add(SearchRecommendItem(
+        scope: SearchScope.academy,
+        keyword: t.label,
+        label: t.label,
+        cover: _firstAcademyCover(t.label),
+        fallbackIcon: Icons.menu_book_outlined,
+      ));
+    }
+    for (final l in AcademyLevel.values) {
+      items.add(SearchRecommendItem(
+        scope: SearchScope.academy,
+        keyword: l.label,
+        label: l.label,
+        cover: _firstAcademyCover(l.label),
+        fallbackIcon: Icons.school_outlined,
+      ));
+    }
+    return items;
+  }
+
+  String? _firstAcademyCover(String keyword) {
+    for (final c in AcademyContent.courses) {
+      if (AcademySearchService.courseMatchesKeyword(c, keyword)) {
+        return c.coverImage;
+      }
+    }
+    for (final k in AcademyContent.knowledgeCards) {
+      if (AcademySearchService.cardMatchesKeyword(k, keyword)) {
+        return k.coverImage;
+      }
+    }
+    return null;
   }
 
   Future<void> _deleteHistory(String keyword) async {
@@ -827,18 +922,16 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
 class SearchInitialData {
   final List<String> history;
   final List<String> hot;
-  final List<MapEntry<String, String>> templateCategories;
-  final List<String> sceneStyles;
-  final List<String> academyTopics;
-  final List<String> academyLevels;
+  final List<SearchRecommendItem> templateItems;
+  final List<SearchRecommendItem> sceneItems;
+  final List<SearchRecommendItem> academyItems;
 
   const SearchInitialData({
     required this.history,
     required this.hot,
-    required this.templateCategories,
-    required this.sceneStyles,
-    required this.academyTopics,
-    required this.academyLevels,
+    required this.templateItems,
+    required this.sceneItems,
+    required this.academyItems,
   });
 }
 
