@@ -1,0 +1,396 @@
+﻿===COMMITS===
+47cb049 chore(camera): 本地化 camerawesome_ohos 依赖以扩展原生白平衡
+
+===STAT===
+ .../packages/camerawesome_ohos/.gitignore          |   50 +
+ .../packages/camerawesome_ohos/CHANGELOG.md        |   12 +
+ .../packages/camerawesome_ohos/CONTRIBUTING.md     |   26 +
+ .../packages/camerawesome_ohos/LICENSE             |    6 +
+ .../packages/camerawesome_ohos/OAT.xml             |  106 ++
+ .../packages/camerawesome_ohos/README.md           |  410 +++++
+ .../camerawesome_ohos/analysis_options.yaml        |   38 +
+ .../camerawesome_ohos/assets/icons/16_9.png        |  Bin 0 -> 895 bytes
+ .../camerawesome_ohos/assets/icons/1_1.png         |  Bin 0 -> 488 bytes
+ .../camerawesome_ohos/assets/icons/4_3.png         |  Bin 0 -> 651 bytes
+ .../camerawesome_ohos/assets/icons/expanded.png    |  Bin 0 -> 242 bytes
+ .../camerawesome_ohos/assets/icons/minimized.png   |  Bin 0 -> 246 bytes
+ .../packages/camerawesome_ohos/docs.json           |   92 ++
+ .../camerawesome_ohos/docs/appendix/license.mdx    |    7 +
+ .../camerawesome_ohos/docs/appendix/roadmap.mdx    |   41 +
+ .../docs/getting_started/awesome-ui.mdx            |  514 ++++++
+ .../docs/getting_started/custom-ui.mdx             |  288 ++++
+ .../docs/getting_started/installing.mdx            |  103 ++
+ .../docs/image_analysis/detecting_faces.mdx        |  402 +++++
+ .../image_analysis_configuration.mdx               |   82 +
+ .../image_analysis/image_format_conversions.mdx    |  330 ++++
+ .../docs/image_analysis/reading_barcodes.mdx       |  590 +++++++
+ .../camerawesome_ohos/docs/img/apparence.png       |  Bin 0 -> 14992 bytes
+ .../camerawesome_ohos/docs/img/auto_rotate.gif     |  Bin 0 -> 2429362 bytes
+ .../docs/img/awesome_ui_parts.webp                 |  Bin 0 -> 14136 bytes
+ .../camerawesome_ohos/docs/img/barcode_ai.gif      |  Bin 0 -> 5087375 bytes
+ .../camerawesome_ohos/docs/img/barcode_overlay.gif |  Bin 0 -> 2585309 bytes
+ .../camerawesome_ohos/docs/img/base_awesome_ui.jpg |  Bin 0 -> 123905 bytes
+ .../docs/img/camera_preview_position.jpg           |  Bin 0 -> 46038 bytes
+ .../docs/img/camera_states_interactions.png        |  Bin 0 -> 14029 bytes
+ .../camerawesome_ohos/docs/img/capture_button.gif  |  Bin 0 -> 4679678 bytes
+ .../docs/img/coordinates_conversion.png            |  Bin 0 -> 4354 bytes
+ .../docs/img/crop_rect_example.png                 |  Bin 0 -> 3256 bytes
+ .../docs/img/custom_awesome_ui.jpg                 |  Bin 0 -> 73621 bytes
+ .../camerawesome_ohos/docs/img/custom_theme.gif    |  Bin 0 -> 6977116 bytes
+ .../packages/camerawesome_ohos/docs/img/doc.png    |  Bin 0 -> 12514 bytes
+ .../camerawesome_ohos/docs/img/face_ai.gif         |  Bin 0 -> 7442545 bytes
+ .../camerawesome_ohos/docs/img/face_filter.jpg     |  Bin 0 -> 163422 bytes
+ .../camerawesome_ohos/docs/img/features.png        |  Bin 0 -> 497248 bytes
+ .../camerawesome_ohos/docs/img/filters.gif         |  Bin 0 -> 6965148 bytes
+ .../packages/camerawesome_ohos/docs/img/flash.gif  |  Bin 0 -> 2132494 bytes
+ .../camerawesome_ohos/docs/img/preview.png         |  Bin 0 -> 258327 bytes
+ .../camerawesome_ohos/docs/img/sensors_type.gif    |  Bin 0 -> 15636995 bytes
+ .../docs/img/swap_photo_video.gif                  |  Bin 0 -> 1671099 bytes
+ .../packages/camerawesome_ohos/docs/index.mdx      |   31 +
+ .../docs/widgets/awesome_buttons.mdx               |  313 ++++
+ .../docs/widgets/awesome_camera_mode_selector.mdx  |   36 +
+ .../docs/widgets/awesome_filters.mdx               |   33 +
+ .../docs/widgets/awesome_oriented_widget.mdx       |   16 +
+ .../camerawesome_ohos/docs/widgets/layout.mdx      |  139 ++
+ .../camerawesome_ohos/docs/widgets/theming.mdx     |   67 +
+ .../camerawesome_ohos/docs/widgets/widgets.mdx     |   22 +
+ .../packages/camerawesome_ohos/example/.gitignore  |   45 +
+ .../packages/camerawesome_ohos/example/README.md   |   16 +
+ .../example/analysis_options.yaml                  |   29 +
+ .../example/integration_test/bundled_test.dart     |   14 +
+ .../example/integration_test/common.dart           |   40 +
+ .../example/integration_test/photo_test.dart       |  116 ++
+ .../example/integration_test/ui_test.dart          |  344 ++++
+ .../example/integration_test/video_test.dart       |  157 ++
+ .../example/lib/ai_analysis_barcode.dart           |  176 ++
+ .../example/lib/ai_analysis_faces.dart             |  357 ++++
+ .../example/lib/analysis_image_filter.dart         |  205 +++
+ .../example/lib/analysis_image_filter_picker.dart  |  398 +++++
+ .../example/lib/camera_analysis_capabilities.dart  |   77 +
+ .../example/lib/custom_awesome_ui.dart             |  119 ++
+ .../example/lib/custom_theme.dart                  |   68 +
+ .../example/lib/custom_ui_example_1.dart           |   55 +
+ .../example/lib/custom_ui_example_2.dart           |   87 +
+ .../example/lib/custom_ui_example_3.dart           |   82 +
+ .../example/lib/drivable_camera.dart               |   30 +
+ .../camerawesome_ohos/example/lib/main.dart        |   50 +
+ .../example/lib/preview_overlay_example.dart       |  117 ++
+ .../example/lib/subroute_camera.dart               |  103 ++
+ .../example/lib/utils/file_utils.dart              |   14 +
+ .../example/lib/utils/mlkit_utils.dart             |   56 +
+ .../lib/widgets/barcode_preview_overlay.dart       |  386 +++++
+ .../example/lib/widgets/custom_media_preview.dart  |   84 +
+ .../example/lib/widgets/mini_video_player.dart     |   43 +
+ .../camerawesome_ohos/example/ohos/.gitignore      |   19 +
+ .../example/ohos/AppScope/app.json5                |   10 +
+ .../AppScope/resources/base/element/string.json    |    8 +
+ .../AppScope/resources/base/media/app_icon.png     |  Bin 0 -> 6790 bytes
+ .../example/ohos/build-profile.json5               |   28 +
+ .../example/ohos/entry/.gitignore                  |    7 +
+ .../example/ohos/entry/build-profile.json5         |   29 +
+ .../example/ohos/entry/hvigorfile.ts               |   17 +
+ .../example/ohos/entry/oh-package.json5            |   14 +
+ .../src/main/ets/entryability/EntryAbility.ets     |   24 +
+ .../ohos/entry/src/main/ets/pages/Index.ets        |   38 +
+ .../main/ets/plugins/GeneratedPluginRegistrant.ets |   32 +
+ .../example/ohos/entry/src/main/module.json5       |   62 +
+ .../src/main/resources/base/element/color.json     |    8 +
+ .../src/main/resources/base/element/string.json    |   16 +
+ .../entry/src/main/resources/base/media/icon.png   |  Bin 0 -> 6790 bytes
+ .../main/resources/base/profile/main_pages.json    |    5 +
+ .../src/main/resources/en_US/element/string.json   |   16 +
+ .../src/main/resources/zh_CN/element/string.json   |   16 +
+ .../entry/src/ohosTest/ets/test/Ability.test.ets   |   50 +
+ .../ohos/entry/src/ohosTest/ets/test/List.test.ets |   20 +
+ .../src/ohosTest/ets/testability/TestAbility.ets   |   63 +
+ .../src/ohosTest/ets/testability/pages/Index.ets   |   49 +
+ .../ets/testrunner/OpenHarmonyTestRunner.ts        |   64 +
+ .../example/ohos/entry/src/ohosTest/module.json5   |   51 +
+ .../src/ohosTest/resources/base/element/color.json |    8 +
+ .../ohosTest/resources/base/element/string.json    |   16 +
+ .../src/ohosTest/resources/base/media/icon.png     |  Bin 0 -> 6790 bytes
+ .../resources/base/profile/test_pages.json         |    5 +
+ .../example/ohos/hvigor/hvigor-config.json5        |   20 +
+ .../camerawesome_ohos/example/ohos/hvigorfile.ts   |   21 +
+ .../example/ohos/oh-package.json5                  |   23 +
+ .../camerawesome_ohos/example/pubspec.yaml         |   46 +
+ .../example/scripts/run_firebase_test_lab.sh       |   21 +
+ .../example/scripts/run_native_android_tests.sh    |    4 +
+ .../example/scripts/run_patrol.sh                  |   12 +
+ .../camerawesome_ohos/lib/camerawesome_plugin.dart |  535 ++++++
+ .../camerawesome_ohos/lib/generated/i18n.dart      |  152 ++
+ .../packages/camerawesome_ohos/lib/pigeon.dart     | 1435 ++++++++++++++++
+ .../camera_characteristics.dart                    |   13 +
+ .../packages/camerawesome_ohos/lib/src/logger.dart |   10 +
+ .../orchestrator/analysis/analysis_controller.dart |   93 ++
+ .../lib/src/orchestrator/camera_context.dart       |  214 +++
+ .../exceptions/camera_states_exceptions.dart       |   19 +
+ .../src/orchestrator/models/analysis/analysis.dart |    4 +
+ .../models/analysis/analysis_config.dart           |   76 +
+ .../models/analysis/analysis_image.dart            |  223 +++
+ .../models/analysis/analysis_image_ext.dart        |  189 +++
+ .../orchestrator/models/analysis/image_plane.dart  |   28 +
+ .../models/analysis/input_analysis.dart            |   23 +
+ .../models/camera_display_rotation.dart            |    6 +
+ .../src/orchestrator/models/camera_flashes.dart    |    6 +
+ .../orchestrator/models/camera_orientations.dart   |    7 +
+ .../models/camera_physical_button.dart             |    5 +
+ .../lib/src/orchestrator/models/capture_modes.dart |   26 +
+ .../models/filters/awesome_filter.dart             |  332 ++++
+ .../models/filters/awesome_filters.dart            |   49 +
+ .../lib/src/orchestrator/models/media_capture.dart |   45 +
+ .../lib/src/orchestrator/models/models.dart        |   12 +
+ .../src/orchestrator/models/permission_utils.dart  |   19 +
+ .../lib/src/orchestrator/models/save_config.dart   |   53 +
+ .../lib/src/orchestrator/models/sensor_config.dart |  179 ++
+ .../lib/src/orchestrator/models/sensor_data.dart   |    6 +
+ .../lib/src/orchestrator/models/sensor_type.dart   |   87 +
+ .../lib/src/orchestrator/models/sensors.dart       |   12 +
+ .../lib/src/orchestrator/models/video_options.dart |   77 +
+ .../orchestrator/states/analysis_camera_state.dart |   49 +
+ .../lib/src/orchestrator/states/camera_state.dart  |  147 ++
+ .../states/handlers/filter_handler.dart            |   57 +
+ .../orchestrator/states/photo_camera_state.dart    |  124 ++
+ .../states/preparing_camera_state.dart             |  216 +++
+ .../orchestrator/states/preview_camera_state.dart  |   49 +
+ .../lib/src/orchestrator/states/states.dart        |    7 +
+ .../states/video_camera_recording_state.dart       |  116 ++
+ .../orchestrator/states/video_camera_state.dart    |   85 +
+ .../src/photofilters/filters/color_filters.dart    |   48 +
+ .../photofilters/filters/convolution_filters.dart  |   39 +
+ .../lib/src/photofilters/filters/filters.dart      |   13 +
+ .../src/photofilters/filters/image_filters.dart    |   33 +
+ .../src/photofilters/filters/preset_filters.dart   |  403 +++++
+ .../lib/src/photofilters/filters/subfilters.dart   |  198 +++
+ .../lib/src/photofilters/rgba_model.dart           |    8 +
+ .../src/photofilters/utils/color_filter_utils.dart |  147 ++
+ .../photofilters/utils/convolution_kernels.dart    |  222 +++
+ .../src/photofilters/utils/image_filter_utils.dart |  178 ++
+ .../lib/src/photofilters/utils/utils.dart          |   83 +
+ .../src/widgets/awesome_camera_mode_selector.dart  |  141 ++
+ .../lib/src/widgets/awesome_media_preview.dart     |   96 ++
+ .../src/widgets/awesome_sensor_type_selector.dart  |  177 ++
+ .../buttons/awesome_aspect_ratio_button.dart       |  105 ++
+ .../buttons/awesome_camera_switch_button.dart      |   71 +
+ .../widgets/buttons/awesome_capture_button.dart    |  161 ++
+ .../src/widgets/buttons/awesome_flash_button.dart  |   76 +
+ .../widgets/buttons/awesome_location_button.dart   |   53 +
+ .../buttons/awesome_pause_resume_button.dart       |   78 +
+ .../lib/src/widgets/buttons/buttons.dart           |    6 +
+ .../lib/src/widgets/camera_awesome_builder.dart    |  522 ++++++
+ .../src/widgets/filters/awesome_filter_button.dart |   59 +
+ .../filters/awesome_filter_name_indicator.dart     |   40 +
+ .../widgets/filters/awesome_filter_selector.dart   |  160 ++
+ .../src/widgets/filters/awesome_filter_widget.dart |  143 ++
+ .../lib/src/widgets/filters/filters.dart           |    2 +
+ .../src/widgets/layout/awesome_bottom_actions.dart |   86 +
+ .../src/widgets/layout/awesome_camera_layout.dart  |   61 +
+ .../src/widgets/layout/awesome_top_actions.dart    |   40 +
+ .../lib/src/widgets/layout/layout.dart             |    3 +
+ .../preview/awesome_camera_gesture_detector.dart   |  154 ++
+ .../widgets/preview/awesome_camera_preview.dart    |  452 ++++++
+ .../widgets/preview/awesome_focus_indicator.dart   |   97 ++
+ .../lib/src/widgets/preview/preview.dart           |    3 +
+ .../lib/src/widgets/utils/animated_clip_rect.dart  |   87 +
+ .../src/widgets/utils/awesome_bouncing_widget.dart |   91 ++
+ .../lib/src/widgets/utils/awesome_circle_icon.dart |   45 +
+ .../src/widgets/utils/awesome_oriented_widget.dart |   87 +
+ .../lib/src/widgets/utils/awesome_theme.dart       |  129 ++
+ .../lib/src/widgets/utils/utils.dart               |    5 +
+ .../camerawesome_ohos/lib/src/widgets/widgets.dart |    9 +
+ .../packages/camerawesome_ohos/ohos/.gitignore     |   31 +
+ .../camerawesome_ohos/ohos/BuildProfile.ets        |   17 +
+ .../packages/camerawesome_ohos/ohos/README.md      |   25 +
+ .../camerawesome_ohos/ohos/build-profile.json5     |   15 +
+ .../packages/camerawesome_ohos/ohos/hvigorfile.ts  |    2 +
+ .../packages/camerawesome_ohos/ohos/index.ets      |   17 +
+ .../camerawesome_ohos/ohos/oh-package-lock.json5   |   19 +
+ .../camerawesome_ohos/ohos/oh-package.json5        |   11 +
+ .../packages/camerawesome_ohos/ohos/pubspec.yaml   |   66 +
+ .../components/cameraX/AnalysisImageConverter.ets  |  103 ++
+ .../components/cameraX/CameraAbilityLifecycle.ets  |  111 ++
+ .../ets/components/cameraX/CameraPermissions.ets   |   68 +
+ .../main/ets/components/cameraX/CameraState.ets    | 1271 +++++++++++++++
+ .../src/main/ets/components/cameraX/Constants.ets  |  176 ++
+ .../components/cameraX/ImageAnalysisBuilder.ets    |  147 ++
+ .../cameraX/OrientationStreamListener.ets          |  151 ++
+ .../components/cameraX/PhysicalButtonsHandler.ets  |   63 +
+ .../src/main/ets/components/cameraX/Pigeon.ets     | 1715 ++++++++++++++++++++
+ .../ets/components/display/DisplayRotation.ets     |    3 +
+ .../components/display/DisplayRotationListener.ets |   39 +
+ .../main/ets/components/plugin/CameraAwesomeX.ets  |  518 ++++++
+ .../sensors/CameraDeviceChangeListener.ets         |   26 +
+ .../ets/components/sensors/SensorOrientation.ets   |    3 +
+ .../sensors/SensorOrientationListener.ets          |   39 +
+ .../src/main/ets/components/utils/CameraUtils.ets  |   41 +
+ .../src/main/ets/components/utils/Constant.ets     |    6 +
+ .../ohos/src/main/ets/components/utils/Logger.ets  |   47 +
+ .../main/ets/components/workers/GetImageWorker.ets |  108 ++
+ .../camerawesome_ohos/ohos/src/main/module.json5   |   55 +
+ .../src/main/resources/base/element/string.json    |    8 +
+ .../camerawesome_ohos/pigeons/interface.dart       |  335 ++++
+ .../packages/camerawesome_ohos/pigeons/pigeon.sh   |    8 +
+ .../packages/camerawesome_ohos/pubspec.yaml        |   72 +
+ .../test/camera_context_test.dart                  |    1 +
+ .../camerawesome_ohos/test/camerawesome_test.dart  |   18 +
+ .../camerawesome_ohos/test/filter_test.dart        |   30 +
+ .../packages/camerawesome_ohos/test/res/bird.jpg   |  Bin 0 -> 510090 bytes
+ lumira_app_flutter/pubspec.lock                    |    8 +-
+ lumira_app_flutter/pubspec.yaml                    |    6 +-
+ 235 files changed, 22610 insertions(+), 9 deletions(-)
+
+===DIFF===
+diff --git a/lumira_app_flutter/packages/camerawesome_ohos/analysis_options.yaml b/lumira_app_flutter/packages/camerawesome_ohos/analysis_options.yaml
+new file mode 100644
+index 0000000..1898fb9
+--- /dev/null
++++ b/lumira_app_flutter/packages/camerawesome_ohos/analysis_options.yaml
+@@ -0,0 +1,38 @@
++# This file configures the analyzer, which statically analyzes Dart code to
++# check for errors, warnings, and lints.
++#
++# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
++# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
++# invoked from the command line by running `flutter analyze`.
++
++# The following line activates a set of recommended lints for Flutter apps,
++# packages, and plugins designed to encourage good coding practices.
++include: package:flutter_lints/flutter.yaml
++
++# Task 0: 本地化为 path 依赖后，flutter analyze 会递归扫描本包目录。
++# 排除 fork 自带的 demo/示例/测试/pigeon IDL 源码：它们依赖 mlkit/video_player/open_file 等
++# 未随本包提供的 dev 依赖，且与 App 运行时及 OHOS 原生构建无关，避免引入误报错误。
++analyzer:
++  exclude:
++    - example/**
++    - pigeons/**
++    - test/**
++
++linter:
++  # The lint rules applied to this project can be customized in the
++  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
++  # included above or to enable additional rules. A list of all available lints
++  # and their documentation is published at
++  # https://dart-lang.github.io/linter/lints/index.html.
++  #
++  # Instead of disabling a lint rule for the entire project in the
++  # section below, it can also be suppressed for a single line of code
++  # or a specific dart file by using the `// ignore: name_of_lint` and
++  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
++  # producing the lint.
++  rules:
++    always_use_package_imports: true
++    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
++    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
++# Additional information about this file can be found at
++# https://dart.dev/guides/language/analysis-options
+diff --git a/lumira_app_flutter/packages/camerawesome_ohos/pubspec.yaml b/lumira_app_flutter/packages/camerawesome_ohos/pubspec.yaml
+new file mode 100644
+index 0000000..f42aaed
+--- /dev/null
++++ b/lumira_app_flutter/packages/camerawesome_ohos/pubspec.yaml
+@@ -0,0 +1,72 @@
++name: camerawesome_ohos
++description: Easiest Flutter camera Plugin supporting capturing images,
++  streaming images, video recording, switch sensors, autofocus, flash... on
++  Android and iOS
++version: 1.0.2
++repository: https://gitcode.com/CPF-Flutter/fluttertpc_camerawesome
++
++environment:
++  sdk: '>=2.17.3 <4.0.0'
++  flutter: ">=1.20.0"
++
++dependencies:
++  carousel_slider: ^4.2.1
++  collection: ^1.17.0
++  colorfilter_generator: ^0.0.8
++  flutter:
++    sdk: flutter
++  image: ^4.0.15
++    # photofilters:
++  # git: https://github.com/svenopdehipt/photofilters.git
++  rxdart: ^0.27.7
++dev_dependencies:
++  flutter_lints: ^2.0.1
++  flutter_test:
++    sdk: flutter
++  pigeon:
++    git:
++      url: "https://gitcode.com/CPF-Flutter/flutter_packages.git"
++      path: "packages/pigeon"
++  test: ^1.25.2
++
++
++# For information on the generic Dart part of this file, see the
++# following page: https://dart.dev/tools/pub/pubspec
++# The following section is specific to Flutter.
++flutter:
++  assets:
++    - assets/icons/1_1.png
++    - assets/icons/16_9.png
++    - assets/icons/4_3.png
++    - assets/icons/expanded.png
++    - assets/icons/minimized.png
++  plugin:
++    platforms:
++      ohos:
++        pluginClass: CamerawesomePlugin
++  #To add assets to your plugin package, add an assets section, like this:
++  #
++  # For details regarding assets in packages, see
++  # https://flutter.dev/assets-and-images/#from-packages
++  #
++  # An image asset can refer to one or more resolution-specific "variants", see
++  # https://flutter.dev/assets-and-images/#resolution-aware.
++  # To add custom fonts to your plugin package, add a fonts section here,
++  # in this "flutter" section. Each entry in this list should have a
++  # "family" key with the font family name, and a "fonts" key with a
++  # list giving the asset and other descriptors for the font. For
++  # example:
++  # fonts:
++  #   - family: Schyler
++  #     fonts:
++  #       - asset: fonts/Schyler-Regular.ttf
++  #       - asset: fonts/Schyler-Italic.ttf
++  #         style: italic
++  #   - family: Trajan Pro
++  #     fonts:
++  #       - asset: fonts/TrajanPro.ttf
++  #       - asset: fonts/TrajanPro_Bold.ttf
++  #         weight: 700
++  #
++  # For details regarding fonts in packages, see
++  # https://flutter.dev/custom-fonts/#from-packages
+diff --git a/lumira_app_flutter/pubspec.yaml b/lumira_app_flutter/pubspec.yaml
+index dfeca46..5730f29 100644
+--- a/lumira_app_flutter/pubspec.yaml
++++ b/lumira_app_flutter/pubspec.yaml
+@@ -20,25 +20,23 @@ dependencies:
+   # 需 meta 1.12.0+，与 Harmony 3.7 / Dart 2.19.6 必需的 meta 1.8.0 冲突）
+   flutter_riverpod: 2.3.6
+ 
+   # 路由（brief ^14.6.1 → 调整为兼容 Dart 2.19 的版本，14.x 需 Dart 3）
+   go_router: ^6.5.7
+ 
+   # 相机（brief ^2.5.0 → 调整为兼容 Dart 2.19 的版本，2.x 需 Dart 3）
+   # Fix: 改用 CPF-Flutter Harmony 适配版本 camerawesome_ohos 1.0.2（对应原库名 camerawesome 1.4.0）
+   # 来源：https://gitcode.com/CPF-Flutter/docs/blob/main/ThirdpartyLibrarites.md 第 81 行
+   # pub.dev 版本无 ohos 实现，导致 Harmony 端取景器一直转圈；改用 gitcode fork 的 ohos 子目录包
++  # Task 0: 从 gitcode fork 本地化为 path 依赖（便于扩展原生白平衡；flutter pub clear 不清本地版）
+   camerawesome_ohos:
+-    git:
+-      url: https://gitcode.com/CPF-Flutter/fluttertpc_camerawesome.git
+-      ref: master
+-      path: ohos
++    path: packages/camerawesome_ohos
+ 
+   # 原版 camerawesome（iOS/Android 用，包名不同于 camerawesome_ohos）
+   # Fix(ios WYSIWYG): 原版 1.4.0 预览 cover 算法有 bug（竖屏纹理永远按高度适配），
+   # 且 iOS 预览流选 16:9 视频 preset 与 4:3 成片视场不一致。改为自建 vendor 包修复，
+   # 见 packages/camerawesome（与原版同版本号，仅打 iOS/预览适配补丁）。
+   camerawesome:
+     path: packages/camerawesome
+ 
+   # 权限（brief ^12.0.1 → CPF-Flutter 3.7 Harmony 适配版本 10.3.2，11+ 需 Dart 3；未回合上游，见 dependency_overrides）
+   permission_handler: 10.3.2  # Harmony 3.7 适配版本 (CPF-Flutter)

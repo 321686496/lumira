@@ -1,0 +1,65 @@
+﻿diff --git a/lumira_app_flutter/packages/camerawesome/ios/Classes/CameraPreview/CameraPreview.m b/lumira_app_flutter/packages/camerawesome/ios/Classes/CameraPreview/CameraPreview.m
+index 8c8be1a..0fd12bc 100644
+--- a/lumira_app_flutter/packages/camerawesome/ios/Classes/CameraPreview/CameraPreview.m
++++ b/lumira_app_flutter/packages/camerawesome/ios/Classes/CameraPreview/CameraPreview.m
+@@ -308,6 +308,16 @@
+   }
+ }
+ 
++// 逐通道钳制增益到 [1.0, maxWhiteBalanceGain]。
++// Apple 文档警告：部分温度/色度组合会得到越界的 RGB 增益，直接传给
++// setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains: 会造成 NSException 崩溃。
++static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGains gains, float maxGain) {
++  gains.redGain   = MAX(1.0f, MIN(maxGain, gains.redGain));
++  gains.greenGain = MAX(1.0f, MIN(maxGain, gains.greenGain));
++  gains.blueGain  = MAX(1.0f, MIN(maxGain, gains.blueGain));
++  return gains;
++}
++
+ - (void)setWhiteBalance:(NSString *)mode temperatureK:(NSNumber *_Nullable)k
+                   error:(FlutterError *_Nullable __autoreleasing *_Nonnull)error {
+   NSError *e = nil;
+@@ -317,18 +327,23 @@
+   }
+ 
+   if (k != nil) {
+-    // 手动色温：用目标 K 得到 gains，锁定
++    // 手动色温：用目标 K 得到 gains，锁定（渐进钳制避免越界崩溃）
+     AVCaptureWhiteBalanceGains gains =
+         [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:
+             AVCaptureWhiteBalanceTemperatureAndTintValuesMake([k floatValue], 0.0f)];
+-    [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
++    gains = ClampWhiteBalanceGains(gains, _captureDevice.maxWhiteBalanceGain);
++    if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
++      [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
++    } else {
++      *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"locked white balance not supported" details:nil];
++    }
+   } else if ([mode isEqualToString:@"auto"]) {
+     // 恢复自动（连续自动白平衡）
+     AVCaptureWhiteBalanceMode wbMode = AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance;
+     if ([_captureDevice isWhiteBalanceModeSupported:wbMode]) _captureDevice.whiteBalanceMode = wbMode;
+     else *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"continuous auto white balance not supported" details:nil];
+   } else {
+-    // 模式预设：映射到目标 K 再锁定
++    // 模式预设：映射到目标 K 再锁定（渐进钳制避免越界崩溃）
+     float presetK = 5500.0f;
+     if      ([mode isEqualToString:@"daylight"])     presetK = 5500.0f;
+     else if ([mode isEqualToString:@"cloudy"])       presetK = 6500.0f;
+@@ -337,10 +352,12 @@
+     AVCaptureWhiteBalanceGains gains =
+         [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:
+             AVCaptureWhiteBalanceTemperatureAndTintValuesMake(presetK, 0.0f)];
+-    gains.redGain   = MAX(1.0f, MIN(_captureDevice.maxWhiteBalanceGain, gains.redGain));
+-    gains.greenGain = MAX(1.0f, MIN(_captureDevice.maxWhiteBalanceGain, gains.greenGain));
+-    gains.blueGain  = MAX(1.0f, MIN(_captureDevice.maxWhiteBalanceGain, gains.blueGain));
+-    [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
++    gains = ClampWhiteBalanceGains(gains, _captureDevice.maxWhiteBalanceGain);
++    if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
++      [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
++    } else {
++      *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"locked white balance not supported" details:nil];
++    }
+   }
+ 
+   [_captureDevice unlockForConfiguration];
