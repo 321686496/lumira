@@ -10,7 +10,6 @@ import '../features/capture/pages/capture_page.dart';
 import '../features/capture/pages/capture_preview_page.dart';
 import '../features/capture/pages/capture_preview_template_page.dart';
 import '../features/capture/pages/capture_scene_detail_page.dart';
-import '../features/capture/pages/capture_scene_guide_page.dart';
 import '../features/capture/pages/capture_scene_manage_page.dart';
 import '../features/capture/pages/capture_tutorial_page.dart';
 import '../features/watermark/pages/watermark_editor_page.dart';
@@ -151,15 +150,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             templateId: templateId,
             draftId: draftId,
           );
-        },
-      ),
-      GoRoute(
-        path: RouteNames.captureSceneGuide,
-        name: 'captureSceneGuide',
-        builder: (context, state) {
-          // 接收 scene 参数（uni-app: /pages/capture/scene-guide?scene=xxx）
-          final scene = state.queryParams[RouteNames.paramScene];
-          return CaptureSceneGuidePage(scene: scene);
         },
       ),
       GoRoute(

@@ -149,7 +149,7 @@ class RecommendationService {
             subtitle: '从咖啡馆开始你的拍摄之旅',
             imageSeed: 'banner-new-user-cafe',
             tag: '新手友好',
-            route: '/capture/scene-guide?scene=preset_cafe',
+            route: '/capture/scene-detail?sceneId=preset_cafe',
           ));
       if (questionnaireBanner == null) {
         usedSceneIds.add('preset_cafe');
@@ -209,7 +209,7 @@ class RecommendationService {
         subtitle: '你收藏的场景，新的拍摄灵感',
         imageSeed: 'banner-fav-$sceneId',
         tag: '收藏场景',
-        route: '/capture/scene-guide?scene=$sceneId',
+        route: '/capture/scene-detail?sceneId=$sceneId',
       ));
     } else if (fallbackKit != null &&
         !usedSceneIds.contains(fallbackKit.sceneId)) {
@@ -221,7 +221,7 @@ class RecommendationService {
         subtitle: '你常用的套件，新的拍摄灵感',
         imageSeed: 'banner-kit-${fallbackKit.id}',
         tag: '收藏场景',
-        route: '/capture/scene-guide?scene=$sceneId',
+        route: '/capture/scene-detail?sceneId=$sceneId',
       ));
     } else {
       // 全空 fallback：系统推荐模板

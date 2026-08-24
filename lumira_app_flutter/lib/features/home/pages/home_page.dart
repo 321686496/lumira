@@ -88,13 +88,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     GoRouter.of(context).push(RouteNames.build(RouteNames.capture, params));
   }
   void _goSceneGuide(String sceneId) {
-    // 项目记忆规则：场景推荐卡片跳转 scene-guide?scene=xxx（不是 scene-detail）
-    // Forced fix: 改为 push 而非 context.go，避免返回时跳到其他页面或退出应用
+    // 场景卡片深链直达场景详情（场景灵感页并入场景库后的统一落点）
     GoRouter.of(context).push(
-      RouteNames.build(
-        RouteNames.captureSceneGuide,
-        {RouteNames.paramScene: sceneId},
-      ),
+      RouteNames.withSceneId(RouteNames.captureSceneDetail, sceneId),
     );
   }
 

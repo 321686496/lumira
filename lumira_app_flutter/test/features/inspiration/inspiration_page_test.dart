@@ -43,10 +43,10 @@ void main() {
           builder: (_, __) => const InspirationPage(),
         ),
         GoRoute(
-          path: RouteNames.captureSceneGuide,
-          name: 'captureSceneGuide',
+          path: RouteNames.captureSceneDetail,
+          name: 'captureSceneDetail',
           builder: (_, __) =>
-              const Scaffold(body: Center(child: Text('SCENE_GUIDE'))),
+              const Scaffold(body: Center(child: Text('SCENE_DETAIL'))),
         ),
         GoRoute(
           path: RouteNames.templatesDetail,
@@ -186,17 +186,17 @@ void main() {
       expect(find.text('根据你的喜好推荐'), findsNothing);
     });
 
-    testWidgets('tapping guide bar pushes scene guide', (tester) async {
+    testWidgets('tapping guide bar pushes scene detail', (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byType(InspirationGuideBar));
       await tester.pumpAndSettle();
-      expect(find.text('SCENE_GUIDE'), findsOneWidget);
+      expect(find.text('SCENE_DETAIL'), findsOneWidget);
     });
 
-    testWidgets('tapping a today scene card pushes scene guide',
+    testWidgets('tapping a today scene card pushes scene detail',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
@@ -205,7 +205,7 @@ void main() {
       await tester.ensureVisible(find.text('咖啡馆窗边'));
       await tester.tap(find.text('咖啡馆窗边'));
       await tester.pumpAndSettle();
-      expect(find.text('SCENE_GUIDE'), findsOneWidget);
+      expect(find.text('SCENE_DETAIL'), findsOneWidget);
     });
 
     testWidgets('tapping a tutorial card pushes tutorial detail',

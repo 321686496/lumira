@@ -77,7 +77,8 @@ class _CaptureSceneManagePageState
   }
 
   void _goGuide() {
-    GoRouter.of(context).push(RouteNames.captureSceneGuide);
+    // 管理页"查看场景"统一进入场景库大全（场景灵感页已并入）
+    GoRouter.of(context).push(RouteNames.scenes);
   }
 
   /// 点击场景卡片跳转到场景详情页（带 sceneId）

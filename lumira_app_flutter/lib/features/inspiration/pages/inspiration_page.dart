@@ -21,10 +21,7 @@ class InspirationPage extends ConsumerWidget {
 
   void _goSceneGuide(BuildContext context, String sceneId) {
     GoRouter.of(context).push(
-      RouteNames.build(
-        RouteNames.captureSceneGuide,
-        {RouteNames.paramScene: sceneId},
-      ),
+      RouteNames.withSceneId(RouteNames.captureSceneDetail, sceneId),
     );
   }
 
