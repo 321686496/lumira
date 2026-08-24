@@ -25,6 +25,10 @@ import '../../profile/providers/collection_providers.dart';
 import '../../watermark/data/watermark_providers.dart';
 import '../providers/gallery_diary_providers.dart';
 
+/// 原生「保存到系统相册」MethodChannel（与拍摄预览页共用同一通道，见
+/// CapturePreviewPage 同名字段）：{ 'path': <本地文件绝对路径> } -> { success, error }
+const _photoSaverChannel = MethodChannel('lumira/photo_saver');
+
 /// 相册照片详情页（查看为主）
 ///
 /// 设计文档：docs/superpowers/specs/2026-07-31-gallery-detail-edit-split-design.md
@@ -410,6 +414,44 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     }
   }
 
+  /// 保存当前本地照片到系统相册：复用原生 `lumira/photo_saver` 通道。
+  /// 网络图片（dataUrl/filePath 以 http 开头）不支持，弹 toast 提示。
+  Future<void> _onSaveToAlbum() async {
+    final photo = _photo;
+    if (photo == null) return;
+    final filePath = photo.filePath;
+    final dataUrl = photo.dataUrl;
+    final localPath = (filePath != null && filePath.isNotEmpty && !filePath.startsWith('http'))
+        ? filePath
+        : null;
+    if (localPath == null) {
+      final isNetwork = (dataUrl != null && dataUrl.startsWith('http')) ||
+          (filePath != null && filePath.startsWith('http'));
+      LumiraToast.show(
+        context,
+        isNetwork ? '网络图片暂不支持保存到系统相册' : '未找到可保存的照片文件',
+        duration: const Duration(milliseconds: 1500),
+      );
+      return;
+    }
+    try {
+      final result = await _photoSaverChannel.invokeMethod('saveToAlbum', {
+        'path': localPath,
+      });
+      final success = result != null && result['success'] == true;
+      if (!mounted) return;
+      LumiraToast.show(
+        context,
+        success ? '已保存到系统相册' : '保存失败：${result?['error'] ?? '未知错误'}',
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      debugPrint('[gallery-detail] 保存到系统相册异常: $e');
+      if (!mounted) return;
+      LumiraToast.show(context, '保存失败：$e', duration: const Duration(seconds: 2));
+    }
+  }
+
   /// 删除当前照片：先弹出确认对话框，确认后调用 DAO 删除并返回上一页。
   Future<void> _onDelete() async {
     final photo = _photo;
@@ -522,6 +564,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
               onShare: _onShare,
               onDelete: _onDelete,
               onAddWatermark: _onAddWatermark,
+              onSaveToAlbum: _onSaveToAlbum,
             ),
         ],
       ),
@@ -726,6 +769,7 @@ class _MoreAction extends StatelessWidget {
     required this.onShare,
     required this.onDelete,
     required this.onAddWatermark,
+    required this.onSaveToAlbum,
   });
 
   final ThemeTokens tokens;
@@ -734,6 +778,7 @@ class _MoreAction extends StatelessWidget {
   final Future<void> Function() onShare;
   final Future<void> Function() onDelete;
   final Future<void> Function() onAddWatermark;
+  final Future<void> Function() onSaveToAlbum;
 
   @override
   Widget build(BuildContext context) {
@@ -779,6 +824,13 @@ class _MoreAction extends StatelessWidget {
           Divider(height: 1, color: tokens.divider),
           _MoreSheetOption(
             tokens: tokens,
+            icon: Icons.save_outlined,
+            label: '保存到系统相册',
+            onTap: () => Navigator.of(ctx).pop('saveToAlbum'),
+          ),
+          Divider(height: 1, color: tokens.divider),
+          _MoreSheetOption(
+            tokens: tokens,
             icon: Icons.photo_filter_outlined,
             label: '添加水印',
             color: tokens.brand,
@@ -803,6 +855,8 @@ class _MoreAction extends StatelessWidget {
       await onOutfitMark();
     } else if (result == 'share') {
       await onShare();
+    } else if (result == 'saveToAlbum') {
+      await onSaveToAlbum();
     } else if (result == 'watermark') {
       await onAddWatermark();
     } else if (result == 'delete') {
