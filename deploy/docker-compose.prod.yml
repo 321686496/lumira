@@ -62,6 +62,8 @@ services:
     depends_on:
       lumira-mysql:
         condition: service_healthy
+      lumira-redis:
+        condition: service_started
     # 不暴露端口到宿主机（通过 docker network 与 nginx 通信，更安全）
     # 如需在宿主机直接访问调试，取消注释下面两行
     # ports:
@@ -78,6 +80,9 @@ services:
       - DB_NAME=${MYSQL_DATABASE}
       - UPLOAD_DIR=/app/data/uploads
       - BACKEND_PUBLIC_URL=${BACKEND_PUBLIC_URL}
+      # Redis 缓存（未配置 REDIS_URL 时后端自动降级为无缓存，行为同现状）
+      # 集群扩容时所有后端副本共用同一 Redis 实例
+      - REDIS_URL=redis://lumira-redis:6379
     volumes:
       - ./data:/app/data
     networks:
@@ -90,6 +95,18 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  # ---- Redis 7 缓存服务（2026-08，Redis 缓存 + 集群就绪）----
+  # 持久化到宿主机 data/redis；AOF 开启保证重启不丢缓存。
+  # 单机/集群均填同一 Redis 实例；后端不配置 REDIS_URL 时自动降级为无缓存。
+  lumira-redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - lumira-net
 
 networks:
   lumira-net:

@@ -18,6 +18,11 @@ upstream lumira_backend_upstream {
     # docker compose 服务名 "lumira-backend" 会自动在指定网络中解析为容器 IP
     server lumira-backend:3000;
 
+    # 集群扩容：复制下行 server 到下方，指向多台业务容器（务必关闭宿主机端口暴露，
+    # 由 nginx 做负载均衡；所有副本共用同一 MySQL 与 Redis）
+    # server lumira-backend-2:3000;
+    # server lumira-backend-3:3000;
+
     # 可选：长连接保持（减少每次请求的 TCP 握手开销）
     keepalive 32;
     keepalive_timeout 60s;
