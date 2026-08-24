@@ -18,6 +18,16 @@ export class AccountService {
     private readonly mailService: MailService,
   ) {}
 
+  /** 查询当前设备的绑定邮箱（用于「账号保护」页展示已绑定状态） */
+  async getStatus(deviceId: string) {
+    const db = this.dbService.getDb();
+    const row = await db.query.devices.findFirst({
+      where: eq(devices.deviceId, deviceId),
+    });
+    if (!row) throw new BadRequestException('设备不存在，请先注册');
+    return { email: row.email ?? null };
+  }
+
   async rotateRecoverySecret(deviceId: string) {
     const db = this.dbService.getDb();
     const secret = generateSecret();

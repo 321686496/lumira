@@ -4,6 +4,10 @@ export interface RecoveryQrResponse {
   expiresAt: number;
 }
 
+export interface AccountStatusResponse {
+  email: string | null;
+}
+
 export interface RecoverResponse {
   deviceId: string;
 }

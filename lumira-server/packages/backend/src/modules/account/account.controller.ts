@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { DeviceAuthGuard } from '../../common/guards/device-auth.guard';
 import { AccountService } from './account.service';
 import { RecoverByQrDto } from './dto/recover-by-qr.dto';
@@ -9,10 +9,10 @@ import { EmailCodeDto } from './dto/email-code.dto';
 export class AccountController {
   constructor(private readonly accountService: AccountService) {}
 
-  @Post('recovery-qr')
+  @Get('status')
   @UseGuards(DeviceAuthGuard)
-  recoveryQr(@Req() req: any) {
-    return this.accountService.rotateRecoverySecret(req.deviceId);
+  status(@Req() req: any) {
+    return this.accountService.getStatus(req.deviceId);
   }
 
   @Post('recover-by-qr')
