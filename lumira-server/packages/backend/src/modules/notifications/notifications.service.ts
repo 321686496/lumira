@@ -4,14 +4,27 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { asc, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { notifications, devices } from '../../database/schema';
+import { RedisService } from '../../common/redis/redis.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(
+    private readonly dbService: DatabaseService,
+    private readonly redisService: RedisService,
+  ) {}
+
+  /** 通知写操作后统一失效通知缓存 */
+  private async invalidateNotifCaches(): Promise<void> {
+    await this.redisService.delByPattern('lumira:cache:notifList:*');
+  }
 
   async listForDevice(deviceId: string) {
+    const key = `lumira:cache:notifList:device:${deviceId}`;
+    const cached = await this.redisService.getJson<{ notifications: Array<Record<string, unknown>> }>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
     const rows = await db.select()
@@ -36,7 +49,10 @@ export class NotificationsService {
         startAt: n.startAt ?? null,
         endAt: n.endAt ?? null,
       }));
-    return { notifications: list };
+    const result = { notifications: list };
+
+    await this.redisService.setJson(key, result, 600);
+    return result;
   }
 
   /** 定向匹配：scope=all 恒真；devices 按 id；criteria 按设备字段 + 通配 */
@@ -99,6 +115,7 @@ export class NotificationsService {
       updatedAt: now,
     };
     await db.insert(notifications).values(row);
+    await this.invalidateNotifCaches();
     return (await this.getById(id))!;
   }
 
@@ -118,6 +135,7 @@ export class NotificationsService {
     if (dto.isActive !== undefined) patch.isActive = dto.isActive ? 1 : 0;
     if (dto.sortOrder !== undefined) patch.sortOrder = dto.sortOrder;
     await db.update(notifications).set(patch).where(eq(notifications.id, id));
+    await this.invalidateNotifCaches();
     return (await this.getById(id))!;
   }
 
@@ -125,6 +143,7 @@ export class NotificationsService {
     const db = this.dbService.getDb();
     await this.requireExists(id);
     await db.delete(notifications).where(eq(notifications.id, id));
+    await this.invalidateNotifCaches();
     return { success: true };
   }
 
@@ -135,6 +154,7 @@ export class NotificationsService {
     await db.update(notifications)
       .set({ isActive: next, updatedAt: Math.floor(Date.now() / 1000) })
       .where(eq(notifications.id, id));
+    await this.invalidateNotifCaches();
     return { id, isActive: next === 1 };
   }
 

@@ -10,6 +10,7 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 import { rowToCategory } from './templates.service';
 import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
 import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
+import { RedisService } from '../../common/redis/redis.service';
 import type { TemplateCategory } from '@lumira/shared';
 import type { UploadFile } from './admin-templates.service';
 
@@ -41,7 +42,14 @@ export class AdminCategoriesService {
   constructor(
     private readonly dbService: DatabaseService,
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
+    private readonly redisService: RedisService,
   ) {}
+
+  /** 分类变更后统一失效内容缓存 */
+  private async invalidateCategoryCaches(): Promise<void> {
+    await this.redisService.delByPattern('lumira:cache:categoryList:*');
+    await this.redisService.delByPattern('lumira:cache:categoryTree:*');
+  }
 
   /**
    * Admin 分类列表（含 isActive=0），支持按 level/parentKey 筛选。
@@ -121,6 +129,7 @@ export class AdminCategoriesService {
       updatedAt: now,
     });
 
+    await this.invalidateCategoryCaches();
     return this.getByKeyAndParent(meta.key, parentKey);
   }
 
@@ -159,6 +168,7 @@ export class AdminCategoriesService {
       .set(updateData)
       .where(eq(templateCategories.id, existing.id));
 
+    await this.invalidateCategoryCaches();
     return this.getByKeyAndParent(key, parentKey);
   }
 
@@ -201,6 +211,7 @@ export class AdminCategoriesService {
     await db.delete(templateCategories).where(eq(templateCategories.id, existing.id));
     await this.storage.deleteByDir('categories', key);
 
+    await this.invalidateCategoryCaches();
     return { success: true };
   }
 
@@ -215,6 +226,7 @@ export class AdminCategoriesService {
       .set({ isActive: newActive, updatedAt: now })
       .where(eq(templateCategories.id, existing.id));
 
+    await this.invalidateCategoryCaches();
     return { key, isActive: newActive === 1 };
   }
 

@@ -6,6 +6,7 @@ import { eq, and, asc, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { templateCategories } from '../../database/schema';
 import { rowToCategory } from './templates.service';
+import { RedisService } from '../../common/redis/redis.service';
 import type {
   TemplateCategory,
   TemplateCategoryListResponse,
@@ -15,25 +16,42 @@ import type {
 
 @Injectable()
 export class CategoriesService {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(
+    private readonly dbService: DatabaseService,
+    private readonly redisService: RedisService,
+  ) {}
 
   /** 客户端：仅返回 isActive=1 的分类（扁平列表），按 level + sortOrder 排序 */
   async listActive(): Promise<TemplateCategoryListResponse> {
+    const key = 'lumira:cache:categoryList:active';
+    const cached = await this.redisService.getJson<TemplateCategoryListResponse>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
     const rows = await db.select().from(templateCategories)
       .where(eq(templateCategories.isActive, 1))
       .orderBy(asc(templateCategories.level), asc(templateCategories.sortOrder));
-    return { categories: rows.map(rowToCategory) };
+    const result = { categories: rows.map(rowToCategory) };
+
+    await this.redisService.setJson(key, result, 600);
+    return result;
   }
 
   /** 客户端：返回完整三级树（仅 isActive=1） */
   async listTree(): Promise<TemplateCategoryTreeResponse> {
+    const key = 'lumira:cache:categoryTree:tree';
+    const cached = await this.redisService.getJson<TemplateCategoryTreeResponse>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
     const rows = await db.select().from(templateCategories)
       .where(eq(templateCategories.isActive, 1))
       .orderBy(asc(templateCategories.level), asc(templateCategories.sortOrder));
     const flat = rows.map(rowToCategory);
-    return { categories: buildTree(flat) };
+    const result = { categories: buildTree(flat) };
+
+    await this.redisService.setJson(key, result, 600);
+    return result;
   }
 
   /** 返回指定父分类的直接子分类（isActive=1） */

@@ -8,6 +8,7 @@ import { DatabaseService } from '../../database/database.service';
 import { templates, templateCategories, templatePrices } from '../../database/schema';
 import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
 import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
+import { RedisService } from '../../common/redis/redis.service';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { parsePptpl } from './utils/pptpl-parser';
@@ -65,7 +66,15 @@ export class AdminTemplatesService {
   constructor(
     private readonly dbService: DatabaseService,
     @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
+    private readonly redisService: RedisService,
   ) {}
+
+  /** 模板内容变更后统一失效内容缓存 */
+  private async invalidateTemplateCaches(): Promise<void> {
+    await this.redisService.delByPattern('lumira:cache:templateList:*');
+    await this.redisService.delByPattern('lumira:cache:templateDetail:*');
+    await this.redisService.delByPattern('lumira:cache:templatePrices:*');
+  }
 
   // ===== 列表 / 详情 =====
 
@@ -268,6 +277,7 @@ export class AdminTemplatesService {
         });
     }
 
+    await this.invalidateTemplateCaches();
     return this.getDetail(id);
   }
 
@@ -411,6 +421,7 @@ export class AdminTemplatesService {
         });
     }
 
+    await this.invalidateTemplateCaches();
     return this.getDetail(id);
   }
 
@@ -433,6 +444,7 @@ export class AdminTemplatesService {
     // 删除文件目录
     await this.storage.deleteByDir('templates', id);
 
+    await this.invalidateTemplateCaches();
     return { success: true };
   }
 
@@ -452,6 +464,7 @@ export class AdminTemplatesService {
     // 同步 template_prices 的 isActive
     await db.update(templatePrices).set({ isActive: newActive, updatedAt: now }).where(eq(templatePrices.templateId, id));
 
+    await this.invalidateTemplateCaches();
     return { id, isActive: newActive === 1 };
   }
 }

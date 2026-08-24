@@ -3,13 +3,18 @@ import { asc, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { systemScenes } from '../../database/schema';
 import { UsageService } from '../usage/usage.service';
+import { RedisService } from '../../common/redis/redis.service';
 import { CreateSceneDto } from './dto/create-scene.dto';
 import { UpdateSceneDto } from './dto/update-scene.dto';
 import type { SystemScene } from '@lumira/shared';
 
 @Injectable()
 export class ScenesService {
-  constructor(private readonly dbService: DatabaseService, private readonly usageService: UsageService) {}
+  constructor(
+    private readonly dbService: DatabaseService,
+    private readonly usageService: UsageService,
+    private readonly redisService: RedisService,
+  ) {}
 
   private toScene(row: Record<string, unknown>): SystemScene {
     return {
@@ -35,18 +40,30 @@ export class ScenesService {
 
   /** 客户端：返回启用场景 + 对应使用次数 */
   async listActive(): Promise<{ scenes: Array<SystemScene & { usage: { useShoot: number; openDetail: number; sceneSelect: number } }> }> {
+    const key = 'lumira:cache:sceneList:active';
+    const cached = await this.redisService.getJson<{ scenes: Array<SystemScene & { usage: { useShoot: number; openDetail: number; sceneSelect: number } }> }>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
     const rows = await db.select().from(systemScenes)
       .where(sql`${systemScenes.isActive} = 1`)
       .orderBy(asc(systemScenes.sortOrder));
     const stats = await this.usageService.stats('scene');
     const statsMap = new Map(stats.items.map((i) => [i.itemId, i]));
-    return {
+    const result = {
       scenes: rows.map((r) => {
         const u = statsMap.get(r.id);
         return { ...this.toScene(r), usage: { useShoot: u?.useShoot ?? 0, openDetail: u?.openDetail ?? 0, sceneSelect: u?.sceneSelect ?? 0 } };
       }),
     };
+
+    await this.redisService.setJson(key, result, 600);
+    return result;
+  }
+
+  /** 场景写操作后统一失效场景缓存 */
+  private async invalidateSceneCaches(): Promise<void> {
+    await this.redisService.delByPattern('lumira:cache:sceneList:*');
   }
 
   async listAdmin(): Promise<{ scenes: SystemScene[] }> {
@@ -81,6 +98,7 @@ export class ScenesService {
       createdAt: now,
       updatedAt: now,
     });
+    await this.invalidateSceneCaches();
     return (await this.getById(dto.id))!;
   }
 
@@ -99,6 +117,7 @@ export class ScenesService {
     if (dto.sortOrder !== undefined) patch.sortOrder = dto.sortOrder;
     if (dto.isActive !== undefined) patch.isActive = dto.isActive ? 1 : 0;
     await db.update(systemScenes).set(patch).where(sql`${systemScenes.id} = ${id}`);
+    await this.invalidateSceneCaches();
     return (await this.getById(id))!;
   }
 
@@ -106,6 +125,7 @@ export class ScenesService {
     const db = this.dbService.getDb();
     await this.requireExists(id);
     await db.delete(systemScenes).where(sql`${systemScenes.id} = ${id}`);
+    await this.invalidateSceneCaches();
     return { success: true };
   }
 
@@ -114,6 +134,7 @@ export class ScenesService {
     const scene = await this.requireExists(id);
     const next = scene.isActive ? 0 : 1;
     await db.update(systemScenes).set({ isActive: next, updatedAt: Math.floor(Date.now() / 1000) }).where(sql`${systemScenes.id} = ${id}`);
+    await this.invalidateSceneCaches();
     return { id, isActive: next === 1 };
   }
 

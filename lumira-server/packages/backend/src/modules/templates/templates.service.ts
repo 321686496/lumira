@@ -6,6 +6,7 @@ import { DatabaseService } from '../../database/database.service';
 import { ownedTemplates, templatePrices, templates, templateCategories } from '../../database/schema';
 import { PointsService } from '../points/points.service';
 import { buildAssetUrl } from '../../common/storage/asset-url';
+import { RedisService } from '../../common/redis/redis.service';
 import type {
   RemoteTemplateMeta,
   RemoteTemplateListResponse,
@@ -19,6 +20,7 @@ export class TemplatesService {
   constructor(
     private readonly dbService: DatabaseService,
     private readonly pointsService: PointsService,
+    private readonly redisService: RedisService,
   ) {}
 
   /** 查询设备已拥有的模板 id 列表 */
@@ -42,17 +44,24 @@ export class TemplatesService {
 
   /** 查询所有模板积分定价 */
   async listPrices() {
+    const key = 'lumira:cache:templatePrices:list';
+    const cached = await this.redisService.getJson<{ prices: { templateId: string; priceCredits: number; isActive: boolean }[] }>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
     const rows = await db.query.templatePrices.findMany({
       where: eq(templatePrices.isActive, 1),
     });
-    return {
+    const result = {
       prices: rows.map((r) => ({
         templateId: r.templateId,
         priceCredits: r.priceCredits,
         isActive: r.isActive === 1,
       })),
     };
+
+    await this.redisService.setJson(key, result, 600);
+    return result;
   }
 
   /** 积分兑换模板 */
@@ -62,7 +71,7 @@ export class TemplatesService {
 
     // 整体事务：已拥有检查 + 定价 + 扣积分 + 写入 owned
     // 任一环节失败（已拥有 / 余额不足 / 无定价记录）则整体回滚
-    return db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // 1. 幂等检查（必须先于定价：已拥有 → 409，不落任何定价记录，
       //    防止重复/失败请求用上报值污染 template_prices）
       const ownedRows = await tx.select().from(ownedTemplates)
@@ -127,6 +136,10 @@ export class TemplatesService {
         balance: newBalance,
       };
     });
+
+    // 兑换可能 UPSERT 本地内置模板定价，失效定价缓存
+    await this.redisService.delByPattern('lumira:cache:templatePrices:*');
+    return result;
   }
 
   /**
@@ -176,6 +189,12 @@ export class TemplatesService {
     category?: string,
     subtreeKeys?: string[],
   ): Promise<RemoteTemplateListResponse> {
+    // 缓存 key 含查询参数指纹：不同筛选返回不同结果，避免串缓存；
+    // admin 写入按 pattern `lumira:cache:templateList:*` 全量失效
+    const key = `lumira:cache:templateList:list:${since ?? 0}:${category ?? ''}:${subtreeKeys ? subtreeKeys.join('|') : ''}`;
+    const cached = await this.redisService.getJson<RemoteTemplateListResponse>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
 
     // 构建条件：isActive=1 + 可选 since + 可选 category / 可选 subtree 集合
@@ -207,18 +226,26 @@ export class TemplatesService {
       ? metas.reduce((max, m) => Math.max(max, m.updatedAt), 0)
       : Math.floor(Date.now() / 1000);
 
-    return { templates: metas, serverUpdatedAt };
+    const result: RemoteTemplateListResponse = { templates: metas, serverUpdatedAt };
+    await this.redisService.setJson(key, result, 600);
+    return result;
   }
 
   /** 客户端拉取单个模板完整内容（5 段）*/
   async getRemoteTemplateDetail(id: string): Promise<RemoteTemplateDetail> {
+    const key = `lumira:cache:templateDetail:${id}`;
+    const cached = await this.redisService.getJson<RemoteTemplateDetail>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
     const rows = await db.select().from(templates).where(eq(templates.id, id)).limit(1);
     const row = rows[0];
     if (!row) {
       throw new NotFoundException('Template not found');
     }
-    return rowToDetail(row);
+    const detail = rowToDetail(row);
+    await this.redisService.setJson(key, detail, 600);
+    return detail;
   }
 }
 
