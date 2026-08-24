@@ -7,6 +7,7 @@ import type { MySql2Transaction } from 'drizzle-orm/mysql2';
 import { DatabaseService } from '../../database/database.service';
 import { userPoints, pointTransactions, pointEarnEvents } from '../../database/schema';
 import * as schema from '../../database/schema';
+import { RedisService } from '../../common/redis/redis.service';
 import { getUtc8DateStr } from '../../common/utils/date.util';
 
 // 积分流水类型（与 shared 类型保持一致，此处本地定义避免事务内依赖 shared 构建产物）
@@ -37,7 +38,15 @@ interface BalanceRow {
 
 @Injectable()
 export class PointsService {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(
+    private readonly dbService: DatabaseService,
+    private readonly redisService: RedisService,
+  ) {}
+
+  /** 写积分后失效该设备的余额缓存 */
+  private async invalidateBalance(deviceId: string): Promise<void> {
+    await this.redisService.del(`lumira:cache:userPoints:${deviceId}`);
+  }
 
   /**
    * 增加积分（事务：upsert 余额 + 写流水）
@@ -88,6 +97,7 @@ export class PointsService {
       }
     });
 
+    await this.invalidateBalance(deviceId);
     const updated = await this.getBalance(deviceId);
     return updated.balance;
   }
@@ -182,6 +192,7 @@ export class PointsService {
           });
         }
       });
+      await this.invalidateBalance(deviceId);
       const updated = await this.getBalance(deviceId);
       return { granted: true, delta: points, balance: updated.balance };
     } catch (e) {
@@ -205,9 +216,11 @@ export class PointsService {
     refId: string | null = null,
   ): Promise<number> {
     const db = this.dbService.getDb();
-    return db.transaction(async (tx) =>
+    const result = await db.transaction(async (tx) =>
       this.spendPointsSync(tx, deviceId, delta, type, refId),
     );
+    await this.invalidateBalance(deviceId);
+    return result;
   }
 
   /**
@@ -252,15 +265,27 @@ export class PointsService {
 
   /** 查余额（不存在则返回 0）*/
   async getBalance(deviceId: string) {
+    const key = `lumira:cache:userPoints:${deviceId}`;
+    const cached = await this.redisService.getJson<{
+      deviceId: string;
+      balance: number;
+      totalEarned: number;
+      totalSpent: number;
+    }>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
     const rows = await db.select().from(userPoints).where(eq(userPoints.deviceId, deviceId));
     const record = rows[0];
-    return {
+    const result = {
       deviceId,
       balance: record?.balance ?? 0,
       totalEarned: record?.totalEarned ?? 0,
       totalSpent: record?.totalSpent ?? 0,
     };
+
+    await this.redisService.setJson(key, result, 60);
+    return result;
   }
 
   /** 查流水（倒序，默认 50 条）*/

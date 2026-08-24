@@ -25,12 +25,16 @@ export class TemplatesService {
 
   /** 查询设备已拥有的模板 id 列表 */
   async listOwned(deviceId: string) {
+    const key = `lumira:cache:ownedTemplates:${deviceId}`;
+    const cached = await this.redisService.getJson<{ templateIds: string[]; records: Array<Record<string, unknown>> }>(key);
+    if (cached !== null) return cached;
+
     const db = this.dbService.getDb();
     const rows = await db.query.ownedTemplates.findMany({
       where: eq(ownedTemplates.deviceId, deviceId),
       orderBy: (t, { desc }) => [desc(t.unlockedAt)],
     });
-    return {
+    const result = {
       templateIds: rows.map((r) => r.templateId),
       records: rows.map((r) => ({
         id: r.id,
@@ -40,6 +44,9 @@ export class TemplatesService {
         unlockedAt: r.unlockedAt,
       })),
     };
+
+    await this.redisService.setJson(key, result, 120);
+    return result;
   }
 
   /** 查询所有模板积分定价 */
@@ -139,6 +146,9 @@ export class TemplatesService {
 
     // 兑换可能 UPSERT 本地内置模板定价，失效定价缓存
     await this.redisService.delByPattern('lumira:cache:templatePrices:*');
+    // 兑换变更余额与已拥有，失效对应用户热数据缓存
+    await this.redisService.del(`lumira:cache:userPoints:${deviceId}`);
+    await this.redisService.del(`lumira:cache:ownedTemplates:${deviceId}`);
     return result;
   }
 
@@ -173,6 +183,8 @@ export class TemplatesService {
       sourceDetail,
       unlockedAt: now,
     });
+    // 变更已拥有，失效该设备缓存
+    await this.redisService.del(`lumira:cache:ownedTemplates:${deviceId}`);
     return true;
   }
 
