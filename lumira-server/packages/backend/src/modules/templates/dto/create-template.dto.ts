@@ -38,7 +38,7 @@ export class CreateTemplateDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(10)
+  @MaxLength(20)
   shortDesc?: string;
 
   @IsOptional()
