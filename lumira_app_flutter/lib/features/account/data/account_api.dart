@@ -17,6 +17,14 @@ class RecoverResult {
   const RecoverResult(this.deviceId);
 }
 
+/// 账号保护状态（当前设备的绑定邮箱等）
+class AccountStatus {
+  final String? email;
+  const AccountStatus({this.email});
+  factory AccountStatus.fromJson(Map<String, dynamic> j) =>
+      AccountStatus(email: j['email'] as String?);
+}
+
 /// 账号保护 / 恢复的客户端 API。
 class AccountApi {
   final ApiClient client;
@@ -25,6 +33,13 @@ class AccountApi {
   Future<RecoveryQrData> rotateRecoverySecret() async {
     final r = await client.post('/account/recovery-qr',
         fromJson: (json) => RecoveryQrData.fromJson(json as Map<String, dynamic>));
+    return r;
+  }
+
+  /// 查询当前设备的账号保护状态（已绑定邮箱等）。
+  Future<AccountStatus> getStatus() async {
+    final r = await client.get('/account/status',
+        fromJson: (json) => AccountStatus.fromJson(json as Map<String, dynamic>));
     return r;
   }
 

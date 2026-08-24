@@ -1,16 +1,16 @@
 // lib/features/capture/data/templates/fresh_green_portrait.dart
 import '../../domain/photo_template.dart';
 
-/// 清新淡雅绿模板
+/// 清新淡雅绿模板（fresh_green 子风格）
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 10
 const PhotoTemplate freshGreenPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'fresh_green_portrait',
-    name: '清新淡雅绿',
+    name: '清新绿意全身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'fresh_green', method: 'full_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'fresh_green', subStyle: 'fresh_green', method: 'full_body'),
     tags: ['人像', '森系', '露营', '净白', '户外'],
     tagIds: [],
     price: 0,

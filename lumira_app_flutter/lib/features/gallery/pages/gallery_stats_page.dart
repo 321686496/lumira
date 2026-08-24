@@ -13,6 +13,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/gallery_mock_data.dart';
 import '../data/gallery_models.dart';
+import '../data/name_resolver.dart';
 
 /// 画册统计页
 ///
@@ -174,12 +175,21 @@ class _StatsContentState extends State<_StatsContent> {
           ),
         ),
         const SizedBox(height: 16),
-        // 3. 拍摄分类排行榜
+        // 3. 拍摄场景排行
         FadeUp(
           delay: const Duration(milliseconds: 160),
           child: _CategoryRankCard(
             tokens: tokens,
             ranks: stats.categoryRanks,
+          ),
+        ),
+        const SizedBox(height: 16),
+        // 3.5 常用模板排行
+        FadeUp(
+          delay: const Duration(milliseconds: 200),
+          child: _TemplateRankCard(
+            tokens: tokens,
+            ranks: stats.templateRanks,
           ),
         ),
         const SizedBox(height: 16),
@@ -232,6 +242,22 @@ class _StatsContentState extends State<_StatsContent> {
         .toList()
       ..sort((a, b) => b.count.compareTo(a.count));
 
+    // 常用模板排行（基于 templateId）
+    final templateCounts = <String, int>{};
+    for (final p in photos) {
+      final tid = p.templateId;
+      if (tid == null || tid.isEmpty) continue;
+      templateCounts[tid] = (templateCounts[tid] ?? 0) + 1;
+    }
+    final templateRanks = templateCounts.entries
+        .map((e) => CategoryRank(
+              label: _templateLabel(e.key),
+              count: e.value,
+              percent: photos.isNotEmpty ? e.value / photos.length : 0.0,
+            ))
+        .toList()
+      ..sort((a, b) => b.count.compareTo(a.count));
+
     // 时段分布
     final timeBuckets = <int>[0, 0, 0, 0]; // 上午/下午/傍晚/夜晚
     for (final p in photos) {
@@ -261,15 +287,14 @@ class _StatsContentState extends State<_StatsContent> {
       avgPerDay: avgPerDay,
       dailyCounts: dailyCounts,
       categoryRanks: ranks,
+      templateRanks: templateRanks,
       timeOfDayDistribution: distribution,
     );
   }
 
-  String _sceneLabel(String sceneId) {
-    if (sceneId == 'uncategorized') return '未设置场景';
-    // 简单返回 sceneId 作为标签（真实场景下可查询场景名称）
-    return sceneId;
-  }
+  String _sceneLabel(String sceneId) => sceneDisplayName(sceneId);
+
+  String _templateLabel(String templateId) => templateDisplayName(templateId);
 }
 
 /// 总照片数卡片
@@ -687,6 +712,63 @@ class _RankRow extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 常用模板排行
+class _TemplateRankCard extends StatelessWidget {
+  const _TemplateRankCard({
+    required this.tokens,
+    required this.ranks,
+  });
+
+  final ThemeTokens tokens;
+  final List<CategoryRank> ranks;
+
+  @override
+  Widget build(BuildContext context) {
+    return NeuCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.style_outlined, size: 20, color: tokens.brand),
+              const SizedBox(width: 8),
+              Text(
+                '常用模板排行',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (ranks.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Text(
+                  '暂无模板数据',
+                  style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+                ),
+              ),
+            )
+          else
+            for (var i = 0; i < ranks.length; i++) ...[
+              _RankRow(
+                tokens: tokens,
+                rank: ranks[i],
+                index: i,
+              ),
+              if (i < ranks.length - 1) const SizedBox(height: 12),
+            ],
+        ],
+      ),
     );
   }
 }

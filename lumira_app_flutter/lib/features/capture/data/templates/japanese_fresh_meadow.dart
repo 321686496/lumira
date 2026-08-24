@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/japanese_fresh_meadow.dart
+import '../../domain/photo_template.dart';
+
+/// 草地远景日系少女（japanese_fresh 子风格变体）
+const PhotoTemplate japaneseFreshMeadowTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'japanese_fresh_meadow',
+    name: '草地远景日系少女',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'japanese_fresh', subStyle: 'japanese_fresh', method: 'wide'),
+    tags: ['人像', '日系', '草地', '远景', '留白'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/japanese_fresh_portrait.png',
+    description: '远景大留白的日系草地少女，人景交融，空气清透。',
+    referenceSource: '小红书日系远景人像教程',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.2, y: 0.15, w: 0.6, h: 0.85),
+    opacity: 0.2,
+    aspectRatio: '3:4',
+    description: '远景全身取景，人物占比小，上部留白给天空与草地延展',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait.png'),
+    position: Position(x: 0.5, y: 0.6),
+    scale: 0.5,
+    rotation: 0,
+    description: '远景站立或轻轻走动，身体放松，面向镜头方向，融于草地',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 100,
+    shutterSpeed: '1/250',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '漫射光（阴天/顺光）',
+    lightDirectionAngle: 0,
+    shootingDistance: '5-8m（远景）',
+    background: '大片草地/远山/云天',
+    props: [],
+    bestTime: '上午 7:00-10:00',
+    bestTimeFrom: '07:00',
+    bestTimeTo: '10:00',
+    tips: [
+      '远景构图人物占比要小才有意境',
+      '利用草地线条引导视线',
+      '整体低饱和清透',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: 12,
+      contrast: -10,
+      saturation: -6,
+      temperature: -3,
+      tint: 0,
+      highlights: 5,
+      shadows: 12,
+      clarity: -8,
+      vibrance: 3,
+    ),
+    smoothStrength: 8,
+    sharpen: 5,
+    vignette: 0,
+    grain: 0,
+    lut: 'pastel',
+  ),
+);

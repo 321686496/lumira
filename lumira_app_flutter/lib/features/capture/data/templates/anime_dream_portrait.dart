@@ -1,16 +1,16 @@
 // lib/features/capture/data/templates/anime_dream_portrait.dart
 import '../../domain/photo_template.dart';
 
-/// 动漫温柔青模板
+/// 动漫温柔青模板（anime_tender 子风格，归位 fresh_healing）
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 12
 const PhotoTemplate animeDreamPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'anime_dream_portrait',
-    name: '动漫温柔青',
+    name: '晴空田园少女人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'anime_dream', method: 'full_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'anime_tender', subStyle: 'anime_tender', method: 'full_body'),
     tags: ['人像', '动漫', '宫崎骏', '梦境', '晴天'],
     tagIds: [],
     price: 40,

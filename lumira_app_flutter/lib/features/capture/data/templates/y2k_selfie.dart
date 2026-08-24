@@ -1,0 +1,76 @@
+// lib/features/capture/data/templates/y2k_selfie.dart
+import '../../domain/photo_template.dart';
+
+/// 千禧辣妹自拍模板（y2k 变体）
+const PhotoTemplate y2kSelfieTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'y2k_selfie',
+    name: '千禧辣妹自拍',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'urban_trend', style: 'y2k', subStyle: 'y2k', method: 'selfie'),
+    tags: ['人像', '自拍', 'Y2K', '千禧', '闪光'],
+    tagIds: [],
+    price: 40,
+    cover: 'assets/images/templates/y2k_portrait.png',
+    description: '千禧辣妹高饱和闪光自拍，颠狂元气，Y2K 千禧美食风攻击性自拍。',
+    referenceSource: '小红书 Y2K 千禧风教程；酷 girl 非甜美风格；千禧回潮自拍',
+  ),
+  composition: Composition(
+    overlayType: 'center',
+    subjectFrame: SubjectFrame(x: 0.2, y: 0.1, w: 0.6, h: 0.8),
+    opacity: 0.2,
+    aspectRatio: '3:4',
+    description: '居中人像大特写自拍，占满画面',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/y2k_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.9,
+    rotation: 0,
+    description: '手举手机自拍半身入镜，比耶或叉腰，表情酷拽直视镜头',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 400,
+    shutterSpeed: '1/100',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'on',
+    focusMode: 'auto',
+    lensType: 'front',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '正面闪光',
+    lightDirectionAngle: 0,
+    shootingDistance: '0.3-0.5m（手持）',
+    background: '纯色墙/涂鸦墙/街头',
+    props: ['墨镜', '链条', '发夹'],
+    bestTime: '全天（闪光为主光）',
+    tips: [
+      '开启手机闪光灯直打',
+      '背景选亮色/涂鸦墙',
+      '表情要酷不要甜',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: 8,
+      contrast: 15,
+      saturation: 20,
+      temperature: 5,
+      tint: 5,
+      highlights: -5,
+      shadows: 0,
+      clarity: 0,
+      vibrance: 5,
+    ),
+    smoothStrength: 8,
+    sharpen: 15,
+    vignette: 5,
+    grain: 5,
+    lut: 'none',
+  ),
+);

@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate foodiePortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'foodie_portrait',
-    name: '探店美食人像',
+    name: '美食人像半身',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'foodie_portrait', method: 'half_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'scene_portrait', style: 'foodie_portrait', subStyle: 'foodie_portrait', method: 'half_body'),
     tags: ['人像', '探店', '美食', '对角线', '下午茶'],
     tagIds: [],
     price: 0,

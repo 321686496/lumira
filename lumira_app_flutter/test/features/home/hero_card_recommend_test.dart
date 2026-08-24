@@ -42,7 +42,7 @@ void main() {
     );
   }
 
-  testWidgets('有推荐时按钮显示模板名并带 templateId 跳转拍摄页', (tester) async {
+  testWidgets('有推荐时嵌入模板卡、按钮显示「套用模板拍摄」并带 templateId 跳转拍摄页', (tester) async {
     final inspiration = HeroInspiration(
       dateText: '8月23日',
       title: '今日灵感',
@@ -50,14 +50,18 @@ void main() {
       weatherText: '',
       recommendedTemplateId: 'soft_portrait',
       recommendedTemplateName: '柔光人像',
+      recommendedTemplateCategory: 'portrait',
     );
     await tester.pumpWidget(_wrap(inspiration: inspiration));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('柔光人像'), findsOneWidget);
+    // 模板卡已嵌入（含名称），按钮为固定短文案，不再因长模板名而 overflow
+    expect(find.text('今日推荐'), findsOneWidget);
+    expect(find.text('柔光人像'), findsOneWidget);
+    expect(find.text('套用模板拍摄'), findsOneWidget);
     expect(find.text('开始拍摄'), findsNothing);
 
-    await tester.tap(find.textContaining('柔光人像'));
+    await tester.tap(find.text('柔光人像'));
     await tester.pumpAndSettle();
 
     expect(find.text('CAPTURE:soft_portrait'), findsOneWidget);

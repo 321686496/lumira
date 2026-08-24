@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/fresh_green_park.dart
+import '../../domain/photo_template.dart';
+
+/// 公园绿意远景人像（fresh_green 子风格变体）
+const PhotoTemplate freshGreenParkTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'fresh_green_park',
+    name: '公园绿意远景人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'fresh_green', subStyle: 'fresh_green', method: 'wide'),
+    tags: ['人像', '森系', '公园', '远景', '绿意'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/fresh_green_portrait.png',
+    description: '公园绿意远景人像，清新淡雅绿调，人景自然交融。',
+    referenceSource: '小红书公园绿意人像教程',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.22, y: 0.15, w: 0.55, h: 0.85),
+    opacity: 0.2,
+    aspectRatio: '3:4',
+    description: '远景全身取景，人物偏小融入树林，上部留白给绿叶与天空',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/fresh_green_portrait.png'),
+    position: Position(x: 0.5, y: 0.6),
+    scale: 0.5,
+    rotation: 0,
+    description: '远景站立或倚树，身体自然放松，面向镜头，融于公园绿色',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 100,
+    shutterSpeed: '1/250',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '漫射光（树荫/阴天）',
+    lightDirectionAngle: 0,
+    shootingDistance: '4-6m（远景）',
+    background: '公园草坪/树林/步道',
+    props: [],
+    bestTime: '上午 8:00-10:00 或阴天',
+    bestTimeFrom: '08:00',
+    bestTimeTo: '10:00',
+    tips: [
+      '远景让绿意充满画面',
+      '浅色服装与自然融合',
+      '保持淡雅绿调',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: 12,
+      contrast: -8,
+      saturation: -6,
+      temperature: -8,
+      tint: 0,
+      highlights: 5,
+      shadows: 12,
+      clarity: -5,
+      vibrance: 0,
+    ),
+    smoothStrength: 8,
+    sharpen: 5,
+    vignette: 0,
+    grain: 0,
+    lut: 'pastel',
+  ),
+);

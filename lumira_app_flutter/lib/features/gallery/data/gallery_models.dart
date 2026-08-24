@@ -172,6 +172,7 @@ class GalleryStats {
     required this.avgPerDay,
     required this.dailyCounts,
     required this.categoryRanks,
+    required this.templateRanks,
     required this.timeOfDayDistribution,
   });
 
@@ -183,8 +184,10 @@ class GalleryStats {
   final double avgPerDay;
   /// 近 7 天每日计数（长度 7，索引 0 = 6 天前，索引 6 = 今天）
   final List<int> dailyCounts;
-  /// 拍摄分类排行（按数量降序）
+  /// 拍摄场景排行（按数量降序）
   final List<CategoryRank> categoryRanks;
+  /// 常用模板排行（按数量降序）
+  final List<CategoryRank> templateRanks;
   /// 拍摄时段分布（4 项：上午/下午/傍晚/夜晚）
   final List<TimeSlot> timeOfDayDistribution;
 }

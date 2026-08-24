@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate y2kPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'y2k_portrait',
-    name: 'Y2K 千禧风',
+    name: 'Y2K千禧半身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'y2k', method: 'half_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'urban_trend', style: 'y2k', subStyle: 'y2k', method: 'half_body'),
     tags: ['人像', 'Y2K', '千禧', '高饱和', '闪光'],
     tagIds: [],
     price: 40,

@@ -1,0 +1,76 @@
+// lib/features/capture/data/templates/dark_indoor_he.dart
+import '../../domain/photo_template.dart';
+
+/// 暗房轮廓他拍人像模板（dark_indoor 变体）
+const PhotoTemplate darkIndoorHeTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'dark_indoor_he',
+    name: '暗房轮廓他拍人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'urban_trend', style: 'dark_indoor', subStyle: 'dark_indoor', method: 'normal'),
+    tags: ['人像', '他拍', '暗调', '轮廓', '质感'],
+    tagIds: [],
+    price: 40,
+    cover: 'assets/images/templates/dark_indoor_portrait.png',
+    description: '暗房轮廓他拍人像，侧窗光勾勒身形，锐化质感黑森林氛围。',
+    referenceSource: '小红书黑森林滤镜教程；暗调室内人像；探店拍照教程',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.15, w: 0.45, h: 0.7),
+    opacity: 0.25,
+    aspectRatio: '3:4',
+    description: '三分之一侧身取景，侧光勾勒轮廓',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.8,
+    rotation: 0,
+    description: '侧身站立面向窗光，一手搭椅背，轮廓光勾勒身形，静默沉思',
+  ),
+  camera: CameraParams(
+    exposureCompensation: -0.3,
+    iso: 320,
+    shutterSpeed: '1/80',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5200,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '侧光/逆光（窗光）',
+    lightDirectionAngle: 90,
+    shootingDistance: '1.5-2m',
+    background: '咖啡馆/暗调室内/窗帘',
+    props: ['咖啡杯', '椅子', '书'],
+    bestTime: '全天（室内）',
+    tips: [
+      '侧光勾勒人物轮廓',
+      '背景选暗调室内保持干净',
+      '锐化突出质感细节',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: -10,
+      contrast: 12,
+      saturation: -5,
+      temperature: 5,
+      tint: 0,
+      highlights: -10,
+      shadows: -5,
+      clarity: 0,
+      vibrance: 0,
+    ),
+    smoothStrength: 12,
+    sharpen: 20,
+    vignette: 15,
+    grain: 8,
+    lut: 'cinematic',
+  ),
+);

@@ -1,0 +1,76 @@
+// lib/features/capture/data/templates/foodie_he.dart
+import '../../domain/photo_template.dart';
+
+/// 餐桌互动他拍人像模板（场景人像 · 他拍）
+const PhotoTemplate foodieHeTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'foodie_he',
+    name: '餐桌互动他拍人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'scene_portrait', style: 'foodie_portrait', subStyle: 'foodie_portrait', method: 'normal'),
+    tags: ['人像', '美食', '他拍', '互动', '下午茶'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/foodie_portrait.png',
+    description: '餐桌前的互动他拍，人举杯碰食物，探店时光热气腾腾。',
+    referenceSource: '小红书探店下午茶拍照；Foodie 滤镜风格；咖啡馆人像教程',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.2, w: 0.5, h: 0.6),
+    opacity: 0.25,
+    aspectRatio: '1:1',
+    description: '平视取景感人举杯互动，人与美食共同入画',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/foodie_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.8,
+    rotation: 0,
+    description: '侧身坐姿，一手举杯伸向镜头方向，一手轻扶桌面，侧头看向镜头，微笑',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 200,
+    shutterSpeed: '1/100',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '顺光/侧光（室内灯）',
+    lightDirectionAngle: 45,
+    shootingDistance: '1-1.5m',
+    background: '咖啡馆桌面/餐厅/美食',
+    props: ['咖啡杯', '蛋糕', '餐具', '餐巾'],
+    bestTime: '全天（室内）',
+    tips: [
+      '抓拍举杯瞬间制造互动感',
+      '人手持餐具体现用餐氛围',
+      '暖调让食物更诱人',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '1:1',
+    color: PostProcessColor(
+      brightness: 10,
+      contrast: -4,
+      saturation: 10,
+      temperature: 10,
+      tint: 0,
+      highlights: 0,
+      shadows: 8,
+      clarity: 0,
+      vibrance: 5,
+    ),
+    smoothStrength: 12,
+    sharpen: 10,
+    vignette: 6,
+    grain: 0,
+    lut: 'warm_film',
+  ),
+);

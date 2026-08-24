@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/cream_healing_window.dart
+import '../../domain/photo_template.dart';
+
+/// 奶油窗光他拍人像（cream_healing 子风格变体）
+const PhotoTemplate creamHealingWindowTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'cream_healing_window',
+    name: '奶油窗光他拍人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'cream_healing', subStyle: 'cream_healing', method: 'normal'),
+    tags: ['人像', '奶油', '窗光', '暖调', '治愈'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/cream_healing_portrait.png',
+    description: '奶油暖调窗光下的他拍人像，柔和暖黄，氛围治愈。',
+    referenceSource: '小红书奶油窗光人像教程',
+  ),
+  composition: Composition(
+    overlayType: 'center',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.18, w: 0.42, h: 0.65),
+    opacity: 0.25,
+    aspectRatio: '3:4',
+    description: '居中半身取景，人物置于窗光一侧，背景柔和',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cream_healing_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.75,
+    rotation: 0,
+    description: '靠窗侧坐，微微弯腰靠近窗沿，手搭在窗台，暖光洒在脸上',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0.2,
+    iso: 100,
+    shutterSpeed: '1/160',
+    whiteBalance: 'cloudy',
+    whiteBalanceK: 6000,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '窗边侧光（暖）',
+    lightDirectionAngle: 75,
+    shootingDistance: '1.5-2m',
+    background: '暖色窗帘/木质窗框/室内绿植',
+    props: ['窗帘', '绿植'],
+    bestTime: '下午 15:00-17:00',
+    bestTimeFrom: '15:00',
+    bestTimeTo: '17:00',
+    tips: [
+      '利用下午暖窗光营造奶油氛围',
+      '面部朝向窗光补光',
+      '服装选奶油/米粉色系',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: 12,
+      contrast: -8,
+      saturation: 5,
+      temperature: 12,
+      tint: 0,
+      highlights: -5,
+      shadows: 12,
+      clarity: -5,
+      vibrance: 5,
+    ),
+    smoothStrength: 15,
+    sharpen: 8,
+    vignette: 5,
+    grain: 5,
+    lut: 'warm_film',
+  ),
+);

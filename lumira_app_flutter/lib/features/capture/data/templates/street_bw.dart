@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate streetBwTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'street_bw',
-    name: '黑白街拍',
+    name: '随性街头黑白',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'street',
-    classification: TemplateClassification(type: 'street', style: 'casual', method: 'candid'),
+    classification: TemplateClassification(type: 'street', style: 'casual', subStyle: 'casual', method: 'normal'),
     tags: ['黑白', '街拍', '人文', '极简'],
     tagIds: [],
     price: 0,

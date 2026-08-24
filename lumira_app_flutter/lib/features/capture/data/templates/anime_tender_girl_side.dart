@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/anime_tender_girl_side.dart
+import '../../domain/photo_template.dart';
+
+/// 晴空田园少女人像·侧拍（anime_tender 子风格变体）
+const PhotoTemplate animeTenderGirlSideTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'anime_tender_girl_side',
+    name: '晴空田园少女人像·侧拍',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'anime_tender', subStyle: 'anime_tender', method: 'side'),
+    tags: ['人像', '动漫', '宫崎骏', '晴空', '侧拍'],
+    tagIds: [],
+    price: 40,
+    cover: 'assets/images/templates/anime_dream_portrait.png',
+    description: '晴空田园林下的清透侧拍，动漫温柔青色，宫崎骏式意境。',
+    referenceSource: '小红书宫崎骏感滤镜；日系动漫人像',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.08, w: 0.5, h: 0.75),
+    opacity: 0.2,
+    aspectRatio: '3:4',
+    description: '侧拍取景，人物偏右，回眸视线朝向晴空留白方向',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/anime_dream_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.72,
+    rotation: 0,
+    description: '田间侧身回眸，张开双臂轻展，仰头看天，开心放松',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 100,
+    shutterSpeed: '1/200',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '顺光/顶光',
+    lightDirectionAngle: 30,
+    shootingDistance: '2-3m',
+    background: '蓝天白云/草坡/花田',
+    props: [],
+    bestTime: '上午 9:00-11:00',
+    bestTimeFrom: '09:00',
+    bestTimeTo: '11:00',
+    tips: [
+      '侧拍带晴空绿野',
+      '服装浅色与天空呼应',
+      '晴天蓝天才有效果',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: 12,
+      contrast: -5,
+      saturation: 10,
+      temperature: 5,
+      tint: 0,
+      highlights: -5,
+      shadows: 15,
+      clarity: -5,
+      vibrance: 8,
+    ),
+    smoothStrength: 10,
+    sharpen: 5,
+    vignette: 0,
+    grain: 0,
+    lut: 'pastel',
+  ),
+);

@@ -1,16 +1,16 @@
 // lib/features/capture/data/templates/purple_dusk_portrait.dart
 import '../../domain/photo_template.dart';
 
-/// 温柔日暮紫模板
+/// 紫色黄昏半身人像模板
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 14
 const PhotoTemplate purpleDuskPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'purple_dusk_portrait',
-    name: '温柔日暮紫',
+    name: '紫色黄昏半身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'purple_dusk', method: 'half_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'dreamy_night', style: 'purple_dusk', subStyle: 'purple_dusk', method: 'half_body'),
     tags: ['人像', '日暮', '紫色', '梦幻', '夕阳'],
     tagIds: [],
     price: 60,

@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/elegant_lady_wide.dart
+import '../../domain/photo_template.dart';
+
+/// 优雅远眺人像模板（场景人像 · 远景）
+const PhotoTemplate elegantLadyWideTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'elegant_lady_wide',
+    name: '优雅远眺人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'scene_portrait', style: 'elegant_lady', subStyle: 'elegant_lady', method: 'wide'),
+    tags: ['人像', '优雅', '远眺', '轻熟女', '莫兰迪'],
+    tagIds: [],
+    price: 60,
+    cover: 'assets/images/templates/elegant_lady_portrait.png',
+    description: '远景远眺的优雅人像，人物融入城市场景，大气疏离的高级感。',
+    referenceSource: '小红书轻熟女穿搭拍照；莫兰迪淡雅风格；城市街拍人像',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.3, w: 0.3, h: 0.5),
+    opacity: 0.25,
+    aspectRatio: '4:5',
+    description: '人物作为环境人像置入远景，周边都市空间留白呈现疏离质感',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/elegant_lady_portrait.png'),
+    position: Position(x: 0.45, y: 0.6),
+    scale: 0.6,
+    rotation: 0,
+    description: '远眺站立于平台或街道尽头，望向城市远端，身姿挺拔从容',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 100,
+    shutterSpeed: '1/200',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: 'main',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '漫射光/侧光',
+    lightDirectionAngle: 60,
+    shootingDistance: '6-10m',
+    background: '天际线、广场、江边或城市观景台',
+    props: [],
+    bestTime: '上午 9:00-11:00 或下午 15:00-17:00',
+    bestTimeFrom: '09:00',
+    bestTimeTo: '11:00',
+    tips: [
+      '远景人物占比小凸显环境大气',
+      '选择简洁都市背景避免杂乱',
+      '远眺动作增添疏离高级感',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '4:5',
+    color: PostProcessColor(
+      brightness: 5,
+      contrast: 6,
+      saturation: -13,
+      temperature: -5,
+      tint: 0,
+      highlights: 0,
+      shadows: 5,
+      clarity: 5,
+      vibrance: -6,
+    ),
+    smoothStrength: 10,
+    sharpen: 12,
+    vignette: 10,
+    grain: 6,
+    lut: 'cinematic',
+  ),
+);

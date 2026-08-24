@@ -72,6 +72,15 @@ class HeroInspiration {
   /// 推荐出的模板名称，用于 CTA 按钮文案
   final String recommendedTemplateName;
 
+  /// 推荐模板封面（内置 assets 路径 / 远程 http URL），空串表示无封面
+  final String recommendedTemplateCover;
+
+  /// 推荐模板封面 base64 data URL（自定义模板），空表示无
+  final String recommendedTemplateCoverData;
+
+  /// 推荐模板所属分类 key（如 portrait），用于嵌入卡片的分类角标
+  final String recommendedTemplateCategory;
+
   const HeroInspiration({
     required this.dateText,
     required this.title,
@@ -79,6 +88,9 @@ class HeroInspiration {
     required this.weatherText,
     this.recommendedTemplateId = '',
     this.recommendedTemplateName = '',
+    this.recommendedTemplateCover = '',
+    this.recommendedTemplateCoverData = '',
+    this.recommendedTemplateCategory = '',
   });
 
   static const HeroInspiration fallback = HeroInspiration(
@@ -89,9 +101,25 @@ class HeroInspiration {
   );
 }
 
-/// 今日灵感推荐出的模板（仅 id + 名称，用于 CTA 按钮）
+/// 今日灵感推荐出的模板（id + 名称 + 封面/分类，用于 CTA 与嵌入卡片）
 class RecommendedTemplate {
   final String id;
   final String name;
-  const RecommendedTemplate({required this.id, required this.name});
+
+  /// 封面（内置 assets 路径 / 远程 http URL）
+  final String cover;
+
+  /// 封面 base64 data URL（自定义模板）
+  final String coverData;
+
+  /// 模板分类 key（用于嵌入卡片分类展示）
+  final String category;
+
+  const RecommendedTemplate({
+    required this.id,
+    required this.name,
+    this.cover = '',
+    this.coverData = '',
+    this.category = '',
+  });
 }

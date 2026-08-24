@@ -175,11 +175,14 @@ class TemplateMeta {
 
 class TemplateClassification {
   final String type;
+  /// 大风格（L2，仅人像模板使用，如 fresh_healing）。
+  final String majorStyle;
   final String style;
   final String subStyle;
   final String method;
   const TemplateClassification({
     required this.type,
+    this.majorStyle = '',
     this.style = '',
     this.subStyle = '',
     this.method = '',
@@ -187,12 +190,14 @@ class TemplateClassification {
 
   TemplateClassification copyWith({
     String? type,
+    String? majorStyle,
     String? style,
     String? subStyle,
     String? method,
   }) =>
       TemplateClassification(
         type: type ?? this.type,
+        majorStyle: majorStyle ?? this.majorStyle,
         style: style ?? this.style,
         subStyle: subStyle ?? this.subStyle,
         method: method ?? this.method,
@@ -203,12 +208,13 @@ class TemplateClassification {
       identical(this, other) ||
       other is TemplateClassification &&
           type == other.type &&
+          majorStyle == other.majorStyle &&
           style == other.style &&
           subStyle == other.subStyle &&
           method == other.method;
 
   @override
-  int get hashCode => Object.hash(type, style, subStyle, method);
+  int get hashCode => Object.hash(type, majorStyle, style, subStyle, method);
 }
 
 class Composition {

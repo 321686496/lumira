@@ -1,0 +1,76 @@
+// lib/features/capture/data/templates/morandi_minimal_overhead.dart
+import '../../domain/photo_template.dart';
+
+/// 莫兰迪低饱和俯拍（morandi_minimal 子风格变体）
+const PhotoTemplate morandiMinimalOverheadTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'morandi_minimal_overhead',
+    name: '莫兰迪低饱和俯拍',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'morandi_minimal', subStyle: 'morandi_minimal', method: 'overhead'),
+    tags: ['人像', '莫兰迪', '俯拍', '低饱和', '极简'],
+    tagIds: [],
+    price: 60,
+    cover: 'assets/images/templates/morandi_minimal_portrait.png',
+    description: '莫兰迪低饱和俯拍人像，布景与人物成统一色块，高级克制。',
+    referenceSource: '莫兰迪俯拍人像；极简布景',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.28, w: 0.4, h: 0.55),
+    opacity: 0.2,
+    aspectRatio: '4:5',
+    description: '俯拍取景，人物略偏上，桌面布景与主体形成统一色块',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/morandi_minimal_portrait.png'),
+    position: Position(x: 0.5, y: 0.55),
+    scale: 0.7,
+    rotation: 0,
+    description: '仰卧或俯身于莫兰迪布景上，手臂自然搭放，闭目沉静',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 100,
+    shutterSpeed: '1/160',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '顶光/柔光',
+    lightDirectionAngle: 90,
+    shootingDistance: '1-1.5m（俯拍）',
+    background: '莫兰迪布景/纯色床品',
+    props: ['布艺', '抱枕'],
+    bestTime: '全天（室内可控光）',
+    tips: [
+      '俯拍统一色彩布局',
+      '人物与背景同色系',
+      '低饱和高级质感',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '4:5',
+    color: PostProcessColor(
+      brightness: 0,
+      contrast: 5,
+      saturation: -20,
+      temperature: -5,
+      tint: 0,
+      highlights: 0,
+      shadows: 0,
+      clarity: 5,
+      vibrance: -10,
+    ),
+    smoothStrength: 12,
+    sharpen: 10,
+    vignette: 5,
+    grain: 5,
+    lut: 'none',
+  ),
+);

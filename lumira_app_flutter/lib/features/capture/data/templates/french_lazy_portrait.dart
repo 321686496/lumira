@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate frenchLazyPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'french_lazy_portrait',
-    name: '法式慵懒高雅',
+    name: '法式慵懒半身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'french_lazy', method: 'half_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'retro_nostalgia', style: 'french_lazy', subStyle: 'french_lazy', method: 'half_body'),
     tags: ['人像', '法式', '慵懒', '颗粒', '窗光'],
     tagIds: [],
     price: 40,

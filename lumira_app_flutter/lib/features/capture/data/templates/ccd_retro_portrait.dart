@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate ccdRetroPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'ccd_retro_portrait',
-    name: 'CCD 胶片复古',
+    name: 'CCD复古半身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'ccd_retro', method: 'half_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'emotional_film', style: 'ccd_retro', subStyle: 'ccd_retro', method: 'half_body'),
     tags: ['人像', 'CCD', '复古', '胶片', '暖黄'],
     tagIds: [],
     price: 0,

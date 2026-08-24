@@ -1,0 +1,76 @@
+// lib/features/capture/data/templates/foodie_overhead.dart
+import '../../domain/photo_template.dart';
+
+/// 美食俯拍人像模板（场景人像 · 俯拍）
+const PhotoTemplate foodieOverheadTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'foodie_overhead',
+    name: '美食俯拍人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'scene_portrait', style: 'foodie_portrait', subStyle: 'foodie_portrait', method: 'overhead'),
+    tags: ['人像', '美食', '俯拍', '探店', '下午茶'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/foodie_portrait.png',
+    description: '90 度俯拍视角，人与桌面美食构成俯视盛宴的仪式感。',
+    referenceSource: '小红书探店下午茶拍照；Foodie 滤镜风格；咖啡馆人像教程',
+  ),
+  composition: Composition(
+    overlayType: 'center',
+    subjectFrame: SubjectFrame(x: 0.25, y: 0.25, w: 0.5, h: 0.5),
+    opacity: 0.25,
+    aspectRatio: '1:1',
+    description: '俯拍居中构图，食物桌面与人物共同铺满画面中心',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/foodie_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.9,
+    rotation: 0,
+    description: '俯视角拍摄，人物低头探向桌面美食，双手持杯或餐具，桌面铺满食物',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 160,
+    shutterSpeed: '1/125',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '顶光/漫射光（室内灯）',
+    lightDirectionAngle: 90,
+    shootingDistance: '0.6-0.9m（俯视）',
+    background: '咖啡桌面/餐盘/杯具构成俯视画面',
+    props: ['咖啡杯', '蛋糕', '餐具'],
+    bestTime: '全天（室内）',
+    tips: [
+      '从正上方垂直俯拍构图更整',
+      '桌面摆盘丰富增强画面层次',
+      '俯拍突出食物而弱化人脸',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '1:1',
+    color: PostProcessColor(
+      brightness: 11,
+      contrast: -4,
+      saturation: 12,
+      temperature: 10,
+      tint: 0,
+      highlights: 0,
+      shadows: 8,
+      clarity: 0,
+      vibrance: 6,
+    ),
+    smoothStrength: 10,
+    sharpen: 10,
+    vignette: 5,
+    grain: 0,
+    lut: 'warm_film',
+  ),
+);

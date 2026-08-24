@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'neon_portrait',
-    name: '霓虹人像',
+    name: '霓虹街角他拍人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'film', method: 'normal'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'urban_trend', style: 'neon_city', subStyle: 'neon_city', method: 'normal'),
     tags: ['霓虹', '夜景人像', '赛博朋克', '城市'],
     tagIds: [],
     price: 20,

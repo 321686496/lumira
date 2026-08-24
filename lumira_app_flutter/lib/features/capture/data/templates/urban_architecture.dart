@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate urbanArchitectureTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'urban_architecture',
-    name: '城市建筑',
+    name: '城市建筑天际线',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'landscape',
-    classification: TemplateClassification(type: 'landscape', style: 'epic', method: 'wide'),
+    classification: TemplateClassification(type: 'landscape', style: 'epic', subStyle: 'epic', method: 'wide'),
     tags: ['建筑', '城市', '风光', '几何线条'],
     tagIds: [],
     price: 20,

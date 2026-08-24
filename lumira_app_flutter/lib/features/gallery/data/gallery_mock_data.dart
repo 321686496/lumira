@@ -88,6 +88,12 @@ class GalleryMockData {
       CategoryRank(label: '美食', count: 6, percent: 0.14),
       CategoryRank(label: '街拍', count: 4, percent: 0.10),
     ],
+    templateRanks: [
+      CategoryRank(label: '日系清新', count: 12, percent: 0.29),
+      CategoryRank(label: '富士胶片', count: 9, percent: 0.21),
+      CategoryRank(label: '莫兰迪极简', count: 7, percent: 0.17),
+      CategoryRank(label: '霓虹街角', count: 5, percent: 0.12),
+    ],
     timeOfDayDistribution: [
       TimeSlot(label: '上午', icon: Icons.wb_sunny_outlined, count: 10, percent: 0.24),
       TimeSlot(label: '下午', icon: Icons.wb_cloudy_outlined, count: 14, percent: 0.33),

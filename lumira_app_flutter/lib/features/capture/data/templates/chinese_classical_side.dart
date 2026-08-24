@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/chinese_classical_side.dart
+import '../../domain/photo_template.dart';
+
+/// 中式侧拍人像模板（chinese_classical 变体）
+const PhotoTemplate chineseClassicalSideTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'chinese_classical_side',
+    name: '中式侧拍人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'retro_nostalgia', style: 'chinese_classical', subStyle: 'chinese_classical', method: 'side'),
+    tags: ['人像', '侧拍', '古风', '新中式', '雅致'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/chinese_classical_portrait.png',
+    description: '中式侧拍人像，侧影优雅东方意境，莫兰迪冷调含蓄留白。',
+    referenceSource: '小红书古风人像教程；莫兰迪冷色调风格；汉服摄影套图',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.15, w: 0.45, h: 0.65),
+    opacity: 0.3,
+    aspectRatio: '3:4',
+    description: '三分之一侧身取景，侧影优雅构图',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/chinese_classical_portrait.png'),
+    position: Position(x: 0.45, y: 0.5),
+    scale: 0.7,
+    rotation: 0,
+    description: '侧身站立侧脸朝向光源，执扇轻抵额间，含蓄优雅，视线低垂',
+  ),
+  camera: CameraParams(
+    exposureCompensation: -0.3,
+    iso: 100,
+    shutterSpeed: '1/160',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5200,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '侧逆光',
+    lightDirectionAngle: 135,
+    shootingDistance: '2-3m',
+    background: '园林/竹林/古建/白墙黛瓦',
+    props: ['团扇', '折扇', '油纸伞'],
+    bestTime: '上午 8:00-10:00 或下午 15:00-17:00',
+    bestTimeFrom: '08:00',
+    bestTimeTo: '10:00',
+    tips: [
+      '侧脸朝向光源勾勒轮廓',
+      '侧影留白凸显东方意境',
+      '服装选低饱和汉服',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: -5,
+      contrast: 5,
+      saturation: -15,
+      temperature: -10,
+      tint: 0,
+      highlights: -10,
+      shadows: -5,
+      clarity: 0,
+      vibrance: -5,
+    ),
+    smoothStrength: 12,
+    sharpen: 10,
+    vignette: 15,
+    grain: 8,
+    lut: 'cinematic',
+  ),
+);

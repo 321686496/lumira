@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate foodFlatLayTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'food_flat_lay',
-    name: '美食俯拍',
+    name: '木质桌面俯拍料理',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'food',
-    classification: TemplateClassification(type: 'food', style: 'overhead', method: 'flat-lay'),
+    classification: TemplateClassification(type: 'food', style: 'overhead', subStyle: 'overhead', method: 'flat'),
     tags: ['美食', '俯拍', 'flat-lay', '静物'],
     tagIds: [],
     price: 0,

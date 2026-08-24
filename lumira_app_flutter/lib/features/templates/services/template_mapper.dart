@@ -36,6 +36,10 @@ class TemplateMapper {
         'type': tpl.meta.classification.type,
         'style': tpl.meta.classification.style,
         'method': tpl.meta.classification.method,
+        // v4level：内置模板同样带四级分类，必须落库，
+        // 否则按大风格/子风格钻取过滤（matchesSubtree）时永远匹配不到。
+        'majorStyle': tpl.meta.classification.majorStyle,
+        'subStyle': tpl.meta.classification.subStyle,
       },
       tags: List<String>.from(tpl.meta.tags),
       tagIds: List<String>.from(tpl.meta.tagIds),
@@ -65,6 +69,11 @@ class TemplateMapper {
   /// 详情按需拉取时由 [detailToRecord] 覆盖填充。
   /// source 固定为 'remote'，isBuiltin/isRecommend 均为 false（后端动态模板不是系统内置）。
   /// cover 字段使用后端 coverUrl（绝对或相对 URL），coverData 留空（不预下载 base64）。
+  ///
+  /// 时间单位转换：后端 `updated_at`/`created_at` 存的是 epoch 秒，而本地
+  /// TemplateRecord.createdAt/updatedAt 及详情页展示统一按毫秒处理（内置 seeder、
+  /// 编辑器均用 `DateTime.now().millisecondsSinceEpoch`）。因此在此处 ×1000 换算为毫秒，
+  /// 否则后台添加的模板在详情页会显示成 1970 年而非今日。
   static TemplateRecord metaToRecord(RemoteTemplateMetaDto meta) {
     return TemplateRecord(
       id: meta.id,
@@ -95,8 +104,8 @@ class TemplateMapper {
       camera: const <String, dynamic>{},
       sceneGuide: const <String, dynamic>{},
       postProcess: const <String, dynamic>{},
-      createdAt: meta.updatedAt,
-      updatedAt: meta.updatedAt,
+      createdAt: meta.updatedAt * 1000,
+      updatedAt: meta.updatedAt * 1000,
       isBuiltin: false,
       isRecommended: false,
       source: 'remote',
@@ -150,6 +159,7 @@ class TemplateMapper {
         category: r.category,
         classification: TemplateClassification(
           type: (r.classification['type'] as String?) ?? r.category,
+          majorStyle: (r.classification['majorStyle'] as String?) ?? '',
           style: (r.classification['style'] as String?) ??
               (r.classification['majorStyle'] as String?) ??
               '',

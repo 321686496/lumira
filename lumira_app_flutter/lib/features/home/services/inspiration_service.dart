@@ -248,6 +248,9 @@ class InspirationService {
       weatherText: weatherText,
       recommendedTemplateId: rec?.id ?? '',
       recommendedTemplateName: rec?.name ?? '',
+      recommendedTemplateCover: rec?.cover ?? '',
+      recommendedTemplateCoverData: rec?.coverData ?? '',
+      recommendedTemplateCategory: rec?.category ?? '',
     );
   }
 
@@ -314,6 +317,8 @@ class InspirationService {
         type: cls['type'] as String?,
         ambience: _decodeAmbience(t.ambienceJson),
         popularity: usage[t.id]?.useShoot ?? 0,
+        cover: t.cover,
+        coverData: t.coverData ?? '',
       ));
     }
     return pickRecommendedTemplate(

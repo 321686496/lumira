@@ -394,7 +394,7 @@ class _OtherSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
-    final asyncOthers = ref.watch(freeBuiltinTemplatesProvider);
+    final asyncOthers = ref.watch(hotAndNewTemplatesProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Column(

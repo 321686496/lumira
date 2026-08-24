@@ -1,16 +1,16 @@
 // lib/features/capture/data/templates/cafe_portrait.dart
 import '../../domain/photo_template.dart';
 
-/// 咖啡馆人像模板
+/// 咖啡馆人像模板（japanese 子风格）
 /// 来源：lumira-app/src/data/templates/cafe-portrait.ts
 const PhotoTemplate cafePortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'cafe_portrait',
-    name: '咖啡馆人像',
+    name: '咖啡馆窗边人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'japanese', method: 'normal'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'japanese', subStyle: 'japanese', method: 'normal'),
     tags: ['咖啡馆', '人像', '柔光', '生活'],
     tagIds: [],
     price: 0,

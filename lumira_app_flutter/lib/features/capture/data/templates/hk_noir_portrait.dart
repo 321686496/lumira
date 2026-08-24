@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'hk_noir_portrait',
-    name: '港风夜景人像',
+    name: '港风Noir半身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'hk_noir', method: 'half_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'retro_nostalgia', style: 'hk_noir', subStyle: 'hk_noir', method: 'half_body'),
     tags: ['人像', '港风', '夜景', '霓虹', '王家卫'],
     tagIds: [],
     price: 0,

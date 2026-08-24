@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate macroFlowerTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'macro_flower',
-    name: '微距花卉',
+    name: '微距花卉花蕊',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'macro',
-    classification: TemplateClassification(type: 'macro', style: 'nature', method: 'macro'),
+    classification: TemplateClassification(type: 'macro', style: 'nature', subStyle: 'nature', method: 'macro'),
     tags: ['微距', '花卉', '特写', '自然'],
     tagIds: [],
     price: 20,

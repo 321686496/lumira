@@ -1,16 +1,16 @@
 // lib/features/capture/data/templates/cream_healing_portrait.dart
 import '../../domain/photo_template.dart';
 
-/// 奶油治愈风模板
+/// 奶油治愈风模板（cream_healing 子风格）
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 4
 const PhotoTemplate creamHealingPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'cream_healing_portrait',
-    name: '奶油治愈风',
+    name: '奶油暖调半身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'cream_healing', method: 'half_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'cream_healing', subStyle: 'cream_healing', method: 'half_body'),
     tags: ['人像', '奶油', '治愈', '暖调', '夕阳'],
     tagIds: [],
     price: 0,

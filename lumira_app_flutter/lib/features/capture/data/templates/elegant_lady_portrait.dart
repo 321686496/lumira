@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'elegant_lady_portrait',
-    name: '知性优雅轻熟女',
+    name: '优雅女士七分身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'elegant_lady', method: 'seven_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'scene_portrait', style: 'elegant_lady', subStyle: 'elegant_lady', method: 'seven_body'),
     tags: ['人像', '知性', '优雅', '轻熟女', '莫兰迪'],
     tagIds: [],
     price: 60,

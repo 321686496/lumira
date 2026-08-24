@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:lumira_app_flutter/core/db/tables.dart';
@@ -31,14 +33,14 @@ void main() {
     expect(scenes.every((s) => s[Tables.colCreator] == 'system'), isTrue);
   });
 
-  test('seedAll inserts 29 templates with 16 free + 13 paid', () async {
+  test('seedAll inserts 132 templates with 86 free + 46 paid', () async {
     await BuiltinDataSeeder.seedAll(db);
     final all = await db.query(Tables.customTemplates);
-    expect(all.length, 29);
+    expect(all.length, 132);
     final free = all.where((t) => (t[Tables.colPrice] as num) == 0).length;
     final paid = all.where((t) => (t[Tables.colPrice] as num) > 0).length;
-    expect(free, 16);
-    expect(paid, 13);
+    expect(free, 86);
+    expect(paid, 46);
     // 全部标记为 builtin
     expect(all.every((t) => t[Tables.colIsBuiltin] == 1), isTrue);
   });
@@ -95,15 +97,65 @@ void main() {
     // 强制重新种子化内置模板
     await BuiltinDataSeeder.reseedBuiltinTemplates(db);
     final all = await db.query(Tables.customTemplates);
-    // 29 builtin + 1 custom = 30
-    expect(all.length, 30);
+    // 132 builtin + 1 custom = 133
+    expect(all.length, 133);
     // 用户自定义模板保留
     final custom = all.where((t) => t[Tables.colIsBuiltin] == 0).toList();
     expect(custom.length, 1);
     expect(custom.first[Tables.colId], 'user_custom_1');
     // 内置模板数量正确
     final builtin = all.where((t) => t[Tables.colIsBuiltin] == 1).toList();
-    expect(builtin.length, 29);
+    expect(builtin.length, 132);
+  });
+
+  test('reseedPortraitCategoriesTo4level 将动漫温柔青归位清新治愈(非梦幻夜色)', () async {
+    await BuiltinDataSeeder.reseedPortraitCategoriesTo4level(db);
+    // 三级子风格节点 anime_tender 应挂在 fresh_healing(清新治愈) 下
+    final rows = await db.query(
+      Tables.templateCategories,
+      where: '${Tables.colKey} = ? AND ${Tables.colIsActive} = 1',
+      whereArgs: ['anime_tender'],
+    );
+    expect(rows, hasLength(1));
+    expect(rows.first[Tables.colParentKey], 'fresh_healing');
+    expect(rows.first[Tables.colLevel], 3);
+    expect(rows.first[Tables.colName], '动漫温柔青');
+    // 不应再残留挂在梦幻夜色(dreamy_night)下的两个同 key 分类
+    final orphan = await db.query(
+      Tables.templateCategories,
+      where: '${Tables.colParentKey} = ? AND ${Tables.colKey} = ?',
+      whereArgs: ['dreamy_night', 'anime_tender'],
+    );
+    expect(orphan, isEmpty);
+    // 梦幻夜色(dreamy_night)下只保留其自身的子风格（blue_night/purple_dusk 等）
+    final dreamyChildren = await db.query(
+      Tables.templateCategories,
+      where: '${Tables.colParentKey} = ? AND ${Tables.colKey} IN (?, ?)',
+      whereArgs: [
+        'dreamy_night',
+        'blue_night',
+        'purple_dusk',
+      ],
+    );
+    expect(dreamyChildren.length, 2);
+  });
+
+  test('内置模板 anime_dream_portrait 种子化后 classification 落库 fresh_healing/anime_tender', () async {
+    await BuiltinDataSeeder.seedAll(db);
+    final rows = await db.query(
+      Tables.customTemplates,
+      where: '${Tables.colId} = ?',
+      whereArgs: ['anime_dream_portrait'],
+    );
+    expect(rows, hasLength(1));
+    final classification =
+        jsonDecode(rows.first[Tables.colClassificationJson] as String) as Map;
+    // 大风格应为 清新治愈(fresh_healing)，子风格/风格为 动漫温柔青(anime_tender)
+    expect(classification['majorStyle'], 'fresh_healing');
+    expect(classification['subStyle'], 'anime_tender');
+    expect(classification['style'], 'anime_tender');
+    // 不应是旧的梦幻夜色(dreamy_night)归属
+    expect(classification['majorStyle'], isNot('dreamy_night'));
   });
 }
 
@@ -123,6 +175,8 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colCoverData} TEXT,
       ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
       ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
+      ${Tables.colShortDesc} TEXT NOT NULL DEFAULT '',
+      ${Tables.colAmbienceJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colPoseJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
@@ -133,6 +187,21 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
+    )
+  ''');
+  await db.execute('''
+    CREATE TABLE ${Tables.templateCategories} (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ${Tables.colKey} TEXT NOT NULL,
+      ${Tables.colName} TEXT NOT NULL DEFAULT '',
+      ${Tables.colParentKey} TEXT,
+      ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+      ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(${Tables.colKey}, ${Tables.colParentKey})
     )
   ''');
   await db.execute('''

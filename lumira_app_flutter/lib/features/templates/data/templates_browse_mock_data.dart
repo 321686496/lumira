@@ -1591,7 +1591,10 @@ class TemplatesBrowseMockData {
     final tpl = TemplateRegistry.getTemplate(t.id);
     if (tpl == null) return t;
     final cls = tpl.meta.classification;
-    final newStyle = t.majorStyle ?? (cls.style.isEmpty ? null : cls.style);
+    final newStyle = t.majorStyle ??
+        (cls.majorStyle.isNotEmpty
+            ? cls.majorStyle
+            : (cls.style.isEmpty ? null : cls.style));
     final newMethod = t.method ?? (cls.method.isEmpty ? null : cls.method);
     if (newStyle == t.majorStyle && newMethod == t.method) {
       return t;
@@ -1626,7 +1629,9 @@ class TemplatesBrowseMockData {
       description: tpl.meta.description,
       ambience: tpl.meta.ambience,
       updatedAt: tpl.meta.updatedAt,
-      majorStyle: cls.style.isEmpty ? null : cls.style,
+      majorStyle: cls.majorStyle.isNotEmpty
+          ? cls.majorStyle
+          : (cls.style.isEmpty ? null : cls.style),
       subStyle: cls.subStyle.isEmpty ? null : cls.subStyle,
       method: cls.method.isEmpty ? null : cls.method,
       aspectRatio: tpl.composition.aspectRatio,

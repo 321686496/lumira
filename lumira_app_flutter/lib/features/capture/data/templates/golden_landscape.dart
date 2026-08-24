@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate goldenLandscapeTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'golden_landscape',
-    name: '黄金时刻风光',
+    name: '金色麦田风光',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'landscape',
-    classification: TemplateClassification(type: 'landscape', style: 'fresh', method: 'wide'),
+    classification: TemplateClassification(type: 'landscape', style: 'fresh', subStyle: 'fresh', method: 'wide'),
     tags: ['风光', '黄金时刻', '日出日落', '广角'],
     tagIds: [],
     price: 0,

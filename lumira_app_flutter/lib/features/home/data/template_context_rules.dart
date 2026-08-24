@@ -134,11 +134,20 @@ class Candidate {
   final String? type;
   final Map<String, dynamic> ambience;
   final int popularity;
+
+  /// 封面（内置 assets 路径 / 远程 http URL）
+  final String cover;
+
+  /// 封面 base64 data URL（自定义模板）
+  final String coverData;
+
   const Candidate({
     required this.id, required this.name, required this.category,
     this.style, this.subStyle, this.type,
     this.ambience = const {},
     this.popularity = 0,
+    this.cover = '',
+    this.coverData = '',
   });
 }
 
@@ -180,5 +189,11 @@ RecommendedTemplate? pickRecommendedTemplate({
     return b.c.popularity.compareTo(a.c.popularity);
   });
   final best = pooled.first.c;
-  return RecommendedTemplate(id: best.id, name: best.name);
+  return RecommendedTemplate(
+    id: best.id,
+    name: best.name,
+    category: best.category,
+    cover: best.cover,
+    coverData: best.coverData,
+  );
 }

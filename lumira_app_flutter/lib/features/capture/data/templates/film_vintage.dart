@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate filmVintageTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'film_vintage',
-    name: '胶片复古人像',
+    name: '胶片复古他拍人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'film', method: 'normal'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'emotional_film', style: 'film', subStyle: 'film', method: 'normal'),
     tags: ['胶片', '复古', '人像', '怀旧', '暖调'],
     tagIds: [],
     price: 20,

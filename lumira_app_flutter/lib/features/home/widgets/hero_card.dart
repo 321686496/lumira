@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../templates/data/templates_mock_data.dart';
+import '../../templates/widgets/template_cover_image.dart';
 import '../data/home_providers.dart';
 import '../data/inspiration_models.dart';
 
@@ -90,9 +92,9 @@ class _HeroCardState extends ConsumerState<HeroCard> {
         ),
         child: inspirationAsync.when(
           // skipLoadingOnReload：定时 invalidate 触发的重载沿用旧数据，避免每分钟闪 loading 骨架。
-          loading: () => _buildContent(tokens, isNeumorphic, HeroInspiration.fallback, dim: true),
-          error: (_, __) => _buildContent(tokens, isNeumorphic, HeroInspiration.fallback),
-          data: (inspiration) => _buildContent(tokens, isNeumorphic, inspiration),
+          loading: () => _buildContent(tokens, appTheme.style, HeroInspiration.fallback, dim: true),
+          error: (_, __) => _buildContent(tokens, appTheme.style, HeroInspiration.fallback),
+          data: (inspiration) => _buildContent(tokens, appTheme.style, inspiration),
           skipLoadingOnReload: true,
         ),
       ),
@@ -101,10 +103,11 @@ class _HeroCardState extends ConsumerState<HeroCard> {
 
   Widget _buildContent(
     ThemeTokens tokens,
-    bool isNeumorphic,
+    UIStyle style,
     HeroInspiration inspiration, {
     bool dim = false,
   }) {
+    final isNeumorphic = style == UIStyle.neumorphic;
     return Stack(
       // Clip.none：允许装饰半圆溢出到卡片边缘（由外层 Container antiAlias 做圆角裁剪）
       clipBehavior: Clip.none,
@@ -179,7 +182,21 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                     height: 1.6,
                   ),
                 ),
-                const SizedBox(height: 20), // 40rpx → 20dp
+                // 推荐模板卡（有推荐时嵌入灵感卡内部，点击直接套用进入拍摄）
+                if (inspiration.recommendedTemplateId.isNotEmpty) ...[
+                  Builder(
+                    builder: (context) => _recommendCard(
+                      tokens: tokens,
+                      style: style,
+                      inspiration: inspiration,
+                      onTap: () => GoRouter.of(context).push(RouteNames.build(
+                        RouteNames.capture,
+                        {RouteNames.paramTemplateId: inspiration.recommendedTemplateId},
+                      )),
+                    ),
+                  ),
+                  const SizedBox(height: 20), // 40rpx → 20dp
+                ],
                 // CTA 按钮（有推荐模板时，点击直接套用模板进入拍摄）
                 Builder(builder: (context) {
                   final hasRec = inspiration.recommendedTemplateId.isNotEmpty;
@@ -227,9 +244,7 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                           ),
                           const SizedBox(width: 8), // 16rpx → 8dp
                           Text(
-                            hasRec
-                                ? '用「${inspiration.recommendedTemplateName}」拍摄'
-                                : '开始拍摄',
+                            hasRec ? '套用模板拍摄' : '开始拍摄',
                             style: const TextStyle(
                               fontSize: 15, // 30rpx → 15dp
                               fontWeight: FontWeight.w500,
@@ -273,6 +288,114 @@ class _HeroCardState extends ConsumerState<HeroCard> {
           ),
         ),
       ],
+    );
+  }
+
+  /// 今日灵感卡内嵌的推荐模板卡（横向紧凑：左封面缩略图 + 右名称/分类）
+  Widget _recommendCard({
+    required ThemeTokens tokens,
+    required UIStyle style,
+    required HeroInspiration inspiration,
+    required VoidCallback onTap,
+  }) {
+    final isNeu = style == UIStyle.neumorphic;
+    final isFlat = style == UIStyle.flat;
+    final category = inspiration.recommendedTemplateCategory;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: tokens.surface,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: isNeu ? tokens.shadowConvex : null,
+          border: isFlat ? Border.all(color: tokens.divider, width: 1) : null,
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 72, // 144rpx → 72dp 紧凑缩略图
+              height: 96, // 192rpx → 96dp（3:4），与文字列撑起卡片高度
+              child: TemplateCoverImage(
+                cover: inspiration.recommendedTemplateCover,
+                coverData: inspiration.recommendedTemplateCoverData,
+                fit: BoxFit.cover,
+                fallback: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [tokens.brandSubtle, tokens.brand.withOpacity(0.4)],
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.photo_camera_outlined,
+                      size: 22,
+                      color: tokens.brandDeep.withOpacity(0.6),
+                    ),
+                  ),
+                ),
+                errorFallback: Container(
+                  color: tokens.surfaceAlt,
+                  child: Center(
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      size: 20,
+                      color: tokens.textTertiary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '今日推荐',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.brand,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      inspiration.recommendedTemplateName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.textPrimary,
+                        height: 1.3,
+                      ),
+                    ),
+                    if (category.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        TemplatesMockData.categoryLabel(category),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: tokens.textSecondary,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

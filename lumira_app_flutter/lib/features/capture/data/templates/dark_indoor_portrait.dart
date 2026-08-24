@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'dark_indoor_portrait',
-    name: '室内暗调氛围',
+    name: '暗调室内半身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'dark_indoor', method: 'half_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'urban_trend', style: 'dark_indoor', subStyle: 'dark_indoor', method: 'half_body'),
     tags: ['人像', '暗调', '咖啡馆', '锐化', '质感'],
     tagIds: [],
     price: 40,

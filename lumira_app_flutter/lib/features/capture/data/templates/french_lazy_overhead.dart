@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/french_lazy_overhead.dart
+import '../../domain/photo_template.dart';
+
+/// 法式慵懒俯拍模板（french_lazy 变体）
+const PhotoTemplate frenchLazyOverheadTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'french_lazy_overhead',
+    name: '法式慵懒俯拍',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'retro_nostalgia', style: 'french_lazy', subStyle: 'french_lazy', method: 'overhead'),
+    tags: ['人像', '俯拍', '法式', '慵懒', '颗粒'],
+    tagIds: [],
+    price: 40,
+    cover: 'assets/images/templates/french_lazy_portrait.png',
+    description: '法式慵懒俯拍人像，咖啡桌上慵懒视角，颗粒质感复古高雅。',
+    referenceSource: '小红书法式慵懒风格教程；复古颗粒质感；法式写真套图',
+  ),
+  composition: Composition(
+    overlayType: 'grid',
+    subjectFrame: SubjectFrame(x: 0.25, y: 0.15, w: 0.5, h: 0.5),
+    opacity: 0.25,
+    aspectRatio: '3:4',
+    description: '俯拍视角，人物+桌面静物融入画面',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/french_lazy_portrait.png'),
+    position: Position(x: 0.5, y: 0.4),
+    scale: 0.6,
+    rotation: 0,
+    description: '俯拍侧倚姿态，一手托腮或搭在咖啡杯边，慵懒松弛看向镜头',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 200,
+    shutterSpeed: '1/100',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '侧光（窗光）',
+    lightDirectionAngle: 90,
+    shootingDistance: '0.5-1m（俯拍）',
+    background: '木质桌面/白床单/咖啡杯',
+    props: ['咖啡杯', '书', '牛角包'],
+    bestTime: '上午 9:00-11:00',
+    bestTimeFrom: '09:00',
+    bestTimeTo: '11:00',
+    tips: [
+      '俯拍角度融合桌面静物',
+      '窗光营造柔和明暗',
+      '颗粒是法式质感核心',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: -5,
+      contrast: 5,
+      saturation: -5,
+      temperature: 10,
+      tint: 0,
+      highlights: 0,
+      shadows: 5,
+      clarity: 0,
+      vibrance: 0,
+    ),
+    smoothStrength: 12,
+    sharpen: 12,
+    vignette: 10,
+    grain: 22,
+    lut: 'vintage',
+  ),
+);

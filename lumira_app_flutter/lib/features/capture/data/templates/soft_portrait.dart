@@ -1,16 +1,16 @@
 // lib/features/capture/data/templates/soft_portrait.dart
 import '../../domain/photo_template.dart';
 
-/// 柔光人像模板
+/// 柔光人像模板（japanese 子风格）
 /// 来源：lumira-app/src/data/templates/soft-portrait.ts
 const PhotoTemplate softPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'soft_portrait',
-    name: '柔光人像',
+    name: '窗边柔光人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'japanese', method: 'normal'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'japanese', subStyle: 'japanese', method: 'normal'),
     tags: ['人像', '柔光', '自然光', '清新'],
     tagIds: [],
     price: 0,

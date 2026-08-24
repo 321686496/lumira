@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
@@ -40,10 +40,11 @@ export function TemplateCardGrid({
   const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [pendingToggleId, setPendingToggleId] = useState<string | null>(null);
-  const [togglePending, startToggleTransition] = useTransition();
+  // 每张卡片的加载状态（Record<模板id, 是否处理中>），避免 React 18 中 async
+  // + useTransition 包裹导致异步渲染被丢弃、点击"无反应"的问题。
+  const [pendingMap, setPendingMap] = useState<Record<string, boolean>>({});
   const [deleteTarget, setDeleteTarget] = useState<AdminTemplateListItem | null>(null);
-  const [deletePending, startDeleteTransition] = useTransition();
+  const [deletePending, setDeletePending] = useState(false);
 
   // 一级分类（题材），用于顶部筛选
   const typeCategories = useMemo(
@@ -77,11 +78,17 @@ export function TemplateCardGrid({
     return builtinTemplates.filter((b) => !backendIds.has(b.id));
   }, [builtinTemplates, templates]);
 
-  const handleToggle = (t: AdminTemplateListItem) => {
-    setPendingToggleId(t.id);
-    startToggleTransition(async () => {
-      const result = await toggleTemplateActive(t.id);
-      setPendingToggleId(null);
+  // 上架/下架切换：用显式 pending 状态驱动，保证点击立刻有反馈，且处理中禁用避免重复点击
+  const handleToggle = useCallback(
+    async (t: AdminTemplateListItem) => {
+      if (pendingMap[t.id]) return; // 正在处理，忽略重复点击
+      setPendingMap((p) => ({ ...p, [t.id]: true }));
+      let result;
+      try {
+        result = await toggleTemplateActive(t.id);
+      } finally {
+        setPendingMap((p) => ({ ...p, [t.id]: false }));
+      }
       if (result?.error) {
         toast({
           variant: 'destructive',
@@ -95,27 +102,34 @@ export function TemplateCardGrid({
         });
         router.refresh();
       }
-    });
-  };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pendingMap],
+  );
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
     const id = deleteTarget.id;
-    startDeleteTransition(async () => {
-      const result = await deleteTemplate(id);
-      if (result?.error) {
-        toast({
-          variant: 'destructive',
-          title: '删除失败',
-          description: result.error,
-        });
-      } else {
-        toast({ title: '已删除', description: `「${deleteTarget.name}」已删除` });
-        setDeleteTarget(null);
-        router.refresh();
-      }
-    });
-  };
+    setDeletePending(true);
+    let result;
+    try {
+      result = await deleteTemplate(id);
+    } finally {
+      setDeletePending(false);
+    }
+    if (result?.error) {
+      toast({
+        variant: 'destructive',
+        title: '删除失败',
+        description: result.error,
+      });
+    } else {
+      toast({ title: '已删除', description: `「${deleteTarget.name}」已删除` });
+      setDeleteTarget(null);
+      router.refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleteTarget]);
 
   return (
     <div className="space-y-5">
@@ -197,7 +211,7 @@ export function TemplateCardGrid({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
           {filtered.map((t) => {
           const cover = toAssetUrl(t.coverUrl, backendUrl);
-          const toggling = togglePending && pendingToggleId === t.id;
+          const toggling = !!pendingMap[t.id];
           const u = usage[t.id];
             return (
               <div

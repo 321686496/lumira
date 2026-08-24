@@ -25,7 +25,7 @@ import '../../features/notification/data/notification_dao.dart';
 import 'dao/search_history_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 36;
+const int _kDbVersion = 39;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -1133,6 +1133,38 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v36 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 37) {
+    try {
+      // v37: 人像分类重整为四级（type→majorStyle→subStyle→method），
+      // 并重新种子化内置模板补齐 majorStyle / subStyle 落库字段。
+      //
+      // 修复：老库（v17-36）分类树仍为旧三级结构（人像子风格直接挂在 portrait 下、
+      // 大风格缺失），且存量内置模板记录缺 majorStyle/subStyle 字段，
+      // 导致模板引用的分类名在本地分类树中不存在、按大风格/子风格钻取匹配失败。
+      await BuiltinDataSeeder.reseedPortraitCategoriesTo4level(db);
+      await BuiltinDataSeeder.reseedBuiltinTemplates(db);
+    } catch (e) {
+      debugPrint('v37 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 39) {
+    try {
+      // v39: 重新种子化人像四级分类 + 内置模板",
+      // 确保「动漫温柔青」归位 清新治愈(fresh_healing)→anime_tender，
+      // 并刷新内置模板 classification 的 majorStyle/subStyle 落库字段。
+      //
+      // 背景：38 号仅 37→38 但未补迁移块，导致老库升 38 时不再 reseed，
+      // 设备端残留旧分类（anime_dream 挂 dreamy_night/梦幻夜色），
+      // 出现「动漫温柔青 在 梦幻夜色 分类下」的错位显示。
+      // 38 号未真正触发，这里以 <39 幂等重跑，覆盖 37 与 38 两级存量库。
+      await BuiltinDataSeeder.reseedPortraitCategoriesTo4level(db);
+      await BuiltinDataSeeder.reseedBuiltinTemplates(db);
+    } catch (e) {
+      debugPrint('v39 migration failed (silent fallback): $e');
     }
   }
 }

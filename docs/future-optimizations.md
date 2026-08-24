@@ -98,3 +98,46 @@
 - **背景/动机**：评审时确认 `clamp` 已保证不越界；保持现状符合 brief，故不扩大改动面，仅登记。
 - **目标状态**：无有效源的照片 item 置空 `onTap` 或置灰。
 - **状态**：⏳ 待优化
+
+---
+
+## 相册/拍摄日记滑动多选（2026-08-24）
+
+### P1 · 滑动多选滑动超出可滚动区域时不自动滚动
+- **模块**：相册页 / 拍摄日记选照片 popup · `SweepSelectGrid`（Flutter）
+- **优化点**：互操作仿 iPhone/微信选图的长按滑动多选已落地，但当手指滑到可滚动 popup / 网格的可见区边缘之外时，`SweepSelectGrid` 不会像微信那样在边缘自动滚动以继续加选下方照片，只能先松开重滑。
+- **背景/动机**：`SweepSelectGrid` 外层用裸 `Listener` 接收移动事件，滚动由 `GridView` 自带 `ScrollController` 承接；边缘自动滚动（edge scrolling）需在移动到接近视口上/下边界时主动 `jumpTo`/`animateTo` 补充滚动量，并补偿 `scrollOffset` 命中的几何，当前未实现。
+- **目标状态**：在 `_handleMove` 中检测指针接近视口边界（阈值如 48~64px）时按增量推进 `_scrollController`，并让 `GridGeometry.cellAt` 用更新后的 `scrollOffset` 命中后续格子，实现手指在边缘持续滑动即自动滚屏加选。
+- **状态**：⏳ 待优化
+
+### P2 · 时间分区跨分区滑动选中仍按“仅分区内连续”
+- **模块**：相册页（Flutter）
+- **优化点**：当前每分区独立渲染 `SweepSelectGrid`，一次滑动只能在单个分区内连续选中；如手指跨过“今天/昨天”分区间隔，第二个分区的选中需重新长按起始。分区头部已提供「全选/取消全选」兜底。
+- **背景/动机**：计划评审时按“仅分区内连续”确认；首版跨分区自动续选复杂度较高，交付方与微信行为略有差异。
+- **目标状态**：若后续希望一次长按即可跨分区连续滑动选中，需将分区网格升级为单一可滚网格（保留分区头）或在 `_endSweep`/滑到分区边界时接力到下一分区。
+- **状态**：⏳ 待优化
+
+---
+
+## 后端 Redis 缓存 + 集群就绪（2026-08-24）
+
+### P1 · 新增 S3/OSS 对象存储适配器
+- **模块**：后端存储层（`common/storage`）
+- **优化点**：当前 `StorageModule` 仅提供 `LocalStorageAdapter`（本地磁盘）。抽象接口 `StorageAdapter`/`storageAdapterProvider` 已就绪，但 S3/MinIO/阿里 OSS 的实现尚未编写，`storageAdapterProvider` 也未按 `env` 切换实现类。
+- **背景/动机**：本地磁盘在集群多副本下不共享，且 `UPLOAD_DIR` 为单机挂载；切对象存储可解耦实例、提升高可用并可接 CDN。本次为「单机到集群」做存储抽象预留，不急于落地。
+- **目标状态**：新增 `S3StorageAdapter`/`OssStorageAdapter` 实现 `StorageAdapter`，`storageAdapterProvider` 依据 `STORAGE_DRIVER`（local/s3/oss）选择实现；存量相对路径 `/uploads/...` 经 `buildAssetUrl` 拼接域名，切换驱动不改前端 URL 约定。
+- **状态**：⏳ 待优化
+
+### P2 · Redis 演进为 Cluster / Sentinel 部署
+- **模块**：后端 Redis 缓存（`common/redis`）
+- **优化点**：`RedisService` 当前为单实例 `redis://` 连接；`REDIS_URL` 仅支持单一地址。用户量上来做后端集群时，Redis 单点会成为瓶颈/故障点。
+- **背景/动机**：设计时按单机起步、单例 Redis 足够；集群阶段再演进，避免前期过度设计。
+- **目标状态**：`RedisService` 支持 `REDIS_URL` 为逗号分隔的节点列表，自动选择 `Cluster`/`Sentinel` 客户端；`delByPattern` 的 `SCAN` 在 Cluster 下需按槽位执行。
+- **状态**：⏳ 待优化
+
+### P2 · 后端上传图片引入压缩 / 缩略图
+- **模块**：后端上传链路（admin-templates / admin-categories）
+- **优化点**：当前 `storage.write` 原样落盘用户上传的原图，无压缩或缩略图；App 端列表缩略图仍拉取原图。
+- **背景/动机**：图片量大后原图直出带宽/存储成本高、首屏慢；前端已用 `/uploads` 路径，改缩略图 URL 需后端产出。
+- **目标状态**：写入时基于尺寸生成多规格（原始图 + 缩略图），客户端列表用缩略图、详情用原图；后续接入对象存储时一并支持。
+- **状态**：⏳ 待优化

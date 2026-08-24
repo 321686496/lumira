@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/fresh_green_courtyard.dart
+import '../../domain/photo_template.dart';
+
+/// 庭院绿意他拍人像（fresh_green 子风格变体）
+const PhotoTemplate freshGreenCourtyardTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'fresh_green_courtyard',
+    name: '庭院绿意他拍人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'fresh_green', subStyle: 'fresh_green', method: 'normal'),
+    tags: ['人像', '森系', '庭院', '他拍', '绿意'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/fresh_green_portrait.png',
+    description: '庭院绿意下的他拍人像，篱笆与绿植衬托，清爽自然。',
+    referenceSource: '小红书庭院人像教程',
+  ),
+  composition: Composition(
+    overlayType: 'center',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.15, w: 0.42, h: 0.7),
+    opacity: 0.2,
+    aspectRatio: '3:4',
+    description: '居中半身取景，人物靠在绿植一侧，背景简洁',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/fresh_green_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.75,
+    rotation: 0,
+    description: '侧身站在绿植旁，手轻扶枝叶，微微低头浅笑',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 100,
+    shutterSpeed: '1/200',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '漫射光（树荫/阴天）',
+    lightDirectionAngle: 30,
+    shootingDistance: '1.5-2.5m',
+    background: '庭院篱笆/绿植/木质围栏',
+    props: ['绿植盆栽', '花篮'],
+    bestTime: '上午 8:00-10:00 或阴天',
+    bestTimeFrom: '08:00',
+    bestTimeTo: '10:00',
+    tips: [
+      '以绿植为前景增加层次',
+      '浅色服装与绿意呼应',
+      '保持淡雅绿调',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: 12,
+      contrast: -8,
+      saturation: -8,
+      temperature: -8,
+      tint: 0,
+      highlights: 5,
+      shadows: 12,
+      clarity: -5,
+      vibrance: 0,
+    ),
+    smoothStrength: 10,
+    sharpen: 5,
+    vignette: 0,
+    grain: 0,
+    lut: 'pastel',
+  ),
+);

@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate indoorStillLifeTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'indoor_still_life',
-    name: '室内静物',
+    name: '室内极简静物',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'still-life',
-    classification: TemplateClassification(type: 'still-life', style: 'minimal', method: 'single'),
+    classification: TemplateClassification(type: 'still-life', style: 'minimal', subStyle: 'minimal', method: 'single'),
     tags: ['静物', '室内', '柔光', '生活美学'],
     tagIds: [],
     price: 0,

@@ -61,7 +61,7 @@ final userPreferenceProvider = FutureProvider<UserPreference>((ref) async {
   );
 });
 
-/// 免费内置模板列表 Provider（"更多模板" section 数据源）
+/// 免费内置模板列表 Provider（"更多模板" section 数据源备选）
 ///
 /// 用 FutureProvider 缓存查询结果，避免 FutureBuilder 在每次 build 时
 /// 重新调用 dao.getBuiltin(price: 0) 导致反复进入 loading 状态。
@@ -69,6 +69,42 @@ final freeBuiltinTemplatesProvider =
     FutureProvider<List<TemplateRecord>>((ref) async {
   final dao = await ref.watch(templatesDaoProvider.future);
   return dao.getBuiltin(price: 0);
+});
+
+/// 「更多模板」栏目数据源
+///
+/// 取免费内置模板，展示逻辑为：前 3 个为最热门模板（按 useShoot*2 + openDetail
+/// 热度排序），后 3 个为最新上架的模板（按 updatedAt 降序）。热门与最新部分重叠
+/// 时按模板去重，保证实际展示不超过展示位所需的模板数。
+final hotAndNewTemplatesProvider = FutureProvider<List<TemplateRecord>>((ref) async {
+  final dao = await ref.watch(templatesDaoProvider.future);
+  final usageDao = await ref.watch(usageDaoProvider.future);
+
+  final all = await dao.getBuiltin(price: 0);
+  if (all.isEmpty) return const [];
+  if (all.length <= 6) return all;
+
+  // 热度：useShoot*2 + openDetail，降序取前 3
+  final counts = await usageDao.countMap('template', all.map((t) => t.id).toList());
+  final hot = [...all]..sort((a, b) {
+        final pa = (counts[a.id]?.useShoot ?? 0) * 2 + (counts[a.id]?.openDetail ?? 0);
+        final pb = (counts[b.id]?.useShoot ?? 0) * 2 + (counts[b.id]?.openDetail ?? 0);
+        return pb.compareTo(pa);
+      });
+
+  // 最新：updatedAt 降序，跳过已入选热门的前 3 个，凑满 3 个"最新上架"
+  final newest = [...all]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+  final seen = <String>{};
+  final result = <TemplateRecord>[];
+  for (final t in hot.take(3)) {
+    if (seen.add(t.id)) result.add(t);
+  }
+  for (final t in newest) {
+    if (result.length >= 6) break;
+    if (seen.add(t.id)) result.add(t);
+  }
+  return result;
 });
 
 /// 推荐内置模板列表 Provider（"今日为你推荐" section 数据源）

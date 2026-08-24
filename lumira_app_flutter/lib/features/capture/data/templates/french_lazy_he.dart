@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/french_lazy_he.dart
+import '../../domain/photo_template.dart';
+
+/// 法式街头他拍人像模板（french_lazy 变体）
+const PhotoTemplate frenchLazyHeTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'french_lazy_he',
+    name: '法式街头他拍人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'retro_nostalgia', style: 'french_lazy', subStyle: 'french_lazy', method: 'normal'),
+    tags: ['人像', '他拍', '法式', '慵懒', '街头'],
+    tagIds: [],
+    price: 40,
+    cover: 'assets/images/templates/french_lazy_portrait.png',
+    description: '法式街头他拍人像，慵懒不刻意，复古颗粒高雅，欧式街头时光。',
+    referenceSource: '小红书法式慵懒风格教程；复古颗粒质感；法式写真套图',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.15, w: 0.4, h: 0.7),
+    opacity: 0.25,
+    aspectRatio: '3:4',
+    description: '三分之一街头半身取景，倚墙或行走构图',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/french_lazy_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.78,
+    rotation: 0,
+    description: '侧身倚靠墙边或行走回眸，一手自然垂放，慵懒随性，不刻意',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 200,
+    shutterSpeed: '1/150',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '自然光（侧光）',
+    lightDirectionAngle: 90,
+    shootingDistance: '1.5-2m',
+    background: '欧式街道/咖啡店外/拱廊',
+    props: ['咖啡杯', '草帽', '帆布袋'],
+    bestTime: '上午 9:00-11:00',
+    bestTimeFrom: '09:00',
+    bestTimeTo: '11:00',
+    tips: [
+      '利用欧式街景做背景',
+      '抓拍行走不刻意更慵懒',
+      '颗粒是法式质感核心',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: -5,
+      contrast: 5,
+      saturation: -5,
+      temperature: 10,
+      tint: 0,
+      highlights: 0,
+      shadows: 5,
+      clarity: 0,
+      vibrance: 0,
+    ),
+    smoothStrength: 12,
+    sharpen: 12,
+    vignette: 10,
+    grain: 22,
+    lut: 'vintage',
+  ),
+);

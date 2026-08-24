@@ -1,16 +1,16 @@
 // lib/features/capture/data/templates/japanese_fresh_portrait.dart
 import '../../domain/photo_template.dart';
 
-/// 日系小清新模板
+/// 日系小清新模板（japanese_fresh 子风格）
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 3
 const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'japanese_fresh_portrait',
-    name: '日系小清新',
+    name: '日系清新回眸人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'japanese_fresh', method: 'seven_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'japanese_fresh', subStyle: 'japanese_fresh', method: 'seven_body'),
     tags: ['人像', '日系', '小清新', '空气感', '低对比'],
     tagIds: [],
     price: 0,

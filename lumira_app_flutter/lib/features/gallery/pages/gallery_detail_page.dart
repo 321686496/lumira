@@ -1,19 +1,15 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:photo_view/photo_view.dart';
-import 'package:share_plus/share_plus.dart';
 
-import '../../../core/utils/safe_share.dart';
+import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
-import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -23,7 +19,6 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/providers/collection_providers.dart';
 import '../../watermark/data/watermark_providers.dart';
-import '../providers/gallery_diary_providers.dart';
 
 /// 原生「保存到系统相册」MethodChannel（与拍摄预览页共用同一通道，见
 /// CapturePreviewPage 同名字段）：{ 'path': <本地文件绝对路径> } -> { success, error }
@@ -51,104 +46,135 @@ class GalleryDetailPage extends ConsumerStatefulWidget {
 }
 
 class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
-  GalleryItemRecord? _photo;
+  /// 当前相册内全部照片（最新在前，顺序与相册列表一致），用于左右滑动切换相邻照片
+  List<GalleryItemRecord> _photos = const [];
+
+  /// 当前展示照片在 [_photos] 中的索引
+  int _index = 0;
+
+  /// 分页控制器，负责滑动切换相邻照片的动画
+  late final PageController _pageController;
+
   bool _isLoading = true;
   bool _isInitialLoaded = false;
 
-  /// 模板名称（异步查询，null 表示未查询到或未加载）
-  String? _templateName;
+  /// 模板 id → 名称（整册预载，供每张照片详情页各自显示模板名）
+  final Map<String, String> _templateNameById = {};
 
-  /// 场景名称（异步查询，null 表示未查询到或未加载）
-  String? _sceneName;
+  /// 场景 id → 名称（整册预载，供每张照片详情页各自显示场景名）
+  final Map<String, String> _sceneNameById = {};
 
   /// 所有可用场景列表（用于分类更换选择器）
   List<SceneRecord> _allScenes = const [];
 
-  /// 是否处于"对比"模式（点击 AppBar "对比"按钮切换）。
-  /// 为 true 时 _ReadOnlyCanvas 显示原图（originalPath），为 false 时显示已烘焙的成品。
+  /// 是否处于"对比"模式（切换显示原图 / 已烘焙成品）。
   bool _isComparing = false;
 
-  /// 展示中照片的宽高比（异步解析，用于让预览区按照片自然比例自适应，null 时回退固定高度）
-  double? _photoAspectRatio;
+  GalleryItemRecord? get _photo {
+    if (_photos.isEmpty || _index < 0 || _index >= _photos.length) return null;
+    return _photos[_index];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   Future<void> _loadPhoto(GalleryDao dao) async {
     try {
       if (widget.photoId == null) {
         if (mounted) {
           setState(() {
-            _photo = null;
+            _photos = const [];
+            _index = 0;
             _isLoading = false;
           });
         }
         return;
       }
-      final photo = await dao.getById(widget.photoId!);
 
-      // 并行查询模板名 / 场景名 / 全部场景列表
-      String? templateName;
-      String? sceneName;
-      List<SceneRecord> allScenes = const [];
-      if (photo != null) {
-        final futures = <Future<dynamic>>[];
-        if (photo.templateId != null && photo.templateId!.isNotEmpty) {
-          futures.add(
-            ref.read(templatesDaoProvider.future).then((d) => d.getById(photo.templateId!)),
-          );
-        } else {
-          futures.add(Future.value(null));
+      // 拉取全部照片列表，并定位当前照片（找不到则停留在第一张）
+      final photos = await dao.getAll();
+      var index = photos.indexWhere((p) => p.id == widget.photoId);
+      if (index < 0) index = 0;
+
+      // 整册预载场景/模板名称映射，供左右滑动后每张照片各自正确显示来源信息
+      try {
+        final scenesDao = await ref.read(scenesDaoProvider.future);
+        final allScenes = await scenesDao.getAll();
+        final templateNameById = <String, String>{};
+        final sceneNameById = <String, String>{
+          for (final s in allScenes) s.id: s.name,
+        };
+        final templatesDao = await ref.read(templatesDaoProvider.future);
+        for (final t in await templatesDao.getAll()) {
+          templateNameById[t.id] = t.name;
         }
-        if (photo.sceneId != null && photo.sceneId!.isNotEmpty) {
-          futures.add(
-            ref.read(scenesDaoProvider.future).then((d) => d.getById(photo.sceneId!)),
-          );
-        } else {
-          futures.add(Future.value(null));
+        if (mounted) {
+          _templateNameById
+            ..clear()
+            ..addAll(templateNameById);
+          _sceneNameById
+            ..clear()
+            ..addAll(sceneNameById);
+          setState(() => _allScenes = allScenes);
         }
-        // 加载所有场景用于分类更换
-        futures.add(
-          ref.read(scenesDaoProvider.future).then((d) => d.getAll()),
-        );
-        final results = await Future.wait(futures);
-        if (results[0] is TemplateRecord) {
-          templateName = (results[0] as TemplateRecord).name;
-        }
-        if (results[1] is SceneRecord) {
-          sceneName = (results[1] as SceneRecord).name;
-        }
-        if (results[2] is List<SceneRecord>) {
-          allScenes = results[2] as List<SceneRecord>;
-        }
+      } catch (e, st) {
+        debugPrint('[gallery-detail] 预载场景/模板名称异常: $e\n$st');
       }
 
       if (mounted) {
         setState(() {
-          _photo = photo;
-          _templateName = templateName;
-          _sceneName = sceneName;
-          _allScenes = allScenes;
+          _photos = photos;
+          _index = index;
+          _isComparing = false;
           _isLoading = false;
         });
       }
-      // 异步解析照片宽高比，让预览区按照片自然比例自适应（失败则回退固定高度）
-      if (photo != null) {
-        final displayUrl = photo.dataUrl ?? photo.filePath;
-        if (displayUrl != null && displayUrl.isNotEmpty) {
-          _resolveAspectRatio(displayUrl).then((ratio) {
-            if (mounted && ratio != null && ratio > 0) {
-              setState(() => _photoAspectRatio = ratio);
-            }
-          });
-        }
+      if (photos.isEmpty) return;
+      // 定位到目标照片（若初始页非 0，则跳到目标索引）
+      if (index != 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _pageController.hasClients) {
+            _pageController.jumpToPage(index);
+          }
+        });
       }
     } catch (e, st) {
       debugPrint('[gallery-detail] _loadPhoto 异常: $e\n$st');
       if (mounted) {
         setState(() {
-          _photo = null;
+          _photos = const [];
+          _index = 0;
           _isLoading = false;
         });
       }
     }
+  }
+
+  /// 覆盖当前照片记录（用于收藏/更换分类/标记穿搭日记后同步列表数据）
+  void _replaceCurrent(GalleryItemRecord record) {
+    if (_index < 0 || _index >= _photos.length) return;
+    final next = List<GalleryItemRecord>.of(_photos);
+    next[_index] = record;
+    setState(() => _photos = next);
+  }
+
+  /// 滑动切换照片时更新当前索引并重置对比模式
+  void _onPageChanged(int index) {
+    if (index == _index) return;
+    if (index < 0 || index >= _photos.length) return;
+    setState(() {
+      _index = index;
+      _isComparing = false;
+    });
   }
 
   /// 点击"后期修图"按钮：跳转修图页，返回后刷新
@@ -210,24 +236,26 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         newSceneName = scene?.name;
       }
       if (!mounted) return;
-      setState(() {
-        _photo = GalleryItemRecord(
-          id: photo.id,
-          dataUrl: photo.dataUrl,
-          filePath: photo.filePath,
-          originalPath: photo.originalPath,
-          transform: photo.transform,
-          postProcess: photo.postProcess,
-          sceneId: newSceneId,
-          templateId: photo.templateId,
-          kitId: photo.kitId,
-          mood: photo.mood,
-          lut: photo.lut,
-          isFavorite: photo.isFavorite,
-          createdAt: photo.createdAt,
-        );
-        _sceneName = newSceneName;
-      });
+      final updatedPhoto = GalleryItemRecord(
+        id: photo.id,
+        dataUrl: photo.dataUrl,
+        filePath: photo.filePath,
+        originalPath: photo.originalPath,
+        transform: photo.transform,
+        postProcess: photo.postProcess,
+        sceneId: newSceneId,
+        templateId: photo.templateId,
+        kitId: photo.kitId,
+        mood: photo.mood,
+        lut: photo.lut,
+        isFavorite: photo.isFavorite,
+        createdAt: photo.createdAt,
+      );
+      _replaceCurrent(updatedPhoto);
+      if (newSceneId != null && newSceneName != null) {
+        final name = newSceneName;
+        setState(() => _sceneNameById[newSceneId] = name);
+      }
       ref.invalidate(collectionsListProvider);
       LumiraToast.show(context, '已更换场景', duration: const Duration(milliseconds: 1000));
     } catch (e) {
@@ -255,58 +283,30 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     setState(() => _isComparing = !_isComparing);
   }
 
-  /// 当前预览中展示的图片 URL（对比时为原图，否则为成品）
-  String? _currentDisplayUrl() {
-    final photo = _photo;
-    if (photo == null) return null;
-    if (_isComparing &&
-        photo.originalPath != null &&
-        photo.originalPath!.isNotEmpty) {
-      return photo.originalPath;
-    }
-    return photo.dataUrl ?? photo.filePath;
-  }
-
-  /// 点击照片预览 → 打开全屏大图查看器（支持双指缩放）
+  /// 点击照片预览 → 打开全屏大图查看器（整册多图：双指缩放 + 左右滑动切换）
   void _openFullscreen() {
-    final url = _currentDisplayUrl();
-    if (url == null || url.isEmpty) return;
+    // 收集整册照片的可展示 URL，用于全屏内左右滑动浏览相邻照片
+    final urls = <String>[];
+    final urlIndexById = <String, int>{};
+    for (final p in _photos) {
+      final u = p.dataUrl ?? p.filePath;
+      if (u == null || u.isEmpty) continue;
+      urlIndexById[p.id] = urls.length;
+      urls.add(u);
+    }
+    if (urls.isEmpty) return;
+    final photo = _photo;
+    final initial = (photo != null && urlIndexById.containsKey(photo.id))
+        ? urlIndexById[photo.id]!
+        : 0;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _FullscreenViewer(url: url),
+        builder: (_) => FullscreenImageGallery(
+          urls: urls,
+          initialIndex: initial,
+        ),
       ),
     );
-  }
-
-  /// 解析图片宽高比（本地文件与网络图片均支持），失败返回 null
-  Future<double?> _resolveAspectRatio(String url) {
-    final completer = Completer<ui.Image>();
-    late final ImageStreamListener listener;
-    listener = ImageStreamListener(
-      (info, _) {
-        if (!completer.isCompleted) completer.complete(info.image);
-      },
-      onError: (error, _) {
-        if (!completer.isCompleted) completer.completeError(error);
-      },
-    );
-    final stream = _imageProviderFor(url).resolve(const ImageConfiguration());
-    stream.addListener(listener);
-
-    return completer.future.then<double?>((image) {
-      stream.removeListener(listener);
-      final ratio = image.width / (image.height == 0 ? 1 : image.height);
-      image.dispose();
-      return ratio;
-    }).catchError((_) {
-      stream.removeListener(listener);
-      return null;
-    });
-  }
-
-  ImageProvider<Object> _imageProviderFor(String url) {
-    if (url.startsWith('http')) return NetworkImage(url);
-    return FileImage(File(url));
   }
 
   /// 记录探店：跳转到探店新增页，预填当前照片
@@ -317,101 +317,6 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
       RouteNames.checkinEdit,
       {RouteNames.paramPhotoId: photo.id},
     ));
-  }
-
-  /// 标记为穿搭日记：弹出场景选择器
-  Future<void> _onOutfitMark() async {
-    final photo = _photo;
-    final scenes = _allScenes;
-    if (photo == null) return;
-    if (scenes.isEmpty) {
-      LumiraToast.show(context, '暂无可用场景', duration: const Duration(milliseconds: 1500));
-      return;
-    }
-    final tokens = ref.read(themeTokensProvider);
-    final selected = await showLumiraBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => _OutfitScenePicker(
-        scenes: scenes,
-        currentSceneId: photo.sceneId,
-        tokens: tokens,
-      ),
-    );
-    if (selected == null || !mounted) return;
-    try {
-      final dao = await ref.read(galleryDaoProvider.future);
-      await dao.updateScene(photo.id, selected);
-      if (!mounted) return;
-      setState(() {
-        _photo = GalleryItemRecord(
-          id: photo.id,
-          dataUrl: photo.dataUrl,
-          filePath: photo.filePath,
-          originalPath: photo.originalPath,
-          transform: photo.transform,
-          postProcess: photo.postProcess,
-          sceneId: selected,
-          templateId: photo.templateId,
-          kitId: photo.kitId,
-          mood: photo.mood,
-          lut: photo.lut,
-          isFavorite: photo.isFavorite,
-          createdAt: photo.createdAt,
-        );
-      });
-      ref.invalidate(diaryEntriesProvider(const DiaryFilter(tab: kDiaryTabOutfit)));
-      ref.invalidate(diaryStreakProvider);
-      LumiraToast.show(context, '已标记为穿搭日记', duration: const Duration(milliseconds: 1500));
-    } catch (e) {
-      if (mounted) {
-        LumiraToast.show(context, '标记失败：$e', duration: const Duration(seconds: 2));
-      }
-    }
-  }
-
-  /// 分享当前照片：优先分享本地文件；网络图（dataUrl 以 http 开头）暂不支持。
-  Future<void> _onShare() async {
-    final photo = _photo;
-    if (photo == null) return;
-    final filePath = photo.filePath;
-    final dataUrl = photo.dataUrl;
-    // 选取第一个可用的本地路径
-    final localPath = (filePath != null && filePath.isNotEmpty && !filePath.startsWith('http'))
-        ? filePath
-        : null;
-    if (localPath == null) {
-      final isNetwork = (dataUrl != null && dataUrl.startsWith('http')) ||
-          (filePath != null && filePath.startsWith('http'));
-      if (isNetwork) {
-        LumiraToast.show(
-          context,
-          '网络图片暂不支持分享',
-          duration: const Duration(milliseconds: 1500),
-        );
-      } else {
-        LumiraToast.show(
-          context,
-          '未找到可分享的照片文件',
-          duration: const Duration(milliseconds: 1500),
-        );
-      }
-      return;
-    }
-    try {
-      await SafeShare.shareXFiles(
-        [XFile(localPath)],
-        subject: '如画 LUMIRA · 摄影作品',
-        text: '我用如画拍了一张照片，快来看看吧！',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      LumiraToast.show(
-        context,
-        '分享失败：$e',
-        duration: const Duration(seconds: 2),
-      );
-    }
   }
 
   /// 保存当前本地照片到系统相册：复用原生 `lumira/photo_saver` 通道。
@@ -551,17 +456,9 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         leading: _DarkBackButton(tokens: tokens),
         actions: [
           if (_photo != null)
-            _FavoriteButton(
-              photo: _photo!,
-              tokens: tokens,
-              onToggled: _onFavoriteToggled,
-            ),
-          if (_photo != null)
             _MoreAction(
               tokens: tokens,
               onCheckin: _onCheckin,
-              onOutfitMark: _onOutfitMark,
-              onShare: _onShare,
               onDelete: _onDelete,
               onAddWatermark: _onAddWatermark,
               onSaveToAlbum: _onSaveToAlbum,
@@ -583,7 +480,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
             return Center(
                 child: LumiraProgress.circular());
           }
-          return _photo == null ? _EmptyCanvas(tokens: tokens) : _buildContent(_photo!, tokens);
+          return _photo == null ? _EmptyCanvas(tokens: tokens) : _buildContent(tokens);
         },
       ),
       bottomNavigationBar: _photo == null
@@ -593,148 +490,74 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
               isReadOnly: _photo?.originalPath == null,
               photo: _photo!,
               onTap: _onEditTap,
-              onShare: _onShare,
+              onSaveToAlbum: _onSaveToAlbum,
               onFavoriteToggle: _onFavoriteToggled,
             ),
     );
   }
 
-  /// 收藏状态切换：更新本地 _photo 并刷新收藏列表
+  /// 收藏状态切换：更新当前照片记录并刷新收藏列表
   void _onFavoriteToggled(bool next) {
-    if (_photo == null) return;
-    setState(() {
-      _photo = GalleryItemRecord(
-        id: _photo!.id,
-        dataUrl: _photo!.dataUrl,
-        filePath: _photo!.filePath,
-        originalPath: _photo!.originalPath,
-        transform: _photo!.transform,
-        postProcess: _photo!.postProcess,
-        sceneId: _photo!.sceneId,
-        templateId: _photo!.templateId,
-        kitId: _photo!.kitId,
-        mood: _photo!.mood,
-        lut: _photo!.lut,
-        isFavorite: next,
-        createdAt: _photo!.createdAt,
-      );
-    });
+    final photo = _photo;
+    if (photo == null) return;
+    _replaceCurrent(GalleryItemRecord(
+      id: photo.id,
+      dataUrl: photo.dataUrl,
+      filePath: photo.filePath,
+      originalPath: photo.originalPath,
+      transform: photo.transform,
+      postProcess: photo.postProcess,
+      sceneId: photo.sceneId,
+      templateId: photo.templateId,
+      kitId: photo.kitId,
+      mood: photo.mood,
+      lut: photo.lut,
+      isFavorite: next,
+      createdAt: photo.createdAt,
+    ));
     ref.invalidate(collectionsListProvider);
   }
 
-  Widget _buildContent(GalleryItemRecord photo, ThemeTokens tokens) {
-    // 进入/切换照片时淡入 + 轻微上移，提升流畅感
-    return TweenAnimationBuilder<double>(
-      key: ValueKey(photo.id),
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      builder: (context, t, child) => Opacity(
-        opacity: t,
-        child: Transform.translate(
-          offset: Offset(0, 12 * (1 - t)),
-          child: child,
-        ),
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. 照片预览区（应用 photo.postProcess 滤镜，只读）
-            // _isComparing 为 true 时切换显示原图
-            _ReadOnlyCanvas(
-              photo: photo,
-              tokens: tokens,
-              isComparing: _isComparing,
-              onCompareToggle: _onCompareToggle,
-              aspectRatio: _photoAspectRatio,
-              onTap: _openFullscreen,
-            ),
-            // 1.5 心情独立凸显（照片正下方、信息面板之上）
-            if (photo.mood != null && photo.mood!.isNotEmpty)
-              _MoodHero(mood: photo.mood!, tokens: tokens),
-            // 2. 照片信息 section（合并元信息/分类/来源，消除卡片汤与场景重复）
-            _PhotoInfoSection(
-              photo: photo,
-              tokens: tokens,
-              sceneName: _sceneName,
-              templateName: _templateName,
-              sceneId: photo.sceneId,
-              templateId: photo.templateId,
-              onChangeCategory: _onChangeCategory,
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
+  /// 构建整册照片的分页视图：通过 PageView 左右滑动切换相邻照片（带动画）
+  Widget _buildContent(ThemeTokens tokens) {
+    return PageView.builder(
+      controller: _pageController,
+      onPageChanged: _onPageChanged,
+      itemCount: _photos.length,
+      itemBuilder: (context, index) => _buildPhotoPage(_photos[index], tokens),
     );
   }
-}
 
-/// 穿搭场景选择器 BottomSheet
-class _OutfitScenePicker extends StatelessWidget {
-  const _OutfitScenePicker({
-    required this.scenes,
-    required this.currentSceneId,
-    required this.tokens,
-  });
-
-  final List<SceneRecord> scenes;
-  final String? currentSceneId;
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    final maxHeight = MediaQuery.of(context).size.height * 0.5;
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxHeight),
+  /// 构建单张照片的详情内容（预览 + 心情 + 信息面板），作为 PageView 的一页
+  Widget _buildPhotoPage(GalleryItemRecord photo, ThemeTokens tokens) {
+    return SingleChildScrollView(
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-            child: Text(
-              '选择穿搭场景',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: tokens.textPrimary,
-              ),
-            ),
+          // 1. 照片预览区（应用 photo.postProcess 滤镜，只读，不缩放）
+          _ReadOnlyCanvas(
+            photo: photo,
+            tokens: tokens,
+            isComparing: _isComparing,
+            onCompareToggle: _onCompareToggle,
+            onTap: _openFullscreen,
           ),
-          Flexible(
-            child: ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.only(bottom: 24),
-              children: [
-                ...scenes.map((scene) => GestureDetector(
-                  onTap: () => Navigator.of(context).pop(scene.id),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                    decoration: BoxDecoration(
-                      color: scene.id == currentSceneId ? tokens.brandSubtle : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.checkroom_outlined, size: 18, color: tokens.brand),
-                        const SizedBox(width: 12),
-                        Text(
-                          scene.name,
-                          style: TextStyle(fontSize: 15, color: tokens.textPrimary),
-                        ),
-                        if (scene.id == currentSceneId) ...[
-                          const Spacer(),
-                          Icon(Icons.check, size: 18, color: tokens.brand),
-                        ],
-                      ],
-                    ),
-                  ),
-                )),
-              ],
-            ),
+          // 1.5 心情独立凸显（照片正下方、信息面板之上）
+          if (photo.mood != null && photo.mood!.isNotEmpty)
+            _MoodHero(mood: photo.mood!, tokens: tokens),
+          // 2. 照片信息 section（合并元信息/分类/来源）
+          _PhotoInfoSection(
+            photo: photo,
+            tokens: tokens,
+            sceneName: _sceneNameById[photo.sceneId],
+            templateName: photo.templateId != null
+                ? _templateNameById[photo.templateId]
+                : null,
+            sceneId: photo.sceneId,
+            templateId: photo.templateId,
+            onChangeCategory: _onChangeCategory,
           ),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -760,13 +583,11 @@ class _DarkBackButton extends StatelessWidget {
   }
 }
 
-/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"记录探店" / "标记为穿搭日记" / "分享照片" / "添加水印" / "删除照片"操作。
+/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"记录探店" / "保存到系统相册" / "添加水印" / "删除照片"操作。
 class _MoreAction extends StatelessWidget {
   const _MoreAction({
     required this.tokens,
     required this.onCheckin,
-    required this.onOutfitMark,
-    required this.onShare,
     required this.onDelete,
     required this.onAddWatermark,
     required this.onSaveToAlbum,
@@ -774,8 +595,6 @@ class _MoreAction extends StatelessWidget {
 
   final ThemeTokens tokens;
   final Future<void> Function() onCheckin;
-  final Future<void> Function() onOutfitMark;
-  final Future<void> Function() onShare;
   final Future<void> Function() onDelete;
   final Future<void> Function() onAddWatermark;
   final Future<void> Function() onSaveToAlbum;
@@ -809,21 +628,6 @@ class _MoreAction extends StatelessWidget {
           Divider(height: 1, color: tokens.divider),
           _MoreSheetOption(
             tokens: tokens,
-            icon: Icons.checkroom_outlined,
-            label: '标记为穿搭日记',
-            color: tokens.brand,
-            onTap: () => Navigator.of(ctx).pop('outfit'),
-          ),
-          Divider(height: 1, color: tokens.divider),
-          _MoreSheetOption(
-            tokens: tokens,
-            icon: Icons.ios_share_outlined,
-            label: '分享照片',
-            onTap: () => Navigator.of(ctx).pop('share'),
-          ),
-          Divider(height: 1, color: tokens.divider),
-          _MoreSheetOption(
-            tokens: tokens,
             icon: Icons.save_outlined,
             label: '保存到系统相册',
             onTap: () => Navigator.of(ctx).pop('saveToAlbum'),
@@ -851,10 +655,6 @@ class _MoreAction extends StatelessWidget {
     if (result == null) return;
     if (result == 'checkin') {
       await onCheckin();
-    } else if (result == 'outfit') {
-      await onOutfitMark();
-    } else if (result == 'share') {
-      await onShare();
     } else if (result == 'saveToAlbum') {
       await onSaveToAlbum();
     } else if (result == 'watermark') {
@@ -1036,17 +836,18 @@ class _EmptyCanvas extends StatelessWidget {
 
 /// 只读照片预览区：直接显示已烘焙的 JPEG（filePath 已含 postProcess 色彩矩阵 +
 /// transform 变换）。不再叠加 ColorFiltered，避免"2x 参数"效果。
-/// 支持 photo_view 双指缩放与拖拽查看细节。
+///
+/// 详情页的小图预览**不支持缩放/拖拽**——仅作为缩略展示，点击整区打开
+/// [FullscreenImageGallery]（支持双指缩放 + 左AppBar右滑动）查看大图。
 ///
 /// 当 isComparing 为 true 且 photo.originalPath 存在时，切换显示原图
 /// （未应用后期参数的原始照片），便于与编辑后效果对比。
-class _ReadOnlyCanvas extends StatelessWidget {
+class _ReadOnlyCanvas extends StatefulWidget {
   const _ReadOnlyCanvas({
     required this.photo,
     required this.tokens,
     this.isComparing = false,
     required this.onCompareToggle,
-    this.aspectRatio,
     this.onTap,
   });
 
@@ -1055,28 +856,97 @@ class _ReadOnlyCanvas extends StatelessWidget {
   final bool isComparing;
   final VoidCallback onCompareToggle;
 
-  /// 照片宽高比（宽/高）。有值时预览区按此比例自适应高度，避免固定高度带来的空白。
-  final double? aspectRatio;
-
   /// 点击照片预览的回调（用于打开全屏大图查看器）
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
-    // 对比模式优先显示原图；否则显示已烘焙的成品（filePath 优先，回退 dataUrl）
-    final String? url;
-    if (isComparing &&
-        photo.originalPath != null &&
-        photo.originalPath!.isNotEmpty) {
-      url = photo.originalPath;
-    } else {
-      url = photo.dataUrl ?? photo.filePath;
+  State<_ReadOnlyCanvas> createState() => _ReadOnlyCanvasState();
+}
+
+class _ReadOnlyCanvasState extends State<_ReadOnlyCanvas> {
+  /// 照片宽高比（宽/高）。异步解析后用于按自然比例自适应高度，null 时回退固定高度。
+  double? _aspectRatio;
+
+  /// 当前查询尺寸的图片流（dispose 时移除监听，避免泄漏）
+  ImageStream? _measureStream;
+  ImageStreamListener? _measureListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _measureAspectRatio();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReadOnlyCanvas oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photo.id != widget.photo.id) {
+      setState(() => _aspectRatio = null);
+      _measureAspectRatio();
     }
+  }
+
+  @override
+  void dispose() {
+    _removeMeasureListener();
+    super.dispose();
+  }
+
+  void _removeMeasureListener() {
+    if (_measureStream != null && _measureListener != null) {
+      _measureStream!.removeListener(_measureListener!);
+    }
+    _measureStream = null;
+    _measureListener = null;
+  }
+
+  /// 解析当前展示图片的宽高比（本地文件与网络图片均支持），失败则保持 null
+  void _measureAspectRatio() {
+    final url = _displayUrl();
+    if (url == null || url.isEmpty) return;
+    _removeMeasureListener();
+    final provider = _imageProviderFor(url);
+    final listener = ImageStreamListener(
+      (info, _) {
+        final image = info.image;
+        final ratio = image.width / (image.height == 0 ? 1 : image.height);
+        if (mounted) setState(() => _aspectRatio = ratio);
+      },
+      onError: (Object? error, StackTrace? stackTrace) {
+        debugPrint('[gallery-detail] 解析图片尺寸失败: $error');
+      },
+    );
+    _measureStream = provider.resolve(const ImageConfiguration());
+    _measureListener = listener;
+    _measureStream!.addListener(listener);
+  }
+
+  /// 对比模式优先显示原图；否则显示已烘焙的成品（filePath 优先，回退 dataUrl）
+  String? _displayUrl() {
+    if (widget.isComparing &&
+        widget.photo.originalPath != null &&
+        widget.photo.originalPath!.isNotEmpty) {
+      return widget.photo.originalPath;
+    }
+    return widget.photo.dataUrl ?? widget.photo.filePath;
+  }
+
+  /// 生成本地/网络图片的 ImageProvider。
+  ImageProvider<Object> _imageProviderFor(String url) {
+    if (url.startsWith('http')) return NetworkImage(url);
+    return FileImage(File(url));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = widget.tokens;
+    final url = _displayUrl();
     final hasOriginal =
-        photo.originalPath != null && photo.originalPath!.isNotEmpty;
+        widget.photo.originalPath != null && widget.photo.originalPath!.isNotEmpty;
     final screenHeight = MediaQuery.of(context).size.height;
     final canvasHeight = screenHeight * 0.45;
 
+    // 小图预览：普通 Image，不做缩放/拖拽
     final Widget inner = ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: url == null || url.isEmpty
@@ -1087,15 +957,12 @@ class _ReadOnlyCanvas extends StatelessWidget {
                     size: 32, color: tokens.textTertiary),
               ),
             )
-          : PhotoView(
-              imageProvider: _providerFor(url),
-              minScale: PhotoViewComputedScale.contained,
-              maxScale: 4.0,
-              backgroundDecoration:
-                  const BoxDecoration(color: Colors.transparent),
+          : Image(
+              image: _imageProviderFor(url),
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.cover,
               filterQuality: FilterQuality.high,
-              // 不设 onTapUp：photo_view 在双击的第一击也会回调 onTapUp，
-              // 会误触发外层覆盖的节点打开全屏。单击打开全屏仍由外层 GestureDetector 接管。
               errorBuilder: (_, __, ___) => Container(
                 color: tokens.surfaceAlt,
                 child: Center(
@@ -1117,10 +984,10 @@ class _ReadOnlyCanvas extends StatelessWidget {
 
     // 有宽高比时按比例自适应，否则回退固定高度
     final Widget frame;
-    if (aspectRatio != null && aspectRatio! > 0) {
+    if (_aspectRatio != null && _aspectRatio! > 0) {
       frame = Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: AspectRatio(aspectRatio: aspectRatio!, child: inner),
+        child: AspectRatio(aspectRatio: _aspectRatio!, child: inner),
       );
     } else {
       frame = Container(
@@ -1133,7 +1000,7 @@ class _ReadOnlyCanvas extends StatelessWidget {
     return Stack(
       children: [
         GestureDetector(
-          onTap: onTap,
+          onTap: widget.onTap,
           behavior: HitTestBehavior.opaque,
           child: frame,
         ),
@@ -1143,13 +1010,13 @@ class _ReadOnlyCanvas extends StatelessWidget {
             bottom: 16,
             right: 16,
             child: GestureDetector(
-              onTap: onCompareToggle,
+              onTap: widget.onCompareToggle,
               behavior: HitTestBehavior.opaque,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 decoration: BoxDecoration(
-                  color: isComparing
+                  color: widget.isComparing
                       ? tokens.brand
                       : Colors.black.withOpacity(0.35),
                   borderRadius: BorderRadius.circular(1000),
@@ -1158,17 +1025,23 @@ class _ReadOnlyCanvas extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      isComparing ? Icons.visibility : Icons.compare_outlined,
+                      widget.isComparing
+                          ? Icons.visibility
+                          : Icons.compare_outlined,
                       size: 14,
-                      color: isComparing ? tokens.textInverse : Colors.white,
+                      color: widget.isComparing
+                          ? tokens.textInverse
+                          : Colors.white,
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      isComparing ? '原图' : '对比',
+                      widget.isComparing ? '原图' : '对比',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: isComparing ? tokens.textInverse : Colors.white,
+                        color: widget.isComparing
+                            ? tokens.textInverse
+                            : Colors.white,
                       ),
                     ),
                   ],
@@ -1178,12 +1051,6 @@ class _ReadOnlyCanvas extends StatelessWidget {
           ),
       ],
     );
-  }
-
-  /// 生成 PhotoView 所需的 ImageProvider（相册本地文件用 File，云端数据用 Network）。
-  ImageProvider<Object> _providerFor(String url) {
-    if (url.startsWith('http')) return NetworkImage(url);
-    return FileImage(File(url));
   }
 }
 
@@ -1663,7 +1530,7 @@ class _SourceChip extends StatelessWidget {
   }
 }
 
-/// 底部操作栏：左侧收藏/分享辅操作 + 右侧"后期修图"主按钮。
+/// 底部操作栏：左侧收藏/保存到相册辅操作 + 右侧"后期修图"主按钮。
 /// 简洁一栏式；辅操作用新拟态圆形图标按钮，主按钮用品牌金色渐变 +
 /// 柔和品牌辉光，按下有缩放反馈，贴合项目 warm 新拟态美学。
 class _EditBottomBar extends StatelessWidget implements PreferredSizeWidget {
@@ -1672,14 +1539,14 @@ class _EditBottomBar extends StatelessWidget implements PreferredSizeWidget {
     required this.isReadOnly,
     required this.photo,
     required this.onTap,
-    required this.onShare,
+    required this.onSaveToAlbum,
     required this.onFavoriteToggle,
   });
   final ThemeTokens tokens;
   final bool isReadOnly;
   final GalleryItemRecord photo;
   final VoidCallback onTap;
-  final VoidCallback onShare;
+  final VoidCallback onSaveToAlbum;
   final ValueChanged<bool> onFavoriteToggle;
 
   @override
@@ -1697,7 +1564,7 @@ class _EditBottomBar extends StatelessWidget implements PreferredSizeWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 辅操作组：收藏 + 分享
+              // 辅操作组：收藏 + 保存到系统相册
               _FavoriteButton(
                 photo: photo,
                 tokens: tokens,
@@ -1707,8 +1574,8 @@ class _EditBottomBar extends StatelessWidget implements PreferredSizeWidget {
               const SizedBox(width: 16),
               _RoundActionButton(
                 tokens: tokens,
-                icon: Icons.ios_share_outlined,
-                onTap: onShare,
+                icon: Icons.download_outlined,
+                onTap: onSaveToAlbum,
               ),
               const Spacer(),
               // 主按钮：后期修图
@@ -1854,64 +1721,6 @@ class _PressableScaleState extends State<_PressableScale> {
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOut,
         child: widget.child,
-      ),
-    );
-  }
-}
-
-/// 全屏大图查看器：黑底 + photo_view 双指缩放/拖拽，点击图片或右上角关闭。
-/// 用于从相册详情页点击照片预览后查看大图。
-class _FullscreenViewer extends StatelessWidget {
-  const _FullscreenViewer({required this.url});
-
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    final ImageProvider<Object> provider;
-    if (url.startsWith('http')) {
-      provider = NetworkImage(url);
-    } else {
-      provider = FileImage(File(url));
-    }
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // 图片主体：黑底居中，支持缩放/拖拽（photo_view 统一仲裁手势）
-          Positioned.fill(
-            child: PhotoView(
-              imageProvider: provider,
-              minScale: PhotoViewComputedScale.contained,
-              maxScale: 5.0,
-              backgroundDecoration: const BoxDecoration(color: Colors.black),
-              onTapUp: (_, __, ___) => Navigator.of(context).pop(),
-              filterQuality: FilterQuality.high,
-              errorBuilder: (_, __, ___) => const Center(
-                child: Icon(Icons.broken_image_outlined,
-                    size: 40, color: Colors.white54),
-              ),
-            ),
-          ),
-          // 右上角关闭按钮
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            right: 16,
-            child: GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              behavior: HitTestBehavior.opaque,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.4),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.close, color: Colors.white, size: 22),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

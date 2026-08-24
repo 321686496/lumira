@@ -1,16 +1,16 @@
 // lib/features/capture/data/templates/blue_night_portrait.dart
 import '../../domain/photo_template.dart';
 
-/// 复古暗夜蓝模板
+/// 蓝色之夜七分身人像模板
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 13
 const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'blue_night_portrait',
-    name: '复古暗夜蓝',
+    name: '蓝色之夜七分身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'blue_night', method: 'seven_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'dreamy_night', style: 'blue_night', subStyle: 'blue_night', method: 'seven_body'),
     tags: ['人像', '暗夜', '逆光', '剪影', '冷调'],
     tagIds: [],
     price: 40,

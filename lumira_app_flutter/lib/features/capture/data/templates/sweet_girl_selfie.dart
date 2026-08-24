@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/sweet_girl_selfie.dart
+import '../../domain/photo_template.dart';
+
+/// 甜美元气自拍（sweet_girl 子风格变体）
+const PhotoTemplate sweetGirlSelfieTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'sweet_girl_selfie',
+    name: '甜美元气自拍',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'sweet_girl', subStyle: 'sweet_girl', method: 'selfie'),
+    tags: ['人像', '甜妹', '自拍', '元气', '粉色'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/sweet_girl_portrait.png',
+    description: '手持自拍的甜美元气少女，比心比耶，粉色空气感十足。',
+    referenceSource: '小红书甜妹自拍教程',
+  ),
+  composition: Composition(
+    overlayType: 'center',
+    subjectFrame: SubjectFrame(x: 0.32, y: 0.2, w: 0.36, h: 0.55),
+    opacity: 0.2,
+    aspectRatio: '3:4',
+    description: '自拍构图中景，人物居中，面部占画面中上部',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.8,
+    rotation: 0,
+    description: '手持手机前置，另一手比耶贴脸，歪头俏皮，甜笑',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0.2,
+    iso: 100,
+    shutterSpeed: '1/160',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '面光（顺光）',
+    lightDirectionAngle: 30,
+    shootingDistance: '0.4-0.8m',
+    background: '纯色粉墙/花墙/教室',
+    props: ['发夹', '泡泡'],
+    bestTime: '上午 9:00-11:00',
+    bestTimeFrom: '09:00',
+    bestTimeTo: '11:00',
+    tips: [
+      '顺光明亮干净',
+      '表情甜而活泼',
+      '浅粉背景呼应甜美',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: 12,
+      contrast: -5,
+      saturation: 8,
+      temperature: 8,
+      tint: 0,
+      highlights: 5,
+      shadows: 10,
+      clarity: -5,
+      vibrance: 5,
+    ),
+    smoothStrength: 15,
+    sharpen: 5,
+    vignette: 0,
+    grain: 0,
+    lut: 'pastel',
+  ),
+);

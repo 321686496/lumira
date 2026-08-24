@@ -1,0 +1,78 @@
+// lib/features/capture/data/templates/ccd_retro_he.dart
+import '../../domain/photo_template.dart';
+
+/// CCD 旧味他拍人像模板（情绪胶片 · 他拍）
+const PhotoTemplate ccdRetroHeTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'ccd_retro_he',
+    name: 'CCD旧味他拍人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'emotional_film', style: 'ccd_retro', subStyle: 'ccd_retro', method: 'normal'),
+    tags: ['人像', 'CCD', '他拍', '复古', '旧味'],
+    tagIds: [],
+    price: 0,
+    cover: 'assets/images/templates/ccd_retro_portrait.png',
+    description: '上世纪 CCD 旧味他拍，暖黄颗粒下藏着说不清的心事。',
+    referenceSource: '小红书 CCD 复古拍照教程；vivo X200 Ultra CCD 模式；ProCCD App 滤镜',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.18, w: 0.42, h: 0.66),
+    opacity: 0.3,
+    aspectRatio: '3:4',
+    description: '他拍半身取景，人物置于右侧三分线，左侧留白烘托氛围',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/ccd_retro_portrait.png'),
+    position: Position(x: 0.58, y: 0.5),
+    scale: 0.8,
+    rotation: 0,
+    description: '侧身站立望向镜头不远处，一只手插兜或扶墙，眼神带疏离感',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0.2,
+    iso: 200,
+    shutterSpeed: '1/100',
+    whiteBalance: 'cloudy',
+    whiteBalanceK: 6000,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '侧顺光/漫射光',
+    lightDirectionAngle: 45,
+    shootingDistance: '1.5-2m',
+    background: '老街/室内暖光/复古墙面',
+    props: [],
+    bestTime: '下午 15:00-17:00',
+    bestTimeFrom: '15:00',
+    bestTimeTo: '17:00',
+    tips: [
+      '利用旧墙纹理增强复古感',
+      '人物神情放松带叙事感',
+      '服装选纯色或格纹',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: 8,
+      contrast: -4,
+      saturation: 5,
+      temperature: 15,
+      tint: 2,
+      highlights: -8,
+      shadows: 10,
+      clarity: -5,
+      vibrance: 5,
+    ),
+    smoothStrength: 15,
+    sharpen: 8,
+    vignette: 16,
+    grain: 25,
+    lut: 'vintage',
+  ),
+);

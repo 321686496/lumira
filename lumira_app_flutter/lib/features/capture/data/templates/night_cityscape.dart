@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate nightCityscapeTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'night_cityscape',
-    name: '夜景城市',
+    name: '城市霓虹夜景',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'night',
-    classification: TemplateClassification(type: 'night', style: 'neon', method: 'wide'),
+    classification: TemplateClassification(type: 'night', style: 'neon', subStyle: 'neon', method: 'wide'),
     tags: ['夜景', '城市', '长曝光', '风光'],
     tagIds: [],
     price: 0,

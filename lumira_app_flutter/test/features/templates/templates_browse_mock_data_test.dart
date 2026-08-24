@@ -27,7 +27,7 @@ void main() {
     test('registry 内模板由 registry 补齐二级分类', () {
       final d = TemplatesBrowseMockData.findDetailById('cafe_portrait');
       expect(d, isNotNull);
-      expect(d!.majorStyle, 'japanese');
+      expect(d!.majorStyle, 'fresh_healing'); // 二级大风格
       expect(d.method, 'normal');
     });
 

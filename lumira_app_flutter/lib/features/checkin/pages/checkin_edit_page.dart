@@ -14,6 +14,7 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../gallery/widgets/sweep_select_grid.dart';
 import '../data/checkin_categories.dart';
 import '../data/checkin_models.dart';
 import '../data/checkin_providers.dart';
@@ -1278,93 +1279,100 @@ class _CheckinPhotoPickerSheetState extends ConsumerState<_CheckinPhotoPickerShe
                           ],
                         ),
                       )
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(16),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          mainAxisSpacing: 10,
-                          crossAxisSpacing: 10,
-                          childAspectRatio: 1.0,
-                        ),
+                    : SweepSelectGrid(
                         itemCount: _photos.length,
-                        itemBuilder: (_, i) {
+                        idOf: (i) => _photos[i].id,
+                        selectedIds: _selected,
+                        onSelectionChanged: (next) => setState(() {
+                          _selected
+                            ..clear()
+                            ..addAll(next);
+                        }),
+                        maxSelectable: widget.maxCount,
+                        onMaxReached: () => LumiraToast.show(
+                          context,
+                          '最多选择 9 张照片',
+                          duration: const Duration(milliseconds: 1500),
+                        ),
+                        padding: const EdgeInsets.all(16),
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        aspectRatio: 1,
+                        itemBuilder: (_, i, selected, startSweep) {
                           final p = _photos[i];
-                          final selected = _selected.contains(p.id);
                           return GestureDetector(
                             onTap: () => _openViewer(i),
+                            onLongPress: () => startSweep(),
                             behavior: HitTestBehavior.opaque,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  // 照片主体：铺满整个格子
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: _buildThumb(p, tokens),
-                                  ),
-                                  // 选中高亮描边
-                                  AnimatedOpacity(
-                                    opacity: selected ? 1.0 : 0.0,
-                                    duration: const Duration(milliseconds: 200),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: tokens.brand.withOpacity(0.2),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: tokens.brand,
-                                          width: 2.5,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  // 勾选按钮（独立可点，点击才勾选，不触发放大）
-                                  Positioned(
-                                    top: 6,
-                                    right: 6,
-                                    child: GestureDetector(
-                                      onTap: () => _toggle(p.id),
-                                      behavior: HitTestBehavior.opaque,
-                                      child: AnimatedContainer(
-                                        duration:
-                                            const Duration(milliseconds: 200),
-                                        width: 24,
-                                        height: 24,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: selected
-                                              ? tokens.brand
-                                              : Colors.white.withOpacity(0.9),
-                                          border: Border.all(
-                                            color: selected
-                                                ? tokens.brand
-                                                : Colors.white.withOpacity(0.6),
-                                            width: 2,
-                                          ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black
-                                                  .withOpacity(0.15),
-                                              blurRadius: 4,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                        child: selected
-                                            ? const Icon(
-                                                Icons.check_rounded,
-                                                size: 15,
-                                                color: Colors.white,
-                                              )
-                                            : null,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                              // 照片主体：铺满整个格子
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: _buildThumb(p, tokens),
                               ),
-                            ),
-                          );
+                              // 选中高亮描边
+                              AnimatedOpacity(
+                                opacity: selected ? 1.0 : 0.0,
+                                duration: const Duration(milliseconds: 200),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: tokens.brand.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: tokens.brand,
+                                      width: 2.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // 勾选按钮（独立可点，点击才勾选，不触发放大）
+                              Positioned(
+                                top: 6,
+                                right: 6,
+                                child: GestureDetector(
+                                  onTap: () => _toggle(p.id),
+                                  behavior: HitTestBehavior.opaque,
+                                  child: AnimatedContainer(
+                                    duration:
+                                        const Duration(milliseconds: 200),
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: selected
+                                          ? tokens.brand
+                                          : Colors.white.withOpacity(0.9),
+                                      border: Border.all(
+                                        color: selected
+                                            ? tokens.brand
+                                            : Colors.white.withOpacity(0.6),
+                                        width: 2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color:
+                                              Colors.black.withOpacity(0.15),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: selected
+                                        ? const Icon(
+                                            Icons.check_rounded,
+                                            size: 15,
+                                            color: Colors.white,
+                                          )
+                                        : null,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
                         },
                       ),
           ),

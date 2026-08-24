@@ -1,16 +1,16 @@
 // lib/features/capture/data/templates/sweet_girl_portrait.dart
 import '../../domain/photo_template.dart';
 
-/// 甜妹元气少女模板
+/// 甜妹元气少女模板（sweet_girl 子风格）
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 16
 const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'sweet_girl_portrait',
-    name: '甜妹元气少女',
+    name: '甜美少女半身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'sweet_girl', method: 'half_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'sweet_girl', subStyle: 'sweet_girl', method: 'half_body'),
     tags: ['人像', '甜妹', '元气', '少女', '粉色'],
     tagIds: [],
     price: 0,

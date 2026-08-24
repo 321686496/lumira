@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate sunsetSilhouetteTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'sunset_silhouette',
-    name: '日落逆光剪影',
+    name: '夕阳剪影远景人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'emotional', method: 'wide'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'emotional_film', style: 'emotional', subStyle: 'emotional', method: 'wide'),
     tags: ['逆光', '剪影', '黄昏', '人像'],
     tagIds: [],
     price: 0,

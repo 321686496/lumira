@@ -6,11 +6,11 @@ import '../../domain/photo_template.dart';
 const PhotoTemplate chineseClassicalPortraitTemplate = PhotoTemplate(
   meta: TemplateMeta(
     id: 'chinese_classical_portrait',
-    name: '新中式古风',
+    name: '中式古典全身人像',
     author: '如画 Lumira',
     version: '1.0.0',
     category: 'portrait',
-    classification: TemplateClassification(type: 'portrait', style: 'chinese_classical', method: 'full_body'),
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'retro_nostalgia', style: 'chinese_classical', subStyle: 'chinese_classical', method: 'full_body'),
     tags: ['人像', '古风', '新中式', '莫兰迪', '园林'],
     tagIds: [],
     price: 0,

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,15 +9,19 @@ import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/utils/safe_temp_dir.dart';
 import '../../profile/providers/collection_providers.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/gallery_models.dart';
+import '../data/name_resolver.dart';
 import '../widgets/photo_cell.dart';
 import '../widgets/scene_filter_pills.dart';
+import '../widgets/sweep_select_grid.dart';
 import '../widgets/view_toggle.dart';
 
 /// 原生「保存到系统相册」MethodChannel（复用）：
@@ -56,6 +62,8 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   // 的内部 listener。CircularProgressIndicator（_isLoading=true 时显示，
   // 无限动画）让 pumpAndSettle 持续 pump 直到 setState 触发重建。
   List<GalleryItemRecord> _photos = const [];
+  /// 全部照片（未过滤），用于顶部筛选 pill 稳定展示，避免切换筛选后多余 tab 消失
+  List<GalleryItemRecord> _allPhotos = const [];
   bool _isLoading = true;
   bool _isInitialLoaded = false;
 
@@ -81,9 +89,11 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   Future<void> _loadPhotos(GalleryDao dao) async {
     try {
       final photos = await _fetchPhotos(dao);
+      final all = await dao.getAll();
       if (mounted) {
         setState(() {
           _photos = photos;
+          _allPhotos = all;
           _isLoading = false;
         });
       }
@@ -91,6 +101,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
       if (mounted) {
         setState(() {
           _photos = const [];
+          _allPhotos = const [];
           _isLoading = false;
         });
       }
@@ -192,8 +203,78 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
     }
   }
 
-  void _exportSelected() {
-    LumiraToast.show(context, '已选择 ${_selectedIds.length} 张照片导出');
+  /// 从系统相册/文件选择器导入照片到 App 相册（常驻入口）。
+  ///
+  /// 选择图片后写入应用本地目录并插入 gallery_items，随后重拉列表展示。
+  Future<void> _importFromSystemGallery() async {
+    final dao = ref.read(galleryDaoProvider).value;
+    if (dao == null) return;
+    try {
+      final files = await FilePickerService.pickImages(allowMultiple: true);
+      final picked = files ?? const <PickedFile>[];
+      if (picked.isEmpty) return; // 用户取消，静默
+
+      // 批量导入前先确定目标目录（path_provider 在鸿蒙未注册时自动降级）
+      final dir = await getSafeDocumentsDirectory();
+      final folder = Directory('${dir.path}/lumira_import');
+      if (!await folder.exists()) {
+        await folder.create(recursive: true);
+      }
+
+      final now = DateTime.now().millisecondsSinceEpoch;
+      int imported = 0;
+      for (var i = 0; i < picked.length; i++) {
+        final full = await FilePickerService.ensureFullBytes(picked[i]);
+        final bytes = full.bytes;
+        if (bytes == null || bytes.isEmpty) continue;
+        final ext = _imageExtFrom(full);
+        final path = '${folder.path}/import_${now}_$i.$ext';
+        await File(path).writeAsBytes(bytes);
+        final rec = GalleryItemRecord(
+          id: 'photo_${now}_$i',
+          filePath: path,
+          createdAt: now,
+        );
+        await dao.insert(rec);
+        imported++;
+      }
+      ref.invalidate(galleryDaoProvider);
+      if (!mounted) return;
+      if (imported > 0) {
+        LumiraToast.show(
+          context,
+          '已导入 $imported 张照片',
+          duration: const Duration(seconds: 2),
+        );
+        setState(() => _isLoading = true);
+        await _loadPhotos(dao);
+      } else {
+        LumiraToast.show(
+          context,
+          '读取照片失败，请重试',
+          duration: const Duration(seconds: 2),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('[gallery] 导入照片异常: $e');
+      LumiraToast.show(context, '导入失败：$e', duration: const Duration(seconds: 2));
+    }
+  }
+
+  /// 从 [PickedFile] 推断图片扩展名；无法推断时回退 jpg（保证可解码）。
+  String _imageExtFrom(PickedFile f) {
+    final r = RegExp(r'^(jpg|jpeg|png|gif|bmp|webp|heic|heif)$');
+    final extRaw = f.extension;
+    final ext = (extRaw == null ? '' : extRaw.trim()).toLowerCase();
+    if (ext.isNotEmpty && r.hasMatch(ext)) return ext == 'jpeg' ? 'jpg' : ext;
+    final name = f.name;
+    final idx = name.lastIndexOf('.');
+    if (idx >= 0 && idx < name.length - 1) {
+      final ext2 = name.substring(idx + 1).toLowerCase();
+      if (r.hasMatch(ext2)) return ext2 == 'jpeg' ? 'jpg' : ext2;
+    }
+    return 'jpg';
   }
 
   /// 将选中照片保存到系统相册：逐张解析本地文件路径（跳过网络图片），
@@ -372,7 +453,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
 
   Widget _buildBody(ThemeTokens tokens) {
     final photoViews = _photos.map(GalleryPhoto.fromRecord).toList();
-    final pills = _buildPills(_photos);
+    final pills = _buildPills(_allPhotos);
     final grouped = _groupByTime(_photos);
 
     return Column(
@@ -428,10 +509,20 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
                         height: 1.3,
                       ),
                     ),
-                    ViewToggle(
-                      activeTab: _viewTab,
-                      onPhotoTap: () {},
-                      onDiaryTap: () => GoRouter.of(context).push(RouteNames.galleryDiary),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ImportAction(
+                          tokens: tokens,
+                          onTap: _importFromSystemGallery,
+                        ),
+                        const SizedBox(width: 12),
+                        ViewToggle(
+                          activeTab: _viewTab,
+                          onPhotoTap: () {},
+                          onDiaryTap: () => GoRouter.of(context).push(RouteNames.galleryDiary),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -485,11 +576,6 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
                       ),
                       LumiraButton(
                         variant: ButtonVariant.ghost,
-                        onPressed: _selectedIds.isEmpty ? null : _exportSelected,
-                        child: Text('导出 (${_selectedIds.length})'),
-                      ),
-                      LumiraButton(
-                        variant: ButtonVariant.ghost,
                         onPressed: _selectedIds.isEmpty ? null : _saveSelectedToAlbum,
                         child: Text('保存到相册 (${_selectedIds.length})'),
                       ),
@@ -533,7 +619,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
           : _EmptyState(
               tokens: tokens,
               onCapture: () => GoRouter.of(context).push(RouteNames.capture),
-              onImport: () => LumiraToast.show(context, '导入功能即将上线'),
+              onImport: _importFromSystemGallery,
             );
       // 用可滚动容器包裹空状态，使下拉刷新在空数据时依然可用
       return LayoutBuilder(
@@ -588,28 +674,45 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
                       color: tokens.textPrimary,
                     ),
                   ),
-                  Text(
-                    '${sectionPhotos.length} 张',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.textTertiary,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 多选模式下一键全选/取消全选
+                      if (_isMultiSelectMode)
+                        _SectionSelectAllButton(
+                          tokens: tokens,
+                          allSelected: sectionPhotos.isNotEmpty &&
+                              sectionPhotos
+                                  .every((p) => _selectedIds.contains(p.id)),
+                          onTap: () {
+                            setState(() {
+                              final allSelected = sectionPhotos
+                                  .every((p) => _selectedIds.contains(p.id));
+                              final ids =
+                                  sectionPhotos.map((p) => p.id).toList();
+                              if (allSelected) {
+                                _selectedIds.removeAll(ids);
+                              } else {
+                                _selectedIds.addAll(ids);
+                              }
+                            });
+                          },
+                        ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${sectionPhotos.length} 张',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.textTertiary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            // 该组照片网格
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 6,
-                crossAxisSpacing: 6,
-              ),
-              itemCount: sectionPhotos.length,
-              itemBuilder: (_, i) => _buildPhotoCell(tokens, sectionPhotos, i),
-            ),
+            // 该组照片网格（支持长按滑动批量选，仅限本分区内连续）
+            _buildSectionGrid(tokens, sectionPhotos),
           ],
         );
       },
@@ -646,6 +749,57 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
           });
         },
       ),
+    );
+  }
+
+  /// 构建某一个时间分区的照片网格，支持长按滑动批量选（仅限本分区连续）。
+  Widget _buildSectionGrid(
+      ThemeTokens tokens, List<GalleryPhoto> photos) {
+    return SweepSelectGrid(
+      itemCount: photos.length,
+      idOf: (i) => photos[i].id,
+      selectedIds: _selectedIds,
+      onSelectionChanged: (next) => setState(() {
+        _selectedIds
+          ..clear()
+          ..addAll(next);
+      }),
+      crossAxisCount: 3,
+      mainAxisSpacing: 6,
+      crossAxisSpacing: 6,
+      padding: EdgeInsets.zero,
+      aspectRatio: 1,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemBuilder: (_, i, isSelected, startSweep) {
+        final photo = photos[i];
+        return FadeUp(
+          delay: Duration(milliseconds: (i % 6) * 50),
+          child: PhotoCell(
+            key: ValueKey('photo_cell_$i'),
+            photo: photo,
+            isSelected: isSelected,
+            isMultiSelectMode: _isMultiSelectMode,
+            onTap: () {
+              if (_isMultiSelectMode) {
+                setState(() {
+                  if (!_selectedIds.remove(photo.id)) {
+                    _selectedIds.add(photo.id);
+                  }
+                });
+              } else {
+                _openDetail(photo);
+              }
+            },
+            onLongPress: () {
+              if (!_isMultiSelectMode) {
+                setState(() => _isMultiSelectMode = true);
+              }
+              startSweep();
+            },
+          ),
+        );
+      },
     );
   }
 
@@ -692,7 +846,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
       if (sid == 'uncategorized') return;
       result.add(SceneFilterPill(
         key: 'scene_$sid',
-        label: sid.length > 4 ? sid.substring(0, 4) : sid,
+        label: sceneDisplayName(sid),
         count: cnt,
         icon: Icons.label_outlined,
       ));
@@ -739,6 +893,47 @@ class _StatsAction extends StatelessWidget {
   }
 }
 
+/// 相册顶部信息条的「导入」常驻入口：点击从系统相册/文件选择器导入照片。
+class _ImportAction extends StatelessWidget {
+  const _ImportAction({required this.tokens, required this.onTap});
+  final ThemeTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: tokens.brandSubtle,
+          borderRadius: BorderRadius.circular(1000),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.add_photo_alternate_outlined,
+              size: 14,
+              color: tokens.brand,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '导入',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: tokens.brand,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CancelSearchButton extends StatelessWidget {
   const _CancelSearchButton({required this.tokens, required this.onTap});
   final ThemeTokens tokens;
@@ -754,6 +949,53 @@ class _CancelSearchButton extends StatelessWidget {
         child: Text(
           '取消',
           style: TextStyle(fontSize: 13, color: tokens.brand),
+        ),
+      ),
+    );
+  }
+}
+
+/// 分区头部的一键全选/取消全选按钮（仅多选模式显示，主题自适应）。
+class _SectionSelectAllButton extends StatelessWidget {
+  const _SectionSelectAllButton({
+    required this.tokens,
+    required this.allSelected,
+    required this.onTap,
+  });
+
+  final ThemeTokens tokens;
+  final bool allSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          border: Border.all(color: tokens.textTertiary.withOpacity(0.6)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              allSelected ? Icons.deselect_outlined : Icons.select_all,
+              size: 13,
+              color: tokens.brand,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              allSelected ? '取消全选' : '全选',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: tokens.brand,
+              ),
+            ),
+          ],
         ),
       ),
     );

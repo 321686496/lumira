@@ -1,0 +1,76 @@
+// lib/features/capture/data/templates/morandi_minimal_side.dart
+import '../../domain/photo_template.dart';
+
+/// 莫兰迪侧拍人像（morandi_minimal 子风格变体）
+const PhotoTemplate morandiMinimalSideTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'morandi_minimal_side',
+    name: '莫兰迪侧拍人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'fresh_healing', style: 'morandi_minimal', subStyle: 'morandi_minimal', method: 'side'),
+    tags: ['人像', '莫兰迪', '侧拍', '低饱和', '知性'],
+    tagIds: [],
+    price: 60,
+    cover: 'assets/images/templates/morandi_minimal_portrait.png',
+    description: '莫兰迪低饱和侧拍人像，侧脸线条安静高级，极简克制。',
+    referenceSource: '莫兰迪侧拍人像；轻熟女知性风',
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    subjectFrame: SubjectFrame(x: 0.3, y: 0.12, w: 0.44, h: 0.75),
+    opacity: 0.2,
+    aspectRatio: '4:5',
+    description: '侧拍取景，人物偏右，侧脸朝向留白空间',
+  ),
+  pose: Pose(
+    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/morandi_minimal_portrait.png'),
+    position: Position(x: 0.5, y: 0.5),
+    scale: 0.8,
+    rotation: 0,
+    description: '侧身回望一侧，双手自然下垂放松，神情平静知性',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    iso: 100,
+    shutterSpeed: '1/160',
+    whiteBalance: 'daylight',
+    whiteBalanceK: 5500,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensType: '1x',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '侧光/柔光',
+    lightDirectionAngle: 60,
+    shootingDistance: '1.5-2m',
+    background: '纯色灰墙/莫兰迪背景纸',
+    props: [],
+    bestTime: '全天（室内可控光）',
+    tips: [
+      '侧光勾勒轮廓低调高级',
+      '服饰莫兰迪灰调',
+      '画面极简无杂质',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '4:5',
+    color: PostProcessColor(
+      brightness: 0,
+      contrast: 5,
+      saturation: -20,
+      temperature: -5,
+      tint: 0,
+      highlights: 0,
+      shadows: 0,
+      clarity: 5,
+      vibrance: -10,
+    ),
+    smoothStrength: 12,
+    sharpen: 10,
+    vignette: 5,
+    grain: 5,
+    lut: 'none',
+  ),
+);

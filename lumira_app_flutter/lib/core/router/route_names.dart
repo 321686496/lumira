@@ -80,6 +80,8 @@ class RouteNames {
 
   // === 账号保护 / 恢复 ===
   static const String accountProtection = '/profile/account-protection';
+  static const String accountRecoveryQr = '/account/recovery-qr';
+  static const String accountBindEmail = '/account/bind-email';
   static const String accountRecover = '/account/recover';
 
   // === 查询参数键名 ===
