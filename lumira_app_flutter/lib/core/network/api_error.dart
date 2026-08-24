@@ -42,6 +42,25 @@ class ApiException implements Exception {
   String toString() => 'ApiException($kind, $statusCode): $message';
 }
 
+/// 从 Dio 错误响应体中提取后端返回的业务 message（如「Insufficient points balance」）。
+///
+/// NestJS 错误体通常为 `{ statusCode, message, error }`，message 可能是 String 或 List。
+/// 提取失败时返回空串，由调用方决定兜底文案。
+String _backendMessage(dynamic err) {
+  try {
+    final data = (err as dynamic).response?.data;
+    if (data is Map) {
+      final m = data['message'];
+      if (m is String && m.isNotEmpty) return m;
+      if (m is List && m.isNotEmpty) return m.map((e) => e.toString()).join('; ');
+    }
+    if (data is String && data.isNotEmpty) return data;
+  } catch (_) {
+    // 忽略解析失败，返回空串
+  }
+  return '';
+}
+
 /// 将 Dio 异常映射为 ApiException
 ///
 /// 注意：调用方需传入 dio 4.0.6 的 DioError 类型
@@ -61,6 +80,7 @@ ApiException classifyDioError(dynamic err) {
   }
 
   final statusCode = err.response?.statusCode as int?;
+  final backendMsg = _backendMessage(err);
   switch (statusCode) {
     case 401:
       return ApiException(ApiErrorKind.unauthorized, 'Unauthorized', statusCode: 401, original: err);
@@ -74,6 +94,11 @@ ApiException classifyDioError(dynamic err) {
       if (statusCode != null && statusCode >= 500) {
         return ApiException(ApiErrorKind.server, 'Server error', statusCode: statusCode, original: err);
       }
-      return ApiException(ApiErrorKind.unknown, 'Unknown error', statusCode: statusCode, original: err);
+      return ApiException(
+        ApiErrorKind.unknown,
+        backendMsg.isNotEmpty ? backendMsg : 'Unknown error',
+        statusCode: statusCode,
+        original: err,
+      );
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -9,6 +10,8 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../points/data/points_repository.dart';
+import '../../points/widgets/points_earn_ways.dart';
 import '../../redeem/data/redeem_repository.dart';
 import '../../redeem/data/redeem_models.dart';
 import '../data/owned_templates_repository.dart';
@@ -114,6 +117,15 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
         lumira.LumiraToast.show(context, '缺少模板积分价格');
         return;
       }
+
+      // 预检余额：不足时直接弹「积分不足 + 获取积分方式」弹窗，不进入确认弹窗
+      final balance = await _fetchBalance();
+      if (balance != null && balance < price) {
+        await _showInsufficientCreditsDialog(price: price, balance: balance);
+        return;
+      }
+      if (!mounted) return;
+
       final confirmed = await lumira.showLumiraDialog<bool>(
         context: context,
         barrierDismissible: true,
@@ -137,9 +149,55 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      lumira.LumiraToast.show(context, '兑换失败：$e');
+      // 服务端兜底：余额不足（预检后并发扣减等竞态）同样弹积分不足弹窗
+      if (_isInsufficientCreditsError(e)) {
+        await _showInsufficientCreditsDialog(price: widget.price ?? 0);
+      } else {
+        lumira.LumiraToast.show(context, '兑换失败：$e');
+      }
     } finally {
       _purchasing = false;
+    }
+  }
+
+  /// 拉取当前积分余额；失败返回 null（不阻塞购买流程，交由 exchange 兜底报错）。
+  Future<int?> _fetchBalance() async {
+    try {
+      final repo = await ref.read(pointsRepositoryProvider.future);
+      final b = await repo.getBalance();
+      return b.balance;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 判断是否为「积分不足」错误（后端返回 400 + Insufficient points balance）。
+  bool _isInsufficientCreditsError(Object e) {
+    if (e is ApiException) {
+      final msg = e.message.toLowerCase();
+      return msg.contains('insufficient') || msg.contains('余额不足');
+    }
+    return false;
+  }
+
+  /// 弹出「积分不足」弹窗：告知当前余额不足 + 列出获取积分方式。
+  /// 点击「去赚积分」跳转积分钱包页（该页含获取积分/签到/邀请入口）。
+  Future<void> _showInsufficientCreditsDialog({
+    required int price,
+    int? balance,
+  }) async {
+    final goWallet = await lumira.showLumiraDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => _InsufficientCreditsContent(
+        price: price,
+        balance: balance,
+        onCancel: () => Navigator.pop(ctx, false),
+        onGoWallet: () => Navigator.pop(ctx, true),
+      ),
+    );
+    if (goWallet == true && mounted) {
+      GoRouter.of(context).push(RouteNames.pointsWallet);
     }
   }
 
@@ -937,6 +995,168 @@ class _PayPopupContent extends ConsumerWidget {
                   child: Center(
                     child: Text(
                       '确认解锁',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.textInverse,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 积分不足弹窗内容
+///
+/// 付费模板解锁时积分不足以支付时展示：
+/// - 头部：积分不足 + 差额说明
+/// - 中部：获取积分方式列表（与积分钱包页共用同一数据源）
+/// - 底部：「取消」/「去赚积分」（跳转积分钱包页）
+class _InsufficientCreditsContent extends ConsumerWidget {
+  const _InsufficientCreditsContent({
+    required this.price,
+    required this.balance,
+    required this.onCancel,
+    required this.onGoWallet,
+  });
+
+  final int price;
+
+  /// 当前可用积分；为 null 时（余额拉取失败/服务端兜底）不展示差额数字
+  final int? balance;
+  final VoidCallback onCancel;
+  final VoidCallback onGoWallet;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+
+    final String desc;
+    if (balance != null) {
+      final diff = price - balance!;
+      desc = balance! >= price
+          ? '解锁该模板需 $price 积分，当前可用 $balance 积分。'
+          : '解锁该模板需 $price 积分，当前可用 $balance 积分，还差 $diff 积分。';
+    } else {
+      desc = '解锁该模板需 $price 积分，当前积分不足以完成解锁。';
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.error_outline, size: 20, color: tokens.danger),
+            const SizedBox(width: 8),
+            Text(
+              '积分不足',
+              style: TextStyle(
+                fontFamily: 'Noto Serif SC',
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          desc,
+          style: TextStyle(
+            fontSize: 13,
+            color: tokens.textSecondary,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: tokens.surfaceAlt,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '获取积分方式',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              PointsEarnWaysList(
+                tokens: tokens,
+                dense: true,
+                stacked: true,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: onCancel,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    // neumorphic 风格下：移除 border，用 canvasDeep + shadowConcaveSubtle
+                    color: isNeumorphic
+                        ? tokens.canvasDeep
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    border: isNeumorphic
+                        ? null
+                        : Border.all(color: tokens.divider, width: 1),
+                    boxShadow: isNeumorphic
+                        ? tokens.shadowConcaveSubtle
+                        : null,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.textSecondary,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: GestureDetector(
+                onTap: onGoWallet,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: tokens.brand,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: tokens.shadowConvexBrand,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '去赚积分',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,

@@ -10,6 +10,8 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../features/gallery/data/gallery_models.dart';
+import '../../../features/points/data/points_models.dart';
+import '../../../features/points/data/points_repository.dart';
 import '../../../features/usage/usage_providers.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -133,6 +135,39 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     GoRouter.of(context).push(
       '${RouteNames.templatesUnlock}?templateId=${template.id}&price=${template.price}',
     );
+  }
+
+  /// 跳转积分钱包页（右上角积分数点击入口）。
+  void _goPointsWallet() {
+    GoRouter.of(context).push(RouteNames.pointsWallet);
+  }
+
+  /// 顶部导航右侧操作组：
+  /// - 我的模板（自定义/导入）→ 导出 + 编辑
+  /// - 付费模板未解锁 → 右上角展示用户积分数（点击跳转积分钱包页）
+  /// - 其余（免费模板 / 已解锁付费模板）→ 无右侧操作
+  List<Widget>? _navActions(ThemeTokens tokens, bool isLocked) {
+    if (_isMyTemplate) {
+      return [
+        if (_isCustomTemplate)
+          LumiraIconButton(
+            icon: Icons.ios_share,
+            onPressed: _goExport,
+            color: tokens.textPrimary,
+            size: 20,
+          ),
+        LumiraIconButton(
+          icon: Icons.edit_outlined,
+          onPressed: _goEdit,
+          color: tokens.textPrimary,
+          size: 20,
+        ),
+      ];
+    }
+    if (isLocked) {
+      return [_CreditBalanceChip(onTap: _goPointsWallet)];
+    }
+    return null;
   }
 
   void _goEdit() {
@@ -487,6 +522,12 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
         ? ref.watch(templateDetailProvider(widget.templateId!))
         : const AsyncValue<TemplateDetail?>.data(null);
 
+    // 当前模板是否处于「付费未解锁」锁定态（决定右上角是否展示积分余额）
+    final TemplateDetail? effectiveTemplate =
+        mockTemplate ?? asyncDetail.value;
+    final effectiveLocked =
+        effectiveTemplate != null && computeLocked(effectiveTemplate);
+
     return Scaffold(
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
@@ -502,23 +543,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                   title: '模板详情',
                   transparent: true,
                   leading: _BackButton(tokens: tokens, onTap: _back),
-                  actions: _isMyTemplate
-                      ? [
-                          if (_isCustomTemplate)
-                            LumiraIconButton(
-                              icon: Icons.ios_share,
-                              onPressed: _goExport,
-                              color: tokens.textPrimary,
-                              size: 20,
-                            ),
-                          LumiraIconButton(
-                            icon: Icons.edit_outlined,
-                            onPressed: _goEdit,
-                            color: tokens.textPrimary,
-                            size: 20,
-                          ),
-                        ]
-                      : null,
+                  actions: _navActions(tokens, effectiveLocked),
                 ),
                 Expanded(
                   child: mockTemplate != null
@@ -605,6 +630,61 @@ class _BackButton extends StatelessWidget {
           color: tokens.textPrimary,
         ),
       ),
+    );
+  }
+}
+
+/// 右上角积分余额胶囊：付费模板未解锁时展示当前积分数，点击跳转积分钱包页。
+///
+/// 余额来自 [pointsRepositoryProvider]（GET /points/balance），加载中显示占位「…」。
+class _CreditBalanceChip extends ConsumerWidget {
+  const _CreditBalanceChip({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(themeTokensProvider);
+    final repoAsync = ref.watch(pointsRepositoryProvider);
+
+    Widget chip(String label) => GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: tokens.brandSubtle,
+              borderRadius: BorderRadius.circular(9999),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.stars_outlined, size: 14, color: tokens.brand),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.brandText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+
+    return repoAsync.maybeWhen(
+      data: (repo) => FutureBuilder<PointsBalance>(
+        future: repo.getBalance(),
+        builder: (context, snap) {
+          final balance = snap.connectionState == ConnectionState.done
+              ? snap.data?.balance
+              : null;
+          return chip(balance != null ? '$balance' : '…');
+        },
+      ),
+      orElse: () => chip('…'),
     );
   }
 }
