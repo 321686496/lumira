@@ -5,6 +5,7 @@ import { eq, and, or, gt, asc, desc, sql, inArray, type SQL } from 'drizzle-orm'
 import { DatabaseService } from '../../database/database.service';
 import { ownedTemplates, templatePrices, templates, templateCategories } from '../../database/schema';
 import { PointsService } from '../points/points.service';
+import { buildAssetUrl } from '../../common/storage/asset-url';
 import type {
   RemoteTemplateMeta,
   RemoteTemplateListResponse,
@@ -234,7 +235,7 @@ export function rowToMeta(row: TemplateRow): RemoteTemplateMeta {
     version: row.version,
     category: row.category,
     price: row.price,
-    coverUrl: normalizeAssetUrl(row.coverUrl),
+    coverUrl: buildAssetUrl(row.coverUrl),
     description: row.description,
     referenceSource: row.referenceSource,
     tags: safeParseStringArray(row.tagsJson),
@@ -253,8 +254,8 @@ export function rowToDetail(row: TemplateRow): RemoteTemplateDetail {
   if (silhouette && typeof silhouette === 'object') {
     const s = silhouette as Record<string, unknown>;
     // 旧数据修复：剪影 URL 可能在 BACKEND_PUBLIC_URL 配置前写入，前缀为 localhost
-    if (typeof s.url === 'string') s.url = normalizeAssetUrl(s.url);
-    if (typeof s.data === 'string') s.data = normalizeAssetUrl(s.data);
+    if (typeof s.url === 'string') s.url = buildAssetUrl(s.url);
+    if (typeof s.data === 'string') s.data = buildAssetUrl(s.data);
   }
   return {
     ...rowToMeta(row),
@@ -270,7 +271,7 @@ export function rowToCategory(row: CategoryRow): TemplateCategory {
   return {
     key: row.key,
     name: row.name,
-    iconUrl: normalizeAssetUrl(row.iconUrl),
+    iconUrl: buildAssetUrl(row.iconUrl),
     description: row.description ?? '',
     parentKey: row.parentKey,
     level: row.level,
@@ -282,22 +283,8 @@ export function rowToCategory(row: CategoryRow): TemplateCategory {
 }
 
 /**
- * 规范化静态资源 URL。
- *
- * 背景：`BACKEND_PUBLIC_URL` 配置前上传的模板/分类，数据库中的 coverUrl、
- * 剪影 url/data、iconUrl 前缀为 `http://localhost:3000`，App 端无法访问。
- * 这里在返回客户端前将 localhost/127.0.0.1 前缀替换为当前 `BACKEND_PUBLIC_URL`，
- * 保证旧数据也能被 App 正常加载（不依赖手动改库）。
+ * 安全解析 JSON 对象。
  */
-function normalizeAssetUrl(url: string | null | undefined): string {
-  if (!url) return url || '';
-  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(url)) {
-    const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
-    return url.replace(/^https?:\/\/[^/]+/, base);
-  }
-  return url;
-}
-
 function safeParseObject(json: string): Record<string, unknown> {
   try {
     const v = JSON.parse(json);
