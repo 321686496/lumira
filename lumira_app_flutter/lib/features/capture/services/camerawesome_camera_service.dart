@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io';
 
 import 'package:camerawesome_ohos/camerawesome_plugin.dart' as ohos;
 import 'package:camerawesome/camerawesome_plugin.dart' as ca;
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
@@ -393,16 +394,28 @@ class CamerawesomeCameraService implements CameraService {
     );
   }
 
-  /// 统一的拍照文件路径生成（三端共用，带兜底）
+  /// 统一的拍照文件路径生成（三端共用）。
+  ///
+  /// 照片必须写入**持久化目录**（数据库同目录下的 `photos/` 子目录），不能写入
+  /// 临时目录：iOS 在 App 更新/重装时会被系统清空 `tmp/`，导致已拍照片文件丢失
+  /// （相册数据库记录仍在、文件却消失，表现为“更新后照片都没了”）。
+  /// 鸿蒙端 path_provider 缺 ohos 原生实现，`getTemporaryDirectory()` 会抛
+  /// `MissingPluginException`，此前依赖 catch 兜底落到 `getDatabasesPath()`（持久
+  /// 目录），因此 OHOS 恰好不受影响。这里统一改为持久目录，三端行为一致。
   Future<String> _buildPath() async {
     final ts = DateTime.now().millisecondsSinceEpoch;
     try {
+      final dbPath = await getDatabasesPath();
+      final photosDir = Directory(p.join(dbPath, 'photos'));
+      if (!await photosDir.exists()) {
+        await photosDir.create(recursive: true);
+      }
+      return p.join(photosDir.path, 'capture_$ts.jpg');
+    } catch (e) {
+      // 持久目录创建失败的极低概率兜底：临时目录在下次更新前本会话仍可用
+      debugPrint('[camera] 创建持久化照片目录失败，兜底到临时目录: $e');
       final dir = await getTemporaryDirectory();
       return '${dir.path}/capture_$ts.jpg';
-    } catch (e) {
-      debugPrint('[camera] getTemporaryDirectory failed, fallback to dbPath: $e');
-      final dbPath = await getDatabasesPath();
-      return '$dbPath/capture_$ts.jpg';
     }
   }
 
