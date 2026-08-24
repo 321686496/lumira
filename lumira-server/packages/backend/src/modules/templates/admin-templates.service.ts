@@ -1,13 +1,13 @@
 // lumira-server/packages/backend/src/modules/templates/admin-templates.service.ts
 // Admin 模板管理业务逻辑（spec 3.3 + 3.4）
 
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { eq, asc, desc, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-import * as fs from 'fs';
-import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
 import { templates, templateCategories, templatePrices } from '../../database/schema';
+import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
+import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { parsePptpl } from './utils/pptpl-parser';
@@ -37,12 +37,6 @@ function assertFileSize(file: UploadFile, maxBytes: number, fieldLabel: string):
   }
 }
 
-/** 静态资源 URL 构造（spec 3.5：prefix 不含 /api/v1）*/
-function buildPublicUrl(category: 'templates' | 'categories', id: string, filename: string): string {
-  const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
-  return `${base}/uploads/${category}/${id}/${filename}`;
-}
-
 /** 从文件名/mimetype 提取扩展名（小写，不含点）*/
 function extractExt(file: UploadFile): string {
   // 优先用文件名扩展名
@@ -66,30 +60,12 @@ function extractExt(file: UploadFile): string {
   return mimeMap[file.mimetype] || 'bin';
 }
 
-/** 保存文件到 uploads/templates/{id}/{filename}，返回相对存储路径 */
-function saveFile(uploadDir: string, category: 'templates' | 'categories', id: string, filename: string, buffer: Buffer): string {
-  const dir = path.join(uploadDir, category, id);
-  fs.mkdirSync(dir, { recursive: true });
-  const filePath = path.join(dir, filename);
-  fs.writeFileSync(filePath, buffer);
-  return filePath;
-}
-
-/** 删除 uploads/templates/{id}/ 整个目录 */
-function deleteTemplateFiles(uploadDir: string, id: string): void {
-  const dir = path.join(uploadDir, 'templates', id);
-  if (fs.existsSync(dir)) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-}
-
 @Injectable()
 export class AdminTemplatesService {
-  private readonly uploadDir: string;
-
-  constructor(private readonly dbService: DatabaseService) {
-    this.uploadDir = path.resolve(process.env.UPLOAD_DIR || './data/uploads');
-  }
+  constructor(
+    private readonly dbService: DatabaseService,
+    @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
+  ) {}
 
   // ===== 列表 / 详情 =====
 
@@ -221,16 +197,14 @@ export class AdminTemplatesService {
     // 保存封面
     const coverExt = extractExt(cover);
     const coverFilename = `cover.${coverExt}`;
-    saveFile(this.uploadDir, 'templates', id, coverFilename, cover.buffer);
-    const coverUrl = buildPublicUrl('templates', id, coverFilename);
+    const coverUrl = await this.storage.write('templates', id, coverFilename, cover.buffer);
 
     // 保存剪影（若有），URL 写入 poseJson
     let poseJson = JSON.stringify(pose);
     if (silhouette) {
       const silExt = extractExt(silhouette);
       const silFilename = `silhouette.${silExt}`;
-      saveFile(this.uploadDir, 'templates', id, silFilename, silhouette.buffer);
-      const silUrl = buildPublicUrl('templates', id, silFilename);
+      const silUrl = await this.storage.write('templates', id, silFilename, silhouette.buffer);
       // 将 silhouette URL 注入 pose 对象
       const poseObj = typeof pose === 'object' && pose !== null ? pose as Record<string, unknown> : {};
       if (poseObj.silhouette && typeof poseObj.silhouette === 'object') {
@@ -360,8 +334,7 @@ export class AdminTemplatesService {
     if (cover) {
       const coverExt = extractExt(cover);
       const coverFilename = `cover.${coverExt}`;
-      saveFile(this.uploadDir, 'templates', id, coverFilename, cover.buffer);
-      coverUrl = buildPublicUrl('templates', id, coverFilename);
+      coverUrl = await this.storage.write('templates', id, coverFilename, cover.buffer);
     }
 
     // 剪影：若有新剪影，保存并注入 pose URL
@@ -369,8 +342,7 @@ export class AdminTemplatesService {
     if (silhouette) {
       const silExt = extractExt(silhouette);
       const silFilename = `silhouette.${silExt}`;
-      saveFile(this.uploadDir, 'templates', id, silFilename, silhouette.buffer);
-      const silUrl = buildPublicUrl('templates', id, silFilename);
+      const silUrl = await this.storage.write('templates', id, silFilename, silhouette.buffer);
       const poseObj = typeof pose === 'object' && pose !== null ? pose as Record<string, unknown> : {};
       if (poseObj.silhouette && typeof poseObj.silhouette === 'object') {
         (poseObj.silhouette as Record<string, unknown>).type = 'image';
@@ -459,7 +431,7 @@ export class AdminTemplatesService {
     await db.delete(templatePrices).where(eq(templatePrices.templateId, id));
 
     // 删除文件目录
-    deleteTemplateFiles(this.uploadDir, id);
+    await this.storage.deleteByDir('templates', id);
 
     return { success: true };
   }
