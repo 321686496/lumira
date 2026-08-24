@@ -1,0 +1,118 @@
+# 生产环境部署用的 docker-compose 配置
+# 通过 GitHub Actions SSH 部署时使用：docker compose -f docker-compose.prod.yml --env-file .env up -d
+# 构建上下文指向仓库的 lumira-server/ 目录，使用多阶段 Dockerfile 构建后端镜像
+#
+# 部署目录结构：/opt/lumira/backend/{repo, docker-compose.prod.yml, .env, data}
+# repo/ 是 git clone 的仓库
+#
+# 与 nginx 通信方式：
+#   后端容器加入 external network（你已有的 nginx 容器所在网络）
+#   nginx 通过容器名 "lumira-backend" 反向代理到 http://lumira-backend:3000
+#   无需将 3000 端口暴露到宿主机（更安全）
+#
+# .env 文件需要包含：
+#   JWT_SECRET=...            （必填，JWT 签名密钥）
+#   ADMIN_TOKEN=...           （必填，Admin API 令牌）
+#   NGINX_NETWORK=...         （必填，nginx 容器所在的 docker network 名）
+#                              查询方式：docker network ls
+#                              如果还没创建：docker network create lumira-net
+#   BACKEND_PUBLIC_URL=...    （必填，后端 API 公网域名，构造上传图片 URL 用）
+#                              例：https://lumira.iwtle.top
+#                              未设置时后端会回退到 http://localhost:3000，
+#                              导致 App 端图片加载失败（详见 AGENTS.md 部署章节）
+
+version: "3.8"
+
+# ---- MySQL 8 服务（SQLite -> MySQL 迁移，2026-08）----
+# .env 需额外配置：MYSQL_ROOT_PASSWORD / MYSQL_DATABASE / MYSQL_USER / MYSQL_PASSWORD
+# 后端通过内部网络 DB_HOST=lumira-mysql 连接，不暴露 3306 到宿主机
+
+services:
+  lumira-mysql:
+    image: mysql:8
+    restart: always
+    # 数据持久化：宿主机 data/mysql 目录（首次启动自动建库，MySQL 会初始化 /var/lib/mysql）
+    volumes:
+      - ./data/mysql:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    # 不暴露 3306 到宿主机（仅内部网络访问，更安全）
+    healthcheck:
+      # 密码通过 MYSQL_PWD 环境变量传入，避免 -p$VAR 在 shell 中分词/触发交互式提示；
+      # 走 TCP（-h 127.0.0.1）而非 localhost socket，与 CI service container 已验证一致。
+      test: ["CMD-SHELL", "MYSQL_PWD=$${MYSQL_ROOT_PASSWORD} mysqladmin ping -h 127.0.0.1 -uroot --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - lumira-net
+
+  lumira-backend:
+    build:
+      # 部署目录结构：/opt/lumira/backend/{repo, docker-compose.prod.yml, .env, data}
+      # repo/ 是 git clone 的仓库
+      context: ./repo/lumira-server
+      dockerfile: packages/backend/Dockerfile
+    image: lumira-backend:latest
+    restart: always
+    depends_on:
+      lumira-mysql:
+        condition: service_healthy
+      lumira-redis:
+        condition: service_started
+    # 不暴露端口到宿主机（通过 docker network 与 nginx 通信，更安全）
+    # 如需在宿主机直接访问调试，取消注释下面两行
+    # ports:
+    #   - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - DB_HOST=lumira-mysql
+      - DB_PORT=3306
+      - DB_USER=${MYSQL_USER}
+      - DB_PASSWORD=${MYSQL_PASSWORD}
+      - DB_NAME=${MYSQL_DATABASE}
+      - UPLOAD_DIR=/app/data/uploads
+      - BACKEND_PUBLIC_URL=${BACKEND_PUBLIC_URL}
+      # Redis 缓存（未配置 REDIS_URL 时后端自动降级为无缓存，行为同现状）
+      # 集群扩容时所有后端副本共用同一 Redis 实例
+      - REDIS_URL=redis://lumira-redis:6379
+    volumes:
+      - ./data:/app/data
+    networks:
+      - lumira-net
+    healthcheck:
+      # 用 node 执行 HTTP 请求做健康检查（node:20-alpine 镜像一定有 node）
+      # 避免 busybox wget 的各种兼容性问题（不支持 --spider、--quiet 长格式等）
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/api/v1/health',(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ---- Redis 7 缓存服务（2026-08，Redis 缓存 + 集群就绪）----
+  # 持久化到宿主机 data/redis；AOF 开启保证重启不丢缓存。
+  # 单机/集群均填同一 Redis 实例；后端不配置 REDIS_URL 时自动降级为无缓存。
+  lumira-redis:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - lumira-net
+
+networks:
+  lumira-net:
+    # external: true 表示使用已存在的外部网络（你的 nginx 容器所在的网络）
+    # 在 .env 中设置 NGINX_NETWORK=<网络名>
+    # 查询现有网络：docker network ls
+    # 创建新网络：docker network create lumira-net
+    external: true
+    name: ${NGINX_NETWORK}
