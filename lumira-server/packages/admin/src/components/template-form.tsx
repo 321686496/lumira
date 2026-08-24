@@ -1494,26 +1494,6 @@ export default function TemplateForm({
               </fieldset>
 
               <fieldset className="space-y-3 rounded-md border border-input p-4">
-                <legend className="px-2 text-sm font-medium">系统滤镜</legend>
-                <div className="space-y-2">
-                  <Controller
-                    control={control}
-                    name="systemFilter"
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {LUTS.map((v) => (
-                            <SelectItem key={v} value={v}>{LUT_LABELS[v] ?? v}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-              </fieldset>
-
-              <fieldset className="space-y-3 rounded-md border border-input p-4">
                 <legend className="px-2 text-sm font-medium">补光（fillLight）</legend>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
