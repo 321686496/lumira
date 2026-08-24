@@ -383,6 +383,8 @@ class CamerawesomeCameraService implements CameraService {
             Size(flutterPreviewSize.width, flutterPreviewSize.height),
           );
         },
+        // 屏蔽 camerawesome 默认白色对焦框：金色对焦框由 App 层 _FocusOverlay 渲染
+        onTapPainter: null,
       ),
     );
   }
@@ -411,6 +413,8 @@ class CamerawesomeCameraService implements CameraService {
             Size(flutterPreviewSize.width, flutterPreviewSize.height),
           );
         },
+        // 屏蔽 camerawesome 默认白色对焦框：金色对焦框由 App 层 _FocusOverlay 渲染
+        onTapPainter: null,
       ),
     );
   }

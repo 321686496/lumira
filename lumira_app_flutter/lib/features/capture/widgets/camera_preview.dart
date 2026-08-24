@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
+import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/capture/domain/filter_recipe.dart';
 import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
 import 'package:lumira_app_flutter/features/templates/data/templates_editor_mock_data.dart'
@@ -67,7 +71,7 @@ Composition _editorFormCompositionToDomain(EditorFormComposition src) {
 /// - CompositionOverlay 叠加构图辅助线（三分法、黄金螺旋等）
 /// - PoseSilhouette 叠加姿势剪影
 class CameraPreview extends ConsumerWidget {
-  const CameraPreview({
+  CameraPreview({
     super.key,
     this.onZoomChanged,
     this.formOverride,
@@ -99,6 +103,13 @@ class CameraPreview extends ConsumerWidget {
   /// 然后在每张滤镜卡片中套用对应 ColorFilter 显示效果预览。
   /// 为 null 时不包裹 RepaintBoundary（兼容不需要捕获的场景）。
   final GlobalKey? rawCaptureKey;
+
+  /// 对焦反馈层（[_FocusOverlay]）状态驱动 key：单击对焦 / 长按锁定回调
+  /// 通过它显示金色对焦框与「AE/AF 锁定」标签。
+  /// facing 变化时由外层 KeyedSubtree（ValueKey）+ _FocusOverlay.didUpdateWidget 复位。
+  /// 注意：本构造为非 const（GlobalKey 非 const 工厂，无法作为 const 字段初始化式）。
+  final GlobalKey<_FocusOverlayState> _focusKey =
+      GlobalKey<_FocusOverlayState>();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -147,7 +158,14 @@ class CameraPreview extends ConsumerWidget {
               fit: previewFit,
               onReady: () => _onCameraReady(ref, flashMode, facing),
               onTapFocus: (position, previewSize) {
+                final overlay = _focusKey.currentState;
+                // 锁定状态下单击其他位置 → 先解除锁定，再对新触点重新对焦（iPhone 行为）
+                if (overlay?.isLocked == true) {
+                  cameraService.setFocusAndExposureLock(locked: false);
+                  overlay?.unlock();
+                }
                 cameraService.focusOnPoint(position, previewSize);
+                overlay?.showFocus(position);
               },
             ),
           ),
@@ -165,6 +183,17 @@ class CameraPreview extends ConsumerWidget {
     // 从当前倍数出发按比例缩放并真正下发到相机（替代 camerawesome 内置的
     // 仅更新状态、不下发相机的 onPreviewScale 流程）。
     final filteredCamera = _PinchZoomCamera(
+      onLongPressStart: (localPosition, previewSize) {
+        _focusKey.currentState?.showLock(localPosition);
+        cameraService.setFocusAndExposureLock(
+          locked: true,
+          position: localPosition,
+          previewSize: previewSize,
+        );
+      },
+      onLongPressEnd: () {
+        // 锁定常驻，抬手不隐藏（避免动画闪烁）
+      },
       child: applyFilter
           ? ColorFiltered(
               colorFilter: fromPostProcess(effectivePost),
@@ -247,6 +276,13 @@ class CameraPreview extends ConsumerWidget {
         filteredCamera,
         compositionOverlay,
         silhouetteOverlay,
+        // 对焦反馈层：GlobalKey 不能同时充当 ValueKey，因此用 KeyedSubtree 包一层。
+        // ValueKey('focus_overlay_$facing') + _FocusOverlay.didUpdateWidget
+        // 在切换前后摄像头时复位锁定态与对焦框。
+        KeyedSubtree(
+          key: ValueKey('focus_overlay_$facing'),
+          child: _FocusOverlay(key: _focusKey, facing: facing),
+        ),
       ],
     );
   }
@@ -324,9 +360,20 @@ final cameraPreviewOverrideProvider = Provider<Widget?>((ref) => null);
 ///   保证取景器画面实时缩放（此前 camerawesome 内置手势只更新状态、不下发相机）。
 /// - 倍数变化 < 0.01 时不下发，避免高频原生调用。
 class _PinchZoomCamera extends ConsumerStatefulWidget {
-  const _PinchZoomCamera({super.key, required this.child});
+  const _PinchZoomCamera({
+    required this.child,
+    this.onLongPressStart,
+    this.onLongPressEnd,
+  });
 
   final Widget child;
+
+  /// 长按开始（约 500ms 无位移按下）：[localPosition] 为取景器内本地坐标，
+  /// [previewSize] 为取景器当前尺寸（用于原生 AE/AF 锁定坐标换算）。
+  final void Function(Offset localPosition, Size previewSize)? onLongPressStart;
+
+  /// 长按结束（抬手）。锁定常驻，抬手不隐藏（避免动画闪烁）。
+  final VoidCallback? onLongPressEnd;
 
   @override
   ConsumerState<_PinchZoomCamera> createState() => _PinchZoomCameraState();
@@ -367,38 +414,301 @@ class _PinchZoomCameraState extends ConsumerState<_PinchZoomCamera> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      // 用 start 让 Flutter 在手势被接受时重新捕获初始跨度，
-      // 避免“双指刚落下间距极小”导致初始 scale 巨大、一捏就跳最大倍数
-      dragStartBehavior: DragStartBehavior.start,
-      onScaleStart: (_) => _resetGesture(),
-      onScaleUpdate: (details) {
-        final pc = details.pointerCount;
-        if (pc < 2) {
-          // 单指/点击不干扰（点击对焦仍由相机组件处理）
+    return LayoutBuilder(builder: (context, constraints) {
+      final previewSize = Size(constraints.maxWidth, constraints.maxHeight);
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // 用 start 让 Flutter 在手势被接受时重新捕获初始跨度，
+        // 避免“双指刚落下间距极小”导致初始 scale 巨大、一捏就跳最大倍数
+        dragStartBehavior: DragStartBehavior.start,
+        // 长按与 onScale* 同处手势竞技场：长按超过 500ms 由 LongPress 胜出
+        // （tap/scale 被拒），双指捏合由 Scale 胜出，两者互不干扰。
+        onLongPressStart: (details) => widget.onLongPressStart
+            ?.call(details.localPosition, previewSize),
+        onLongPressEnd: (_) => widget.onLongPressEnd?.call(),
+        onScaleStart: (_) => _resetGesture(),
+        onScaleUpdate: (details) {
+          final pc = details.pointerCount;
+          if (pc < 2) {
+            // 单指/点击不干扰（点击对焦仍由相机组件处理）
+            _lastPointerCount = pc;
+            return;
+          }
+          // 指针数从 <2 变为 >=2（新捏合或手指重新落下），重新锚定起始倍数，
+          // 防止 Flutter 重置初始跨度后 scale 跳变导致倍数突变
+          if (_lastPointerCount < 2) {
+            _lastPointerCount = pc;
+            _lastScale = details.scale;
+            _currentMultiplier = ref.read(CaptureState.apparentZoomProvider);
+            return;
+          }
           _lastPointerCount = pc;
-          return;
-        }
-        // 指针数从 <2 变为 >=2（新捏合或手指重新落下），重新锚定起始倍数，
-        // 防止 Flutter 重置初始跨度后 scale 跳变导致倍数突变
-        if (_lastPointerCount < 2) {
-          _lastPointerCount = pc;
+          if (details.scale == 0 || _lastScale == 0) return;
+          // 增量缩放：用相邻两帧 scale 的比值（不受初始跨度影响），
+          // 让捏合缩放平滑连续，不再“一捏就跳到最大倍数”
+          final ratio = details.scale / _lastScale;
           _lastScale = details.scale;
-          _currentMultiplier = ref.read(CaptureState.apparentZoomProvider);
-          return;
-        }
-        _lastPointerCount = pc;
-        if (details.scale == 0 || _lastScale == 0) return;
-        // 增量缩放：用相邻两帧 scale 的比值（不受初始跨度影响），
-        // 让捏合缩放平滑连续，不再“一捏就跳到最大倍数”
-        final ratio = details.scale / _lastScale;
-        _lastScale = details.scale;
-        _currentMultiplier *= ratio;
-        _applyZoom(_currentMultiplier);
-      },
-      onScaleEnd: (_) => _resetGesture(),
-      child: widget.child,
+          _currentMultiplier *= ratio;
+          _applyZoom(_currentMultiplier);
+        },
+        onScaleEnd: (_) => _resetGesture(),
+        child: widget.child,
+      );
+    });
+  }
+}
+
+/// 对焦反馈层：渲染金色四角对焦框（单击对焦）与「AE/AF 锁定」标签（长按锁定）。
+///
+/// 自管理显示状态，由外部通过 [_FocusOverlayState]（`GlobalKey`）驱动，
+/// 不污染任何 provider。切换前后摄像头时由外层 KeyedSubtree(ValueKey(facing))
+/// 重建整棵子树，锁定态与对焦框自动复位；`facing` 字段仅作 didUpdateWidget 兜底。
+class _FocusOverlay extends ConsumerStatefulWidget {
+  const _FocusOverlay({super.key, this.facing});
+
+  /// 当前摄像头 facing（切换时复位对焦/锁定态，正常路径由外层 KeyedSubtree 重建完成）。
+  final String? facing;
+
+  @override
+  ConsumerState<_FocusOverlay> createState() => _FocusOverlayState();
+}
+
+class _FocusOverlayState extends ConsumerState<_FocusOverlay> {
+  Offset? _point;
+  bool _locked = false;
+  bool _visible = false;
+  Timer? _hideTimer;
+
+  bool get isLocked => _locked;
+
+  /// 单击对焦：显示金色对焦框，约 1.5s 后自动消失。
+  void showFocus(Offset point) {
+    _hideTimer?.cancel();
+    setState(() {
+      _point = point;
+      _locked = false;
+      _visible = true;
+    });
+    _hideTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (!mounted) return;
+      setState(() => _visible = false);
+    });
+  }
+
+  /// 长按锁定：显示金色对焦框 + 「AE/AF 锁定」标签，常驻不消失。
+  void showLock(Offset point) {
+    _hideTimer?.cancel();
+    setState(() {
+      _point = point;
+      _locked = true;
+      _visible = true;
+    });
+  }
+
+  /// 解除锁定并隐藏（用于「锁定后单击其他位置」的解锁阶段）。
+  void unlock() {
+    _hideTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _locked = false;
+      _visible = false;
+    });
+  }
+
+  @override
+  void didUpdateWidget(_FocusOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 兜底：facing 变化时复位（正常路径由外层 KeyedSubtree 重建完成）。
+    if (widget.facing != oldWidget.facing) {
+      _hideTimer?.cancel();
+      _point = null;
+      _locked = false;
+      _visible = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible || _point == null) return const SizedBox.shrink();
+    final tokens = ref.watch(appThemeProvider).tokens;
+    return IgnorePointer(
+      child: Stack(
+        children: [
+          _FocusFrame(point: _point!),
+          if (_locked) _LockBadge(point: _point!, tokens: tokens),
+        ],
+      ),
+    );
+  }
+}
+
+/// 金色四角 L 形对焦框：叠照片浮层语义（跨风格金色描边，不外发光、无阴影、无模糊）。
+///
+/// 尺寸约 70×70，中心位于 [point]；出现时做 1.6→1.0 弹性缩入 + 轻微淡入。
+class _FocusFrame extends StatefulWidget {
+  const _FocusFrame({required this.point});
+
+  final Offset point;
+
+  @override
+  State<_FocusFrame> createState() => _FocusFrameState();
+}
+
+class _FocusFrameState extends State<_FocusFrame>
+    with SingleTickerProviderStateMixin {
+  static const double _size = 70.0;
+  static const double _stroke = 3.0;
+  static const double _cornerLength = 22.0;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+  );
+  late final Animation<double> _scale = Tween<double>(begin: 1.6, end: 1.0)
+      .animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
+  late final Animation<double> _opacity = Tween<double>(begin: 0.0, end: 1.0)
+      .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(_FocusFrame oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 对焦框移动到新触点时重放弹性缩入动画
+    if (oldWidget.point != widget.point) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 金色：跨风格叠加视觉，透明度 0.9
+    final borderColor = Colors.amber.shade400.withOpacity(0.9);
+    return Positioned(
+      left: widget.point.dx - _size / 2,
+      top: widget.point.dy - _size / 2,
+      width: _size,
+      height: _size,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return Opacity(
+            opacity: _opacity.value,
+            child: Transform.scale(scale: _scale.value, child: child),
+          );
+        },
+        child: CustomPaint(
+          key: const Key('focus_frame'),
+          size: const Size(_size, _size),
+          painter: _FocusFramePainter(
+            color: borderColor,
+            strokeWidth: _stroke,
+            cornerLength: _cornerLength,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 四角 L 形描边画笔（金色对焦框）。
+class _FocusFramePainter extends CustomPainter {
+  const _FocusFramePainter({
+    required this.color,
+    required this.strokeWidth,
+    required this.cornerLength,
+  });
+
+  final Color color;
+  final double strokeWidth;
+  final double cornerLength;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    final w = size.width;
+    final h = size.height;
+    final l = cornerLength;
+    // 左上
+    canvas.drawLine(Offset(0, l), const Offset(0, 0), paint);
+    canvas.drawLine(const Offset(0, 0), Offset(l, 0), paint);
+    // 右上
+    canvas.drawLine(Offset(w - l, 0), Offset(w, 0), paint);
+    canvas.drawLine(Offset(w, 0), Offset(w, l), paint);
+    // 右下
+    canvas.drawLine(Offset(w, h - l), Offset(w, h), paint);
+    canvas.drawLine(Offset(w, h), Offset(w - l, h), paint);
+    // 左下
+    canvas.drawLine(Offset(l, h), Offset(0, h), paint);
+    canvas.drawLine(Offset(0, h), Offset(0, h - l), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FocusFramePainter oldDelegate) =>
+      oldDelegate.color != color ||
+      oldDelegate.strokeWidth != strokeWidth ||
+      oldDelegate.cornerLength != cornerLength;
+}
+
+/// 「AE/AF 锁定」胶囊标签：对焦框正下方（约 56px）居中显示。
+///
+/// 实心 `tokens.surface` + 细边 `tokens.divider` + `tokens.textPrimary` 文字，
+/// 跨风格通用叠照片浮层：不使用 BackdropFilter / 阴影 / 玻璃。
+class _LockBadge extends StatelessWidget {
+  const _LockBadge({required this.point, required this.tokens});
+
+  final Offset point;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: point.dx,
+      top: point.dy + 56,
+      child: FractionalTranslation(
+        // 以对焦框中心为轴水平居中
+        translation: const Offset(-0.5, 0),
+        child: Container(
+          key: const Key('focus_lock_badge'),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: tokens.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: tokens.divider, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock, size: 14, color: tokens.textPrimary),
+              const SizedBox(width: 4),
+              Text(
+                'AE/AF 锁定',
+                style: TextStyle(fontSize: 12, color: tokens.textPrimary),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
