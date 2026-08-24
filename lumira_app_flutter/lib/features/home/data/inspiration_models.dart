@@ -66,11 +66,19 @@ class HeroInspiration {
   /// 为空时 HeroCard 隐藏天气行
   final String weatherText;
 
+  /// 推荐出的模板（套用即进入拍摄），空串表示无推荐
+  final String recommendedTemplateId;
+
+  /// 推荐出的模板名称，用于 CTA 按钮文案
+  final String recommendedTemplateName;
+
   const HeroInspiration({
     required this.dateText,
     required this.title,
     required this.description,
     required this.weatherText,
+    this.recommendedTemplateId = '',
+    this.recommendedTemplateName = '',
   });
 
   static const HeroInspiration fallback = HeroInspiration(
@@ -79,4 +87,11 @@ class HeroInspiration {
     description: '捕捉每一束光，让日常成为习惯',
     weatherText: '',
   );
+}
+
+/// 今日灵感推荐出的模板（仅 id + 名称，用于 CTA 按钮）
+class RecommendedTemplate {
+  final String id;
+  final String name;
+  const RecommendedTemplate({required this.id, required this.name});
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -74,8 +75,9 @@ class CameraPreview extends ConsumerWidget {
     this.rawCaptureKey,
   });
 
-  /// 双指缩放手势回调（传入真实倍数，1.0 = 1x）。
-  /// 注意：双指缩放现在直接同步 provider 状态，此字段保留供其他子组件复用回调。
+  /// 缩放回调（传入真实倍数，1.0 = 1x），由外部（缩放轮盘等）触发。
+  /// 取景器内的双指捏合缩放由本组件内置的 [_PinchZoomCamera] 处理，
+  /// 此回调保留供外部复用。
   final ValueChanged<double>? onZoomChanged;
 
   /// 表单覆盖参数（Bug 12 修复：模板预览页使用）
@@ -147,12 +149,6 @@ class CameraPreview extends ConsumerWidget {
               onTapFocus: (position, previewSize) {
                 cameraService.focusOnPoint(position, previewSize);
               },
-              onScaleZoom: (multiplier) {
-                // multiplier 已是真实倍数（service 层已按平台转换）
-                ref.read(CaptureState.apparentZoomProvider.notifier).state =
-                    multiplier;
-                ref.read(CaptureState.zoomProvider.notifier).state = multiplier;
-              },
             ),
           ),
         );
@@ -165,12 +161,17 @@ class CameraPreview extends ConsumerWidget {
         : cameraWidget;
 
     // 滤镜包裹（修复 Bug 2/3：使用 effectivePost，自由模式也应用）
-    final filteredCamera = applyFilter
-        ? ColorFiltered(
-            colorFilter: fromPostProcess(effectivePost),
-            child: rawCamera,
-          )
-        : rawCamera;
+    // 双指捏合缩放：最外层包 _PinchZoomCamera，在整个取景器上监听捏合手势，
+    // 从当前倍数出发按比例缩放并真正下发到相机（替代 camerawesome 内置的
+    // 仅更新状态、不下发相机的 onPreviewScale 流程）。
+    final filteredCamera = _PinchZoomCamera(
+      child: applyFilter
+          ? ColorFiltered(
+              colorFilter: fromPostProcess(effectivePost),
+              child: rawCamera,
+            )
+          : rawCamera,
+    );
 
     // 构图叠图（修复 Bug 2：使用 effectiveComp，自由模式也显示构图辅助线）
     final compositionOverlay =
@@ -311,3 +312,93 @@ class CameraPreview extends ConsumerWidget {
 
 /// 测试覆写 provider（生产环境为 null，测试中注入占位 widget）
 final cameraPreviewOverrideProvider = Provider<Widget?>((ref) => null);
+
+/// 双指捏合缩放包装：在取景器最外层监听 onScale 手势实现 iPhone 原生相机式缩放。
+///
+/// 行为说明：
+/// - 手势起始时记录当前缩放倍数（apparentZoomProvider），
+///   随手势 `details.scale` 按比例缩放（张开放大、捏合缩小），
+///   与外部缩放轮盘/水平拖动共用同一倍数语义，不产生跳变。
+/// - 同步更新 apparentZoomProvider（缩放轮盘指示器）/ zoomProvider（成片缩放），
+///   并真正调用 [CameraService.setZoomMultiplier] 下发到相机，
+///   保证取景器画面实时缩放（此前 camerawesome 内置手势只更新状态、不下发相机）。
+/// - 倍数变化 < 0.01 时不下发，避免高频原生调用。
+class _PinchZoomCamera extends ConsumerStatefulWidget {
+  const _PinchZoomCamera({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  ConsumerState<_PinchZoomCamera> createState() => _PinchZoomCameraState();
+}
+
+class _PinchZoomCameraState extends ConsumerState<_PinchZoomCamera> {
+  /// 上一次 update 的 scale（用于相邻帧增量比，抵消初始跨度影响）
+  double _lastScale = 1.0;
+
+  /// 本次捏合手势的当前缩放倍数（增量累积）
+  double _currentMultiplier = 1.0;
+
+  /// 上一次 update 的指针数（用于检测手指重新落下时重新锚定）
+  int _lastPointerCount = 0;
+
+  /// 上一次实际下发到相机的倍数（用于节流）
+  double? _lastAppliedMultiplier;
+
+  void _resetGesture() {
+    _lastScale = 1.0;
+    _currentMultiplier = 1.0;
+    _lastPointerCount = 0;
+    _lastAppliedMultiplier = null;
+  }
+
+  /// 将目标倍数 clamp 到设备范围后更新状态并下发相机。
+  void _applyZoom(double target) {
+    final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 1.0;
+    final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final clamped = target.clamp(minZoom, maxZoom);
+    final last = _lastAppliedMultiplier;
+    if (last != null && (clamped - last).abs() < 0.01) return;
+    _lastAppliedMultiplier = clamped;
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = clamped;
+    ref.read(CaptureState.zoomProvider.notifier).state = clamped;
+    ref.read(cameraServiceProvider).setZoomMultiplier(clamped);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      // 用 start 让 Flutter 在手势被接受时重新捕获初始跨度，
+      // 避免“双指刚落下间距极小”导致初始 scale 巨大、一捏就跳最大倍数
+      dragStartBehavior: DragStartBehavior.start,
+      onScaleStart: (_) => _resetGesture(),
+      onScaleUpdate: (details) {
+        final pc = details.pointerCount;
+        if (pc < 2) {
+          // 单指/点击不干扰（点击对焦仍由相机组件处理）
+          _lastPointerCount = pc;
+          return;
+        }
+        // 指针数从 <2 变为 >=2（新捏合或手指重新落下），重新锚定起始倍数，
+        // 防止 Flutter 重置初始跨度后 scale 跳变导致倍数突变
+        if (_lastPointerCount < 2) {
+          _lastPointerCount = pc;
+          _lastScale = details.scale;
+          _currentMultiplier = ref.read(CaptureState.apparentZoomProvider);
+          return;
+        }
+        _lastPointerCount = pc;
+        if (details.scale == 0 || _lastScale == 0) return;
+        // 增量缩放：用相邻两帧 scale 的比值（不受初始跨度影响），
+        // 让捏合缩放平滑连续，不再“一捏就跳到最大倍数”
+        final ratio = details.scale / _lastScale;
+        _lastScale = details.scale;
+        _currentMultiplier *= ratio;
+        _applyZoom(_currentMultiplier);
+      },
+      onScaleEnd: (_) => _resetGesture(),
+      child: widget.child,
+    );
+  }
+}

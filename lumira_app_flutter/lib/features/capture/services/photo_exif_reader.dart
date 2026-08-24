@@ -1,6 +1,10 @@
 import 'dart:io';
 
 import 'package:image/image.dart' as img;
+// 依赖 image 4.2.0 内部 EXIF 目录/取值 API 读取扩展字段，需要访问 lib/src 实现。
+// ignore_for_file: implementation_imports
+import 'package:image/src/exif/ifd_directory.dart';
+import 'package:image/src/exif/ifd_value.dart';
 import 'exif_card_generator.dart';
 
 /// 从 JPEG 文件读取 EXIF 元数据
@@ -38,6 +42,16 @@ class PhotoExifReader {
         ? '$make ${model ?? ""}'.trim()
         : model;
 
+    // 分辨率：采用解码后的实际像素宽高（WxH）
+    final resolution = '${image.width}x${image.height}';
+
+    // 文件大小（读源文件字节数，转为可读单位）
+    String? fileSize;
+    try {
+      final size = File(photoPath).lengthSync();
+      fileSize = _formatFileSize(size);
+    } catch (_) {}
+
     // 拍摄时间（DateTime tag 0x132，ASCII "YYYY:MM:DD HH:MM:SS"）
     final dateTimeValue = imageIfd['DateTime'];
     final String? dtString = dateTimeValue?.toString();
@@ -66,12 +80,33 @@ class PhotoExifReader {
         ? _formatShutterSpeed(exposureTimeValue.toRational().toDouble())
         : null;
 
+    // 曝光补偿（ExposureBiasValue tag 0x9204，Rational，单位 EV，通常为 ±小数）
+    final biasValue = exifIfd['ExposureBiasValue'];
+    final String? exposureCompensation = biasValue != null
+        ? '${_formatExposureBias(biasValue.toRational().toDouble())} EV'
+        : null;
+
+    // 白平衡（WhiteBalance tag 0xA403，Long：0=自动 1=手动）
+    final wbValue = exifIfd['WhiteBalance'];
+    final String? whiteBalance = wbValue != null
+        ? (wbValue.toInt() == 0 ? '自动' : '手动')
+        : null;
+
+    // GPS 位置（gpsIfd，纬度/经度 Rational + Ref 方向）
+    final String? location = _readGps(exif.gpsIfd);
+
     return ExifInfo(
       cameraModel: cameraModel,
+      make: make,
       focalLength: focalLength,
       fNumber: fNumber,
       iso: iso,
       shutterSpeed: shutterSpeed,
+      exposureCompensation: exposureCompensation,
+      whiteBalance: whiteBalance,
+      resolution: resolution,
+      fileSize: fileSize,
+      location: location,
       timestamp: dtString?.isNotEmpty == true
           ? dtString
           : (timestamp != null
@@ -80,6 +115,44 @@ class PhotoExifReader {
       sceneName: sceneName,
       template: template,
     );
+  }
+
+  /// 把字节数格式化为可读大小（B / KB / MB）。
+  static String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  /// 曝光补偿显示：保留符号并避免尾随 0（如 0 EV、+0.3 EV、-1 EV）。
+  static String _formatExposureBias(double ev) {
+    if (ev == 0) return '0';
+    final sign = ev > 0 ? '+' : '-';
+    final abs = ev.abs();
+    final s = abs == abs.toInt() ? abs.toInt().toString() : abs.toStringAsFixed(1);
+    return '$sign$s';
+  }
+
+  /// 从 GPS IFD 读取并以「纬度, 经度」形式返回可读坐标。
+  /// 依赖 image 4.2.0 的 IfdDirectory：GPSLatitude/GPSLongitude 为 Rational 数组。
+  static String? _readGps(IfdDirectory gps) {
+    final latV = gps['GPSLatitude'];
+    final lonV = gps['GPSLongitude'];
+    if (latV == null || lonV == null) return null;
+    final lat = _formatCoordinate(latV, gps['GPSLatitudeRef']?.toString());
+    final lon = _formatCoordinate(lonV, gps['GPSLongitudeRef']?.toString());
+    if (lat == null && lon == null) return null;
+    return [lat, lon].whereType<String>().join(', ');
+  }
+
+  /// 单个坐标：Rational 数组 [度, 分, 秒] + 方向 ref（N/S/E/W）。
+  /// 依赖 image 4.2.0 的 IfdValue.length / toRational(index)。
+  static String? _formatCoordinate(IfdValue value, String? ref) {
+    if (value.length == 0) return null;
+    final deg = value.toRational(0).toDouble();
+    var result = '${deg.toStringAsFixed(2)}°';
+    if (ref != null) result += ' $ref';
+    return result;
   }
 
   static String _formatShutterSpeed(double seconds) {

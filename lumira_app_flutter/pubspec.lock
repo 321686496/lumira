@@ -59,11 +59,9 @@ packages:
   camerawesome_ohos:
     dependency: "direct main"
     description:
-      path: ohos
-      ref: master
-      resolved-ref: "5a68c67ecbb192f1abbce5578c1c823a50d37ddc"
-      url: "https://gitcode.com/CPF-Flutter/fluttertpc_camerawesome.git"
-    source: git
+      path: "packages/camerawesome_ohos"
+      relative: true
+    source: path
     version: "1.0.2"
   carousel_slider:
     dependency: transitive
@@ -694,6 +692,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "5.4.0"
+  photo_view:
+    dependency: "direct main"
+    description:
+      name: photo_view
+      sha256: "8036802a00bae2a78fc197af8a158e3e2f7b500561ed23b4c458107685e645bb"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "0.14.0"
   platform:
     dependency: transitive
     description:

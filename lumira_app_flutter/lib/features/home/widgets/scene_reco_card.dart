@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
@@ -156,33 +159,48 @@ class SceneRecoCard extends ConsumerWidget {
     );
   }
 
-  /// 封面图：imageSeed 以 assets/ 开头时加载本地资源，否则保持 picsum 占位
+  /// 封面图：优先级 data:image/ → http(s)/本地路径 → 统一主题化占位图
   Widget _buildCoverImage(ThemeTokens tokens) {
-    if (scene.imageSeed.startsWith('assets/')) {
-      return Image.asset(
-        scene.imageSeed,
+    final placeholder = Container(
+      color: tokens.surfaceAlt,
+      child: Icon(
+        Icons.image_outlined,
+        size: 32,
+        color: tokens.textTertiary,
+      ),
+    );
+    final cover = scene.coverUrl;
+    if (cover.isEmpty) return placeholder;
+    if (cover.startsWith('data:image/')) {
+      // base64Decode 可能 throws；Image.memory 的 errorBuilder 只捕获解码错误，
+      // 故用 try 包裹并在失败时回退占位图
+      Widget decode() {
+        final comma = cover.indexOf(',');
+        final b64 = comma >= 0 ? cover.substring(comma + 1) : cover;
+        return Image.memory(
+          base64Decode(b64),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => placeholder,
+        );
+      }
+      try {
+        return decode();
+      } catch (_) {
+        return placeholder;
+      }
+    }
+    if (cover.startsWith('http://') || cover.startsWith('https://')) {
+      return CachedNetworkImage(
+        url: cover,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stack) => Container(
-          color: tokens.surfaceAlt,
-          child: Icon(
-            Icons.image_outlined,
-            size: 32,
-            color: tokens.textTertiary,
-          ),
-        ),
+        placeholder: placeholder,
+        errorWidget: placeholder,
       );
     }
-    return CachedNetworkImage(
-      url: 'https://picsum.photos/seed/${scene.imageSeed}/400/600',
+    return Image.file(
+      File(cover),
       fit: BoxFit.cover,
-      errorWidget: Container(
-        color: tokens.surfaceAlt,
-        child: Icon(
-          Icons.image_outlined,
-          size: 32,
-          color: tokens.textTertiary,
-        ),
-      ),
+      errorBuilder: (_, __, ___) => placeholder,
     );
   }
 }

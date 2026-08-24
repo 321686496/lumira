@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../data/home_providers.dart';
@@ -178,54 +180,68 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                   ),
                 ),
                 const SizedBox(height: 20), // 40rpx → 20dp
-                // CTA 按钮
-                GestureDetector(
-                  onTap: widget.onCapture,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24, // 48rpx → 24dp
-                      vertical: 12, // 24rpx → 12dp
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
-                      // neumorphic 风格：使用 brand 纯色 + 双向阴影，避免渐变发光感
-                      // 其他风格：保留 brand→brandDeep 渐变
-                      color: isNeumorphic ? tokens.brand : null,
-                      gradient: isNeumorphic
-                          ? null
-                          : LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                tokens.brand,
-                                tokens.brandDeep,
-                              ],
-                            ),
-                      boxShadow:
-                          isNeumorphic ? tokens.shadowConvex : null,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(
-                          Icons.camera_alt_outlined,
-                          size: 16, // 32rpx → 16dp
-                          color: Colors.white,
-                        ),
-                        SizedBox(width: 8), // 16rpx → 8dp
-                        Text(
-                          '开始拍摄',
-                          style: TextStyle(
-                            fontSize: 15, // 30rpx → 15dp
-                            fontWeight: FontWeight.w500,
+                // CTA 按钮（有推荐模板时，点击直接套用模板进入拍摄）
+                Builder(builder: (context) {
+                  final hasRec = inspiration.recommendedTemplateId.isNotEmpty;
+                  return GestureDetector(
+                    onTap: () {
+                      if (hasRec) {
+                        GoRouter.of(context).push(RouteNames.build(
+                          RouteNames.capture,
+                          {RouteNames.paramTemplateId: inspiration.recommendedTemplateId},
+                        ));
+                      } else {
+                        widget.onCapture();
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24, // 48rpx → 24dp
+                        vertical: 12, // 24rpx → 12dp
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
+                        // neumorphic 风格：使用 brand 纯色 + 双向阴影，避免渐变发光感
+                        // 其他风格：保留 brand→brandDeep 渐变
+                        color: isNeumorphic ? tokens.brand : null,
+                        gradient: isNeumorphic
+                            ? null
+                            : LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  tokens.brand,
+                                  tokens.brandDeep,
+                                ],
+                              ),
+                        boxShadow:
+                            isNeumorphic ? tokens.shadowConvex : null,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.camera_alt_outlined,
+                            size: 16, // 32rpx → 16dp
                             color: Colors.white,
-                            height: 1,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8), // 16rpx → 8dp
+                          Text(
+                            hasRec
+                                ? '用「${inspiration.recommendedTemplateName}」拍摄'
+                                : '开始拍摄',
+                            style: const TextStyle(
+                              fontSize: 15, // 30rpx → 15dp
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                              height: 1,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                }),
                 // 天气行（weatherText 为空时隐藏）
                 if (inspiration.weatherText.isNotEmpty) ...[
                   const SizedBox(height: 16), // 32rpx → 16dp

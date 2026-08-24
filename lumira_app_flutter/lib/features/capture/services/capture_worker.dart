@@ -18,6 +18,7 @@
 import 'dart:async';
 import 'dart:io' show File, stderr;
 import 'dart:isolate' show Isolate, ReceivePort, SendPort;
+import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:image/image.dart' as img;
@@ -38,6 +39,7 @@ class CaptureWorkerRequest {
     required this.smoothStrength,
     required this.vignette,
     required this.needRawRgba,
+    this.applyP3ToSrgb = false,
   });
 
   /// GPU 色彩矩阵处理后的 rawRgba（主 isolate 生成，dart:ui 管线，保证所见即所得）
@@ -54,6 +56,11 @@ class CaptureWorkerRequest {
   /// true：不编码 JPEG，回传 rawRgba 给主 isolate 做水印合成
   /// false：worker 直接编码 JPEG 写盘，仅回传路径
   final bool needRawRgba;
+
+  /// 是否对照片做 P3→sRGB 色域转换（iOS/OHOS 相机输出广色域 JPEG）。
+  /// dart:ui 解码后 rawRgba 是 P3 像素值，image 包编码 JPEG 不嵌 ICC，
+  /// 查看器按 sRGB 解释导致偏黄。由主 isolate 按平台决定。
+  final bool applyP3ToSrgb;
 }
 
 /// worker 处理结果。
@@ -64,6 +71,8 @@ class CaptureWorkerResult {
     required this.width,
     required this.height,
     required this.outputPath,
+    this.diagBefore,
+    this.diagAfter,
   });
   final bool ok;
 
@@ -72,6 +81,10 @@ class CaptureWorkerResult {
   final int width;
   final int height;
   final String outputPath;
+
+  /// 诊断：P3→sRGB 转换前/后的平均 RGB（[r, g, b]），用于验证偏黄方向。
+  final List<int>? diagBefore;
+  final List<int>? diagAfter;
 }
 
 /// 常驻 worker isolate 单例。
@@ -111,6 +124,7 @@ class CaptureWorker {
       'smoothStrength': request.smoothStrength,
       'vignette': request.vignette,
       'needRawRgba': request.needRawRgba,
+      'applyP3ToSrgb': request.applyP3ToSrgb,
     });
     try {
       final result = await replyPort.first as Map;
@@ -120,6 +134,8 @@ class CaptureWorker {
         width: result['width'] as int,
         height: result['height'] as int,
         outputPath: result['outputPath'] as String,
+        diagBefore: (result['diagBefore'] as List?)?.cast<int>(),
+        diagAfter: (result['diagAfter'] as List?)?.cast<int>(),
       );
     } finally {
       replyPort.close();
@@ -152,6 +168,7 @@ void _workerEntry(SendPort mainPort) async {
       final smoothStrength = msg['smoothStrength'] as int;
       final vignette = msg['vignette'] as int;
       final needRawRgba = msg['needRawRgba'] as bool;
+      final applyP3ToSrgb = msg['applyP3ToSrgb'] as bool? ?? false;
 
       // 1. 从 rawRgba 创建 img.Image
       final image = img.Image.fromBytes(
@@ -161,6 +178,15 @@ void _workerEntry(SendPort mainPort) async {
         numChannels: 4,
         order: img.ChannelOrder.rgba,
       );
+
+      // 1.5. 诊断：P3→sRGB 转换前后的颜色采样（用于验证偏黄方向）
+      final diagBefore = _sampleAvgRgb(image);
+
+      // 1.6. P3→sRGB 色域转换（iOS/OHOS 相机输出广色域 JPEG）
+      if (applyP3ToSrgb) {
+        _applyP3ToSrgbInWorker(image);
+      }
+      final diagAfter = _sampleAvgRgb(image);
 
       // 2. 逐像素 CPU 效果：锐化 + 清晰度 + 颗粒 + 磨皮 + 暗角
       applyPerPixelEffectsImg(
@@ -188,6 +214,8 @@ void _workerEntry(SendPort mainPort) async {
         'width': width,
         'height': height,
         'outputPath': outputPath,
+        'diagBefore': diagBefore,
+        'diagAfter': diagAfter,
       });
     } catch (e, st) {
       stderr.writeln('[capture-worker] postProcess failed: $e\n$st');
@@ -222,4 +250,73 @@ void _workerEntry(SendPort mainPort) async {
       });
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// P3→sRGB 色域转换（worker isolate 内部）
+// ─────────────────────────────────────────────────────────────────────────
+
+/// sRGB 传递函数查表（避免逐像素 pow）
+final List<double> _srgbToLinearLut = _buildSrgbToLinearLut();
+final List<double> _srgbEncodeLut = _buildSrgbEncodeLut();
+
+List<double> _buildSrgbToLinearLut() {
+  return List<double>.generate(256, (i) {
+    final v = i / 255.0;
+    if (v <= 0.04045) return v / 12.92;
+    return math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  });
+}
+
+List<double> _buildSrgbEncodeLut() {
+  const steps = 4096;
+  return List<double>.generate(steps, (i) {
+    final c = i / (steps - 1);
+    if (c <= 0.0031308) return c * 12.92;
+    return (1.055 * math.pow(c, 1.0 / 2.4) - 0.055).clamp(0.0, 1.0).toDouble();
+  });
+}
+
+/// 将 P3(D65) 像素就地转换为 sRGB(D65)。
+///
+/// P3 与 sRGB 同为 D65 白点、同为 sRGB 传递函数，仅基色不同。
+/// 使用 sRGB→P3 正向矩阵的逆矩阵（带负系数）来正确还原 P3 中超出 sRGB 色域的红色。
+void _applyP3ToSrgbInWorker(img.Image image) {
+  const steps = 4096;
+  for (final p in image) {
+    final r = p.r.toInt(), g = p.g.toInt(), b = p.b.toInt();
+    final lr = _srgbToLinearLut[r];
+    final lg = _srgbToLinearLut[g];
+    final lb = _srgbToLinearLut[b];
+    // P3(D65) → sRGB(D65) 线性基色转换矩阵（sRGB→P3 正向矩阵的逆）
+    final sr = (1.2249 * lr - 0.2247 * lg).clamp(0.0, 1.0);
+    final sg = (-0.0420 * lr + 1.0419 * lg).clamp(0.0, 1.0);
+    final sb = (-0.0197 * lr - 0.0786 * lg + 1.0983 * lb).clamp(0.0, 1.0);
+    p
+      ..r = (_srgbEncodeLut[(sr * (steps - 1)).round()] * 255).round()
+      ..g = (_srgbEncodeLut[(sg * (steps - 1)).round()] * 255).round()
+      ..b = (_srgbEncodeLut[(sb * (steps - 1)).round()] * 255).round();
+  }
+}
+
+/// 采样整图平均 RGB（步进采样降低耗时），返回 [avgR, avgG, avgB]。
+/// 用于诊断偏黄方向：若 R 明显高于 G/B 则偏黄。
+List<int> _sampleAvgRgb(img.Image image, {int step = 8}) {
+  var r = 0.0, g = 0.0, b = 0.0;
+  var cnt = 0;
+  for (var y = 0; y < image.height; y += step) {
+    for (var x = 0; x < image.width; x += step) {
+      final p = image.getPixel(x, y);
+      r += p.r.toInt();
+      g += p.g.toInt();
+      b += p.b.toInt();
+      cnt++;
+    }
+  }
+  if (cnt == 0) return [0, 0, 0];
+  return [
+    (r / cnt).round(),
+    (g / cnt).round(),
+    (b / cnt).round(),
+  ];
 }

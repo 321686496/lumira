@@ -15,15 +15,11 @@ import '../data/checkin_models.dart';
 import '../data/checkin_providers.dart';
 import '../widgets/checkin_common.dart';
 
-/// 封面底部预留的浮层重叠带（dp）：信息卡向上浮动 _coverFloat，
-/// 封面正文需用等量底部留白让出该区域，避免遮挡日期等真实内容。
-const double _coverFloat = 34;
-
 /// 探店足迹详情页（精致手帐风）
 ///
-/// - 沉浸式大封面：首张照片铺满顶部约 57% 屏高，店名/评分/分类/日期叠放于底部渐变遮罩上
-/// - 缩略图带：首图之外的照片横向小图，点击切换封面
-/// - 浮层信息卡：地点/心得，圆角 20，与封面重叠产生「浮上来」手帐感
+/// - 沉浸式大封面：照片铺满顶部约 57% 屏高，店名/评分/分类/日期叠放于底部渐变遮罩上
+/// - 封面可左右滑动切换照片，点击直接进入全屏大图（多图左右切换）
+/// - 封面下方缩略图带 / 信息卡
 class CheckinDetailPage extends ConsumerStatefulWidget {
   const CheckinDetailPage({super.key, this.checkinId});
 
@@ -35,6 +31,34 @@ class CheckinDetailPage extends ConsumerStatefulWidget {
 
 class _CheckinDetailPageState extends ConsumerState<CheckinDetailPage> {
   int _coverIndex = 0;
+
+  /// 封面左右滑动用的分页控制器
+  final PageController _coverController = PageController();
+
+  /// 封面随滑动到位时更新高亮（不跳页，避免打断滑动动画）
+  void _selectCoverBySwipe(int i) {
+    if (!mounted) return;
+    setState(() => _coverIndex = i);
+  }
+
+  /// 点缩略图时带动画跳到对应封面
+  void _selectCoverByThumb(int i) {
+    if (!mounted) return;
+    setState(() => _coverIndex = i);
+    if (_coverController.hasClients) {
+      _coverController.animateToPage(
+        i,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _coverController.dispose();
+    super.dispose();
+  }
 
   void _goEdit(String id) {
     GoRouter.of(context).push(RouteNames.build(
@@ -75,7 +99,9 @@ class _CheckinDetailPageState extends ConsumerState<CheckinDetailPage> {
                 tokens: tokens,
                 detail: detail,
                 coverIndex: _coverIndex,
-                onThumbTap: (i) => setState(() => _coverIndex = i),
+                coverController: _coverController,
+                onCoverChanged: _selectCoverBySwipe,
+                onThumbTap: _selectCoverByThumb,
                 onOpenViewer: _openViewer,
               );
             },
@@ -159,12 +185,14 @@ class _CheckinDetailPageState extends ConsumerState<CheckinDetailPage> {
   }
 }
 
-/// 详情正文：封面 + 缩略图 + 浮层信息卡
+/// 详情正文：封面（可左右滑动切换）+ 缩略图带 + 信息卡
 class _DetailContent extends StatelessWidget {
   const _DetailContent({
     required this.tokens,
     required this.detail,
     required this.coverIndex,
+    required this.coverController,
+    required this.onCoverChanged,
     required this.onThumbTap,
     required this.onOpenViewer,
   });
@@ -172,6 +200,8 @@ class _DetailContent extends StatelessWidget {
   final ThemeTokens tokens;
   final CheckinDetail detail;
   final int coverIndex;
+  final PageController coverController;
+  final ValueChanged<int> onCoverChanged;
   final ValueChanged<int> onThumbTap;
   final void Function(List<String> urls, int index) onOpenViewer;
 
@@ -189,15 +219,15 @@ class _DetailContent extends StatelessWidget {
     final active = photoUrls.isEmpty ? 0 : (coverIndex >= photoUrls.length ? 0 : coverIndex);
     final hasInfo = record.place.isNotEmpty || record.note.isNotEmpty;
 
-    void openViewer() {
-      if (photoUrls.isNotEmpty) onOpenViewer(photoUrls, active);
+    void openAt(int i) {
+      if (photoUrls.isNotEmpty) onOpenViewer(photoUrls, i.clamp(0, photoUrls.length - 1));
     }
 
     return SingleChildScrollView(
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          // 沉浸式封面（正文底部预留 _coverFloat 供信息卡上浮，不遮挡日期）
+          // 沉浸式封面（左右滑动切换图片，点击进全屏）
           SizedBox(
             width: double.infinity,
             height: coverH,
@@ -207,27 +237,37 @@ class _DetailContent extends StatelessWidget {
               photoUrls: photoUrls,
               active: active,
               record: record,
-              onThumbTap: onThumbTap,
-              onOpenViewer: openViewer,
+              controller: coverController,
+              onCoverChanged: onCoverChanged,
+              onOpenImage: openAt,
             ),
           ),
-          // 浮层信息卡：整块在流式布局中，向上 Transform 浮动 _coverFloat
-          if (hasInfo)
-            Transform.translate(
-              offset: const Offset(0, -_coverFloat),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _InfoCard(tokens: tokens, record: record),
-              ),
+          // 缩略图带：移到封面下方，不再遮挡大图
+          if (photoUrls.length > 1) ...[
+            const SizedBox(height: 12),
+            _ThumbStrip(
+              tokens: tokens,
+              photoUrls: photoUrls,
+              active: active,
+              onTap: onThumbTap,
             ),
-          if (hasInfo) const SizedBox(height: _coverFloat),
+          ],
+          // 信息卡（正常流式布局，不与封面上浮重叠）
+          if (hasInfo) ...[
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _InfoCard(tokens: tokens, record: record),
+            ),
+            const SizedBox(height: 24),
+          ],
         ],
       ),
     );
   }
 }
 
-/// 沉浸式封面部（含缩略图带）
+/// 沉浸式封面：可左右滑动切换照片，点击进入全屏大图
 class _CoverHeader extends StatelessWidget {
   const _CoverHeader({
     required this.tokens,
@@ -235,8 +275,9 @@ class _CoverHeader extends StatelessWidget {
     required this.photoUrls,
     required this.active,
     required this.record,
-    required this.onThumbTap,
-    required this.onOpenViewer,
+    required this.controller,
+    required this.onCoverChanged,
+    required this.onOpenImage,
   });
 
   final ThemeTokens tokens;
@@ -244,18 +285,18 @@ class _CoverHeader extends StatelessWidget {
   final List<String> photoUrls;
   final int active;
   final CheckinRecord record;
-  final ValueChanged<int> onThumbTap;
-  final VoidCallback onOpenViewer;
+  final PageController controller;
+  final ValueChanged<int> onCoverChanged;
+  final void Function(int index) onOpenImage;
 
   @override
   Widget build(BuildContext context) {
-    final showThumbs = photoUrls.length > 1;
     return SizedBox(
       width: double.infinity,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 大封面（首张 或 缩略图选中项）；有点击时按下微缩反馈，点击进全屏
+          // 大封面：左右滑动切换图片，点击进全屏；无图时显示分类占位
           ClipRRect(
             borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
             child: photoUrls.isEmpty
@@ -264,49 +305,52 @@ class _CoverHeader extends StatelessWidget {
                     alignment: Alignment.center,
                     child: Icon(category.icon, size: 96, color: category.iconColor),
                   )
-                : _PressScale(
-                    onTap: onOpenViewer,
-                    child: CheckinPhotoImage(url: photoUrls[active], tokens: tokens, fit: BoxFit.cover),
+                : PageView.builder(
+                    controller: controller,
+                    itemCount: photoUrls.length,
+                    onPageChanged: onCoverChanged,
+                    itemBuilder: (_, i) => _PressScale(
+                      onTap: () => onOpenImage(i),
+                      child: CheckinPhotoImage(url: photoUrls[i], tokens: tokens, fit: BoxFit.cover),
+                    ),
                   ),
           ),
-          // 上下渐变遮罩
+          // 上下渐变遮罩（纯装饰，IgnorePointer 让点击/滑动穿透到 PageView）
           Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.45),
-                    Colors.transparent,
-                    Colors.transparent,
-                    Colors.black.withOpacity(0.55),
-                  ],
-                  stops: const [0.0, 0.35, 0.6, 1.0],
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.45),
+                      Colors.transparent,
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.55),
+                    ],
+                    stops: const [0.0, 0.35, 0.6, 1.0],
+                  ),
                 ),
               ),
             ),
           ),
-          // 底部信息区 + 缩略图带
+          // 底部：页码指示 + 店名/评分/分类/日期（纯装饰，IgnorePointer）
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: Column(
+            child: IgnorePointer(
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (showThumbs) ...[
-                  _ThumbStrip(
-                    tokens: tokens,
-                    photoUrls: photoUrls,
-                    active: active,
-                    onTap: onThumbTap,
-                  ),
-                  const SizedBox(height: 12),
+                if (photoUrls.length > 1) ...[
+                  _PageDots(count: photoUrls.length, active: active),
+                  const SizedBox(height: 10),
                 ],
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, _coverFloat),
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -363,16 +407,13 @@ class _CoverHeader extends StatelessWidget {
                             formatCheckinDate(record.visitedAt),
                             style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.9)),
                           ),
-                          if (photoUrls.isNotEmpty) ...[
-                            const Spacer(),
-                            _FullscreenChip(onTap: onOpenViewer),
-                          ],
                         ],
                       ),
                     ],
                   ),
                 ),
               ],
+              ),
             ),
           ),
         ],
@@ -610,36 +651,30 @@ class _FloatingControl extends ConsumerWidget {
   }
 }
 
-/// 全屏入口提示胶囊（叠在封面暗渐变遮罩上，属通用叠加层）
-class _FullscreenChip extends StatelessWidget {
-  const _FullscreenChip({required this.onTap});
+/// 封面页码圆点指示器（叠在底部暗渐变遮罩上，便于观察左右滑动的当前位置）
+class _PageDots extends StatelessWidget {
+  const _PageDots({required this.count, required this.active});
 
-  final VoidCallback onTap;
+  final int count;
+  final int active;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.30),
-          borderRadius: BorderRadius.circular(1000),
-          border: Border.all(color: Colors.white.withOpacity(0.4), width: 1),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(Icons.open_in_full, size: 11, color: Colors.white),
-            SizedBox(width: 4),
-            Text(
-              '看大图',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white),
-            ),
-          ],
-        ),
-      ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(count, (i) {
+        final on = i == active;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          width: on ? 18 : 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: on ? Colors.white : Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(1000),
+          ),
+        );
+      }),
     );
   }
 }

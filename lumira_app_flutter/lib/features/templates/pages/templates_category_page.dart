@@ -233,12 +233,19 @@ class _SubCategoryGrid extends ConsumerWidget {
     final daoAsync = ref.watch(templatesDaoProvider);
     final subKeys = categories.map((c) => c.key).toList();
 
-    // 预取二级分类封面图（限并发暖缓存），加速卡片封面显示
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ImageCacheUtil.prefetch(
-        categories.map((c) => c.iconUrl).toList(),
-      );
-    });
+    // 预取二级分类封面图（限并发暖缓存），加速卡片封面显示。
+    //
+    // 二级分类往往很多（同一题材下 10+ 个子风格），首次进入会把这些全尺寸封面
+    // 一次性拉下来，是"首次慢、二次快"的根因（磁盘缓存保证了二次快）。
+    // 对比模板概览页（一级分类仅约 7 张）这里并发明显不足：
+    // - 不再等 addPostFrameCallback，改为 build 时立即触发（更早开始下载）；
+    // - 并发从默认 3 提升到 6（ImageCacheUtil 的 clamp 上限），多图并行拉取，
+    //   显著缩短首次进入的等待；prefetch 幂等 + inflight 去重，重复 build 无害。
+    // - 顺序拉缩略图（而非全尺寸原图），每张下载字节量大减，利于同时并行。
+    ImageCacheUtil.prefetch(
+      categories.map((c) => categoryThumbUrl(c.iconUrl, c.key)).toList(),
+      concurrency: 6,
+    );
 
     return daoAsync.when(
       loading: () =>
@@ -397,9 +404,10 @@ class _SubCategoryCard extends ConsumerWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // 封面大图
+          // 封面大图（优先缩略图，缩略图接口失败时回退原图，保证显示稳定）
           CachedNetworkImage(
-            url: record.iconUrl,
+            url: categoryThumbUrl(record.iconUrl, record.key),
+            fallbackUrl: record.iconUrl,
             fit: BoxFit.cover,
             placeholder: ColoredBox(color: tokens.surfaceAlt),
             errorWidget: Container(

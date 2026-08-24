@@ -58,12 +58,16 @@ class DiaryEntry {
   const DiaryEntry({
     required this.weekday,
     required this.date,
+    required this.day,
     required this.photos,
     this.isToday = false,
   });
 
   final String weekday;
   final String date;
+
+  /// 对应的具体日期（用于日期选择器标记「有照片的日期」）
+  final DateTime day;
   final List<DiaryPhoto> photos;
   final bool isToday;
 }

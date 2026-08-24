@@ -1,0 +1,49 @@
+﻿commit 09c04e5c08fb5a0aea932fe89825cb1f2deb0cda
+Author: hh <321686496@qq.com>
+Date:   Wed Aug 19 23:00:10 2026 +0800
+
+    test(points): e2e for level_reward grant/idempotent/invalid-400
+
+diff --git a/lumira-server/packages/backend/test/points.e2e-spec.ts b/lumira-server/packages/backend/test/points.e2e-spec.ts
+index eabaf77..d47c374 100644
+--- a/lumira-server/packages/backend/test/points.e2e-spec.ts
++++ b/lumira-server/packages/backend/test/points.e2e-spec.ts
+@@ -67,4 +67,38 @@ describe('PointsController (e2e)', () => {
+       .send({ type: 'not-a-type' })
+       .expect(400);
+   });
++
++  it('POST /api/v1/points/earn type=level_reward refId=10 → 首次 granted:true 且 delta:250', async () => {
++    const res = await request(app.getHttpServer())
++      .post('/api/v1/points/earn')
++      .set('Authorization', `Bearer ${token}`)
++      .send({ type: 'level_reward', refId: '10' })
++      .expect(201);
++    expect(res.body.granted).toBe(true);
++    expect(res.body.delta).toBe(250);
++  });
++
++  it('POST /api/v1/points/earn type=level_reward refId=10 → 重复 granted:false 且余额不变', async () => {
++    const before = await request(app.getHttpServer())
++      .post('/api/v1/points/earn')
++      .set('Authorization', `Bearer ${token}`)
++      .send({ type: 'level_reward', refId: '10' })
++      .expect(201);
++    const res = await request(app.getHttpServer())
++      .post('/api/v1/points/earn')
++      .set('Authorization', `Bearer ${token}`)
++      .send({ type: 'level_reward', refId: '10' })
++      .expect(201);
++    expect(res.body.granted).toBe(false);
++    expect(res.body.delta).toBe(0);
++    expect(res.body.balance).toBe(before.body.balance);
++  });
++
++  it('POST /api/v1/points/earn type=level_reward refId=999 (不在奖励表) → 400', async () => {
++    await request(app.getHttpServer())
++      .post('/api/v1/points/earn')
++      .set('Authorization', `Bearer ${token}`)
++      .send({ type: 'level_reward', refId: '999' })
++      .expect(400);
++  });
+ });

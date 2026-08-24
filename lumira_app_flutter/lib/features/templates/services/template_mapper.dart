@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../../core/config/app_config.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../capture/domain/photo_template.dart';
@@ -42,6 +44,8 @@ class TemplateMapper {
       coverData: tpl.meta.coverData,
       description: tpl.meta.description,
       referenceSource: tpl.meta.referenceSource,
+      shortDesc: tpl.meta.shortDesc,
+      ambienceJson: ambienceToJson(tpl.meta.ambience ?? const RemoteTemplateAmbienceDto()),
       composition: _compositionToJson(tpl.composition),
       pose: _poseToJson(tpl.pose),
       camera: _cameraToJson(tpl.camera),
@@ -84,6 +88,8 @@ class TemplateMapper {
       coverData: null,
       description: meta.description,
       referenceSource: meta.referenceSource,
+      shortDesc: meta.shortDesc,
+      ambienceJson: ambienceToJson(meta.ambience),
       composition: const <String, dynamic>{},
       pose: const <String, dynamic>{},
       camera: const <String, dynamic>{},
@@ -114,10 +120,12 @@ class TemplateMapper {
       price: detail.price,
       coverUrl: detail.coverUrl,
       description: detail.description,
+      shortDesc: detail.shortDesc,
       referenceSource: detail.referenceSource,
       tags: detail.tags,
       tagIds: detail.tagIds,
       classification: detail.classification,
+      ambience: detail.ambience,
       sortOrder: detail.sortOrder,
       updatedAt: detail.updatedAt,
     );
@@ -155,6 +163,9 @@ class TemplateMapper {
         coverData: r.coverData,
         description: r.description,
         referenceSource: r.referenceSource,
+        shortDesc: r.shortDesc,
+        ambience: ambienceFromJson(r.ambienceJson),
+        updatedAt: r.updatedAt,
         source: r.source,
       ),
       composition: _compositionFromJson(r.composition),
@@ -247,7 +258,8 @@ class TemplateMapper {
 
     final classificationJson = <String, dynamic>{
       'type': form.meta.category,
-      'style': form.meta.style ?? '',
+      'majorStyle': form.meta.style ?? '',
+      'subStyle': form.meta.subStyle ?? '',
       'method': form.meta.method ?? '',
     };
 
@@ -265,6 +277,9 @@ class TemplateMapper {
       coverData: form.meta.coverImage,
       description: form.meta.description,
       referenceSource: form.meta.referenceSource,
+      shortDesc: form.meta.shortDesc,
+      ambienceJson: TemplateMapper.ambienceToJson(
+        form.meta.ambience ?? const RemoteTemplateAmbienceDto()),
       composition: compositionJson,
       pose: <String, dynamic>{
         'silhouette': editorSilhouetteToJson(form.pose.silhouette),
@@ -313,12 +328,27 @@ class TemplateMapper {
         tags: List<String>.from(r.tags),
         description: r.description,
         referenceSource: r.referenceSource,
-        style: (r.classification['style'] as String?)?.isNotEmpty == true
-            ? r.classification['style'] as String
+        // 向后兼容：旧 {type, style, method} 数据中 style 读到 style，
+        // subStyle 读到 method（旧 method 实为三级）；新四级数据读 majorStyle/subStyle。
+        style: (r.classification['majorStyle'] as String?)?.isNotEmpty == true
+            ? r.classification['majorStyle'] as String
+            : (r.classification['style'] as String?)?.isNotEmpty == true
+                ? r.classification['style'] as String
+                : null,
+        subStyle: (r.classification['subStyle'] as String?)?.isNotEmpty == true
+            ? r.classification['subStyle'] as String
+            : (r.classification['method'] as String?)?.isNotEmpty == true
+                ? r.classification['method'] as String
+                : null,
+        // 四级 method 仅在存在真正的四级 subStyle 时读取，
+        // 避免旧三级数据的 method 被误投到四级。
+        method: (r.classification['subStyle'] as String?)?.isNotEmpty == true
+            ? (r.classification['method'] as String?)?.isNotEmpty == true
+                ? r.classification['method'] as String
+                : null
             : null,
-        method: (r.classification['method'] as String?)?.isNotEmpty == true
-            ? r.classification['method'] as String
-            : null,
+        shortDesc: r.shortDesc,
+        ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
         coverImage: r.coverData,
       ),
       composition: editor.EditorFormComposition(
@@ -394,13 +424,38 @@ class TemplateMapper {
           ? null
           : editor.EditorFormFillLight(
               enabled: (fillLightJson['enabled'] as bool?) ?? false,
-              color: (fillLightJson['color'] as num?)?.toInt() ?? 0xFFFFE5B4,
+              color: ((fillLightJson['color'] as num?)?.toInt() ?? 0xFFFFE5B4) |
+                  0xFF000000,
               intensity: (fillLightJson['intensity'] as num?)?.toDouble() ?? 0.8,
             ),
     );
   }
 
   // === Silhouette 序列化 ===
+
+  /// 氛围元数据 → JSON 字符串（落库用）。
+  static String ambienceToJson(RemoteTemplateAmbienceDto a) {
+    return jsonEncode({
+      'seasons': a.seasons,
+      'weathers': a.weathers,
+      'timeTones': a.timeTones,
+    });
+  }
+
+  /// JSON 字符串 → 氛围元数据。空/非法输入返回空对象。
+  static RemoteTemplateAmbienceDto ambienceFromJson(String json) {
+    if (json.isEmpty) return const RemoteTemplateAmbienceDto();
+    try {
+      final m = jsonDecode(json) as Map<String, dynamic>;
+      return RemoteTemplateAmbienceDto(
+        seasons: (m['seasons'] as List<dynamic>?)?.cast<String>() ?? const [],
+        weathers: (m['weathers'] as List<dynamic>?)?.cast<String>() ?? const [],
+        timeTones: (m['timeTones'] as List<dynamic>?)?.cast<String>() ?? const [],
+      );
+    } catch (_) {
+      return const RemoteTemplateAmbienceDto();
+    }
+  }
 
   /// PhotoTemplate 剪影 → JSON。
   /// builtin: 仅存 key；image: base64 data URL + filename + sizeKB；svg: inline SVG。
@@ -550,6 +605,7 @@ class TemplateMapper {
       'vignette': p.vignette,
       'grain': p.grain,
       'lut': p.lut,
+      if (p.fillLight != null) 'fillLight': p.fillLight!.toJson(),
     };
   }
 
@@ -629,6 +685,9 @@ class TemplateMapper {
       vignette: (json['vignette'] as num?)?.toInt() ?? 0,
       grain: (json['grain'] as num?)?.toInt() ?? 0,
       lut: (json['lut'] as String?) ?? 'none',
+      fillLight: (json['fillLight'] as Map<String, dynamic>?) != null
+          ? FillLightParams.fromJson(json['fillLight'] as Map<String, dynamic>)
+          : null,
     );
   }
 

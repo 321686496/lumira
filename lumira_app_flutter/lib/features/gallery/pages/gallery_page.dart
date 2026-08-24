@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,6 +17,10 @@ import '../data/gallery_models.dart';
 import '../widgets/photo_cell.dart';
 import '../widgets/scene_filter_pills.dart';
 import '../widgets/view_toggle.dart';
+
+/// 原生「保存到系统相册」MethodChannel（复用）：
+/// { 'path': <本地文件绝对路径> } -> { success, error }
+const _photoSaverChannel = MethodChannel('lumira/photo_saver');
 
 /// 相册主页（首个接入 DAO 的页面）
 ///
@@ -189,6 +194,68 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
 
   void _exportSelected() {
     LumiraToast.show(context, '已选择 ${_selectedIds.length} 张照片导出');
+  }
+
+  /// 将选中照片保存到系统相册：逐张解析本地文件路径（跳过网络图片），
+  /// 复用原生 `lumira/photo_saver` 通道批量调用 saveToAlbum。
+  Future<void> _saveSelectedToAlbum() async {
+    final dao = ref.read(galleryDaoProvider).value;
+    if (dao == null) return;
+    final ids = _selectedIds.toList();
+    int saved = 0;
+    int skipped = 0;
+    int failed = 0;
+    try {
+      for (final id in ids) {
+        final record = await dao.getById(id);
+        final filePath = record?.filePath;
+        final dataUrl = record?.dataUrl;
+        final isNetwork = (filePath != null && filePath.startsWith('http')) ||
+            (dataUrl != null && dataUrl.startsWith('http'));
+        final localPath = (filePath != null && filePath.isNotEmpty && !isNetwork)
+            ? filePath
+            : (dataUrl != null && dataUrl.isNotEmpty && !dataUrl.startsWith('http'))
+                ? dataUrl
+                : null;
+        if (localPath == null) {
+          skipped++;
+          continue;
+        }
+        try {
+          final result = await _photoSaverChannel.invokeMethod('saveToAlbum', {
+            'path': localPath,
+          });
+          if (result != null && result['success'] == true) {
+            saved++;
+          } else {
+            failed++;
+          }
+        } catch (_) {
+          failed++;
+        }
+      }
+      if (!mounted) return;
+      final parts = <String>[
+        '已保存 $saved 张',
+        if (skipped > 0) '$skipped 张跳过',
+        if (failed > 0) '$failed 张失败',
+      ];
+      LumiraToast.show(
+        context,
+        parts.join(' · '),
+        duration: const Duration(seconds: 2),
+      );
+      if (saved > 0 && mounted) {
+        setState(() {
+          _isMultiSelectMode = false;
+          _selectedIds.clear();
+        });
+      }
+    } catch (e) {
+      debugPrint('[gallery] 批量保存到系统相册异常: $e');
+      if (!mounted) return;
+      LumiraToast.show(context, '保存失败：$e', duration: const Duration(seconds: 2));
+    }
   }
 
   /// 将选中照片加入精选集：弹出底部 Sheet 显示所有 manual 类型精选集 + "新建精选集"按钮。
@@ -420,6 +487,11 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
                         variant: ButtonVariant.ghost,
                         onPressed: _selectedIds.isEmpty ? null : _exportSelected,
                         child: Text('导出 (${_selectedIds.length})'),
+                      ),
+                      LumiraButton(
+                        variant: ButtonVariant.ghost,
+                        onPressed: _selectedIds.isEmpty ? null : _saveSelectedToAlbum,
+                        child: Text('保存到相册 (${_selectedIds.length})'),
                       ),
                       LumiraButton(
                         variant: ButtonVariant.ghost,

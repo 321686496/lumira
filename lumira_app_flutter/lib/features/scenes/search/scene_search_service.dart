@@ -67,6 +67,13 @@ class SceneSearchService {
       case SearchSort.latest:
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         break;
+      case SearchSort.photos:
+        list.sort((a, b) =>
+            (popularity?[b.id] ?? 0).compareTo(popularity?[a.id] ?? 0));
+        break;
+      case SearchSort.name:
+        list.sort((a, b) => a.name.compareTo(b.name));
+        break;
     }
   }
 }

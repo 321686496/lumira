@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
+import '../../../core/db/dao/scenes_dao.dart';
+import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../templates/widgets/template_cover_image.dart';
 import '../data/composition_kit_models.dart';
 import '../providers/composition_kits_providers.dart';
 
@@ -62,16 +64,23 @@ class _KitDetailContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final sceneAsync = ref.watch(compositionKitSceneProvider(kit.sceneId));
+    final templateAsync = kit.templateId == null
+        ? null
+        : ref.watch(compositionKitTemplateProvider(kit.templateId!));
+    final scene = sceneAsync.valueOrNull;
+    final template = templateAsync?.valueOrNull;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _CoverPreview(tokens: tokens, kit: kit),
+          _CoverPreview(tokens: tokens, kit: kit, scene: scene, template: template),
           const SizedBox(height: 16),
           _TitleSection(tokens: tokens, kit: kit),
           const SizedBox(height: 16),
-          _MetaSection(tokens: tokens, kit: kit),
+          _LinkedSection(tokens: tokens, kit: kit, scene: scene, template: template),
           const SizedBox(height: 16),
           if (kit.cameraOverrides.isNotEmpty) ...[
             _ParamsSection(tokens: tokens, kit: kit),
@@ -89,21 +98,31 @@ class _KitDetailContent extends ConsumerWidget {
 }
 
 class _CoverPreview extends StatelessWidget {
-  const _CoverPreview({required this.tokens, required this.kit});
+  const _CoverPreview({
+    required this.tokens,
+    required this.kit,
+    required this.scene,
+    required this.template,
+  });
   final ThemeTokens tokens;
   final CompositionKit kit;
+  final SceneRecord? scene;
+  final TemplateRecord? template;
 
   @override
   Widget build(BuildContext context) {
+    final cover = resolveKitCover(kit, scene: scene, template: template);
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: AspectRatio(
         aspectRatio: 3.0 / 4.0,
-        child: kit.coverUrl != null && kit.coverUrl!.isNotEmpty
-            ? CachedNetworkImage(
-                url: kit.coverUrl!,
+        child: cover.hasImage
+            ? TemplateCoverImage(
+                cover: cover.cover,
+                coverData: cover.coverData,
                 fit: BoxFit.cover,
-                errorWidget: _CoverFallback(tokens: tokens),
+                fallback: _CoverFallback(tokens: tokens),
+                errorFallback: _CoverFallback(tokens: tokens),
               )
             : _CoverFallback(tokens: tokens),
       ),
@@ -160,63 +179,177 @@ class _TitleSection extends StatelessWidget {
   }
 }
 
-class _MetaSection extends ConsumerWidget {
-  const _MetaSection({required this.tokens, required this.kit});
+/// 场景 / 模板关联卡片区块：以卡片形式展示并可跳转到对应详情页。
+class _LinkedSection extends StatelessWidget {
+  const _LinkedSection({
+    required this.tokens,
+    required this.kit,
+    required this.scene,
+    required this.template,
+  });
+
   final ThemeTokens tokens;
   final CompositionKit kit;
+  final SceneRecord? scene;
+  final TemplateRecord? template;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return NeuCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _MetaRow(
-            tokens: tokens,
-            label: '场景',
-            value: 'ID: ${kit.sceneId}',
+  Widget build(BuildContext context) {
+    final sceneName = (scene != null && scene!.name.isNotEmpty)
+        ? scene!.name
+        : kit.sceneId;
+    final sceneCover = _sceneCover(scene);
+    final sceneSub = scene == null ? '场景已不存在' : (scene!.category.isNotEmpty ? scene!.category : '场景');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _LinkedCard(
+          tokens: tokens,
+          label: '场景',
+          title: sceneName,
+          subtitle: sceneSub,
+          cover: sceneCover,
+          onTap: () => GoRouter.of(context).push(
+            RouteNames.withSceneId(RouteNames.captureSceneDetail, kit.sceneId),
           ),
-          const SizedBox(height: 8),
-          _MetaRow(
+        ),
+        const SizedBox(height: 12),
+        if (template == null && kit.templateId == null)
+          _LinkedCard(
             tokens: tokens,
             label: '模板',
-            value: kit.templateId == null ? '未关联' : 'ID: ${kit.templateId}',
+            title: '未关联模板',
+            subtitle: '纯场景组合，可跳过',
+            cover: const KitCoverSource(),
+          )
+        else
+          _LinkedCard(
+            tokens: tokens,
+            label: '模板',
+            title: (template != null && template!.name.isNotEmpty)
+                ? template!.name
+                : (kit.templateId ?? '模板'),
+            subtitle: template == null ? '模板已不存在' : '点击查看模板详情',
+            cover: _templateCover(template),
+            onTap: () => GoRouter.of(context).push(
+              RouteNames.withTemplateId(RouteNames.templatesDetail, kit.templateId!),
+            ),
           ),
-        ],
+      ],
+    );
+  }
+
+  KitCoverSource _sceneCover(SceneRecord? scene) {
+    if (scene == null) return const KitCoverSource();
+    if (scene.coverUrl.isNotEmpty) return KitCoverSource(cover: scene.coverUrl);
+    if (scene.exampleImages.isNotEmpty) {
+      return KitCoverSource(cover: scene.exampleImages.first);
+    }
+    return const KitCoverSource();
+  }
+
+  KitCoverSource _templateCover(TemplateRecord? template) {
+    if (template == null) return const KitCoverSource();
+    if (template.coverData != null && template.coverData!.isNotEmpty) {
+      return KitCoverSource(coverData: template.coverData);
+    }
+    if (template.cover.isNotEmpty) return KitCoverSource(cover: template.cover);
+    return const KitCoverSource();
+  }
+}
+
+class _LinkedCard extends StatelessWidget {
+  const _LinkedCard({
+    required this.tokens,
+    required this.label,
+    required this.title,
+    required this.subtitle,
+    required this.cover,
+    this.onTap,
+  });
+
+  final ThemeTokens tokens;
+  final String label;
+  final String title;
+  final String subtitle;
+  final KitCoverSource cover;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: NeuCard(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 56,
+                height: 56,
+                child: cover.hasImage
+                    ? TemplateCoverImage(
+                        cover: cover.cover,
+                        coverData: cover.coverData,
+                        fit: BoxFit.cover,
+                        fallback: _LinkedImagePlaceholder(tokens: tokens),
+                        errorFallback: _LinkedImagePlaceholder(tokens: tokens),
+                      )
+                    : _LinkedImagePlaceholder(tokens: tokens),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              Icon(Icons.chevron_right, size: 18, color: tokens.textTertiary),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.tokens, required this.label, required this.value});
+class _LinkedImagePlaceholder extends StatelessWidget {
+  const _LinkedImagePlaceholder({required this.tokens});
   final ThemeTokens tokens;
-  final String label;
-  final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 56,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: tokens.textSecondary,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(fontSize: 13, color: tokens.textPrimary),
-          ),
-        ),
-      ],
+    return Container(
+      color: tokens.surface,
+      child: Icon(Icons.layers_outlined, color: tokens.textTertiary, size: 24),
     );
   }
 }

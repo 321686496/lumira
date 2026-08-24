@@ -17,6 +17,7 @@ class GalleryItemRecord {
   final String? mood;
   final String? lut;
   final bool isFavorite;
+  final bool isHidden;
   final int createdAt;
 
   GalleryItemRecord({
@@ -32,6 +33,7 @@ class GalleryItemRecord {
     this.mood,
     this.lut,
     this.isFavorite = false,
+    this.isHidden = false,
     required this.createdAt,
   });
 
@@ -49,6 +51,7 @@ class GalleryItemRecord {
       Tables.colMood: mood,
       Tables.colLut: lut,
       Tables.colGalleryItemIsFavorite: isFavorite ? 1 : 0,
+      Tables.colGalleryItemHidden: isHidden ? 1 : 0,
       Tables.colCreatedAt: createdAt,
     };
   }
@@ -67,6 +70,7 @@ class GalleryItemRecord {
       mood: row[Tables.colMood] as String?,
       lut: row[Tables.colLut] as String?,
       isFavorite: (row[Tables.colGalleryItemIsFavorite] as num?)?.toInt() == 1,
+      isHidden: (row[Tables.colGalleryItemHidden] as num?)?.toInt() == 1,
       createdAt: (row[Tables.colCreatedAt] as num).toInt(),
     );
   }
@@ -140,10 +144,14 @@ class GalleryDao {
 
   final Database _db;
 
+  /// 隐藏照片过滤（从系统相册引入、不在内部相册/列表展示）
+  static const String _notHidden = '${Tables.colGalleryItemHidden} != 1';
+
   /// 获取所有照片（最新在前，对应 uni-app 数组头部插入的语义）
   Future<List<GalleryItemRecord>> getAll({int? limit, int? offset}) async {
     final rows = await _db.query(
       Tables.galleryItems,
+      where: _notHidden,
       orderBy: '${Tables.colCreatedAt} DESC',
       limit: limit,
       offset: offset,
@@ -154,7 +162,7 @@ class GalleryDao {
   Future<List<GalleryItemRecord>> getByScene(String sceneId) async {
     final rows = await _db.query(
       Tables.galleryItems,
-      where: '${Tables.colSceneId} = ?',
+      where: '${Tables.colSceneId} = ? AND $_notHidden',
       whereArgs: [sceneId],
       orderBy: '${Tables.colCreatedAt} DESC',
     );
@@ -321,6 +329,7 @@ class GalleryDao {
   Future<List<GalleryItemRecord>> getRecent({int limit = 10}) async {
     final rows = await _db.query(
       Tables.galleryItems,
+      where: _notHidden,
       orderBy: '${Tables.colCreatedAt} DESC',
       limit: limit,
     );
@@ -359,7 +368,7 @@ class GalleryDao {
   Future<List<GalleryItemRecord>> getFavorites({int? limit}) async {
     final rows = await _db.query(
       Tables.galleryItems,
-      where: '${Tables.colGalleryItemIsFavorite} = ?',
+      where: '${Tables.colGalleryItemIsFavorite} = ? AND $_notHidden',
       whereArgs: [1],
       orderBy: '${Tables.colCreatedAt} DESC',
       limit: limit,
@@ -374,6 +383,7 @@ class GalleryDao {
       SELECT g.* FROM ${Tables.galleryItems} g
       LEFT JOIN ${Tables.scenes} s ON g.${Tables.colSceneId} = s.${Tables.colId}
       WHERE s.${Tables.colRelatedCategory} = ?
+        AND g.${Tables.colGalleryItemHidden} != 1
       ORDER BY g.${Tables.colCreatedAt} DESC
       ${limit != null ? 'LIMIT ?' : ''}
     ''', limit != null ? [category, limit] : [category]);
@@ -384,7 +394,7 @@ class GalleryDao {
   Future<List<GalleryItemRecord>> getByTemplate(String templateId, {int? limit}) async {
     final rows = await _db.query(
       Tables.galleryItems,
-      where: '${Tables.colTemplateId} = ?',
+      where: '${Tables.colTemplateId} = ? AND $_notHidden',
       whereArgs: [templateId],
       orderBy: '${Tables.colCreatedAt} DESC',
       limit: limit,
@@ -400,6 +410,7 @@ class GalleryDao {
       SELECT * FROM ${Tables.galleryItems}
       WHERE strftime('%Y', ${Tables.colCreatedAt} / 1000, 'unixepoch', 'localtime') = ?
         AND strftime('%m', ${Tables.colCreatedAt} / 1000, 'unixepoch', 'localtime') = ?
+        AND ${Tables.colGalleryItemHidden} != 1
       ORDER BY ${Tables.colCreatedAt} DESC
       ${limit != null ? 'LIMIT ?' : ''}
     ''', limit != null ? [yearStr, monthStr, limit] : [yearStr, monthStr]);
@@ -411,7 +422,7 @@ class GalleryDao {
     final pattern = '%$query%';
     final rows = await _db.query(
       Tables.galleryItems,
-      where: '${Tables.colSceneId} LIKE ? OR ${Tables.colTemplateId} LIKE ? OR ${Tables.colMood} LIKE ?',
+      where: '( ${Tables.colSceneId} LIKE ? OR ${Tables.colTemplateId} LIKE ? OR ${Tables.colMood} LIKE ? ) AND $_notHidden',
       whereArgs: [pattern, pattern, pattern],
       orderBy: '${Tables.colCreatedAt} DESC',
     );

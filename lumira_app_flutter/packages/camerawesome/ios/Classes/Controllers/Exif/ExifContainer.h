@@ -18,6 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)addCreationDate:(NSDate *)date;
 - (void)addDescription:(NSString *)description;
 - (void)addProjection:(NSString *)projection;
+- (void)addImageOrientation:(int)orientation;
 
 - (void)setValue:(NSString *)key forExifKey:(NSString *)value;
 

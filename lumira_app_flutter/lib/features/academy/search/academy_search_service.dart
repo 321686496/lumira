@@ -62,6 +62,12 @@ class AcademySearchService {
       case SearchSort.latest:
         list.sort((a, b) => b.lessonNumber.compareTo(a.lessonNumber));
         break;
+      case SearchSort.photos:
+        list.sort((a, b) => a.title.compareTo(b.title));
+        break;
+      case SearchSort.name:
+        list.sort((a, b) => a.title.compareTo(b.title));
+        break;
     }
     return list;
   }

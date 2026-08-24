@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_view/photo_view.dart';
 
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
@@ -552,92 +553,79 @@ class _PhotoViewerDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasPath = submission.photoPath != null;
-    return GestureDetector(
-      onTap: () => Navigator.of(context).pop(),
-      behavior: HitTestBehavior.opaque,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            // 居中可缩放图片
-            Center(
-              child: GestureDetector(
-                onTap: () {}, // 阻止点击图片关闭
-                child: InteractiveViewer(
-                  minScale: 1.0,
-                  maxScale: 4.0,
-                  panEnabled: true,
-                  scaleEnabled: true,
-                  boundaryMargin: const EdgeInsets.all(40),
-                  child: hasPath
-                      ? Image.file(
-                          File(submission.photoPath!),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => Container(
-                            width: 120, height: 120,
-                            color: tokens.surfaceAlt,
-                            child: Icon(Icons.broken_image_outlined,
-                                size: 40, color: tokens.textTertiary),
-                          ),
-                        )
-                      : CachedNetworkImage(
-                          url: submission.photoUrl!,
-                          fit: BoxFit.contain,
-                          errorWidget: Container(
-                            width: 120, height: 120,
-                            color: tokens.surfaceAlt,
-                            child: Icon(Icons.broken_image_outlined,
-                                size: 40, color: tokens.textTertiary),
-                          ),
-                        ),
-                ),
+    final ImageProvider<Object> provider;
+    if (hasPath) {
+      provider = FileImage(File(submission.photoPath!));
+    } else {
+      provider = NetworkImage(submission.photoUrl!);
+    }
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // 全屏可缩放图片（photo_view 统一仲裁手势），单击任意处关闭
+          Positioned.fill(
+            child: PhotoView(
+              imageProvider: provider,
+              minScale: PhotoViewComputedScale.contained,
+              maxScale: 4.0,
+              backgroundDecoration:
+                  const BoxDecoration(color: Colors.transparent),
+              onTapUp: (_, __, ___) => Navigator.of(context).pop(),
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, __, ___) => Container(
+                width: 120,
+                height: 120,
+                color: tokens.surfaceAlt,
+                child: Icon(Icons.broken_image_outlined,
+                    size: 40, color: tokens.textTertiary),
               ),
             ),
-            // 顶部关闭按钮
+          ),
+          // 顶部关闭按钮
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            right: 16,
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              behavior: HitTestBehavior.opaque,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.5),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close,
+                    size: 22, color: Colors.white),
+              ),
+            ),
+          ),
+          // 底部备注（如有）
+          if (submission.note != null && submission.note!.isNotEmpty)
             Positioned(
-              top: MediaQuery.of(context).padding.top + 12,
-              right: 16,
-              child: GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    shape: BoxShape.circle,
+              left: 24,
+              right: 24,
+              bottom: MediaQuery.of(context).padding.bottom + 24,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  submission.note!,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.white,
+                    height: 1.5,
                   ),
-                  child: const Icon(Icons.close,
-                      size: 22, color: Colors.white),
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ),
-            // 底部备注（如有）
-            if (submission.note != null && submission.note!.isNotEmpty)
-              Positioned(
-                left: 24,
-                right: 24,
-                bottom: MediaQuery.of(context).padding.bottom + 24,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    submission.note!,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Colors.white,
-                      height: 1.5,
-                    ),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }

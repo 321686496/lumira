@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 import '../data/capture_state.dart';
 import '../data/scene_presets_data.dart';
+import '../domain/scene_preset.dart';
 import '../../usage/usage_providers.dart';
 import '../../../core/db/dao/usage_dao.dart';
 
@@ -44,43 +45,14 @@ class ScenePresetStrip extends ConsumerWidget {
                   nextId;
               if (nextId == null) {
                 // 取消选中：清除场景滤镜
-                final currentPost = ref.read(
-                    CaptureState.freeModePostProcessProvider);
-                ref.read(CaptureState.freeModePostProcessProvider.notifier).state =
-                    currentPost.copyWith(
-                  lut: null,
-                  systemFilter: null,
+                CaptureState.applySceneFilter(
+                  ref,
+                  const SceneFilter(lut: 'none'),
                 );
-                final editable = ref.read(CaptureState.editableTemplateProvider);
-                if (editable != null) {
-                  ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                      editable.copyWith(
-                    postProcess: editable.postProcess.copyWith(
-                      lut: null,
-                      systemFilter: null,
-                    ),
-                  );
-                }
               } else {
                 // 选中场景：同步 LUT 和 systemFilter
                 _reportSceneSelect(ref, preset.id);
-                final currentPost = ref.read(
-                    CaptureState.freeModePostProcessProvider);
-                ref.read(CaptureState.freeModePostProcessProvider.notifier).state =
-                    currentPost.copyWith(
-                  lut: preset.filter.lut,
-                  systemFilter: preset.filter.systemFilter,
-                );
-                final editable = ref.read(CaptureState.editableTemplateProvider);
-                if (editable != null) {
-                  ref.read(CaptureState.editableTemplateProvider.notifier).state =
-                      editable.copyWith(
-                    postProcess: editable.postProcess.copyWith(
-                      lut: preset.filter.lut,
-                      systemFilter: preset.filter.systemFilter,
-                    ),
-                  );
-                }
+                CaptureState.applySceneFilter(ref, preset.filter);
               }
             },
             child: AnimatedContainer(

@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../templates/widgets/template_cover_image.dart';
 import '../data/composition_kit_models.dart';
 import '../providers/composition_kits_providers.dart';
 
@@ -239,7 +238,7 @@ class _Divider extends StatelessWidget {
   }
 }
 
-class _KitCard extends StatelessWidget {
+class _KitCard extends ConsumerWidget {
   const _KitCard({
     required this.tokens,
     required this.kit,
@@ -253,7 +252,16 @@ class _KitCard extends StatelessWidget {
   final VoidCallback onLongPress;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sceneAsync = ref.watch(compositionKitSceneProvider(kit.sceneId));
+    final templateAsync = kit.templateId == null
+        ? null
+        : ref.watch(compositionKitTemplateProvider(kit.templateId!));
+
+    final scene = sceneAsync.valueOrNull;
+    final template = templateAsync?.valueOrNull;
+    final cover = resolveKitCover(kit, scene: scene, template: template);
+
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -268,11 +276,13 @@ class _KitCard extends StatelessWidget {
               child: SizedBox(
                 width: 80,
                 height: 80,
-                child: kit.coverUrl != null && kit.coverUrl!.isNotEmpty
-                    ? CachedNetworkImage(
-                        url: kit.coverUrl!,
+                child: cover.hasImage
+                    ? TemplateCoverImage(
+                        cover: cover.cover,
+                        coverData: cover.coverData,
                         fit: BoxFit.cover,
-                        errorWidget: _CoverPlaceholder(tokens: tokens),
+                        fallback: _CoverPlaceholder(tokens: tokens),
+                        errorFallback: _CoverPlaceholder(tokens: tokens),
                       )
                     : _CoverPlaceholder(tokens: tokens),
               ),
@@ -299,9 +309,12 @@ class _KitCard extends StatelessWidget {
                     spacing: 4,
                     runSpacing: 4,
                     children: [
-                      _Tag(tokens: tokens, text: '场景: ${_shortId(kit.sceneId)}'),
+                      _Tag(tokens: tokens, text: '场景: ${_nameOrShort(scene?.name, kit.sceneId)}'),
                       if (kit.templateId != null)
-                        _Tag(tokens: tokens, text: '模板: ${_shortId(kit.templateId!)}'),
+                        _Tag(
+                          tokens: tokens,
+                          text: '模板: ${_nameOrShort(template?.name, kit.templateId!)}',
+                        ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -317,6 +330,12 @@ class _KitCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 优先展示名称；场景/模板被删除（查询不到）时回退到短 ID。
+  String _nameOrShort(String? name, String id) {
+    if (name != null && name.isNotEmpty) return name;
+    return _shortId(id);
   }
 
   String _shortId(String id) {

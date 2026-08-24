@@ -160,6 +160,7 @@ final diaryEntriesProvider =
     return DiaryEntry(
       weekday: kDiaryWeekdayNames[day.weekday - 1],
       date: DateFormat('M月d日').format(day),
+      day: day,
       photos: diaryPhotos,
       isToday: day == today,
     );

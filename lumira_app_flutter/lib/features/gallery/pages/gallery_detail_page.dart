@@ -6,11 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:photo_view/photo_view.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/utils/safe_share.dart';
-
-import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
@@ -25,6 +24,10 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../profile/providers/collection_providers.dart';
 import '../../watermark/data/watermark_providers.dart';
 import '../providers/gallery_diary_providers.dart';
+
+/// 原生「保存到系统相册」MethodChannel（与拍摄预览页共用同一通道，见
+/// CapturePreviewPage 同名字段）：{ 'path': <本地文件绝对路径> } -> { success, error }
+const _photoSaverChannel = MethodChannel('lumira/photo_saver');
 
 /// 相册照片详情页（查看为主）
 ///
@@ -411,6 +414,44 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     }
   }
 
+  /// 保存当前本地照片到系统相册：复用原生 `lumira/photo_saver` 通道。
+  /// 网络图片（dataUrl/filePath 以 http 开头）不支持，弹 toast 提示。
+  Future<void> _onSaveToAlbum() async {
+    final photo = _photo;
+    if (photo == null) return;
+    final filePath = photo.filePath;
+    final dataUrl = photo.dataUrl;
+    final localPath = (filePath != null && filePath.isNotEmpty && !filePath.startsWith('http'))
+        ? filePath
+        : null;
+    if (localPath == null) {
+      final isNetwork = (dataUrl != null && dataUrl.startsWith('http')) ||
+          (filePath != null && filePath.startsWith('http'));
+      LumiraToast.show(
+        context,
+        isNetwork ? '网络图片暂不支持保存到系统相册' : '未找到可保存的照片文件',
+        duration: const Duration(milliseconds: 1500),
+      );
+      return;
+    }
+    try {
+      final result = await _photoSaverChannel.invokeMethod('saveToAlbum', {
+        'path': localPath,
+      });
+      final success = result != null && result['success'] == true;
+      if (!mounted) return;
+      LumiraToast.show(
+        context,
+        success ? '已保存到系统相册' : '保存失败：${result?['error'] ?? '未知错误'}',
+        duration: const Duration(seconds: 2),
+      );
+    } catch (e) {
+      debugPrint('[gallery-detail] 保存到系统相册异常: $e');
+      if (!mounted) return;
+      LumiraToast.show(context, '保存失败：$e', duration: const Duration(seconds: 2));
+    }
+  }
+
   /// 删除当前照片：先弹出确认对话框，确认后调用 DAO 删除并返回上一页。
   Future<void> _onDelete() async {
     final photo = _photo;
@@ -523,6 +564,7 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
               onShare: _onShare,
               onDelete: _onDelete,
               onAddWatermark: _onAddWatermark,
+              onSaveToAlbum: _onSaveToAlbum,
             ),
         ],
       ),
@@ -727,6 +769,7 @@ class _MoreAction extends StatelessWidget {
     required this.onShare,
     required this.onDelete,
     required this.onAddWatermark,
+    required this.onSaveToAlbum,
   });
 
   final ThemeTokens tokens;
@@ -735,6 +778,7 @@ class _MoreAction extends StatelessWidget {
   final Future<void> Function() onShare;
   final Future<void> Function() onDelete;
   final Future<void> Function() onAddWatermark;
+  final Future<void> Function() onSaveToAlbum;
 
   @override
   Widget build(BuildContext context) {
@@ -780,6 +824,13 @@ class _MoreAction extends StatelessWidget {
           Divider(height: 1, color: tokens.divider),
           _MoreSheetOption(
             tokens: tokens,
+            icon: Icons.save_outlined,
+            label: '保存到系统相册',
+            onTap: () => Navigator.of(ctx).pop('saveToAlbum'),
+          ),
+          Divider(height: 1, color: tokens.divider),
+          _MoreSheetOption(
+            tokens: tokens,
             icon: Icons.photo_filter_outlined,
             label: '添加水印',
             color: tokens.brand,
@@ -804,6 +855,8 @@ class _MoreAction extends StatelessWidget {
       await onOutfitMark();
     } else if (result == 'share') {
       await onShare();
+    } else if (result == 'saveToAlbum') {
+      await onSaveToAlbum();
     } else if (result == 'watermark') {
       await onAddWatermark();
     } else if (result == 'delete') {
@@ -983,7 +1036,7 @@ class _EmptyCanvas extends StatelessWidget {
 
 /// 只读照片预览区：直接显示已烘焙的 JPEG（filePath 已含 postProcess 色彩矩阵 +
 /// transform 变换）。不再叠加 ColorFiltered，避免"2x 参数"效果。
-/// 支持 InteractiveViewer 双指缩放与拖拽查看细节。
+/// 支持 photo_view 双指缩放与拖拽查看细节。
 ///
 /// 当 isComparing 为 true 且 photo.originalPath 存在时，切换显示原图
 /// （未应用后期参数的原始照片），便于与编辑后效果对比。
@@ -1034,17 +1087,29 @@ class _ReadOnlyCanvas extends StatelessWidget {
                     size: 32, color: tokens.textTertiary),
               ),
             )
-          : InteractiveViewer(
-              minScale: 1.0,
+          : PhotoView(
+              imageProvider: _providerFor(url),
+              minScale: PhotoViewComputedScale.contained,
               maxScale: 4.0,
-              panEnabled: true,
-              scaleEnabled: true,
-              boundaryMargin: EdgeInsets.zero,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: KeyedSubtree(
-                  key: ValueKey(url),
-                  child: _buildImage(url),
+              backgroundDecoration:
+                  const BoxDecoration(color: Colors.transparent),
+              filterQuality: FilterQuality.high,
+              // 不设 onTapUp：photo_view 在双击的第一击也会回调 onTapUp，
+              // 会误触发外层覆盖的节点打开全屏。单击打开全屏仍由外层 GestureDetector 接管。
+              errorBuilder: (_, __, ___) => Container(
+                color: tokens.surfaceAlt,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.broken_image_outlined,
+                          size: 32, color: tokens.textTertiary),
+                      const SizedBox(height: 8),
+                      Text('图片加载失败',
+                          style: TextStyle(
+                              fontSize: 12, color: tokens.textTertiary)),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1115,41 +1180,10 @@ class _ReadOnlyCanvas extends StatelessWidget {
     );
   }
 
-  Widget _buildImage(String url) {
-    // 强制图片填满整个取景框，让 BoxFit.contain 在框内水平居中；
-    // 否则 InteractiveViewer 会把小于视口的图片按左上角对齐，导致右侧大片空白。
-    Widget imageWidget = url.startsWith('http')
-        ? CachedNetworkImage(
-            url: url,
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.contain,
-          )
-        : Image.file(
-            File(url),
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Container(
-              color: tokens.surfaceAlt,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.broken_image_outlined,
-                        size: 32, color: tokens.textTertiary),
-                    const SizedBox(height: 8),
-                    Text('图片加载失败',
-                        style: TextStyle(fontSize: 12, color: tokens.textTertiary)),
-                  ],
-                ),
-              ),
-            ),
-          );
-
-    // JPEG 已烘焙 transform 变换（processFile 调用 _applyTransform），
-    // 此处不再叠加 RotatedBox/Transform，避免双重变换。
-    return imageWidget;
+  /// 生成 PhotoView 所需的 ImageProvider（相册本地文件用 File，云端数据用 Network）。
+  ImageProvider<Object> _providerFor(String url) {
+    if (url.startsWith('http')) return NetworkImage(url);
+    return FileImage(File(url));
   }
 }
 
@@ -1825,7 +1859,7 @@ class _PressableScaleState extends State<_PressableScale> {
   }
 }
 
-/// 全屏大图查看器：黑底 + InteractiveViewer 双指缩放/拖拽，点击图片或右上角关闭。
+/// 全屏大图查看器：黑底 + photo_view 双指缩放/拖拽，点击图片或右上角关闭。
 /// 用于从相册详情页点击照片预览后查看大图。
 class _FullscreenViewer extends StatelessWidget {
   const _FullscreenViewer({required this.url});
@@ -1834,34 +1868,28 @@ class _FullscreenViewer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ImageProvider<Object> provider;
+    if (url.startsWith('http')) {
+      provider = NetworkImage(url);
+    } else {
+      provider = FileImage(File(url));
+    }
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // 图片主体：黑底居中，支持缩放/拖拽
+          // 图片主体：黑底居中，支持缩放/拖拽（photo_view 统一仲裁手势）
           Positioned.fill(
-            child: GestureDetector(
-              onTap: () => Navigator.of(context).pop(),
-              behavior: HitTestBehavior.opaque,
-              child: InteractiveViewer(
-                minScale: 1.0,
-                maxScale: 5.0,
-                panEnabled: true,
-                scaleEnabled: true,
-                boundaryMargin: const EdgeInsets.all(20),
-                child: url.startsWith('http')
-                    ? CachedNetworkImage(
-                        url: url,
-                        fit: BoxFit.contain,
-                        width: double.infinity,
-                        height: double.infinity,
-                      )
-                    : Image.file(
-                        File(url),
-                        fit: BoxFit.contain,
-                        width: double.infinity,
-                        height: double.infinity,
-                      ),
+            child: PhotoView(
+              imageProvider: provider,
+              minScale: PhotoViewComputedScale.contained,
+              maxScale: 5.0,
+              backgroundDecoration: const BoxDecoration(color: Colors.black),
+              onTapUp: (_, __, ___) => Navigator.of(context).pop(),
+              filterQuality: FilterQuality.high,
+              errorBuilder: (_, __, ___) => const Center(
+                child: Icon(Icons.broken_image_outlined,
+                    size: 40, color: Colors.white54),
               ),
             ),
           ),

@@ -25,7 +25,7 @@ import '../../features/notification/data/notification_dao.dart';
 import 'dao/search_history_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 34;
+const int _kDbVersion = 36;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -154,6 +154,8 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
+      ${Tables.colShortDesc} TEXT NOT NULL DEFAULT '',
+      ${Tables.colAmbienceJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
@@ -233,6 +235,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colMood} TEXT,
       ${Tables.colLut} TEXT,
       ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colGalleryItemHidden} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCreatedAt} INTEGER NOT NULL
     )
   ''');
@@ -1095,6 +1098,41 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v34 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 35) {
+    try {
+      // v35: 模板卡片/详情展示 shortDesc + ambience 元数据
+      await _addColumnIfNotExists(
+        db,
+        Tables.customTemplates,
+        Tables.colShortDesc,
+        "TEXT NOT NULL DEFAULT ''",
+      );
+      await _addColumnIfNotExists(
+        db,
+        Tables.customTemplates,
+        Tables.colAmbienceJson,
+        "TEXT NOT NULL DEFAULT '{}'",
+      );
+      // 存量内置模板可后续增量标注，本次无需回填
+    } catch (e) {
+      debugPrint('v35 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 36) {
+    try {
+      // v36: gallery_items 新增 hidden 列（从系统相册导入、不在内部相册展示的照片标记）
+      await _addColumnIfNotExists(
+        db,
+        Tables.galleryItems,
+        Tables.colGalleryItemHidden,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+    } catch (e) {
+      debugPrint('v36 migration failed (silent fallback): $e');
     }
   }
 }

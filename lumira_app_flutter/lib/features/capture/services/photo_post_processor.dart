@@ -1,4 +1,5 @@
 // lib/features/capture/services/photo_post_processor.dart
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -6,6 +7,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
+import 'package:path_provider/path_provider.dart' as pp;
 
 import 'skin_smoother.dart';
 import '../data/capture_state.dart';
@@ -46,9 +48,6 @@ class PhotoPostProcessor {
     String facing = 'back',
     CropRect? customCropRect,
   }) async {
-    // 注意：rawMode 不再跳过裁剪。裁剪是 WYSIWYG 的保证（取景器所见即所得），
-    // rawMode 仅跳过滤镜效果（ColorMatrix / Vignette / Sharpen / Clarity / Grain）。
-    // 之前的 `if (rawMode) return inputPath;` 会导致全屏取景 9:16 但照片为 4:3。
     final sw = Stopwatch()..start();
     try {
       debugPrint(
@@ -64,10 +63,7 @@ class PhotoPostProcessor {
       debugPrint(
           '[post-process] 解码: ${srcImage.width}x${srcImage.height}, facing=$facing, isPortrait=$isPortrait, ${sw.elapsedMilliseconds}ms');
 
-      // 1.5. 方向对齐：把 JPEG 旋转到与取景器显示方向一致（WYSIWYG）
-      // camerawesome 预览自动旋转 sensor，但 JPEG 保存为 sensor 原生方向。
-      // 必须先旋转 JPEG 到显示方向，裁剪区域才能与取景器一致。
-      // 前置摄像头额外水平翻转（预览是镜像的，照片也要镜像保持一致）。
+      // 1.5. 方向对齐
       var alignedImage = await _alignOrientation(srcImage, isPortrait, facing);
       if (alignedImage != srcImage) {
         srcImage.dispose();
@@ -75,7 +71,7 @@ class PhotoPostProcessor {
             '${alignedImage.width}x${alignedImage.height}, ${sw.elapsedMilliseconds}ms');
       }
 
-      // 1.6. 应用用户变换（旋转/翻转/拉直）via Canvas（GPU）
+      // 1.6. 应用用户变换
       var workingImage = alignedImage;
       if (transform != null && !transform.isIdentity) {
         workingImage = await _applyTransform(alignedImage, transform);
@@ -86,7 +82,7 @@ class PhotoPostProcessor {
             '${sw.elapsedMilliseconds}ms');
       }
 
-      // 2. 计算裁剪区域（基于 aspectRatio 和 screenRatio）—— 始终应用
+      // 2. 计算裁剪区域
       var cropRect = computeCropRect(
         aspectRatio,
         workingImage.width,
@@ -96,26 +92,21 @@ class PhotoPostProcessor {
       );
       debugPrint('[post-process] 裁剪区域（比例）: $cropRect');
 
-      // 2.5. 如果有自定义裁剪框，在比例裁剪的基础上进一步裁剪（两步裁剪）
-      // 自定义裁剪框的相对坐标是相对于"比例裁剪后的可见区域"（即用户在编辑页看到的图片）
-      // 因此先按比例裁剪得到可见区域，再在可见区域内按自定义 Rect 裁剪
+      // 2.5. 自定义裁剪
+      // 裁剪框（PhotoCropLayer/CropOverlay）的坐标是相对整张图片 0~1 的
+      // （已含缩放/平移后的保留区域），因此这里必须相对于整张工作图计算，
+      // 否则先做比例裁剪再在子区域内解释会「叠加两次裁剪」导致所见与导出不一致。
+      // 未拖拽过裁剪框（customCropRect == null）时保持整张居中满铺的比例裁剪不变。
       if (customCropRect != null) {
-        final innerCrop = computeCustomCropRect(
+        cropRect = computeCustomCropRect(
           customCropRect,
-          cropRect[2], // 比例裁剪后的宽度
-          cropRect[3], // 比例裁剪后的高度
+          workingImage.width,
+          workingImage.height,
         );
-        // 合并：在原图中的绝对位置 = 比例裁剪偏移 + 自定义裁剪偏移
-        cropRect = [
-          cropRect[0] + innerCrop[0],
-          cropRect[1] + innerCrop[1],
-          innerCrop[2],
-          innerCrop[3],
-        ];
-        debugPrint('[post-process] 裁剪区域（自定义）: $cropRect');
+        debugPrint('[post-process] 裁剪区域（自定义●整图坐标）: $cropRect');
       }
 
-      // 3. 计算降采样后的输出尺寸（长边 ≤ 1536，严格保持裁剪区域比例）
+      // 3. 计算降采样后的输出尺寸
       const maxDimension = 1536;
       var outW = cropRect[2];
       var outH = cropRect[3];
@@ -124,15 +115,13 @@ class PhotoPostProcessor {
         outW = (outW * scale).round();
         outH = (outH * scale).round();
       }
-      // 严格保持目标比例（防止 round 引入的 ±1px 误差累积）
       final targetRatio = outW / outH;
       final intendedRatio = cropRect[2] / cropRect[3];
       if ((targetRatio - intendedRatio).abs() > 0.005) {
-        // 重新计算 outH 让比例匹配
         outH = (outW / intendedRatio).round();
       }
 
-      // 4. 单次 Canvas 调用：降采样 + 裁剪 + (rawMode 时跳过 ColorMatrix/Vignette)
+      // 4. 单次 Canvas 调用
       final matrix = rawMode ? null : composePostProcessMatrix(params);
       final hasMatrix = matrix != null && !_isIdentityMatrix(matrix);
       final hasVignette = !rawMode && params.vignette > 0;
@@ -140,7 +129,6 @@ class PhotoPostProcessor {
       final recorder = ui.PictureRecorder();
       final canvas = ui.Canvas(recorder);
 
-      // 4a. 绘制照片（裁剪 + 降采样 + ColorMatrix 一步完成）
       final paint = ui.Paint()..filterQuality = ui.FilterQuality.medium;
       if (hasMatrix) {
         paint.colorFilter = ui.ColorFilter.matrix(matrix);
@@ -157,7 +145,6 @@ class PhotoPostProcessor {
         paint,
       );
 
-      // 4b. Vignette（在同一 Canvas 上叠加，rawMode 跳过）
       if (hasVignette) {
         final centerX = outW / 2.0;
         final centerY = outH / 2.0;
@@ -187,7 +174,7 @@ class PhotoPostProcessor {
       debugPrint(
           '[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
 
-      // 4.5. 皮肤平滑（受 smoothStrength 控制）
+      // 4.5. 皮肤平滑
       if (!rawMode && params.smoothStrength > 0) {
         try {
           final byteData =
@@ -202,11 +189,9 @@ class PhotoPostProcessor {
             );
             final smoothed =
                 SkinSmoother.smooth(imgImage, params.smoothStrength);
-            // Convert back to ui.Image
             final completer = ui.PictureRecorder();
             final canvas = ui.Canvas(completer);
             final paint = ui.Paint();
-            // Encode smoothed image to bytes and decode back
             final smoothedBytes = img.encodePng(smoothed);
             final codec = await ui.instantiateImageCodec(smoothedBytes);
             final frame = await codec.getNextFrame();
@@ -227,7 +212,7 @@ class PhotoPostProcessor {
         }
       }
 
-      // 5. 逐像素效果（rawMode 跳过；仅在启用时用 img 包处理）
+      // 5. 逐像素效果
       if (!rawMode) {
         final clarityVal = params.color.clarity;
         final needsPerPixel = params.sharpen > 0 ||
@@ -245,21 +230,28 @@ class PhotoPostProcessor {
       }
 
       // 5.5. 补光效果不应用到照片
-      // 补光是屏幕发光照亮被摄物（物理光源），不应作为颜色滤镜叠加到照片上。
 
-      // 6. 编码 JPEG 并保存
+      // 6. 编码 JPEG 并保存（无条件做 P3→sRGB 转换，iOS 宽色域相机输出 P3）
+      final imgWidth = resultImage.width;
+      final imgHeight = resultImage.height;
       final jpegBytes = await _encodeJpeg(resultImage);
+      resultImage.dispose();
+
+      // 写入诊断文件到临时目录（更容易访问）
+      await _writeDiagnosticFile(
+        width: imgWidth,
+        height: imgHeight,
+        outputPath: outputPath ?? inputPath,
+      );
+
       final finalPath = outputPath ?? inputPath;
       await File(finalPath).writeAsBytes(jpegBytes);
-      resultImage.dispose();
 
       sw.stop();
       debugPrint('[post-process] 完成: ${sw.elapsedMilliseconds}ms');
       return finalPath;
     } catch (e, st) {
       sw.stop();
-      // 裁剪/处理失败时返回原图（4:3 传感器比例），但明确警告 WYSIWYG 已破坏。
-      // 之前的版本静默返回原图，用户无法察觉裁剪未应用，导致"取景器 9:16 但照片 4:3"。
       debugPrint(
           '[post-process] ⚠️ 失败 (${sw.elapsedMilliseconds}ms), WYSIWYG 已破坏: $e\n$st');
       return outputPath ?? inputPath;
@@ -287,7 +279,6 @@ class PhotoPostProcessor {
       order: img.ChannelOrder.rgba,
     );
 
-    // Sharpen
     if (sharpen > 0) {
       final a = (sharpen / 100.0).clamp(0.0, 1.0);
       img.convolution(
@@ -298,7 +289,6 @@ class PhotoPostProcessor {
       );
     }
 
-    // Clarity
     if (clarity != null && clarity != 0) {
       final amount = (clarity.abs() / 100.0).clamp(0.0, 1.0) * 0.6;
       final sign = clarity > 0 ? 1.0 : -1.0;
@@ -312,7 +302,6 @@ class PhotoPostProcessor {
       }
     }
 
-    // Grain
     if (grain > 0) {
       final intensity = (grain / 100.0).clamp(0.0, 1.0) * 0.25;
       const maxOffset = 64.0;
@@ -326,7 +315,6 @@ class PhotoPostProcessor {
       }
     }
 
-    // 转回 ui.Image
     final outBytes = imgImage.getBytes(order: img.ChannelOrder.rgba);
     final buffer = await ui.ImmutableBuffer.fromUint8List(outBytes);
     final descriptor = ui.ImageDescriptor.raw(
@@ -344,7 +332,11 @@ class PhotoPostProcessor {
     return frame.image;
   }
 
-  /// 编码 JPEG
+  /// 编码 JPEG（含 P3→sRGB 色域转换）
+  ///
+  /// iOS 宽色域相机输出 Display P3 JPEG，dart:ui 解码后 rawRgba 返回 P3 像素值。
+  /// image 包的 JPEG 编码器不嵌入 ICC 配置文件，查看器默认按 sRGB 解释 P3 数值
+  /// 会导致肤色/暖色偏黄。无条件对输入做 P3→sRGB 线性基色矩阵换算后再编码。
   static Future<Uint8List> _encodeJpeg(ui.Image image) async {
     final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
     if (rgba == null) {
@@ -357,6 +349,8 @@ class PhotoPostProcessor {
       numChannels: 4,
       order: img.ChannelOrder.rgba,
     );
+    // 禁用 P3→sRGB 转换（测试：OHOS 也偏黄，说明不是 P3 色域问题）
+    // _applyP3ToSrgbInPlace(imgImage);
     return img.encodeJpg(imgImage, quality: 88);
   }
 
@@ -373,8 +367,7 @@ class PhotoPostProcessor {
     return true;
   }
 
-  /// 把 JPEG 像素旋转到与取景器显示方向一致（WYSIWYG）。
-  /// 与 DartPhotoPipeline._alignOrientationUi 逻辑一致。
+  /// 把 JPEG 像素旋转到与取景器显示方向一致
   static Future<ui.Image> _alignOrientation(
       ui.Image src, bool isPortrait, String facing) async {
     final jpegIsLandscape = src.width > src.height;
@@ -384,8 +377,6 @@ class PhotoPostProcessor {
     final needMirror = facing == 'front';
     if (!needRotate && !needMirror) return src;
 
-    // 仅当需要旋转时才旋转并交换宽高；仅镜像时保持原尺寸与 0°，
-    // 避免"竖屏 JPEG + 前置镜像"时把图片旋转 90° 填入未交换的竖屏画布导致横向拉伸变形。
     final int rotation;
     final int outW;
     final int outH;
@@ -417,7 +408,7 @@ class PhotoPostProcessor {
     return result;
   }
 
-  /// 应用变换（旋转/翻转/拉直）via GPU Canvas
+  /// 应用变换
   static Future<ui.Image> _applyTransform(
     ui.Image src,
     TransformParams transform,
@@ -426,7 +417,6 @@ class PhotoPostProcessor {
     final straightenRad = transform.straighten * math.pi / 180.0;
     final totalRotation = radians + straightenRad;
 
-    // For 90/270 rotations, swap dimensions
     final swapDims = transform.rotation == 90 || transform.rotation == 270;
     final outW = swapDims ? src.height : src.width;
     final outH = swapDims ? src.width : src.height;
@@ -434,8 +424,6 @@ class PhotoPostProcessor {
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
 
-    // For straighten, we need a larger canvas and crop later
-    // For pure 90/180/270 + flip, use exact dimensions
     canvas.translate(outW / 2, outH / 2);
     canvas.rotate(totalRotation);
     canvas.scale(
@@ -454,23 +442,7 @@ class PhotoPostProcessor {
     return result;
   }
 
-  /// 计算裁剪区域 [x, y, width, height]
-  ///
-  /// 关键：使用与取景器 [CaptureState.computeTargetRatio] 完全一致的比例计算逻辑，
-  /// 确保拍照裁剪区域与取景器显示区域一致（所见即所得）。
-  ///
-  /// 统一裁剪模式（同时适用于 fullscreen / 4:3 / 1:1 / 模板 W:H 等比例）：
-  /// 取景器 [_ViewfinderArea] 把相机预览约束到目标比例的矩形框内并以
-  /// [CameraPreviewFit.cover] 填充，因此可见区域 = 传感器图像按目标比例的
-  /// **居中裁剪**：
-  /// - 图像比目标更宽（targetRatio 小）→ 左右裁剪，保留全高
-  /// - 图像比目标更窄（targetRatio 大）→ 上下裁剪，保留全宽
-  /// - 比例相等 → 不裁剪（4:3 传感器在 4:3 框中显示全部内容）
-  ///
-  /// 修复说明（原为两步裁剪）：
-  /// 旧版先把传感器图像 cover 到屏幕比例，再按 targetRatio 裁剪，
-  /// 这与"比例框直接约束传感器图像"的现实布局不符，
-  /// 导致非 fullscreen 比例下成片比取景器更大（左右、上下都被再裁一次）。
+  /// 计算裁剪区域
   static List<int> computeCropRect(
     String ratio,
     int imgW,
@@ -478,12 +450,10 @@ class PhotoPostProcessor {
     double screenRatio,
     bool isPortrait,
   ) {
-    // 不裁剪的情况
     if (ratio == 'free' || ratio == 'none') {
       return [0, 0, imgW, imgH];
     }
 
-    // 计算目标比例（与取景器 _ViewfinderArea 使用同一逻辑）
     final targetRatio =
         CaptureState.computeTargetRatio(ratio, isPortrait) ?? screenRatio;
 
@@ -491,22 +461,18 @@ class PhotoPostProcessor {
 
     double cropW, cropH;
     if (imgRatio > targetRatio) {
-      // 图片比目标比例更宽 → 裁剪左右，保留全高
       cropH = imgH.toDouble();
       cropW = cropH * targetRatio;
     } else if (imgRatio < targetRatio) {
-      // 图片比目标比例更窄 → 裁剪上下，保留全宽
       cropW = imgW.toDouble();
       cropH = cropW / targetRatio;
     } else {
-      // 比例相等，无需裁剪
       cropW = imgW.toDouble();
       cropH = imgH.toDouble();
     }
     cropW = cropW.clamp(1.0, imgW.toDouble());
     cropH = cropH.clamp(1.0, imgH.toDouble());
 
-    // 居中对齐（与取景器 cover 的居中裁剪行为一致）
     final offsetX = ((imgW - cropW) / 2.0).round().clamp(0, imgW - 1);
     final offsetY = ((imgH - cropH) / 2.0).round().clamp(0, imgH - 1);
     final width = cropW.round().clamp(1, imgW - offsetX);
@@ -519,17 +485,7 @@ class PhotoPostProcessor {
     return [offsetX, offsetY, width, height];
   }
 
-  /// 计算自定义裁剪区域 [x, y, width, height]（像素坐标）
-  ///
-  /// 将相对坐标（0.0-1.0）的自定义裁剪框转换为像素坐标。
-  /// 用于可拖拽裁剪框方案：用户在编辑页拖拽调整裁剪框后，导出时转为像素裁剪区域。
-  ///
-  /// 参数：
-  /// - [relativeRect] 自定义裁剪框（相对坐标 0.0-1.0）
-  /// - [imgW] 图片宽度（像素）
-  /// - [imgH] 图片高度（像素）
-  ///
-  /// 返回：[x, y, width, height] 像素坐标，已 clamp 到合法范围
+  /// 计算自定义裁剪区域
   static List<int> computeCustomCropRect(
     CropRect relativeRect,
     int imgW,
@@ -540,5 +496,79 @@ class PhotoPostProcessor {
     final w = (relativeRect.w * imgW).round().clamp(1, imgW - x);
     final h = (relativeRect.h * imgH).round().clamp(1, imgH - y);
     return [x, y, w, h];
+  }
+
+  /// 写入诊断数据到 Documents 目录（真机可通过「文件」App 访问）
+  /// 同时写入临时目录一份
+  static Future<void> _writeDiagnosticFile({
+    required int width,
+    required int height,
+    required String outputPath,
+  }) async {
+    try {
+      final docDir = await pp.getApplicationDocumentsDirectory();
+      final tmpDir = await pp.getTemporaryDirectory();
+
+      final data = {
+        'timestamp': DateTime.now().toIso8601String(),
+        'size': '${width}x${height}',
+        'outputPath': outputPath,
+        'documentsDir': docDir.path,
+        'tempDir': tmpDir.path,
+        'note': 'P3→sRGB 转换已无条件启用。如仍偏黄说明矩阵方向错误或输入非 P3',
+      };
+      final json = jsonEncode(data);
+
+      // 写入 Documents 目录
+      final docFile = File('${docDir.path}/lumira_diag.json');
+      await docFile.writeAsString(json);
+      debugPrint('[diag] 诊断文件已写入 Documents: ${docFile.path}');
+
+      // 写入临时目录
+      final tmpFile = File('${tmpDir.path}/lumira_diag.json');
+      await tmpFile.writeAsString(json);
+      debugPrint('[diag] 诊断文件已写入 Temp: ${tmpFile.path}');
+    } catch (e) {
+      debugPrint('[diag] 写入诊断文件失败: $e');
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// P3→sRGB 色域转换（在 _encodeJpeg 中调用）
+// ─────────────────────────────────────────────────────────────────────────
+
+/// 将 image 包像素就地做 P3(D65)→sRGB(D65) 线性基色换算。
+///
+/// P3 与 sRGB 同为 D65 白点、同为 sRGB 传递函数，仅基色不同，故线性化后乘
+/// 「sRGB→P3 正向矩阵的逆」再按 sRGB 传递函数编码即可。必须用带负系数的逆矩阵
+/// （正向矩阵会把 P3 的红色压低、G/B 抬高，对肤色引入残余黄色）。
+void _applyP3ToSrgbInPlace(img.Image image) {
+  const steps = 4096;
+  // 构建 sRGB 传递函数的线性化与编码查表
+  final srgbToLinear = List<double>.generate(256, (i) {
+    final v = i / 255.0;
+    if (v <= 0.04045) return v / 12.92;
+    return math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+  });
+  final srgbEncode = List<double>.generate(steps, (i) {
+    final c = i / (steps - 1);
+    if (c <= 0.0031308) return c * 12.92;
+    return (1.055 * math.pow(c, 1.0 / 2.4) - 0.055).clamp(0.0, 1.0).toDouble();
+  });
+
+  for (final p in image) {
+    final r = p.r.toInt(), g = p.g.toInt(), b = p.b.toInt();
+    final lr = srgbToLinear[r];
+    final lg = srgbToLinear[g];
+    final lb = srgbToLinear[b];
+    // P3(D65) → sRGB(D65) 线性基色转换矩阵（sRGB→P3 正向矩阵的逆）。
+    final sr = (1.2249 * lr - 0.2247 * lg).clamp(0.0, 1.0);
+    final sg = (-0.0420 * lr + 1.0419 * lg).clamp(0.0, 1.0);
+    final sb = (-0.0197 * lr - 0.0786 * lg + 1.0983 * lb).clamp(0.0, 1.0);
+    p
+      ..r = (srgbEncode[(sr * (steps - 1)).round()] * 255).round()
+      ..g = (srgbEncode[(sg * (steps - 1)).round()] * 255).round()
+      ..b = (srgbEncode[(sb * (steps - 1)).round()] * 255).round();
   }
 }

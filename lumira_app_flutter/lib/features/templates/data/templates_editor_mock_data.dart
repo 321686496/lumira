@@ -13,6 +13,7 @@
 /// - PostProcess 新增 systemFilter
 /// - 新增 EditorFormFillLight（补光灯状态）
 import '../../capture/domain/photo_template.dart' show SubjectFrame;
+import 'remote_template_dto.dart';
 
 class EditorForm {
   EditorForm({
@@ -55,8 +56,11 @@ class EditorFormMeta {
     this.description = '',
     this.referenceSource = '',
     this.style,
+    this.subStyle,
     this.method,
     this.coverImage,
+    this.shortDesc = '',
+    this.ambience,
   });
 
   String id;
@@ -65,12 +69,13 @@ class EditorFormMeta {
   List<String> tags;
   String description;
   String referenceSource;
-  // 三层分类的二、三层：风格 / 方式（可选，未选择时为 null）
-  String? style;
-  String? method;
-  /// 效果图（封面图）：base64 data URL（如 `data:image/png;base64,xxxx`）。
-  /// 保存到 TemplateRecord.coverData。null 表示未设置封面图。
+  // 四级分类（对齐后端 {type, majorStyle, subStyle, method}）
+  String? style; // 二级 majorStyle
+  String? subStyle; // 三级 subStyle（原 method 改名）
+  String? method; // 四级 method（新增）
   String? coverImage;
+  String shortDesc; // 短简介
+  RemoteTemplateAmbienceDto? ambience; // 季节/天气/时段
 
   EditorFormMeta copy() => EditorFormMeta(
         id: id,
@@ -80,8 +85,11 @@ class EditorFormMeta {
         description: description,
         referenceSource: referenceSource,
         style: style,
+        subStyle: subStyle,
         method: method,
         coverImage: coverImage,
+        shortDesc: shortDesc,
+        ambience: ambience,
       );
 }
 

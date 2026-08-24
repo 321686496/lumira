@@ -52,6 +52,10 @@ class Tables {
   // 取值：'builtin' | 'custom' | 'remote'
   static const String colSource = 'source';
 
+  // === custom_templates 扩展列（v35 迁移新增，模板卡片/详情展示用） ===
+  static const String colShortDesc = 'short_desc';
+  static const String colAmbienceJson = 'ambience_json';
+
   // === template_categories 表（v13 迁移新增，分类管理） ===
   static const String templateCategories = 'template_categories';
   static const String colIconUrl = 'icon_url';
@@ -119,6 +123,9 @@ class Tables {
 
   // === gallery_items 扩展列（v8 迁移新增） ===
   static const String colGalleryItemIsFavorite = 'is_favorite';
+
+  // === gallery_items 扩展列（v36 迁移新增，从系统相册引入、不在内部相册展示） ===
+  static const String colGalleryItemHidden = 'hidden';
 
   // === user_progress ===
   static const String userProgress = 'user_progress';

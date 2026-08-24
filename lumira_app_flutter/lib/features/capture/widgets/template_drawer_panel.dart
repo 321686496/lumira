@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
+import '../../../core/router/route_names.dart';
 import '../../../core/utils/image_cache.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
+import '../../templates/data/owned_templates_repository.dart';
 
 /// 「显示更多」展开的完整模板面板（约 60% 页面高度）。
 ///
@@ -31,20 +35,28 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
   }
 
   void _select(PhotoTemplate tpl) {
-    ref.read(CaptureState.currentTemplateIdProvider.notifier).state = tpl.meta.id;
+  final ownedIds = ref.read(ownedTemplateIdsProvider);
+  // 付费模板未解锁：不直接应用，跳详情页并提示需多少积分解锁
+  if (tpl.meta.price > 0 && !ownedIds.contains(tpl.meta.id)) {
     _collapse();
+    LumiraToast.show(context, '这是付费模板，需 ${tpl.meta.price} 积分解锁');
+    GoRouter.of(context).push(
+      RouteNames.withTemplateId(RouteNames.templatesDetail, tpl.meta.id),
+    );
+    return;
   }
+  ref.read(CaptureState.currentTemplateIdProvider.notifier).state = tpl.meta.id;
+  _collapse();
+}
 
   @override
   Widget build(BuildContext context) {
     final currentId = ref.watch(CaptureState.currentTemplateIdProvider);
-    final templatesAsync = ref.watch(CaptureState.sortedTemplatesProvider);
-    final templates = templatesAsync.maybeWhen(
-      data: (list) => list,
-      loading: () => const <PhotoTemplate>[],
-      error: (_, __) => const <PhotoTemplate>[],
-      orElse: () => const <PhotoTemplate>[],
-    );
+    // 工具栏模板列表：当前使用的模板被提到第一位（含选中状态）
+    final templates = ref.watch(CaptureState.toolbarTemplatesProvider);
+    // 触发已拥有模板加载（付费模板门禁判断依赖 ownedTemplateIdsProvider）
+    ref.watch(ownedTemplatesLoaderProvider);
+    final ownedIds = ref.watch(ownedTemplateIdsProvider);
 
     final panelHeight = MediaQuery.of(context).size.height * 0.6;
     final keyword = _query.trim().toLowerCase();
@@ -74,7 +86,7 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
                         style: TextStyle(color: Colors.white54, fontSize: 13),
                       ),
                     )
-                  : _buildGrid(filtered, currentId),
+                  : _buildGrid(filtered, currentId, ownedIds),
             ),
           ],
         ),
@@ -151,7 +163,10 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
     );
   }
 
-  Widget _buildGrid(List<PhotoTemplate> templates, String? currentId) {
+  Widget _buildGrid(
+    List<PhotoTemplate> templates,
+    String? currentId,
+    Set<String> ownedIds) {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -165,6 +180,8 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
         final tpl = templates[i];
         final active = tpl.meta.id == currentId;
         final isCustom = tpl.meta.source == 'custom';
+        // 付费模板且当前用户未解锁 → 锁定（点按跳详情页，不直接应用）
+        final isLocked = tpl.meta.price > 0 && !ownedIds.contains(tpl.meta.id);
         return GestureDetector(
           onTap: () => _select(tpl),
           behavior: HitTestBehavior.opaque,
@@ -221,6 +238,34 @@ class _TemplateDrawerPanelState extends ConsumerState<TemplateDrawerPanel> {
                     ],
                   ),
                 ),
+                // 付费模板锁定角标
+                if (isLocked)
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.lock, size: 9, color: Colors.white),
+                          const SizedBox(width: 3),
+                          const Text(
+                            '付费',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 9,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 // 选中标记
                 if (active)
                   Positioned(

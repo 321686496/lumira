@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -13,7 +17,10 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
+import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 import '../data/capture_scene_mock_data.dart';
+import '../data/scene_record_mapper.dart';
+import '../data/scene_presets_data.dart';
 import '../widgets/scene_achievement_card.dart';
 import '../widgets/scene_filter_badge.dart';
 import '../widgets/add_to_composition_sheet.dart';
@@ -53,6 +60,7 @@ class _CaptureSceneDetailPageState
   bool _isFav = false;
   List<String> _editableTagIds = [];
   bool _tagSheetVisible = false;
+  List<GalleryItemRecord> _scenePhotos = [];
 
   @override
   void initState() {
@@ -63,32 +71,39 @@ class _CaptureSceneDetailPageState
   }
 
   Future<void> _loadScene() async {
-    // 先尝试 DAO
+    final id = widget.sceneId ?? '';
+    // 1. 优先真实 DB 数据
     try {
       final dao = await ref.read(scenesDaoProvider.future);
-      final record = await dao.getById(widget.sceneId ?? '');
+      final record = await dao.getById(id);
       if (record != null) {
         _sceneRecord = record;
         _isFav = record.isFavorite;
-        // 仍用 mock ScenePreset 提供完整 UI 字段（icon/filter/sceneGuide 结构体）
-        final mockScene = CaptureSceneMockData.getSceneById(widget.sceneId);
-        _scene = mockScene;
-        if (mockScene != null && mockScene.isCustom) {
-          _editableTagIds =
-              List<String>.from((mockScene as CustomScenePreset).tagIds);
+        // 按 creator 映射：user → 自定义场景；其它 → 内置/系统场景
+        _scene = record.creator == 'user'
+            ? sceneRecordToCustom(record)
+            : sceneRecordToPreset(record);
+        final custom = _scene as CustomScenePreset?;
+        if (custom != null) {
+          _editableTagIds = List<String>.from(custom.tagIds);
         }
+        // 加载该场景下拍摄的真实照片
+        final galleryDao = await ref.read(galleryDaoProvider.future);
+        _scenePhotos = await galleryDao.getByScene(id);
         return;
       }
     } catch (_) {
-      // DAO 失败回退 mock
+      // DAO 异常 → 下方回退真实内置预设
     }
-    // 回退 mock
-    final s = CaptureSceneMockData.getSceneById(widget.sceneId);
-    _scene = s;
-    _isFav = s != null ? CaptureSceneMockData.isFavorite(s.id) : false;
-    if (s != null && s.isCustom) {
-      _editableTagIds = List<String>.from((s as CustomScenePreset).tagIds);
+    // 2. DB 无该场景 → 真实内置预设
+    final preset = ScenePresetsData.getScenePreset(id);
+    _scene = preset;
+    _isFav = false;
+    if (preset is CustomScenePreset) {
+      _editableTagIds = List<String>.from(preset.tagIds);
     }
+    final galleryDao = await ref.read(galleryDaoProvider.future);
+    _scenePhotos = await galleryDao.getByScene(id);
   }
 
   void _back() {
@@ -123,6 +138,19 @@ class _CaptureSceneDetailPageState
         RouteNames.paramScene: scene.id,
       }),
     );
+  }
+
+  void _openViewer(int index) {
+    final urls = _scenePhotos
+        .map(galleryItemSource)
+        .where((u) => u != null && u.isNotEmpty)
+        .cast<String>()
+        .toList();
+    if (urls.isEmpty) return;
+    final i = index.clamp(0, urls.length - 1);
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FullscreenImageGallery(urls: urls, initialIndex: i),
+    ));
   }
 
   void _goCreateKit() {
@@ -194,7 +222,16 @@ class _CaptureSceneDetailPageState
                       ),
                       _FilterSection(scene: scene),
                       _TipsSection(scene: scene),
-                      _AchievementSection(scene: scene),
+                      _ScenePhotosSection(
+                        sceneName: scene.name,
+                        photos: _scenePhotos,
+                        onOpenViewer: _openViewer,
+                        onCapture: _goCapture,
+                      ),
+                      _AchievementSection(
+                        scene: scene,
+                        photoCount: _scenePhotos.length,
+                      ),
                       const SizedBox(height: 80), // detail-bottom-space
                     ],
                   ),
@@ -209,6 +246,32 @@ class _CaptureSceneDetailPageState
           scene == null ? null : _BottomButtons(onCapture: _goCapture, onCreateKit: _goCreateKit),
     );
   }
+}
+
+/// 照片显示源：filePath > dataUrl > originalPath，取首个非空
+String? galleryItemSource(GalleryItemRecord p) {
+  for (final c in [p.filePath, p.dataUrl, p.originalPath]) {
+    if (c != null && c.isNotEmpty) return c;
+  }
+  return null;
+}
+
+/// 由真实照片数构造场景成就（等级阈值：0 → 未开始；1-2 → 初遇 Lv1；3-9 → 熟悉 Lv2；10+ → 精通 Lv3）
+SceneAchievement buildSceneAchievement(String sceneId, int count) {
+  if (count == 0) {
+    return SceneAchievement(
+        sceneId: sceneId, level: 0, levelName: '未开始', photoCount: 0, nextLevelCount: 1);
+  }
+  if (count < 3) {
+    return SceneAchievement(
+        sceneId: sceneId, level: 1, levelName: '初遇', photoCount: count, nextLevelCount: 3);
+  }
+  if (count < 10) {
+    return SceneAchievement(
+        sceneId: sceneId, level: 2, levelName: '熟悉', photoCount: count, nextLevelCount: 10);
+  }
+  return SceneAchievement(
+      sceneId: sceneId, level: 3, levelName: '精通', photoCount: count, nextLevelCount: 30);
 }
 
 /// 顶部导航（返回 + 标题 + 收藏）
@@ -257,7 +320,13 @@ class _Swiper extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 主题 token：占位底色 / 占位图标色跟随主题 brand
     final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
-    final images = scene.exampleImages;
+    // 自定义场景封面优先展示；内置场景走 exampleImages。
+    // 将封面放入 images 首项（cover 可能为空，需过滤）。
+    final images = <String>[
+      if (scene is CustomScenePreset && (scene as CustomScenePreset).cover.isNotEmpty)
+        (scene as CustomScenePreset).cover,
+      ...scene.exampleImages,
+    ];
     if (images.isEmpty) {
       return Container(
         height: 240, // 480rpx → 240dp
@@ -625,25 +694,137 @@ class _TipRow extends ConsumerWidget {
   }
 }
 
-class _AchievementSection extends StatelessWidget {
-  const _AchievementSection({required this.scene});
-  final ScenePreset scene;
+/// 该场景下拍摄的照片（真实数据，横向缩略 + 全屏查看；无照片引导拍摄）
+class _ScenePhotosSection extends ConsumerWidget {
+  const _ScenePhotosSection({
+    required this.sceneName,
+    required this.photos,
+    required this.onOpenViewer,
+    required this.onCapture,
+  });
+
+  final String sceneName;
+  final List<GalleryItemRecord> photos;
+  final void Function(int index) onOpenViewer;
+  final VoidCallback onCapture;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+
+    if (photos.isEmpty) {
+      // 空态：引导「用此场景拍照」
+      return _Section(
+        title: '此场景拍摄',
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
+          decoration: BoxDecoration(
+            color: tokens.surfaceAlt,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            children: [
+              Icon(Icons.photo_library_outlined,
+                  size: 36, color: tokens.textTertiary),
+              const SizedBox(height: 8),
+              Text(
+                '还没有用「$sceneName」拍过照片',
+                style: TextStyle(fontSize: 13, color: tokens.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              LumiraButton(
+                variant: ButtonVariant.primary,
+                onPressed: onCapture,
+                child: const Text('用此场景拍照'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return _Section(
+      title: '此场景拍摄',
+      child: SizedBox(
+        height: 140,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: photos.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 8),
+          itemBuilder: (context, i) {
+            final url = galleryItemSource(photos[i]) ?? '';
+            return GestureDetector(
+              onTap: () => onOpenViewer(i),
+              behavior: HitTestBehavior.opaque,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 100,
+                  height: 140,
+                  child: _ScenePhotoThumb(url: url, tokens: tokens),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// 单张场景照片缩略：http / data / 本地文件 → 统一占位
+class _ScenePhotoThumb extends StatelessWidget {
+  const _ScenePhotoThumb({required this.url, required this.tokens});
+  final String url;
+  final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
-    final achievement = CaptureSceneMockData.getSceneAchievement(scene.id);
-    final rankEntry = CaptureSceneMockData.weeklyRanking
-        .where((e) => e.scene.id == scene.id)
-        .toList();
-    final rank = rankEntry.isEmpty ? null : rankEntry.first.rank;
+    final placeholder = Container(
+      color: tokens.surfaceAlt,
+      child: Icon(Icons.image_outlined, size: 28, color: tokens.textTertiary),
+    );
+    if (url.isEmpty) return placeholder;
+    if (url.startsWith('data:image/')) {
+      Widget decode() {
+        final comma = url.indexOf(',');
+        final b64 = comma >= 0 ? url.substring(comma + 1) : url;
+        return Image.memory(base64Decode(b64), fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => placeholder);
+      }
+      try {
+        return decode();
+      } catch (_) {
+        return placeholder;
+      }
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return CachedNetworkImage(
+        url: url,
+        fit: BoxFit.cover,
+        placeholder: placeholder,
+        errorWidget: placeholder,
+      );
+    }
+    return Image.file(File(url),
+        fit: BoxFit.cover, errorBuilder: (_, __, ___) => placeholder);
+  }
+}
 
+class _AchievementSection extends StatelessWidget {
+  const _AchievementSection({required this.scene, required this.photoCount});
+  final ScenePreset scene;
+  final int photoCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final achievement = buildSceneAchievement(scene.id, photoCount);
     return _Section(
       title: '我的成就',
       child: SceneAchievementCard(
         achievement: achievement,
         sceneName: scene.name,
-        rank: rank,
-        rankLabel: '本周',
+        // rank 为空 → 不渲染排行榜
       ),
     );
   }

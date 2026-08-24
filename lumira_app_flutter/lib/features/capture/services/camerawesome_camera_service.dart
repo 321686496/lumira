@@ -9,6 +9,7 @@ import 'package:sqflite/sqflite.dart' show getDatabasesPath;
 
 import 'camera_service.dart';
 import 'camerawesome_delegate.dart';
+import 'white_balance.dart';
 
 /// camerawesome 系列三端共用实现。
 ///
@@ -16,7 +17,8 @@ import 'camerawesome_delegate.dart';
 /// - setZoom 统一传 [0,1] 归一化值（camerawesome 默认语义）
 /// - buildPreview 使用默认 cover 填充
 /// - capture 走 camerawesome 默认 SaveConfig.photo 流程
-/// - onScaleZoom 直接透传归一化值，不做倍数转换
+/// - 双指捏合缩放在 App 层（CameraPreview._PinchZoomCamera）统一处理，
+///   不再使用 camerawesome 内置 onPreviewScale，仅保留点击对焦
 /// - 不查询设备真实 minZoom/maxZoom，不做任何重映射
 class CamerawesomeCameraService implements CameraService {
   CamerawesomeCameraService(this._delegate);
@@ -277,6 +279,22 @@ class CamerawesomeCameraService implements CameraService {
   }
 
   @override
+  void setWhiteBalance(WhiteBalanceSettings settings) {
+    final mode = settings.mode.name;
+    debugPrint(
+        '[camera] setWhiteBalance DISPATCH mode=$mode k=${settings.temperatureK} platform=${_delegate.platformTag}');
+    try {
+      if (_delegate.platformTag == 'ohos') {
+        ohos.CamerawesomePlugin.setWhiteBalance(mode, settings.temperatureK);
+      } else {
+        ca.CamerawesomePlugin.setWhiteBalance(mode, settings.temperatureK);
+      }
+    } catch (e) {
+      debugPrint('[camera] setWhiteBalance failed: $e');
+    }
+  }
+
+  @override
   void focusOnPoint(Offset flutterPosition, Size flutterPreviewSize) {
     try {
       _cameraState?.when(
@@ -303,6 +321,15 @@ class CamerawesomeCameraService implements CameraService {
       _cachedMaxZoom = null;
       _cachedMinZoom = null;
       _lastBuildFacing = config.facing;
+      // 摄像头切换开始：通知上层相机未就绪。
+      // 快速连点切换会触发 CameraAwesomeBuilder 反复销毁重建，而原生相机的
+      // init/start（PreparingCameraState.start 内含 500ms 异步延迟、且 dispose
+      // 不会取消该延迟任务）可能重叠执行，导致取景器黑屏卡住。
+      // 上层（capture_page）收到 false 后在切换完成（builder 回调发 true）前
+      // 忽略再次切换，串行化摄像头切换。
+      if (!_readyController.isClosed) {
+        _readyController.add(false);
+      }
     }
     if (_delegate.platformTag == 'ohos') {
       return _buildOhos(config);
@@ -335,12 +362,6 @@ class CamerawesomeCameraService implements CameraService {
           );
         },
       ),
-      onPreviewScaleBuilder: (state) => ohos.OnPreviewScale(
-        onScale: (scale) {
-          // OHOS: scale 已是真实倍数，直接透传
-          config.onScaleZoom?.call(scale);
-        },
-      ),
     );
   }
 
@@ -367,15 +388,6 @@ class CamerawesomeCameraService implements CameraService {
             position,
             Size(flutterPreviewSize.width, flutterPreviewSize.height),
           );
-        },
-      ),
-      onPreviewScaleBuilder: (state) => ca.OnPreviewScale(
-        onScale: (scale) {
-          // native: scale 是 [0,1] 归一化，转真实倍数
-          final maxZoom = _cachedMaxZoom ?? 10.0;
-          final minZoom = _cachedMinZoom ?? 1.0;
-          final multiplier = minZoom + (maxZoom - minZoom) * scale;
-          config.onScaleZoom?.call(multiplier);
         },
       ),
     );

@@ -115,7 +115,7 @@ class SearchHotSection extends ConsumerWidget {
   }
 }
 
-/// 为你推荐区块：模板分类卡（横向滚动）。
+/// 为你推荐区块：模板分类卡（横向卡片，图标 + 标签）。
 class SearchRecommendTemplateSection extends ConsumerWidget {
   const SearchRecommendTemplateSection({
     super.key,
@@ -142,36 +142,18 @@ class SearchRecommendTemplateSection extends ConsumerWidget {
                   color: tokens.textPrimary)),
           const SizedBox(height: 12),
           SizedBox(
-            height: 76,
+            height: 96,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (_, i) {
                 final e = items[i];
-                return GestureDetector(
+                return _RecommendCard.template(
+                  tokens: tokens,
+                  key: e.key,
+                  label: e.value,
                   onTap: () => onTap(e.value),
-                  child: Container(
-                    width: 88,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: tokens.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: tokens.divider, width: 1),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(e.value,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: tokens.textPrimary)),
-                      ],
-                    ),
-                  ),
                 );
               },
             ),
@@ -182,7 +164,7 @@ class SearchRecommendTemplateSection extends ConsumerWidget {
   }
 }
 
-/// 为你推荐 · 场景（风格词条）。
+/// 为你推荐 · 场景（图标卡片）。
 class SearchRecommendSceneSection extends ConsumerWidget {
   const SearchRecommendSceneSection({
     super.key,
@@ -198,7 +180,7 @@ class SearchRecommendSceneSection extends ConsumerWidget {
     final tokens = ref.watch(themeTokensProvider);
     if (styles.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, 16, 0, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -208,27 +190,18 @@ class SearchRecommendSceneSection extends ConsumerWidget {
                   fontWeight: FontWeight.w600,
                   color: tokens.textPrimary)),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final s in styles)
-                GestureDetector(
-                  onTap: () => onTap(s),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: tokens.surfaceAlt,
-                      borderRadius: BorderRadius.circular(9999),
-                      border: Border.all(color: tokens.divider, width: 1),
-                    ),
-                    child: Text(s,
-                        style:
-                            TextStyle(fontSize: 12, color: tokens.textSecondary)),
-                  ),
-                ),
-            ],
+          SizedBox(
+            height: 96,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: styles.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) => _RecommendCard.scene(
+                tokens: tokens,
+                label: styles[i],
+                onTap: () => onTap(styles[i]),
+              ),
+            ),
           ),
         ],
       ),
@@ -236,7 +209,7 @@ class SearchRecommendSceneSection extends ConsumerWidget {
   }
 }
 
-/// 为你推荐 · 美学院（主题/等级词条）。
+/// 为你推荐 · 美学院（主题/等级图标卡片）。
 class SearchRecommendAcademySection extends ConsumerWidget {
   const SearchRecommendAcademySection({
     super.key,
@@ -253,7 +226,7 @@ class SearchRecommendAcademySection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      padding: const EdgeInsets.fromLTRB(20, 16, 0, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -263,46 +236,174 @@ class SearchRecommendAcademySection extends ConsumerWidget {
                   fontWeight: FontWeight.w600,
                   color: tokens.textPrimary)),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final t in topics)
-                GestureDetector(
-                  onTap: () => onTap(t),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: tokens.surfaceAlt,
-                      borderRadius: BorderRadius.circular(9999),
-                      border: Border.all(color: tokens.divider, width: 1),
-                    ),
-                    child: Text(t,
-                        style:
-                            TextStyle(fontSize: 12, color: tokens.textSecondary)),
-                  ),
-                ),
-              for (final l in levels)
-                GestureDetector(
+          SizedBox(
+            height: 96,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: topics.length + levels.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                if (i < topics.length) {
+                  return _RecommendCard.academyTopic(
+                    tokens: tokens,
+                    label: topics[i],
+                    onTap: () => onTap(topics[i]),
+                  );
+                }
+                final l = levels[i - topics.length];
+                return _RecommendCard.academyLevel(
+                  tokens: tokens,
+                  label: l,
                   onTap: () => onTap(l),
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: tokens.brandSubtle,
-                      borderRadius: BorderRadius.circular(9999),
-                      border: Border.all(color: tokens.divider, width: 1),
-                    ),
-                    child: Text(l,
-                        style: TextStyle(fontSize: 12, color: tokens.brand)),
-                  ),
-                ),
-            ],
+                );
+              },
+            ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// 统一的推荐图标卡片：圆形品牌色底图标 + 下方单行标签。
+class _RecommendCard extends StatelessWidget {
+  const _RecommendCard({
+    required this.tokens,
+    required this.icon,
+    required this.label,
+    required this.tint,
+    required this.hasBg,
+    required this.onTap,
+  });
+
+  final ThemeTokens tokens;
+  final IconData icon;
+  final String label;
+  final Color tint;
+  /// 是否给整卡上品牌淡色底（true=主题等强调项）。
+  final bool hasBg;
+  final VoidCallback onTap;
+
+  factory _RecommendCard.template({
+    required ThemeTokens tokens,
+    required String key,
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      _RecommendCard(
+        tokens: tokens,
+        icon: _templateIcon(key),
+        label: label,
+        tint: tokens.brand,
+        hasBg: false,
+        onTap: onTap,
+      );
+
+  factory _RecommendCard.scene({
+    required ThemeTokens tokens,
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      _RecommendCard(
+        tokens: tokens,
+        icon: Icons.camera_roll_outlined,
+        label: label,
+        tint: tokens.brand,
+        hasBg: false,
+        onTap: onTap,
+      );
+
+  factory _RecommendCard.academyTopic({
+    required ThemeTokens tokens,
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      _RecommendCard(
+        tokens: tokens,
+        icon: Icons.menu_book_outlined,
+        label: label,
+        tint: tokens.brand,
+        hasBg: true,
+        onTap: onTap,
+      );
+
+  factory _RecommendCard.academyLevel({
+    required ThemeTokens tokens,
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      _RecommendCard(
+        tokens: tokens,
+        icon: Icons.school_outlined,
+        label: label,
+        tint: tokens.brand,
+        hasBg: false,
+        onTap: onTap,
+      );
+
+  static IconData _templateIcon(String key) {
+    switch (key) {
+      case 'portrait':
+        return Icons.face_outlined;
+      case 'landscape':
+        return Icons.landscape_outlined;
+      case 'food':
+        return Icons.restaurant_outlined;
+      case 'street':
+        return Icons.location_city_outlined;
+      case 'night':
+        return Icons.nightlight_outlined;
+      case 'macro':
+        return Icons.center_focus_strong_outlined;
+      case 'still-life':
+        return Icons.emoji_food_beverage_outlined;
+      default:
+        return Icons.photo_camera_outlined;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final card = Container(
+      width: 104,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: hasBg ? tint.withAlpha(18) : tokens.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tokens.divider, width: 1),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [tint, tint.withAlpha(160)],
+              ),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 20, color: Colors.white),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+    return GestureDetector(onTap: onTap, child: card);
   }
 }
 

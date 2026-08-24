@@ -295,17 +295,75 @@
       [_captureDevice setExposureMode:exposureMode];
     }
     
+    // brightness∈[0,1] 编码 EV∈[-3,+3]（0.5=0EV，与应用侧滑块一致）。
+    // exposureTargetBias 单位即 EV，直接按 EV 解码以匹配原相机的曝光档位与步进，
+    // 避免把 [0,1] 线性映射到设备满量程（±8EV）导致小步进被放大数倍。
     CGFloat minExposureTargetBias = _captureDevice.minExposureTargetBias;
     CGFloat maxExposureTargetBias = _captureDevice.maxExposureTargetBias;
-    
-    CGFloat exposureTargetBias = minExposureTargetBias + (maxExposureTargetBias - minExposureTargetBias) * [brightness floatValue];
-    exposureTargetBias = MAX(minExposureTargetBias, MIN(maxExposureTargetBias, exposureTargetBias));
+
+    CGFloat ev = ((CGFloat)[brightness floatValue] - 0.5f) * 6.0f;
+    CGFloat exposureTargetBias = MAX(minExposureTargetBias, MIN(maxExposureTargetBias, ev));
     
     [_captureDevice setExposureTargetBias:exposureTargetBias completionHandler:nil];
     [_captureDevice unlockForConfiguration];
   } else {
     *error = [FlutterError errorWithCode:@"BRIGHTNESS_NOT_SET" message:@"can't set the brightness value" details:[brightnessError localizedDescription]];
   }
+}
+
+// 逐通道钳制增益到 [1.0, maxWhiteBalanceGain]。
+// Apple 文档警告：部分温度/色度组合会得到越界的 RGB 增益，直接传给
+// setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains: 会造成 NSException 崩溃。
+static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGains gains, float maxGain) {
+  gains.redGain   = MAX(1.0f, MIN(maxGain, gains.redGain));
+  gains.greenGain = MAX(1.0f, MIN(maxGain, gains.greenGain));
+  gains.blueGain  = MAX(1.0f, MIN(maxGain, gains.blueGain));
+  return gains;
+}
+
+- (void)setWhiteBalance:(NSString *)mode temperatureK:(NSNumber *_Nullable)k
+                  error:(FlutterError *_Nullable __autoreleasing *_Nonnull)error {
+  NSError *e = nil;
+  if (![_captureDevice lockForConfiguration:&e]) {
+    *error = [FlutterError errorWithCode:@"WB_LOCK_ERR" message:[e localizedDescription] details:nil];
+    return;
+  }
+
+  if (k != nil) {
+    // 手动色温：用目标 K 得到 gains，锁定（渐进钳制避免越界崩溃）
+    AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = [k floatValue], .tint = 0.0f };
+    AVCaptureWhiteBalanceGains gains =
+        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
+    gains = ClampWhiteBalanceGains(gains, _captureDevice.maxWhiteBalanceGain);
+    if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
+      [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
+    } else {
+      *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"locked white balance not supported" details:nil];
+    }
+  } else if ([mode isEqualToString:@"auto"]) {
+    // 恢复自动（连续自动白平衡）
+    AVCaptureWhiteBalanceMode wbMode = AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance;
+    if ([_captureDevice isWhiteBalanceModeSupported:wbMode]) _captureDevice.whiteBalanceMode = wbMode;
+    else *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"continuous auto white balance not supported" details:nil];
+  } else {
+    // 模式预设：映射到目标 K 再锁定（渐进钳制避免越界崩溃）
+    float presetK = 5500.0f;
+    if      ([mode isEqualToString:@"daylight"])     presetK = 5500.0f;
+    else if ([mode isEqualToString:@"cloudy"])       presetK = 6500.0f;
+    else if ([mode isEqualToString:@"fluorescent"])  presetK = 4200.0f;
+    else if ([mode isEqualToString:@"incandescent"]) presetK = 3000.0f;
+    AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = presetK, .tint = 0.0f };
+    AVCaptureWhiteBalanceGains gains =
+        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
+    gains = ClampWhiteBalanceGains(gains, _captureDevice.maxWhiteBalanceGain);
+    if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
+      [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
+    } else {
+      *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"locked white balance not supported" details:nil];
+    }
+  }
+
+  [_captureDevice unlockForConfiguration];
 }
 
 - (void)setMirrorFrontCamera:(bool)value error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {

@@ -56,6 +56,9 @@
 	<!-- 麦克风（camerawesome 相机组件要求：录制视频时采集声音） -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>录制视频时需要麦克风权限采集声音</string>
+	<!-- 仅添加照片到相册（PHPhotoLibrary addOnly 权限，用于"保存到系统相册"） -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>需要将处理后的照片保存到系统相册</string>
 	<!-- 定位（camerawesome 组件要求：可将拍摄位置 GPS 写入照片 Exif 信息） -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>用于将拍摄位置（GPS）写入照片的 Exif 信息</string>
@@ -63,5 +66,12 @@
 	     设为 false 后 App Store Connect 上传时不再每次弹出"App 加密文稿"问卷。 -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- 文件共享调试：允许在 iOS「文件」App → 本机 iPhone / 我的 iPhone 中查看
+	     本 App 的 Documents 目录。用于排查「拍照偏黄」问题（保存 raw/最终图 + 分阶段
+	     RGB 报告供人工核对）。仅调试需要，不影响功能。 -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 </dict>
 </plist>

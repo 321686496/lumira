@@ -1,99 +1,38 @@
-# Task 5 报告：关于页 _AppHeader 替换为光晕 + logo
+# Task 5 报告 — App 层 CameraService 接口 + 三端透传
 
-## STATUS
+**Status:** ✅ 完成
+**Commit:** `97409e4` — `feat(camera): CameraService 暴露白平衡 setter 并透传三端`
 
-DONE
+## 改动文件
+- `lumira_app_flutter/lib/features/capture/services/camera_service.dart`（+5）
+  - 顶部新增 `import 'white_balance.dart';`
+  - 在 `setBrightness` 后新增抽象方法：
+    ```dart
+    /// 设置传感器级白平衡（预设 + 手动色温 K）。取景实时生效，直出即带。
+    void setWhiteBalance(WhiteBalanceSettings settings);
+    ```
+- `lumira_app_flutter/lib/features/capture/services/camerawesome_camera_service.dart`（+15）
+  - 新增 `import 'white_balance.dart';`
+  - `@override void setWhiteBalance(WhiteBalanceSettings settings)`，按 `_delegate.platformTag == 'ohos'` 判别分派到 `ohos.CamerawesomePlugin` / `ca.CamerawesomePlugin`，mode = `settings.mode.name`，temp = `settings.temperatureK`，外覆 try/catch + debugPrint。
 
-## COMMITS
+## 现状确认（实现前读取）
+- 仅 1 个实现类 `CamerawesomeCameraService implements CameraService`，无其它实现类，无 missing override 隐患。
+- 平台分派沿用现有 `_delegate.platformTag == 'ohos'`（与 setZoom/getMaxZoom 等一致），别名 `ohos.` / `ca.`。
+- 三端插件静态方法签名一致：`setWhiteBalance(String mode, int? k)`（ohos 与 ca 均已就绪）。
 
-- Hash: `7fa6e78`
-- Message: `feat(about): replace surface container with brand halo + logo`
-- Files changed:
-  - `lumira_app_flutter/lib/features/profile/pages/profile_about_page.dart` (modified)
-  - `lumira_app_flutter/test/features/profile/profile_about_page_test.dart` (created)
+## 测试摘要
+- `cd e:\Project\photo_post\lumira_app_flutter; flutter analyze lib/features/capture/services/camera_service.dart lib/features/capture/services/camerawesome_camera_service.dart` → **No issues found!**
+- 全量 `flutter analyze` 报 1 条 error `Undefined class 'WhiteBalanceSettings'`（缺 import），修复后已消失（该文件单独分析通过）。其余 417 条均为既有 info/post，非本次引入。
+- 无新增单元测试（任务未要求）。
 
-## TESTS
+## Commit + push
+- 仅 add 两个 service 文件（`camera_service.dart`、`camerawesome_camera_service.dart`），未触及游离文件。
+- `git push origin master`（gitee）✅、`git push github master`（github）✅ 均成功（`09baf61..97409e4`）。
 
-### Step 3 — 运行测试验证失败（修改前）
+## Concerns
+- 无阻断项。仅 note：全量仓库存在大量既存 analyze info（非本次引入），如后续需 0-info 需单独治理。
 
-命令：
-```
-flutter test test/features/profile/profile_about_page_test.dart
-```
-
-结果：**PASS**（1 test passed）
-
-说明：计划 Step 3 预期 "FAIL（如文件不存在）或 PASS（如现有 _AppHeader 已含 LumiraLogo）"。由于测试文件为本任务新建，且当前工作区的 _AppHeader 已经在 Task 1-4 流程中替换为含 `LumiraLogo.symbol` 的中间版本（112×112 白色 surface 容器），断言 `find.byType(LumiraLogo)` 与 `find.text('如画 Lumira')` 在修改前已能通过，符合计划中 PASS 分支预期。
-
-### Step 5 — 运行测试验证通过（修改后）
-
-命令：
-```
-flutter test test/features/profile/profile_about_page_test.dart
-```
-
-结果：**PASS**（1 test passed）
-
-输出：
-```
-00:00 +0: ProfileAboutPage renders brand logo with halo
-00:00 +1: All tests passed!
-```
-
-## ANALYZE
-
-### Step 6 — flutter analyze
-
-命令：
-```
-flutter analyze lib/features/profile/pages/profile_about_page.dart
-```
-
-结果：**No issues found! (ran in 3.0s)**
-
-## 实施详情
-
-### Step 1 — Glob 检查测试文件
-
-命令：Glob `test/features/profile/*about*`
-结果：No file found（测试文件不存在，需创建）
-
-### Step 2 — 创建测试文件
-
-文件：`d:\app\projects\photo_post\lumira_app_flutter\test\features\profile\profile_about_page_test.dart`
-
-按计划代码原样创建，并按任务提示参照 Task 2/3 经验（splash_page_test.dart 第 8 行）追加 `import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';`，因为测试代码使用了 `ThemeKey.warmWhite` 与 `UIStyle.neumoric`（两者定义于 theme_tokens.dart）。断言逻辑未改动。
-
-### Step 4 — 修改 _AppHeader
-
-文件：`d:\app\projects\photo_post\lumira_app_flutter\lib\features\profile\pages\profile_about_page.dart`
-
-按计划给出的替换代码原样使用，将原白色 surface 容器（112×112 + box-shadow + padding 16 + LumiraLogo.symbol size:80）替换为 140×140 径向渐变圆形光晕 + logo 组合：
-
-- 外层 `SizedBox` 140×140 包裹 `Stack`
-- 第一层：`Container` 140×140，`BoxShape.circle` + `RadialGradient`（`tokens.brandSubtle.withOpacity(0.45)` → `tokens.brandLight.withOpacity(0.18)` → `tokens.canvas.withOpacity(0)`，stops `[0.0, 0.55, 1.0]`）
-- 第二层：`LumiraLogo.symbol(size: 80, semanticsLabel: '如画品牌符号标')`
-
-### Step 7 — git 提交
-
-```
-git add lib/features/profile/pages/profile_about_page.dart test/features/profile/profile_about_page_test.dart
-git commit -m "feat(about): replace surface container with brand halo + logo"
-```
-
-提交输出：
-```
-[master 7fa6e78] feat(about): replace surface container with brand halo + logo
- 2 files changed, 65 insertions(+), 27 deletions(-)
- create mode 100644 lumira_app_flutter/test/features/profile/profile_about_page_test.dart
-```
-
-## CONCERNS
-
-none
-
-### 备注
-
-- 工作区中存在大量其他未提交的修改（android/ios 资源、pubspec.yaml、home_page.dart、capture_page.dart、academy_*_page.dart 等），均不属于本任务范围，未做处理。仅提交了 Task 5 计划明确指定的两个文件。
-- git diff 显示原 HEAD 中 _AppHeader 是 88×88 渐变方块 +「如」字版本；工作区在编辑前已被前置流程改为 112×112 白色 surface 容器 + LumiraLogo.symbol（与本任务计划描述的"当前"一致）。本次提交的最终差异（HEAD → 新提交）即原 88×88 → 140×140 光晕，符合 Task 5 目标。
-- 计划中 Step 3 预期已涵盖 PASS 分支（"或 PASS（如现有 _AppHeader 已含 LumiraLogo）"），故未阻塞。
+## 评审结论：Approved
+- 抽象方法签名/import 正确（camera_service.dart:19 / :9）；实现透传正确（camerawesome_camera_service.dart:281-292），`mode=settings.mode.name`、按 `_delegate.platformTag=='ohos'` 分流 ohos/ca 插件、try/catch+debugPrint。
+- 多平台分派与既有 `stop`/`getMaxZoom`/`setZoom` 范式完全同构；别名 i存在；仅 1 实现类无 missing override；无 records/无多余改动/无游离混入。
+- Minor：auto 态 `temperatureK=null` 以 null 透传，三端插件签名 `int?` 已兼容，非缺陷。

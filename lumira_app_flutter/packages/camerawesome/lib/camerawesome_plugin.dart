@@ -343,6 +343,13 @@ class CamerawesomePlugin {
     return CameraInterface().setCorrection(brightness);
   }
 
+  /// 设置白平衡模式与色温。
+  /// mode ∈ {auto, daylight, cloudy, fluorescent, incandescent}; k 为 3000..8000 或 null。
+  static Future<void> setWhiteBalance(String mode, int? k) {
+    // 共享 Pigeon 通道（iOS 已由 Task 2 实现；Android 端由 Task 3 实现）。
+    return CameraInterface().setWhiteBalance(mode, k);
+  }
+
   /// returns the max zoom available on device
   static Future<num?> getMaxZoom() {
     return CameraInterface().getMaxZoom();

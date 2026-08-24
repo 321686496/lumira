@@ -1,86 +1,121 @@
-# Task 3 报告：修改 LumiraNav 支持 centerTitle=false 左对齐
+# Task 3 报告 — Android（CameraX via Camera2Interop）传感器级白平衡
 
-## 状态
+**状态：DONE_WITH_CONCERNS（实现完成；本机无完整 Android SDK，未真编译 Kotlin）**
 
-STATUS: DONE_WITH_CONCERNS
+## 摘要
 
-## 执行摘要
+为 camerawesome 的 Android（CameraX 1.2.2）原生层补齐了 Pigeon 通道与
+`CameraAwesomeX.setWhiteBalance(mode, temperatureK)`，实现传感器级白平衡：
 
-按计划完成 Task 3 全部 7 个 Step：在 `LumiraNav` 中根据 `widget.centerTitle` 分支布局，`true` 时保持原 `Stack + Positioned + Center` 强制居中（向后兼容），`false` 时改用 `Padding + Row` 让标题紧贴 `leading` 右侧并通过 `Spacer` 把 `actions` 推到右侧。
+- **预设**（`k == null`）：直接用 `CaptureRequest.CONTROL_AWB_MODE` 常量
+  （auto/daylight/cloudy/fluorescent/incandescent），交给设备 3A 处理。
+- **手动色温**（`k != null`，3000–8000K，中心 5500）：关掉自动 AWB
+  （`CONTROL_AWB_MODE_OFF`），用 `COLOR_CORRECTION_GAINS` 设 `RggbChannelVector`，
+  增益由 Kelvin→RGB→相对增益换算得到并钳制到 `[1/4, 4]`。
+- 选项经 `Camera2CameraControl.setCaptureRequestOptions` 整体替换，作用于该相机
+  所有 use case（预览实时生效 + 拍照/录像直出即带）；切回预设/自动时自动清除
+  之前手动设的 gains。
 
-## 提交
+## 关键澄清（API 已从官方 1.2.2 sources 核证，非猜测）
 
-- Commit hash: `9502319e79f62db9c32f8a9697c82af6bbfa3d4e`
-- Commit message: `feat(nav): support centerTitle=false left-aligned layout`
-- 文件变更（2 个）：
-  - modified: `lib/shared/widgets/nav/lumira_nav.dart`
-  - added: `test/shared/widgets/nav/lumira_nav_test.dart`
+原 plan 及上一版 BLOCKED 报告假设的抽象 API（`Camera2Interop.Extender(control)` /
+`asCamera2CameraControl`）在 **CameraX 1.2.2 中不存在**。我下载并解析了官方
+`camera-camera2-1.2.2-sources.jar` 实际源码确认：
 
-## 各 Step 执行记录
+- `androidx.camera.camera2.interop.Camera2Interop`（1.2.2）**只含**嵌套
+  `Extender<T>`（构造参数是 `ExtendableBuilder`，用于 use-case 配置期，**不是**用于运行中
+  `CameraControl`）。既无 `asCamera2CameraControl`，也没有
+  `setCaptureRequestOption(Camera2CameraControl, ...)` 静态方法。
+- `androidx.camera.camera2.interop.Camera2CameraControl`（1.2.2）提供：
+  - 静态工厂 `Camera2CameraControl.from(CameraControl)`（要求 CameraControl 是
+    Camera2 实现，否则抛 `IllegalArgumentException`）。
+  - `setCaptureRequestOptions(CaptureRequestOptions)`（**整体替换**已设选项）、
+    `addCaptureRequestOptions(...)`、`clearCaptureRequestOptions()`。
+- `androidx.camera.camera2.interop.CaptureRequestOptions.Builder.setCaptureRequestOption(
+  CaptureRequest.Key<ValueT>, ValueT)`。
 
-### Step 1: 阅读现有 lumira_nav.dart
-- Read `lib/shared/widgets/nav/lumira_nav.dart` line 130-190
-- 确认 SafeArea → SizedBox(height:48) → Stack 内 3 个 Positioned（左/中/右），其中居中分支用 `Center(child: centerWidget)` 强制居中。
-- 同时阅读 line 1-130 了解 widget 入参：`centerTitle` 默认 `true`、`showBackButton` 默认 `true`、`useWordmark` 默认 `false`。
+> 因此实现选用：`Camera2CameraControl.from(cameraControl)` +
+> `setCaptureRequestOptions(...)`（每次整体替换，切换模式天然清除旧 gains）。
+> camerawesome 通过 camera-lifecycle 的默认 Camera2 配置初始化，`previewCamera.cameraControl`
+> 即为 `Camera2CameraControlImpl`，满足 `from()` 前置条件。
 
-### Step 2: 写失败测试
-- Glob `test/shared/widgets/nav/lumira_nav_test.dart` → 不存在
-- 按计划代码创建测试文件，包含两个 testWidgets：
-  1. `centerTitle=true (default) renders title centered`
-  2. `centerTitle=false renders title without Center widget`（断言 `find.byType(Center), findsNothing`）
+## 改动文件（仅 Android 层 2 个文件被修改，Dart 通道复用 Task 2）
 
-### Step 3: 运行测试验证失败
-- 命令：`flutter test test/shared/widgets/nav/lumira_nav_test.dart`
-- 首次运行：编译失败 — 计划给出的测试代码引用 `ThemeKey` 和 `UIStyle`，但只 import 了 `theme_controller.dart`；这两个 enum 实际定义在 `theme_tokens.dart` 中（`theme_controller.dart` 仅 import 未 export）。
-- 与 Task 2 测试对比确认：Task 2 测试 `home_brand_title_test.dart` 多了一行 `import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';`，因此能通过。
-- 修复：在测试文件中按 Task 2 同样方式追加 `theme_tokens.dart` 的 import（仅修复必要的编译错误，不"优化"计划代码）。
-- 重新运行：第一个测试通过；第二个测试如预期 FAIL，错误信息：
-  ```
-  Expected: no matching nodes in the widget tree
-  Actual: _WidgetTypeFinder:<exactly one widget with type "Center" ...>
-  ```
-  完全符合计划预期（centerTitle=false 时仍渲染 Center）。
+1. `lumira_app_flutter/packages/camerawesome/android/src/main/kotlin/com/apparence/camerawesome/cameraX/Pigeon.kt`
+   - `CameraInterface` 接口新增 `fun setWhiteBalance(mode: String, temperatureK: Int?)`。
+   - `setUp` 新增分发通道 `dev.flutter.pigeon.CameraInterface.setWhiteBalance`，
+     `args[1]` 解包为 `Int?`，与共享 pigeon.dart（`setWhiteBalance(String, int?)`）签名一致。
+2. `lumira_app_flutter/packages/camerawesome/android/src/main/kotlin/com/apparence/camerawesome/cameraX/CameraAwesomeX.kt`
+   - 新增 imports：`CaptureRequest`、`RggbChannelVector`、
+     `Camera2CameraControl`、`CaptureRequestOptions`、`kotlin.math.ln/pow`。
+   - 新增 `override fun setWhiteBalance(mode: String, temperatureK: Int?)`（含
+     `@SuppressLint("RestrictedApi")`，`try/catch { Log.e("CameraAwesome", ...) }`）。
+   - 新增辅助方法 `awbModeFor(mode)`、`kelvinToRgb(k)`、`gainsFromKelvin(k)`。
 
-### Step 4: 修改 lumira_nav.dart 实现 left-align
-- 严格按计划给出的替换代码修改 `lib/shared/widgets/nav/lumira_nav.dart`。
-- 将原 `SafeArea → SizedBox(height:48) → Stack(...)` 替换为：
-  - `widget.centerTitle ? Stack(...) : Padding(padding: EdgeInsets.symmetric(horizontal:8), child: Row(...))`
-- `centerTitle=false` 分支的 Row 结构：`leadingWidget` → `if (centerWidget != null) [SizedBox(width:4), Flexible(child: centerWidget)]` → `Spacer()` → `Row(actions ?? [SizedBox(width:40)])`。
-- 未对计划代码做任何"优化"，原样使用。
+## Kelvin → RGB 相对增益换算（Tanner Helland 逆算法）
 
-### Step 5: 运行测试验证通过
-- 命令：`flutter test test/shared/widgets/nav/lumira_nav_test.dart`
-- 结果：`00:00 +2: All tests passed!`（2 个测试全部通过）
+- `kelvinToRgb(k)`：`t = k/100`，分段公式给出 0..255 的 (R,G,B)：
+  - 红：`t<=66 ? 255 : 329.6987*(t-60)^-0.13320`
+  - 绿：`t<=66 ? 99.4708*ln(t)-161.1196 : 288.1222*(t-60)^-0.07551`
+  - 蓝：`t>=66 ? 255 : (t<=19 ? 0 : 138.5177*ln(t-10)-305.0448)`，再各自 /255。
+- `gainsFromKelvin(k)`：相对增益 = `kelvinToRgb(k) / kelvinToRgb(5500)`，钳制 `[0.25,4]`，
+  返回 `RggbChannelVector(r, g, g, b)`（构造参数序为 R、Gr、Gb、B）。
+- 极性校验（节选）：
+  - 3000K → r≈1.00、g≈0.75、b≈0.49 → **R>G>B**（暖，红增强）✓
+  - 8000K → r≈0.87、g≈0.97、b≈1.15 → **B>G>R**（冷，蓝增强）✓
+  - 5500K → 相对 5500 恒为 1.0（中性）✓
 
-### Step 6: 运行 analyze 确保无警告
-- 命令：`flutter analyze lib/shared/widgets/nav/lumira_nav.dart`
-- 结果：`No issues found! (ran in 3.1s)`
+## 测试 / 验证
 
-### Step 7: 提交
-- 仅 add 本 Task 涉及的两个文件（不污染工作区其他未完成的并行修改）：
-  ```bash
-  git add lib/shared/widgets/nav/lumira_nav.dart test/shared/widgets/nav/lumira_nav_test.dart
-  git commit -m "feat(nav): support centerTitle=false left-aligned layout"
-  ```
-- 结果：`[master 9502319] feat(nav): support centerTitle=false left-aligned layout`
-  - 2 files changed, 107 insertions(+), 34 deletions(-)
-  - create mode 100644 lumira_app_flutter/test/shared/widgets/nav/lumira_nav_test.dart
+- `cd e:\Project\photo_post\lumira_app_flutter; flutter analyze`
+  - 结果 **0 error**；418 条 `info` 级 lint，均为项目既有（含 camerawesome 包内的
+    `constant_identifier_names` 等既有告警），与本次改动无新增 error。
+  - 注：`flutter analyze` 只分析 Dart，不编译 Kotlin。
+- **未真编译 Kotlin**：本机 Android SDK 无 `platforms`、`~/.gradle/caches` 不存在，
+  `flutter build apk` 无法运行。实现所依赖的 CameraX API 均已通过官方 1.2.2
+  sources jar 逐一核证（`Camera2CameraControl.from` / `setCaptureRequestOptions` /
+  `CaptureRequestOptions.Builder.setCaptureRequestOption` / `RggbChannelVector` 构造序）。
+  已在新代码中加 `try/catch`，`from()` 若在个别设备非 Camera2 实现仅告警不致命。
 
-## 测试命令与结果
+## Commit / Push
 
-| 命令 | 结果 |
-| --- | --- |
-| `flutter test test/shared/widgets/nav/lumira_nav_test.dart`（修改前） | FAIL — centerTitle=false 仍渲染 Center |
-| `flutter test test/shared/widgets/nav/lumira_nav_test.dart`（修改后） | PASS — 2 tests passed |
-| `flutter analyze lib/shared/widgets/nav/lumira_nav.dart` | No issues found |
+- 仅 add 本次动到的 Android 文件：
+  - `camerawesome/android/.../cameraX/Pigeon.kt`
+  - `camerawesome/android/.../cameraX/CameraAwesomeX.kt`
+- commit：`feat(camera): Android 传感器级白平衡 (CameraX mode + gain via Camera2Interop)`
+- `git push origin master` 与 `git push github master` 均需成功。
+- 共享 `pigeon.dart` 本次**未改动**（Task 2 已含通道），未 add。
+- 其他未提交/游离文件（`lib/features/search/*`、`lib/features/templates/*`、
+  `docs/superpowers/plans/reports/task-*`、`docs/superpowers/plans/*plan/spec` 等）一律不 add。
 
-## 关键文件路径
+## Concerns / 遗留
 
-- 修改：`d:\app\projects\photo_post\lumira_app_flutter\lib\shared\widgets\nav\lumira_nav.dart`
-- 新增：`d:\app\projects\photo_post\lumira_app_flutter\test\shared\widgets\nav\lumira_nav_test.dart`
+1. **未真编译**（唯一硬性 concern）：Kotlin 层未跑过 `gradle/dlv` 编译，靠源码核证。
+   万一某个新 API 在 1.2.2 其他变体（camera-lifecycle 依赖解析）有细微差异，需一次真机构建
+   复核；但所用类/方法均取自 `camera-camera2-1.2.2` 源码，风险低。
+2. 手动 K 的 `COLOR_CORRECTION_GAINS` 换算基于标准色温→RGB 近似；个别厂商 ISP 的色彩空间差异
+   可能导致 W/B 略偏，属可接受的近似（与 iOS 用内置 `deviceWhiteBalanceGainsForTemperature`
+   不完全等价，但 3000 暖/8000 冷/5500 中性方向正确）。
+3. `setCaptureRequestOptions` 返回的 `ListenableFuture` 被丢弃：它仅在「选项真正写入 session」
+   时完成、被更新请求/camera 关闭时以 `OperationCanceledException` 失败。因我们每次整体替换，
+   连续滑动时前者会被后者取代属预期，故未在该 future 上挂失败日志以免误报；同步异常已由
+   `try/catch` 兜底。
+4. 预设（AWB_MODE 常量）与手动（gains）都经同一 `setCaptureRequestOptions` 替换，互不残留。
 
-## CONCERNS
+## 评审与修复（评审结果：Needs fixes → 复审后定）
 
-1. **计划测试代码缺 import（已最小修复）**：计划在 Task 3 Step 2 给出的测试代码只 import 了 `theme_controller.dart`，但 `ThemeKey` / `UIStyle` 两个 enum 定义在 `theme_tokens.dart` 中（`theme_controller.dart` 仅 `import` 而未 `export`，不会传递给测试文件）。这导致首次运行直接编译失败，无法按计划"验证测试因 Center 仍存在而失败"。已按 Task 2 测试同样的写法追加一行 `import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';` 修复，随后测试如预期因 `find.byType(Center), findsNothing` 断言失败而失败。修改不影响计划中"测试用例断言"的本意。
+首次评审（Base 7f1b6c5 / Head 761c030）判定 **Needs fixes**，2 个 Important：
+1. **手动 K 增益方向疑似反了**：`gainsFromKelvin = kelvinToRgb(k)/kelvinToRgb(5500)` 放大该色温的特征色偏（3000K 携 R>G>B → 更暖/更橙），而非中和；与 iOS `deviceWhiteBalanceGainsForTemperatureAndTintValues` 的**补偿式**语义不符，也不符摄影白平衡本义。修复：改为补偿式 `gain = kelvinToRgb(5500)/kelvinToRgb(k)`（3000K → R 低 B 高 → 中和暖光）。需真机黑白卡核实方向。
+2. **缺实验 interop opt-in**：`Camera2CameraControl`/`CaptureRequestOptions` 属 `androidx.camera.camera2.interop` 实验 API，仅 `@SuppressLint("RestrictedApi")` 不够；库内既有为 `@androidx.annotation.OptIn(ExperimentalCamera2Interop::class)` 或 `@SuppressLint("RestrictedApi", "UnsafeOptInUsageError")`（见 CameraCapabilities.kt:13 / CameraXState.kt:198）。缺则 `UnsafeOptInUsageError` lint 可能挂构建。修复：补 opt-in/压制，与库内对齐。
 
-2. **其他未提交修改未受影响**：工作区还存在 Task 1/2 之外的若干未提交修改（如 `splash_page.dart`、`profile_about_page.dart`、`home_page.dart` 等）。这些是后续 Task 4-7 待处理的工作，本 Task 仅提交了 `lumira_nav.dart` 与 `lumira_nav_test.dart` 两个文件，未触碰其他文件。
+✅ 正确项：Pigeon 通道名与共享 Dart 通道逐字符一致；`Camera2CameraControl.from/setCaptureRequestOptions` 是真实存在的 1.2.2 API（整体替换自动清旧 gains）；RggbChannelVector 四参序 R,G_even,G_odd,B 正确；三分支齐全；`k` 越界被 `coerceIn(3000,8000)` 钳制。
+
+⚠️ 登记 Minor（给最终整体评审）：① `setCaptureRequestOptions` 返回的 `ListenableFuture` 被丢弃，异步失败无日志；② 增益未按设备 `COLOR_CORRECTION_GAINS_RANGE` 归一，暖端 B<1 增益在部分下界=1.0 的机型会被钳掉/拒绝；③ `kelvinToRgb` 红通道在 t 略>66 时越过 255 被 clamp，纯观感。
+
+## 复审结论：Approved
+
+修复 commit `e342eb6`（仅 CameraAwesomeX.kt，+15/-5），两个 Important 均已落实：
+- `gainsFromKelvin` 比值反转为 `kelvinToRgb(5500)/kelvinToRgb(k)`；代入内核验：3000K→R=1.00/G=1.34/B=2.02（B>1 主导降温中和）、8000K→R=1.15/G=1.03/B=0.87（升温）、5500K 全 1。补偿方向正确，未出现 R>1/B<1。
+- `setWhiteBalance` 补 `@androidx.annotation.OptIn(ExperimentalCamera2Interop::class)` + import，与 CameraCapabilities.kt:13 一致，`UnsafeOptInUsageError` 风险消除。
+- 无新增回归（coerceIn 钳制/try-catch/签名均保留）。
+- 唯一字面偏差（3000K 红 clamp → R 增益实为 1.0 非 <1）：源于既知红 clamp Minor，不影响补偿语义；真机方向建议最终评审后用灰卡复核。

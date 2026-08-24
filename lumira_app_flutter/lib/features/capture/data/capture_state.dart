@@ -34,6 +34,12 @@ class CaptureState {
   /// 仅展示模板效果：隐藏所有参数调整/工具栏、禁用快门、取景器铺水印。
   static final trialModeProvider = StateProvider<bool>((ref) => false);
 
+  /// 相机续命版本号：路由观察者检测到「非拍摄页 → 返回拍摄页」时自增。
+  /// 拍摄页监听该值变化并强制重建相机预览——因为离开拍摄页到其他页面时相机已被
+  /// 显式释放（服务单例 stop），但从被覆盖（retain）的拍摄页返回时页面不会重新
+  /// initState，必须重建 CameraAwesomeBuilder 才能恢复取景器预览。
+  static final cameraRenewVersionProvider = StateProvider<int>((ref) => 0);
+
   // ── 相机引擎状态（由 CameraPreview 通过 onCameraStateCreated 回调注入）──
   // 持有 camerawesome 的 CameraState 引用，用于实现真实拍照/缩放/摄像头切换/闪光灯同步。
   // 测试环境中为 null（cameraPreviewOverrideProvider 注入占位 widget，不创建真实 CameraState）。
@@ -246,6 +252,37 @@ class CaptureState {
       return a.meta.name.compareTo(b.meta.name);
     });
     return sorted;
+  });
+
+  /// 工具栏展示的模板列表：把「当前使用的模板」提到第一位。
+  /// 基于 [sortedTemplatesProvider]（使用频率排序）同步派生：
+  /// - currentTemplateId 为空 → 直接返回排序列表（自由拍摄）
+  /// - 当前模板在列表中 → 移到第一位
+  /// - 当前模板不在列表中（如 URL 参数进入且 DAO 未加载）→ 从 [originalTemplateProvider] 解析并前置
+  /// 纯同步，切换模板时不会触发异步重排，避免列表闪动。
+  static final toolbarTemplatesProvider =
+      Provider<List<PhotoTemplate>>((ref) {
+    final currentId = ref.watch(currentTemplateIdProvider);
+    final sorted = ref.watch(sortedTemplatesProvider).maybeWhen(
+          data: (list) => list,
+          loading: () => TemplateRegistry.allTemplates,
+          error: (_, __) => TemplateRegistry.allTemplates,
+          orElse: () => TemplateRegistry.allTemplates,
+        );
+    if (currentId == null) return sorted;
+
+    final result = List<PhotoTemplate>.from(sorted);
+    final index = result.indexWhere((t) => t.meta.id == currentId);
+    if (index >= 0) {
+      final tpl = result.removeAt(index);
+      result.insert(0, tpl);
+    } else {
+      final original = ref.watch(originalTemplateProvider);
+      if (original != null && original.meta.id == currentId) {
+        result.insert(0, original);
+      }
+    }
+    return result;
   });
 
   /// 原始模板（只读，派生自 currentTemplateIdProvider）
@@ -535,6 +572,26 @@ class CaptureState {
       ref.read(freeModeCameraProvider.notifier).state = updater(current);
       _scheduleCameraPersist(
           ProviderScope.containerOf(ref.context, listen: false));
+    }
+  }
+
+  /// 将场景推荐滤镜套用到当前后期参数。
+  /// 有模板时基于 editableTemplate 的 postProcess 叠加，无模板时写 freeModePostProcessProvider。
+  /// 供场景条点击 / 场景路由进入两种入口复用，保证「套用场景即自动套用推荐滤镜」。
+  static void applySceneFilter(WidgetRef ref, SceneFilter filter) {
+    final current = ref.read(freeModePostProcessProvider);
+    ref.read(freeModePostProcessProvider.notifier).state = current.copyWith(
+      lut: filter.lut,
+      systemFilter: filter.systemFilter,
+    );
+    final editable = ref.read(editableTemplateProvider);
+    if (editable != null) {
+      ref.read(editableTemplateProvider.notifier).state = editable.copyWith(
+        postProcess: editable.postProcess.copyWith(
+          lut: filter.lut,
+          systemFilter: filter.systemFilter,
+        ),
+      );
     }
   }
 

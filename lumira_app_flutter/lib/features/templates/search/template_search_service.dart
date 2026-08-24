@@ -53,6 +53,7 @@ class TemplateSearchService {
     Map<String, String> categoryLabelByKey = const {},
     Set<String>? allowedIds,
     Map<String, int>? popularity,
+    Map<String, int>? usageCounts,
   }) {
     var list = all
         .where((t) =>
@@ -78,7 +79,7 @@ class TemplateSearchService {
       list = list.where((t) => allowedIds.contains(t.id)).toList();
     }
 
-    _sort(list, filters.sort, popularity);
+    _sort(list, filters.sort, popularity, usageCounts);
     return list;
   }
 
@@ -96,6 +97,7 @@ class TemplateSearchService {
     List<TemplateRecord> list,
     SearchSort sort,
     Map<String, int>? popularity,
+    Map<String, int>? usageCounts,
   ) {
     switch (sort) {
       case SearchSort.comprehensive:
@@ -110,6 +112,17 @@ class TemplateSearchService {
         break;
       case SearchSort.latest:
         list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case SearchSort.photos:
+        list.sort((a, b) {
+          final pa = usageCounts?[a.id] ?? 0;
+          final pb = usageCounts?[b.id] ?? 0;
+          if (pa != pb) return pb.compareTo(pa);
+          return a.name.compareTo(b.name);
+        });
+        break;
+      case SearchSort.name:
+        list.sort((a, b) => a.name.compareTo(b.name));
         break;
     }
   }

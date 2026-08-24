@@ -194,13 +194,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                           GoRouter.of(context).push(RouteNames.scenes);
                           break;
                         case '收藏':
+                        case '管理':
                           GoRouter.of(context).push(RouteNames.build(
                             RouteNames.captureSceneManage,
-                            {RouteNames.paramTab: 'fav'},
+                            {RouteNames.paramTab: sceneManageTabFor(label)},
                           ));
-                          break;
-                        case '管理':
-                          GoRouter.of(context).push(RouteNames.captureSceneManage);
                           break;
                       }
                     },
@@ -445,7 +443,7 @@ class _SceneRecoGrid extends ConsumerWidget {
       loading: () => _buildSkeleton(),
       error: (_, __) => _buildSkeleton(),
       data: (scenes) {
-        if (scenes.isEmpty) return _buildSkeleton();
+        if (scenes.isEmpty) return const SizedBox.shrink(); // 空态
         return GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -465,19 +463,10 @@ class _SceneRecoGrid extends ConsumerWidget {
   }
 
   Widget _buildSkeleton() {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 0.50,
-      children: HomeMockData.scenes
-          .map((scene) => SceneRecoCard(
-                scene: scene,
-                onTap: () => onTap(scene.id),
-              ))
-          .toList(),
+    // 通用加载占位，不再使用 mock 场景数据
+    return const SizedBox(
+      height: 120,
+      child: Center(child: CircularProgressIndicator(strokeWidth: 3)),
     );
   }
 }
@@ -612,5 +601,18 @@ class _RecentShotsGrid extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// 首页场景推荐标题右侧链接 → 场景管理 tab 参数
+/// 收藏落在「我的收藏」，管理落在「自定义场景」
+String sceneManageTabFor(String label) {
+  switch (label) {
+    case '管理':
+      return 'custom';
+    case '收藏':
+      return 'fav';
+    default:
+      return 'fav';
   }
 }

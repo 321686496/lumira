@@ -24,6 +24,7 @@ class RouteNames {
   static const String templatesRecommend = '/templates/recommend';
   static const String templatesCategory = '/templates/category';
   static const String templatesAll = '/templates/all';
+  static const String templatesPhotos = '/templates/photos';
   static const String templatesExportDetail = '/templates/export-detail';
   static const String challengeDetail = '/challenge/detail';
   static const String challengeHistory = '/challenge/history';

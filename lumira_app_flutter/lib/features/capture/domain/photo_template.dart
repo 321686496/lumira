@@ -1,6 +1,8 @@
 // lib/features/capture/domain/photo_template.dart
 import 'package:flutter/foundation.dart';
 
+import '../../templates/data/remote_template_dto.dart';
+
 /// 内部哨兵常量，用于区分 copyWith 中"未传入参数"与"显式传入 null"。
 /// 解决 `systemFilter ?? this.systemFilter` 无法将 nullable 字段清空的问题。
 const _unset = Object();
@@ -69,6 +71,13 @@ class TemplateMeta {
   final String description;
   final String referenceSource;
 
+  /// 短简介（卡片/详情展示用，来自后端 shortDesc）。
+  final String shortDesc;
+  /// 季节/天气/时段氛围元数据（详情展示用，来自后端 ambience）。
+  final RemoteTemplateAmbienceDto? ambience;
+  /// 后端更新时间戳（毫秒，详情展示用）。
+  final int updatedAt;
+
   /// 模板来源：'builtin'（系统内置）| 'custom'（用户自定义）| 'remote'（后端动态）。
   /// 用于 UI 区分「我的」自定义模板与后端同步模板（如拍摄页模板条角标）。
   final String source;
@@ -87,6 +96,9 @@ class TemplateMeta {
     this.coverData,
     this.description = '',
     this.referenceSource = '',
+    this.shortDesc = '',
+    this.ambience,
+    this.updatedAt = 0,
     this.source = 'builtin',
   });
 
@@ -104,6 +116,9 @@ class TemplateMeta {
     Object? coverData = _unset,
     String? description,
     String? referenceSource,
+    String? shortDesc,
+    Object? ambience = _unset,
+    int? updatedAt,
     String? source,
   }) =>
       TemplateMeta(
@@ -122,6 +137,11 @@ class TemplateMeta {
             : coverData as String?,
         description: description ?? this.description,
         referenceSource: referenceSource ?? this.referenceSource,
+        shortDesc: shortDesc ?? this.shortDesc,
+        ambience: identical(ambience, _unset)
+            ? this.ambience
+            : ambience as RemoteTemplateAmbienceDto?,
+        updatedAt: updatedAt ?? this.updatedAt,
         source: source ?? this.source,
       );
 
@@ -142,11 +162,15 @@ class TemplateMeta {
           coverData == other.coverData &&
           description == other.description &&
           referenceSource == other.referenceSource &&
+          shortDesc == other.shortDesc &&
+          ambience == other.ambience &&
+          updatedAt == other.updatedAt &&
           source == other.source;
 
   @override
   int get hashCode => Object.hash(id, name, author, version, category, classification,
-      Object.hashAll(tags), Object.hashAll(tagIds), price, cover, coverData, description, referenceSource, source);
+      Object.hashAll(tags), Object.hashAll(tagIds), price, cover, coverData, description, referenceSource,
+      shortDesc, ambience, updatedAt, source);
 }
 
 class TemplateClassification {
@@ -560,6 +584,9 @@ class PostProcess {
   /// 由可拖拽裁剪框设置，导出时传入 [PhotoPostProcessor.processFile]。
   final CropRect? customCropRect;
 
+  /// 补光灯配置（模板启用时非 null）。用于套用模板时自动激活拍摄页补光灯。
+  final FillLightParams? fillLight;
+
   const PostProcess({
     this.cropRatio = '3:4',
     required this.color,
@@ -570,6 +597,7 @@ class PostProcess {
     this.lut = 'none',
     this.systemFilter,
     this.customCropRect,
+    this.fillLight,
   });
 
   /// copyWith 的 systemFilter 和 customCropRect 参数使用 [_unset] 哨兵区分两种情况：
@@ -585,6 +613,7 @@ class PostProcess {
     String? lut,
     Object? systemFilter = _unset,
     Object? customCropRect = _unset,
+    Object? fillLight = _unset,
   }) =>
       PostProcess(
         cropRatio: cropRatio ?? this.cropRatio,
@@ -600,6 +629,9 @@ class PostProcess {
         customCropRect: identical(customCropRect, _unset)
             ? this.customCropRect
             : customCropRect as CropRect?,
+        fillLight: identical(fillLight, _unset)
+            ? this.fillLight
+            : fillLight as FillLightParams?,
       );
 
   @override
@@ -614,11 +646,12 @@ class PostProcess {
           grain == other.grain &&
           lut == other.lut &&
           systemFilter == other.systemFilter &&
-          customCropRect == other.customCropRect;
+          customCropRect == other.customCropRect &&
+          fillLight == other.fillLight;
 
   @override
   int get hashCode => Object.hash(cropRatio, color, smoothStrength, sharpen,
-      vignette, grain, lut, systemFilter, customCropRect);
+      vignette, grain, lut, systemFilter, customCropRect, fillLight);
 
   Map<String, dynamic> toJson() => {
         'cropRatio': cropRatio,
@@ -630,6 +663,7 @@ class PostProcess {
         'lut': lut,
         if (systemFilter != null) 'systemFilter': systemFilter,
         if (customCropRect != null) 'customCropRect': customCropRect!.toJson(),
+        if (fillLight != null) 'fillLight': fillLight!.toJson(),
       };
 
   /// 将另一个 PostProcess（增量）合并到当前参数上，返回全量参数。
@@ -649,6 +683,7 @@ class PostProcess {
         lut: delta.lut != 'none' ? delta.lut : lut,
         systemFilter: delta.systemFilter ?? systemFilter,
         customCropRect: delta.customCropRect ?? customCropRect,
+        fillLight: delta.fillLight ?? fillLight,
       );
 
   factory PostProcess.fromJson(Map<String, dynamic> json) => PostProcess(
@@ -663,7 +698,52 @@ class PostProcess {
         customCropRect: (json['customCropRect'] as Map<String, dynamic>?) != null
             ? CropRect.fromJson(json['customCropRect'] as Map<String, dynamic>)
             : null,
+        fillLight: (json['fillLight'] as Map<String, dynamic>?) != null
+            ? FillLightParams.fromJson(json['fillLight'] as Map<String, dynamic>)
+            : null,
       );
+}
+
+/// 补光灯配置（模板内嵌，启用时随模板一起保存/套用）。
+///
+/// [color] 为 0xRRGGBB int 色值，与拍摄页补光应用（[CaptureState.fillLightColorProvider]）
+/// 及详情页展示使用同一 int 取值，保证所见即所得。
+class FillLightParams {
+  const FillLightParams({
+    required this.enabled,
+    required this.color,
+    required this.intensity,
+  });
+
+  final bool enabled;
+  final int color;
+  final double intensity;
+
+  factory FillLightParams.fromJson(Map<String, dynamic> json) =>
+      FillLightParams(
+        enabled: (json['enabled'] as bool?) ?? false,
+        // 兼容历史 24 位 RGB（Flutter Color(int) 会把缺省 alpha 判为透明导致颜色发暗/对不上），
+        // 统一归一到不透明 ARGB（alpha=FF）。
+        color: ((json['color'] as num?)?.toInt() ?? 0xFFFFE5B4) | 0xFF000000,
+        intensity: (json['intensity'] as num?)?.toDouble() ?? 0.8,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'color': color,
+        'intensity': intensity,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FillLightParams &&
+          enabled == other.enabled &&
+          color == other.color &&
+          intensity == other.intensity;
+
+  @override
+  int get hashCode => Object.hash(enabled, color, intensity);
 }
 
 /// 照片变换参数（旋转/翻转/拉直）

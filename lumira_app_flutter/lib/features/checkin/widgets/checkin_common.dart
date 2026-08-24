@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -107,26 +108,49 @@ class CheckinPhotoImage extends StatelessWidget {
     if (u == null || u.isEmpty) {
       return _fallback();
     }
-    final Widget image = u.startsWith('http')
-        ? CachedNetworkImage(
-            url: u,
-            fit: fit,
-            width: width,
-            height: height,
-            errorWidget: _fallback(),
-          )
-        : Image.file(
-            File(u),
-            fit: fit,
-            width: width,
-            height: height,
-            errorBuilder: (_, __, ___) => _fallback(),
-          );
+    final Widget image;
+    if (u.startsWith('http')) {
+      image = CachedNetworkImage(
+        url: u,
+        fit: fit,
+        width: width,
+        height: height,
+        errorWidget: _fallback(),
+      );
+    } else if (u.startsWith('data:')) {
+      // base64 data URL（兼容旧数据 / 相册导入的内联图）
+      image = _buildFromDataUrl(u);
+    } else {
+      image = Image.file(
+        File(u),
+        fit: fit,
+        width: width,
+        height: height,
+        errorBuilder: (_, __, ___) => _fallback(),
+      );
+    }
     if (borderRadius == null) return image;
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius!),
       child: image,
     );
+  }
+
+  Widget _buildFromDataUrl(String dataUrl) {
+    Widget error = _fallback();
+    try {
+      final comma = dataUrl.indexOf(',');
+      final b64 = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
+      return Image.memory(
+        base64Decode(b64),
+        fit: fit,
+        width: width,
+        height: height,
+        errorBuilder: (_, __, ___) => error,
+      );
+    } catch (_) {
+      return error;
+    }
   }
 
   Widget _fallback() {

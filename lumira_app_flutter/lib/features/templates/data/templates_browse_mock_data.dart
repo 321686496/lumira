@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../capture/data/template_registry.dart';
 import '../../capture/domain/photo_template.dart';
+import 'remote_template_dto.dart';
 
 /// 模板浏览页（detail / all / recommend）共享 mock 数据
 ///
@@ -222,11 +223,24 @@ class TemplateDetail {
     this.majorStyle,
     this.subStyle,
     this.method,
+    this.shortDesc = '',
+    this.description = '',
+    this.ambience,
+    this.updatedAt = 0,
   });
 
   final String id;
   final String name;
   final String category; // 'portrait' / 'landscape' / ...
+
+  /// 短简介（卡片/详情展示用，来自后端 shortDesc）。
+  final String shortDesc;
+  /// 长描述（详情页展示用，来自后端 description）。
+  final String description;
+  /// 季节/天气/时段氛围元数据（详情展示用，来自后端 ambience）。
+  final RemoteTemplateAmbienceDto? ambience;
+  /// 后端更新时间戳（毫秒，详情展示用）。
+  final int updatedAt;
 
   /// 完整分类路径的分级扩展字段（四级分类，spec-4level）。
   /// - majorStyle：大风格（L2，如 emotional）
@@ -281,6 +295,10 @@ class TemplateDetail {
       majorStyle: majorStyle ?? this.majorStyle,
       subStyle: subStyle ?? this.subStyle,
       method: method ?? this.method,
+      shortDesc: shortDesc,
+      description: description,
+      ambience: ambience,
+      updatedAt: updatedAt,
     );
   }
 }
@@ -331,6 +349,7 @@ class PostProcessData {
     this.brilliance,
     this.clarity,
     this.systemFilter,
+    this.fillLight,
     required this.smoothStrength,
     required this.sharpen,
     required this.vignette,
@@ -364,10 +383,26 @@ class PostProcessData {
 
   /// 系统滤镜预设（与 domain PostProcess.systemFilter 对齐）：null 表示未使用
   final String? systemFilter;
+
+  /// 补光灯（fillLight）配置：仅当模板启用补光灯时非空，否则详情页不显示补光灯栏。
+  final FillLightData? fillLight;
   final int smoothStrength; // 0..100
   final int sharpen; // 0..100
   final int vignette; // 0..100
   final int grain; // 0..100
+}
+
+/// 补光灯配置（与编辑器 fillLight 对齐）：color 为 ARGB int，intensity 为强度（0.1~1.5）。
+class FillLightData {
+  const FillLightData({
+    required this.enabled,
+    required this.color,
+    required this.intensity,
+  });
+
+  final bool enabled;
+  final int color;
+  final double intensity;
 }
 
 class SceneGuideData {
@@ -421,6 +456,9 @@ class AllTemplateItem {
     this.coverData,
     this.majorStyle,
     this.subStyle,
+    this.shortDesc = '',
+    this.description = '',
+    this.ambience,
   });
   final String id;
   final String name;
@@ -430,6 +468,13 @@ class AllTemplateItem {
   final String coverSeed;
   final int price; // 0 = 免费
   final bool isCustom;
+
+  /// 短简介（卡片展示用，来自后端 shortDesc）。
+  final String shortDesc;
+  /// 完整描述（卡片短简介为空时兜底展示）。
+  final String description;
+  /// 氛围元数据（chips 展示用）。
+  final RemoteTemplateAmbienceDto? ambience;
 
   /// 内置模板 assets 路径或远程模板 http URL（可能为空）
   final String? cover;
@@ -1561,7 +1606,10 @@ class TemplatesBrowseMockData {
   ///
   /// v14: 改为 public，供 [templateDetailProvider] 在加载远程模板完整内容后
   /// 转换为详情页所需格式。
-  static TemplateDetail fromPhotoTemplate(PhotoTemplate tpl) {
+  static TemplateDetail fromPhotoTemplate(
+    PhotoTemplate tpl, {
+    FillLightData? fillLight,
+  }) {
     final cls = tpl.meta.classification;
     return TemplateDetail(
       id: tpl.meta.id,
@@ -1574,6 +1622,10 @@ class TemplatesBrowseMockData {
       tagIds: List<String>.from(tpl.meta.tagIds),
       price: tpl.meta.price,
       referenceSource: tpl.meta.referenceSource,
+      shortDesc: tpl.meta.shortDesc,
+      description: tpl.meta.description,
+      ambience: tpl.meta.ambience,
+      updatedAt: tpl.meta.updatedAt,
       majorStyle: cls.style.isEmpty ? null : cls.style,
       subStyle: cls.subStyle.isEmpty ? null : cls.subStyle,
       method: cls.method.isEmpty ? null : cls.method,
@@ -1608,6 +1660,7 @@ class TemplatesBrowseMockData {
         brilliance: tpl.postProcess.color.brilliance?.round(),
         clarity: tpl.postProcess.color.clarity?.round(),
         systemFilter: tpl.postProcess.systemFilter,
+        fillLight: fillLight,
         smoothStrength: tpl.postProcess.smoothStrength,
         sharpen: tpl.postProcess.sharpen,
         vignette: tpl.postProcess.vignette,

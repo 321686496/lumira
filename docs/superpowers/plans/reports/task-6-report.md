@@ -1,104 +1,48 @@
-# Task 6 报告：首页使用 HomeBrandTitle 并传 centerTitle: false
+# Task 6 报告 — 拍摄页 param_panel 相机 Tab 白平衡 UI
 
-## STATUS: DONE_WITH_CONCERNS
+## Status
+✅ 完成
 
-## 执行摘要
+## Commit
+- SHA: `8dffa5a`
+- 主题: `feat(camera): 拍摄页白平衡预设+色温滑块 UI`
+- 已 push 到 `origin`(gitee) 与 `github`（`97409e4..8dffa5a`，两者均成功）
+- 改动文件（仅此一个）: `lumira_app_flutter/lib/features/capture/widgets/param_panel.dart`（+119 行）
 
-按计划 Task 6 的 Step 1-6 严格执行，完成 `lib/features/home/pages/home_page.dart` 的 appBar 改造：移除 `title: '如画'` 与 `_NavLocation` leading，改用 `LumiraNav(centerTitle: false, showBackButton: false, leading: const HomeBrandTitle(), ...)`；追加 `home_brand_title.dart` import；删除不再使用的 `_NavLocation` 类。
+## 实现要点
 
-## COMMITS
+### 接线点
+- 白平衡为**实时会话调节**，未写入模板 `CameraParams`。
+- 直接通过 `cameraServiceProvider`（`lib/features/capture/services/camera_service_provider.dart`）持有的 `CameraService` 调用 `setWhiteBalance(settings)`。
+- 新增文件级 `StateProvider<WhiteBalanceSettings> whiteBalanceSessionProvider`（默认 `auto`）。放在 provider 而非 `StatefulWidget` 本地 state，是因为 `TabBarView` 切换 Tab 会 dispose/重建非当前页 child，本地 state 会丢失；provider 保证切换 Tab 后选择保留。
 
-- **Hash:** `fcf82268bc2cdd4ab2b3419a97b2f4a59eff3ade`
-- **Message:** `feat(home): use HomeBrandTitle with left-aligned layout`
-- **Files:** 2 files changed, 10 insertions(+), 39 deletions(-)
-  - `lumira_app_flutter/lib/features/home/pages/home_page.dart`
-  - `lumira_app_flutter/test/features/home/home_page_test.dart`（计划外修改，见 CONCERNS）
+### UI 新增（相机 Tab）
+- 新增「白平衡」`_SectionCard`，内嵌：
+  - `_WbPresetRow`：胶囊式预设 pill（自动/日光/阴天/荧光/白炽），`Wrap` 布局复用 param_panel 现有 gold/dark 浮层风格语义。
+  - 手动色温 `_SliderRow`（复用具量），`min 3000 / max 8000 / divisions 50`（即步进 100），仅 `!wb.isAuto` 时显示，值显示 `XXXX K`。
+- 交互逻辑（`_applyWhiteBalance`）：
+  - 选择非 Auto 预设：`mode` 设为所选，`temperatureK` 沿用现值，无则默认 `5500`。
+  - 拖动色温滑块：`(v/100).round()*100` 步进 100。
+  - 切回 Auto：`const WhiteBalanceSettings()`（temperatureK 置 null），插件端 auto 复位。
+- 预设映射符合简报：auto→自动、daylight→日光、cloudy→阴天、fluorescent→荧光、incandescent→白炽。
 
-## 各 Step 执行情况
+### 关于主题约束
+`param_panel.dart` 是拍摄页浮层抽屉里一个**存量硬编码 dark/gold 风格组件**（`Color(0xFFC9A96E)`、`Colors.white.withOpacity`），尚未迁移到 `appThemeProvider`。简报「复用现有 param_panel 浮层组件的风格语义、不引入别套语法」优先于全局主题约束；因此本次新增的 pill 与滑块沿用该文件既有的 `_SectionCard/_SliderRow/_PopupRow` 视觉语言（深色底 + 半透明白 + gold 强调），未混入别套风格、也未顺手重构全面板到主题系统（超出本任务范围）。
 
-### Step 1: 修改 home_page.dart appBar ✅
-严格按计划"替换为"代码块修改。原代码（实际为 `title: '如画'`，非计划描述的 `useWordmark: true`——可能是 Task 1-5 期间变动）替换为：
-```dart
-appBar: LumiraNav(
-  centerTitle: false,
-  transparent: true,
-  scrolled: _scrolled,
-  showBackButton: false,
-  leading: const HomeBrandTitle(),
-  actions: [...],
-),
-```
+## 测试摘要
+- `cd e:\Project\photo_post\lumira_app_flutter; flutter analyze` 通过：
+  - 全仓 416 条均为**存量 info**（const 提示/未使用 import 等），无本次改动新增的 `error`/`warning`。
+  - 对 `param_panel.dart` 单独分析仅剩 8 条 `prefer_const_*` info，均为该文件既有编码风格导致的，按简报「存量 info 忽略」处理。
+- 本机无真机，未做端到端取景器实拍验证；`CamerawesomeCameraService.setWhiteBalance` 已在 Task 5 完成三端透传，本次仅接线 UI→该 API，本地状态刷新逻辑经 `flutter analyze` + 代码审查确认正确。
 
-### Step 2: 添加 import ✅
-在 import 区按字母序插入 `lib/features/home/pages/home_page.dart:8`：
-```dart
-import '../../../shared/widgets/brand/home_brand_title.dart';
-```
+## Concerns
+- `param_panel.dart` 整体仍为硬编码黑暗/gold 风格，未接入 `appThemeProvider`/`uiStyleProvider`。本次为局部一致性沿用既有风格；若需全局样式合法化，应作为独立任务整体迁移该面板（超出 Task 6 范围）。
+- 白平衡选择为会话级（`StateProvider`），关闭面板/切换模板后不会自动复位到 auto（符合「仅实时会话调节」定义）；若后续要求随模板/会话打开复位，需另行处理。
+- 端到端取景器色温效果未在真机验证，依赖 Task 5 已合入的插件透传。
 
-### Step 3: 删除 _NavLocation 类 ✅
-- Grep 确认 `_NavLocation` 仅在 `home_page.dart` 引用（无其他文件依赖）
-- Grep 确认 `HomeMockData.location` 仅在 `home_page.dart`（_NavLocation 内）使用，但 `home_mock_data.dart` 仍被 `HomeMockData.banners/scenes/recents` 使用，故保留该 import
-- 按计划给出的完整代码块删除 `_NavLocation` 类
+## 报告路径
+`e:\Project\photo_post\docs\superpowers\plans\reports\task-6-report.md`
 
-### Step 4: flutter analyze ✅（无本次引入的警告）
-```
-flutter analyze lib/features/home/pages/home_page.dart
-```
-结果：3 个 info 级别问题，**均为预存在**（git diff 确认我的修改未触碰这些代码行）：
-- `_goChallenge` unused (line 76) — 预存在
-- prefer_const_constructors (line 131, 132) — body 区域 HomeBanner，预存在
-
-无 "unused import" 警告（`home_mock_data.dart` 仍被使用，未误删）。
-
-### Step 5: 运行首页测试 ✅（部分通过，1 项预存在失败）
-```
-flutter test test/features/home/home_page_test.dart
-```
-结果：**4 pass / 1 fail**
-
-| 测试 | 结果 | 说明 |
-|------|------|------|
-| HomePage renders all 8 sections | ❌ FAIL | 预存在失败：`find.text('模板')` 找不到（QuickActions 区域）|
-| HomePage tip refresh button changes tip text | ✅ PASS | |
-| HomePage renders across 4 UI styles | ✅ PASS | |
-| HomePage renders across 8 themes | ✅ PASS | |
-| HomePage scroll toggles LumiraNav scrolled state | ✅ PASS | |
-
-**'模板' 失败为预存在问题的验证：**
-通过 `git stash push` 仅暂存我的两个文件（home_page.dart + home_page_test.dart），在提交态代码（Task 5 commit 7fa6e78，title:'如画' + _NavLocation）上运行提交态测试：
-- line 106 `find.text('如画')` → PASS（提交态有 title:'如画'）
-- line 107 `find.text('上海')` → PASS（提交态有 _NavLocation）
-- line 116 `find.text('模板')` → **FAIL**（"zero widgets with text '模板'"）
-
-这确证 '模板' 失败在 Task 6 之前就已存在，与本次修改无关。`LumiraNav.preferredSize` 固定为 `Size.fromHeight(56)`，不受 `centerTitle` 影响，body 布局（QuickActions 所在）完全未受 Task 6 影响。
-
-### Step 6: git 提交 ✅
-```bash
-git add lib/features/home/pages/home_page.dart test/features/home/home_page_test.dart
-git commit -m "feat(home): use HomeBrandTitle with left-aligned layout"
-```
-（计划 Step 6 仅 add home_page.dart；因我同步更新了测试断言，一并提交以保持仓库一致）
-
-## TESTS
-
-- **命令:** `flutter test test/features/home/home_page_test.dart`
-- **结果:** 4 passed, 1 failed
-- **失败项:** `HomePage renders all 8 sections` — `find.text('模板')` findsWidgets 断言失败（预存在，非 Task 6 引入）
-
-## CONCERNS
-
-### 1. 计划外修改了 home_page_test.dart（必要变更）
-计划的"测试修改"清单仅列 `splash_page_test.dart` 与 `profile_about_page_test.dart`，未包含 `home_page_test.dart`。但 Task 6 的代码变更（移除 `title: '如画'`、删除 `_NavLocation`）使现有测试断言失效：
-- 4 处 `expect(find.text('如画'), findsOneWidget)` → 改为 `expect(find.text('Lumira'), findsOneWidget)`（HomeBrandTitle 默认 logoEnglish 渲染 "Lumira"）
-- 1 处 `expect(find.text('上海'), findsOneWidget)` → 删除（_NavLocation 已移除，'上海' 即 HomeMockData.location 不再显示）
-
-这些更新是代码变更的直接必要后果（非"优化"），且计划 Step 5 明确期望"若存在则应通过"、Task 9 要求全部测试通过。已在提交中包含此文件。
-
-### 2. 预存在测试失败：'模板' 断言
-`HomePage renders all 8 sections` 测试中 `find.text('模板')` 失败。已通过 stash 对照实验确证此失败在 Task 5 提交态即存在，与 Task 6 无关。可能原因：QuickActions 渲染或视口/offstage 问题。建议后续任务排查（不在 Task 6 范围内）。
-
-### 3. 预存在 analyze 警告
-`flutter analyze lib/features/home/pages/home_page.dart` 报 3 个 info（`_goChallenge` unused + 2 处 prefer_const），均在我未修改的代码行，为预存在问题，按 scope 规则未处理。
-
-### 4. 工作树存在大量先前任务的未提交变更
-git status 显示 `pubspec.yaml`、`pubspec.lock`、`lumira_logo.dart`（untracked）、`capture_page.dart`、`academy_*.dart`、android/ios 资源等均为未提交状态。这些非 Task 6 引入，但提示先前任务的提交可能不完整（例如 `lumira_logo.dart` 仍为 untracked，`pubspec.yaml` 添加 flutter_svg 未提交）。stash 全部变更会导致 flutter_svg 编译失败——已通过仅 stash Task 6 文件的方式规避。
+## 评审结论：Approved
+- 白平衡**未写入 CameraParams**（仅触达 whiteBalanceSessionProvider + cameraService.setWhiteBalance）✅；状态用文件级 StateProvider 保留（TabBarView 切换不丢）✅；接线正确 `_applyWhiteBalance`（param_panel.dart:357）实时调 setWhiteBalance ✅；非 Auto 默认 5500 / 切 Auto 置 null ✅；滑块 3000-8000 步进100 `XXXX K`、仅 `!isAuto` 渲染 ✅；预设映射正确 ✅；复用既有 _SliderRow、仅新增原子 _WbPresetRow，非过度造件 ✅。
+- ⚠️ Minor（非本任务新增违规）：新增 `_WbPresetRow` 沿用全 panel 既有硬编码 dark/gold（Color(0xFFC9A96E)/Colors.white.withOpacity/BorderRadius.circular(16)），**未引入新色值/新常量**，仅复刻既有 pill 语义且简报明令「复用既有浮层风格、不另起一套」；存量全局面板未主题化属独立遗留，应登记 future-optimizations 作全局迁移任务。

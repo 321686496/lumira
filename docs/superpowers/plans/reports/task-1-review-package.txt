@@ -1,0 +1,192 @@
+﻿===COMMITS===
+930e387 feat(camera): 白平衡共享模型与插件 Dart 接口
+
+===STAT===
+ .../features/capture/services/white_balance.dart   | 44 ++++++++++++++++++++++
+ .../camerawesome/lib/camerawesome_plugin.dart      |  8 ++++
+ .../camerawesome_ohos/lib/camerawesome_plugin.dart | 10 ++++-
+ .../capture/services/white_balance_test.dart       | 44 ++++++++++++++++++++++
+ 4 files changed, 105 insertions(+), 1 deletion(-)
+
+===DIFF===
+diff --git a/lumira_app_flutter/lib/features/capture/services/white_balance.dart b/lumira_app_flutter/lib/features/capture/services/white_balance.dart
+new file mode 100644
+index 0000000..d888051
+--- /dev/null
++++ b/lumira_app_flutter/lib/features/capture/services/white_balance.dart
+@@ -0,0 +1,44 @@
++/// 白平衡模式。
++///
++/// 与相机原生通道约定一致，`name` 直接作为 `CamerawesomePlugin.setWhiteBalance(mode, k)` 的 mode 参数。
++enum WhiteBalanceMode { auto, daylight, cloudy, fluorescent, incandescent }
++
++/// 传感器级白平衡设置（跨三端共享模型）。
++class WhiteBalanceSettings {
++  const WhiteBalanceSettings({
++    this.mode = WhiteBalanceMode.auto,
++    this.temperatureK,
++  });
++
++  final WhiteBalanceMode mode;
++
++  /// 色温（开尔文），取值 3000..8000，仅非 auto 模式生效，auto 时为 null。
++  final int? temperatureK;
++
++  bool get isAuto => mode == WhiteBalanceMode.auto;
++
++  WhiteBalanceSettings copyWith({
++    WhiteBalanceMode? mode,
++    int? temperatureK,
++  }) {
++    return WhiteBalanceSettings(
++      mode: mode ?? this.mode,
++      temperatureK: temperatureK ?? this.temperatureK,
++    );
++  }
++
++  @override
++  bool operator ==(Object other) {
++    if (identical(this, other)) return true;
++    return other is WhiteBalanceSettings &&
++        other.mode == mode &&
++        other.temperatureK == temperatureK;
++  }
++
++  @override
++  int get hashCode => Object.hash(mode, temperatureK);
++
++  @override
++  String toString() =>
++      'WhiteBalanceSettings(mode: $mode, temperatureK: $temperatureK)';
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/packages/camerawesome/lib/camerawesome_plugin.dart b/lumira_app_flutter/packages/camerawesome/lib/camerawesome_plugin.dart
+index dc6d6c3..7922a86 100644
+--- a/lumira_app_flutter/packages/camerawesome/lib/camerawesome_plugin.dart
++++ b/lumira_app_flutter/packages/camerawesome/lib/camerawesome_plugin.dart
+@@ -336,20 +336,28 @@ class CamerawesomePlugin {
+   }
+ 
+   /// set brightness manually with range [0,1]
+   static Future<void> setBrightness(double brightness) {
+     if (brightness < 0 || brightness > 1) {
+       throw "Value must be between [0,1]";
+     }
+     return CameraInterface().setCorrection(brightness);
+   }
+ 
++  // 原生通道由 Task 2/3/4 实现：届时将实现为
++  // `return CameraInterface().setWhiteBalance(mode, k);`（Pigeon 接口当前尚无该通道方法）。
++  /// 设置白平衡模式与色温。
++  /// mode ∈ {auto, daylight, cloudy, fluorescent, incandescent}; k 为 3000..8000 或 null。
++  static Future<void> setWhiteBalance(String mode, int? k) {
++    return Future<void>.value();
++  }
++
+   /// returns the max zoom available on device
+   static Future<num?> getMaxZoom() {
+     return CameraInterface().getMaxZoom();
+   }
+ 
+   /// Change aspect ratio when a photo is taken
+   static Future<void> setAspectRatio(String ratio) {
+     return CameraInterface().setAspectRatio(ratio.toUpperCase());
+   }
+ 
+diff --git a/lumira_app_flutter/packages/camerawesome_ohos/lib/camerawesome_plugin.dart b/lumira_app_flutter/packages/camerawesome_ohos/lib/camerawesome_plugin.dart
+index 445de1b..aa0f5e2 100644
+--- a/lumira_app_flutter/packages/camerawesome_ohos/lib/camerawesome_plugin.dart
++++ b/lumira_app_flutter/packages/camerawesome_ohos/lib/camerawesome_plugin.dart
+@@ -1,11 +1,11 @@
+-﻿import 'dart:async';
++import 'dart:async';
+ import 'dart:io';
+ 
+ import 'package:camerawesome_ohos/camerawesome_plugin.dart';
+ import 'package:camerawesome_ohos/pigeon.dart';
+ import 'package:camerawesome_ohos/src/logger.dart';
+ import 'package:camerawesome_ohos/src/orchestrator/models/camera_display_rotation.dart';
+ import 'package:camerawesome_ohos/src/orchestrator/models/camera_physical_button.dart';
+ import 'package:camerawesome_ohos/src/orchestrator/models/sensor_type.dart';
+ import 'package:camerawesome_ohos/src/orchestrator/models/video_options.dart';
+ import 'package:collection/collection.dart';
+@@ -396,20 +396,28 @@ class CamerawesomePlugin {
+   }
+ 
+   /// set brightness manually with range [0,1]
+   static Future<void> setBrightness(double brightness) {
+     if (brightness < 0 || brightness > 1) {
+       throw "Value must be between [0,1]";
+     }
+     return CameraInterface().setCorrection(brightness);
+   }
+ 
++  // 原生通道由 Task 2/3/4 实现：届时将实现为
++  // `return CameraInterface().setWhiteBalance(mode, k);`（Pigeon 接口当前尚无该通道方法）。
++  /// 设置白平衡模式与色温。
++  /// mode ∈ {auto, daylight, cloudy, fluorescent, incandescent}; k 为 3000..8000 或 null。
++  static Future<void> setWhiteBalance(String mode, int? k) {
++    return Future<void>.value();
++  }
++
+   /// returns the max zoom available on device
+   static Future<num?> getMaxZoom() {
+     return CameraInterface().getMaxZoom();
+   }
+ 
+   /// returns the min zoom available on device (can be < 1.0 for ultra-wide)
+   static Future<num?> getMinZoom() {
+     return CameraInterface().getMinZoom();
+   }
+ 
+diff --git a/lumira_app_flutter/test/features/capture/services/white_balance_test.dart b/lumira_app_flutter/test/features/capture/services/white_balance_test.dart
+new file mode 100644
+index 0000000..c5bc0d2
+--- /dev/null
++++ b/lumira_app_flutter/test/features/capture/services/white_balance_test.dart
+@@ -0,0 +1,44 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:lumira_app_flutter/features/capture/services/white_balance.dart';
++
++void main() {
++  group('WhiteBalanceSettings', () {
++    test('默认是 auto、temperatureK == null、isAuto == true', () {
++      const settings = WhiteBalanceSettings();
++      expect(settings.mode, WhiteBalanceMode.auto);
++      expect(settings.temperatureK, isNull);
++      expect(settings.isAuto, isTrue);
++    });
++
++    test('copyWith(mode: daylight, temperatureK: 6000) 后 isAuto == false', () {
++      const settings = WhiteBalanceSettings();
++      final updated = settings.copyWith(
++        mode: WhiteBalanceMode.daylight,
++        temperatureK: 6000,
++      );
++      expect(updated.mode, WhiteBalanceMode.daylight);
++      expect(updated.temperatureK, 6000);
++      expect(updated.isAuto, isFalse);
++    });
++
++    test('相等性与 hashCode 一致', () {
++      const a = WhiteBalanceSettings(
++        mode: WhiteBalanceMode.cloudy,
++        temperatureK: 6500,
++      );
++      const b = WhiteBalanceSettings(
++        mode: WhiteBalanceMode.cloudy,
++        temperatureK: 6500,
++      );
++      const c = WhiteBalanceSettings(
++        mode: WhiteBalanceMode.cloudy,
++        temperatureK: 5000,
++      );
++
++      expect(a, equals(b));
++      expect(a.hashCode, b.hashCode);
++      expect(a, isNot(equals(c)));
++      expect(a.hashCode, isNot(c.hashCode));
++    });
++  });
++}
+\ No newline at end of file

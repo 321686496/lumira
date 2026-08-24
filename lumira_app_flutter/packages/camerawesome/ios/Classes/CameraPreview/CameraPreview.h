@@ -97,6 +97,7 @@ AVCaptureAudioDataOutputSampleBufferDelegate>
 - (CGSize)getEffectivPreviewSize;
 - (void)setUpCaptureSessionForAudioError:(nonnull void (^)(NSError *))error;
 - (void)setBrightness:(NSNumber *)brightness error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
+- (void)setWhiteBalance:(NSString *)mode temperatureK:(NSNumber * _Nullable)k error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
 @end
 
 NS_ASSUME_NONNULL_END

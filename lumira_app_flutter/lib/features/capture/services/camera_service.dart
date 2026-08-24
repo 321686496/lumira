@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import 'white_balance.dart';
+
 /// 平台无关的相机服务接口。
 /// 阶段一：三端实现各自封装 camerawesome（ohos fork / 原版 1.4.0）
 /// 阶段二：替换为各端原生相机层，本接口零改动
@@ -26,6 +28,9 @@ abstract class CameraService {
   /// 设置亮度校正（0.0~1.0，0.5 为中性）
   /// 用于将 EV 补偿映射到取景器亮度预览
   void setBrightness(double brightness);
+
+  /// 设置传感器级白平衡（预设 + 手动色温 K）。取景实时生效，直出即带。
+  void setWhiteBalance(WhiteBalanceSettings settings);
 
   /// 点击对焦
   void focusOnPoint(Offset flutterPosition, Size flutterPreviewSize);
@@ -93,13 +98,11 @@ class CameraPreviewConfig {
     this.fit = CameraPreviewFit.cover,
     this.onReady,
     this.onTapFocus,
-    this.onScaleZoom,
   });
   final String facing;
   final CameraPreviewFit fit;
   final VoidCallback? onReady;
   final void Function(Offset, Size)? onTapFocus;
-  final void Function(double)? onScaleZoom;
 }
 
 enum CameraPreviewFit { cover, contain }

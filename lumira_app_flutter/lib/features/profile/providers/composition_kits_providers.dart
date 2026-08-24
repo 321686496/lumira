@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/db/dao/scenes_dao.dart';
+import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../data/composition_kit_models.dart';
 
@@ -17,6 +19,20 @@ final compositionKitsProvider = FutureProvider<List<CompositionKit>>((ref) async
 final compositionKitByIdProvider =
     FutureProvider.family<CompositionKit?, String>((ref, id) async {
   final dao = await ref.watch(compositionKitsDaoProvider.future);
+  return dao.getById(id);
+});
+
+/// 按 ID 获取套件关联的场景（用于详情/列表显示场景名与封面）
+final compositionKitSceneProvider =
+    FutureProvider.family<SceneRecord?, String>((ref, id) async {
+  final dao = await ref.watch(scenesDaoProvider.future);
+  return dao.getById(id);
+});
+
+/// 按 ID 获取套件关联的模板（用于详情/列表显示模板名与封面）
+final compositionKitTemplateProvider =
+    FutureProvider.family<TemplateRecord?, String>((ref, id) async {
+  final dao = await ref.watch(templatesDaoProvider.future);
   return dao.getById(id);
 });
 

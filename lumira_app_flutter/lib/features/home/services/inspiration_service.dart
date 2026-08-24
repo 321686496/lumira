@@ -10,12 +10,17 @@
 // - category：portrait/landscape/food/street/night/macro/still-life/无数据
 // - 天气：晴/多云/阴/雨/雪/雾
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
+import '../../../core/db/dao/templates_dao.dart';
+import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/network/api_client.dart';
 import '../data/inspiration_models.dart';
 import '../data/inspiration_rules.dart';
+import '../data/template_context_rules.dart';
 
 /// 黄金时刻计算简化版：日落前 1 小时
 /// 返回 "HH:mm" 格式（本地墙钟时刻），失败返回空字符串
@@ -128,11 +133,17 @@ class InspirationService {
   InspirationService({
     required GalleryDao galleryDao,
     required ApiClient apiClient,
+    required TemplatesDao templatesDao,
+    required UsageDao usageDao,
   })  : _galleryDao = galleryDao,
-        _apiClient = apiClient;
+        _apiClient = apiClient,
+        _templatesDao = templatesDao,
+        _usageDao = usageDao;
 
   final GalleryDao _galleryDao;
   final ApiClient _apiClient;
+  final TemplatesDao _templatesDao;
+  final UsageDao _usageDao;
 
   /// 构建今日灵感
   /// 失败时返回 fallback，绝不抛异常
@@ -216,11 +227,99 @@ class InspirationService {
       weatherText = blue.isEmpty ? '' : '蓝调时刻 $blue';
     }
 
+    // 模板推荐（失败静默回落，不影响卡片）
+    RecommendedTemplate? rec;
+    try {
+      rec = await _recommend(
+        slot: _slotName(slot),
+        month: now.month,
+        temperature: weather.temperature,
+        weather: weather.condition,
+        latitude: weather.latitude,
+      );
+    } catch (e) {
+      debugPrint('InspirationService recommend failed: $e');
+    }
+
     return HeroInspiration(
       dateText: dateText,
       title: '今日灵感',
       description: description,
       weatherText: weatherText,
+      recommendedTemplateId: rec?.id ?? '',
+      recommendedTemplateName: rec?.name ?? '',
+    );
+  }
+
+  /// 用户最近 50 张照片中，带模板照片的模板类别计数的最高类别（模板偏好）。
+  Future<String?> _recentTopTemplateCategory() async {
+    final photos = await _galleryDao.getRecent(limit: 50);
+    final counts = <String, int>{};
+    for (final p in photos) {
+      final tid = p.templateId;
+      if (tid == null || tid.isEmpty) continue;
+      final tpl = await _templatesDao.getById(tid);
+      if (tpl == null || tpl.category.isEmpty) continue;
+      counts[tpl.category] = (counts[tpl.category] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return null;
+    final entries = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return entries.first.key;
+  }
+
+  Map<String, dynamic> _decodeAmbience(String json) {
+    if (json.isEmpty) return const {};
+    try {
+      final v = jsonDecode(json);
+      return v is Map<String, dynamic> ? v : const {};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// 计算推荐模板：无近期模板拍摄偏好、或无语境适配模板 → null。
+  Future<RecommendedTemplate?> _recommend({
+    required String slot,
+    required int month,
+    required int temperature,
+    required String weather,
+    double latitude = 0,
+  }) async {
+    final prefCat = await _recentTopTemplateCategory();
+    if (prefCat == null) return null;
+
+    final context = InspirationContext(
+      slot: slot,
+      season: seasonOf(month),
+      tempRange: tempRangeOf(temperature),
+      weather: weather,
+      region: regionOf(latitude),
+    );
+
+    final templates = await _templatesDao.getBuiltinAndRemote();
+    if (templates.isEmpty) return null;
+    // 批量取所有模板的全站 use_shoot 次数，避免逐条查询
+    final usage = await _usageDao.countMap('template', templates.map((t) => t.id).toList());
+
+    final candidates = <Candidate>[];
+    for (final t in templates) {
+      final cls = t.classification;
+      candidates.add(Candidate(
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        style: cls['style'] as String?,
+        subStyle: cls['subStyle'] as String?,
+        type: cls['type'] as String?,
+        ambience: _decodeAmbience(t.ambienceJson),
+        popularity: usage[t.id]?.useShoot ?? 0,
+      ));
+    }
+    return pickRecommendedTemplate(
+      candidates: candidates,
+      context: context,
+      preferredCategory: prefCat,
     );
   }
 }

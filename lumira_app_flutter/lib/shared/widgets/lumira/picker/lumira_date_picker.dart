@@ -1,20 +1,22 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
-import '../_internal/lumira_theme_resolver.dart';
+import '../dialog/lumira_bottom_sheet.dart';
 
 /// Lumira 日期选择器
 ///
 /// 设计文档：docs/superpowers/specs/2026-08-04-lumira-component-foundation-design.md §3.4
 ///
-/// 容器视觉由 [LumiraThemeResolver.containerVisual] 统一解析（4 风格），
-/// 圆角 = appTheme.popupRadius / 2。日历内部颜色全部从 tokens 取，零硬编码。
-/// 选中日期的 brand 圆形背景为功能性强调色，4 风格下一致。
+/// 全宽底部弹层：容器视觉由 [LumiraBottomSheetContainer] 统一解析（4 风格），
+/// 圆角 = appTheme.popupRadius / 2（仅顶部两角），底部自动适配安全区。
+/// 日历内部颜色全部从 tokens 取，零硬编码；选中日期的 brand 圆形背景为功能
+/// 性强调色，4 风格下一致。
+///
+/// [markedDates]：需要打点标记的日期集合（如「有照片的日期」），
+/// 在对应日期下方显示一个小圆点，与无照片日期、选中日期区分。
 ///
 /// 图标说明：项目未依赖 phosphor_flutter，沿用项目既有约定
 /// （Icons.chevron_left / right 作为 ph-caret-left / right 替代）。
@@ -23,101 +25,18 @@ Future<DateTime?> showLumiraDatePicker({
   required DateTime initialDate,
   DateTime? firstDate,
   DateTime? lastDate,
+  Set<DateTime> markedDates = const {},
 }) {
-  return showDialog<DateTime>(
+  return showLumiraBottomSheet<DateTime>(
     context: context,
-    barrierDismissible: true,
-    builder: (_) => _LumiraDatePickerDialog(
+    isScrollControlled: true,
+    builder: (_) => _LumiraDatePickerContent(
       initialDate: initialDate,
       firstDate: firstDate,
       lastDate: lastDate,
+      markedDates: markedDates,
     ),
   );
-}
-
-class _LumiraDatePickerDialog extends ConsumerWidget {
-  const _LumiraDatePickerDialog({
-    required this.initialDate,
-    required this.firstDate,
-    required this.lastDate,
-  });
-
-  final DateTime initialDate;
-  final DateTime? firstDate;
-  final DateTime? lastDate;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final appTheme = ref.watch(appThemeProvider);
-    final tokens = appTheme.tokens;
-    final radius = appTheme.popupRadius / 2;
-    final visual = LumiraThemeResolver.containerVisual(
-      tokens: tokens,
-      style: appTheme.style,
-      radiusDp: radius,
-    );
-
-    final content = _LumiraDatePickerContent(
-      initialDate: initialDate,
-      firstDate: firstDate,
-      lastDate: lastDate,
-    );
-
-    // 分层容器：背景色 → (glass/female 渐变叠加) → 内容
-    final layered = Stack(
-      children: <Widget>[
-        Positioned.fill(child: ColoredBox(color: visual.background)),
-        if (visual.glassOverlay != null)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(gradient: visual.glassOverlay),
-              ),
-            ),
-          ),
-        Padding(padding: const EdgeInsets.all(20), child: content),
-      ],
-    );
-
-    Widget clipped;
-    if (visual.backdropBlurSigma > 0) {
-      // glass 风格：在背景层前插入 BackdropFilter
-      clipped = ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: Stack(
-          children: <Widget>[
-            Positioned.fill(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(
-                  sigmaX: visual.backdropBlurSigma,
-                  sigmaY: visual.backdropBlurSigma,
-                ),
-                child: const SizedBox.shrink(),
-              ),
-            ),
-            layered,
-          ],
-        ),
-      );
-    } else {
-      clipped = ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: layered,
-      );
-    }
-
-    return Material(
-      type: MaterialType.transparency,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(radius),
-          border: visual.border,
-          boxShadow: visual.shadows,
-        ),
-        child: clipped,
-      ),
-    );
-  }
 }
 
 class _LumiraDatePickerContent extends ConsumerStatefulWidget {
@@ -125,11 +44,15 @@ class _LumiraDatePickerContent extends ConsumerStatefulWidget {
     required this.initialDate,
     required this.firstDate,
     required this.lastDate,
+    required this.markedDates,
   });
 
   final DateTime initialDate;
   final DateTime? firstDate;
   final DateTime? lastDate;
+
+  /// 需要打点标记的日期集合（date-only）
+  final Set<DateTime> markedDates;
 
   @override
   ConsumerState<_LumiraDatePickerContent> createState() =>
@@ -188,48 +111,65 @@ class _LumiraDatePickerContentState
 
     final now = _dateOnly(DateTime.now());
 
-    return SizedBox(
-      width: 280,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _buildMonthBar(tokens, prevDisabled, nextDisabled),
-          const SizedBox(height: 12),
-          _buildWeekHeader(tokens),
-          const SizedBox(height: 8),
-          _buildGrid(tokens, firstDateOnly, lastDateOnly, now),
-          const SizedBox(height: 16),
-          _buildActions(tokens, appTheme),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _buildMonthBar(tokens, prevDisabled, nextDisabled),
+        const SizedBox(height: 12),
+        _buildWeekHeader(tokens),
+        const SizedBox(height: 8),
+        _buildGrid(tokens, firstDateOnly, lastDateOnly, now, widget.markedDates),
+        const SizedBox(height: 16),
+        _buildActions(tokens, appTheme),
+      ],
     );
   }
 
   Widget _buildMonthBar(ThemeTokens tokens, bool prevDisabled, bool nextDisabled) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Stack(
       children: <Widget>[
-        _navButton(
-          icon: Icons.chevron_left,
-          enabled: !prevDisabled,
-          tokens: tokens,
-          onTap: _goPrevMonth,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: <Widget>[
+            _navButton(
+              icon: Icons.chevron_left,
+              enabled: !prevDisabled,
+              tokens: tokens,
+              onTap: _goPrevMonth,
+            ),
+            Text(
+              '${_displayedMonth.year}年${_displayedMonth.month}月',
+              style: (Theme.of(context).textTheme.titleMedium ??
+                      const TextStyle(fontSize: 16, fontWeight: FontWeight.w500))
+                  .copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: tokens.textPrimary,
+                  ),
+            ),
+            _navButton(
+              icon: Icons.chevron_right,
+              enabled: !nextDisabled,
+              tokens: tokens,
+              onTap: _goNextMonth,
+            ),
+          ],
         ),
-        Text(
-          '${_displayedMonth.year}年${_displayedMonth.month}月',
-          style: (Theme.of(context).textTheme.titleMedium ??
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w500))
-              .copyWith(
-                fontWeight: FontWeight.bold,
-                color: tokens.textPrimary,
+        // 右上角关闭按钮：无需只能通过「取消」退出
+        Align(
+          alignment: Alignment.topRight,
+          child: GestureDetector(
+            onTap: () => Navigator.of(context).pop(null),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Icon(
+                Icons.close,
+                size: 18,
+                color: tokens.textTertiary,
               ),
-        ),
-        _navButton(
-          icon: Icons.chevron_right,
-          enabled: !nextDisabled,
-          tokens: tokens,
-          onTap: _goNextMonth,
+            ),
+          ),
         ),
       ],
     );
@@ -263,8 +203,7 @@ class _LumiraDatePickerContentState
     return Row(
       children: <Widget>[
         for (final String l in labels)
-          SizedBox(
-            width: 40,
+          Expanded(
             child: Center(
               child: Text(
                 l,
@@ -281,18 +220,39 @@ class _LumiraDatePickerContentState
     DateTime? firstDateOnly,
     DateTime? lastDateOnly,
     DateTime now,
+    Set<DateTime> markedDates,
   ) {
     // 周日为一周第一天：weekday Mon=1..Sun=7 → SundayStart = weekday % 7
     final firstWeekday = _displayedMonth.weekday;
     final gridStart =
         _displayedMonth.subtract(Duration(days: firstWeekday % 7));
 
+    // 按当月实际占据的周数渲染，避免小月仍堆出 6 行造成弹窗过高
+    final lastOfMonth = DateTime(_displayedMonth.year, _displayedMonth.month + 1, 0);
+    final daysInSpan = lastOfMonth.difference(gridStart).inDays + 1;
+    final rowCount = (daysInSpan / 7).ceil();
+
     final rows = <Widget>[];
-    for (int r = 0; r < 6; r++) {
+    for (int r = 0; r < rowCount; r++) {
       final cells = <Widget>[];
       for (int c = 0; c < 7; c++) {
         final day = gridStart.add(Duration(days: r * 7 + c));
-        cells.add(_buildCell(day, tokens, firstDateOnly, lastDateOnly, now));
+        cells.add(
+          Expanded(
+            child: SizedBox(
+              width: double.infinity,
+              height: 40,
+              child: _buildCell(
+                day,
+                tokens,
+                firstDateOnly,
+                lastDateOnly,
+                now,
+                markedDates,
+              ),
+            ),
+          ),
+        );
       }
       rows.add(Row(children: cells));
     }
@@ -305,6 +265,7 @@ class _LumiraDatePickerContentState
     DateTime? firstDateOnly,
     DateTime? lastDateOnly,
     DateTime now,
+    Set<DateTime> markedDates,
   ) {
     final dayOnly = _dateOnly(day);
     final isThisMonth = day.month == _displayedMonth.month;
@@ -316,11 +277,16 @@ class _LumiraDatePickerContentState
         day.weekday == DateTime.saturday || day.weekday == DateTime.sunday;
     final isToday = _isSameDay(dayOnly, now);
     final isSelected = _isSameDay(dayOnly, _selected);
+    final isMarked =
+        markedDates.any((d) => _isSameDay(d, dayOnly)) && isThisMonth;
 
     Color textColor;
     if (isSelected) {
       textColor = tokens.textInverse;
     } else if (isToday) {
+      textColor = tokens.brandText;
+    } else if (isMarked) {
+      // 有照片日期：主色文字突出，区别于无照片日期
       textColor = tokens.brandText;
     } else if (isOutOfRange) {
       textColor = tokens.textTertiary;
@@ -350,20 +316,47 @@ class _LumiraDatePickerContentState
             height: 36,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isSelected ? tokens.brand : null,
+              color: isSelected
+                  ? tokens.brand
+                  : (isMarked && !isToday ? tokens.brandSubtle : null),
               border: isToday && !isSelected
                   ? Border.all(color: tokens.brand, width: 1.5)
                   : null,
             ),
             alignment: Alignment.center,
-            child: Text(
-              '${day.day}',
-              style: TextStyle(
-                color: textColor,
-                fontSize: 14,
-                fontWeight:
-                    isSelected || isToday ? FontWeight.w600 : FontWeight.w400,
-              ),
+            child: Stack(
+              fit: StackFit.expand,
+              children: <Widget>[
+                Center(
+                  child: Text(
+                    '${day.day}',
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 14,
+                      fontWeight:
+                          isSelected || isToday ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
+                // 有照片日期在数字下方打点，与无照片日期、选中日期区分
+                if (isMarked)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 5,
+                    child: Center(
+                      child: Container(
+                        width: 5,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color:
+                              isSelected ? tokens.textInverse : tokens.brand,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
