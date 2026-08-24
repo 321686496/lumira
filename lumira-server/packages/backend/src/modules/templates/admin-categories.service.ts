@@ -1,23 +1,17 @@
 // lumira-server/packages/backend/src/modules/templates/admin-categories.service.ts
 // Admin 分类管理业务逻辑（spec 3.3 + 11.4 三级分类扩展）
 
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject } from '@nestjs/common';
 import { eq, and, or, asc, sql, isNull } from 'drizzle-orm';
-import * as fs from 'fs';
-import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
 import { templateCategories, templates } from '../../database/schema';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { rowToCategory } from './templates.service';
+import { STORAGE_ADAPTER } from '../../common/storage/storage.provider';
+import type { StorageAdapter } from '../../common/storage/storage-adapter.interface';
 import type { TemplateCategory } from '@lumira/shared';
 import type { UploadFile } from './admin-templates.service';
-
-/** 静态资源 URL 构造（spec 3.5：prefix 不含 /api/v1） */
-function buildIconUrl(key: string, filename: string): string {
-  const base = process.env.BACKEND_PUBLIC_URL || 'http://localhost:3000';
-  return `${base}/uploads/categories/${key}/${filename}`;
-}
 
 /** 从文件名/mimetype 提取扩展名（小写，不含点） */
 function extractIconExt(file: UploadFile): string {
@@ -39,29 +33,15 @@ function extractIconExt(file: UploadFile): string {
   return mimeMap[file.mimetype] || 'bin';
 }
 
-function saveIconFile(uploadDir: string, key: string, filename: string, buffer: Buffer): void {
-  const dir = path.join(uploadDir, 'categories', key);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, filename), buffer);
-}
-
-function deleteCategoryFiles(uploadDir: string, key: string): void {
-  const dir = path.join(uploadDir, 'categories', key);
-  if (fs.existsSync(dir)) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-}
-
 /** 最大层级（四级：type/majorStyle/subStyle/method） */
 const MAX_LEVEL = 4;
 
 @Injectable()
 export class AdminCategoriesService {
-  private readonly uploadDir: string;
-
-  constructor(private readonly dbService: DatabaseService) {
-    this.uploadDir = path.resolve(process.env.UPLOAD_DIR || './data/uploads');
-  }
+  constructor(
+    private readonly dbService: DatabaseService,
+    @Inject(STORAGE_ADAPTER) private readonly storage: StorageAdapter,
+  ) {}
 
   /**
    * Admin 分类列表（含 isActive=0），支持按 level/parentKey 筛选。
@@ -119,13 +99,12 @@ export class AdminCategoriesService {
       throw new ConflictException(`Category key already exists: ${meta.key} under parent ${parentKey ?? '(root)'}`);
     }
 
-    // 处理图标 URL：若上传了图标文件，保存并构造 URL；否则用 meta.iconUrl 或空字符串
+    // 处理图标 URL：若上传了图标文件，保存并构造相对 storageKey；否则用 meta.iconUrl 或空字符串
     let iconUrl = meta.iconUrl || '';
     if (icon) {
       const ext = extractIconExt(icon);
       const filename = `icon.${ext}`;
-      saveIconFile(this.uploadDir, meta.key, filename, icon.buffer);
-      iconUrl = buildIconUrl(meta.key, filename);
+      iconUrl = await this.storage.write('categories', meta.key, filename, icon.buffer);
     }
 
     await db.insert(templateCategories).values({
@@ -161,8 +140,7 @@ export class AdminCategoriesService {
     if (icon) {
       const ext = extractIconExt(icon);
       const filename = `icon.${ext}`;
-      saveIconFile(this.uploadDir, key, filename, icon.buffer);
-      iconUrl = buildIconUrl(key, filename);
+      iconUrl = await this.storage.write('categories', key, filename, icon.buffer);
     } else if (meta.iconUrl !== undefined) {
       iconUrl = meta.iconUrl;
     }
@@ -221,7 +199,7 @@ export class AdminCategoriesService {
     }
 
     await db.delete(templateCategories).where(eq(templateCategories.id, existing.id));
-    deleteCategoryFiles(this.uploadDir, key);
+    await this.storage.deleteByDir('categories', key);
 
     return { success: true };
   }
