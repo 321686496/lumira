@@ -6,11 +6,11 @@
 //
 // 对照：lumira-app/src/composables/useRecommendation.ts 中的 userPreference computed
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
-import '../../../core/db/dao/user_interests_dao.dart';
 import '../recommend/template_ranking.dart';
 import '../data/templates_mock_data.dart';
 
@@ -121,28 +121,33 @@ final recommendedBuiltinTemplatesProvider =
   final base = await dao.getBuiltin(isRecommended: true);
   if (base.isEmpty) return const [];
 
-  // 画像：'{scope}:{key}' -> score
-  final interestsDao = await ref.watch(userInterestsDaoProvider.future);
-  final portrait = <String, double>{};
-  final all = await interestsDao.getAll();
-  for (final e in all.entries) {
-    portrait[e.key] = e.value.score;
+  try {
+    // 画像：'{scope}:{key}' -> score
+    final interestsDao = await ref.watch(userInterestsDaoProvider.future);
+    final portrait = <String, double>{};
+    final all = await interestsDao.getAll();
+    for (final e in all.entries) {
+      portrait[e.key] = e.value.score;
+    }
+
+    // 热度：use_shoot*2 + open_detail
+    final usageDao = await ref.watch(usageDaoProvider.future);
+    final counts =
+        await usageDao.countMap('template', base.map((t) => t.id).toList());
+    final popularity = <String, int>{
+      for (final t in base)
+        t.id: ((counts[t.id]?.useShoot ?? 0) * 2 + (counts[t.id]?.openDetail ?? 0)),
+    };
+
+    final ctx = RankingContext(
+      portrait: portrait,
+      popularity: popularity,
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+    final scores = TemplateRanking().scoreAll(base, ctx);
+    return TemplateRanking().mixExplore(scores);
+  } catch (e) {
+    debugPrint('[recommend] today recommend ranking failed (silent fallback): $e');
+    return base;
   }
-
-  // 热度：use_shoot*2 + open_detail
-  final usageDao = await ref.watch(usageDaoProvider.future);
-  final counts =
-      await usageDao.countMap('template', base.map((t) => t.id).toList());
-  final popularity = <String, int>{
-    for (final t in base)
-      t.id: ((counts[t.id]?.useShoot ?? 0) * 2 + (counts[t.id]?.openDetail ?? 0)),
-  };
-
-  final ctx = RankingContext(
-    portrait: portrait,
-    popularity: popularity,
-    nowMs: DateTime.now().millisecondsSinceEpoch,
-  );
-  final scores = TemplateRanking().scoreAll(base, ctx);
-  return TemplateRanking().mixExplore(scores);
 });

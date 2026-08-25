@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/db/dao/composition_kits_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/growth_dao.dart';
@@ -409,24 +411,30 @@ class RecommendationService {
         (interestById[t.id] ?? 0) * 0.5;
   }
 
-  /// 并行读取模板的个人兴趣（基于用户兴趣画像的三维加权）。未注入 interestDao 时返回空 map。
+  /// 并行读取模板的个人兴趣（基于用户兴趣画像的三维加权）。未注入 interestDao 时返回空 map；
+  /// 画像读取失败时静默回退空 map，不影响 Banner 主流程。
   Future<Map<String, double>> _loadTemplateInterest(
     List<TemplateRecord> picks,
   ) async {
     final dao = _interestDao;
     if (dao == null || picks.isEmpty) return const {};
-    final all = await dao.getAll();
-    final portrait = <String, double>{};
-    for (final e in all.entries) {
-      portrait[e.key] = e.value.score;
+    try {
+      final all = await dao.getAll();
+      final portrait = <String, double>{};
+      for (final e in all.entries) {
+        portrait[e.key] = e.value.score;
+      }
+      final ctx = RankingContext(
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+        portrait: portrait,
+      );
+      return {
+        for (final t in picks) t.id: TemplateRanking().interestFor(t, ctx),
+      };
+    } catch (e) {
+      debugPrint('[recommend] load template interest failed (silent fallback): $e');
+      return const {};
     }
-    final ctx = RankingContext(
-      nowMs: DateTime.now().millisecondsSinceEpoch,
-      portrait: portrait,
-    );
-    return {
-      for (final t in picks) t.id: TemplateRanking().interestFor(t, ctx),
-    };
   }
 
   /// 并行读取系统推荐模板的全站流行度（templateId -> use_shoot*2 + open_detail）。

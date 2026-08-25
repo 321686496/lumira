@@ -66,4 +66,23 @@ void main() {
     final b = scores.firstWhere((s) => s.template.id == 'b');
     expect(a.total > b.total, isTrue);
   });
+
+  test('mixExplore: 热度与近期降权影响最终排序', () {
+    final tpls = [
+      _tpl('hot', 'portrait', style: 'fresh'),
+      _tpl('recent', 'portrait', style: 'fresh'),
+    ];
+    final ctx2 = RankingContext(
+      nowMs: 0,
+      portrait: {},
+      popularity: {'hot': 100, 'recent': 10},
+      recentlyShown: {'recent'},
+    );
+    final out = TemplateRanking().mixExplore(
+      TemplateRanking().scoreAll(tpls, ctx2),
+    );
+    // 高热度且未被近期展示的模板 total 更高，应排在近期展示（被降权）之前
+    expect(out.first.id, 'hot');
+    expect(out.last.id, 'recent');
+  });
 }

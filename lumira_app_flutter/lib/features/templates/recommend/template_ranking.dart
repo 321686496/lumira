@@ -42,7 +42,7 @@ class TemplateScore {
 }
 
 /// 个性化模板排序器（纯 Dart，可单元测试）。
-/// 三维画像权重 + 60/40 熟/新混合；独立新引擎，不与现有 recommendation_engine.dart 混用。
+/// 三维画像权重 + 50/50 熟/新混合；独立新引擎，不与现有 recommendation_engine.dart 混用。
 class TemplateRanking {
   // 三维画像内部权重
   static const double wCategory = 0.50;
@@ -106,9 +106,12 @@ class TemplateRanking {
     return scores;
   }
 
-  /// 熟/新 50/50 混合：新鲜 half 与兴趣 half 交替合并（去重后回填）
+  /// 熟/新 50/50 混合：新鲜 half 与兴趣 half 交替合并（去重后回填），
+  /// 最后用 `total`（含热度/问卷/近期降权）做最终排序，使全量信号生效。
+  /// 混合保证多样性（高分探索与高分兴趣均在池内），total 保证排序质量。
   List<TemplateRecord> mixExplore(List<TemplateScore> scores) {
     if (scores.isEmpty) return const [];
+    final totalById = {for (final s in scores) s.template.id: s.total};
     final explore = [...scores]..sort((a, b) => b.exploration.compareTo(a.exploration));
     final exploit = [...scores]..sort((a, b) => b.interest.compareTo(a.interest));
     final half = (scores.length / 2).ceil();
@@ -134,6 +137,7 @@ class TemplateRanking {
         if (used.add(s.template.id)) out.add(s.template);
       }
     }
+    out.sort((x, y) => (totalById[y.id] ?? 0).compareTo(totalById[x.id] ?? 0));
     return out;
   }
 }
