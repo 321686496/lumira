@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -389,16 +390,30 @@ class _MethodCard extends StatelessWidget {
 }
 
 /// 全屏扫描恢复二维码子页，解析成功后把原始结果回传给父页。
-class _ScannerPage extends StatefulWidget {
+///
+/// 原生相机扫码仅在 android / iOS 可用。当前接入的扫码插件（qr_code_scanner）
+/// 的 [QRView] 只提供了 android / iOS / web 的 platform view 分支，未适配 OHOS，
+/// 在 OHOS 上直接渲染会抛
+/// 「Unsupported operation: ... TargetPlatform.ohos but there isn't a default one」
+/// 的运行时错误。因此对不支持的平台展示与 App 主题一致的引导卡片，引导用户回到
+/// 父页手动输入恢复码（设计文档已约定该兜底，见 2026-08-19-account-recovery-design.md）。
+class _ScannerPage extends ConsumerStatefulWidget {
   const _ScannerPage();
 
   @override
-  State<_ScannerPage> createState() => _ScannerPageState();
+  ConsumerState<_ScannerPage> createState() => _ScannerPageState();
 }
 
-class _ScannerPageState extends State<_ScannerPage> {
+class _ScannerPageState extends ConsumerState<_ScannerPage> {
   final _key = GlobalKey();
   QRViewController? _controller;
+
+  /// 仅 android / iOS 提供原生相扫码 platform view；其余平台（含 OHOS）走主题化回退。
+  bool get _canScanNative {
+    if (kIsWeb) return false;
+    final p = defaultTargetPlatform;
+    return p == TargetPlatform.android || p == TargetPlatform.iOS;
+  }
 
   @override
   void dispose() {
@@ -408,23 +423,104 @@ class _ScannerPageState extends State<_ScannerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = ref.watch(themeTokensProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('扫描恢复二维码')),
-      body: QRView(
-        key: _key,
-        overlay: QrScannerOverlayShape(
-          overlayColor: Colors.black26,
-          borderColor: Theme.of(context).colorScheme.primary,
+      backgroundColor: tokens.canvas,
+      extendBodyBehindAppBar: true,
+      appBar: LumiraNav(
+        title: '扫描恢复二维码',
+        transparent: true,
+        leading: AccountBackButton(tokens: tokens),
+      ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: const Alignment(-0.8, -0.6),
+            radius: 1.2,
+            colors: [
+              tokens.brandSubtle.withOpacity(0.35),
+              tokens.canvas.withOpacity(0.0),
+            ],
+          ),
         ),
-        onQRViewCreated: (c) {
-          _controller = c;
-          c.scannedDataStream.listen((barcode) {
-            final code = barcode.code;
-            if (code != null && code.isNotEmpty) {
-              Navigator.of(context).pop(code);
-            }
-          });
-        },
+        child: SafeArea(
+          child: _canScanNative
+              ? QRView(
+                  key: _key,
+                  overlay: QrScannerOverlayShape(
+                    overlayColor: Colors.black26,
+                    borderColor: tokens.brand,
+                    borderLength: 30,
+                    borderWidth: 5,
+                  ),
+                  onQRViewCreated: (c) {
+                    _controller = c;
+                    c.scannedDataStream.listen((barcode) {
+                      final code = barcode.code;
+                      if (code != null && code.isNotEmpty) {
+                        Navigator.of(context).pop(code);
+                      }
+                    });
+                  },
+                )
+              : _UnsupportedScanGuide(tokens: tokens),
+        ),
+      ),
+    );
+  }
+}
+
+/// 读取不到原生相机扫码能力的引导卡片（主题一致，不崩溃）。
+class _UnsupportedScanGuide extends StatelessWidget {
+  const _UnsupportedScanGuide({required this.tokens});
+
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: NeuCard(
+          onTap: () => Navigator.of(context).pop(),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: tokens.brandSubtle,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(Icons.qr_code_scanner, size: 32, color: tokens.brand),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '当前设备暂不支持摄像头扫码',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '请返回「找回账号」页，手动输入旧设备上保存的恢复码即可找回账号。',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, height: 1.5, color: tokens.textSecondary),
+              ),
+              const SizedBox(height: 20),
+              LumiraButton(
+                variant: ButtonVariant.primary,
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('返回手动输入恢复码'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
