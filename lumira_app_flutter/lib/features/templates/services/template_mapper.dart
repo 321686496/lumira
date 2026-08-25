@@ -51,7 +51,7 @@ class TemplateMapper {
       shortDesc: tpl.meta.shortDesc,
       ambienceJson: ambienceToJson(tpl.meta.ambience ?? const RemoteTemplateAmbienceDto()),
       composition: _compositionToJson(tpl.composition),
-      pose: _poseToJson(tpl.pose),
+      pose: _posesToJson(tpl.poses),
       camera: _cameraToJson(tpl.camera),
       sceneGuide: _sceneGuideToJson(tpl.sceneGuide),
       postProcess: _postProcessToJson(tpl.postProcess),
@@ -179,7 +179,7 @@ class TemplateMapper {
         source: r.source,
       ),
       composition: _compositionFromJson(r.composition),
-      pose: _poseFromJson(r.pose),
+      poses: _posesFromJson(r.pose),
       camera: _cameraFromJson(r.camera),
       sceneGuide: _sceneGuideFromJson(r.sceneGuide),
       postProcess: _postProcessFromJson(r.postProcess),
@@ -291,13 +291,16 @@ class TemplateMapper {
       ambienceJson: TemplateMapper.ambienceToJson(
         form.meta.ambience ?? const RemoteTemplateAmbienceDto()),
       composition: compositionJson,
-      pose: <String, dynamic>{
-        'silhouette': editorSilhouetteToJson(form.pose.silhouette),
-        'position': {'x': form.pose.position.x, 'y': form.pose.position.y},
-        'scale': form.pose.scale,
-        'rotation': form.pose.rotation,
-        'description': form.pose.description,
-      },
+      pose: <dynamic>[
+        <String, dynamic>{
+          'name': '',
+          'silhouette': editorSilhouetteToJson(form.pose.silhouette),
+          'position': {'x': form.pose.position.x, 'y': form.pose.position.y},
+          'scale': form.pose.scale,
+          'rotation': form.pose.rotation,
+          'description': form.pose.description,
+        },
+      ],
       camera: cameraJson,
       sceneGuide: <String, dynamic>{
         'lightDirection': form.sceneGuide.lightDirection,
@@ -322,7 +325,12 @@ class TemplateMapper {
   /// 缺失时回退到 null 默认值，向后兼容旧模板数据。
   static editor.EditorForm toEditorForm(TemplateRecord r) {
     final composition = r.composition;
-    final pose = r.pose;
+    final poseRaw = r.pose;
+    final pose = poseRaw is List
+        ? (poseRaw.isNotEmpty
+            ? (poseRaw.first as Map<String, dynamic>? ?? <String, dynamic>{})
+            : <String, dynamic>{})
+        : (poseRaw as Map<String, dynamic>? ?? <String, dynamic>{});
     final camera = r.camera;
     final sceneGuide = r.sceneGuide;
     final postProcess = r.postProcess;
@@ -566,6 +574,7 @@ class TemplateMapper {
 
   static Map<String, dynamic> _poseToJson(Pose p) {
     return <String, dynamic>{
+      'name': p.name,
       'silhouette': silhouetteToJson(p.silhouette),
       'position': {'x': p.position.x, 'y': p.position.y},
       'scale': p.scale,
@@ -573,6 +582,9 @@ class TemplateMapper {
       'description': p.description,
     };
   }
+
+  static List<dynamic> _posesToJson(List<Pose> poses) =>
+      poses.map(_poseToJson).toList();
 
   static Map<String, dynamic> _cameraToJson(CameraParams c) {
     final json = <String, dynamic>{
@@ -643,6 +655,7 @@ class TemplateMapper {
   static Pose _poseFromJson(Map<String, dynamic> json) {
     final posJson = json['position'] as Map<String, dynamic>?;
     return Pose(
+      name: (json['name'] as String?) ?? '',
       silhouette: silhouetteFromJson((json['silhouette'] as Map<String, dynamic>?) ?? {}),
       position: Position(
         x: (posJson?['x'] as num?)?.toDouble() ?? 0.5,
@@ -652,6 +665,19 @@ class TemplateMapper {
       rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
       description: (json['description'] as String?) ?? '',
     );
+  }
+
+  static List<Pose> _posesFromJson(dynamic raw) {
+    if (raw is List) {
+      return raw
+          .whereType<Map<String, dynamic>>()
+          .map(_poseFromJson)
+          .toList();
+    }
+    if (raw is Map<String, dynamic>) {
+      return [_poseFromJson(raw)];
+    }
+    return const [];
   }
 
   static CameraParams _cameraFromJson(Map<String, dynamic> json) {
@@ -748,7 +774,11 @@ class TemplateMapper {
     if (isPptpl) {
       composition =
           (json['composition'] as Map<String, dynamic>?) ?? <String, dynamic>{};
-      pose = _normalizePose((json['pose'] as Map<String, dynamic>?) ?? {});
+      dynamic rawPose = json['pose'];
+      final poseMap = rawPose is List
+          ? (rawPose.isNotEmpty ? rawPose.first : <String, dynamic>{})
+          : rawPose;
+      pose = _normalizePose((poseMap as Map<String, dynamic>?) ?? {});
       camera = (json['camera'] as Map<String, dynamic>?) ?? <String, dynamic>{};
       sceneGuide =
           (json['sceneGuide'] as Map<String, dynamic>?) ?? <String, dynamic>{};

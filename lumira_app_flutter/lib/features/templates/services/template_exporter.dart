@@ -46,7 +46,7 @@ class TemplateExporter {
         'updatedAt': record.updatedAt,
       },
       'composition': Map<String, dynamic>.from(record.composition),
-      'pose': Map<String, dynamic>.from(record.pose),
+      'pose': record.pose,
       'camera': Map<String, dynamic>.from(record.camera),
       'sceneGuide': Map<String, dynamic>.from(record.sceneGuide),
       'postProcess': Map<String, dynamic>.from(record.postProcess),
