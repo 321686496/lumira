@@ -313,19 +313,6 @@ export default function TemplateForm({
     return [];
   });
   const [poseIndex, setPoseIndex] = useState(0);
-  const [poses, setPoses] = useState<PoseFormData[]>(() => buildInitialPoses());
-  const [pptplFile, setPptplFile] = useState<File | null>(null);
-  const imageInputRef = React.useRef<HTMLInputElement>(null);
-  const pptplInputRef = React.useRef<HTMLInputElement>(null);
-  // 裁剪比例是否随构图比例联动：
-  // - 默认联动（改构图比例时裁剪比例同步为同值）
-  // - 用户单独设置过裁剪比例后解锁（以手动选择为准，不再自动跟随）
-  const [cropRatioLinked, setCropRatioLinked] = useState(() => {
-    const ar = (initial?.composition?.aspectRatio as string | undefined) ?? '3:4';
-    const cr = (initial?.postProcess?.cropRatio as string | undefined) ?? '3:4';
-    return ar === cr;
-  });
-
   const isEdit = Boolean(templateId && initial);
 
   /** 初始化姿势数组：编辑模式从 initial.poses（缺省用 initial.pose），新建默认单姿势 */
@@ -368,6 +355,19 @@ export default function TemplateForm({
       rotation: 0,
     }];
   };
+
+  const [poses, setPoses] = useState<PoseFormData[]>(() => buildInitialPoses());
+  const [pptplFile, setPptplFile] = useState<File | null>(null);
+  const imageInputRef = React.useRef<HTMLInputElement>(null);
+  const pptplInputRef = React.useRef<HTMLInputElement>(null);
+  // 裁剪比例是否随构图比例联动：
+  // - 默认联动（改构图比例时裁剪比例同步为同值）
+  // - 用户单独设置过裁剪比例后解锁（以手动选择为准，不再自动跟随）
+  const [cropRatioLinked, setCropRatioLinked] = useState(() => {
+    const ar = (initial?.composition?.aspectRatio as string | undefined) ?? '3:4';
+    const cr = (initial?.postProcess?.cropRatio as string | undefined) ?? '3:4';
+    return ar === cr;
+  });
 
   const buildDefaults = (): FormValues => {
     if (!initial) {
