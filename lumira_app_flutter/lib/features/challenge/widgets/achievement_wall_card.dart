@@ -39,13 +39,135 @@ class AchievementWallCard extends ConsumerWidget {
                 itemCount: achievements.length,
                 itemBuilder: (context, index) {
                   final achievement = achievements[index];
-                  return _AchievementBadge(achievement: achievement, tokens: tokens);
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _showDetail(context, achievement, tokens),
+                    child: _AchievementBadge(
+                        achievement: achievement, tokens: tokens),
+                  );
                 },
               ),
             ],
           );
         },
       ),
+    );
+  }
+
+  /// 点击成就弹出详情，展示图标、描述与完成情况
+  void _showDetail(
+      BuildContext context, ChallengeAchievement achievement, ThemeTokens tokens) {
+    final percent = (achievement.progress * 100).clamp(0, 100).round();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: tokens.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 成就图标
+              Center(
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: achievement.unlocked
+                        ? tokens.brandSubtle
+                        : tokens.canvasDeep,
+                    border: achievement.unlocked
+                        ? Border.all(color: tokens.brand, width: 1.5)
+                        : null,
+                  ),
+                  child: Icon(
+                    achievement.unlocked
+                        ? achievement.icon
+                        : Icons.lock_outline,
+                    size: 32,
+                    color: achievement.unlocked
+                        ? tokens.brand
+                        : tokens.textTertiary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 标题
+              Text(
+                achievement.title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // 描述
+              Text(
+                achievement.description,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: tokens.textSecondary,
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // 解锁状态胶囊
+              Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: achievement.unlocked
+                        ? tokens.successSubtle
+                        : tokens.surfaceAlt,
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  child: Text(
+                    achievement.unlocked ? '已解锁' : '未解锁',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: achievement.unlocked
+                          ? tokens.success
+                          : tokens.textTertiary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              // 解锁进度
+              Row(
+                children: [
+                  Expanded(
+                    child: LumiraProgress.linear(
+                      value: achievement.progress.clamp(0.0, 1.0),
+                      minHeight: 8,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '$percent%',
+                    style: TextStyle(
+                      fontFamily: 'Courier New',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: tokens.brand,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

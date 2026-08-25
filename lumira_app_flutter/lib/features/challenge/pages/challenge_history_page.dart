@@ -326,88 +326,90 @@ class _HistoryTimelineTile extends ConsumerWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: NeuCard(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 日期 + 状态
-                    Row(
-                      children: [
-                        Text(
-                          _formatDate(record.date),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: tokens.textTertiary,
-                          ),
-                        ),
-                        const Spacer(),
-                        _StatusChip(
-                          tokens: tokens,
-                          status: record.status,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // 标题
-                    Text(
-                      record.title,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    // 分类 + XP
-                    Row(
-                      children: [
-                        _CategoryChip(
-                            tokens: tokens, category: record.category),
-                        const SizedBox(width: 8),
-                        if (isDone) ...[
-                          Icon(Icons.stars_outlined,
-                              size: 14, color: tokens.brand),
-                          const SizedBox(width: 2),
+              // 整卡可点击跳转历史挑战记录详情页（不再仅照片可点）
+              child: GestureDetector(
+                onTap: () => _viewDetail(context, ref),
+                behavior: HitTestBehavior.opaque,
+                child: NeuCard(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 日期 + 状态
+                      Row(
+                        children: [
                           Text(
-                            '+${record.rewardXP} XP',
+                            _formatDate(record.date),
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.brand,
+                              fontWeight: FontWeight.w500,
+                              color: tokens.textTertiary,
                             ),
                           ),
+                          const Spacer(),
+                          _StatusChip(
+                            tokens: tokens,
+                            status: record.status,
+                          ),
                         ],
-                      ],
-                    ),
-                    // 照片缩略图横滑（真实数据 photoIds 可能为空，则不渲染）
-                    if (record.photoIds.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 72,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: record.photoIds.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(width: 8),
-                          itemBuilder: (context, index) {
-                            final photoId = record.photoIds[index];
-                            return GestureDetector(
-                              onTap: () => _viewDetail(context, ref),
-                              child: ClipRRect(
+                      ),
+                      const SizedBox(height: 8),
+                      // 标题
+                      Text(
+                        record.title,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      // 分类 + XP
+                      Row(
+                        children: [
+                          _CategoryChip(
+                              tokens: tokens, category: record.category),
+                          const SizedBox(width: 8),
+                          if (isDone) ...[
+                            Icon(Icons.stars_outlined,
+                                size: 14, color: tokens.brand),
+                            const SizedBox(width: 2),
+                            Text(
+                              '+${record.rewardXP} XP',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: tokens.brand,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      // 照片缩略图横滑（真实数据 photoIds 可能为空，则不渲染）
+                      if (record.photoIds.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 72,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: record.photoIds.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 8),
+                            itemBuilder: (context, index) {
+                              final photoId = record.photoIds[index];
+                              return ClipRRect(
                                 borderRadius: BorderRadius.circular(8),
                                 child: _PhotoThumb(
                                   photoId: photoId,
                                   tokens: tokens,
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -430,7 +432,7 @@ class _HistoryTimelineTile extends ConsumerWidget {
   void _viewDetail(BuildContext context, WidgetRef ref) {
     GoRouter.of(context).push(
       RouteNames.build(
-        RouteNames.challengeDetail,
+        RouteNames.challengeHistoryDetail,
         {
           RouteNames.paramChallengeId: record.challengeId,
           RouteNames.paramDate: record.date,

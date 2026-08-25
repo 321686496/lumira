@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// 附加挑战奖励 = 对应主挑战的 60%（round 取整），确保奖励低于主挑战。
+/// 所有展示/入账/发放附加挑战 XP 的地方必须共用本函数，保证口径一致。
+int subChallengeRewardXP(int mainRewardXP) => (mainRewardXP * 0.6).round();
+
 /// 挑战状态
 enum ChallengeStatus {
   /// 已完成

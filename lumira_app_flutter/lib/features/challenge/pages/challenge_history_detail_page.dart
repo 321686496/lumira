@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'dart:io' show File;
 
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -18,32 +18,33 @@ import '../data/challenge_pool.dart';
 import '../data/challenge_providers.dart';
 import '../widgets/challenge_tag.dart';
 
-/// Challenge 详情页
+/// 挑战历史记录详情页
 ///
-/// 视觉规格来源：lumira-app/src/pages/challenge/detail.vue
-/// 5 个 section:
-/// 1. LumiraNav（标题"挑战详情" + 左侧返回箭头）
-/// 2. HeroCard（金色渐变背景 + badge + status + 标题 + 描述 + 奖励 + 进度条）
-/// 3. 完成的作品（3:4 作品图 + 日期 + 标题 + tags）
-/// 4. 挑战要求（3 个 req-item）
-/// 5. 拍摄建议（3 个 tip-row，gold/green/red 三色）
-/// 6. 底部操作（"返回挑战" outline + "再拍一张" brand）
-class ChallengeDetailPage extends ConsumerStatefulWidget {
-  const ChallengeDetailPage({super.key, this.challengeId, this.date});
+/// 与挑战详情页（challenge_detail_page.dart）分离：
+/// - 只读展示某一天的挑战历史记录，数据来自 allHistoryProvider（全量历史，不限周）
+/// - 已完成记录显示正确的进度 1/1 与当时的作品照片
+/// - **不展示"去拍照 / 再拍一张"按钮**，底部仅"返回"
+class ChallengeHistoryDetailPage extends ConsumerStatefulWidget {
+  const ChallengeHistoryDetailPage({
+    super.key,
+    this.challengeId,
+    this.date,
+  });
 
   final String? challengeId;
-  /// 指定日期（YYYY-MM-DD），为空时默认使用今天
+
+  /// 指定日期（YYYY-MM-DD）
   final String? date;
 
   @override
-  ConsumerState<ChallengeDetailPage> createState() =>
-      _ChallengeDetailPageState();
+  ConsumerState<ChallengeHistoryDetailPage> createState() =>
+      _ChallengeHistoryDetailPageState();
 }
 
-class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
+class _ChallengeHistoryDetailPageState
+    extends ConsumerState<ChallengeHistoryDetailPage> {
   final ScrollController _scrollController = ScrollController();
   bool _scrolled = false;
-  String? _completedPhotoId;
 
   static const double _scrollThreshold = 10.0;
 
@@ -68,65 +69,28 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
   }
 
   void _back() {
-    // Forced fix: canPop 保护，避免 pop 到空栈退出应用
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
-      GoRouter.of(context).go(RouteNames.challenge);
+      GoRouter.of(context).go(RouteNames.challengeHistory);
     }
   }
 
-  void _goCapture() {
-    final cid = widget.challengeId;
-    if (cid == null || cid.isEmpty) {
-      GoRouter.of(context).push(RouteNames.capture);
-    } else {
-      GoRouter.of(context).push(
-        '${RouteNames.capture}?${RouteNames.paramChallengeId}=${Uri.encodeComponent(cid)}',
-      );
-    }
-  }
-
-  /// 从题库 + 真实历史记录构建挑战详情
-  /// - hasCompletedWork: 该挑战今日是否已完成（status=done 且有 photoIds）
-  /// - dailyChallengeId: 今日每日挑战 id，用于区分主/附加挑战（附加挑战奖励=主挑战的 60%）
-  ChallengeDetail? _buildDetailFromPool(
-    String? challengeId,
-    ChallengeHistoryRecord? todayRecord, {
-    String? dailyChallengeId,
-  }) {
+  /// 根据历史记录 + 题库构建只读挑战详情
+  ChallengeDetail? _buildDetail(ChallengeHistoryRecord? record) {
+    final challengeId = widget.challengeId;
     if (challengeId == null) return null;
     final item = ChallengePool.byId(challengeId);
     if (item == null) return null;
 
-    final isDone = todayRecord?.status == ChallengeStatus.done;
-    final hasPhoto =
-        isDone && todayRecord!.photoIds.isNotEmpty;
+    final isDone = record != null && record.status == ChallengeStatus.done;
     final progressCurrent = isDone ? 1 : 0;
-
-    // 奖励口径：已完成→以历史记录入账值为准（附加挑战在提交时按 60% 入账）；
-    // 未完成→主挑战显示题库奖励，附加挑战显示 60%（与支行列表/确认页一致）。
-    final int rewardXP;
-    if (isDone && todayRecord != null && todayRecord.rewardXP > 0) {
-      rewardXP = todayRecord.rewardXP;
-    } else if (challengeId == dailyChallengeId) {
-      rewardXP = item.rewardXP;
+    // 已完成以历史入账值为准（附加挑战按 60% 入账），否则展示题库奖励
+    int rewardXP;
+    if (isDone && record.rewardXP > 0) {
+      rewardXP = record.rewardXP;
     } else {
-      rewardXP = subChallengeRewardXP(item.rewardXP);
-    }
-
-    // 完成作品（仅在已完成且有照片时构造）
-    Work? completedWork;
-    if (hasPhoto) {
-      completedWork = Work(
-        imageUrl: '',
-        date: todayRecord.date,
-        title: item.title,
-        tags: const [],
-      );
-      _completedPhotoId = todayRecord.photoIds.isNotEmpty
-          ? todayRecord.photoIds.last
-          : null;
+      rewardXP = item.rewardXP;
     }
 
     return ChallengeDetail(
@@ -138,7 +102,6 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
       progressCurrent: progressCurrent,
       progressTotal: 1,
       status: isDone ? ChallengeStatus.done : ChallengeStatus.pending,
-      completedWork: completedWork,
       requirements: [
         Requirement(
           index: 1,
@@ -186,8 +149,7 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     final style = ref.watch(uiStyleProvider);
-    final historyAsync = ref.watch(weeklyHistoryProvider);
-    final dailyState = ref.watch(dailyChallengeStateProvider).value;
+    final historyAsync = ref.watch(allHistoryProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -199,42 +161,37 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                 style: TextStyle(color: tokens.textSecondary)),
           ),
           data: (history) {
-            // 从历史记录中找到与当前 challengeId 匹配的记录。
-            // 使用 widget.date 指定日期，为空时默认今天。
-            final now = DateTime.now();
-            final targetDate = widget.date ??
-                '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-            final todayRecord = history
-                .where((r) =>
-                    r.date == targetDate &&
-                    r.challengeId == widget.challengeId)
-                .toList()
-              ..sort((a, b) => b.date.compareTo(a.date));
-            final record =
-                todayRecord.isNotEmpty ? todayRecord.first : null;
-            final detail = _buildDetailFromPool(
-              widget.challengeId,
-              record,
-              dailyChallengeId: dailyState?.selected?.id,
-            );
+            // 从全量历史中查找匹配 challengeId + date 的记录（以其为准，显示完成状态）
+            ChallengeHistoryRecord? record;
+            if (widget.challengeId != null && widget.date != null) {
+              final matches = history.where((r) =>
+                  r.challengeId == widget.challengeId &&
+                  r.date == widget.date);
+              if (matches.isNotEmpty) {
+                record = matches.first;
+              }
+            }
+            final detail = _buildDetail(record);
 
             if (detail == null) {
               return Center(
-                child: Text('挑战不存在',
+                child: Text('记录不存在',
                     style: TextStyle(color: tokens.textSecondary)),
               );
             }
 
-            final hasCompletedWork = detail.completedWork != null;
+            final photoIds = record != null ? record.photoIds : const <String>[];
+            final isDone = detail.status == ChallengeStatus.done;
 
             return Stack(
               children: [
                 Column(
                   children: [
                     LumiraNav(
-                      title: '挑战详情',
+                      title: '挑战记录详情',
                       scrolled: _scrolled,
                       transparent: true,
+                      leading: _BackButton(tokens: tokens, onBack: _back),
                     ),
                     Expanded(
                       child: ListView(
@@ -246,16 +203,16 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                                 detail: detail, tokens: tokens, style: style),
                           ),
                           const SizedBox(height: 24),
-                          // 完成的作品（仅有照片时显示）
-                          if (hasCompletedWork) ...[
+                          // 完成的作品（仅已完成且有照片时显示）
+                          if (isDone && photoIds.isNotEmpty) ...[
                             const _SectionTitle(text: '完成的作品'),
                             const SizedBox(height: 12),
                             FadeUp(
                               delay: const Duration(milliseconds: 80),
                               child: _WorkCard(
-                                photoId: _completedPhotoId ?? '',
-                                date: detail.completedWork!.date,
-                                title: detail.completedWork!.title,
+                                photoIds: photoIds,
+                                date: record!.date,
+                                title: detail.title,
                                 rewardXP: detail.rewardXP,
                                 tokens: tokens,
                                 style: style,
@@ -274,9 +231,7 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                               child: Column(
                                 children: detail.requirements
                                     .map((r) => _RequirementItem(
-                                          requirement: r,
-                                          tokens: tokens,
-                                        ))
+                                        requirement: r, tokens: tokens))
                                     .toList(),
                               ),
                             ),
@@ -298,41 +253,20 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
                             ),
                           ),
                           const SizedBox(height: 28),
-                          // 底部操作：未完成显示"去拍照"，已完成显示"再拍一张"
+                          // 底部：历史记录详情只读，仅"返回"（无去拍照）
                           FadeUp(
                             delay: const Duration(milliseconds: 320),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: LumiraButton(
-                                    variant: ButtonVariant.secondary,
-                                    onPressed: _back,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: const [
-                                        Icon(Icons.arrow_back),
-                                        SizedBox(width: 8),
-                                        Text('返回挑战'),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: LumiraButton(
-                                    variant: ButtonVariant.primary,
-                                    onPressed: _goCapture,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.camera_alt_outlined),
-                                        const SizedBox(width: 8),
-                                        Text(hasCompletedWork ? '再拍一张' : '去拍照'),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            child: LumiraButton(
+                              variant: ButtonVariant.primary,
+                              onPressed: _back,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.arrow_back),
+                                  SizedBox(width: 8),
+                                  Text('返回'),
+                                ],
+                              ),
                             ),
                           ),
                         ],
@@ -349,6 +283,24 @@ class _ChallengeDetailPageState extends ConsumerState<ChallengeDetailPage> {
   }
 }
 
+class _BackButton extends StatelessWidget {
+  const _BackButton({required this.tokens, required this.onBack});
+  final ThemeTokens tokens;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onBack,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(Icons.arrow_back_ios_new, size: 20, color: tokens.textPrimary),
+      ),
+    );
+  }
+}
+
 class _SectionTitle extends StatelessWidget {
   const _SectionTitle({required this.text});
 
@@ -358,11 +310,7 @@ class _SectionTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: const TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.w600,
-        height: 1.2,
-      ),
+      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, height: 1.2),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );
@@ -370,7 +318,8 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.detail, required this.tokens, required this.style});
+  const _HeroCard(
+      {required this.detail, required this.tokens, required this.style});
 
   final ChallengeDetail detail;
   final ThemeTokens tokens;
@@ -381,12 +330,11 @@ class _HeroCard extends StatelessWidget {
     final progressPercent = detail.progressTotal == 0
         ? 0.0
         : detail.progressCurrent / detail.progressTotal;
-    // Forced fix: neumorphic 风格下移除硬编码金色渐变，改用 surface 纯色 + shadowConvex 双向阴影
     final isNeumorphic = style == UIStyle.neumorphic;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24), // 40rpx 48rpx → 20 24
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       decoration: BoxDecoration(
         color: isNeumorphic ? tokens.surface : null,
         gradient: isNeumorphic
@@ -396,13 +344,12 @@ class _HeroCard extends StatelessWidget {
                 end: Alignment.bottomRight,
                 colors: [Color(0xFFFDF6EC), Color(0xFFF5E6CC)],
               ),
-        borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
+        borderRadius: BorderRadius.circular(14),
         boxShadow: isNeumorphic ? tokens.shadowConvex : const [],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // badge 行：左 badge + 右 status
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -421,7 +368,8 @@ class _HeroCard extends StatelessWidget {
               ),
               if (detail.status == ChallengeStatus.done)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: tokens.successSubtle,
                     borderRadius: BorderRadius.circular(6),
@@ -439,11 +387,10 @@ class _HeroCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          // 标题
           Text(
             detail.title,
             style: TextStyle(
-              fontSize: 20, // 40rpx → 20dp
+              fontSize: 20,
               fontWeight: FontWeight.w600,
               color: tokens.textPrimary,
               height: 1.3,
@@ -453,7 +400,6 @@ class _HeroCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
-          // 描述
           Text(
             detail.description,
             style: TextStyle(
@@ -465,7 +411,6 @@ class _HeroCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 16),
-          // 奖励
           Row(
             children: [
               Icon(Icons.emoji_events_outlined, size: 16, color: tokens.brand),
@@ -481,7 +426,6 @@ class _HeroCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          // 进度条
           Row(
             children: [
               Expanded(
@@ -493,10 +437,7 @@ class _HeroCard extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 '${detail.progressCurrent}/${detail.progressTotal} 已完成',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: tokens.textTertiary,
-                ),
+                style: TextStyle(fontSize: 12, color: tokens.textTertiary),
               ),
             ],
           ),
@@ -506,9 +447,10 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
+/// 完成的作品：以横滑列表展示所有照片（支持多张），单张时也居中展示
 class _WorkCard extends ConsumerWidget {
   const _WorkCard({
-    required this.photoId,
+    required this.photoIds,
     required this.date,
     required this.title,
     required this.rewardXP,
@@ -516,7 +458,7 @@ class _WorkCard extends ConsumerWidget {
     required this.style,
   });
 
-  final String photoId;
+  final List<String> photoIds;
   final String date;
   final String title;
   final int rewardXP;
@@ -526,90 +468,175 @@ class _WorkCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isNeumorphic = style == UIStyle.neumorphic;
-    return Container(
-      decoration: BoxDecoration(
-        color: isNeumorphic ? tokens.surface : tokens.canvas,
-        borderRadius: BorderRadius.circular(14),
-        border: isNeumorphic ? null : Border.all(color: tokens.divider, width: 1),
-        boxShadow: isNeumorphic
-            ? tokens.shadowConvexSubtle
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  offset: const Offset(0, 2),
-                  blurRadius: 8,
+
+    Widget card() {
+      final content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AspectRatio(
+            aspectRatio: 3 / 4,
+            child: _WorkImage(photoId: photoIds.first, tokens: tokens),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today_outlined,
+                        size: 12, color: tokens.textTertiary),
+                    const SizedBox(width: 6),
+                    Text(
+                      date,
+                      style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    ChallengeTagWidget(
+                      tag: ChallengeTag(
+                        label: '+$rewardXP XP',
+                        color: ChallengeTagColor.gold,
+                        showCheckIcon: false,
+                      ),
+                    ),
+                    const ChallengeTagWidget(
+                      tag: ChallengeTag(
+                        label: '已完成',
+                        color: ChallengeTagColor.green,
+                        showCheckIcon: false,
+                      ),
+                    ),
+                  ],
                 ),
               ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 3 / 4,
-              child: _buildWorkImage(ref),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.calendar_today_outlined, size: 12, color: tokens.textTertiary),
-                      const SizedBox(width: 6),
-                      Text(
-                        date,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.textTertiary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      ChallengeTagWidget(
-                        tag: ChallengeTag(
-                          label: '+$rewardXP XP',
-                          color: ChallengeTagColor.gold,
-                          showCheckIcon: false,
-                        ),
-                      ),
-                      ChallengeTagWidget(
-                        tag: ChallengeTag(
-                          label: '已完成',
-                          color: ChallengeTagColor.green,
-                          showCheckIcon: false,
-                        ),
-                      ),
-                    ],
+          ),
+        ],
+      );
+
+      return Container(
+        decoration: BoxDecoration(
+          color: isNeumorphic ? tokens.surface : tokens.canvas,
+          borderRadius: BorderRadius.circular(14),
+          border:
+              isNeumorphic ? null : Border.all(color: tokens.divider, width: 1),
+          boxShadow: isNeumorphic
+              ? tokens.shadowConvexSubtle
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    offset: const Offset(0, 2),
+                    blurRadius: 8,
                   ),
                 ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            width: double.infinity,
+            child: content,
+          ),
+        ),
+      );
+    }
+
+    if (photoIds.length <= 1) {
+      return card();
+    }
+
+    // 多张照片：横滑列表
+    return SizedBox(
+      height: 340,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: photoIds.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              width: 220,
+              decoration: BoxDecoration(
+                color: isNeumorphic ? tokens.surface : tokens.canvas,
+                borderRadius: BorderRadius.circular(14),
+                border: isNeumorphic
+                    ? null
+                    : Border.all(color: tokens.divider, width: 1),
+                boxShadow: isNeumorphic ? tokens.shadowConvexSubtle : null,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 3 / 4,
+                      child: _WorkImage(
+                          photoId: photoIds[index], tokens: tokens),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          const ChallengeTagWidget(
+                            tag: ChallengeTag(
+                              label: '已完成',
+                              color: ChallengeTagColor.green,
+                              showCheckIcon: false,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
+}
 
-  Widget _buildWorkImage(WidgetRef ref) {
+/// 单张作品图，从 gallery_items 加载真实图片
+class _WorkImage extends ConsumerWidget {
+  const _WorkImage({required this.photoId, required this.tokens});
+
+  final String photoId;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     return FutureBuilder<GalleryItemRecord?>(
       future: ref
           .read(galleryDaoProvider.future)
@@ -629,10 +656,7 @@ class _WorkCard extends ConsumerWidget {
         }
         final item = snapshot.data;
         if (item == null) {
-          return Container(
-            color: tokens.divider,
-            child: Icon(Icons.image, color: tokens.textTertiary),
-          );
+          return _placeholder();
         }
         final filePath = item.filePath ?? item.originalPath;
         if (filePath != null && filePath.isNotEmpty) {
@@ -683,9 +707,8 @@ class _RequirementItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 圆形序号
           Container(
-            width: 24, // 48rpx → 24dp
+            width: 24,
             height: 24,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
@@ -702,7 +725,6 @@ class _RequirementItem extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          // 标题 + 描述
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -731,7 +753,7 @@ class _RequirementItem extends StatelessWidget {
               ],
             ),
           ),
-          ],
+        ],
       ),
     );
   }
@@ -752,18 +774,16 @@ class _TipRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 64×64 圆角图标盒
           Container(
-            width: 32, // 64rpx → 32dp
+            width: 32,
             height: 32,
             decoration: BoxDecoration(
               color: colors.background,
-              borderRadius: BorderRadius.circular(8), // 16rpx → 8dp
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(tip.icon, size: 16, color: colors.icon),
           ),
           const SizedBox(width: 12),
-          // 标题 + 描述
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

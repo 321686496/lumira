@@ -210,7 +210,7 @@ class LocalChallengeRepository implements ChallengeRepository {
         id: item.id, title: item.title, icon: _categoryIcon(cat),
         status: isDone ? ChallengeStatus.done : ChallengeStatus.pending,
         progressCurrent: isDone ? 1 : 0, progressTotal: 1,
-        rewardXP: (item.rewardXP * 0.6).round(),
+        rewardXP: subChallengeRewardXP(item.rewardXP),
         tags: [ChallengeTag(label: ChallengeCategory.label(cat), color: _tagColor(cat))],
       ));
     }

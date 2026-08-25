@@ -70,6 +70,14 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
       );
     }
 
+    // 计算本次实际发放的 XP：主挑战=题库奖励，附加挑战=主挑战的 60%。
+    // 判断标准：今日每日挑战（dailyChallengeStateProvider.selected）的 id 是否等于当前提交的挑战 id。
+    final dailyState = ref.watch(dailyChallengeStateProvider).value;
+    final isMainChallenge = dailyState?.selected?.id == widget.challengeId;
+    final effectiveXP = isMainChallenge
+        ? poolItem.rewardXP
+        : subChallengeRewardXP(poolItem.rewardXP);
+
     return Scaffold(
       backgroundColor: tokens.canvas,
       body: SafeArea(
@@ -100,6 +108,7 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
                     delay: const Duration(milliseconds: 80),
                     child: _ChallengeInfoCard(
                       poolItem: poolItem,
+                      rewardXP: effectiveXP,
                       tokens: tokens,
                     ),
                   ),
@@ -157,7 +166,7 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
                       variant: ButtonVariant.primary,
                       onPressed: _submitting
                           ? null
-                          : () => _onSubmit(poolItem),
+                          : () => _onSubmit(poolItem, effectiveXP),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -202,7 +211,7 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
   }
 
   /// 提交：回写挑战状态 done + 累加 XP + 关联 photoId 到挑战历史
-  Future<void> _onSubmit(ChallengePoolItem poolItem) async {
+  Future<void> _onSubmit(ChallengePoolItem poolItem, int rewardXP) async {
     setState(() => _submitting = true);
     try {
       final dao = await ref.read(challengeDaoProvider.future);
@@ -224,7 +233,7 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
           challengeId: poolItem.id,
           category: poolItem.category,
           title: poolItem.title,
-          rewardXP: poolItem.rewardXP,
+          rewardXP: rewardXP,
           status: ChallengeStatus.done,
           selectedAt: nowMs,
           completedAt: nowMs,
@@ -249,7 +258,7 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
           db: db,
           repo: repo,
           source: 'challenge',
-          amount: poolItem.rewardXP,
+          amount: rewardXP,
           refId: poolItem.id,
         );
       } catch (e) {
@@ -271,7 +280,7 @@ class _ChallengeConfirmPageState extends ConsumerState<ChallengeConfirmPage> {
       GoRouter.of(context).go(
         '${RouteNames.challengeComplete}'
         '?${RouteNames.paramChallengeId}=${Uri.encodeComponent(poolItem.id)}'
-        '&rewardXp=${poolItem.rewardXP}'
+        '&rewardXp=$rewardXP'
         '&title=${Uri.encodeComponent(poolItem.title)}',
       );
     } catch (e) {
@@ -401,9 +410,14 @@ class _Placeholder extends StatelessWidget {
 
 /// 挑战信息卡：badge + 标题 + 描述 + 奖励 + tip
 class _ChallengeInfoCard extends StatelessWidget {
-  const _ChallengeInfoCard({required this.poolItem, required this.tokens});
+  const _ChallengeInfoCard({
+    required this.poolItem,
+    required this.rewardXP,
+    required this.tokens,
+  });
 
   final ChallengePoolItem poolItem;
+  final int rewardXP;
   final ThemeTokens tokens;
 
   @override
@@ -442,7 +456,7 @@ class _ChallengeInfoCard extends StatelessWidget {
                       size: 14, color: tokens.brand),
                   const SizedBox(width: 4),
                   Text(
-                    '+${poolItem.rewardXP} XP',
+                    '+$rewardXP XP',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
