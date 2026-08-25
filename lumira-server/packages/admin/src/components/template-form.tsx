@@ -15,7 +15,7 @@ import {
 import { FileUpload } from '@/components/ui/file-upload';
 import { compressImage } from '@/lib/image-compress';
 import { toAssetUrl } from '@/lib/asset-url';
-import { Upload as UploadIcon, ArrowLeft, ArrowRight, Check } from '@phosphor-icons/react/dist/ssr';
+import { Upload as UploadIcon, X, Plus, ArrowLeft, ArrowRight, Check } from '@phosphor-icons/react/dist/ssr';
 import { useToast } from '@/hooks/use-toast';
 import { createTemplate, updateTemplate } from '@/actions/templates';
 import SilhouettePreview from '@/components/silhouette-preview';
@@ -87,6 +87,22 @@ const FILL_LIGHT_COLORS = [
 const ADVANCED_COLOR_KEYS = ['highlights', 'shadows', 'blackPoint', 'clarity', 'vibrance', 'brilliance'] as const;
 
 const NONE_VALUE = '__none__';
+
+/** 单个姿势的编辑期数据（多姿势编辑器用） */
+interface PoseFormData {
+  name: string;
+  description: string;
+  silhouetteType: string;
+  silhouetteBuiltinKey: string;
+  /** 新上传的剪影图片文件（提交时随表单发送） */
+  silhouetteFile: File | null;
+  /** 已存在的剪影 URL（编辑模式，image 类型预览用） */
+  silhouetteUrl: string | null;
+  positionX: number;
+  positionY: number;
+  scale: number;
+  rotation: number;
+}
 
 const SEASONS_OPTIONS = [
   { value: 'spring', label: '春' },
@@ -161,7 +177,6 @@ const schema = z.object({
   category: z.string().min(1, '请选择分类'),
   classificationMajorStyle: z.string().optional().default(NONE_VALUE),
   classificationSubStyle: z.string().optional().default(NONE_VALUE),
-  classificationMethod: z.string().optional().default(NONE_VALUE),
   price: z.coerce.number().int().min(0, '价格不能为负'),
   description: z.string().optional().default(''),
   shortDesc: z.string().max(20, '短简介最多 20 字').optional().default(''),
@@ -256,6 +271,16 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** File → base64 data URL（多姿势剪影：后端仅对 poses[0] 落盘文件，其余姿势剪影以 data URL 内嵌提交） */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 interface TemplateFormProps {
   categories: TemplateCategory[];
   initial?: AdminTemplateDetail;
@@ -273,9 +298,19 @@ export default function TemplateForm({
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [silhouetteFile, setSilhouetteFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>(() => {
+    if (templateId && initial?.images) {
+      return initial.images
+        .map((img) => toAssetUrl(img.url, backendUrl))
+        .filter(Boolean) as string[];
+    }
+    return [];
+  });
+  const [poseIndex, setPoseIndex] = useState(0);
+  const [poses, setPoses] = useState<PoseFormData[]>(() => buildInitialPoses());
   const [pptplFile, setPptplFile] = useState<File | null>(null);
+  const imageInputRef = React.useRef<HTMLInputElement>(null);
   const pptplInputRef = React.useRef<HTMLInputElement>(null);
   // 裁剪比例是否随构图比例联动：
   // - 默认联动（改构图比例时裁剪比例同步为同值）
@@ -288,6 +323,47 @@ export default function TemplateForm({
 
   const isEdit = Boolean(templateId && initial);
 
+  /** 初始化姿势数组：编辑模式从 initial.poses（缺省用 initial.pose），新建默认单姿势 */
+  const buildInitialPoses = (): PoseFormData[] => {
+    const fallbackPose = (raw: Record<string, unknown> | undefined): PoseFormData => {
+      const silhouette = (raw?.silhouette ?? {}) as Record<string, unknown>;
+      const position = (raw?.position ?? {}) as Record<string, unknown>;
+      return {
+        name: (raw?.name as string) ?? '',
+        description: (raw?.description as string) ?? '',
+        silhouetteType: (silhouette.type as string) ?? 'builtin',
+        silhouetteBuiltinKey: silhouette.type === 'image' ? '' : ((silhouette.data as string) ?? ''),
+        silhouetteFile: null,
+        // 保留原始绝对 URL（编辑模式 image 类型回填用），预览时再经 toAssetUrl 转换
+        silhouetteUrl: silhouette.type === 'image' ? ((silhouette.url as string) ?? (silhouette.data as string) ?? '') || null : null,
+        positionX: num(position.x, 0.5),
+        positionY: num(position.y, 0.5),
+        scale: num(raw?.scale, 1.0),
+        rotation: num(raw?.rotation, 0),
+      };
+    };
+    if (isEdit && initial?.poses && initial.poses.length > 0) {
+      return initial.poses.map((p) =>
+        fallbackPose(p as unknown as Record<string, unknown>),
+      );
+    }
+    if (isEdit && initial?.pose) {
+      return [fallbackPose(initial.pose as Record<string, unknown>)];
+    }
+    return [{
+      name: '',
+      description: '',
+      silhouetteType: 'builtin',
+      silhouetteBuiltinKey: '',
+      silhouetteFile: null,
+      silhouetteUrl: null,
+      positionX: 0.5,
+      positionY: 0.5,
+      scale: 1.0,
+      rotation: 0,
+    }];
+  };
+
   const buildDefaults = (): FormValues => {
     if (!initial) {
       const typeCategories = categories.filter((c) => c.level === 1);
@@ -296,7 +372,6 @@ export default function TemplateForm({
         category: typeCategories[0]?.key ?? 'portrait',
         classificationMajorStyle: NONE_VALUE,
         classificationSubStyle: NONE_VALUE,
-        classificationMethod: NONE_VALUE,
         price: 0,
         description: '',
         shortDesc: '',
@@ -376,7 +451,6 @@ export default function TemplateForm({
       category: initial.category,
       classificationMajorStyle: initial.classification?.majorStyle || NONE_VALUE,
       classificationSubStyle: initial.classification?.subStyle || NONE_VALUE,
-      classificationMethod: initial.classification?.method || NONE_VALUE,
       price: initial.price,
       description: initial.description ?? '',
       shortDesc: initial.shortDesc ?? '',
@@ -558,25 +632,119 @@ export default function TemplateForm({
     }
   };
 
-  const onSubmit = (data: FormValues) => {
+  /** 预览 URL：新上传的 blob 原样返回，既有绝对/相对 URL 经 toAssetUrl 归一 */
+  const poseSilhouettePreview = (p: PoseFormData): string | null => {
+    if (!p.silhouetteUrl) return null;
+    if (p.silhouetteUrl.startsWith('blob:')) return p.silhouetteUrl;
+    return toAssetUrl(p.silhouetteUrl, backendUrl);
+  };
+
+  const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    const processed = await Promise.all(
+      files.map((f) => compressImage(f, { maxDim: 1080, quality: 0.8 })),
+    );
+    setImageFiles((prev) => [...prev, ...processed]);
+    setImagePreviews((prev) => [...prev, ...processed.map((f) => URL.createObjectURL(f))]);
+    if (e.target) e.target.value = '';
+  };
+
+  const removeImage = (i: number) => {
+    setImageFiles((prev) => prev.filter((_, idx) => idx !== i));
+    setImagePreviews((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  /** 拖拽前的简单排序：左移/右移（封面始终 = 首张） */
+  const moveImage = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= imageFiles.length) return;
+    setImageFiles((prev) => {
+      const c = [...prev];
+      [c[i], c[j]] = [c[j], c[i]];
+      return c;
+    });
+    setImagePreviews((prev) => {
+      const c = [...prev];
+      [c[i], c[j]] = [c[j], c[i]];
+      return c;
+    });
+  };
+
+  const updatePose = (i: number, patch: Partial<PoseFormData>) =>
+    setPoses((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+
+  const addPose = () => {
+    setPoses((prev) => [
+      ...prev,
+      {
+        name: '',
+        description: '',
+        silhouetteType: 'builtin',
+        silhouetteBuiltinKey: '',
+        silhouetteFile: null,
+        silhouetteUrl: null,
+        positionX: 0.5,
+        positionY: 0.5,
+        scale: 1.0,
+        rotation: 0,
+      },
+    ]);
+    setPoseIndex(poses.length);
+  };
+
+  const removePose = (i: number) => {
+    if (poses.length <= 1) return;
+    setPoses((prev) => prev.filter((_, idx) => idx !== i));
+    setPoseIndex((idx) => {
+      if (i < idx) return idx - 1;
+      if (idx >= poses.length - 1) return poses.length - 2;
+      return idx;
+    });
+  };
+
+  const currentPose = poses[poseIndex] ?? poses[0];
+
+  const onSubmit = async (data: FormValues) => {
     setError(null);
 
-    if (!isEdit && !coverFile) {
+    if (!isEdit && imageFiles.length === 0) {
       setError('请上传封面图片（Step 2）');
       setStep(1);
       return;
     }
 
-    const pose: Record<string, unknown> = {
-      description: data.poseDescription ?? '',
-      position: { x: data.posePositionX, y: data.posePositionY },
-      scale: data.poseScale,
-      rotation: data.poseRotation,
+    // 各姿势新上传的剪影文件转为 data URL 内嵌进 poses（后端仅对 poses[0] 落盘文件）
+    const imageDataUrls = new Array<string | undefined>(poses.length);
+    const firstSilhouetteFile =
+      poses[0]?.silhouetteType === 'image' ? poses[0].silhouetteFile : null;
+    await Promise.all(
+      poses.map(async (p, i) => {
+        if (p.silhouetteType === 'image' && p.silhouetteFile) {
+          imageDataUrls[i] = await fileToDataUrl(p.silhouetteFile);
+        }
+      }),
+    );
+
+    const posesPayload: Record<string, unknown>[] = poses.map((p, i) => ({
+      ...(p.name ? { name: p.name } : {}),
+      ...(p.description ? { description: p.description } : {}),
       silhouette: {
-        type: data.silhouetteType,
-        data: data.silhouetteBuiltinKey ?? '',
+        type: p.silhouetteType,
+        ...(p.silhouetteType === 'builtin'
+          ? { data: p.silhouetteBuiltinKey ?? '' }
+          : p.silhouetteType === 'image'
+            ? imageDataUrls[i]
+              ? { data: imageDataUrls[i] }
+              : p.silhouetteUrl && !p.silhouetteUrl.startsWith('blob:')
+                ? { url: p.silhouetteUrl }
+                : {}
+            : {}),
       },
-    };
+      position: { x: p.positionX, y: p.positionY },
+      scale: p.scale,
+      rotation: p.rotation,
+    }));
 
     const meta: Record<string, unknown> = {
       name: data.name,
@@ -596,8 +764,7 @@ export default function TemplateForm({
       classification: {
         type: data.category,
         majorStyle: data.classificationMajorStyle === NONE_VALUE ? '' : (data.classificationMajorStyle ?? ''),
-        subStyle: data.classificationSubStyle === NONE_VALUE ? '' : (data.classificationSubStyle ?? ''),
-        method: data.classificationMethod === NONE_VALUE ? '' : (data.classificationMethod ?? ''),
+        style: data.classificationSubStyle === NONE_VALUE ? '' : (data.classificationSubStyle ?? ''),
       },
       sortOrder: data.sortOrder,
       isActive: data.isActive,
@@ -621,7 +788,8 @@ export default function TemplateForm({
             }
           : {}),
       },
-      pose,
+      pose: posesPayload[0],
+      poses: posesPayload,
       camera: {
         exposureCompensation: data.exposureCompensation,
         isoMode: data.isoMode,
@@ -677,9 +845,13 @@ export default function TemplateForm({
 
     const fd = new FormData();
     fd.set('meta', JSON.stringify(meta));
-    if (coverFile) fd.set('cover', coverFile);
-    if (silhouetteFile && data.silhouetteType === 'image') {
-      fd.set('silhouette', silhouetteFile);
+    // 首图同时作为 cover（后端单图兼容）
+    if (imageFiles.length > 0) fd.set('cover', imageFiles[0]);
+    // 多效果图：多个同名字段 images
+    imageFiles.forEach((f) => fd.append('images', f));
+    // 首个姿势的剪影文件走单 silhouette 字段（后端注入 poses[0]）
+    if (firstSilhouetteFile) {
+      fd.set('silhouette', firstSilhouetteFile);
     }
 
     startTransition(async () => {
@@ -715,56 +887,17 @@ export default function TemplateForm({
 
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
-  const watchSilhouetteType = watch('silhouetteType');
   const watchCategory = watch('category');
   const majStyleField = watch('classificationMajorStyle') || NONE_VALUE;
   const majStyleKey = majStyleField === NONE_VALUE ? '' : majStyleField;
-  const subStyleField = watch('classificationSubStyle') || NONE_VALUE;
-  const subStyleKey = subStyleField === NONE_VALUE ? '' : subStyleField;
 
   const typeCategories = categories.filter((c) => c.level === 1);
-  // 四级动态级联：按父子链逐级展开，父级无子级则该层不显示
+  // 三级动态级联：按父子链逐级展开，父级无子级则该层不显示
   const majorStyleOptions = categories.filter((c) => c.level === 2 && c.parentKey === watchCategory);
   const subStyleOptions = categories.filter((c) => c.level === 3 && c.parentKey === majStyleKey);
-  const methodOptions = categories.filter((c) => c.level === 4 && c.parentKey === subStyleKey);
 
-  const coverPreviewUrl = isEdit && initial?.coverUrl
-    ? toAssetUrl(initial.coverUrl, backendUrl) ?? undefined
-    : undefined;
-
-  // 封面及剪影预览 URL（用于 PhonePreview 和 SilhouettePreview）
-  const [coverPreviewSrc, setCoverPreviewSrc] = React.useState<string | null>(coverPreviewUrl ?? null);
-  const [silhouettePreviewSrc, setSilhouettePreviewSrc] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (coverFile) {
-      const url = URL.createObjectURL(coverFile);
-      setCoverPreviewSrc(url);
-      return () => URL.revokeObjectURL(url);
-    }
-    if (coverPreviewUrl) {
-      setCoverPreviewSrc(coverPreviewUrl);
-    }
-    return undefined;
-  }, [coverFile, coverPreviewUrl]);
-
-  React.useEffect(() => {
-    if (silhouetteFile) {
-      const url = URL.createObjectURL(silhouetteFile);
-      setSilhouettePreviewSrc(url);
-      return () => URL.revokeObjectURL(url);
-    }
-    if (isEdit && initial?.pose) {
-      const pose = initial.pose as Record<string, unknown>;
-      const silhouette = pose.silhouette as Record<string, unknown> | undefined;
-      if (silhouette?.url) {
-        setSilhouettePreviewSrc(toAssetUrl(silhouette.url as string, backendUrl));
-      } else {
-        setSilhouettePreviewSrc(null);
-      }
-    }
-    return undefined;
-  }, [silhouetteFile, isEdit, initial, backendUrl]);
+  // 封面预览 = 效果图首张（PhonePreview 使用）
+  const coverPreviewSrc = imagePreviews[0] ?? null;
 
   const watchedValues = watch();
 
@@ -843,7 +976,7 @@ export default function TemplateForm({
 
               <div className="space-y-2">
                 <Label>分类（四级动态级联）*</Label>
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">一级（题材）</Label>
                     <Controller
@@ -856,7 +989,6 @@ export default function TemplateForm({
                             field.onChange(v);
                             setValue('classificationMajorStyle', NONE_VALUE);
                             setValue('classificationSubStyle', NONE_VALUE);
-                            setValue('classificationMethod', NONE_VALUE);
                           }}
                         >
                           <SelectTrigger><SelectValue placeholder="选择题材" /></SelectTrigger>
@@ -883,7 +1015,6 @@ export default function TemplateForm({
                             onValueChange={(v) => {
                               field.onChange(v);
                               setValue('classificationSubStyle', NONE_VALUE);
-                              setValue('classificationMethod', NONE_VALUE);
                             }}
                           >
                             <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
@@ -911,7 +1042,6 @@ export default function TemplateForm({
                             value={field.value || NONE_VALUE}
                             onValueChange={(v) => {
                               field.onChange(v);
-                              setValue('classificationMethod', NONE_VALUE);
                             }}
                           >
                             <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
@@ -928,37 +1058,11 @@ export default function TemplateForm({
                       />
                     </div>
                   )}
-                  {methodOptions.length > 0 && (
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">四级（方法）</Label>
-                      <Controller
-                        control={control}
-                        name="classificationMethod"
-                        render={({ field }) => (
-                          <Select
-                            value={field.value || NONE_VALUE}
-                            onValueChange={field.onChange}
-                            disabled={subStyleOptions.length === 0}
-                          >
-                            <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value={NONE_VALUE}>无</SelectItem>
-                              {methodOptions.map((c) => (
-                                <SelectItem key={c.key} value={c.key}>
-                                  {c.name} ({c.key})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                    </div>
-                  )}
                 </div>
                 {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                 <p className="text-xs text-muted-foreground">
-                  题材必选；二/三/四级按父子链动态展开，深度随题材而定（人像可达四级，浅层题材至二三级）。
-                  提交时 category = 一级 key，classification 中 type=一级 / majorStyle=二级 / subStyle=三级 / method=四级。
+                  题材必选；二/三级按父子链动态展开。
+                  提交时 category = 一级 key，classification 中 type=一级 / majorStyle=二级 / style=三级。
                 </p>
               </div>
 
@@ -1075,85 +1179,216 @@ export default function TemplateForm({
 
           {step === 1 && (
             <div className="space-y-6">
-              <FileUpload
-                label="封面图片 *"
-                accept="image/png,image/jpeg,image/webp"
-                maxSize={8 * 1024 * 1024}
-                value={coverFile}
-                onChange={async (file) => {
-                  setCoverFile(file ? await compressImage(file, { maxDim: 1080, quality: 0.8 }) : null);
-                }}
-                hint="JPG / PNG / WebP，≤8MB，建议 3:4 竖图。上传后自动压缩（PNG 转 WebP）。"
-                previewUrl={coverPreviewUrl}
-              />
-
+              {/* 多效果图上传：首张为封面 */}
               <div className="space-y-2">
-                <Label>剪影类型</Label>
-                <Controller
-                  control={control}
-                  name="silhouetteType"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {SILHOUETTE_TYPES.map((v) => (
-                          <SelectItem key={v} value={v}>{v}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+                <Label>效果图（首张为封面）*</Label>
+                <div className="flex gap-2 flex-wrap">
+                  {imagePreviews.map((src, i) => (
+                    <div
+                      key={`${src}-${i}`}
+                      className="relative h-[120px] w-[120px] shrink-0 overflow-hidden rounded-md border border-input"
+                    >
+                      <img src={src} alt={`效果图 ${i + 1}`} className="h-full w-full object-cover" />
+                      {i === 0 && (
+                        <span className="absolute left-1 top-1 rounded bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
+                          封面
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeImage(i)}
+                        className="absolute right-1 top-1 rounded bg-black/60 p-1 text-white hover:bg-black/80"
+                        aria-label="删除效果图"
+                      >
+                        <X size={12} weight="bold" />
+                      </button>
+                      {/* 左移 / 右移排序（封面始终为首张） */}
+                      <div className="absolute bottom-1 left-1 flex gap-1">
+                        {i > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => moveImage(i, -1)}
+                            className="rounded bg-black/50 p-0.5 text-white hover:bg-black/80"
+                            aria-label="左移"
+                          >
+                            <ArrowLeft size={10} weight="bold" />
+                          </button>
+                        )}
+                        {i < imagePreviews.length - 1 && (
+                          <button
+                            type="button"
+                            onClick={() => moveImage(i, 1)}
+                            className="rounded bg-black/50 p-0.5 text-white hover:bg-black/80"
+                            aria-label="右移"
+                          >
+                            <ArrowRight size={10} weight="bold" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="flex h-[120px] w-[120px] shrink-0 flex-col items-center justify-center rounded-md border border-dashed border-input text-muted-foreground hover:bg-muted/50"
+                  >
+                    <Plus size={20} />
+                    <span className="mt-1 text-xs">添加</span>
+                  </button>
+                </div>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={handleImagePick}
                 />
+                <p className="text-xs text-muted-foreground">
+                  JPG / PNG / WebP，单张 ≤8MB，建议 3:4 竖图。支持多选，首张为封面（删除首张后第二张自动成为封面）。
+                </p>
               </div>
 
-              {watchSilhouetteType === 'builtin' && (
-                <div className="space-y-2">
-                  <Label htmlFor="silhouetteBuiltinKey">内置剪影 key</Label>
-                  <Input id="silhouetteBuiltinKey" placeholder="如：sitting-cafe" {...register('silhouetteBuiltinKey')} />
+              {/* 多姿势编辑器 */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label>姿势剪影（多姿势）</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addPose}>
+                    <Plus size={14} className="mr-1" /> 添加姿势
+                  </Button>
                 </div>
-              )}
 
-              {watchSilhouetteType === 'image' && (
-                <div className="space-y-4">
-                  <FileUpload
-                    label="剪影图片"
-                    accept="image/png,image/svg+xml"
-                    maxSize={8 * 1024 * 1024}
-                    value={silhouetteFile}
-                    onChange={async (file) => {
-                      setSilhouetteFile(file ? await compressImage(file, { maxDim: 640, quality: 0.8 }) : null);
-                    }}
-                    hint="PNG / SVG，≤8MB。上传后自动压缩（PNG 转 WebP 保留透明通道）。"
-                  />
+                {poses.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {poses.map((p, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setPoseIndex(i)}
+                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors ${
+                          i === poseIndex
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-input text-muted-foreground hover:bg-accent'
+                        }`}
+                      >
+                        Pose {i + 1}
+                        {p.silhouetteType === 'image' && <span>{p.silhouetteFile ? '（新）' : ''}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-                  {silhouettePreviewSrc && (
-                    <SilhouettePreview
-                      silhouetteUrl={silhouettePreviewSrc}
-                      positionX={watchedValues.posePositionX}
-                      positionY={watchedValues.posePositionY}
-                      scale={watchedValues.poseScale}
-                      rotation={watchedValues.poseRotation}
-                      aspectRatio={watchedValues.aspectRatio}
-                      cropRatio={watchedValues.cropRatio}
-                      onPositionChange={(x, y) => {
-                        setValue('posePositionX', x);
-                        setValue('posePositionY', y);
-                      }}
-                      onScaleChange={(s) => setValue('poseScale', s)}
-                      onRotationChange={(r) => setValue('poseRotation', r)}
-                    />
-                  )}
-                </div>
-              )}
+                {currentPose && (
+                  <div className="space-y-4 rounded-md border border-input p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">
+                        姿势 {poseIndex + 1}（共 {poses.length} 个）
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={poses.length <= 1}
+                        onClick={() => removePose(poseIndex)}
+                      >
+                        <X size={14} className="mr-1" /> 删除当前姿势
+                      </Button>
+                    </div>
 
-              {watchSilhouetteType === 'svg' && (
-                <div className="rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
-                  SVG 类型请通过 .pptpl 文件上传内嵌 SVG 内容（pose.silhouette.data 字段）。
-                </div>
-              )}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>剪影类型</Label>
+                        <Select
+                          value={currentPose.silhouetteType}
+                          onValueChange={(v) => updatePose(poseIndex, { silhouetteType: v })}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {SILHOUETTE_TYPES.map((v) => (
+                              <SelectItem key={v} value={v}>{v}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="poseDescription">姿势描述</Label>
-                <Textarea id="poseDescription" rows={2} {...register('poseDescription')} />
+                    {currentPose.silhouetteType === 'builtin' && (
+                      <div className="space-y-2">
+                        <Label htmlFor={`pose-builtin-${poseIndex}`}>内置剪影 key</Label>
+                        <Input
+                          id={`pose-builtin-${poseIndex}`}
+                          placeholder="如：sitting-cafe"
+                          value={currentPose.silhouetteBuiltinKey}
+                          onChange={(e) => updatePose(poseIndex, { silhouetteBuiltinKey: e.target.value })}
+                        />
+                      </div>
+                    )}
+
+                    {currentPose.silhouetteType === 'image' && (
+                      <div className="space-y-4">
+                        <FileUpload
+                          label="剪影图片"
+                          accept="image/png,image/svg+xml"
+                          maxSize={8 * 1024 * 1024}
+                          value={currentPose.silhouetteFile}
+                          onChange={async (file) => {
+                            if (!file) {
+                              updatePose(poseIndex, { silhouetteFile: null, silhouetteUrl: null });
+                              return;
+                            }
+                            const compressed = await compressImage(file, { maxDim: 640, quality: 0.8 });
+                            updatePose(poseIndex, {
+                              silhouetteFile: compressed,
+                              silhouetteUrl: URL.createObjectURL(compressed),
+                            });
+                          }}
+                          hint="PNG / SVG，≤8MB。上传后自动压缩（PNG 转 WebP 保留透明通道）。"
+                        />
+                        {poseSilhouettePreview(currentPose) && (
+                          <SilhouettePreview
+                            silhouetteUrl={poseSilhouettePreview(currentPose)!}
+                            positionX={currentPose.positionX}
+                            positionY={currentPose.positionY}
+                            scale={currentPose.scale}
+                            rotation={currentPose.rotation}
+                            aspectRatio={watchedValues.aspectRatio}
+                            cropRatio={watchedValues.cropRatio}
+                            onPositionChange={(x, y) => updatePose(poseIndex, { positionX: x, positionY: y })}
+                            onScaleChange={(s) => updatePose(poseIndex, { scale: s })}
+                            onRotationChange={(r) => updatePose(poseIndex, { rotation: r })}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {currentPose.silhouetteType === 'svg' && (
+                      <div className="rounded-md bg-muted/30 p-3 text-xs text-muted-foreground">
+                        SVG 类型请通过 .pptpl 文件上传内嵌 SVG 内容（pose.silhouette.data 字段）。
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`pose-name-${poseIndex}`}>姿势名称（可选）</Label>
+                        <Input
+                          id={`pose-name-${poseIndex}`}
+                          placeholder="如：坐姿 / 站姿"
+                          value={currentPose.name}
+                          onChange={(e) => updatePose(poseIndex, { name: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`pose-desc-${poseIndex}`}>姿势描述</Label>
+                        <Input
+                          id={`pose-desc-${poseIndex}`}
+                          placeholder="如：主体坐姿，看向镜头"
+                          value={currentPose.description}
+                          onChange={(e) => updatePose(poseIndex, { description: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1633,13 +1868,13 @@ export default function TemplateForm({
             <h3 className="text-sm font-medium text-foreground mb-3">模板预览</h3>
             <PhonePreview
               coverUrl={coverPreviewSrc}
-              silhouetteUrl={silhouettePreviewSrc}
-              silhouetteType={watchedValues.silhouetteType}
-              silhouetteBuiltinKey={watchedValues.silhouetteBuiltinKey}
-              positionX={watchedValues.posePositionX}
-              positionY={watchedValues.posePositionY}
-              scale={watchedValues.poseScale}
-              rotation={watchedValues.poseRotation}
+              silhouetteUrl={currentPose ? poseSilhouettePreview(currentPose) : null}
+              silhouetteType={currentPose?.silhouetteType ?? 'builtin'}
+              silhouetteBuiltinKey={currentPose?.silhouetteBuiltinKey ?? ''}
+              positionX={currentPose?.positionX ?? 0.5}
+              positionY={currentPose?.positionY ?? 0.5}
+              scale={currentPose?.scale ?? 1}
+              rotation={currentPose?.rotation ?? 0}
               aspectRatio={watchedValues.aspectRatio}
               overlayType={watchedValues.overlayType}
               opacity={watchedValues.opacity}
