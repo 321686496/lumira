@@ -7,26 +7,63 @@ import '../../templates/data/remote_template_dto.dart';
 /// 解决 `systemFilter ?? this.systemFilter` 无法将 nullable 字段清空的问题。
 const _unset = Object();
 
+/// 模板效果图。url 为资源地址（网络/本地），data 为 base64 data URL（可选）。
+/// 约定：images[0] 即封面，卡片/推荐统一取 [TemplateMeta.cover]。
+/// Phase 1 中效果图多图持久化（images_json 列）尚未引入，由 cover/coverData 单图派生。
+class TemplateImage {
+  final String url;
+  final String? data;
+  const TemplateImage({required this.url, this.data});
+
+  TemplateImage copyWith({String? url, Object? data = _unset}) => TemplateImage(
+        url: url ?? this.url,
+        data: identical(data, _unset) ? this.data : data as String?,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TemplateImage && url == other.url && data == other.data;
+
+  @override
+  int get hashCode => Object.hash(url, data);
+}
+
 class PhotoTemplate {
   final TemplateMeta meta;
   final Composition composition;
-  final Pose pose;
   final CameraParams camera;
   final SceneGuide sceneGuide;
   final PostProcess postProcess;
 
+  // 支持多姿势。为保持 const 构造（无数内置模板文件以 const 构造本类）且向后兼容旧 `pose:` 参数，
+  // 采用两个 backing 字段 + 派生 getter [poses]：`pose:` 传入时存 [_pose]（包装为单元素），
+  // 否则存 [_poses]。直接存储 `final List<Pose> poses` 并在初始化器里三元合并是无法成为常量表达式的。
+  final List<Pose>? _poses;
+  final Pose? _pose;
+
   const PhotoTemplate({
     required this.meta,
     required this.composition,
-    required this.pose,
+    List<Pose>? poses,
+    Pose? pose,
     required this.camera,
     required this.sceneGuide,
     required this.postProcess,
-  });
+  })  : _poses = poses,
+        _pose = pose;
+
+  /// 姿势列表；images 语义类似，pose 为 null 时兼容旧 `pose:` 单参数（包装为单元素列表）。
+  List<Pose> get poses =>
+      _pose != null ? <Pose>[_pose!] : (_poses ?? const <Pose>[]);
+
+  /// 兼容旧代码的单姿势读取；无姿势时返回空姿势。
+  Pose get pose => poses.isNotEmpty ? poses.first : const Pose();
 
   PhotoTemplate copyWith({
     TemplateMeta? meta,
     Composition? composition,
+    List<Pose>? poses,
     Pose? pose,
     CameraParams? camera,
     SceneGuide? sceneGuide,
@@ -35,7 +72,7 @@ class PhotoTemplate {
       PhotoTemplate(
         meta: meta ?? this.meta,
         composition: composition ?? this.composition,
-        pose: pose ?? this.pose,
+        poses: poses ?? (pose != null ? <Pose>[pose] : this.poses),
         camera: camera ?? this.camera,
         sceneGuide: sceneGuide ?? this.sceneGuide,
         postProcess: postProcess ?? this.postProcess,
@@ -47,13 +84,15 @@ class PhotoTemplate {
       other is PhotoTemplate &&
           meta == other.meta &&
           composition == other.composition &&
-          pose == other.pose &&
+          listEquals(poses, other.poses) &&
           camera == other.camera &&
           sceneGuide == other.sceneGuide &&
           postProcess == other.postProcess;
 
   @override
-  int get hashCode => Object.hash(meta, composition, pose, camera, sceneGuide, postProcess);
+  int get hashCode => Object.hash(meta, composition,
+      Object.hashAll(poses.map((e) => e.hashCode)),
+      camera, sceneGuide, postProcess);
 }
 
 class TemplateMeta {
@@ -81,6 +120,12 @@ class TemplateMeta {
   /// 模板来源：'builtin'（系统内置）| 'custom'（用户自定义）| 'remote'（后端动态）。
   /// 用于 UI 区分「我的」自定义模板与后端同步模板（如拍摄页模板条角标）。
   final String source;
+
+  /// 效果图列表，images[0] 即封面。Phase 1 中由 cover/coverData 单图派生（首图），
+  /// 满足"首张即封面"；多效果图持久化（images_json 列）留待 Phase 2。
+  List<TemplateImage> get images => <TemplateImage>[
+        if (cover.isNotEmpty) TemplateImage(url: cover, data: coverData),
+      ];
 
   const TemplateMeta({
     required this.id,
@@ -353,6 +398,7 @@ class Position {
 }
 
 class Pose {
+  final String name;
   final SilhouetteResource silhouette;
   final Position position;
   final double positionX;
@@ -361,6 +407,7 @@ class Pose {
   final double rotation;
   final String description;
   const Pose({
+    this.name = '',
     this.silhouette = const SilhouetteResource(type: 'builtin', data: 'none'),
     this.position = const Position(),
     this.positionX = 0,
@@ -371,6 +418,7 @@ class Pose {
   });
 
   Pose copyWith({
+    String? name,
     SilhouetteResource? silhouette,
     Position? position,
     double? positionX,
@@ -380,6 +428,7 @@ class Pose {
     String? description,
   }) =>
       Pose(
+        name: name ?? this.name,
         silhouette: silhouette ?? this.silhouette,
         position: position ?? this.position,
         positionX: positionX ?? this.positionX,
@@ -393,6 +442,7 @@ class Pose {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is Pose &&
+          name == other.name &&
           silhouette == other.silhouette &&
           position == other.position &&
           positionX == other.positionX &&
@@ -402,7 +452,8 @@ class Pose {
           description == other.description;
 
   @override
-  int get hashCode => Object.hash(silhouette, position, positionX, positionY, scale, rotation, description);
+  int get hashCode => Object.hash(
+      name, silhouette, position, positionX, positionY, scale, rotation, description);
 }
 
 class CameraParams {
