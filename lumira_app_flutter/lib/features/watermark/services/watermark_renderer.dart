@@ -55,11 +55,10 @@ class WatermarkRenderer {
       padBottom = frame.borderBottom * photoW +
           (frame.bottomPlate ? frame.bottomRatio * photoH : 0);
     }
-    final shadow = (type == WatermarkFrameType.polaroid && frame.shadowOpacity > 0)
-        ? (frame.shadowBlur * photoW).clamp(2.0, 60.0)
-        : 0.0;
+    // 注：不把投影烘焙进输出图像。投影仅用于屏幕展示（如编辑页预览），
+    // 若写入成片会在白边下方留下一条灰/黑线，因此这里直接以卡片边界作为画布。
     final outputW = (photoW + padLeft + padRight).round();
-    final outputH = (photoH + padTop + padBottom + shadow).round();
+    final outputH = (photoH + padTop + padBottom).round();
 
     final cardRect = ui.Rect.fromLTWH(
         0, 0, photoW + padLeft + padRight, photoH + padTop + padBottom);
@@ -73,36 +72,12 @@ class WatermarkRenderer {
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(recorder);
 
-    // 画布底色：以卡片颜色（强制不透明）铺满整个输出，避免未绘制区域（透明）
-    // 被 JPEG 编码成黑色；同时给底部投影提供和卡片相协调的落色背景。
+    // 画布底色：以卡片颜色（强制不透明）铺满整个输出，避免任何未绘制区域
+    // （透明像素）被 JPEG 编码成黑色。
     canvas.drawRect(
       ui.Rect.fromLTWH(0, 0, outputW.toDouble(), outputH.toDouble()),
       ui.Paint()..color = frame.color.withAlpha(0xFF),
     );
-
-    // 投影（拍立得，仅底部）
-    // 采用垂直线性渐变从卡片底边柔和渐入、到画布底缘前逐渐消失，避免旧实现
-    // （紧贴白边的模糊色块在画布底缘被硬裁切）在白边下方渲染出黑色硬边/黑线。
-    if (shadow > 0) {
-      final bandH = (outputH.toDouble() - cardRect.bottom).clamp(0.0, double.infinity);
-      if (bandH > 0) {
-        final paint = ui.Paint()
-          ..shader = ui.Gradient.linear(
-            ui.Offset(0, cardRect.bottom),
-            ui.Offset(0, outputH.toDouble()),
-            [
-              _withOpacity(frame.shadowColor, 0.0),
-              _withOpacity(frame.shadowColor, frame.shadowOpacity),
-              _withOpacity(frame.shadowColor, 0.0),
-            ],
-            const [0.0, 0.5, 1.0],
-          );
-        canvas.drawRect(
-          ui.Rect.fromLTWH(0, cardRect.bottom, outputW.toDouble(), bandH),
-          paint,
-        );
-      }
-    }
 
     if (type == WatermarkFrameType.polaroid) {
       final paint = ui.Paint();

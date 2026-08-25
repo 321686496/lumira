@@ -182,6 +182,7 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                     height: 1.6,
                   ),
                 ),
+                const SizedBox(height: 16), // 32rpx → 16dp，模板卡片与上方文字间隙
                 // 推荐模板卡（有推荐时嵌入灵感卡内部，点击直接套用进入拍摄）
                 if (inspiration.recommendedTemplateId.isNotEmpty) ...[
                   Builder(

@@ -96,6 +96,8 @@ class _FilterSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 选中的滤镜（除「原图」外）移到「原图」之后第二位；「原图」始终在第一位
+    final ordered = _moveActiveToSecond(filters, activeFilter);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -116,10 +118,10 @@ class _FilterSection extends StatelessWidget {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            itemCount: filters.length,
+            itemCount: ordered.length,
             separatorBuilder: (_, __) => const SizedBox(width: 4),
             itemBuilder: (ctx, i) {
-              final f = filters[i];
+              final f = ordered[i];
               final active = activeFilter == f ||
                   (f == 'none' && activeFilter.isEmpty);
               return _FilterThumbCard(
@@ -134,6 +136,19 @@ class _FilterSection extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// 选中的滤镜（除「原图」外）移到「原图」之后（第二位），「原图」始终在第一位。
+  /// 未选中、选中「原图」或滤镜不在列表内时保持原顺序。
+  List<String> _moveActiveToSecond(List<String> filters, String active) {
+    if (active.isEmpty || active == 'none' || !filters.contains(active)) {
+      return filters;
+    }
+    final result = [...filters];
+    result.remove(active);
+    final noneIndex = result.indexOf('none');
+    result.insert(noneIndex + 1, active);
+    return result;
   }
 }
 

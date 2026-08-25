@@ -6,7 +6,8 @@ import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByte
 
 import 'package:flutter/foundation.dart'
     show compute, defaultTargetPlatform, kDebugMode;
-import 'package:flutter/services.dart' show HapticFeedback;
+import 'package:flutter/services.dart'
+    show HapticFeedback, SystemChrome, DeviceOrientation;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -185,6 +186,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
   @override
   void initState() {
     super.initState();
+    // 防御性放开横竖屏（与 main.dart 一致，幂等）：
+    // main() 里已设置允许旋转，但 hot reload 不会重跑 main()；这里在拍摄页
+    // 初始化时再次确保方向不锁死。否则横屏持机时 MediaQuery 恒为竖屏，
+    // isPortrait 恒为 true → 成片仍是竖图、模板拍摄指南也不随横屏适配。
+    _forceUnlockRotation();
     // 从非拍摄页返回本拍摄页时，若本页面是被 retain（覆盖未销毁）的实例，
     // 相机已在离开时被路由观察者释放，需重建相机预览才能恢复取景器。
     // 通过 ref.listenManual 监听版本号自增；首次进入时相机尚未就绪（_cameraReady
@@ -541,6 +547,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
+  /// 放开横竖屏旋转（幂等，与 main.dart 启动配置一致）。
+  Future<void> _forceUnlockRotation() async {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
   /// 隐藏顶部模板信息卡并持久化（下次进入拍摄页保持隐藏）。
   void _hideTemplateInfoCard() {
     final container = ProviderScope.containerOf(context, listen: false);
@@ -630,9 +645,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 这样用户按下快门即可看到水印动画，无需等待 GPU/isolate/落库完成。
       final wmSettings = ref.read(watermarkSettingsProvider);
       final wmTemplate = ref.read(currentWatermarkTemplateProvider);
+      // 挑战模式下不触发水印定格动画（即使水印与动画开关均已开启），
+      // 挑战流程聚焦拍摄本身，避免动画打断确认/完成跳转。
+      final isChallengeMode =
+          widget.challengeId != null && widget.challengeId!.isNotEmpty;
       final shouldAnimateNow = wmSettings.enabled &&
           wmSettings.animationEnabled &&
-          wmTemplate != null;
+          wmTemplate != null &&
+          !isChallengeMode;
       if (shouldAnimateNow && mounted) {
         setState(() {
           _showWatermarkAnimation = true;
@@ -1969,13 +1989,13 @@ class _FillLightPanel extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 8),
-          // 预设色行
+          // 预设色行：选中的预设色移到第一位
           SizedBox(
             height: 44,
             child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
-                ..._presets.map((p) {
+                ..._orderedPresets(enabled, color).map((p) {
                   final isSelected = enabled && _colorMatches(color, p.color);
                   return _PresetColorDot(
                     preset: p,
@@ -2101,6 +2121,17 @@ class _FillLightPanel extends ConsumerWidget {
   }
 
   bool _colorMatches(Color a, Color b) => a.value == b.value;
+
+  /// 将当前选中的预设色移到列表第一位（未启用、未选中或已在第一位时保持原顺序）。
+  List<_FillLightPreset> _orderedPresets(bool enabled, Color color) {
+    if (!enabled) return _presets;
+    final index = _presets.indexWhere((p) => _colorMatches(color, p.color));
+    if (index <= 0) return _presets;
+    final result = [..._presets];
+    final item = result.removeAt(index);
+    result.insert(0, item);
+    return result;
+  }
 
   /// 关闭补光并重置悬浮取景器到初始状态（位置、大小）
   void _turnOffFillLight(WidgetRef ref) {

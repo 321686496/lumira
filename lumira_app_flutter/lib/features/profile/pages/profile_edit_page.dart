@@ -507,7 +507,16 @@ class _AvatarTile extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             ClipOval(
-              child: CachedNetworkImage(url: url, width: 64, height: 64, fit: BoxFit.cover),
+              child: CachedNetworkImage(
+                url: url,
+                width: 64,
+                height: 64,
+                fit: BoxFit.cover,
+                backgroundColor: tokens.surfaceAlt,
+                // 头像未加载出来/加载失败时显示占位（人形剪影，与“我的”页一致）
+                placeholder: _AvatarPlaceholder(size: 64, tokens: tokens),
+                errorWidget: _AvatarPlaceholder(size: 64, tokens: tokens),
+              ),
             ),
             if (selected)
               Container(
@@ -561,6 +570,33 @@ class _AvatarTile extends StatelessWidget {
   }
 }
 
+/// 头像占位组件：头像 URL 为空 / 加载中 / 加载失败时显示的人形剪影。
+/// 底色取当前主题 surfaceAlt，图标为主品牌色，随设置里的 UI 风格 & 主题联动（与“我的”页一致）。
+class _AvatarPlaceholder extends StatelessWidget {
+  const _AvatarPlaceholder({required this.size, required this.tokens});
+
+  final double size;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: ColoredBox(
+        color: tokens.surfaceAlt,
+        child: Center(
+          child: Icon(
+            Icons.person_outline,
+            size: size * 0.5,
+            color: tokens.textTertiary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 编辑资料页顶部基本信息区：左侧头像（点击弹出选择器）+ 右侧用户名输入
 class _BasicInfoHeader extends StatelessWidget {
   const _BasicInfoHeader({
@@ -599,7 +635,16 @@ class _BasicInfoHeader extends StatelessWidget {
             clipBehavior: Clip.none,
             children: [
               ClipOval(
-                child: CachedNetworkImage(url: url, width: 72, height: 72, fit: BoxFit.cover),
+                child: CachedNetworkImage(
+                  url: url,
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                  backgroundColor: tokens.surfaceAlt,
+                  // 头像未加载出来/加载失败时显示占位（人形剪影，与“我的”页一致）
+                  placeholder: _AvatarPlaceholder(size: 72, tokens: tokens),
+                  errorWidget: _AvatarPlaceholder(size: 72, tokens: tokens),
+                ),
               ),
               Positioned(
                 right: 0,

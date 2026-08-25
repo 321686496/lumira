@@ -20,9 +20,11 @@ class ScenePresetStrip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeId = ref.watch(CaptureState.activeScenePresetIdProvider);
-    final presets = compact
+    final basePresets = compact
         ? ScenePresetsData.allScenePresets.take(6).toList()
         : ScenePresetsData.allScenePresets;
+    // 选中的场景移到列表第一位
+    final presets = _moveActiveToFront(basePresets, activeId);
 
     return SizedBox(
       height: compact ? 60 : 82,
@@ -154,6 +156,18 @@ class ScenePresetStrip extends ConsumerWidget {
         },
       ),
     );
+  }
+
+  /// 将当前选中的场景移到列表第一位（未选中、已在第一位或不在列表内时保持原顺序）。
+  List<ScenePreset> _moveActiveToFront(
+      List<ScenePreset> presets, String? activeId) {
+    if (activeId == null) return presets;
+    final index = presets.indexWhere((p) => p.id == activeId);
+    if (index <= 0) return presets;
+    final result = [...presets];
+    final item = result.removeAt(index);
+    result.insert(0, item);
+    return result;
   }
 
   /// 上报场景选择事件。仅系统内置场景（id 命中 [ScenePresetsData] code 常量）上报，
