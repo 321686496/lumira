@@ -24,6 +24,7 @@ import '../../features/profile/data/profile_dao.dart';
 import '../../features/notification/data/notification_dao.dart';
 import 'dao/search_history_dao.dart';
 import 'dao/user_interests_dao.dart';
+import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
 const int _kDbVersion = 40;
@@ -121,6 +122,11 @@ final usageDaoProvider = FutureProvider<UsageDao>((ref) async {
 final userInterestsDaoProvider = FutureProvider<InterestDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return InterestDao(db);
+});
+
+final interestServiceProvider = FutureProvider<InterestService>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return InterestService(InterestDao(db), TemplatesDao(db));
 });
 
 final notificationDaoProvider = FutureProvider<NotificationDao>((ref) async {
