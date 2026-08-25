@@ -2,9 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image/image.dart' as img;
 import 'package:qr_code_scanner/qr_code_scanner.dart';
+import 'package:zxing2/qrcode.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../../core/services/file_picker_service.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -405,6 +408,7 @@ class _ScannerPage extends ConsumerStatefulWidget {
 class _ScannerPageState extends ConsumerState<_ScannerPage> {
   final _key = GlobalKey();
   QRViewController? _controller;
+  bool _picking = false;
 
   /// 支持原生相机扫码的平台：android / iOS / ohos；其余（含 web）走主题化回退。
   bool get _canScanNative {
@@ -412,13 +416,63 @@ class _ScannerPageState extends ConsumerState<_ScannerPage> {
     final p = defaultTargetPlatform;
     return p == TargetPlatform.android ||
         p == TargetPlatform.iOS ||
-        p == TargetPlatform.ohos;
+        // 标准 Flutter SDK 没有 TargetPlatform.ohos，用名称判断保持双 SDK 兼容
+        p.name == 'ohos';
   }
 
   @override
   void dispose() {
     _controller?.dispose();
     super.dispose();
+  }
+
+  /// 从相册选择图片并尝试识别二维码，成功则 pop 回传识别文本。
+  ///
+  /// 选图走 `FilePickerService`（跨平台，含 OHOS）；二维码解码用纯 Dart 的
+  /// `zxing2`，因此相册识别在 android / iOS / ohos 乃至 web 上均可用
+  /// （web 端连相机扫码都不可用，正好用相册识别补齐）。
+  Future<void> _pickFromGallery() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final file = await FilePickerService.pickSingleImage();
+      if (file == null) return; // 用户取消选择
+      final full = await FilePickerService.ensureFullBytes(file);
+      final bytes = full.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        if (mounted) LumiraToast.show(context, '读取图片失败，请重试');
+        return;
+      }
+      final secret = _decodeQrFromBytes(bytes);
+      if (!mounted) return;
+      if (secret != null && secret.isNotEmpty) {
+        Navigator.of(context).pop(secret);
+      } else {
+        LumiraToast.show(context, '未识别到二维码，请选择清晰的二维码图片');
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  /// 从图片字节解码二维码文本，未识别到返回 null。
+  String? _decodeQrFromBytes(List<int> bytes) {
+    final image = img.decodeImage(Uint8List.fromList(bytes));
+    if (image == null) return null;
+    try {
+      final pixels = image
+          .convert(numChannels: 4)
+          .getBytes(order: img.ChannelOrder.rgba);
+      final source =
+          RGBLuminanceSource(image.width, image.height, pixels.buffer.asInt32List());
+      final bitmap = BinaryBitmap(HybridBinarizer(source));
+      final result = QRCodeReader().decode(bitmap);
+      final text = result.text;
+      return text.isNotEmpty ? text : null;
+    } catch (_) {
+      // 图片中无二维码，或解码失败
+      return null;
+    }
   }
 
   @override
@@ -444,26 +498,48 @@ class _ScannerPageState extends ConsumerState<_ScannerPage> {
           ),
         ),
         child: SafeArea(
-          child: _canScanNative
-              ? QRView(
-                  key: _key,
-                  overlay: QrScannerOverlayShape(
-                    overlayColor: Colors.black26,
-                    borderColor: tokens.brand,
-                    borderLength: 30,
-                    borderWidth: 5,
+          child: Column(
+            children: [
+              Expanded(
+                child: _canScanNative
+                    ? QRView(
+                        key: _key,
+                        overlay: QrScannerOverlayShape(
+                          overlayColor: Colors.black26,
+                          borderColor: tokens.brand,
+                          borderLength: 30,
+                          borderWidth: 5,
+                        ),
+                        onQRViewCreated: (c) {
+                          _controller = c;
+                          c.scannedDataStream.listen((barcode) {
+                            final code = barcode.code;
+                            if (code != null && code.isNotEmpty) {
+                              Navigator.of(context).pop(code);
+                            }
+                          });
+                        },
+                      )
+                    : _UnsupportedScanGuide(tokens: tokens),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+                child: LumiraButton(
+                  variant: ButtonVariant.secondary,
+                  onPressed: _picking ? null : _pickFromGallery,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(_picking ? Icons.hourglass_top : Icons.photo_library_outlined),
+                      const SizedBox(width: 8),
+                      Text(_picking ? '识别中…' : '从相册选择二维码'),
+                    ],
                   ),
-                  onQRViewCreated: (c) {
-                    _controller = c;
-                    c.scannedDataStream.listen((barcode) {
-                      final code = barcode.code;
-                      if (code != null && code.isNotEmpty) {
-                        Navigator.of(context).pop(code);
-                      }
-                    });
-                  },
-                )
-              : _UnsupportedScanGuide(tokens: tokens),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

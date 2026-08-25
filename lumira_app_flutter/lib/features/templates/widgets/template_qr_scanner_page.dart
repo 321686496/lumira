@@ -37,7 +37,8 @@ class _TemplateQrScannerPageState extends ConsumerState<TemplateQrScannerPage> {
     final p = defaultTargetPlatform;
     return p == TargetPlatform.android ||
         p == TargetPlatform.iOS ||
-        p == TargetPlatform.ohos;
+        // 标准 Flutter SDK 没有 TargetPlatform.ohos，用名称判断保持双 SDK 兼容
+        p.name == 'ohos';
   }
 
   @override

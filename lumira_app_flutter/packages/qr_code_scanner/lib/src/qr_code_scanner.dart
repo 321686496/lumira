@@ -384,7 +384,7 @@ class QRViewController {
         'cutOutBottomOffset': overlay.cutOutBottomOffset
       });
       return true;
-    } else if (defaultTargetPlatform == TargetPlatform.ohos) {
+    } else if (defaultTargetPlatform.name == 'ohos') {
       if (overlay == null) {
         return false;
       }
@@ -400,7 +400,7 @@ class QRViewController {
 
   //Starts/Stops invert scanning.
   Future<void> scanInvert(bool isScanInvert) async {
-    if (defaultTargetPlatform == TargetPlatform.ohos) {
+    if (defaultTargetPlatform.name == 'ohos') {
       try {
         await _channel
             .invokeMethod('invertScan', {"isInvertScan": isScanInvert});

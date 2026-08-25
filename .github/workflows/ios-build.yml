@@ -91,29 +91,44 @@ jobs:
       - name: Patch OHOS fork packages for standard Flutter SDK
         # 复用 codemagic.yaml 的补丁逻辑：
         # flutter_local_notifications / shared_preferences / sqflite / permission_handler
-        # 等 OHOS fork 包引用了 TargetPlatform.ohos / Platform.isOhos，
-        # 在标准 Flutter SDK 下编译失败，统一替换为 linux（iOS/Android 上永不匹配）
+        # 等 OHOS fork 包引用了 TargetPlatform.ohos / Platform.isOhos，在标准 Flutter SDK 下
+        # 编译失败，统一替换为 linux（iOS/Android 上永不匹配）。
+        # 除 ~/.pub-cache/git（解析的 fork 依赖）外，还需补项目内本地 fork 包（packages/）
+        # 与 lib/ 业务代码（qr_code_scanner 的 OHOS 平台视图）。OhosView 是 flutter_ohos
+        # 引擎提供的平台视图类，标准 SDK 不存在，iOS 构建永不走该分支，统一替换为 UiKitView。
         run: |
           python3 -c "
           import os
+          replacements = [
+              ('TargetPlatform.ohos', 'TargetPlatform.linux'),
+              ('Platform.isOhos', 'Platform.isLinux'),
+              ('OhosView', 'UiKitView'),
+          ]
+          roots = [os.path.expanduser('~/.pub-cache/git')]
+          ws = os.path.join(os.environ.get('GITHUB_WORKSPACE', ''), 'lumira_app_flutter')
+          for sub in ('lib', 'packages'):
+              roots.append(os.path.join(ws, sub))
           patched = []
-          for root, dirs, files in os.walk(os.path.expanduser('~/.pub-cache/git')):
-              for fname in files:
-                  if not fname.endswith('.dart'):
-                      continue
-                  path = os.path.join(root, fname)
-                  try:
-                      with open(path, 'r', encoding='utf-8') as f:
-                          content = f.read()
-                  except Exception:
-                      continue
-                  original = content
-                  content = content.replace('TargetPlatform.ohos', 'TargetPlatform.linux')
-                  content = content.replace('Platform.isOhos', 'Platform.isLinux')
-                  if content != original:
-                      with open(path, 'w', encoding='utf-8') as f:
-                          f.write(content)
-                      patched.append(path)
+          for root in roots:
+              if not os.path.exists(root):
+                  continue
+              for dirpath, dirs, files in os.walk(root):
+                  for fname in files:
+                      if not fname.endswith('.dart'):
+                          continue
+                      path = os.path.join(dirpath, fname)
+                      try:
+                          with open(path, 'r', encoding='utf-8') as f:
+                              content = f.read()
+                      except Exception:
+                          continue
+                      original = content
+                      for src, dst in replacements:
+                          content = content.replace(src, dst)
+                      if content != original:
+                          with open(path, 'w', encoding='utf-8') as f:
+                              f.write(content)
+                          patched.append(path)
           print(f'Patched {len(patched)} file(s) for standard Flutter SDK compatibility')
           for p in patched:
               print(f'  {p}')
