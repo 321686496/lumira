@@ -189,6 +189,10 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   int _poseVersion = 0;
   late final ValueNotifier<int> _poseVersionNotifier;
 
+  // 当前正在编辑的姿势下标（多姿势支持）。默认 0 = 第一个姿势。
+  // 切换姿势前会调用 _ensurePoseIndex() 保证 _form.poses 非空且 _poseIndex 不越界。
+  int _poseIndex = 0;
+
   /// 是否正在从 DAO 异步加载模板（编辑模式且 mock 中不存在时为 true）。
   /// 加载期间显示 loading 覆盖层，避免用户看到空白表单误以为模板未加载。
   bool _isLoadingFromDao = false;
@@ -233,6 +237,29 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   void _notifyPoseChanged() {
     _poseVersion++;
     _poseVersionNotifier.value = _poseVersion;
+  }
+
+  /// 多姿势安全护栏：
+  /// - 若 [_form.poses] 为空，先插入一个空 EditorFormPose 占位（保证后续访问 [0] 不越界）；
+  /// - 若 [_poseIndex] 超出范围，回退到末位。
+  ///
+  /// 每个 _form.poses[_poseIndex] 处理器开头都应调用它，避免空列表/越界导致渲染崩溃。
+  void _ensurePoseIndex() {
+    if (_form.poses.isEmpty) {
+      _form.poses.add(EditorFormPose());
+    }
+    if (_poseIndex >= _form.poses.length) {
+      _poseIndex = _form.poses.length - 1;
+    } else if (_poseIndex < 0) {
+      _poseIndex = 0;
+    }
+  }
+
+  /// 取当前生效姿势的引用（调用前会先确保非空）。
+  /// 用于处理器内部访问 silhouette/position/scale/rotation 等可变字段。
+  EditorFormPose _currentPose() {
+    _ensurePoseIndex();
+    return _form.poses[_poseIndex];
   }
 
   /// 同步加载初始表单（mock 数据源）：
@@ -298,6 +325,8 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         _tagsController.text = _form.meta.tags.join(', ');
         _propsController.text = _form.sceneGuide.props.join(', ');
         _tipsController.text = _form.sceneGuide.tips.join('\n');
+        // 异步加载后 poses 列表长度可能与切换前不同，钳制 _poseIndex 防越界。
+        _ensurePoseIndex();
         _notifyPoseChanged();
         _isLoadingFromDao = false;
       });
@@ -380,11 +409,39 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   }
 
   Future<void> _pickCoverImage() async {
+    await _pickImageInto(
+      (dataUrl) => _onChange(() => _form.meta.setCoverImage(dataUrl)),
+      successMessage: '封面图已设置',
+      errorMessage: '设置封面图失败',
+    );
+  }
+
+  /// 调用系统能力拍照获取封面图。
+  ///
+  /// 使用 image_picker 的 ImageSource.camera 调起系统相机（而非 app 内拍摄页），
+  /// 拍照完成后读取图片 bytes 转 base64 data URL。
+  /// OHOS 平台 image_picker 无原生实现，回退到相册选择提示。
+  Future<void> _pickCoverImageFromCamera() async {
+    await _pickImageFromCameraInto(
+      (dataUrl) => _onChange(() => _form.meta.setCoverImage(dataUrl)),
+      successMessage: '封面图已设置',
+      errorMessage: '设置封面图失败',
+    );
+  }
+
+  /// 从相册选一张图，转 data URL 后通过 [onPicked] 回调交由调用方决定如何落地
+  /// （设为封面、追加到效果图列表等）。
+  ///
+  /// OHOS 端 file_picker 的 withData 返回的 bytes 会被截断为 4096 字节，
+  /// 无法解码图片；ensureFullBytes 会从磁盘/原生通道读取完整内容。
+  Future<void> _pickImageInto(
+    void Function(String dataUrl) onPicked, {
+    required String successMessage,
+    required String errorMessage,
+  }) async {
     try {
       final file = await FilePickerService.pickSingleImage();
       if (file == null) return;
-      // OHOS 端 file_picker 的 withData 返回的 bytes 会被截断为 4096 字节，
-      // 无法解码图片；ensureFullBytes 会从磁盘/原生通道读取完整内容。
       final fullFile = await FilePickerService.ensureFullBytes(file);
       final bytes = fullFile.bytes;
       if (bytes == null || bytes.isEmpty) {
@@ -394,21 +451,22 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       }
       final mime = _imageMimeFromExtension(fullFile.extension);
       final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
-      _onChange(() => _form.meta.setCoverImage(dataUrl));
+      onPicked(dataUrl);
       if (!mounted) return;
-      lumira.LumiraToast.show(context, '封面图已设置');
+      lumira.LumiraToast.show(context, successMessage);
     } catch (e) {
       if (!mounted) return;
-      lumira.LumiraToast.show(context, '设置封面图失败：$e');
+      lumira.LumiraToast.show(context, '$errorMessage：$e');
     }
   }
 
-  /// 调用系统能力拍照获取封面图。
-  ///
-  /// 使用 image_picker 的 ImageSource.camera 调起系统相机（而非 app 内拍摄页），
-  /// 拍照完成后读取图片 bytes 转 base64 data URL。
+  /// 调起系统相机拍照，转 data URL 后通过 [onPicked] 回调交由调用方决定如何落地。
   /// OHOS 平台 image_picker 无原生实现，回退到相册选择提示。
-  Future<void> _pickCoverImageFromCamera() async {
+  Future<void> _pickImageFromCameraInto(
+    void Function(String dataUrl) onPicked, {
+    required String successMessage,
+    required String errorMessage,
+  }) async {
     try {
       // OHOS: image_picker 无 OHOS 实现，提示用户从相册选择
       if (io.Platform.operatingSystem == 'ohos') {
@@ -422,9 +480,9 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       final bytes = await xfile.readAsBytes();
       // 拍摄结果统一为 jpeg
       final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-      _onChange(() => _form.meta.setCoverImage(dataUrl));
+      onPicked(dataUrl);
       if (!mounted) return;
-      lumira.LumiraToast.show(context, '封面图已设置');
+      lumira.LumiraToast.show(context, successMessage);
     } on PlatformException catch (e) {
       // 用户取消拍照时某些平台抛 PlatformException，静默处理
       final code = e.code.toLowerCase();
@@ -435,14 +493,28 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         return;
       }
       if (!mounted) return;
-      lumira.LumiraToast.show(context, '设置封面图失败：$e');
+      lumira.LumiraToast.show(context, '$errorMessage：$e');
     } catch (e) {
       if (!mounted) return;
-      lumira.LumiraToast.show(context, '设置封面图失败：$e');
+      lumira.LumiraToast.show(context, '$errorMessage：$e');
     }
   }
 
   Future<void> _showCoverImagePicker() async {
+    await _showImageSourceSheet(
+      title: '选择封面图',
+      onPickFromGallery: _pickCoverImage,
+      onPickFromCamera: _pickCoverImageFromCamera,
+    );
+  }
+
+  /// 弹出图片来源选择 sheet（相册 / 拍照 / 取消）。
+  /// 标题、文案由调用方传入，按钮回调可复用为「设为封面」或「追加效果图」。
+  Future<void> _showImageSourceSheet({
+    required String title,
+    required Future<void> Function() onPickFromGallery,
+    required Future<void> Function() onPickFromCamera,
+  }) async {
     final tokens = ref.read(themeTokensProvider);
     await lumira.showLumiraBottomSheet<void>(
       context: context,
@@ -453,7 +525,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
-              '选择封面图',
+              title,
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -466,7 +538,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
             title: const Text('从相册选择'),
             onTap: () {
               Navigator.pop(ctx);
-              _pickCoverImage();
+              onPickFromGallery();
             },
           ),
           lumira.LumiraListTile(
@@ -474,7 +546,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
             title: const Text('拍照'),
             onTap: () {
               Navigator.pop(ctx);
-              _pickCoverImageFromCamera();
+              onPickFromCamera();
             },
           ),
           lumira.LumiraListTile(
@@ -490,20 +562,21 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
   void _onSilhouetteSourceChange(String type) {
     setState(() {
-      _form.pose.silhouette.type = type;
+      final pose = _currentPose();
+      pose.silhouette.type = type;
       if (type == 'builtin') {
-        _form.pose.silhouette.data = 'none';
+        pose.silhouette.data = 'none';
       } else {
-        _form.pose.silhouette.data = '';
+        pose.silhouette.data = '';
       }
-      _form.pose.silhouette.filename = null;
-      _form.pose.silhouette.sizeKB = null;
+      pose.silhouette.filename = null;
+      pose.silhouette.sizeKB = null;
     });
     _scheduleAutoSave();
   }
 
   void _selectBuiltinSilhouette(String key) {
-    _onChange(() => _form.pose.silhouette.data = key);
+    _onChange(() => _currentPose().silhouette.data = key);
   }
 
   Future<void> _importSilhouetteImage() async {
@@ -523,7 +596,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
       final sizeKB = (bytes.length / 1024).round();
       setState(() {
-        _form.pose.silhouette = SilhouetteResource(
+        _currentPose().silhouette = SilhouetteResource(
           type: 'image',
           data: dataUrl,
           filename: fullFile.name,
@@ -547,7 +620,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
           child: SilhouetteEditorDialog(
             onComplete: (svg) {
               setState(() {
-                _form.pose.silhouette =
+                _currentPose().silhouette =
                     SilhouetteResource(type: 'svg', data: svg);
               });
               if (!mounted) return;
@@ -572,10 +645,11 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     if (!_isDraggingPose) return;
     // 拖动时不调用 setState（避免整个 page rebuild 和滚动跳跃），
     // 只更新 _form 和 _poseVersionNotifier，让 ValueListenableBuilder 局部重建
+    final pose = _currentPose();
     final dx = details.delta.dx / constraints.maxWidth;
     final dy = details.delta.dy / constraints.maxHeight;
-    _form.pose.position.x = (_form.pose.position.x + dx).clamp(0.0, 1.0);
-    _form.pose.position.y = (_form.pose.position.y + dy).clamp(0.0, 1.0);
+    pose.position.x = (pose.position.x + dx).clamp(0.0, 1.0);
+    pose.position.y = (pose.position.y + dy).clamp(0.0, 1.0);
     _notifyPoseChanged();
   }
 
@@ -586,10 +660,11 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
   /// 位置 X/Y 滑块变化（不调用 setState，避免页面滚动跳跃）
   void _onPosePositionSliderChanged(bool isX, double v) {
+    final pose = _currentPose();
     if (isX) {
-      _form.pose.position.x = v;
+      pose.position.x = v;
     } else {
-      _form.pose.position.y = v;
+      pose.position.y = v;
     }
     _notifyPoseChanged();
     _scheduleAutoSave();
@@ -597,14 +672,14 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
   /// 缩放滑块变化（不调用 setState）
   void _onScaleSliderChanged(double v) {
-    _form.pose.scale = v;
+    _currentPose().scale = v;
     _notifyPoseChanged();
     _scheduleAutoSave();
   }
 
   /// 旋转滑块变化（不调用 setState）
   void _onRotationSliderChanged(double v) {
-    _form.pose.rotation = v;
+    _currentPose().rotation = v;
     _notifyPoseChanged();
     _scheduleAutoSave();
   }
@@ -660,7 +735,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     debugPrint(
         '[Editor]   coverData in record: ${record.coverData != null ? '${record.coverData!.length} chars' : 'null'}');
     debugPrint(
-        '[Editor]   silhouette: type=${_form.pose.silhouette.type}, data=${_form.pose.silhouette.data.isNotEmpty ? '${_form.pose.silhouette.data.length} chars' : 'empty'}');
+        '[Editor]   silhouette (current pose $_poseIndex): type=${_currentPose().silhouette.type}, data=${_currentPose().silhouette.data.isNotEmpty ? '${_currentPose().silhouette.data.length} chars' : 'empty'}, total poses=${_form.poses.length}');
 
     try {
       final dao = await ref.read(templatesDaoProvider.future);
@@ -800,6 +875,8 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     if (syncedForm != null) {
       // 将修改后的 form 复制回 _form（深拷贝避免后续 mutation 污染）
       _form = syncedForm.copy();
+      // 同步后 poses 列表可能变化，钳制 _poseIndex 防越界。
+      _ensurePoseIndex();
       // 同步 notifier（让剪影预览的位置滑块立即反映新值）
       _notifyPoseChanged();
       // 同步文本控制器
@@ -917,16 +994,19 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
           onChange: _onChange,
         ));
         break;
-      case 1: // 封面与剪影（封面图 + 姿势剪影）
+      case 1: // 封面与剪影（效果图列表 + 姿势列表 + 姿势剪影）
         children.add(_StepCard(
           tokens: tokens,
-          title: '封面',
-          child: _buildCoverField(tokens),
+          title: '效果图',
+          child: _buildImagesField(tokens),
         ));
+        children.add(const SizedBox(height: 12));
+        children.add(_buildPoseListBar(tokens));
         children.add(const SizedBox(height: 12));
         children.add(_Step3Pose(
           tokens: tokens,
           form: _form,
+          poseIndex: _poseIndex,
           compositionAspectRatio: _form.composition.aspectRatio,
           isDragging: _isDraggingPose,
           poseVersionNotifier: _poseVersionNotifier,
@@ -981,79 +1061,208 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     return children;
   }
 
-  /// 「封面与剪影」Tab 中的封面图字段（从 Step1 抽离出来的「效果图（封面图）」区块）。
-  Widget _buildCoverField(ThemeTokens tokens) {
-    final cover = _form.meta.coverImage;
-    final onPickCoverImage = _showCoverImagePicker;
+  /// 「封面与剪影」Tab 中的效果图列表（多图横排，第一张为封面）。
+  ///
+  /// 列表末尾固定有「+ 添加效果图」按钮；缩略图点按放大预览并可重新选择封面，
+  /// 长按或右上角小×删除（仅当总数 > 1 时显示删除）。
+  Widget _buildImagesField(ThemeTokens tokens) {
+    _ensureImages();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _FieldLabel(tokens: tokens, text: '效果图（封面图）'),
-        if (cover != null && cover.isNotEmpty)
-          GestureDetector(
-            onTap: () => _showCoverPreviewDialog(
-                context, cover, tokens, onPickCoverImage),
-            behavior: HitTestBehavior.opaque,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: FutureBuilder<ui.Image>(
-                future: _getCachedCoverImage(cover),
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    final img = snapshot.data!;
-                    return AspectRatio(
-                      aspectRatio: img.width / img.height,
-                      child: Image.memory(
-                        _cachedCoverDecode(cover),
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, _) {
-                          debugPrint(
-                              '[Editor] Cover image decode error: $error');
-                          return _CoverPlaceholder(tokens: tokens);
-                        },
-                      ),
-                    );
-                  }
-                  if (snapshot.hasError) {
-                    debugPrint(
-                        '[Editor] Cover image decode error: ${snapshot.error}');
-                    return _CoverPlaceholder(tokens: tokens);
-                  }
-                  return Container(
-                    height: 200,
-                    width: double.infinity,
-                    color: tokens.canvasDeep,
-                    child: const Center(
-                        child: SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator())),
-                  );
-                },
-              ),
-            ),
-          )
-        else
-          GestureDetector(
-            onTap: onPickCoverImage,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              height: 120,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: tokens.canvasDeep,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: tokens.divider,
-                  width: 0.5,
-                ),
-              ),
-              clipBehavior: Clip.hardEdge,
-              child: _CoverPlaceholder(tokens: tokens),
-            ),
+        _FieldLabel(tokens: tokens, text: '效果图（第一张为封面）'),
+        SizedBox(
+          height: 120,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _form.meta.images.length + 1, // +1 = 添加按钮
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, i) {
+              if (i == _form.meta.images.length) {
+                return _AddImageTile(tokens: tokens, onTap: _addCoverImage);
+              }
+              final img = _form.meta.images[i];
+              final isOnlyPlaceholder = _form.meta.images.length == 1 &&
+                  img.data.isEmpty;
+              return _ImageTile(
+                tokens: tokens,
+                data: img.data,
+                isCover: i == 0,
+                onTap: isOnlyPlaceholder
+                    ? _addCoverImage
+                    : () => _showCoverPreviewDialog(
+                          context,
+                          img.data,
+                          tokens,
+                          // i==0 时走「更换封面」语义（_showCoverImagePicker → setCoverImage 替换首张）；
+                          // i>0 时走「更换图片」语义——按当前索引替换，避免误改封面。
+                          i == 0
+                              ? _showCoverImagePicker
+                              : () => _showImageSourceSheet(
+                                    title: '更换图片',
+                                    onPickFromGallery: () => _pickImageInto(
+                                      (dataUrl) => _onChange(
+                                          () => _replaceImageAt(i, dataUrl)),
+                                      successMessage: '效果图已更换',
+                                      errorMessage: '更换图片失败',
+                                    ),
+                                    onPickFromCamera: () =>
+                                        _pickImageFromCameraInto(
+                                      (dataUrl) => _onChange(
+                                          () => _replaceImageAt(i, dataUrl)),
+                                      successMessage: '效果图已更换',
+                                      errorMessage: '更换图片失败',
+                                    ),
+                                  ),
+                        ),
+                onDelete: _form.meta.images.length > 1 && !isOnlyPlaceholder
+                    ? () => _removeImage(i)
+                    : null,
+              );
+            },
           ),
+        ),
       ],
     );
+  }
+
+  /// 保证 _form.meta.images 至少有一张（首张作为占位空图，由 UI 展示「点击添加」入口）。
+  /// 空图占位在 [TemplateMapper.fromEditorForm] 中通过 `where((e) => e.data.isNotEmpty)` 过滤掉，不会落库。
+  void _ensureImages() {
+    if (_form.meta.images.isEmpty) {
+      _form.meta.images = <EditorFormMetaImage>[EditorFormMetaImage(data: '')];
+    }
+  }
+
+  /// 「添加效果图」入口：弹图片来源选择 sheet，拾取后追加到 images 末尾
+  /// （若仅有 1 张空占位则替换之，避免空占位被推到非首位置）。
+  void _addCoverImage() {
+    _showImageSourceSheet(
+      title: '添加效果图',
+      onPickFromGallery: () => _pickImageInto(
+        _addPickedImageToList,
+        successMessage: '效果图已添加',
+        errorMessage: '添加效果图失败',
+      ),
+      onPickFromCamera: () => _pickImageFromCameraInto(
+        _addPickedImageToList,
+        successMessage: '效果图已添加',
+        errorMessage: '添加效果图失败',
+      ),
+    );
+  }
+
+  void _addPickedImageToList(String dataUrl) {
+    _onChange(() {
+      if (_form.meta.images.length == 1 &&
+          _form.meta.images.first.data.isEmpty) {
+        // 仅占位空图 → 替换为首张
+        _form.meta.images = <EditorFormMetaImage>[
+          EditorFormMetaImage(data: dataUrl),
+        ];
+      } else {
+        _form.meta.addImage(dataUrl);
+      }
+    });
+  }
+
+  void _removeImage(int i) {
+    _onChange(() {
+      if (i < 0 || i >= _form.meta.images.length) return;
+      _form.meta.images.removeAt(i);
+      _ensureImages();
+    });
+  }
+
+  /// 替换指定索引的图：i==0 走 `setCoverImage`（保留首张替换语义），
+  /// 其他索引直接覆盖 `images[i]`。供非封面缩略图的「更换图片」回调使用。
+  void _replaceImageAt(int i, String dataUrl) {
+    if (i < 0 || i >= _form.meta.images.length) return;
+    if (i == 0) {
+      _form.meta.setCoverImage(dataUrl);
+    } else {
+      _form.meta.images[i] = EditorFormMetaImage(data: dataUrl);
+    }
+  }
+
+  /// 姿势列表条：当前模板的所有姿势胶囊（增/切换/删）。
+  ///
+  /// - 姿势胶囊点按切换 _poseIndex；
+  /// - 「+」按钮在末尾追加新姿势并自动切到末位；
+  /// - 当 poses.length > 1 时显示「删除当前姿势」按钮。
+  Widget _buildPoseListBar(ThemeTokens tokens) {
+    _ensurePoseIndex();
+    return _StepCard(
+      tokens: tokens,
+      title: '姿势列表',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < _form.poses.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  _PosePill(
+                    tokens: tokens,
+                    label: _form.poses[i].name.isNotEmpty
+                        ? _form.poses[i].name
+                        : '姿势${i + 1}',
+                    active: i == _poseIndex,
+                    onTap: () {
+                      if (i == _poseIndex) return;
+                      _onChange(() {
+                        _poseIndex = i;
+                        _notifyPoseChanged();
+                      });
+                    },
+                  ),
+                ],
+                const SizedBox(width: 8),
+                lumira.LumiraIconButton(
+                  icon: Icons.add,
+                  onPressed: _addPose,
+                  color: tokens.brand,
+                ),
+              ],
+            ),
+          ),
+          if (_form.poses.length > 1) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: lumira.LumiraIconButton(
+                icon: Icons.delete_outline,
+                variant: lumira.LumiraIconButtonVariant.outlined,
+                color: tokens.textSecondary,
+                onPressed: () => _removePose(_poseIndex),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _addPose() {
+    _onChange(() {
+      _form.poses.add(EditorFormPose(name: '姿势${_form.poses.length + 1}'));
+      _poseIndex = _form.poses.length - 1;
+      _notifyPoseChanged();
+    });
+  }
+
+  void _removePose(int i) {
+    if (_form.poses.length <= 1) return;
+    _onChange(() {
+      if (i < 0 || i >= _form.poses.length) return;
+      _form.poses.removeAt(i);
+      if (_poseIndex >= _form.poses.length) {
+        _poseIndex = _form.poses.length - 1;
+      }
+      _notifyPoseChanged();
+    });
   }
 }
 
@@ -1585,27 +1794,25 @@ void _showCoverPreviewDialog(
 
 /// v17: Step1 表单状态。
 ///
-/// 分类选项（type/majorStyle/subStyle/method）从 sqflite DAO 动态加载，支持四级级联：
+/// 分类选项（type/majorStyle/subStyle）从 sqflite DAO 动态加载，支持三级级联：
 /// - type（一级）：initState 时加载 level=1 分类 → `form.meta.category`
 /// - majorStyle（二级）：type 变化时按 parentKey 重新加载 → `form.meta.style`
 /// - subStyle（三级）：majorStyle 变化时按 parentKey 重新加载 → `form.meta.subStyle`
-/// - method（四级）：subStyle 变化时按 parentKey 重新加载 → `form.meta.method`
 ///
-/// 级联一致性：切换 type 时清空 style/subStyle/method；切换 style 时清空 subStyle/method；
-/// 切换 subStyle 时清空 method。
+/// Phase 2 收敛：原四级 `method` 不再在编辑器中渲染或写入（保留字段以兼容旧序列化）。
+///
+/// 级联一致性：切换 type 时清空 style/subStyle；切换 style 时清空 subStyle。
 class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
   List<EditorOption> _typeOptions = const [];
   List<EditorOption> _styleOptions = const [];
   List<EditorOption> _subStyleOptions = const [];
-  List<EditorOption> _method4Options = const [];
 
   /// “+ 新增标签”输入框控制器（标签 chips 下方的输入框）。
   final TextEditingController _newTagController = TextEditingController();
 
-  /// 记录已加载过的 category/style/subStyle，用于 didUpdateWidget 判断是否需要重新加载
+  /// 记录已加载过的 category/style，用于 didUpdateWidget 判断是否需要重新加载
   String? _lastLoadedCategory;
   String? _lastLoadedStyle;
-  String? _lastLoadedSubStyle;
 
   @override
   void initState() {
@@ -1613,7 +1820,6 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     _loadTypeOptions();
     _loadStyleOptions(widget.form.meta.category);
     _loadSubStyleOptions(widget.form.meta.style);
-    _loadMethod4Options(widget.form.meta.subStyle);
   }
 
   @override
@@ -1632,10 +1838,6 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     // style 变化时重新加载三级 subStyle 选项
     if (widget.form.meta.style != _lastLoadedStyle) {
       _loadSubStyleOptions(widget.form.meta.style);
-    }
-    // subStyle 变化时重新加载四级 method 选项
-    if (widget.form.meta.subStyle != _lastLoadedSubStyle) {
-      _loadMethod4Options(widget.form.meta.subStyle);
     }
   }
 
@@ -1686,24 +1888,6 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
       });
     } catch (e) {
       debugPrint('Failed to load subStyle categories: $e');
-    }
-  }
-
-  Future<void> _loadMethod4Options(String? subStyleKey) async {
-    _lastLoadedSubStyle = subStyleKey;
-    if (subStyleKey == null || subStyleKey.isEmpty) {
-      if (mounted) setState(() => _method4Options = const []);
-      return;
-    }
-    try {
-      final dao = await ref.read(templatesDaoProvider.future);
-      final cats = await dao.getCategoriesByParent(subStyleKey);
-      if (!mounted) return;
-      setState(() {
-        _method4Options = cats.map((c) => EditorOption(c.key, c.name)).toList();
-      });
-    } catch (e) {
-      debugPrint('Failed to load method4 categories: $e');
     }
   }
 
@@ -1872,7 +2056,8 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     final tokens = widget.tokens;
     final form = widget.form;
     final onChange = widget.onChange;
-    // style/subStyle/method 为可选字段，首位加"不限"（空值 → null）
+    // style/subStyle 为可选字段，首位加"不限"（空值 → null）
+    // 注：method 字段已收敛为兼容读取（旧数据），不再在 UI 中渲染或写入。
     final styleOptions = <EditorOption>[
       const EditorOption('', '不限'),
       ..._styleOptions,
@@ -1880,10 +2065,6 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     final subStyleOptions = <EditorOption>[
       const EditorOption('', '不限'),
       ..._subStyleOptions,
-    ];
-    final method4Options = <EditorOption>[
-      const EditorOption('', '不限'),
-      ..._method4Options,
     ];
     // 标签候选（异步聚合自定义模板 tags）
     final tagCandidates = ref.watch(customTagCandidatesProvider);
@@ -1935,10 +2116,9 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             options: _typeOptions,
             onChanged: (v) => onChange(() {
               form.meta.category = v;
-              // 切换分类时清空 style/subStyle/method（级联一致性）
+              // 切换分类时清空 style/subStyle（级联一致性）
               form.meta.style = null;
               form.meta.subStyle = null;
-              form.meta.method = null;
             }),
           ),
           const SizedBox(height: 14),
@@ -1960,13 +2140,12 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             options: styleOptions,
             onChanged: (v) => onChange(() {
               form.meta.style = v.isEmpty ? null : v;
-              // 切换风格时清空 subStyle/method（级联一致性）
+              // 切换风格时清空 subStyle（级联一致性）
               form.meta.subStyle = null;
-              form.meta.method = null;
             }),
           ),
           const SizedBox(height: 14),
-          // Task6 四级级联第三级：子风格（subStyle，可选，级联自风格）
+          // Phase 2 三级级联第三级：子风格（subStyle，可选，级联自风格）
           _FieldLabel(tokens: tokens, text: '子风格'),
           _FieldDropdown(
             tokens: tokens,
@@ -1974,19 +2153,6 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             options: subStyleOptions,
             onChanged: (v) => onChange(() {
               form.meta.subStyle = v.isEmpty ? null : v;
-              // 切换子风格时清空 method（级联一致性）
-              form.meta.method = null;
-            }),
-          ),
-          const SizedBox(height: 14),
-          // Task6 四级级联第四级：方法（method，可选，级联自子风格）
-          _FieldLabel(tokens: tokens, text: '方法'),
-          _FieldDropdown(
-            tokens: tokens,
-            value: form.meta.method ?? '',
-            options: method4Options,
-            onChanged: (v) => onChange(() {
-              form.meta.method = v.isEmpty ? null : v;
             }),
           ),
           const SizedBox(height: 14),
@@ -2172,6 +2338,201 @@ class _CoverPlaceholder extends StatelessWidget {
   }
 }
 
+/// 效果图列表末尾的「添加效果图」按钮 tile。
+/// 主题自适应：neumorphic 用 surface + shadowConvexSubtle；其它风格用 canvasDeep + 细边。
+class _AddImageTile extends ConsumerWidget {
+  const _AddImageTile({required this.tokens, required this.onTap});
+
+  final ThemeTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        width: 100,
+        height: 120,
+        decoration: BoxDecoration(
+          color: isNeumorphic ? tokens.surface : tokens.canvasDeep,
+          borderRadius: BorderRadius.circular(10),
+          border: isNeumorphic
+              ? null
+              : Border.all(color: tokens.divider, width: 0.5),
+          boxShadow: isNeumorphic ? tokens.shadowConvexSubtle : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add_photo_alternate_outlined,
+                size: 28, color: tokens.brand),
+            const SizedBox(height: 6),
+            Text('添加',
+                style: TextStyle(fontSize: 11, color: tokens.textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 效果图列表中的一张缩略图 tile。
+///
+/// - 点按 [onTap] 放大预览（空占位时进入添加流程）；
+/// - [isCover]=true 时左上角显示「封面」角标（tokens.brand 底）；
+/// - [onDelete] 非 null 时右上角显示「×」按钮（仅当总数 > 1 时调用方会传入）。
+///
+/// 叠在照片上的角标/删除按钮用「半透明黑遮罩 + 白字/白图标」表达，
+/// 属于跨风格通用的「照片叠加视觉」，不视为主题色硬编码。
+class _ImageTile extends ConsumerWidget {
+  const _ImageTile({
+    required this.tokens,
+    required this.data,
+    required this.isCover,
+    required this.onTap,
+    this.onDelete,
+  });
+
+  final ThemeTokens tokens;
+  final String data; // data URL（base64）
+  final bool isCover;
+  final VoidCallback onTap;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        children: [
+          Container(
+            width: 100,
+            height: 120,
+            decoration: BoxDecoration(
+              color: tokens.canvasDeep,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isCover ? tokens.brand : tokens.divider,
+                width: isCover ? 1.2 : 0.5,
+              ),
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: data.isEmpty
+                ? _CoverPlaceholder(tokens: tokens)
+                : Image.memory(
+                    _cachedCoverDecode(data),
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, _) {
+                      debugPrint('[Editor] Image tile decode error: $error');
+                      return _CoverPlaceholder(tokens: tokens);
+                    },
+                  ),
+          ),
+          if (isCover)
+            Positioned(
+              left: 4,
+              top: 4,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: tokens.brand,
+                  borderRadius: BorderRadius.circular(9999),
+                ),
+                child: Text(
+                  '封面',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textInverse,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+          if (onDelete != null)
+            Positioned(
+              right: 4,
+              top: 4,
+              child: GestureDetector(
+                onTap: onDelete,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    // 半透明黑遮罩，叠在照片上保证跨风格可读
+                    color: Color.fromRGBO(0, 0, 0, 0.55),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.close,
+                    size: 14,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 姿势胶囊：姿势列表条中的单个姿势切换按钮，主题与 UI 风格自适应。
+/// 选中态用 tokens.brand 高亮 + textInverse 文字；非选中态用 surface/canvasDeep。
+class _PosePill extends ConsumerWidget {
+  const _PosePill({
+    required this.tokens,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final ThemeTokens tokens;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: active
+              ? tokens.brand
+              : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
+          borderRadius: BorderRadius.circular(9999),
+          border: isNeumorphic
+              ? null
+              : Border.all(
+                  color: active ? tokens.brand : Colors.transparent,
+                  width: 1,
+                ),
+          boxShadow: isNeumorphic
+              ? (active ? tokens.shadowConvex : tokens.shadowConvexSubtle)
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: active ? tokens.textInverse : tokens.textSecondary,
+            height: 1,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ===== Step 2: 构图叠图 =====
 
 class _Step2Composition extends StatelessWidget {
@@ -2289,6 +2650,7 @@ class _Step3Pose extends StatelessWidget {
   const _Step3Pose({
     required this.tokens,
     required this.form,
+    required this.poseIndex,
     required this.compositionAspectRatio,
     required this.isDragging,
     required this.poseVersionNotifier,
@@ -2307,6 +2669,9 @@ class _Step3Pose extends StatelessWidget {
 
   final ThemeTokens tokens;
   final EditorForm form;
+  /// 当前正在编辑的姿势下标（多姿势切换支持）。
+  /// 由 [_TemplatesEditorPageState._poseIndex] 传入；超出 poses 范围时回退到首张。
+  final int poseIndex;
   final String compositionAspectRatio;
   final bool isDragging;
   final ValueNotifier<int> poseVersionNotifier;
@@ -2322,8 +2687,18 @@ class _Step3Pose extends StatelessWidget {
   final ValueChanged<double> onScaleSliderChanged;
   final ValueChanged<double> onRotationSliderChanged;
 
+  /// 取当前生效姿势的引用。poses 为空时返回占位空姿势用于只读展示。
+  /// 返回的是同一 EditorFormPose 对象的引用，故 onChanged 闭包内 `pose.description = v`
+  /// 直接写入原对象。
+  EditorFormPose _resolvePose() {
+    if (form.poses.isEmpty) return EditorFormPose();
+    final i = poseIndex.clamp(0, form.poses.length - 1);
+    return form.poses[i];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final pose = _resolvePose();
     return _StepCard(
       tokens: tokens,
       title: '姿势剪影',
@@ -2335,19 +2710,19 @@ class _Step3Pose extends StatelessWidget {
           _PillGroup(
             tokens: tokens,
             options: silhouetteSourceOptions,
-            value: form.pose.silhouette.type,
+            value: pose.silhouette.type,
             onChanged: onSourceChange,
           ),
           const SizedBox(height: 14),
-          if (form.pose.silhouette.type == 'builtin') ...[
+          if (pose.silhouette.type == 'builtin') ...[
             _FieldLabel(tokens: tokens, text: '选择剪影'),
             _BuiltinSilhouetteThumbnails(
               tokens: tokens,
-              selectedKey: form.pose.silhouette.data,
+              selectedKey: pose.silhouette.data,
               onSelect: onSelectBuiltin,
             ),
           ],
-          if (form.pose.silhouette.type == 'image') ...[
+          if (pose.silhouette.type == 'image') ...[
             _FieldLabel(tokens: tokens, text: '导入图片'),
             _GhostActionButton(
               tokens: tokens,
@@ -2355,12 +2730,12 @@ class _Step3Pose extends StatelessWidget {
               label: '选择图片',
               onTap: onImportImage,
             ),
-            if (form.pose.silhouette.filename != null) ...[
+            if (pose.silhouette.filename != null) ...[
               const SizedBox(height: 8),
               Text(
-                form.pose.silhouette.sizeKB != null
-                    ? '${form.pose.silhouette.filename} (${form.pose.silhouette.sizeKB}KB)'
-                    : '${form.pose.silhouette.filename}',
+                pose.silhouette.sizeKB != null
+                    ? '${pose.silhouette.filename} (${pose.silhouette.sizeKB}KB)'
+                    : '${pose.silhouette.filename}',
                 style: TextStyle(
                   fontSize: 12,
                   color: tokens.textTertiary,
@@ -2368,7 +2743,7 @@ class _Step3Pose extends StatelessWidget {
               ),
             ],
           ],
-          if (form.pose.silhouette.type == 'svg') ...[
+          if (pose.silhouette.type == 'svg') ...[
             _FieldLabel(tokens: tokens, text: '绘制剪影'),
             _GhostActionButton(
               tokens: tokens,
@@ -2384,12 +2759,12 @@ class _Step3Pose extends StatelessWidget {
               return _SliderRow(
                 tokens: tokens,
                 label: '位置 X',
-                value: form.pose.position.x,
+                value: pose.position.x,
                 min: 0,
                 max: 1,
                 divisions: 100,
                 onChanged: (v) => onPosePositionSliderChanged(true, v),
-                valueText: form.pose.position.x.toStringAsFixed(2),
+                valueText: pose.position.x.toStringAsFixed(2),
               );
             },
           ),
@@ -2399,12 +2774,12 @@ class _Step3Pose extends StatelessWidget {
               return _SliderRow(
                 tokens: tokens,
                 label: '位置 Y',
-                value: form.pose.position.y,
+                value: pose.position.y,
                 min: 0,
                 max: 1,
                 divisions: 100,
                 onChanged: (v) => onPosePositionSliderChanged(false, v),
-                valueText: form.pose.position.y.toStringAsFixed(2),
+                valueText: pose.position.y.toStringAsFixed(2),
               );
             },
           ),
@@ -2414,12 +2789,12 @@ class _Step3Pose extends StatelessWidget {
               return _SliderRow(
                 tokens: tokens,
                 label: '缩放',
-                value: form.pose.scale,
+                value: pose.scale,
                 min: 0.3,
                 max: 2.5,
                 divisions: 110,
                 onChanged: onScaleSliderChanged,
-                valueText: form.pose.scale.toStringAsFixed(2),
+                valueText: pose.scale.toStringAsFixed(2),
               );
             },
           ),
@@ -2429,22 +2804,22 @@ class _Step3Pose extends StatelessWidget {
               return _SliderRow(
                 tokens: tokens,
                 label: '旋转',
-                value: form.pose.rotation,
+                value: pose.rotation,
                 min: -45,
                 max: 45,
                 divisions: 90,
                 onChanged: onRotationSliderChanged,
-                valueText: '${form.pose.rotation.round()}°',
+                valueText: '${pose.rotation.round()}°',
               );
             },
           ),
           _FieldLabel(tokens: tokens, text: '姿势描述'),
           _FieldInput(
             tokens: tokens,
-            initialValue: form.pose.description,
+            initialValue: pose.description,
             placeholder: '姿势描述',
             multiline: true,
-            onChanged: (v) => onChange(() => form.pose.description = v),
+            onChanged: (v) => onChange(() => pose.description = v),
           ),
           const SizedBox(height: 14),
           // 预览框（可拖动）—— 用 RepaintBoundary 隔离重绘，
@@ -2485,12 +2860,12 @@ class _Step3Pose extends StatelessWidget {
                             builder: (context, _, __) {
                               return Positioned.fill(
                                 child: SilhouetteLayer(
-                                  silhouetteType: form.pose.silhouette.type,
-                                  silhouetteData: form.pose.silhouette.data,
-                                  positionX: form.pose.position.x,
-                                  positionY: form.pose.position.y,
-                                  scale: form.pose.scale,
-                                  rotation: form.pose.rotation,
+                                  silhouetteType: pose.silhouette.type,
+                                  silhouetteData: pose.silhouette.data,
+                                  positionX: pose.position.x,
+                                  positionY: pose.position.y,
+                                  scale: pose.scale,
+                                  rotation: pose.rotation,
                                 ),
                               );
                             },
@@ -2540,13 +2915,13 @@ class _Step3Pose extends StatelessWidget {
             ),
           ),
           // 位置数值显示 —— 也用 ValueListenableBuilder 局部重建
-          if (form.pose.silhouette.data != 'none') ...[
+          if (pose.silhouette.data != 'none') ...[
             const SizedBox(height: 8),
             ValueListenableBuilder<int>(
               valueListenable: poseVersionNotifier,
               builder: (context, _, __) {
                 return Text(
-                  '位置 X: ${(form.pose.position.x * 100).round()}%  Y: ${(form.pose.position.y * 100).round()}%',
+                  '位置 X: ${(pose.position.x * 100).round()}%  Y: ${(pose.position.y * 100).round()}%',
                   style: TextStyle(
                     fontSize: 11,
                     fontFamily: 'SF Mono',
