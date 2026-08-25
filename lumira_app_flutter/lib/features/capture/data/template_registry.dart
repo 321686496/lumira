@@ -182,10 +182,19 @@ class TemplateRegistry {
     return result;
   }
 
-  /// 归并 key = 分类三元组 + 共享配置签名。
+  /// 归并 key：
+  /// - 人像（portrait）：按分类三元组（type+majorStyle+style）归并为套——
+  ///   同子风格下的 base/selfie/he/side/wide 等姿势变体共享同一套的 poses[]/images[]。
+  ///   人像姿势变体的 composition/camera/sceneGuide 因取景不同而相异，故不参与 key，
+  ///   否则（含共享配置签名）将无法归并，导致每套退化为单姿势。
+  /// - 非人像：姿势变体语义不成立（同分类多为不同题材，如 closeup_pizza/soup），
+  ///   必须叠加共享配置签名，保持每个模板独立成套。
   static String _suiteKey(PhotoTemplate t) {
     final c = t.meta.classification;
-    return '${c.type}|${c.majorStyle}|${c.style}|${_sharedConfigSig(t)}';
+    if (c.type == 'portrait') {
+      return '${c.type}|${c.majorStyle}|${c.style}';
+    }
+    return '${c.type}|${c.style}|${c.method}|${_sharedConfigSig(t)}';
   }
 
   /// 共享配置签名：composition / camera / sceneGuide / postProcess 关键参数。

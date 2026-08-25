@@ -333,6 +333,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
       ${Tables.colCreator} TEXT NOT NULL DEFAULT 'user',
       ${Tables.colIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCoverUrl} TEXT NOT NULL DEFAULT '',
       ${Tables.colCreatedAt} INTEGER NOT NULL,
       ${Tables.colUpdatedAt} INTEGER NOT NULL
     )
@@ -352,6 +353,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colMood} TEXT,
       ${Tables.colLut} TEXT,
       ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colGalleryItemHidden} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCreatedAt} INTEGER NOT NULL
     )
   ''');

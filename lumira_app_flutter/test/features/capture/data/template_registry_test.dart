@@ -4,8 +4,8 @@ import 'package:lumira_app_flutter/features/capture/data/template_registry.dart'
 
 void main() {
   group('TemplateRegistry', () {
-    test('returns all 132 templates', () {
-      expect(TemplateRegistry.allTemplates.length, 132);
+    test('returns all 69 suites (portrait 姿势变体归并为套)', () {
+      expect(TemplateRegistry.allTemplates.length, 69);
     });
 
     test('getTemplate returns copy, not singleton', () {
@@ -20,7 +20,7 @@ void main() {
     test('getRecentTemplates returns correct count', () {
       expect(TemplateRegistry.getRecentTemplates(6).length, 6);
       expect(TemplateRegistry.getRecentTemplates(12).length, 12);
-      expect(TemplateRegistry.getRecentTemplates(20).length, 20); // now 132 total
+      expect(TemplateRegistry.getRecentTemplates(20).length, 20); // now 69 suites total
     });
 
     test('getTemplate returns null for unknown id', () {
@@ -41,11 +41,11 @@ void main() {
       expect(tpl.postProcess.lut, 'pastel');
     });
 
-    test('86 free + 46 paid templates', () {
+    test('56 free + 13 paid suites', () {
       final free = TemplateRegistry.allTemplates.where((t) => t.meta.price == 0).toList();
       final paid = TemplateRegistry.allTemplates.where((t) => t.meta.price > 0).toList();
-      expect(free.length, 86);
-      expect(paid.length, 46);
+      expect(free.length, 56);
+      expect(paid.length, 13);
     });
   });
 }

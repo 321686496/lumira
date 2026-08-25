@@ -87,8 +87,11 @@ class TemplateRecord {
       Tables.colPrice: price,
       Tables.colCover: cover,
       Tables.colCoverData: coverData,
-      Tables.colImagesJson:
-          (images == null) ? null : jsonEncode(images!.map(_imageToJson).toList()),
+      // images_json 列定义为 NOT NULL DEFAULT '[]'，images 为 null（旧模板）时回退 '[]'，
+      // 显式传 null 会违反 NOT NULL 约束。
+      Tables.colImagesJson: jsonEncode(
+        images?.map(_imageToJson).toList() ?? const [],
+      ),
       Tables.colDescription: description,
       Tables.colReferenceSource: referenceSource,
       Tables.colShortDesc: shortDesc,

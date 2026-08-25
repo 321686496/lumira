@@ -365,9 +365,9 @@ void main() {
       expect(updatedDropdown, findsOneWidget);
     });
 
-    // Task6 — 基本信息 tab 新字段（短简介/四级下拉/ambience chips/标签新增）
+    // Task6 — 基本信息 tab 新字段（短简介/三级下拉/ambience chips/标签新增）
     testWidgets(
-        'Step 1: renders new basic info fields (短简介/四级下拉/ambience chips/标签新增)',
+        'Step 1: renders new basic info fields (短简介/三级下拉/ambience chips/标签新增)',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(
@@ -378,10 +378,11 @@ void main() {
       expect(find.text('短简介'), findsOneWidget);
       expect(find.text('一句话介绍（推荐 ≤20 字）'), findsOneWidget);
 
-      // 四级级联下拉：风格/子风格/方法
+      // 三级级联下拉：大类/风格/子风格（Phase 2 已收敛，移除四级"方法"）
       expect(find.text('风格'), findsWidgets);
       expect(find.text('子风格'), findsOneWidget);
-      expect(find.text('方法'), findsOneWidget);
+      // 四级"方法"下拉已不再渲染（分类收敛为三级）
+      expect(find.text('方法'), findsNothing);
 
       // ambience chips
       expect(find.text('适用季节/天气/时段'), findsOneWidget);
