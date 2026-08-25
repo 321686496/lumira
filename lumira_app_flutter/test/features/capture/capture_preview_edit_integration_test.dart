@@ -171,6 +171,7 @@ Future<Database> _openInMemoryDbWithV7Schema() async {
           ${Tables.colMood} TEXT,
           ${Tables.colLut} TEXT,
           ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
+          ${Tables.colGalleryItemHidden} INTEGER NOT NULL DEFAULT 0,
           ${Tables.colCreatedAt} INTEGER NOT NULL
         )
       ''');

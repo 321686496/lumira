@@ -434,6 +434,7 @@ void main() {
                 ${Tables.colTagIdsJson} TEXT NOT NULL DEFAULT '[]',
                 ${Tables.colCreator} TEXT NOT NULL DEFAULT 'user',
                 ${Tables.colIsFavorite} INTEGER NOT NULL DEFAULT 0,
+                ${Tables.colCoverUrl} TEXT NOT NULL DEFAULT '',
                 ${Tables.colCreatedAt} INTEGER NOT NULL,
                 ${Tables.colUpdatedAt} INTEGER NOT NULL
               )
