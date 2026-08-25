@@ -23,9 +23,10 @@ import '../../features/onboarding/data/questionnaire_dao.dart';
 import '../../features/profile/data/profile_dao.dart';
 import '../../features/notification/data/notification_dao.dart';
 import 'dao/search_history_dao.dart';
+import 'dao/user_interests_dao.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 39;
+const int _kDbVersion = 40;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -115,6 +116,11 @@ final userTagsDaoProvider = FutureProvider<TagsDao>((ref) async {
 final usageDaoProvider = FutureProvider<UsageDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return UsageDao(db);
+});
+
+final userInterestsDaoProvider = FutureProvider<InterestDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return InterestDao(db);
 });
 
 final notificationDaoProvider = FutureProvider<NotificationDao>((ref) async {
@@ -315,6 +321,9 @@ Future<void> _onCreate(Database db, int version) async {
   ''');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_item_tags_tag_id ON ${Tables.itemTags}(${Tables.colTagId})');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_item_tags_item ON ${Tables.itemTags}(${Tables.colItemType}, ${Tables.colItemId})');
+
+  batch.execute(UserInterestsTable.createSql);
+  batch.execute(UserInterestsTable.indexScopeSql);
 
   await batch.commit(noResult: true);
 
@@ -1165,6 +1174,16 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await BuiltinDataSeeder.reseedBuiltinTemplates(db);
     } catch (e) {
       debugPrint('v39 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 40) {
+    try {
+      // v40: user_interests 用户兴趣画像表（个性推荐反馈闭环信号源）
+      await db.execute(UserInterestsTable.createSql);
+      await db.execute(UserInterestsTable.indexScopeSql);
+    } catch (e) {
+      debugPrint('v40 migration failed (silent fallback): $e');
     }
   }
 }

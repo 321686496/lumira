@@ -433,3 +433,24 @@ class SearchHistoryTable {
       'CREATE INDEX IF NOT EXISTS idx_search_history_scope_time ON $name ($colScope, $colLastSearchedAt DESC)';
 }
 
+
+/// 用户兴趣画像表（v40 迁移新增，个性推荐反馈闭环信号源）
+class UserInterestsTable {
+  static const String name = 'user_interests';
+  static const String colScope = 'scope';
+  static const String colKey = 'key';
+  static const String colScore = 'score';
+  static const String colLastSignalAt = 'last_signal_at';
+
+  static const String createSql = '''
+    CREATE TABLE IF NOT EXISTS $name (
+      $colScope TEXT NOT NULL,
+      $colKey TEXT NOT NULL,
+      $colScore REAL NOT NULL DEFAULT 0,
+      $colLastSignalAt INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY ($colScope, $colKey)
+    )
+  ''';
+  static const String indexScopeSql =
+      'CREATE INDEX IF NOT EXISTS idx_user_interests_scope ON $name ($colScope)';
+}
