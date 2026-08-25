@@ -164,20 +164,25 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       const outBuf = new ArrayBuffer(outLen);
       const outU8 = new Uint8Array(outBuf);
       const srcU8 = new Uint8Array(srcBuf);
+      // 反向映射用"乘倒数取代逐像素除法"：ArkTS AOT 下除法（尤其是 /sxScale 与 /syScale）
+      // 在 120 万输出像素上是显著 CPU 热区，换算成乘法能明显提速。
+      const invSx = 1.0 / sxScale;
+      const invSy = 1.0 / syScale;
       for (let oy = 0; oy < iOutH; oy++) {
+        const rowRotY = (oy - cH) * invSy; // 等价于原 pRotY
+        const rowBase = (oy * iOutW) << 2; // 当前输出行基址
         for (let ox = 0; ox < iOutW; ox++) {
-          const pRotX = (ox - cW) / sxScale;
-          const pRotY = (oy - cH) / syScale;
+          const colRotX = (ox - cW) * invSx; // 等价于原 pRotX
           let cx: number;
           let cy: number;
           if (alignRotation === 90) {
-            cx = pRotY; cy = -pRotX;
+            cx = rowRotY; cy = -colRotX;
           } else if (alignRotation === 180) {
-            cx = -pRotX; cy = -pRotY;
+            cx = -colRotX; cy = -rowRotY;
           } else if (alignRotation === 270) {
-            cx = -pRotY; cy = pRotX;
+            cx = -rowRotY; cy = colRotX;
           } else {
-            cx = pRotX; cy = pRotY;
+            cx = colRotX; cy = rowRotY;
           }
           const sx = cx + halfW;
           const sy = cy + halfH;
@@ -217,7 +222,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
           if (ng < 0) { ng = 0; } else if (ng > 255) { ng = 255; }
           if (nb < 0) { nb = 0; } else if (nb > 255) { nb = 255; }
 
-          const oi = (oy * iOutW + ox) << 2;
+          const oi = rowBase + (ox << 2);
           outU8[oi] = Math.round(nr);
           outU8[oi + 1] = Math.round(ng);
           outU8[oi + 2] = Math.round(nb);
@@ -226,30 +231,47 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       }
       const tTransform = Date.now();
 
-      // ── 4) 锐化（Unsharp 3x3，与 Dart image_processing_service 一致）──
-      // kernel: [0,-a,0; -a,1+4a,-a; 0,-a,0]，仅 enhance
+      // ── 4) 边缘自适应锐化（Unsharp 死区版）──
+      // 原实现：new = (1+4a)*c - a*(上+下+左+右)，对每个像素无差别增强。
+      // 缺点：平坦/低对比区域（天空、皮肤、纯色背景）里传感器噪点 + JPEG 压缩噪声
+      // 会被同等放大成肉眼可见的"颗粒感"。
+      // 本实现：只在像素与十字邻域均值的偏差超过死区 edgeThr 时锐化（保留高频边缘），
+      // 偏差落在死区内的平坦区原样输出，从而在保住清晰度的同时压制颗粒。
       let finalU8 = outU8;
       if (sharpen > 0) {
         const a = Math.min(sharpen / 100.0, 1.0);
-        const center = 1 + 4 * a;
+        const edgeThr = 4; // 死区阈值（/255）：低于它视为平坦/噪声，不锐化
         const convBuf = new ArrayBuffer(outLen);
         const convU8 = new Uint8Array(convBuf);
         for (let oy = 0; oy < iOutH; oy++) {
           const y0s = oy > 0 ? oy - 1 : oy;
           const y1s = oy < iOutH - 1 ? oy + 1 : oy;
+          const crow = (oy * iOutW) << 2;
           for (let ox = 0; ox < iOutW; ox++) {
             const x0s = ox > 0 ? ox - 1 : ox;
             const x1s = ox < iOutW - 1 ? ox + 1 : ox;
-            const ci = (oy * iOutW + ox) << 2;
+            const ci = crow + (ox << 2);
             const ui = (y0s * iOutW + ox) << 2;
             const di = (y1s * iOutW + ox) << 2;
             const li = (oy * iOutW + x0s) << 2;
             const ri = (oy * iOutW + x1s) << 2;
             for (let ch = 0; ch < 3; ch++) {
-              let v = center * outU8[ci + ch] -
-                a * (outU8[ui + ch] + outU8[di + ch] + outU8[li + ch] + outU8[ri + ch]);
-              if (v < 0) { v = 0; } else if (v > 255) { v = 255; }
-              convU8[ci + ch] = Math.round(v);
+              const c0 = outU8[ci + ch];
+              const m = (outU8[ui + ch] + outU8[di + ch] + outU8[li + ch] + outU8[ri + ch]) * 0.25;
+              const diff = c0 - m;
+              if (diff > edgeThr) {
+                let v = c0 + a * (diff - edgeThr);
+                if (v > 255) { v = 255; }
+                if (v < 0) { v = 0; }
+                convU8[ci + ch] = Math.round(v);
+              } else if (diff < -edgeThr) {
+                let v = c0 + a * (diff + edgeThr);
+                if (v > 255) { v = 255; }
+                if (v < 0) { v = 0; }
+                convU8[ci + ch] = Math.round(v);
+              } else {
+                convU8[ci + ch] = c0; // 平坦/噪声区：不锐化 → 不放大颗粒
+              }
             }
             convU8[ci + 3] = 255;
           }
@@ -266,7 +288,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
         size: { width: iOutW, height: iOutH }
       });
       packer = image.createImagePacker();
-      const packed = await packer.packing(finalPixelMap, { format: 'image/jpeg', quality: 90 });
+      const packed = await packer.packing(finalPixelMap, { format: 'image/jpeg', quality: 92 });
       const wfile = fs.openSync(outputPath, fs.OpenMode.CREATE | fs.OpenMode.TRUNC | fs.OpenMode.READ_WRITE);
       wfd = wfile.fd;
       fs.writeSync(wfd, packed);
