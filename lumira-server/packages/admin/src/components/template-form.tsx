@@ -15,7 +15,12 @@ import {
 import { FileUpload } from '@/components/ui/file-upload';
 import { compressImage } from '@/lib/image-compress';
 import { toAssetUrl } from '@/lib/asset-url';
-import { Upload as UploadIcon, X, Plus, ArrowLeft, ArrowRight, Check } from '@phosphor-icons/react';
+import { Upload as UploadIcon } from '@phosphor-icons/react/dist/csr/Upload';
+import { X } from '@phosphor-icons/react/dist/csr/X';
+import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
+import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
+import { ArrowRight } from '@phosphor-icons/react/dist/csr/ArrowRight';
+import { Check } from '@phosphor-icons/react/dist/csr/Check';
 import { useToast } from '@/hooks/use-toast';
 import { createTemplate, updateTemplate } from '@/actions/templates';
 import SilhouettePreview from '@/components/silhouette-preview';

@@ -1,6 +1,7 @@
 // src/components/pagination.tsx
 import { Button } from '@/components/ui/button';
-import { CaretLeft, CaretRight } from '@phosphor-icons/react/dist/ssr';
+import { CaretLeft } from '@phosphor-icons/react/dist/ssr/CaretLeft';
+import { CaretRight } from '@phosphor-icons/react/dist/ssr/CaretRight';
 
 export function Pagination({
   page,

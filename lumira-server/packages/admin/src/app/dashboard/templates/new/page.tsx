@@ -5,7 +5,7 @@ import { api } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from '@phosphor-icons/react/dist/ssr';
+import { ArrowLeft } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import TemplateForm from '@/components/template-form';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';

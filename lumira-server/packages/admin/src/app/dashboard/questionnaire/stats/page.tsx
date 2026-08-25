@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { api } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
-import { ArrowLeft } from '@phosphor-icons/react/dist/ssr';
+import { ArrowLeft } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import type { QuestionnaireStats } from '@/types/admin';
 
 const questionConfig: Array<{

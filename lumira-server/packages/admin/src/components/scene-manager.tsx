@@ -14,9 +14,11 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
-import {
-  Plus, PencilSimple, Trash, Camera, MagnifyingGlass,
-} from '@phosphor-icons/react';
+import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
+import { PencilSimple } from '@phosphor-icons/react/dist/csr/PencilSimple';
+import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
+import { Camera } from '@phosphor-icons/react/dist/csr/Camera';
+import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
 import { useToast } from '@/hooks/use-toast';
 import {
   saveScene, removeScene, setSceneActive,

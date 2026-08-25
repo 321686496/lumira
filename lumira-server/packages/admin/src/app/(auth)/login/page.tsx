@@ -1,7 +1,7 @@
 // src/app/(auth)/login/page.tsx
 import { Suspense } from 'react';
 import LoginForm from './login-form';
-import { ChartLineUp } from '@phosphor-icons/react/dist/ssr';
+import { ChartLineUp } from '@phosphor-icons/react/dist/ssr/ChartLineUp';
 
 export default async function LoginPage({
   searchParams,

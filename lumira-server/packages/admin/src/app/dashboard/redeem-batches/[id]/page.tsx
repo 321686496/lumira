@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ToggleSwitch } from '@/components/toggle-switch';
 import { BatchCodesTable } from '@/components/batch-codes-table';
 import { formatUnixTime } from '@/lib/utils';
-import { ArrowLeft } from '@phosphor-icons/react/dist/ssr';
+import { ArrowLeft } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import Link from 'next/link';
 
 function parseRewardTemplates(raw: string): string[] {

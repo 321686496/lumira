@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { MagnifyingGlass } from '@phosphor-icons/react/dist/ssr';
+import { MagnifyingGlass } from '@phosphor-icons/react/dist/ssr/MagnifyingGlass';
 import { RewardsTable } from '@/components/rewards-table';
 import { Pagination } from '@/components/pagination';
 

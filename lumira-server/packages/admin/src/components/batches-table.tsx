@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ToggleSwitch } from '@/components/toggle-switch';
 import { formatUnixTime } from '@/lib/utils';
-import { Eye } from '@phosphor-icons/react/dist/ssr';
+import { Eye } from '@phosphor-icons/react/dist/ssr/Eye';
 import type { Batch } from '@/types/admin';
 
 function renderRewardInfo(b: Batch): string {

@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
 import { truncateDeviceId, formatUnixTime } from '@/lib/utils';
-import { ArrowLeft, Coins, TrendUp, TrendDown } from '@phosphor-icons/react/dist/ssr';
+import { ArrowLeft } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
+import { Coins } from '@phosphor-icons/react/dist/ssr/Coins';
+import { TrendUp } from '@phosphor-icons/react/dist/ssr/TrendUp';
+import { TrendDown } from '@phosphor-icons/react/dist/ssr/TrendDown';
 import PointsForm from '@/components/points-form';
 
 const transactionTypeLabels: Record<string, string> = {

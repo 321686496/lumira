@@ -5,7 +5,7 @@ import { UnauthenticatedError } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import { formatUnixTime } from '@/lib/utils';
 import Link from 'next/link';
-import { ArrowLeft } from '@phosphor-icons/react/dist/ssr';
+import { ArrowLeft } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 
 const labelMaps: Record<string, Record<string, string>> = {
   source: {

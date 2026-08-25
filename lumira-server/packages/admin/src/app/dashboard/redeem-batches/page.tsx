@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { api } from '@/lib/api';
 import { UnauthenticatedError } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import { Plus } from '@phosphor-icons/react/dist/ssr';
+import { Plus } from '@phosphor-icons/react/dist/ssr/Plus';
 import { BatchesTable } from '@/components/batches-table';
 
 export default async function RedeemBatchesPage() {

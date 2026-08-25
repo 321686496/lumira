@@ -5,9 +5,12 @@ import { UnauthenticatedError } from '@/lib/auth';
 import { StatsCard } from '@/components/stats-card';
 import { ChartCard } from '@/components/chart-card';
 import { TrendChart } from '@/components/trend-chart';
-import {
-  DeviceMobile, Users, ArrowUp, Ticket, Gift, Database,
-} from '@phosphor-icons/react/dist/ssr';
+import { DeviceMobile } from '@phosphor-icons/react/dist/ssr/DeviceMobile';
+import { Users } from '@phosphor-icons/react/dist/ssr/Users';
+import { ArrowUp } from '@phosphor-icons/react/dist/ssr/ArrowUp';
+import { Ticket } from '@phosphor-icons/react/dist/ssr/Ticket';
+import { Gift } from '@phosphor-icons/react/dist/ssr/Gift';
+import { Database } from '@phosphor-icons/react/dist/ssr/Database';
 
 export default async function DashboardPage() {
   let stats;

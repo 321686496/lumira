@@ -17,7 +17,7 @@ import {
   sceneLabels,
   frequencyLabels,
 } from '@/lib/profile-labels';
-import { ArrowLeft } from '@phosphor-icons/react/dist/ssr';
+import { ArrowLeft } from '@phosphor-icons/react/dist/ssr/ArrowLeft';
 import type { DeviceRecord } from '@/types/admin';
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3000';

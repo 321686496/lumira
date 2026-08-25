@@ -18,10 +18,17 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
-import {
-  Plus, PencilSimple, Trash, Lock, CaretDown, CaretRight,
-  MagnifyingGlass, ArrowUp, ArrowDown, FolderPlus, ImageSquare,
-} from '@phosphor-icons/react';
+import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
+import { PencilSimple } from '@phosphor-icons/react/dist/csr/PencilSimple';
+import { Trash } from '@phosphor-icons/react/dist/csr/Trash';
+import { Lock } from '@phosphor-icons/react/dist/csr/Lock';
+import { CaretDown } from '@phosphor-icons/react/dist/csr/CaretDown';
+import { CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
+import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
+import { ArrowUp } from '@phosphor-icons/react/dist/csr/ArrowUp';
+import { ArrowDown } from '@phosphor-icons/react/dist/csr/ArrowDown';
+import { FolderPlus } from '@phosphor-icons/react/dist/csr/FolderPlus';
+import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { FileUpload } from '@/components/ui/file-upload';

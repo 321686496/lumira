@@ -1,9 +1,16 @@
 // src/components/sidebar.tsx
 import Link from 'next/link';
-import {
-  ChartLineUp, Users, Ticket, Gift, ClipboardText,
-  SquaresFour, GridFour, DeviceMobile, ChatCircleText, Camera, Megaphone,
-} from '@phosphor-icons/react';
+import { ChartLineUp } from '@phosphor-icons/react/dist/csr/ChartLineUp';
+import { Users } from '@phosphor-icons/react/dist/csr/Users';
+import { Ticket } from '@phosphor-icons/react/dist/csr/Ticket';
+import { Gift } from '@phosphor-icons/react/dist/csr/Gift';
+import { ClipboardText } from '@phosphor-icons/react/dist/csr/ClipboardText';
+import { SquaresFour } from '@phosphor-icons/react/dist/csr/SquaresFour';
+import { GridFour } from '@phosphor-icons/react/dist/csr/GridFour';
+import { DeviceMobile } from '@phosphor-icons/react/dist/csr/DeviceMobile';
+import { ChatCircleText } from '@phosphor-icons/react/dist/csr/ChatCircleText';
+import { Camera } from '@phosphor-icons/react/dist/csr/Camera';
+import { Megaphone } from '@phosphor-icons/react/dist/csr/Megaphone';
 import { cn } from '@/lib/utils';
 
 const navItems = [

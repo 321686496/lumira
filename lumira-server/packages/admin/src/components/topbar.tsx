@@ -1,5 +1,5 @@
 // src/components/topbar.tsx
-import { SignOut } from '@phosphor-icons/react';
+import { SignOut } from '@phosphor-icons/react/dist/csr/SignOut';
 import { Button } from '@/components/ui/button';
 import { logoutAction } from '@/actions/logout';
 

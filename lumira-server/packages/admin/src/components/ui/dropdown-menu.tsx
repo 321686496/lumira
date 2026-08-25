@@ -2,7 +2,9 @@
 
 import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
-import { Check, CaretRight, Circle } from "@phosphor-icons/react"
+import { Check } from '@phosphor-icons/react/dist/csr/Check';
+import { CaretRight } from '@phosphor-icons/react/dist/csr/CaretRight';
+import { Circle } from '@phosphor-icons/react/dist/csr/Circle';
 
 import { cn } from "@/lib/utils"
 

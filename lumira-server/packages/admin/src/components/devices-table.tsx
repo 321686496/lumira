@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { truncateDeviceId, formatUnixTime } from '@/lib/utils';
 import { toAssetUrl } from '@/lib/asset-url';
 import { genderLabels } from '@/lib/profile-labels';
-import { Coins, UserCircle } from '@phosphor-icons/react/dist/ssr';
+import { Coins } from '@phosphor-icons/react/dist/ssr/Coins';
+import { UserCircle } from '@phosphor-icons/react/dist/ssr/UserCircle';
 import type { DeviceListResponse, DeviceRecord } from '@/types/admin';
 
 const platformLabels: Record<string, string> = {
