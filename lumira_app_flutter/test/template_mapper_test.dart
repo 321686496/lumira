@@ -15,7 +15,8 @@ void main() {
           author: '如画',
           version: '1.0.0',
           category: 'portrait',
-          classification: TemplateClassification(type: 'portrait', style: 'japanese', method: 'normal'),
+          classification: TemplateClassification(
+              type: 'portrait', style: 'japanese', method: 'normal'),
           tags: ['咖啡馆', '人像'],
           tagIds: ['t1', 't2'],
           price: 0,
@@ -57,7 +58,12 @@ void main() {
         ),
         postProcess: PostProcess(
           cropRatio: '3:4',
-          color: PostProcessColor(brightness: 5, contrast: 10, saturation: 10, temperature: 20, tint: -5),
+          color: PostProcessColor(
+              brightness: 5,
+              contrast: 10,
+              saturation: 10,
+              temperature: 20,
+              tint: -5),
           smoothStrength: 20,
           sharpen: 15,
           vignette: 15,
@@ -74,7 +80,8 @@ void main() {
       expect(record.tags, ['咖啡馆', '人像']);
       expect(record.composition['overlayType'], 'center');
       expect(record.composition['subjectFrame'], isNotNull);
-      expect(record.pose['silhouette'], isNotNull);
+      // Phase 1：toRecord 将 pose 序列化为多姿势数组，首姿势的 silhouette 非空
+      expect((record.pose as List).first['silhouette'], isNotNull);
       expect(record.camera['iso'], 400);
       expect(record.sceneGuide['lightDirection'], '侧光 45°');
       expect(record.postProcess['lut'], 'warm_film');
@@ -131,11 +138,51 @@ void main() {
         cover: '',
         description: '',
         referenceSource: '',
-        composition: {'overlayType': 'center', 'opacity': 0.5, 'aspectRatio': '3:4', 'description': ''},
-        pose: {'silhouette': {'type': 'builtin', 'data': 'none'}, 'scale': 1.0, 'rotation': 0, 'description': ''},
-        camera: {'exposureCompensation': 0.0, 'iso': 200, 'shutterSpeed': '1/200', 'whiteBalance': 'daylight', 'whiteBalanceK': 5500, 'flashMode': 'off', 'focusMode': 'auto', 'lensSuggestion': 'main'},
-        sceneGuide: {'lightDirection': '', 'shootingDistance': '', 'background': '', 'props': <String>[], 'bestTime': '', 'tips': <String>[]},
-        postProcess: {'cropRatio': '3:4', 'color': {'brightness': 0, 'contrast': 0, 'saturation': 0, 'temperature': 0, 'tint': 0}, 'smoothStrength': 0, 'sharpen': 0, 'vignette': 0, 'grain': 0, 'lut': 'none'},
+        composition: {
+          'overlayType': 'center',
+          'opacity': 0.5,
+          'aspectRatio': '3:4',
+          'description': ''
+        },
+        pose: {
+          'silhouette': {'type': 'builtin', 'data': 'none'},
+          'scale': 1.0,
+          'rotation': 0,
+          'description': ''
+        },
+        camera: {
+          'exposureCompensation': 0.0,
+          'iso': 200,
+          'shutterSpeed': '1/200',
+          'whiteBalance': 'daylight',
+          'whiteBalanceK': 5500,
+          'flashMode': 'off',
+          'focusMode': 'auto',
+          'lensSuggestion': 'main'
+        },
+        sceneGuide: {
+          'lightDirection': '',
+          'shootingDistance': '',
+          'background': '',
+          'props': <String>[],
+          'bestTime': '',
+          'tips': <String>[]
+        },
+        postProcess: {
+          'cropRatio': '3:4',
+          'color': {
+            'brightness': 0,
+            'contrast': 0,
+            'saturation': 0,
+            'temperature': 0,
+            'tint': 0
+          },
+          'smoothStrength': 0,
+          'sharpen': 0,
+          'vignette': 0,
+          'grain': 0,
+          'lut': 'none'
+        },
         createdAt: 1700000000000,
         updatedAt: 1700000000000,
         isBuiltin: false,
