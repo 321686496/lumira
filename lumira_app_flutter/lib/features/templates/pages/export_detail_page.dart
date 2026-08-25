@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/router/route_names.dart';
@@ -14,6 +15,8 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/safe_share.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../models/share_token.dart';
+import '../services/template_share_service.dart';
 
 class ExportDetailPage extends ConsumerStatefulWidget {
   const ExportDetailPage({
@@ -38,6 +41,7 @@ class ExportDetailPage extends ConsumerStatefulWidget {
 class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
   File? _file;
   String? _contentPreview;
+  String? _rawContent;
   bool _isLoading = true;
   String? _error;
 
@@ -64,6 +68,7 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
       setState(() {
         _file = file;
         _contentPreview = preview;
+        _rawContent = content;
         _isLoading = false;
       });
     } catch (e) {
@@ -198,6 +203,34 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
     await SafeShare.share(
       '我用如画分享了模板「${widget.templateName}」\n链接：$link\n分享码：$code',
       subject: '如画模板：${widget.templateName}',
+    );
+  }
+
+  /// 弹出分享有效期选择底部面板，生成自定义模板分享二维码。
+  Future<void> _generateShareQr() async {
+    final content = _rawContent;
+    if (content == null) {
+      if (mounted) LumiraToast.show(context, '暂无可分享内容');
+      return;
+    }
+
+    TemplateShareService service;
+    try {
+      service = await ref.read(templateShareServiceProvider.future);
+    } catch (_) {
+      if (mounted) LumiraToast.show(context, '分享服务不可用');
+      return;
+    }
+    if (!mounted) return;
+
+    await showLumiraBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _ShareQrSheet(
+        service: service,
+        rawContent: content,
+        templateName: widget.templateName,
+      ),
     );
   }
 
@@ -371,10 +404,10 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
             onPressed: _saveToFileManager,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+              children: const [
                 Icon(Icons.save_outlined, size: 20),
-                const SizedBox(width: 8),
-                const Text('保存到文件管理器'),
+                SizedBox(width: 8),
+                Text('保存到文件管理器'),
               ],
             ),
           ),
@@ -384,10 +417,23 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
             onPressed: _shareFile,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+              children: const [
                 Icon(Icons.share_outlined, size: 20),
-                const SizedBox(width: 8),
-                const Text('分享文件'),
+                SizedBox(width: 8),
+                Text('分享文件'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          LumiraButton(
+            variant: ButtonVariant.secondary,
+            onPressed: _generateShareQr,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.qr_code_2_outlined, size: 20),
+                SizedBox(width: 8),
+                Text('生成分享二维码'),
               ],
             ),
           ),
@@ -398,10 +444,10 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
               onPressed: () => _copyText(widget.shareLink!, '分享链接已复制'),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+                children: const [
                   Icon(Icons.link_outlined, size: 20),
-                  const SizedBox(width: 8),
-                  const Text('复制分享链接'),
+                  SizedBox(width: 8),
+                  Text('复制分享链接'),
                 ],
               ),
             ),
@@ -413,10 +459,10 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
               onPressed: () => _copyText(widget.shareCode!, '分享码已复制'),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+                children: const [
                   Icon(Icons.qr_code_2_outlined, size: 20),
-                  const SizedBox(width: 8),
-                  const Text('复制分享码'),
+                  SizedBox(width: 8),
+                  Text('复制分享码'),
                 ],
               ),
             ),
@@ -427,15 +473,280 @@ class _ExportDetailPageState extends ConsumerState<ExportDetailPage> {
             onPressed: _shareAsText,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
+              children: const [
                 Icon(Icons.chat_bubble_outline, size: 20),
-                const SizedBox(width: 8),
-                const Text('以文本分享'),
+                SizedBox(width: 8),
+                Text('以文本分享'),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 可选的分享有效期。
+class _TtlOption {
+  const _TtlOption(this.label, this.seconds);
+
+  final String label;
+  final int seconds;
+}
+
+const _shareTtlOptions = <_TtlOption>[
+  _TtlOption('15分钟', 900),
+  _TtlOption('1小时', 3600),
+  _TtlOption('6小时', 21600),
+  _TtlOption('12小时', 43200),
+];
+
+enum _SharePhase { select, loading, result }
+
+/// 生成分享二维码的底部面板：有效期选择 → loading → 结果视图。
+class _ShareQrSheet extends ConsumerStatefulWidget {
+  const _ShareQrSheet({
+    required this.service,
+    required this.rawContent,
+    required this.templateName,
+  });
+
+  final TemplateShareService service;
+  final String rawContent;
+  final String templateName;
+
+  @override
+  ConsumerState<_ShareQrSheet> createState() => _ShareQrSheetState();
+}
+
+class _ShareQrSheetState extends ConsumerState<_ShareQrSheet> {
+  _SharePhase _phase = _SharePhase.select;
+  ShareToken? _shareToken;
+  String? _error;
+
+  Future<void> _createShare(int ttl) async {
+    setState(() {
+      _phase = _SharePhase.loading;
+      _error = null;
+    });
+    try {
+      final result =
+          await widget.service.sharePayloadJson(widget.rawContent, ttl);
+      if (!mounted) return;
+      setState(() {
+        _shareToken = result;
+        _phase = _SharePhase.result;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _SharePhase.select;
+        _error = '生成二维码失败: $e';
+      });
+      LumiraToast.show(context, '生成二维码失败: $e');
+    }
+  }
+
+  void _copyLink(String link) {
+    Clipboard.setData(ClipboardData(text: link));
+    LumiraToast.show(context, '分享链接已复制');
+  }
+
+  Future<void> _revoke() async {
+    final token = _shareToken?.token;
+    if (token == null) return;
+    setState(() {
+      _phase = _SharePhase.loading;
+    });
+    try {
+      await widget.service.revokeShare(token);
+      if (!mounted) return;
+      final overlay = Overlay.of(context, rootOverlay: true);
+      LumiraToast.showWithOverlay(overlay, '已撤回分享');
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _phase = _SharePhase.result;
+        _error = '撤回分享失败: $e';
+      });
+      LumiraToast.show(context, '撤回分享失败: $e');
+    }
+  }
+
+  String _formatExpiry(int expiresAt) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000);
+    String two(int n) => n.toString().padLeft(2, '0');
+    final hm = '${two(dt.hour)}:${two(dt.minute)}';
+    final now = DateTime.now();
+    final sameDay = dt.year == now.year &&
+        dt.month == now.month &&
+        dt.day == now.day;
+    if (sameDay) return '有效期至 $hm';
+    return '有效期至 ${two(dt.month)}-${two(dt.day)} $hm';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = ref.watch(themeTokensProvider);
+
+    final Widget body;
+    if (_phase == _SharePhase.loading) {
+      body = Padding(
+        padding: const EdgeInsets.only(top: 24, bottom: 24),
+        child: Center(
+          child: LumiraProgress.circular(),
+        ),
+      );
+    } else if (_phase == _SharePhase.result) {
+      body = _buildResult(tokens);
+    } else {
+      body = _buildSelect(tokens);
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '生成分享二维码',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 16),
+        body,
+      ],
+    );
+  }
+
+  Widget _buildSelect(ThemeTokens tokens) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '请选择分享链接有效期（超期后链接与二维码自动失效）：',
+          style: TextStyle(fontSize: 13, color: tokens.textSecondary),
+        ),
+        const SizedBox(height: 16),
+        for (final option in _shareTtlOptions) ...[
+          LumiraButton(
+            variant: ButtonVariant.secondary,
+            onPressed: () => _createShare(option.seconds),
+            child: Text(option.label),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            style: TextStyle(fontSize: 13, color: tokens.danger),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Text(
+          '最长有效期 12 小时，生成后链接仅限装如画 App 的设备扫码导入。',
+          style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResult(ThemeTokens tokens) {
+    final token = _shareToken;
+    if (token == null) return const SizedBox.shrink();
+    final link = TemplateShareService.buildQrText(token.token);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: QrImageView(
+              data: link,
+              size: 180,
+              backgroundColor: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          widget.templateName,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _formatExpiry(token.expiresAt),
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: tokens.textSecondary),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: tokens.surfaceAlt,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            link,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontFamily: 'monospace',
+              color: tokens.textSecondary,
+            ),
+          ),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            style: TextStyle(fontSize: 13, color: tokens.danger),
+          ),
+        ],
+        const SizedBox(height: 16),
+        LumiraButton(
+          variant: ButtonVariant.secondary,
+          onPressed: () => _copyLink(link),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.link_outlined, size: 20),
+              SizedBox(width: 8),
+              Text('复制链接'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        LumiraButton(
+          variant: ButtonVariant.danger,
+          onPressed: _revoke,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.close, size: 20),
+              SizedBox(width: 8),
+              Text('撤回分享'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

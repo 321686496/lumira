@@ -50,17 +50,31 @@ class TemplateShareService {
     return '';
   }
 
-  /// 创建分享：导出 payload 上传，返回 share token。
-  Future<ShareToken> shareTemplate(TemplateRecord record, int expiresInSeconds) async {
-    final payload = await _buildPayload(record);
+  /// 直接分享一份 payload JSON 字符串，返回 share token。
+  ///
+  /// 内部会先扫描 payload 里的 `data:image/...;base64,` 图片做限长压缩
+  /// （复用 [TemplateShareService.compressImageToLimit]，>1MB 压缩到 ≤1MB），
+  /// 再 POST `/templates/share`。供导出详情页把已读出的 `.pptpl` 原始 JSON
+  /// 直接分享，无需依赖 [TemplateRecord]。
+  Future<ShareToken> sharePayloadJson(
+    String payload,
+    int expiresInSeconds,
+  ) async {
+    final compressed = await _compressEmbeddedImages(payload);
     return _api.post(
       '/templates/share',
       body: <String, dynamic>{
-        'payload': payload,
+        'payload': compressed,
         'expiresInSeconds': expiresInSeconds,
       },
       fromJson: (j) => ShareToken.fromJson(j as Map<String, dynamic>),
     );
+  }
+
+  /// 创建分享：导出 payload 上传，返回 share token。
+  Future<ShareToken> shareTemplate(TemplateRecord record, int expiresInSeconds) async {
+    final payload = await _buildPayload(record);
+    return sharePayloadJson(payload, expiresInSeconds);
   }
 
   /// 拉取分享内容，返回 `{payload, expiresAt}`。
@@ -81,11 +95,10 @@ class TemplateShareService {
     );
   }
 
-  /// 构建共享 payload：导出 .pptpl JSON 字符串，并把内嵌 base64 图片压缩至 ≤1MB/张。
+  /// 构建共享 payload：导出 .pptpl JSON 字符串（图片限长压缩由 sharePayloadJson 统一负责）。
   Future<String> _buildPayload(TemplateRecord record) async {
     final withCover = await TemplateExporter.embedCoverData(record);
-    final raw = TemplateExporter.exportToPptpl(withCover);
-    return _compressEmbeddedImages(raw);
+    return TemplateExporter.exportToPptpl(withCover);
   }
 
   /// 将字节压缩到 [maxBytes] 以内（仅当超过时）。
