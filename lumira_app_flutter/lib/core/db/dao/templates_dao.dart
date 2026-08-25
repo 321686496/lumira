@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
 import '../tables.dart';
+import '../../../features/capture/domain/photo_template.dart';
 
 /// 简化的模板实体（仅常用字段；完整 PhotoTemplate 在 lib/features/templates/ 中定义）
 /// 本任务范围：DB 层只负责存取原始 JSON 数据
@@ -18,6 +19,9 @@ class TemplateRecord {
   final int price;
   final String cover;
   final String? coverData;
+  /// 效果图列表（images_json 列）。null 表示未存储（旧模板无该列数据）。
+  /// [0] 为封面；仅 Phase 1 存量模板由 cover/coverData 派生，Phase 2 起直接读数组。
+  final List<TemplateImage>? images;
   final String description;
   final String referenceSource;
   final String shortDesc;
@@ -53,6 +57,7 @@ class TemplateRecord {
     required this.price,
     required this.cover,
     this.coverData,
+    this.images,
     required this.description,
     required this.referenceSource,
     this.shortDesc = '',
@@ -82,6 +87,8 @@ class TemplateRecord {
       Tables.colPrice: price,
       Tables.colCover: cover,
       Tables.colCoverData: coverData,
+      Tables.colImagesJson:
+          (images == null) ? null : jsonEncode(images!.map(_imageToJson).toList()),
       Tables.colDescription: description,
       Tables.colReferenceSource: referenceSource,
       Tables.colShortDesc: shortDesc,
@@ -112,6 +119,7 @@ class TemplateRecord {
       price: (row[Tables.colPrice] as num?)?.toInt() ?? 0,
       cover: (row[Tables.colCover] as String?) ?? '',
       coverData: row[Tables.colCoverData] as String?,
+      images: _decodeImages(row[Tables.colImagesJson]),
       description: (row[Tables.colDescription] as String?) ?? '',
       referenceSource: (row[Tables.colReferenceSource] as String?) ?? '',
       shortDesc: (row[Tables.colShortDesc] as String?) ?? '',
@@ -145,6 +153,7 @@ class TemplateRecord {
     int? price,
     String? cover,
     String? coverData,
+    List<TemplateImage>? images,
     String? description,
     String? referenceSource,
     String? shortDesc,
@@ -172,6 +181,7 @@ class TemplateRecord {
       price: price ?? this.price,
       cover: cover ?? this.cover,
       coverData: coverData ?? this.coverData,
+      images: images ?? this.images,
       description: description ?? this.description,
       referenceSource: referenceSource ?? this.referenceSource,
       shortDesc: shortDesc ?? this.shortDesc,
@@ -200,6 +210,25 @@ class TemplateRecord {
   static dynamic _decodeJsonAny(Object? raw) {
     if (raw is String && raw.isNotEmpty) {
       return jsonDecode(raw);
+    }
+    return null;
+  }
+
+  static Map<String, dynamic> _imageToJson(TemplateImage img) =>
+      <String, dynamic>{'url': img.url, if (img.data != null) 'data': img.data};
+
+  /// 解析 images_json 列。空数组 `[]` 返回空 List（非 null）；无数据返回 null。
+  static List<TemplateImage>? _decodeImages(Object? raw) {
+    if (raw is String && raw.isNotEmpty) {
+      final list = jsonDecode(raw) as List<dynamic>?;
+      if (list == null) return null;
+      return list
+          .whereType<Map<String, dynamic>>()
+          .map((e) => TemplateImage(
+                url: (e['url'] as String?) ?? '',
+                data: e['data'] as String?,
+              ))
+          .toList();
     }
     return null;
   }

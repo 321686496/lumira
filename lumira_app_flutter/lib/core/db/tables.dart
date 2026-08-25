@@ -21,6 +21,7 @@ class Tables {
   static const String colReferenceSource = 'reference_source';
   static const String colCompositionJson = 'composition_json';
   static const String colPoseJson = 'pose_json';
+  static const String colImagesJson = 'images_json';
   static const String colCameraJson = 'camera_json';
   static const String colSceneGuideJson = 'scene_guide_json';
   static const String colPostProcessJson = 'post_process_json';

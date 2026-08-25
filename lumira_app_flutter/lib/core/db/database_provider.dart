@@ -27,7 +27,7 @@ import 'dao/user_interests_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 40;
+const int _kDbVersion = 41;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -160,6 +160,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
       ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colPoseJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colImagesJson} TEXT NOT NULL DEFAULT '[]',
       ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
@@ -1190,6 +1191,21 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await db.execute(UserInterestsTable.indexScopeSql);
     } catch (e) {
       debugPrint('v40 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 41) {
+    try {
+      // v41: custom_templates 新增 images_json 列（多效果图持久化）
+      // 效果图列表 JSON 数组，[0] 为封面；旧数据缺失列时默认 '[]'。
+      await _addColumnIfNotExists(
+        db,
+        Tables.customTemplates,
+        Tables.colImagesJson,
+        "TEXT NOT NULL DEFAULT '[]'",
+      );
+    } catch (e) {
+      debugPrint('v41 migration failed (silent fallback): $e');
     }
   }
 }
