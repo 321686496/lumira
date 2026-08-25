@@ -77,7 +77,30 @@ describe('InviteController (e2e)', () => {
 
     expect(res.body.inviterDeviceId).toBe(inviterDeviceId);
     expect(res.body.tierReached).toBe(1); // 首次邀请达成阶梯 1
+    expect(res.body.instantPointsGranted).toBe(true); // 邀请人获得即时 +30
     expect(res.body.rewards).not.toBeNull();
+    // 阶梯 1 奖励构成：积分 + 免费解锁次数 + 成就
+    const items = res.body.rewards.items;
+    expect(items.map((i: any) => i.type)).toEqual(
+      expect.arrayContaining(['points', 'unlock_count', 'achievement']),
+    );
+  });
+
+  it('GET /api/v1/points/balance — 双方各 +30 即时积分，邀请人另得阶梯1 奖励', async () => {
+    // 邀请人：即时 +30 + 阶梯1 积分 +20 = 50；免费解锁 ×1
+    const inviter = await request(app.getHttpServer())
+      .get('/api/v1/points/balance')
+      .set('Authorization', `Bearer ${inviterToken}`)
+      .expect(200);
+    expect(inviter.body.balance).toBe(50);
+    expect(inviter.body.freeUnlockCount).toBe(1);
+
+    // 被邀请人：即时 +30
+    const invitee = await request(app.getHttpServer())
+      .get('/api/v1/points/balance')
+      .set('Authorization', `Bearer ${inviteeToken}`)
+      .expect(200);
+    expect(invitee.body.balance).toBe(30);
   });
 
   it('POST /api/v1/invite/activate — should reject duplicate activation', async () => {

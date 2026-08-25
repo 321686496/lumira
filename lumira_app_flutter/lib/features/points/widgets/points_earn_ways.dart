@@ -17,11 +17,12 @@ const List<PointsEarnWay> pointsEarnWays = [
   PointsEarnWay(
     Icons.calendar_today_outlined,
     '每日签到',
-    '+2 积分/天，连签 7 天额外 +14（每日首拍自动完成）',
+    '+4 积分/天，连签 7 天额外 +14（每日首拍自动完成）',
   ),
-  PointsEarnWay(Icons.photo_camera_outlined, '每日首次拍摄', '+2 积分/天'),
-  PointsEarnWay(Icons.emoji_events_outlined, '完成挑战', '+5 积分/次'),
-  PointsEarnWay(Icons.card_giftcard, '邀请好友 / 兑换码', '按邀请阶梯发放'),
+  PointsEarnWay(Icons.share_outlined, '每日分享', '+2 积分/天'),
+  PointsEarnWay(Icons.emoji_events_outlined, '完成挑战', '+5 积分/次，每日上限 3 次'),
+  PointsEarnWay(Icons.card_giftcard, '邀请好友', '双方各得 +30，每日上限 3 次'),
+  PointsEarnWay(Icons.trending_up, '等级升级', '每级发放，档位递增'),
 ];
 
 /// 获取积分途径列表

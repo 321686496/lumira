@@ -1,6 +1,6 @@
 // lumira-server/packages/backend/src/modules/templates/dto/exchange-template.dto.ts
 
-import { IsString, MinLength, MaxLength, IsOptional, IsInt, Min } from 'class-validator';
+import { IsString, MinLength, MaxLength, IsOptional, IsInt, Min, IsIn } from 'class-validator';
 
 export class ExchangeTemplateDto {
   @IsString()
@@ -13,4 +13,9 @@ export class ExchangeTemplateDto {
   @IsInt()
   @Min(1)
   priceCredits?: number;
+
+  // 支付方式：points（积分，默认）/ free_unlock（免费解锁次数，邀请里程碑奖励，不耗积分）
+  @IsOptional()
+  @IsIn(['points', 'free_unlock'])
+  payBy?: 'points' | 'free_unlock';
 }

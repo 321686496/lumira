@@ -48,6 +48,26 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
   /// 购买请求进行中标记：防重入（仅方法内串行保护，不参与 UI 渲染）
   bool _purchasing = false;
 
+  /// 当前可用的免费解锁次数（邀请里程碑奖励，加载后缓存；展示免费解锁选项）
+  int _freeUnlockCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFreeUnlockCount();
+  }
+
+  Future<void> _loadFreeUnlockCount() async {
+    try {
+      final repo = await ref.read(pointsRepositoryProvider.future);
+      final b = await repo.getBalance();
+      if (!mounted) return;
+      setState(() => _freeUnlockCount = b.freeUnlockCount);
+    } catch (_) {
+      // 余额拉取失败不阻塞解锁页
+    }
+  }
+
   void _back() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
@@ -160,6 +180,52 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
     }
   }
 
+  /// 使用免费解锁次数解锁（邀请里程碑奖励，不耗积分）
+  Future<void> _onFreeUnlock() async {
+    if (_purchasing) return; // 防重入
+    _purchasing = true;
+    try {
+      final templateId = widget.templateId;
+      if (templateId == null || templateId.isEmpty) {
+        lumira.LumiraToast.show(context, '缺少模板信息');
+        return;
+      }
+      if (_freeUnlockCount < 1) {
+        lumira.LumiraToast.show(context, '暂无免费解锁次数，邀请好友即可获得');
+        return;
+      }
+
+      final confirmed = await lumira.showLumiraDialog<bool>(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => _FreeUnlockPopupContent(
+          onCancel: () => Navigator.pop(context, false),
+          onConfirm: () => Navigator.pop(context, true),
+        ),
+      );
+      if (confirmed != true) return;
+      if (!mounted) return;
+      final repo = await ref.read(ownedTemplatesRepositoryProvider.future);
+      final result = await repo.exchange(templateId, payBy: 'free_unlock');
+      if (!mounted) return;
+      // 刷新 owned 缓存 + 免费解锁余额
+      ref.invalidate(ownedTemplatesLoaderProvider);
+      setState(() {
+        _unlocked = true;
+        _freeUnlockCount = result.freeUnlockLeft ?? (_freeUnlockCount - 1);
+      });
+      lumira.LumiraToast.show(
+        context,
+        '解锁成功！剩余免费解锁 ${result.freeUnlockLeft ?? 0} 次',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '免费解锁失败：$e');
+    } finally {
+      _purchasing = false;
+    }
+  }
+
   /// 拉取当前积分余额；失败返回 null（不阻塞购买流程，交由 exchange 兜底报错）。
   Future<int?> _fetchBalance() async {
     try {
@@ -253,9 +319,11 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
                               _OptionsList(
                                 tokens: tokens,
                                 price: widget.price,
+                                freeUnlockCount: _freeUnlockCount,
                                 onShare: _onShare,
                                 onInputCode: _onInputCode,
                                 onPurchase: _onPurchase,
+                                onFreeUnlock: _onFreeUnlock,
                               ),
                               _BottomNote(tokens: tokens),
                             ],
@@ -556,21 +624,46 @@ class _OptionsList extends StatelessWidget {
   const _OptionsList({
     required this.tokens,
     required this.price,
+    required this.freeUnlockCount,
     required this.onShare,
     required this.onInputCode,
     required this.onPurchase,
+    required this.onFreeUnlock,
   });
 
   final ThemeTokens tokens;
   final int? price;
+  final int freeUnlockCount;
   final VoidCallback onShare;
   final Future<void> Function() onInputCode;
   final VoidCallback onPurchase;
+  final VoidCallback onFreeUnlock;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
+        if (freeUnlockCount > 0) ...[
+          FadeUp(
+            delay: const Duration(milliseconds: 40),
+            child: _OptionCard(
+              tokens: tokens,
+              icon: Icons.lock_open_outlined,
+              iconBgColor: tokens.brandSubtle,
+              iconColor: tokens.brand,
+              title: '免费解锁（剩余 ×$freeUnlockCount）',
+              desc: '使用免费解锁次数，不消耗积分',
+              titleStrong: true,
+              brandBorder: true,
+              button: _SmallBrandButton(
+                tokens: tokens,
+                label: '免费解锁',
+                onTap: onFreeUnlock,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         FadeUp(
           delay: const Duration(milliseconds: 80),
           child: _OptionCard(
@@ -995,6 +1088,119 @@ class _PayPopupContent extends ConsumerWidget {
                   child: Center(
                     child: Text(
                       '确认解锁',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.textInverse,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 免费解锁确认弹窗内容
+class _FreeUnlockPopupContent extends ConsumerWidget {
+  const _FreeUnlockPopupContent({
+    required this.onCancel,
+    required this.onConfirm,
+  });
+
+  final VoidCallback onCancel;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '免费解锁',
+          style: TextStyle(
+            fontFamily: 'Noto Serif SC',
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Icon(Icons.lock_open_outlined, size: 36, color: tokens.brand),
+        const SizedBox(height: 10),
+        Text(
+          '使用 1 次免费解锁，永久解锁该模板',
+          style: TextStyle(
+            fontSize: 13,
+            color: tokens.textTertiary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        Text(
+          '不消耗积分',
+          style: TextStyle(
+            fontSize: 12,
+            color: tokens.success,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: onCancel,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isNeumorphic
+                        ? tokens.canvasDeep
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                    border: isNeumorphic
+                        ? null
+                        : Border.all(color: tokens.divider, width: 1),
+                    boxShadow: isNeumorphic
+                        ? tokens.shadowConcaveSubtle
+                        : null,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.textSecondary,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: GestureDetector(
+                onTap: onConfirm,
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: tokens.brand,
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: tokens.shadowConvexBrand,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '确认免费解锁',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,

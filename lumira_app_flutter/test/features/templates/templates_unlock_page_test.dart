@@ -392,12 +392,14 @@ class _MockOwnedTemplatesRepository implements OwnedTemplatesRepository {
   Future<TemplateExchangeResult> exchange(
     String templateId, {
     int? priceCredits,
+    String payBy = 'points',
   }) async {
     return TemplateExchangeResult(
       success: true,
       templateId: templateId,
-      spentCredits: priceCredits ?? 0,
-      balance: 100,
+      spentCredits: payBy == 'free_unlock' ? 0 : (priceCredits ?? 0),
+      balance: payBy == 'free_unlock' ? 0 : 100,
+      payBy: payBy,
     );
   }
 }

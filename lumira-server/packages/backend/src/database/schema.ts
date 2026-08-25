@@ -109,6 +109,7 @@ export const userPoints = mysqlTable('user_points', {
   balance: int('balance').notNull().default(0),
   totalEarned: int('total_earned').notNull().default(0),
   totalSpent: int('total_spent').notNull().default(0),
+  freeUnlockCount: int('free_unlock_count').notNull().default(0),
   updatedAt: int('updated_at').notNull(),
 });
 

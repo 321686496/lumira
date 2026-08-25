@@ -1,31 +1,36 @@
 // lumira-server/packages/backend/src/modules/points/points.service.ts
 
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and, gte } from 'drizzle-orm';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import type { MySql2Transaction } from 'drizzle-orm/mysql2';
 import { DatabaseService } from '../../database/database.service';
 import { userPoints, pointTransactions, pointEarnEvents } from '../../database/schema';
 import * as schema from '../../database/schema';
 import { RedisService } from '../../common/redis/redis.service';
-import { getUtc8DateStr } from '../../common/utils/date.util';
+import { getUtc8DateStr, getUtc8DayStart } from '../../common/utils/date.util';
 
 // 积分流水类型（与 shared 类型保持一致，此处本地定义避免事务内依赖 shared 构建产物）
 type PointTransactionType =
   | 'invite' | 'sign_in' | 'share' | 'redeem_code'
   | 'exchange_template' | 'ad' | 'admin_grant'
   | 'shoot_daily' | 'challenge'
-  | 'level_reward';
+  | 'level_reward'
+  | 'free_unlock' | 'free_unlock_spend';
 
 // 事件型积分规则：type → 单次积分值
-const DAILY_SHOOT_POINTS = 2; // 每日首次拍摄
+const DAILY_SHOOT_POINTS = 2; // 每日首次拍摄（保留分支，实际不再被调用；积分由签到合并发放 +4/天）
 const CHALLENGE_POINTS = 5;   // 每次完成挑战
 const SHARE_POINTS = 2;       // 每日首次分享
 
+// 挑战每日积分上限：每天最多 3 次挑战计分（= 15 分/天）
+const CHALLENGE_DAILY_LIMIT = 3;
+
 // 升级积分奖励真值源（key=等级，与前端 LEVEL_REWARD_MAP 一致）
+// 档位递增：Lv2-4:30 / 5-7:60 / 8-10:100 / 11-13:150 / 14-16:200 / 17-19:300 / 20:600
 const LEVEL_REWARD_MAP: Record<number, number> = {
-  2: 25, 3: 25, 4: 50, 5: 100, 6: 50, 7: 50, 8: 50, 9: 50, 10: 250,
-  11: 50, 12: 50, 13: 50, 14: 50, 15: 150, 16: 50, 17: 50, 18: 50, 19: 50, 20: 500,
+  2: 30, 3: 30, 4: 30, 5: 60, 6: 60, 7: 60, 8: 100, 9: 100, 10: 100,
+  11: 150, 12: 150, 13: 150, 14: 200, 15: 200, 16: 200, 17: 300, 18: 300, 19: 300, 20: 600,
 };
 
 interface BalanceRow {
@@ -33,6 +38,7 @@ interface BalanceRow {
   balance: number;
   totalEarned: number;
   totalSpent: number;
+  freeUnlockCount: number;
   updatedAt: number;
 }
 
@@ -129,6 +135,22 @@ export class PointsService {
         throw new BadRequestException('refId is required for challenge');
       }
       eventRefId = refId;
+
+      // 每日挑战积分上限：当天（UTC+8）challenge 事件数 >= 上限则不再发放。
+      // 关系/记录照常推进，仅积分不发（返回 granted:false，200 不抛错）。
+      const dayStart = getUtc8DayStart();
+      const dayCount = await this.dbService.getDb()
+        .select({ value: sql<number>`count(*)` })
+        .from(pointEarnEvents)
+        .where(and(
+          eq(pointEarnEvents.deviceId, deviceId),
+          eq(pointEarnEvents.type, 'challenge'),
+          gte(pointEarnEvents.createdAt, dayStart),
+        ));
+      if ((dayCount[0]?.value ?? 0) >= CHALLENGE_DAILY_LIMIT) {
+        const updated = await this.getBalance(deviceId);
+        return { granted: false, delta: 0, balance: updated.balance };
+      }
     } else if (type === 'share') {
       points = SHARE_POINTS;
       // 每日首次分享：refId 按 UTC+8 自然日计算（与 shoot_daily 同模式，幂等）
@@ -271,8 +293,15 @@ export class PointsService {
       balance: number;
       totalEarned: number;
       totalSpent: number;
+      freeUnlockCount: number;
     }>(key);
-    if (cached !== null) return cached;
+    if (cached !== null) {
+      // 兼容旧缓存（上线前写入，缺少 free_unlock_count）：补齐默认 0
+      return {
+        ...cached,
+        freeUnlockCount: cached.freeUnlockCount ?? 0,
+      };
+    }
 
     const db = this.dbService.getDb();
     const rows = await db.select().from(userPoints).where(eq(userPoints.deviceId, deviceId));
@@ -282,10 +311,97 @@ export class PointsService {
       balance: record?.balance ?? 0,
       totalEarned: record?.totalEarned ?? 0,
       totalSpent: record?.totalSpent ?? 0,
+      freeUnlockCount: record?.freeUnlockCount ?? 0,
     };
 
     await this.redisService.setJson(key, result, 60);
     return result;
+  }
+
+  /**
+   * 增加免费解锁付费模板次数（邀请里程碑奖励，不耗积分）。
+   * 事务内：写审计流水（delta=0, type='free_unlock'）+ 累加 user_points.free_unlock_count。
+   * 幂等由调用方保证（受邀里程碑在发放前已通过 reward_unlocks 去重）。
+   * @returns 发放后的 freeUnlockCount
+   */
+  async earnFreeUnlocks(
+    deviceId: string,
+    count: number,
+    refId: string | null = null,
+  ): Promise<number> {
+    if (count <= 0) {
+      throw new BadRequestException('earnFreeUnlocks count must be positive');
+    }
+    const db = this.dbService.getDb();
+    const now = Math.floor(Date.now() / 1000);
+
+    await db.transaction(async (tx) => {
+      // 审计流水（不改变积分余额）
+      await tx.insert(pointTransactions).values({
+        deviceId,
+        delta: 0,
+        type: 'free_unlock',
+        refId,
+        createdAt: now,
+      });
+
+      const rows = await tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)) as BalanceRow[];
+      const existing = rows[0];
+      if (existing) {
+        await tx.update(userPoints)
+          .set({
+            freeUnlockCount: existing.freeUnlockCount + count,
+            updatedAt: now,
+          })
+          .where(eq(userPoints.deviceId, deviceId));
+      } else {
+        await tx.insert(userPoints).values({
+          deviceId,
+          balance: 0,
+          totalEarned: 0,
+          totalSpent: 0,
+          freeUnlockCount: count,
+          updatedAt: now,
+        });
+      }
+    });
+
+    await this.invalidateBalance(deviceId);
+    const updated = await this.getBalance(deviceId);
+    return updated.freeUnlockCount;
+  }
+
+  /**
+   * 消耗 1 次免费解锁额度（供模板兑换事务复用）。
+   * 在传入 tx 内：校验 free_unlock_count>0 并扣减 1 + 写审计流水；
+   * 无额度抛 BadRequestException；返回扣减后的剩余 freeUnlockCount。
+   */
+  async spendFreeUnlockSync(
+    tx: MySql2Transaction<typeof schema, ExtractTablesWithRelations<typeof schema>>,
+    deviceId: string,
+    refId: string | null = null,
+  ): Promise<number> {
+    const now = Math.floor(Date.now() / 1000);
+    const rows = await tx.select().from(userPoints).where(eq(userPoints.deviceId, deviceId)) as BalanceRow[];
+    const existing = rows[0];
+    if (!existing || existing.freeUnlockCount < 1) {
+      throw new BadRequestException('No free unlock count available');
+    }
+    // 审计流水（不改变积分余额）
+    await tx.insert(pointTransactions).values({
+      deviceId,
+      delta: 0,
+      type: 'free_unlock_spend',
+      refId,
+      createdAt: now,
+    });
+    await tx.update(userPoints)
+      .set({
+        freeUnlockCount: existing.freeUnlockCount - 1,
+        updatedAt: now,
+      })
+      .where(eq(userPoints.deviceId, deviceId));
+    return existing.freeUnlockCount - 1;
   }
 
   /** 查流水（倒序，默认 50 条）*/

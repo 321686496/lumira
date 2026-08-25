@@ -68,14 +68,14 @@ describe('PointsController (e2e)', () => {
       .expect(400);
   });
 
-  it('POST /api/v1/points/earn type=level_reward refId=10 → 首次 granted:true 且 delta:250', async () => {
+  it('POST /api/v1/points/earn type=level_reward refId=10 → 首次 granted:true 且 delta:100', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/points/earn')
       .set('Authorization', `Bearer ${token}`)
       .send({ type: 'level_reward', refId: '10' })
       .expect(201);
     expect(res.body.granted).toBe(true);
-    expect(res.body.delta).toBe(250);
+    expect(res.body.delta).toBe(100);
   });
 
   it('POST /api/v1/points/earn type=level_reward refId=10 → 重复 granted:false 且余额不变', async () => {

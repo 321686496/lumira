@@ -153,6 +153,11 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
                 FadeUp(child: _HeroCard(tokens: tokens)),
                 const SizedBox(height: 20),
                 FadeUp(
+                  delay: const Duration(milliseconds: 40),
+                  child: _DailyBenefitCard(tokens: tokens),
+                ),
+                const SizedBox(height: 20),
+                FadeUp(
                   delay: const Duration(milliseconds: 60),
                   child: _MyInviteCodeCard(tokens: tokens),
                 ),
@@ -275,6 +280,110 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
+/// 邀请每日即时奖励说明卡（每次邀请双方各得 +30，每日上限 3 次）
+class _DailyBenefitCard extends ConsumerWidget {
+  const _DailyBenefitCard({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final stats = ref.watch(inviteStatsProvider).valueOrNull;
+    final today = stats?.todayInviteCount ?? 0;
+    final left = stats?.dailyInvitePointsLeft ?? 0;
+    final freeUnlock = stats?.freeUnlockCount ?? 0;
+    return NeuCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.bolt_outlined, size: 18, color: tokens.brand),
+              const SizedBox(width: 8),
+              Text(
+                '每次邀请，双方各得 +30 积分',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '邀请人每日最多 3 次即时积分（超出的邀请仍计入阶梯进度）',
+            style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _BenefitStat(
+                tokens: tokens,
+                label: '今日已邀请',
+                value: '$today 位',
+              ),
+              const SizedBox(width: 12),
+              _BenefitStat(
+                tokens: tokens,
+                label: '今日可领积分',
+                value: '$left 次',
+              ),
+              const SizedBox(width: 12),
+              _BenefitStat(
+                tokens: tokens,
+                label: '免费解锁',
+                value: '$freeUnlock 次',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BenefitStat extends StatelessWidget {
+  const _BenefitStat({
+    required this.tokens,
+    required this.label,
+    required this.value,
+  });
+  final ThemeTokens tokens;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: tokens.brandSubtle,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, color: tokens.textTertiary),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: tokens.brand,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RewardCard extends ConsumerWidget {
   const _RewardCard({required this.tokens});
   final ThemeTokens tokens;
@@ -291,10 +400,10 @@ class _RewardCard extends ConsumerWidget {
       rewards = tiers.map((t) {
         final done = t.done;
         final locked = t.locked;
-        final labelList = t.rewards.map((r) => r.label).join('、');
+        final labelList = t.rewards.map((r) => r.displayLabel).join(' · ');
         return RewardEntry(
           icon: Icons.card_giftcard,
-          countLabel: '${t.requiredInvites} 分享',
+          countLabel: '${t.requiredInvites} 位',
           name: labelList.isEmpty ? '第 ${t.tier} 档奖励' : labelList,
           done: done,
           locked: locked,
@@ -340,12 +449,10 @@ class _RewardLadderItem {
 /// 奖励阶梯定义（阈值 / icon / 名称）
 /// 状态（done/locked/进行中）由真实 InviteStats.totalInvites 和 nextTier 派生
 const _rewardLadder = <_RewardLadderItem>[
-  _RewardLadderItem(threshold: 1, icon: Icons.movie_outlined, name: '日系胶片模板'),
-  _RewardLadderItem(threshold: 3, icon: Icons.flag_outlined, name: '法式复古包'),
-  _RewardLadderItem(threshold: 5, icon: Icons.star_outline, name: '氛围感包'),
-  _RewardLadderItem(threshold: 10, icon: Icons.emoji_events_outlined, name: '分享达人成就'),
-  _RewardLadderItem(threshold: 15, icon: Icons.workspace_premium_outlined, name: '全部精选模板'),
-  _RewardLadderItem(threshold: 20, icon: Icons.bolt_outlined, name: '裂变之神'),
+  _RewardLadderItem(threshold: 1, icon: Icons.emoji_events_outlined, name: '+20 积分 · 免费解锁×1 · 初露锋芒'),
+  _RewardLadderItem(threshold: 3, icon: Icons.workspace_premium_outlined, name: '+80 积分 · 免费解锁×1'),
+  _RewardLadderItem(threshold: 5, icon: Icons.flag_outlined, name: '+150 积分 · 免费解锁×2 · 人气达人'),
+  _RewardLadderItem(threshold: 10, icon: Icons.star_outline, name: '+300 积分 · 免费解锁×3 · 社交之星'),
 ];
 
 /// 奖励阶梯条目（用于 UI 渲染）
@@ -374,7 +481,7 @@ List<RewardEntry> _buildRewardLadder(InviteStats? stats) {
     final isNext = nextRequired == t.threshold;
     return RewardEntry(
       icon: t.icon,
-      countLabel: '${t.threshold} 分享',
+      countLabel: '${t.threshold} 位',
       name: t.name,
       done: done,
       locked: !done && !isNext,

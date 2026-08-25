@@ -7,8 +7,9 @@ import { dailySignInRecords } from '../../database/schema';
 import { PointsService } from '../points/points.service';
 import { getUtc8DayStart } from '../../common/utils/date.util';
 
-// 签到奖励配置：每天 2 积分，第 7 天额外奖励 14 积分（共 16 积分）
-const DAILY_BASE_POINTS = 2;
+// 签到奖励配置：每日首拍自动签到 +4 积分（合并原"签到 +2 + 每日首拍 +2"），
+// 第 7 天额外奖励 14 积分（共 18 积分）
+const DAILY_BASE_POINTS = 4;
 const DAY_7_BONUS = 14;
 const MAX_DAY_INDEX = 7;
 

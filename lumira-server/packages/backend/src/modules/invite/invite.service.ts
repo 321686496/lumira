@@ -1,14 +1,31 @@
 // lumira-server/packages/backend/src/modules/invite/invite.service.ts
 
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
-import { eq, and, count, desc } from 'drizzle-orm';
+import { eq, and, count, desc, gte } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { devices, inviteRecords, rewardTiers, rewardUnlocks } from '../../database/schema';
+import { devices, inviteRecords, rewardTiers, rewardUnlocks, userPoints } from '../../database/schema';
 import { generateInviteCode } from '../../shared/invite-code.generator';
+import { PointsService } from '../points/points.service';
+import { getUtc8DayStart } from '../../common/utils/date.util';
+
+// 邀请即时奖励：双方各 +30 积分；邀请人每日上限 3 次（90 分/天）
+const INVITE_INSTANT_POINTS = 30;
+const INVITE_DAILY_LIMIT = 3;
+
+// 里程碑奖励 item 结构
+interface MilestoneRewardItem {
+  type: string; // 'points' | 'unlock_count' | 'achievement'
+  value?: number;
+  id?: string;
+  label?: string;
+}
 
 @Injectable()
 export class InviteService {
-  constructor(private readonly dbService: DatabaseService) {}
+  constructor(
+    private readonly dbService: DatabaseService,
+    private readonly pointsService: PointsService,
+  ) {}
 
   // 生成或获取已有邀请码（存入 devices.invite_code 列）
   async generateInviteCode(deviceId: string): Promise<string> {
@@ -126,7 +143,34 @@ export class InviteService {
       .where(eq(inviteRecords.inviterDeviceId, inviterDeviceId));
     const totalInvites = countResult[0]?.value || 0;
 
-    // 7. 检查是否达到新的奖励阶梯
+    // 6.5 邀请即时积分：双方各 +30。
+    //     邀请人每日上限 3 次（超出则邀请人侧不发即时积分，关系/里程碑照常）；
+    //     被邀请人每次首次激活都给（每个新用户自己的首邀奖励，不受邀请人每日上限影响）。
+    let instantPointsGranted = false;
+    try {
+      const todayCount = await db.select({ value: count() })
+        .from(inviteRecords)
+        .where(and(
+          eq(inviteRecords.inviterDeviceId, inviterDeviceId),
+          gte(inviteRecords.activatedAt, getUtc8DayStart()),
+        ));
+      const todayInvites = todayCount[0]?.value || 0;
+
+      if (todayInvites <= INVITE_DAILY_LIMIT) {
+        await this.pointsService.earnPoints(
+          inviterDeviceId, INVITE_INSTANT_POINTS, 'invite', inviteeDeviceId,
+        );
+        instantPointsGranted = true;
+      }
+      await this.pointsService.earnPoints(
+        inviteeDeviceId, INVITE_INSTANT_POINTS, 'invite', inviterDeviceId,
+      );
+    } catch (e) {
+      // 积分发放失败不阻断邀请关系建立
+      console.error('[invite] instant points failed', e);
+    }
+
+    // 7. 检查是否达到新的奖励阶梯（一次性：积分 + 免费解锁次数 + 成就）
     const tiers = await db.query.rewardTiers.findMany({
       where: eq(rewardTiers.isActive, 1),
     });
@@ -154,10 +198,30 @@ export class InviteService {
             status: 'unlocked',
             unlockedAt: now,
           });
+
+          // 发放里程碑奖励：points → 积分；unlock_count → 免费解锁次数；
+          // achievement → 成就即 reward_unlocks 记录本身，无需额外写入。
+          const items = JSON.parse(tier.rewardsJson) as MilestoneRewardItem[];
+          try {
+            for (const item of items) {
+              if (item.type === 'points' && item.value) {
+                await this.pointsService.earnPoints(
+                  inviterDeviceId, item.value, 'invite', `tier:${tier.tier}`,
+                );
+              } else if (item.type === 'unlock_count' && item.value) {
+                await this.pointsService.earnFreeUnlocks(
+                  inviterDeviceId, item.value, `tier:${tier.tier}`,
+                );
+              }
+            }
+          } catch (e) {
+            console.error('[invite] milestone rewards failed', e);
+          }
+
           tierReached = tier.tier;
           rewards = {
             tier: tier.tier,
-            items: JSON.parse(tier.rewardsJson),
+            items,
           };
         }
       }
@@ -167,6 +231,7 @@ export class InviteService {
       inviterDeviceId,
       tierReached,
       rewards,
+      instantPointsGranted,
     };
   }
 
@@ -252,6 +317,21 @@ export class InviteService {
       activatedAt: r.activatedAt,
     }));
 
+    // 免费解锁次数（邀请里程碑奖励累计）+ 今日邀请与剩余可领积分邀请数
+    const pointsRows = await db.select({ freeUnlockCount: userPoints.freeUnlockCount })
+      .from(userPoints)
+      .where(eq(userPoints.deviceId, deviceId));
+    const freeUnlockCount = pointsRows[0]?.freeUnlockCount ?? 0;
+
+    const todayInvites = await db.select({ value: count() })
+      .from(inviteRecords)
+      .where(and(
+        eq(inviteRecords.inviterDeviceId, deviceId),
+        gte(inviteRecords.activatedAt, getUtc8DayStart()),
+      ));
+    const todayInviteCount = todayInvites[0]?.value || 0;
+    const dailyInvitePointsLeft = Math.max(0, INVITE_DAILY_LIMIT - todayInviteCount);
+
     return {
       totalInvites,
       currentTier,
@@ -260,6 +340,9 @@ export class InviteService {
       tiers: tierProgress,
       invitees,
       unlockedRewards: rewardsWithItems,
+      freeUnlockCount,
+      todayInviteCount,
+      dailyInvitePointsLeft,
     };
   }
 }

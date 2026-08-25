@@ -124,6 +124,15 @@ class InviteStats {
   final List<InviteTierEntry> tiers;
   final List<Invitee> invitees;
 
+  /// 免费解锁付费模板次数（邀请里程碑累计奖励）
+  final int freeUnlockCount;
+
+  /// 今日已邀请成功次数
+  final int todayInviteCount;
+
+  /// 今日还可领即时积分的邀请次数（= 每日上限 3 - 今日已邀请）
+  final int dailyInvitePointsLeft;
+
   const InviteStats({
     required this.totalInvites,
     required this.currentTier,
@@ -132,6 +141,9 @@ class InviteStats {
     this.myInviteCode,
     this.tiers = const [],
     this.invitees = const [],
+    this.freeUnlockCount = 0,
+    this.todayInviteCount = 0,
+    this.dailyInvitePointsLeft = 0,
   });
 
   factory InviteStats.fromJson(Map<String, dynamic> j) {
@@ -148,6 +160,9 @@ class InviteStats {
       myInviteCode: j['myInviteCode'] as String?,
       tiers: tiersRaw.map((e) => InviteTierEntry.fromJson(e as Map<String, dynamic>)).toList(),
       invitees: inviteesRaw.map((e) => Invitee.fromJson(e as Map<String, dynamic>)).toList(),
+      freeUnlockCount: (j['freeUnlockCount'] as num?)?.toInt() ?? 0,
+      todayInviteCount: (j['todayInviteCount'] as num?)?.toInt() ?? 0,
+      dailyInvitePointsLeft: (j['dailyInvitePointsLeft'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -165,6 +180,9 @@ class InviteStats {
         'myInviteCode': myInviteCode,
         'tiers': tiers.map((t) => t.toJson()).toList(),
         'invitees': invitees.map((i) => i.toJson()).toList(),
+        'freeUnlockCount': freeUnlockCount,
+        'todayInviteCount': todayInviteCount,
+        'dailyInvitePointsLeft': dailyInvitePointsLeft,
       };
 }
 

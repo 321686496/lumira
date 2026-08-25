@@ -903,10 +903,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
           } catch (_) {}
         }
 
-        // 每日首次拍摄积分（后台幂等；失败静默，绝不阻塞拍照流程）
+        // 每日首次拍摄经验台账 + 结算升级奖励（后台幂等；失败静默，绝不阻塞拍照流程）
+        // 每日首拍积分已合并进下方自动签到
         if (!_dailyShootEarned) {
           _dailyShootEarned = true;
-          _earnDailyShootPoints();
+          _recordDailyShootXp();
         }
 
         // === 自动签到：每日首拍自动触发 ===
@@ -1029,9 +1030,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
     _startCameraReadyWatchdog();
   }
 
-  /// 每日首次拍摄积分（fire-and-forget）。
-  /// 服务端按 UTC+8 自然日幂等，同一会话只请求一次。
-  Future<void> _earnDailyShootPoints() async {
+  /// 每日首次拍摄经验台账 + 结算升级奖励（fire-and-forget）。
+  /// 每日首拍积分已合并进自动签到（+4/天，连签 7 天额外 +14），不再单独发放。
+  Future<void> _recordDailyShootXp() async {
     try {
       final repo = await ref.read(pointsRepositoryProvider.future);
       // 每日首拍经验（+10）写台账 + 结算升级奖励
@@ -1047,13 +1048,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
       } catch (e) {
         debugPrint('[capture] daily shoot xp failed: $e');
       }
-      final result = await repo.earn(type: 'shoot_daily');
-      if (result.granted && mounted) {
-        LumiraToast.show(context, '每日首拍 +${result.delta} 积分');
-      }
     } catch (e) {
       // 离线/网络异常静默，不打扰拍摄
-      debugPrint('[capture] earn daily shoot points failed: $e');
+      debugPrint('[capture] earn daily shoot xp failed: $e');
     }
   }
 

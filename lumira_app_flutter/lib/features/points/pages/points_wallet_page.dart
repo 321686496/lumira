@@ -247,6 +247,32 @@ class _BalanceBody extends StatelessWidget {
             ],
           ),
         ),
+        if (balance.freeUnlockCount > 0) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: tokens.brandSubtle,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.lock_open_outlined, size: 16, color: tokens.brand),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '免费解锁 ×${balance.freeUnlockCount}：可在解锁页任选付费模板，不消耗积分',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -666,16 +692,7 @@ class _TxRow extends StatelessWidget {
   final ThemeTokens tokens;
   final PointTransaction tx;
 
-  String get _typeLabel {
-    switch (tx.type) {
-      case PointTxType.earn:
-        return '积分获得';
-      case PointTxType.spend:
-        return '积分消耗';
-      case PointTxType.unknown:
-        return '积分变动';
-    }
-  }
+  String get _typeLabel => pointSourceLabel(tx.source);
 
   String get _deltaText {
     final v = tx.delta;

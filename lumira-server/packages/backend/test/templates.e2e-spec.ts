@@ -4,6 +4,7 @@ import { NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify
 import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
 import { userPoints, templatePrices } from '../src/database/schema';
+import { eq } from 'drizzle-orm';
 import request from 'supertest';
 import { resetTestDatabase } from './test-db';
 
@@ -147,5 +148,52 @@ describe('TemplatesController (e2e) — exchange', () => {
 
     expect(res.body.spentCredits).toBe(30);
     expect(res.body.balance).toBe(50); // 80 - 30
+  });
+
+  it('free_unlock 支付：扣 1 次免费解锁额度，不耗积分', async () => {
+    // 授予 2 次免费解锁（邀请里程碑奖励）
+    const now = Math.floor(Date.now() / 1000);
+    await dbService.getDb().update(userPoints)
+      .set({ freeUnlockCount: 2, updatedAt: now })
+      .where(eq(userPoints.deviceId, deviceId));
+
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/templates/exchange')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ templateId: 'neon_portrait', priceCredits: 120, payBy: 'free_unlock' })
+      .expect(201);
+
+    expect(res.body.success).toBe(true);
+    expect(res.body.payBy).toBe('free_unlock');
+    expect(res.body.spentCredits).toBe(0); // 不耗积分
+    expect(res.body.balance).toBeNull(); // free_unlock 不扣积分，balance 字段为空
+    expect(res.body.freeUnlockLeft).toBe(1); // 2 - 1
+
+    // 积分余额不变（free_unlock 不消耗积分）
+    const bal = await request(app.getHttpServer())
+      .get('/api/v1/points/balance')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(bal.body.balance).toBe(50);
+
+    // owned 记录 source=free_unlock
+    const owned = await request(app.getHttpServer())
+      .get('/api/v1/templates/owned')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    expect(owned.body.templateIds).toContain('neon_portrait');
+  });
+
+  it('free_unlock 支付但无免费解锁额度返回 400', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    await dbService.getDb().update(userPoints)
+      .set({ freeUnlockCount: 0, updatedAt: now })
+      .where(eq(userPoints.deviceId, deviceId));
+
+    await request(app.getHttpServer())
+      .post('/api/v1/templates/exchange')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ templateId: 'macro_flower', priceCredits: 80, payBy: 'free_unlock' })
+      .expect(400);
   });
 });

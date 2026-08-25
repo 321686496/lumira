@@ -2,11 +2,13 @@ import 'package:flutter/foundation.dart';
 
 /// 奖励类型
 ///
-/// 后端契约：'template' | 'template_pack' | 'achievement'
+/// 后端契约：'template' | 'template_pack' | 'achievement' | 'points' | 'unlock_count'
 enum RewardType {
   template,
   templatePack,
   achievement,
+  points,
+  unlockCount,
 }
 
 extension RewardTypeExt on RewardType {
@@ -18,6 +20,10 @@ extension RewardTypeExt on RewardType {
         return 'template_pack';
       case RewardType.achievement:
         return 'achievement';
+      case RewardType.points:
+        return 'points';
+      case RewardType.unlockCount:
+        return 'unlock_count';
     }
   }
 
@@ -29,6 +35,10 @@ extension RewardTypeExt on RewardType {
         return RewardType.templatePack;
       case 'achievement':
         return RewardType.achievement;
+      case 'points':
+        return RewardType.points;
+      case 'unlock_count':
+        return RewardType.unlockCount;
       default:
         return RewardType.template;
     }
@@ -98,22 +108,43 @@ class RewardItem {
   final String id;
   final String label;
 
+  /// 数值型奖励的数量（points 为积分值、unlock_count 为解锁次数）
+  final int value;
+
   const RewardItem({
     required this.type,
-    required this.id,
-    required this.label,
+    this.id = '',
+    this.label = '',
+    this.value = 0,
   });
 
   factory RewardItem.fromJson(Map<String, dynamic> j) => RewardItem(
-        type: RewardTypeExt.fromJson(j['type'] as String),
-        id: j['id'] as String,
-        label: j['label'] as String,
+        type: RewardTypeExt.fromJson(j['type'] as String? ?? ''),
+        id: j['id'] as String? ?? '',
+        label: j['label'] as String? ?? '',
+        value: (j['value'] as num?)?.toInt() ?? 0,
       );
+
+  /// 用户可见文案（points/unlock_count 由 value 拼装，achievement 用 label）
+  String get displayLabel {
+    switch (type) {
+      case RewardType.points:
+        return '+$value 积分';
+      case RewardType.unlockCount:
+        return '免费解锁 ×$value';
+      case RewardType.achievement:
+        return label.isEmpty ? '成就' : label;
+      case RewardType.template:
+      case RewardType.templatePack:
+        return label.isEmpty ? id : label;
+    }
+  }
 
   Map<String, dynamic> toJson() => {
         'type': type.toJson(),
-        'id': id,
-        'label': label,
+        if (id.isNotEmpty) 'id': id,
+        if (label.isNotEmpty) 'label': label,
+        if (value > 0) 'value': value,
       };
 }
 
