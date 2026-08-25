@@ -103,6 +103,28 @@ export interface RemoteTemplateListResponse {
   serverUpdatedAt: number;
 }
 
+// ===== 模板搜索（客户端实时搜索线上模板）=====
+
+/** 模板搜索排序方式。 */
+export type TemplateSearchSort = 'comprehensive' | 'hot' | 'latest' | 'photos' | 'name';
+
+/** 模板搜索结果项：在 meta 基础上附加全站热度/拍摄/查看计数。 */
+export interface TemplateSearchItem extends RemoteTemplateMeta {
+  /** 全站热度 = 2×全站拍摄数 + 1×全站查看数（火爆排序用）。 */
+  hotScore: number;
+  /** 全站拍摄数（use_shoot），拍摄数排序用。 */
+  shootCount: number;
+  /** 全站查看数（open_detail）。 */
+  openCount: number;
+}
+
+export interface TemplateSearchResponse {
+  items: TemplateSearchItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 // ===== 后端动态模板完整内容（详情用）=====
 
 export interface RemoteTemplateDetail extends RemoteTemplateMeta {

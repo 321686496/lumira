@@ -19,7 +19,11 @@ import '../../academy/data/academy_content.dart';
 import '../../academy/data/academy_models.dart';
 import '../../academy/search/academy_search_service.dart';
 import '../../scenes/search/scene_search_service.dart';
+import '../../templates/data/remote_template_dto.dart';
+import '../../templates/data/remote_templates_providers.dart';
+import '../../templates/search/template_remote_search_service.dart';
 import '../../templates/search/template_search_service.dart';
+import '../../templates/services/template_mapper.dart';
 import '../data/search_result.dart';
 import '../widgets/search_initial_sections.dart';
 import '../widgets/search_result_card.dart';
@@ -203,10 +207,65 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     return results;
   }
 
+  /// 模板检索：
+  /// - 无高级筛选（价格/仅我拥有/用户标签）时，优先实时走后端搜索接口拿最新
+  ///   后台运营模板（全站热度 2:1 由后端排序），再与本地内置/自定义合并；
+  /// - 命中后端不支持的筛选，或后端请求失败/离线时，回退本地 sqflite 全量检索。
   Future<List<SearchResult>> _buildTemplateResults() async {
     final allowed = await _allowedTemplateIds();
+    if (!TemplateRemoteSearchService.isBackendCapable(_filters)) {
+      // 后端不支持价格/仅我拥有/用户标签 → 纯本地全量检索
+      return _templateResultsFrom(_allTemplates, allowed: allowed);
+    }
+
+    final List<RemoteTemplateSearchItemDto> remoteItems;
+    try {
+      final repo = await ref.read(remoteTemplatesRepositoryProvider.future);
+      final resp = await TemplateRemoteSearchService.search(
+        repo,
+        keyword: _keyword,
+        filters: _filters,
+      );
+      remoteItems = resp.items;
+    } catch (_) {
+      // 网络失败/离线 → 回退本地全量缓存（含已同步的 remote 模板）
+      return _templateResultsFrom(_allTemplates, allowed: allowed);
+    }
+
+    // 后台实时模板 + 本地内置/自定义（排除已同步 remote，避免与后台结果重复）
+    final remoteHot = {
+      for (final it in remoteItems) it.meta.id: it.hotScore,
+    };
+    final remoteShoot = {
+      for (final it in remoteItems) it.meta.id: it.shootCount,
+    };
+    final remote = [
+      for (final it in remoteItems)
+        SearchResult(
+          scope: SearchScope.template,
+          template: TemplateMapper.metaToRecord(it.meta),
+          usageCount: _templateUsageCounts[it.meta.id] ?? 0,
+          categoryLabels: _categoryLabelByKey,
+        ),
+    ];
+    final localPool = _allTemplates.where((t) => t.source != 'remote').toList();
+    final local = _templateResultsFrom(localPool, allowed: allowed);
+
+    return _mergeTemplateResults(
+      remote: remote,
+      local: local,
+      remoteHot: remoteHot,
+      remoteShoot: remoteShoot,
+    );
+  }
+
+  /// 本地检索并映射为搜索结果（内置/自定义或回退全量时复用）。
+  List<SearchResult> _templateResultsFrom(
+    List<TemplateRecord> all, {
+    Set<String>? allowed,
+  }) {
     final list = TemplateSearchService.search(
-      all: _allTemplates,
+      all: all,
       keyword: _keyword,
       filters: _filters,
       categoryLabelByKey: _categoryLabelByKey,
@@ -222,6 +281,53 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
             ))
         .toList();
   }
+
+  /// 合并远程（后台实时）+ 本地（内置/自定义）结果并统一排序。
+  /// 远程模板用后端全站热度/拍摄数，本地用降级分（recommended / 本地拍摄数）。
+  List<SearchResult> _mergeTemplateResults({
+    required List<SearchResult> remote,
+    required List<SearchResult> local,
+    required Map<String, int> remoteHot,
+    required Map<String, int> remoteShoot,
+  }) {
+    var combined = [...remote, ...local];
+    switch (_filters.sort) {
+      case SearchSort.comprehensive:
+        // 综合：远程按后台 sortOrder（后端已排序），本地保持默认顺序置后
+        break;
+      case SearchSort.hot:
+        combined.sort((a, b) {
+          final ha = _remoteScore(a.id, remoteHot,
+              fallback: a.template?.isRecommended == true ? 1 : 0);
+          final hb = _remoteScore(b.id, remoteHot,
+              fallback: b.template?.isRecommended == true ? 1 : 0);
+          if (ha != hb) return hb.compareTo(ha);
+          return _templateUpdatedAtMs(b).compareTo(_templateUpdatedAtMs(a));
+        });
+        break;
+      case SearchSort.photos:
+        combined.sort((a, b) {
+          final pa = _remoteScore(a.id, remoteShoot, fallback: a.usageCount);
+          final pb = _remoteScore(b.id, remoteShoot, fallback: b.usageCount);
+          if (pa != pb) return pb.compareTo(pa);
+          return a.title.compareTo(b.title);
+        });
+        break;
+      case SearchSort.latest:
+        combined.sort(
+            (a, b) => _templateUpdatedAtMs(b).compareTo(_templateUpdatedAtMs(a)));
+        break;
+      case SearchSort.name:
+        combined.sort((a, b) => a.title.compareTo(b.title));
+        break;
+    }
+    return combined;
+  }
+
+  int _remoteScore(String id, Map<String, int> map, {required int fallback}) =>
+      map[id] ?? fallback;
+
+  int _templateUpdatedAtMs(SearchResult r) => r.template?.updatedAt ?? 0;
 
   Future<List<SearchResult>> _buildSceneResults() async {
     final allowed = await _allowedSceneIds();

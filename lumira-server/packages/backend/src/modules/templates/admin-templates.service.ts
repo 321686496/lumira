@@ -74,6 +74,7 @@ export class AdminTemplatesService {
     await this.redisService.delByPattern('lumira:cache:templateList:*');
     await this.redisService.delByPattern('lumira:cache:templateDetail:*');
     await this.redisService.delByPattern('lumira:cache:templatePrices:*');
+    await this.redisService.delByPattern('lumira:cache:templateSearch:*');
   }
 
   // ===== 列表 / 详情 =====

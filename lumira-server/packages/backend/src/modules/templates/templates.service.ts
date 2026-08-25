@@ -1,10 +1,11 @@
 // lumira-server/packages/backend/src/modules/templates/templates.service.ts
 
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, HttpException, HttpStatus } from '@nestjs/common';
 import { eq, and, or, gt, asc, desc, sql, inArray, type SQL } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { ownedTemplates, templatePrices, templates, templateCategories } from '../../database/schema';
 import { PointsService } from '../points/points.service';
+import { UsageService } from '../usage/usage.service';
 import { buildAssetUrl } from '../../common/storage/asset-url';
 import { RedisService } from '../../common/redis/redis.service';
 import type {
@@ -16,6 +17,8 @@ import type {
   TemplateImage,
   TemplatePose,
   TemplateClassification,
+  TemplateSearchSort,
+  TemplateSearchResponse,
 } from '@lumira/shared';
 
 @Injectable()
@@ -24,7 +27,138 @@ export class TemplatesService {
     private readonly dbService: DatabaseService,
     private readonly pointsService: PointsService,
     private readonly redisService: RedisService,
+    private readonly usageService: UsageService,
   ) {}
+
+  /**
+   * 模板搜索（客户端实时搜索线上模板）。
+   *
+   * 性能/QPS 设计：
+   * - 把「活跃模板全集 + 每项全站热度」整体物化到 Redis（key `lumira:cache:templateSearch:base`，
+   *   TTL 120s），搜索命中该 base 后在内存过滤/排序/分页，几乎不打 DB。
+   * - 全站热度聚合（GROUP BY usage_events）只在 base 过期重建时执行一次，
+   *   避免每次搜索都对大表聚合（这是 /usage/stats 的瓶颈）。
+   * - Admin 写模板后通过 `lumira:cache:templateSearch:*` 失效，下次请求惰性重建。
+   * - 单设备轻量限流（60 次/分钟）防刷，配合客户端防抖进一步降低 QPS。
+   */
+  async searchTemplates(params: {
+    deviceId: string;
+    q: string;
+    sort: TemplateSearchSort;
+    category?: string;
+    page: number;
+    pageSize: number;
+  }): Promise<TemplateSearchResponse> {
+    await this.checkSearchRateLimit(params.deviceId);
+
+    const items = await this.getSearchBase();
+    const q = params.q.trim().toLowerCase();
+
+    // 关键词过滤：多字段不区分大小写子串匹配（name/author/category/description/tags）
+    let matched = items;
+    if (q) {
+      matched = items.filter((it) => {
+        const base = it.base;
+        if (base.name.toLowerCase().includes(q)) return true;
+        if (base.author.toLowerCase().includes(q)) return true;
+        if (base.category.toLowerCase().includes(q)) return true;
+        if (base.description.toLowerCase().includes(q)) return true;
+        return base.tags.some((t) => t.toLowerCase().includes(q));
+      });
+    }
+
+    // 分类子树/分类 key 过滤（可选）
+    if (params.category) {
+      matched = matched.filter((it) => it.base.category === params.category);
+    }
+
+    // 排序（后端统一按全站数据排序，客户端无需二次排序）
+    const sorted = [...matched];
+    switch (params.sort) {
+      case 'latest':
+        sorted.sort((a, b) => b.meta.updatedAt - a.meta.updatedAt);
+        break;
+      case 'hot':
+        sorted.sort((a, b) => b.hotScore - a.hotScore || b.meta.updatedAt - a.meta.updatedAt);
+        break;
+      case 'photos':
+        sorted.sort((a, b) => b.shootCount - a.shootCount || a.base.name.localeCompare(b.base.name));
+        break;
+      case 'name':
+        sorted.sort((a, b) => (a.base.name || '').localeCompare(b.base.name || '', 'zh-CN'));
+        break;
+      case 'comprehensive':
+      default:
+        sorted.sort((a, b) => a.base.sortOrder - b.base.sortOrder || b.meta.updatedAt - a.meta.updatedAt);
+        break;
+    }
+
+    const total = sorted.length;
+    const offset = (params.page - 1) * params.pageSize;
+    const pageItems = sorted.slice(offset, offset + params.pageSize);
+    return {
+      items: pageItems.map((it) => ({
+        ...it.meta,
+        hotScore: it.hotScore,
+        shootCount: it.shootCount,
+        openCount: it.openCount,
+      })),
+      total,
+      page: params.page,
+      pageSize: params.pageSize,
+    };
+  }
+
+  /** 从 Redis 读取（或重建）搜索 base：活跃模板 meta + 全站热度。 */
+  private async getSearchBase(): Promise<SearchBaseItem[]> {
+    const key = 'lumira:cache:templateSearch:base';
+    const cached = await this.redisService.getJson<SearchBaseItem[]>(key);
+    if (cached !== null) return cached;
+
+    const db = this.dbService.getDb();
+    const rows = await db.select().from(templates)
+      .where(eq(templates.isActive, 1))
+      .orderBy(asc(templates.sortOrder), desc(templates.updatedAt));
+
+    // 全站热度聚合（仅在 base 重建时执行一次）
+    const stats = await this.usageService.stats('template');
+    const statsMap = new Map(stats.items.map((i) => [i.itemId, i]));
+
+    const base = rows.map((row): SearchBaseItem => {
+      const shootCount = statsMap.get(row.id)?.useShoot ?? 0;
+      const openCount = statsMap.get(row.id)?.openDetail ?? 0;
+      return {
+        meta: rowToMeta(row),
+        base: {
+          name: row.name,
+          author: row.author,
+          category: row.category,
+          description: row.description,
+          tags: safeParseStringArray(row.tagsJson),
+          sortOrder: row.sortOrder,
+        },
+        // 热度 = 2×拍摄数 + 1×查看数（权重 2:1，用户确认）
+        hotScore: shootCount * 2 + openCount,
+        shootCount,
+        openCount,
+      };
+    });
+
+    await this.redisService.setJson(key, base, 120);
+    return base;
+  }
+
+  /** 单设备搜索限流（60 次/分钟），防止刷接口。 */
+  private async checkSearchRateLimit(deviceId: string): Promise<void> {
+    const rk = `lumira:ratelimit:${deviceId}:templateSearch`;
+    const windowSec = 60;
+    const limit = 60;
+    const current = (await this.redisService.getJson<number>(rk)) ?? 0;
+    if (current >= limit) {
+      throw new HttpException('rate_limited', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    await this.redisService.setJson<number>(rk, current + 1, windowSec);
+  }
 
   /** 查询设备已拥有的模板 id 列表 */
   async listOwned(deviceId: string) {
@@ -74,12 +208,17 @@ export class TemplatesService {
     return result;
   }
 
-  /** 积分兑换模板 */
-  async exchange(deviceId: string, templateId: string, priceCredits?: number) {
+  /** 积分 / 免费解锁次数 兑换模板 */
+  async exchange(
+    deviceId: string,
+    templateId: string,
+    priceCredits?: number,
+    payBy: 'points' | 'free_unlock' = 'points',
+  ) {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
 
-    // 整体事务：已拥有检查 + 定价 + 扣积分 + 写入 owned
+    // 整体事务：已拥有检查 + 定价 + 扣积分/扣免费解锁 + 写入 owned
     // 任一环节失败（已拥有 / 余额不足 / 无定价记录）则整体回滚
     const result = await db.transaction(async (tx) => {
       // 1. 幂等检查（必须先于定价：已拥有 → 409，不落任何定价记录，
@@ -121,29 +260,44 @@ export class TemplatesService {
           });
       }
 
-      // 3. 扣积分（余额不足抛 BadRequestException，事务回滚）
-      const newBalance = await this.pointsService.spendPointsSync(
-        tx,
-        deviceId,
-        price,
-        'exchange_template',
-        templateId,
-      );
+      // 3. 支付：free_unlock → 扣 1 次免费解锁额度（任意价位模板均只耗 1 次，不耗积分）；
+      //    points（默认）→ 扣积分（余额不足抛 BadRequestException，事务回滚）
+      let newBalance: number | null = null;
+      let freeUnlockLeft: number | null = null;
+      let spentCredits = 0;
+      if (payBy === 'free_unlock') {
+        freeUnlockLeft = await this.pointsService.spendFreeUnlockSync(
+          tx, deviceId, templateId,
+        );
+      } else {
+        newBalance = await this.pointsService.spendPointsSync(
+          tx,
+          deviceId,
+          price,
+          'exchange_template',
+          templateId,
+        );
+        spentCredits = price;
+      }
 
       // 4. 写入拥有记录
       await tx.insert(ownedTemplates).values({
         deviceId,
         templateId,
-        source: 'points',
-        sourceDetail: `credits:${price}`,
+        source: payBy === 'free_unlock' ? 'free_unlock' : 'points',
+        sourceDetail: payBy === 'free_unlock'
+          ? 'free_unlock'
+          : `credits:${price}`,
         unlockedAt: now,
       });
 
       return {
         success: true,
         templateId,
-        spentCredits: price,
+        spentCredits,
         balance: newBalance,
+        freeUnlockLeft,
+        payBy,
       };
     });
 
@@ -339,6 +493,22 @@ export function rowToCategory(row: CategoryRow): TemplateCategory {
     isActive: row.isActive === 1,
     updatedAt: row.updatedAt,
   };
+}
+
+/** 模板搜索基项：meta + 用于关键词过滤的标量字段 + 全站热度。 */
+interface SearchBaseItem {
+  meta: RemoteTemplateMeta;
+  base: {
+    name: string;
+    author: string;
+    category: string;
+    description: string;
+    tags: string[];
+    sortOrder: number;
+  };
+  hotScore: number;
+  shootCount: number;
+  openCount: number;
 }
 
 /**

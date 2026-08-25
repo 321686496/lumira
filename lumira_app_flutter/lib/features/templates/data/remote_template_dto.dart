@@ -182,6 +182,71 @@ class RemoteTemplateListResponseDto {
   }
 }
 
+/// 排序方式（对应后端 `TemplateSearchSort`）。
+enum TemplateSearchSort { comprehensive, hot, latest, photos, name }
+
+/// `GET /templates/search` 的单个结果项。
+///
+/// 对应后端 `TemplateSearchItem extends RemoteTemplateMeta`：
+/// 在 meta 基础上附加全站热度/拍摄/查看计数。
+@immutable
+class RemoteTemplateSearchItemDto {
+  final RemoteTemplateMetaDto meta;
+  /// 全站热度 = 2×拍摄数 + 1×查看数（后端已计算）。
+  final int hotScore;
+  /// 全站拍摄数（use_shoot）。
+  final int shootCount;
+  /// 全站查看数（open_detail）。
+  final int openCount;
+
+  const RemoteTemplateSearchItemDto({
+    required this.meta,
+    required this.hotScore,
+    required this.shootCount,
+    required this.openCount,
+  });
+
+  factory RemoteTemplateSearchItemDto.fromJson(Map<String, dynamic> j) {
+    return RemoteTemplateSearchItemDto(
+      meta: RemoteTemplateMetaDto.fromJson(j),
+      hotScore: (j['hotScore'] as num?)?.toInt() ?? 0,
+      shootCount: (j['shootCount'] as num?)?.toInt() ?? 0,
+      openCount: (j['openCount'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// `GET /templates/search` 响应体。
+///
+/// 对应后端 `TemplateSearchResponse`：`{ items; total; page; pageSize }`
+@immutable
+class RemoteTemplateSearchResponseDto {
+  final List<RemoteTemplateSearchItemDto> items;
+  final int total;
+  final int page;
+  final int pageSize;
+
+  const RemoteTemplateSearchResponseDto({
+    required this.items,
+    required this.total,
+    required this.page,
+    required this.pageSize,
+  });
+
+  factory RemoteTemplateSearchResponseDto.fromJson(Map<String, dynamic> j) {
+    final list = j['items'] as List<dynamic>? ?? const [];
+    return RemoteTemplateSearchResponseDto(
+      items: list
+          .map((e) =>
+              RemoteTemplateSearchItemDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      total: (j['total'] as num?)?.toInt() ?? 0,
+      page: (j['page'] as num?)?.toInt() ?? 1,
+      pageSize: (j['pageSize'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 /// 后端动态模板完整内容（详情用）。
 ///
 /// 对应 spec `RemoteTemplateDetail extends RemoteTemplateMeta`：

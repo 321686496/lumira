@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DatabaseModule } from '../../database/database.module';
 import { PointsModule } from '../points/points.module';
+import { UsageModule } from '../usage/usage.module';
 import { TemplatesController } from './templates.controller';
 import { TemplatesService } from './templates.service';
 import { AdminTemplatesController } from './admin-templates.controller';
@@ -20,6 +21,7 @@ import { ShareTemplatesModule } from './share-templates.module';
   imports: [
     DatabaseModule,
     PointsModule,
+    UsageModule,
     ShareTemplatesModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'dev-secret-change-me',

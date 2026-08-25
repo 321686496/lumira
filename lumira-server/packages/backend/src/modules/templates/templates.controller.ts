@@ -5,6 +5,7 @@ import { TemplatesService } from './templates.service';
 import { ExchangeTemplateDto } from './dto/exchange-template.dto';
 import { DeviceAuthGuard } from '../../common/guards/device-auth.guard';
 import { DeviceId } from '../../common/decorators';
+import type { TemplateSearchSort } from '@lumira/shared';
 
 @Controller('templates')
 @UseGuards(DeviceAuthGuard)
@@ -37,6 +38,28 @@ export class TemplatesController {
     return this.templatesService.listPrices();
   }
 
+  @Get('search')
+  async search(
+    @DeviceId() deviceId: string,
+    @Query('q') q?: string,
+    @Query('sort') sort?: string,
+    @Query('category') category?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    const sorts = ['comprehensive', 'hot', 'latest', 'photos', 'name'] as const;
+    const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const pageSizeNum = Math.min(50, Math.max(1, parseInt(pageSize ?? '20', 10) || 20));
+    return this.templatesService.searchTemplates({
+      deviceId,
+      q: q ?? '',
+      sort: (sorts.includes((sort ?? '') as never) ? sort : 'comprehensive') as TemplateSearchSort,
+      category: category || undefined,
+      page: pageNum,
+      pageSize: pageSizeNum,
+    });
+  }
+
   // :id 必须放在所有静态子路径之后
   @Get(':id')
   async getRemoteDetail(@Param('id') id: string) {
@@ -48,6 +71,8 @@ export class TemplatesController {
     @DeviceId() deviceId: string,
     @Body() dto: ExchangeTemplateDto,
   ) {
-    return this.templatesService.exchange(deviceId, dto.templateId, dto.priceCredits);
+    return this.templatesService.exchange(
+      deviceId, dto.templateId, dto.priceCredits, dto.payBy,
+    );
   }
 }

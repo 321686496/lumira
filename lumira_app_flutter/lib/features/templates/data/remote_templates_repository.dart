@@ -29,6 +29,15 @@ abstract class RemoteTemplatesRepository {
   Future<RemoteTemplateDetailDto> fetchDetail(String id);
 
   Future<List<TemplateCategoryDto>> fetchCategories();
+
+  /// 实时搜索线上模板。Network 失败抛 [ApiException]，由调用方决定是否回退本地。
+  Future<RemoteTemplateSearchResponseDto> search({
+    required String q,
+    required TemplateSearchSort sort,
+    String? category,
+    int page = 1,
+    int pageSize = 20,
+  });
 }
 
 class RemoteTemplatesRepositoryImpl implements RemoteTemplatesRepository {
@@ -70,5 +79,27 @@ class RemoteTemplatesRepositoryImpl implements RemoteTemplatesRepository {
       ),
     );
     return resp.categories;
+  }
+
+  @override
+  Future<RemoteTemplateSearchResponseDto> search({
+    required String q,
+    required TemplateSearchSort sort,
+    String? category,
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    return _api.get(
+      '/templates/search',
+      query: <String, dynamic>{
+        'q': q,
+        'sort': sort.name,
+        if (category != null && category.isNotEmpty) 'category': category,
+        'page': page,
+        'pageSize': pageSize,
+      },
+      fromJson: (j) =>
+          RemoteTemplateSearchResponseDto.fromJson(j as Map<String, dynamic>),
+    );
   }
 }
