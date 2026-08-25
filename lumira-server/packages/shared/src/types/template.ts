@@ -44,6 +44,34 @@ export interface TemplateAmbience {
   timeTones: ('goldenHour' | 'day' | 'night' | 'warm' | 'cool')[];
 }
 
+/** 效果图（[0]=封面） */
+export interface TemplateImage {
+  url: string;
+  /** base64 data URL（可选，内置模板用） */
+  data?: string;
+}
+
+/** 姿势剪影（多姿势 Phase 3 起新结构） */
+export interface TemplatePose {
+  name?: string;
+  description?: string;
+  silhouette: { type: string; data?: string; url?: string };
+  position: { x: number; y: number };
+  scale: number;
+  rotation: number;
+}
+
+/** 三级分类：大类(type) → 风格(majorStyle) → 子风格(style)；method 不再作为树层级（兼容保留） */
+export interface TemplateClassification {
+  type: string;
+  majorStyle: string;
+  style: string;
+  /** 兼容旧数据/旧 App：等同于 style 的旧字段名 */
+  subStyle?: string;
+  /** 兼容旧数据：不再作为分类树层级 */
+  method?: string;
+}
+
 export interface RemoteTemplateMeta {
   id: string;
   name: string;
@@ -51,12 +79,17 @@ export interface RemoteTemplateMeta {
   version: string;
   category: string;
   price: number;
+  /** 封面 URL（保留，= images[0].url 派生，兼容旧 App） */
   coverUrl: string;
+  /** 效果图列表（[0]=封面）。旧数据由 cover_url 派生单元素。 */
+  images?: TemplateImage[];
+  /** 姿势组。旧数据由 pose 派生单元素。 */
+  poses?: TemplatePose[];
   description: string;
   referenceSource: string;
   tags: string[];
   tagIds: string[];
-  classification: { type: string; majorStyle: string; subStyle: string; method: string };
+  classification: TemplateClassification;
   /** 季节/天气/时段元数据 */
   ambience: TemplateAmbience;
   /** 短简介（≤10字） */
@@ -74,7 +107,10 @@ export interface RemoteTemplateListResponse {
 
 export interface RemoteTemplateDetail extends RemoteTemplateMeta {
   composition: Record<string, unknown>;
+  /** 兼容旧 App：首个姿势（poses[0]） */
   pose: Record<string, unknown>;
+  /** 姿势组（多姿势；旧数据由 pose 派生单元素） */
+  poses?: TemplatePose[];
   camera: Record<string, unknown>;
   sceneGuide: Record<string, unknown>;
   postProcess: Record<string, unknown>;
@@ -102,9 +138,14 @@ export interface AdminTemplateDetail extends AdminTemplateListItem {
   referenceSource: string;
   tags: string[];
   tagIds: string[];
-  classification: { type: string; majorStyle: string; subStyle: string; method: string };
+  classification: TemplateClassification;
   composition: Record<string, unknown>;
+  /** 兼容旧 admin：首个姿势（poses[0]） */
   pose: Record<string, unknown>;
+  /** 姿势组（多姿势） */
+  poses?: TemplatePose[];
+  /** 效果图列表（[0]=封面） */
+  images?: TemplateImage[];
   camera: Record<string, unknown>;
   sceneGuide: Record<string, unknown>;
   postProcess: Record<string, unknown>;
@@ -124,7 +165,7 @@ export interface CreateTemplateRequest {
   referenceSource?: string;
   tags?: string[];
   tagIds?: string[];
-  classification?: { type: string; majorStyle: string; subStyle: string; method: string };
+  classification?: TemplateClassification;
   /** 季节/天气/时段元数据（可选，缺省按空结构存储） */
   ambience?: TemplateAmbience;
   /** 短简介（≤10字，可选） */
@@ -132,7 +173,12 @@ export interface CreateTemplateRequest {
   sortOrder?: number;
   isActive?: boolean;
   composition?: Record<string, unknown>;
+  /** 兼容旧 admin：单个姿势（poses 优先） */
   pose?: Record<string, unknown>;
+  /** 姿势组（多姿势，优先于 pose） */
+  poses?: TemplatePose[];
+  /** 效果图列表（[0]=封面，优先于 cover 文件上传） */
+  images?: TemplateImage[];
   camera?: Record<string, unknown>;
   sceneGuide?: Record<string, unknown>;
   postProcess?: Record<string, unknown>;
