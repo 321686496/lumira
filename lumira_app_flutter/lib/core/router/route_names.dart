@@ -28,6 +28,7 @@ class RouteNames {
   static const String templatesExportDetail = '/templates/export-detail';
   static const String challengeDetail = '/challenge/detail';
   static const String challengeHistory = '/challenge/history';
+  static const String challengeHistoryDetail = '/challenge/history-detail';
   static const String challengeConfirm = '/challenge/confirm';
   static const String challengeComplete = '/challenge/complete';
   static const String checkinList = '/checkin/list';
@@ -40,6 +41,7 @@ class RouteNames {
   static const String galleryEdit = '/gallery/edit';
   static const String galleryWatermarkApply = '/gallery/watermark/apply';
   static const String galleryDiary = '/gallery/diary';
+  static const String galleryDiaryDay = '/gallery/diary/day';
   static const String galleryStats = '/gallery/stats';
   static const String galleryMonthlyDigest = '/gallery/monthly-digest';
   static const String profileSettings = '/profile/settings';
@@ -48,6 +50,7 @@ class RouteNames {
   static const String profileSettingsWatermark = '/profile/settings/watermark';
   static const String profileSettingsWatermarkEdit = '/profile/settings/watermark/edit';
   static const String profileGrowth = '/profile/growth';
+  static const String profileGrowthCalendar = '/profile/growth/calendar';
   static const String profileInvite = '/profile/invite';
   static const String profileShareCode = '/profile/share-code';
   static const String profileAcademy = '/profile/academy';

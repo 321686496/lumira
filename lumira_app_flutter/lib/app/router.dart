@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../core/router/route_names.dart';
 import '../core/router/route_observers.dart';
 import '../features/account/pages/account_protection_page.dart';
+import '../features/account/pages/bind_email_page.dart';
 import '../features/account/pages/recover_account_page.dart';
+import '../features/account/pages/recovery_qr_page.dart';
 import '../features/capture/pages/capture_page.dart';
 import '../features/capture/pages/capture_preview_page.dart';
 import '../features/capture/pages/capture_preview_template_page.dart';
@@ -18,10 +20,12 @@ import '../features/challenge/pages/challenge_complete_page.dart';
 import '../features/challenge/pages/challenge_confirm_page.dart';
 import '../features/challenge/pages/challenge_detail_page.dart';
 import '../features/challenge/pages/challenge_history_page.dart';
+import '../features/challenge/pages/challenge_history_detail_page.dart';
 import '../features/checkin/pages/checkin_detail_page.dart';
 import '../features/checkin/pages/checkin_edit_page.dart';
 import '../features/checkin/pages/checkin_list_page.dart';
 import '../features/gallery/pages/gallery_detail_page.dart';
+import '../features/gallery/pages/gallery_diary_day_page.dart';
 import '../features/gallery/pages/gallery_diary_page.dart';
 import '../features/gallery/pages/gallery_edit_page.dart';
 import '../features/gallery/pages/gallery_monthly_digest_page.dart';
@@ -48,6 +52,7 @@ import '../features/profile/pages/composition_kit_detail_page.dart';
 import '../features/profile/pages/composition_kits_page.dart';
 import '../features/profile/pages/profile_fragment_detail_page.dart';
 import '../features/profile/pages/profile_growth_page.dart';
+import '../features/profile/pages/growth_calendar_page.dart';
 import '../features/profile/pages/profile_notifications_page.dart';
 import '../features/profile/pages/profile_invite_page.dart';
 import '../features/profile/pages/profile_share_code_page.dart';
@@ -309,6 +314,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ChallengeHistoryPage(),
       ),
       GoRoute(
+        path: RouteNames.challengeHistoryDetail,
+        name: 'challengeHistoryDetail',
+        builder: (context, state) {
+          final challengeId = state.queryParams[RouteNames.paramChallengeId];
+          final date = state.queryParams[RouteNames.paramDate];
+          return ChallengeHistoryDetailPage(
+              challengeId: challengeId, date: date);
+        },
+      ),
+      GoRoute(
         path: RouteNames.challengeConfirm,
         name: 'challengeConfirm',
         builder: (context, state) {
@@ -387,6 +402,18 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'galleryDiary',
         builder: (context, state) => const GalleryDiaryPage(),
       ),
+      // 拍摄日记某一天的当日照片页（时间轴「查看更多」进入）
+      GoRoute(
+        path: RouteNames.galleryDiaryDay,
+        name: 'galleryDiaryDay',
+        builder: (context, state) {
+          final dateStr = state.queryParams[RouteNames.paramDate];
+          final day = dateStr != null
+              ? DateTime.tryParse(dateStr)
+              : null;
+          return GalleryDiaryDayPage(day: day ?? DateTime.now());
+        },
+      ),
       GoRoute(
         path: RouteNames.galleryStats,
         name: 'galleryStats',
@@ -447,6 +474,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AccountProtectionPage(),
       ),
       GoRoute(
+        path: RouteNames.accountRecoveryQr,
+        name: 'accountRecoveryQr',
+        builder: (context, state) => const RecoveryQrPage(),
+      ),
+      GoRoute(
+        path: RouteNames.accountBindEmail,
+        name: 'accountBindEmail',
+        builder: (context, state) => const BindEmailPage(),
+      ),
+      GoRoute(
         path: RouteNames.accountRecover,
         name: 'accountRecover',
         builder: (context, state) => const RecoverAccountPage(),
@@ -469,6 +506,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileGrowth,
         name: 'profileGrowth',
         builder: (context, state) => const ProfileGrowthPage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileGrowthCalendar,
+        name: 'profileGrowthCalendar',
+        builder: (context, state) => const GrowthCalendarPage(),
       ),
       GoRoute(
         path: RouteNames.profileInvite,
