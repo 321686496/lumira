@@ -13,6 +13,9 @@ import type {
   RemoteTemplateDetail,
   TemplateCategory,
   TemplateAmbience,
+  TemplateImage,
+  TemplatePose,
+  TemplateClassification,
 } from '@lumira/shared';
 
 @Injectable()
@@ -222,6 +225,7 @@ export class TemplatesService {
         inArray(templates.category, subtreeKeys),
         jsonIn('$.type'),
         jsonIn('$.majorStyle'),
+        jsonIn('$.style'),
         jsonIn('$.subStyle'),
         jsonIn('$.method'),
       ) as SQL);
@@ -267,6 +271,14 @@ type TemplateRow = typeof templates.$inferSelect;
 type CategoryRow = typeof templateCategories.$inferSelect;
 
 export function rowToMeta(row: TemplateRow): RemoteTemplateMeta {
+  const coverUrl = buildAssetUrl(row.coverUrl);
+  // images: 优先 images_json；为空数组时由 coverUrl 派生单元素（兼容旧数据）
+  const parsedImages = safeParseImagesArray(row.imagesJson).map((img) => ({
+    url: buildAssetUrl(img.url),
+    ...(img.data ? { data: img.data } : {}),
+  }));
+  const images: TemplateImage[] | undefined =
+    parsedImages.length > 0 ? parsedImages : (coverUrl ? [{ url: coverUrl }] : undefined);
   return {
     id: row.id,
     name: row.name,
@@ -274,7 +286,8 @@ export function rowToMeta(row: TemplateRow): RemoteTemplateMeta {
     version: row.version,
     category: row.category,
     price: row.price,
-    coverUrl: buildAssetUrl(row.coverUrl),
+    coverUrl,
+    images,
     description: row.description,
     referenceSource: row.referenceSource,
     tags: safeParseStringArray(row.tagsJson),
@@ -288,18 +301,25 @@ export function rowToMeta(row: TemplateRow): RemoteTemplateMeta {
 }
 
 export function rowToDetail(row: TemplateRow): RemoteTemplateDetail {
-  const pose = safeParseObject(row.poseJson);
-  const silhouette = pose.silhouette;
-  if (silhouette && typeof silhouette === 'object') {
-    const s = silhouette as Record<string, unknown>;
-    // 旧数据修复：剪影 URL 可能在 BACKEND_PUBLIC_URL 配置前写入，前缀为 localhost
-    if (typeof s.url === 'string') s.url = buildAssetUrl(s.url);
-    if (typeof s.data === 'string') s.data = buildAssetUrl(s.data);
+  // poses: pose_json 为数组时直接用；旧单对象包装为 [obj]；空对象/空数组 → []
+  const posesArr = safeParsePosesArray(row.poseJson);
+  // 旧数据修复：剪影 URL 可能在 BACKEND_PUBLIC_URL 配置前写入，前缀为 localhost
+  for (const p of posesArr) {
+    const silhouette = p.silhouette;
+    if (silhouette && typeof silhouette === 'object') {
+      const s = silhouette as Record<string, unknown>;
+      if (typeof s.url === 'string') s.url = buildAssetUrl(s.url);
+      if (typeof s.data === 'string') s.data = buildAssetUrl(s.data);
+    }
   }
+  // pose 兼容旧 App：poses[0] 或空对象
+  const pose: Record<string, unknown> = posesArr.length > 0 ? posesArr[0] : {};
   return {
     ...rowToMeta(row),
     composition: safeParseObject(row.compositionJson),
     pose,
+    // pose_json 结构自由（兼容旧数据），按 TemplatePose[] 透出
+    poses: posesArr.length > 0 ? (posesArr as unknown as TemplatePose[]) : undefined,
     camera: safeParseObject(row.cameraJson),
     sceneGuide: safeParseObject(row.sceneGuideJson),
     postProcess: safeParseObject(row.postProcessJson),
@@ -344,14 +364,58 @@ function safeParseStringArray(json: string): string[] {
   }
 }
 
-function safeParseClassification(json: string): { type: string; majorStyle: string; subStyle: string; method: string } {
+function safeParseClassification(json: string): TemplateClassification {
   const obj = safeParseObject(json);
-  return {
-    type: typeof obj.type === 'string' ? obj.type : '',
-    majorStyle: typeof obj.majorStyle === 'string' ? obj.majorStyle : '',
-    subStyle: typeof obj.subStyle === 'string' ? obj.subStyle : '',
-    method: typeof obj.method === 'string' ? obj.method : '',
-  };
+  const type = typeof obj.type === 'string' ? obj.type : '';
+  const majorStyle = typeof obj.majorStyle === 'string' ? obj.majorStyle : '';
+  // 三级分类：新字段 style 优先；旧数据无 style 时回退 subStyle
+  const style = typeof obj.style === 'string'
+    ? obj.style
+    : (typeof obj.subStyle === 'string' ? obj.subStyle : '');
+  // subStyle 兼容字段：与 style 同值（旧数据原值；新数据保持与 style 一致）
+  const subStyle = typeof obj.subStyle === 'string' ? obj.subStyle : style;
+  // method 不再作为树层级（兼容保留，可空）
+  const method = typeof obj.method === 'string' && obj.method.length > 0 ? obj.method : undefined;
+  return { type, majorStyle, style, subStyle, method };
+}
+
+/**
+ * 安全解析 images_json 数组：返回有 url 字段的对象数组。
+ * 非数组 / 非对象元素 / 无 url 字段均被过滤掉。
+ */
+function safeParseImagesArray(json: string): TemplateImage[] {
+  try {
+    const v = JSON.parse(json);
+    if (!Array.isArray(v)) return [];
+    return v.filter((x): x is TemplateImage =>
+      !!x && typeof x === 'object' && !Array.isArray(x) && typeof (x as { url?: unknown }).url === 'string'
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 安全解析 pose_json 数组：返回非空对象数组。
+ * - 数组 → 过滤掉空对象/非对象元素
+ * - 旧单对象（非空） → 包装为 [obj]
+ * - 空对象 {} / 空数组 [] / 非对象 → 返回 []
+ */
+function safeParsePosesArray(json: string): Record<string, unknown>[] {
+  try {
+    const v = JSON.parse(json);
+    const isNonNullObject = (x: unknown): x is Record<string, unknown> =>
+      !!x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x as object).length > 0;
+    if (Array.isArray(v)) {
+      return v.filter(isNonNullObject);
+    }
+    if (isNonNullObject(v)) {
+      return [v];
+    }
+    return [];
+  } catch {
+    return [];
+  }
 }
 
 /** 清洗入口 ambience 输入为标准三数组结构（非法值丢弃） */

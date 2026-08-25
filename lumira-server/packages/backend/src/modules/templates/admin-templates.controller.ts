@@ -39,7 +39,7 @@ export class AdminTemplatesController {
     if (!parsed.meta) {
       throw new BadRequestException('Missing "meta" field');
     }
-    if (!parsed.files.cover) {
+    if (!parsed.files.cover && !(parsed.files.images && parsed.files.images.length > 0)) {
       throw new BadRequestException('Missing "cover" file');
     }
 
@@ -56,6 +56,7 @@ export class AdminTemplatesController {
       parsed.files.cover,
       parsed.files.silhouette,
       parsed.files.pptpl,
+      parsed.files.images,
     );
   }
 
@@ -82,6 +83,7 @@ export class AdminTemplatesController {
       parsed.files.cover,
       parsed.files.silhouette,
       parsed.files.pptpl,
+      parsed.files.images,
     );
   }
 
@@ -105,11 +107,14 @@ interface ParsedMultipart {
     silhouette?: UploadFile;
     pptpl?: UploadFile;
     icon?: UploadFile;
+    /** 多效果图（[0]=封面） */
+    images?: UploadFile[];
   };
 }
 
 /**
- * 解析 multipart 请求，提取 `meta` 文本字段和文件字段（cover/silhouette/pptpl/icon）。
+ * 解析 multipart 请求，提取 `meta` 文本字段和文件字段
+ * （cover/silhouette/pptpl/icon/多张 images）。
  * 使用 @fastify/multipart 的 request.parts() 异步迭代器。
  */
 export async function parseMultipart(req: FastifyRequest): Promise<ParsedMultipart> {
@@ -141,6 +146,9 @@ export async function parseMultipart(req: FastifyRequest): Promise<ParsedMultipa
         result.files.pptpl = file;
       } else if (fieldname === 'icon') {
         result.files.icon = file;
+      } else if (fieldname === 'images' || fieldname?.startsWith('images[')) {
+        // 多效果图：字段名 images 或 images[N]
+        (result.files.images = result.files.images || []).push(file);
       }
       // 其他字段名忽略
     }

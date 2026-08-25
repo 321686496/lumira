@@ -152,16 +152,17 @@ export class AdminTemplatesService {
   // ===== 创建 / 更新 / 删除 =====
 
   /**
-   * 创建模板（spec 3.4 处理流程）：
+   * 创建模板（spec 3.4 + Phase 3 处理流程）：
    * 1. 解析 meta JSON → 2. 若有 pptpl 覆盖 5 段 → 3. 生成 ID →
-   * 4. 保存封面 → 5. 保存剪影 → 6. 构造 URL 写入 poseJson →
-   * 7. INSERT → 8. 若 price>0 UPSERT template_prices → 9. 返回详情
+   * 4. 保存多图（images[] 或旧单 cover）→ 5. 保存剪影注入 poses[0] →
+   * 6. 构造 imagesJson + poseJson（数组） → 7. INSERT → 8. 若 price>0 UPSERT template_prices → 9. 返回详情
    */
   async create(
     meta: CreateTemplateDto,
-    cover: UploadFile,
+    cover?: UploadFile,
     silhouette?: UploadFile,
     pptpl?: UploadFile,
+    images?: UploadFile[],
   ): Promise<AdminTemplateDetail> {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
@@ -174,18 +175,24 @@ export class AdminTemplatesService {
       throw new BadRequestException(`Category not found: ${meta.category}`);
     }
 
-    // 校验上传文件大小（图片 5MB / pptpl 25MB），超限返回明确的 400 而不是 413
-    assertFileSize(cover, MAX_IMAGE_BYTES, '封面图片');
+    // 校验上传文件大小（图片 8MB / pptpl 25MB），超限返回明确的 400 而不是 413
+    if (cover) {
+      assertFileSize(cover, MAX_IMAGE_BYTES, '封面图片');
+    }
     if (silhouette) {
       assertFileSize(silhouette, MAX_IMAGE_BYTES, '剪影图片');
     }
     if (pptpl) {
       assertFileSize(pptpl, MAX_PPTPL_BYTES, '.pptpl 文件');
     }
+    if (images && images.length > 0) {
+      images.forEach((img, i) => assertFileSize(img, MAX_IMAGE_BYTES, `效果图 ${i + 1}`));
+    }
 
     // 5 段内容：默认取 meta，若有 pptpl 则覆盖
     let composition = meta.composition || {};
-    let pose = meta.pose || {};
+    let pose = meta.pose || {};          // 兼容旧字段（单 pose）
+    let poses = meta.poses;              // 新字段（pose 数组，优先）
     let camera = meta.camera || {};
     let sceneGuide = meta.sceneGuide || {};
     let postProcess = meta.postProcess || {};
@@ -194,7 +201,8 @@ export class AdminTemplatesService {
       try {
         const pptplContent = parsePptpl(pptpl.buffer);
         composition = pptplContent.composition;
-        pose = pptplContent.pose;
+        pose = pptplContent.pose;  // pptpl 旧结构：单 pose 对象
+        poses = undefined;          // 让 fallback 走 [pose]
         camera = pptplContent.camera;
         sceneGuide = pptplContent.sceneGuide;
         postProcess = pptplContent.postProcess;
@@ -203,28 +211,73 @@ export class AdminTemplatesService {
       }
     }
 
-    // 保存封面
-    const coverExt = extractExt(cover);
-    const coverFilename = `cover.${coverExt}`;
-    const coverUrl = await this.storage.write('templates', id, coverFilename, cover.buffer);
+    // ===== 多图上传 (Phase 3) =====
+    // 优先级：images 文件 > cover 文件（兼容旧 admin）> meta.images URL 数组
+    let imagesArr: Array<{ url: string; data?: string }> = [];
+    let coverUrl = '';
+    if (images && images.length > 0) {
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const ext = extractExt(img);
+        const filename = `image_${i}.${ext}`;
+        const url = await this.storage.write('templates', id, filename, img.buffer);
+        imagesArr.push({ url });
+      }
+      coverUrl = imagesArr[0].url;
+    } else if (cover) {
+      // 旧单图路径：cover 文件同时作为效果图首元素
+      const coverExt = extractExt(cover);
+      const coverFilename = `cover.${coverExt}`;
+      coverUrl = await this.storage.write('templates', id, coverFilename, cover.buffer);
+      imagesArr = [{ url: coverUrl }];
+    } else if (Array.isArray(meta.images) && meta.images.length > 0) {
+      // meta.images 已是 URL/data 数组（如复制场景），直接用
+      imagesArr = meta.images
+        .map((img) => {
+          const r = img as Record<string, unknown>;
+          const url = typeof r.url === 'string' ? r.url : '';
+          const data = typeof r.data === 'string' ? r.data : undefined;
+          if (!url) return null;
+          return data ? { url, data } : { url };
+        })
+        .filter((x): x is { url: string; data?: string } => x !== null);
+      coverUrl = imagesArr[0]?.url || '';
+    }
 
-    // 保存剪影（若有），URL 写入 poseJson
-    let poseJson = JSON.stringify(pose);
+    // ===== pose 数组化 + silhouette 注入 =====
+    // 优先级：meta.poses > [meta.pose] > []
+    let posesArr: Record<string, unknown>[];
+    if (Array.isArray(poses) && poses.length > 0) {
+      posesArr = poses as Record<string, unknown>[];
+    } else if (pose && typeof pose === 'object' && Object.keys(pose).length > 0) {
+      posesArr = [pose as Record<string, unknown>];
+    } else {
+      posesArr = [];
+    }
+
     if (silhouette) {
       const silExt = extractExt(silhouette);
       const silFilename = `silhouette.${silExt}`;
       const silUrl = await this.storage.write('templates', id, silFilename, silhouette.buffer);
-      // 将 silhouette URL 注入 pose 对象
-      const poseObj = typeof pose === 'object' && pose !== null ? pose as Record<string, unknown> : {};
-      if (poseObj.silhouette && typeof poseObj.silhouette === 'object') {
-        (poseObj.silhouette as Record<string, unknown>).type = 'image';
-        (poseObj.silhouette as Record<string, unknown>).url = silUrl;
-        (poseObj.silhouette as Record<string, unknown>).data = silUrl; // 兼容字段
+      if (posesArr.length > 0) {
+        // 注入到首元素（不修改 meta 原值，做浅拷贝）
+        const first = { ...posesArr[0] };
+        const silObj = (first.silhouette && typeof first.silhouette === 'object')
+          ? { ...(first.silhouette as Record<string, unknown>) }
+          : {};
+        silObj.type = 'image';
+        silObj.url = silUrl;
+        silObj.data = silUrl; // 兼容字段
+        first.silhouette = silObj;
+        posesArr = [first, ...posesArr.slice(1)];
       } else {
-        poseObj.silhouette = { type: 'image', url: silUrl, data: silUrl };
+        // 无 pose 数据，仅构造 silhouette
+        posesArr = [{ silhouette: { type: 'image', url: silUrl, data: silUrl } }];
       }
-      poseJson = JSON.stringify(poseObj);
     }
+
+    const poseJson = JSON.stringify(posesArr);
+    const imagesJson = JSON.stringify(imagesArr);
 
     // INSERT
     await db.insert(templates).values({
@@ -243,13 +296,16 @@ export class AdminTemplatesService {
         // 自动同步：classification.type = category（spec 11.4）
         type: meta.category,
         majorStyle: meta.classification?.majorStyle || '',
-        subStyle: meta.classification?.subStyle || '',
+        // 三级分类：style 主字段；旧 admin 仅提交 subStyle 时按 subStyle 写 style
+        style: meta.classification?.style || meta.classification?.subStyle || '',
+        subStyle: meta.classification?.subStyle || meta.classification?.style || '',
         method: meta.classification?.method || '',
       }),
       sortOrder: meta.sortOrder ?? 0,
       isActive: meta.isActive === false ? 0 : 1,
       compositionJson: JSON.stringify(composition),
       poseJson,
+      imagesJson,
       cameraJson: JSON.stringify(camera),
       sceneGuideJson: JSON.stringify(sceneGuide),
       postProcessJson: JSON.stringify(postProcess),
@@ -281,13 +337,14 @@ export class AdminTemplatesService {
     return this.getDetail(id);
   }
 
-  /** 更新模板（multipart：可选新封面 + 可选新剪影 + 可选 pptpl 覆盖 5 段）*/
+  /** 更新模板（multipart：可选新封面 / 多图 / 新剪影 / pptpl 覆盖 5 段）*/
   async update(
     id: string,
     meta: UpdateTemplateDto,
     cover?: UploadFile,
     silhouette?: UploadFile,
     pptpl?: UploadFile,
+    images?: UploadFile[],
   ): Promise<AdminTemplateDetail> {
     const db = this.dbService.getDb();
     const now = Math.floor(Date.now() / 1000);
@@ -299,7 +356,7 @@ export class AdminTemplatesService {
       throw new NotFoundException('Template not found');
     }
 
-    // 校验上传文件大小（图片 5MB / pptpl 25MB），超限返回明确的 400 而不是 413
+    // 校验上传文件大小（图片 8MB / pptpl 25MB），超限返回明确的 400 而不是 413
     if (cover) {
       assertFileSize(cover, MAX_IMAGE_BYTES, '封面图片');
     }
@@ -308,6 +365,9 @@ export class AdminTemplatesService {
     }
     if (pptpl) {
       assertFileSize(pptpl, MAX_PPTPL_BYTES, '.pptpl 文件');
+    }
+    if (images && images.length > 0) {
+      images.forEach((img, i) => assertFileSize(img, MAX_IMAGE_BYTES, `效果图 ${i + 1}`));
     }
 
     // 若改了分类，校验新分类存在
@@ -322,6 +382,7 @@ export class AdminTemplatesService {
     // 5 段内容：默认取旧值，若 meta 提供则覆盖，若有 pptpl 则全覆盖
     let composition = meta.composition !== undefined ? meta.composition : safeParse(existing.compositionJson);
     let pose = meta.pose !== undefined ? meta.pose : safeParse(existing.poseJson);
+    let poses = meta.poses;
     let camera = meta.camera !== undefined ? meta.camera : safeParse(existing.cameraJson);
     let sceneGuide = meta.sceneGuide !== undefined ? meta.sceneGuide : safeParse(existing.sceneGuideJson);
     let postProcess = meta.postProcess !== undefined ? meta.postProcess : safeParse(existing.postProcessJson);
@@ -331,6 +392,7 @@ export class AdminTemplatesService {
         const pptplContent = parsePptpl(pptpl.buffer);
         composition = pptplContent.composition;
         pose = pptplContent.pose;
+        poses = undefined;
         camera = pptplContent.camera;
         sceneGuide = pptplContent.sceneGuide;
         postProcess = pptplContent.postProcess;
@@ -339,30 +401,78 @@ export class AdminTemplatesService {
       }
     }
 
-    // 封面：若有新封面，保存并更新 URL；否则保留旧 URL
+    // ===== 多图上传 (Phase 3) =====
+    // 优先级：images 文件 > cover 文件 > meta.images URL 数组 > 旧 imagesJson/coverUrl
+    let imagesArr: Array<{ url: string; data?: string }>;
     let coverUrl = existing.coverUrl;
-    if (cover) {
+    if (images && images.length > 0) {
+      imagesArr = [];
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const ext = extractExt(img);
+        const filename = `image_${i}.${ext}`;
+        const url = await this.storage.write('templates', id, filename, img.buffer);
+        imagesArr.push({ url });
+      }
+      coverUrl = imagesArr[0].url;
+    } else if (cover) {
+      // 旧单图路径：cover 文件同时作为效果图首元素，丢弃旧 imagesJson 其他元素
       const coverExt = extractExt(cover);
       const coverFilename = `cover.${coverExt}`;
       coverUrl = await this.storage.write('templates', id, coverFilename, cover.buffer);
+      imagesArr = [{ url: coverUrl }];
+    } else if (Array.isArray(meta.images)) {
+      // meta.images 提供则覆盖（可空数组表示清空）
+      imagesArr = meta.images
+        .map((img) => {
+          const r = img as Record<string, unknown>;
+          const url = typeof r.url === 'string' ? r.url : '';
+          const data = typeof r.data === 'string' ? r.data : undefined;
+          if (!url) return null;
+          return data ? { url, data } : { url };
+        })
+        .filter((x): x is { url: string; data?: string } => x !== null);
+      coverUrl = imagesArr[0]?.url || '';
+    } else {
+      // 无文件、无 meta.images：保留旧 imagesJson
+      imagesArr = safeParseImagesArrayExisting(existing.imagesJson);
     }
 
-    // 剪影：若有新剪影，保存并注入 pose URL
-    let poseJson = JSON.stringify(pose);
+    // ===== pose 数组化 + silhouette 注入 =====
+    let posesArr: Record<string, unknown>[];
+    if (Array.isArray(poses) && poses.length > 0) {
+      posesArr = poses as Record<string, unknown>[];
+    } else if (pose !== undefined && pose && typeof pose === 'object' && Object.keys(pose).length > 0) {
+      posesArr = [pose as Record<string, unknown>];
+    } else if (Array.isArray(meta.poses)) {
+      // meta.poses 显式为空数组 → 清空 poses
+      posesArr = [];
+    } else {
+      // 无 pose / poses 提供：保留旧 poseJson（数组化）
+      posesArr = safeParsePosesArrayExisting(existing.poseJson);
+    }
+
     if (silhouette) {
       const silExt = extractExt(silhouette);
       const silFilename = `silhouette.${silExt}`;
       const silUrl = await this.storage.write('templates', id, silFilename, silhouette.buffer);
-      const poseObj = typeof pose === 'object' && pose !== null ? pose as Record<string, unknown> : {};
-      if (poseObj.silhouette && typeof poseObj.silhouette === 'object') {
-        (poseObj.silhouette as Record<string, unknown>).type = 'image';
-        (poseObj.silhouette as Record<string, unknown>).url = silUrl;
-        (poseObj.silhouette as Record<string, unknown>).data = silUrl;
+      if (posesArr.length > 0) {
+        const first = { ...posesArr[0] };
+        const silObj = (first.silhouette && typeof first.silhouette === 'object')
+          ? { ...(first.silhouette as Record<string, unknown>) }
+          : {};
+        silObj.type = 'image';
+        silObj.url = silUrl;
+        silObj.data = silUrl;
+        first.silhouette = silObj;
+        posesArr = [first, ...posesArr.slice(1)];
       } else {
-        poseObj.silhouette = { type: 'image', url: silUrl, data: silUrl };
+        posesArr = [{ silhouette: { type: 'image', url: silUrl, data: silUrl } }];
       }
-      poseJson = JSON.stringify(poseObj);
     }
+
+    const poseJson = JSON.stringify(posesArr);
+    const imagesJson = JSON.stringify(imagesArr);
 
     // 更新字段（仅赋值 meta 中出现的字段，undefined 保留旧值）
     const updateData: Record<string, unknown> = {
@@ -385,9 +495,10 @@ export class AdminTemplatesService {
       updateData.classificationJson = JSON.stringify({
         type: finalCategory,
         majorStyle: meta.classification?.majorStyle ?? existingCls.majorStyle,
-        // 兼容旧 admin 前端：仅提交 style 时将其作为 subStyle 存储，避免分类数据丢失
+        // 三级分类：style 主字段；旧 admin 仅提交 subStyle 时按 subStyle 写 style
+        style: meta.classification?.style ?? meta.classification?.subStyle ?? existingCls.style,
         subStyle: meta.classification?.subStyle ?? meta.classification?.style ?? existingCls.subStyle,
-        method: meta.classification?.method ?? existingCls.method,
+        method: meta.classification?.method ?? existingCls.method ?? '',
       });
     }
     if (meta.sortOrder !== undefined) updateData.sortOrder = meta.sortOrder;
@@ -395,6 +506,7 @@ export class AdminTemplatesService {
     updateData.coverUrl = coverUrl;
     updateData.compositionJson = JSON.stringify(composition);
     updateData.poseJson = poseJson;
+    updateData.imagesJson = imagesJson;
     updateData.cameraJson = JSON.stringify(camera);
     updateData.sceneGuideJson = JSON.stringify(sceneGuide);
     updateData.postProcessJson = JSON.stringify(postProcess);
@@ -478,13 +590,46 @@ function safeParse(json: string): Record<string, unknown> {
   }
 }
 
-/** 解析 classification_json，提取 type/majorStyle/subStyle/method 字符串 */
-function safeParseClassification(json: string): { type: string; majorStyle: string; subStyle: string; method: string } {
+/** 解析既有 images_json（admin 更新保留用，原样返回 url/data，不改写） */
+function safeParseImagesArrayExisting(json: string): Array<{ url: string; data?: string }> {
+  try {
+    const v = JSON.parse(json);
+    if (!Array.isArray(v)) return [];
+    return v.filter((x): x is { url: string; data?: string } =>
+      !!x && typeof x === 'object' && !Array.isArray(x) &&
+      typeof (x as { url?: unknown }).url === 'string'
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** 解析既有 pose_json（数组或旧单对象 → 数组；原样保留对象不改写） */
+function safeParsePosesArrayExisting(json: string): Record<string, unknown>[] {
+  try {
+    const v = JSON.parse(json);
+    const isNonNullObject = (x: unknown): x is Record<string, unknown> =>
+      !!x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x as object).length > 0;
+    if (Array.isArray(v)) return v.filter(isNonNullObject);
+    if (isNonNullObject(v)) return [v];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/** 解析 classification_json，提取 type/majorStyle/style/subStyle/method 字符串
+ *  (style 为三级主字段；旧数据无 style 时回退 subStyle) */
+function safeParseClassification(json: string): { type: string; majorStyle: string; style: string; subStyle: string; method: string } {
   const obj = safeParse(json);
+  const style = typeof obj.style === 'string'
+    ? obj.style
+    : (typeof obj.subStyle === 'string' ? obj.subStyle : '');
   return {
     type: typeof obj.type === 'string' ? obj.type : '',
     majorStyle: typeof obj.majorStyle === 'string' ? obj.majorStyle : '',
-    subStyle: typeof obj.subStyle === 'string' ? obj.subStyle : '',
+    style,
+    subStyle: typeof obj.subStyle === 'string' ? obj.subStyle : style,
     method: typeof obj.method === 'string' ? obj.method : '',
   };
 }
