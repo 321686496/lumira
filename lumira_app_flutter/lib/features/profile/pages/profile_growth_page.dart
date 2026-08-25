@@ -16,6 +16,8 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/growth_models.dart';
 import '../providers/growth_providers.dart';
 import '../services/growth_xp_service.dart';
+import '../widgets/day_detail_sheet.dart';
+import '../widgets/shooting_calendar_heatmap.dart';
 
 /// 成长中心页
 ///
@@ -545,8 +547,119 @@ class _AchievementCell extends StatelessWidget {
       ),
     );
 
-    if (item.unlocked) return cell;
-    return Opacity(opacity: 0.5, child: cell);
+    // 整卡可点击查看成就详情与完成情况
+    final tappable = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showDetail(context, item, tokens),
+      child: cell,
+    );
+
+    if (item.unlocked) return tappable;
+    return Opacity(opacity: 0.5, child: tappable);
+  }
+
+  /// 点击成就弹出详情，展示描述、解锁状态与解锁时间
+  void _showDetail(
+      BuildContext context, AchievementRecord item, ThemeTokens tokens) {
+    final timeStr = item.unlockedAt != null
+        ? DateTime.fromMillisecondsSinceEpoch(item.unlockedAt!)
+            .toString()
+            .substring(0, 10)
+        : null;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: tokens.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 成就图标
+              Center(
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: item.unlocked
+                        ? LinearGradient(
+                            colors: [tokens.brand, tokens.brandDeep],
+                          )
+                        : null,
+                    color: item.unlocked ? null : tokens.canvasDeep,
+                  ),
+                  child: Icon(
+                    _iconForKey(item.iconKey),
+                    size: 32,
+                    color: item.unlocked ? Colors.white : tokens.textTertiary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // 名称
+              Text(
+                item.name,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: tokens.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              // 描述
+              Text(
+                item.description,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: tokens.textSecondary,
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // 解锁状态
+              Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: item.unlocked
+                        ? tokens.successSubtle
+                        : tokens.surfaceAlt,
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  child: Text(
+                    item.unlocked ? '已解锁' : '未解锁',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: item.unlocked
+                          ? tokens.success
+                          : tokens.textTertiary,
+                    ),
+                  ),
+                ),
+              ),
+              if (item.unlocked && timeStr != null) ...[
+                const SizedBox(height: 12),
+                Center(
+                  child: Text(
+                    '解锁于 $timeStr',
+                    style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -681,21 +794,9 @@ class _CalendarCard extends StatelessWidget {
         return tokens.brand.withOpacity(0.4);
       case 3:
         return tokens.brand.withOpacity(0.6);
-      case 4:
-        return tokens.brand;
       default:
-        return tokens.divider;
+        return tokens.brand;
     }
-  }
-
-  /// 将每日活动数映射为 0-4 等级：
-  /// 0 活动 → 0（空）；1 → 2；2-3 → 3；4+ → 4。
-  /// level 1 未使用（保持阈值简单）。
-  int _countToLevel(int count) {
-    if (count == 0) return 0;
-    if (count == 1) return 2;
-    if (count <= 3) return 3;
-    return 4;
   }
 
   String _formatDate(DateTime d) {
@@ -707,16 +808,8 @@ class _CalendarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 112 格热力图：从今天往前数 112 天。
-    // index 0 = 111 天前（最旧），index 111 = 今天（最新）。
-    // 使用 UTC 以与 DAO 中 SQLite date(ts/1000,'unixepoch') 的 UTC 日期对齐。
+    // 用 UTC 以与 DAO 中 SQLite date(ts/1000,'unixepoch') 的 UTC 日期对齐。
     final today = DateTime.now().toUtc();
-    final cells = List<int>.generate(112, (i) {
-      final date = today.subtract(Duration(days: 111 - i));
-      final dateStr = _formatDate(date);
-      final count = heatmap[dateStr] ?? 0;
-      return _countToLevel(count);
-    });
 
     // 本月拍摄数：当前 YYYY-MM 内所有日期的活动数之和
     final currentMonth = _formatDate(today).substring(0, 7);
@@ -752,34 +845,41 @@ class _CalendarCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () =>
+                    GoRouter.of(context)
+                        .push(RouteNames.profileGrowthCalendar),
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '全部记录',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.brand,
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 16,
+                      color: tokens.brand,
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 360, // minWidth 360
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 10,
-                  mainAxisSpacing: 2,
-                  crossAxisSpacing: 2,
-                  childAspectRatio: 1,
-                ),
-                itemCount: cells.length,
-                itemBuilder: (context, i) {
-                  return Container(
-                    key: ValueKey('heatmap_cell_$i'),
-                    decoration: BoxDecoration(
-                      color: _heatColor(cells[i]),
-                      borderRadius: BorderRadius.circular(2), // 4rpx → 2dp
-                    ),
-                  );
-                },
-              ),
-            ),
+          ShootingCalendarHeatmap(
+            heatmap: heatmap,
+            tokens: tokens,
+            daysBack: 112,
+            onCellTap: (date, count, level) {
+              showDayDetailSheet(context, date: date);
+            },
           ),
           const SizedBox(height: 12),
           // 图例

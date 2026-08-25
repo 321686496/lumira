@@ -227,4 +227,53 @@ class GrowthDao {
     }
     return result;
   }
+
+  /// 获取某日（YYYY-MM-DD，UTC 口径，与 getDailyActivity 一致）拍摄的照片（缩略图展示用）。
+  /// 排除从系统相册引入且隐藏的项。
+  Future<List<DayPhoto>> getPhotosByDate(String date) async {
+    final rows = await _db.query(
+      Tables.galleryItems,
+      where: "date(${Tables.colCreatedAt} / 1000, 'unixepoch') = ? "
+          'AND (${Tables.colGalleryItemHidden} IS NULL OR ${Tables.colGalleryItemHidden} != 1)',
+      whereArgs: [date],
+      orderBy: '${Tables.colCreatedAt} DESC',
+    );
+    return rows.map((r) {
+      final thumb =
+          (r[Tables.colDataUrl] as String?) ?? (r[Tables.colFilePath] as String?) ?? '';
+      return DayPhoto(
+        id: r[Tables.colId] as String,
+        thumb: thumb,
+        createdAt: (r[Tables.colCreatedAt] as num).toInt(),
+      );
+    }).toList();
+  }
+
+  /// 获取某日（YYYY-MM-DD）完成挑战的标题列表。
+  Future<List<String>> getChallengesByDate(String date) async {
+    final rows = await _db.query(
+      ChallengeHistoryTable.name,
+      where: '${ChallengeHistoryTable.colStatus} = ? '
+          'AND ${ChallengeHistoryTable.colCompletedAt} IS NOT NULL '
+          "AND date(${ChallengeHistoryTable.colCompletedAt} / 1000, 'unixepoch') = ?",
+      whereArgs: ['done', date],
+      orderBy: '${ChallengeHistoryTable.colCompletedAt} DESC',
+    );
+    return rows
+        .map((r) => (r[ChallengeHistoryTable.colTitle] as String?) ?? '挑战完成')
+        .toList();
+  }
+
+  /// 组装某日详情（照片 + 挑战），供热力图格子点击后的弹层展示。
+  Future<DayActivityDetail> getDayDetail(String date) async {
+    final photos = await getPhotosByDate(date);
+    final challenges = await getChallengesByDate(date);
+    return DayActivityDetail(
+      date: date,
+      photoCount: photos.length,
+      challengeCount: challenges.length,
+      photos: photos,
+      challenges: challenges,
+    );
+  }
 }

@@ -147,6 +147,40 @@ class HeatmapCell {
   const HeatmapCell({required this.date, required this.count});
 }
 
+/// 热力图格子点击后的单日详情（底部弹层数据）
+class DayActivityDetail {
+  const DayActivityDetail({
+    required this.date,
+    required this.photoCount,
+    required this.challengeCount,
+    required this.photos,
+    required this.challenges,
+  });
+
+  /// YYYY-MM-DD
+  final String date;
+  final int photoCount;
+  final int challengeCount;
+  final List<DayPhoto> photos;
+  final List<String> challenges; // 当日完成挑战标题
+
+  /// 当日总活动量（与热力图格子的数值口径一致）
+  int get totalCount => photoCount + challengeCount;
+}
+
+/// 单日照片（缩略图展示用）
+class DayPhoto {
+  const DayPhoto({
+    required this.id,
+    required this.thumb,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String thumb; // dataUrl（base64）或 filePath
+  final int createdAt;
+}
+
 /// 6 项成就墙的占位定义（无 DB 记录时返回）
 const List<AchievementRecord> kPlaceholderAchievements = [
   AchievementRecord(id: 'ach_first_photo', name: '初次拍摄', description: '完成第一次拍摄', iconKey: 'camera', unlocked: false),

@@ -36,6 +36,14 @@ final growthHeatmapProvider = FutureProvider<Map<String, int>>((ref) async {
   return dao.getDailyActivity();
 });
 
+/// 某日活动的详情（照片 + 挑战），供拍摄日历热力图格子点击后弹层展示。
+final growthDayDetailProvider = FutureProvider.family<DayActivityDetail, String>(
+  (ref, date) async {
+    final dao = await ref.watch(growthDaoProvider.future);
+    return dao.getDayDetail(date);
+  },
+);
+
 /// 个人中心 UserProfile Provider
 /// 聚合 GrowthDao（等级/XP）+ GalleryDao（作品数/收藏数）+ TemplatesDao（模板数）
 /// 对照：lumira-app/src/pages/profile/index.vue 的 userProfile computed
