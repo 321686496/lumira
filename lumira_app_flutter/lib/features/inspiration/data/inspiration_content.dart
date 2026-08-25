@@ -176,6 +176,7 @@ class InspirationContent {
     String? topCategory,
     DateTime now, {
     int count = 4,
+    Map<String, double> interestByTemplateId = const {},
   }) {
     final slot = slotOf(now);
     int scoreOf(TodayShootItem item) {
@@ -183,6 +184,10 @@ class InspirationContent {
       if (item.slots.contains(slot) || item.slots.contains('any')) score += 2;
       if (topCategory != null && item.categories.contains(topCategory)) {
         score += 3;
+      }
+      // 个人兴趣加成（仅模板目标；0..1 → 0..5，与 slot/category 分同量级）
+      if (item.target == TodayShootTarget.template) {
+        score += ((interestByTemplateId[item.targetId] ?? 0) * 5).round();
       }
       return score;
     }
