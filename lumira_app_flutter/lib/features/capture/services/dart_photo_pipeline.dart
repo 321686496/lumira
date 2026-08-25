@@ -398,6 +398,37 @@ void _applyP3ToSrgb(img.Image image) {
   }
 }
 
+/// 判断 JPEG 字节是否内嵌 Display P3 / DCI-P3 ICC（宽色域 iPhone 相机输出）。
+///
+/// 与 [_isDisplayP3Jpeg] 相同，公开给 capture 拍摄通路（dart:ui 解码）复用。
+bool isDisplayP3Jpeg(Uint8List bytes) => _isDisplayP3Jpeg(bytes);
+
+/// 对 RGBA 字节缓冲内的像素就地做正确的 P3→sRGB 色域换算。
+///
+/// capture 拍摄走 dart:ui 解码（[ui.ImageDescriptor.encoded]，忽略 JPEG 内嵌 ICC），
+/// 宽色域 iPhone 原片会被当作 sRGB 解释 → 肤色/暖色偏黄，而取景器走系统色管
+/// （P3 渲染正确）故不黄。此函数把解码出的 RGBA（r,g,b,a 顺序）像素经
+/// 线性化 → 正确的 P3→sRGB 逆矩阵 → sRGB 编码，使成片与取景器一致。
+///
+/// 方向铁律参照 [_applyP3ToSrgb]：必须用 sRGB→P3 正向矩阵的逆（带负系数），
+/// 若误用正向矩阵会把红色进一步放大、更黄。
+void applyP3ToSrgbRgba(Uint8List rgba) {
+  const steps = 4096;
+  for (int i = 0; i + 2 < rgba.length; i += 4) {
+    final r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
+    final lr = _srgbToLinearLut[r];
+    final lg = _srgbToLinearLut[g];
+    final lb = _srgbToLinearLut[b];
+    // P3(D65) → sRGB(D65) 线性基色转换矩阵（sRGB→P3 正向矩阵的逆）。
+    final sr = (1.2249 * lr - 0.2247 * lg).clamp(0.0, 1.0);
+    final sg = (-0.0420 * lr + 1.0419 * lg).clamp(0.0, 1.0);
+    final sb = (-0.0197 * lr - 0.0786 * lg + 1.0983 * lb).clamp(0.0, 1.0);
+    rgba[i] = (_srgbEncodeLut[(sr * (steps - 1)).round()] * 255).round();
+    rgba[i + 1] = (_srgbEncodeLut[(sg * (steps - 1)).round()] * 255).round();
+    rgba[i + 2] = (_srgbEncodeLut[(sb * (steps - 1)).round()] * 255).round();
+  }
+}
+
 /// 在 worker Isolate 中执行完整照片后处理。
 ///
 /// 从 [PhotoPostProcessor] 移植全部逻辑到 image 包 API：

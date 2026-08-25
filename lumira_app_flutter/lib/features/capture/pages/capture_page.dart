@@ -18,6 +18,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:screen/screen.dart';
 
 import '../../../core/db/database_provider.dart';
+import '../../../core/services/ohos_image_processor.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/router/route_names.dart';
@@ -43,6 +44,7 @@ import '../domain/scene_preset.dart' show SceneFilter;
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
 import '../services/capture_worker.dart';
+import '../services/dart_photo_pipeline.dart' show applyP3ToSrgbRgba, isDisplayP3Jpeg;
 import '../services/white_balance.dart';
 import '../../watermark/data/watermark_providers.dart';
 import '../../watermark/models/watermark_template.dart';
@@ -769,7 +771,6 @@ class _CapturePageState extends ConsumerState<CapturePage>
           smoothStrength: gpuData.smoothStrength,
           vignette: gpuData.vignette,
           needRawRgba: gpuData.needRawRgba,
-          applyDeYellow: defaultTargetPlatform == TargetPlatform.iOS,
         ),
       );
       swIso.stop();
@@ -825,17 +826,31 @@ class _CapturePageState extends ConsumerState<CapturePage>
             template: watermarkTemplate,
           );
 
-          // 将 RGBA 字节编码为 JPEG（quality 90，与 worker 输出统一）
-          // 注：Flutter 3.7 的 dart:ui toByteData 不支持 JPEG（ImageByteFormat.jpeg
-          // 是较新版本 API），此处用 image 包纯 Dart 编码；1280px 下耗时已可接受。
-          final outputImage = img.Image.fromBytes(
-            width: wmResult.width,
-            height: wmResult.height,
-            bytes: wmResult.rgbaBytes.buffer,
-            numChannels: 4,
-            order: img.ChannelOrder.rgba,
-          );
-          final jpegBytes = img.encodeJpg(outputImage, quality: 90);
+          // 将 RGBA 字节编码为 JPEG（quality 90，与 worker 输出统一）。
+          // OHOS：走系统 ImagePacker 硬件编码（替代纯 Dart img.encodeJpg，节省 ~1.2s），
+          // 失败时静默回退 Dart 软件编码，绝不阻塞拍照流程。
+          Uint8List jpegBytes;
+          final isOhos = OhosImageProcessor.isSupported;
+          final jpegNative = isOhos
+              ? await OhosImageProcessor.instance.encodeJpegFromRgba(
+                  rgba: wmResult.rgbaBytes,
+                  width: wmResult.width,
+                  height: wmResult.height,
+                  quality: 90,
+                )
+              : null;
+          if (jpegNative != null) {
+            jpegBytes = jpegNative;
+          } else {
+            final outputImage = img.Image.fromBytes(
+              width: wmResult.width,
+              height: wmResult.height,
+              bytes: wmResult.rgbaBytes.buffer,
+              numChannels: 4,
+              order: img.ChannelOrder.rgba,
+            );
+            jpegBytes = img.encodeJpg(outputImage, quality: 90);
+          }
           finalPath = processedPath.replaceAll(RegExp(r'\.jpg$'), '_wm.jpg');
           await File(finalPath).writeAsBytes(jpegBytes);
 
@@ -857,10 +872,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       try {
         await _writeColorDiagnostics(
           rawPath: originalPath,
-          processedPath: processedPath,
+          outputPath: finalPath,
+          sourceAvgRgb: gpuData.sourceAvgRgb,
           diagBefore: workerResult.diagBefore,
           diagAfter: workerResult.diagAfter,
-          applyDeYellow: defaultTargetPlatform == TargetPlatform.iOS,
         );
       } catch (e) {
         debugPrint('[capture] 颜色诊断写盘失败（不影响拍照）: $e');
@@ -3627,6 +3642,14 @@ class _CaptureProcessParams {
 /// 【性能优化 B】
 const int kMaxProcessDim = 1280;
 
+/// 拍摄（live capture）成片的最小锐化下限。
+/// 自由/默认模式下用户 sharpen=0 时，纯下采样（滤镜 quality low）+ 无锐化会让成片变糊
+/// （手抖 + 缩图）。强制一个最小锐化基线，保证成片不软。模板自带锐化 > 该值时不受影响。
+///
+/// 注意：OHOS 拍照档位限制到 ≤3MP 后源图仅有 ~1.92MP（1200x1600），相对 8MP 时
+/// 失去大量"下采样自带锐化"，故 20 的 unsharp 强度（a=0.2）已显软，抬高到 30 找回锐度。
+const int kMinLiveSharpen = 30;
+
 /// JPEG 降采样解码目标长边（px）。
 /// 相机原始图通常 4000px 级别，用 targetWidth/targetHeight 让引擎在解码阶段
 /// 直接降采样到略高于输出尺寸（1600），避免全尺寸解码后再 GPU 缩小，
@@ -3647,6 +3670,7 @@ class _GpuProcessedData {
     required this.smoothStrength,
     required this.vignette,
     required this.needRawRgba,
+    this.sourceAvgRgb,
   });
   final Uint8List rgbaBytes;
   final int width;
@@ -3661,6 +3685,10 @@ class _GpuProcessedData {
   /// 避免主 isolate 重复解码 JPEG（节省 ~180ms）。
   /// 为 false 时 isolate 直接编码 JPEG 写文件（无水印场景，不阻塞 UI）。
   final bool needRawRgba;
+
+  /// 诊断：dart:ui 解码后的源图平均 RGB（色彩矩阵/绘制前）。
+  /// 与 diagBefore（绘制后）对比，可判定偏黄来自相机片源还是后处理矩阵。
+  final List<int>? sourceAvgRgb;
 }
 
 /// 诊断：对 rawRgba (ByteData) 做步进采样，返回平均 RGB 估算。
@@ -3681,6 +3709,28 @@ List<int> _sampleAvgRgbFromRgba(ByteData byteData) {
   }
   if (cnt == 0) return [0, 0, 0];
   return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
+}
+
+/// RGBA 原始字节 → [ui.Image]（ImageDescriptor.raw，避免 JPEG 编解码往返）。
+Future<ui.Image> _rgbaToUiImage(
+  Uint8List rgba,
+  int width,
+  int height,
+) async {
+  final buffer = await ui.ImmutableBuffer.fromUint8List(rgba);
+  final descriptor = ui.ImageDescriptor.raw(
+    buffer,
+    width: width,
+    height: height,
+    pixelFormat: ui.PixelFormat.rgba8888,
+  );
+  buffer.dispose();
+  final codec = await descriptor.instantiateCodec();
+  final frame = await codec.getNextFrame();
+  final image = frame.image;
+  descriptor.dispose();
+  codec.dispose();
+  return image;
 }
 
 /// 诊断（compute 顶层函数）：用 image 包(CPU)解码 JPEG bytes 并采样平均 RGB。
@@ -3717,15 +3767,15 @@ List<int> imageDecodeSample(Uint8List bytes) {
 /// [偏黄诊断] 把拍照管线各阶段产物写入 Documents，可在 iOS「文件」App 中直接查看，
 /// 代替控制台日志定位黄色从哪一步进入：
 ///  - raw_src.jpg     = rawPath（相机写盘、Dart 处理前的原始 JPEG）
-///  - final_out.jpg   = processedPath（worker 处理+编码后的最终 JPEG）
+///  - final_out.jpg   = outputPath（最终成片：无水印=worker编码，有水印=水印合成后）
 ///  - color_diag.txt  = 各阶段平均 RGB + 是否启用去黄校色，供人工核对偏黄方向。
 /// 写盘失败不影响拍照正常流程。
 Future<void> _writeColorDiagnostics({
   required String? rawPath,
-  required String processedPath,
+  required String outputPath,
+  List<int>? sourceAvgRgb,
   required List<int>? diagBefore,
   required List<int>? diagAfter,
-  required bool applyDeYellow,
 }) async {
   final dir = Directory(
     '${(await getApplicationDocumentsDirectory()).path}/color_diag',
@@ -3736,16 +3786,18 @@ Future<void> _writeColorDiagnostics({
   if (rawPath != null && await File(rawPath).exists()) {
     await File(rawPath).copy(rawFile.path);
   }
-  await File(processedPath).copy(outFile.path);
+  // 取“最终产物”而非中间路径：有水印时 worker 不写 processedPath，只有 finalPath 是真实成片
+  await File(outputPath).copy(outFile.path);
   final buf = StringBuffer()
     ..writeln('拍照偏黄诊断 ${DateTime.now().toIso8601String()}')
-    ..writeln('platform=${defaultTargetPlatform.name} | applyDeYellow=$applyDeYellow')
-    ..writeln('diagBefore(dart:ui解码+ColorMatrix后, 平均RGB)=$diagBefore')
-    ..writeln('diagAfter(去黄校色后, 平均RGB)=$diagAfter')
+    ..writeln('platform=${defaultTargetPlatform.name}')
+    ..writeln('diagSource(dart:ui解码+P3→sRGB后, 色彩矩阵前, 平均RGB)=$sourceAvgRgb')
+    ..writeln('diagBefore(色彩矩阵后/worker收到, 平均RGB)=$diagBefore')
+    ..writeln('diagAfter(worker效果处理后, 平均RGB)=$diagAfter')
     ..writeln(
-        '参考判断：若 diagBefore 已明显 R>B（中性场景）→ 黄色在解码之前（相机片源）；'
-        '若 diag占比无变化而 final_out 偏黄 → 黄色在编码链路。')
-    ..writeln('请对照打开 raw_src.jpg 与 final_out.jpg：哪一个偏黄？');
+        '判断：diagSource≈diagBefore 且 R>B → 偏黄在解码前（相机片源）；'
+        'diagSource≈中性而 diagBefore R>B → 偏黄连色彩矩阵引入。')
+    ..writeln('请对照打开 raw_src.jpg 与 final_out.jpg（final_out=最终成片）：哪一个偏黄？');
   await File('${dir.path}/color_diag.txt').writeAsString(buf.toString());
   debugPrint('[capture] 颜色诊断已写入 ${dir.path}');
 }
@@ -3754,54 +3806,118 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
   // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
   final swDecode = Stopwatch()..start();
   try {
-    final bytes = await File(params.inputPath).readAsBytes();
-    // 高效降采样解码：先用 ImageDescriptor 读取原始宽高，再按比例缩放到
-    // 不超过 kDecodeTargetDim 的包围盒内（保持原始宽高比，避免拉伸）。
-    // 相比固定 targetWidth:1600（竖屏 3:4 会解出 1600x2133），竖屏 3:4 只需
-    // 解 1200x1600，少解约 1.8 倍像素，显著降低 OHOS 大 JPEG 解码耗时。
-    final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-    final descriptor = await ui.ImageDescriptor.encoded(buffer);
-    final srcW = descriptor.width;
-    final srcH = descriptor.height;
-    final decodeScale = math.min(
-      kDecodeTargetDim / srcW,
-      kDecodeTargetDim / srcH,
-    ).clamp(0.0, 1.0); // 小图不放大
-    final resizedW = (srcW * decodeScale).round().clamp(1, kDecodeTargetDim);
-    final resizedH = (srcH * decodeScale).round().clamp(1, kDecodeTargetDim);
-    final codec = await descriptor.instantiateCodec(
-      targetWidth: resizedW,
-      targetHeight: resizedH,
-    );
-    final frame = await codec.getNextFrame();
-    final srcImage = frame.image;
-    codec.dispose();
-    descriptor.dispose();
-    buffer.dispose();
-    swDecode.stop();
-    debugPrint('[perf] gpu decode JPEG: ${swDecode.elapsedMilliseconds}ms (src=${srcImage.width}x${srcImage.height})');
-
-    // 诊断：解码后、绘制前，直接采样源图 rawRgba 平均 RGB。
-    // 与 worker 收到的 diagBefore（GPU 绘制后）对比，可定位偏黄发生在解码还是绘制。
-    try {
-      final srcByteData =
-          await srcImage.toByteData(format: ui.ImageByteFormat.rawRgba);
-      if (srcByteData != null) {
-        final ss = _sampleAvgRgbFromRgba(srcByteData);
-        debugPrint('[capture] 源图解码 rawRgba 平均RGB(dart:ui): $ss');
+    final isOhos = OhosImageProcessor.isSupported;
+    late ui.Image srcImage;
+    List<int>? nativeAvgRgb;
+    List<int>? sourceAvgRgb;
+    if (isOhos) {
+      // OHOS：flutter_ohos 引擎 dart:ui 的 JPEG 软件解码极慢（1200x1600 实测 ~6s），
+      // 改走 OHOS 系统 image.ImageSource（系统/硬件解码）拿 RGBA，
+      // 再用 ImageDescriptor.raw 建 ui.Image，彻底绕开该瓶颈。
+      final native = await OhosImageProcessor.instance.decodeJpegToRgba(
+        path: params.inputPath,
+        targetWidth: kDecodeTargetDim,
+        targetHeight: kDecodeTargetDim,
+      );
+      if (native == null) {
+        debugPrint('[capture] OHOS 原生解码失败，回退原始照片');
+        return null;
       }
-    } catch (e) {
-      debugPrint('[capture] 源图采样失败: $e');
-    }
+      final buffer = await ui.ImmutableBuffer.fromUint8List(native.rgba);
+      final rDescriptor = ui.ImageDescriptor.raw(
+        buffer,
+        width: native.width,
+        height: native.height,
+        pixelFormat: ui.PixelFormat.rgba8888,
+      );
+      buffer.dispose();
+      final rCodec = await rDescriptor.instantiateCodec();
+      final rFrame = await rCodec.getNextFrame();
+      srcImage = rFrame.image;
+      rCodec.dispose();
+      rDescriptor.dispose();
+      // 诊断：直接采样原生 RGBA（免二次解码）
+      nativeAvgRgb = _sampleAvgRgbFromRgba(ByteData.sublistView(native.rgba));
+      sourceAvgRgb = nativeAvgRgb;
+    } else {
+      final bytes = await File(params.inputPath).readAsBytes();
+      // 高效降采样解码：先用 ImageDescriptor 读取原始宽高，再按比例缩放到
+      // 不超过 kDecodeTargetDim 的包围盒内（保持原始宽高比，避免拉伸）。
+      // 相比固定 targetWidth:1600（竖屏 3:4 会解出 1600x2133），竖屏 3:4 只需
+      // 解 1200x1600，少解约 1.8 倍像素，显著降低大 JPEG 解码耗时。
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final srcW = descriptor.width;
+      final srcH = descriptor.height;
+      final decodeScale = math.min(
+        kDecodeTargetDim / srcW,
+        kDecodeTargetDim / srcH,
+      ).clamp(0.0, 1.0); // 小图不放大
+      final resizedW = (srcW * decodeScale).round().clamp(1, kDecodeTargetDim);
+      final resizedH = (srcH * decodeScale).round().clamp(1, kDecodeTargetDim);
+      final codec = await descriptor.instantiateCodec(
+        targetWidth: resizedW,
+        targetHeight: resizedH,
+      );
+      final frame = await codec.getNextFrame();
+      srcImage = frame.image;
+      codec.dispose();
+      descriptor.dispose();
+      buffer.dispose();
 
-    // 诊断：用 image 包(CPU)直接解码同一 JPEG 采样，与 dart:ui 解码结果对比。
-    // 若 image 包解码更接近中性（不偏黄），则说明偏黄来自 dart:ui 解码器色彩空间处理。
-    try {
-      final imgByteData = await compute(imageDecodeSample, bytes);
-      debugPrint('[capture] 源图解码 平均RGB(image包CPU): $imgByteData');
-    } catch (e) {
-      debugPrint('[capture] image包解码采样失败: $e');
+      // [P3→sRGB 根因修复] dart:ui 解码忽略 JPEG 内嵌 ICC：宽色域 iPhone 原片（Display P3）
+      // 被当作 sRGB 解释 → 肤色/暖色偏黄，而取景器走系统色管（P3 渲染正确）故不黄。
+      // 检测到 P3 时，对解码像素做正确的 P3→sRGB 矩阵换算（线性化 → 逆矩阵 → sRGB 编码，
+      // 方向铁律见 dart_photo_pipeline.applyP3ToSrgbRgba），在绘制色彩矩阵之前完成，
+      // 使成片与取景器一致。非 P3 原片（OHOS / 普通 JPEG）不做处理。
+      if (isDisplayP3Jpeg(bytes)) {
+        try {
+          final srcByteData =
+              await srcImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+          if (srcByteData != null) {
+            final rgba = srcByteData.buffer.asUint8List(
+              srcByteData.offsetInBytes,
+              srcByteData.lengthInBytes,
+            );
+            applyP3ToSrgbRgba(rgba);
+            final corrected =
+                await _rgbaToUiImage(rgba, srcImage.width, srcImage.height);
+            srcImage.dispose();
+            srcImage = corrected;
+            debugPrint('[capture] 检测到 Display P3，已做正确 P3→sRGB 色域换算');
+          }
+        } catch (e) {
+          debugPrint('[capture] P3→sRGB 换算失败（保留原像素继续）: $e');
+        }
+      }
+
+      // 诊断：解码后、绘制前，直接采样源图 rawRgba 平均 RGB。
+      // 与 worker 收到的 diagBefore（GPU 绘制后）对比，可定位偏黄发生在解码还是绘制。
+      try {
+        final srcByteData =
+            await srcImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+        if (srcByteData != null) {
+          sourceAvgRgb = _sampleAvgRgbFromRgba(srcByteData);
+          debugPrint('[capture] 源图解码 rawRgba 平均RGB(dart:ui): $sourceAvgRgb');
+        }
+      } catch (e) {
+        debugPrint('[capture] 源图采样失败: $e');
+      }
+
+      // 诊断：用 image 包(CPU)直接解码同一 JPEG 采样，与 dart:ui 解码结果对比。
+      // 仅 iOS 保留（OHOS 无偏黄问题，且该 CPU 解码约占 1.9s）。
+      try {
+        final imgByteData = await compute(imageDecodeSample, bytes);
+        debugPrint('[capture] 源图解码 平均RGB(image包CPU): $imgByteData');
+      } catch (e) {
+        debugPrint('[capture] image包解码采样失败: $e');
+      }
     }
+    swDecode.stop();
+    debugPrint(<String>[
+      '[perf] gpu decode JPEG: ${swDecode.elapsedMilliseconds}ms (src=${srcImage.width}x${srcImage.height})',
+      if (isOhos && nativeAvgRgb != null) ' nativeAvgRgb=$nativeAvgRgb',
+    ].join());
 
     // 计算方向对齐参数
     final jpegIsLandscape = srcImage.width > srcImage.height;
@@ -3917,12 +4033,17 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
       width: iOutW,
       height: iOutH,
       outputPath: params.inputPath,
-      sharpen: params.postProcess.sharpen,
+      // 拍摄成片强制最小锐化：用户 sharpen=0（自由模式）时若不放一个基线，
+      // 纯缩图 + 无锐化会让成片明显发糊。模板自带更大的 sharpen 不受影响。
+      sharpen: (params.postProcess.sharpen >= kMinLiveSharpen)
+          ? params.postProcess.sharpen
+          : kMinLiveSharpen,
       clarity: params.postProcess.color.clarity,
       grain: params.postProcess.grain,
       smoothStrength: params.postProcess.smoothStrength,
       vignette: params.postProcess.vignette,
       needRawRgba: needRawRgba,
+      sourceAvgRgb: sourceAvgRgb,
     );
   } catch (e, st) {
     debugPrint('[capture] GPU 色彩矩阵处理失败: $e\n$st');

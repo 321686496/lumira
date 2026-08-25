@@ -7,13 +7,15 @@ import 'package:flutter/material.dart';
 
 import '../models/watermark_template.dart';
 import '../services/watermark_renderer.dart';
+import '../../capture/services/dart_photo_pipeline.dart'
+    show applyP3ToSrgbRgba, isDisplayP3Jpeg;
 
 /// 拍摄后水印定格动画 overlay。
 ///
 /// 拍照完成且水印 + 动画开关均开启时，由拍摄页挂到 Stack 顶层播放：
-/// - Phase 1 (0–28%)：带水印的照片从很小状态放大到满（最大宽 = 页面宽 * 0.9）并淡入
-/// - Phase 2 (28–78%)：居中停顿，展示最终效果
-/// - Phase 3 (78–100%)：整体淡出
+/// - Phase 1 (0–35%)：带水印的照片从很小状态放大到满（最大宽 = 页面宽 * 0.9）并淡入
+/// - Phase 2 (35–85%)：居中停顿，展示最终效果
+/// - Phase 3 (85–100%)：整体淡出
 /// - 动画结束后通过 [onAnimationComplete] 通知拍摄页直接跳转到拍摄预览页
 ///
 /// 展示内容与最终落库成片视觉一致：
@@ -70,6 +72,19 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
   int _displayH = 0;
   bool _compositeReady = false;
   bool _disposed = false;
+  bool _animationStarted = false;
+
+  /// 启动动画（只启动一次）。
+  ///
+  /// 必须等首帧解码完成后才 forward，
+  /// 否则动画时长会被解码耗时压缩：iOS 解码快 -> 动画看起来太快；
+  /// OHOS 解码慢 -> 首帧出现时 grow 已结束，甚至动画已整体结束，看起来没有动画。
+  /// 统一为「首帧就绪才从头播，各平台时长一致」。
+  void _startAnimation() {
+    if (_animationStarted) return;
+    _animationStarted = true;
+    _controller.forward();
+  }
 
   /// 应用展示图并释放上一张（避免泄漏）。
   void _applyDisplay(ui.Image image, int w, int h) {
@@ -96,32 +111,32 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1600),
+      duration: const Duration(milliseconds: 2000),
     );
     // Phase 1：从小放大到 1.0（easeOutBack 带轻微回弹），同步淡入
     _grow = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(0.0, 0.28, curve: Curves.easeOutBack),
+      curve: const Interval(0.0, 0.35, curve: Curves.easeOutBack),
     );
     _fadeIn = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(0.0, 0.28, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.30, curve: Curves.easeOut),
     );
     // Phase 2：保持显示；Phase 3：淡出
     _fadeOut = CurvedAnimation(
       parent: _controller,
-      curve: const Interval(0.78, 1.0, curve: Curves.easeIn),
+      curve: const Interval(0.85, 1.0, curve: Curves.easeIn),
     );
-    // 快速路径：解码 + 方向对齐原片，立即显示，保证动画不空白。
-    _prepBase();
-    // 后台路径：水印（含拍立得白边）合成后替换显示。
-    _buildComposite();
-    _controller.forward();
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         widget.onAnimationComplete();
       }
     });
+    // 快速路径：解码 + 方向对齐原片，立即显示，保证动画不空白。
+    _prepBase();
+    // 后台路径：水印（含拍立得白边）合成后替换显示。
+    _buildComposite();
+    // 动画启动延后到首帧解码完成，保证各平台时长一致（见 _startAnimation）。
   }
 
   /// 快速路径：解码原片 → 方向对齐 → 立即显示。
@@ -139,6 +154,9 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
         decoded.dispose();
         decoded = aligned;
       }
+      // 宽色域原片做正确的 P3→sRGB 换算，使动画画面与最终成片（已校色）色彩一致，
+      // 避免 iOS 相机 P3 原片被按 sRGB 解释导致的偏黄。
+      decoded = await _p3CorrectIfNeeded(decoded, bytes);
       if (!mounted) {
         decoded.dispose();
         return;
@@ -147,8 +165,12 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
       setState(() {
         _applyPlaceholder(img, img.width, img.height);
       });
+      // 首帧就绪：此刻才开始播放动画，保证 iOS/OHOS 动画时长一致（不因解码耗时被压缩）。
+      _startAnimation();
     } catch (e) {
+      // 解码失败：无法展示画面，仍启动控制器以触发 onAnimationComplete，避免卡死拍摄流程。
       debugPrint('[watermark-anim] base prep failed: $e');
+      _startAnimation();
     }
   }
 
@@ -173,6 +195,9 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
       downscaled = await _downscale(source, _decodeTargetDim);
       source.dispose();
       source = null;
+
+      // 宽色域原片在降采样后做正确的 P3→sRGB 换算，与成片色彩一致（避免动画偏黄）。
+      downscaled = await _p3CorrectIfNeeded(downscaled, bytes);
 
       final renderer = WatermarkRenderer();
       final result = await renderer.render(
@@ -281,6 +306,28 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     descriptor.dispose();
     codec.dispose();
     return image;
+  }
+
+  /// 若源 JPEG 为 Display P3 宽色域，对其解码图像做正确的 P3→sRGB 换算并返回新图；
+  /// 否则原样返回。原图在成功换算后会被 dispose，调用方沿用返回值即可。
+  Future<ui.Image> _p3CorrectIfNeeded(
+    ui.Image image,
+    Uint8List jpegBytes,
+  ) async {
+    if (isDisplayP3Jpeg(jpegBytes) == false) return image;
+    try {
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (data == null) return image;
+      final rgba =
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      applyP3ToSrgbRgba(rgba);
+      final corrected = await _rgbaToImage(rgba, image.width, image.height);
+      image.dispose();
+      return corrected;
+    } catch (e) {
+      debugPrint('[watermark-anim] P3→sRGB 换算失败（保留原图）: $e');
+      return image;
+    }
   }
 
   @override
