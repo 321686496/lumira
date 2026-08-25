@@ -230,12 +230,25 @@ class TemplateMeta {
       shortDesc, ambience, updatedAt, source);
 }
 
+/// 模板分类。
+///
+/// Phase 2 收敛后编辑器只暴露三级分类层级：
+/// - [type]：一级大类（必填，如 portrait/landscape/food/...）
+/// - [majorStyle]：二级大风格（仅人像模板使用，如 fresh_healing）
+/// - [style]：旧字段，与 [majorStyle] 含义相同（保留以兼容旧序列化）
+///
+/// 以下字段保留以兼容旧四级分类序列化（旧数据），Phase 2 起编辑器不再渲染或写入：
+/// - [subStyle]：旧三级子风格（旧四级兼容读取）
+/// - [method]：旧四级方法（旧四级兼容读取）
 class TemplateClassification {
   final String type;
   /// 大风格（L2，仅人像模板使用，如 fresh_healing）。
   final String majorStyle;
+  /// 旧字段，与 [majorStyle] 含义相同（保留以兼容旧序列化）。
   final String style;
+  /// 旧三级子风格（Phase 2 收敛后不再作为分类层级，旧四级兼容读取）。
   final String subStyle;
+  /// 旧四级方法（Phase 2 收敛后不再作为分类层级，旧四级兼容读取）。
   final String method;
   const TemplateClassification({
     required this.type,
