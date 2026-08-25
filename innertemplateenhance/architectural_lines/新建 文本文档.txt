@@ -1,0 +1,167 @@
+{
+    "basic": {
+        "name": "黑白建筑几何硬光",
+        "category": "landscape",
+        "classificationSuggestion": {
+            "majorStyle": "极简建筑",
+            "subStyle": "黑白几何硬光",
+            "method": "环境建筑实拍"
+        },
+        "price": 0,
+        "shortDesc": "硬朗几何建筑，锐利光影切割，高级黑白极简美学🖤",
+        "tags": ["建筑", "极简", "黑白", "几何", "硬光", "光影", "现代建筑"],
+        "description": "建筑风景拍摄模板，适合拍摄现代简约几何体块建筑，利用晴天侧方硬阳光制造锐利阴影切割画面，输出高对比黑白质感，适合城市建筑、美术馆、极简外立面拍摄。",
+        "ambience": {
+            "seasons": ["spring", "summer", "autumn", "winter"],
+            "weathers": ["sunny"],
+            "timeTones": ["day"]
+        },
+        "referenceSource": "参考黑白现代建筑摄影样片",
+        "author": "Lumira"
+    },
+    "composition": {
+        "sourceAspectRatio": "1:1",
+        "aspectRatio": "1:1",
+        "overlayType": "leading_lines",
+        "opacity": 0.3,
+        "gridType": "rule_of_thirds",
+        "subjectFrame": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 1.0,
+            "h": 1.0
+        },
+        "compositionDescription": "正方形画幅，建筑填满整个画面，利用建筑竖直线条、横向窗线作为引导线，几何体块左右分割，阴影斜向线条切割画面，不留多余天空留白。"
+    },
+    "pose": {
+        "poseDescription": "",
+        "poseDetail": {
+            "整体身形": "",
+            "上肢": "",
+            "下肢": "",
+            "头颈": "",
+            "视线表情": "",
+            "情绪": "",
+            "互动道具": ""
+        },
+        "silhouetteType": "builtin",
+        "silhouetteBuiltinKey": "",
+        "posePositionX": 0.5,
+        "posePositionY": 0.5,
+        "poseScale": 1.0,
+        "poseRotation": 0.0
+    },
+    "orientation": {
+        "framePosition": "",
+        "bodyFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "faceFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "twist": "",
+        "headPitch": 0,
+        "headRoll": 0,
+        "gaze": ""
+    },
+    "framing": {
+        "shotSize": "大远景",
+        "shotSizeNote": "建筑外立面完整入画，地面少量保留，裁掉多余高空天空",
+        "cameraHeight": "平视",
+        "cameraAzimuth": "正拍，正对建筑外立面",
+        "subjectScale": "建筑主体占画幅95%，地面占底部5%",
+        "environmentRatio": "环境（地面、少量天空）占画幅5%",
+        "headroom": "画面顶部少量天空留白约5%",
+        "framingNote": "平视正拍大远景，建筑几何体块填满正方形画幅，保留少量地面，弱化天空占比，突出建筑结构线条。"
+    },
+    "camera": {
+        "exposureCompensation": -0.3,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5200,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensSuggestion": "main",
+        "lensType": "标准镜头"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "主光从屏幕左上方约45°照射建筑外立面",
+            "辅光轮廓光": "无辅光、无反光板，完全依靠自然光，无轮廓光",
+            "光型软硬": "硬光，晴朗日光，光源小，阴影边缘锐利分明",
+            "光比": "高对比，光比约4:1",
+            "阴影": "阴影投向屏幕右下方，阴影边缘锋利清晰，阴影浓度深，斜向长条阴影切割白色墙面，窗洞内部形成深重黑色区域",
+            "质感": "保留墙面粗糙哑光肌理；窗户玻璃带有微弱环境树木反光；亮部墙面干净发白，暗部深邃，没有柔化模糊",
+            "环境光": "环境光很弱，以直射主阳光为主，天空亮度低不抢主体",
+            "色温对比": "原始为日光色温，后期转为无色彩黑白，无冷暖色彩对比"
+        },
+        "lightToParams": "光比高，设置exposureCompensation=-0.3压亮部；后期contrast提高强化明暗差距；highlights压低防止白墙过曝；shadows适度保留暗部层次；lut选用fine_art_bw实现黑白效果。"
+    },
+    "sceneGuide": {
+        "lightDirection": "晴天直射硬自然光，光源屏幕左上方45度，高对比度",
+        "shootingDistance": "8‑15m",
+        "background": "纯白色几何体块现代建筑，浅灰色平整地面，浅白天空",
+        "props": [],
+        "bestTime": "10:00‑15:00",
+        "tips": [
+            "尽量选择晴天，要有强烈直射阳光，保证锐利硬阴影",
+            "对齐建筑横竖线条，手机保持水平，不要倾斜",
+            "构图减少大面积天空，重点捕捉斜向落在墙面上的长条阴影",
+            "避开阴天漫射光，阴天无法产生锐利切割阴影"
+        ]
+    },
+    "styling": {
+        "subjectType": "建筑/街景",
+        "clothingLayers": {
+            "上装": "",
+            "下装": "",
+            "衣角处理": "",
+            "袖子": "",
+            "领口": "",
+            "鞋袜": "",
+            "叠穿层次": ""
+        },
+        "accessories": "",
+        "hairMakeup": "",
+        "objectStyle": "主体为现代解构主义建筑，大块哑光白色涂料墙面，竖向凹凸肋条造型，横向长条黑色窄窗户，几何体块错落堆叠；材质哑光粗糙抹灰墙面；陈设关系：垂直竖肋分割画面，横向窗带做水平分割，斜向阴影做对角线切割，黑窗作为重色锚点平衡白色墙面。整体极简，依靠形体、阴影、黑白块面构成画面。",
+        "note": "拍摄优先选择块面感强的现代建筑；墙面以浅白浅灰为佳；黑色长条窗洞作为画面深色锚点；重点等待斜向长阴影落在墙面上，依靠光影强化几何结构。"
+    },
+    "postProcess": {
+        "cropRatio": "1:1",
+        "color": {
+            "brightness": 0,
+            "contrast": 22,
+            "saturation": -100,
+            "temperature": 0,
+            "tint": 0,
+            "highlights": -18,
+            "shadows": 12,
+            "blackPoint": 8,
+            "clarity": 15,
+            "vibrance": null,
+            "brilliance": null
+        },
+        "lut": "fine_art_bw",
+        "systemFilter": "none",
+        "smoothStrength": 0,
+        "sharpen": 20,
+        "vignette": 12,
+        "grain": 18
+    },
+    "fillLight": {
+        "enabled": false,
+        "color": "#FFE5B4",
+        "intensity": 0.8
+    },
+    "compensationNotes": "clarity:15强化墙面建筑肌理；sharpen:20强化建筑直线边缘；vignette:12轻微压四角，视线收拢到建筑中心；grain:18加入细微胶片颗粒模拟建筑摄影质感；saturation‑100配合fine_art_bw实现黑白。",
+    "confidence": "high",
+    "cannotAchieve": {
+        "flag": false,
+        "reason": ""
+    },
+    "notes": "1.核心灵魂是晴天硬日光产生的锋利斜向阴影，阴天无法复刻此效果。2.必须严格水平对齐建筑横竖线条，画面倾斜会破坏极简几何氛围。3.白色墙面容易高光溢出，后期highlights压低保护墙面纹理。4.黑色窗户保留深邃黑色，blackPoint适度调整防止死黑完全丢失细节。5.正方形1:1画幅，裁剪时舍弃过多天空，重点保留建筑墙体和投影。"
+}
+
+
+价格免费
