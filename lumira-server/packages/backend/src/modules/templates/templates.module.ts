@@ -14,11 +14,13 @@ import { AdminCategoriesController } from './admin-categories.controller';
 import { AdminCategoriesService } from './admin-categories.service';
 import { ThumbsController } from './thumbs.controller';
 import { ThumbsService } from './thumbs.service';
+import { ShareTemplatesModule } from './share-templates.module';
 
 @Module({
   imports: [
     DatabaseModule,
     PointsModule,
+    ShareTemplatesModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'dev-secret-change-me',
       signOptions: { expiresIn: '30d' },
