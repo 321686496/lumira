@@ -147,14 +147,71 @@ class TemplateRegistry {
   };
 
   static PhotoTemplate? getTemplate(String id) {
-    final tpl = _templates[id];
+    final tpl = _suitesById[id];
     if (tpl == null) return null;
     return tpl.copyWith();
   }
 
+  // ---- 套归并（Phase 5）----
+  // 内置模板按「分类（type+majorStyle+style）+ 共享配置」归并为套：
+  // 每个套 = 一个 PhotoTemplate，images = 各成员封面（[0] 即封面），poses = 各成员姿势。
+  // 合并后的套映射到其成员的全部原始 id，故 getTemplate(id) 对任意成员 id 均返回所属套。
+
+  static final Map<String, PhotoTemplate> _suitesById = _buildSuitesById();
+
   static List<PhotoTemplate> get allTemplates =>
-      _templates.values.map((t) => t.copyWith()).toList();
+      _suitesById.values.toSet().map((t) => t.copyWith()).toList();
 
   static List<PhotoTemplate> getRecentTemplates(int count) =>
       allTemplates.take(count).toList();
+
+  /// 将 [_templates] 按归并 key 分组，产出「新模板 id → 套」映射。
+  static Map<String, PhotoTemplate> _buildSuitesById() {
+    final byKey = <String, List<String>>{};
+    for (final id in _templates.keys) {
+      final key = _suiteKey(_templates[id]!);
+      byKey.putIfAbsent(key, () => []).add(id);
+    }
+    final result = <String, PhotoTemplate>{};
+    for (final members in byKey.values) {
+      final suite = _mergeSuite(members);
+      for (final id in members) {
+        result[id] = suite;
+      }
+    }
+    return result;
+  }
+
+  /// 归并 key = 分类三元组 + 共享配置签名。
+  static String _suiteKey(PhotoTemplate t) {
+    final c = t.meta.classification;
+    return '${c.type}|${c.majorStyle}|${c.style}|${_sharedConfigSig(t)}';
+  }
+
+  /// 共享配置签名：composition / camera / sceneGuide / postProcess 关键参数。
+  static String _sharedConfigSig(PhotoTemplate t) =>
+      '${t.composition.toJson()}|${t.camera.toJson()}|'
+      '${_sceneGuideSig(t.sceneGuide)}|${t.postProcess.toJson()}';
+
+  static String _sceneGuideSig(SceneGuide s) =>
+      '${s.lightDirection}|${s.shootingDistance}|${s.background}|'
+      '${s.props}|${s.bestTime}|${s.tips}';
+
+  /// 将同 key 的成员归并为一个套。
+  /// id/name 取归并组首个成员的（模板名须具体，不用纯风格名）；
+  /// images = 各成员封面（[0] 为封面），poses = 各成员姿势。
+  static PhotoTemplate _mergeSuite(List<String> memberIds) {
+    final first = _templates[memberIds.first]!;
+    final images = <TemplateImage>[];
+    final poses = <Pose>[];
+    for (final id in memberIds) {
+      final t = _templates[id]!;
+      images.addAll(t.meta.images);
+      poses.addAll(t.poses);
+    }
+    return first.copyWith(
+      meta: first.meta.copyWith(images: images),
+      poses: poses,
+    );
+  }
 }
