@@ -23,7 +23,10 @@ class TemplateRecord {
   final String shortDesc;
   final String ambienceJson;
   final Map<String, dynamic> composition;
-  final Map<String, dynamic> pose;
+  /// pose 载体（Phase 1 兼容两种形态）：
+  /// - 旧数据：单个 Map（单姿势）
+  /// - 新数据：JSON 数组 List（多姿势）
+  final dynamic pose;
   final Map<String, dynamic> camera;
   final Map<String, dynamic> sceneGuide;
   final Map<String, dynamic> postProcess;
@@ -114,7 +117,7 @@ class TemplateRecord {
       shortDesc: (row[Tables.colShortDesc] as String?) ?? '',
       ambienceJson: (row[Tables.colAmbienceJson] as String?) ?? '{}',
       composition: _decodeJsonMap(row[Tables.colCompositionJson]),
-      pose: _decodeJsonMap(row[Tables.colPoseJson]),
+      pose: _decodeJsonAny(row[Tables.colPoseJson]),
       camera: _decodeJsonMap(row[Tables.colCameraJson]),
       sceneGuide: _decodeJsonMap(row[Tables.colSceneGuideJson]),
       postProcess: _decodeJsonMap(row[Tables.colPostProcessJson]),
@@ -147,7 +150,7 @@ class TemplateRecord {
     String? shortDesc,
     String? ambienceJson,
     Map<String, dynamic>? composition,
-    Map<String, dynamic>? pose,
+    dynamic pose,
     Map<String, dynamic>? camera,
     Map<String, dynamic>? sceneGuide,
     Map<String, dynamic>? postProcess,
@@ -191,6 +194,14 @@ class TemplateRecord {
       return jsonDecode(raw) as Map<String, dynamic>;
     }
     return <String, dynamic>{};
+  }
+
+  /// 通用 JSON 解码：返回原样结构（旧单个 Map 或新版 List 数组），无法解码时返回 null。
+  static dynamic _decodeJsonAny(Object? raw) {
+    if (raw is String && raw.isNotEmpty) {
+      return jsonDecode(raw);
+    }
+    return null;
   }
 
   static List<String> _decodeJsonList(Object? raw) {
