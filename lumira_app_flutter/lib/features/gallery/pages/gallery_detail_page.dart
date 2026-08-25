@@ -778,6 +778,14 @@ class _FavoriteButtonState extends ConsumerState<_FavoriteButton> {
         try {
           final dao = await ref.read(galleryDaoProvider.future);
           await dao.toggleFavorite(photo.id);
+          // 个性化反馈：收藏照片（且照片带模板）→ 回写模板画像（失败静默）
+          if (!photo.isFavorite && photo.templateId != null) {
+            try {
+              final interest =
+                  await ref.read(interestServiceProvider.future);
+              await interest.recordSignal(photo.templateId!, 1.5);
+            } catch (_) {}
+          }
           widget.onToggled(!photo.isFavorite);
           if (context.mounted) {
             // 轻触震动，强化交互反馈

@@ -495,6 +495,9 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
         source: source,
         event: UsageEventType.openDetail,
       );
+      // 个性化反馈：查看详情 → 轻量加权（失败静默）
+      final interest = await ref.read(interestServiceProvider.future);
+      await interest.recordSignal(templateId, 0.6);
     } catch (_) {
       // 上报失败静默，不影响详情加载
     }

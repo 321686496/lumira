@@ -892,6 +892,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
         // 先 report（事件入队）再 sync，避免 sync 先于新事件完成导致延迟上报
         // ignore: unawaited_futures
         _reportAndSync(record.templateId, record.sceneId);
+        // 个性化反馈：完成拍摄 → 加权写给模板分类画像（失败静默）
+        if (record.templateId != null) {
+          try {
+            final service =
+                await ref.read(interestServiceProvider.future);
+            // ignore: unawaited_futures
+            service.recordSignal(record.templateId!, 3.0);
+          } catch (_) {}
+        }
 
         // 每日首次拍摄积分（后台幂等；失败静默，绝不阻塞拍照流程）
         if (!_dailyShootEarned) {
