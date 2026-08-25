@@ -109,16 +109,18 @@ final hotAndNewTemplatesProvider = FutureProvider<List<TemplateRecord>>((ref) as
   return result;
 });
 
-/// 推荐内置模板列表 Provider（"今日为你推荐" section 数据源）
+/// 推荐模板列表 Provider（"今日为你推荐" section 数据源）
 ///
 /// 同上，缓存查询结果避免 FutureBuilder 反复 loading。
 ///
 /// 个性化排序：基于 TemplateRanking（50/50 熟/新混合 + 画像三维权重 + 全站热度）
-/// 对推荐内置模板排序，输出排序后的「今日为你推荐」列表。
+/// 对推荐候选池排序，输出排序后的「今日为你推荐」列表。
+///
+/// 候选池 = 内置推荐位 ∪ 全部远程模板（后台实时下发，纳入推荐以提供活水）。
 final recommendedBuiltinTemplatesProvider =
     FutureProvider<List<TemplateRecord>>((ref) async {
   final dao = await ref.watch(templatesDaoProvider.future);
-  final base = await dao.getBuiltin(isRecommended: true);
+  final base = await dao.getRecommendedCandidatePool();
   if (base.isEmpty) return const [];
 
   try {

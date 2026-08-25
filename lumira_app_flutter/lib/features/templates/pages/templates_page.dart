@@ -50,6 +50,13 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.invalidate(remoteCategoriesSyncProvider);
       ref.invalidate(remoteTemplatesSyncProvider);
+      // 远程模板同步完成后刷新"今日为你推荐"候选池，
+      // 让后台新增/下架的运营模板立即反映进推荐列表。
+      ref.read(remoteTemplatesSyncProvider.future).then((_) {
+        ref.invalidate(recommendedBuiltinTemplatesProvider);
+      }).catchError((_) {
+        ref.invalidate(recommendedBuiltinTemplatesProvider);
+      });
     });
   }
 
@@ -85,6 +92,8 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
       ref.read(remoteCategoriesSyncProvider.future).catchError((_) {}),
       ref.read(remoteTemplatesSyncProvider.future).catchError((_) {}),
     ]);
+    // 远程模板同步完成，刷新"今日为你推荐"候选取，体现后台运营新增模板。
+    ref.invalidate(recommendedBuiltinTemplatesProvider);
   }
 
   @override

@@ -98,7 +98,8 @@ class RecommendationService {
     final favoriteScenesFuture = _scenesDao.getFavorites();
     final totalPhotosFuture = _growthDao.getTotalPhotos();
     final allKitsFuture = _kitsDao.getAll();
-    final systemPicksFuture = _templatesDao.getBuiltin(isRecommended: true);
+    // 候选池 = 内置推荐位 ∪ 全部远程模板（后台实时下发的运营模板参与 Banner 推荐）
+    final systemPicksFuture = _templatesDao.getRecommendedCandidatePool();
     final popularityFuture = _loadTemplatePopularity();
 
     final categoryCounts = await categoryCountsFuture;
@@ -437,12 +438,12 @@ class RecommendationService {
     }
   }
 
-  /// 并行读取系统推荐模板的全站流行度（templateId -> use_shoot*2 + open_detail）。
-  /// 未注入 usageDao 时返回空 map。
+  /// 并行读取推荐候选池的全站流行度（templateId -> use_shoot*2 + open_detail）。
+  /// 未注入 usageDao 时返回空 map。候选池含远程模板（纳入后台运营模板热度）。
   Future<Map<String, int>> _loadTemplatePopularity() async {
     final dao = _usageDao;
     if (dao == null) return const {};
-    final picks = await _templatesDao.getBuiltin(isRecommended: true);
+    final picks = await _templatesDao.getRecommendedCandidatePool();
     final result = <String, int>{};
     final counts =
         await dao.countMap('template', picks.map((t) => t.id).toList());

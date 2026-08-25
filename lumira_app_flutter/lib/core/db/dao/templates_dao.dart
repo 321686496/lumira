@@ -296,6 +296,23 @@ class TemplatesDao {
     return rows.map(TemplateRecord.fromRow).toList();
   }
 
+  /// 获取推荐候选池：内置推荐位（is_builtin=1 且 is_recommended=1）∪ 全部远程模板（source='remote'）。
+  ///
+  /// 供个性化推荐引擎使用：候选池既要保留内置"官方推荐位"，也要纳入后台实时下发的
+  /// 全部远程模板（后台新增的运营模板 should 参与推荐）。远程模板入库统一
+  /// is_recommended=false（见 TemplateMapper.metaToRecord），因此这里不能用
+  /// (is_builtin=1 OR source='remote') AND is_recommended=1，否则会过滤掉全部远程模板。
+  Future<List<TemplateRecord>> getRecommendedCandidatePool() async {
+    final rows = await _db.query(
+      Tables.customTemplates,
+      where: '(${Tables.colIsBuiltin} = ? AND ${Tables.colIsRecommended} = ?) '
+          'OR ${Tables.colSource} = ?',
+      whereArgs: [1, 1, 'remote'],
+      orderBy: '${Tables.colPrice} ASC, ${Tables.colName} ASC',
+    );
+    return rows.map(TemplateRecord.fromRow).toList();
+  }
+
   /// 仅获取用户自定义模板（source='custom'）。
   ///
   /// 严格按 source='custom' 过滤，排除后端动态模板（source='remote'），
