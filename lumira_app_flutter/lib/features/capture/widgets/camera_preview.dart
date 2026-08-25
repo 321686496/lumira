@@ -239,12 +239,18 @@ class CameraPreview extends ConsumerWidget {
       silhouettePosY = 0.5;
       hasSilhouette = false;
     } else if (editable != null) {
-      silhouetteType = editable.pose.silhouette.type;
-      silhouetteData = editable.pose.silhouette.data;
-      silhouetteScale = editable.pose.scale;
-      silhouetteRotation = editable.pose.rotation;
-      silhouettePosX = editable.pose.position.x;
-      silhouettePosY = editable.pose.position.y;
+      // 多姿势模板：跟随当前选中姿势的下标读取剪影（默认 poses[0]）。
+      final poses = editable.poses;
+      final idx = ref.watch(CaptureState.currentPoseIndexProvider);
+      final Pose current = poses.isNotEmpty
+          ? poses[idx.clamp(0, poses.length - 1)]
+          : const Pose();
+      silhouetteType = current.silhouette.type;
+      silhouetteData = current.silhouette.data;
+      silhouetteScale = current.scale;
+      silhouetteRotation = current.rotation;
+      silhouettePosX = current.position.x;
+      silhouettePosY = current.position.y;
       hasSilhouette = silhouetteData != 'none';
     } else {
       silhouetteType = '';

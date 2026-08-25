@@ -322,6 +322,27 @@ class CaptureState {
     return original?.copyWith();
   });
 
+  /// 当前生效的姿势下标（多姿势模板拍摄切换用）。
+  /// 模板（currentTemplateIdProvider）变化时自动复位为 0。
+  static final currentPoseIndexProvider = StateProvider<int>((ref) {
+    ref.watch(currentTemplateIdProvider); // 模板切换时复位
+    return 0;
+  });
+
+  /// 计算下一个姿势下标（纯函数，便于单测）。count<=1 时不切换（保持 0）。
+  static int nextPoseIndex(int cur, int count) =>
+      count <= 1 ? 0 : (cur + 1) % count;
+
+  /// 切换到下一个姿势（循环）。仅 poses>1 有意义。
+  static void nextPose(WidgetRef ref) {
+    final editable = ref.read(editableTemplateProvider);
+    final poses = editable?.poses ?? const <Pose>[];
+    if (poses.length <= 1) return;
+    final cur = ref.read(currentPoseIndexProvider);
+    ref.read(currentPoseIndexProvider.notifier).state =
+        nextPoseIndex(cur, poses.length);
+  }
+
   /// applied = editableTemplate 与 originalTemplate 是否完全一致
   /// true 表示用户没有修改任何参数（或已重置）
   static final appliedProvider = Provider<bool>((ref) {
@@ -724,6 +745,8 @@ class CaptureState {
     // editableTemplateProvider 和 appliedProvider 是派生的，不需要显式重置
     // （当 currentTemplateIdProvider 设为 null 时，originalTemplateProvider 返回 null，
     //  editableTemplateProvider 会自动重置为 null）
+    // 姿势下标复位
+    container.read(currentPoseIndexProvider.notifier).state = 0;
     // 工具栏与补光状态
     container.read(activeToolProvider.notifier).state = null;
     container.read(templateDrawerExpandedProvider.notifier).state = false;

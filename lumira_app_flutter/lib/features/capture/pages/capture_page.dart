@@ -22,6 +22,7 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../challenge/widgets/challenge_overlay_bar.dart';
 import '../../home/providers/banner_recommendation_provider.dart';
@@ -1404,6 +1405,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
               ],
             ),
           ),
+
+          // 3. 多姿势切换按钮（仅 poses>1 的模板显示；叠照片浮层按风格自适应）
+          if (!isTrialMode)
+            Positioned(
+              // 置于取景器右侧、画面纵向约 40% 处，避开顶部浮层组与底部控制区
+              right: 12,
+              top: MediaQuery.of(context).size.height * 0.40,
+              child: const _PoseSwitchButton(),
+            ),
 
           // 4. 底部控制区（始终保留：含拍摄按钮 + 缩略图 + 切换摄像头）
           //    全屏模式下仅隐藏工具栏与抽屉（在 _BottomControlArea 内部处理）
@@ -3950,6 +3960,79 @@ class _TemplateInfoRestoreChip extends ConsumerWidget {
             Icons.auto_awesome,
             size: 20,
             color: tokens.brand.withOpacity(0.85),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 多姿势模板的「切换姿势」按钮（叠照片浮层）。
+/// 仅在 `editableTemplateProvider.poses.length > 1` 时渲染；点击调用
+/// [CaptureState.nextPose] 循环切换，剪影随 [CaptureState.currentPoseIndexProvider] 跟随。
+/// 背景/描边随当前 UI 风格派生（实心/半透明 surface + 细边，无外阴影、无毛玻璃、不硬编码颜色）。
+class _PoseSwitchButton extends ConsumerWidget {
+  const _PoseSwitchButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final poses = ref.watch(CaptureState.editableTemplateProvider)?.poses ??
+        const <Pose>[];
+    if (poses.length <= 1) return const SizedBox.shrink();
+    final idx = ref.watch(CaptureState.currentPoseIndexProvider);
+
+    // 叠在照片上的浮层取向：各风格都用「实心/半透明 surface + 细边」表达表面，
+    // 不做模糊、不挂外阴影；glass 风格用其自身的半透明白表达玻璃表面。
+    final Color bg;
+    final Border border;
+    switch (appTheme.style) {
+      case UIStyle.neumorphic:
+        bg = tokens.surface.withOpacity(0.78);
+        border = Border.all(color: tokens.divider.withOpacity(0.7), width: 0.8);
+        break;
+      case UIStyle.flat:
+        bg = tokens.surface.withOpacity(0.75);
+        border = Border.all(color: tokens.divider, width: 1);
+        break;
+      case UIStyle.glass:
+        bg = Colors.white.withOpacity(0.22);
+        border = Border.all(color: Colors.white.withOpacity(0.35), width: 0.8);
+        break;
+      case UIStyle.female:
+        bg = tokens.surface.withOpacity(0.82);
+        border = Border.all(color: tokens.brand.withOpacity(0.15), width: 0.8);
+        break;
+    }
+
+    return Semantics(
+      label: '切换姿势，当前 ${idx + 1} / ${poses.length}',
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => CaptureState.nextPose(ref),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: border,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.swap_horiz, size: 16, color: tokens.textPrimary),
+              const SizedBox(width: 4),
+              Text(
+                '${idx + 1}/${poses.length}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+            ],
           ),
         ),
       ),
