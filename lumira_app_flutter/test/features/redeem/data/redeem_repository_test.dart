@@ -49,6 +49,14 @@ class _FakeApi implements ApiClient {
   }) async {
     throw UnimplementedError('MULTIPART $path');
   }
+
+  @override
+  Future<T> delete<T>(
+    String path, {
+    required T Function(Object? json) fromJson,
+  }) async {
+    throw UnimplementedError('DELETE $path');
+  }
 }
 
 void main() {

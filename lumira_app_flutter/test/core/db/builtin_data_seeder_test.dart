@@ -21,7 +21,8 @@ void main() {
 
   // 适配说明：
   // v10 重构后 seeder 数据源从 TemplatesBrowseMockData.allTemplates (10 项)
-  // 改为 TemplateRegistry.allTemplates (29 项：16 免费 + 13 付费)。
+  // 改为 TemplateRegistry.allTemplates。Phase 5 将内置模板按子风格归并为套，
+  // 现为 69 套（56 免费 + 13 付费），每套含 poses[]/images[]。
   // 测试计数已按 TemplateRegistry 实际数据调整。
   test('seedAll returns true and inserts 7 scenes', () async {
     final inserted = await BuiltinDataSeeder.seedAll(db);
@@ -33,14 +34,14 @@ void main() {
     expect(scenes.every((s) => s[Tables.colCreator] == 'system'), isTrue);
   });
 
-  test('seedAll inserts 132 templates with 86 free + 46 paid', () async {
+  test('seedAll inserts 69 suite templates with 56 free + 13 paid', () async {
     await BuiltinDataSeeder.seedAll(db);
     final all = await db.query(Tables.customTemplates);
-    expect(all.length, 132);
+    expect(all.length, 69);
     final free = all.where((t) => (t[Tables.colPrice] as num) == 0).length;
     final paid = all.where((t) => (t[Tables.colPrice] as num) > 0).length;
-    expect(free, 86);
-    expect(paid, 46);
+    expect(free, 56);
+    expect(paid, 13);
     // 全部标记为 builtin
     expect(all.every((t) => t[Tables.colIsBuiltin] == 1), isTrue);
   });
@@ -97,15 +98,15 @@ void main() {
     // 强制重新种子化内置模板
     await BuiltinDataSeeder.reseedBuiltinTemplates(db);
     final all = await db.query(Tables.customTemplates);
-    // 132 builtin + 1 custom = 133
-    expect(all.length, 133);
+    // 69 builtin + 1 custom = 70
+    expect(all.length, 70);
     // 用户自定义模板保留
     final custom = all.where((t) => t[Tables.colIsBuiltin] == 0).toList();
     expect(custom.length, 1);
     expect(custom.first[Tables.colId], 'user_custom_1');
     // 内置模板数量正确
     final builtin = all.where((t) => t[Tables.colIsBuiltin] == 1).toList();
-    expect(builtin.length, 132);
+    expect(builtin.length, 69);
   });
 
   test('reseedPortraitCategoriesTo4level 将动漫温柔青归位清新治愈(非梦幻夜色)', () async {
