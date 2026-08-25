@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Upload, X, MagnifyingGlassPlus } from '@phosphor-icons/react/dist/ssr';
+import { Upload, X, MagnifyingGlassPlus } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';

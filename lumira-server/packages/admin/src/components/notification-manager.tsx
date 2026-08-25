@@ -18,7 +18,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Plus, PencilSimple, Trash, Megaphone } from '@phosphor-icons/react/dist/ssr';
+import { Plus, PencilSimple, Trash, Megaphone } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import {
   saveNotification, removeNotification, setNotificationActive,

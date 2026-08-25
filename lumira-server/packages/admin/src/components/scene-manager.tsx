@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Plus, PencilSimple, Trash, Camera, MagnifyingGlass,
-} from '@phosphor-icons/react/dist/ssr';
+} from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import {
   saveScene, removeScene, setSceneActive,

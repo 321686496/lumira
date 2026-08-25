@@ -21,7 +21,7 @@ import {
 import {
   Plus, PencilSimple, Trash, Lock, CaretDown, CaretRight,
   MagnifyingGlass, ArrowUp, ArrowDown, FolderPlus, ImageSquare,
-} from '@phosphor-icons/react/dist/ssr';
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { FileUpload } from '@/components/ui/file-upload';

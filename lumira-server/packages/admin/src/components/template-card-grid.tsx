@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   MagnifyingGlass, PencilSimple, Trash, Plus,
-} from '@phosphor-icons/react/dist/ssr';
+} from '@phosphor-icons/react';
 import { formatUnixTime } from '@/lib/utils';
 import { toAssetUrl } from '@/lib/asset-url';
 import { useToast } from '@/hooks/use-toast';
