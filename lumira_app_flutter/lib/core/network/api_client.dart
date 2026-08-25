@@ -97,6 +97,21 @@ class ApiClient {
       throw classifyDioError(e);
     }
   }
+
+  /// DELETE 请求
+  ///
+  /// 镜像 [get] / [post]：成功时用 [fromJson] 转换响应，失败抛 [ApiException]。
+  Future<T> delete<T>(
+    String path, {
+    required T Function(Object? json) fromJson,
+  }) async {
+    try {
+      final resp = await _dio.delete(path);
+      return fromJson(resp.data);
+    } on DioError catch (e) {
+      throw classifyDioError(e);
+    }
+  }
 }
 
 /// 全局 ApiClient Provider
