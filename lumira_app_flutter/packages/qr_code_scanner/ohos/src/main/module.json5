@@ -1,0 +1,10 @@
+{
+  "module": {
+    "name": "qr_code_scanner",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "modelVersion": "5.0.0",
+  "name": "lumira_app_flutter",
+  "version": "1.0.0",
+  "description": "Please describe the basic information.",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "@ohos/flutter_ohos": "file:./har/flutter.har"
+  },
+  "devDependencies": {
+    "@ohos/hypium": "1.0.6"
+  },
+  "overrides": {
+    "@ohos/flutter_module": "file:./entry",
+    "@ohos/flutter_ohos": "file:./har/flutter.har",
+    "permission_handler_ohos": "file:./har/permission_handler_ohos.har",
+    "device_info_plus": "file:./har/device_info_plus.har",
+    "camerawesome_ohos": "file:./har/camerawesome_ohos.har",
+    "sqflite": "file:./har/sqflite.har",
+    "screen": "file:./har/screen.har",
+    "file_picker_ohos": "file:./har/file_picker_ohos.har",
+    "qr_code_scanner": "file:./har/qr_code_scanner.har"
+  }
+}
