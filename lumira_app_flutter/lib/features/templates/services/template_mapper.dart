@@ -46,6 +46,7 @@ class TemplateMapper {
       price: tpl.meta.price,
       cover: tpl.meta.cover,
       coverData: tpl.meta.coverData,
+      images: tpl.meta.images.isEmpty ? null : tpl.meta.images,
       description: tpl.meta.description,
       referenceSource: tpl.meta.referenceSource,
       shortDesc: tpl.meta.shortDesc,
@@ -169,8 +170,7 @@ class TemplateMapper {
         tags: List<String>.from(r.tags),
         tagIds: List<String>.from(r.tagIds),
         price: r.price,
-        cover: normalizeAssetUrl(r.cover),
-        coverData: r.coverData,
+        images: _imagesFromRecord(r),
         description: r.description,
         referenceSource: r.referenceSource,
         shortDesc: r.shortDesc,
@@ -678,6 +678,25 @@ class TemplateMapper {
       return [_poseFromJson(raw)];
     }
     return const [];
+  }
+
+  /// TemplateRecord → 效果图列表（多图）。images_json 优先，其次 cover/coverData 单图兜底。
+  static List<TemplateImage> _imagesFromRecord(TemplateRecord r) {
+    final list = <TemplateImage>[];
+    if (r.images != null && r.images!.isNotEmpty) {
+      list.addAll(r.images!);
+      return list; // images_json 优先（已含封面，[0]）。
+    }
+    // 兜底：仅 cover/coverData 单图（内置/旧数据）。
+    if (r.cover.isNotEmpty) list.add(TemplateImage(url: normalizeAssetUrl(r.cover)));
+    if (r.coverData != null && r.coverData!.isNotEmpty) {
+      if (list.isEmpty) {
+        list.add(TemplateImage(url: '', data: r.coverData));
+      } else {
+        list[0] = TemplateImage(url: list.first.url, data: r.coverData);
+      }
+    }
+    return list;
   }
 
   static CameraParams _cameraFromJson(Map<String, dynamic> json) {

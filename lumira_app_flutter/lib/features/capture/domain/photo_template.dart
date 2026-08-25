@@ -105,8 +105,6 @@ class TemplateMeta {
   final List<String> tags;
   final List<String> tagIds;
   final int price;
-  final String cover;
-  final String? coverData;
   final String description;
   final String referenceSource;
 
@@ -121,11 +119,22 @@ class TemplateMeta {
   /// 用于 UI 区分「我的」自定义模板与后端同步模板（如拍摄页模板条角标）。
   final String source;
 
-  /// 效果图列表，images[0] 即封面。Phase 1 中由 cover/coverData 单图派生（首图），
-  /// 满足"首张即封面"；多效果图持久化（images_json 列）留待 Phase 2。
-  List<TemplateImage> get images => <TemplateImage>[
-        if (cover.isNotEmpty) TemplateImage(url: cover, data: coverData),
+  // 为保证 const 内置模板仍可用 `TemplateMeta(cover: ...)` 构造（无数内置模板与测试
+  // 以 const 方式构建本类），cover/coverData 由 [_cover]/[_coverData] 承载（兼容存储），
+  // 多效果图写入 [_images]。getter [images]/[cover]/[coverData] 派生统一读取。
+  final String _cover;
+  final String? _coverData;
+  final List<TemplateImage>? _images;
+
+  /// 效果图列表，[0] 即封面。多效果图时由 mapper 从 images_json 填充。
+  List<TemplateImage> get images => _images ?? <TemplateImage>[
+        if (_cover.isNotEmpty) TemplateImage(url: _cover, data: _coverData),
       ];
+
+  /// 封面 = images[0] 的 url。兼容旧代码读取 meta.cover。
+  String get cover => images.isNotEmpty ? images.first.url : '';
+  /// 封面对应 base64 data（可选）。
+  String? get coverData => images.isNotEmpty ? images.first.data : null;
 
   const TemplateMeta({
     required this.id,
@@ -137,15 +146,18 @@ class TemplateMeta {
     this.tags = const [],
     this.tagIds = const [],
     this.price = 0,
-    this.cover = '',
-    this.coverData,
+    String cover = '',
+    String? coverData,
+    List<TemplateImage>? images,
     this.description = '',
     this.referenceSource = '',
     this.shortDesc = '',
     this.ambience,
     this.updatedAt = 0,
     this.source = 'builtin',
-  });
+  })  : _cover = cover,
+        _coverData = coverData,
+        _images = images;
 
   TemplateMeta copyWith({
     String? id,
@@ -157,8 +169,7 @@ class TemplateMeta {
     List<String>? tags,
     List<String>? tagIds,
     int? price,
-    String? cover,
-    Object? coverData = _unset,
+    Object? images = _unset,
     String? description,
     String? referenceSource,
     String? shortDesc,
@@ -176,10 +187,11 @@ class TemplateMeta {
         tags: tags ?? this.tags,
         tagIds: tagIds ?? this.tagIds,
         price: price ?? this.price,
-        cover: cover ?? this.cover,
-        coverData: identical(coverData, _unset)
-            ? this.coverData
-            : coverData as String?,
+        cover: _cover,
+        coverData: _coverData,
+        images: identical(images, _unset)
+            ? this.images
+            : images as List<TemplateImage>,
         description: description ?? this.description,
         referenceSource: referenceSource ?? this.referenceSource,
         shortDesc: shortDesc ?? this.shortDesc,
@@ -203,8 +215,7 @@ class TemplateMeta {
           listEquals(tags, other.tags) &&
           listEquals(tagIds, other.tagIds) &&
           price == other.price &&
-          cover == other.cover &&
-          coverData == other.coverData &&
+          listEquals(images, other.images) &&
           description == other.description &&
           referenceSource == other.referenceSource &&
           shortDesc == other.shortDesc &&
@@ -214,7 +225,8 @@ class TemplateMeta {
 
   @override
   int get hashCode => Object.hash(id, name, author, version, category, classification,
-      Object.hashAll(tags), Object.hashAll(tagIds), price, cover, coverData, description, referenceSource,
+      Object.hashAll(tags), Object.hashAll(tagIds), price,
+      Object.hashAll(images.map((e) => e.hashCode)), description, referenceSource,
       shortDesc, ambience, updatedAt, source);
 }
 
