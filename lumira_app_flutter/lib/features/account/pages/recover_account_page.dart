@@ -391,11 +391,9 @@ class _MethodCard extends StatelessWidget {
 
 /// 全屏扫描恢复二维码子页，解析成功后把原始结果回传给父页。
 ///
-/// 原生相机扫码仅在 android / iOS 可用。当前接入的扫码插件（qr_code_scanner）
-/// 的 [QRView] 只提供了 android / iOS / web 的 platform view 分支，未适配 OHOS，
-/// 在 OHOS 上直接渲染会抛
-/// 「Unsupported operation: ... TargetPlatform.ohos but there isn't a default one」
-/// 的运行时错误。因此对不支持的平台展示与 App 主题一致的引导卡片，引导用户回到
+/// 原生相机扫码在 android / iOS / ohos（HarmonyOS）可用：本地化的
+/// `qr_code_scanner` 已合并 CPF-Flutter 鸿蒙适配（OhosView 原生扫码）。
+/// 其余平台（含 web）展示与 App 主题一致的引导卡片，引导用户回到
 /// 父页手动输入恢复码（设计文档已约定该兜底，见 2026-08-19-account-recovery-design.md）。
 class _ScannerPage extends ConsumerStatefulWidget {
   const _ScannerPage();
@@ -408,11 +406,13 @@ class _ScannerPageState extends ConsumerState<_ScannerPage> {
   final _key = GlobalKey();
   QRViewController? _controller;
 
-  /// 仅 android / iOS 提供原生相扫码 platform view；其余平台（含 OHOS）走主题化回退。
+  /// 支持原生相机扫码的平台：android / iOS / ohos；其余（含 web）走主题化回退。
   bool get _canScanNative {
     if (kIsWeb) return false;
     final p = defaultTargetPlatform;
-    return p == TargetPlatform.android || p == TargetPlatform.iOS;
+    return p == TargetPlatform.android ||
+        p == TargetPlatform.iOS ||
+        p == TargetPlatform.ohos;
   }
 
   @override

@@ -751,11 +751,9 @@ packages:
   qr_code_scanner:
     dependency: "direct main"
     description:
-      path: "."
-      ref: master
-      resolved-ref: fb9104513a3e7fadc3aacb5ab6a7c9805ac6a2fc
-      url: "https://gitcode.com/CPF-Flutter/fluttertpc_qr_code_scanner.git"
-    source: git
+      path: "packages/qr_code_scanner"
+      relative: true
+    source: path
     version: "0.7.0"
   qr_flutter:
     dependency: "direct main"

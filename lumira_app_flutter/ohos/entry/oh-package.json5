@@ -11,6 +11,7 @@
     "camerawesome_ohos": "file:../har/camerawesome_ohos.har",
     "sqflite": "file:../har/sqflite.har",
     "screen": "file:../har/screen.har",
-    "file_picker_ohos": "file:../har/file_picker_ohos.har"
+    "file_picker_ohos": "file:../har/file_picker_ohos.har",
+    "qr_code_scanner": "file:../har/qr_code_scanner.har"
   }
 }

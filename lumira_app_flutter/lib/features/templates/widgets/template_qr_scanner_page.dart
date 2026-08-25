@@ -11,10 +11,9 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 
 /// 全屏相机扫码子页：扫描「二维码分享」的二维码并回传原始文本。
 ///
-/// 原生相机扫码仅在 android / iOS 可用。当前接入的扫码插件（qr_code_scanner）
-/// 的 [QRView] 只适配了 android / iOS / web 的 platform view，未适配 OHOS，
-/// 直接渲染会抛「Unsupported operation ... TargetPlatform.ohos」的运行时错误，
-/// 因此对不支持平台展示与 App 主题一致的引导卡片（同「恢复账号」页的做法）。
+/// 原生相机扫码在 android / iOS / ohos（HarmonyOS）可用：本地化的
+/// `qr_code_scanner` 已合并 CPF-Flutter 鸿蒙适配（OhosView 原生扫码），
+/// 其余平台（含 web）展示与 App 主题一致的引导卡片（同「恢复账号」页的做法）。
 ///
 /// 返回约定（经 [Navigator.pop] 回传给父页 [TemplateImportSheet]）：
 /// - 扫到有效二维码 → pop 原始识别文本（[String]）
@@ -32,11 +31,13 @@ class _TemplateQrScannerPageState extends ConsumerState<TemplateQrScannerPage> {
   final _key = GlobalKey();
   QRViewController? _controller;
 
-  /// 仅 android / iOS 提供原生相机扫码 platform view；其余平台（含 OHOS）走主题化回退。
+  /// 支持原生相机扫码的平台：android / iOS / ohos；其余（含 web）走主题化回退。
   bool get _canScanNative {
     if (kIsWeb) return false;
     final p = defaultTargetPlatform;
-    return p == TargetPlatform.android || p == TargetPlatform.iOS;
+    return p == TargetPlatform.android ||
+        p == TargetPlatform.iOS ||
+        p == TargetPlatform.ohos;
   }
 
   @override

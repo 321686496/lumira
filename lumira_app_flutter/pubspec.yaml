@@ -106,11 +106,10 @@ dependencies:
 
   # 二维码渲染（纯 Dart，Dart 2.19 兼容）
   qr_flutter: ^4.1.0
-  # 扫码（CPF-Flutter 鸿蒙适配 fork，源库 qr_code_scanner 0.7.0）
+  # 扫码（本地化 fork：CPF-Flutter 鸿蒙适配，源库 qr_code_scanner 0.7.0）
+  # 已合并 android/ios/ohos 三端实现到 packages/qr_code_scanner
   qr_code_scanner:
-    git:
-      url: https://gitcode.com/CPF-Flutter/fluttertpc_qr_code_scanner.git
-      ref: master
+    path: packages/qr_code_scanner
   photo_view: 0.14.0
 
 dev_dependencies:
