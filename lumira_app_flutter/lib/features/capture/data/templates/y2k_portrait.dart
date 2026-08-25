@@ -14,7 +14,11 @@ const PhotoTemplate y2kPortraitTemplate = PhotoTemplate(
     tags: ['人像', 'Y2K', '千禧', '高饱和', '闪光'],
     tagIds: [],
     price: 40,
-    cover: 'assets/images/templates/y2k_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/y2k_portrait.png'),
+
+    ],
     description: '千禧回潮高饱和闪光，飒爽酷 girl 攻击性，Y2K 非甜美路线。',
     referenceSource: '小红书 Y2K 千禧风教程；酷 girl 非甜美风格；千禧回潮摄影',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate y2kPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '居中半身取景，双手叉腰开立站姿',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/y2k_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.8,
-    rotation: 0,
-    description: '正面双手叉腰站立，开立站姿，头部微仰，酷无表情直视镜头',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/y2k_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '正面双手叉腰站立，开立站姿，头部微仰，酷无表情直视镜头',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/y2k_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.9,
+          rotation: 0,
+          description: '手举手机自拍半身入镜，比耶或叉腰，表情酷拽直视镜头',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/y2k_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '正面站立单腿屈膝点地，一手插兜一手比耶，酷拽直视镜头',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/y2k_portrait.png'),
+          position: Position(x: 0.45, y: 0.5),
+          scale: 0.78,
+          rotation: 0,
+          description: '侧身站立微回头，一手叉腰一手自然垂，身体线条拉满，酷拽表情',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0,
     iso: 200,

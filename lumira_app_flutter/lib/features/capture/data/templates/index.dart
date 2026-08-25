@@ -1,7 +1,6 @@
 // lib/features/capture/data/templates/index.dart
 export 'soft_portrait.dart';
 export 'golden_landscape.dart';
-export 'cafe_portrait.dart';
 export 'film_vintage.dart';
 export 'food_flat_lay.dart';
 export 'indoor_still_life.dart';
@@ -21,44 +20,17 @@ export 'chinese_classical_portrait.dart';
 export 'french_lazy_portrait.dart';
 export 'morandi_minimal_portrait.dart';
 export 'dark_indoor_portrait.dart';
-export 'neon_city_portrait.dart';
 export 'fresh_green_portrait.dart';
 export 'y2k_portrait.dart';
 export 'anime_dream_portrait.dart';
 export 'blue_night_portrait.dart';
-export 'blue_night_wide.dart';
-export 'blue_night_he.dart';
-export 'blue_night_side.dart';
 export 'purple_dusk_portrait.dart';
-export 'purple_dusk_he.dart';
-export 'purple_dusk_wide.dart';
-export 'purple_dusk_side.dart';
 export 'foodie_portrait.dart';
 export 'sweet_girl_portrait.dart';
 export 'elegant_lady_portrait.dart';
 
 // 新增 21 款人像 4-variant 变体模板（2026-08-24 重构）
-export 'neon_city_selfie.dart';
-export 'neon_city_wide.dart';
-export 'y2k_selfie.dart';
-export 'y2k_he.dart';
-export 'y2k_side.dart';
-export 'dark_indoor_he.dart';
-export 'dark_indoor_side.dart';
-export 'dark_indoor_low.dart';
 export 'western_street.dart';
-export 'western_wide.dart';
-export 'western_side.dart';
-export 'western_half.dart';
-export 'hk_noir_he.dart';
-export 'hk_noir_wide.dart';
-export 'hk_noir_side.dart';
-export 'french_lazy_he.dart';
-export 'french_lazy_side.dart';
-export 'french_lazy_overhead.dart';
-export 'chinese_classical_wide.dart';
-export 'chinese_classical_he.dart';
-export 'chinese_classical_side.dart';
 
 // 新增 12 款非人像内置模板（2026-08-24 补充）
 export 'mountain_dawn.dart';
@@ -106,40 +78,5 @@ export 'flat_tshirt.dart';
 export 'flat_cosmetics.dart';
 
 // 新增 20 款人像 4-variant 变体模板（2026-08-24 fresh_healing / dreamy_night 补齐）
-export 'japanese_golden_hour.dart';
-export 'japanese_tulip.dart';
-export 'japanese_fresh_beach.dart';
-export 'japanese_fresh_meadow.dart';
-export 'japanese_fresh_side.dart';
-export 'cream_healing_window.dart';
-export 'cream_healing_overhead.dart';
-export 'cream_healing_side.dart';
-export 'fresh_green_park.dart';
-export 'fresh_green_overhead.dart';
-export 'fresh_green_courtyard.dart';
-export 'sweet_girl_selfie.dart';
-export 'sweet_girl_dress.dart';
-export 'sweet_girl_side.dart';
-export 'morandi_minimal_he.dart';
-export 'morandi_minimal_side.dart';
-export 'morandi_minimal_overhead.dart';
-export 'anime_tender_girl_side.dart';
-export 'anime_tender_girl_overhead.dart';
-export 'anime_tender_girl_two.dart';
 
 // 新增 15 款人像模板批量变体（2026-08-24 emotional_film / scene_portrait）
-export 'emotional_selfie.dart';
-export 'emotional_half.dart';
-export 'emotional_corridor.dart';
-export 'film_selfie.dart';
-export 'film_side.dart';
-export 'film_wide.dart';
-export 'ccd_retro_selfie.dart';
-export 'ccd_retro_he.dart';
-export 'ccd_retro_side.dart';
-export 'foodie_he.dart';
-export 'foodie_overhead.dart';
-export 'foodie_side.dart';
-export 'elegant_lady_he.dart';
-export 'elegant_lady_side.dart';
-export 'elegant_lady_wide.dart';

@@ -106,7 +106,7 @@ class TemplatesMockData {
     TemplateRecommendation(
       id: 'night_cityscape',
       name: '夜景城市',
-      reason: '系统精选：适合当前时段',
+      reason: '为你推荐：适合当前时段',
       source: TemplateSource.systemPick,
       imageSeed: 'tpl-night-cityscape',
       category: 'night',
@@ -192,7 +192,7 @@ class TemplatesMockData {
       case TemplateSource.categoryMatch:
         return '同分类';
       case TemplateSource.systemPick:
-        return '系统精选';
+        return '为你推荐';
     }
   }
 }

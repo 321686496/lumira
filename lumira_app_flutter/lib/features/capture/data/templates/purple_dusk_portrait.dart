@@ -14,7 +14,11 @@ const PhotoTemplate purpleDuskPortraitTemplate = PhotoTemplate(
     tags: ['人像', '日暮', '紫色', '梦幻', '夕阳'],
     tagIds: [],
     price: 60,
-    cover: 'assets/images/templates/purple_dusk_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/purple_dusk_portrait.png'),
+
+    ],
     description: '夕阳克莱因蓝梦幻紫，HSL 蓝饱和提升的日暮浪漫。',
     referenceSource: '小红书克莱因蓝滤镜教程；夕阳紫色梦幻；日暮氛围人像',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate purpleDuskPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '三分线右侧半身取景，侧脸望夕阳构图',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/purple_dusk_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.75,
-    rotation: 0,
-    description: '侧身站立，侧脸仰头望夕阳，一手轻拂发丝，并拢站立，陶醉微笑',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/purple_dusk_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '侧身站立，侧脸仰头望夕阳，一手轻拂发丝，并拢站立，陶醉微笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/purple_dusk_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.6,
+          rotation: 0,
+          description: '正对镜头他拍，双手自然摆放，微微一笑，融入暮色',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/purple_dusk_portrait.png'),
+          position: Position(x: 0.5, y: 0.42),
+          scale: 0.38,
+          rotation: 0,
+          description: '远景背影站立看晚霞，人物较小融入紫色天地',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/purple_dusk_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.68,
+          rotation: 0,
+          description: '侧面站立，侧脸望夕阳，一手轻拂发丝，陶醉微笑',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: -0.3,
     iso: 200,

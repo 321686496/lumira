@@ -20,6 +20,8 @@ class RemoteTemplateMetaDto {
   final String category;
   final int price;
   final String coverUrl;
+  /// 效果图列表（原始 JSON，[0]=封面）。对应后端 `RemoteTemplateMeta.images`。
+  final List<dynamic> images;
   final String description;
   final String shortDesc;
   final String referenceSource;
@@ -38,6 +40,7 @@ class RemoteTemplateMetaDto {
     required this.category,
     required this.price,
     required this.coverUrl,
+    this.images = const [],
     required this.description,
     this.shortDesc = '',
     required this.referenceSource,
@@ -58,6 +61,7 @@ class RemoteTemplateMetaDto {
       category: j['category'] as String? ?? '',
       price: (j['price'] as num?)?.toInt() ?? 0,
       coverUrl: j['coverUrl'] as String? ?? '',
+      images: j['images'] as List<dynamic>? ?? const [],
       description: j['description'] as String? ?? '',
       shortDesc: j['shortDesc'] as String? ?? '',
       referenceSource: j['referenceSource'] as String? ?? '',
@@ -262,6 +266,8 @@ class RemoteTemplateDetailDto {
   final String category;
   final int price;
   final String coverUrl;
+  /// 效果图列表（原始 JSON，[0]=封面）。对应后端 `RemoteTemplateMeta.images`。
+  final List<dynamic> images;
   final String description;
   final String shortDesc;
   final String referenceSource;
@@ -274,7 +280,10 @@ class RemoteTemplateDetailDto {
 
   // === 5 段完整内容 JSON ===
   final Map<String, dynamic> composition;
+  /// 首个姿势（兼容旧后端/旧数据，poses 数组缺失时使用）
   final Map<String, dynamic> pose;
+  /// 姿势组（原始 JSON 数组，对应后端 `RemoteTemplateDetail.poses`，多姿势优先）
+  final List<dynamic> poses;
   final Map<String, dynamic> camera;
   final Map<String, dynamic> sceneGuide;
   final Map<String, dynamic> postProcess;
@@ -287,6 +296,7 @@ class RemoteTemplateDetailDto {
     required this.category,
     required this.price,
     required this.coverUrl,
+    this.images = const [],
     required this.description,
     this.shortDesc = '',
     required this.referenceSource,
@@ -298,16 +308,18 @@ class RemoteTemplateDetailDto {
     required this.updatedAt,
     required this.composition,
     required this.pose,
+    this.poses = const [],
     required this.camera,
     required this.sceneGuide,
     required this.postProcess,
   });
 
-  /// 从 meta + 5 段 JSON 构造（便于复用 [RemoteTemplateMetaDto] 解析逻辑）。
+  /// 从 meta + 多段 JSON 构造（便于复用 [RemoteTemplateMetaDto] 解析逻辑）。
   factory RemoteTemplateDetailDto.fromMetaAndSegments(
     RemoteTemplateMetaDto meta,
     Map<String, dynamic> composition,
     Map<String, dynamic> pose,
+    List<dynamic> poses,
     Map<String, dynamic> camera,
     Map<String, dynamic> sceneGuide,
     Map<String, dynamic> postProcess,
@@ -320,6 +332,7 @@ class RemoteTemplateDetailDto {
       category: meta.category,
       price: meta.price,
       coverUrl: meta.coverUrl,
+      images: meta.images,
       description: meta.description,
       shortDesc: meta.shortDesc,
       referenceSource: meta.referenceSource,
@@ -331,6 +344,7 @@ class RemoteTemplateDetailDto {
       updatedAt: meta.updatedAt,
       composition: composition,
       pose: pose,
+      poses: poses,
       camera: camera,
       sceneGuide: sceneGuide,
       postProcess: postProcess,
@@ -344,6 +358,7 @@ class RemoteTemplateDetailDto {
       meta,
       (j['composition'] as Map<String, dynamic>?) ?? const {},
       (j['pose'] as Map<String, dynamic>?) ?? const {},
+      j['poses'] as List<dynamic>? ?? const [],
       (j['camera'] as Map<String, dynamic>?) ?? const {},
       (j['sceneGuide'] as Map<String, dynamic>?) ?? const {},
       (j['postProcess'] as Map<String, dynamic>?) ?? const {},

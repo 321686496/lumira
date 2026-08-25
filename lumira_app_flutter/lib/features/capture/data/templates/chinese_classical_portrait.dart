@@ -14,7 +14,11 @@ const PhotoTemplate chineseClassicalPortraitTemplate = PhotoTemplate(
     tags: ['人像', '古风', '新中式', '莫兰迪', '园林'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/chinese_classical_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/chinese_classical_portrait.png'),
+
+    ],
     description: '莫兰迪冷调东方意境，侧逆光园林古风，国潮新中式美学。',
     referenceSource: '小红书古风人像教程；莫兰迪冷色调风格；汉服摄影套图',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate chineseClassicalPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '黄金分割点全身取景，侧逆光勾勒轮廓',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/chinese_classical_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.65,
-    rotation: 0,
-    description: '侧身站立执扇半遮面，回眸看镜头，并拢微立，含蓄浅笑',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/chinese_classical_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.65,
+          rotation: 0,
+          description: '侧身站立执扇半遮面，回眸看镜头，并拢微立，含蓄浅笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/chinese_classical_portrait.png'),
+          position: Position(x: 0.5, y: 0.4),
+          scale: 0.55,
+          rotation: 0,
+          description: '远景站立于庭院回廊，执扇或撑伞，融入园林境像',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/chinese_classical_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.7,
+          rotation: 0,
+          description: '侧身执扇半遮面回眸，一手垂放，含蓄浅笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/chinese_classical_portrait.png'),
+          position: Position(x: 0.45, y: 0.5),
+          scale: 0.7,
+          rotation: 0,
+          description: '侧身站立侧脸朝向光源，执扇轻抵额间，含蓄优雅，视线低垂',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: -0.3,
     iso: 100,

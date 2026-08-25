@@ -14,7 +14,11 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
     tags: ['人像', '知性', '优雅', '轻熟女', '莫兰迪'],
     tagIds: [],
     price: 60,
-    cover: 'assets/images/templates/elegant_lady_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/elegant_lady_portrait.png'),
+
+    ],
     description: '莫兰迪淡雅三分法，知性优雅轻熟女，成熟大气的品质感。',
     referenceSource: '小红书轻熟女穿搭拍照；莫兰迪淡雅风格；城市街拍人像',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
     aspectRatio: '4:5',
     description: '三分线左侧七分身取景，行走抓拍构图',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/elegant_lady_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.7,
-    rotation: 0,
-    description: '侧身优雅行走，侧脸看远方，一手持包，一手自然摆动，优雅迈步，自信微笑',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/elegant_lady_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.7,
+          rotation: 0,
+          description: '侧身优雅行走，侧脸看远方，一手持包，一手自然摆动，优雅迈步，自信微笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/elegant_lady_portrait.png'),
+          position: Position(x: 0.6, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '侧身驻足回望镜头，一手持包，一手自然下垂，神情从容自信',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/elegant_lady_portrait.png'),
+          position: Position(x: 0.4, y: 0.5),
+          scale: 0.7,
+          rotation: 0,
+          description: '侧立回眸望向远方，一手提包，一手轻披颈巾，身姿修长优雅',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/elegant_lady_portrait.png'),
+          position: Position(x: 0.45, y: 0.6),
+          scale: 0.6,
+          rotation: 0,
+          description: '远眺站立于平台或街道尽头，望向城市远端，身姿挺拔从容',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0,
     iso: 100,

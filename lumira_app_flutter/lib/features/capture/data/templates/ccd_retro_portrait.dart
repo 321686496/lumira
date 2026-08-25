@@ -14,7 +14,11 @@ const PhotoTemplate ccdRetroPortraitTemplate = PhotoTemplate(
     tags: ['人像', 'CCD', '复古', '胶片', '暖黄'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/ccd_retro_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/ccd_retro_portrait.png'),
+
+    ],
     description: '90 年代 CCD 复古质感，暖黄颗粒自带柔光，拍出老照片的温柔记忆。',
     referenceSource: '小红书 CCD 复古拍照教程；vivo X200 Ultra CCD 模式；ProCCD App 滤镜',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate ccdRetroPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '三分线左侧半身取景，头部位于上三分线，右侧留白',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/ccd_retro_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.75,
-    rotation: 0,
-    description: '侧身站立回眸看镜头，一手轻触发梢，一前一后站姿，微笑',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/ccd_retro_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '侧身站立回眸看镜头，一手轻触发梢，一前一后站姿，微笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/ccd_retro_portrait.png'),
+          position: Position(x: 0.5, y: 0.45),
+          scale: 1.1,
+          rotation: 0,
+          description: '手持设备自拍，微微仰头或歪头，眼神直视镜头，表情俏皮复古',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/ccd_retro_portrait.png'),
+          position: Position(x: 0.58, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '侧身站立望向镜头不远处，一只手插兜或扶墙，眼神带疏离感',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/ccd_retro_portrait.png'),
+          position: Position(x: 0.38, y: 0.45),
+          scale: 0.75,
+          rotation: 0,
+          description: '头部微侧露出轮廓，下巴微收，手轻触脸颊，侧颜入镜',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0.3,
     iso: 200,

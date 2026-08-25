@@ -14,7 +14,11 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
     tags: ['人像', '日系', '小清新', '空气感', '低对比'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/japanese_fresh_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait.png'),
+
+    ],
     description: '干净清透的日系空气感，低对比微冷调，樱花校园的青春记忆。',
     referenceSource: '小红书日系小清新教程；日系写真风格；轻颜/醒图清新滤镜',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '三分线左侧七分身取景，留白充足，人物占比不超过 60%',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.7,
-    rotation: 0,
-    description: '侧身自然行走，侧脸看向远方，双手自然摆动，迈步动态，微笑',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.7,
+          rotation: 0,
+          description: '侧身自然行走，侧脸看向远方，双手自然摆动，迈步动态，微笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '手持手机前置镜头，另一只手轻抚发丝，半侧脸微笑看镜头',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait.png'),
+          position: Position(x: 0.5, y: 0.6),
+          scale: 0.5,
+          rotation: 0,
+          description: '远景站立或轻轻走动，身体放松，面向镜头方向，融于草地',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/japanese_fresh_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.72,
+          rotation: 0,
+          description: '侧身站立轻轻回眸，侧脸轮廓清晰，发丝自然，浅笑',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0,
     iso: 100,

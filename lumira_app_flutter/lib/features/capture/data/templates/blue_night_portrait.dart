@@ -14,7 +14,11 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
     tags: ['人像', '暗夜', '逆光', '剪影', '冷调'],
     tagIds: [],
     price: 40,
-    cover: 'assets/images/templates/blue_night_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/blue_night_portrait.png'),
+
+    ],
     description: '黄昏逆光暗夜蓝冷峻浪漫，天空大海的背影剪影诗。',
     referenceSource: '小红书爱乐之城深色滤镜；逆光剪影人像；黄昏海边摄影',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '三分线左侧七分身取景，天空大海占主体留白',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/blue_night_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.65,
-    rotation: 0,
-    description: '背影站立望海，仰头，双手自然下垂，并拢站立',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/blue_night_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.65,
+          rotation: 0,
+          description: '背影站立望海，仰头，双手自然下垂，并拢站立',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/blue_night_portrait.png'),
+          position: Position(x: 0.5, y: 0.45),
+          scale: 0.4,
+          rotation: 0,
+          description: '远景背影站立望海，人物较小融入夜色',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/blue_night_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.5,
+          rotation: 0,
+          description: '他拍侧身回望镜头，一只手自然下垂，融入夜色',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/blue_night_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.6,
+          rotation: 0,
+          description: '侧面站立，侧脸望海，双手自然下垂，线条流畅',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: -0.5,
     iso: 200,

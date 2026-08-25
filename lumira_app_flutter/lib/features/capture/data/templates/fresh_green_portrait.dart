@@ -14,7 +14,11 @@ const PhotoTemplate freshGreenPortraitTemplate = PhotoTemplate(
     tags: ['人像', '森系', '露营', '净白', '户外'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/fresh_green_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/fresh_green_portrait.png'),
+
+    ],
     description: '户外森系净白空气感，清新淡雅绿调，草地森林的自然治愈。',
     referenceSource: '小红书净白滤镜教程；户外森系露营；清新淡雅绿调人像',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate freshGreenPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '三分线左侧全身取景，留白充足，人景比例 4:6',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/fresh_green_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.7,
-    rotation: 0,
-    description: '侧身草地坐姿，回眸看镜头，双手撑地后撑，屈膝坐地，自然微笑',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/fresh_green_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.7,
+          rotation: 0,
+          description: '侧身草地坐姿，回眸看镜头，双手撑地后撑，屈膝坐地，自然微笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/fresh_green_portrait.png'),
+          position: Position(x: 0.5, y: 0.6),
+          scale: 0.5,
+          rotation: 0,
+          description: '远景站立或倚树，身体自然放松，面向镜头，融于公园绿色',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/fresh_green_portrait.png'),
+          position: Position(x: 0.5, y: 0.6),
+          scale: 0.65,
+          rotation: 0,
+          description: '躺在草地上或坐草坪抬手，头微微上扬，表情轻松',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/fresh_green_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '侧身站在绿植旁，手轻扶枝叶，微微低头浅笑',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0,
     iso: 100,

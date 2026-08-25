@@ -14,7 +14,13 @@ const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
     tags: ['霓虹', '夜景人像', '赛博朋克', '城市'],
     tagIds: [],
     price: 20,
-    cover: 'assets/images/templates/neon_portrait.jpg',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/neon_portrait.jpg'),
+
+      TemplateImage(url: 'assets/images/templates/neon_city_portrait.png'),
+
+    ],
     description: '利用城市霓虹灯光拍摄赛博朋克风格人像',
     referenceSource: '样片 EXIF: 赛博朋克人像作品集；参数参考 500px Neon Portrait 专题',
   ),
@@ -25,13 +31,36 @@ const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
     aspectRatio: '9:16',
     description: '人物置于画面右侧，左侧霓虹招牌引导线指向人物',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'neon-pose'),
-    position: Position(x: 0.6, y: 0.5),
-    scale: 0.9,
-    rotation: -5,
-    description: '模特微侧身，面部朝向霓虹光源，手部可触碰面部或举起',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'neon-pose'),
+          position: Position(x: 0.6, y: 0.5),
+          scale: 0.9,
+          rotation: -5,
+          description: '模特微侧身，面部朝向霓虹光源，手部可触碰面部或举起',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/neon_city_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '正面站立单手叉腰，一腿前一腿后，酷无表情看镜头',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/neon_city_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '手举手机自拍，半侧脸入镜，微微歪头，随意自然表情看镜头',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/neon_city_portrait.png'),
+          position: Position(x: 0.5, y: 0.45),
+          scale: 0.6,
+          rotation: 0,
+          description: '人物站立于长街中段回眸，一手自然垂放，融入霓虹纵深',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: -0.3,
     isoMode: 'manual',

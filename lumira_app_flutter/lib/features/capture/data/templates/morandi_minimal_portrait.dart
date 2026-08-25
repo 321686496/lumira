@@ -14,7 +14,11 @@ const PhotoTemplate morandiMinimalPortraitTemplate = PhotoTemplate(
     tags: ['人像', '莫兰迪', '冷淡', '低饱和', '知性'],
     tagIds: [],
     price: 60,
-    cover: 'assets/images/templates/morandi_minimal_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/morandi_minimal_portrait.png'),
+
+    ],
     description: '莫兰迪低饱和高级冷淡，纯色极简知性风，轻熟女的品质感。',
     referenceSource: '莫兰迪色系人像；轻熟女知性风；小红书极简人像教程',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate morandiMinimalPortraitTemplate = PhotoTemplate(
     aspectRatio: '4:5',
     description: '居中半身取景，纯色背景极简构图',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/morandi_minimal_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.8,
-    rotation: 0,
-    description: '正面端坐，双手交叠放膝上，并拢侧坐，正视镜头，知性无表情',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/morandi_minimal_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '正面端坐，双手交叠放膝上，并拢侧坐，正视镜头，知性无表情',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/morandi_minimal_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '侧坐在桌前，手边放一只莫兰迪色陶器，凝视一处，安静从容',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/morandi_minimal_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '侧身回望一侧，双手自然下垂放松，神情平静知性',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/morandi_minimal_portrait.png'),
+          position: Position(x: 0.5, y: 0.55),
+          scale: 0.7,
+          rotation: 0,
+          description: '仰卧或俯身于莫兰迪布景上，手臂自然搭放，闭目沉静',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0,
     iso: 100,

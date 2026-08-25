@@ -14,7 +14,11 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
     tags: ['人像', '暗调', '咖啡馆', '锐化', '质感'],
     tagIds: [],
     price: 40,
-    cover: 'assets/images/templates/dark_indoor_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/dark_indoor_portrait.png'),
+
+    ],
     description: '咖啡馆暗调精致高级，锐化质感黑森林氛围，探店氛围感首选。',
     referenceSource: '小红书黑森林滤镜教程；咖啡馆暗调人像；探店拍照教程',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '三分线左侧半身取景，倚桌托腮构图',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.78,
-    rotation: 0,
-    description: '侧身倚桌坐姿，单手托腮撑桌，微低头看侧方，沉思',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.78,
+          rotation: 0,
+          description: '侧身倚桌坐姿，单手托腮撑桌，微低头看侧方，沉思',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '侧身站立面向窗光，一手搭椅背，轮廓光勾勒身形，静默沉思',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait.png'),
+          position: Position(x: 0.45, y: 0.5),
+          scale: 0.78,
+          rotation: 0,
+          description: '侧面坐姿，脸部朝向窗光，侧脸半明半暗，视线向下，安静含蓄',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait.png'),
+          position: Position(x: 0.5, y: 0.4),
+          scale: 0.7,
+          rotation: 0,
+          description: '站立微微低头看向下方镜头，气场增强，面部在暗调中突出',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: -0.3,
     iso: 400,

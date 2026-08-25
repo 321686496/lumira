@@ -14,7 +14,11 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
     tags: ['人像', '港风', '夜景', '霓虹', '王家卫'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/hk_noir_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/hk_noir_portrait.png'),
+
+    ],
     description: '王家卫式港风夜景，霓虹暖黄低对比，街头浪漫故事感。',
     referenceSource: '小红书港风夜景教程；王家卫电影风格；醒图/美图秀秀港风滤镜',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '居中偏左半身取景，倚墙回眸构图',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.75,
-    rotation: 0,
-    description: '侧身倚墙回眸看镜头，一手插袋，一手自然垂下，交叉倚墙，沉思微怅',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '侧身倚墙回眸看镜头，一手插袋，一手自然垂下，交叉倚墙，沉思微怅',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.78,
+          rotation: 0,
+          description: '侧身倚墙回眸看镜头，一手插袋，交叉倚墙，沉思微怅',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait.png'),
+          position: Position(x: 0.5, y: 0.4),
+          scale: 0.6,
+          rotation: 0,
+          description: '人物远景站立于旧街中行走或驻足，融入霓虹纵深，故事感',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait.png'),
+          position: Position(x: 0.45, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '侧身回眸看镜头，侧脸光影交错，一手插袋，意境忧郁',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: -0.3,
     iso: 800,

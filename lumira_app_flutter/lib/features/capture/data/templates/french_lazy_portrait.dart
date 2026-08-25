@@ -14,7 +14,11 @@ const PhotoTemplate frenchLazyPortraitTemplate = PhotoTemplate(
     tags: ['人像', '法式', '慵懒', '颗粒', '窗光'],
     tagIds: [],
     price: 40,
-    cover: 'assets/images/templates/french_lazy_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/french_lazy_portrait.png'),
+
+    ],
     description: '白床单窗光下的法式慵懒，颗粒质感复古高雅，卧室里的慵懒时光。',
     referenceSource: '小红书法式慵懒风格教程；复古颗粒质感；法式写真套图',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate frenchLazyPortraitTemplate = PhotoTemplate(
     aspectRatio: '4:5',
     description: '三分线左侧半身取景，倚靠侧坐构图',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/french_lazy_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.78,
-    rotation: 0,
-    description: '侧身倚靠侧坐，头部微仰看侧方，一手撑床/桌面，一手自然放置，慵懒无表情',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/french_lazy_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.78,
+          rotation: 0,
+          description: '侧身倚靠侧坐，头部微仰看侧方，一手撑床/桌面，一手自然放置，慵懒无表情',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/french_lazy_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.78,
+          rotation: 0,
+          description: '侧身倚靠墙边或行走回眸，一手自然垂放，慵懒随性，不刻意',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/french_lazy_portrait.png'),
+          position: Position(x: 0.45, y: 0.5),
+          scale: 0.78,
+          rotation: 0,
+          description: '侧面坐姿或站立，头部微侧看向侧方，慵懒优雅，视线淡然',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/french_lazy_portrait.png'),
+          position: Position(x: 0.5, y: 0.4),
+          scale: 0.6,
+          rotation: 0,
+          description: '俯拍侧倚姿态，一手托腮或搭在咖啡杯边，慵懒松弛看向镜头',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0,
     iso: 200,

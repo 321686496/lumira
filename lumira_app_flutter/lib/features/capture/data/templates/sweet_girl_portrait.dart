@@ -14,7 +14,11 @@ const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
     tags: ['人像', '甜妹', '元气', '少女', '粉色'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/sweet_girl_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/sweet_girl_portrait.png'),
+
+    ],
     description: '高亮暖粉比心托腮，九宫格甜美元气少女，青春的粉色记忆。',
     referenceSource: '小红书甜妹拍照教程；元气少女风；九宫格甜美拍照',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '三分线右侧半身取景，比心托腮构图',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.8,
-    rotation: 0,
-    description: '正面站立微倾，单手比心至脸侧，头部微歪，并拢微内八，俏皮大笑',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '正面站立微倾，单手比心至脸侧，头部微歪，并拢微内八，俏皮大笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.8,
+          rotation: 0,
+          description: '手持手机前置，另一手比耶贴脸，歪头俏皮，甜笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait.png'),
+          position: Position(x: 0.5, y: 0.55),
+          scale: 0.7,
+          rotation: 0,
+          description: '正面站立，双手提起裙摆，脚尖轻踮，灿烂大笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '侧身回头，手轻抚发辫，回眸看向镜头，俏皮甜笑',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0,
     iso: 100,

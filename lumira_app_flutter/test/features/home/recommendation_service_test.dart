@@ -164,10 +164,10 @@ void main() {
       expect(templateRoutes.length, 4,
           reason: '槽位 2/3/4/5 均应 fallback 到系统推荐模板');
 
-      // 槽位 2 的 tag 应为 "编辑精选"（无 topCategory fallback）
-      expect(banners[1].tag, '编辑精选');
-      expect(banners[2].tag, '编辑精选');
-      expect(banners[3].tag, '编辑精选');
+      // 槽位 2 的 tag 应为 "为你精选"（无 topCategory fallback）
+      expect(banners[1].tag, '为你精选');
+      expect(banners[2].tag, '为你精选');
+      expect(banners[3].tag, '为你精选');
     });
 
     test('5 条 banner 去重：templateId 不重复', () async {

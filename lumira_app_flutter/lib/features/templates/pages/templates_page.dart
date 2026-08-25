@@ -639,10 +639,15 @@ class _AcademyEntrySection extends ConsumerWidget {
 /// TemplateRecord → TemplateRecommendation 适配
 /// DAO 推荐模板数据 → RecommendationCard 所需类型
 TemplateRecommendation _recordToRecommendation(TemplateRecord r) {
+  // 来源 badge 文案由 TemplateSource.systemPick → '为你推荐'（见 sourceLabel）。
+  // 副行展示模板短描述，更有内容感、不再固定一句话。
+  final desc = r.shortDesc.isNotEmpty
+      ? r.shortDesc
+      : (r.description.isNotEmpty ? r.description : '为你推荐');
   return TemplateRecommendation(
     id: r.id,
     name: r.name,
-    reason: '系统精选推荐',
+    reason: desc,
     source: TemplateSource.systemPick,
     imageSeed: r.id,
     category: r.category,

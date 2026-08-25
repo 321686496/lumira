@@ -14,7 +14,13 @@ const PhotoTemplate softPortraitTemplate = PhotoTemplate(
     tags: ['人像', '柔光', '自然光', '清新'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/soft_portrait.jpg',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/soft_portrait.jpg'),
+
+      TemplateImage(url: 'assets/images/templates/cafe_portrait.jpg'),
+
+    ],
     description: '柔光环境下的半身人像，肤色通透自然，适合清新风格肖像',
     referenceSource: '样片 EXIF: Unsplash 柔光人像合集；参数参考人像摄影工作室',
   ),
@@ -25,13 +31,36 @@ const PhotoTemplate softPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '人物居中构图，面部位于画面上 1/3 处，保留头顶适当留白',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'soft-portrait'),
-    position: Position(x: 0.5, y: 0.45),
-    scale: 1.0,
-    rotation: 0,
-    description: '模特半身姿态，身体微侧，面部朝向光源，表情自然放松',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'soft-portrait'),
+          position: Position(x: 0.5, y: 0.45),
+          scale: 1.0,
+          rotation: 0,
+          description: '模特半身姿态，身体微侧，面部朝向光源，表情自然放松',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'sitting-cafe'),
+          position: Position(x: 0.5, y: 0.45),
+          scale: 1.0,
+          rotation: 0,
+          description: '模特坐姿，身体微侧向窗光方向，手部自然搭于桌面或持咖啡杯',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.5, y: 0.48),
+          scale: 1.0,
+          rotation: 0,
+          description: '侧身站立，侧脸迎着逆光，发丝随风轻扬，表情安静望向远方',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 1.0,
+          rotation: 0,
+          description: '手持手机长度朝前，另一手比V，嘴角上扬，花田作背景',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0.3,
     isoMode: 'manual',

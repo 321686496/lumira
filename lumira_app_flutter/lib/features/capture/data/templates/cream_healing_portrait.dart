@@ -14,7 +14,11 @@ const PhotoTemplate creamHealingPortraitTemplate = PhotoTemplate(
     tags: ['人像', '奶油', '治愈', '暖调', '夕阳'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/cream_healing_portrait.png',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/cream_healing_portrait.png'),
+
+    ],
     description: '奶油橙暖调温柔治愈，夕阳海边氛围感，拯救废片的小镰仓风。',
     referenceSource: '小红书小镰仓滤镜教程；海边夕阳拍照；Foodie 暖调滤镜',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate creamHealingPortraitTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '居中偏右半身取景，三分线右侧构图',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cream_healing_portrait.png'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.75,
-    rotation: 0,
-    description: '正面坐姿，单手托腮，头部微倾，盘腿或屈膝坐，温柔微笑看镜头',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cream_healing_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '正面坐姿，单手托腮，头部微倾，盘腿或屈膝坐，温柔微笑看镜头',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cream_healing_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '靠窗侧坐，微微弯腰靠近窗沿，手搭在窗台，暖光洒在脸上',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cream_healing_portrait.png'),
+          position: Position(x: 0.5, y: 0.55),
+          scale: 0.7,
+          rotation: 0,
+          description: '仰面躺或坐地上抬头，双手轻托脸，眉眼弯弯温柔笑',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cream_healing_portrait.png'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.75,
+          rotation: 0,
+          description: '侧身坐或站，侧脸朝向逆光方向，发丝随风透光',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0,
     iso: 100,

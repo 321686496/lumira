@@ -14,7 +14,11 @@ const PhotoTemplate filmVintageTemplate = PhotoTemplate(
     tags: ['胶片', '复古', '人像', '怀旧', '暖调'],
     tagIds: [],
     price: 20,
-    cover: 'assets/images/templates/film_vintage.jpg',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/film_vintage.jpg'),
+
+    ],
     description: '模拟胶片质感的复古人像，暖调褪色感营造怀旧氛围',
     referenceSource: '样片 EXIF: 500px 胶片人像作品；参数参考胶片摄影作品',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate filmVintageTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '人物置于左侧三分线交点，右侧留白展示环境氛围',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'vintage-portrait'),
-    position: Position(x: 0.4, y: 0.45),
-    scale: 1.0,
-    rotation: 0,
-    description: '复古半身人像姿态，身体微侧，神情悠远望向画外',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'vintage-portrait'),
+          position: Position(x: 0.4, y: 0.45),
+          scale: 1.0,
+          rotation: 0,
+          description: '复古半身人像姿态，身体微侧，神情悠远望向画外',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'vintage-portrait'),
+          position: Position(x: 0.5, y: 0.4),
+          scale: 1.15,
+          rotation: 0,
+          description: '手持设备自拍，微微侧脸，眼神从容放松，发丝自然垂落',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'vintage-portrait'),
+          position: Position(x: 0.4, y: 0.4),
+          scale: 1.05,
+          rotation: 0,
+          description: '身体侧对镜头，目光望向来时方向，一手自然下垂，背影带旧时光况味',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'vintage-portrait'),
+          position: Position(x: 0.4, y: 0.62),
+          scale: 0.85,
+          rotation: 0,
+          description: '站立于街角，身体朝向街道延伸方向，剪影融入旧街氛围',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0.3,
     isoMode: 'manual',

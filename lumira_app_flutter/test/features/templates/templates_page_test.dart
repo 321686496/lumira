@@ -160,8 +160,8 @@ void main() {
     await settleOrPump(tester, UIStyle.neumorphic);
 
     // DAO 切换后所有 recommendation 的 source 均为 systemPick → '系统精选'
-    // 3 个推荐卡片 → 3 个 '系统精选' badge
-    expect(find.text('系统精选'), findsNWidgets(3));
+    // 3 个推荐卡片 → 3 个 '为你推荐' badge
+    expect(find.text('为你推荐'), findsNWidgets(3));
   });
 
   testWidgets('free badge shows on price=0 templates', (tester) async {

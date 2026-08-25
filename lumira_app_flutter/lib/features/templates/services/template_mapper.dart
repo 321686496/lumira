@@ -96,6 +96,16 @@ class TemplateMapper {
       price: meta.price,
       cover: meta.coverUrl,
       coverData: null,
+      // 多效果图：解析后端 images 数组（[0]=封面）。空列表时留空，由 _imagesFromRecord 用 cover 兜底。
+      images: meta.images.isEmpty
+          ? null
+          : meta.images
+                .whereType<Map<String, dynamic>>()
+                .map((img) => TemplateImage(
+                      url: (img['url'] as String?) ?? '',
+                      data: img['data'] as String?,
+                    ))
+                .toList(),
       description: meta.description,
       referenceSource: meta.referenceSource,
       shortDesc: meta.shortDesc,
@@ -129,6 +139,7 @@ class TemplateMapper {
       category: detail.category,
       price: detail.price,
       coverUrl: detail.coverUrl,
+      images: detail.images,
       description: detail.description,
       shortDesc: detail.shortDesc,
       referenceSource: detail.referenceSource,
@@ -142,7 +153,8 @@ class TemplateMapper {
     final metaRecord = metaToRecord(meta);
     return metaRecord.copyWith(
       composition: detail.composition,
-      pose: detail.pose,
+      // 多姿势优先存 poses 数组；旧后端/旧数据缺 poses 时退化为单 pose。
+      pose: detail.poses.isNotEmpty ? detail.poses : detail.pose,
       camera: detail.camera,
       sceneGuide: detail.sceneGuide,
       postProcess: detail.postProcess,

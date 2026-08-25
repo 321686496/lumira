@@ -14,7 +14,11 @@ const PhotoTemplate sunsetSilhouetteTemplate = PhotoTemplate(
     tags: ['逆光', '剪影', '黄昏', '人像'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/sunset_silhouette.jpg',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/sunset_silhouette.jpg'),
+
+    ],
     description: '日落时分逆光拍摄人像剪影，突出轮廓与氛围',
     referenceSource: '样片 EXIF: Pexels #12345；参数参考摄影教学网站 Photzy 逆光人像指南',
   ),
@@ -25,13 +29,36 @@ const PhotoTemplate sunsetSilhouetteTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '人物置于左侧三分线交点，剪影轮廓清晰，上方留白展示天空',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
-    position: Position(x: 0.35, y: 0.55),
-    scale: 1.0,
-    rotation: 0,
-    description: '模特侧身站立，背对镜头，面朝夕阳方向，手臂自然下垂',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.35, y: 0.55),
+          scale: 1.0,
+          rotation: 0,
+          description: '模特侧身站立，背对镜头，面朝夕阳方向，手臂自然下垂',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.5, y: 0.45),
+          scale: 1.1,
+          rotation: 0,
+          description: '手持设备自拍，微微侧脸看镜头，眼神低垂或望向远方，情绪内敛',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.45, y: 0.4),
+          scale: 1.2,
+          rotation: 0,
+          description: '半身侧对镜头，一手轻触脸颊或整理发丝，眼神低垂流露情绪',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.6, y: 0.5),
+          scale: 1.0,
+          rotation: 0,
+          description: '背面或侧背影行走，面朝夕阳方向，手臂自然摆动，身姿具叙事感',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: -0.7,
     isoMode: 'manual',

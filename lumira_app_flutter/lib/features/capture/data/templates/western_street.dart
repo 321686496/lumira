@@ -13,7 +13,11 @@ const PhotoTemplate westernStreetTemplate = PhotoTemplate(
     tags: ['人像', '他拍', '欧美', '街拍', '时尚'],
     tagIds: [],
     price: 20,
-    cover: 'assets/images/templates/neon_portrait.jpg',
+    images: [
+
+      TemplateImage(url: 'assets/images/templates/neon_portrait.jpg'),
+
+    ],
     description: '欧美街头时尚他拍，城市建筑背景，利落穿搭气场十足。',
     referenceSource: '小红书欧美街拍教程；城市时尚人像；欧美穿搭摄影',
   ),
@@ -24,13 +28,36 @@ const PhotoTemplate westernStreetTemplate = PhotoTemplate(
     aspectRatio: '3:4',
     description: '三分之一单立人像取景，城市纵深背景',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 0.78,
-    rotation: -3,
-    description: '正面站立微侧身，一手插兜一手自然垂，利落自信直视镜头',
-  ),
+    poses: [
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.78,
+          rotation: -3,
+          description: '正面站立微侧身，一手插兜一手自然垂，利落自信直视镜头',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.5, y: 0.4),
+          scale: 0.6,
+          rotation: 0,
+          description: '人物远景站立于街道中,回眸或行走抓拍,融入都市纵深',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.45, y: 0.5),
+          scale: 0.78,
+          rotation: 0,
+          description: '侧身站立微回头,一手叉腰一手自然垂,身形线条大片感',
+    ),
+    Pose(
+      silhouette: SilhouetteResource(type: 'builtin', data: 'standing-profile'),
+          position: Position(x: 0.5, y: 0.5),
+          scale: 0.82,
+          rotation: -3,
+          description: '正面半身站立,双手自然下垂或轻抚耳饰,自信直视镜头',
+    ),
+  ],
   camera: CameraParams(
     exposureCompensation: 0,
     iso: 200,

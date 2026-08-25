@@ -169,7 +169,7 @@ class RecommendationService {
     // === 槽位 2：基于最近拍摄分类 ===
     final topCategory = _pickTopCategory(categoryCounts);
     TemplateRecord? slot2Tpl;
-    var slot2Tag = '编辑精选'; // 冷启动 fallback 标签
+    var slot2Tag = '为你精选'; // 冷启动 fallback 标签
     if (topCategory != null) {
       final tpls = await _templatesDao.getBuiltin(
         category: topCategory,
@@ -187,7 +187,7 @@ class RecommendationService {
       final label = _categoryLabelMap[topCategory] ?? '推荐';
       final subtitle = topCategory != null
           ? '你最近常拍$label，试试这套模板'
-          : '编辑精选，${_truncate(slot2Tpl.description, 30)}';
+          : _bannerSubtitle(slot2Tpl);
       banners.add(HomeBannerItem(
         id: 'banner_recent_category',
         title: topCategory != null ? '继续拍$label' : slot2Tpl.name,
@@ -240,9 +240,9 @@ class RecommendationService {
         banners.add(HomeBannerItem(
           id: 'banner_favorite_scene_fallback',
           title: tpl.name,
-          subtitle: '编辑精选，${_truncate(tpl.description, 30)}',
+          subtitle: _bannerSubtitle(tpl),
           imageSeed: 'banner-pick-${tpl.id}',
-          tag: '编辑精选',
+          tag: '为你精选',
           route: '/templates/detail?templateId=${tpl.id}',
           cover: tpl.cover.isNotEmpty ? tpl.cover : null,
           coverData: tpl.coverData,
@@ -257,9 +257,9 @@ class RecommendationService {
       banners.add(HomeBannerItem(
         id: 'banner_system_pick',
         title: slot4Tpl.name,
-        subtitle: '编辑精选，${_truncate(slot4Tpl.description, 30)}',
+        subtitle: _bannerSubtitle(slot4Tpl),
         imageSeed: 'banner-pick-${slot4Tpl.id}',
-        tag: '编辑精选',
+        tag: '为你精选',
         route: '/templates/detail?templateId=${slot4Tpl.id}',
         cover: slot4Tpl.cover.isNotEmpty ? slot4Tpl.cover : null,
         coverData: slot4Tpl.coverData,
@@ -294,6 +294,12 @@ class RecommendationService {
 
     // 防御性截断：固定 5 条
     return banners.take(5).toList();
+  }
+
+  /// 模板类 Banner 副标题：优先用模板短描述，否则截断 description。
+  String _bannerSubtitle(TemplateRecord tpl) {
+    if (tpl.shortDesc.isNotEmpty) return tpl.shortDesc;
+    return _truncate(tpl.description, 30);
   }
 
   /// 构建单条探索新鲜感 banner（槽位 5 复用）
@@ -342,9 +348,9 @@ class RecommendationService {
         banners.add(HomeBannerItem(
           id: 'banner_exploration$idSuffix',
           title: tpl.name,
-          subtitle: '编辑精选，${_truncate(tpl.description, 30)}',
+          subtitle: _bannerSubtitle(tpl),
           imageSeed: 'banner-pick-${tpl.id}$idSuffix',
-          tag: '编辑精选',
+          tag: '为你精选',
           route: '/templates/detail?templateId=${tpl.id}',
           cover: tpl.cover.isNotEmpty ? tpl.cover : null,
           coverData: tpl.coverData,
