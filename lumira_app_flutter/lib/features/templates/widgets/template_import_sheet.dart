@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/services/file_picker_service.dart';
 
+import '../../../core/auth/auth_controller.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -16,6 +18,8 @@ import '../services/pptpl_format.dart';
 import '../services/template_import_service.dart';
 import '../services/template_mapper.dart';
 import '../services/template_share_code.dart';
+import '../services/template_share_service.dart';
+import 'template_qr_scanner_page.dart';
 
 /// 模板导入 BottomSheet
 ///
@@ -23,7 +27,7 @@ import '../services/template_share_code.dart';
 /// 提供 3 种导入方式：
 /// 1. 从文件导入（.json / .lumira / .pptpl）
 /// 2. 从链接导入（粘贴分享链接）
-/// 3. 扫码导入（手动输入分享码，无相机库依赖）
+/// 3. 扫码导入（相机扫码 / 输入分享码，支持 token 在线拉取与离线链接解析）
 class TemplateImportSheet extends ConsumerWidget {
   const TemplateImportSheet({super.key, required this.onImported});
 
@@ -93,7 +97,7 @@ class TemplateImportSheet extends ConsumerWidget {
         _ImportOption(
           icon: Icons.qr_code_scanner_outlined,
           title: '扫码导入',
-          subtitle: '输入模板分享码（LUMIRA-xxx）',
+          subtitle: '相机扫码，或输入分享码 / 链接',
           tokens: tokens,
           onTap: () => _handleQrImport(context, ref),
         ),
@@ -223,8 +227,20 @@ class TemplateImportSheet extends ConsumerWidget {
       if (context.mounted) navigator.pop();
       return;
     }
+    // ignore: use_build_context_synchronously
+    if (!context.mounted) return;
 
-    final parsed = TemplateShareCode.parseLink(url.trim());
+    await _importOfflineTemplate(context, ref, url);
+  }
+
+  // ===== 离线链接导入（从链接 / 扫码离线型 tpl 共用）=====
+  Future<void> _importOfflineTemplate(
+    BuildContext context,
+    WidgetRef ref,
+    String rawLink,
+  ) async {
+    final navigator = Navigator.of(context);
+    final parsed = TemplateShareCode.parseLink(rawLink.trim());
     if (parsed == null) {
       if (context.mounted) {
         navigator.pop();
@@ -234,7 +250,9 @@ class TemplateImportSheet extends ConsumerWidget {
     }
 
     // 轻量形式（无完整 JSON）→ 不支持
-    if (parsed['name'] is String && parsed.containsKey('coverSeed') && !parsed.containsKey('meta')) {
+    if (parsed['name'] is String &&
+        parsed.containsKey('coverSeed') &&
+        !parsed.containsKey('meta')) {
       if (context.mounted) {
         navigator.pop();
         _showToast(context, '该分享链接不包含完整模板参数，请使用文件导入');
@@ -242,7 +260,16 @@ class TemplateImportSheet extends ConsumerWidget {
       return;
     }
 
-    // 完整 JSON 形式 → 走 DAO 持久化
+    await _importParsedJson(context, ref, parsed);
+  }
+
+  // ===== 落库（importJson + 刷新 + 结果处理；文件/链接/token 共用）=====
+  Future<void> _importParsedJson(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, dynamic> parsed,
+  ) async {
+    final navigator = Navigator.of(context);
     try {
       final dao = await ref.read(templatesDaoProvider.future);
       final result = await TemplateImportService.importJson(
@@ -269,7 +296,7 @@ class TemplateImportSheet extends ConsumerWidget {
       }
       onImported(result.id!);
     } catch (e, st) {
-      debugPrint('[TemplateImport] link FAILED: $e\n$st');
+      debugPrint('[TemplateImport] import FAILED: $e\n$st');
       if (context.mounted) {
         navigator.pop();
         _showToast(context, '导入失败：$e');
@@ -277,23 +304,88 @@ class TemplateImportSheet extends ConsumerWidget {
     }
   }
 
-  // ===== 扫码导入（DAO 持久化）=====
+  // ===== 扫码导入（相机扫码 → 分发；手动输入兜底）=====
   Future<void> _handleQrImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
-    // 与 _handleFileImport 同理：不提前关闭 BottomSheet，操作完成后再统一关闭。
+    debugPrint('[TemplateImport] code-version: v3-qr-scanner');
+    // 与 _handleFileImport 同理：不提前关闭 BottomSheet，全程保持 sheet active。
+    // 先跳转全屏相机扫码页拿原始识别文本。
+    final scanned = await Navigator.of(context).push<String>(MaterialPageRoute(
+      builder: (_) => const TemplateQrScannerPage(),
+    ));
+
+    // 用户取消扫码（返回 null，含不支持平台的「返回」）→ 直接关闭面板
+    // ignore: use_build_context_synchronously
+    if (!context.mounted) return;
+    if (scanned == null) {
+      if (context.mounted) navigator.pop();
+      return;
+    }
+
+    final text = scanned.trim();
+
+    // 分享码文本（LUMIRA-分类-名称）→ 沿用既有 parseCode 逻辑
+    if (text.startsWith('LUMIRA-')) {
+      await _handleShareCodeImport(context, ref, text);
+      return;
+    }
+
+    // 其它文本用 TemplateShareService 分类：
+    //  - 返回 token → imp 在线拉取；null → 离线 tpl；'' → 无效
+    final token = TemplateShareService.parseTokenFromScannedText(text);
+    if (token == null) {
+      // 离线 tpl 链接 → 复用离线解析管线
+      await _importOfflineTemplate(context, ref, text);
+      return;
+    }
+    if (token.isEmpty) {
+      // 无效内容，或不支持平台引导返回的空串 → 提示后进入手动输入兜底
+      if (text.isNotEmpty && context.mounted) {
+        _showToast(context, '未能识别有效的分享内容，请手动输入或改用「从链接导入」');
+      }
+      await _handleManualImport(context, ref);
+      return;
+    }
+
+    // token 型（lumira://imp/xxx）→ 后端拉取导入
+    await _handleTokenImport(context, ref, token);
+  }
+
+  // ===== 手动输入兜底（分享码 / 链接）=====
+  Future<void> _handleManualImport(BuildContext context, WidgetRef ref) async {
+    final navigator = Navigator.of(context);
     final code = await _showInputDialog(
       context: context,
       title: '扫码导入',
-      hint: '输入分享码（LUMIRA-分类-名称）',
+      hint: '输入分享码（LUMIRA-分类-名称）或分享链接',
       keyboardType: TextInputType.text,
     );
+
+    // ignore: use_build_context_synchronously
+    if (!context.mounted) return;
 
     if (code == null || code.trim().isEmpty) {
       if (context.mounted) navigator.pop();
       return;
     }
 
-    final parsed = TemplateShareCode.parseCode(code.trim());
+    final text = code.trim();
+    if (text.startsWith('LUMIRA-')) {
+      await _handleShareCodeImport(context, ref, text);
+    } else {
+      // 非分享码 → 按分享链接尝试离线解析
+      await _importOfflineTemplate(context, ref, text);
+    }
+  }
+
+  // ===== 分享码导入（parseCode → 映射内置模板落库）=====
+  Future<void> _handleShareCodeImport(
+    BuildContext context,
+    WidgetRef ref,
+    String code,
+  ) async {
+    final navigator = Navigator.of(context);
+    final parsed = TemplateShareCode.parseCode(code);
     if (parsed == null) {
       if (context.mounted) {
         navigator.pop();
@@ -340,6 +432,86 @@ class TemplateImportSheet extends ConsumerWidget {
       onImported(record.id);
     } catch (e, st) {
       debugPrint('[TemplateImport] qr FAILED: $e\n$st');
+      if (context.mounted) {
+        navigator.pop();
+        _showToast(context, '导入失败：$e');
+      }
+    }
+  }
+
+  // ===== token 型导入（后端拉取）=====
+  Future<void> _handleTokenImport(
+    BuildContext context,
+    WidgetRef ref,
+    String token,
+  ) async {
+    final navigator = Navigator.of(context);
+    try {
+      final service = await ref.read(templateShareServiceProvider.future);
+      Map<String, dynamic> share;
+      try {
+        share = await service.fetchShare(token);
+      } on ApiException catch (e) {
+        if (e.kind == ApiErrorKind.unauthorized) {
+          // 设备未注册 / token 失效：AuthInterceptor 已自动触发重新注册，
+          // 这里等待注册完成后用新 token 重试一次
+          final ok = await ref
+              .read(authControllerProvider.notifier)
+              .ensureRegistered();
+          if (!ok) {
+            if (context.mounted) {
+              navigator.pop();
+              _showToast(context, '设备未完成注册，无法在线导入');
+            }
+            return;
+          }
+          share = await service.fetchShare(token);
+        } else if (e.kind == ApiErrorKind.notFound) {
+          // 404：分享不存在或已过期
+          if (context.mounted) {
+            navigator.pop();
+            _showToast(context, '该分享已过期或不存在');
+          }
+          return;
+        } else if (e.kind == ApiErrorKind.network) {
+          if (context.mounted) {
+            navigator.pop();
+            _showToast(context, '网络异常，请检查网络后重试');
+          }
+          return;
+        } else {
+          if (context.mounted) {
+            navigator.pop();
+            _showToast(context, '导入失败：${e.message}');
+          }
+          return;
+        }
+      }
+
+      final payload = share['payload'];
+      if (payload is! String || payload.isEmpty) {
+        if (context.mounted) {
+          navigator.pop();
+          _showToast(context, '分享内容无效，请稍后重试');
+        }
+        return;
+      }
+
+      final decoded = jsonDecode(payload);
+      if (decoded is! Map<String, dynamic>) {
+        if (context.mounted) {
+          navigator.pop();
+          _showToast(context, '分享内容无效，请稍后重试');
+        }
+        return;
+      }
+
+      // ignore: use_build_context_synchronously
+      if (!context.mounted) return;
+
+      await _importParsedJson(context, ref, decoded);
+    } catch (e, st) {
+      debugPrint('[TemplateImport] token FETCH FAILED: $e\n$st');
       if (context.mounted) {
         navigator.pop();
         _showToast(context, '导入失败：$e');
