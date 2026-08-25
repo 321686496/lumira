@@ -10,6 +10,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/db/dao/user_interests_dao.dart';
+import '../recommend/template_ranking.dart';
 import '../data/templates_mock_data.dart';
 
 /// 用户拍摄偏好 Provider
@@ -110,8 +112,37 @@ final hotAndNewTemplatesProvider = FutureProvider<List<TemplateRecord>>((ref) as
 /// 推荐内置模板列表 Provider（"今日为你推荐" section 数据源）
 ///
 /// 同上，缓存查询结果避免 FutureBuilder 反复 loading。
+///
+/// 个性化排序：基于 TemplateRanking（50/50 熟/新混合 + 画像三维权重 + 全站热度）
+/// 对推荐内置模板排序，输出排序后的「今日为你推荐」列表。
 final recommendedBuiltinTemplatesProvider =
     FutureProvider<List<TemplateRecord>>((ref) async {
   final dao = await ref.watch(templatesDaoProvider.future);
-  return dao.getBuiltin(isRecommended: true);
+  final base = await dao.getBuiltin(isRecommended: true);
+  if (base.isEmpty) return const [];
+
+  // 画像：'{scope}:{key}' -> score
+  final interestsDao = await ref.watch(userInterestsDaoProvider.future);
+  final portrait = <String, double>{};
+  final all = await interestsDao.getAll();
+  for (final e in all.entries) {
+    portrait[e.key] = e.value.score;
+  }
+
+  // 热度：use_shoot*2 + open_detail
+  final usageDao = await ref.watch(usageDaoProvider.future);
+  final counts =
+      await usageDao.countMap('template', base.map((t) => t.id).toList());
+  final popularity = <String, int>{
+    for (final t in base)
+      t.id: ((counts[t.id]?.useShoot ?? 0) * 2 + (counts[t.id]?.openDetail ?? 0)),
+  };
+
+  final ctx = RankingContext(
+    portrait: portrait,
+    popularity: popularity,
+    nowMs: DateTime.now().millisecondsSinceEpoch,
+  );
+  final scores = TemplateRanking().scoreAll(base, ctx);
+  return TemplateRanking().mixExplore(scores);
 });
