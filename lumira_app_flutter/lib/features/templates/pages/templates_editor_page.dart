@@ -394,7 +394,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       }
       final mime = _imageMimeFromExtension(fullFile.extension);
       final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
-      _onChange(() => _form.meta.coverImage = dataUrl);
+      _onChange(() => _form.meta.setCoverImage(dataUrl));
       if (!mounted) return;
       lumira.LumiraToast.show(context, '封面图已设置');
     } catch (e) {
@@ -422,7 +422,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       final bytes = await xfile.readAsBytes();
       // 拍摄结果统一为 jpeg
       final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-      _onChange(() => _form.meta.coverImage = dataUrl);
+      _onChange(() => _form.meta.setCoverImage(dataUrl));
       if (!mounted) return;
       lumira.LumiraToast.show(context, '封面图已设置');
     } on PlatformException catch (e) {

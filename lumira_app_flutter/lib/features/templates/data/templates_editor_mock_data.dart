@@ -19,32 +19,47 @@ class EditorForm {
   EditorForm({
     required this.meta,
     required this.composition,
-    required this.pose,
+    List<EditorFormPose>? poses,
+    EditorFormPose? pose,
     required this.camera,
     required this.sceneGuide,
     required this.postProcess,
     this.fillLight,
-  });
+  }) : poses = pose != null
+            ? <EditorFormPose>[pose]
+            : (poses ?? const <EditorFormPose>[]);
 
   EditorFormMeta meta;
   EditorFormComposition composition;
-  EditorFormPose pose;
+  /// 姿势列表（多姿势）。兼容 getter [pose] 读首张，供编辑器内既有控件操作 poses[0]。
+  List<EditorFormPose> poses;
   EditorFormCamera camera;
   EditorFormSceneGuide sceneGuide;
   EditorFormPostProcess postProcess;
   /// 补光灯状态（与 capture 页补光灯功能对齐）。null 表示未启用。
   EditorFormFillLight? fillLight;
 
+  /// 兼容旧调用：读首张姿势；空列表时返回占位空姿势。
+  EditorFormPose get pose => poses.isNotEmpty ? poses.first : EditorFormPose();
+
   /// 深拷贝
   EditorForm copy() => EditorForm(
         meta: meta.copy(),
         composition: composition.copy(),
-        pose: pose.copy(),
+        poses: poses.map((p) => p.copy()).toList(),
         camera: camera.copy(),
         sceneGuide: sceneGuide.copy(),
         postProcess: postProcess.copy(),
         fillLight: fillLight?.copy(),
       );
+}
+
+/// 效果图（编辑器内统一以 base64 data URL 存储）。images[0] 即封面。
+class EditorFormMetaImage {
+  EditorFormMetaImage({required this.data});
+  String data; // data URL
+
+  EditorFormMetaImage copy() => EditorFormMetaImage(data: data);
 }
 
 class EditorFormMeta {
@@ -58,10 +73,14 @@ class EditorFormMeta {
     this.style,
     this.subStyle,
     this.method,
-    this.coverImage,
+    List<EditorFormMetaImage>? images,
+    String? coverImage,
     this.shortDesc = '',
     this.ambience,
-  });
+  }) : images = images ??
+            (coverImage != null && coverImage!.isNotEmpty
+                ? <EditorFormMetaImage>[EditorFormMetaImage(data: coverImage!)]
+                : const <EditorFormMetaImage>[]);
 
   String id;
   String name;
@@ -73,9 +92,35 @@ class EditorFormMeta {
   String? style; // 二级 majorStyle
   String? subStyle; // 三级 subStyle（原 method 改名）
   String? method; // 四级 method（新增）
-  String? coverImage;
+  /// 效果图列表，[0] 即封面。兼容 getter [coverImage] 读首张。
+  List<EditorFormMetaImage> images;
   String shortDesc; // 短简介
   RemoteTemplateAmbienceDto? ambience; // 季节/天气/时段
+
+  /// 封面 = images[0].data（兼容旧 `coverImage` 读取）。
+  String? get coverImage => images.isNotEmpty ? images.first.data : null;
+
+  /// 设置封面（兼容旧的 `coverImage = data` 赋值写法，替换首张）。
+  void setCoverImage(String? url) {
+    if (url == null || url.isEmpty) {
+      images = <EditorFormMetaImage>[]; // 清空铺底，仍由 UI 保留占位
+    } else if (images.isEmpty) {
+      images = <EditorFormMetaImage>[EditorFormMetaImage(data: url)];
+    } else {
+      images = <EditorFormMetaImage>[
+        EditorFormMetaImage(data: url),
+        ...images.skip(1),
+      ];
+    }
+  }
+
+  /// 追加一张效果图（末尾）。
+  void addImage(String dataUrl) {
+    images = <EditorFormMetaImage>[
+      ...images,
+      EditorFormMetaImage(data: dataUrl),
+    ];
+  }
 
   EditorFormMeta copy() => EditorFormMeta(
         id: id,
@@ -87,7 +132,7 @@ class EditorFormMeta {
         style: style,
         subStyle: subStyle,
         method: method,
-        coverImage: coverImage,
+        images: images.map((e) => e.copy()).toList(),
         shortDesc: shortDesc,
         ambience: ambience,
       );
@@ -124,6 +169,7 @@ class EditorFormComposition {
 
 class EditorFormPose {
   EditorFormPose({
+    this.name = '',
     SilhouetteResource? silhouette,
     Position? position,
     this.scale = 1.0,
@@ -132,6 +178,8 @@ class EditorFormPose {
   })  : silhouette = silhouette ?? SilhouetteResource(type: 'builtin', data: 'none'),
         position = position ?? Position(x: 0.5, y: 0.5);
 
+  /// 姿势名称（仅编辑/展示用，落库时写入 pose[name]）。
+  String name;
   SilhouetteResource silhouette;
   Position position;
   double scale; // 0.3 ~ 2.5（与 capture 页姿势剪影缩放范围对齐）
@@ -140,6 +188,7 @@ class EditorFormPose {
   String description;
 
   EditorFormPose copy() => EditorFormPose(
+        name: name,
         silhouette: silhouette.copy(),
         position: position.copy(),
         scale: scale,

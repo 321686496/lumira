@@ -283,8 +283,14 @@ class TemplateMapper {
       tags: List<String>.from(form.meta.tags),
       tagIds: const [],
       price: 0,
-      cover: '',
+      cover: form.meta.coverImage ?? '',
       coverData: form.meta.coverImage,
+      images: form.meta.images.isEmpty
+          ? null
+          : form.meta.images
+                .where((e) => e.data.isNotEmpty)
+                .map((e) => TemplateImage(url: '', data: e.data))
+                .toList(),
       description: form.meta.description,
       referenceSource: form.meta.referenceSource,
       shortDesc: form.meta.shortDesc,
@@ -292,14 +298,15 @@ class TemplateMapper {
         form.meta.ambience ?? const RemoteTemplateAmbienceDto()),
       composition: compositionJson,
       pose: <dynamic>[
-        <String, dynamic>{
-          'name': '',
-          'silhouette': editorSilhouetteToJson(form.pose.silhouette),
-          'position': {'x': form.pose.position.x, 'y': form.pose.position.y},
-          'scale': form.pose.scale,
-          'rotation': form.pose.rotation,
-          'description': form.pose.description,
-        },
+        for (final p in form.poses)
+          <String, dynamic>{
+            'name': p.name,
+            'silhouette': editorSilhouetteToJson(p.silhouette),
+            'position': {'x': p.position.x, 'y': p.position.y},
+            'scale': p.scale,
+            'rotation': p.rotation,
+            'description': p.description,
+          },
       ],
       camera: cameraJson,
       sceneGuide: <String, dynamic>{
@@ -326,11 +333,7 @@ class TemplateMapper {
   static editor.EditorForm toEditorForm(TemplateRecord r) {
     final composition = r.composition;
     final poseRaw = r.pose;
-    final pose = poseRaw is List
-        ? (poseRaw.isNotEmpty
-            ? (poseRaw.first as Map<String, dynamic>? ?? <String, dynamic>{})
-            : <String, dynamic>{})
-        : (poseRaw as Map<String, dynamic>? ?? <String, dynamic>{});
+    final poseList = _poseListRaw(poseRaw);
     final camera = r.camera;
     final sceneGuide = r.sceneGuide;
     final postProcess = r.postProcess;
@@ -367,7 +370,16 @@ class TemplateMapper {
             : null,
         shortDesc: r.shortDesc,
         ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
-        coverImage: r.coverData,
+        images: (r.images == null)
+            ? (r.coverData?.isNotEmpty == true
+                ? <editor.EditorFormMetaImage>[
+                    editor.EditorFormMetaImage(data: r.coverData!)
+                  ]
+                : const <editor.EditorFormMetaImage>[])
+            : r.images!
+                .map((img) =>
+                    editor.EditorFormMetaImage(data: img.data ?? img.url))
+                .toList(),
       ),
       composition: editor.EditorFormComposition(
         overlayType: (composition['overlayType'] as String?) ?? 'rule_of_thirds',
@@ -384,18 +396,27 @@ class TemplateMapper {
         opacity: (composition['opacity'] as num?)?.toDouble() ?? 0.5,
         description: (composition['description'] as String?) ?? '',
       ),
-      pose: editor.EditorFormPose(
-        silhouette: _toEditorSilhouette(
-          silhouetteFromJson((pose['silhouette'] as Map<String, dynamic>?) ?? {}),
-        ),
-        position: editor.Position(
-          x: ((pose['position'] as Map<String, dynamic>?)?['x'] as num?)?.toDouble() ?? 0.5,
-          y: ((pose['position'] as Map<String, dynamic>?)?['y'] as num?)?.toDouble() ?? 0.5,
-        ),
-        scale: (pose['scale'] as num?)?.toDouble() ?? 1.0,
-        rotation: (pose['rotation'] as num?)?.toDouble() ?? 0,
-        description: (pose['description'] as String?) ?? '',
-      ),
+      poses: <editor.EditorFormPose>[
+        for (final p in poseList)
+          editor.EditorFormPose(
+            name: (p['name'] as String?) ?? '',
+            silhouette: _toEditorSilhouette(
+              silhouetteFromJson(
+                  (p['silhouette'] as Map<String, dynamic>?) ?? {}),
+            ),
+            position: editor.Position(
+              x: ((p['position'] as Map<String, dynamic>?)?['x'] as num?)
+                      ?.toDouble() ??
+                  0.5,
+              y: ((p['position'] as Map<String, dynamic>?)?['y'] as num?)
+                      ?.toDouble() ??
+                  0.5,
+            ),
+            scale: (p['scale'] as num?)?.toDouble() ?? 1.0,
+            rotation: (p['rotation'] as num?)?.toDouble() ?? 0,
+            description: (p['description'] as String?) ?? '',
+          ),
+      ],
       camera: editor.EditorFormCamera(
         exposureCompensation: (camera['exposureCompensation'] as num?)?.toDouble() ?? 0.0,
         isoMode: (camera['isoMode'] as String?) ?? 'auto',
@@ -697,6 +718,17 @@ class TemplateMapper {
       }
     }
     return list;
+  }
+
+  /// 规范化 r.pose（下标存储，可为 List 或旧单 Map）统一为 List<Map>，供 toEditorForm 遍历。
+  static List<Map<String, dynamic>> _poseListRaw(dynamic raw) {
+    if (raw is List) {
+      return raw.whereType<Map<String, dynamic>>().toList();
+    }
+    if (raw is Map<String, dynamic>) {
+      return <Map<String, dynamic>>[raw];
+    }
+    return const <Map<String, dynamic>>[];
   }
 
   static CameraParams _cameraFromJson(Map<String, dynamic> json) {
