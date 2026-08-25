@@ -196,11 +196,11 @@ class BuiltinDataSeeder {
     await batch.commit(noResult: true);
   }
 
-  /// 预置所有二三四级系统分类（v17 迁移 + onCreate 调用；v37 重整人像为四级）。
+  /// 预置所有二三级系统分类（v17 迁移 + onCreate 调用；v37 重整人像为三级）。
   ///
-  /// 对齐后端 009 迁移的四级树形结构（spec 2026-08-24 重整）：
-  /// - 人像 portrait：大风格 majorStyle（L2）→ 子风格 subStyle（L3）→ 方法 method（L4）
-  /// - 非人像题材：保持浅层（二级=风格 style → 三级=方法 method）
+  /// 分类树收敛为三级：大类 → 风格 → 子风格（spec 2026-08-26 Phase 5）：
+  /// - 人像 portrait：大风格 majorStyle（L2）→ 子风格 subStyle（L3）
+  /// - 非人像题材：浅层（二级=风格 style → 三级=方法 method）
   ///
   /// 使用 INSERT OR IGNORE 配合 UNIQUE(key, parent_key) 约束保证幂等：
   /// 重复调用不会报错（同名已存在则保留，不覆盖 updatedAt）。
@@ -268,116 +268,6 @@ class BuiltinDataSeeder {
       ['still-life', 'flat', '扁平', 2],
     ];
 
-    // 方法：人像（level=4, parent=子风格）：(parentKey, key, name, sortOrder)
-    // 每风格叶节点下 4 款具体模板用方法(构图/拍法)区分，故每个子风格补 4 个方法。
-    const portraitMethods = <List<Object>>[
-      // japanese 日系
-      ['japanese', 'normal', '他拍', 1],
-      ['japanese', 'selfie', '自拍', 2],
-      ['japanese', 'overhead', '俯拍', 3],
-      ['japanese', 'side', '侧拍', 4],
-      // japanese_fresh 日系清新
-      ['japanese_fresh', 'seven_body', '七分身', 1],
-      ['japanese_fresh', 'selfie', '自拍', 2],
-      ['japanese_fresh', 'wide', '远景', 3],
-      ['japanese_fresh', 'side', '侧拍', 4],
-      // cream_healing 奶油治愈
-      ['cream_healing', 'half_body', '半身', 1],
-      ['cream_healing', 'normal', '他拍', 2],
-      ['cream_healing', 'overhead', '俯拍', 3],
-      ['cream_healing', 'side', '侧拍', 4],
-      // fresh_green 清新绿意
-      ['fresh_green', 'full_body', '全身', 1],
-      ['fresh_green', 'wide', '远景', 2],
-      ['fresh_green', 'overhead', '俯拍', 3],
-      ['fresh_green', 'normal', '他拍', 4],
-      // sweet_girl 甜美少女
-      ['sweet_girl', 'half_body', '半身', 1],
-      ['sweet_girl', 'selfie', '自拍', 2],
-      ['sweet_girl', 'full_body', '全身', 3],
-      ['sweet_girl', 'side', '侧拍', 4],
-      // morandi_minimal 莫兰迪极简
-      ['morandi_minimal', 'half_body', '半身', 1],
-      ['morandi_minimal', 'normal', '他拍', 2],
-      ['morandi_minimal', 'side', '侧拍', 3],
-      ['morandi_minimal', 'overhead', '俯拍', 4],
-      // anime_tender 动漫温柔青
-      ['anime_tender', 'full_body', '全身', 1],
-      ['anime_tender', 'side', '侧拍', 2],
-      ['anime_tender', 'overhead', '俯拍', 3],
-      ['anime_tender', 'normal', '他拍', 4],
-      // emotional 情绪
-      ['emotional', 'wide', '远景', 1],
-      ['emotional', 'selfie', '自拍', 2],
-      ['emotional', 'half_body', '半身', 3],
-      ['emotional', 'normal', '他拍', 4],
-      // film 胶片
-      ['film', 'normal', '他拍', 1],
-      ['film', 'selfie', '自拍', 2],
-      ['film', 'side', '侧拍', 3],
-      ['film', 'wide', '远景', 4],
-      // ccd_retro CCD复古
-      ['ccd_retro', 'half_body', '半身', 1],
-      ['ccd_retro', 'selfie', '自拍', 2],
-      ['ccd_retro', 'normal', '他拍', 3],
-      ['ccd_retro', 'side', '侧拍', 4],
-      // western 欧美
-      ['western', 'normal', '他拍', 1],
-      ['western', 'wide', '远景', 2],
-      ['western', 'side', '侧拍', 3],
-      ['western', 'half_body', '半身', 4],
-      // neon_city 霓虹都市
-      ['neon_city', 'half_body', '半身', 1],
-      ['neon_city', 'normal', '他拍', 2],
-      ['neon_city', 'selfie', '自拍', 3],
-      ['neon_city', 'wide', '远景', 4],
-      // y2k Y2K千禧
-      ['y2k', 'half_body', '半身', 1],
-      ['y2k', 'selfie', '自拍', 2],
-      ['y2k', 'normal', '他拍', 3],
-      ['y2k', 'side', '侧拍', 4],
-      // dark_indoor 暗调室内
-      ['dark_indoor', 'half_body', '半身', 1],
-      ['dark_indoor', 'normal', '他拍', 2],
-      ['dark_indoor', 'side', '侧拍', 3],
-      ['dark_indoor', 'low_angle', '仰拍', 4],
-      // hk_noir 港风Noir
-      ['hk_noir', 'half_body', '半身', 1],
-      ['hk_noir', 'normal', '他拍', 2],
-      ['hk_noir', 'wide', '远景', 3],
-      ['hk_noir', 'side', '侧拍', 4],
-      // french_lazy 法式慵懒
-      ['french_lazy', 'half_body', '半身', 1],
-      ['french_lazy', 'normal', '他拍', 2],
-      ['french_lazy', 'side', '侧拍', 3],
-      ['french_lazy', 'overhead', '俯拍', 4],
-      // chinese_classical 中式古典
-      ['chinese_classical', 'full_body', '全身', 1],
-      ['chinese_classical', 'wide', '远景', 2],
-      ['chinese_classical', 'normal', '他拍', 3],
-      ['chinese_classical', 'side', '侧拍', 4],
-      // blue_night 蓝色之夜
-      ['blue_night', 'seven_body', '七分身', 1],
-      ['blue_night', 'wide', '远景', 2],
-      ['blue_night', 'normal', '他拍', 3],
-      ['blue_night', 'side', '侧拍', 4],
-      // purple_dusk 紫色黄昏
-      ['purple_dusk', 'half_body', '半身', 1],
-      ['purple_dusk', 'normal', '他拍', 2],
-      ['purple_dusk', 'wide', '远景', 3],
-      ['purple_dusk', 'side', '侧拍', 4],
-      // foodie_portrait 美食人像
-      ['foodie_portrait', 'half_body', '半身', 1],
-      ['foodie_portrait', 'normal', '他拍', 2],
-      ['foodie_portrait', 'overhead', '俯拍', 3],
-      ['foodie_portrait', 'side', '侧拍', 4],
-      // elegant_lady 优雅女士
-      ['elegant_lady', 'seven_body', '七分身', 1],
-      ['elegant_lady', 'normal', '他拍', 2],
-      ['elegant_lady', 'side', '侧拍', 3],
-      ['elegant_lady', 'wide', '远景', 4],
-    ];
-
     // 方法：非人像（level=3, parent=二级风格）：(parentKey, key, name, sortOrder)
     const nonPortraitMethods = <List<Object>>[
       ['fresh', 'wide', '远景', 1],
@@ -430,7 +320,6 @@ class BuiltinDataSeeder {
     insertRows(majorStyles, 2);                    // 大风格（人像）
     insertRows(portraitSubStyles, 3);              // 子风格（人像）
     insertRows(nonPortraitStyles, 2);              // 风格（非人像）
-    insertRows(portraitMethods, 4);                // 方法（人像）
     insertRows(nonPortraitMethods, 3);             // 方法（非人像）
 
     await batch.commit(noResult: true);
@@ -488,7 +377,7 @@ class BuiltinDataSeeder {
       whereArgs: portraitSubStyles,
     );
 
-    // 5. 重新播种四级结构
+    // 5. 重新播种三级结构
     await seedStyleMethodCategories(db);
   }
 
