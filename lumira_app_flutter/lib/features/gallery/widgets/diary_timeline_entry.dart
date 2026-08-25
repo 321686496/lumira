@@ -8,6 +8,7 @@ import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../data/gallery_models.dart';
+import 'diary_photo_cell.dart';
 
 /// 日记时间轴单条 entry（左日期 + 右照片网格，微信朋友圈式布局）
 ///
@@ -15,14 +16,16 @@ import '../data/gallery_models.dart';
 /// - 1 张：单图横版（4:3）展示
 /// - 2~4 张：四宫格（2 列，正方形）
 /// - 5~9 张：九宫格（3 列，正方形）
-/// - 超过 9 张：仍显示 9 格，最后一格显示 "+N 查看更多"
-/// 标签（场景/模板/心情）去重后统一展示在照片网格下方，避免每张图重复。
+/// - 超过 9 张：仍显示 9 格，最后一格显示 "+N 查看更多"，点击进入当日照片页
+/// 标签（场景/模板/心情）叠加在所属照片内部（见 [DiaryPhotoCell]），
+/// 不再统一排在网格下方。
 class DiaryTimelineEntry extends ConsumerWidget {
   const DiaryTimelineEntry({
     super.key,
     required this.entry,
     this.onPhotoTap,
     this.onPhotoLongPress,
+    this.onViewMore,
   });
 
   final DiaryEntry entry;
@@ -33,6 +36,9 @@ class DiaryTimelineEntry extends ConsumerWidget {
   /// 长按照片回调，参数为照片 ID（用于删除照片）
   final void Function(String photoId)? onPhotoLongPress;
 
+  /// 点击「查看更多」回调，参数为该天的日期（用于跳转当日照片页）
+  final void Function(DateTime day)? onViewMore;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
@@ -40,14 +46,6 @@ class DiaryTimelineEntry extends ConsumerWidget {
     final total = allPhotos.length;
     // 最多展示 9 格
     final displayPhotos = total > 9 ? allPhotos.sublist(0, 9) : allPhotos;
-    // 标签去重（按 label），统一展示在网格下方
-    final tags = <DiaryTag>[];
-    final seen = <String>{};
-    for (final p in allPhotos) {
-      for (final t in p.tags) {
-        if (seen.add(t.label)) tags.add(t);
-      }
-    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -112,23 +110,9 @@ class DiaryTimelineEntry extends ConsumerWidget {
               ),
             ),
           ),
-          // 右：照片网格 + 标签
+          // 右：照片网格（标签已叠加在照片内部）
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildGrid(displayPhotos, total, tokens),
-                if (tags.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children:
-                        tags.map((t) => _DiaryTagChip(tag: t, tokens: tokens)).toList(),
-                  ),
-                ],
-              ],
-            ),
+            child: _buildGrid(displayPhotos, total, tokens),
           ),
         ],
       ),
@@ -138,7 +122,7 @@ class DiaryTimelineEntry extends ConsumerWidget {
   Widget _buildGrid(List<DiaryPhoto> photos, int total, ThemeTokens tokens) {
     final count = photos.length;
     if (count == 1) {
-      return _PhotoCell(
+      return DiaryPhotoCell(
         photo: photos[0],
         aspectRatio: 4 / 3,
         tokens: tokens,
@@ -176,12 +160,11 @@ class DiaryTimelineEntry extends ConsumerWidget {
                           photo: photo,
                           overflowCount: overflowN,
                           tokens: tokens,
-                          onTap: () => onPhotoTap?.call(photo.id),
-                          onLongPress: onPhotoLongPress == null
+                          onTap: onViewMore == null
                               ? null
-                              : () => onPhotoLongPress!(photo.id),
+                              : () => onViewMore!(entry.day),
                         )
-                      : _PhotoCell(
+                      : DiaryPhotoCell(
                           photo: photo,
                           aspectRatio: 1,
                           tokens: tokens,
@@ -202,125 +185,23 @@ class DiaryTimelineEntry extends ConsumerWidget {
   }
 }
 
-/// 单张照片卡片（横版 / 正方形），左上角叠加心情徽标
-class _PhotoCell extends StatelessWidget {
-  const _PhotoCell({
-    required this.photo,
-    required this.aspectRatio,
-    required this.tokens,
-    this.onTap,
-    this.onLongPress,
-  });
-  final DiaryPhoto photo;
-  final double aspectRatio;
-  final ThemeTokens tokens;
-  final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      behavior: HitTestBehavior.opaque,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Stack(
-          children: [
-            AspectRatio(
-              aspectRatio: aspectRatio,
-              child: _PhotoImage(photo: photo, tokens: tokens),
-            ),
-            // 心情浮在照片左上角
-            if (photo.mood != null)
-              Positioned(
-                top: 6,
-                left: 6,
-                child: _MoodBadge(mood: photo.mood!, tokens: tokens),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 照片角上的心情徽标（圆角小胶囊：表情图标 + 心情名）
-class _MoodBadge extends StatelessWidget {
-  const _MoodBadge({required this.mood, required this.tokens});
-  final String mood;
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.42),
-        borderRadius: BorderRadius.circular(1000),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(_moodIconFor(mood), size: 11, color: Colors.white),
-          const SizedBox(width: 3),
-          Text(
-            mood,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-              height: 1.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 心情名 → 图标映射（与 CapturePreviewMockData.moods 保持一致）
-IconData _moodIconFor(String mood) {
-  switch (mood) {
-    case '开心':
-      return Icons.sentiment_satisfied;
-    case '甜酷':
-      return Icons.wb_sunny_outlined;
-    case '温柔':
-      return Icons.local_florist_outlined;
-    case '复古':
-      return Icons.movie_outlined;
-    case '清新':
-      return Icons.eco_outlined;
-    case '文艺':
-      return Icons.palette_outlined;
-    case '治愈':
-      return Icons.grass_outlined;
-    default:
-      return Icons.sentiment_satisfied;
-  }
-}
-
-/// 九宫格最后一格：照片 + "+N 查看更多" 遮罩
+/// 九宫格最后一格：照片 + "+N 查看更多" 遮罩（点击进入当日照片页）
 class _OverflowCell extends StatelessWidget {
   const _OverflowCell({
     required this.photo,
     required this.overflowCount,
     required this.tokens,
     this.onTap,
-    this.onLongPress,
   });
   final DiaryPhoto photo;
   final int overflowCount;
   final ThemeTokens tokens;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
@@ -329,7 +210,7 @@ class _OverflowCell extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              _PhotoImage(photo: photo, tokens: tokens),
+              _OverflowImage(photo: photo, tokens: tokens),
               // 半透明遮罩 + "+N 查看更多"
               Container(
                 color: Colors.black.withOpacity(0.45),
@@ -368,9 +249,9 @@ class _OverflowCell extends StatelessWidget {
   }
 }
 
-/// 提取图片渲染逻辑，让单图 / 网格 / 溢出格共用
-class _PhotoImage extends StatelessWidget {
-  const _PhotoImage({required this.photo, required this.tokens});
+/// 溢出格的图片渲染（与 [DiaryPhotoCell] 内部逻辑一致，独立避免依赖）
+class _OverflowImage extends StatelessWidget {
+  const _OverflowImage({required this.photo, required this.tokens});
   final DiaryPhoto photo;
   final ThemeTokens tokens;
 
@@ -401,59 +282,5 @@ class _PhotoImage extends StatelessWidget {
         child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
       ),
     );
-  }
-}
-
-class _DiaryTagChip extends StatelessWidget {
-  const _DiaryTagChip({required this.tag, required this.tokens});
-  final DiaryTag tag;
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = _TagColors.of(tag.color, tokens);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: colors.bg,
-        borderRadius: BorderRadius.circular(1000),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(tag.icon, size: 10, color: colors.fg),
-          const SizedBox(width: 2),
-          Text(
-            tag.label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              color: colors.fg,
-              height: 1.2,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TagColors {
-  final Color fg;
-  final Color bg;
-  const _TagColors._(this.fg, this.bg);
-
-  static _TagColors of(DiaryTagColor c, ThemeTokens tokens) {
-    switch (c) {
-      case DiaryTagColor.gold:
-        return _TagColors._(tokens.brand, tokens.brandSubtle);
-      case DiaryTagColor.green:
-        return _TagColors._(tokens.success, tokens.successSubtle);
-      case DiaryTagColor.red:
-        return _TagColors._(tokens.danger, tokens.dangerSubtle);
-    }
   }
 }

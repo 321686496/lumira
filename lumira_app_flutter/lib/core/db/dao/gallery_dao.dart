@@ -417,6 +417,19 @@ class GalleryDao {
     return rows.map(GalleryItemRecord.fromRow).toList();
   }
 
+  /// 按某一天筛选照片（拍摄日记「查看更多」当日照片页使用，本地时区）
+  Future<List<GalleryItemRecord>> getByDay(DateTime day) async {
+    final dateStr =
+        '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+    final rows = await _db.rawQuery('''
+      SELECT * FROM ${Tables.galleryItems}
+      WHERE date(${Tables.colCreatedAt} / 1000, 'unixepoch', 'localtime') = ?
+        AND ${Tables.colGalleryItemHidden} != 1
+      ORDER BY ${Tables.colCreatedAt} DESC
+    ''', [dateStr]);
+    return rows.map(GalleryItemRecord.fromRow).toList();
+  }
+
   /// 按关键字搜索照片：多字段模糊匹配（场景/模板/心情），最新在前
   Future<List<GalleryItemRecord>> search(String query) async {
     final pattern = '%$query%';

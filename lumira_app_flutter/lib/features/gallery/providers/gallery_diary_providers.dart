@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
+import '../../../core/db/dao/scenes_dao.dart';
+import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../data/gallery_models.dart';
 
@@ -42,23 +44,28 @@ class ShootingCheckin {
   );
 }
 
-/// 拍摄日记筛选条件：tab（穿搭/拍摄）+ 可选心情
+/// 拍摄日记筛选条件：tab（穿搭/拍摄）+ 可选多选心情
 class DiaryFilter {
-  const DiaryFilter({required this.tab, this.mood});
+  const DiaryFilter({required this.tab, this.moods = const <String>{}});
 
   final String tab;
-  final String? mood;
 
-  bool get isAllMood => mood == null;
+  /// 已选心情集合（可为空；非空时仅保留命中任一心情的照片）
+  final Set<String> moods;
+
+  bool get isAllMood => moods.isEmpty;
 
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is DiaryFilter && other.tab == tab && other.mood == mood;
+    return other is DiaryFilter &&
+        other.tab == tab &&
+        other.moods.length == moods.length &&
+        other.moods.containsAll(moods);
   }
 
   @override
-  int get hashCode => Object.hash(tab, mood);
+  int get hashCode => Object.hash(tab, Object.hashAllUnordered(moods));
 }
 
 /// 中文星期名（DateTime.weekday: 1=周一 ... 7=周日）
@@ -79,7 +86,7 @@ const String kDiaryTabShoot = 'shoot'; // 拍摄日记：全部照片
 /// 拍摄日记时间轴 entries（按天分组）
 ///
 /// family 参数为筛选条件：[DiaryFilter.tab] 区分穿搭/拍摄视图，
-/// [DiaryFilter.mood] 非空时仅保留该心情的照片。每篇 entry 对应一个有照片的日期。
+/// [DiaryFilter.moods] 非空时仅保留命中任一心情的照片。每篇 entry 对应一个有照片的日期。
 final diaryEntriesProvider =
     FutureProvider.family<List<DiaryEntry>, DiaryFilter>((ref, filter) async {
   final dao = await ref.watch(galleryDaoProvider.future);
@@ -93,25 +100,11 @@ final diaryEntriesProvider =
   var filtered = filter.tab == kDiaryTabOutfit
       ? records.where((r) => r.sceneId != null && r.sceneId!.isNotEmpty).toList()
       : records;
-  // 按心情过滤
+  // 按心情多选过滤
   if (!filter.isAllMood) {
-    filtered = filtered.where((r) => r.mood == filter.mood).toList();
-  }
-
-  // 预取 scene / template 名称用于派生标签
-  final sceneNames = <String, String>{};
-  final templateNames = <String, String>{};
-  for (final r in filtered) {
-    final sid = r.sceneId;
-    if (sid != null && sid.isNotEmpty && !sceneNames.containsKey(sid)) {
-      final s = await scenesDao.getById(sid);
-      sceneNames[sid] = (s != null && s.name.isNotEmpty) ? s.name : sid;
-    }
-    final tid = r.templateId;
-    if (tid != null && tid.isNotEmpty && !templateNames.containsKey(tid)) {
-      final t = await templatesDao.getById(tid);
-      templateNames[tid] = (t != null && t.name.isNotEmpty) ? t.name : tid;
-    }
+    filtered = filtered
+        .where((r) => r.mood != null && filter.moods.contains(r.mood))
+        .toList();
   }
 
   // 按天分组（保留插入顺序，DESC）
@@ -126,45 +119,99 @@ final diaryEntriesProvider =
   final now = DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
 
+  // 一次性预取场景/模板名称，供所有照片标签复用
+  final photosByName = <String, List<GalleryItemRecord>>{};
+  final allPhotos = <GalleryItemRecord>[];
+  for (final day in sortedDays) {
+    final list = groups[day]!;
+    photosByName[DateFormat('M月d日').format(day)] = list;
+    allPhotos.addAll(list);
+  }
+  final diaryPhotosByDay = await _recordsToDiaryPhotos(
+    allPhotos,
+    scenesDao,
+    templatesDao,
+  );
+
+  int photoCursor = 0;
   return sortedDays.map((day) {
-    final photos = groups[day]!;
-    final diaryPhotos = photos.map((r) {
-      final tags = <DiaryTag>[];
-      final img = (r.dataUrl ?? r.filePath) ?? '';
-      final sid = r.sceneId;
-      if (sid != null && sid.isNotEmpty) {
-        tags.add(DiaryTag(
-          label: sceneNames[sid] ?? sid,
-          color: DiaryTagColor.gold,
-          icon: Icons.place_outlined,
-        ));
-      }
-      final tid = r.templateId;
-      if (tid != null && tid.isNotEmpty) {
-        tags.add(DiaryTag(
-          label: templateNames[tid] ?? tid,
-          color: DiaryTagColor.green,
-          icon: Icons.photo_filter_outlined,
-        ));
-      }
-      // 心情独立成字段（叠加在照片角上），不再混入下方标签
-      final mood = r.mood;
-      return DiaryPhoto(
-        id: r.id,
-        img: img,
-        tags: tags,
-        mood: (mood != null && mood.isNotEmpty) ? mood : null,
-      );
-    }).toList();
+    final dayPhotos = <DiaryPhoto>[];
+    final dayCount = photosByName[DateFormat('M月d日').format(day)]!.length;
+    for (var i = 0; i < dayCount; i++) {
+      dayPhotos.add(diaryPhotosByDay[photoCursor++]);
+    }
 
     return DiaryEntry(
       weekday: kDiaryWeekdayNames[day.weekday - 1],
       date: DateFormat('M月d日').format(day),
       day: day,
-      photos: diaryPhotos,
+      photos: dayPhotos,
       isToday: day == today,
     );
   }).toList();
+});
+
+/// 将照片记录转换为 [DiaryPhoto]（解析场景/模板名称作为标签，心情独立成字段）
+Future<List<DiaryPhoto>> _recordsToDiaryPhotos(
+  List<GalleryItemRecord> records,
+  ScenesDao scenesDao,
+  TemplatesDao templatesDao,
+) async {
+  // 预取 scene / template 名称用于派生标签
+  final sceneNames = <String, String>{};
+  final templateNames = <String, String>{};
+  for (final r in records) {
+    final sid = r.sceneId;
+    if (sid != null && sid.isNotEmpty && !sceneNames.containsKey(sid)) {
+      final s = await scenesDao.getById(sid);
+      sceneNames[sid] = (s != null && s.name.isNotEmpty) ? s.name : sid;
+    }
+    final tid = r.templateId;
+    if (tid != null && tid.isNotEmpty && !templateNames.containsKey(tid)) {
+      final t = await templatesDao.getById(tid);
+      templateNames[tid] = (t != null && t.name.isNotEmpty) ? t.name : tid;
+    }
+  }
+
+  return records.map((r) {
+    final tags = <DiaryTag>[];
+    final img = (r.dataUrl ?? r.filePath) ?? '';
+    final sid = r.sceneId;
+    if (sid != null && sid.isNotEmpty) {
+      tags.add(DiaryTag(
+        label: sceneNames[sid] ?? sid,
+        color: DiaryTagColor.gold,
+        icon: Icons.place_outlined,
+      ));
+    }
+    final tid = r.templateId;
+    if (tid != null && tid.isNotEmpty) {
+      tags.add(DiaryTag(
+        label: templateNames[tid] ?? tid,
+        color: DiaryTagColor.green,
+        icon: Icons.photo_filter_outlined,
+      ));
+    }
+    // 心情独立成字段（叠加在照片角上），不再混入下方标签
+    final mood = r.mood;
+    return DiaryPhoto(
+      id: r.id,
+      img: img,
+      tags: tags,
+      mood: (mood != null && mood.isNotEmpty) ? mood : null,
+    );
+  }).toList();
+}
+
+/// 某一天拍摄的全部照片（拍摄日记「查看更多」当日照片页使用）
+final diaryDayProvider =
+    FutureProvider.family<List<DiaryPhoto>, DateTime>((ref, day) async {
+  final dao = await ref.watch(galleryDaoProvider.future);
+  final scenesDao = await ref.watch(scenesDaoProvider.future);
+  final templatesDao = await ref.watch(templatesDaoProvider.future);
+
+  final records = await dao.getByDay(day);
+  return _recordsToDiaryPhotos(records, scenesDao, templatesDao);
 });
 
 /// 连续拍摄天数：复用 [shootingCheckinProvider] 的统一语义
@@ -258,8 +305,10 @@ class DiaryMonthlyStats {
 }
 
 /// 本月统计 Provider：聚合本月照片数、打卡天数、最常心情、常去场景
+/// 「常去场景」展示场景名称而非 key：sceneId → SceneRecord.name 映射
 final diaryMonthlyStatsProvider = FutureProvider<DiaryMonthlyStats>((ref) async {
   final dao = await ref.watch(galleryDaoProvider.future);
+  final scenesDao = await ref.watch(scenesDaoProvider.future);
   final now = DateTime.now();
   final records = await dao.getByMonth(now.year, now.month);
 
@@ -285,6 +334,14 @@ final diaryMonthlyStatsProvider = FutureProvider<DiaryMonthlyStats>((ref) async 
   String? topScene;
   if (sceneCounts.isNotEmpty) {
     topScene = sceneCounts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  }
+
+  // 场景 key → 场景名称（查不到时回退 key）
+  if (topScene != null) {
+    final scene = await scenesDao.getById(topScene);
+    if (scene != null && scene.name.isNotEmpty) {
+      topScene = scene.name;
+    }
   }
 
   final streak = await ref.watch(diaryStreakProvider.future);

@@ -183,6 +183,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('2篇'), findsOneWidget);
   });
+
+  testWidgets('mood filter supports multi-select (union)', (tester) async {
+    setViewport(tester);
+    await initContainer();
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day, 12);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    // p1 今天·开心、p2 今天·甜酷、p3 昨天·开心
+    await dao.insert(GalleryItemRecord(
+      id: 'm1', dataUrl: 'https://example.com/m1.jpg', mood: '开心',
+      createdAt: today.millisecondsSinceEpoch,
+    ));
+    await dao.insert(GalleryItemRecord(
+      id: 'm2', dataUrl: 'https://example.com/m2.jpg', mood: '甜酷',
+      createdAt: today.millisecondsSinceEpoch + 1,
+    ));
+    await dao.insert(GalleryItemRecord(
+      id: 'm3', dataUrl: 'https://example.com/m3.jpg', mood: '开心',
+      createdAt: yesterday.millisecondsSinceEpoch,
+    ));
+
+    await container.read(
+        diaryEntriesProvider(const DiaryFilter(tab: kDiaryTabShoot)).future);
+    await container.read(diaryStreakProvider.future);
+
+    await pumpDiaryPage(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('2篇'), findsOneWidget);
+
+    // 仅选「开心」→ 今天 p1 + 昨天 p3 → 2 篇
+    await tester.ensureVisible(find.text('开心').first);
+    await tester.tap(find.text('开心').first);
+    await tester.pumpAndSettle();
+    expect(find.text('2篇'), findsOneWidget);
+
+    // 再选「甜酷」（多选并集）→ 新增今天 p2，仍 2 篇（今天 p1+p2 + 昨天 p3）
+    await tester.ensureVisible(find.text('甜酷').first);
+    await tester.tap(find.text('甜酷').first);
+    await tester.pumpAndSettle();
+    expect(find.text('2篇'), findsOneWidget);
+
+    // 取消「开心」，仅剩「甜酷」→ 只有今天 p2 → 1 篇
+    await tester.tap(find.text('开心').first);
+    await tester.pumpAndSettle();
+    expect(find.text('1篇'), findsOneWidget);
+
+    // 取消「甜酷」→ 恢复全部
+    await tester.tap(find.text('甜酷').first);
+    await tester.pumpAndSettle();
+    expect(find.text('2篇'), findsOneWidget);
+  });
 }
 
 Future<void> _onCreate(Database db, int version) async {
@@ -201,6 +254,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colMood} TEXT,
       ${Tables.colLut} TEXT,
       ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colGalleryItemHidden} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCreatedAt} INTEGER NOT NULL
     )
   ''');

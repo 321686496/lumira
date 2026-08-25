@@ -27,7 +27,8 @@ class GalleryDiaryPage extends ConsumerStatefulWidget {
 }
 
 class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
-  String? _selectedMood;
+  /// 已选心情集合（多选；空集表示「全部」）
+  Set<String> _selectedMoods = {};
 
   /// 当前筛选的日期（null 表示未筛选 / 「全部」）
   DateTime? _pickedDate;
@@ -51,9 +52,21 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     );
   }
 
+  /// 时间轴「查看更多」→ 当日照片页（传该天具体日期）
+  void _navigateToDay(DateTime day) {
+    final dateStr =
+        '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+    GoRouter.of(context).push(
+      RouteNames.build(RouteNames.galleryDiaryDay, {
+        RouteNames.paramDate: dateStr,
+      }),
+    );
+  }
+
   Future<void> _pickDate() async {
     final entries = ref
-        .read(diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, mood: _selectedMood)))
+        .read(diaryEntriesProvider(
+            DiaryFilter(tab: kDiaryTabShoot, moods: _selectedMoods)))
         .valueOrNull;
 
     // 有照片的日期集合 → 日期选择器打点标记
@@ -122,7 +135,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     final dao = await ref.read(galleryDaoProvider.future);
     await dao.delete(photoId);
     ref.invalidate(
-        diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, mood: _selectedMood)));
+        diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, moods: _selectedMoods)));
     ref.invalidate(diaryStreakProvider);
     ref.invalidate(diaryTotalCountProvider);
     if (mounted) {
@@ -135,7 +148,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final entriesAsync = ref.watch(
-        diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, mood: _selectedMood)));
+        diaryEntriesProvider(DiaryFilter(tab: kDiaryTabShoot, moods: _selectedMoods)));
     final streak = ref.watch(diaryStreakProvider).valueOrNull ?? 0;
     final monthStats = ref.watch(diaryMonthlyStatsProvider).valueOrNull;
 
@@ -179,14 +192,20 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                 controller: _scrollController,
                 padding: const EdgeInsets.only(bottom: 100),
                 children: [
-                  // 心情筛选
+                  // 心情筛选（多选，与标题栏保持间隔）
                   FadeUp(
                     delay: const Duration(milliseconds: 50),
                     child: Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.only(top: 12, bottom: 4),
                       child: _MoodFilterRow(
-                        selectedMood: _selectedMood,
-                        onSelect: (mood) => setState(() => _selectedMood = mood),
+                        selectedMoods: _selectedMoods,
+                        onToggle: (mood, active) => setState(() {
+                          if (active) {
+                            _selectedMoods = {..._selectedMoods, mood};
+                          } else {
+                            _selectedMoods = {..._selectedMoods}..remove(mood);
+                          }
+                        }),
                         tokens: tokens,
                       ),
                     ),
@@ -282,6 +301,7 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                           entry: e.value,
                           onPhotoTap: _navigateToPhoto,
                           onPhotoLongPress: _onPhotoLongPress,
+                          onViewMore: _navigateToDay,
                         ),
                       );
                     }),
@@ -390,15 +410,16 @@ class _CalendarAction extends StatelessWidget {
   }
 }
 
+/// 心情筛选行：横向滑动，支持多选（点击选中/再次点击取消）
 class _MoodFilterRow extends StatelessWidget {
   const _MoodFilterRow({
-    required this.selectedMood,
-    required this.onSelect,
+    required this.selectedMoods,
+    required this.onToggle,
     required this.tokens,
   });
 
-  final String? selectedMood;
-  final void Function(String?) onSelect;
+  final Set<String> selectedMoods;
+  final void Function(String mood, bool active) onToggle;
   final ThemeTokens tokens;
 
   @override
@@ -413,9 +434,9 @@ class _MoodFilterRow extends StatelessWidget {
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final mood = moods[index];
-          final active = selectedMood == mood.name;
+          final active = selectedMoods.contains(mood.name);
           return GestureDetector(
-            onTap: () => onSelect(active ? null : mood.name),
+            onTap: () => onToggle(mood.name, !active),
             behavior: HitTestBehavior.opaque,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
