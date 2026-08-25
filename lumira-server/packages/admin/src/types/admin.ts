@@ -1,6 +1,8 @@
 // src/types/admin.ts
 // 后台专用类型（与 @lumira/shared 互补）
 
+import type { TemplateImage, TemplatePose } from '@lumira/shared';
+
 export interface StatsResponse {
   totalDevices: number;
   todayNewDevices: number;
@@ -246,9 +248,11 @@ export interface AdminTemplateDetail extends AdminTemplateListItem {
   referenceSource: string;
   tags: string[];
   tagIds: string[];
-  classification: { type: string; majorStyle: string; subStyle: string; method: string };
+  classification: { type: string; majorStyle: string; style: string; subStyle?: string; method?: string };
   composition: Record<string, unknown>;
   pose: Record<string, unknown>;
+  poses?: TemplatePose[];
+  images?: TemplateImage[];
   camera: Record<string, unknown>;
   sceneGuide: Record<string, unknown>;
   postProcess: Record<string, unknown>;
@@ -266,13 +270,15 @@ export interface CreateTemplateRequest {
   referenceSource?: string;
   tags?: string[];
   tagIds?: string[];
-  classification?: { type: string; majorStyle: string; subStyle: string; method: string };
+  classification?: { type: string; majorStyle: string; style: string; subStyle?: string; method?: string };
   ambience?: TemplateAmbience;
   shortDesc?: string;
   sortOrder?: number;
   isActive?: boolean;
   composition?: Record<string, unknown>;
   pose?: Record<string, unknown>;
+  poses?: TemplatePose[];
+  images?: TemplateImage[];
   camera?: Record<string, unknown>;
   sceneGuide?: Record<string, unknown>;
   postProcess?: Record<string, unknown>;
