@@ -68,8 +68,9 @@ export class UpdateTemplateDto {
   tagIds?: string[];
 
   @IsOptional()
-  // style 为旧 admin 前端的兼容字段（仅提交 style 时按 subStyle 存储）
-  classification?: { type: string; majorStyle: string; subStyle: string; method: string; style?: string };
+  // 三级分类：type → majorStyle → style；subStyle 为旧字段兼容（与 style 同值）；
+  // method 不再作为树层级（兼容保留）
+  classification?: { type: string; majorStyle: string; style: string; subStyle?: string; method?: string };
 
   @IsOptional()
   @IsInt()
@@ -84,7 +85,18 @@ export class UpdateTemplateDto {
   composition?: Record<string, unknown>;
 
   @IsOptional()
+  /** 兼容旧 admin：单个姿势（poses 优先） */
   pose?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsArray()
+  /** 姿势组（多姿势，优先于 pose） */
+  poses?: Record<string, unknown>[];
+
+  @IsOptional()
+  @IsArray()
+  /** 效果图列表（[0]=封面，优先于 cover 文件上传） */
+  images?: Record<string, unknown>[];
 
   @IsOptional()
   camera?: Record<string, unknown>;
