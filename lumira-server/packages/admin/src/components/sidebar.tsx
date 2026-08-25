@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {
   ChartLineUp, Users, Ticket, Gift, ClipboardText,
   SquaresFour, GridFour, DeviceMobile, ChatCircleText, Camera, Megaphone,
-} from '@phosphor-icons/react/dist/ssr';
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
