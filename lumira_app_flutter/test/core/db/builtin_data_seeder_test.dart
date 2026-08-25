@@ -179,6 +179,7 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colAmbienceJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colPoseJson} TEXT NOT NULL DEFAULT '{}',
+      ${Tables.colImagesJson} TEXT NOT NULL DEFAULT '[]',
       ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
