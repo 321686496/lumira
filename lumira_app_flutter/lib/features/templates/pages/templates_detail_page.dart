@@ -381,7 +381,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _PreviewImage(
+              _PreviewGallery(
                 template: template,
                 tokens: tokens,
               ),
@@ -800,8 +800,8 @@ class _RemoteLoadError extends StatelessWidget {
   }
 }
 
-class _PreviewImage extends StatelessWidget {
-  const _PreviewImage({
+class _PreviewGallery extends StatefulWidget {
+  const _PreviewGallery({
     required this.template,
     required this.tokens,
   });
@@ -809,8 +809,15 @@ class _PreviewImage extends StatelessWidget {
   final TemplateDetail template;
   final ThemeTokens tokens;
 
+  @override
+  State<_PreviewGallery> createState() => _PreviewGalleryState();
+}
+
+class _PreviewGalleryState extends State<_PreviewGallery> {
+  int _current = 0;
+
   double get _aspectRatio {
-    final parts = template.aspectRatio.split(':');
+    final parts = widget.template.aspectRatio.split(':');
     final w = int.tryParse(parts[0]) ?? 4;
     final h = int.tryParse(parts[1]) ?? 3;
     return w / h;
@@ -818,6 +825,9 @@ class _PreviewImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = widget.tokens;
+    final imgs = widget.template.displayImages;
+    final controller = PageController();
     return FadeUp(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -828,23 +838,28 @@ class _PreviewImage extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                TemplateCoverImage(
-                  cover: template.cover,
-                  coverData: template.coverData,
-                  fit: BoxFit.cover,
-                  fallback: Container(
-                    color: tokens.surfaceAlt,
-                    child: Icon(
-                      Icons.photo_outlined,
-                      color: tokens.textTertiary,
-                      size: 40,
+                PageView.builder(
+                  controller: controller,
+                  itemCount: imgs.length,
+                  onPageChanged: (i) => setState(() => _current = i),
+                  itemBuilder: (_, i) => TemplateCoverImage(
+                    cover: imgs[i].url,
+                    coverData: imgs[i].data,
+                    fit: BoxFit.cover,
+                    fallback: Container(
+                      color: tokens.surfaceAlt,
+                      child: Icon(
+                        Icons.photo_outlined,
+                        color: tokens.textTertiary,
+                        size: 40,
+                      ),
                     ),
-                  ),
-                  errorFallback: Container(
-                    color: tokens.surfaceAlt,
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      color: tokens.textTertiary,
+                    errorFallback: Container(
+                      color: tokens.surfaceAlt,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: tokens.textTertiary,
+                      ),
                     ),
                   ),
                 ),
@@ -856,11 +871,12 @@ class _PreviewImage extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       // 硬编码颜色，与 uni-app 一致 (rgba(0,0,0,0.45))
+                      // 「叠照片上的黑/白半透明遮罩」属跨风格通用的叠加视觉，是合法例外。
                       color: const Color(0x73000000),
                       borderRadius: BorderRadius.circular(9999),
                     ),
                     child: Text(
-                      TemplatesBrowseMockData.categoryLabel(template.category),
+                      TemplatesBrowseMockData.categoryLabel(widget.template.category),
                       style: const TextStyle(
                         fontSize: 11,
                         color: Colors.white,
@@ -869,9 +885,49 @@ class _PreviewImage extends StatelessWidget {
                     ),
                   ),
                 ),
+                // 多图时右下角页码指示器（叠照片浮层：半透明 surface + 细边，无阴影）
+                if (imgs.length > 1)
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: _PageIndicator(current: _current, total: imgs.length, tokens: tokens),
+                  ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 画廊页码指示器（叠照片浮层：半透明 surface + 细边，避免毛玻璃/外阴影）。
+class _PageIndicator extends StatelessWidget {
+  const _PageIndicator({
+    required this.current,
+    required this.total,
+    required this.tokens,
+  });
+
+  final int current;
+  final int total;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: tokens.surface.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(9999),
+        border: Border.all(color: tokens.divider.withOpacity(0.5)),
+      ),
+      child: Text(
+        '${current + 1}/$total',
+        style: TextStyle(
+          fontSize: 11,
+          color: tokens.textPrimary,
+          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -1354,7 +1410,7 @@ class _FillLightCard extends StatelessWidget {
   }
 }
 
-class _PoseReferenceCard extends StatelessWidget {
+class _PoseReferenceCard extends StatefulWidget {
   const _PoseReferenceCard({
     required this.template,
     required this.tokens,
@@ -1363,18 +1419,29 @@ class _PoseReferenceCard extends StatelessWidget {
   final TemplateDetail template;
   final ThemeTokens tokens;
 
+  @override
+  State<_PoseReferenceCard> createState() => _PoseReferenceCardState();
+}
+
+class _PoseReferenceCardState extends State<_PoseReferenceCard> {
+  int _index = 0;
+
   /// 姿势参考预览框比例：与模板宽高比一致（4:3 → 4:3、16:9 → 16:9），
   /// fullscreen 时回退设备屏幕宽高比。
   double _posePreviewRatio(BuildContext context) {
     return poseReferenceAspectRatio(
-      template.aspectRatio,
+      widget.template.aspectRatio,
       MediaQuery.of(context).size,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final pose = template.pose;
+    final tokens = widget.tokens;
+    final poses = widget.template.displayPoses;
+    // 越界兜底：模板姿势组在渲染期间可能缩短（如 mock 换数据）。
+    if (_index >= poses.length) _index = poses.length - 1;
+    final PoseData pose = poses[_index];
     return FadeUp(
       delay: const Duration(milliseconds: 400),
       child: Padding(
@@ -1396,6 +1463,34 @@ class _PoseReferenceCard extends StatelessWidget {
                       color: tokens.textPrimary,
                     ),
                   ),
+                  const Spacer(),
+                  // 仅多姿势时显示「上一/下一姿势」切换
+                  if (poses.length > 1) ...[
+                    LumiraIconButton(
+                      icon: Icons.chevron_left,
+                      size: 18,
+                      color: tokens.brand,
+                      padding: const EdgeInsets.all(4),
+                      onPressed: () => setState(
+                          () => _index = (_index - 1 + poses.length) % poses.length),
+                    ),
+                    Text(
+                      '${_index + 1}/${poses.length}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    LumiraIconButton(
+                      icon: Icons.chevron_right,
+                      size: 18,
+                      color: tokens.brand,
+                      padding: const EdgeInsets.all(4),
+                      onPressed: () =>
+                          setState(() => _index = (_index + 1) % poses.length),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 12),

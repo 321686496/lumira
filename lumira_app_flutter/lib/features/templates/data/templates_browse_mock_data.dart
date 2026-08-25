@@ -220,6 +220,8 @@ class TemplateDetail {
     required this.postProcess,
     required this.sceneGuide,
     required this.pose,
+    this.images,
+    this.poses,
     this.majorStyle,
     this.subStyle,
     this.method,
@@ -267,6 +269,19 @@ class TemplateDetail {
   final SceneGuideData sceneGuide;
   final PoseData pose;
 
+  /// 效果图列表（多图时非 null；null 表示仅有 cover/coverData 单图）。
+  final List<TemplateImage>? images;
+  /// 姿势组（多姿势时非 null；null 表示单 pose）。
+  final List<PoseData>? poses;
+
+  /// 无显式 images 时由 cover/coverData 构造单元素列表，供 UI 统一遍历。
+  List<TemplateImage> get displayImages => images ?? <TemplateImage>[
+        if (cover?.isNotEmpty == true)
+          TemplateImage(url: cover!, data: coverData),
+      ];
+  /// 姿势组（兼容单 pose）。
+  List<PoseData> get displayPoses => poses ?? <PoseData>[pose];
+
   /// 仅复制分类分级字段（majorStyle / subStyle / method），其余字段保持原样。
   /// 用于 [TemplatesBrowseMockData.findDetailById] 从 TemplateRegistry 补齐
   /// mock 详情缺失的分类分级，其余详细参数（构图/相机/后期）不受影响。
@@ -292,6 +307,8 @@ class TemplateDetail {
       postProcess: postProcess,
       sceneGuide: sceneGuide,
       pose: pose,
+      images: images,
+      poses: poses,
       majorStyle: majorStyle ?? this.majorStyle,
       subStyle: subStyle ?? this.subStyle,
       method: method ?? this.method,
@@ -1679,6 +1696,20 @@ class TemplatesBrowseMockData {
         bestTime: tpl.sceneGuide.bestTime,
         tips: List<String>.from(tpl.sceneGuide.tips),
       ),
+      images: tpl.meta.images.isEmpty ? null : tpl.meta.images,
+      poses: tpl.poses.isEmpty
+          ? null
+          : tpl.poses
+                .map((p) => PoseData(
+                      silhouetteType: p.silhouette.type,
+                      silhouetteData: p.silhouette.data,
+                      positionX: p.position.x,
+                      positionY: p.position.y,
+                      description: p.description,
+                      scale: p.scale,
+                      rotation: p.rotation,
+                    ))
+                .toList(),
       pose: PoseData(
         silhouetteType: tpl.pose.silhouette.type,
         silhouetteData: tpl.pose.silhouette.data,
