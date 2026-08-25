@@ -198,9 +198,39 @@ class AwesomeCameraPreviewState extends State<AwesomeCameraPreview> {
                             widget.onPreviewTap != null && _previewSize != null
                                 ? OnPreviewTapBuilder(
                                     pixelPreviewSizeGetter: () => _previewSize!,
+                                    // 对焦归一化基准 = 取景框（可见区域）尺寸，
+                                    // 而非被裁剪的 croppedPreviewSize。
                                     flutterPreviewSizeGetter: () =>
-                                        croppedPreviewSize,
-                                    onPreviewTap: widget.onPreviewTap!,
+                                        PreviewSize(
+                                      width: constrainedSize.width,
+                                      height: constrainedSize.height,
+                                    ),
+                                    onPreviewTap: OnPreviewTap(
+                                      onTap: (position, flutterPreviewSize,
+                                          pixelPreviewSize) {
+                                        // 手势层覆盖整张纹理（cover 模式纹理比取景框大并
+                                        // 居中裁切、contain 模式比取景框小并居中留边），
+                                        // localPosition 相对纹理左上角。加上偏移换算回
+                                        // 取景框坐标，否则黄色对焦框相对手指触点偏移
+                                        // （iOS 全屏取景框 + 4:3 纹理时明显偏右）。
+                                        final offset = computePreviewTapOffset(
+                                          textureSize: Size(
+                                            _flutterPreviewSize!.width,
+                                            _flutterPreviewSize!.height,
+                                          ),
+                                          boxSize: constrainedSize,
+                                        );
+                                        widget.onPreviewTap!.onTap(
+                                          position + offset,
+                                          flutterPreviewSize,
+                                          pixelPreviewSize,
+                                        );
+                                      },
+                                      onTapPainter:
+                                          widget.onPreviewTap!.onTapPainter,
+                                      tapPainterDuration: widget
+                                          .onPreviewTap!.tapPainterDuration,
+                                    ),
                                   )
                                 : null,
                         onPreviewScale: widget.onPreviewScale,

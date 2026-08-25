@@ -165,6 +165,12 @@ export class Constants {
 
     static readonly MIN_VIDEO_FRAME: number = 30;
     /**
+     * 拍照输出像素上限（宽×高）。前端仅解码/处理到 ~1600 边长（kDecodeTargetDim=1600），
+     * 源图无需 8MP 级全分辨率，超高分辨率档位会显著拖慢 capture() 编码与写盘（实测 2106ms）。
+     * 取值 ≤3MP：仍覆盖 1600 输出目标，且明显加速拍照。
+     */
+    static readonly MAX_PHOTO_PIXELS: number = 3000000;
+    /**
      * FLASH_POSITION_X.
      */
     static readonly FLASH_POSITION_X: number = 0;

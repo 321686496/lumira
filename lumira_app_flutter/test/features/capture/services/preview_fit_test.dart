@@ -1,4 +1,4 @@
-import 'dart:ui' show Size;
+import 'dart:ui' show Offset, Size;
 
 import 'package:camerawesome/preview_fit.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,6 +59,46 @@ void main() {
       );
       expect(size.width, closeTo(844 * (9 / 16), 0.01));
       expect(size.height, closeTo(844, 0.01));
+    });
+  });
+
+  group('computePreviewTapOffset', () {
+    // 修复背景：全屏取景框（390×844）+ 4:3 竖屏传感器（3024×4032）时，
+    // cover 模式纹理被放大到 633×844 并左右居中裁切。手势层覆盖整张纹理，
+    // 其 localPosition 相对纹理左上角（在取景框左侧 -121.5 处），导致对焦框
+    // 相对手指触点向右偏移 121.5。该函数把纹理坐标换算回取景框坐标。
+    test('cover 全屏 + 4:3 纹理：水平向左平移，垂直无偏移', () {
+      final offset = computePreviewTapOffset(
+        textureSize: const Size(633, 844),
+        boxSize: const Size(390, 844),
+      );
+      expect(offset.dx, closeTo(-121.5, 0.01));
+      expect(offset.dy, closeTo(0, 0.01));
+
+      // 手指点屏幕中央 (195, 422) → 手势层 localPosition (316.5, 422)
+      // → 换算回取景框坐标后应回到 (195, 422)
+      final tap = const Offset(316.5, 422) + offset;
+      expect(tap.dx, closeTo(195, 0.01));
+      expect(tap.dy, closeTo(422, 0.01));
+    });
+
+    test('contain 竖屏 + 16:9 纹理：垂直向下平移，水平无偏移', () {
+      // 16:9 纹理 390×219.4 居中放入 390×844 取景框
+      final offset = computePreviewTapOffset(
+        textureSize: const Size(390, 219.4),
+        boxSize: const Size(390, 844),
+      );
+      expect(offset.dx, closeTo(0, 0.01));
+      expect(offset.dy, closeTo((844 - 219.4) / 2, 0.01));
+    });
+
+    test('等比铺满（4:3 框 + 4:3 纹理）：无偏移', () {
+      final offset = computePreviewTapOffset(
+        textureSize: const Size(633, 844),
+        boxSize: const Size(633, 844),
+      );
+      expect(offset.dx, closeTo(0, 0.01));
+      expect(offset.dy, closeTo(0, 0.01));
     });
   });
 }

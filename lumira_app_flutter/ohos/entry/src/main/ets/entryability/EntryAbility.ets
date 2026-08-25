@@ -5,6 +5,7 @@ import { GeneratedPluginRegistrant } from '../plugins/GeneratedPluginRegistrant'
 import PhotoSaverPlugin from '../plugins/PhotoSaverPlugin';
 import FileReaderPlugin from '../plugins/FileReaderPlugin';
 import DeepLinkPlugin from '../plugins/DeepLinkPlugin';
+import ImageProcessorPlugin from '../plugins/ImageProcessorPlugin';
 
 export default class EntryAbility extends FlutterAbility {
   configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -16,6 +17,8 @@ export default class EntryAbility extends FlutterAbility {
     flutterEngine.getPlugins()?.add(new FileReaderPlugin());
     // 注册原生深链插件（uni_links 无 ohos 实现）
     flutterEngine.getPlugins()?.add(new DeepLinkPlugin());
+    // 注册原生图像处理器（dart:ui JPEG 软件解码在 OHOS 上极慢，改走系统 ImageSource 解码）
+    flutterEngine.getPlugins()?.add(new ImageProcessorPlugin());
   }
 
   // ⚠️ best-effort：flutter_ohos 的 onCreate 返回 Promise，须以 async 方式重写；

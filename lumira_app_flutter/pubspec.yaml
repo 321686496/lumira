@@ -110,6 +110,9 @@ dependencies:
   # 已合并 android/ios/ohos 三端实现到 packages/qr_code_scanner
   qr_code_scanner:
     path: packages/qr_code_scanner
+  # 二维码解码（纯 Dart，无原生插件；用于「从相册选择二维码」识别）
+  # 纯 Dart 实现，兼容 OHOS / Dart 2.19.6，web 端亦可用
+  zxing2: 0.2.0
   photo_view: 0.14.0
 
 dev_dependencies:

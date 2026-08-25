@@ -27,3 +27,22 @@ Size computeCoverPreviewSize({
       ? Size(targetWidthByWidth, targetHeightByWidth)
       : Size(targetWidthByHeight, targetHeightByHeight);
 }
+
+/// Computes the offset of the tap gesture layer relative to the preview box.
+///
+/// The gesture layer covers the whole [textureSize] (the max preview size).
+/// In `cover` mode the texture is larger than the box and centered-cropped
+/// (left/right or top/bottom overflow); in `contain` mode it is smaller and
+/// centered with bars. Either way the gesture `localPosition` is measured from
+/// the texture top-left, so adding this offset converts it back to the box
+/// (preview widget) coordinate space — keeping the focus frame aligned with
+/// the user's finger (iOS showed the frame offset to the right).
+Offset computePreviewTapOffset({
+  required Size textureSize,
+  required Size boxSize,
+}) {
+  return Offset(
+    (boxSize.width - textureSize.width) / 2,
+    (boxSize.height - textureSize.height) / 2,
+  );
+}

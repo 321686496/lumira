@@ -730,21 +730,68 @@ class _CapturePageState extends ConsumerState<CapturePage>
       originalPath = null;
     }
 
+    // === OHOS 单次原生快速路径 ===
+    // 简单成片（无水印、无暂未原生实现的磨皮/暗角/颗粒/Clarity 复杂效果）走原生管线一次做完
+    // （解码→几何变换→色彩矩阵→锐化→JPEG硬编码→写文件），绕开 GPU toByteData 读回 +
+    // isolate 逐像素 + 软件编码，以达成 ≤800ms 后处理目标。失败一律回退下面原有
+    // GPU+isolate+水印管线，绝不阻塞/退化。iOS/Android 不走此分支。
+    final fastNative = _isOhos &&
+        !needWatermark &&
+        params.postProcess.smoothStrength == 0 &&
+        params.postProcess.vignette == 0 &&
+        params.postProcess.grain == 0 &&
+        (params.postProcess.color.clarity == null || params.postProcess.color.clarity == 0) &&
+        params.postProcess.customCropRect == null;
+    bool nativeFastDone = false;
+    if (fastNative) {
+      final swNative = Stopwatch()..start();
+      try {
+        nativeFastDone = await OhosImageProcessor.instance.processJpeg(
+          inputPath: params.inputPath,
+          outputPath: params.inputPath,
+          targetRatio: params.targetRatio,
+          isPortrait: params.isPortrait,
+          isFront: params.isFront,
+          matrix: composePostProcessMatrix(params.postProcess),
+          sharpen: params.postProcess.sharpen >= kMinLiveSharpen
+              ? params.postProcess.sharpen
+              : kMinLiveSharpen,
+          maxDim: kMaxProcessDim,
+        );
+      } catch (e) {
+        debugPrint('[capture] OHOS 原生快速路径异常，回退原管线: $e');
+        nativeFastDone = false;
+      }
+      swNative.stop();
+      debugPrint('[perf] OHOS原生 processJpeg 快速路径: ${swNative.elapsedMilliseconds}ms ok=$nativeFastDone');
+    }
+
     // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
     final swTotal = Stopwatch()..start();
+    String processedPath = params.inputPath;
+    List<int>? gpuSourceAvgRgb;
+    List<int>? diagBefore;
+    List<int>? diagAfter;
+    _GpuProcessedData? gpuData;
+    CaptureWorkerResult? workerResult;
     try {
       final swGpu = Stopwatch()..start();
       // 【所见即所得修复】先在主 isolate 中用 dart:ui GPU 管线应用色彩矩阵，
       // 与取景器 ColorFiltered 使用完全相同的渲染管线。
       // 然后传 rawRgba 给 worker isolate 做后续 CPU 处理（锐化/磨皮/暗角/JPEG 编码）。
-      final gpuData = await _applyColorMatrixOnGpu(params, needRawRgba: needWatermark);
-      swGpu.stop();
-      debugPrint('[perf] _applyColorMatrixOnGpu: ${swGpu.elapsedMilliseconds}ms');
-      if (gpuData == null) {
-        // GPU 处理失败，跳过后续处理（不阻塞拍照流程）
-        debugPrint('[capture] GPU 处理失败，使用原始照片');
-        _isProcessingCapture = false;
-        return;
+      // （OHOS 原生快速路径已产出成片，跳过本段与后续 worker/水印。）
+      if (!nativeFastDone) {
+        gpuData = await _applyColorMatrixOnGpu(params, needRawRgba: needWatermark);
+        swGpu.stop();
+        debugPrint('[perf] _applyColorMatrixOnGpu: ${swGpu.elapsedMilliseconds}ms');
+        if (gpuData == null) {
+          // GPU 处理失败，跳过后续处理（不阻塞拍照流程）
+          debugPrint('[capture] GPU 处理失败，使用原始照片');
+          _isProcessingCapture = false;
+          return;
+        }
+      } else {
+        swGpu.stop();
       }
       // 等待原图备份完成（isolate 即将覆写 inputPath）
       if (backupFuture != null) {
@@ -754,36 +801,43 @@ class _CapturePageState extends ConsumerState<CapturePage>
         });
       }
       final swIso = Stopwatch()..start();
-      // 常驻 worker isolate（A 优化），避免 compute() 每次创建 isolate 的开销
-      // 偏黄诊断结论（2026-08-24，color_diag 实测 diagBefore=[128,108,100]）：成片在 sRGB
-      // 语境下比取景器偏暖。这不是 P3 二次转换问题（实测对 sRGB 像素再套 P3→sRGB 会进一步
-      // 抬 R / 压 B，加重偏黄），而是 iOS 相机 ISP 成片固有的暖倾向。这里对 iOS 走 worker
-      // 固定去黄校色（压低红、抬亮蓝），使成片与取景器观感一致。
-      final workerResult = await CaptureWorker.instance.process(
-        CaptureWorkerRequest(
-          rgbaBytes: gpuData.rgbaBytes,
-          width: gpuData.width,
-          height: gpuData.height,
-          outputPath: gpuData.outputPath,
-          sharpen: gpuData.sharpen,
-          clarity: gpuData.clarity,
-          grain: gpuData.grain,
-          smoothStrength: gpuData.smoothStrength,
-          vignette: gpuData.vignette,
-          needRawRgba: gpuData.needRawRgba,
-        ),
-      );
-      swIso.stop();
-      debugPrint('[perf] CaptureWorker.process: ${swIso.elapsedMilliseconds}ms '
-          'platform=${defaultTargetPlatform.name}, '
-          'diagBefore=${workerResult.diagBefore}, '
-          'diagAfter=${workerResult.diagAfter}');
-      if (!mounted) {
-        _isProcessingCapture = false;
-        return;
+      if (!nativeFastDone) {
+        // 常驻 worker isolate（A 优化），避免 compute() 每次创建 isolate 的开销
+        // 偏黄诊断结论（2026-08-24，color_diag 实测 diagBefore=[128,108,100]）：成片在 sRGB
+        // 语境下比取景器偏暖。这不是 P3 二次转换问题（实测对 sRGB 像素再套 P3→sRGB 会进一步
+        // 抬 R / 压 B，加重偏黄），而是 iOS 相机 ISP 成片固有的暖倾向。这里对 iOS 走 worker
+        // 固定去黄校色（压低红、抬亮蓝），使成片与取景器观感一致。
+        final gd = gpuData!; // 此时非空：非原生快速路径下 gpuData 已在上面赋值，null 时已提前 return
+        workerResult = await CaptureWorker.instance.process(
+          CaptureWorkerRequest(
+            rgbaBytes: gd.rgbaBytes,
+            width: gd.width,
+            height: gd.height,
+            outputPath: gd.outputPath,
+            sharpen: gd.sharpen,
+            clarity: gd.clarity,
+            grain: gd.grain,
+            smoothStrength: gd.smoothStrength,
+            vignette: gd.vignette,
+            needRawRgba: gd.needRawRgba,
+          ),
+        );
+        swIso.stop();
+        debugPrint('[perf] CaptureWorker.process: ${swIso.elapsedMilliseconds}ms '
+            'platform=${defaultTargetPlatform.name}, '
+            'diagBefore=${workerResult.diagBefore}, '
+            'diagAfter=${workerResult.diagAfter}');
+        if (!mounted) {
+          _isProcessingCapture = false;
+          return;
+        }
+        processedPath = workerResult.outputPath;
+        gpuSourceAvgRgb = gpuData.sourceAvgRgb;
+        diagBefore = workerResult.diagBefore;
+        diagAfter = workerResult.diagAfter;
+      } else {
+        swIso.stop();
       }
-
-      String processedPath = workerResult.outputPath;
 
       // evict FileImage 缓存，防止 isolate 覆写后旧解码图残留
       try {
@@ -798,9 +852,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 失败时静默回退到 processedPath，绝不阻塞拍照流程。
       // originalPath 仍为未加水印的原始备份，不受此步骤影响。
       String finalPath = processedPath;
-      if (watermarkTemplate != null &&
+      if (!nativeFastDone &&
+          watermarkTemplate != null &&
           watermarkSettings.enabled &&
-          workerResult.rgbaBytes != null) {
+          workerResult!.rgbaBytes != null) {
         ui.Image? sourceImage;
         final swWm = Stopwatch()..start();
         try {
@@ -873,9 +928,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
         await _writeColorDiagnostics(
           rawPath: originalPath,
           outputPath: finalPath,
-          sourceAvgRgb: gpuData.sourceAvgRgb,
-          diagBefore: workerResult.diagBefore,
-          diagAfter: workerResult.diagAfter,
+          sourceAvgRgb: gpuSourceAvgRgb,
+          diagBefore: diagBefore,
+          diagAfter: diagAfter,
         );
       } catch (e) {
         debugPrint('[capture] 颜色诊断写盘失败（不影响拍照）: $e');

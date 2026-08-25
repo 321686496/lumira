@@ -29,7 +29,6 @@ import { media } from '@kit.MediaKit'
 import { Constants } from '../cameraX/Constants'
 import { sensor } from '@kit.SensorServiceKit'
 import { geoLocationManager } from '@kit.LocationKit'
-import { effectKit } from '@kit.ArkGraphics2D'
 import { ArkTSUtils, Decimal } from '@kit.ArkTS'
 import { photoAccessHelper } from '@kit.MediaLibraryKit'
 import { display } from '@kit.ArkUI'
@@ -344,29 +343,42 @@ export class CameraState implements StreamHandler {
       return false;
     }
 
-    let photoProfile: undefined | camera.Profile = photoProfilesArray.find((profile: camera.Profile) => {
-      const aspectRatioMatch =
-        profile.size.width * this.previewProfile!!.size.height ===
-          profile.size.height * this.previewProfile!!.size.width;
-      return profile.size.width >= ConstantsPreview.PREVIEW_1080 &&
-        profile.size.height >= ConstantsPreview.PREVIEW_1080 &&
-        aspectRatioMatch;
-    });
-
-    // 没有1080P的分辨率
+    // photoProfiles 数组的排列顺序在不同机型上并不一致（降序/升序都可能），不能依赖下标排序。
+    // 在像素上限 MAX_PHOTO_PIXELS 内按面积选最大档位：上限保证拍照速度（过高分辨率拖慢 capture()），
+    // 取最大保证源图不至于太小导致前端放大后成片模糊。
+    // 优先取"与预览宽高比匹配（浮点容差）"里面积最大的档位，避免成片取景框被裁切；无匹配则退而求其次。
+    const previewW = this.previewProfile!!.size.width;
+    const previewH = this.previewProfile!!.size.height;
+    const previewAspect = previewW / previewH;
+    const maxPixels = Constants.MAX_PHOTO_PIXELS;
+    const byAreaDesc = (a: camera.Profile, b: camera.Profile): number =>
+      (b.size.width * b.size.height) - (a.size.width * a.size.height);
+    const byAreaAsc = (a: camera.Profile, b: camera.Profile): number =>
+      (a.size.width * a.size.height) - (b.size.width * b.size.height);
+    // 拍照档位在像素上限内选择：前端只解码到 ~1600 边长，源图无需 8MP 级，
+    // 全分辨率档位会显著拖慢 capture() 编码与写盘（实测 2106ms）。在 ≤MAX_PHOTO_PIXELS
+    // 内优先取与预览宽高比匹配、面积最大的档位，避免成片取景框被裁切。
+    const underCap: camera.Profile[] = [...photoProfilesArray]
+      .filter((p: camera.Profile) => p.size.width * p.size.height <= maxPixels);
+    const aspectMatched: camera.Profile[] = [...underCap]
+      .filter((p: camera.Profile) =>
+        Math.abs(p.size.width / p.size.height - previewAspect) / previewAspect < 0.02)
+      .sort(byAreaDesc);
+    let photoProfile: camera.Profile | undefined = aspectMatched[0];
     if (!photoProfile) {
-      photoProfile = photoProfilesArray.reverse().find((profile: camera.Profile) => {
-        const aspectRatioMatch =
-          profile.size.width * this.previewProfile!!.size.height ===
-            profile.size.height * this.previewProfile!!.size.width;
-        return aspectRatioMatch;
-      })
+      // 无精确宽高比匹配时，退而求其次取像素上限内面积最大的档位，宁可稍裁切也不可因低分辨率而糊。
+      photoProfile = [...underCap].sort(byAreaDesc)[0];
     }
-
+    if (!photoProfile) {
+      // 所有档位均超过像素上限（仅提供超高分辨率档位）时，取面积最小档位以保速。
+      photoProfile = [...photoProfilesArray].sort(byAreaAsc)[0];
+    }
     if (!photoProfile) {
       Logger.error(TAG, `photoConfig photoProfile undefined`);
       return false;
     }
+    Logger.info(TAG, `photoConfig photoProfile=${photoProfile.size.width}x${photoProfile.size.height} ` +
+      `preview=${previewW}x${previewH} total=${photoProfilesArray.length} maxPixels=${maxPixels}`);
 
     // 创建预览流输出。
     this.previewOutput = this.cameraManager!.createPreviewOutput(this.previewProfile, this.surfaceId?.toString());
@@ -911,6 +923,7 @@ export class CameraState implements StreamHandler {
   async takePhoto(): Promise<void> {
     const degree = await this.getCurrentDeviceDegree();
     let photoSettings: camera.PhotoCaptureSetting = {
+      quality: camera.QualityLevel.QUALITY_LEVEL_HIGH, // 官方推荐高画质，降低JPEG压缩对清晰度的影响
       mirror: this.cameraPosition === camera.CameraPosition.CAMERA_POSITION_FRONT ? this._mirrorFrontCamera : false,
       rotation: this.getPhotoRotation(degree)
     };
@@ -927,7 +940,9 @@ export class CameraState implements StreamHandler {
         Logger.info(TAG, `getCurrentLocation call Failed! error: ${(e as BusinessError).code}`);
       }
     }
+    takePhotoStartAt = Date.now()
     await this.photoOutput?.capture(photoSettings);
+    Logger.info(TAG, `takePhoto capture() returned after ${Date.now() - takePhotoStartAt}ms`);
     Logger.info(TAG, 'takePicture end');
   }
 
@@ -984,7 +999,7 @@ export class CameraState implements StreamHandler {
                   const file = fileIo.openSync(this._photoPath!, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE)
                   const written = fileIo.writeSync(file.fd, buffer)
                   fileIo.closeSync(file)
-                  Logger.info(TAG, `photoAvailable: saved raw JPEG bytes=${written} to ${this._photoPath}`)
+                  Logger.info(TAG, `photoAvailable: saved raw JPEG bytes=${written} elapsed=${Date.now() - takePhotoStartAt}ms to ${this._photoPath}`)
                   this._photoResult?.success(true)
                 } catch (e) {
                   Logger.error(TAG, `photoAvailable save failed: ${JSON.stringify(e)}`)
@@ -1033,15 +1048,13 @@ export class CameraState implements StreamHandler {
     }
     try {
       let requestOptions: photoAccessHelper.RequestOptions = {
-        // 按照业务需求配置回图模式
-        // FAST_MODE：仅接收一阶段低质量图回调
-        // HIGH_QUALITY_MODE：仅接收二阶段全质量图回调
-        // BALANCE_MODE：接收一阶段及二阶段图片回调
-        deliveryMode: photoAccessHelper.DeliveryMode.FAST_MODE,
+        // 兜底路径也需要全质量图：FAST_MODE 仅接收一阶段低质量图会导致成片模糊，
+        // 改 HIGH_QUALITY_MODE 接收二阶段全质量图。正常拍照仍以 photoAvailable 原始帧直出为主，
+        // 此路径仅在 photoAvailable 未触发时兜底。
+        deliveryMode: photoAccessHelper.DeliveryMode.HIGH_QUALITY_MODE,
       }
       savePhotoPath = path
       takePhotoResult = result
-      takePhotoColorMatrix = this.colorMatrix
 
       let handler = new MediaDataHandler();
       photoRequestId =
@@ -1396,10 +1409,10 @@ export class CameraState implements StreamHandler {
   }
 }
 
-let takePhotoColorMatrix: Array<number> = []
 let savePhotoPath: string | undefined = undefined
 let takePhotoResult: Result<boolean> | undefined = undefined
 let photoRequestId: string | undefined = undefined
+let takePhotoStartAt: number = 0
 
 class MediaDataHandler implements photoAccessHelper.MediaAssetDataHandler<ArrayBuffer> {
   async onDataPrepared(data: ArrayBuffer) {
@@ -1407,30 +1420,20 @@ class MediaDataHandler implements photoAccessHelper.MediaAssetDataHandler<ArrayB
       Logger.error('Error occurred when preparing data');
       return;
     }
-    // 应用获取到图片buffer后可自定义处理
-    let pm: PixelMap | null = null;
-    let pm1: PixelMap | null = null;
+    // 直接落盘全质量 JPEG buffer，不做 createPixelMap + effectKit 重编码：
+    // 避免在主线程逐像素处理后阻塞拍照（速度），也避免二次压缩损失清晰度（质量）。
+    // 成片颜色由应用内 Dart 处理器统一处理，无需在原生层二次上色。
     try {
-      let file = await fileIo.open(savePhotoPath, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE);
-
-      pm = await image.createImageSource(data).createPixelMap();
-
-      pm1 = await effectKit.createEffect(pm)
-        .setColorMatrix(takePhotoColorMatrix)
-        .getEffectPixelMap();
-
-      const packOpts: image.PackingOption = { format: "image/jpeg", quality: 98 };
-      await image.createImagePacker().packToFile(pm1, file.fd, packOpts);
-
-      Logger.info('Succeeded in packing the image to file.');
+      const file = await fileIo.open(savePhotoPath, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE);
+      const written = fileIo.writeSync(file.fd, data);
+      fileIo.closeSync(file);
+      Logger.info(`photoAssetAvailable: saved bytes=${written} elapsed=${Date.now() - takePhotoStartAt}ms`);
       takePhotoResult.success(true);
     } catch (error) {
-      Logger.error(`Failed to pack the image to file.code ${error.code},message is ${error.message}`);
+      Logger.error(`Failed to write the photo file.code ${error.code},message is ${error.message}`);
       takePhotoResult?.success(false);
     } finally {
       photoRequestId = undefined;
-      pm?.release();
-      pm1?.release();
     }
   }
 }
