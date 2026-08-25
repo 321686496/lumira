@@ -198,6 +198,8 @@ export const templates = mysqlTable('templates', {
   isActive: int('is_active').notNull().default(1),
   compositionJson: longtext('composition_json').notNull().default('{}'),
   poseJson: longtext('pose_json').notNull().default('{}'),
+  // 多效果图列表（[0]=封面）；旧数据由迁移 022 从 cover_url 派生单元素
+  imagesJson: longtext('images_json').notNull().default('[]'),
   cameraJson: longtext('camera_json').notNull().default('{}'),
   sceneGuideJson: longtext('scene_guide_json').notNull().default('{}'),
   postProcessJson: longtext('post_process_json').notNull().default('{}'),
