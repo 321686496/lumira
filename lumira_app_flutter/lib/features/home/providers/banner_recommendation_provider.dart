@@ -20,6 +20,7 @@ final bannerRecommendationProvider =
     growthDao: await ref.watch(growthDaoProvider.future),
     questionnaireDao: await ref.watch(questionnaireDaoProvider.future),
     usageDao: await ref.watch(usageDaoProvider.future),
+    interestDao: await ref.watch(userInterestsDaoProvider.future),
   );
   return service.buildBanners();
 });

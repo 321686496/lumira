@@ -4,7 +4,9 @@ import '../../../core/db/dao/growth_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/dao/usage_dao.dart';
+import '../../../core/db/dao/user_interests_dao.dart';
 import '../../../features/profile/data/composition_kit_models.dart';
+import '../../templates/recommend/template_ranking.dart';
 import '../../onboarding/data/questionnaire_dao.dart';
 import '../data/home_mock_data.dart';
 
@@ -68,13 +70,15 @@ class RecommendationService {
     required GrowthDao growthDao,
     required QuestionnaireDao questionnaireDao,
     UsageDao? usageDao,
+    InterestDao? interestDao,
   })  : _galleryDao = galleryDao,
         _scenesDao = scenesDao,
         _templatesDao = templatesDao,
         _kitsDao = kitsDao,
         _growthDao = growthDao,
         _questionnaireDao = questionnaireDao,
-        _usageDao = usageDao;
+        _usageDao = usageDao,
+        _interestDao = interestDao;
 
   final GalleryDao _galleryDao;
   final ScenesDao _scenesDao;
@@ -83,6 +87,7 @@ class RecommendationService {
   final GrowthDao _growthDao;
   final QuestionnaireDao _questionnaireDao;
   final UsageDao? _usageDao;
+  final InterestDao? _interestDao;
 
   /// 构建 5 条首页 Banner
   Future<List<HomeBannerItem>> buildBanners() async {
@@ -100,6 +105,7 @@ class RecommendationService {
     final allKits = await allKitsFuture;
     final systemPicks = await systemPicksFuture;
     final popularity = await popularityFuture;
+    final interestById = await _loadTemplateInterest(systemPicks);
 
     // 客户端按 usage_count DESC 排序（DAO 未提供 orderByUsage 参数）
     final kitsByUsage = [...allKits]..sort((a, b) => b.usageCount.compareTo(a.usageCount));
@@ -172,7 +178,7 @@ class RecommendationService {
         usedCategories.add(topCategory);
       }
     }
-    slot2Tpl ??= _pickUnusedSystemPick(systemPicks, usedTemplateIds, popularity);
+    slot2Tpl ??= _pickUnusedSystemPick(systemPicks, usedTemplateIds, popularity, interestById);
     if (slot2Tpl != null) {
       usedTemplateIds.add(slot2Tpl.id);
       final label = _categoryLabelMap[topCategory] ?? '推荐';
@@ -242,7 +248,7 @@ class RecommendationService {
     }
 
     // === 槽位 4：系统推荐模板 ===
-    final slot4Tpl = _pickUnusedSystemPick(systemPicks, usedTemplateIds, popularity);
+    final slot4Tpl = _pickUnusedSystemPick(systemPicks, usedTemplateIds, popularity, interestById);
     if (slot4Tpl != null) {
       usedTemplateIds.add(slot4Tpl.id);
       banners.add(HomeBannerItem(
@@ -266,6 +272,7 @@ class RecommendationService {
       systemPicks: systemPicks,
       idSuffix: '',
       popularity: popularity,
+      interestById: interestById,
     );
 
     // === 老用户补位：再来一条探索 ===
@@ -278,6 +285,7 @@ class RecommendationService {
         systemPicks: systemPicks,
         idSuffix: '_extra',
         popularity: popularity,
+        interestById: interestById,
       );
     }
 
@@ -294,6 +302,7 @@ class RecommendationService {
     required List<TemplateRecord> systemPicks,
     required String idSuffix,
     required Map<String, int> popularity,
+    required Map<String, double> interestById,
   }) async {
     final explorationCat =
         _pickExplorationCategory(categoryCounts, usedCategories);
@@ -305,7 +314,7 @@ class RecommendationService {
           tpls.where((t) => !usedTemplateIds.contains(t.id)).toList();
       final tpl = unused.isNotEmpty
           ? unused.first
-          : _pickUnusedSystemPick(systemPicks, usedTemplateIds, popularity);
+          : _pickUnusedSystemPick(systemPicks, usedTemplateIds, popularity, interestById);
       if (tpl != null) {
         usedTemplateIds.add(tpl.id);
         final label = _categoryLabelMap[explorationCat] ?? explorationCat;
@@ -324,7 +333,7 @@ class RecommendationService {
       }
     } else {
       // 无可用分类时，fallback 到系统推荐
-      final tpl = _pickUnusedSystemPick(systemPicks, usedTemplateIds, popularity);
+      final tpl = _pickUnusedSystemPick(systemPicks, usedTemplateIds, popularity, interestById);
       if (tpl != null) {
         usedTemplateIds.add(tpl.id);
         banners.add(HomeBannerItem(
@@ -370,26 +379,54 @@ class RecommendationService {
     return null;
   }
 
-  /// 从系统推荐列表中取第一个未使用、且全站流行度最大的模板；
+  /// 从系统推荐列表中取第一个未使用、且“(热度*0.5 + 个人兴趣*0.5) 混合分”最大的模板；
   /// 流行度全为 0/空时退回第一个未使用模板（保持原行为）。
   TemplateRecord? _pickUnusedSystemPick(
     List<TemplateRecord> systemPicks,
     Set<String> usedTemplateIds,
-    Map<String, int> popularity,
-  ) {
+    Map<String, int> popularity, [
+    Map<String, double> interestById = const {},
+  ]) {
     final unused =
         systemPicks.where((t) => !usedTemplateIds.contains(t.id)).toList();
     if (unused.isEmpty) return null;
     var best = unused.first;
-    var bestPop = popularity[best.id] ?? 0;
+    var bestScore = _blendScore(best, popularity, interestById);
     for (final t in unused.skip(1)) {
-      final p = popularity[t.id] ?? 0;
-      if (p > bestPop) {
-        bestPop = p;
+      final s = _blendScore(t, popularity, interestById);
+      if (s > bestScore) {
+        bestScore = s;
         best = t;
       }
     }
     return best;
+  }
+
+  /// 热度(原始)与个人兴趣的 0.5/0.5 混合分
+  double _blendScore(TemplateRecord t, Map<String, int> popularity,
+      Map<String, double> interestById) {
+    return (popularity[t.id] ?? 0).toDouble() * 0.5 +
+        (interestById[t.id] ?? 0) * 0.5;
+  }
+
+  /// 并行读取模板的个人兴趣（基于用户兴趣画像的三维加权）。未注入 interestDao 时返回空 map。
+  Future<Map<String, double>> _loadTemplateInterest(
+    List<TemplateRecord> picks,
+  ) async {
+    final dao = _interestDao;
+    if (dao == null || picks.isEmpty) return const {};
+    final all = await dao.getAll();
+    final portrait = <String, double>{};
+    for (final e in all.entries) {
+      portrait[e.key] = e.value.score;
+    }
+    final ctx = RankingContext(
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+      portrait: portrait,
+    );
+    return {
+      for (final t in picks) t.id: TemplateRanking().interestFor(t, ctx),
+    };
   }
 
   /// 并行读取系统推荐模板的全站流行度（templateId -> use_shoot*2 + open_detail）。
