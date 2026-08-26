@@ -427,21 +427,48 @@ class CamerawesomeCameraService implements CameraService {
   /// 鸿蒙端 path_provider 缺 ohos 原生实现，`getTemporaryDirectory()` 会抛
   /// `MissingPluginException`，此前依赖 catch 兜底落到 `getDatabasesPath()`（持久
   /// 目录），因此 OHOS 恰好不受影响。这里统一改为持久目录，三端行为一致。
+  ///
+  /// 防御性收紧：**绝不静默写进 tmp/**。持久目录依次取
+  ///  1) `getDatabasesPath()`（iOS=Documents、OHOS=应用数据目录，均更新后保留）；
+  ///  2) `getApplicationDocumentsDirectory()`（iOS 兜底，同样 Documents）。
+  /// 两者都失败时宁可让本次拍照失败并明确抛错，也不把照片写进 tmp 造成
+  /// “更新后文件无声消失、数据库记录仍在”的幽灵照片。
   Future<String> _buildPath() async {
     final ts = DateTime.now().millisecondsSinceEpoch;
-    try {
-      final dbPath = await getDatabasesPath();
-      final photosDir = Directory(p.join(dbPath, 'photos'));
-      if (!await photosDir.exists()) {
-        await photosDir.create(recursive: true);
+    String? chosen;
+    String? lastErr;
+    for (final base in await _persistentBases()) {
+      try {
+        final photosDir = Directory(p.join(base, 'photos'));
+        if (!await photosDir.exists()) {
+          await photosDir.create(recursive: true);
+        }
+        chosen = p.join(photosDir.path, 'capture_$ts.jpg');
+        debugPrint('[camera] 照片存储路径(持久): $chosen');
+        return chosen;
+      } catch (e) {
+        lastErr = e.toString();
       }
-      return p.join(photosDir.path, 'capture_$ts.jpg');
-    } catch (e) {
-      // 持久目录创建失败的极低概率兜底：临时目录在下次更新前本会话仍可用
-      debugPrint('[camera] 创建持久化照片目录失败，兜底到临时目录: $e');
-      final dir = await getTemporaryDirectory();
-      return '${dir.path}/capture_$ts.jpg';
     }
+    // 持久目录全部不可用：宁可拍照失败，也不写 tmp 造成更新后照片无声丢失
+    debugPrint('[camera] 持久化照片目录全部不可用，放弃本次拍照(绝不写 tmp): $lastErr');
+    throw StateError('持久化照片目录不可用，无法保存照片');
+  }
+
+  /// 候选持久目录基址（依次尝试）。
+  Future<List<String>> _persistentBases() async {
+    final bases = <String>[];
+    try {
+      bases.add(await getDatabasesPath());
+    } catch (e) {
+      debugPrint('[camera] getDatabasesPath 不可用: $e');
+    }
+    try {
+      bases.add((await getApplicationDocumentsDirectory()).path);
+    } catch (e) {
+      debugPrint('[camera] getApplicationDocumentsDirectory 不可用: $e');
+    }
+    return bases;
   }
 
   ohos.CameraPreviewFit _mapPreviewFitOhos(CameraPreviewFit fit) {

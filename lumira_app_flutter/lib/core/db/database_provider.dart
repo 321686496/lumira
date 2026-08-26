@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'tables.dart';
@@ -41,9 +45,43 @@ final databaseProvider = FutureProvider<Database>((ref) async {
     onCreate: _onCreate,
     onUpgrade: _onUpgrade,
   );
+  // 启动期把关键存储目录写入 Documents（更新后保留、Files 可见），
+  // 用于定位「更新后照片消失」问题：若此报告下次启动仍存在，说明沙盒未被重置，
+  // 照片则应落在 photosDir 下；若报告/照片均消失，则是容器整体被重建。
+  try {
+    // ignore: unawaited_futures
+    _writeStorageReport(dbPath);
+  } catch (e) {
+    debugPrint('storage report write failed: $e');
+  }
   ref.onDispose(db.close);
   return db;
 });
+
+/// 写一份持久的存储路径报告（一次启动写一次，覆盖写）。
+Future<void> _writeStorageReport(String dbPath) async {
+  final buf = StringBuffer()
+    ..writeln('# Lumira 存储路径报告  ${DateTime.now().toIso8601String()}')
+    ..writeln('dbPath        : $dbPath')
+    ..writeln('getDatabasesPath = ${await getDatabasesPath()}');
+  try {
+    final doc = await getApplicationDocumentsDirectory();
+    buf.writeln('documentsDir  : ${doc.path}');
+  } catch (e) {
+    buf.writeln('documentsDir  : ERROR $e');
+  }
+  try {
+    final tmp = await getTemporaryDirectory();
+    buf.writeln('temporaryDir  : ${tmp.path}');
+  } catch (e) {
+    buf.writeln('temporaryDir  : ERROR $e');
+  }
+  buf.writeln('photosDir     : ${p.join(await getDatabasesPath(), 'photos')}');
+  final diagDir = await getApplicationDocumentsDirectory();
+  final dir = Directory(p.join(diagDir.path, 'color_diag'));
+  if (!await dir.exists()) await dir.create(recursive: true);
+  await File(p.join(dir.path, 'storage_report.txt')).writeAsString(buf.toString());
+}
 
 final templatesDaoProvider = FutureProvider<TemplatesDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
