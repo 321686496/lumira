@@ -1,0 +1,213 @@
+{
+    "name": "侘寂素陶静物",
+    "category": "stillLife",
+    "classification": {
+        "type": "stillLife",
+        "majorStyle": "wabi‑sabi侘寂",
+        "subStyle": "原木棉麻质感",
+        "method": "窗边柔和自然光静物拍摄"
+    },
+    "shortDesc": "素陶器物沐着温柔窗光，质朴安静，满是松弛侘寂氛围感🍂",
+    "description": "静物拍摄模板，适配素色粗陶器皿，利用窗边柔和漫射自然光，搭配棉麻织物与素色背景，低饱和暖米色调，呈现质朴安静的侘寂静物效果，适合陶器、摆件、家居小物拍摄。",
+    "ambience": {
+        "seasons": ["春", "秋", "冬"],
+        "weathers": ["晴天薄云"],
+        "timeTones": ["午后暖调"]
+    },
+    "tags": ["静物", "侘寂风", "粗陶", "自然光", "低饱和"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "单只圆肚粗陶罐，居中构图，棉麻台面素色背景"
+        },
+        {
+            "imageIndex": 1,
+            "role": "效果图",
+            "caption": "大碗+迷你陶罐组合静物，大小器物形成对比层次"
+        },
+        {
+            "imageIndex": 2,
+            "role": "效果图",
+            "caption": "陶罐搭配褶皱亚麻布料，侧方入射阳光制造柔和投影"
+        },
+        {
+            "imageIndex": 3,
+            "role": "效果图",
+            "caption": "陶罐放置素陶圆盘上，斜向窗光，明暗过渡柔和"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "封面·单陶罐居中构图",
+            "type": "composition",
+            "description": "圆肚粗陶罐放置画面中心，主体垂直居中，上方大面积素色墙面留白，下方保留部分棉麻台面，上下留白均衡，突出器物圆润轮廓。",
+            "compositionFrame": "主体放在画面九宫格正中心，上半部分70%为纯色背景留白，下半部分30%为棉麻台面，无引导线，对称式静态构图，强化器物形体。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "stilllife_center_vase"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.52
+            },
+            "scale": 0.72,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 1,
+            "name": "器物组合错落构图",
+            "type": "composition",
+            "description": "大碗位于画面屏幕左侧，迷你陶罐放在屏幕右下方，一大一小两件器物错落摆放，器物之间留有空隙，台面与背景大面积留白，形成大小体量对比。",
+            "compositionFrame": "大碗落在九宫格左中交叉点，小陶罐落在右下交叉点；背景占画面上65%，棉麻台面占画面下35%，非对称平衡构图。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "stilllife_two_objects"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.54
+            },
+            "scale": 0.78,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 2,
+            "name": "陶罐配褶皱布料构图",
+            "type": "composition",
+            "description": "陶罐居于画面中心，后方铺放褶皱亚麻织物，布料向屏幕左右两侧散开，木质台面承载主体，右侧有窗入射光线，器物承接侧光，后方布料做柔和层次衬托。",
+            "compositionFrame": "陶罐主体居中，背景墙面占据画面右上区域；前景木质台面占画面底部30%，褶皱亚麻布料作为中景，利用布料褶皱形成柔和的纹理层次。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "stilllife_vase_fabric"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 0.74,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 3,
+            "name": "盘托陶罐斜光构图",
+            "type": "composition",
+            "description": "粗陶罐放置在同色系素陶圆盘中央，圆盘置于浅色平面，光线从屏幕右方斜向射入，影子投向屏幕左下方；画面上半部分大面积浅灰墙面留白。",
+            "compositionFrame": "陶罐+圆盘组合落在画面垂直中轴，略微偏下；上半部分70%空白背景，底部30%为平面台面；斜向投影作为画面隐形引导元素。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "stilllife_vase_plate"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.58
+            },
+            "scale": 0.68,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "thirds",
+        "aspectRatio": "3:4",
+        "opacity": 0.3,
+        "description": "静物，平视机位正拍；器物主体占据画面中部，上方大量纯色背景留白，下方保留台面/织物，主体占画幅45‑60%，环境背景占40‑55%。",
+        "subjectFrame": {
+            "x": 0.24,
+            "y": 0.28,
+            "w": 0.52,
+            "h": 0.64
+        }
+    },
+    "camera": {
+        "exposureCompensation": 0.15,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5200,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光来自屏幕侧上方（窗边漫射自然光），柔光，光比约2.5:1；阴影柔和边缘模糊，影子投向屏幕另一侧；保留陶器表面砂质颗粒纹理，无强烈高光反光；环境为室内漫反射环境光。",
+        "shootingDistance": "1.2‑1.8m",
+        "background": "纯色哑光米白/浅灰墙面，避免花纹杂物",
+        "props": ["粗陶器皿", "棉麻/亚麻布料", "素陶圆盘", "原木桌面"],
+        "bestTime": "14:00‑16:30",
+        "tips": [
+            "使用窗边柔和自然光，避免直射硬阳光，可薄纱窗帘柔化光线",
+            "尽量关闭室内顶光，只用窗光作为唯一主光源",
+            "靠近主体、让背景离器物更远，模拟浅景深效果；手机无法物理大光圈虚化，依靠构图距离实现层次",
+            "台面布料自然褶皱，不要过度平整，贴合侘寂质朴质感",
+            "使用vignette轻微压暗四角，把视觉重心收拢到器物本体"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "3:4",
+        "color": {
+            "brightness": 4,
+            "contrast": -8,
+            "saturation": -10,
+            "temperature": 6,
+            "tint": 1,
+            "highlights": -14,
+            "shadows": 10,
+            "clarity": 12
+        },
+        "smoothStrength": 12,
+        "sharpen": 18,
+        "vignette": 24,
+        "grain": 22,
+        "lut": "warm_muted"
+    },
+    "orientation": {
+        "framePosition": "画面九宫格中心",
+        "bodyFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "faceFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "twist": "正身",
+        "headPitch": 0,
+        "headRoll": 0,
+        "gaze": "看向镜头方向"
+    },
+    "framing": {
+        "shotSize": "近景",
+        "shotSizeNote": "完整收纳器物+部分台面与背景",
+        "cameraHeight": "平视",
+        "cameraAzimuth": "正拍",
+        "subjectScale": "器物主体占画幅50%左右",
+        "environmentRatio": "背景+台面占画幅50%",
+        "headroom": "器物顶部距离画面上边缘留有1/4画面高度留白",
+        "framingNote": "静物平视正拍，完整容纳器皿形体，上方大量留白营造安静呼吸感"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "窗边主光屏幕侧上方45°",
+            "辅光轮廓光": "环境漫反射充当弱辅光，无额外轮廓光",
+            "光型软硬": "柔光，经过纱帘/室内墙面漫反射，阴影边缘过渡柔和",
+            "光比": "约2.5:1，中低反差",
+            "阴影": "阴影投向屏幕对侧，边缘柔和不生硬，阴影浓度适中不死黑",
+            "质感": "保留粗陶砂质颗粒纹理，哑光材质，无刺眼高光，细微的器物表面起伏被光线表现出来",
+            "环境光": "室内环境漫反射光，整体环境亮度均匀",
+            "色温对比": "整体统一暖米调，无明显冷暖冲突"
+        },
+        "lightToParams": "略微提高色温增加暖调；降低对比度、压低高光、抬起阴影；添加颗粒模拟胶片静物质感；暗角收拢视线"
+    },
+    "styling": {
+        "subjectType": "粗陶静物摆件",
+        "clothingLayers": {},
+        "accessories": "",
+        "hairMakeup": "",
+        "objectStyle": "米米色粗砂质素烧陶器，无釉哑光，表面带有自然制陶颗粒纹理；搭配原色棉麻织物，原木/素色台面，素色哑光背景，整体色彩统一低饱和大地色系。",
+        "note": "不要使用亮色道具，全部选择米、白、浅卡其、原木色，维持统一质朴调性。"
+    }
+}

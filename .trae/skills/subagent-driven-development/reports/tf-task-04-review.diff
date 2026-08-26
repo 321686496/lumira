@@ -1,0 +1,174 @@
+﻿===== COMMITS =====
+3aa19828 feat(templates): 详情页新增红心收藏按钮
+===== STAT =====
+ .../templates/pages/templates_detail_page.dart     | 48 ++++++++++++++++++----
+ 1 file changed, 40 insertions(+), 8 deletions(-)
+===== DIFF =====
+diff --git a/lumira_app_flutter/lib/features/templates/pages/templates_detail_page.dart b/lumira_app_flutter/lib/features/templates/pages/templates_detail_page.dart
+index 62fab555..c6d79de7 100644
+--- a/lumira_app_flutter/lib/features/templates/pages/templates_detail_page.dart
++++ b/lumira_app_flutter/lib/features/templates/pages/templates_detail_page.dart
+@@ -6,40 +6,41 @@ import 'package:go_router/go_router.dart';
+ import '../../../core/db/dao/templates_dao.dart';
+ import '../../../core/db/dao/tags_dao.dart';
+ import '../../../core/db/dao/usage_dao.dart';
+ import '../../../core/db/database_provider.dart';
+ import '../../../core/db/dao/gallery_dao.dart';
+ import '../../../core/router/route_names.dart';
+ import '../../../features/gallery/data/gallery_models.dart';
+ import '../../../features/points/data/points_models.dart';
+ import '../../../features/points/data/points_repository.dart';
+ import '../../../features/usage/usage_providers.dart';
+ import '../../../core/theme/theme_controller.dart';
+ import '../../../core/theme/theme_tokens.dart';
+ import '../../../core/utils/safe_share.dart';
+ import '../../../shared/widgets/cards/neu_card.dart';
+ import '../../../shared/widgets/common/fade_up.dart';
+ import '../../../shared/widgets/lumira/lumira.dart';
+ import '../../../shared/widgets/nav/lumira_nav.dart';
+ import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
+ import '../../../shared/widgets/tags/user_tags_section.dart';
+ import '../data/owned_templates_repository.dart';
++import '../data/templates_providers.dart';
+ import '../data/remote_templates_providers.dart';
+ import '../data/templates_browse_mock_data.dart';
+ import '../data/templates_editor_mock_data.dart' show parseAspectRatio;
+ import '../services/template_exporter.dart';
+ import '../services/template_share_code.dart';
+ import '../widgets/ambience_badges.dart';
+ import '../widgets/ambience_label.dart';
+ import '../widgets/pose_silhouette.dart';
+ import '../widgets/template_cover_image.dart';
+ import '../../../features/gallery/widgets/photo_cell.dart';
+ 
+ /// 全量分类记录列表（供详情页分类面包屑解析）。
+ ///
+ /// 用 List 而非 key→name 扁平 map：L3 拍法 key（如 normal / wide）在同一 key 下会
+ /// 出现在多个父分类（如 japanese→他拍、casual→随拍），扁平 map 会产生歧义，
+ /// 需要按父分类路径精确解析每个分段的中文名。
+ final templateCategoryProvider =
+     FutureProvider<List<TemplateCategoryRecord>>((ref) async {
+   final dao = await ref.watch(templatesDaoProvider.future);
+   return dao.getCategories(activeOnly: false);
+@@ -130,61 +131,67 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
+     }
+     GoRouter.of(context).push('/capture?templateId=$id');
+   }
+ 
+   void _goUnlock(TemplateDetail template) {
+     GoRouter.of(context).push(
+       '${RouteNames.templatesUnlock}?templateId=${template.id}&price=${template.price}',
+     );
+   }
+ 
+   /// 跳转积分钱包页（右上角积分数点击入口）。
+   void _goPointsWallet() {
+     GoRouter.of(context).push(RouteNames.pointsWallet);
+   }
+ 
+   /// 顶部导航右侧操作组：
+   /// - 我的模板（自定义/导入）→ 导出 + 编辑
+   /// - 付费模板未解锁 → 右上角展示用户积分数（点击跳转积分钱包页）
+   /// - 其余（免费模板 / 已解锁付费模板）→ 无右侧操作
+   List<Widget>? _navActions(ThemeTokens tokens, bool isLocked) {
+-    if (_isMyTemplate) {
+-      return [
++    final id = _template?.id ?? '';
++    final heart = id.isEmpty
++        ? null
++        : _FavoriteToggle(
++            templateId: id,
++            tokens: tokens,
++          );
++    final rest = <Widget>[
++      if (_isMyTemplate) ...[
+         if (_isCustomTemplate)
+           LumiraIconButton(
+             icon: Icons.ios_share,
+             onPressed: _goExport,
+             color: tokens.textPrimary,
+             size: 20,
+           ),
+         LumiraIconButton(
+           icon: Icons.edit_outlined,
+           onPressed: _goEdit,
+           color: tokens.textPrimary,
+           size: 20,
+         ),
+-      ];
+-    }
+-    if (isLocked) {
+-      return [_CreditBalanceChip(onTap: _goPointsWallet)];
+-    }
+-    return null;
++      ],
++      if (isLocked) _CreditBalanceChip(onTap: _goPointsWallet),
++    ];
++    if (heart == null && rest.isEmpty) return null;
++    return [if (heart != null) heart, ...rest];
+   }
+ 
+   void _goEdit() {
+     final id = _template?.id;
+     if (id == null) return;
+     GoRouter.of(context).push(
+       RouteNames.withTemplateId(RouteNames.templatesEditor, id),
+     );
+   }
+ 
+   void _back() {
+     if (Navigator.of(context).canPop()) {
+       Navigator.of(context).pop();
+     } else {
+       GoRouter.of(context).go(RouteNames.templates);
+     }
+   }
+ 
+   void _showSnack(String msg) {
+     LumiraToast.show(
+@@ -1952,20 +1959,45 @@ class _TemplatePhotosSection extends ConsumerWidget {
+                             photo: GalleryPhoto.fromRecord(record),
+                             onTap: () => GoRouter.of(context).push(
+                               RouteNames.build(RouteNames.galleryDetail, {
+                                 RouteNames.paramPhotoId: record.id,
+                               }),
+                             ),
+                           ),
+                         );
+                       },
+                     ),
+                   ),
+                 ],
+               ),
+             ),
+           );
+         },
+       ),
+     );
+   }
+ }
++
++/// 详情页红心收藏按钮：跟随收藏状态切换空心/实心，点击切换收藏并刷新收藏集。
++class _FavoriteToggle extends ConsumerWidget {
++  const _FavoriteToggle({required this.templateId, required this.tokens});
++
++  final String templateId;
++  final ThemeTokens tokens;
++
++  @override
++  Widget build(BuildContext context, WidgetRef ref) {
++    final favoriteIds =
++        ref.watch(favoriteTemplateIdsProvider).valueOrNull ?? const <String>{};
++    final isFav = favoriteIds.contains(templateId);
++    return LumiraIconButton(
++      icon: isFav ? Icons.favorite : Icons.favorite_border,
++      onPressed: () async {
++        final dao = await ref.read(templatesFavoriteDaoProvider.future);
++        await dao.toggleFavorite(templateId);
++        ref.invalidate(favoriteTemplateIdsProvider);
++      },
++      color: isFav ? tokens.brand : tokens.textSecondary,
++      size: 20,
++    );
++  }
++}

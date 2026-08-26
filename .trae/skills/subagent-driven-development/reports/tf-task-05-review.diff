@@ -1,0 +1,160 @@
+﻿diff --git a/lumira_app_flutter/lib/features/templates/pages/templates_all_page.dart b/lumira_app_flutter/lib/features/templates/pages/templates_all_page.dart
+index 8e49bf37..9084d367 100644
+--- a/lumira_app_flutter/lib/features/templates/pages/templates_all_page.dart
++++ b/lumira_app_flutter/lib/features/templates/pages/templates_all_page.dart
+@@ -16,6 +16,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
+ import '../data/builtin_category_icons.dart';
+ import '../data/remote_templates_providers.dart';
+ import '../data/templates_browse_mock_data.dart';
++import '../data/templates_providers.dart';
+ import '../services/template_mapper.dart';
+ import '../widgets/ambience_badges.dart';
+ import '../widgets/template_cover_image.dart';
+@@ -51,6 +52,7 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+   String? _selectedStyle;
+   String? _selectedMethod;
+   bool _showCustom = false;
++  bool _showFavorites = false;
+   PriceFilter _priceFilter = PriceFilter.all;
+ 
+   @override
+@@ -161,6 +163,14 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+       filtered = filtered.where((t) => t.price > 0).toList();
+     }
+ 
++    // 收藏过滤：仅保留已收藏模板（与分类、价格、我的 toggle 取交集）
++    if (_showFavorites) {
++      final favIds = ref.read(favoriteTemplateIdsProvider).valueOrNull;
++      if (favIds != null) {
++        filtered = filtered.where((t) => favIds.contains(t.id)).toList();
++      }
++    }
++
+     return _AllPageData(
+       allCount: allCount,
+       unlockedCount: unlockedCount,
+@@ -193,6 +203,10 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+     setState(() => _showCustom = value);
+   }
+ 
++  void _toggleFavorites(bool value) {
++    setState(() => _showFavorites = value);
++  }
++
+   void _onPriceFilter(PriceFilter value) {
+     setState(() => _priceFilter = value);
+   }
+@@ -244,6 +258,8 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+   @override
+   Widget build(BuildContext context) {
+     final tokens = ref.watch(themeTokensProvider);
++    // watch 收藏集合：收藏/取消后重建 future，自动刷新「收藏」过滤列表
++    ref.watch(favoriteTemplateIdsProvider);
+     // 导入的模板现在持久化到 DAO，不再需要内存 provider
+     final importedAll = <AllTemplateItem>[];
+     final asyncDao = ref.watch(templatesDaoProvider);
+@@ -336,6 +352,8 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+                                         onLayerSelect: _onLayerSelect,
+                                         onToggleCustom: _toggleCustom,
+                                         onPriceFilter: _onPriceFilter,
++                                        showFavorites: _showFavorites,
++                                        onToggleFavorites: _toggleFavorites,
+                                       ),
+                                       if (_showCustom)
+                                         _ActionRow(
+@@ -495,9 +513,11 @@ class _FilterSection extends StatelessWidget {
+     required this.selectedStyle,
+     required this.selectedMethod,
+     required this.showCustom,
++    required this.onToggleCustom,
++    required this.showFavorites,
++    required this.onToggleFavorites,
+     required this.priceFilter,
+     required this.onLayerSelect,
+-    required this.onToggleCustom,
+     required this.onPriceFilter,
+   });
+ 
+@@ -516,6 +536,8 @@ class _FilterSection extends StatelessWidget {
+   final PriceFilter priceFilter;
+   final void Function(int layer, String? value) onLayerSelect;
+   final void Function(bool) onToggleCustom;
++  final bool showFavorites;
++  final void Function(bool) onToggleFavorites;
+   final void Function(PriceFilter) onPriceFilter;
+ 
+   @override
+@@ -561,13 +583,27 @@ class _FilterSection extends StatelessWidget {
+               onSelect: onPriceFilter,
+             ),
+             const SizedBox(height: 12),
+-            // "我的" toggle：切换是否只看用户自定义/导入的模板
++            // "收藏" + "我的" toggle：过滤已收藏 / 用户自定义模板
+             Align(
+               alignment: Alignment.centerRight,
+-              child: _CustomToggle(
+-                tokens: tokens,
+-                active: showCustom,
+-                onTap: () => onToggleCustom(!showCustom),
++              child: Row(
++                mainAxisSize: MainAxisSize.min,
++                children: [
++                  _CustomToggle(
++                    tokens: tokens,
++                    active: showFavorites,
++                    onTap: () => onToggleFavorites(!showFavorites),
++                    icon: Icons.favorite_border,
++                    activeIcon: Icons.favorite,
++                    label: '收藏',
++                  ),
++                  const SizedBox(width: 8),
++                  _CustomToggle(
++                    tokens: tokens,
++                    active: showCustom,
++                    onTap: () => onToggleCustom(!showCustom),
++                  ),
++                ],
+               ),
+             ),
+           ],
+@@ -756,11 +792,17 @@ class _CustomToggle extends ConsumerWidget {
+     required this.tokens,
+     required this.active,
+     required this.onTap,
++    this.icon = Icons.bookmark_border_outlined,
++    this.activeIcon = Icons.bookmark,
++    this.label = '我的',
+   });
+ 
+   final ThemeTokens tokens;
+   final bool active;
+   final VoidCallback onTap;
++  final IconData icon;
++  final IconData activeIcon;
++  final String label;
+ 
+   @override
+   Widget build(BuildContext context, WidgetRef ref) {
+@@ -791,13 +833,13 @@ class _CustomToggle extends ConsumerWidget {
+           mainAxisSize: MainAxisSize.min,
+           children: [
+             Icon(
+-              active ? Icons.bookmark : Icons.bookmark_border_outlined,
++              active ? activeIcon : icon,
+               size: 14,
+               color: active ? Colors.white : tokens.textSecondary,
+             ),
+             const SizedBox(width: 4),
+             Text(
+-              '我的',
++              label,
+               style: TextStyle(
+                 fontSize: 12,
+                 fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+@@ -1764,4 +1806,4 @@ AllTemplateItem _recordToItem(TemplateRecord r, {required bool isCustom}) {
+ String _truncate(String s, {int maxLen = 24}) {
+   if (s.characters.length <= maxLen) return s;
+   return '${s.characters.take(maxLen)}…';
+-}
++}
+\ No newline at end of file
