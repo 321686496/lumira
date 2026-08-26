@@ -23,6 +23,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
 import '../../../shared/widgets/tags/user_tags_section.dart';
 import '../data/owned_templates_repository.dart';
+import '../data/templates_providers.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../data/templates_editor_mock_data.dart' show parseAspectRatio;
@@ -147,8 +148,15 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   /// - 付费模板未解锁 → 右上角展示用户积分数（点击跳转积分钱包页）
   /// - 其余（免费模板 / 已解锁付费模板）→ 无右侧操作
   List<Widget>? _navActions(ThemeTokens tokens, bool isLocked) {
-    if (_isMyTemplate) {
-      return [
+    final id = _template?.id ?? '';
+    final heart = id.isEmpty
+        ? null
+        : _FavoriteToggle(
+            templateId: id,
+            tokens: tokens,
+          );
+    final rest = <Widget>[
+      if (_isMyTemplate) ...[
         if (_isCustomTemplate)
           LumiraIconButton(
             icon: Icons.ios_share,
@@ -162,12 +170,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
           color: tokens.textPrimary,
           size: 20,
         ),
-      ];
-    }
-    if (isLocked) {
-      return [_CreditBalanceChip(onTap: _goPointsWallet)];
-    }
-    return null;
+      ],
+      if (isLocked) _CreditBalanceChip(onTap: _goPointsWallet),
+    ];
+    if (heart == null && rest.isEmpty) return null;
+    return [if (heart != null) heart, ...rest];
   }
 
   void _goEdit() {
@@ -1966,6 +1973,31 @@ class _TemplatePhotosSection extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+/// 详情页红心收藏按钮：跟随收藏状态切换空心/实心，点击切换收藏并刷新收藏集。
+class _FavoriteToggle extends ConsumerWidget {
+  const _FavoriteToggle({required this.templateId, required this.tokens});
+
+  final String templateId;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favoriteIds =
+        ref.watch(favoriteTemplateIdsProvider).valueOrNull ?? const <String>{};
+    final isFav = favoriteIds.contains(templateId);
+    return LumiraIconButton(
+      icon: isFav ? Icons.favorite : Icons.favorite_border,
+      onPressed: () async {
+        final dao = await ref.read(templatesFavoriteDaoProvider.future);
+        await dao.toggleFavorite(templateId);
+        ref.invalidate(favoriteTemplateIdsProvider);
+      },
+      color: isFav ? tokens.brand : tokens.textSecondary,
+      size: 20,
     );
   }
 }
