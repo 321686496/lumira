@@ -4106,11 +4106,16 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
       width: iOutW,
       height: iOutH,
       outputPath: params.inputPath,
-      // 拍摄成片强制最小锐化：用户 sharpen=0（自由模式）时若不放一个基线，
-      // 纯缩图 + 无锐化会让成片明显发糊。模板自带更大的 sharpen 不受影响。
-      sharpen: (params.postProcess.sharpen >= kMinLiveSharpen)
-          ? params.postProcess.sharpen
-          : kMinLiveSharpen,
+      // 拍摄成片强制最小锐化：仅 OHOS 生效。
+      // 背景：用户 sharpen=0（自由模式）时若不放一个基线，OHOS 纯缩图+无锐化会让成片明显发糊
+      //（kDeblur 结论，2026-08-24）。此处强制 kMinLiveSharpen 基线只为 OHOS 保清晰。
+      // iOS/Android 相机 ISP 直出已足够清晰，若也强制该基线，会让共享 worker 的无差别
+      // 3x3 锐化把平坦区域噪点一并放大成"颗粒感"，故非 OHOS 一律用用户真实 sharpen 值。
+      sharpen: _isOhos
+          ? ((params.postProcess.sharpen >= kMinLiveSharpen)
+              ? params.postProcess.sharpen
+              : kMinLiveSharpen)
+          : params.postProcess.sharpen,
       clarity: params.postProcess.color.clarity,
       grain: params.postProcess.grain,
       smoothStrength: params.postProcess.smoothStrength,
