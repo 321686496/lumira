@@ -1,0 +1,92 @@
+
+{
+  "module": {
+    "name": "entry",
+    "type": "entry",
+    "description": "$string:module_desc",
+    "mainElement": "EntryAbility",
+    "deviceTypes": [
+      "phone"
+    ],
+    "deliveryWithInstall": true,
+    "installationFree": false,
+    "pages": "$profile:main_pages",
+    "abilities": [
+      {
+        "name": "EntryAbility",
+        "srcEntry": "./ets/entryability/EntryAbility.ets",
+        "description": "$string:EntryAbility_desc",
+        "icon": "$media:icon",
+        "label": "$string:EntryAbility_label",
+        // 放开 Ability 级布局方向：允许自动旋转（竖屏 + 横屏，不含竖屏倒置）。
+        // 否则即使 Flutter 侧 setPreferredOrientations 已放开，HarmonyOS 窗口仍不旋转，
+        // MediaQuery 恒报竖屏 → 横屏持机时成片仍是竖图、模板拍摄指南也不适配横屏。
+        // 与 Flutter 侧请求的方向集合（portraitUp/landscapeLeft/landscapeRight）一致。
+        "orientation": "auto_rotation_restricted",
+        "startWindowIcon": "$media:icon",
+        "startWindowBackground": "$color:start_window_background",
+        "exported": true,
+        "skills": [
+          {
+            "entities": [
+              "entity.system.home"
+            ],
+            "actions": [
+              "action.system.home"
+            ]
+          },
+          {
+            "entities": [
+              "entity.system.viewData"
+            ],
+            "actions": [
+              "ohos.want.action.viewData"
+            ],
+            "uris": [
+              {
+                "scheme": "lumira",
+                "host": "tpl",
+                "pathStartWith": "/"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "requestPermissions": [
+      {"name" :  "ohos.permission.INTERNET"},
+      {
+        "name": "ohos.permission.CAMERA",
+        "reason": "$string:permission_camera_reason",
+        "usedScene": {
+          "abilities": [ "EntryAbility" ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.MICROPHONE",
+        "reason": "$string:permission_microphone_reason",
+        "usedScene": {
+          "abilities": [ "EntryAbility" ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.WRITE_IMAGEVIDEO",
+        "reason": "$string:permission_write_imagevideo_reason",
+        "usedScene": {
+          "abilities": [ "EntryAbility" ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.ACCELEROMETER",
+        "reason": "$string:permission_accelerometer_reason",
+        "usedScene": {
+          "abilities": [ "EntryAbility" ],
+          "when": "inuse"
+        }
+      }
+    ]
+  }
+}
