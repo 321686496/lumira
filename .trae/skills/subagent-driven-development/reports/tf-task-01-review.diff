@@ -1,0 +1,311 @@
+﻿===== COMMITS =====
+73954cf8 feat(templates): 新增模板收藏表与 Tv42 迁移及 DAO
+===== STAT =====
+ .../lib/core/db/dao/templates_favorite_dao.dart    | 65 ++++++++++++++++++++++
+ .../lib/core/db/database_provider.dart             | 31 ++++++++++-
+ lumira_app_flutter/lib/core/db/tables.dart         |  4 ++
+ 3 files changed, 99 insertions(+), 1 deletion(-)
+===== DIFF =====
+diff --git a/lumira_app_flutter/lib/core/db/dao/templates_favorite_dao.dart b/lumira_app_flutter/lib/core/db/dao/templates_favorite_dao.dart
+new file mode 100644
+index 00000000..bbf99326
+--- /dev/null
++++ b/lumira_app_flutter/lib/core/db/dao/templates_favorite_dao.dart
+@@ -0,0 +1,65 @@
++import 'package:sqflite/sqflite.dart';
++
++import '../tables.dart';
++
++/// 模板收藏 DAO：独立关系表，模板 id 为主键，覆盖全来源（builtin/custom/remote）。
++class TemplatesFavoriteDao {
++  TemplatesFavoriteDao(this._db);
++
++  final Database _db;
++
++  Future<bool> isFavorite(String templateId) async {
++    final rows = await _db.query(
++      Tables.templateFavorites,
++      columns: [Tables.colId],
++      where: '${Tables.colId} = ?',
++      whereArgs: [templateId],
++      limit: 1,
++    );
++    return rows.isNotEmpty;
++  }
++
++  Future<void> addFavorite(String templateId) async {
++    await _db.insert(
++      Tables.templateFavorites,
++      {
++        Tables.colId: templateId,
++        Tables.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++      },
++      conflictAlgorithm: ConflictAlgorithm.replace,
++    );
++  }
++
++  Future<void> removeFavorite(String templateId) async {
++    await _db.delete(
++      Tables.templateFavorites,
++      where: '${Tables.colId} = ?',
++      whereArgs: [templateId],
++    );
++  }
++
++  Future<bool> toggleFavorite(String templateId) async {
++    if (await isFavorite(templateId)) {
++      await removeFavorite(templateId);
++      return false;
++    }
++    await addFavorite(templateId);
++    return true;
++  }
++
++  Future<List<String>> getFavoriteIds() async {
++    final rows = await _db.query(
++      Tables.templateFavorites,
++      columns: [Tables.colId],
++      orderBy: '${Tables.colCreatedAt} DESC',
++    );
++    return rows.map((r) => r[Tables.colId] as String).toList();
++  }
++
++  Future<int> countFavorites() async {
++    final rows = await _db.rawQuery(
++      'SELECT COUNT(*) AS c FROM ${Tables.templateFavorites}',
++    );
++    return (rows.first['c'] as int?) ?? 0;
++  }
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/core/db/database_provider.dart b/lumira_app_flutter/lib/core/db/database_provider.dart
+index 4fa91d87..7a231ef2 100644
+--- a/lumira_app_flutter/lib/core/db/database_provider.dart
++++ b/lumira_app_flutter/lib/core/db/database_provider.dart
+@@ -7,65 +7,72 @@ import 'tables.dart';
+ import 'dao/templates_dao.dart';
+ import 'dao/scenes_dao.dart';
+ import 'dao/gallery_dao.dart';
+ import 'seeders/builtin_data_seeder.dart';
+ import '../../features/challenge/data/challenge_dao.dart';
+ import '../../features/academy/data/academy_dao.dart';
+ import 'dao/composition_kits_dao.dart';
+ import 'dao/api_cache_dao.dart';
+ import 'dao/settings_dao.dart';
+ import 'dao/watermark_dao.dart';
+ import 'dao/tutorial_read_dao.dart';
+ import 'dao/tags_dao.dart';
+ import 'dao/usage_dao.dart';
+ import '../../features/academy/data/academy_content.dart';
+ import '../../core/auth/auth_dao.dart';
+ import '../../features/onboarding/data/questionnaire_dao.dart';
+ import '../../features/profile/data/profile_dao.dart';
+ import '../../features/notification/data/notification_dao.dart';
+ import 'dao/search_history_dao.dart';
+ import 'dao/user_interests_dao.dart';
++import 'dao/templates_favorite_dao.dart';
+ import '../../features/templates/recommend/user_interests.dart';
+ 
+ const String _kDbName = 'lumira.db';
+-const int _kDbVersion = 41;
++const int _kDbVersion = 42;
+ 
+ /// 数据库 Provider
+ /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
+ final databaseProvider = FutureProvider<Database>((ref) async {
+   final dbDir = await getDatabasesPath();
+   final dbPath = p.join(dbDir, _kDbName);
+   final db = await openDatabase(
+     dbPath,
+     version: _kDbVersion,
+     onCreate: _onCreate,
+     onUpgrade: _onUpgrade,
+   );
+   ref.onDispose(db.close);
+   return db;
+ });
+ 
+ final templatesDaoProvider = FutureProvider<TemplatesDao>((ref) async {
+   final db = await ref.watch(databaseProvider.future);
+   return TemplatesDao(db);
+ });
+ 
++final templatesFavoriteDaoProvider =
++    FutureProvider<TemplatesFavoriteDao>((ref) async {
++  final db = await ref.watch(databaseProvider.future);
++  return TemplatesFavoriteDao(db);
++});
++
+ final scenesDaoProvider = FutureProvider<ScenesDao>((ref) async {
+   final db = await ref.watch(databaseProvider.future);
+   return ScenesDao(db);
+ });
+ 
+ final galleryDaoProvider = FutureProvider<GalleryDao>((ref) async {
+   final db = await ref.watch(databaseProvider.future);
+   return GalleryDao(db);
+ });
+ 
+ final challengeDaoProvider = FutureProvider<ChallengeDao>((ref) async {
+   final db = await ref.watch(databaseProvider.future);
+   return ChallengeDao(db);
+ });
+ 
+ final academyDaoProvider = FutureProvider<AcademyDao>((ref) async {
+   final db = await ref.watch(databaseProvider.future);
+   return AcademyDao(db);
+ });
+ 
+@@ -160,40 +167,48 @@ Future<void> _onCreate(Database db, int version) async {
+       ${Tables.colReferenceSource} TEXT NOT NULL DEFAULT '',
+       ${Tables.colCompositionJson} TEXT NOT NULL DEFAULT '{}',
+       ${Tables.colPoseJson} TEXT NOT NULL DEFAULT '{}',
+       ${Tables.colImagesJson} TEXT NOT NULL DEFAULT '[]',
+       ${Tables.colCameraJson} TEXT NOT NULL DEFAULT '{}',
+       ${Tables.colSceneGuideJson} TEXT NOT NULL DEFAULT '{}',
+       ${Tables.colPostProcessJson} TEXT NOT NULL DEFAULT '{}',
+       ${Tables.colIsBuiltin} INTEGER NOT NULL DEFAULT 0,
+       ${Tables.colIsRecommended} INTEGER NOT NULL DEFAULT 0,
+       ${Tables.colSource} TEXT NOT NULL DEFAULT 'builtin',
+       ${Tables.colShortDesc} TEXT NOT NULL DEFAULT '',
+       ${Tables.colAmbienceJson} TEXT NOT NULL DEFAULT '{}',
+       ${Tables.colCreatedAt} INTEGER NOT NULL,
+       ${Tables.colUpdatedAt} INTEGER NOT NULL
+     )
+   ''');
+   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_category ON ${Tables.customTemplates}(${Tables.colCategory})');
+   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_created_at ON ${Tables.customTemplates}(${Tables.colCreatedAt} DESC)');
+   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_source ON ${Tables.customTemplates}(${Tables.colSource})');
+ 
++  // === template_favorites（v42 新增，模板收藏独立关系表） ===
++  batch.execute('''
++    CREATE TABLE IF NOT EXISTS ${Tables.templateFavorites} (
++      ${Tables.colId} TEXT PRIMARY KEY,
++      ${Tables.colCreatedAt} INTEGER NOT NULL
++    )
++  ''');
++
+   // === template_categories（v13 新增，v17 改为三级树形分类） ===
+   // 主键改为自增 id（method 级 key 在不同 style 下重复，如 'normal'），
+   // UNIQUE(key, parent_key) 保证同父级下 key 不重复。
+   batch.execute('''
+     CREATE TABLE IF NOT EXISTS ${Tables.templateCategories} (
+       ${Tables.colId} INTEGER PRIMARY KEY AUTOINCREMENT,
+       ${Tables.colKey} TEXT NOT NULL,
+       ${Tables.colName} TEXT NOT NULL,
+       ${Tables.colParentKey} TEXT,
+       ${Tables.colLevel} INTEGER NOT NULL DEFAULT 1,
+       ${Tables.colIconUrl} TEXT NOT NULL DEFAULT '',
+       ${Tables.colDescription} TEXT NOT NULL DEFAULT '',
+       ${Tables.colSortOrder} INTEGER NOT NULL DEFAULT 0,
+       ${Tables.colIsSystem} INTEGER NOT NULL DEFAULT 0,
+       ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
+       ${Tables.colUpdatedAt} INTEGER NOT NULL,
+       UNIQUE(${Tables.colKey}, ${Tables.colParentKey})
+     )
+   ''');
+   batch.execute('CREATE INDEX IF NOT EXISTS idx_template_categories_parent ON ${Tables.templateCategories}(${Tables.colParentKey})');
+@@ -1191,40 +1206,54 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+       await db.execute(UserInterestsTable.indexScopeSql);
+     } catch (e) {
+       debugPrint('v40 migration failed (silent fallback): $e');
+     }
+   }
+ 
+   if (oldVersion < 41) {
+     try {
+       // v41: custom_templates 新增 images_json 列（多效果图持久化）
+       // 效果图列表 JSON 数组，[0] 为封面；旧数据缺失列时默认 '[]'。
+       await _addColumnIfNotExists(
+         db,
+         Tables.customTemplates,
+         Tables.colImagesJson,
+         "TEXT NOT NULL DEFAULT '[]'",
+       );
+     } catch (e) {
+       debugPrint('v41 migration failed (silent fallback): $e');
+     }
+   }
++
++  if (oldVersion < 42) {
++    try {
++      // v42: 新增 template_favorites 表（模板收藏独立关系表）
++      await db.execute('''
++        CREATE TABLE IF NOT EXISTS ${Tables.templateFavorites} (
++          ${Tables.colId} TEXT PRIMARY KEY,
++          ${Tables.colCreatedAt} INTEGER NOT NULL
++        )
++      ''');
++    } catch (e) {
++      debugPrint('v42 migration failed (silent fallback): $e');
++    }
++  }
+ }
+ 
+ /// 修复 template_categories 表中的 corrupted 数据（v18 迁移）。
+ ///
+ /// 1. 删除 level 与 parent_key 不一致的记录：
+ ///    - level=1 但 parent_key NOT NULL → 应为 NULL
+ ///    - level>1 但 parent_key IS NULL → 应有父分类
+ /// 2. 清理重复记录（每个 key+COALESCE(parent_key,'') 仅保留 MIN(id)）
+ /// 3. 创建 NULL 安全唯一索引
+ Future<void> _fixCategoryData(Database db) async {
+   // 1. 删除 level 与 parent_key 不一致的 corrupted 记录
+   // level>1 但 parent_key IS NULL：这些是被误标为一级的二级/三级分类
+   await db.execute('''
+     DELETE FROM ${Tables.templateCategories}
+     WHERE ${Tables.colLevel} > 1 AND ${Tables.colParentKey} IS NULL
+   ''');
+   // level=1 但 parent_key NOT NULL：这些是被误标为一级但有父分类的记录
+   await db.execute('''
+     DELETE FROM ${Tables.templateCategories}
+     WHERE ${Tables.colLevel} = 1 AND ${Tables.colParentKey} IS NOT NULL
+diff --git a/lumira_app_flutter/lib/core/db/tables.dart b/lumira_app_flutter/lib/core/db/tables.dart
+index d9684bce..f886cd66 100644
+--- a/lumira_app_flutter/lib/core/db/tables.dart
++++ b/lumira_app_flutter/lib/core/db/tables.dart
+@@ -11,40 +11,44 @@ class Tables {
+   static const String colAuthor = 'author';
+   static const String colVersion = 'version';
+   static const String colCategory = 'category';
+   static const String colClassificationJson = 'classification_json';
+   static const String colTagsJson = 'tags_json';
+   static const String colTagIdsJson = 'tag_ids_json';
+   static const String colPrice = 'price';
+   static const String colCover = 'cover';
+   static const String colCoverData = 'cover_data';
+   static const String colDescription = 'description';
+   static const String colReferenceSource = 'reference_source';
+   static const String colCompositionJson = 'composition_json';
+   static const String colPoseJson = 'pose_json';
+   static const String colImagesJson = 'images_json';
+   static const String colCameraJson = 'camera_json';
+   static const String colSceneGuideJson = 'scene_guide_json';
+   static const String colPostProcessJson = 'post_process_json';
+   static const String colCreatedAt = 'created_at';
+   static const String colUpdatedAt = 'updated_at';
+ 
++  // === template_favorites（v42 新增，模板收藏独立关系表） ===
++  // 复用 colId / colCreatedAt 常量。
++  static const String templateFavorites = 'template_favorites';
++
+   // === scenes ===
+   static const String scenes = 'scenes';
+   static const String colIcon = 'icon';
+   static const String colStyle = 'style';
+   static const String colFilterJson = 'filter_json';
+   static const String colVibe = 'vibe';
+   static const String colExampleImagesJson = 'example_images_json';
+   static const String colTipsJson = 'tips_json';
+   static const String colWhereToShoot = 'where_to_shoot';
+   static const String colBestTime = 'best_time';
+   static const String colRelatedCategory = 'related_category';
+   static const String colRecommendedTagIdsJson = 'recommended_tag_ids_json';
+   // colTagIdsJson 已在 custom_templates 段声明（值同为 'tag_ids_json'），此处不重复声明
+   static const String colCreator = 'creator';
+   static const String colIsFavorite = 'is_favorite';
+   // 自定义场景封面图（base64 data URL）。colCoverUrl 常量在 composition_kits 段声明（值 'cover_url'），此处复用
+ 
+   // === custom_templates 扩展列（v4 迁移新增） ===
+   static const String colIsBuiltin = 'is_builtin';
+   static const String colIsRecommended = 'is_recommended';

@@ -1,0 +1,477 @@
+﻿diff --git a/lumira_app_flutter/lib/core/db/dao/templates_favorite_dao.dart b/lumira_app_flutter/lib/core/db/dao/templates_favorite_dao.dart
+new file mode 100644
+index 00000000..bbf99326
+--- /dev/null
++++ b/lumira_app_flutter/lib/core/db/dao/templates_favorite_dao.dart
+@@ -0,0 +1,65 @@
++import 'package:sqflite/sqflite.dart';
++
++import '../tables.dart';
++
++/// 模板收藏 DAO：独立关系表，模板 id 为主键，覆盖全来源（builtin/custom/remote）。
++class TemplatesFavoriteDao {
++  TemplatesFavoriteDao(this._db);
++
++  final Database _db;
++
++  Future<bool> isFavorite(String templateId) async {
++    final rows = await _db.query(
++      Tables.templateFavorites,
++      columns: [Tables.colId],
++      where: '${Tables.colId} = ?',
++      whereArgs: [templateId],
++      limit: 1,
++    );
++    return rows.isNotEmpty;
++  }
++
++  Future<void> addFavorite(String templateId) async {
++    await _db.insert(
++      Tables.templateFavorites,
++      {
++        Tables.colId: templateId,
++        Tables.colCreatedAt: DateTime.now().millisecondsSinceEpoch,
++      },
++      conflictAlgorithm: ConflictAlgorithm.replace,
++    );
++  }
++
++  Future<void> removeFavorite(String templateId) async {
++    await _db.delete(
++      Tables.templateFavorites,
++      where: '${Tables.colId} = ?',
++      whereArgs: [templateId],
++    );
++  }
++
++  Future<bool> toggleFavorite(String templateId) async {
++    if (await isFavorite(templateId)) {
++      await removeFavorite(templateId);
++      return false;
++    }
++    await addFavorite(templateId);
++    return true;
++  }
++
++  Future<List<String>> getFavoriteIds() async {
++    final rows = await _db.query(
++      Tables.templateFavorites,
++      columns: [Tables.colId],
++      orderBy: '${Tables.colCreatedAt} DESC',
++    );
++    return rows.map((r) => r[Tables.colId] as String).toList();
++  }
++
++  Future<int> countFavorites() async {
++    final rows = await _db.rawQuery(
++      'SELECT COUNT(*) AS c FROM ${Tables.templateFavorites}',
++    );
++    return (rows.first['c'] as int?) ?? 0;
++  }
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/core/db/database_provider.dart b/lumira_app_flutter/lib/core/db/database_provider.dart
+index 4fa91d87..7a231ef2 100644
+--- a/lumira_app_flutter/lib/core/db/database_provider.dart
++++ b/lumira_app_flutter/lib/core/db/database_provider.dart
+@@ -24,10 +24,11 @@ import '../../features/profile/data/profile_dao.dart';
+ import '../../features/notification/data/notification_dao.dart';
+ import 'dao/search_history_dao.dart';
+ import 'dao/user_interests_dao.dart';
++import 'dao/templates_favorite_dao.dart';
+ import '../../features/templates/recommend/user_interests.dart';
+ 
+ const String _kDbName = 'lumira.db';
+-const int _kDbVersion = 41;
++const int _kDbVersion = 42;
+ 
+ /// 数据库 Provider
+ /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
+@@ -49,6 +50,12 @@ final templatesDaoProvider = FutureProvider<TemplatesDao>((ref) async {
+   return TemplatesDao(db);
+ });
+ 
++final templatesFavoriteDaoProvider =
++    FutureProvider<TemplatesFavoriteDao>((ref) async {
++  final db = await ref.watch(databaseProvider.future);
++  return TemplatesFavoriteDao(db);
++});
++
+ final scenesDaoProvider = FutureProvider<ScenesDao>((ref) async {
+   final db = await ref.watch(databaseProvider.future);
+   return ScenesDao(db);
+@@ -177,6 +184,14 @@ Future<void> _onCreate(Database db, int version) async {
+   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_created_at ON ${Tables.customTemplates}(${Tables.colCreatedAt} DESC)');
+   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_source ON ${Tables.customTemplates}(${Tables.colSource})');
+ 
++  // === template_favorites（v42 新增，模板收藏独立关系表） ===
++  batch.execute('''
++    CREATE TABLE IF NOT EXISTS ${Tables.templateFavorites} (
++      ${Tables.colId} TEXT PRIMARY KEY,
++      ${Tables.colCreatedAt} INTEGER NOT NULL
++    )
++  ''');
++
+   // === template_categories（v13 新增，v17 改为三级树形分类） ===
+   // 主键改为自增 id（method 级 key 在不同 style 下重复，如 'normal'），
+   // UNIQUE(key, parent_key) 保证同父级下 key 不重复。
+@@ -1208,6 +1223,20 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+       debugPrint('v41 migration failed (silent fallback): $e');
+     }
+   }
++
++  if (oldVersion < 42) {
++    try {
++      // v42: 新增 template_favorites 表（模板收藏独立关系表）
++      await db.execute('''
++        CREATE TABLE IF NOT EXISTS ${Tables.templateFavorites} (
++          ${Tables.colId} TEXT PRIMARY KEY,
++          ${Tables.colCreatedAt} INTEGER NOT NULL
++        )
++      ''');
++    } catch (e) {
++      debugPrint('v42 migration failed (silent fallback): $e');
++    }
++  }
+ }
+ 
+ /// 修复 template_categories 表中的 corrupted 数据（v18 迁移）。
+diff --git a/lumira_app_flutter/lib/core/db/tables.dart b/lumira_app_flutter/lib/core/db/tables.dart
+index d9684bce..f886cd66 100644
+--- a/lumira_app_flutter/lib/core/db/tables.dart
++++ b/lumira_app_flutter/lib/core/db/tables.dart
+@@ -28,6 +28,10 @@ class Tables {
+   static const String colCreatedAt = 'created_at';
+   static const String colUpdatedAt = 'updated_at';
+ 
++  // === template_favorites（v42 新增，模板收藏独立关系表） ===
++  // 复用 colId / colCreatedAt 常量。
++  static const String templateFavorites = 'template_favorites';
++
+   // === scenes ===
+   static const String scenes = 'scenes';
+   static const String colIcon = 'icon';
+diff --git a/lumira_app_flutter/lib/features/templates/data/templates_providers.dart b/lumira_app_flutter/lib/features/templates/data/templates_providers.dart
+index 0bcabb9d..f6702fba 100644
+--- a/lumira_app_flutter/lib/features/templates/data/templates_providers.dart
++++ b/lumira_app_flutter/lib/features/templates/data/templates_providers.dart
+@@ -153,3 +153,11 @@ final recommendedBuiltinTemplatesProvider =
+     return base;
+   }
+ });
++
++/// 已收藏的模板 id 集合（收藏状态 UI 的唯一数据源）。
++/// 收藏/取消后 `ref.invalidate(favoriteTemplateIdsProvider)` 触发重建。
++final favoriteTemplateIdsProvider = FutureProvider<Set<String>>((ref) async {
++  final dao = await ref.watch(templatesFavoriteDaoProvider.future);
++  final ids = await dao.getFavoriteIds();
++  return ids.toSet();
++});
+diff --git a/lumira_app_flutter/lib/features/templates/pages/templates_all_page.dart b/lumira_app_flutter/lib/features/templates/pages/templates_all_page.dart
+index 8e49bf37..9084d367 100644
+--- a/lumira_app_flutter/lib/features/templates/pages/templates_all_page.dart
++++ b/lumira_app_flutter/lib/features/templates/pages/templates_all_page.dart
+@@ -16,6 +16,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
+ import '../data/builtin_category_icons.dart';
+ import '../data/remote_templates_providers.dart';
+ import '../data/templates_browse_mock_data.dart';
++import '../data/templates_providers.dart';
+ import '../services/template_mapper.dart';
+ import '../widgets/ambience_badges.dart';
+ import '../widgets/template_cover_image.dart';
+@@ -51,6 +52,7 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+   String? _selectedStyle;
+   String? _selectedMethod;
+   bool _showCustom = false;
++  bool _showFavorites = false;
+   PriceFilter _priceFilter = PriceFilter.all;
+ 
+   @override
+@@ -161,6 +163,14 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+       filtered = filtered.where((t) => t.price > 0).toList();
+     }
+ 
++    // 收藏过滤：仅保留已收藏模板（与分类、价格、我的 toggle 取交集）
++    if (_showFavorites) {
++      final favIds = ref.read(favoriteTemplateIdsProvider).valueOrNull;
++      if (favIds != null) {
++        filtered = filtered.where((t) => favIds.contains(t.id)).toList();
++      }
++    }
++
+     return _AllPageData(
+       allCount: allCount,
+       unlockedCount: unlockedCount,
+@@ -193,6 +203,10 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+     setState(() => _showCustom = value);
+   }
+ 
++  void _toggleFavorites(bool value) {
++    setState(() => _showFavorites = value);
++  }
++
+   void _onPriceFilter(PriceFilter value) {
+     setState(() => _priceFilter = value);
+   }
+@@ -244,6 +258,8 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+   @override
+   Widget build(BuildContext context) {
+     final tokens = ref.watch(themeTokensProvider);
++    // watch 收藏集合：收藏/取消后重建 future，自动刷新「收藏」过滤列表
++    ref.watch(favoriteTemplateIdsProvider);
+     // 导入的模板现在持久化到 DAO，不再需要内存 provider
+     final importedAll = <AllTemplateItem>[];
+     final asyncDao = ref.watch(templatesDaoProvider);
+@@ -336,6 +352,8 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
+                                         onLayerSelect: _onLayerSelect,
+                                         onToggleCustom: _toggleCustom,
+                                         onPriceFilter: _onPriceFilter,
++                                        showFavorites: _showFavorites,
++                                        onToggleFavorites: _toggleFavorites,
+                                       ),
+                                       if (_showCustom)
+                                         _ActionRow(
+@@ -495,9 +513,11 @@ class _FilterSection extends StatelessWidget {
+     required this.selectedStyle,
+     required this.selectedMethod,
+     required this.showCustom,
++    required this.onToggleCustom,
++    required this.showFavorites,
++    required this.onToggleFavorites,
+     required this.priceFilter,
+     required this.onLayerSelect,
+-    required this.onToggleCustom,
+     required this.onPriceFilter,
+   });
+ 
+@@ -516,6 +536,8 @@ class _FilterSection extends StatelessWidget {
+   final PriceFilter priceFilter;
+   final void Function(int layer, String? value) onLayerSelect;
+   final void Function(bool) onToggleCustom;
++  final bool showFavorites;
++  final void Function(bool) onToggleFavorites;
+   final void Function(PriceFilter) onPriceFilter;
+ 
+   @override
+@@ -561,13 +583,27 @@ class _FilterSection extends StatelessWidget {
+               onSelect: onPriceFilter,
+             ),
+             const SizedBox(height: 12),
+-            // "我的" toggle：切换是否只看用户自定义/导入的模板
++            // "收藏" + "我的" toggle：过滤已收藏 / 用户自定义模板
+             Align(
+               alignment: Alignment.centerRight,
+-              child: _CustomToggle(
+-                tokens: tokens,
+-                active: showCustom,
+-                onTap: () => onToggleCustom(!showCustom),
++              child: Row(
++                mainAxisSize: MainAxisSize.min,
++                children: [
++                  _CustomToggle(
++                    tokens: tokens,
++                    active: showFavorites,
++                    onTap: () => onToggleFavorites(!showFavorites),
++                    icon: Icons.favorite_border,
++                    activeIcon: Icons.favorite,
++                    label: '收藏',
++                  ),
++                  const SizedBox(width: 8),
++                  _CustomToggle(
++                    tokens: tokens,
++                    active: showCustom,
++                    onTap: () => onToggleCustom(!showCustom),
++                  ),
++                ],
+               ),
+             ),
+           ],
+@@ -756,11 +792,17 @@ class _CustomToggle extends ConsumerWidget {
+     required this.tokens,
+     required this.active,
+     required this.onTap,
++    this.icon = Icons.bookmark_border_outlined,
++    this.activeIcon = Icons.bookmark,
++    this.label = '我的',
+   });
+ 
+   final ThemeTokens tokens;
+   final bool active;
+   final VoidCallback onTap;
++  final IconData icon;
++  final IconData activeIcon;
++  final String label;
+ 
+   @override
+   Widget build(BuildContext context, WidgetRef ref) {
+@@ -791,13 +833,13 @@ class _CustomToggle extends ConsumerWidget {
+           mainAxisSize: MainAxisSize.min,
+           children: [
+             Icon(
+-              active ? Icons.bookmark : Icons.bookmark_border_outlined,
++              active ? activeIcon : icon,
+               size: 14,
+               color: active ? Colors.white : tokens.textSecondary,
+             ),
+             const SizedBox(width: 4),
+             Text(
+-              '我的',
++              label,
+               style: TextStyle(
+                 fontSize: 12,
+                 fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+@@ -1764,4 +1806,4 @@ AllTemplateItem _recordToItem(TemplateRecord r, {required bool isCustom}) {
+ String _truncate(String s, {int maxLen = 24}) {
+   if (s.characters.length <= maxLen) return s;
+   return '${s.characters.take(maxLen)}…';
+-}
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/features/templates/pages/templates_detail_page.dart b/lumira_app_flutter/lib/features/templates/pages/templates_detail_page.dart
+index 62fab555..c6d79de7 100644
+--- a/lumira_app_flutter/lib/features/templates/pages/templates_detail_page.dart
++++ b/lumira_app_flutter/lib/features/templates/pages/templates_detail_page.dart
+@@ -23,6 +23,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
+ import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
+ import '../../../shared/widgets/tags/user_tags_section.dart';
+ import '../data/owned_templates_repository.dart';
++import '../data/templates_providers.dart';
+ import '../data/remote_templates_providers.dart';
+ import '../data/templates_browse_mock_data.dart';
+ import '../data/templates_editor_mock_data.dart' show parseAspectRatio;
+@@ -147,8 +148,15 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
+   /// - 付费模板未解锁 → 右上角展示用户积分数（点击跳转积分钱包页）
+   /// - 其余（免费模板 / 已解锁付费模板）→ 无右侧操作
+   List<Widget>? _navActions(ThemeTokens tokens, bool isLocked) {
+-    if (_isMyTemplate) {
+-      return [
++    final id = _template?.id ?? '';
++    final heart = id.isEmpty
++        ? null
++        : _FavoriteToggle(
++            templateId: id,
++            tokens: tokens,
++          );
++    final rest = <Widget>[
++      if (_isMyTemplate) ...[
+         if (_isCustomTemplate)
+           LumiraIconButton(
+             icon: Icons.ios_share,
+@@ -162,12 +170,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
+           color: tokens.textPrimary,
+           size: 20,
+         ),
+-      ];
+-    }
+-    if (isLocked) {
+-      return [_CreditBalanceChip(onTap: _goPointsWallet)];
+-    }
+-    return null;
++      ],
++      if (isLocked) _CreditBalanceChip(onTap: _goPointsWallet),
++    ];
++    if (heart == null && rest.isEmpty) return null;
++    return [if (heart != null) heart, ...rest];
+   }
+ 
+   void _goEdit() {
+@@ -1969,3 +1976,28 @@ class _TemplatePhotosSection extends ConsumerWidget {
+     );
+   }
+ }
++
++/// 详情页红心收藏按钮：跟随收藏状态切换空心/实心，点击切换收藏并刷新收藏集。
++class _FavoriteToggle extends ConsumerWidget {
++  const _FavoriteToggle({required this.templateId, required this.tokens});
++
++  final String templateId;
++  final ThemeTokens tokens;
++
++  @override
++  Widget build(BuildContext context, WidgetRef ref) {
++    final favoriteIds =
++        ref.watch(favoriteTemplateIdsProvider).valueOrNull ?? const <String>{};
++    final isFav = favoriteIds.contains(templateId);
++    return LumiraIconButton(
++      icon: isFav ? Icons.favorite : Icons.favorite_border,
++      onPressed: () async {
++        final dao = await ref.read(templatesFavoriteDaoProvider.future);
++        await dao.toggleFavorite(templateId);
++        ref.invalidate(favoriteTemplateIdsProvider);
++      },
++      color: isFav ? tokens.brand : tokens.textSecondary,
++      size: 20,
++    );
++  }
++}
+diff --git a/lumira_app_flutter/test/core/db/dao/templates_favorite_dao_test.dart b/lumira_app_flutter/test/core/db/dao/templates_favorite_dao_test.dart
+new file mode 100644
+index 00000000..83240ec1
+--- /dev/null
++++ b/lumira_app_flutter/test/core/db/dao/templates_favorite_dao_test.dart
+@@ -0,0 +1,64 @@
++import 'package:flutter_test/flutter_test.dart';
++import 'package:sqflite_common_ffi/sqflite_ffi.dart';
++import 'package:sqflite/sqflite.dart';
++
++import 'package:lumira_app_flutter/core/db/dao/templates_favorite_dao.dart';
++import 'package:lumira_app_flutter/core/db/tables.dart';
++
++void main() {
++  late Database db;
++  late TemplatesFavoriteDao dao;
++
++  setUpAll(() {
++    sqfliteFfiInit();
++    databaseFactory = databaseFactoryFfiNoIsolate;
++  });
++
++  setUp(() async {
++    db = await openDatabase(':memory:', version: 1, onCreate: (d, v) async {
++      await d.execute('''
++        CREATE TABLE IF NOT EXISTS ${Tables.templateFavorites} (
++          ${Tables.colId} TEXT PRIMARY KEY,
++          ${Tables.colCreatedAt} INTEGER NOT NULL
++        )
++      ''');
++    });
++    dao = TemplatesFavoriteDao(db);
++  });
++
++  tearDown(() => db.close());
++
++  test('初始未收藏', () async {
++    expect(await dao.isFavorite('t1'), false);
++    expect(await dao.getFavoriteIds(), isEmpty);
++  });
++
++  test('addFavorite 后收藏且幂等', () async {
++    await dao.addFavorite('t1');
++    await dao.addFavorite('t1');
++    expect(await dao.isFavorite('t1'), true);
++    expect(await dao.countFavorites(), 1);
++  });
++
++  test('removeFavorite 取消收藏', () async {
++    await dao.addFavorite('t1');
++    await dao.removeFavorite('t1');
++    expect(await dao.isFavorite('t1'), false);
++    expect(await dao.getFavoriteIds(), isEmpty);
++  });
++
++  test('toggleFavorite 往返切换返回新状态', () async {
++    expect(await dao.toggleFavorite('t1'), true);
++    expect(await dao.isFavorite('t1'), true);
++    expect(await dao.toggleFavorite('t1'), false);
++    expect(await dao.isFavorite('t1'), false);
++  });
++
++  test('getFavoriteIds 按收藏时间倒序、多模板独立', () async {
++    await dao.addFavorite('a');
++    await Future<void>.delayed(const Duration(milliseconds: 5));
++    await dao.addFavorite('b');
++    expect(await dao.getFavoriteIds(), ['b', 'a']);
++    expect(await dao.countFavorites(), 2);
++  });
++}
+\ No newline at end of file
