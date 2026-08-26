@@ -3892,17 +3892,32 @@ List<int> _sampleCenterAvgRgbFromRgba(ByteData byteData, int width, int height) 
 
 /// 由「取景器平均色」与「成片平均色」构造逐通道增益校正矩阵（5x4）。
 /// 把成片通道均值推向取景器均值 → 消除快照 ISP 相对取景器的色偏。近似恒等时返回 null。
+///
+/// **亮度中性铁律**：取景器视频帧（video）通常比快照成片（photo）整体更亮
+/// （取景器有预提亮/显示增益），若直接用 preview/photo 逐通道独立缩放，三通道
+/// 增益都会 >1，整张成片被提亮而过曝。因此必须先把三通道增益做「亮度中性归一化」：
+/// 几何均值置为 1（中灰像素增益后灰值不变 → 全局亮度守恒），只保留通道间的相对
+/// 差异用于消除色偏。这样只校正"B/R 失衡（偏黄）"，绝不动曝光。
 List<double>? _buildPreviewAnchorCorrectionMatrix(
     List<int> preview, List<int> photo) {
-  const double lo = 0.78, hi = 1.30;
+  const double lo = 0.80, hi = 1.25;
   double gain(int p, int c) {
     if (c <= 0) return 1.0;
     return (p / c).clamp(lo, hi);
   }
 
-  final gr = gain(preview[0], photo[0]);
-  final gg = gain(preview[1], photo[1]);
-  final gb = gain(preview[2], photo[2]);
+  var gr = gain(preview[0], photo[0]);
+  var gg = gain(preview[1], photo[1]);
+  var gb = gain(preview[2], photo[2]);
+
+  // 亮度中性化：三通道几何均值归 1，只保留色度（通道间相对差异）。
+  final gmean = math.pow(gr * gg * gb, 1.0 / 3.0).toDouble();
+  if (gmean > 1e-6) {
+    gr /= gmean;
+    gg /= gmean;
+    gb /= gmean;
+  }
+
   if ((gr - 1).abs() < 0.015 &&
       (gg - 1).abs() < 0.015 &&
       (gb - 1).abs() < 0.015) {
