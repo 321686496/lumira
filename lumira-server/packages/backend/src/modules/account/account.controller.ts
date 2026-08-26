@@ -15,6 +15,12 @@ export class AccountController {
     return this.accountService.getStatus(req.deviceId);
   }
 
+  @Post('recovery-qr')
+  @UseGuards(DeviceAuthGuard)
+  recoveryQr(@Req() req: any) {
+    return this.accountService.rotateRecoverySecret(req.deviceId);
+  }
+
   @Post('recover-by-qr')
   recoverByQr(@Body() dto: RecoverByQrDto) {
     return this.accountService.recoverByQr(dto.secret);
