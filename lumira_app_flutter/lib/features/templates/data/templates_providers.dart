@@ -153,3 +153,11 @@ final recommendedBuiltinTemplatesProvider =
     return base;
   }
 });
+
+/// 已收藏的模板 id 集合（收藏状态 UI 的唯一数据源）。
+/// 收藏/取消后 `ref.invalidate(favoriteTemplateIdsProvider)` 触发重建。
+final favoriteTemplateIdsProvider = FutureProvider<Set<String>>((ref) async {
+  final dao = await ref.watch(templatesFavoriteDaoProvider.future);
+  final ids = await dao.getFavoriteIds();
+  return ids.toSet();
+});
