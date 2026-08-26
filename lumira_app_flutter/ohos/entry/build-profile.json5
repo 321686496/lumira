@@ -2,6 +2,12 @@
 {
   "apiType": 'stageMode',
   "buildOption": {
+    // 原生 C++ 模块：photo_processor.cpp（后处理像素循环下沉到 C++，绕过 ArkTS 慢速逐像素循环）
+    "externalNativeOptions": {
+      "path": "./src/main/cpp/CMakeLists.txt",
+      "arguments": "",
+      "cppFlags": ""
+    }
   },
   "targets": [
     {

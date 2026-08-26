@@ -55,7 +55,10 @@ class WatermarkAnimationOverlay extends StatefulWidget {
 class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     with SingleTickerProviderStateMixin {
   /// 展示最大宽度占页面宽度的比例。
-  static const double _maxWidthRatio = 0.9;
+  static const double _maxWidthRatio = 0.8;
+
+  /// 展示最大高度占页面高度的比例（避免竖片溢出屏幕）。
+  static const double _maxHeightRatio = 0.85;
 
   /// 后台合成目标尺寸上限（动画展示区域较小，无需解码/合成全尺寸原图）。
   static const int _decodeTargetDim = 1200;
@@ -341,7 +344,6 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
-    final maxWidth = screenSize.width * _maxWidthRatio;
 
     return IgnorePointer(
       child: AnimatedBuilder(
@@ -353,6 +355,29 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
           }
           final aspect = _displayW / _displayH;
 
+          // 按「限宽 80% / 限高 85%」手算实际显示宽高（等比缩放）。
+          // 不能依赖 Center + AspectRatio + SizedBox 来限宽：Center 给宽松约束后，
+          // AspectRatio 会按“比例 + 全屏约束”自行撑到满宽，SizedBox 的宽度请求被无视。
+          final maxW = screenSize.width * _maxWidthRatio;
+          final maxH = screenSize.height * _maxHeightRatio;
+          double w;
+          double h;
+          if (aspect >= 1) {
+            w = maxW;
+            h = w / aspect;
+            if (h > maxH) {
+              h = maxH;
+              w = h * aspect;
+            }
+          } else {
+            h = maxH;
+            w = h * aspect;
+            if (w > maxW) {
+              w = maxW;
+              h = w / aspect;
+            }
+          }
+
           // 缩放：0.15（极小）→ 1.0，配合 easeOutBack 产生「从小变大」的定格效果
           final scale = 0.15 + 0.85 * _grow.value;
           // 透明度：淡入 × (1 - 淡出)
@@ -363,12 +388,10 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
               scale: scale,
               child: Opacity(
                 opacity: opacity,
-                child: AspectRatio(
-                  aspectRatio: aspect,
-                  child: SizedBox(
-                    width: maxWidth,
-                    child: RawImage(image: image, fit: BoxFit.contain),
-                  ),
+                child: SizedBox(
+                  width: w,
+                  height: h,
+                  child: RawImage(image: image, fit: BoxFit.fill),
                 ),
               ),
             ),

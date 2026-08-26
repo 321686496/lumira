@@ -6,7 +6,6 @@ import 'package:camerawesome_ohos/pigeon.dart';
 import 'package:camerawesome_ohos/src/orchestrator/camera_context.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../logger.dart';
 
@@ -384,9 +383,8 @@ class _CameraWidgetBuilder extends State<CameraAwesomeBuilder>
 
   @override
   void didChangeDependencies() {
-    if (Platform.operatingSystem != 'ohos') {
-      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    }
+    // 不再锁死竖屏。原判断 Platform.operatingSystem != 'ohos' 在 OHOS 上并不可靠，
+    // 且强制单竖屏会覆盖 main.dart 的横竖屏放开，导致横屏成片恒为竖图。方向统一由 main.dart 控制。
     super.didChangeDependencies();
   }
 

@@ -43,6 +43,7 @@ import '../domain/photo_template.dart';
 import '../domain/scene_preset.dart' show SceneFilter;
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
+import '../services/level_sensor_service.dart';
 import '../services/capture_worker.dart';
 import '../services/dart_photo_pipeline.dart' show applyP3ToSrgbRgba, isDisplayP3Jpeg;
 import '../services/white_balance.dart';
@@ -104,6 +105,14 @@ enum CameraPermissionStatus { unknown, granted, denied, permanentlyDenied }
 class _CapturePageState extends ConsumerState<CapturePage>
     with WidgetsBindingObserver {
   bool _isLandscape = false;
+
+  /// 来自加速度传感器的竖/横持判定（true=竖持，false=横持，null=尚未判定/平放）。
+  /// 用于拍摄方向与比例：OHOS 引擎窗口旋转时不一定更新 MediaQuery，横屏持机时
+  /// MediaQuery 恒报竖屏，导致成片恒为竖图、3:4 也不翻成 4:3。这里改用传感器判断
+  /// "手机拿横了没"，与 iPhone 原相机一致，且不依赖窗口是否旋转。
+  bool? _devicePortrait;
+  StreamSubscription<bool?>? _devicePortraitSub;
+
   CameraPermissionStatus _permissionStatus = CameraPermissionStatus.unknown;
 
   /// 是否 OHOS（HarmonyOS）：非 iOS 且非 Android。用于区分平台差异（白平衡等）。
@@ -194,6 +203,21 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 初始化时再次确保方向不锁死。否则横屏持机时 MediaQuery 恒为竖屏，
     // isPortrait 恒为 true → 成片仍是竖图、模板拍摄指南也不随横屏适配。
     _forceUnlockRotation();
+    // 订阅加速度传感器判定竖/横持：见 _devicePortrait 字段注释。仅当判定翻转时
+    // setState，避免传感器高频回调触发不必要的重建。
+    _devicePortraitSub =
+        LevelSensorService.portraitnessStream().listen((portrait) {
+      if (portrait == null || !mounted) return;
+      final newLandscape = !portrait;
+      if (newLandscape != _isLandscape) {
+        setState(() {
+          _isLandscape = newLandscape;
+          _devicePortrait = portrait;
+        });
+      } else {
+        _devicePortrait = portrait;
+      }
+    });
     // 从非拍摄页返回本拍摄页时，若本页面是被 retain（覆盖未销毁）的实例，
     // 相机已在离开时被路由观察者释放，需重建相机预览才能恢复取景器。
     // 通过 ref.listenManual 监听版本号自增；首次进入时相机尚未就绪（_cameraReady
@@ -455,6 +479,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 关闭，导致再次进入拍摄页时取景器就绪流失效、卡在加载中。
     _cameraReadySub?.cancel();
     _cameraReadyWatchdog?.cancel();
+    _devicePortraitSub?.cancel();
     // 释放常驻 worker isolate（性能优化 A：避免 isolate 泄漏）
     CaptureWorker.instance.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -629,7 +654,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 使用 MediaQuery（与取景器一致）而非已废弃的 WidgetsBinding.instance.window.physicalSize，
     // 后者在部分平台返回 Size.zero 导致 screenRatio=NaN，isolate 裁切失败后 catch 返回原始 4:3 图像。
     final screenSize = MediaQuery.of(context).size;
-    final isPortrait = screenSize.height >= screenSize.width;
+    // 物理方向优先用加速度传感器（见 _devicePortrait）：OHOS 窗口/MediaQuery 未必跟随旋转，
+    // 仅看 MediaQuery 会恒判竖屏 → 横屏持机成片仍是竖图、3:4 也不翻成 4:3。
+    // 传感器判定成功（非 null）时用之；否则回退到 MediaQuery。
+    final isPortrait =
+        _devicePortrait ?? (screenSize.height >= screenSize.width);
     var screenRatio = screenSize.width / screenSize.height;
     if (!screenRatio.isFinite || screenRatio <= 0) {
       // Fallback：典型手机屏幕比例（竖屏 9:19.5，横屏 19.5:9）

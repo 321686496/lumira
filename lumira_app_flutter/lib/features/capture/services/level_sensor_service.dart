@@ -101,6 +101,42 @@ class LevelSensorService {
     });
   }
 
+  /// 判定手机此刻是竖持(true)还是横持(false)。
+  ///
+  /// 用于拍摄方向与比例切换。**不依赖 Flutter 窗口是否已旋转**：OHOS 引擎在窗口旋转时
+  /// 不一定把方向同步给 MediaQuery，导致横屏持机时 MediaQuery 恒报竖屏、成片恒为竖图。
+  /// 这里直接读加速度计判断"手机拿横了没"，与 iPhone 原相机一致。
+  ///
+  /// 判定规则（[x,y,z] 为 m/s²，重力≈9.8）：竖持时重力主轴在屏幕 y 轴、横持时在 x 轴；
+  /// 故 |y|>=|x| 判定为竖持、|x|>|y| 判定为横持。
+  /// 手机平放（重力几乎全沿 z 轴，|x|、|y| 都小）时无左右方向感，发出 null，
+  /// 由调用方维持上次判定 / 回退到 MediaQuery。
+  static Stream<bool?> portraitnessStream() =>
+      _rawStream().transform(_portraitTransformer());
+
+  static StreamTransformer<List<double>, bool?> _portraitTransformer() {
+    bool? last;
+    return StreamTransformer.fromHandlers(
+      handleData: (List<double> a, EventSink<bool?> sink) {
+        final x = a[0].abs();
+        final y = a[1].abs();
+        final z = a[2].abs();
+        // 平放或接近平放：重力沿 z 轴，无竖/横持方向感 → 维持上次判定。
+        if (z >= 1.0 && x < 2.0 && y < 2.0) {
+          sink.add(last);
+          return;
+        }
+        last = y >= x;
+        sink.add(last);
+      },
+      handleError: (Object e, StackTrace st, EventSink<bool?> sink) {
+        sink.add(null);
+        sink.close();
+      },
+      handleDone: (EventSink<bool?> sink) => sink.close(),
+    );
+  }
+
   static List<double> _parseOhosEvent(Object? event) {
     final list = event as List;
     final x = (list[0] as num).toDouble();

@@ -6,7 +6,6 @@ import 'package:camerawesome/pigeon.dart';
 import 'package:camerawesome/src/orchestrator/camera_context.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 /// This is the builder for your camera interface
 /// Using the [state] you can do anything you need without having to think about the camera flow
@@ -382,7 +381,9 @@ class _CameraWidgetBuilder extends State<CameraAwesomeBuilder>
 
   @override
   void didChangeDependencies() {
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    // 不再锁死竖屏。原实现强制 setPreferredOrientations([portraitUp])，
+    // 会在相机预览挂载时覆盖 main.dart 的横竖屏放开，导致横屏持机时窗口不旋转、
+    // MediaQuery 恒报竖屏、成片恒为竖图。方向统一由 main.dart 的 setPreferredOrientations 控制。
     super.didChangeDependencies();
   }
 

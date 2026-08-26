@@ -105,6 +105,8 @@ class OhosImageProcessor {
   /// - [maxDim]：输出最大边（默认 [kMaxProcessDim]=1280）
   ///
   /// 成功写文件后返回 true；任何失败（原生报错 / 非 OHOS）返回 false（调用方回退原管线）。
+  /// 原生失败时仍在 [timing] 里给出各阶段耗时（decode/transform/sharpen/encode），
+  /// 便于定位瓶颈。
   Future<bool> processJpeg({
     required String inputPath,
     required String outputPath,
@@ -114,6 +116,7 @@ class OhosImageProcessor {
     required List<double> matrix,
     required int sharpen,
     int maxDim = 1280,
+    Map<String, int>? timing,
   }) async {
     if (!isSupported) return false;
     try {
@@ -131,6 +134,12 @@ class OhosImageProcessor {
         },
       );
       if (result == null) return false;
+      final t = result['timing'];
+      if (timing != null && t is Map<Object?, Object?>) {
+        t.forEach((k, v) {
+          if (v is int) timing[k.toString()] = v;
+        });
+      }
       return result['ok'] == true;
     } catch (e) {
       debugPrint('[OhosImageProcessor] processJpeg failed: $e');
