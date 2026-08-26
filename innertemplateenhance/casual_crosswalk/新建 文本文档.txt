@@ -1,0 +1,221 @@
+{
+  "name": "斑马线随拍",
+  "category": "street",
+  "classification": {
+    "type": "street",
+    "majorStyle": "casual",
+    "subStyle": "humanistic",
+    "method": "wide"
+  },
+  "shortDesc": "城市路口黑白纪实，斑马线延伸出充满烟火的街头故事📷",
+  "description": "街拍非人像模板，大远景抓拍行人穿行斑马线的生活决定性瞬间；利用斑马线透视引导线构建画面，侧光/顶光塑造路面线条质感，黑白高对比胶片质感，适合记录城市人文纪实场景。",
+  "ambience": {
+    "seasons": ["春季", "夏季", "秋季"],
+    "weathers": ["晴天"],
+    "timeTones": ["日间自然光"]
+  },
+  "tags": ["街拍", "斑马线", "随拍", "人文纪实", "黑白胶片"],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "斑马线透视引导，远景捕捉路口行人的决定性纪实瞬间"
+    },
+    {
+      "imageIndex": 1,
+      "role": "效果图",
+      "caption": "多行人错落穿行，强化斑马线线条节奏感，等待画面决定性瞬间"
+    },
+    {
+      "imageIndex": 2,
+      "role": "效果图",
+      "caption": "侧光硬光影，路面明暗分割突出几何线条，捕捉行人经过的决定性瞬间"
+    },
+    {
+      "imageIndex": 3,
+      "role": "效果图",
+      "caption": "黄昏路口，柔和日光下的斑马线人文快照，定格街头决定性瞬间"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·路口远景构图",
+      "type": "composition",
+      "description": "斑马线作为核心引导线向画面深处汇聚，零散行人作为点状视觉趣味点落在三分线交点区域，耐心等候街头决定性瞬间，保留路口建筑、信号灯环境，画面上下保留充足环境留白。",
+      "compositionFrame": "纵深引导线构图，斑马线从画面底部向上汇聚向远方；行人趣味点落在画面中偏右三分交叉位置；下半部分占画面约60%留给路面斑马线，上半部分40%留给街道建筑远景。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape-wide"
+      },
+      "position": {
+        "x": 0.4,
+        "y": 0.5
+      },
+      "scale": 0.9,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 1,
+      "name": "多行人节奏构图",
+      "type": "composition",
+      "description": "多名行人分散分布在斑马线上，利用行人大小远近制造画面层次，透视线条贯穿整张画面，等候并捕捉人群行走、驻足交谈的决定性瞬间。",
+      "compositionFrame": "引导线纵深构图，斑马线线条贯穿；多个人物点状元素错落排布在线条之上，不要集中扎堆；前景路面，中景行人，远景街道建筑三层层次。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape-wide"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 0.92,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 2,
+      "name": "硬光线条强化构图",
+      "type": "composition",
+      "description": "强光切割路面形成大块明暗面，斑马线线条被光影强化；少量行人置于明暗交界区域，抓住行人经过的决定性瞬间，突出几何对比，弱化多余杂乱环境元素。",
+      "compositionFrame": "侧光下明暗分割画面，斑马线引导线保持纵深；主体趣味点放在明暗交界三分点；暗部承载阴影，亮部凸显斑马线白色条纹。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape-wide"
+      },
+      "position": {
+        "x": 0.48,
+        "y": 0.52
+      },
+      "scale": 0.88,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 3,
+      "name": "黄昏柔和街景构图",
+      "type": "composition",
+      "description": "黄昏低角度日光，光线柔和，斑马线透视保留，行人剪影轮廓柔和，远处建筑带有淡淡的氛围感，静待街头决定性瞬间，整体画面层次柔和不生硬。",
+      "compositionFrame": "纵深引导线构图，天空保留小幅占比；行人分布于斑马线中景位置；整体画面明暗对比适度降低，环境氛围感增强。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape-wide"
+      },
+      "position": {
+        "x": 0.44,
+        "y": 0.49
+      },
+      "scale": 0.91,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "leading_lines",
+    "gridType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.5,
+    "description": "大远景景别，机位平视略抬高；斑马线透视引导线作为画面骨架；等候街头决定性瞬间，行人趣味点落在三分线交点；路面斑马线占画幅下半部分约60%，街道建筑远景占上半部分40%。",
+    "subjectFrame": {
+      "x": 0.3,
+      "y": 0.3,
+      "w": 0.5,
+      "h": 0.45
+    }
+  },
+  "camera": {
+    "exposureCompensation": -0.2,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5500,
+    "flashMode": "off",
+    "focusMode": "continuous",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光屏幕上方偏侧，侧光或顶光；硬光光比约3:1；阴影投向屏幕下方，阴影边缘偏硬；保留路面与建筑纹理质感，高光落在斑马线白色条纹上，无明显光斑；环境光为日间街道自然光。",
+    "shootingDistance": "10‑20m",
+    "background": "斑马线、路口信号灯、城市街道建筑、往来行人和车辆",
+    "props": ["变焦能力的手机镜头"],
+    "bestTime": "09:00‑11:00 或者 17:00‑19:00",
+    "tips": [
+      "在路口保持耐心，等待决定性瞬间，等候多个行人形成画面节奏再按下快门",
+      "充分利用斑马线的透视引导线，将行人趣味点放置在线条汇聚附近",
+      "控制曝光，优先保留斑马线高光条纹细节，避免高光区域过曝发白",
+      "本模板为纪实抓拍，手机无法实现专业相机高速快门定格，依靠连续对焦抓拍动态行人",
+      "暗角参数用于压暗画面四角，视觉重心汇聚到画面中部斑马线区域，不产生背景虚化效果"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 5,
+      "contrast": 22,
+      "saturation": -30,
+      "temperature": 0,
+      "tint": 0,
+      "highlights": -12,
+      "shadows": 8
+    },
+    "smoothStrength": 0,
+    "sharpen": 35,
+    "vignette": 18,
+    "grain": 15,
+    "lut": "bw",
+    "systemFilter": "none"
+  },
+  "orientation": {
+    "framePosition": "画面中偏中下，归一坐标 x:0.3‑0.8 y:0.2‑0.7",
+    "bodyFacing": {
+      "type": "none",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "none",
+      "azimuth": 0
+    },
+    "twist": "无，非人像题材",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "无"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "完整收纳路口斑马线与远处街道建筑，行人作为画面点缀，捕捉街头决定性瞬间",
+    "cameraHeight": "平视略抬高",
+    "cameraAzimuth": "正拍路口纵深方向",
+    "subjectScale": "斑马线场景主体约占画幅90%，行人作为点缀占比小",
+    "environmentRatio": "环境背景占画面100%，行人仅作为画面视觉锚点",
+    "headroom": "上方预留约1/3画面给到远景建筑",
+    "framingNote": "大远景平视略抬机位，以斑马线纵深透视构建画面，等待决定性瞬间，行人作为点状趣味元素，完整保留路口城市环境。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "主光屏幕上方，侧光或者顶光",
+      "辅光轮廓光": "无额外辅光，依靠环境漫反射填充暗部",
+      "光型软硬": "晴天硬光，阳光直射；黄昏时段转为柔光",
+      "光比": "晴天约3:1，黄昏约2:1",
+      "阴影": "阴影落向屏幕下方，晴天阴影边缘锐利浓度深；黄昏阴影边缘柔和",
+      "质感": "保留柏油路面粗糙纹理、斑马线条纹纹理；高光集中于白色斑马线；无明显光斑反光",
+      "环境光": "日间城市街道环境自然光",
+      "色温对比": "整体环境统一日光色温，无明显冷暖对冲"
+    },
+    "lightToParams": "exposureCompensation‑0.2压低整体曝光；contrast+22提升明暗反差；highlights‑12保护斑马线高光；shadows+8找回暗部路面细节；lut=bw实现黑白纪实效果；grain+15增加胶片颗粒质感"
+  },
+  "styling": {
+    "subjectType": "街景城市路口非人像，斑马线+行人点缀",
+    "clothingLayers": {
+      "上装": "",
+      "下装": "",
+      "衣角处理": "",
+      "袖子": "",
+      "领口": "",
+      "鞋袜": "",
+      "叠穿层次": ""
+    },
+    "accessories": "",
+    "hairMakeup": "",
+    "objectStyle": "城市十字路口，黑白纪实人文风格，几何线条感，胶片颗粒质感；行人日常城市穿搭，不作特定造型要求。",
+    "note": "抓拍真实路人，无需刻意造型，追求生活随机的决定性瞬间。"
+  }
+}

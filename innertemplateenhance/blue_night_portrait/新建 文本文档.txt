@@ -1,0 +1,219 @@
+帮我根据以下结构性数据生成图片：
+{
+  "name": "蓝调时刻海边剪影人像",
+  "category": "portrait",
+  "classification": {
+    "type": "portrait",
+    "majorStyle": "氛围感人像",
+    "subStyle": "蓝调剪影",
+    "method": "环境逆光人像"
+  },
+  "shortDesc": "蓝调暮色漫染大海，静默剪影诉说晚风心事🌊",
+  "description": "人像摄影模板，蓝调暮色黄昏海边环境，依靠日落环境逆光塑造人物剪影，适合长裙、西装深色系穿搭，捕捉安静疏离的海边氛围感，适合情绪人像拍摄。",
+  "ambience": {
+    "seasons": ["春季", "夏季", "秋季"],
+    "weathers": ["晴天", "少云"],
+    "timeTones": ["蓝调时刻"]
+  },
+  "tags": ["蓝调时刻", "海边人像", "剪影", "情绪人像", "暮色"],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "大远景，人物背对镜头望向海平面落日，完整蓝调海天环境"
+    },
+    {
+      "imageIndex": 1,
+      "role": "效果图",
+      "caption": "斜侧半身，蓝调海边回头人像，保留面部细节轮廓光"
+    },
+    {
+      "imageIndex": 2,
+      "role": "效果图",
+      "caption": "七分身侧脸剪影，海风拂动发丝，胶片颗粒质感"
+    },
+    {
+      "imageIndex": 3,
+      "role": "效果图",
+      "caption": "七分身背身侧仰头剪影，望向黄昏天际霞光"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·远景背对伫立",
+      "type": "people",
+      "description": "人物背对镜头，身体朝向屏幕正远方海面180°，头部保持正直，双脚平稳站立，双臂自然垂落在身体两侧，全身笔直站立，视线望向屏幕正前方海平面落日，情绪沉静放空。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "person_stand_back"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.72
+      },
+      "scale": 0.22,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 1,
+      "name": "斜侧回眸半身",
+      "type": "people",
+      "description": "人物身体侧向屏幕左约+45°，面部回转朝向镜头方向约‑45°，头颈正直，肩膀微微放松，画面可见的屏幕右侧手臂自然弯曲，手部松弛悬于腰侧，手指自然放松，重心稳定站立，视线看向镜头，气质清冷疏离。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "person_half_turn_backlook"
+      },
+      "position": {
+        "x": 0.34,
+        "y": 0.54
+      },
+      "scale": 0.64,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 2,
+      "name": "侧面侧脸剪影",
+      "type": "people",
+      "description": "人物身体侧向屏幕右约‑90°，面部同样朝向屏幕右‑90°纯侧面，头部微微抬升，一缕发丝被海风吹起，双臂自然垂于身体，双手手指松弛，重心单腿支撑站立，视线望向屏幕右侧远方海面，安静忧郁。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "person_profile_silhouette"
+      },
+      "position": {
+        "x": 0.32,
+        "y": 0.58
+      },
+      "scale": 0.74,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 3,
+      "name": "背身仰头望天际",
+      "type": "people",
+      "description": "人物身体背对镜头朝向屏幕正前方海面180°，头部向上仰起headPitch+18°，面部转向屏幕右侧约‑45°，双肩放松下沉，双臂垂在身体两侧，双手自然下垂，视线看向屏幕右上方黄昏云霞，情绪温柔怅然。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "person_back_look_up"
+      },
+      "position": {
+        "x": 0.34,
+        "y": 0.62
+      },
+      "scale": 0.68,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.3,
+    "description": "竖版3:4，遵循三分法构图；海平面放置画面下1/3分割线；封面图为大远景，人物放在画面下方居中；其余效果图为半身/七分身，人物置于画面左侧，上方大量预留天空留白；海天占据画面绝大部分环境空间。",
+    "subjectFrame": {
+      "x": 0.05,
+      "y": 0.02,
+      "w": 0.9,
+      "h": 0.96
+    }
+  },
+  "camera": {
+    "exposureCompensation": -0.7,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "tungsten",
+    "whiteBalanceK": 3600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主逆光来自屏幕正远方海平面日落位置，属于强环境逆光；无正面主补光，弱轮廓光勾勒头发与肩膀边缘；光型为柔和黄昏漫射光；光比高约7:1；人物主体形成深重黑色剪影，阴影包裹整个人物，无正面面部阴影；质感：人物大面积哑光黑色剪影，边缘发丝带有细微高光勾边；环境天空有冷暖色彩渐变，海面柔和反光；环境光：背景天空冷深蓝色，日落缝隙透出暖橙黄光；色温对比：背景天空冷蓝，地平线日落区域暖橙。",
+    "shootingDistance": "2.0‑3.5m",
+    "background": "海边海岸线、广阔海面，黄昏蓝调渐变天空，少量轻薄云层；可选悬崖礁石海岸或者沙滩海岸。",
+    "props": [],
+    "bestTime": "日落结束后蓝调时刻，日落后15‑30分钟",
+    "tips": [
+      "关闭闪光灯，依靠环境天光；使用负曝光补偿压低人物亮度获得剪影效果。",
+      "手机无法实现光学浅景深，拍摄尽量拉开人物与背景海面的距离，依靠暗角引导视线聚焦人物。",
+      "尽量选择少云晴天，蓝调时刻色彩层次最佳。",
+      "如果需要保留部分面部细节（效果图1），环境不要完全全黑，保留微弱环境天光。",
+      "拍摄建议握持稳定，避免暗光环境照片糊片。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": -4,
+      "contrast": 18,
+      "saturation": 8,
+      "temperature": -12,
+      "tint": -4,
+      "highlights": -22,
+      "shadows": -16,
+      "vibrance": 10
+    },
+    "smoothStrength": 10,
+    "sharpen": 24,
+    "vignette": 28,
+    "grain": 26,
+    "lut": "cool_blue",
+    "systemFilter": "none"
+  },
+  "orientation": {
+    "framePosition": "画面九宫格下方区域，x=0.5,y=0.72，主体占画幅约22%",
+    "bodyFacing": {
+      "type": "背对",
+      "azimuth": 180
+    },
+    "faceFacing": {
+      "type": "背对",
+      "azimuth": 180
+    },
+    "twist": "正身背对无扭转",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "看向屏幕正前方的海面与落日"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "完整人物全身入画，脚底靠近画面下边缘",
+    "cameraHeight": "平视",
+    "cameraAzimuth": "正拍",
+    "subjectScale": "人物占画幅22%，海天环境占78%",
+    "environmentRatio": "环境占78%",
+    "headroom": "头顶上方留有约画面高度60%的天空留白",
+    "framingNote": "大远景平视机位，人物置于画面底部，最大化保留蓝调海面天空氛围感。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "主逆光来自屏幕正远方海平面日落方位",
+      "辅光轮廓光": "微弱轮廓逆光，勾勒发丝肩膀边缘，无正面补光",
+      "光型软硬": "黄昏柔和漫射逆光，光源面积大",
+      "光比": "高对比光比约7:1",
+      "阴影": "整个人物主体全部处于深重阴影剪影，没有向画面内投射实体影子",
+      "质感": "人物主体哑光黑色剪影，发丝边缘细微高光；海面柔和反光，天空色彩过渡顺滑，胶片颗粒质感",
+      "环境光": "环境光来自整片黄昏蓝调天空，屏幕远方地平线带有暖橙色霞光",
+      "色温对比": "环境天空大面积冷蓝色，地平线日落区域局部暖橙，冷暖强烈对比"
+    },
+    "lightToParams": "负曝光补偿压低主体，降低temperature强化蓝调，压低shadows加深剪影，压低highlights抑制天空高光溢出，增加contrast拉大剪影和天空的反差，grain增加胶片氛围感，vignette压暗四角。"
+  },
+  "styling": {
+    "subjectType": "女性人像剪影",
+    "clothingLayers": {
+      "上装": "深色西装 / 深色吊带",
+      "下装": "深色长裙 / 深色西装长裤",
+      "衣角处理": "自然垂落，不束腰，保留衣服轮廓",
+      "袖子": "长袖 / 无袖吊带",
+      "领口": "圆领、吊带均可，深色系优先",
+      "鞋袜": "不露鞋袜",
+      "叠穿层次": "纯色深色套装，避免浅色，保证剪影轮廓干净"
+    },
+    "accessories": "简约细耳环，尽量少配饰，避免细碎配饰破坏剪影轮廓",
+    "hairMakeup": "中短发，可留出几缕碎发，利用逆光勾出发丝高光；剪影造型妆容几乎不可见；若保留面部细节效果图，使用低饱和红唇。",
+    "objectStyle": "",
+    "note": "穿搭优先黑色、藏青色深色系，轮廓线条流畅，避免细碎繁杂装饰，保证剪影轮廓干净利落。"
+  }
+}
