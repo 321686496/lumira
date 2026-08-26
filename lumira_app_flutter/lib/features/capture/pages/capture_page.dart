@@ -38,7 +38,7 @@ import '../data/capture_thumbnail_state.dart';
 import '../data/custom_fill_light_colors.dart';
 import '../data/scene_presets_data.dart';
 import '../data/scene_record_mapper.dart' show sceneFilterFromJson;
-import '../domain/filter_recipe.dart' show composePostProcessMatrix;
+import '../domain/filter_recipe.dart' show composePostProcessMatrix, multiplyColorMatrices;
 import '../domain/photo_template.dart';
 import '../domain/scene_preset.dart' show SceneFilter;
 import '../services/camera_service.dart';
@@ -761,6 +761,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
     if (fastNative) {
       final swNative = Stopwatch()..start();
       try {
+        final nativeTiming = <String, int>{};
         nativeFastDone = await OhosImageProcessor.instance.processJpeg(
           inputPath: params.inputPath,
           outputPath: params.inputPath,
@@ -772,13 +773,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
               ? params.postProcess.sharpen
               : kMinLiveSharpen,
           maxDim: params.maxDim,
+          timing: nativeTiming,
         );
+        swNative.stop();
+        debugPrint('[perf] OHOS原生 processJpeg 快速路径: ${swNative.elapsedMilliseconds}ms '
+            'ok=$nativeFastDone decode=${nativeTiming['decode']}ms '
+            'transform=${nativeTiming['transform']}ms sharpen=${nativeTiming['sharpen']}ms '
+            'encode=${nativeTiming['encode']}ms');
       } catch (e) {
         debugPrint('[capture] OHOS 原生快速路径异常，回退原管线: $e');
         nativeFastDone = false;
       }
-      swNative.stop();
-      debugPrint('[perf] OHOS原生 processJpeg 快速路径: ${swNative.elapsedMilliseconds}ms ok=$nativeFastDone');
     }
 
     // === 性能测量（临时，定位 1.5-2s 瓶颈后移除） ===
@@ -3809,6 +3814,79 @@ List<int> _sampleAvgRgbFromRgba(ByteData byteData) {
   return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
 }
 
+/// 读取 iOS 原生在拍照瞬间缓存到 Documents/preview_ref.txt 的取景器帧中心平均色。
+/// 格式："R G B\n"。失败返回 null（后续走无校正回退）。
+///
+/// 背景（方案A·预览锚定校色）：iOS 快照有独立白平衡/色调引擎，成片比取景器偏暖；
+/// 取景器视频帧走中性色管不黄。此基准即"Dart 端希望成片对齐的取景器颜色"。
+Future<List<int>?> _readPreviewColorReference() async {
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    final f = File('${dir.path}/preview_ref.txt');
+    if (!await f.exists()) return null;
+    final parts = (await f.readAsString()).trim().split(RegExp(r'\s+'));
+    if (parts.length < 3) return null;
+    final r = int.tryParse(parts[0]);
+    final g = int.tryParse(parts[1]);
+    final b = int.tryParse(parts[2]);
+    if (r == null || g == null || b == null) return null;
+    if ([r, g, b].any((v) => v < 8 || v > 247)) return null; // 过暗/过亮视为不可靠
+    return [r, g, b];
+  } catch (_) {
+    return null;
+  }
+}
+
+/// 对 rawRgba (ByteData, RGBA8888) 的中心 ~55% 区域做步进采样平均 RGB。
+/// 与 iOS 原生 cachePreviewColorReference 的中心区域一致，避免构图边缘差异干扰。
+List<int> _sampleCenterAvgRgbFromRgba(ByteData byteData, int width, int height) {
+  if (width <= 0 || height <= 0) return [0, 0, 0];
+  final x0 = (width * 0.225).round();
+  final y0 = (height * 0.225).round();
+  final x1 = (width * 0.775).round();
+  final y1 = (height * 0.775).round();
+  final step = (width * height / 20000).ceil().clamp(1, 64);
+  var r = 0.0, g = 0.0, b = 0.0, cnt = 0;
+  for (var y = y0; y < y1; y += step) {
+    for (var x = x0; x < x1; x += step) {
+      var i = (y * width + x) * 4;
+      if (i + 3 >= byteData.lengthInBytes) continue;
+      r += byteData.getUint8(i);
+      g += byteData.getUint8(i + 1);
+      b += byteData.getUint8(i + 2);
+      cnt++;
+    }
+  }
+  if (cnt == 0) return [0, 0, 0];
+  return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
+}
+
+/// 由「取景器平均色」与「成片平均色」构造逐通道增益校正矩阵（5x4）。
+/// 把成片通道均值推向取景器均值 → 消除快照 ISP 相对取景器的色偏。近似恒等时返回 null。
+List<double>? _buildPreviewAnchorCorrectionMatrix(
+    List<int> preview, List<int> photo) {
+  const double lo = 0.78, hi = 1.30;
+  double gain(int p, int c) {
+    if (c <= 0) return 1.0;
+    return (p / c).clamp(lo, hi);
+  }
+
+  final gr = gain(preview[0], photo[0]);
+  final gg = gain(preview[1], photo[1]);
+  final gb = gain(preview[2], photo[2]);
+  if ((gr - 1).abs() < 0.015 &&
+      (gg - 1).abs() < 0.015 &&
+      (gb - 1).abs() < 0.015) {
+    return null;
+  }
+  return [
+    gr, 0, 0, 0, 0,
+    0, gg, 0, 0, 0,
+    0, 0, gb, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
+}
+
 /// RGBA 原始字节 → [ui.Image]（ImageDescriptor.raw，避免 JPEG 编解码往返）。
 Future<ui.Image> _rgbaToUiImage(
   Uint8List rgba,
@@ -3908,6 +3986,8 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     late ui.Image srcImage;
     List<int>? nativeAvgRgb;
     List<int>? sourceAvgRgb;
+    // 方案A·预览锚定校色：取景器帧平均值基准构造的校正矩阵（仅 iOS，非 P3 处理的补充）
+    List<double>? previewCorrectionMatrix;
     if (isOhos) {
       // OHOS：flutter_ohos 引擎 dart:ui 的 JPEG 软件解码极慢（1200x1600 实测 ~6s），
       // 改走 OHOS 系统 image.ImageSource（系统/硬件解码）拿 RGBA，
@@ -3997,6 +4077,17 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         if (srcByteData != null) {
           sourceAvgRgb = _sampleAvgRgbFromRgba(srcByteData);
           debugPrint('[capture] 源图解码 rawRgba 平均RGB(dart:ui): $sourceAvgRgb');
+          // 方案A·预览锚定校色：取景器帧平均色（iOS 原生拍照瞬间写入 preview_ref.txt）为基准，
+          // 结合成片源图中心区域平均色，构造逐通道增益矩阵，消除快照 ISP 相对取景器的偏暖。
+          final preview = await _readPreviewColorReference();
+          if (preview != null) {
+            final photoCenter = _sampleCenterAvgRgbFromRgba(
+                srcByteData, srcImage.width, srcImage.height);
+            previewCorrectionMatrix =
+                _buildPreviewAnchorCorrectionMatrix(preview, photoCenter);
+            debugPrint('[capture] 预览锚定校色: preview=$preview, '
+                'photoCenter=$photoCenter, correction=${previewCorrectionMatrix == null ? "none" : previewCorrectionMatrix.take(3).map((e) => e.toStringAsFixed(3)).toList()}');
+          }
         }
       } catch (e) {
         debugPrint('[capture] 源图采样失败: $e');
@@ -4085,7 +4176,12 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         ' Y方向${rotatedImgH >= iOutH - 0.5 ? "✓" : "❌(拉伸!"})');
 
     // 构造色彩矩阵
-    final matrix = composePostProcessMatrix(params.postProcess);
+    // 方案A·预览锚定校色：校正矩阵先行（作用于原始像素，把成片拉回取景器色温），
+    // 再叠加用户色彩矩阵（风格化），避免校正被风格化改变 / 两者混在一起不可控。
+    var matrix = composePostProcessMatrix(params.postProcess);
+    if (previewCorrectionMatrix != null) {
+      matrix = multiplyColorMatrices(matrix, previewCorrectionMatrix);
+    }
 
     // 单次 Canvas：方向对齐 + cover 裁剪 + 镜像 + 缩放 + ColorMatrix（一步完成）
     //

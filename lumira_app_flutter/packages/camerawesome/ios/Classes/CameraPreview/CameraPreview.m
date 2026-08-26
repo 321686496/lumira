@@ -606,6 +606,52 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
 
 # pragma mark - Camera picture
 
+/// 拍照前把当前取景器帧的中心区域平均色缓存到 Documents/preview_ref.txt。
+///
+/// 根因（已确认）：iOS 快照（AVCapturePhotoOutput）有独立的白平衡/色调引擎，成片比取景器
+/// 偏暖（偏黄）；而取景器/视频帧（AVCaptureVideoDataOutput 的 _latestPixelBuffer）走中性色管、不黄。
+/// 即使是 iOS 系统「照片」色管正确的查看器下，raw_src（相机原片）依旧偏黄 → P3→sRGB 转换不相关。
+///
+/// 方案A「预览锚定校色」：以取景器当前帧平均色为基准，Dart 端据此把成片逐通道增益校正到与取景器一致
+///（所见即所得），且是每张照片实时参考取景器，非常用的固定白平衡，不会被场景冷暖误导。
+- (void)cachePreviewColorReference {
+  CVPixelBufferRef buf = atomic_load(&_latestPixelBuffer);
+  if (buf == NULL) return;
+  CVPixelBufferLockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
+  unsigned char *base = (unsigned char *)CVPixelBufferGetBaseAddress(buf);
+  const int w = (int)CVPixelBufferGetWidth(buf);
+  const int h = (int)CVPixelBufferGetHeight(buf);
+  if (base == NULL || w <= 0 || h <= 0) {
+    CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
+    return;
+  }
+  const size_t rowBytes = CVPixelBufferGetBytesPerRow(buf);
+  // 中心 ~55% 区域平均（取景器与成片共享同一光学中心，避免边缘构图差异干扰色彩评估）
+  const int x0 = (int)(w * 0.225), y0 = (int)(h * 0.225);
+  const int x1 = (int)(w * 0.775), y1 = (int)(h * 0.775);
+  long r = 0, g = 0, b = 0, cnt = 0;
+  int step = MAX(1, (int)((w * h) / 20000));
+  for (int y = y0; y < y1; y += step) {
+    unsigned char *line = base + (size_t)y * rowBytes;
+    for (int x = x0; x < x1; x += step) {
+      unsigned char *p = line + (size_t)x * 4;
+      // BGRA：idx0=B, idx1=G, idx2=R
+      b += p[0];
+      g += p[1];
+      r += p[2];
+      cnt++;
+    }
+  }
+  CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
+  if (cnt == 0) return;
+  const int avgR = (int)(r / cnt), avgG = (int)(g / cnt), avgB = (int)(b / cnt);
+  // 写入 app Documents（与 Flutter getApplicationDocumentsDirectory 指向同一目录）
+  NSString *docs = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+  NSString *path = [docs stringByAppendingPathComponent:@"preview_ref.txt"];
+  NSString *content = [NSString stringWithFormat:@"%d %d %d\n", avgR, avgG, avgB];
+  [content writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+}
+
 /// Take the picture into the given path
 - (void)takePictureAtPath:(NSString *)path completion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
   // Instanciate camera picture obj
@@ -635,6 +681,8 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
   [settings setFlashMode:_flashMode];
   [settings setHighResolutionPhotoEnabled:YES];
   
+  // 拍照前缓存取景器帧平均色作色彩基准（方案A：预览锚定校色）
+  [self cachePreviewColorReference];
   // 拍照前锁定白平衡到当前取景器增益，使快照成片与取景器观感一致（修复「取景器正常、成片偏黄」）
   [self lockWhiteBalanceToCurrentPreview];
   

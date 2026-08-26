@@ -523,6 +523,14 @@ ColorFilter fromPostProcess(PostProcess process) {
   return ColorFilter.matrix(composePostProcessMatrix(process));
 }
 
+/// 公开的 5x4 ColorMatrix 乘法（供外部叠加，例如「预览锚定校色」增益矩阵）。
+///
+/// 语义同 [_multiplyMatrices]：结果 = A ∘ B，即对像素先应用 B 再应用 A
+///（A 为外层/后应用，B 为内层/先应用）。调用方把"先作用于原始像素"的矩阵放 b。
+List<double> multiplyColorMatrices(List<double> a, List<double> b) {
+  return _multiplyMatrices(a, b);
+}
+
 // ─── Display Labels ───
 
 /// 统一滤镜库（单一滤镜库，去重合并系统滤镜与 LUT 预设）。
