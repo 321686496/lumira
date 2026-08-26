@@ -28,6 +28,10 @@ class Tables {
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
 
+  // === template_favorites（v42 新增，模板收藏独立关系表） ===
+  // 复用 colId / colCreatedAt 常量。
+  static const String templateFavorites = 'template_favorites';
+
   // === scenes ===
   static const String scenes = 'scenes';
   static const String colIcon = 'icon';

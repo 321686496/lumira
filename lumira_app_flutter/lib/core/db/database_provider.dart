@@ -24,10 +24,11 @@ import '../../features/profile/data/profile_dao.dart';
 import '../../features/notification/data/notification_dao.dart';
 import 'dao/search_history_dao.dart';
 import 'dao/user_interests_dao.dart';
+import 'dao/templates_favorite_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 41;
+const int _kDbVersion = 42;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -47,6 +48,12 @@ final databaseProvider = FutureProvider<Database>((ref) async {
 final templatesDaoProvider = FutureProvider<TemplatesDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return TemplatesDao(db);
+});
+
+final templatesFavoriteDaoProvider =
+    FutureProvider<TemplatesFavoriteDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return TemplatesFavoriteDao(db);
 });
 
 final scenesDaoProvider = FutureProvider<ScenesDao>((ref) async {
@@ -176,6 +183,14 @@ Future<void> _onCreate(Database db, int version) async {
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_category ON ${Tables.customTemplates}(${Tables.colCategory})');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_created_at ON ${Tables.customTemplates}(${Tables.colCreatedAt} DESC)');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_source ON ${Tables.customTemplates}(${Tables.colSource})');
+
+  // === template_favorites（v42 新增，模板收藏独立关系表） ===
+  batch.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.templateFavorites} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colCreatedAt} INTEGER NOT NULL
+    )
+  ''');
 
   // === template_categories（v13 新增，v17 改为三级树形分类） ===
   // 主键改为自增 id（method 级 key 在不同 style 下重复，如 'normal'），
@@ -1206,6 +1221,20 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v41 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 42) {
+    try {
+      // v42: 新增 template_favorites 表（模板收藏独立关系表）
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ${Tables.templateFavorites} (
+          ${Tables.colId} TEXT PRIMARY KEY,
+          ${Tables.colCreatedAt} INTEGER NOT NULL
+        )
+      ''');
+    } catch (e) {
+      debugPrint('v42 migration failed (silent fallback): $e');
     }
   }
 }
