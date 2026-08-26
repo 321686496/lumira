@@ -946,6 +946,7 @@ export class CameraState implements StreamHandler {
     await this.photoOutput?.capture(photoSettings);
     Logger.info(TAG, `takePhoto capture() returned after ${Date.now() - takePhotoStartAt}ms`);
     Logger.info(TAG, 'takePicture end');
+    // [性能拆解] 快照后 JPEG 交付是否为主要耗时：对比本行与 photoAvailable saved 的 elapsed。
   }
 
   /**
@@ -979,6 +980,7 @@ export class CameraState implements StreamHandler {
       this.photoOutput!!.on('photoAvailable',
         (err: BusinessError, photo: camera.Photo) => {
           Logger.info(TAG, 'photoAvailable begin');
+          Logger.info(TAG, `[perf-cam] photoAvailable begin elapsed=${Date.now() - takePhotoStartAt}ms`);
           if (err && err.code !== 0) {
             Logger.error(TAG, `photoAvailable error: ${err.code}`);
             this._photoResult?.success(false)
@@ -995,6 +997,7 @@ export class CameraState implements StreamHandler {
           this._photoDirectDone = true
           imageObj.getComponent(image.ComponentType.JPEG,
             (errCode: BusinessError, component: image.Component) => {
+              Logger.info(TAG, `[perf-cam] getComponent(jpeg) cb elapsed=${Date.now() - takePhotoStartAt}ms`);
               if (!errCode && component && component.byteBuffer && this._photoPath) {
                 try {
                   const buffer = component.byteBuffer as ArrayBuffer

@@ -172,7 +172,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       const tSharpen = tTransform;
 
       // ── 5) 系统硬件编码 JPEG 并写文件 ──
-      const finalBuf = finalU8.buffer as ArrayBuffer;
+      const finalBuf = finBuf as ArrayBuffer;
       finalPixelMap = await image.createPixelMap(finalBuf, {
         editable: false,
         pixelFormat: image.PixelMapFormat.RGBA_8888,
@@ -187,7 +187,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       wfd = -1;
       const tEncode = Date.now();
 
-      console.info(`[ImageProcessor] processJpeg ok ${pw}x${ph} src=${srcW}x${srcH} crop=${region.size.width}x${region.size.height} mirror=${needMirror} `
+      console.info(`[ImageProcessor] processJpeg ok ${pw}x${ph} src=${srcW}x${srcH} crop=${region.size.width}x${region.size.height} mirror=${isFront} `
         + `decode=${tDecode - tStart}ms transform=${tTransform - tDecode}ms sharpen=${tSharpen - tTransform}ms encode=${tEncode - tSharpen}ms`);
       result.success({
         ok: true,

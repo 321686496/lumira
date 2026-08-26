@@ -50,7 +50,7 @@ final databaseProvider = FutureProvider<Database>((ref) async {
   // 照片则应落在 photosDir 下；若报告/照片均消失，则是容器整体被重建。
   try {
     // ignore: unawaited_futures
-    _writeStorageReport(dbPath);
+    _writeStorageReport(db, dbPath);
   } catch (e) {
     debugPrint('storage report write failed: $e');
   }
@@ -59,7 +59,7 @@ final databaseProvider = FutureProvider<Database>((ref) async {
 });
 
 /// 写一份持久的存储路径报告（一次启动写一次，覆盖写）。
-Future<void> _writeStorageReport(String dbPath) async {
+Future<void> _writeStorageReport(Database db, String dbPath) async {
   final buf = StringBuffer()
     ..writeln('# Lumira 存储路径报告  ${DateTime.now().toIso8601String()}')
     ..writeln('dbPath        : $dbPath')
@@ -76,11 +76,70 @@ Future<void> _writeStorageReport(String dbPath) async {
   } catch (e) {
     buf.writeln('temporaryDir  : ERROR $e');
   }
-  buf.writeln('photosDir     : ${p.join(await getDatabasesPath(), 'photos')}');
+  final photosDir = p.join(await getDatabasesPath(), 'photos');
+  buf.writeln('photosDir     : $photosDir');
+
+  // === 相册「文件路径 vs 实际磁盘」一致性诊断 ===
+  // 用于定位「photos 下有文件但相册显示占位」：对比 DB 里存的路经、
+  // 该文件是否存在、以及 photos 目录实际文件清单。
+  buf.writeln();
+  buf.writeln('--- gallery_items 路径诊断 ---');
+  try {
+    final rows = await db.rawQuery('''
+      SELECT ${Tables.colId} AS id,
+             ${Tables.colFilePath} AS file_path,
+             ${Tables.colOriginalPath} AS original_path,
+             ${Tables.colDataUrl} AS data_url
+      FROM ${Tables.galleryItems}
+      ORDER BY ${Tables.colCreatedAt} DESC
+    ''');
+    buf.writeln('total rows   : ${rows.length}');
+    for (final r in rows.take(200)) {
+      final fp = r['file_path'] as String?;
+      final op = r['original_path'] as String?;
+      bool fpExists = false;
+      bool opExists = false;
+      try {
+        fpExists = fp != null && fp.isNotEmpty && await File(fp).exists();
+      } catch (_) {}
+      try {
+        opExists = op != null && op.isNotEmpty && await File(op).exists();
+      } catch (_) {}
+      buf.writeln('id=${r['id']}');
+      buf.writeln('  file_path     : $fp (exists=$fpExists)');
+      buf.writeln('  original_path : $op (exists=$opExists)');
+      final inCurContainer = (fp ?? '').contains('Application/') &&
+          (fp ?? '').contains(dbPath.split('Documents')[0]);
+      buf.writeln('  file_path_in_current_container=$inCurContainer');
+    }
+  } catch (e) {
+    buf.writeln('gallery_items query failed: $e');
+  }
+
+  // === photos 目录实际文件清单 ===
+  buf.writeln();
+  buf.writeln('--- $photosDir 实际文件 ---');
+  try {
+    final d = Directory(photosDir);
+    if (await d.exists()) {
+      final files = d.listSync().whereType<File>().toList()
+        ..sort((a, b) => b.path.compareTo(a.path));
+      buf.writeln('file count    : ${files.length}');
+      for (final f in files.take(200)) {
+        buf.writeln(f.path);
+      }
+    } else {
+      buf.writeln('photosDir does not exist');
+    }
+  } catch (e) {
+    buf.writeln('photos dir listing failed: $e');
+  }
+
   final diagDir = await getApplicationDocumentsDirectory();
   final dir = Directory(p.join(diagDir.path, 'color_diag'));
   if (!await dir.exists()) await dir.create(recursive: true);
   await File(p.join(dir.path, 'storage_report.txt')).writeAsString(buf.toString());
+  debugPrint('[storage] 存储诊断报告已写入 ${p.join(dir.path, 'storage_report.txt')}');
 }
 
 final templatesDaoProvider = FutureProvider<TemplatesDao>((ref) async {

@@ -102,8 +102,11 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
   // ── Pass 2：边缘自适应锐化（Unsharp 死区版，仅锐化超阈值边缘，平坦区原样）──
   uint8_t* final = out;
   if (sharpen > 0) {
+    // 锐化强度完全跟随入参 sharpen（不额外放大增益），死区 edgeThr 保持原始 4.0：
+    // 不修改锐化参数，仅保证像素级语义与旧 ArkTS 实现一致。
     double a = (double)sharpen / 100.0;
-    if (a > 1.0) a = 1.0;
+    if (a > 1.2) a = 1.2;
+    if (a < 0.0) a = 0.0;
     const double edgeThr = 4.0;
     uint8_t* conv = (uint8_t*)malloc(outLen);
     if (!conv) {
