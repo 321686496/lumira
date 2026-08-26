@@ -308,6 +308,8 @@ export class CameraState implements StreamHandler {
         // 启动会话
         await this.session.start().then(() => {
           Logger.info(TAG, 'Promise returned to indicate the session start success.');
+          // 注册对焦状态监听（仅日志观测），确认触控对焦是否真正触发
+          this.registerFocusStateListener()
           if (this.enableImageStream && this.imageAnalysisBuilder) {
             this.imageAnalysisBuilder.start()
           }
@@ -1068,15 +1070,30 @@ export class CameraState implements StreamHandler {
   }
 
   setFocusPoint(previewSize: PreviewSize, x: number, y: number) {
-    this.session?.setFocusPoint({ x: y / previewSize.getHeight(), y: 1 - x / previewSize.getWidth() })
-    try {
-      sensor.once(sensor.SensorId.ORIENTATION, (data: sensor.OrientationResponse) => {
-        this.setFocusMode(camera.FocusMode.FOCUS_MODE_CONTINUOUS_AUTO)
-      });
-    } catch (error) {
-      let e: BusinessError = error as BusinessError;
-      Logger.error(`Failed to invoke once. Code: ${e.code}, message: ${e.message}`);
-    }
+    // 触控对焦：CameraKit 契约下 setFocusPoint 仅在 FOCUS_MODE_AUTO 模式有效，
+    // 会根据对焦点执行一次「单次自动对焦」并锁定（与 iOS AVCaptureFocusModeAutoFocus 一致）。
+    // ⚠️ 严禁在此把模式切回 FOCUS_MODE_CONTINUOUS_AUTO：该模式不支持对焦点，且会立即取消
+    // 刚触发的单次对焦，导致「黄框出现但画面没有任何对焦效果」。切回连续对焦的时机由
+    // setFocusAndExposureLockFn(locked=false) 控制（App 进入拍摄页与长按解锁时）。
+    const nx = y / previewSize.getHeight()
+    const ny = 1 - x / previewSize.getWidth()
+    Logger.info(TAG, `setFocusPoint normalized=(${nx.toFixed(3)}, ${ny.toFixed(3)})`)
+    this.session?.setFocusPoint({ x: nx, y: ny })
+  }
+
+  /**
+   * 注册对焦状态监听（仅用于观测/验证触控对焦是否真正触发，只打日志，不切换对焦模式）。
+   * 注意：不得在 FOCUS_STATE_FOCUSED 后自动切回 CONTINUOUS_AUTO——那会破坏 App 的
+   * 「长按 AE/AF 锁定」功能；切回时机统一由 setFocusAndExposureLockFn(locked=false) 控制。
+   */
+  private registerFocusStateListener(): void {
+    this.session?.on('focusStateChange', (err: BusinessError, focusState: camera.FocusState) => {
+      if (err !== undefined && err.code !== 0) {
+        Logger.error(TAG, `focusStateChange error code: ${err.code}`);
+        return;
+      }
+      Logger.info(TAG, `focusStateChange focusState: ${focusState}`);
+    });
   }
 
   /**

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:camerawesome_ohos/camerawesome_plugin.dart' as ohos;
+import 'package:camerawesome_ohos/pigeon.dart' as ohos_pigeon;
 import 'package:camerawesome/camerawesome_plugin.dart' as ca;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -319,13 +320,31 @@ class CamerawesomeCameraService implements CameraService {
   @override
   void focusOnPoint(Offset flutterPosition, Size flutterPreviewSize) {
     try {
-      _cameraState?.when(
-        onPhotoMode: (photoState) => photoState.focusOnPoint(
-          flutterPosition: flutterPosition,
-          pixelPreviewSize: flutterPreviewSize,
-          flutterPreviewSize: flutterPreviewSize,
-        ),
-      );
+      if (_delegate.platformTag == 'ohos') {
+        // OHOS: camerawesome_ohos 的 focusOnPoint 需要 pigeon 的 PreviewSize，
+        // 不能直接传 Flutter 的 Size，否则抛「type 'Size' is not a subtype of
+        // type 'PreviewSize'」被 catch 吞掉，原生对焦从未被调用
+        // （表现为「黄框出现但画面无任何对焦效果」）。
+        final ps = ohos_pigeon.PreviewSize(
+          width: flutterPreviewSize.width,
+          height: flutterPreviewSize.height,
+        );
+        _cameraState?.when(
+          onPhotoMode: (photoState) => photoState.focusOnPoint(
+            flutterPosition: flutterPosition,
+            pixelPreviewSize: ps,
+            flutterPreviewSize: ps,
+          ),
+        );
+      } else {
+        _cameraState?.when(
+          onPhotoMode: (photoState) => photoState.focusOnPoint(
+            flutterPosition: flutterPosition,
+            pixelPreviewSize: flutterPreviewSize,
+            flutterPreviewSize: flutterPreviewSize,
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('[camera] focusOnPoint failed: $e');
     }
