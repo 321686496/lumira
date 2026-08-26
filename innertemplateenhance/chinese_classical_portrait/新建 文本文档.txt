@@ -1,0 +1,156 @@
+{
+    "name": "园林竹韵新中式汉服全身人像",
+    "category": "portrait",
+    "classification": {
+        "type": "portrait",
+        "majorStyle": "新中式古风",
+        "subStyle": "园林汉服",
+        "method": "自然光环境人像"
+    },
+    "shortDesc": "亭下回眸执扇轻掩，清冷温婉，浸染江南园林的诗意古风🍃",
+    "description": "人物全身古风汉服人像，江南古典园林亭台场景，利用午后侧方柔和自然光，浅青竹纹宋制汉服搭配团扇道具，回眸回望镜头，营造含蓄清冷的东方古典氛围感，适合汉服爱好者拍摄。",
+    "ambience": {
+        "seasons": ["春季", "初夏"],
+        "weathers": ["晴天", "薄云晴天"],
+        "timeTones": "午后柔光"
+    },
+    "tags": ["新中式", "汉服", "园林人像", "古风", "全身人像"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "江南园林亭廊，汉服女子侧身回眸，团扇半遮面的古风全身照"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "封面·回眸执扇站姿",
+            "type": "people",
+            "description": "人物身体背对镜头偏向屏幕左约135°，面部回转朝向镜头，头颈微微收下巴；重心落在屏幕右侧腿，屏幕左侧腿微微向后；屏幕右侧手臂抬起，手持竹纹团扇，扇子轻挡口鼻位置，手指放松握住扇柄；屏幕左侧手臂被宽大衣袖遮挡；身体站姿挺拔，肩线松弛，眼神望向镜头，神情温婉含蓄。",
+            "compositionFrame": "",
+            "silhouette": {
+                "type": "builtin",
+                "data": "people_stand_back_lookback"
+            },
+            "position": {
+                "x": 0.54,
+                "y": 0.46
+            },
+            "scale": 0.92,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "thirds",
+        "aspectRatio": "3:4",
+        "opacity": 0.3,
+        "description": "全身景别，平视机位斜侧45°拍摄；人物处于画面偏右位置，主体占画幅约65%；头顶保留约1/5留白，脚底贴近画面下边缘；背景完整保留亭柱、白墙假山池水园林环境，环境占画幅35%，左侧亭柱做框架式前景。",
+        "subjectFrame": {
+            "x": 0.34,
+            "y": 0.08,
+            "w": 0.54,
+            "h": 0.91
+        }
+    },
+    "camera": {
+        "exposureCompensation": 0.15,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5100,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕左上方45°入射，属于午后漫射太阳光；具备柔和轮廓光，在人物肩袖、发丝边缘勾勒亮边；光型柔和，光比约2.5:1；阴影投向屏幕右下方，阴影边缘柔和过渡；皮肤呈现哑光温润质感，发丝边缘有高光，树叶产生细碎光斑；环境整体冷调。",
+        "shootingDistance": "2.0‑2.4m",
+        "background": "江南古典园林，木质亭廊立柱，白墙黛瓦花格窗，太湖石假山、池塘水景，竹子、开花灌木植物",
+        "props": ["竹纹手绘团扇", "古风发簪步摇头饰"],
+        "bestTime": "15:00‑16:30",
+        "tips": [
+            "尽量选择园林有遮挡的漫射日光，避开正午硬直射阳光",
+            "靠近被摄者，与背景假山池水拉开距离，配合暗角参数模拟浅景深效果；手机硬件无法实现光学虚化",
+            "左侧亭柱利用作为前景，增加画面层次，不要完全遮挡人物",
+            "握扇手部姿态放松，不要用力攥紧扇柄，扇面轻挡下半张脸",
+            "人物身体转过去之后再回头看向镜头，脖颈自然扭转，不要耸肩"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "3:4",
+        "color": {
+            "brightness": 2,
+            "contrast": -8,
+            "saturation": -4,
+            "temperature": -6,
+            "tint": 3,
+            "highlights": 18,
+            "shadows": 12,
+            "clarity": -5
+        },
+        "smoothStrength": 32,
+        "sharpen": 20,
+        "vignette": 26,
+        "grain": 16,
+        "lut": "muted_cool",
+        "systemFilter": "none"
+    },
+    "orientation": {
+        "framePosition": "画面九宫格右侧居中，归一坐标x:0.54 y:0.46，占画幅65%",
+        "bodyFacing": {
+            "type": "侧向屏幕左",
+            "azimuth": 135
+        },
+        "faceFacing": {
+            "type": "正对镜头",
+            "azimuth": 0
+        },
+        "twist": "侧身回眸，身体转向屏幕左，脸部转回朝向镜头",
+        "headPitch": -8,
+        "headRoll": 0,
+        "gaze": "视线直视镜头"
+    },
+    "framing": {
+        "shotSize": "全身",
+        "shotSizeNote": "完整拍摄从头顶至脚底全部入画",
+        "cameraHeight": "平视",
+        "cameraAzimuth": "斜侧45°",
+        "subjectScale": "主体约占画幅65%",
+        "environmentRatio": "园林背景环境占画幅35%",
+        "headroom": "头顶距离画面上边缘约1/5画幅高度",
+        "framingNote": "全身平视斜侧机位，人物偏右构图，左侧借用亭柱做前景框架，完整保留江南园林环境。"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "主光屏幕左上方45°午后自然光",
+            "辅光轮廓光": "环境漫反射充当辅光，同时有轮廓光打亮发丝与衣袖边缘",
+            "光型软硬": "柔光，经过树叶过滤，过渡柔和",
+            "光比": "约2.5:1，中等偏低反差",
+            "阴影": "阴影投向屏幕右下方，阴影边缘柔和，浓度适中，不死黑",
+            "质感": "皮肤哑光温润，保留少量皮肤纹理；发丝边缘有高光；树叶形成细碎散景光斑；衣料纱质通透反光",
+            "环境光": "背景环境光偏冷，亮度略低于主体人物",
+            "色温对比": "主体略暖，背景环境偏冷，微弱冷暖对比"
+        },
+        "lightToParams": "降低contrast压低反差，highlights压低防止衣袖纱料过曝，shadows提升保留暗部衣纹细节，temperature负向压低营造清冷古风色调，vignette压暗四角突出人物。"
+    },
+    "styling": {
+        "subjectType": "古风汉服人像",
+        "clothingLayers": {
+            "上装": "浅灰青广袖大袖衫，衣身印水墨竹子纹样，半透纱质面料",
+            "下装": "同色系多层齐腰襦裙，纱质堆叠长裙",
+            "衣角处理": "裙摆自然垂落铺在石地面，全部外放",
+            "袖子": "宽大广袖，袖子自然垂落，一层薄纱外衫",
+            "领口": "立领对襟样式",
+            "鞋袜": "被长裙遮挡不可见",
+            "叠穿层次": "外层透纱大袖衫+内层襦裙，两层叠穿"
+        },
+        "accessories": "圆形竹纹团扇；银色系古风发簪、珠花、步摇发饰",
+        "hairMakeup": "古风盘发，梳高发髻，点缀珠花步摇；妆容清淡素雅，低饱和度国风妆面",
+        "objectStyle": "",
+        "note": "整体服饰配色低饱和青灰调，和园林环境色调融合，避免艳丽色彩。"
+    }
+}

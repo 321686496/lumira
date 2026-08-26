@@ -1,0 +1,39 @@
+﻿===== COMMITS =====
+558ad6d4 feat(templates): 新增收藏状态 provider
+===== STAT =====
+ .../lib/features/templates/data/templates_providers.dart          | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+===== DIFF =====
+diff --git a/lumira_app_flutter/lib/features/templates/data/templates_providers.dart b/lumira_app_flutter/lib/features/templates/data/templates_providers.dart
+index 0bcabb9d..f6702fba 100644
+--- a/lumira_app_flutter/lib/features/templates/data/templates_providers.dart
++++ b/lumira_app_flutter/lib/features/templates/data/templates_providers.dart
+@@ -136,20 +136,28 @@ final recommendedBuiltinTemplatesProvider =
+     final usageDao = await ref.watch(usageDaoProvider.future);
+     final counts =
+         await usageDao.countMap('template', base.map((t) => t.id).toList());
+     final popularity = <String, int>{
+       for (final t in base)
+         t.id: ((counts[t.id]?.useShoot ?? 0) * 2 + (counts[t.id]?.openDetail ?? 0)),
+     };
+ 
+     final ctx = RankingContext(
+       portrait: portrait,
+       popularity: popularity,
+       nowMs: DateTime.now().millisecondsSinceEpoch,
+     );
+     final scores = TemplateRanking().scoreAll(base, ctx);
+     return TemplateRanking().mixExplore(scores);
+   } catch (e) {
+     debugPrint('[recommend] today recommend ranking failed (silent fallback): $e');
+     return base;
+   }
+ });
++
++/// 已收藏的模板 id 集合（收藏状态 UI 的唯一数据源）。
++/// 收藏/取消后 `ref.invalidate(favoriteTemplateIdsProvider)` 触发重建。
++final favoriteTemplateIdsProvider = FutureProvider<Set<String>>((ref) async {
++  final dao = await ref.watch(templatesFavoriteDaoProvider.future);
++  final ids = await dao.getFavoriteIds();
++  return ids.toSet();
++});
