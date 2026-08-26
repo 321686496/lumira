@@ -182,6 +182,7 @@ const schema = z.object({
   category: z.string().min(1, '请选择分类'),
   classificationMajorStyle: z.string().optional().default(NONE_VALUE),
   classificationSubStyle: z.string().optional().default(NONE_VALUE),
+  classificationMethod: z.string().optional().default(NONE_VALUE),
   price: z.coerce.number().int().min(0, '价格不能为负'),
   description: z.string().optional().default(''),
   shortDesc: z.string().max(20, '短简介最多 20 字').optional().default(''),
@@ -377,6 +378,7 @@ export default function TemplateForm({
         category: typeCategories[0]?.key ?? 'portrait',
         classificationMajorStyle: NONE_VALUE,
         classificationSubStyle: NONE_VALUE,
+        classificationMethod: NONE_VALUE,
         price: 0,
         description: '',
         shortDesc: '',
@@ -456,6 +458,7 @@ export default function TemplateForm({
       category: initial.category,
       classificationMajorStyle: initial.classification?.majorStyle || NONE_VALUE,
       classificationSubStyle: initial.classification?.subStyle || NONE_VALUE,
+      classificationMethod: initial.classification?.method || NONE_VALUE,
       price: initial.price,
       description: initial.description ?? '',
       shortDesc: initial.shortDesc ?? '',
@@ -770,6 +773,7 @@ export default function TemplateForm({
         type: data.category,
         majorStyle: data.classificationMajorStyle === NONE_VALUE ? '' : (data.classificationMajorStyle ?? ''),
         style: data.classificationSubStyle === NONE_VALUE ? '' : (data.classificationSubStyle ?? ''),
+        method: data.classificationMethod === NONE_VALUE ? '' : (data.classificationMethod ?? ''),
       },
       sortOrder: data.sortOrder,
       isActive: data.isActive,
@@ -893,13 +897,15 @@ export default function TemplateForm({
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
   const watchCategory = watch('category');
+  const typeCategories = categories.filter((c) => c.level === 1);
+  // 四级动态级联：按父子链逐级展开，父级无子级则该层不显示
+  const majorStyleOptions = categories.filter((c) => c.level === 2 && c.parentKey === watchCategory);
   const majStyleField = watch('classificationMajorStyle') || NONE_VALUE;
   const majStyleKey = majStyleField === NONE_VALUE ? '' : majStyleField;
-
-  const typeCategories = categories.filter((c) => c.level === 1);
-  // 三级动态级联：按父子链逐级展开，父级无子级则该层不显示
-  const majorStyleOptions = categories.filter((c) => c.level === 2 && c.parentKey === watchCategory);
+  const subStyleField = watch('classificationSubStyle') || NONE_VALUE;
+  const subStyleKey = subStyleField === NONE_VALUE ? '' : subStyleField;
   const subStyleOptions = categories.filter((c) => c.level === 3 && c.parentKey === majStyleKey);
+  const methodOptions = categories.filter((c) => c.level === 4 && c.parentKey === subStyleKey);
 
   // 封面预览 = 效果图首张（PhonePreview 使用）
   const coverPreviewSrc = imagePreviews[0] ?? null;
@@ -994,6 +1000,7 @@ export default function TemplateForm({
                             field.onChange(v);
                             setValue('classificationMajorStyle', NONE_VALUE);
                             setValue('classificationSubStyle', NONE_VALUE);
+                            setValue('classificationMethod', NONE_VALUE);
                           }}
                         >
                           <SelectTrigger><SelectValue placeholder="选择题材" /></SelectTrigger>
@@ -1020,6 +1027,7 @@ export default function TemplateForm({
                             onValueChange={(v) => {
                               field.onChange(v);
                               setValue('classificationSubStyle', NONE_VALUE);
+                              setValue('classificationMethod', NONE_VALUE);
                             }}
                           >
                             <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
@@ -1047,6 +1055,7 @@ export default function TemplateForm({
                             value={field.value || NONE_VALUE}
                             onValueChange={(v) => {
                               field.onChange(v);
+                              setValue('classificationMethod', NONE_VALUE);
                             }}
                           >
                             <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
@@ -1063,11 +1072,38 @@ export default function TemplateForm({
                       />
                     </div>
                   )}
+                  {methodOptions.length > 0 && (
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">四级（方法）</Label>
+                      <Controller
+                        control={control}
+                        name="classificationMethod"
+                        render={({ field }) => (
+                          <Select
+                            value={field.value || NONE_VALUE}
+                            onValueChange={(v) => {
+                              field.onChange(v);
+                            }}
+                          >
+                            <SelectTrigger><SelectValue placeholder="无" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={NONE_VALUE}>无</SelectItem>
+                              {methodOptions.map((c) => (
+                                <SelectItem key={c.key} value={c.key}>
+                                  {c.name} ({c.key})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  )}
                 </div>
                 {errors.category && <p className="text-sm text-destructive">{errors.category.message}</p>}
                 <p className="text-xs text-muted-foreground">
-                  题材必选；二/三级按父子链动态展开。
-                  提交时 category = 一级 key，classification 中 type=一级 / majorStyle=二级 / style=三级。
+                  题材必选；二/三/四级按父子链动态展开。
+                  提交时 category = 一级 key，classification 中 type=一级 / majorStyle=二级 / style=三级 / method=四级。
                 </p>
               </div>
 

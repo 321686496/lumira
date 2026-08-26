@@ -1794,25 +1794,28 @@ void _showCoverPreviewDialog(
 
 /// v17: Step1 表单状态。
 ///
-/// 分类选项（type/majorStyle/subStyle）从 sqflite DAO 动态加载，支持三级级联：
+/// 分类选项（type/majorStyle/subStyle/method）从 sqflite DAO 动态加载，支持四级级联
+/// （与后台表单一致，数据源同为后端 /categories 同步进本地 DAO）：
 /// - type（一级）：initState 时加载 level=1 分类 → `form.meta.category`
 /// - majorStyle（二级）：type 变化时按 parentKey 重新加载 → `form.meta.style`
 /// - subStyle（三级）：majorStyle 变化时按 parentKey 重新加载 → `form.meta.subStyle`
+/// - method（四级）：subStyle 变化时按 parentKey 重新加载 → `form.meta.method`（可选，可空）
 ///
-/// Phase 2 收敛：原四级 `method` 不再在编辑器中渲染或写入（保留字段以兼容旧序列化）。
-///
-/// 级联一致性：切换 type 时清空 style/subStyle；切换 style 时清空 subStyle。
+/// 级联一致性：切换 type 时清空 style/subStyle/method；切换 style 时清空 subStyle/method；
+/// 切换 subStyle 时清空 method。method 可选可不选，空值为 null。
 class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
   List<EditorOption> _typeOptions = const [];
   List<EditorOption> _styleOptions = const [];
   List<EditorOption> _subStyleOptions = const [];
+  List<EditorOption> _methodOptions = const [];
 
   /// “+ 新增标签”输入框控制器（标签 chips 下方的输入框）。
   final TextEditingController _newTagController = TextEditingController();
 
-  /// 记录已加载过的 category/style，用于 didUpdateWidget 判断是否需要重新加载
+  /// 记录已加载过的 category/style/subStyle，用于 didUpdateWidget 判断是否需要重新加载
   String? _lastLoadedCategory;
   String? _lastLoadedStyle;
+  String? _lastLoadedSubStyle;
 
   @override
   void initState() {
@@ -1820,6 +1823,7 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     _loadTypeOptions();
     _loadStyleOptions(widget.form.meta.category);
     _loadSubStyleOptions(widget.form.meta.style);
+    _loadMethodOptions(widget.form.meta.subStyle);
   }
 
   @override
@@ -1838,6 +1842,10 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     // style 变化时重新加载三级 subStyle 选项
     if (widget.form.meta.style != _lastLoadedStyle) {
       _loadSubStyleOptions(widget.form.meta.style);
+    }
+    // subStyle 变化时重新加载四级 method 选项
+    if (widget.form.meta.subStyle != _lastLoadedSubStyle) {
+      _loadMethodOptions(widget.form.meta.subStyle);
     }
   }
 
@@ -1888,6 +1896,25 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
       });
     } catch (e) {
       debugPrint('Failed to load subStyle categories: $e');
+    }
+  }
+
+  /// v17 四级分类：加载四级 method 选项（父级 = 三级 subStyle），可选可不选。
+  Future<void> _loadMethodOptions(String? subStyleKey) async {
+    _lastLoadedSubStyle = subStyleKey;
+    if (subStyleKey == null || subStyleKey.isEmpty) {
+      if (mounted) setState(() => _methodOptions = const []);
+      return;
+    }
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final cats = await dao.getCategoriesByParent(subStyleKey);
+      if (!mounted) return;
+      setState(() {
+        _methodOptions = cats.map((c) => EditorOption(c.key, c.name)).toList();
+      });
+    } catch (e) {
+      debugPrint('Failed to load method categories: $e');
     }
   }
 
@@ -2056,8 +2083,7 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     final tokens = widget.tokens;
     final form = widget.form;
     final onChange = widget.onChange;
-    // style/subStyle 为可选字段，首位加"不限"（空值 → null）
-    // 注：method 字段已收敛为兼容读取（旧数据），不再在 UI 中渲染或写入。
+    // style/subStyle/method 为可选字段，首位加"不限"（空值 → null）
     final styleOptions = <EditorOption>[
       const EditorOption('', '不限'),
       ..._styleOptions,
@@ -2065,6 +2091,10 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
     final subStyleOptions = <EditorOption>[
       const EditorOption('', '不限'),
       ..._subStyleOptions,
+    ];
+    final methodOptions = <EditorOption>[
+      const EditorOption('', '不限'),
+      ..._methodOptions,
     ];
     // 标签候选（异步聚合自定义模板 tags）
     final tagCandidates = ref.watch(customTagCandidatesProvider);
@@ -2116,9 +2146,10 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             options: _typeOptions,
             onChanged: (v) => onChange(() {
               form.meta.category = v;
-              // 切换分类时清空 style/subStyle（级联一致性）
+              // 切换分类时清空 style/subStyle/method（级联一致性）
               form.meta.style = null;
               form.meta.subStyle = null;
+              form.meta.method = null;
             }),
           ),
           const SizedBox(height: 14),
@@ -2140,8 +2171,9 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             options: styleOptions,
             onChanged: (v) => onChange(() {
               form.meta.style = v.isEmpty ? null : v;
-              // 切换风格时清空 subStyle（级联一致性）
+              // 切换风格时清空 subStyle/method（级联一致性）
               form.meta.subStyle = null;
+              form.meta.method = null;
             }),
           ),
           const SizedBox(height: 14),
@@ -2153,6 +2185,19 @@ class _Step1TemplateInfoState extends ConsumerState<_Step1TemplateInfo> {
             options: subStyleOptions,
             onChanged: (v) => onChange(() {
               form.meta.subStyle = v.isEmpty ? null : v;
+              // 切换子风格时清空 method（级联一致性）
+              form.meta.method = null;
+            }),
+          ),
+          const SizedBox(height: 14),
+          // Task6: 四级分类：方法（method，可选，级联自子风格，选项来自后端分类）
+          _FieldLabel(tokens: tokens, text: '方法'),
+          _FieldDropdown(
+            tokens: tokens,
+            value: form.meta.method ?? '',
+            options: methodOptions,
+            onChanged: (v) => onChange(() {
+              form.meta.method = v.isEmpty ? null : v;
             }),
           ),
           const SizedBox(height: 14),
