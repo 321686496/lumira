@@ -95,9 +95,10 @@ class OhosImageProcessor {
 
   /// OHOS 单次原生拍照后处理：解码→几何变换→色彩矩阵→锐化→JPEG硬编码→写文件。
   ///
-  /// 只要「需要水印」或「带暂未原生实现的复杂效果（磨皮/暗角/颗粒/Clarity）」时为 false，
-  /// 调用方走现有 GPU+isolate 管线；本方法仅在简单成片（颜色 + 锐化，无水印）时被启用，
-  /// 失败一律返回 false 并由调用方回退原有管线，绝不阻塞拍照。
+  /// 只要「带暂未原生实现的复杂效果（磨皮/暗角/颗粒/Clarity）」时为 false，
+  /// 调用方走现有 GPU+isolate 管线；本方法负责原生产出"底片"。开水印时底片随后由
+  /// 调用方用原生解码+水印渲染+原生编码合成（见 capture_page 水印分支），因此
+  /// 水印不再导致回退慢管线。失败一律返回 false 并由调用方回退原有管线，绝不阻塞拍照。
   ///
   /// - [matrix]：20 元素 ColorMatrix（由 `composePostProcessMatrix` 产出，保证与取景器一致）
   /// - [sharpen]：有效锐化值（应已应用 kMinLiveSharpen 下限）

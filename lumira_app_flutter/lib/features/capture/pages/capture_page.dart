@@ -746,12 +746,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
 
     // === OHOS 单次原生快速路径 ===
-    // 简单成片（无水印、无暂未原生实现的磨皮/暗角/颗粒/Clarity 复杂效果）走原生管线一次做完
-    // （解码→几何变换→色彩矩阵→锐化→JPEG硬编码→写文件），绕开 GPU toByteData 读回 +
-    // isolate 逐像素 + 软件编码，以达成 ≤800ms 后处理目标。失败一律回退下面原有
-    // GPU+isolate+水印管线，绝不阻塞/退化。iOS/Android 不走此分支。
+    // 无论是否开「水印」，只要无暂未原生实现的复杂效果（磨皮/暗角/颗粒/Clarity）就走原生：
+    // processJpeg 先原生搞定"底片"（解码→几何变换→色彩矩阵→边缘自适应锐化→JPEG硬编码→写文件）。
+    // 开「水印」时水印随后单独用「原生解码 + 原生编码」合成（见下方水印分支），绕开
+    // GPU toByteData 读回 + isolate 逐像素 + 软件编码（日志实测那套要 4.5s+）。
+    // 失败一律回退下面原有 GPU+isolate+水印管线，绝不阻塞拍摄。iOS/Android 不走此分支。
     final fastNative = _isOhos &&
-        !needWatermark &&
         params.postProcess.smoothStrength == 0 &&
         params.postProcess.vignette == 0 &&
         params.postProcess.grain == 0 &&
@@ -867,64 +867,89 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 失败时静默回退到 processedPath，绝不阻塞拍照流程。
       // originalPath 仍为未加水印的原始备份，不受此步骤影响。
       String finalPath = processedPath;
-      if (!nativeFastDone &&
-          watermarkTemplate != null &&
-          watermarkSettings.enabled &&
-          workerResult!.rgbaBytes != null) {
+      final wantWatermark = watermarkTemplate != null && watermarkSettings.enabled;
+      if (wantWatermark) {
         ui.Image? sourceImage;
         final swWm = Stopwatch()..start();
         try {
-          // 用 worker 返回的 rawRgba 直接创建 ui.Image（ImageDescriptor.raw）
-          // 避免 JPEG 编解码往返（节省 ~180ms）
-          final buffer = await ui.ImmutableBuffer.fromUint8List(workerResult.rgbaBytes!);
-          final descriptor = ui.ImageDescriptor.raw(
-            buffer,
-            width: workerResult.width,
-            height: workerResult.height,
-            pixelFormat: ui.PixelFormat.rgba8888,
-          );
-          buffer.dispose();
-          final codec = await descriptor.instantiateCodec();
-          final frame = await codec.getNextFrame();
-          sourceImage = frame.image;
-          descriptor.dispose();
-          codec.dispose();
-
-          final renderer = ref.read(watermarkRendererProvider);
-          final wmResult = await renderer.render(
-            sourceImage: sourceImage,
-            template: watermarkTemplate,
-          );
-
-          // 将 RGBA 字节编码为 JPEG（quality 90，与 worker 输出统一）。
-          // OHOS：走系统 ImagePacker 硬件编码（替代纯 Dart img.encodeJpg，节省 ~1.2s），
-          // 失败时静默回退 Dart 软件编码，绝不阻塞拍照流程。
-          Uint8List jpegBytes;
-          final isOhos = OhosImageProcessor.isSupported;
-          final jpegNative = isOhos
-              ? await OhosImageProcessor.instance.encodeJpegFromRgba(
-                  rgba: wmResult.rgbaBytes,
-                  width: wmResult.width,
-                  height: wmResult.height,
-                  quality: 90,
-                )
-              : null;
-          if (jpegNative != null) {
-            jpegBytes = jpegNative;
-          } else {
-            final outputImage = img.Image.fromBytes(
-              width: wmResult.width,
-              height: wmResult.height,
-              bytes: wmResult.rgbaBytes.buffer,
-              numChannels: 4,
-              order: img.ChannelOrder.rgba,
+          if (nativeFastDone) {
+            // 原生已产出底片：用原生解码（不解码缩放，targetWidth/Height=0）拿 RGBA，
+            // 再走同一水印渲染，绕开 dart:ui 软件解码（OHOS 上极慢，日志实测整条旧管线 4.5s+）。
+            final decoded = await OhosImageProcessor.instance.decodeJpegToRgba(
+              path: processedPath,
+              targetWidth: 0,
+              targetHeight: 0,
             );
-            jpegBytes = img.encodeJpg(outputImage, quality: 90);
+            if (decoded != null) {
+              final buffer = await ui.ImmutableBuffer.fromUint8List(decoded.rgba);
+              final descriptor = ui.ImageDescriptor.raw(
+                buffer,
+                width: decoded.width,
+                height: decoded.height,
+                pixelFormat: ui.PixelFormat.rgba8888,
+              );
+              buffer.dispose();
+              final codec = await descriptor.instantiateCodec();
+              final frame = await codec.getNextFrame();
+              sourceImage = frame.image;
+              descriptor.dispose();
+              codec.dispose();
+            }
+          } else if (workerResult != null && workerResult.rgbaBytes != null) {
+            // 旧管线：用 worker 返回的 rawRgba 直接创建 ui.Image（ImageDescriptor.raw）
+            // 避免 JPEG 编解码往返（节省 ~180ms）
+            final buffer = await ui.ImmutableBuffer.fromUint8List(workerResult.rgbaBytes!);
+            final descriptor = ui.ImageDescriptor.raw(
+              buffer,
+              width: workerResult.width,
+              height: workerResult.height,
+              pixelFormat: ui.PixelFormat.rgba8888,
+            );
+            buffer.dispose();
+            final codec = await descriptor.instantiateCodec();
+            final frame = await codec.getNextFrame();
+            sourceImage = frame.image;
+            descriptor.dispose();
+            codec.dispose();
           }
-          finalPath = processedPath.replaceAll(RegExp(r'\.jpg$'), '_wm.jpg');
-          await File(finalPath).writeAsBytes(jpegBytes);
 
-          debugPrint('[watermark] rendered to $finalPath');
+          if (sourceImage != null) {
+            final renderer = ref.read(watermarkRendererProvider);
+            final wmResult = await renderer.render(
+              sourceImage: sourceImage,
+              template: watermarkTemplate,
+            );
+
+            // 将 RGBA 字节编码为 JPEG（quality 90，与 worker 输出统一）。
+            // OHOS：走系统 ImagePacker 硬件编码（替代纯 Dart img.encodeJpg，节省 ~1.2s），
+            // 失败时静默回退 Dart 软件编码，绝不阻塞拍照流程。
+            Uint8List jpegBytes;
+            final isOhos = OhosImageProcessor.isSupported;
+            final jpegNative = isOhos
+                ? await OhosImageProcessor.instance.encodeJpegFromRgba(
+                    rgba: wmResult.rgbaBytes,
+                    width: wmResult.width,
+                    height: wmResult.height,
+                    quality: 90,
+                  )
+                : null;
+            if (jpegNative != null) {
+              jpegBytes = jpegNative;
+            } else {
+              final outputImage = img.Image.fromBytes(
+                width: wmResult.width,
+                height: wmResult.height,
+                bytes: wmResult.rgbaBytes.buffer,
+                numChannels: 4,
+                order: img.ChannelOrder.rgba,
+              );
+              jpegBytes = img.encodeJpg(outputImage, quality: 90);
+            }
+            finalPath = processedPath.replaceAll(RegExp(r'\.jpg$'), '_wm.jpg');
+            await File(finalPath).writeAsBytes(jpegBytes);
+
+            debugPrint('[watermark] rendered to $finalPath');
+          }
         } catch (e) {
           debugPrint('[watermark] render failed, using original: $e');
           finalPath = processedPath;
@@ -4111,7 +4136,8 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
       //（kDeblur 结论，2026-08-24）。此处强制 kMinLiveSharpen 基线只为 OHOS 保清晰。
       // iOS/Android 相机 ISP 直出已足够清晰，若也强制该基线，会让共享 worker 的无差别
       // 3x3 锐化把平坦区域噪点一并放大成"颗粒感"，故非 OHOS 一律用用户真实 sharpen 值。
-      sharpen: _isOhos
+      // 顶层函数，无法访问 State 上的 _isOhos，用同样的平台判断内联。
+      sharpen: (!Platform.isAndroid && !Platform.isIOS)
           ? ((params.postProcess.sharpen >= kMinLiveSharpen)
               ? params.postProcess.sharpen
               : kMinLiveSharpen)
