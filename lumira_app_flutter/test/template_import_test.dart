@@ -116,6 +116,50 @@ void main() {
       expect(record.postProcess['lut'], 'cinematic');
     });
 
+    test('多姿势 pptpl JSON 应保留全部剪影（不回退为单剪影）', () {
+      final json = <String, dynamic>{
+        'format': 'pptpl',
+        'version': '1.0',
+        'meta': {
+          'id': 'tpl-multi-pose',
+          'name': '多姿势模板',
+          'category': 'portrait',
+        },
+        'composition': {'overlayType': 'rule_of_thirds'},
+        'pose': [
+          {
+            'name': '正面',
+            'silhouette': {'type': 'builtin', 'data': 'standing-profile'},
+            'position': {'x': 0.4, 'y': 0.5},
+            'scale': 1.0,
+            'rotation': 0,
+          },
+          {
+            'name': '侧拍',
+            'silhouette': {'type': 'image', 'data': 'data:image/png;base64,AAAA'},
+            'position': {'x': 0.6, 'y': 0.5},
+            'scale': 1.1,
+            'rotation': 15,
+          },
+        ],
+        'camera': <String, dynamic>{},
+        'sceneGuide': <String, dynamic>{},
+        'postProcess': <String, dynamic>{},
+      };
+
+      final record = TemplateMapper.recordFromImportedJson(
+        json,
+        createdAt: 1700000000000,
+      );
+
+      // pose 应保留为数组，且包含 2 个姿势（剪影数量不得丢失）
+      expect(record.pose, isA<List>());
+      final poses = record.pose as List;
+      expect(poses.length, 2);
+      expect((poses[0] as Map)['name'], '正面');
+      expect((poses[1] as Map)['name'], '侧拍');
+    });
+
     test('剪影 builtin key 不存在时应降级为 none', () {
       final json = <String, dynamic>{
         'format': 'pptpl',

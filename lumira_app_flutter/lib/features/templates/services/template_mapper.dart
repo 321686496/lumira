@@ -829,7 +829,7 @@ class TemplateMapper {
     final referenceSource = (meta['referenceSource'] as String?) ?? '';
 
     Map<String, dynamic> composition;
-    Map<String, dynamic> pose;
+    dynamic pose;
     Map<String, dynamic> camera;
     Map<String, dynamic> sceneGuide;
     Map<String, dynamic> postProcess;
@@ -837,11 +837,15 @@ class TemplateMapper {
     if (isPptpl) {
       composition =
           (json['composition'] as Map<String, dynamic>?) ?? <String, dynamic>{};
-      dynamic rawPose = json['pose'];
-      final poseMap = rawPose is List
-          ? (rawPose.isNotEmpty ? rawPose.first : <String, dynamic>{})
-          : rawPose;
-      pose = _normalizePose((poseMap as Map<String, dynamic>?) ?? {});
+      final dynamic rawPose = json['pose'];
+      // 多姿势：pose 为数组时要保留全部剪影，不得截断为第一项。
+      // 单姿势（旧数据 / 简化格式）仍保持单 Map，兼容旧消费方。
+      pose = rawPose is List
+          ? rawPose
+              .whereType<Map<String, dynamic>>()
+              .map((p) => _normalizePose(p))
+              .toList()
+          : _normalizePose((rawPose as Map<String, dynamic>?) ?? {});
       camera = (json['camera'] as Map<String, dynamic>?) ?? <String, dynamic>{};
       sceneGuide =
           (json['sceneGuide'] as Map<String, dynamic>?) ?? <String, dynamic>{};
@@ -867,8 +871,12 @@ class TemplateMapper {
       postProcess = <String, dynamic>{'cropRatio': '3:4', 'lut': 'none'};
     }
 
-    // 剪影降级：builtin key 不在白名单 → 'none'
-    pose = _degradeSilhouetteIfNeeded(pose);
+    // 剪影降级：builtin key 不在白名单 → 'none'（多姿势逐项降级）
+    pose = pose is List
+        ? pose
+            .map<dynamic>((p) => _degradeSilhouetteIfNeeded(p as Map<String, dynamic>))
+            .toList()
+        : _degradeSilhouetteIfNeeded(pose as Map<String, dynamic>);
 
     return TemplateRecord(
       id: id,
@@ -910,7 +918,8 @@ class TemplateMapper {
     return false;
   }
 
-  /// 规范化 pose 字段，确保 silhouette / position / scale / rotation 存在
+  /// 规范化 pose 字段，确保 silhouette / position / scale / rotation 存在，
+  /// 并保留全部原始字段（name/description 等多姿势切换所需信息）。
   static Map<String, dynamic> _normalizePose(Map<String, dynamic> pose) {
     final silhouette =
         pose['silhouette'] as Map<String, dynamic>? ?? <String, dynamic>{
@@ -923,10 +932,14 @@ class TemplateMapper {
       'y': 0.5,
     };
     return {
+      ...pose,
       'silhouette': silhouette,
       'position': position,
       'scale': pose['scale'] ?? 1.0,
       'rotation': pose['rotation'] ?? 0,
+      // 显式纳入，保证后续消费者可取到（避免纯 spread 丢键歧义）
+      if (pose['name'] != null) 'name': pose['name'],
+      if (pose['description'] != null) 'description': pose['description'],
     };
   }
 
