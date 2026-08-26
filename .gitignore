@@ -17,3 +17,9 @@ outputs/
 
 # ML model files (large binary, not tracked in git, root dir only)
 /models/
+
+# Debug / CI build logs
+debuglog.txt
+
+# Vendored plugin lockfile (library style: lockfile not tracked)
+lumira_app_flutter/packages/camerawesome/pubspec.lock
