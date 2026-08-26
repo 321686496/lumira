@@ -18,6 +18,11 @@
         "description": "$string:EntryAbility_desc",
         "icon": "$media:icon",
         "label": "$string:EntryAbility_label",
+        // 放开 Ability 级布局方向：允许自动旋转（竖屏 + 横屏，不含竖屏倒置）。
+        // 否则即使 Flutter 侧 setPreferredOrientations 已放开，HarmonyOS 窗口仍不旋转，
+        // MediaQuery 恒报竖屏 → 横屏持机时成片仍是竖图、模板拍摄指南也不适配横屏。
+        // 与 Flutter 侧请求的方向集合（portraitUp/landscapeLeft/landscapeRight）一致。
+        "orientation": "auto_rotation_restricted",
         "startWindowIcon": "$media:icon",
         "startWindowBackground": "$color:start_window_background",
         "exported": true,
