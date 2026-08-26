@@ -247,32 +247,41 @@ class _BalanceBody extends StatelessWidget {
             ],
           ),
         ),
-        if (balance.freeUnlockCount > 0) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: tokens.brandSubtle,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.lock_open_outlined, size: 16, color: tokens.brand),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '免费解锁 ×${balance.freeUnlockCount}：可在解锁页任选付费模板，不消耗积分',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: tokens.textPrimary,
-                    ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: balance.freeUnlockCount > 0
+                ? tokens.brandSubtle
+                : tokens.surfaceAlt,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.lock_open_outlined,
+                size: 16,
+                color:
+                    balance.freeUnlockCount > 0 ? tokens.brand : tokens.textTertiary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  balance.freeUnlockCount > 0
+                      ? '免费解锁 ×${balance.freeUnlockCount}：可在解锁页任选付费模板，不消耗积分'
+                      : '免费解锁 ×0：邀请好友可获取免费解锁次数',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: balance.freeUnlockCount > 0
+                        ? tokens.textPrimary
+                        : tokens.textTertiary,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ],
     );
   }

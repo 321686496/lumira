@@ -81,6 +81,18 @@ class _FakeCacheDao implements ApiCacheDao {
   Future<void> save(String key, String payload) async => _store[key] = payload;
   @override
   Future<void> clear(String key) async => _store.remove(key);
+  @override
+  Future<int> count() async => _store.length;
+  @override
+  Future<int> payloadBytes() async {
+    var total = 0;
+    for (final v in _store.values) {
+      total += v.length;
+    }
+    return total;
+  }
+  @override
+  Future<void> clearAll() async => _store.clear();
 }
 
 void main() {

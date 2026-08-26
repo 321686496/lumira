@@ -7,7 +7,6 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/number_format.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -16,6 +15,7 @@ import '../../capture/data/capture_state.dart';
 import '../../templates/services/template_exporter.dart';
 import '../../templates/widgets/template_cover_image.dart';
 import '../../templates/widgets/template_import_sheet.dart';
+import '../../templates/data/templates_providers.dart';
 import '../data/profile_content_mock_data.dart';
 
 /// 用户自定义模板列表（is_builtin=0），从 DAO 读取
@@ -94,6 +94,7 @@ enum _FilterKey {
   landscape,
   food,
   other,
+  favorites,
 }
 
 class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage> {
@@ -110,7 +111,10 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
   /// （`customTemplatesProvider`），不再合并 `ProfileContentMockData.customTemplates`。
   /// 所有导入的模板（文件/链接/扫码）均持久化到 DAO，当前页面展示 DAO 中
   /// 的全部用户自定义模板（与 brief Step 4 一致）。
-  List<CustomTemplate> _filteredTemplatesWith(List<CustomTemplate> customs) {
+  List<CustomTemplate> _filteredTemplatesWith(
+    List<CustomTemplate> customs,
+    Set<String> favIds,
+  ) {
     final all = customs;
     switch (_activeFilter) {
       case _FilterKey.all:
@@ -136,6 +140,9 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
               return true;
           }
         }).toList();
+      case _FilterKey.favorites:
+        // 收藏筛选：仅显示已收藏的自定义模板（favIds 来自 template_favorites）
+        return all.where((t) => favIds.contains(t.id)).toList();
     }
   }
 
@@ -298,10 +305,13 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     final customAsync = ref.watch(customTemplatesProvider);
+    // watch 收藏集：收藏/取消后重建列表，「收藏」筛选与顶部收藏数实时更新
+    final favoriteAsync = ref.watch(favoriteTemplateIdsProvider);
+    final favoriteIds = favoriteAsync.valueOrNull ?? const <String>{};
     final filtered = customAsync.when(
       loading: () => const <CustomTemplate>[],
       error: (_, __) => const <CustomTemplate>[],
-      data: (customs) => _filteredTemplatesWith(customs),
+      data: (customs) => _filteredTemplatesWith(customs, favoriteIds),
     );
 
     return Scaffold(
@@ -336,10 +346,12 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
                     _StatsBar(
                       tokens: tokens,
                       totalCount: filtered.length,
-                      // Plan A Task A5：usageCount / isFavorite 暂未持久化到 DAO，
+                      // Plan A Task A5：usageCount 暂未持久化到 DAO，
                       // 按 brief 简化方案置为 0（后续扩展 TemplateRecord 时再恢复）
                       totalUsage: 0,
-                      favoriteCount: 0,
+                      favoriteCount: favoriteIds.length,
+                      onFavoriteTap: () => GoRouter.of(context)
+                          .push(RouteNames.templatesFavorites),
                     ),
                     _ActionBar(tokens: tokens, onImport: _showImportSheet),
                     _FilterBar(
@@ -438,14 +450,17 @@ class _StatsBar extends StatelessWidget {
     required this.totalCount,
     required this.totalUsage,
     required this.favoriteCount,
+    this.onFavoriteTap,
   });
   final ThemeTokens tokens;
   final int totalCount;
   final int totalUsage;
   final int favoriteCount;
+  /// 「收藏」数可点击进入「我的收藏」页；为空则不响应点击。
+  final VoidCallback? onFavoriteTap;
 
-  Widget _statItem(String num, String label) {
-    return Column(
+  Widget _statItem(String num, String label, {VoidCallback? onTap}) {
+    final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
@@ -468,6 +483,12 @@ class _StatsBar extends StatelessWidget {
           ),
         ),
       ],
+    );
+    if (onTap == null) return content;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: content,
     );
   }
 
@@ -492,7 +513,7 @@ class _StatsBar extends StatelessWidget {
           // 4+ 位数必须用 formatThousands
           _statItem(formatThousands(totalUsage), '使用次数'),
           _divider(),
-          _statItem('$favoriteCount', '收藏'),
+          _statItem('$favoriteCount', '收藏', onTap: onFavoriteTap),
         ],
       ),
     );
@@ -562,6 +583,7 @@ class _FilterBar extends StatelessWidget {
     _FilterConfig(key: _FilterKey.landscape, label: '风光'),
     _FilterConfig(key: _FilterKey.food, label: '美食'),
     _FilterConfig(key: _FilterKey.other, label: '其他'),
+    _FilterConfig(key: _FilterKey.favorites, label: '收藏'),
   ];
 
   @override

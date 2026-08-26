@@ -8,10 +8,13 @@ import '../../../core/preferences/home_wordmark_style.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/db/database_provider.dart';
+import '../../../core/utils/cache_utils.dart';
 import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../capture/data/capture_state.dart';
 import '../../watermark/data/watermark_providers.dart';
 import '../data/profile_mock_data.dart';
 
@@ -34,8 +37,9 @@ class ProfileSettingsPage extends ConsumerStatefulWidget {
 
 class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
   late bool _gridOn = ProfileMockData.defaultGridOn;
-  late bool _levelOn = ProfileMockData.defaultLevelOn;
-  late bool _shutterOn = ProfileMockData.defaultShutterOn;
+
+  /// 缓存占用文本（缓存详情页入口展示，异步计算）
+  String _cacheSizeText = '0.0 MB';
 
   int _tapCount = 0;
   Timer? _tapTimer;
@@ -47,6 +51,27 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     // 使用 microtask 避免在 build 阶段同步触发 provider 写入引发重建断言。
     Future.microtask(() =>
         loadWatermarkSettings(ProviderScope.containerOf(context, listen: false)));
+    // 从 DB 异步加载水平仪开关到 provider（与拍摄页共享同一状态）。
+    Future.microtask(() =>
+        CaptureState.loadLevelEnabled(ProviderScope.containerOf(context, listen: false)));
+    // 从 DB 异步加载快门声音开关到 provider（与拍摄页共享同一状态）。
+    Future.microtask(() =>
+        CaptureState.loadShutterSound(ProviderScope.containerOf(context, listen: false)));
+    // 从 DB 异步加载默认分辨率到 provider（与拍摄页共享同一状态）。
+    Future.microtask(() =>
+        CaptureState.loadDefaultResolution(ProviderScope.containerOf(context, listen: false)));
+    // 异步计算缓存总占用，展示在"缓存"入口。
+    Future.microtask(() async {
+      try {
+        final container = ProviderScope.containerOf(context, listen: false);
+        final apiDao = await container.read(apiCacheDaoProvider.future);
+        final bytes = await CacheInfo.totalBytes(apiDao);
+        if (!mounted) return;
+        setState(() => _cacheSizeText = formatBytes(bytes));
+      } catch (_) {
+        // 计算失败保持默认展示
+      }
+    });
   }
 
   @override
@@ -148,6 +173,14 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
     final watermarkSettings = ref.watch(watermarkSettingsProvider);
     final watermarkTemplate = ref.watch(currentWatermarkTemplateProvider);
     final currentTemplateName = watermarkTemplate?.name ?? '未选择';
+    // 水平仪开关（与拍摄页共享，来自 DB 持久化）
+    final levelEnabled = ref.watch(CaptureState.levelEnabledProvider);
+    // 快门声音开关（与拍摄页共享，来自 DB 持久化）
+    final shutterSound = ref.watch(CaptureState.shutterSoundProvider);
+    // 默认分辨率（与拍摄页共享，来自 DB 持久化）
+    final defaultResolution =
+        ref.watch(CaptureState.defaultResolutionProvider);
+    final resolutionLabel = CaptureResolutions.labelOf(defaultResolution);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -235,8 +268,13 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         icon: Icons.straighten_outlined,
                         label: '水平仪',
                         trailing: LumiraSwitch(
-                          value: _levelOn,
-                          onChanged: (v) => setState(() => _levelOn = v),
+                          value: levelEnabled,
+                          onChanged: (v) {
+                            // 更新共享 provider + 持久化（设置页与拍摄页联动）
+                            final container = ProviderScope.containerOf(context, listen: false);
+                            ref.read(CaptureState.levelEnabledProvider.notifier).state = v;
+                            CaptureState.persistLevelEnabled(container, v);
+                          },
                         ),
                         tokens: tokens,
                         isLast: true,
@@ -254,7 +292,8 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                       _SettingItem(
                         icon: Icons.aspect_ratio_outlined,
                         label: '默认分辨率',
-                        value: '4:3',
+                        value: resolutionLabel,
+                        onTap: () => GoRouter.of(context).push(RouteNames.profileSettingsResolution),
                         tokens: tokens,
                       ),
                       _SettingItem(
@@ -299,8 +338,14 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         icon: Icons.graphic_eq_outlined,
                         label: '快门声音',
                         trailing: LumiraSwitch(
-                          value: _shutterOn,
-                          onChanged: (v) => setState(() => _shutterOn = v),
+                          value: shutterSound,
+                          onChanged: (v) {
+                            // 更新共享 provider + 持久化（设置页与拍摄页联动）
+                            final container =
+                                ProviderScope.containerOf(context, listen: false);
+                            ref.read(CaptureState.shutterSoundProvider.notifier).state = v;
+                            CaptureState.persistShutterSound(container, v);
+                          },
                         ),
                         tokens: tokens,
                         isLast: true,
@@ -325,13 +370,9 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                       ),
                       _SettingItem(
                         icon: Icons.cleaning_services_outlined,
-                        label: '清除缓存',
-                        value: '0.0 MB',
-                        onTap: () => LumiraToast.show(
-                          context,
-                          '已清除缓存',
-                          duration: const Duration(milliseconds: 1000),
-                        ),
+                        label: '缓存',
+                        value: _cacheSizeText,
+                        onTap: () => GoRouter.of(context).push(RouteNames.profileSettingsCache),
                         tokens: tokens,
                       ),
                       _SettingItem(

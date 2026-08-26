@@ -26,7 +26,7 @@ void main() {
             follow_system INTEGER NOT NULL DEFAULT 0,
             capture_fullscreen INTEGER NOT NULL DEFAULT 0,
             grid_enabled INTEGER NOT NULL DEFAULT 0,
-            level_enabled INTEGER NOT NULL DEFAULT 0,
+            level_enabled INTEGER NOT NULL DEFAULT 1,
             shutter_sound INTEGER NOT NULL DEFAULT 1,
             watermark INTEGER NOT NULL DEFAULT 0,
             seed_v3_done INTEGER NOT NULL DEFAULT 0,
@@ -68,6 +68,31 @@ void main() {
     await dao.setAutoDeblur(false);
     await dao.setAutoDeblur(true);
     expect(await dao.getAutoDeblur(), isTrue);
+  });
+
+  group('level enabled persistence', () {
+    test('default is true (1) even when DB has no explicit value', () async {
+      // 无行时回退 true
+      await db.delete('user_settings', where: 'id = 1');
+      expect(await dao.getLevelEnabled(), isTrue);
+    });
+
+    test('getLevelEnabled reads current DB value', () async {
+      expect(await dao.getLevelEnabled(), isTrue);
+    });
+
+    test('setLevelEnabled(false) persists to DB', () async {
+      await dao.setLevelEnabled(false);
+      expect(await dao.getLevelEnabled(), isFalse);
+      final rows = await db.query('user_settings', where: 'id = 1');
+      expect(rows.first['level_enabled'], equals(0));
+    });
+
+    test('setLevelEnabled(true) after false works', () async {
+      await dao.setLevelEnabled(false);
+      await dao.setLevelEnabled(true);
+      expect(await dao.getLevelEnabled(), isTrue);
+    });
   });
 
   group('free mode params persistence', () {

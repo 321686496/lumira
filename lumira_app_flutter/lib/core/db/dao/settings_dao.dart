@@ -109,6 +109,84 @@ class SettingsDao {
     );
   }
 
+  /// 读取水平仪开关（默认 true=开启，无行或缺省时保持当前默认开启行为）
+  Future<bool> getLevelEnabled() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colLevelEnabled],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return true;
+    return (rows.first[Tables.colLevelEnabled] as int?) == 1;
+  }
+
+  /// 设置水平仪开关
+  Future<void> setLevelEnabled(bool value) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colLevelEnabled: value ? 1 : 0,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 读取快门声音开关（默认 true=开启，无行或缺省时保持默认开启）
+  Future<bool> getShutterSound() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colShutterSound],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return true;
+    return (rows.first[Tables.colShutterSound] as int?) == 1;
+  }
+
+  /// 设置快门声音开关
+  Future<void> setShutterSound(bool value) async {
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colShutterSound: value ? 1 : 0,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
+  /// 读取默认拍摄分辨率（user_settings.default_resolution，默认 'high'）
+  /// 合法值为 'high' / 'standard' / 'smooth'，非法或缺省回退 'high'
+  Future<String> getDefaultResolution() async {
+    final rows = await _db.query(
+      Tables.userSettings,
+      columns: [Tables.colDefaultResolution],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return 'high';
+    final raw = rows.first[Tables.colDefaultResolution] as String;
+    return (raw == 'high' || raw == 'standard' || raw == 'smooth') ? raw : 'high';
+  }
+
+  /// 设置默认拍摄分辨率（'high' / 'standard' / 'smooth'）
+  Future<void> setDefaultResolution(String value) async {
+    final normalized = (value == 'standard' || value == 'smooth') ? value : 'high';
+    await _db.update(
+      Tables.userSettings,
+      {
+        Tables.colDefaultResolution: normalized,
+        Tables.colUpdatedAt: DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
+
   /// 读取自由模式相机参数（未设置时返回 null）
   Future<CameraParams?> getFreeModeCamera() async {
     final rows = await _db.query(

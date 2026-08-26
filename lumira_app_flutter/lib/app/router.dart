@@ -58,6 +58,7 @@ import '../features/profile/pages/profile_invite_page.dart';
 import '../features/profile/pages/profile_share_code_page.dart';
 import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
+import '../features/profile/pages/profile_settings_cache_page.dart';
 import '../features/profile/feedback/pages/feedback_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
 import '../features/points/pages/points_wallet_page.dart';
@@ -73,6 +74,7 @@ import '../features/templates/pages/templates_category_page.dart';
 import '../features/templates/pages/templates_detail_page.dart';
 import '../features/templates/pages/templates_drafts_page.dart';
 import '../features/templates/pages/templates_editor_page.dart';
+import '../features/templates/pages/templates_favorites_page.dart';
 import '../features/templates/pages/templates_recommend_page.dart';
 import '../features/templates/pages/templates_unlock_page.dart';
 import '../features/templates/pages/export_detail_page.dart';
@@ -257,6 +259,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           final category = state.queryParams[RouteNames.paramCategory];
           return TemplatesCategoryPage(category: category);
         },
+      ),
+      GoRoute(
+        path: RouteNames.templatesFavorites,
+        name: 'templatesFavorites',
+        builder: (context, state) => const TemplatesFavoritesPage(),
       ),
       GoRoute(
         path: RouteNames.templatesExportDetail,
@@ -467,6 +474,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileSettingsTheme,
         name: 'profileSettingsTheme',
         builder: (context, state) => const ProfileThemePage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileSettingsCache,
+        name: 'profileSettingsCache',
+        builder: (context, state) => const ProfileSettingsCachePage(),
       ),
       GoRoute(
         path: RouteNames.accountProtection,

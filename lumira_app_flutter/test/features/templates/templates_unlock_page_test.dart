@@ -12,6 +12,7 @@ import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_unlock_page.dart';
 import 'package:lumira_app_flutter/features/templates/data/owned_templates_repository.dart';
 import 'package:lumira_app_flutter/features/points/data/points_models.dart';
+import 'package:lumira_app_flutter/features/points/data/points_repository.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -44,6 +45,7 @@ void main() {
     String initialLocation = '/templates/unlock',
     int? price,
     String? templateId,
+    int freeUnlockCount = 0,
   }) {
     final goRouter = GoRouter(
       initialLocation: initialLocation,
@@ -84,6 +86,8 @@ void main() {
         uiStyleProvider.overrideWith((ref) => uiStyle),
         ownedTemplatesRepositoryProvider.overrideWith(
             (ref) async => _MockOwnedTemplatesRepository()),
+        pointsRepositoryProvider.overrideWith(
+            (ref) async => _MockPointsRepository(freeUnlockCount)),
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
@@ -173,7 +177,7 @@ void main() {
 
       expect(find.text('0 积分解锁'), findsOneWidget);
       expect(find.text('消耗积分，永久使用'), findsOneWidget);
-      expect(find.text('积分购买'), findsOneWidget);
+      expect(find.text('解锁'), findsOneWidget);
     });
 
     testWidgets('renders option 2 输入兑换码', (tester) async {
@@ -219,7 +223,7 @@ void main() {
               templateId: 'cafe_portrait'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      await tester.tap(find.text('积分购买'));
+      await tester.tap(find.text('解锁'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 弹窗内容：标题 + 价格 + 描述 + 取消/确认
@@ -268,7 +272,7 @@ void main() {
               templateId: 'cafe_portrait'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      await tester.tap(find.text('积分购买'));
+      await tester.tap(find.text('解锁'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 点击 取消 关闭弹窗
@@ -311,7 +315,7 @@ void main() {
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 积分购买 → 确认弹窗 → mock exchange 成功
-      await tester.tap(find.text('积分购买'));
+      await tester.tap(find.text('解锁'));
       await settleOrPump(tester, UIStyle.neumorphic);
       await tester.tap(find.text('确认解锁'));
       await settleOrPump(tester, UIStyle.neumorphic);
@@ -340,7 +344,7 @@ void main() {
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 积分购买 → 确认 → mock exchange 成功
-      await tester.tap(find.text('积分购买'));
+      await tester.tap(find.text('解锁'));
       await settleOrPump(tester, UIStyle.neumorphic);
       await tester.tap(find.text('确认解锁'));
       await settleOrPump(tester, UIStyle.neumorphic);
@@ -351,6 +355,121 @@ void main() {
 
       // 返回 home 页
       expect(find.text('HOME_PAGE'), findsOneWidget);
+    });
+  });
+
+  group('TemplatesUnlockPage — free unlock', () {
+    testWidgets('banner shows free count when N>0', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+          themeKey: ThemeKey.warmWhite,
+          uiStyle: UIStyle.neumorphic,
+          price: 18,
+          templateId: 'cafe_portrait',
+          freeUnlockCount: 2));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(
+          find.text('免费解锁 ×2：可在解锁页任选付费模板，不消耗积分'),
+          findsOneWidget);
+      expect(find.textContaining('免费解锁 ×0'), findsNothing);
+    });
+
+    testWidgets('banner shows ×0 hint when N==0', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+          themeKey: ThemeKey.warmWhite,
+          uiStyle: UIStyle.neumorphic,
+          freeUnlockCount: 0));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(
+          find.text('免费解锁 ×0：邀请好友可获取免费解锁次数'),
+          findsOneWidget);
+    });
+
+    testWidgets('N>0: tapping 解锁 opens choice dialog', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+          themeKey: ThemeKey.warmWhite,
+          uiStyle: UIStyle.neumorphic,
+          price: 18,
+          templateId: 'cafe_portrait',
+          freeUnlockCount: 2));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('解锁'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('选择解锁方式'), findsOneWidget);
+      expect(find.text('免费解锁（剩余 ×2）'), findsOneWidget);
+      expect(find.text('取消'), findsOneWidget);
+    });
+
+    testWidgets('N>0: choose free unlock unlocks via free_unlock',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+          themeKey: ThemeKey.warmWhite,
+          uiStyle: UIStyle.neumorphic,
+          price: 18,
+          templateId: 'cafe_portrait',
+          freeUnlockCount: 2));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('解锁'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 选择免费解锁 → 弹出免费解锁确认
+      await tester.tap(find.text('免费解锁（剩余 ×2）'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+      expect(find.text('免费解锁'), findsAtLeastNWidgets(1));
+      expect(find.text('确认免费解锁'), findsOneWidget);
+
+      await tester.tap(find.text('确认免费解锁'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('解锁成功'), findsAtLeastNWidgets(1));
+    });
+
+    testWidgets('N>0: choose points shows pay popup', (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+          themeKey: ThemeKey.warmWhite,
+          uiStyle: UIStyle.neumorphic,
+          price: 18,
+          templateId: 'cafe_portrait',
+          freeUnlockCount: 2));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('解锁'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      // 选择积分项（弹窗中的项在树中靠后，用 .last）
+      await tester.tap(find.text('18 积分解锁').last);
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('选择解锁方式'), findsNothing);
+      expect(find.text('18 积分'), findsOneWidget); // pay popup
+      expect(find.text('确认解锁'), findsOneWidget);
+    });
+
+    testWidgets('N==0: tapping 解锁 goes straight to pay popup',
+        (tester) async {
+      setLargeViewport(tester);
+      await tester.pumpWidget(wrap(
+          themeKey: ThemeKey.warmWhite,
+          uiStyle: UIStyle.neumorphic,
+          price: 18,
+          templateId: 'cafe_portrait',
+          freeUnlockCount: 0));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      await tester.tap(find.text('解锁'));
+      await settleOrPump(tester, UIStyle.neumorphic);
+
+      expect(find.text('选择解锁方式'), findsNothing);
+      expect(find.text('18 积分'), findsOneWidget); // pay popup
     });
   });
 
@@ -377,6 +496,31 @@ void main() {
       }
     });
   });
+}
+
+class _MockPointsRepository implements PointsRepository {
+  _MockPointsRepository(this.freeUnlockCount);
+  final int freeUnlockCount;
+
+  @override
+  Future<PointsBalance> getBalance() async => PointsBalance(
+        deviceId: 'test-device',
+        balance: 100,
+        totalEarned: 100,
+        totalSpent: 0,
+        freeUnlockCount: freeUnlockCount,
+      );
+
+  @override
+  Future<PointsTransactions> listTransactions({
+    int limit = 50,
+    int offset = 0,
+  }) async =>
+      const PointsTransactions(transactions: [], total: 0);
+
+  @override
+  Future<PointEarnResult> earn({required String type, String? refId}) async =>
+      const PointEarnResult(granted: false, delta: 0, balance: 0);
 }
 
 class _MockOwnedTemplatesRepository implements OwnedTemplatesRepository {

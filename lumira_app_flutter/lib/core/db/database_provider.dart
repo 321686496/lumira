@@ -28,7 +28,7 @@ import 'dao/templates_favorite_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 42;
+const int _kDbVersion = 44;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -305,8 +305,9 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colFollowSystem} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colCaptureFullscreen} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colGridEnabled} INTEGER NOT NULL DEFAULT 0,
-      ${Tables.colLevelEnabled} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colLevelEnabled} INTEGER NOT NULL DEFAULT 1,
       ${Tables.colShutterSound} INTEGER NOT NULL DEFAULT 1,
+      ${Tables.colDefaultResolution} TEXT NOT NULL DEFAULT 'high',
       ${Tables.colWatermark} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colSeedV3Done} INTEGER NOT NULL DEFAULT 0,
       ${Tables.colAutoDeblur} INTEGER NOT NULL DEFAULT 1,
@@ -1235,6 +1236,33 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       ''');
     } catch (e) {
       debugPrint('v42 migration failed (silent fallback): $e');
+    }
+  }
+
+  if (oldVersion < 43) {
+    try {
+      // v43: 水平仪开关接入数据库。历史 schema 中 level_enabled 默认 0（关闭），
+      // 而应用层默认行为是开启（true）且旧版本从未持久化该开关——所有存量 0 均为
+      // 「未显式操作」而非「用户主动关闭」。故把存量 0 统一迁移为 1（开启），
+      // 与全新安装（建表默认 1）行为对齐。
+      await db.execute(
+        'UPDATE ${Tables.userSettings} SET ${Tables.colLevelEnabled} = 1 WHERE ${Tables.colLevelEnabled} = 0',
+      );
+    } catch (e) {
+      debugPrint('v43 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 44) {
+    try {
+      // v44: user_settings 新增 default_resolution 列（默认拍摄分辨率，默认 high）
+      await _addColumnIfNotExists(
+        db,
+        Tables.userSettings,
+        Tables.colDefaultResolution,
+        "TEXT NOT NULL DEFAULT 'high'",
+      );
+    } catch (e) {
+      debugPrint('v44 migration failed (silent fallback): $e');
     }
   }
 }

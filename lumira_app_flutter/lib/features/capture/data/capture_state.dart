@@ -13,6 +13,7 @@ import '../../templates/services/template_mapper.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../templates/data/templates_providers.dart';
 import '../../templates/data/remote_templates_providers.dart';
+import '../services/level_sensor_service.dart';
 
 /// 闪光灯模式
 enum CaptureFlashMode { off, on, auto, torch }
@@ -661,8 +662,107 @@ class CaptureState {
 
   // ── 新增：水平仪 ──
 
+  /// 水平仪开关（持久化到 user_settings.level_enabled，默认开启）。
+  /// 由拍摄页 initState 从 DB 加载、设置页开关切换后持久化。
   static final levelEnabledProvider = StateProvider<bool>((ref) => true);
-  static final levelAngleProvider = StateProvider<double>((ref) => 0.0);
+
+  /// 水平仪传感器数据流（平台分发 + EMA 滤波 + 角度换算）。
+  /// autoDispose：LevelIndicator 挂载即订阅、卸载即自动取消，跟随生命周期、省电。
+  static final levelSensorProvider =
+      StreamProvider.autoDispose<LevelReading>((ref) {
+    return LevelSensorService.stream();
+  });
+
+  /// 从 DAO 加载水平仪开关到 provider（capture_page initState 调用）。
+  static Future<void> loadLevelEnabled(ProviderContainer container) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      final enabled = await dao.getLevelEnabled();
+      container.read(levelEnabledProvider.notifier).state = enabled;
+    } catch (e) {
+      // 加载失败静默降级，保持默认开启
+      debugPrint('[capture] loadLevelEnabled failed: $e');
+    }
+  }
+
+  /// 持久化水平仪开关（设置页 toggle 切换时调用）。
+  static Future<void> persistLevelEnabled(
+    ProviderContainer container,
+    bool enabled,
+  ) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      await dao.setLevelEnabled(enabled);
+    } catch (e) {
+      // 持久化失败静默，不影响本次设置
+      debugPrint('[capture] persist level enabled failed: $e');
+    }
+  }
+
+  // ── 新增：快门声音 ──
+
+  /// 快门声音开关（持久化到 user_settings.shutter_sound，默认开启）。
+  /// 由设置页 initState 从 DB 加载、toggle 切换后持久化；拍摄页 _onCapture 读取。
+  static final shutterSoundProvider = StateProvider<bool>((ref) => true);
+
+  /// 从 DAO 加载快门声音开关到 provider（设置页 initState 调用）。
+  static Future<void> loadShutterSound(ProviderContainer container) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      final enabled = await dao.getShutterSound();
+      container.read(shutterSoundProvider.notifier).state = enabled;
+    } catch (e) {
+      // 加载失败静默降级，保持默认开启
+      debugPrint('[capture] loadShutterSound failed: $e');
+    }
+  }
+
+  /// 持久化快门声音开关（设置页 toggle 切换时调用）。
+  static Future<void> persistShutterSound(
+    ProviderContainer container,
+    bool enabled,
+  ) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      await dao.setShutterSound(enabled);
+    } catch (e) {
+      // 持久化失败静默，不影响本次设置
+      debugPrint('[capture] persist shutter sound failed: $e');
+    }
+  }
+
+  // ── 新增：默认分辨率 ──
+
+  /// 默认拍摄分辨率（持久化到 user_settings.default_resolution，默认 'high'）。
+  /// 由设置页 initState 从 DB 加载、分辨率选择页切换后持久化；拍摄页 _onCapture 读取
+  /// 决定解码与输出最大边长。
+  static final defaultResolutionProvider = StateProvider<String>((ref) => 'high');
+
+  /// 从 DAO 加载默认分辨率到 provider（设置页 initState 调用）。
+  static Future<void> loadDefaultResolution(ProviderContainer container) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      final id = await dao.getDefaultResolution();
+      container.read(defaultResolutionProvider.notifier).state = id;
+    } catch (e) {
+      // 加载失败静默降级，保持默认 'high'
+      debugPrint('[capture] loadDefaultResolution failed: $e');
+    }
+  }
+
+  /// 持久化默认分辨率（分辨率选择页切换时调用）。
+  static Future<void> persistDefaultResolution(
+    ProviderContainer container,
+    String id,
+  ) async {
+    try {
+      final dao = await container.read(settingsDaoProvider.future);
+      await dao.setDefaultResolution(id);
+    } catch (e) {
+      // 持久化失败静默，不影响本次设置
+      debugPrint('[capture] persist default resolution failed: $e');
+    }
+  }
 
   // ── 新增：工具栏状态 ──
 
@@ -729,8 +829,7 @@ class CaptureState {
     container.read(filterPreviewImageProvider.notifier).state = null;
     container.read(bottomPanelExpandedProvider.notifier).state = false;
     container.read(activeScenePresetIdProvider.notifier).state = null;
-    container.read(levelEnabledProvider.notifier).state = true;
-    container.read(levelAngleProvider.notifier).state = 0.0;
+    // levelEnabledProvider 为持久化设置，不在 resetAll 中重置（保持 DB 加载值）
     container.read(kitsProvider.notifier).state = [];
     // 引擎状态与缩放
     container.read(cameraStateProvider.notifier).state = null;
@@ -791,4 +890,69 @@ class FillLightState {
 
   @override
   String toString() => 'FillLightState(color=$color, intensity=$intensity)';
+}
+
+/// 拍摄输出分辨率档位配置。
+///
+/// 控制拍摄成片的最大边长（px）与解码目标边长（px）：
+/// - [maxDim]：后处理输出最大边。当前默认（high）1280 与原硬编码
+///   `kMaxProcessDim` 一致；降低可显著减少逐像素 CPU 效果与 JPEG 编码耗时。
+/// - [decodeDim]：JPEG 降采样解码目标长边，略高于输出留出画质余量
+///   （原 `kDecodeTargetDim`，high = 1600）。
+class CaptureResolution {
+  const CaptureResolution({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.maxDim,
+    required this.decodeDim,
+  });
+
+  /// 稳定标识（持久化到 user_settings.default_resolution）
+  final String id;
+  final String label;
+  final String description;
+  final int maxDim;
+  final int decodeDim;
+}
+
+/// 默认分辨率档位注册表。
+class CaptureResolutions {
+  CaptureResolutions._();
+
+  /// 档位列表（顺序即展示顺序）。
+  static const List<CaptureResolution> options = [
+    CaptureResolution(
+      id: 'high',
+      label: '高清',
+      description: '画质优先 · 1280px',
+      maxDim: 1280,
+      decodeDim: 1600,
+    ),
+    CaptureResolution(
+      id: 'standard',
+      label: '标准',
+      description: '均衡画质与速度 · 1080px',
+      maxDim: 1080,
+      decodeDim: 1350,
+    ),
+    CaptureResolution(
+      id: 'smooth',
+      label: '流畅',
+      description: '更快出片 · 720px',
+      maxDim: 720,
+      decodeDim: 900,
+    ),
+  ];
+
+  /// 按 id 查找档位，未知 id 回退高清（默认档）。
+  static CaptureResolution byId(String id) {
+    for (final o in options) {
+      if (o.id == id) return o;
+    }
+    return options.first;
+  }
+
+  /// 档位显示名（未知 id 回退高清）。
+  static String labelOf(String id) => byId(id).label;
 }

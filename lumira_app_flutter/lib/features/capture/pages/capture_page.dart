@@ -7,7 +7,7 @@ import 'dart:ui' as ui show Canvas, ColorFilter, FilterQuality, Image, ImageByte
 import 'package:flutter/foundation.dart'
     show compute, defaultTargetPlatform, kDebugMode;
 import 'package:flutter/services.dart'
-    show HapticFeedback, SystemChrome, DeviceOrientation;
+    show HapticFeedback, SystemChrome, DeviceOrientation, SystemSound, SystemSoundType;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -234,6 +234,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
           ProviderScope.containerOf(context, listen: false));
       // 加载模板信息卡隐藏偏好（用户上次点了隐藏则本次保持隐藏）
       await CaptureState.loadTemplateInfoCardPreference(
+          ProviderScope.containerOf(context, listen: false));
+      // 加载水平仪开关（持久化到 user_settings.level_enabled）
+      await CaptureState.loadLevelEnabled(
           ProviderScope.containerOf(context, listen: false));
 
       // 进入时幂等重应用模板补光配置：
@@ -607,6 +610,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
       return;
     }
 
+    // 快门声音：按设置播放系统快门音（默认开启，设置页可关闭）
+    if (ref.read(CaptureState.shutterSoundProvider)) {
+      SystemSound.play(SystemSoundType.click);
+    }
+
     final cameraService = ref.read(cameraServiceProvider);
     final flashMode = ref.read(CaptureState.flashModeProvider);
     final facing = ref.read(CaptureState.cameraFacingProvider);
@@ -688,6 +696,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
         isPortrait: isPortrait,
         isFront: facing == 'front',
         postProcess: postProcess,
+        // 默认分辨率档位决定成片输出/解码尺寸（设置页可切换）
+        maxDim: CaptureResolutions.byId(
+                ref.read(CaptureState.defaultResolutionProvider))
+            .maxDim,
+        decodeDim: CaptureResolutions.byId(
+                ref.read(CaptureState.defaultResolutionProvider))
+            .decodeDim,
       ));
       _processCaptureQueueItem();
     } catch (e, st) {
@@ -756,7 +771,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           sharpen: params.postProcess.sharpen >= kMinLiveSharpen
               ? params.postProcess.sharpen
               : kMinLiveSharpen,
-          maxDim: kMaxProcessDim,
+          maxDim: params.maxDim,
         );
       } catch (e) {
         debugPrint('[capture] OHOS 原生快速路径异常，回退原管线: $e');
@@ -3683,19 +3698,29 @@ class _CaptureProcessParams {
     required this.isPortrait,
     required this.isFront,
     required this.postProcess,
+    required this.maxDim,
+    required this.decodeDim,
   });
   final String inputPath;
   final double targetRatio; // 目标宽高比（正向像素）
   final bool isPortrait;
   final bool isFront;
   final PostProcess postProcess;
+
+  /// 输出最大边（px），来自默认分辨率档位（默认高清 1280）
+  final int maxDim;
+
+  /// JPEG 降采样解码目标长边（px），略高于输出留画质余量
+  final int decodeDim;
 }
 
-/// 后处理输出最大边（px）。
-/// 2048 → 1280 大幅降低逐像素 CPU 处理耗时（锐化/清晰度/颗粒/磨皮/暗角均为 O(N)），
-/// 像素数降为原来的 (1280/2048)^2 ≈ 39%，CPU 处理耗时约减半。
-/// 【性能优化 B】
-const int kMaxProcessDim = 1280;
+/// 后处理输出/解码尺寸来源说明：
+/// 成片输出最大边与 JPEG 解码目标边长不再硬编码，改由「默认分辨率」档位
+/// （CaptureResolutions，设置页可切换）决定。高清档沿用原值：
+/// - 输出最大边 1280：2048 → 1280 大幅降低逐像素 CPU 处理耗时（锐化/清晰度/颗粒/
+///   磨皮/暗角均为 O(N)），像素数降为原来的 (1280/2048)^2 ≈ 39%，CPU 处理耗时约减半。
+/// - 解码目标长边 1600：略高于输出，避免全尺寸解码后再 GPU 缩小，可省 0.4-1.0s。
+///   【性能优化 B / C】
 
 /// 拍摄（live capture）成片的最小锐化下限。
 /// 自由/默认模式下用户 sharpen=0 时，纯下采样（滤镜 quality low）+ 无锐化会让成片变糊
@@ -3704,13 +3729,6 @@ const int kMaxProcessDim = 1280;
 /// 注意：OHOS 拍照档位限制到 ≤3MP 后源图仅有 ~1.92MP（1200x1600），相对 8MP 时
 /// 失去大量"下采样自带锐化"，故 20 的 unsharp 强度（a=0.2）已显软，抬高到 30 找回锐度。
 const int kMinLiveSharpen = 30;
-
-/// JPEG 降采样解码目标长边（px）。
-/// 相机原始图通常 4000px 级别，用 targetWidth/targetHeight 让引擎在解码阶段
-/// 直接降采样到略高于输出尺寸（1600），避免全尺寸解码后再 GPU 缩小，
-/// 可省 0.4-1.0s。略高于输出 1280 是为了留出画质余量。
-/// 【性能优化 C】
-const int kDecodeTargetDim = 1600;
 
 /// GPU 处理后的 rawRgba 数据 + 尺寸，传给 worker isolate 做后续 CPU 处理。
 class _GpuProcessedData {
@@ -3871,8 +3889,8 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
       // 再用 ImageDescriptor.raw 建 ui.Image，彻底绕开该瓶颈。
       final native = await OhosImageProcessor.instance.decodeJpegToRgba(
         path: params.inputPath,
-        targetWidth: kDecodeTargetDim,
-        targetHeight: kDecodeTargetDim,
+        targetWidth: params.decodeDim,
+        targetHeight: params.decodeDim,
       );
       if (native == null) {
         debugPrint('[capture] OHOS 原生解码失败，回退原始照片');
@@ -3897,7 +3915,7 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     } else {
       final bytes = await File(params.inputPath).readAsBytes();
       // 高效降采样解码：先用 ImageDescriptor 读取原始宽高，再按比例缩放到
-      // 不超过 kDecodeTargetDim 的包围盒内（保持原始宽高比，避免拉伸）。
+      // 不超过 decodeDim 的包围盒内（保持原始宽高比，避免拉伸）。
       // 相比固定 targetWidth:1600（竖屏 3:4 会解出 1600x2133），竖屏 3:4 只需
       // 解 1200x1600，少解约 1.8 倍像素，显著降低大 JPEG 解码耗时。
       final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
@@ -3905,11 +3923,11 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
       final srcW = descriptor.width;
       final srcH = descriptor.height;
       final decodeScale = math.min(
-        kDecodeTargetDim / srcW,
-        kDecodeTargetDim / srcH,
+        params.decodeDim / srcW,
+        params.decodeDim / srcH,
       ).clamp(0.0, 1.0); // 小图不放大
-      final resizedW = (srcW * decodeScale).round().clamp(1, kDecodeTargetDim);
-      final resizedH = (srcH * decodeScale).round().clamp(1, kDecodeTargetDim);
+      final resizedW = (srcW * decodeScale).round().clamp(1, params.decodeDim);
+      final resizedH = (srcH * decodeScale).round().clamp(1, params.decodeDim);
       final codec = await descriptor.instantiateCodec(
         targetWidth: resizedW,
         targetHeight: resizedH,
@@ -3981,9 +3999,9 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     final needMirror = params.isFront;
     final alignRotation = needRotate ? (params.isPortrait ? 90 : 270) : 0;
 
-    // 计算输出尺寸（基于 targetRatio，限制最大边 kMaxProcessDim）
+    // 计算输出尺寸（基于 targetRatio，限制最大边为默认分辨率档位的 maxDim）
     // （B 优化：2048 → 1280，逐像素 CPU 效果处理耗时约减半）
-    const maxDim = kMaxProcessDim;
+    final maxDim = params.maxDim.toDouble();
     double outW, outH;
     if (params.isPortrait) {
       outH = maxDim.toDouble();

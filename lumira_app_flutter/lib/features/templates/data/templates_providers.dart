@@ -13,6 +13,8 @@ import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../recommend/template_ranking.dart';
 import '../data/templates_mock_data.dart';
+import '../data/templates_browse_mock_data.dart';
+import '../widgets/template_grid.dart';
 
 /// 用户拍摄偏好 Provider
 /// 实现：从 GalleryDao 统计照片总数和按模板分类的拍摄数，计算最常用分类及其占比。
@@ -160,4 +162,28 @@ final favoriteTemplateIdsProvider = FutureProvider<Set<String>>((ref) async {
   final dao = await ref.watch(templatesFavoriteDaoProvider.future);
   final ids = await dao.getFavoriteIds();
   return ids.toSet();
+});
+
+/// 全来源已收藏模板卡片列表（按收藏时间倒序）。
+///
+/// 排序交给 DAO 的 CreatedAt DESC；按有序收藏 id 命中 builtin/remote/custom 全池记录，
+/// 转成「我的收藏」页的网格卡片项。模板已删除时静默跳过。
+/// `isCustom` 按 `source == 'custom'` 判定（与 getCustomOnly 口径一致）。
+final favoriteTemplatesProvider = FutureProvider<List<AllTemplateItem>>((ref) async {
+  final dao = await ref.watch(templatesDaoProvider.future);
+  final favDao = await ref.watch(templatesFavoriteDaoProvider.future);
+  final orderedIds = await favDao.getFavoriteIds();
+  if (orderedIds.isEmpty) return const <AllTemplateItem>[];
+  final records = <TemplateRecord>[
+    ...await dao.getBuiltinAndRemote(),
+    ...await dao.getCustomOnly(),
+  ];
+  final byId = <String, TemplateRecord>{for (final r in records) r.id: r};
+  final items = <AllTemplateItem>[];
+  for (final id in orderedIds) {
+    final r = byId[id];
+    if (r == null) continue; // 模板已删，静默跳过
+    items.add(templateGridItemFromRecord(r, isCustom: r.source == 'custom'));
+  }
+  return items;
 });

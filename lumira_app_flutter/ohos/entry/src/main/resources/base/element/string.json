@@ -23,6 +23,10 @@
     {
       "name": "permission_write_imagevideo_reason",
       "value": "用于将拍摄的照片保存到系统相册"
+    },
+    {
+      "name": "permission_accelerometer_reason",
+      "value": "用于拍摄时显示水平仪，辅助保持画面水平"
     }
   ]
 }

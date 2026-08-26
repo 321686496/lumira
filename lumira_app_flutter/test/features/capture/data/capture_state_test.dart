@@ -17,7 +17,7 @@ void main() {
       final tpl = container.read(CaptureState.originalTemplateProvider);
       expect(tpl, isNotNull);
       expect(tpl!.meta.id, 'soft_portrait');
-      expect(tpl.meta.name, '柔光人像');
+      expect(tpl.meta.name, '窗边柔光人像');
     });
 
     test('editableTemplateProvider initializes as copy of original', () {
@@ -68,9 +68,9 @@ void main() {
       final editable1 = container.read(CaptureState.editableTemplateProvider);
       expect(editable1!.meta.id, 'soft_portrait');
       // Change template
-      container.read(CaptureState.currentTemplateIdProvider.notifier).state = 'cafe_portrait';
+      container.read(CaptureState.currentTemplateIdProvider.notifier).state = 'cafe_table';
       final editable2 = container.read(CaptureState.editableTemplateProvider);
-      expect(editable2!.meta.id, 'cafe_portrait');
+      expect(editable2!.meta.id, 'cafe_table');
     });
 
     test('rawModeProvider defaults to false', () {
@@ -107,6 +107,15 @@ void main() {
       expect(container.read(CaptureState.levelEnabledProvider), true);
     });
 
+    test('resetAll does not reset persisted levelEnabledProvider', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      // levelEnabledProvider 是持久化设置（DB 驱动），resetAll 不应重置它
+      container.read(CaptureState.levelEnabledProvider.notifier).state = false;
+      CaptureState.resetAll(container);
+      expect(container.read(CaptureState.levelEnabledProvider), false);
+    });
+
     test('resetAll clears all new providers', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -123,7 +132,8 @@ void main() {
       expect(container.read(CaptureState.rawModeProvider), false);
       expect(container.read(CaptureState.panelExpandedProvider), false);
       expect(container.read(CaptureState.activeScenePresetIdProvider), isNull);
-      expect(container.read(CaptureState.levelEnabledProvider), true);
+      // levelEnabledProvider 为持久化设置，resetAll 后保持原值（false）
+      expect(container.read(CaptureState.levelEnabledProvider), false);
       expect(container.read(CaptureState.originalTemplateProvider), isNull);
       expect(container.read(CaptureState.editableTemplateProvider), isNull);
     });

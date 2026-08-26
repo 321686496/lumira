@@ -26,6 +26,7 @@ class RouteNames {
   static const String templatesAll = '/templates/all';
   static const String templatesPhotos = '/templates/photos';
   static const String templatesExportDetail = '/templates/export-detail';
+  static const String templatesFavorites = '/templates/favorites';
   static const String challengeDetail = '/challenge/detail';
   static const String challengeHistory = '/challenge/history';
   static const String challengeHistoryDetail = '/challenge/history-detail';
@@ -47,6 +48,8 @@ class RouteNames {
   static const String profileSettings = '/profile/settings';
   static const String profileEdit = '/profile/edit';
   static const String profileSettingsTheme = '/profile/settings/theme';
+  static const String profileSettingsCache = '/profile/settings/cache';
+  static const String profileSettingsResolution = '/profile/settings/resolution';
   static const String profileSettingsWatermark = '/profile/settings/watermark';
   static const String profileSettingsWatermarkEdit = '/profile/settings/watermark/edit';
   static const String profileGrowth = '/profile/growth';

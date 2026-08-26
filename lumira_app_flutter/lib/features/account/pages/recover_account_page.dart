@@ -9,6 +9,7 @@ import 'package:zxing2/qrcode.dart';
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/services/file_picker_service.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -76,6 +77,21 @@ class _RecoverAccountPageState extends ConsumerState<RecoverAccountPage> {
     }
   }
 
+  /// 将异常转为友好提示文案。
+  ///
+  /// 后端 4xx（如密钥无效/已过期）会映射为 [ApiErrorKind.unknown] 且
+  /// [ApiException.message] 即为后端中文业务消息，直接展示；
+  /// 网络/服务端等异常则给出通用兜底文案。
+  String _friendlyError(Object e) {
+    if (e is ApiException) {
+      if (e.kind == ApiErrorKind.unknown && e.message.isNotEmpty) {
+        return e.message;
+      }
+      if (e.isNetworkError) return '网络异常，请检查网络后重试';
+    }
+    return '操作失败，请稍后重试';
+  }
+
   Future<void> _recoverByQr([String? presetSecret]) async {
     final secret = presetSecret ?? _secretCtrl.text.trim();
     if (secret.isEmpty || _busy) return;
@@ -90,7 +106,7 @@ class _RecoverAccountPageState extends ConsumerState<RecoverAccountPage> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _msg = '恢复失败：$e';
+          _msg = _friendlyError(e);
         });
       }
     }
@@ -103,7 +119,7 @@ class _RecoverAccountPageState extends ConsumerState<RecoverAccountPage> {
       await (await _resolveApi()).sendCode(email: email, purpose: 'recover');
       if (mounted) setState(() => _msg = '验证码已发送（10 分钟内有效）');
     } catch (e) {
-      if (mounted) setState(() => _msg = '发送失败：$e');
+      if (mounted) setState(() => _msg = _friendlyError(e));
     }
   }
 
@@ -122,7 +138,7 @@ class _RecoverAccountPageState extends ConsumerState<RecoverAccountPage> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _msg = '恢复失败：$e';
+          _msg = _friendlyError(e);
         });
       }
     }

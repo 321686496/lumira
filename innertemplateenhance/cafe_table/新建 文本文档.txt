@@ -1,0 +1,221 @@
+{
+  "name": "咖啡馆午后静物美食",
+  "category": "still_life",
+  "classification": {
+    "type": "still_life",
+    "majorStyle": "复古胶片",
+    "subStyle": "咖啡馆静物",
+    "method": "窗边自然光俯拍"
+  },
+  "shortDesc": "窗边暖光漫落，咖啡与甜点，慢享慵懒午后时光☕",
+  "description": "静物美食模板，适用于咖啡馆桌面咖啡甜品拍摄，依靠窗边柔和侧方自然光，俯拍桌面陈设，搭配书籍小花道具，胶片颗粒氛围感，适合记录下午茶，无需人像出镜。",
+  "ambience": {
+    "seasons": ["春季", "秋季", "冬季"],
+    "weathers": ["晴天", "薄云晴天"],
+    "timeTones": ["午后暖调"]
+  },
+  "tags": ["美食静物", "咖啡馆", "窗边自然光", "胶片颗粒", "下午茶"],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "木质桌面拿铁草莓挞，翻开旧书营造松弛下午茶氛围"
+    },
+    {
+      "imageIndex": 1,
+      "role": "效果图",
+      "caption": "大理石桌面，咖啡马卡龙小雏菊，明亮干净的午后阳光感"
+    },
+    {
+      "imageIndex": 2,
+      "role": "效果图",
+      "caption": "手冲黑咖啡配肉桂卷吐司，复古木质桌面氛围感"
+    },
+    {
+      "imageIndex": 3,
+      "role": "效果图",
+      "caption": "亚麻桌布双可颂，浓缩咖啡，法式慵懒下午茶静物"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面构图-木桌咖啡甜点",
+      "type": "composition",
+      "description": "高角度45度俯拍桌面，咖啡杯、草莓挞为视觉双主体，刀叉放置画面底部，翻开旧书放在画面左上，单支小白花在咖啡杯右侧；桌面斜线形成从屏幕左下向屏幕右上延伸引导线，利用九宫格分割摆放物体，适当留白。",
+      "compositionFrame": "主体群组集中画面中下区域，左上放置书籍做前景陪衬，上部保留部分墙面背景，桌面斜线做引导线，物体之间保留空隙，不要堆满画面，主体占画幅约55%",
+      "silhouette": {
+        "type": "builtin",
+        "data": "still_life_table_01"
+      },
+      "position": {
+        "x": 0.52,
+        "y": 0.54
+      },
+      "scale": 0.94,
+      "rotation": 0
+    },
+    {
+      "imageIndex": 1,
+      "name": "大理石桌明亮构图",
+      "type": "composition",
+      "description": "高角度俯拍大理石桌面，咖啡杯居于画面中下，甜点马卡龙布置屏幕左侧，小雏菊花朵放在画面左下角，刀叉餐巾放在屏幕右下；阳光在桌面形成清晰条状光影，物体沿九宫格交叉点摆放。",
+      "compositionFrame": "主体集中画面下半部分，上半部分大量留白大理石桌面，阳光阴影线条作为画面纹理，主体占画幅约50%",
+      "silhouette": {
+        "type": "builtin",
+        "data": "still_life_table_02"
+      },
+      "position": {
+        "x": 0.48,
+        "y": 0.51
+      },
+      "scale": 0.92,
+      "rotation": 0
+    },
+    {
+      "imageIndex": 2,
+      "name": "手冲咖啡复古构图",
+      "type": "composition",
+      "description": "45度俯拍木质窗台桌面，手冲壶、水杯布置屏幕左上，黑咖啡杯画面中下，肉桂卷吐司餐盘屏幕右侧，杂志书本放在画面右下角；利用窗台做框架边缘，桌面散落少量水渍增加真实生活感。",
+      "compositionFrame": "多物体分散排布，左上手冲器具，中下咖啡杯，右方甜品餐盘，右下角杂志，物体之间留出木质桌面空隙，主体群组占画幅60%",
+      "silhouette": {
+        "type": "builtin",
+        "data": "still_life_table_03"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.53
+      },
+      "scale": 0.96,
+      "rotation": 0
+    },
+    {
+      "imageIndex": 3,
+      "name": "亚麻桌布法式构图",
+      "type": "composition",
+      "description": "俯拍亚麻布艺桌面，咖啡杯位于画面中心，两个可颂分别放置屏幕左上金属托盘、屏幕右上方餐巾，旧书放在屏幕左下角，金属小勺在咖啡杯左侧；亚麻布料褶皱作为画面肌理，阳光投下物体轮廓硬阴影。",
+      "compositionFrame": "咖啡杯视觉中心，食物道具分散四角，亚麻布纹理铺满背景，主体占画幅约52%，四周保留布料留白",
+      "silhouette": {
+        "type": "builtin",
+        "data": "still_life_table_04"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.49
+      },
+      "scale": 0.93,
+      "rotation": 0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "third",
+    "aspectRatio": "1:1",
+    "opacity": 0.3,
+    "description": "美食静物，45度高机位俯拍，1比1正方形画幅；桌面物体沿九宫格交叉点排布，主体群组集中画面中下部，画面上方保留背景留白，主体占画幅50‑60%，环境背景占40‑50%。",
+    "subjectFrame": {
+      "x": 0.08,
+      "y": 0.12,
+      "w": 0.84,
+      "h": 0.82
+    }
+  },
+  "camera": {
+    "exposureCompensation": 0.15,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5200,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光从屏幕左上方45°窗边入射，属于柔和自然光，薄纱漫射后光线偏软；光比约2.5:1；阴影投向屏幕右下方，阴影边缘中等软硬；物体表面保留餐具金属反光、咖啡杯高光；环境为窗边暖调自然光。",
+    "shootingDistance": "1.2‑1.7m",
+    "background": "咖啡馆窗边环境；可以是木墙面、白墙，大理石台面、实木桌面、亚麻桌布",
+    "props": ["咖啡杯碟", "甜点挞/可颂/马卡龙", "刀叉勺子餐巾", "旧书杂志", "小型白色野花雏菊"],
+    "bestTime": "14:00‑16:30",
+    "tips": [
+      "关闭闪光灯，只使用窗边自然光，避免顶光直射",
+      "尽量把桌子靠近窗户，光源在画面侧上方；不要逆光正对窗户拍摄",
+      "手机原生无法实现大光圈物理虚化，靠近主体同时让背景远离物体，配合vignette压暗四角模拟氛围感",
+      "道具摆放不要拥挤，物体之间留出桌面空隙，增加呼吸感",
+      "可以轻微移动角度，让桌面上形成好看的物体阴影，增强画面层次"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "1:1",
+    "color": {
+      "brightness": 4,
+      "contrast": -4,
+      "saturation": 8,
+      "temperature": 5,
+      "tint": 1,
+      "highlights": -12,
+      "shadows": 10,
+      "clarity": 6
+    },
+    "smoothStrength": 10,
+    "sharpen": 20,
+    "vignette": 24,
+    "grain": 26,
+    "lut": "warm_film"
+  },
+  "orientation": {
+    "framePosition": "主体群组位于画面中下九宫格位置",
+    "bodyFacing": {
+      "type": "无",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "无",
+      "azimuth": 0
+    },
+    "twist": "无",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "无"
+  },
+  "framing": {
+    "shotSize": "静物全景",
+    "shotSizeNote": "完整摄入桌面一组道具，包含部分背景环境",
+    "cameraHeight": "高机位俯拍",
+    "cameraAzimuth": "斜侧45°俯视桌面",
+    "subjectScale": "主体道具占画幅50‑60%",
+    "environmentRatio": "环境背景占画幅40‑50%",
+    "headroom": "静物无头顶概念，画面上方预留背景留白约15%",
+    "framingNote": "45度俯拍桌面静物，正方形构图，道具群组集中中下区域，保留桌面和背景环境。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "主光屏幕左上方45°，窗边入射自然光",
+      "辅光轮廓光": "环境漫反射充当弱辅光，无硬轮廓光",
+      "光型软硬": "柔光，经过窗户漫反射，阴影边缘柔和",
+      "光比": "约2.5:1，中等反差",
+      "阴影": "阴影投向屏幕右下方，边缘中等柔和，浓度适中",
+      "质感": "保留木材、瓷器、食物纹理；金属餐具带有柔和高光反光，胶片颗粒质感",
+      "环境光": "窗边暖调环境光，背景亮度略低于桌面主体",
+      "色温对比": "整体统一暖调，无强烈冷暖对冲"
+    },
+    "lightToParams": "提高whiteBalanceK到5200，temperature正向+5，shadows+10找回暗部细节，highlights‑12压制窗户方向高光溢出，grain增加胶片颗粒感，vignette压暗四角聚焦桌面主体"
+  },
+  "styling": {
+    "subjectType": "美食静物",
+    "clothingLayers": {
+      "上装": "",
+      "下装": "",
+      "衣角处理": "",
+      "袖子": "",
+      "领口": "",
+      "鞋袜": "",
+      "叠穿层次": ""
+    },
+    "accessories": "",
+    "hairMakeup": "",
+    "objectStyle": "咖啡杯选简约白瓷杯；甜点色彩鲜活；旧书杂志复古做旧；小花选细碎白色雏菊类；桌材可选实木、大理石、亚麻布艺。",
+    "note": "道具配色以米白、木色、暖棕为主，少量彩色甜点小花做点缀，不要过多鲜艳颜色。"
+  }
+}

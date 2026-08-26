@@ -147,8 +147,11 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
   /// - 我的模板（自定义/导入）→ 导出 + 编辑
   /// - 付费模板未解锁 → 右上角展示用户积分数（点击跳转积分钱包页）
   /// - 其余（免费模板 / 已解锁付费模板）→ 无右侧操作
-  List<Widget>? _navActions(ThemeTokens tokens, bool isLocked) {
-    final id = _template?.id ?? '';
+  ///
+  /// `[effectiveId]` 来自 mock/异步解析后的有效模板 id；本地（内置/自定义）与远程
+  /// 模板都会展示收藏心。@gallery: 收藏按钮覆盖全部来源，不只内置模板。
+  List<Widget>? _navActions(ThemeTokens tokens, bool isLocked, String? effectiveId) {
+    final id = effectiveId ?? widget.templateId ?? '';
     final heart = id.isEmpty
         ? null
         : _FavoriteToggle(
@@ -553,7 +556,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                   title: '模板详情',
                   transparent: true,
                   leading: _BackButton(tokens: tokens, onTap: _back),
-                  actions: _navActions(tokens, effectiveLocked),
+                  actions: _navActions(tokens, effectiveLocked, effectiveTemplate?.id),
                 ),
                 Expanded(
                   child: mockTemplate != null

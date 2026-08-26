@@ -116,6 +116,7 @@ class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
                     tokens: tokens,
                     onTap: () => Navigator.of(context).pop(),
                   ),
+                  actions: const [],
                 ),
                 Expanded(
                   child: RefreshIndicator(

@@ -200,6 +200,37 @@ class ImageCacheUtil {
       }
     } catch (_) {}
   }
+
+  /// 当前内存缓存占用字节数（供设置页/缓存页展示）。
+  static int get memoryCacheBytes => _memoryTotalBytes;
+
+  /// 计算磁盘图片缓存目录总大小（字节）。
+  /// 用于缓存详情页展示"图片缓存（磁盘）"占用。
+  static Future<int> calculateDiskCacheBytes() async {
+    try {
+      final dir = await _getCacheDir();
+      if (!await dir.exists()) return 0;
+      var total = 0;
+      await for (final entity in dir.list(recursive: true)) {
+        if (entity is File) {
+          try {
+            total += await entity.length();
+          } catch (_) {}
+        }
+      }
+      return total;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// 仅清空内存缓存（不动磁盘文件），供缓存页「内存缓存」单项清理。
+  static void clearMemoryOnly() {
+    _memoryCache.clear();
+    _memoryOrder.clear();
+    _memoryTotalBytes = 0;
+    _inflight.clear();
+  }
 }
 
 /// 带缓存 + 自适应降采样的网络图片组件

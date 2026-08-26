@@ -33,4 +33,31 @@ class ApiCacheDao {
   Future<void> clear(String key) async {
     await _db.delete(Tables.apiCache, where: '${Tables.colKey} = ?', whereArgs: [key]);
   }
+
+  /// 缓存条目数量（供缓存详情页展示）。
+  Future<int> count() async {
+    final result =
+        await _db.rawQuery('SELECT COUNT(*) AS c FROM ${Tables.apiCache}');
+    if (result.isEmpty) return 0;
+    return (result.first['c'] as int?) ?? 0;
+  }
+
+  /// 所有 payload 的字符总数（近似字节大小，供缓存详情页展示）。
+  Future<int> payloadBytes() async {
+    final rows = await _db.query(
+      Tables.apiCache,
+      columns: [Tables.colPayload],
+    );
+    var total = 0;
+    for (final row in rows) {
+      final payload = row[Tables.colPayload] as String?;
+      if (payload != null) total += payload.length;
+    }
+    return total;
+  }
+
+  /// 清空全部 API 离线缓存。
+  Future<void> clearAll() async {
+    await _db.delete(Tables.apiCache);
+  }
 }

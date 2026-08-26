@@ -131,7 +131,7 @@ void main() {
       expect(find.text('快门声音'), findsOneWidget);
       // 关于组
       expect(find.text('版本号'), findsOneWidget);
-      expect(find.text('清除缓存'), findsOneWidget);
+      expect(find.text('缓存'), findsOneWidget);
       expect(find.text('关于如画'), findsOneWidget);
       // 合规与法律组
       expect(find.text('用户协议'), findsOneWidget);

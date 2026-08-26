@@ -298,6 +298,10 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                         child: Icon(Icons.search, size: 20),
                       ),
                     ),
+                    _FavoritesButton(
+                      tokens: tokens,
+                      onTap: () => context.push(RouteNames.templatesFavorites),
+                    ),
                   ],
                 ),
                 Expanded(
@@ -1806,4 +1810,27 @@ AllTemplateItem _recordToItem(TemplateRecord r, {required bool isCustom}) {
 String _truncate(String s, {int maxLen = 24}) {
   if (s.characters.length <= maxLen) return s;
   return '${s.characters.take(maxLen)}…';
+}
+
+/// 收藏入口：从模板一级分类页直接查看收藏的模板。
+class _FavoritesButton extends StatelessWidget {
+  const _FavoritesButton({required this.tokens, required this.onTap});
+  final ThemeTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          Icons.favorite_border,
+          size: 22,
+          color: tokens.textPrimary,
+        ),
+      ),
+    );
+  }
 }

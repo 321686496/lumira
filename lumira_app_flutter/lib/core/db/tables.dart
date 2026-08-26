@@ -157,6 +157,7 @@ class Tables {
   static const String colGridEnabled = 'grid_enabled';
   static const String colLevelEnabled = 'level_enabled';
   static const String colShutterSound = 'shutter_sound';
+  static const String colDefaultResolution = 'default_resolution';
   static const String colWatermark = 'watermark';
 
   // === auth 表（v5） ===

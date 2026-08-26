@@ -226,6 +226,32 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
     }
   }
 
+  /// 单一「解锁」入口：有免费次数时弹「选择解锁方式」，否则直接走积分购买。
+  Future<void> _onUnlock() async {
+    final price = widget.price ?? 0;
+    if (_freeUnlockCount > 0) {
+      final choice = await lumira.showLumiraDialog<String>(
+        context: context,
+        barrierDismissible: true,
+        builder: (ctx) => _UnlockMethodContent(
+          freeUnlockCount: _freeUnlockCount,
+          price: price,
+          onFree: () => Navigator.pop(ctx, 'free'),
+          onPoints: () => Navigator.pop(ctx, 'points'),
+          onCancel: () => Navigator.pop(ctx, null),
+        ),
+      );
+      if (!mounted) return;
+      if (choice == 'free') {
+        await _onFreeUnlock();
+      } else if (choice == 'points') {
+        await _onPurchase();
+      }
+    } else {
+      await _onPurchase();
+    }
+  }
+
   /// 拉取当前积分余额；失败返回 null（不阻塞购买流程，交由 exchange 兜底报错）。
   Future<int?> _fetchBalance() async {
     try {
@@ -322,8 +348,7 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
                                 freeUnlockCount: _freeUnlockCount,
                                 onShare: _onShare,
                                 onInputCode: _onInputCode,
-                                onPurchase: _onPurchase,
-                                onFreeUnlock: _onFreeUnlock,
+                                onUnlock: _onUnlock,
                               ),
                               _BottomNote(tokens: tokens),
                             ],
@@ -627,8 +652,7 @@ class _OptionsList extends StatelessWidget {
     required this.freeUnlockCount,
     required this.onShare,
     required this.onInputCode,
-    required this.onPurchase,
-    required this.onFreeUnlock,
+    required this.onUnlock,
   });
 
   final ThemeTokens tokens;
@@ -636,34 +660,17 @@ class _OptionsList extends StatelessWidget {
   final int freeUnlockCount;
   final VoidCallback onShare;
   final Future<void> Function() onInputCode;
-  final VoidCallback onPurchase;
-  final VoidCallback onFreeUnlock;
+  final VoidCallback onUnlock;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        if (freeUnlockCount > 0) ...[
-          FadeUp(
-            delay: const Duration(milliseconds: 40),
-            child: _OptionCard(
-              tokens: tokens,
-              icon: Icons.lock_open_outlined,
-              iconBgColor: tokens.brandSubtle,
-              iconColor: tokens.brand,
-              title: '免费解锁（剩余 ×$freeUnlockCount）',
-              desc: '使用免费解锁次数，不消耗积分',
-              titleStrong: true,
-              brandBorder: true,
-              button: _SmallBrandButton(
-                tokens: tokens,
-                label: '免费解锁',
-                onTap: onFreeUnlock,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
+        FadeUp(
+          delay: const Duration(milliseconds: 40),
+          child: _FreeUnlockBanner(tokens: tokens, count: freeUnlockCount),
+        ),
+        const SizedBox(height: 12),
         FadeUp(
           delay: const Duration(milliseconds: 80),
           child: _OptionCard(
@@ -677,8 +684,8 @@ class _OptionsList extends StatelessWidget {
             brandBorder: true,
             button: _SmallBrandButton(
               tokens: tokens,
-              label: '积分购买',
-              onTap: onPurchase,
+              label: '解锁',
+              onTap: onUnlock,
             ),
           ),
         ),
@@ -717,6 +724,47 @@ class _OptionsList extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 免费解锁次数横幅：始终显示（含 0），0 时提示通过邀请获取。
+class _FreeUnlockBanner extends StatelessWidget {
+  const _FreeUnlockBanner({required this.tokens, required this.count});
+  final ThemeTokens tokens;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFree = count > 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: hasFree ? tokens.brandSubtle : tokens.surfaceAlt,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.lock_open_outlined,
+            size: 16,
+            color: hasFree ? tokens.brand : tokens.textTertiary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              hasFree
+                  ? '免费解锁 ×$count：可在解锁页任选付费模板，不消耗积分'
+                  : '免费解锁 ×0：邀请好友可获取免费解锁次数',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: hasFree ? tokens.textPrimary : tokens.textTertiary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1215,6 +1263,186 @@ class _FreeUnlockPopupContent extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// 「选择解锁方式」弹窗内容：有免费解锁次数时展示，让用户选择
+/// 用免费次数还是积分解锁。
+class _UnlockMethodContent extends ConsumerWidget {
+  const _UnlockMethodContent({
+    required this.freeUnlockCount,
+    required this.price,
+    required this.onFree,
+    required this.onPoints,
+    required this.onCancel,
+  });
+
+  final int freeUnlockCount;
+  final int price;
+  final VoidCallback onFree;
+  final VoidCallback onPoints;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '选择解锁方式',
+          style: TextStyle(
+            fontFamily: 'Noto Serif SC',
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: tokens.textPrimary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        _MethodChoice(
+          tokens: tokens,
+          isNeumorphic: isNeumorphic,
+          icon: Icons.lock_open_outlined,
+          title: '免费解锁（剩余 ×$freeUnlockCount）',
+          desc: '使用免费解锁次数，不消耗积分',
+          brand: true,
+          onTap: onFree,
+        ),
+        const SizedBox(height: 10),
+        _MethodChoice(
+          tokens: tokens,
+          isNeumorphic: isNeumorphic,
+          icon: Icons.star,
+          title: '$price 积分解锁',
+          desc: '消耗积分，永久使用',
+          brand: false,
+          onTap: onPoints,
+        ),
+        const SizedBox(height: 16),
+        GestureDetector(
+          onTap: onCancel,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              // neumorphic 风格下：移除 border，用 canvasDeep + shadowConcaveSubtle
+              color: isNeumorphic ? tokens.canvasDeep : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: isNeumorphic
+                  ? null
+                  : Border.all(color: tokens.divider, width: 1),
+              boxShadow: isNeumorphic ? tokens.shadowConcaveSubtle : null,
+            ),
+            child: Center(
+              child: Text(
+                '取消',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: tokens.textSecondary,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 「选择解锁方式」里的单个解锁方式项
+class _MethodChoice extends StatelessWidget {
+  const _MethodChoice({
+    required this.tokens,
+    required this.isNeumorphic,
+    required this.icon,
+    required this.title,
+    required this.desc,
+    required this.brand,
+    required this.onTap,
+  });
+
+  final ThemeTokens tokens;
+  final bool isNeumorphic;
+  final IconData icon;
+  final String title;
+  final String desc;
+  final bool brand;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: brand ? (isNeumorphic ? tokens.surface : tokens.canvas) : tokens.surfaceAlt,
+          borderRadius: BorderRadius.circular(10),
+          border: isNeumorphic
+              ? null
+              : Border.all(
+                  color: brand ? tokens.brand : tokens.divider,
+                  width: brand ? 1.2 : 1,
+                ),
+          boxShadow: tokens.shadowConvex,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: brand
+                    ? tokens.brandSubtle
+                    : tokens.surfaceAlt,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: brand ? tokens.brand : tokens.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    desc,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: brand ? tokens.success : tokens.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: brand ? tokens.brand : tokens.textTertiary,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
