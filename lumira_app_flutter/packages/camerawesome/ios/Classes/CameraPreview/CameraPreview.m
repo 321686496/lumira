@@ -240,6 +240,8 @@
 
 /// Stop camera preview
 - (void)stop {
+  // 回到连续自动白平衡，避免异常拍摄残留的 Locked 旧增益影响下次预览
+  [self restoreAutoWhiteBalance];
   [_captureSession stopRunning];
 }
 
@@ -366,6 +368,43 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
   [_captureDevice unlockForConfiguration];
 }
 
+/// 拍照前把设备白平衡锁定到「当前取景器白平衡增益」。
+///
+/// 背景：iOS 的 AVCapturePhotoOutput（快照）与 AVCaptureVideoPreviewLayer（取景器）
+/// 走两套独立的白平衡评估引擎。ContinuousAutoWhiteBalance 状态下，快照在按下快门瞬间
+/// 重新评估白平衡，结果往往比取景器当前画面更暖（偏黄），导致「取景器正常、成片偏黄」。
+///
+/// 修复思路：拍照前读取 device.deviceWhiteBalanceGains（实时预览正在应用的白平衡增益），
+/// 切换到 Locked 模式并冻结为该增益，此时快照会复用取景器的白平衡 → 成片与取景器一致；
+/// 拍摄完成后再由 restoreAutoWhiteBalance 恢复连续自动白平衡。
+///
+/// 每次一律重新采样当前增益并锁定（不做模式守卫）：用户手动设过色温时
+/// deviceWhiteBalanceGains 就是其手动增益，重锁到同一值等效无操作，误伤为零；
+/// 而若上一帧拍摄异常未能恢复（残留 Locked 旧增益），此处也能用实时增益覆盖，避免陈旧值。
+- (void)lockWhiteBalanceToCurrentPreview {
+  if (_captureDevice == nil) return;
+  NSError *e = nil;
+  if (![_captureDevice lockForConfiguration:&e]) return;
+  AVCaptureWhiteBalanceGains gains = _captureDevice.deviceWhiteBalanceGains;
+  gains = ClampWhiteBalanceGains(gains, _captureDevice.maxWhiteBalanceGain);
+  if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
+    [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
+  }
+  [_captureDevice unlockForConfiguration];
+}
+
+/// 拍照完成后恢复连续自动白平衡。
+- (void)restoreAutoWhiteBalance {
+  if (_captureDevice == nil) return;
+  NSError *e = nil;
+  if (![_captureDevice lockForConfiguration:&e]) return;
+  AVCaptureWhiteBalanceMode mode = AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance;
+  if ([_captureDevice isWhiteBalanceModeSupported:mode]) {
+    _captureDevice.whiteBalanceMode = mode;
+  }
+  [_captureDevice unlockForConfiguration];
+}
+
 - (void)setMirrorFrontCamera:(bool)value error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
   _mirrorFrontCamera = value;
 }
@@ -416,6 +455,10 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
 }
 
 /// Trigger focus on device at the specific point of the preview
+/// 使用 AVCaptureFocusModeAutoFocus（单次扫描后锁定到触点），这样点击取景器
+/// 时会像 iPhone 原生相机一样触发一次可见的对焦扫动；若直接设
+/// ContinuousAutoFocus 且设备本就处于连续对焦模式，则不会触发任何对焦动作
+/// （表现为「黄色对焦框出现但画面没有任何对焦效果」）。
 - (void)focusOnPoint:(CGPoint)position preview:(CGSize)preview error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
   NSError *lockError;
   if ([_captureDevice isFocusModeSupported:AVCaptureFocusModeAutoFocus] && [_captureDevice isFocusPointOfInterestSupported]) {
@@ -426,7 +469,7 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
       }
       
       [_captureDevice setFocusPointOfInterest:position];
-      [_captureDevice setFocusMode:AVCaptureFocusModeContinuousAutoFocus];
+      [_captureDevice setFocusMode:AVCaptureFocusModeAutoFocus];
       
       [_captureDevice unlockForConfiguration];
     }
@@ -574,6 +617,9 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
                                                                              aspectRatio:_aspectRatio
                                                                               completion:completion
                                                                                 callback:^{
+    // 拍照完成后恢复连续自动白平衡（lockWhiteBalanceToCurrentPreview 在拍照前冻结了它）
+    [self restoreAutoWhiteBalance];
+    
     // If flash mode is always on, restore it back after photo is taken
     if (self->_torchMode == AVCaptureTorchModeOn) {
       [self->_captureDevice lockForConfiguration:nil];
@@ -588,6 +634,9 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
   AVCapturePhotoSettings *settings = [AVCapturePhotoSettings photoSettings];
   [settings setFlashMode:_flashMode];
   [settings setHighResolutionPhotoEnabled:YES];
+  
+  // 拍照前锁定白平衡到当前取景器增益，使快照成片与取景器观感一致（修复「取景器正常、成片偏黄」）
+  [self lockWhiteBalanceToCurrentPreview];
   
   [_capturePhotoOutput capturePhotoWithSettings:settings
                                        delegate:cameraPicture];
