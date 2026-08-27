@@ -1,0 +1,169 @@
+{
+    "name": "莫兰迪静物平铺摆拍",
+    "category": "still_life",
+    "classification": {
+        "type": "still_life",
+        "majorStyle": "极简静物",
+        "subStyle": "莫兰迪低饱和",
+        "method": "俯拍平铺布局"
+    },
+    "shortDesc": "低饱和莫兰迪静物平铺，质感物件有序排布，安静高级氛围感🤍",
+    "description": "静物平铺俯拍模板，适合桌面摆件、软装物料、品牌物料样片拍摄；采用柔和漫射自然光，低饱和莫兰迪色调，几何物件有序排布，适合拍摄家居软装、物料色卡、文创静物，无需强光闪光灯。",
+    "ambience": {
+        "seasons": ["全年"],
+        "weathers": ["阴天", "多云"],
+        "timeTones": ["日间柔光"]
+    },
+    "tags": ["静物俯拍", "平铺摆拍", "莫兰迪", "极简", "软装物料"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "米白底色，陶瓷、玻璃、纸材、空气凤梨几何平铺静物"
+        },
+        {
+            "imageIndex": 1,
+            "role": "效果图",
+            "caption": "灰蓝色织物台面，香薰、贝壳、几何体错落平铺"
+        },
+        {
+            "imageIndex": 2,
+            "role": "效果图",
+            "caption": "纯白台面，彩色陶瓷、折纸、植物枝条柔和静物平铺"
+        },
+        {
+            "imageIndex": 3,
+            "role": "效果图",
+            "caption": "米白底色，盘子玻璃器皿织物金属圆环有序平铺排布"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "封面平铺构图",
+            "type": "composition",
+            "description": "完全俯拍平铺构图，多种材质物体沿画面做网格式散点排布，物体之间留出均等留白，不互相重叠；趣味物件分散在九宫格交叉点位，整体均衡对称感，四周保留充足底色留白。",
+            "compositionFrame": "画面完全俯视，物体散点网格排布，主体物件分布九宫格4个交叉点位，物件之间预留空白间隙，底色大面积露出，无强烈引导线，追求均衡稳定的平面构图，主体物件合计占画幅65%，底色留白35%。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "stilllife_flatgrid"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 0.94,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 1,
+            "name": "织物台面错落平铺",
+            "type": "composition",
+            "description": "俯拍平铺，物件松散错落排布，不严格对齐网格；贝壳、几何体、香薰分散画面，物件少量轻微靠近，保留织物纹理底色露出，画面重心居中。",
+            "compositionFrame": "高机位俯拍，物件松散错落分布，无严格对齐，物件之间留有空隙，织物背景占据全部画幅，静物主体占画幅70%，背景织物留白30%。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "stilllife_scatter"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 0.96,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 2,
+            "name": "彩色柔和静物平铺",
+            "type": "composition",
+            "description": "俯拍平铺，黄色盘子作为视觉中心放在画面正中，其余道具环绕盘子四周散开分布，少量植物枝条增加线条感，四周大量纯白底色留白。",
+            "compositionFrame": "高机位俯拍，主趣味物体放置画面正中心，其余道具环绕四周向外散开；中心主体占画幅40%，周围道具分散四角，底色留白60%。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "stilllife_center_surround"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 0.92,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 3,
+            "name": "器皿几何网格平铺",
+            "type": "composition",
+            "description": "完全俯拍平铺，玻璃器皿、织物、石膏几何体、金属圆环按虚拟网格分布画面，左右视觉重量均衡，物件互不重叠，底色均匀露出。",
+            "compositionFrame": "俯视平面构图，物件沿虚拟网格点位摆放，左右重量平衡，物件之间保持间隙；静物主体占画幅62%，底色留白38%。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "stilllife_flatgrid"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 0.93,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "square",
+        "aspectRatio": "1:1",
+        "opacity": 0.3,
+        "description": "高机位完全俯拍（俯拍平面），1:1正方形画幅；静物平铺，物件分散排布，底色大量留白，静物主体合计占画面60‑70%，背景底色占30‑40%。",
+        "subjectFrame": {
+            "x": 0.04,
+            "y": 0.04,
+            "w": 0.92,
+            "h": 0.92
+        }
+    },
+    "camera": {
+        "exposureCompensation": 0.3,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "cloudy",
+        "whiteBalanceK": 6200,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光来自屏幕斜上方45°，柔和漫射自然光；光比低约2:1；阴影柔和、浅淡，影子投向屏幕斜下方，阴影边缘模糊；保留陶瓷、玻璃、金属、纸张不同材质的哑光与微弱反光质感；不需要正面补光。",
+        "shootingDistance": "0.7‑1.1m",
+        "background": "纯色哑光平整台面；米白/浅奶油/灰蓝色哑光织物衬底，避免反光强亮面。",
+        "props": ["陶瓷盘杯", "石膏/水泥方块几何体", "玻璃器皿", "卡纸色卡", "金属细棒/金属环", "小型绿植/空气凤梨", "贝壳", "折纸方块"],
+        "bestTime": "10:00‑16:00",
+        "tips": [
+            "尽量选择阴天窗边柔和散射光，避开直射硬阳光；直射阳光会造成锐利重阴影破坏氛围",
+            "物件摆放互相不要重叠，物件之间预留空隙，控制画面平衡，不要一侧物件过多",
+            "真机无法实现光学浅景深，尽量相机垂直向下正对桌面拍摄，手机镜头距离台面0.7‑1.1米，保持镜头与台面平行，防止透视变形",
+            "台面必须哑光，不要使用亮反光桌面，避免杂乱倒影干扰画面",
+            "不同道具混合多种材质：陶瓷、纸张、石材、金属、植物，丰富画面层次。"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "1:1",
+        "color": {
+            "brightness": 5,
+            "contrast": -7,
+            "saturation": -18,
+            "temperature": 2,
+            "highlights": -12,
+            "shadows": 8,
+            "clarity": 6
+        },
+        "smoothStrength": 10,
+        "sharpen": 18,
+        "vignette": 12,
+        "grain": 14,
+        "lut": "morandi",
+        "fillLight": {
+            "enabled": false
+        }
+    }
+}

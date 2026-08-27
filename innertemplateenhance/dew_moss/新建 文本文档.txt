@@ -1,0 +1,198 @@
+{
+    "name": "苔藓晨露微距",
+    "category": "still_life",
+    "classification": {
+        "type": "still_life",
+        "majorStyle": "自然微距",
+        "subStyle": "森林露水质感",
+        "method": "自然光侧逆光拍摄"
+    },
+    "shortDesc": "林间晨露凝于青苔，微光通透，感受微观森林的治愈力量🌱",
+    "description": "静物微距模板，拍摄雨后清晨苔藓与水珠，使用侧逆晨光勾勒水珠通透高光，突出苔藓细密肌理与水珠晶莹质感，适合户外林间、潮湿石头苔藓场景拍摄。",
+    "ambience": {
+        "seasons": ["春季", "夏季", "秋季"],
+        "weathers": ["雨后放晴", "清晨有薄雾"],
+        "timeTones": "清晨暖金柔光"
+    },
+    "tags": ["微距", "苔藓", "露水", "自然光", "森系静物"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "侧光下青苔挂满细碎露珠，地面枯叶虚化做背景"
+        },
+        {
+            "imageIndex": 1,
+            "role": "效果图",
+            "caption": "一颗大露珠停留在苔藓叶尖，石块与松针丰富地面层次"
+        },
+        {
+            "imageIndex": 2,
+            "role": "效果图",
+            "caption": "巨型水珠立于苔藓顶端，逆光形成通透玻璃球效果"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "封面构图",
+            "type": "composition",
+            "description": "苔藓主体放置画面中下区域，苔藓枝条沿屏幕从左下向右上延伸形成引导线，上部大量虚化枯叶土壤作为散景背景，水珠分布在苔藓前端突出视觉趣味点。",
+            "compositionFrame": "主体占画面下半部分，左下到右上引导线；画面上半段大面积虚化留白，趣味水珠落在九宫格右下交叉点。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "macro_grass"
+            },
+            "position": {
+                "x": 0.46,
+                "y": 0.62
+            },
+            "scale": 0.92,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 1,
+            "name": "叶尖露珠构图",
+            "type": "composition",
+            "description": "苔藓横向铺展占据画面中下，核心大水珠放在画面中心位置，石块置于屏幕下方偏左，散落松针小枯叶填充底部，背景森林植被完全虚化形成圆形光斑。",
+            "compositionFrame": "视觉重心水珠位于画面中心，前景石块压住画面底部，背景全虚化，上下保留少量环境空间。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "macro_grass"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.54
+            },
+            "scale": 0.94,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 2,
+            "name": "顶珠特写构图",
+            "type": "composition",
+            "description": "巨型水珠作为绝对视觉焦点放在画面垂直中心，茂密苔藓铺满画面下半部分，后方湿润石块、干枯落叶做虚化背景，利用逆光穿透水珠营造透明球体效果。",
+            "compositionFrame": "水珠置于画面中心，苔藓铺满画面下半1/2，上方留给虚化环境，四周利用暗角收拢视线。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "macro_grass"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.48
+            },
+            "scale": 0.9,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "third",
+        "aspectRatio": "3:4",
+        "opacity": 0.3,
+        "description": "微距特写，低机位贴近地面仰拍苔藓；主体苔藓水珠集中在画面中下区域，上半部分留给虚化环境光斑；主体占画面65%，虚化环境占35%。",
+        "subjectFrame": {
+            "x": 0.02,
+            "y": 0.25,
+            "w": 0.96,
+            "h": 0.73
+        }
+    },
+    "camera": {
+        "exposureCompensation": -0.3,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5200,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕偏左上方45°侧逆光入射；属于硬质晨阳光，光比约4:1；高光打亮水珠边缘形成亮轮廓，阴影落向屏幕右下方，阴影边缘中等硬度；质感表现水珠强反光、通透高光光斑，苔藓保留植物细微纹理；背景形成柔和圆形散景光斑；整体暖金色环境光，主体暖调。",
+        "shootingDistance": "0.25‑0.45m",
+        "background": "林间地面，湿润泥土、干枯褐色落叶、湿润灰色石块，背景需要与拍摄主体拉开距离实现虚化散景。",
+        "props": ["带水珠的鲜活苔藓", "湿润石块", "干枯落叶、松针"],
+        "bestTime": "06:30‑08:30",
+        "tips": [
+            "尽量雨后清晨拍摄，保证苔藓表面留存自然水珠；不要人工大量喷水，避免水珠形态死板",
+            "贴近地面低角度拍摄，手机尽量靠近苔藓，同时主体和背景之间拉开距离，模拟微距浅景深效果，真机无法实现光学大光圈虚化，依靠构图距离配合后期暗角辅助聚焦主体",
+            "避开正午强光，强光会直接蒸发水珠，高光容易大面积溢出",
+            "对焦锁定水珠或苔藓叶尖，不要对焦远处背景；轻微负向曝光补偿保护水珠高光不发白过曝"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "3:4",
+        "color": {
+            "brightness": 2,
+            "contrast": 10,
+            "saturation": 14,
+            "temperature": 6,
+            "tint": 1,
+            "highlights": -18,
+            "shadows": 12,
+            "clarity": 16
+        },
+        "smoothStrength": 10,
+        "sharpen": 28,
+        "vignette": 28,
+        "grain": 14,
+        "lut": "none"
+    },
+    "orientation": {
+        "framePosition": "主体集中画面中下，x0.02‑0.98 y0.25‑0.98",
+        "bodyFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "faceFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "twist": "无",
+        "headPitch": 0,
+        "headRoll": 0,
+        "gaze": "无"
+    },
+    "framing": {
+        "shotSize": "特写",
+        "shotSizeNote": "只记录苔藓水珠微观局部，不拍摄远景环境",
+        "cameraHeight": "低机位俯拍",
+        "cameraAzimuth": "斜侧45°",
+        "subjectScale": "主体占画幅65%",
+        "environmentRatio": "虚化环境占画幅35%",
+        "headroom": "画面上方为虚化环境，无人物头部留白概念",
+        "framingNote": "微距特写，相机贴近地面斜侧俯拍，苔藓水珠占据画面中下，上方给到虚化森林地面光斑背景。"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "屏幕左上方45°侧逆光",
+            "辅光轮廓光": "无人工辅光，依靠环境漫反射微弱补光，逆光勾勒水珠亮边轮廓",
+            "光型软硬": "清晨直射硬阳光，光斑锐利，环境漫反射做弱柔化",
+            "光比": "约4:1，明暗反差偏高",
+            "阴影": "阴影投向屏幕右下方，边缘中等硬度，阴影浓度中等，保留苔藓暗部细节",
+            "质感": "水珠强烈镜面反光，形成圆形散景光斑；苔藓保留细密叶片纹理，不做过度磨皮；高光勾出水珠球体边缘",
+            "环境光": "背景环境是暖金色清晨自然光，屏幕上方背景形成大量圆形散景光斑",
+            "色温对比": "整体统一暖金色调，主体与背景色温接近，冷暖差异小"
+        },
+        "lightToParams": "exposureCompensation‑0.3，highlights‑18压水珠高光，shadows12提升苔藓暗部，temperature+6加强清晨暖金感，vignette28压暗四角聚焦水珠主体"
+    },
+    "styling": {
+        "subjectType": "静物-自然植物微距",
+        "clothingLayers": {
+            "上装": "",
+            "下装": "",
+            "衣角处理": "",
+            "袖子": "",
+            "领口": "",
+            "鞋袜": "",
+            "叠穿层次": ""
+        },
+        "accessories": "",
+        "hairMakeup": "",
+        "objectStyle": "鲜绿色细密苔藓，保留自然生长形态；搭配湿润灰色石块，褐色干枯落叶、少量松针点缀；水珠大小错落，优先保留几颗大水珠作为画面趣味点，其余分布细碎小露珠。",
+        "note": "不要整理苔藓，保留原生凌乱自然感；石块落叶随意散落模拟原生林间地表。"
+    }
+}

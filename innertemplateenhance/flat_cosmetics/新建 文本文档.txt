@@ -1,0 +1,137 @@
+{
+  "name": "轻奢裸调美妆静物平铺",
+  "category": "still_life",
+  "classification": {
+    "type": "still_life",
+    "majorStyle": "轻奢极简",
+    "subStyle": "裸调彩妆",
+    "method": "俯拍平铺摆盘"
+  },
+  "shortDesc": "温柔裸调彩妆平铺，柔光质感，高级干净的美妆氛围感✨",
+  "description": "静物美妆拍摄模板，适用于粉底液、眼影、唇釉、化妆刷等彩妆产品；采用高机位俯拍平铺摆盘，柔和漫射自然光，低对比奶油裸色调，适合大理石、浅米色、透明玻璃台面，电商产品、美妆博主静物拍摄使用。",
+  "ambience": {
+    "seasons": ["春季", "夏季"],
+    "weathers": ["多云", "阴天"],
+    "timeTones": ["日间柔光"]
+  },
+  "tags": ["美妆静物", "俯拍平铺", "裸调轻奢", "产品摆盘", "奶油质感"],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "裸粉玫瑰金彩妆大理石平铺，分散式自由摆盘"
+    },
+    {
+      "imageIndex": 1,
+      "role": "效果图",
+      "caption": "米白金调护肤彩妆组合，规整错落摆盘"
+    },
+    {
+      "imageIndex": 2,
+      "role": "效果图",
+      "caption": "玻璃分割浅米色台面，简约彩妆错落摆放"
+    },
+    {
+      "imageIndex": 3,
+      "role": "效果图",
+      "caption": "米白纸垫彩妆平铺，方正对称产品布局"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·分散平铺构图",
+      "type": "composition",
+      "description": "高机位垂直俯拍，彩妆产品分散错落铺满画面，无严格对齐，大小产品互相穿插；眼影盘、瓶罐、化妆刷均匀分布画面四角与中心，画面四周保留少量大理石台面留白，产品之间留出空隙，避免拥挤堆叠。",
+      "compositionFrame": "画面整体铺满九宫格，产品散布九宫格全部交叉点位；中心放置中等瓶罐，四角分布大小彩妆，四周保留10%-15%大理石背景留白，无强引导线，松散自由式平铺。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "stilllife_spread"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 0.94,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 1,
+      "name": "规整错落摆盘构图",
+      "type": "composition",
+      "description": "垂直俯拍，护肤与彩妆产品分组摆放，大件瓶罐靠画面边缘，彩妆盘口红放置画面中下区域，化妆刷置于画面右侧；产品轻微旋转角度，不完全横平竖直，形成规整又松弛的陈列效果。",
+      "compositionFrame": "九宫格布局，大件护肤品占据左上、左下；彩妆眼影口红集中中下区域；右侧预留道具化妆刷位置；四周保留12%米黄大理石背景留白。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "stilllife_arrange"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 0.92,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "square",
+    "aspectRatio": "1:1",
+    "opacity": 0.3,
+    "description": "静物俯拍，1:1正方形画幅，高机位垂直向下俯拍；彩妆产品铺满画面主要区域，四周保留10‑15%背景台面留白；主体产品占画幅85%，背景占15%。",
+    "subjectFrame": {
+      "x": 0.08,
+      "y": 0.08,
+      "w": 0.84,
+      "h": 0.84
+    }
+  },
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "custom",
+    "whiteBalanceK": 5800,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光从屏幕左上方45°入射，柔和漫射柔光；无硬直射光；光比约2:1；阴影柔和浅淡，影子投向屏幕右下方，阴影边缘模糊；金属瓶盖有柔和高光反射；不需要正面补光，纯自然柔光。",
+    "shootingDistance": "0.7‑1.1m",
+    "background": "浅白色大理石 / 浅米哑光台面 / 多格透明玻璃托盘，纯色干净低纹理背景",
+    "props": ["粉底液瓶", "眼影盘", "唇釉", "粉膏散粉罐", "化妆刷套装"],
+    "bestTime": "10:00‑15:00",
+    "tips": [
+      "使用窗边柔和漫射天光，避免阳光直射产生硬黑影；拉薄纱窗帘柔化光线",
+      "产品摆放互相错开角度，不要全部横平竖直，大小高低穿插，不要堆叠遮挡",
+      "真机无法实现光学大光圈虚化，依靠轻暗角+干净背景来聚焦主体；不要紧贴产品，镜头距离0.7米以上避免畸变",
+      "金属、玻璃瓶盖注意反光角度，调整产品旋转角度避免刺眼高光溢出",
+      "台面保持干净无灰尘，保证画面高级干净质感"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "1:1",
+    "color": {
+      "brightness": 5,
+      "contrast": -7,
+      "saturation": -6,
+      "temperature": 3,
+      "highlights": -12,
+      "shadows": 8,
+      "clarity": 4
+    },
+    "smoothStrength": 20,
+    "sharpen": 24,
+    "vignette": 18,
+    "grain": 12,
+    "lut": "cream",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294959028,
+      "intensity": 0.6
+    }
+  }
+}

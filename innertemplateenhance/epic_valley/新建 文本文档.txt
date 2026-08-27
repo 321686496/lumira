@@ -1,0 +1,150 @@
+{
+    "name": "山巅云海落日",
+    "category": "landscape",
+    "classification": {
+        "type": "landscape",
+        "majorStyle": "风光纪实",
+        "subStyle": "山海日出日落",
+        "method": "引导线大远景"
+    },
+    "shortDesc": "金辉漫过山巅云海，石阶向天际延伸，山河壮阔氛围感🌄",
+    "description": "自然风光大远景模板，高山石阶作为引导线通向远方云海落日，暖金色黄昏侧光打亮山石松林，适合山顶观景台拍摄山川云海风光，可容纳游人作为环境点缀，日落黄金时段出片效果最佳。",
+    "ambience": {
+        "seasons": ["春", "秋"],
+        "weathers": ["晴", "云海天气"],
+        "timeTones": ["黄昏黄金时刻"]
+    },
+    "tags": ["云海", "高山风光", "落日金辉", "引导线构图", "大远景"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "高山石阶望向落日云海，金光照亮岩壁与山林"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "云海山景构图",
+            "type": "composition",
+            "description": "石阶道路作为强引导线，从画面屏幕下方向上纵深延伸，人群分布在中景石阶上作为环境点缀；左侧陡峭岩壁与右侧山林形成左右框架，远景铺满云海与黄昏天际，天空占据画面上方约三分之一。",
+            "compositionFrame": "底部石阶为引导线向上汇聚，左右两侧山体树木构成天然画框；中景容纳观景人群，上半区留给云海与落日天空；趣味点集中在远处云海天际交界，下方保留步道空间。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "landscape_leading_line_frame"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.42
+            },
+            "scale": 0.98,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "thirds",
+        "aspectRatio": "9:16",
+        "opacity": 0.3,
+        "description": "大远景风光，机位略微仰拍；石阶引导线从画面底部向远方延伸；山体框架占据画面左右两侧；云海天际线落在上三分之一分割线，天空保留充足留白；环境占满全部画幅。",
+        "subjectFrame": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 1.0,
+            "h": 1.0
+        }
+    },
+    "camera": {
+        "exposureCompensation": -0.3,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "sunset",
+        "whiteBalanceK": 6200,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕右上方45°黄昏低角度照射，属于硬侧光；无额外辅光；光比约4:1；山体背光面阴影浓重，阴影投向屏幕左下方，阴影边缘偏硬；岩壁、松树受光面呈现强烈金色高光质感；环境光是整片橙黄色黄昏天空漫射光；受光区域暖金，背光山体冷暗，冷暖对比强烈。",
+        "shootingDistance": "无限远风光拍摄",
+        "background": "高山花岗岩峭壁、成片松林、漫无边际的层叠云海、橙黄色渐变黄昏天空，山间中式古亭建筑",
+        "props": [],
+        "bestTime": "日落前30‑60分钟黄金时刻",
+        "tips": [
+            "站在高处观景台，利用石阶道路做向前汇聚的引导线",
+            "等待云海流动的时刻拍摄，中景游人保留少许作为画面层次点缀，不要让人物遮挡远处云海",
+            "压低曝光补偿防止天空金色高光过曝丢失层次",
+            "该画面宏大景深为光学镜头物理效果，手机无法复刻，依靠构图保留远近层次，使用vignette压暗四角强化纵深感",
+            "尽量避开正午强光，优先选择日出日落低角度侧光时段"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "9:16",
+        "color": {
+            "brightness": 2,
+            "contrast": 14,
+            "saturation": 16,
+            "temperature": 8,
+            "highlights": -18,
+            "shadows": 10,
+            "clarity": 12
+        },
+        "smoothStrength": 0,
+        "sharpen": 26,
+        "vignette": 28,
+        "grain": 22,
+        "lut": "sunset_warm",
+        "systemFilter": "none"
+    },
+    "orientation": {
+        "framePosition": "全画幅风光，引导线从画面底部向上汇聚",
+        "bodyFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "faceFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "twist": "正身",
+        "headPitch": 0,
+        "headRoll": 0,
+        "gaze": "望向远方云海天际线"
+    },
+    "framing": {
+        "shotSize": "大远景",
+        "shotSizeNote": "完整收纳山体、云海、天空、石阶步道全部环境",
+        "cameraHeight": "低机位仰拍",
+        "cameraAzimuth": "正拍",
+        "subjectScale": "山川云海占据全部画幅",
+        "environmentRatio": "环境100%",
+        "headroom": "天空保留画面上方1/3留白",
+        "framingNote": "大远景仰拍，石阶做引导线，左右山体树木框架构图，天际线置于上三分线位置"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "主光屏幕右上方45°低角度黄昏落日侧光",
+            "辅光轮廓光": "无人工辅光，天空提供微弱环境漫反射",
+            "光型软硬": "硬光，低角度太阳光，明暗分界锐利",
+            "光比": "约4:1，明暗反差大",
+            "阴影": "山体背光面阴影浓重，阴影投向屏幕左下方，边缘偏硬",
+            "质感": "岩石高光锐利，松树针叶带有金色反光；云海过渡柔和，画面带胶片颗粒质感",
+            "环境光": "屏幕上半区整片橙黄色黄昏天空漫射环境光",
+            "色温对比": "受光岩壁暖金黄色，背光山林偏冷暗，冷暖反差明显"
+        },
+        "lightToParams": "提高contrast、temperature增加暖调；highlights压低保护天空高光；shadows提亮暗部山林细节；增加grain模拟胶片风光质感；vignette压暗四角增强画面纵深感"
+    },
+    "styling": {
+        "subjectType": "山川云海自然风光",
+        "clothingLayers": {},
+        "accessories": "",
+        "hairMakeup": "",
+        "objectStyle": "花岗岩奇峰峭壁、成片常绿黄山松、山间石质台阶、古色中式亭台、大面积层叠流动云海",
+        "note": "环境中少量游人作为氛围点缀，无需刻意布置，保留现场真实氛围感"
+    }
+}
+
+
+来源为小红书

@@ -1,0 +1,168 @@
+{
+    "name": "咖啡馆窗光氛围感人像",
+    "category": "portrait",
+    "classification": {
+        "type": "portrait",
+        "majorStyle": "电影感人像",
+        "subStyle": "复古暗调",
+        "method": "窗边自然光人像"
+    },
+    "shortDesc": "午后咖啡馆柔窗光，沉静松弛，演绎都市独处氛围感☕",
+    "description": "人像摄影模板，复古咖啡馆室内场景，依靠窗边侧方柔和自然光塑造明暗层次；穿搭优先深色简约大衣、基础黑色上衣，适合喜欢安静文艺、成熟松弛风格的人群拍摄，可搭配咖啡、书本作为道具。",
+    "ambience": {
+        "seasons": ["秋季", "冬季"],
+        "weathers": ["晴天"],
+        "timeTones": ["午后日光"]
+    },
+    "tags": ["咖啡馆人像", "窗边侧光", "暗调电影感", "文艺独处", "半身人像"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "双手托腮坐在卡座，窗边侧光勾勒面部轮廓，桌上摆放咖啡与书籍"
+        },
+        {
+            "imageIndex": 1,
+            "role": "效果图",
+            "caption": "侧身站立手扶椅靠背，望向窗外，暖调环境光营造故事感"
+        },
+        {
+            "imageIndex": 2,
+            "role": "效果图",
+            "caption": "靠窗坐于卡座，低头看向摊开的书本，桌面摆放拿铁咖啡"
+        },
+        {
+            "imageIndex": 3,
+            "role": "效果图",
+            "caption": "短发造型，双手插裤袋，低头垂眸，环境虚化突出人物主体"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "封面·托腮静坐",
+            "type": "people",
+            "description": "人物坐在卡座座位，身体侧向屏幕右约45°，面部朝向屏幕右，双手手肘支撑于木桌，双手手掌合拢托住下巴两侧，手指放松；头颈微微后仰，视线看向屏幕右方画面外，表情沉静放空，和桌面咖啡、书籍道具共处，情绪安静沉思。",
+            "compositionFrame": "",
+            "silhouette": {
+                "type": "builtin",
+                "data": "portrait_sit_elbow_table"
+            },
+            "position": {
+                "x": 0.44,
+                "y": 0.42
+            },
+            "scale": 0.92,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 1,
+            "name": "侧身扶椅眺望",
+            "type": "people",
+            "description": "人物站立，身体侧向屏幕右接近90°，面部同样朝向屏幕右望向窗外；一只手轻搭木椅靠背，手臂自然弯曲，肩膀放松，头颈挺直，视线投向屏幕右侧窗外，神情淡然，捕捉独处眺望的故事感。",
+            "compositionFrame": "",
+            "silhouette": {
+                "type": "builtin",
+                "data": "portrait_stand_side_gaze"
+            },
+            "position": {
+                "x": 0.36,
+                "y": 0.46
+            },
+            "scale": 0.94,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 2,
+            "name": "靠窗阅读低头",
+            "type": "people",
+            "description": "人物靠窗坐在卡座，身体侧向屏幕右约45°，面部朝向屏幕右，头部向下低头，headPitch‑18°，视线垂落看向桌面摊开的书本，手臂收在桌面，姿态松弛安静，与书籍咖啡道具互动。",
+            "compositionFrame": "",
+            "silhouette": {
+                "type": "builtin",
+                "data": "portrait_sit_read"
+            },
+            "position": {
+                "x": 0.48,
+                "y": 0.40
+            },
+            "scale": 0.90,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 3,
+            "name": "站立手插裤袋垂眸",
+            "type": "people",
+            "description": "人物站立，身体略微转向屏幕右，头部向下低头，视线看向屏幕下方地面，一只手插入裤袋，手臂藏于身后，另一只手自然垂落，肩膀松弛下沉，情绪内敛沉静。",
+            "compositionFrame": "",
+            "silhouette": {
+                "type": "builtin",
+                "data": "portrait_stand_hand_pocket"
+            },
+            "position": {
+                "x": 0.48,
+                "y": 0.50
+            },
+            "scale": 0.96,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "thirds",
+        "aspectRatio": "3:4",
+        "opacity": 0.3,
+        "description": "半身人像，机位平视拍摄；人物放在九宫格垂直分割线上，主体占据画面中上部约60%画幅；头顶保留1/6留白，画面下方保留桌面环境交代背景环境占40%。",
+        "subjectFrame": {
+            "x": 0.18,
+            "y": 0.04,
+            "w": 0.64,
+            "h": 0.93
+        }
+    },
+    "camera": {
+        "exposureCompensation": -0.3,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5200,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕右侧窗户斜上方45°射入，属于柔和的漫射窗光；室内环境台灯提供微弱暖调环境光；光比约3.5:1；阴影投向屏幕左侧，阴影边缘柔和，浓度中等；光线保留皮肤细微纹理，面部形成明暗分割，发丝边缘带有柔和高光。",
+        "shootingDistance": "1.8‑2.4m",
+        "background": "复古咖啡馆，深色木护墙板、墨绿色墙面，复古壁灯，深色皮质卡座，多桌椅的室内环境",
+        "props": ["白瓷咖啡杯碟", "实体书籍", "木质餐桌", "餐具小摆件"],
+        "bestTime": "14:00‑16:00",
+        "tips": [
+            "尽量选择晴天午后侧窗柔光，避免阳光直射硬光斑；拉薄纱窗帘柔化直射日光",
+            "靠近人物同时尽量拉开人物与背景距离，配合暗角模拟浅景深效果；手机无法实现光学大光圈虚化背景",
+            "不要开启闪光灯，依靠环境自然光，保留画面暗调氛围感",
+            "道具咖啡、书本放置画面下半层，不要遮挡人物主体",
+            "人物面部受光面朝向窗户，让侧光落在半边脸上，塑造电影感明暗对比"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "3:4",
+        "color": {
+            "brightness": -4,
+            "contrast": 10,
+            "saturation": 8,
+            "temperature": 6,
+            "tint": 2,
+            "highlights": -18,
+            "shadows": 14,
+            "clarity": 6
+        },
+        "smoothStrength": 28,
+        "sharpen": 24,
+        "vignette": 30,
+        "grain": 22,
+        "lut": "warm_mood",
+        "systemFilter": "none"
+    }
+}

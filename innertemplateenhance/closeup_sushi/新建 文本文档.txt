@@ -1,0 +1,148 @@
+{
+    "name": "日料握寿司静物美食",
+    "category": "food",
+    "classification": {
+        "type": "food",
+        "majorStyle": "写实美食",
+        "subStyle": "日料居酒屋",
+        "method": "桌面静物侧拍"
+    },
+    "shortDesc": "暖调居酒屋光影，鱼肉鲜润通透，高级日式料理静物氛围感🍣",
+    "description": "美食静物拍摄模板，适用于日料握寿司菜品拍摄，侧方柔和暖光塑造鱼肉通透肌理，深色哑光餐盘搭配原木桌面，突出生鱼食材新鲜质感，适合探店、美食记录使用；画面无人物、无手部出镜。",
+    "ambience": {
+        "seasons": ["春季", "秋季", "冬季"],
+        "weathers": ["室内不受天气影响"],
+        "timeTones": ["暖室内灯光"]
+    },
+    "tags": ["美食摄影", "日料", "握寿司", "静物", "探店"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "单件鱼生握寿司摆放在黑釉餐盘，暖光烘托鱼肉鲜亮水润质感"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "寿司静物构图",
+            "type": "composition",
+            "description": "主体鱼生握寿司放置画面中心区域，画面右后方虚化摆放腌姜片、山葵与酱油小碗作为环境陪衬；利用餐盘斜向边缘形成斜向引导线；前后景拉开层次，陪衬道具适度虚化，不能抢夺寿司主体视线，整张画面没有手/人物出现。",
+            "compositionFrame": "主体寿司落在画面九宫格中心区域；黑色餐盘对角线由屏幕左下延伸至屏幕右上；画面右侧与后景预留虚化道具留白，上方保留大量木质桌面环境留白，前景为深色餐盘边缘。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "food_still_life"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.46
+            },
+            "scale": 0.88,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "thirds",
+        "aspectRatio": "1:1",
+        "opacity": 0.3,
+        "description": "静物特写，45°斜侧机位，主体寿司占据画面中间约52%画幅，背景环境占48%，四周适度留白，后景道具做虚化处理；无手、无人物入镜。",
+        "subjectFrame": {
+            "x": 0.11,
+            "y": 0.37,
+            "w": 0.78,
+            "h": 0.44
+        }
+    },
+    "camera": {
+        "exposureCompensation": -0.15,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "incandescent",
+        "whiteBalanceK": 5200,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕左上方45°照射，属于柔和漫射室内灯光；无强硬轮廓光；光比约2.5:1；阴影投向屏幕右下方，阴影边缘柔和，浓度中等；光线打出鱼肉水润反光、海苔油亮质感；背景为弱亮度暖调环境光；整体主体暖调，背景色调略暗。",
+        "shootingDistance": "0.6‑0.9m",
+        "background": "浅原木色木质桌面，暗调模糊的室内餐厅背景",
+        "props": ["黑色哑光餐盘", "腌姜片", "山葵", "小号酱油陶瓷碗"],
+        "bestTime": "室内环境灯光，无室外时间限制，推荐晚间餐厅室内",
+        "tips": [
+            "尽量关闭机顶闪光灯，使用环境室内暖光；避免直射硬光",
+            "靠近主体，尽量拉大主体与背景距离，模拟浅景深效果，真机无法实现光学虚化，依靠构图+后期暗角辅助突出主体",
+            "配菜姜片、山葵、酱油碗放在画面远端做虚化陪衬，不要抢寿司主体",
+            "餐盘倾斜摆放，利用餐盘边缘制造画面斜向引导线",
+            "避免鱼肉高光区域过曝，适当降低曝光补偿保护食材纹理细节",
+            "拍摄时画面不要拍入人手，只拍摄餐盘与食物本身"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "1:1",
+        "color": {
+            "brightness": 2,
+            "contrast": 7,
+            "saturation": 9,
+            "temperature": 6,
+            "tint": 1,
+            "highlights": -14,
+            "shadows": 8,
+            "clarity": 11
+        },
+        "smoothStrength": 0,
+        "sharpen": 26,
+        "vignette": 28,
+        "grain": 14,
+        "lut": "none"
+    },
+    "orientation": {
+        "framePosition": "画面九宫格中心",
+        "bodyFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "faceFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "twist": "正身",
+        "headPitch": 0,
+        "headRoll": 0,
+        "gaze": "不适用静物"
+    },
+    "framing": {
+        "shotSize": "特写",
+        "shotSizeNote": "菜品特写，完整收纳寿司和周边小部分配菜，无人物手部",
+        "cameraHeight": "高机位俯拍",
+        "cameraAzimuth": "斜侧 45°",
+        "subjectScale": "主体寿司占画幅52%",
+        "environmentRatio": "环境背景占画幅48%",
+        "headroom": "静物不适用，画面上方保留桌面留白",
+        "framingNote": "菜品特写，斜侧45°俯拍，主体居中，后景虚化道具做氛围点缀，画面不包含人手。"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "主光屏幕左上方45°",
+            "辅光轮廓光": "无额外轮廓光，环境漫反射微弱补暗部",
+            "光型软硬": "柔光，漫反射室内灯光，阴影过渡柔和",
+            "光比": "约2.5:1",
+            "阴影": "阴影落向屏幕右下方，边缘柔和，浓度中等",
+            "质感": "鱼肉水润通透反光，海苔带有油亮光泽，米饭颗粒纹理保留，无过度磨皮",
+            "环境光": "背景弱亮度暖调室内环境光",
+            "色温对比": "主体暖调，背景偏暗暖，无强烈冷暖对冲"
+        },
+        "lightToParams": "提高whiteBalanceK制造暖调；降低高光保护鱼肉亮部；小幅提升阴影找回暗部餐盘细节；增加暗角聚拢视线；适度锐化还原食材纹理。"
+    },
+    "styling": {
+        "subjectType": "美食静物·鱼生握寿司",
+        "clothingLayers": {},
+        "accessories": "",
+        "hairMakeup": "",
+        "objectStyle": "鱼生握寿司，鱼片保留部分银鱼皮，一条海苔横向捆束固定饭团；摆盘使用哑光黑色方形餐盘，画面右侧摆放山葵，后方散放腌姜片与小型酱油碗，道具错落摆放不遮挡寿司主体；**画面不出现人手**。",
+        "note": "食材表面保持自然湿润光泽，不要过度擦拭，还原日料店出品样貌。"
+    }
+}
