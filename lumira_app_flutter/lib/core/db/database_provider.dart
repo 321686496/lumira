@@ -45,6 +45,16 @@ final databaseProvider = FutureProvider<Database>((ref) async {
     onCreate: _onCreate,
     onUpgrade: _onUpgrade,
   );
+  // 启动期 self-heal：iOS 每次更新会更换沙盒容器 UUID，导致 DB 里存的
+  // 容器绝对路径（/Application/<旧UUID>/Documents/photos/xxx）失效，照片文件
+  // 本体却随之迁移到新容器的 photos 目录。启动时按 basename 把失效路径重定位
+  // 回当前容器，从而让相册照片在更新后依旧可见。
+  try {
+    // ignore: unawaited_futures
+    _repairGalleryPaths(db);
+  } catch (e) {
+    debugPrint('gallery path repair failed: $e');
+  }
   // 启动期把关键存储目录写入 Documents（更新后保留、Files 可见），
   // 用于定位「更新后照片消失」问题：若此报告下次启动仍存在，说明沙盒未被重置，
   // 照片则应落在 photosDir 下；若报告/照片均消失，则是容器整体被重建。
@@ -57,6 +67,62 @@ final databaseProvider = FutureProvider<Database>((ref) async {
   ref.onDispose(db.close);
   return db;
 });
+
+/// 启动期 self-heal：把 gallery_items 里因「iOS 更新更换容器 UUID」而失效的
+/// 照片绝对路径重定位回当前容器的 photos 目录。
+///
+/// iOS 应用更新时数据（含照片文件、lumina.db）会整体保留，但沙盒容器 UUID 会变，
+/// DB 里存的 /Application/<旧UUID>/Documents/photos/xxx 路径因此全部失效（文件仍在
+/// 新容器的同路径下，文件名不变）。这里对每条记录：若存的是「本容器不存在的绝对路径」，
+/// 就在当前 photos 目录按 basename 找回同级文件并改写为当前容器绝对路径，从而自愈。
+Future<void> _repairGalleryPaths(Database db) async {
+  final currentBase = await getDatabasesPath();
+  final photosDir = p.join(currentBase, 'photos');
+  final dir = Directory(photosDir);
+  if (!await dir.exists()) return;
+
+  // basename -> 当前容器下的绝对路径（仅收集普通文件）
+  final byName = <String, String>{};
+  await for (final e in dir.list(followLinks: false)) {
+    if (e is! File) continue;
+    byName[p.basename(e.path)] = e.path;
+  }
+  if (byName.isEmpty) return;
+
+  final rows = await db.query(
+    Tables.galleryItems,
+    columns: [Tables.colId, Tables.colFilePath, Tables.colOriginalPath],
+  );
+
+  int repaired = 0;
+  for (final r in rows) {
+    final id = r[Tables.colId] as String;
+    final newValues = <String, Object?>{};
+    for (final col in [Tables.colFilePath, Tables.colOriginalPath]) {
+      final stored = r[col] as String?;
+      if (stored == null || stored.isEmpty) continue;
+      // 仅修复「绝对路径且在磁盘上不存在」的记录；相对路径/可访问的路径跳过
+      if (!stored.startsWith('/') && !stored.contains('Application/')) continue;
+      if (await File(stored).exists()) continue;
+      final rel = byName[p.basename(stored)];
+      if (rel != null && rel != stored) {
+        newValues[col] = rel;
+      }
+    }
+    if (newValues.isNotEmpty) {
+      await db.update(
+        Tables.galleryItems,
+        newValues,
+        where: '${Tables.colId} = ?',
+        whereArgs: [id],
+      );
+      repaired += newValues.length;
+    }
+  }
+  if (repaired > 0) {
+    debugPrint('[storage] 已重定位 $repaired 个失效照片路径 → 当前容器');
+  }
+}
 
 /// 写一份持久的存储路径报告（一次启动写一次，覆盖写）。
 Future<void> _writeStorageReport(Database db, String dbPath) async {
