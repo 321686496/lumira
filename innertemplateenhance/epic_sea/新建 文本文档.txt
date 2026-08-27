@@ -1,0 +1,151 @@
+{
+    "name": "碧海沙滩海岸风光",
+    "category": "landscape",
+    "classification": {
+        "type": "landscape",
+        "majorStyle": "自然风景",
+        "subStyle": "海边海岸",
+        "method": "引导线构图风光拍摄"
+    },
+    "shortDesc": "澄澈蓝海伴着绵长沙滩，海风辽阔治愈，夏日海边氛围感🌊",
+    "description": "海岸风景模板，高机位俯拍沙滩海洋，自然光日间户外场景，利用海岸线作为引导线，呈现碧海金滩远山白云的开阔海景，适合海边度假记录自然风光。",
+    "ambience": {
+        "seasons": ["夏季", "秋季"],
+        "weathers": ["晴天", "多云"],
+        "timeTones": "日景明亮"
+    },
+    "tags": ["海边", "风光", "沙滩", "海岸线", "夏日"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "俯拍蜿蜒海岸线，金色沙滩与渐变蓝海，远景层叠山峦与白云"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "海岸风景构图",
+            "type": "composition",
+            "description": "海岸线作为曲线引导线从屏幕左下角向画面深处延伸至画面中上部；沙滩占据画面下半部分，海洋占据画面中上部，远山云层放置画面顶部区域，画面保留充足天空留白，营造辽阔空间感。",
+            "compositionFrame": "曲线引导线由海浪沙滩交界构成，左下起始向画面远方收缩；沙滩主体框占据画面下半约55%；海洋占据画面中部；远山+云层放置画面顶部1/4区域，采用三分构图，海平线靠近画面上三分之一位置。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "landscape_coastline"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 1.0,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "thirds",
+        "aspectRatio": "3:4",
+        "opacity": 0.3,
+        "description": "大远景风景，高机位俯拍，海平线置于画面上1/3分割线，沙滩海浪引导线从画面左下角向远处延伸；沙滩占画面下半约55%，海洋、远山、天空环境占画面上45%，天空保留充足留白。",
+        "subjectFrame": {
+            "x": 0.0,
+            "y": 0.0,
+            "w": 1.0,
+            "h": 1.0
+        }
+    },
+    "camera": {
+        "exposureCompensation": 0.15,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5600,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光来自屏幕上方偏左，白天柔和直射日光，属于软‑硬过渡自然光，光比约2.5:1；海浪泡沫亮部高光明显，沙滩阴影柔和，阴影边缘柔和、浓度浅；水面具备波光反光质感，云朵层次分明。",
+        "shootingDistance": "远距离风景拍摄",
+        "background": "蓝色海洋、金色沙滩、层叠远山、蓝天白云，近岸带有绿色沿海植被",
+        "props": [],
+        "bestTime": "10:00‑15:00",
+        "tips": [
+            "将海平线对齐上方三分线，利用海浪与沙滩交界的曲线做引导线增强纵深感",
+            "拍摄尽量避开正午顶光最强时刻，防止海面高光大面积溢出",
+            "适当压低高光保留云朵与海面波纹细节，提升阴影还原沙滩纹理",
+            "该画面远景虚化效果为光学镜头实现，手机无法复刻，依靠构图引导视线模拟空间层次"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "3:4",
+        "color": {
+            "brightness": 4,
+            "contrast": 5,
+            "saturation": 14,
+            "temperature": -3,
+            "tint": 1,
+            "highlights": -12,
+            "shadows": 8,
+            "vibrance": 9
+        },
+        "smoothStrength": 0,
+        "sharpen": 26,
+        "vignette": 14,
+        "grain": 12,
+        "lut": "vibrant",
+        "systemFilter": "none"
+    },
+    "orientation": {
+        "framePosition": "全屏构图",
+        "bodyFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "faceFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "twist": "",
+        "headPitch": 0,
+        "headRoll": 0,
+        "gaze": ""
+    },
+    "framing": {
+        "shotSize": "大远景",
+        "shotSizeNote": "完整收纳沙滩、海洋、远山、天空全部环境元素",
+        "cameraHeight": "高机位俯拍",
+        "cameraAzimuth": "正拍",
+        "subjectScale": "环境全景，无单一主体，风景铺满画幅",
+        "environmentRatio": "环境占100%",
+        "headroom": "天空预留画面上方约1/4留白",
+        "framingNote": "大远景俯拍，海平线放在画面上三分之一，海岸线曲线做视觉引导，完整展现海岸开阔全貌"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "主光屏幕上方偏左，日间高位自然光",
+            "辅光轮廓光": "环境天空漫反射充当辅光，无额外轮廓光",
+            "光型软硬": "软硬过渡日光，云层起到部分柔化效果",
+            "光比": "约2.5:1，整体明暗反差适中",
+            "阴影": "沙滩阴影浅淡，边缘柔和，没有浓重硬阴影",
+            "质感": "海面波光反光，海浪泡沫高光，保留沙滩颗粒纹理，云朵层次丰富，无磨皮效果",
+            "环境光": "天空漫反射均匀照亮整个场景",
+            "色温对比": "海面冷蓝调，沙滩暖金调，冷暖对比柔和"
+        },
+        "lightToParams": "色温轻微负向强化蓝色海水，提升饱和度与鲜艳度，压低高光保护云朵海面细节，适度锐化强化海浪沙滩纹理"
+    },
+    "styling": {
+        "subjectType": "风景海景",
+        "clothingLayers": {},
+        "accessories": "",
+        "hairMakeup": "",
+        "objectStyle": "金黄色细沙，层次渐变蓝绿色海水，远处黛青色层叠山脉，蓬松白色积云，岸边深绿色沿海灌木丛",
+        "note": "户外晴天多云天气，海水层次丰富，沙滩干净无杂物，画面干净通透"
+    }
+}
+
+
+
+来源改为小红书

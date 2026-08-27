@@ -1,0 +1,179 @@
+{
+  "name": "金山雪峰·彩虹麦浪",
+  "category": "landscape",
+  "classification": {
+    "type": "landscape",
+    "majorStyle": "自然风光",
+    "subStyle": "田园雪山",
+    "method": "广角远景构图"
+  },
+  "shortDesc": "金黄麦浪翻涌至雪山脚下，一道彩虹悄然挂在天际，治愈又辽阔的丰收画卷🌾🏔️",
+  "description": "这是一套专为广阔自然风光设计的拍照模板。画面以大面积的金黄色成熟麦田为前景，中景过渡至深色林带，远景为连绵的巍峨雪山，右侧天空点缀一抹彩虹。采用经典三分法构图，色彩上呈现强烈的冷暖对比（金黄麦浪 vs 湛蓝天空/白雪）。适合在秋季晴朗天气、光线充足的时段拍摄，无需复杂布光，依靠自然顺光即可还原高饱和度的通透质感。",
+  "ambience": {
+    "seasons": [
+      "秋季",
+      "夏末"
+    ],
+    "weathers": [
+      "晴朗",
+      "多云转晴"
+    ],
+    "timeTones": [
+      "上午",
+      "午后"
+    ]
+  },
+  "tags": [
+    "雪山",
+    "麦田",
+    "彩虹",
+    "治愈系",
+    "大风光"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "金黄麦浪铺满前景，远处雪山连绵，右侧天际隐现彩虹，色彩浓郁通透。"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·主构图",
+      "type": "composition",
+      "description": "采用经典横向三分法构图。画面下 1/2 至 2/3 区域完全被金黄色麦田占据，麦穗纹理清晰，形成强烈的视觉引导面；中景为深色山脉基底与林带，作为冷暖过渡；上 1/3 为蓝天、白云与雪山峰顶，右侧云层下方有一道淡淡的彩虹。机位平视或微俯，强调地面的广阔延伸感。",
+      "compositionFrame": "下三分之二为金色麦田前景，上三分之一为雪山与蓝天背景，地平线位于画面垂直方向约 55%-60% 处，右侧天空留白容纳彩虹。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape_horizon_thirds"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "horizontal_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.3,
+    "description": "竖幅 3:4 构图。大远景景别。地平线置于画面中上部（约 0.55 高度），刻意压低天空比例以突出前景麦田的浩瀚。主体（麦田+雪山）占满画幅，无多余留白。利用麦浪的横向纹理作为隐性引导线，将视线引向远处的雪山主峰。",
+    "subjectFrame": {
+      "x": 0.0,
+      "y": 0.0,
+      "w": 1.0,
+      "h": 1.0
+    }
+  },
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "自然顺光/侧顺光。主光从屏幕右上方来（依据右侧云层高光及彩虹位置判断），光线硬朗明亮，光比中等（约 3:1）。阴影落在麦穗背光侧及山体背阴面，边缘较硬。无需补光，纯自然光拍摄。",
+    "shootingDistance": "无限远（风景远景）",
+    "background": "连绵雪山、蓝天白云、右侧彩虹",
+    "props": [],
+    "bestTime": "10:00-15:00",
+    "tips": [
+      "寻找高处或开阔地带，确保前景麦田无遮挡，能完整收纳远处雪山轮廓。",
+      "测光点选在麦田亮部与雪山之间，避免天空过曝或麦田欠曝；若天空过亮，可略微降低曝光补偿（-0.3 至 -0.7）并在后期提亮阴影。",
+      "彩虹通常出现在太阳对面，拍摄时注意站位，让太阳在身后或侧后方，才能拍到前方的彩虹。",
+      "真机无法实现光学浅景深，本模板依靠大景深全景清晰呈现，后期通过 sharpen 增强麦穗细节，vignette 轻微压暗四角聚焦中心。",
+      "若现场光线平淡，可提高 saturation 和 contrast 模拟样片的浓郁感。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 5,
+      "contrast": 12,
+      "saturation": 18,
+      "temperature": 2,
+      "tint": 0,
+      "highlights": -10,
+      "shadows": 8,
+      "clarity": 15,
+      "vibrance": 10
+    },
+    "smoothStrength": 0,
+    "sharpen": 35,
+    "vignette": 15,
+    "grain": 5,
+    "lut": "fuji",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "全景填充",
+    "bodyFacing": {
+      "type": "无主体人物",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "无主体人物",
+      "azimuth": 0
+    },
+    "twist": "无",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "无"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "收纳完整地平线、前景麦田与远景雪山",
+    "cameraHeight": "平视",
+    "cameraAzimuth": "正拍",
+    "subjectScale": "环境占 100%，无单一主体，强调层次感",
+    "environmentRatio": "100%",
+    "headroom": "天空留白约占上部 35%-40%",
+    "framingNote": "竖幅大远景，压低地平线突出前景麦浪质感，上部保留雪山与天空细节。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "主光来自屏幕右上方，模拟午后阳光，角度约 45°-60°。",
+      "辅光轮廓光": "无专门辅光，依靠天空漫反射照亮阴影区。",
+      "光型软硬": "硬光为主，阳光直射，麦穗高光明显，山体明暗分界清晰。",
+      "光比": "中高光比，约 3:1 至 4:1，雪山亮部与山谷暗部反差较大。",
+      "阴影": "麦穗间细碎阴影，山体背光面阴影浓重，投向屏幕左下方。",
+      "质感": "麦穗呈现干燥、粗糙的纤维质感，高光处金黄发亮；雪山呈现冷冽、坚硬的岩石与冰雪质感；天空通透无噪点。",
+      "环境光": "整体环境光充足，蓝天提供冷色氛围光，麦田反射暖色光。",
+      "色温对比": "前景暖（金黄），背景冷（蓝白），形成鲜明冷暖对比。"
+    },
+    "lightToParams": "提高 contrast(12) 强化山体立体感；saturation(18) + vibrance(10) 增强麦浪金黄与天空湛蓝；highlights(-10) 防止雪山与云层过曝；shadows(8) 提亮山谷暗部细节；temperature(2) 微暖以贴合丰收氛围；clarity(15) + sharpen(35) 强化麦穗与山石纹理；lut 选用 fuji 增强胶片感的色彩浓度。"
+  },
+  "styling": {
+    "subjectType": "自然风景",
+    "clothingLayers": {
+      "上装": "N/A",
+      "下装": "N/A",
+      "衣角处理": "N/A",
+      "袖子": "N/A",
+      "领口": "N/A",
+      "鞋袜": "N/A",
+      "叠穿层次": "N/A"
+    },
+    "accessories": "N/A",
+    "hairMakeup": "N/A",
+    "objectStyle": "前景：密集金黄色成熟麦穗，纹理清晰；中景：深绿色/褐色林带与山麓；远景：灰白色岩石雪山，覆盖积雪；天空：湛蓝底色，白色积云，右侧淡彩虹。",
+    "note": "重点在于捕捉季节性的色彩对比（金秋 vs 雪山），确保天气通透度高。"
+  }
+}
+
+来源为小红书

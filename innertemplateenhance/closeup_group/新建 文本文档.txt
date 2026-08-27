@@ -1,0 +1,155 @@
+{
+    "name": "日式乌冬暖食美食模板",
+    "category": "food",
+    "classification": {
+        "type": "food",
+        "majorStyle": "美食静物",
+        "subStyle": "日式居酒屋暖调",
+        "method": "桌面近摄环境氛围感"
+    },
+    "shortDesc": "热气氤氲的暖汤乌冬，居酒屋烟火感，温柔治愈🍜",
+    "description": "美食静物拍摄模板，适用于面馆居酒屋桌面实拍，柔和暖环境光捕捉面食热气，突出面条汤面质感，背景虚化交代餐厅环境，适合拍摄热汤面、日式简餐类食物。",
+    "ambience": {
+        "seasons": ["冬季", "秋季"],
+        "weathers": ["不限"],
+        "timeTones": "室内暖黄光"
+    },
+    "tags": ["美食摄影", "日式料理", "暖调烟火", "桌面静物", "热食蒸汽"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "居酒屋桌上一碗冒着热气的乌冬面，葱花芝麻点缀"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "美食主构图",
+            "type": "composition",
+            "description": "面碗主体放置画面中下区域，遵循九宫格构图，桌面形成斜向引导线，上方预留空间容纳升腾蒸汽，背景做环境虚化处理，保留餐厅环境氛围感。",
+            "compositionFrame": "碗作为核心主体居于画面中下，占据画面宽度约三分之二；画面上半部分留白，留给蒸汽与虚化的餐厅背景；桌面从屏幕左下向屏幕右上延伸做引导线；四周适当留桌面边缘，不要把碗完全贴紧画面边界。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "food_bowl_center_bottom"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.58
+            },
+            "scale": 0.88,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "ninth",
+        "aspectRatio": "1:1",
+        "opacity": 0.3,
+        "description": "静物近景，略微俯拍45°机位；面碗主体位于画面中下，主体占画幅62%；上部留出蒸汽与背景空间，环境背景占画幅38%；四周保留部分桌面。",
+        "subjectFrame": {
+            "x": 0.16,
+            "y": 0.38,
+            "w": 0.68,
+            "h": 0.58
+        }
+    },
+    "camera": {
+        "exposureCompensation": 0.15,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "incandescent",
+        "whiteBalanceK": 5800,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕左上方45°照射主体，属于柔和漫射室内环境光；无强烈硬阴影，光比约2.5:1；阴影柔和弥散，落在碗的屏幕右下方；背景多处暖黄色环境灯光提供环境氛围光；整体主体暖调。",
+        "shootingDistance": "0.7‑1.1m",
+        "background": "日式面馆居酒屋虚化背景，木质餐桌，远处模糊的吧台、暖黄色吊灯，不要杂乱杂物入镜。",
+        "props": ["粗陶深色面碗", "乌冬热汤面", "葱花、白芝麻", "木质餐桌"],
+        "bestTime": "室内晚间18:00‑21:00",
+        "tips": [
+            "拍摄刚出锅热食，利用真实蒸汽营造氛围感；蒸汽效果为物理实拍，相机无法生成蒸汽。",
+            "靠近食物主体，尽量拉远背景距离，模拟浅景深虚化；手机无法实现光学大光圈虚化，依靠构图+后期暗角辅助突出主体。",
+            "关闭闪光灯，避免汤面反光过曝。",
+            "碗不要完全居中，略微下沉，上方留出蒸汽升腾的画面空间。",
+            "环境尽量使用室内暖黄光，避开冷白光灯管。"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "1:1",
+        "color": {
+            "brightness": 4,
+            "contrast": -4,
+            "saturation": 10,
+            "temperature": 6,
+            "tint": 1,
+            "highlights": -12,
+            "shadows": 8,
+            "clarity": 10
+        },
+        "smoothStrength": 0,
+        "sharpen": 24,
+        "vignette": 28,
+        "grain": 22,
+        "lut": "warm_food"
+    },
+    "orientation": {
+        "framePosition": "画面中下区域，x0.5 y0.58",
+        "bodyFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "faceFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "twist": "正身",
+        "headPitch": 0,
+        "headRoll": 0,
+        "gaze": "无（美食静物）"
+    },
+    "framing": {
+        "shotSize": "近景",
+        "shotSizeNote": "碗完整入镜，连带部分桌面与上方蒸汽空间",
+        "cameraHeight": "高机位俯拍",
+        "cameraAzimuth": "斜侧 45°",
+        "subjectScale": "主体约占画幅62%",
+        "environmentRatio": "环境背景占画幅38%",
+        "headroom": "画面上方预留约1/4高度用于蒸汽",
+        "framingNote": "美食近景，45°俯拍，碗置于中下，上留蒸汽空间，虚化交代居酒屋环境。"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "主光屏幕左上方45°柔和漫射光",
+            "辅光轮廓光": "无专门轮廓光，背景环境灯做氛围补光",
+            "光型软硬": "柔光，过渡柔和，无锐利硬边阴影",
+            "光比": "约2.5:1，中等偏低反差",
+            "阴影": "阴影弥散柔和，投向屏幕右下方，浓度偏浅",
+            "质感": "汤面油润反光，面条纹理清晰，蒸汽朦胧通透；背景灯光形成柔和光斑，保留食物真实肌理，不做柔化磨皮",
+            "环境光": "背景多处屏幕上方暖黄色吊灯环境光",
+            "色温对比": "整体统一暖黄，主体与背景同为暖调，冷暖对比弱"
+        },
+        "lightToParams": "调高whiteBalanceK、temperature增加暖调；降低contrast，提升shadows保留暗部细节；vignette压暗四角，grain增加餐厅胶片氛围感；highlights压低防止蒸汽过曝。"
+    },
+    "styling": {
+        "subjectType": "热汤乌冬面美食静物",
+        "clothingLayers": {
+            "上装": "",
+            "下装": "",
+            "衣角处理": "",
+            "袖子": "",
+            "领口": "",
+            "鞋袜": "",
+            "叠穿层次": ""
+        },
+        "accessories": "",
+        "hairMakeup": "",
+        "objectStyle": "深色粗陶纹理面碗，饱满粗圆乌冬面条，浅褐色面汤；顶部撒切碎鲜绿色葱花、白芝麻做色彩点缀；热气向上升腾；放置深棕色哑光木质桌面。",
+        "note": "摆盘要点：葱花集中放在面条中心，芝麻少量撒在葱花一侧，汤面微微没过面条，不要溢出碗口。"
+    }
+}

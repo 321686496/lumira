@@ -1,0 +1,245 @@
+{
+  "name": "莫奈花园·彩虹花田",
+  "category": "landscape",
+  "classification": {
+    "type": "landscape",
+    "majorStyle": "田园风光",
+    "subStyle": "花海景观",
+    "method": "广角引导线构图"
+  },
+  "shortDesc": "晨雾漫过起伏丘陵，彩虹色花带如绸缎铺展，治愈系田园梦境，把春天装进镜头里🌸",
+  "description": "这是一套专为广阔花海/梯田景观设计的风景摄影模板。利用起伏的地形与人工种植的色彩条带（薰衣草紫、樱花粉、油菜黄等），构建出极具纵深感的视觉引导线。光影上捕捉日出或日落时分的低角度柔光，营造朦胧、梦幻的油画质感。适用于春季或初夏的花田、公园、郊野拍摄，适合追求治愈系、ins风、大片感的摄影爱好者。",
+  "ambience": {
+    "seasons": [
+      "春季",
+      "初夏"
+    ],
+    "weathers": [
+      "晴朗",
+      "薄雾",
+      "多云"
+    ],
+    "timeTones": [
+      "日出黄金时刻",
+      "日落黄金时刻"
+    ]
+  },
+  "tags": [
+    "治愈系风景",
+    "彩虹花田",
+    "田园油画",
+    "广角大片",
+    "春日限定"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "晨雾中的薰衣草与多彩花带，逆光柔焦，梦幻开场"
+    },
+    {
+      "imageIndex": 1,
+      "role": "效果图",
+      "caption": "起伏丘陵上的彩虹色块拼接，层次丰富，色彩明快"
+    },
+    {
+      "imageIndex": 2,
+      "role": "效果图",
+      "caption": "橙白相间的波浪纹理花田，强烈的线条韵律感"
+    },
+    {
+      "imageIndex": 3,
+      "role": "效果图",
+      "caption": "蜿蜒小路穿过 pastel 色系花海，经典的 S 型引导线构图"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·晨曦雾霭",
+      "type": "composition",
+      "description": "大远景平视构图。画面下方 2/3 被紫色、粉色、黄色的条状花田占据，花带呈放射状向画面中心远方汇聚，形成强烈的透视引导线。画面上方 1/3 为天空与远山，太阳位于中轴线略偏左位置，发出柔和的星芒，晨雾弥漫在地平线处，柔化了远景细节。右侧山坡上有几棵孤树作为点缀，打破水平线的单调。整体氛围静谧、神圣。",
+      "compositionFrame": "三分法构图，地平线位于上 1/3 处；引导线从底部两角向中心消失点汇聚；主体花田占画面 65%，天空留白 35%。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape_horizon_guide"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.6
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 1,
+      "name": "附加·层叠丘陵",
+      "type": "composition",
+      "description": "大远景略微俯拍。利用连绵起伏的丘陵地形，将不同颜色的花田（粉、白、紫、黄）像补丁一样铺陈在山坡上。前景是清晰的粉色和紫色花丛，中景是蜿蜒的色带，远景是绿色的山脊线和散落的树木。光线从上方云层透出，照亮了部分山坡，形成明暗交织的立体感。色彩饱和度较高，呈现童话般的视觉效果。",
+      "compositionFrame": "对角线趋势构图，色带沿山势蜿蜒；前景花卉占底部 1/4，中远景丘陵占 3/4；强调色彩的区块分割与层次感。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape_rolling_hills"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 2,
+      "name": "附加·波浪韵律",
+      "type": "composition",
+      "description": "中远景平视。画面主体是橙色与白色相间的花田，种植成流畅的 S 型或波浪型曲线，充满动感与韵律。前景是密集的橙色花朵，细节清晰；中景是黑白橙相间的条纹延伸至远方；背景是绿色的草坡和五棵排列整齐的树木，天空多云，光线均匀柔和。这种构图强调线条的流动美和色彩的对比冲击。",
+      "compositionFrame": "S 型曲线构图，波浪线横贯画面中部；前景花卉虚化程度低，强调纹理；背景树木位于上 1/5 处作为视觉锚点。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape_s_curve"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 3,
+      "name": "附加·曲径通幽",
+      "type": "composition",
+      "description": "高机位俯拍。一条灰色的蜿蜒小路从右下角延伸至画面深处，将画面分割。路两侧是 pastel 色系（淡粉、淡紫、米白、浅橙）的条状花田，顺着山势起伏。光线从左上方射入，在右侧山坡投下长长的阴影，增强了地形的立体感。整体色调温柔、低饱和，呈现出高级的奶油质感。",
+      "compositionFrame": "引导线构图（道路），道路呈反 S 型；俯视角度约 30-45 度；主体道路与花田占满全画幅，无天空留白，强调地面纹理。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape_winding_path"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "golden_spiral",
+    "aspectRatio": "16:9",
+    "opacity": 0.25,
+    "description": "大远景风景构图。核心在于利用花田的自然线条（直线放射、S 型曲线、波浪线）作为视觉引导，将观众视线引向远方或画面趣味点（如孤树、太阳）。机位多为平视或轻微俯拍，以展现花海的广阔与层次。主体花田通常占据画面 60%-80%，天空或远山作为背景留白。",
+    "subjectFrame": {
+      "x": 0.0,
+      "y": 0.3,
+      "w": 1.0,
+      "h": 0.7
+    }
+  },
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "custom",
+    "whiteBalanceK": 6200,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "广角镜头",
+    "lensSuggestion": "wide_angle_0.6x"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光为自然太阳光。图 1 为逆光/侧逆光，光源来自屏幕正前方偏上，晨雾柔化光线，光比低，阴影柔和投向屏幕后方；图 2/4 为侧顺光，光源来自屏幕左上方，光比中等，山坡右侧有投影；图 3 为漫射光/顶光，云层遮挡，光比极低，无明显硬阴影。无需人工补光，纯自然光拍摄。",
+    "shootingDistance": "5m-无穷远",
+    "background": "起伏的绿色丘陵、远处的树林、带有晨雾或云彩的天空",
+    "props": [],
+    "bestTime": "06:00-07:30 (晨雾逆光) 或 17:00-18:30 (日落暖光)",
+    "tips": [
+      "寻找制高点或站在田埂高处，使用广角镜头（0.6x）以收纳更多花田线条，增强纵深感。",
+      "利用花田的种植行作为天然引导线，将对焦重点放在前景清晰的花朵上，让背景自然延伸。",
+      "图 1 效果需在有晨雾或薄云的日出时分拍摄，若光线过硬，可降低曝光补偿 (-0.3) 并后期提亮阴影。",
+      "真机无法实现光学长焦压缩感，建议物理靠近前景花卉，同时保持背景在画面内，利用透视关系模拟层次。",
+      "色彩还原关键：白平衡 K 值设在 6000-6500 之间，保留阳光的暖意但不过分偏黄，确保紫色和粉色不偏色。",
+      "若现场光线平淡（如阴天），后期需增加 vibrance (+15) 和 clarity (+10) 来提振花朵的质感与色彩分离度。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "16:9",
+    "color": {
+      "brightness": 6,
+      "contrast": -4,
+      "saturation": 12,
+      "temperature": 5,
+      "tint": 3,
+      "highlights": -10,
+      "shadows": 8,
+      "vibrance": 15,
+      "clarity": 8
+    },
+    "smoothStrength": 15,
+    "sharpen": 25,
+    "vignette": 12,
+    "grain": 8,
+    "lut": "pastel",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "全景覆盖，无特定单一主体位置，强调面状分布",
+    "bodyFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "twist": "N/A",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "N/A"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "涵盖广阔花田与天空/远山，强调环境气势",
+    "cameraHeight": "平视 / 轻微高机位俯拍",
+    "cameraAzimuth": "正拍 / 斜侧 45°",
+    "subjectScale": "花田主体占画幅 60%-80%",
+    "environmentRatio": "天空/远山背景占 20%-40%",
+    "headroom": "N/A (风景题材，指天空留白比例约 1/3)",
+    "framingNote": "利用广角镜头夸大前景，通过花田线条引导视线至远方消失点，构建深邃的空间感。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "图 1 逆光 (屏幕前上方); 图 2/4 侧顺光 (屏幕左上方); 图 3 漫射顶光",
+      "辅光轮廓光": "图 1 有大气散射形成的柔光罩效果，花瓣边缘有微弱轮廓光",
+      "光型软硬": "图 1 极柔 (雾); 图 2/4 中等 (直射 + 云); 图 3 柔 (阴/多云)",
+      "光比": "图 1 低 (1:2); 图 2/4 中 (1:3); 图 3 低 (1:1.5)",
+      "阴影": "图 1 无硬影; 图 2/4 山坡背光面有软阴影; 图 3 无明显阴影",
+      "质感": "花瓣呈现丝绒般哑光质感，晨雾带来空气透视的朦胧感，高光处有轻微光晕",
+      "环境光": "天空漫反射光为主，地面受光均匀",
+      "色温对比": "整体偏暖 (金黄/粉紫)，图 3 略偏中性奶油调"
+    },
+    "lightToParams": "whiteBalanceK:6200 定调暖色基底; temperature:+5 微调增暖; highlights:-10 防止天空过曝; shadows:+8 提亮花田暗部细节; vibrance:+15 增强花朵色彩鲜艳度而不失真; lut:pastel 统一柔和明亮的基调。"
+  },
+  "styling": {
+    "subjectType": "自然景观 / 花海",
+    "clothingLayers": {
+      "上装": "N/A",
+      "下装": "N/A",
+      "衣角处理": "N/A",
+      "袖子": "N/A",
+      "领口": "N/A",
+      "鞋袜": "N/A",
+      "叠穿层次": "N/A"
+    },
+    "accessories": "N/A",
+    "hairMakeup": "N/A",
+    "objectStyle": "条状种植的花卉 (薰衣草/郁金香/油菜花等)，色彩按区块分布 (紫/粉/黄/白/橙)，地形起伏有致",
+    "note": "重点在于花田的色彩搭配与种植线条的规整度，自然野花难以复刻此效果，需寻找人工规划的花海景区。"
+  }
+}

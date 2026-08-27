@@ -1,0 +1,244 @@
+{
+  "name": "森系逆光治愈人像",
+  "category": "portrait",
+  "classification": {
+    "type": "portrait",
+    "majorStyle": "森系清新",
+    "subStyle": "逆光唯美",
+    "method": "自然光人像"
+  },
+  "shortDesc": "林间碎金洒落，裙摆轻扬，捕捉那一抹松弛治愈的森系氧气感🌿✨",
+  "description": "这是一组充满呼吸感的森系逆光人像模板。场景设定在阳光穿透树叶的林间草地，利用强烈的自然逆光勾勒人物发丝与轮廓，配合正面柔和补光保留面部细节。穿搭以浅豆绿针织衫搭配多层碎花蛋糕裙为主，赤足踩在草地上，营造慵懒、自由、治愈的少女氛围。适合春夏季节晴朗午后拍摄，追求日系清透与胶片质感的人群。",
+  "ambience": {
+    "seasons": [
+      "春",
+      "夏"
+    ],
+    "weathers": [
+      "晴朗",
+      "多云转晴"
+    ],
+    "timeTones": [
+      "午后暖阳",
+      "黄金时刻"
+    ]
+  },
+  "tags": [
+    "森系",
+    "逆光",
+    "治愈",
+    "少女感",
+    "草地"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "蹲姿仰望，蕾丝头巾与逆光发丝交织，眼神清澈充满希望"
+    },
+    {
+      "imageIndex": 1,
+      "role": "效果图",
+      "caption": "赤足旋转，裙摆飞扬，捕捉动态下的快乐与自由"
+    },
+    {
+      "imageIndex": 2,
+      "role": "效果图",
+      "caption": "侧身伸手触碰阳光，肢体舒展，人与光影完美融合"
+    },
+    {
+      "imageIndex": 3,
+      "role": "效果图",
+      "caption": "回眸轻触树叶，背影杀与侧颜杀结合，静谧美好"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·蹲姿仰望",
+      "type": "people",
+      "description": "人物蹲在画面中央偏下，身体侧向屏幕左约45°，面部完全转向屏幕左上方仰视（headPitch +25°）。双手抬起至下巴处，指尖轻轻捏住蕾丝头巾的系带，手肘自然下垂。视线看向屏幕左上方的光源，嘴唇微张，表情宁静憧憬。头顶留白约1/5，前景有虚化草叶遮挡。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "squatting_looking_up"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 0.85,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 1,
+      "name": "附加·旋转裙摆",
+      "type": "people",
+      "description": "人物全身站立于画面中央，身体背对镜头略偏屏幕左（azimuth +135°），面部回转看向屏幕右后方（faceFacing azimuth -45°），形成回眸笑。双臂向身体两侧水平张开（约90°），手掌放松。双腿赤足踩在草地上，重心在右腿，左腿微曲脚尖点地，呈现旋转中的动态平衡。裙摆因离心力呈伞状散开。视线看向镜头方向，笑容灿烂。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "spinning_arms_out"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 0.95,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 2,
+      "name": "附加·伸手触光",
+      "type": "people",
+      "description": "人物全身侧立，身体面向屏幕左（azimuth +90°），面部仰起朝向屏幕左上方（headPitch +30°）。左臂（画面远端）自然下垂，右臂（画面近端）高高举起伸向屏幕左上方的阳光，手指自然舒展试图触碰光斑。双腿并拢站立，赤足。视线追随手指方向，表情虔诚享受。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "reaching_up_side"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 0.95,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 3,
+      "name": "附加·回眸触叶",
+      "type": "people",
+      "description": "人物全身背对镜头略偏屏幕右（azimuth -135°），面部回转看向屏幕右上方（faceFacing azimuth -45°，headPitch +10°）。右臂抬起伸向屏幕右侧的树枝，指尖轻触绿叶；左臂自然下垂于身侧。双腿赤足站立，重心平稳。视线看向树叶或远方，神情温柔恬淡。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "back_view_touching_leaf"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 0.95,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "none",
+    "aspectRatio": "9:16",
+    "opacity": 0.3,
+    "description": "竖构图全身/七分身人像。机位平视或微低角度仰拍以显修长。主体置于画面水平居中或三分线位置，垂直方向占满画幅大部分，头顶留白1/5-1/4，脚底接近或切出画面下缘。背景为虚化的树林与光斑，前景偶有虚化草叶增加层次。",
+    "subjectFrame": {
+      "x": 0.25,
+      "y": 0.1,
+      "w": 0.5,
+      "h": 0.85
+    }
+  },
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "shade",
+    "whiteBalanceK": 6800,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "强自然逆光，主光源来自屏幕正上方及后方（树冠间隙），形成明显的轮廓光和发丝光；正面需补光以照亮面部暗部。光质柔和漫射（经过树叶过滤），光比约1:4（背景亮主体暗，靠补光平衡）。阴影落在人物正面下方，边缘极软。",
+    "shootingDistance": "2.0-3.0m",
+    "background": "茂密的绿色树林，阳光透过树叶形成圆形光斑（Bokeh），地面为绿色草坪",
+    "props": [
+      "白色蕾丝波点头巾",
+      "无（赤足）"
+    ],
+    "bestTime": "15:00-17:00",
+    "tips": [
+      "【关键】必须开启补光灯或使用反光板：由于是强逆光拍摄，人脸会黑，需从屏幕正面距离1-1.5米处打柔光（亮度约1500-2000lm），使面部曝光正常且眼神有光。",
+      "寻找树叶缝隙漏下的光斑作为背景，避免直射阳光打在脸上造成硬阴影。",
+      "拍摄旋转动作（图2）时，提高快门速度或使用连拍模式捕捉裙摆最佳形态。",
+      "前景可手持几根草叶靠近镜头制造虚化前景，增加画面层次感（如图1）。",
+      "真机无法实现光学大光圈虚化，请尽量让人物远离背景树木（至少3米以上），并靠近镜头，配合后期smoothStrength模拟景深。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "9:16",
+    "color": {
+      "brightness": 8,
+      "contrast": -5,
+      "saturation": -10,
+      "temperature": 5,
+      "tint": 3,
+      "highlights": -15,
+      "shadows": 20
+    },
+    "smoothStrength": 40,
+    "sharpen": 15,
+    "vignette": 10,
+    "grain": 12,
+    "lut": "japanese_fresh",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": true,
+      "color": 4294964058,
+      "intensity": 0.75
+    }
+  },
+  "orientation": {
+    "framePosition": "封面：中下；图2/3/4：居中",
+    "bodyFacing": {
+      "type": "侧向屏幕左/背对/侧向屏幕右",
+      "azimuth": 45
+    },
+    "faceFacing": {
+      "type": "仰视/回眸/侧视",
+      "azimuth": -45
+    },
+    "twist": "颈部扭转明显，形成回眸或仰望姿态",
+    "headPitch": 15,
+    "headRoll": 5,
+    "gaze": "看向光源/镜头/树叶"
+  },
+  "framing": {
+    "shotSize": "封面：七分身/近景；其余：全身",
+    "shotSizeNote": "封面裁切至大腿中部，强调神态；其余展示完整肢体语言与裙摆",
+    "cameraHeight": "平视/微仰拍",
+    "cameraAzimuth": "斜侧45°/正侧面",
+    "subjectScale": "主体占画幅60%-80%",
+    "environmentRatio": "环境占30%-40%，主要为虚化背景",
+    "headroom": "头顶留白约15%-20%",
+    "framingNote": "竖屏全身像，强调人物与环境的融合，利用纵深感突出主体"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕后上方逆光，穿过树叶",
+      "辅光轮廓光": "头发边缘有强烈金色轮廓光；正面有柔和补光填充面部",
+      "光型软硬": "背景光硬（点光源），面部光软（漫反射/补光）",
+      "光比": "背景:主体 ≈ 3:1 (经补光后)",
+      "阴影": "面部阴影极淡，鼻下微影，投向屏幕下方",
+      "质感": "皮肤磨皮柔滑白皙，头发高光明显，衣物纹理清晰但柔和",
+      "环境光": "整体笼罩在暖绿色调的环境光中",
+      "色温对比": "高光偏暖黄，阴影偏冷绿"
+    },
+    "lightToParams": "whiteBalanceK:6800 (偏暖还原阳光感); highlights:-15 (压制背景过曝); shadows:+20 (提亮面部暗部); fillLight:enabled (模拟正面补光); lut:japanese_fresh (提亮降饱和)"
+  },
+  "styling": {
+    "subjectType": "年轻女性",
+    "clothingLayers": {
+      "上装": "浅豆绿色/米白色细坑条针织长袖衫，修身剪裁，V领或圆领",
+      "下装": "多层拼接蛋糕长裙，上层为白底小碎花，下层为浅绿格纹，材质轻薄飘逸",
+      "衣角处理": "上衣下摆塞入裙腰或自然垂落（图1似塞入，图2-4自然）",
+      "袖子": "微喇袖口，增加灵动感",
+      "领口": "简约圆领/V领，露出锁骨",
+      "鞋袜": "赤足（ barefoot），增强自然亲近感",
+      "叠穿层次": "无复杂叠穿，注重单品本身的层次感（裙子）"
+    },
+    "accessories": "白色镂空蕾丝三角头巾，边缘带有小毛球装饰（仅图1佩戴）",
+    "hairMakeup": "深棕色齐肩短发/波波头，发尾微卷，空气刘海；妆容清透伪素颜，强调腮红与唇色的元气感，眉毛自然野生眉",
+    "objectStyle": "无手持道具，主要与环境（草、树、光）互动",
+    "note": "整体色调统一在绿色与白色系，避免高饱和度颜色破坏清新感"
+  }
+}

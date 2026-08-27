@@ -1,0 +1,223 @@
+{
+    "name": "秋日建筑街拍松弛人像",
+    "category": "portrait",
+    "classification": {
+        "type": "portrait",
+        "majorStyle": "知性氛围感",
+        "subStyle": "复古都市街拍",
+        "method": "自然光环境人像"
+    },
+    "shortDesc": "秋日午后金阳洒落，温柔知性，演绎慵懒高级都市感🍂",
+    "description": "都市建筑外墙户外人像模板，利用午后硬调自然光拍摄，穿搭为交叉扭结针织上衣+垂感阔腿长裤，手拿外套做道具，包含站立回眸、侧身、静坐多组姿势，适合轻熟气质女生，晴天下午户外建筑墙面场景使用。",
+    "ambience": {
+        "seasons": ["秋季", "初冬"],
+        "weathers": ["晴天"],
+        "timeTones": "午后金阳光感"
+    },
+    "tags": ["街拍人像", "自然光", "轻熟风", "建筑背景", "松弛感"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "靠墙站立，手搭外套，直面镜头松弛氛围感"
+        },
+        {
+            "imageIndex": 1,
+            "role": "效果图",
+            "caption": "侧身回头，一手插兜，望向画面外侧"
+        },
+        {
+            "imageIndex": 2,
+            "role": "效果图",
+            "caption": "石阶静坐，低头垂眸，捕捉安静柔和瞬间"
+        },
+        {
+            "imageIndex": 3,
+            "role": "效果图",
+            "caption": "向前迈步，手提外套，动态行走抓拍"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "封面·靠墙站立",
+            "type": "people",
+            "description": "身体略微转向屏幕左45°，面部朝向镜头，头颈端正微收下巴；重心落在屏幕右侧腿，屏幕左侧腿微微放松；屏幕右手抱着深色外套，手臂弯曲收于腰腹位置；屏幕左手自然垂落；视线看向镜头，表情柔和松弛，身体轻靠石质墙面。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "standing_relax_lean"
+            },
+            "position": {
+                "x": 0.46,
+                "y": 0.44
+            },
+            "scale": 0.94,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 1,
+            "name": "侧身回眸插兜",
+            "type": "people",
+            "description": "身体侧向屏幕左，面部转向屏幕右约90°回眸，下巴微微抬起；重心放在屏幕右腿，屏幕左腿微松；屏幕左手插入裤兜，手肘向后；屏幕右手挎拿外套与小包；视线望向屏幕画面外侧，不看镜头，姿态慵懒舒展。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "standing_twist_backlook"
+            },
+            "position": {
+                "x": 0.54,
+                "y": 0.48
+            },
+            "scale": 0.92,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 2,
+            "name": "石阶静坐低头",
+            "type": "people",
+            "description": "人物坐在石阶上，身体微微前倾；身体朝向屏幕左前方，面部向下低头headPitch‑20°；屏幕左手撑在石阶台面上，手指放松张开；屏幕右手收拢放在腿上；头发散落，视线看向地面，不看镜头，情绪安静内敛。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "sit_stoop_lookdown"
+            },
+            "position": {
+                "x": 0.48,
+                "y": 0.56
+            },
+            "scale": 0.98,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 3,
+            "name": "行走动态抓拍",
+            "type": "people",
+            "description": "身体正对镜头略微侧转，头部微仰；模拟向前行走，重心落在屏幕左腿；屏幕右手自然下垂，屏幕左手拎住深色外套下摆；手臂随行走自然摆动，视线看向镜头，姿态洒脱舒展。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "walking_casual"
+            },
+            "position": {
+                "x": 0.44,
+                "y": 0.46
+            },
+            "scale": 0.96,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "third",
+        "aspectRatio": "3:4",
+        "opacity": 0.3,
+        "description": "全身人像，机位平视，主体置于画面九宫格居中位置，主体占画幅约70%；头顶保留1/5留白，脚底贴近画面底边；石质建筑环境占画面30%左右，利用建筑线条做背景衬托人物。",
+        "subjectFrame": {
+            "x": 0.24,
+            "y": 0.04,
+            "w": 0.54,
+            "h": 0.95
+        }
+    },
+    "camera": {
+        "exposureCompensation": -0.15,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5200,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕左上方45°入射，属于晴天硬直射阳光；无明显辅光，有自然环境反光；光比约4:1；阴影投向屏幕右下方，阴影边缘锐利，浓度较深；皮肤保留哑光纹理，发丝出现高光勾边，墙面形成硬朗投影；环境光为日间自然光，整体画面偏暖调。",
+        "shootingDistance": "2.0‑2.5m",
+        "background": "粗面石材建筑墙体、石质台阶、木质大门，干净简约复古建筑外立面，避开杂乱杂物。",
+        "props": ["深色外套", "小型腋下挎包"],
+        "bestTime": "14:00‑16:00",
+        "tips": [
+            "尽量选择建筑墙面做背景，让阳光斜打在人物身上，避免顶光正午拍摄",
+            "手拿外套作为道具，可以缓解手臂无处安放的僵硬感",
+            "该样张真实效果依靠光学浅景深，手机无法实现大光圈虚化，拍摄时请人物远离背景，配合暗角来突出主体",
+            "抓拍行走姿势时可以开启连拍，选取肢体最松弛自然的那一帧",
+            "不要让阳光直射眼睛，避免人物眯眼，可轻微调整身体角度"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "3:4",
+        "color": {
+            "brightness": 2,
+            "contrast": 8,
+            "saturation": 6,
+            "temperature": 6,
+            "tint": 1,
+            "highlights": -18,
+            "shadows": 12,
+            "clarity": 10
+        },
+        "smoothStrength": 28,
+        "sharpen": 24,
+        "vignette": 26,
+        "grain": 22,
+        "lut": "warm_natural",
+        "systemFilter": "none",
+        "fillLight": {
+            "enabled": false,
+            "color": 4294959028,
+            "intensity": 0.8
+        }
+    },
+    "orientation": {
+        "framePosition": "画面居中，主体占据中间区域",
+        "bodyFacing": {
+            "type": "侧向屏幕左",
+            "azimuth": 45
+        },
+        "faceFacing": {
+            "type": "正对镜头",
+            "azimuth": 0
+        },
+        "twist": "身体微转，面部回正朝向镜头",
+        "headPitch": -5,
+        "headRoll": 0,
+        "gaze": "看向镜头"
+    },
+    "framing": {
+        "shotSize": "全身",
+        "shotSizeNote": "人物从头顶到脚底完整入画",
+        "cameraHeight": "平视",
+        "cameraAzimuth": "斜侧45°",
+        "subjectScale": "主体占画幅70%",
+        "environmentRatio": "环境背景占画幅30%",
+        "headroom": "头顶距离画面上缘约1/5画幅",
+        "framingNote": "全身平视机位，保留建筑环境，人物完整入镜，头顶适度留白"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "主光屏幕左上方45°",
+            "辅光轮廓光": "无人工辅光，环境漫反射微弱补光；发丝形成自然轮廓高光",
+            "光型软硬": "硬直射日光，阴影边缘锐利",
+            "光比": "约4:1",
+            "阴影": "阴影落向屏幕右下方，边缘锐利，阴影浓度深",
+            "质感": "皮肤哑光保留纹理，发丝高光勾边，石材墙面有硬朗投影，带有胶片颗粒质感",
+            "环境光": "户外日间环境光，整体暖调",
+            "色温对比": "主体与背景统一暖调，无强烈冷暖对冲"
+        },
+        "lightToParams": "exposureCompensation‑0.15，contrast+8，highlights‑18压低阳光高光，shadows+12找回暗部细节，temperature+6增加午后暖调，grain22模拟胶片颗粒"
+    },
+    "styling": {
+        "subjectType": "女性人像",
+        "clothingLayers": {
+            "上装": "浅咖灰调交叉扭结薄针织长袖上衣",
+            "下装": "深咖啡色垂感阔腿长裤",
+            "衣角处理": "上衣侧面扭结缠绕造型，衣摆收于腰腹",
+            "袖子": "长袖，面料轻薄柔软",
+            "领口": "V型交叉围裹领口",
+            "鞋袜": "浅米色平底鞋",
+            "叠穿层次": "手持深咖色大衣作为外搭道具，不穿上身"
+        },
+        "accessories": "小巧金属耳钉、细戒指、小型皮质腋下包",
+        "hairMakeup": "松散低盘发，留出碎发修饰脸型，淡妆知性气质",
+        "objectStyle": "",
+        "note": "配色选用低饱和大地色系，深浅咖色层次，适合秋日街拍，简约高级"
+    }
+}

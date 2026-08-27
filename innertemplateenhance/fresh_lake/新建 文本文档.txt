@@ -1,0 +1,178 @@
+{
+  "name": "夏日湖光·树荫框景",
+  "category": "landscape",
+  "classification": {
+    "type": "landscape",
+    "majorStyle": "自然清新",
+    "subStyle": "湖景风光",
+    "method": "框架式构图"
+  },
+  "shortDesc": "碧蓝湖水与翠绿草坪撞色，树荫斑驳洒落，夏日午后的治愈系明信片，一眼万年🌿💙",
+  "description": "这是一张典型的夏日自然风光摄影模板。采用经典的框架式构图，利用前景上方垂下的绿叶作为天然画框，将视线聚焦于中景高饱和度的碧蓝湖面与远景的林带。画面色彩明快，以青、绿、蓝为主色调，对比强烈且通透。光线为晴朗正午的硬调自然光，阴影清晰。适合在天气晴好的湖畔公园、度假村草坪拍摄，无需复杂道具，重在捕捉色彩与光影的层次感。",
+  "ambience": {
+    "seasons": [
+      "夏季",
+      "初秋"
+    ],
+    "weathers": [
+      "晴朗",
+      "蓝天白云"
+    ],
+    "timeTones": [
+      "正午",
+      "午后"
+    ]
+  },
+  "tags": [
+    "夏日湖景",
+    "框架构图",
+    "高饱和",
+    "治愈系",
+    "自然风光"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "绿叶为框，碧湖为底，树影斑驳的夏日午后极致色彩"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·主构图",
+      "type": "composition",
+      "description": "采用框架式构图与三分法结合。画面上方约1/4处由下垂的茂密绿叶占据，形成天然的前景遮挡与画框；画面下方约1/4为平整翠绿的草坪，带有清晰的树叶投影；中间1/2区域为高饱和度的碧蓝湖水与远处的深绿林带及蓝天白云。视觉重心位于湖面水平线，整体呈现上中下三层结构，色彩层次分明（绿-蓝-绿-蓝）。",
+      "compositionFrame": "顶部框架：屏幕上方0-25%区域填充下垂绿叶；底部基座：屏幕下方75-100%区域为绿色草坪；中部主体：屏幕25-75%区域为蓝色湖面与远山天际线。引导线为水平的湖岸线。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape_frame_top_bottom"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "horizontal_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.3,
+    "description": "竖构图大远景。机位平视。利用前景树叶（上部）和草坪（下部）夹持中景湖面。主体湖面占据画面中央核心位置，约占画幅50%。环境交代完整，天空占上部少量空间。无特定人物主体，强调风景的层次与色彩块面分割。",
+    "subjectFrame": {
+      "x": 0.0,
+      "y": 0.25,
+      "w": 1.0,
+      "h": 0.5
+    }
+  },
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5500,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光为晴朗正午的自然顶光/顺光，从屏幕上方偏后照射。光线硬朗，光比大（约4:1）。树叶在下方草坪投下边缘清晰、浓度较深的阴影，方向朝向屏幕下方。湖面有强烈的镜面反光。无需补光，纯自然光拍摄。",
+    "shootingDistance": "5-10m (面向湖面站立)",
+    "background": "开阔的碧蓝湖泊 + 对岸连绵的深绿色树林 + 蓝天白云",
+    "props": [
+      "无 (纯自然景观)"
+    ],
+    "bestTime": "11:00-14:00",
+    "tips": [
+      "寻找一棵枝叶茂密的大树，站在树荫下向湖面拍摄，利用下垂的树枝作为前景框架。",
+      "确保脚下是修剪整齐的草坪，以形成底部的绿色色块。",
+      "曝光补偿+0.3以防止草地和树叶欠曝变暗，但注意不要过曝导致天空死白。",
+      "真机无法实现光学浅景深，依靠前景树叶的自然遮挡和色彩对比来突出层次。",
+      "若阳光过于强烈导致反差过大，可后期适当提亮阴影(shadows)。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 5,
+      "contrast": 8,
+      "saturation": 18,
+      "temperature": -2,
+      "tint": 3,
+      "highlights": -10,
+      "shadows": 12,
+      "vibrance": 15
+    },
+    "smoothStrength": 0,
+    "sharpen": 25,
+    "vignette": 15,
+    "grain": 0,
+    "lut": "fuji",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "全景分布，无单一主体",
+    "bodyFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "twist": "N/A",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "N/A"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "涵盖前景树叶、中景湖面、远景山林的全景别",
+    "cameraHeight": "平视",
+    "cameraAzimuth": "正拍",
+    "subjectScale": "湖面占50%，前景树叶占25%，草坪占25%",
+    "environmentRatio": "100% 环境",
+    "headroom": "N/A",
+    "framingNote": "竖幅构图，利用上下前景夹持中景，强调色彩的横向分层。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕上方偏后，正午顶光",
+      "辅光轮廓光": "无，依靠环境漫反射",
+      "光型软硬": "硬光，直射阳光",
+      "光比": "高，约4:1",
+      "阴影": "草坪上有清晰的树叶投影，投向屏幕下方，边缘锐利，浓度深",
+      "质感": "树叶透光感强，湖面波光粼粼有高光，草坪纹理清晰",
+      "环境光": "明亮的蓝天散射光",
+      "色温对比": "整体偏冷调（蓝/绿），阳光处微暖"
+    },
+    "lightToParams": "高对比度(contrast +8)配合阴影提亮(shadows +12)保留暗部细节；高光压低(highlights -10)防止天空过曝；高饱和度(saturation +18)强化蓝绿对比。"
+  },
+  "styling": {
+    "subjectType": "自然风景",
+    "clothingLayers": {
+      "上装": "N/A",
+      "下装": "N/A",
+      "衣角处理": "N/A",
+      "袖子": "N/A",
+      "领口": "N/A",
+      "鞋袜": "N/A",
+      "叠穿层次": "N/A"
+    },
+    "accessories": "N/A",
+    "hairMakeup": "N/A",
+    "objectStyle": "翠绿阔叶植物 + 碧蓝平静湖水 + 修剪整齐的绿色草坪 + 远处深绿林带",
+    "note": "重点在于色彩的纯度与明度，绿色要翠绿不发黄，蓝色要青蓝不发灰。"
+  }
+}
