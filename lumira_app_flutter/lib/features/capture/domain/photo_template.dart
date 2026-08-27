@@ -891,7 +891,8 @@ class TransformParams {
 ///
 /// 用于可拖拽裁剪框方案（方案 6.2）：
 /// - x, y, w, h 均为相对值（0.0-1.0），表示裁剪区域在图片中的位置和大小
-/// - 跨不同图片尺寸通用，导出时由 [PhotoPostProcessor.computeCustomCropRect] 转为像素坐标
+/// - 坐标相对「裁剪 UI 显示的参考区域」（= 原图按比例裁剪后的可见区域），
+///   导出时由 [PhotoPostProcessor.computeCustomCropRect] 映射到参考区域内
 /// - null 表示未自定义（使用默认居中按比例裁剪）
 class CropRect {
   final double x;

@@ -6,6 +6,26 @@ import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
+/// 设备持握显示方向：竖屏 or 横屏（并给出横屏时内容要旋转到正向的 90° 圈数）。
+///
+/// 用于横屏拍摄时：把悬浮可折叠的「模板信息卡」等元素旋转到与持机方向一致的可读角度。
+/// 定义：
+/// - [portrait]：true=竖持，false=横持。
+/// - [quarterTurns]：相对竖屏，元素需**顺时针**旋转的 90° 圈数（仅 0/1/3）。
+///   - 0：竖持，无需旋转。
+///   - 1：横持且手机「顶部朝右」（即顺时针 90°，landscapeRight）→ 内容顺时针转 90°。
+///   - 3：横持且手机「顶部朝左」（landscapeLeft）→ 内容逆时针转 90°（= 顺时针 270°）。
+class HoldOrientation {
+  const HoldOrientation({required this.portrait, required this.quarterTurns});
+
+  final bool portrait;
+
+  /// 横屏时元素要顺时针旋转的 90° 圈数（0/1/3）。
+  final int quarterTurns;
+
+  bool get isLandscape => !portrait;
+}
+
 /// 水平仪读数。
 class LevelReading {
   const LevelReading({required this.angleDeg, required this.available});
@@ -101,39 +121,51 @@ class LevelSensorService {
     });
   }
 
-  /// 判定手机此刻是竖持(true)还是横持(false)。
+  /// 判定手机此刻是竖持(true)还是横持(false)，并给出横屏时内容旋转到正向的圈数。
   ///
-  /// 用于拍摄方向与比例切换。**不依赖 Flutter 窗口是否已旋转**：OHOS 引擎在窗口旋转时
-  /// 不一定把方向同步给 MediaQuery，导致横屏持机时 MediaQuery 恒报竖屏、成片恒为竖图。
-  /// 这里直接读加速度计判断"手机拿横了没"，与 iPhone 原相机一致。
+  /// 用于拍摄方向、比例切换与横屏悬浮卡旋转。**不依赖 Flutter 窗口是否已旋转**：
+  /// OHOS 引擎在窗口旋转时不一定把方向同步给 MediaQuery，导致横屏持机时 MediaQuery
+  /// 恒报竖屏、成片恒为竖图。这里直接读加速度计判断"手机拿横了没、哪边朝下"，
+  /// 与 iPhone 原相机一致。
   ///
-  /// 判定规则（[x,y,z] 为 m/s²，重力≈9.8）：竖持时重力主轴在屏幕 y 轴、横持时在 x 轴；
-  /// 故 |y|>=|x| 判定为竖持、|x|>|y| 判定为横持。
-  /// 手机平放（重力几乎全沿 z 轴，|x|、|y| 都小）时无左右方向感，发出 null，
-  /// 由调用方维持上次判定 / 回退到 MediaQuery。
-  static Stream<bool?> portraitnessStream() =>
-      _rawStream().transform(_portraitTransformer());
+  /// 判定规则（[x,y,z] 为 m/s²，重力≈9.8）：
+  /// - 竖持时重力主轴在屏幕 y 轴、横持时在 x 轴 → |y|>=|x| 判竖持、|x|>|y| 判横持。
+  /// - 横屏再按 [x] 正负分辨左右：x>0（重力沿 +x，手机右缘朝下）→ landscapeRight，
+  ///   内容顺时针转 90°（[HoldOrientation.quarterTurns]=1）；x<0 → landscapeLeft，
+  ///   内容逆时针转 90°（quarterTurns=3）。
+  /// - 手机平放（重力几乎全沿 z 轴，|x|、|y| 都小）时无左右方向感，维持上次判定。
+  static Stream<HoldOrientation> holdOrientationStream() =>
+      _rawStream().transform(_holdOrientationTransformer());
 
-  static StreamTransformer<List<double>, bool?> _portraitTransformer() {
-    bool? last;
+  static StreamTransformer<List<double>, HoldOrientation>
+      _holdOrientationTransformer() {
+    HoldOrientation? last;
     return StreamTransformer.fromHandlers(
-      handleData: (List<double> a, EventSink<bool?> sink) {
+      handleData: (List<double> a, EventSink<HoldOrientation> sink) {
         final x = a[0].abs();
         final y = a[1].abs();
         final z = a[2].abs();
         // 平放或接近平放：重力沿 z 轴，无竖/横持方向感 → 维持上次判定。
         if (z >= 1.0 && x < 2.0 && y < 2.0) {
-          sink.add(last);
+          if (last != null) sink.add(last!);
           return;
         }
-        last = y >= x;
-        sink.add(last);
+        final portrait = y >= x;
+        var quarterTurns = 0;
+        if (!portrait) {
+          // 横屏：按 [x] 正负分辨左右。如果真机观感旋转方向相反，把 1/3 对调即可。
+          quarterTurns = a[0] > 0 ? 1 : 3;
+        }
+        final orientation =
+            HoldOrientation(portrait: portrait, quarterTurns: quarterTurns);
+        last = orientation;
+        sink.add(orientation);
       },
-      handleError: (Object e, StackTrace st, EventSink<bool?> sink) {
-        sink.add(null);
+      handleError: (Object e, StackTrace st, EventSink<HoldOrientation> sink) {
+        if (last != null) sink.add(last!);
         sink.close();
       },
-      handleDone: (EventSink<bool?> sink) => sink.close(),
+      handleDone: (EventSink<HoldOrientation> sink) => sink.close(),
     );
   }
 

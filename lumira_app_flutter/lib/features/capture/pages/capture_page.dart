@@ -106,12 +106,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
     with WidgetsBindingObserver {
   bool _isLandscape = false;
 
+  /// 横屏时悬浮内容（模板信息卡）需顺时针旋转的 90° 圈数（0/1/3）。
+  /// 由传感器按左右持机方向给出，保证横屏时 tips 文字正向可读。
+  int _landscapeQuarterTurns = 0;
+
   /// 来自加速度传感器的竖/横持判定（true=竖持，false=横持，null=尚未判定/平放）。
   /// 用于拍摄方向与比例：OHOS 引擎窗口旋转时不一定更新 MediaQuery，横屏持机时
   /// MediaQuery 恒报竖屏，导致成片恒为竖图、3:4 也不翻成 4:3。这里改用传感器判断
   /// "手机拿横了没"，与 iPhone 原相机一致，且不依赖窗口是否旋转。
   bool? _devicePortrait;
-  StreamSubscription<bool?>? _devicePortraitSub;
+  StreamSubscription<HoldOrientation>? _devicePortraitSub;
 
   CameraPermissionStatus _permissionStatus = CameraPermissionStatus.unknown;
 
@@ -198,24 +202,24 @@ class _CapturePageState extends ConsumerState<CapturePage>
   @override
   void initState() {
     super.initState();
-    // 防御性放开横竖屏（与 main.dart 一致，幂等）：
-    // main() 里已设置允许旋转，但 hot reload 不会重跑 main()；这里在拍摄页
-    // 初始化时再次确保方向不锁死。否则横屏持机时 MediaQuery 恒为竖屏，
-    // isPortrait 恒为 true → 成片仍是竖图、模板拍摄指南也不随横屏适配。
-    _forceUnlockRotation();
+    // UI 保持竖屏（与 main.dart 一致，幂等）：横屏拍摄的适配改走加速度传感器，
+    // 见 _devicePortrait 字段注释。hot reload 不会重跑 main()，这里再次确认竖屏锁定。
+    _lockPortrait();
     // 订阅加速度传感器判定竖/横持：见 _devicePortrait 字段注释。仅当判定翻转时
     // setState，避免传感器高频回调触发不必要的重建。
     _devicePortraitSub =
-        LevelSensorService.portraitnessStream().listen((portrait) {
-      if (portrait == null || !mounted) return;
-      final newLandscape = !portrait;
-      if (newLandscape != _isLandscape) {
+        LevelSensorService.holdOrientationStream().listen((o) {
+      if (!mounted) return;
+      final newLandscape = o.isLandscape;
+      if (newLandscape != _isLandscape ||
+          o.quarterTurns != _landscapeQuarterTurns) {
         setState(() {
           _isLandscape = newLandscape;
-          _devicePortrait = portrait;
+          _landscapeQuarterTurns = o.quarterTurns;
+          _devicePortrait = o.portrait;
         });
       } else {
-        _devicePortrait = portrait;
+        _devicePortrait = o.portrait;
       }
     });
     // 从非拍摄页返回本拍摄页时，若本页面是被 retain（覆盖未销毁）的实例，
@@ -578,12 +582,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
-  /// 放开横竖屏旋转（幂等，与 main.dart 启动配置一致）。
-  Future<void> _forceUnlockRotation() async {
+  /// 锁定竖屏（幂等，与 main.dart 启动配置一致）。
+  ///
+  /// UI 整体保持竖屏，避免 iOS 横屏后整页布局被拉伸挤压。横屏拍摄的成片方向与
+  /// 悬浮模板信息卡的旋转，均由加速度传感器驱动（见 [_devicePortrait]），不依赖
+  /// 窗口是否旋转。hot reload 不会重跑 main()，这里在拍摄页初始化时再确认一次。
+  Future<void> _lockPortrait() async {
     await SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
     ]);
   }
 
@@ -780,7 +786,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // 开「水印」时水印随后单独用「原生解码 + 原生编码」合成（见下方水印分支），绕开
     // GPU toByteData 读回 + isolate 逐像素 + 软件编码（日志实测那套要 4.5s+）。
     // 失败一律回退下面原有 GPU+isolate+水印管线，绝不阻塞拍摄。iOS/Android 不走此分支。
+    // 横屏拍摄不走原生：OHOS processJpeg 的几何变换是「居中等比裁窗」（天然等价旋转的
+    // 前提是目标宽高比与源一致），横屏持机时源/目标纵横比翻转，裁窗会直接切掉内容而非
+    // 转正，成片方向错误。这里用加速度传感判定出的 isPortrait 把关：横屏一律走下面的
+    // GPU+isolate 管线（该管线按 isPortrait 做真正的 90° 旋转），竖屏才走原生快速路径。
     final fastNative = _isOhos &&
+        params.isPortrait &&
         params.postProcess.smoothStrength == 0 &&
         params.postProcess.vignette == 0 &&
         params.postProcess.grain == 0 &&
@@ -1541,6 +1552,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
                   else
                     TemplateInfoCard(
                       template: template,
+                      isLandscape: _isLandscape,
+                      quarterTurns: _landscapeQuarterTurns,
                       onHide: _hideTemplateInfoCard,
                     ),
               ],
@@ -3843,74 +3856,50 @@ List<int> _sampleAvgRgbFromRgba(ByteData byteData) {
   return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
 }
 
-/// 读取 iOS 原生在拍照瞬间缓存到 Documents/preview_ref.txt 的取景器帧中心平均色。
-/// 格式："R G B\n"。失败返回 null（后续走无校正回退）。
+/// 用「成片自身的中性灰区域」做自适应白平衡，构造逐通道增益校正矩阵（5x4）。
 ///
-/// 背景（方案A·预览锚定校色）：iOS 快照有独立白平衡/色调引擎，成片比取景器偏暖；
-/// 取景器视频帧走中性色管不黄。此基准即"Dart 端希望成片对齐的取景器颜色"。
-Future<List<int>?> _readPreviewColorReference() async {
-  try {
-    final dir = await getApplicationDocumentsDirectory();
-    final f = File('${dir.path}/preview_ref.txt');
-    if (!await f.exists()) return null;
-    final parts = (await f.readAsString()).trim().split(RegExp(r'\s+'));
-    if (parts.length < 3) return null;
-    final r = int.tryParse(parts[0]);
-    final g = int.tryParse(parts[1]);
-    final b = int.tryParse(parts[2]);
-    if (r == null || g == null || b == null) return null;
-    if ([r, g, b].any((v) => v < 8 || v > 247)) return null; // 过暗/过亮视为不可靠
-    return [r, g, b];
-  } catch (_) {
-    return null;
-  }
-}
+/// 【为什么不用取景器帧做基准】诊断数据（preview_ref.txt R-B=+30）证实：
+/// AVCaptureVideoDataOutput 的原生像素缓冲帧走非显示色管，本身偏黄偏亮，
+/// 把它当"中性基准"是把成片向更黄的地方拉；且一旦增益未正确中和，会连曝光一起动。
+///
+/// 【本方案】取相本帧里饱和度低、亮度适中的像素（灰/浅灰/中性区）的 R/G/B 均值，
+/// 将三通道增益把灰区拉回等量（R=G=B）→ 只抵消相机 ISP 对中性区域的色偏，不偏颇场景真实色彩。
+///
+/// 【曝光守恒铁律】灰区像素校正后其 RGB 应保持与原灰值一致的亮度 → 三通道增益几何均值
+/// （(gr*gg*gb)^(1/3)）必须为 1，这样中性灰像素灰度不变，全局曝光绝不动。仅当通道间
+/// 相对差异足够大（R-B 失衡，即偏黄/偏蓝）时才有非恒等的校正矩阵。
+List<double>? _buildAdaptiveWhiteBalanceMatrixFromRgba(
+    ByteData byteData, int width, int height) {
+  if (width <= 0 || height <= 0) return null;
 
-/// 对 rawRgba (ByteData, RGBA8888) 的中心 ~55% 区域做步进采样平均 RGB。
-/// 与 iOS 原生 cachePreviewColorReference 的中心区域一致，避免构图边缘差异干扰。
-List<int> _sampleCenterAvgRgbFromRgba(ByteData byteData, int width, int height) {
-  if (width <= 0 || height <= 0) return [0, 0, 0];
-  final x0 = (width * 0.225).round();
-  final y0 = (height * 0.225).round();
-  final x1 = (width * 0.775).round();
-  final y1 = (height * 0.775).round();
-  final step = (width * height / 20000).ceil().clamp(1, 64);
-  var r = 0.0, g = 0.0, b = 0.0, cnt = 0;
-  for (var y = y0; y < y1; y += step) {
-    for (var x = x0; x < x1; x += step) {
-      var i = (y * width + x) * 4;
+  // 收集中性灰/浅灰像素（低饱和度 + 中高亮度，避开纯黑/纯白/过曝与强饱和色）。
+  var ir = 0.0, ig = 0.0, ib = 0.0, n = 0;
+  for (var y = 0; y < height; y += 2) {
+    for (var x = 0; x < width; x += 2) {
+      final i = (y * width + x) * 4;
       if (i + 3 >= byteData.lengthInBytes) continue;
-      r += byteData.getUint8(i);
-      g += byteData.getUint8(i + 1);
-      b += byteData.getUint8(i + 2);
-      cnt++;
+      final r = byteData.getUint8(i);
+      final g = byteData.getUint8(i + 1);
+      final b = byteData.getUint8(i + 2);
+      // 低饱和度（通道间最大差 ≤ 24），亮度适中（20~235，排除过曝高光与暗部）。
+      final mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      final mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+      if (mx <= 0 || mx - mn > 24) continue;
+      if (mn < 20 || mx > 235) continue;
+      ir += r; ig += g; ib += b; n++;
     }
   }
-  if (cnt == 0) return [0, 0, 0];
-  return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
-}
+  if (n < 400) return null; // 灰区样本不足，不冒险校色
 
-/// 由「取景器平均色」与「成片平均色」构造逐通道增益校正矩阵（5x4）。
-/// 把成片通道均值推向取景器均值 → 消除快照 ISP 相对取景器的色偏。近似恒等时返回 null。
-///
-/// **亮度中性铁律**：取景器视频帧（video）通常比快照成片（photo）整体更亮
-/// （取景器有预提亮/显示增益），若直接用 preview/photo 逐通道独立缩放，三通道
-/// 增益都会 >1，整张成片被提亮而过曝。因此必须先把三通道增益做「亮度中性归一化」：
-/// 几何均值置为 1（中灰像素增益后灰值不变 → 全局亮度守恒），只保留通道间的相对
-/// 差异用于消除色偏。这样只校正"B/R 失衡（偏黄）"，绝不动曝光。
-List<double>? _buildPreviewAnchorCorrectionMatrix(
-    List<int> preview, List<int> photo) {
-  const double lo = 0.80, hi = 1.25;
-  double gain(int p, int c) {
-    if (c <= 0) return 1.0;
-    return (p / c).clamp(lo, hi);
-  }
+  final avgR = ir / n, avgG = ig / n, avgB = ib / n;
 
-  var gr = gain(preview[0], photo[0]);
-  var gg = gain(preview[1], photo[1]);
-  var gb = gain(preview[2], photo[2]);
+  // 目标：把灰区三通道的平均值推到相同（中性）→ 逐通道增益。
+  // 以 G 为亮度锚，R/B 向 G 对齐：若灰区偏黄（R>G>B），则 R 需小幅下降、B 需小幅抬升。
+  var gr = (avgG / avgR).clamp(0.88, 1.12);
+  var gg = 1.0;
+  var gb = (avgG / avgB).clamp(0.88, 1.12);
 
-  // 亮度中性化：三通道几何均值归 1，只保留色度（通道间相对差异）。
+  // 曝光守恒：三通道几何均值归 1，只保留通道间相对差异。
   final gmean = math.pow(gr * gg * gb, 1.0 / 3.0).toDouble();
   if (gmean > 1e-6) {
     gr /= gmean;
@@ -3921,8 +3910,10 @@ List<double>? _buildPreviewAnchorCorrectionMatrix(
   if ((gr - 1).abs() < 0.015 &&
       (gg - 1).abs() < 0.015 &&
       (gb - 1).abs() < 0.015) {
-    return null;
+    return null; // 灰区已中性，无需校正
   }
+  debugPrint('[capture] 自适应白平衡: grayAvg=[${avgR.round()},${avgG.round()},${avgB.round()}] '
+      '(n=$n) → gains=[${gr.toStringAsFixed(3)},${gg.toStringAsFixed(3)},${gb.toStringAsFixed(3)}]');
   return [
     gr, 0, 0, 0, 0,
     0, gg, 0, 0, 0,
@@ -4121,16 +4112,14 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         if (srcByteData != null) {
           sourceAvgRgb = _sampleAvgRgbFromRgba(srcByteData);
           debugPrint('[capture] 源图解码 rawRgba 平均RGB(dart:ui): $sourceAvgRgb');
-          // 方案A·预览锚定校色：取景器帧平均色（iOS 原生拍照瞬间写入 preview_ref.txt）为基准，
-          // 结合成片源图中心区域平均色，构造逐通道增益矩阵，消除快照 ISP 相对取景器的偏暖。
-          final preview = await _readPreviewColorReference();
-          if (preview != null) {
-            final photoCenter = _sampleCenterAvgRgbFromRgba(
+          // 自适应白平衡：仅 iOS（OHOS/Android 无此偏黄问题）。以成片自身的灰区为中性基准
+          // 构造逐通道增益矩阵，抵消相机 ISP 对中性区域的色偏（偏黄）。
+          // 曝光守恒（几何均值归 1），绝不动整体亮度。
+          // 弃用方案A「预览锚定」：诊断证实取景器缓冲帧（preview_ref R-B=+30）本身走非显示
+          // 色管、偏黄偏亮，只会把成片拉向更黄，且增益未中和时还连带改曝光。
+          if (Platform.isIOS) {
+            previewCorrectionMatrix = _buildAdaptiveWhiteBalanceMatrixFromRgba(
                 srcByteData, srcImage.width, srcImage.height);
-            previewCorrectionMatrix =
-                _buildPreviewAnchorCorrectionMatrix(preview, photoCenter);
-            debugPrint('[capture] 预览锚定校色: preview=$preview, '
-                'photoCenter=$photoCenter, correction=${previewCorrectionMatrix == null ? "none" : previewCorrectionMatrix.take(3).map((e) => e.toStringAsFixed(3)).toList()}');
           }
         }
       } catch (e) {
@@ -4220,7 +4209,7 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         ' Y方向${rotatedImgH >= iOutH - 0.5 ? "✓" : "❌(拉伸!"})');
 
     // 构造色彩矩阵
-    // 方案A·预览锚定校色：校正矩阵先行（作用于原始像素，把成片拉回取景器色温），
+    // 自适应白平衡（成片灰区中性化）先行（作用于原始像素，抵消相机 ISP 对中性区色偏），
     // 再叠加用户色彩矩阵（风格化），避免校正被风格化改变 / 两者混在一起不可控。
     var matrix = composePostProcessMatrix(params.postProcess);
     if (previewCorrectionMatrix != null) {

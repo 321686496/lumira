@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../domain/photo_template.dart';
@@ -12,9 +13,21 @@ import '../domain/photo_template.dart';
 /// - 套用模板默认展开；切换模板（id 变化）时重置为展开
 /// - 视觉与 ChallengeOverlayBar 保持一致（深色半透明浮层 + 品牌色描边）
 class TemplateInfoCard extends ConsumerStatefulWidget {
-  const TemplateInfoCard({super.key, required this.template, this.onHide});
+  const TemplateInfoCard({
+    super.key,
+    required this.template,
+    this.isLandscape = false,
+    this.quarterTurns = 0,
+    this.onHide,
+  });
 
   final PhotoTemplate template;
+
+  /// 横持手机时为 true：卡片旋转到可读方向（由传感器驱动，UI 整体仍保持竖屏）。
+  final bool isLandscape;
+
+  /// 横屏时卡片需**顺时针**旋转的 90° 圈数（0/1/3），保证文字正向（左/右横适配）。
+  final int quarterTurns;
 
   /// 用户点击卡内“隐藏”按钮时回调（由外层负责隐藏卡片并持久化偏好）。
   final VoidCallback? onHide;
@@ -43,6 +56,44 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
+
+    // 竖屏：整卡顶部居中，占满屏宽。
+    if (!widget.isLandscape) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: double.infinity),
+          child: Material(
+            color: Colors.transparent,
+            child: _buildBody(appTheme),
+          ),
+        ),
+      );
+    }
+
+    // 横屏：整卡按持机方向旋转到可读角（顺时针 quarterTurns 圈），浮在画面中部。
+    // RotatedBox 会交换子项的布局宽高：子项「高度」= 旋转后的视觉宽度、子项「宽度」= 视觉高度。
+    // 故用 maxHeight 限制视觉宽度、maxWidth 限制视觉高度，保证不越出仍保持竖屏的画布。
+    final size = MediaQuery.of(context).size;
+    final qTurns = (widget.quarterTurns == 0) ? 3 : widget.quarterTurns;
+    return Center(
+      child: RotatedBox(
+        quarterTurns: qTurns,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: size.height * 0.5, // 旋转后为视觉高度，限制避免超高
+            maxHeight: size.width * 0.86, // 旋转后为视觉宽度，限制避免横向越界
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: _buildBody(appTheme),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(AppThemeData appTheme) {
     final tokens = appTheme.tokens;
     final template = widget.template;
     final tips = template.sceneGuide.tips;
@@ -50,20 +101,7 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
     final hasContent =
         template.meta.description.isNotEmpty || tips.isNotEmpty;
 
-    // 横屏时卡片宽度受限于屏宽的 ~70%，整体居中展示（避免全宽拉伸，呈“横屏样式”）
-    final isLandscape =
-        MediaQuery.of(context).orientation == Orientation.landscape;
-    final maxWidth = isLandscape
-        ? MediaQuery.of(context).size.width.clamp(0.0, 560.0).toDouble()
-        : double.infinity;
-
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: Material(
-          color: Colors.transparent,
-          child: AnimatedSize(
+    return AnimatedSize(
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
             alignment: Alignment.topCenter,
@@ -216,9 +254,6 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
               ),
             ),
           ),
-        ),
-      ),
-    ),
     );
   }
 }

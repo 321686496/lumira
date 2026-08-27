@@ -316,4 +316,72 @@ void main() {
     expect(p1.g, equals(p2.g));
     expect(p1.b, equals(p2.b));
   });
+
+  // ── 自定义裁剪坐标语义回归测试（所见即所得）──
+  // 裁剪 UI（PhotoCropLayer/CropOverlay）叠加在"已烘焙照片"上，而该照片就是
+  // 原图经方向校正/变换后按比例裁剪的可见区域。因此裁剪框相对坐标 (0.0-1.0)
+  // 是相对【比例裁剪区域】而言，必须映射到该区域内。
+  // 旧实现把它相对【整张工作图】解释，导致选区与导出不一致（见不等于所得）。
+
+  test('custom crop: full custom rect (0,0,1,1) equals ratio crop region', () {
+    // 1080x1440 3:4 传感器 + fullscreen(9:19.5) → 比例区域 = 水平居中竖条
+    final ratio = PhotoPostProcessor.computeCropRect(
+        'fullscreen', 1080, 1440, 9.0 / 19.5, true);
+    final custom = PhotoPostProcessor.computeCustomCropRect(
+      const CropRect(x: 0, y: 0, w: 1, h: 1),
+      ratio[0], ratio[1], ratio[2], ratio[3],
+    );
+    expect(custom, ratio,
+        reason: '整框 (0,0,1,1) 应恰好等于比例裁剪区域（不放大视野）');
+  });
+
+  test('custom crop: left-half rect stays inside ratio crop region', () {
+    final ratio = PhotoPostProcessor.computeCropRect(
+        'fullscreen', 1080, 1440, 9.0 / 19.5, true);
+    final custom = PhotoPostProcessor.computeCustomCropRect(
+      const CropRect(x: 0, y: 0, w: 0.5, h: 1),
+      ratio[0], ratio[1], ratio[2], ratio[3],
+    );
+    // 相对比例区域解释：x 起点 = 比例区域起点（不再是整图 0）
+    expect(custom[0], ratio[0]);
+    expect(custom[1], ratio[1]);
+    expect(custom[2], closeTo(ratio[2] * 0.5, 1));
+    expect(custom[3], ratio[3]);
+    expect(custom[0] + custom[2], lessThanOrEqualTo(ratio[0] + ratio[2]),
+        reason: '自定义框不得超出比例裁剪区域（=裁剪 UI 可见范围）');
+  });
+
+  test('custom crop: free ratio reference is full image (backward compatible)',
+      () {
+    final ratio = PhotoPostProcessor.computeCropRect(
+        'free', 1080, 1440, 9.0 / 19.5, true);
+    expect(ratio, [0, 0, 1080, 1440]);
+    final custom = PhotoPostProcessor.computeCustomCropRect(
+      const CropRect(x: 0.25, y: 0.25, w: 0.5, h: 0.5),
+      ratio[0], ratio[1], ratio[2], ratio[3],
+    );
+    expect(custom, [270, 360, 540, 720],
+        reason: '自由比例下参考区域为整图，行为与旧版一致');
+  });
+
+  test('REGRESSION: customCropRect=(0,0,1,1) keeps fullscreen ratio', () async {
+    // 旧实现把 (0,0,1,1) 映射到整图 → 输出 1080x1440 (0.75)，明显不等于
+    // 取景器可见的 9:19.5 竖条。修复后 (0,0,1,1) = 比例裁剪区域，比例须保持。
+    final input = makeSensorJpeg();
+    final output = await PhotoPostProcessor.processFile(
+      inputPath: input.path,
+      params: const PostProcess(color: PostProcessColor()),
+      aspectRatio: 'fullscreen',
+      screenRatio: 9.0 / 19.5,
+      isPortrait: true,
+      customCropRect: const CropRect(x: 0, y: 0, w: 1, h: 1),
+    );
+    final bytes = await File(output).readAsBytes();
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final ratio = frame.image.width / frame.image.height;
+    codec.dispose();
+    expect(ratio, closeTo(9.0 / 19.5, 0.02),
+        reason: '自定义框 (0,0,1,1) 应等于比例裁剪区域，输出须保持 fullscreen 比例');
+  });
 }

@@ -82,28 +82,33 @@ class PhotoPostProcessor {
             '${sw.elapsedMilliseconds}ms');
       }
 
-      // 2. 计算裁剪区域
-      var cropRect = computeCropRect(
+      // 2. 计算裁剪区域（比例裁剪 = 裁剪 UI 显示的烘焙图对应的参考区域）
+      final ratioCropRect = computeCropRect(
         aspectRatio,
         workingImage.width,
         workingImage.height,
         screenRatio,
         isPortrait,
       );
-      debugPrint('[post-process] 裁剪区域（比例）: $cropRect');
+      debugPrint('[post-process] 裁剪区域（比例）: $ratioCropRect');
 
       // 2.5. 自定义裁剪
-      // 裁剪框（PhotoCropLayer/CropOverlay）的坐标是相对整张图片 0~1 的
-      // （已含缩放/平移后的保留区域），因此这里必须相对于整张工作图计算，
-      // 否则先做比例裁剪再在子区域内解释会「叠加两次裁剪」导致所见与导出不一致。
+      // 裁剪 UI（PhotoCropLayer/CropOverlay）叠加在「已烘焙的照片」上，而该照片
+      // 就是原图经方向校正/变换后按比例裁剪的可见区域。因此裁剪框的相对坐标
+      // (0.0-1.0) 是相对【比例裁剪区域】而言的，必须映射到该区域内；若相对整张
+      // 工作图解释，会把裁剪框作用到比例裁剪之外的区域，导致选区与导出不一致
+      // （所见 ≠ 所得）。
       // 未拖拽过裁剪框（customCropRect == null）时保持整张居中满铺的比例裁剪不变。
+      var cropRect = ratioCropRect;
       if (customCropRect != null) {
         cropRect = computeCustomCropRect(
           customCropRect,
-          workingImage.width,
-          workingImage.height,
+          ratioCropRect[0],
+          ratioCropRect[1],
+          ratioCropRect[2],
+          ratioCropRect[3],
         );
-        debugPrint('[post-process] 裁剪区域（自定义●整图坐标）: $cropRect');
+        debugPrint('[post-process] 裁剪区域（自定义●比例区域坐标）: $cropRect');
       }
 
       // 3. 计算降采样后的输出尺寸
@@ -485,16 +490,26 @@ class PhotoPostProcessor {
     return [offsetX, offsetY, width, height];
   }
 
-  /// 计算自定义裁剪区域
+  /// 计算自定义裁剪区域（相对坐标 0.0-1.0，相对【比例裁剪区域】）
+  ///
+  /// 裁剪 UI（PhotoCropLayer/CropOverlay）叠加在已烘焙照片上，该照片对应原图
+  /// 按比例裁剪的可见区域 [refX,refY,refW,refH]（[computeCropRect] 的结果）。
+  /// 因此裁剪框的相对坐标必须映射到该参考区域内，才能保证选区与导出一致。
+  ///
+  /// [relativeRect] 裁剪框相对坐标（0.0-1.0）。
+  /// [refX]/[refY]/[refW]/[refH] 参考区域（工作图上的像素坐标）。
+  ///   自由比例（'free'/'none'）时参考区域即整图，行为与旧版（相对整图）一致。
   static List<int> computeCustomCropRect(
     CropRect relativeRect,
-    int imgW,
-    int imgH,
+    int refX,
+    int refY,
+    int refW,
+    int refH,
   ) {
-    final x = (relativeRect.x * imgW).round().clamp(0, imgW - 1);
-    final y = (relativeRect.y * imgH).round().clamp(0, imgH - 1);
-    final w = (relativeRect.w * imgW).round().clamp(1, imgW - x);
-    final h = (relativeRect.h * imgH).round().clamp(1, imgH - y);
+    final x = (refX + relativeRect.x * refW).round().clamp(refX, refX + refW - 1);
+    final y = (refY + relativeRect.y * refH).round().clamp(refY, refY + refH - 1);
+    final w = (relativeRect.w * refW).round().clamp(1, refX + refW - x);
+    final h = (relativeRect.h * refH).round().clamp(1, refY + refH - y);
     return [x, y, w, h];
   }
 

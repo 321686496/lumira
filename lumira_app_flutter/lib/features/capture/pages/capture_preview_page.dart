@@ -879,6 +879,13 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         return;
       }
 
+      // 屏幕比例 / 方向与拍摄烘焙时一致（应用锁竖屏，MediaQuery 即拍摄时比例），
+      // 保证保存时 computeCropRect 得到的比例裁剪区域 == 裁剪 UI 显示的烘焙照片，
+      // 自定义裁剪框（相对该区域）才能所见即所得。
+      final screenSize = MediaQuery.of(context).size;
+      final screenRatio = screenSize.width / screenSize.height;
+      final isPortrait = screenSize.height >= screenSize.width;
+
       // 从原图重新处理（全量参数 = baked + local增量）
       // - 替换原图：outputPath=photoPath，覆盖当前显示的照片文件
       // - 另存为：写入不冲突的新文件路径，不影响原图
@@ -890,6 +897,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         params: fullParams,
         transform: _localTransform,
         aspectRatio: captureAspectRatio,
+        screenRatio: screenRatio,
+        isPortrait: isPortrait,
         outputPath: outputPath,
         // 传入裁剪框（未拖拽过则为 null，此时 processFile 沿用比例裁剪）
         customCropRect: _localPostProcess.customCropRect,
@@ -1034,6 +1043,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     setState(() => _isSaving = true);
     String? tmpPath;
     try {
+      // 屏幕比例 / 方向与拍摄烘焙时一致（与 _save 的保存路径保持一致）
+      final screenSize = MediaQuery.of(context).size;
+      final screenRatio = screenSize.width / screenSize.height;
+      final isPortrait = screenSize.height >= screenSize.width;
       // 从原图重新处理（应用当前编辑参数），写出到临时文件
       final fullParams = _bakedPostProcess.merge(_localPostProcess);
       tmpPath = _makeDuplicatePath(photoPath);
@@ -1042,6 +1055,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         params: fullParams,
         transform: _localTransform,
         aspectRatio: widget.aspectRatio ?? 'fullscreen',
+        screenRatio: screenRatio,
+        isPortrait: isPortrait,
         outputPath: tmpPath,
         // 传入裁剪框，确保保存到系统相册的结果与编辑页框选一致
         customCropRect: _localPostProcess.customCropRect,

@@ -50,14 +50,13 @@ class MyApp extends ConsumerWidget {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 放开横竖屏：让拍摄页等随设备旋转（对齐 iPhone 原生相机行为）。
-  // 此前应用未显式放开旋转，MediaQuery 恒为竖屏 → 拍摄页 isPortrait 恒为 true，
-  // 导致横屏持机时成片仍是竖图、模板拍摄指南也不随横屏适配。
-  // 仅允许竖屏上 / 两个横屏（与 iOS Info.plist 声明一致，不放开倒置竖屏）。
+  // 锁定竖屏方向：UI 整体保持竖屏，绝不随设备旋转到横屏（避免 iOS 横屏后整体布局
+  // 被拉伸挤压、取景器都看不全）。
+  // 横屏拍摄的适配不依赖整屏旋转，而是走加速度传感器（见 capture_page/level_sensor_service）：
+  //   - 成片方向：横持手机时拍出的照片按原相机逻辑转 90° 成为横图；
+  //   - 悬浮模板信息卡：横持时单独旋转该卡到可读角度，其余 UI 不变。
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
   ]);
 
   // 1. 等待 sqflite 就绪并取出 AuthDao + UserProfileDao
