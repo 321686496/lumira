@@ -200,9 +200,13 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   /// 当前选中的顶部 Tab 下标（0-5）。
   int _tabIndex = 0;
 
+  /// 内容区翻页控制器：顶部 tab 点击与其联动，允许左右滑动切换到相邻 step。
+  late final PageController _pageController;
+
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _tabIndex);
     // 同步加载 mock 数据（内置模板/草稿/测试种子）— 立即显示，避免空白闪烁
     _form = _loadInitialFormSync();
     final mockHasTemplate = widget.templateId != null &&
@@ -226,6 +230,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   void dispose() {
     _autoSaveTimer?.cancel();
     _scrollController.dispose();
+    _pageController.dispose();
     _tagsController.dispose();
     _propsController.dispose();
     _tipsController.dispose();
@@ -935,21 +940,32 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
                 EditorTabBar(
                   tabs: _editorTabs,
                   index: _tabIndex,
-                  onSelect: (i) => setState(() => _tabIndex = i),
+                  onSelect: (i) {
+                    setState(() => _tabIndex = i);
+                    _pageController.animateToPage(
+                      i,
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeInOut,
+                    );
+                  },
                 ),
                 Expanded(
                   child: Stack(
                     children: [
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        child: SingleChildScrollView(
-                          key: ValueKey(_tabIndex),
-                          padding: const EdgeInsets.fromLTRB(24, 4, 24, 120),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: _buildTabContent(_tabIndex),
-                          ),
-                        ),
+                      PageView(
+                        controller: _pageController,
+                        onPageChanged: (i) => setState(() => _tabIndex = i),
+                        children: List.generate(_editorTabs.length, (i) {
+                          return SingleChildScrollView(
+                            key: ValueKey('editor_tab_$i'),
+                            padding:
+                                const EdgeInsets.fromLTRB(24, 4, 24, 120),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: _buildTabContent(i),
+                            ),
+                          );
+                        }),
                       ),
                       _EditorFooter(
                         tokens: tokens,

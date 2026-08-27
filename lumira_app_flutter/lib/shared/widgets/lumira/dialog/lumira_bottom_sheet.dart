@@ -1,10 +1,9 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
+import '../../../../shared/widgets/common/glass_surface.dart';
 import '../_internal/lumira_theme_resolver.dart';
 
 /// 如画应用统一 BottomSheet 展示函数
@@ -122,23 +121,12 @@ class LumiraBottomSheetContainer extends ConsumerWidget {
       ],
     );
 
-    // glass 风格使用 BackdropFilter + Stack 结构
+    // glass 风格使用共享 GlassSurface（半透明主题色磨砂 + 高光 + 内描边）
     if (style == UIStyle.glass) {
-      return ClipRRect(
+      return GlassSurface(
         borderRadius: onlyTopRadius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(
-            decoration: BoxDecoration(
-              color: visual.background,
-              gradient: visual.glassOverlay,
-              border: visual.border,
-              borderRadius: onlyTopRadius,
-              boxShadow: visual.shadows,
-            ),
-            child: body,
-          ),
-        ),
+        shadows: visual.shadows,
+        child: body,
       );
     }
 

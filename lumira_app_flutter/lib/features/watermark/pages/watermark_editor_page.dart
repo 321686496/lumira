@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -13,6 +14,7 @@ import '../../../core/db/database_provider.dart'
     show galleryDaoProvider, watermarkDaoProvider;
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/effects/breathing_tap.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
     show
@@ -71,6 +73,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
 
   /// 背景照片字节（模板模式为示例照片，应用模式为真实照片）。
   Uint8List? _photoBytes;
+  String? _photoDataUrl;
   double? _sourceAspect;
 
   late final TextEditingController _textEditController;
@@ -210,6 +213,8 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
       if (!mounted) return;
       setState(() {
         _photoBytes = bytes;
+        _photoDataUrl =
+            bytes.isEmpty ? null : 'data:image/jpeg;base64,${base64Encode(bytes)}';
         _sourceAspect = (w > 0 && h > 0) ? w / h : 1.0;
       });
     } catch (e) {
@@ -628,9 +633,9 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   }
 
   Widget _photoImage() {
-    final bytes = _photoBytes;
-    if (bytes == null || bytes.isEmpty) return const SizedBox.shrink();
-    return Image.memory(bytes, fit: BoxFit.fill, gaplessPlayback: true);
+    final url = _photoDataUrl;
+    if (url == null || url.isEmpty) return const SizedBox.shrink();
+    return LumiraImage(url, fit: BoxFit.fill);
   }
 
   /// 拍立得预览：白边向外扩展，照片区域缩小并被四周白边包围；

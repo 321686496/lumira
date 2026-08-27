@@ -1,9 +1,9 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/theme_controller.dart';
+import '../../../../core/theme/theme_tokens.dart';
+import '../../../../shared/widgets/common/glass_surface.dart';
 import '../_internal/lumira_theme_resolver.dart';
 
 /// 如画应用统一 Dialog 容器与展示函数
@@ -97,39 +97,18 @@ class LumiraDialogContainer extends ConsumerWidget {
     );
     final effectivePadding = padding ?? const EdgeInsets.all(24);
 
-    // glass 风格需要 BackdropFilter，使用 Stack 结构让 blur 在背景层、内容在顶层
-    if (visual.backdropBlurSigma > 0) {
+    // glass 风格使用共享 GlassSurface（半透明主题色磨砂 + 高光 + 内描边）
+    if (style == UIStyle.glass) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 24),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radius),
           boxShadow: visual.shadows,
         ),
-        child: ClipRRect(
+        child: GlassSurface(
           borderRadius: BorderRadius.circular(radius),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(
-                    sigmaX: visual.backdropBlurSigma,
-                    sigmaY: visual.backdropBlurSigma,
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: visual.background,
-                      gradient: visual.glassOverlay,
-                      border: visual.border,
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: effectivePadding,
-                child: child,
-              ),
-            ],
-          ),
+          padding: effectivePadding,
+          child: child,
         ),
       );
     }

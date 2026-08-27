@@ -1,9 +1,8 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+
+import '../../../shared/widgets/images/lumira_image.dart';
 
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/time_format.dart';
@@ -121,12 +120,12 @@ class CheckinPhotoImage extends StatelessWidget {
       // base64 data URL（兼容旧数据 / 相册导入的内联图）
       image = _buildFromDataUrl(u);
     } else {
-      image = Image.file(
-        File(u),
+      image = LumiraImage(
+        u,
         fit: fit,
         width: width,
         height: height,
-        errorBuilder: (_, __, ___) => _fallback(),
+        errorWidget: _fallback(),
       );
     }
     if (borderRadius == null) return image;
@@ -137,20 +136,13 @@ class CheckinPhotoImage extends StatelessWidget {
   }
 
   Widget _buildFromDataUrl(String dataUrl) {
-    Widget error = _fallback();
-    try {
-      final comma = dataUrl.indexOf(',');
-      final b64 = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
-      return Image.memory(
-        base64Decode(b64),
-        fit: fit,
-        width: width,
-        height: height,
-        errorBuilder: (_, __, ___) => error,
-      );
-    } catch (_) {
-      return error;
-    }
+    return LumiraImage(
+      dataUrl,
+      fit: fit,
+      width: width,
+      height: height,
+      errorWidget: _fallback(),
+    );
   }
 
   Widget _fallback() {

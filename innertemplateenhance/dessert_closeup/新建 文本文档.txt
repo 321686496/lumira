@@ -1,0 +1,221 @@
+{
+    "name": "午后自然光美食静物",
+    "category": "still_life",
+    "classification": {
+        "type": "still_life",
+        "majorStyle": "自然光静物",
+        "subStyle": "治愈甜品",
+        "method": "窗边漫射日光拍摄"
+    },
+    "shortDesc": "窗边暖调日光洒落，甜点点缀温柔光影，慵懒治愈下午茶时光☕",
+    "description": "美食静物拍照模板，适用于蛋糕、泡芙、慕斯、提拉米苏等甜品拍摄，利用窗边柔和午后侧方日光，打造通透柔和明暗层次，搭配简约浅色系餐盘、木质桌面与薄荷叶装饰，适合记录下午茶甜点。",
+    "ambience": {
+        "seasons": ["春季", "夏季", "秋季"],
+        "weathers": ["晴天", "多云晴天"],
+        "timeTones": "午后暖日光"
+    },
+    "tags": ["美食摄影", "静物", "自然光", "甜品", "下午茶"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "芒果慕斯蛋糕，侧方午后日光，晶莹果冻表层质感"
+        },
+        {
+            "imageIndex": 1,
+            "role": "效果图",
+            "caption": "奶油泡芙，木质窗台，蓬松酥皮与饱满奶油内馅"
+        },
+        {
+            "imageIndex": 2,
+            "role": "效果图",
+            "caption": "草莓芝士蛋糕，浅盘布景，新鲜果肉夹心层次"
+        },
+        {
+            "imageIndex": 3,
+            "role": "效果图",
+            "caption": "玻璃杯装提拉米苏，手指饼干分层，可可粉表面"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "芒果慕斯构图",
+            "type": "composition",
+            "description": "三角蛋糕块放置画面中下区域，主体落在九宫格右下交叉点位，盘子占据画面底部，画面左上角留出大面积柔和虚化背景，角落摆放薄荷叶、芒果小丁做点缀，少量撒粉增加细节。",
+            "compositionFrame": "主体甜点位于画面九宫格右下交点；上半部分大量留白；前景盘子底边压画面下缘；小道具放置画面左下角与右下角做平衡，画面横向舒展。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "still_life_dessert_slice"
+            },
+            "position": {
+                "x": 0.54,
+                "y": 0.52
+            },
+            "scale": 0.82,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 1,
+            "name": "奶油泡芙构图",
+            "type": "composition",
+            "description": "泡芙主体居中略偏下，放置木质拼接板上，背景虚化窗户，木板缝隙形成斜向引导线，上方留出窗户环境留白，少量糖粉散落桌面增加氛围感。",
+            "compositionFrame": "主体泡芙画面居中偏下；背景窗户占据画面上方；木板纹理线条从屏幕左下向屏幕右上延伸做引导线；四周适度留白。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "still_life_round_dessert"
+            },
+            "position": {
+                "x": 0.48,
+                "y": 0.58
+            },
+            "scale": 0.78,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 2,
+            "name": "草莓芝士蛋糕构图",
+            "type": "composition",
+            "description": "三角蛋糕放置画面中下，主体九宫格偏右，左下角留白，右下角摆放薄荷叶作为平衡道具，浅米色餐盘承托，画面上半部分保留柔和虚化浅色背景。",
+            "compositionFrame": "甜点主体右下九宫格交点；餐盘底边贴近画面底部；装饰薄荷叶放在画面右下角；画面上方大面积干净留白。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "still_life_dessert_slice"
+            },
+            "position": {
+                "x": 0.51,
+                "y": 0.54
+            },
+            "scale": 0.80,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 3,
+            "name": "玻璃杯提拉米苏构图",
+            "type": "composition",
+            "description": "玻璃杯子主体放在画面中下偏右，杯底置于浅碟子上，白色纸巾做底层衬垫，背景虚化暗调环境，利用玻璃杯通透质感表现内部分层结构。",
+            "compositionFrame": "玻璃杯主体位于九宫格右下交点；画面左侧留出环境虚化留白；杯子垂直竖直摆放；底部碟子压画面下缘，突出杯内食物分层。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "still_life_glass_container"
+            },
+            "position": {
+                "x": 0.58,
+                "y": 0.56
+            },
+            "scale": 0.84,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "thirds",
+        "aspectRatio": "1:1",
+        "opacity": 0.3,
+        "description": "美食静物1:1正方形画幅；45°斜俯机位；甜点主体放置九宫格交叉点位；保留上方大量环境留白；道具边角平衡画面，主体占画幅55‑60%，背景环境占40‑45%。",
+        "subjectFrame": {
+            "x": 0.24,
+            "y": 0.12,
+            "w": 0.64,
+            "h": 0.78
+        }
+    },
+    "camera": {
+        "exposureCompensation": 0.3,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5600,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光来自屏幕左上方45°窗边漫射日光，柔光；无硬直射阳光；光比约2.5:1；阴影投向屏幕右下方，阴影边缘柔和，浓度中等；物体表面有柔和高光反光，保留食物肌理质感；环境为明亮窗边，整体暖调。",
+        "shootingDistance": "0.8‑1.2m",
+        "background": "浅色白墙、窗户、原木桌面，背景尽量简洁，远离杂乱杂物。",
+        "props": ["浅米色陶瓷圆盘", "木质桌面", "新鲜薄荷叶", "糖粉", "水果小丁", "餐巾纸"],
+        "bestTime": "14:00‑16:00",
+        "tips": [
+            "使用窗边散射柔光，避免直射硬太阳光，阳光过强可以拉一层薄纱窗帘柔化光线",
+            "靠近甜点主体，同时把背景尽量拉远，配合vignette压暗四角模拟浅景深效果；手机无法实现光学大光圈虚化",
+            "少量撒糖粉、摆放薄荷叶做边角平衡，道具不要抢夺甜点主体视觉重心",
+            "对焦锁定甜点主体奶油、果肉纹理，保证食物细节锐利",
+            "避免开启闪光灯，闪光灯会破坏柔和自然光质感"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "1:1",
+        "color": {
+            "brightness": 4,
+            "contrast": -4,
+            "saturation": 10,
+            "temperature": 5,
+            "tint": 1,
+            "highlights": -12,
+            "shadows": 8,
+            "clarity": 6
+        },
+        "smoothStrength": 12,
+        "sharpen": 24,
+        "vignette": 26,
+        "grain": 16,
+        "lut": "warm_pastel"
+    },
+    "orientation": {
+        "framePosition": "画面九宫格右下交叉点",
+        "bodyFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "faceFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "twist": "正身",
+        "headPitch": 0,
+        "headRoll": 0,
+        "gaze": "看向镜头"
+    },
+    "framing": {
+        "shotSize": "近景",
+        "shotSizeNote": "完整拍摄甜点连同部分餐盘桌面",
+        "cameraHeight": "高机位俯拍",
+        "cameraAzimuth": "斜侧 45°",
+        "subjectScale": "甜点主体占画幅55‑60%",
+        "environmentRatio": "环境背景占画幅40‑45%",
+        "headroom": "画面上方保留1/4留白",
+        "framingNote": "45度斜俯近景，完整记录甜品形态层次，上方保留环境留白，小道具平衡画面边角。"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "主光屏幕左上方45°窗边漫射日光",
+            "辅光轮廓光": "环境反光板（墙面）柔和补暗部，无硬轮廓光",
+            "光型软硬": "柔光，经过窗户/纱帘漫反射，阴影边缘过渡柔和",
+            "光比": "约2.5:1，中等反差",
+            "阴影": "阴影投向屏幕右下方，边缘柔和，浓度中等，不漆黑死黑",
+            "质感": "保留甜品奶油、酥皮、果冻、水果的细腻肌理；物体表面柔和高光，无刺眼爆亮光斑",
+            "环境光": "窗边环境光，整体明亮，背景亮度略低于主体",
+            "色温对比": "整体统一暖调，主体与背景色温接近，无强烈冷暖对冲"
+        },
+        "lightToParams": "exposureCompensation+0.3提亮整体；highlights‑12压制甜品亮面高光；shadows+8提升暗部细节；temperature+5增加午后暖感；vignette压四角聚焦甜点主体。"
+    },
+    "styling": {
+        "subjectType": "甜品美食静物",
+        "clothingLayers": {
+            "上装": "",
+            "下装": "",
+            "衣角处理": "",
+            "袖子": "",
+            "领口": "",
+            "鞋袜": "",
+            "叠穿层次": ""
+        },
+        "accessories": "",
+        "hairMakeup": "",
+        "objectStyle": "芝士蛋糕、泡芙、慕斯、玻璃杯甜品；搭配浅素色餐具，少量绿色薄荷叶、糖粉做点缀，色彩干净通透。",
+        "note": "摆盘尽量简约，不要堆砌过多道具，突出甜品本身色彩层次。"
+    }
+}

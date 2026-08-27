@@ -6,6 +6,9 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/academy_models.dart';
@@ -66,7 +69,12 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
       return Scaffold(
         backgroundColor: tokens.canvas,
         appBar: LumiraNav(title: appBarTitle, transparent: true),
-        body: Center(child: Text('课程不存在', style: TextStyle(color: tokens.textTertiary))),
+        body: Stack(
+          children: [
+            const Positioned.fill(child: GlassBackground()),
+            Center(child: Text('课程不存在', style: TextStyle(color: tokens.textTertiary))),
+          ],
+        ),
       );
     }
 
@@ -108,7 +116,10 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
           ),
         ],
       ),
-      body: Container(
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          Container(
         decoration: BoxDecoration(
           gradient: RadialGradient(
             center: const Alignment(-0.8, -0.6),
@@ -200,6 +211,8 @@ class _AcademyDetailPageState extends ConsumerState<AcademyDetailPage> {
           ),
         ),
       ),
+        ],
+      ),
     );
   }
 }
@@ -245,11 +258,11 @@ class _HeroImage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 16),
-      child: Image.asset(
+      child: LumiraImage(
         detail.heroImage,
         width: double.infinity,
         fit: BoxFit.fitWidth,
-        errorBuilder: (_, __, ___) => Container(
+        errorWidget:  Container(
           width: double.infinity,
           height: 200,
           color: tokens.surfaceAlt,
@@ -402,11 +415,11 @@ class _TipCard extends StatelessWidget {
           const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.asset(
+            child: LumiraImage(
               detail.tipCardImage,
               width: double.infinity,
               fit: BoxFit.fitWidth,
-              errorBuilder: (_, __, ___) => Container(
+              errorWidget:  Container(
                 width: double.infinity,
                 height: 120,
                 color: tokens.surfaceAlt,
@@ -463,9 +476,9 @@ class _CompareCellView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return LumiraSurface(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: tokens.surface, borderRadius: BorderRadius.circular(12)),
+      radius: 12,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -486,7 +499,7 @@ class _CompareCellView extends StatelessWidget {
   }
 }
 
-class _PracticeCard extends StatelessWidget {
+class _PracticeCard extends ConsumerWidget {
   const _PracticeCard({required this.detail, required this.tokens});
   final AcademyCourseDetail detail;
   final ThemeTokens tokens;
@@ -519,16 +532,22 @@ class _PracticeCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final style = ref.watch(appThemeProvider).style;
+    final isGlass = style == UIStyle.glass;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: tokens.surface,
+        color: isGlass ? ThemeTokens.glassFill(tokens) : tokens.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: tokens.brand, width: 1.5),
+        border: isGlass
+            ? Border.all(color: ThemeTokens.glassBorder(tokens), width: 1)
+            : Border.all(color: tokens.brand, width: 1.5),
+        boxShadow: isGlass
+            ? const [BoxShadow(color: Color(0x1F000000), offset: Offset(0, 6), blurRadius: 20)]
+            : null,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -603,8 +622,8 @@ class _RecommendCard extends StatelessWidget {
               width: 80,
               child: AspectRatio(
                 aspectRatio: 3 / 4,
-                child: Image.asset(r.imageUrl, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt, child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary)),
+                child: LumiraImage(r.imageUrl, fit: BoxFit.cover,
+                  errorWidget:  Container(color: tokens.surfaceAlt, child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary)),
                 ),
               ),
             ),

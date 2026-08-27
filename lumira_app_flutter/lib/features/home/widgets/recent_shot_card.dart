@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -9,6 +6,7 @@ import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../data/home_mock_data.dart';
 
 /// 最近拍摄卡片
@@ -39,23 +37,33 @@ class RecentShotCard extends ConsumerWidget {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final isNeumorphic = appTheme.style == UIStyle.neumorphic;
-    // 性能：按卡片展示宽度换算物理像素，只解码缩略图尺寸，
-    // 避免整张大图全分辨率解码占用内存与 GPU 带宽。
-    final decodeW = _decodeWidth(context);
+    final isGlass = appTheme.style == UIStyle.glass;
 
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          // neumorphic 风格：surface 背景 + 双向凸起阴影，移除 border
-          // 其他风格：canvas 背景 + divider 1dp 边框
-          color: isNeumorphic ? tokens.surface : tokens.canvas,
+          // Forced fix(玻璃): 玻璃风格用半透明品牌玻璃面 + 细白描边 + 柔和投影，
+          // 让背后 GlassBackground 光晕透出形成玻璃卡；其余风格保持不变。
+          color: isGlass
+              ? ThemeTokens.glassFill(tokens)
+              : (isNeumorphic ? tokens.surface : tokens.canvas),
           borderRadius: BorderRadius.circular(14),
-          border: isNeumorphic
-              ? null
-              : Border.all(color: tokens.divider, width: 1),
-          boxShadow: isNeumorphic ? tokens.shadowConvex : null,
+          border: isGlass
+              ? Border.all(color: ThemeTokens.glassBorder(tokens), width: 1)
+              : (isNeumorphic
+                  ? null
+                  : Border.all(color: tokens.divider, width: 1)),
+          boxShadow: isGlass
+              ? const [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    offset: Offset(0, 6),
+                    blurRadius: 20,
+                  ),
+                ]
+              : (isNeumorphic ? tokens.shadowConvex : null),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
@@ -67,7 +75,7 @@ class RecentShotCard extends ConsumerWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    _buildImage(tokens, decodeW),
+                    _buildImage(tokens),
                     // 分类标签（左上）
                     Positioned(
                       top: 8,
@@ -250,59 +258,39 @@ class RecentShotCard extends ConsumerWidget {
     return '${t.month}月${t.day}日';
   }
 
-  /// 按卡片展示宽度换算物理像素，用于 `cacheWidth` 只解码缩略图（性能优化）。
-  int? _decodeWidth(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    // 卡片约半屏宽（两列布局 + 外边距估算），再乘设备像素比得到物理像素。
-    final logical = (mq.size.width - 32) / 2;
-    return (logical * mq.devicePixelRatio).round().clamp(1, 1600);
-  }
-
   /// 按优先级渲染真实照片：filePath > dataUrl > originalPath > picsum 占位
-  Widget _buildImage(ThemeTokens tokens, int? decodeW) {
+  Widget _buildImage(ThemeTokens tokens) {
     // 1. filePath：本地文件
     final filePath = recent.imageFilePath;
     if (filePath != null && filePath.isNotEmpty) {
-      final file = File(filePath);
-      return Image.file(
-        file,
+      return LumiraImage(
+        filePath,
         fit: BoxFit.cover,
-        cacheWidth: decodeW,
-        errorBuilder: (context, error, stack) => _fallbackImage(tokens),
+        errorWidget: _fallbackImage(tokens),
       );
     }
 
-    // 2. dataUrl：base64 内联（兼容旧数据）
+    // 2. dataUrl：base64 内联（兼容旧数据）→ LumiraImage 自动降采样 + base64 字节级缓存
     final dataUrl = recent.imageDataUrl;
     if (dataUrl != null && dataUrl.isNotEmpty) {
-      // 支持 data:image/...;base64,xxxx 或纯 base64
-      final pure = dataUrl.contains(',') ? dataUrl.split(',').last : dataUrl;
-      try {
-        final bytes = Uint8List.fromList(base64Decode(pure));
-        return Image.memory(
-          bytes,
-          fit: BoxFit.cover,
-          cacheWidth: decodeW,
-          errorBuilder: (context, error, stack) => _fallbackImage(tokens),
-        );
-      } catch (_) {
-        // 解码失败继续 fallback
-      }
+      return LumiraImage(
+        dataUrl,
+        fit: BoxFit.cover,
+        errorWidget: _fallbackImage(tokens),
+      );
     }
 
     // 3. originalPath：原始文件路径
     final originalPath = recent.imageOriginalPath;
     if (originalPath != null && originalPath.isNotEmpty) {
-      final file = File(originalPath);
-      return Image.file(
-        file,
+      return LumiraImage(
+        originalPath,
         fit: BoxFit.cover,
-        cacheWidth: decodeW,
-        errorBuilder: (context, error, stack) => _fallbackImage(tokens),
+        errorWidget: _fallbackImage(tokens),
       );
     }
 
-    // 4. picsum 占位
+    // 4. picsum 占位（网络，保留原 CachedNetworkImage）
     return CachedNetworkImage(
       url: 'https://picsum.photos/seed/${recent.imageSeed}/400/600',
       fit: BoxFit.cover,

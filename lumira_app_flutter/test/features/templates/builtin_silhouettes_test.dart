@@ -8,20 +8,15 @@ void main() {
       expect(kBuiltinSilhouetteKeys, isNot(contains('none')));
     });
 
-    test('kBuiltinSilhouettes has all 12 keys mapped to non-empty SVGs', () {
+    test('kBuiltinSilhouettes has all 12 keys mapped to non-empty asset paths', () {
       for (final key in kBuiltinSilhouetteKeys) {
-        final svg = kBuiltinSilhouettes[key];
-        expect(svg, isNotNull, reason: 'key $key missing from map');
-        expect(svg!, isNotEmpty, reason: 'key $key has empty SVG');
-      }
-    });
-
-    test('all SVGs use viewBox="0 0 100 200" and fill="currentColor"', () {
-      for (final entry in kBuiltinSilhouettes.entries) {
-        expect(entry.value, contains('viewBox="0 0 100 200"'),
-            reason: '${entry.key} missing viewBox');
-        expect(entry.value, contains('fill="currentColor"'),
-            reason: '${entry.key} missing currentColor');
+        final assetPath = kBuiltinSilhouettes[key];
+        expect(assetPath, isNotNull, reason: 'key $key missing from map');
+        expect(assetPath!, isNotEmpty, reason: 'key $key has empty asset path');
+        expect(assetPath, startsWith('assets/images/silhouettes/'),
+            reason: 'key $key path should be in silhouettes directory');
+        expect(assetPath, endsWith('.png'),
+            reason: 'key $key should be a PNG file');
       }
     });
 

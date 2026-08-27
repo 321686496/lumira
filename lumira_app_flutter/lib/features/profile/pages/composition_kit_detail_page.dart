@@ -8,6 +8,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../templates/widgets/template_cover_image.dart';
@@ -35,17 +36,22 @@ class CompositionKitDetailPage extends ConsumerWidget {
         transparent: true,
         leading: _BackButton(tokens: tokens),
       ),
-      body: SafeArea(
-        child: kitAsync.when(
-          loading: () => Center(child: LumiraProgress.circular()),
-          error: (e, _) => Center(child: Text('加载失败：$e')),
-          data: (kit) {
-            if (kit == null) {
-              return _NotFound(tokens: tokens);
-            }
-            return _KitDetailContent(tokens: tokens, kit: kit);
-          },
-        ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          SafeArea(
+            child: kitAsync.when(
+              loading: () => Center(child: LumiraProgress.circular()),
+              error: (e, _) => Center(child: Text('加载失败：$e')),
+              data: (kit) {
+                if (kit == null) {
+                  return _NotFound(tokens: tokens);
+                }
+                return _KitDetailContent(tokens: tokens, kit: kit);
+              },
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: kitAsync.maybeWhen(
         data: (kit) => kit == null

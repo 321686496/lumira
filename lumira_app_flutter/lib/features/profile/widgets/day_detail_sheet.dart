@@ -1,10 +1,8 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -273,16 +271,9 @@ class _PhotoThumb extends StatelessWidget {
       return Image.network(thumb, fit: BoxFit.cover);
     }
     if (thumb.startsWith('data:')) {
-      try {
-        final b64 = thumb.contains(',')
-            ? thumb.substring(thumb.indexOf(',') + 1)
-            : thumb;
-        return Image.memory(base64Decode(b64), fit: BoxFit.cover);
-      } catch (_) {
-        return _placeholder();
-      }
+      return LumiraImage(thumb, fit: BoxFit.cover, errorWidget: _placeholder());
     }
-    return Image.file(File(thumb), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _placeholder());
+    return LumiraImage(thumb, fit: BoxFit.cover, errorWidget: _placeholder());
   }
 
   Widget _placeholder() {

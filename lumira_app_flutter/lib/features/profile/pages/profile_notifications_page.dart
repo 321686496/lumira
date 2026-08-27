@@ -7,6 +7,8 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../notification/notification_models.dart';
 import '../../notification/notification_providers.dart';
@@ -136,9 +138,19 @@ class ProfileNotificationsPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: notifications.isEmpty
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          notifications.isEmpty
           ? Center(
-              child: Text('暂无通知', style: TextStyle(color: tokens.textTertiary)),
+              child: LumiraSurface(
+                radius: 14,
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  '暂无通知',
+                  style: TextStyle(color: tokens.textTertiary),
+                ),
+              ),
             )
           : ListView.builder(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -168,6 +180,8 @@ class ProfileNotificationsPage extends ConsumerWidget {
                 );
               },
             ),
+        ],
+      ),
     );
   }
 }

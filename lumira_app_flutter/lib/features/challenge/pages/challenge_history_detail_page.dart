@@ -1,5 +1,3 @@
-import 'dart:io' show File;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +7,8 @@ import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
+
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -660,26 +660,19 @@ class _WorkImage extends ConsumerWidget {
         }
         final filePath = item.filePath ?? item.originalPath;
         if (filePath != null && filePath.isNotEmpty) {
-          return Image.file(
-            File(filePath),
+          return LumiraImage(
+            filePath,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _placeholder(),
+            errorWidget: _placeholder(),
           );
         }
         final dataUrl = item.dataUrl;
         if (dataUrl != null && dataUrl.isNotEmpty) {
-          try {
-            final idx = dataUrl.indexOf('base64,');
-            if (idx != -1) {
-              final b64 = dataUrl.substring(idx + 7);
-              final bytes = Uri.parse('data:;base64,$b64').data!.contentAsBytes();
-              return Image.memory(
-                bytes,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _placeholder(),
-              );
-            }
-          } catch (_) {}
+          return LumiraImage(
+            dataUrl,
+            fit: BoxFit.cover,
+            errorWidget: _placeholder(),
+          );
         }
         return _placeholder();
       },

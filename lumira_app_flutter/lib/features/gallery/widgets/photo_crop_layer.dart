@@ -3,9 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import 'package:lumira_app_flutter/core/utils/image_cache.dart';
-
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../capture/domain/photo_template.dart';
 import 'crop_overlay.dart';
 
@@ -143,13 +142,11 @@ class _PhotoCropLayerState extends State<PhotoCropLayer> {
         final imageRect = Rect.fromLTWH(left, top, w, h);
 
         // 照片 widget（BoxFit.fill 填满适配区域，保证与裁剪框坐标对齐）
-        final photo = widget.photoUrl.startsWith('http')
-            ? CachedNetworkImage(url: widget.photoUrl,
-                fit: BoxFit.fill,
-                errorWidget: _buildErrorWidget())
-            : Image.file(File(widget.photoUrl),
-                fit: BoxFit.fill,
-                errorBuilder: (_, __, ___) => _buildErrorWidget());
+        final photo = LumiraImage(
+          widget.photoUrl,
+          fit: BoxFit.fill,
+          errorWidget: _buildErrorWidget(),
+        );
 
         return Container(
           color: bg,

@@ -1,7 +1,7 @@
-import 'dart:io' show File;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../shared/widgets/images/lumira_image.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -176,27 +176,20 @@ class MainChallengeCard extends ConsumerWidget {
         // 优先级：filePath > originalPath > dataUrl
         final filePath = item.filePath ?? item.originalPath;
         if (filePath != null && filePath.isNotEmpty) {
-          return Image.file(
-            File(filePath),
+          return LumiraImage(
+            filePath,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _buildCoverOrPlaceholder(),
+            errorWidget: _buildCoverOrPlaceholder(),
           );
         }
         final dataUrl = item.dataUrl;
         if (dataUrl != null && dataUrl.isNotEmpty) {
           // dataUrl 形如 data:image/png;base64,xxxx
-          try {
-            final idx = dataUrl.indexOf('base64,');
-            if (idx != -1) {
-              final b64 = dataUrl.substring(idx + 7);
-              final bytes = Uri.parse('data:;base64,$b64').data!.contentAsBytes();
-              return Image.memory(
-                bytes,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _buildCoverOrPlaceholder(),
-              );
-            }
-          } catch (_) {}
+          return LumiraImage(
+            dataUrl,
+            fit: BoxFit.cover,
+            errorWidget: _buildCoverOrPlaceholder(),
+          );
         }
         return _buildCoverOrPlaceholder();
       },

@@ -1,11 +1,10 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../common/glass_surface.dart';
 
 /// 阴影变体选择
 enum NeuShadowVariant {
@@ -145,90 +144,16 @@ class NeuCard extends ConsumerWidget {
         );
 
       case UIStyle.glass:
-        // Forced fix: 玻璃拟态彻底重做，加强 5 个视觉特征让 glass 效果明显：
-        // 1. blur 25（强模糊）
-        // 2. 3 段渐变：顶部高光白 0.85 → 中部白 0.50 → 底部白 0.30（玻璃边缘反射）
-        // 3. 双层边框：外白 0.6 + 内白 0.15（玻璃厚度感）
-        // 4. 顶部高光反射：Stack 顶层放一个 LinearGradient（白 0.45 → 透明）只覆盖顶部 1/3
-        // 5. 深阴影：brand 色微染 + 黑色阴影双层
-        return ClipRRect(
+        // Forced fix: 玻璃拟态改由共享 GlassSurface 渲染——半透明主题色磨砂填充 +
+        // 顶部高光 + 内描边 + 柔和投影，让背后密集彩色背景透过半透明表面显现，
+        // 形成明显的毛玻璃观感（BackdropFilter 无法跨 RepaintBoundary 采样页面背景，
+        // 故不在此处依赖真模糊，改由透色达成）。
+        // 颜色跟随当前主题品牌色，亮/暗主题各有一套。
+        return GlassSurface(
           borderRadius: BorderRadius.circular(radius),
-          child: Stack(
-            children: [
-              // 层 1: BackdropFilter blur
-              Positioned.fill(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      // 3 段渐变模拟玻璃边缘反射
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Colors.white.withOpacity(0.85),
-                          Colors.white.withOpacity(0.50),
-                          Colors.white.withOpacity(0.30),
-                        ],
-                        stops: const [0.0, 0.5, 1.0],
-                      ),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.6),
-                        width: 1.2,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // 层 2: 顶部高光反射（玻璃边缘高光）
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 40,
-                child: IgnorePointer(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(radius),
-                      topRight: Radius.circular(radius),
-                    ),
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.white.withOpacity(0.45),
-                            Colors.white.withOpacity(0.0),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // 层 3: 内边框（玻璃厚度感）
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    margin: const EdgeInsets.all(1.5),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(radius - 1.5),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.15),
-                        width: 0.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // 层 4: 内容
-              Padding(
-                padding: padding,
-                child: child,
-              ),
-            ],
-          ),
+          padding: padding,
+          shadows: appTheme.cardShadow,
+          child: child,
         );
 
       case UIStyle.female:

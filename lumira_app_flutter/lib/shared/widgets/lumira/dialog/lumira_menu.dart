@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
+import '../../../../shared/widgets/common/glass_surface.dart';
 import '../_internal/lumira_theme_resolver.dart';
 
 /// 如画应用统一弹出菜单
@@ -251,6 +252,41 @@ class _LumiraMenuPanel<T> extends ConsumerWidget {
       radiusDp: radius,
     );
 
+    final content = IntrinsicWidth(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (int i = 0; i < items.length; i++) ...[
+            if (i > 0) const SizedBox(height: 2),
+            _LumiraMenuItemTile<T>(
+              item: items[i],
+              itemRadius: (radius - 4).clamp(0.0, radius),
+              tokens: tokens,
+              onTap: items[i].enabled
+                  ? () => onSelected(items[i].value)
+                  : null,
+            ),
+          ],
+        ],
+      ),
+    );
+
+    // glass 风格使用共享 GlassSurface（半透明主题色磨砂 + 高光 + 内描边）
+    if (style == UIStyle.glass) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: _LumiraMenuOverlay._menuMaxWidth,
+        ),
+        child: GlassSurface(
+          borderRadius: BorderRadius.circular(radius),
+          padding: const EdgeInsets.all(4),
+          shadows: visual.shadows,
+          child: content,
+        ),
+      );
+    }
+
     return Container(
       constraints: const BoxConstraints(
         maxWidth: _LumiraMenuOverlay._menuMaxWidth,
@@ -263,25 +299,7 @@ class _LumiraMenuPanel<T> extends ConsumerWidget {
         borderRadius: BorderRadius.circular(radius),
         boxShadow: visual.shadows,
       ),
-      child: IntrinsicWidth(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (int i = 0; i < items.length; i++) ...[
-              if (i > 0) const SizedBox(height: 2),
-              _LumiraMenuItemTile<T>(
-                item: items[i],
-                itemRadius: (radius - 4).clamp(0.0, radius),
-                tokens: tokens,
-                onTap: items[i].enabled
-                    ? () => onSelected(items[i].value)
-                    : null,
-              ),
-            ],
-          ],
-        ),
-      ),
+      child: content,
     );
   }
 }

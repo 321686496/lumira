@@ -11,6 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -337,10 +338,9 @@ class _TimelineNode extends ConsumerWidget {
                               width: 56,
                               height: 56,
                               child: coverImage.isNotEmpty
-                                  ? Image.asset(
-                                      coverImage,
+                                  ? LumiraImage(coverImage,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
+                                      errorWidget: Container(
                                         color: tokens.surfaceAlt,
                                         child: Icon(Icons.image_outlined,
                                             size: 20, color: tokens.textTertiary),
@@ -490,10 +490,9 @@ class _SubmissionPhotos extends ConsumerWidget {
                           width: 88,
                           height: 88,
                           child: sub.photoPath != null
-                              ? Image.file(
-                                  File(sub.photoPath!),
+                              ? LumiraImage(sub.photoPath!,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  errorWidget: Container(
                                     color: tokens.surfaceAlt,
                                     child: Icon(Icons.broken_image_outlined,
                                         size: 20, color: tokens.textTertiary),

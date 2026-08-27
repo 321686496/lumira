@@ -40,6 +40,7 @@ class _TipCardState extends ConsumerState<TipCard> {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+    final isGlass = appTheme.style == UIStyle.glass;
     final tipsAsync = ref.watch(homeTipsProvider);
 
     // 默认 fallback（loading/error 时使用）
@@ -47,15 +48,15 @@ class _TipCardState extends ConsumerState<TipCard> {
     final fallbackTip = fallbackTips[_tipIndex % fallbackTips.length];
 
     return tipsAsync.when(
-      loading: () => _buildCard(tokens, isNeumorphic, fallbackTip, fallbackTips.length, dim: true),
-      error: (_, __) => _buildCard(tokens, isNeumorphic, fallbackTip, fallbackTips.length),
+      loading: () => _buildCard(tokens, isNeumorphic, isGlass, fallbackTip, fallbackTips.length, dim: true),
+      error: (_, __) => _buildCard(tokens, isNeumorphic, isGlass, fallbackTip, fallbackTips.length),
       data: (tips) {
         if (tips.isEmpty) {
-          return _buildCard(tokens, isNeumorphic, fallbackTip, fallbackTips.length);
+          return _buildCard(tokens, isNeumorphic, isGlass, fallbackTip, fallbackTips.length);
         }
         // 索引越界保护（provider 数据变化时重置）
         final idx = _tipIndex < tips.length ? _tipIndex : 0;
-        return _buildCard(tokens, isNeumorphic, tips[idx], tips.length);
+        return _buildCard(tokens, isNeumorphic, isGlass, tips[idx], tips.length);
       },
     );
   }
@@ -63,6 +64,7 @@ class _TipCardState extends ConsumerState<TipCard> {
   Widget _buildCard(
     ThemeTokens tokens,
     bool isNeumorphic,
+    bool isGlass,
     ShootingTip tip,
     int listLength, {
     bool dim = false,
@@ -78,8 +80,11 @@ class _TipCardState extends ConsumerState<TipCard> {
             borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
             // neumorphic 风格：surface 纯色 + 双向阴影，移除渐变和边框
             // 其他风格：保留原渐变 + brand 15% 边框
-            color: isNeumorphic ? tokens.surface : null,
-            gradient: isNeumorphic
+            // glass 风格：半透明磨砂 + 细白描边 + 柔和投影
+            color: isNeumorphic
+                ? tokens.surface
+                : (isGlass ? ThemeTokens.glassFill(tokens) : null),
+            gradient: isNeumorphic || isGlass
                 ? null
                 : const LinearGradient(
                     begin: Alignment.topLeft,
@@ -89,13 +94,28 @@ class _TipCardState extends ConsumerState<TipCard> {
                       Color(0xFFFDF6EC),
                     ],
                   ),
-            border: isNeumorphic
-                ? null
-                : Border.all(
-                    color: tokens.brand.withOpacity(0.15),
-                    width: 1, // 2rpx → 1dp
-                  ),
-            boxShadow: isNeumorphic ? tokens.shadowConvex : null,
+            border: isGlass
+                ? Border.all(
+                    color: ThemeTokens.glassBorder(tokens),
+                    width: 1,
+                  )
+                : (isNeumorphic
+                    ? null
+                    : Border.all(
+                        color: tokens.brand.withOpacity(0.15),
+                        width: 1, // 2rpx → 1dp
+                      )),
+            boxShadow: isNeumorphic
+                ? tokens.shadowConvex
+                : (isGlass
+                    ? const [
+                        BoxShadow(
+                          color: Color(0x1F000000),
+                          offset: Offset(0, 6),
+                          blurRadius: 20,
+                        ),
+                      ]
+                    : null),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

@@ -59,6 +59,7 @@ class _HeroCardState extends ConsumerState<HeroCard> {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+    final isGlass = appTheme.style == UIStyle.glass;
     final inspirationAsync = ref.watch(homeInspirationProvider);
 
     return Padding(
@@ -77,8 +78,11 @@ class _HeroCardState extends ConsumerState<HeroCard> {
           borderRadius: BorderRadius.circular(20), // 40rpx → 20dp
           // neumorphic 风格：使用 surface 纯色 + 双向凸起阴影替代硬编码渐变背景
           // 其他风格：保留原渐变效果
-          color: isNeumorphic ? tokens.surface : null,
-          gradient: isNeumorphic
+          // glass 风格：半透明磨砂 + 细白描边 + 柔和投影
+          color: isNeumorphic
+              ? tokens.surface
+              : (isGlass ? ThemeTokens.glassFill(tokens) : null),
+          gradient: isNeumorphic || isGlass
               ? null
               : const LinearGradient(
                   begin: Alignment.topLeft,
@@ -88,7 +92,20 @@ class _HeroCardState extends ConsumerState<HeroCard> {
                     Color(0xFFF5E6CC),
                   ],
                 ),
-          boxShadow: isNeumorphic ? tokens.shadowConvex : null,
+          border: isGlass
+              ? Border.all(color: ThemeTokens.glassBorder(tokens), width: 1)
+              : null,
+          boxShadow: isNeumorphic
+              ? tokens.shadowConvex
+              : (isGlass
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x1F000000),
+                        offset: Offset(0, 6),
+                        blurRadius: 20,
+                      ),
+                    ]
+                  : null),
         ),
         child: inspirationAsync.when(
           // skipLoadingOnReload：定时 invalidate 触发的重载沿用旧数据，避免每分钟闪 loading 骨架。

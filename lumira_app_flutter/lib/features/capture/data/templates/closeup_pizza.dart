@@ -25,13 +25,13 @@ const PhotoTemplate closeupPizzaTemplate = PhotoTemplate(
     aspectRatio: '1:1',
     description: '披萨沿对角线构图，拉丝芝士作为视觉焦点，强调动态与质感',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿势，聚焦食物拉丝瞬间',
-  ),
+  // pose: Pose(
+  //   silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
+  //   position: Position(x: 0.5, y: 0.5),
+  //   scale: 1.0,
+  //   rotation: 0,
+  //   description: '无人物姿势，聚焦食物拉丝瞬间',
+  // ),
   camera: CameraParams(
     exposureCompensation: 0,
     isoMode: 'auto',

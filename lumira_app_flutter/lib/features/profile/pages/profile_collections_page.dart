@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -579,10 +578,10 @@ class _CoverThumbState extends ConsumerState<_CoverThumb> {
               fit: BoxFit.cover,
               errorWidget: _buildPlaceholder(size),
             )
-          : Image.file(
-              File(url),
+          : LumiraImage(
+              url,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _buildPlaceholder(size),
+              errorWidget: _buildPlaceholder(size),
             ),
     );
   }
@@ -608,10 +607,10 @@ class _CoverThumbState extends ConsumerState<_CoverThumb> {
                     fit: BoxFit.cover,
                     errorWidget: _buildPlaceholder(size / 2),
                   )
-                : Image.file(
-                    File(u),
+                : LumiraImage(
+                    u,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildPlaceholder(size / 2),
+                    errorWidget: _buildPlaceholder(size / 2),
                   );
           }
           return _buildPlaceholder(size / 2);

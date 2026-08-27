@@ -1,29 +1,29 @@
 // lib/features/templates/data/builtin_silhouettes.dart
 
-/// 内置剪影 SVG 库（从 lumira-app/src/data/silhouettes/index.ts 迁移）
+/// 内置剪影库（asset 路径映射）
 ///
-/// 所有 SVG 使用 viewBox="0 0 100 200"（1:2 人像比例），fill="currentColor"。
+/// 剪影为黑色线条风格 PNG（透明背景），存放于 assets/images/silhouettes/。
 /// 此文件为剪影数据的唯一真实源（source of truth）。
 class BuiltinSilhouettes {
   BuiltinSilhouettes._();
 
-  /// 无姿势占位 SVG（空字符串）
+  /// 无姿势占位（空字符串）
   static const String noneSvg = '';
 
-  /// 内置剪影 key → SVG 字符串映射
-  static const Map<String, String> svgMap = {
-    'standing-profile': standingProfileSvg,
-    'sitting-cafe': sittingCafeSvg,
-    'walking-street': walkingStreetSvg,
-    'soft-portrait': softPortraitSvg,
-    'neon-pose': neonPoseSvg,
-    'vintage-portrait': vintagePortraitSvg,
-    'peace-sign-girl': peaceSignGirlSvg,
-    'food-overhead': foodOverheadSvg,
-    'cityscape-tripod': cityscapeTripodSvg,
-    'landscape-wide': landscapeWideSvg,
-    'macro-flower': macroFlowerSvg,
-    'still-life-table': stillLifeTableSvg,
+  /// 内置剪影 key → asset 路径映射
+  static const Map<String, String> assetMap = {
+    'standing-profile': 'assets/images/silhouettes/standing-profile.png',
+    'sitting-cafe': 'assets/images/silhouettes/sitting-cafe.png',
+    'walking-street': 'assets/images/silhouettes/walking-street.png',
+    'soft-portrait': 'assets/images/silhouettes/soft-portrait.png',
+    'neon-pose': 'assets/images/silhouettes/neon-pose.png',
+    'vintage-portrait': 'assets/images/silhouettes/vintage-portrait.png',
+    'peace-sign-girl': 'assets/images/silhouettes/peace-sign-girl.png',
+    'food-overhead': 'assets/images/silhouettes/food-overhead.png',
+    'cityscape-tripod': 'assets/images/silhouettes/cityscape-tripod.png',
+    'landscape-wide': 'assets/images/silhouettes/landscape-wide.png',
+    'macro-flower': 'assets/images/silhouettes/macro-flower.png',
+    'still-life-table': 'assets/images/silhouettes/still-life-table.png',
   };
 
   /// 所有内置剪影 key 列表（排除 'none'）
@@ -34,108 +34,6 @@ class BuiltinSilhouettes {
   ];
 }
 
-// 顶层常量导出（便于直接引用）
-final List<String> kBuiltinSilhouetteKeys = BuiltinSilhouettes.keys;
-final Map<String, String> kBuiltinSilhouettes = BuiltinSilhouettes.svgMap;
-
-// === SVG 字符串（从 Vue 迁移，保持原始路径数据不变，移除 HTML 注释）===
-
-const String standingProfileSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M52 14 C46 14 41 17 38 22 C33 31 29 43 27 57 C25 71 26 85 30 96 C34 104 39 108 44 107 C41 98 38 88 38 74 C38 60 40 47 43 38 C44 35 46 33 47 34 C47 39 46 47 44 56 C41 70 40 84 43 96 C45 102 48 106 51 107 L51 94 C49 86 48 76 49 62 C50 48 52 36 53 26 L53 18 C52 16 52 14 52 14 Z"/>
-  <path d="M53 14 C58 14 61 18 61 23 C61 25 60 27 58 28 L61 29 C63 30 63 32 61 33 L58 34 L60 35 L59 37 L56 39 L53 41 L51 45 L51 50 C53 54 55 58 56 64 C58 73 58 83 56 93 L54 106 C53 116 53 126 54 136 L56 150 L57 168 L56 184 L55 190 L58 194 L52 195 L49 192 L49 184 L50 168 L51 150 L50 136 L49 126 L47 116 L46 106 C44 96 44 86 45 76 C46 66 48 58 50 52 L50 48 L48 44 C47 42 46 40 45 38 L44 34 C42 28 42 22 44 18 C46 15 49 14 53 14 Z"/>
-  <path d="M46 44 C42 48 39 54 37 62 C36 68 37 72 40 74 C42 72 43 68 44 62 C45 56 46 50 47 46 Z"/>
-</svg>''';
-
-const String sittingCafeSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M50 14 C42 14 35 18 32 25 C28 35 26 49 26 64 C26 78 28 90 32 98 C35 103 39 105 43 104 C40 95 38 85 38 71 C38 57 40 45 43 37 C44 40 44 45 43 51 C41 61 40 73 42 83 C43 89 45 93 47 95 L49 87 C47 81 46 73 47 63 C48 53 50 43 51 35 L51 21 C50 17 50 15 50 14 Z"/>
-  <path d="M50 14 C56 14 60 18 60 25 C60 30 57 34 54 36 C57 38 60 42 62 48 L64 59 C65 67 65 75 64 83 L62 91 C60 95 57 97 54 98 L52 104 L54 112 C58 116 62 120 64 126 L66 140 L67 160 L67 180 L65 192 L61 196 L57 194 L56 184 L55 168 L54 152 L52 140 L50 132 L48 140 L46 152 L45 168 L44 184 L43 194 L39 196 L35 192 L33 180 L33 160 L34 140 L36 126 C38 120 42 116 46 112 L48 104 L46 98 C43 97 41 95 39 91 L37 83 C36 75 36 67 37 59 L39 48 C41 42 44 38 47 36 C44 34 41 30 41 25 C41 18 44 14 50 14 Z"/>
-  <path d="M60 36 C64 34 68 36 70 40 C72 44 72 50 70 54 C68 56 65 56 63 54 L60 50 L58 44 Z M58 30 C60 26 64 24 68 26 C70 28 70 32 68 34 L64 36 L60 34 Z"/>
-</svg>''';
-
-const String walkingStreetSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M51 14 C44 14 38 17 35 23 C30 33 25 46 22 60 C19 74 19 88 22 98 C26 104 32 107 37 105 C34 96 30 86 30 72 C30 58 33 45 37 36 C38 39 38 44 37 50 C35 60 34 72 36 82 C37 88 39 92 41 94 L43 86 C41 80 40 72 41 62 C42 52 44 42 46 34 L46 20 C45 16 46 14 51 14 Z"/>
-  <path d="M52 14 C57 14 60 18 60 24 C60 29 57 33 54 35 C57 37 60 41 62 47 L64 58 C65 66 65 74 64 82 L62 90 C60 94 57 96 54 97 L52 103 L54 108 C58 110 62 113 65 118 C68 125 70 135 72 148 L74 168 L73 184 L71 192 L67 195 L63 192 L62 182 L61 166 L59 150 L57 138 L55 130 L52 128 L49 130 L47 138 L45 150 L43 166 L42 182 L41 192 L37 195 L33 192 L31 184 L32 168 L34 148 C36 135 38 125 41 118 C44 113 48 110 52 108 L54 103 L52 97 C49 96 47 94 45 90 L43 82 C42 74 42 66 43 58 L45 47 C47 41 50 37 53 35 C50 33 47 29 47 24 C47 18 48 14 52 14 Z"/>
-</svg>''';
-
-const String softPortraitSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M50 14 C42 14 35 18 32 25 C28 35 26 50 26 65 C26 80 28 92 32 100 C36 106 42 108 48 107 C45 98 43 88 43 74 C43 60 45 48 48 40 C49 43 49 48 48 54 C46 64 45 76 47 86 C48 92 50 96 52 98 L54 90 C52 84 51 76 52 66 C53 56 55 46 56 38 L56 24 C55 20 55 16 50 14 Z"/>
-  <path d="M50 14 C56 14 60 18 60 25 C60 30 57 34 54 36 C57 38 60 42 62 48 L64 58 C65 66 65 74 64 82 L62 90 C60 94 57 96 54 97 L52 103 L50 110 L48 103 L46 97 C43 96 41 94 39 90 L37 82 C36 74 36 66 37 58 L39 48 C41 42 44 38 47 36 C44 34 41 30 41 25 C41 18 44 14 50 14 Z"/>
-  <path d="M44 88 C42 92 42 98 44 102 C46 105 50 106 54 105 C58 103 60 98 58 94 C56 90 52 88 48 88 Z M40 85 C38 88 38 92 40 94 L44 92 L42 88 Z M60 85 C62 88 62 92 60 94 L56 92 L58 88 Z"/>
-</svg>''';
-
-const String neonPoseSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M55 18 C62 16 68 18 72 24 C76 32 78 42 77 52 C76 60 73 66 69 68 C67 62 66 54 66 46 C66 38 67 32 65 28 C63 26 60 26 58 28 Z"/>
-  <path d="M50 14 C55 14 58 18 58 24 C58 29 56 33 53 35 C56 37 59 41 61 47 L63 56 C64 64 64 72 63 80 L61 88 C59 92 56 94 53 95 L51 100 L53 110 C56 120 59 132 61 145 L63 165 L62 180 L60 192 L56 195 L52 192 L51 182 L50 166 L49 150 L47 138 L45 130 L43 138 L41 150 L40 166 L39 182 L38 192 L34 195 L30 192 L28 180 L29 165 L31 145 C33 132 36 120 39 110 L41 100 L39 95 C36 94 34 92 32 88 L30 80 C29 72 29 64 30 56 L32 47 C34 41 37 37 40 35 C37 33 35 29 35 24 C35 18 39 14 50 14 Z"/>
-  <path d="M30 56 C26 60 24 66 24 72 C24 76 26 78 30 77 L34 74 L36 68 L35 62 Z"/>
-  <path d="M63 47 C67 43 72 40 77 38 C81 37 84 39 84 43 C83 46 80 48 76 50 L70 53 L65 56 Z"/>
-</svg>''';
-
-const String vintagePortraitSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M50 10 C42 10 34 14 30 20 C28 24 28 28 30 30 C26 30 22 34 20 40 C19 44 20 48 23 50 C21 52 20 56 22 60 C24 62 28 62 30 60 C29 56 28 52 30 48 C32 44 36 42 40 42 C38 38 38 34 40 32 C42 34 44 36 46 38 C44 34 44 30 46 28 C48 30 50 32 50 34 C50 30 52 28 54 28 C56 30 56 34 54 38 C56 36 58 34 60 32 C62 34 62 38 60 42 C64 42 68 44 70 48 C72 52 71 56 70 60 C72 62 76 62 78 60 C80 56 79 52 77 50 C80 48 81 44 80 40 C78 34 74 30 70 30 C72 28 72 24 70 20 C66 14 58 10 50 10 Z"/>
-  <path d="M50 32 C55 32 58 36 58 42 C58 46 56 50 53 52 C56 54 59 58 61 64 L63 75 C64 83 64 91 63 99 L61 107 C59 111 56 113 53 114 L51 120 L53 130 C56 140 59 152 61 165 L63 182 L62 192 L58 195 L54 192 L53 182 L52 168 L50 155 L48 168 L47 182 L46 192 L42 195 L38 192 L37 182 L39 165 C41 152 44 140 47 130 L49 120 L47 114 C44 113 41 111 39 107 L37 99 C36 91 36 83 37 75 L39 64 C41 58 44 54 47 52 C44 50 42 46 42 42 C42 36 45 32 50 32 Z"/>
-  <path d="M42 110 C38 114 36 120 38 124 C41 126 46 125 50 122 C54 125 59 126 62 124 C64 120 62 114 58 110 Z"/>
-</svg>''';
-
-const String peaceSignGirlSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M38 24 C32 26 28 32 27 40 C26 48 28 54 32 58 C30 62 30 68 32 72 C34 74 37 73 38 70 C36 66 35 60 37 56 C35 52 35 46 37 42 C36 38 37 32 38 28 Z"/>
-  <path d="M62 24 C68 26 72 32 73 40 C74 48 72 54 68 58 C70 62 70 68 68 72 C66 74 63 73 62 70 C64 66 65 60 63 56 C65 52 65 46 63 42 C64 38 63 32 62 28 Z"/>
-  <path d="M48 16 C53 14 58 17 59 23 C59 28 57 32 54 34 C57 36 60 40 62 46 L64 56 C65 64 65 72 64 80 L62 88 C60 92 57 94 54 95 L52 101 L54 110 C57 120 60 132 62 145 L64 162 L63 178 L61 190 L57 194 L53 192 L52 182 L51 168 L50 154 L48 145 L46 154 L45 168 L44 182 L43 192 L39 194 L35 190 L33 178 L34 162 L36 145 C38 132 41 120 44 110 L46 101 L44 95 C41 94 38 92 36 88 L34 80 C33 72 33 64 34 56 L36 46 C38 40 41 36 44 34 C41 32 39 28 39 23 C39 18 42 15 48 16 Z"/>
-  <path d="M62 46 C66 44 70 42 74 40 L78 38 C82 36 85 38 85 42 C84 45 81 47 78 48 L74 50 L76 52 C79 54 82 56 84 59 C85 62 83 64 80 63 C77 61 74 59 71 57 L67 54 L64 52 Z"/>
-  <path d="M85 42 C88 40 90 38 91 34 C92 30 91 26 89 26 C87 26 85 30 84 34 L83 40 Z M78 36 C80 32 81 28 80 24 C79 22 77 22 76 24 C75 28 75 32 76 36 L77 40 Z"/>
-</svg>''';
-
-const String foodOverheadSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M0 110 C5 106 12 104 20 102 L28 100 C32 98 36 96 38 94 L40 92 L42 88 L42 84 L40 82 L38 80 L34 80 L28 82 L20 84 L12 86 L0 88 Z"/>
-  <path d="M38 92 C42 88 46 86 52 86 C58 86 62 88 64 92 L65 98 C64 102 62 106 58 108 L52 110 C46 110 40 108 37 104 L36 100 Z"/>
-  <path d="M58 86 C62 82 66 78 70 76 C74 74 78 74 80 76 C81 78 80 80 77 82 L70 86 L64 90 Z"/>
-  <path d="M52 84 C55 78 58 72 62 68 C65 65 68 65 69 67 C69 69 68 72 65 75 L60 80 L55 84 Z"/>
-  <path d="M46 86 C48 80 50 74 52 70 C54 67 56 67 57 69 C57 71 56 74 54 77 L51 82 L48 86 Z"/>
-  <path d="M41 88 C42 84 43 80 44 76 C45 74 46 74 47 76 C47 78 46 81 45 84 L43 88 Z"/>
-</svg>''';
-
-const String cityscapeTripodSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M32 40 L68 40 C70 40 72 42 72 44 L72 48 L76 48 C78 48 80 50 80 52 L80 64 C80 66 78 68 76 68 L72 68 L72 72 C72 74 70 76 68 76 L32 76 C30 76 28 74 28 72 L28 68 L24 68 C22 68 20 66 20 64 L20 52 C20 50 22 48 24 48 L28 48 L28 44 C28 42 30 40 32 40 Z"/>
-  <path d="M42 76 L58 76 L60 82 L60 92 L58 96 L42 96 L40 92 L40 82 Z"/>
-  <path d="M44 36 L56 36 L57 40 L43 40 Z"/>
-  <path d="M38 96 L62 96 L64 100 L60 102 L40 102 L36 100 Z"/>
-  <path d="M48 102 L52 102 L53 130 L51 135 L49 135 L47 130 Z"/>
-  <path d="M48 130 L46 130 L30 175 L28 185 L32 185 L42 145 L48 135 Z"/>
-  <path d="M52 130 L54 130 L70 175 L72 185 L68 185 L58 145 L52 135 Z"/>
-  <path d="M49 130 L51 130 L51 190 L49 190 Z"/>
-</svg>''';
-
-const String landscapeWideSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M0 70 L8 60 L15 65 L22 52 L30 58 L38 48 L45 55 L52 45 L60 52 L68 42 L75 50 L82 47 L90 55 L100 50 L100 80 L0 80 Z"/>
-  <path d="M0 90 L6 80 L14 85 L20 75 L28 82 L36 72 L44 80 L50 70 L58 78 L66 68 L74 76 L82 72 L90 80 L100 78 L100 100 L0 100 Z"/>
-  <path d="M0 110 L5 105 L12 112 L18 100 L25 108 L32 96 L40 104 L48 92 L55 100 L62 88 L70 96 L78 90 L85 98 L92 92 L100 100 L100 200 L0 200 Z"/>
-  <path d="M15 110 L14 105 L16 100 L15 95 L17 92 L19 96 L18 101 L20 105 L19 110 L18 115 L16 115 Z M15 110 L17 110 L17 130 L15 130 Z"/>
-  <path d="M82 115 L81 110 L83 105 L82 100 L84 97 L86 101 L85 106 L87 110 L86 115 L85 120 L83 120 Z M82 115 L84 115 L84 135 L82 135 Z"/>
-</svg>''';
-
-const String macroFlowerSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M55 50 L54 55 L53 65 L52 80 L51 100 L50 120 L49 135 L48 140 L50 142 L52 140 L53 125 L54 110 L55 90 L56 70 L57 55 L58 50 Z"/>
-  <path d="M55 45 C58 42 62 42 65 45 C67 48 67 52 65 55 C62 57 58 57 55 55 C53 52 53 48 55 45 Z"/>
-  <path d="M60 42 C58 36 60 30 65 28 C70 27 73 30 73 35 C72 40 68 43 64 44 Z"/>
-  <path d="M67 48 C73 47 78 50 79 55 C79 60 76 63 71 62 C67 60 65 56 65 52 Z"/>
-  <path d="M62 58 C65 63 64 70 60 72 C55 73 52 70 52 65 C53 61 57 58 60 58 Z"/>
-  <path d="M52 55 C47 58 43 56 41 52 C40 47 43 43 48 43 C52 44 54 48 54 52 Z"/>
-  <path d="M53 42 C50 38 51 32 55 30 C60 29 63 32 62 37 C61 41 57 43 54 43 Z"/>
-  <path d="M53 70 C48 72 44 78 43 84 C42 88 44 90 48 88 C52 85 54 80 54 75 Z"/>
-  <path d="M44 135 C42 133 42 130 44 128 L48 126 L52 127 L55 129 L57 132 L58 136 L57 140 L55 144 L52 146 L48 146 L45 144 L43 140 Z"/>
-  <path d="M52 144 C58 148 64 154 70 162 C76 170 82 178 86 186 C88 190 87 194 84 195 C80 195 76 192 72 186 C66 178 60 170 54 164 L50 158 L48 150 Z"/>
-</svg>''';
-
-const String stillLifeTableSvg = '''<svg viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-  <path d="M25 100 L23 105 L22 110 L21 115 L20 120 L20 140 L19 160 L18 180 L18 190 L19 195 L31 195 L32 190 L32 180 L31 160 L30 140 L30 120 L29 115 L28 110 L27 105 L25 100 Z"/>
-  <path d="M22 100 L28 100 L28 95 L27 92 L23 92 L22 95 Z"/>
-  <path d="M25 92 L24 80 L24 65 L25 55 L25 50 L25 65 L26 80 L26 92 Z"/>
-  <path d="M25 50 C22 46 22 40 25 36 C28 34 30 38 30 42 C30 46 28 50 25 50 Z"/>
-  <path d="M22 52 C19 50 18 46 20 42 C22 40 24 44 24 48 C24 52 22 54 22 52 Z"/>
-  <path d="M28 52 C30 50 32 48 32 44 C32 40 28 40 27 44 C26 48 27 52 28 52 Z"/>
-  <path d="M25 55 C23 53 23 50 25 48 C27 48 27 52 25 55 Z"/>
-  <path d="M60 120 L58 125 L58 130 L57 135 L57 160 L58 185 L59 192 L61 195 L73 195 L75 192 L76 185 L77 160 L77 135 L76 130 L74 125 L72 120 Z"/>
-  <path d="M58 120 L74 120 L75 115 L74 110 L72 108 L60 108 L58 110 L57 115 Z"/>
-  <path d="M77 130 C82 130 85 134 85 140 C85 146 82 150 77 150 L77 146 C80 146 82 143 82 140 C82 137 80 134 77 134 Z"/>
-  <path d="M5 195 L95 195 L95 200 L5 200 Z"/>
-  <path d="M45 180 C42 178 40 180 40 184 C40 188 43 191 46 191 C49 191 50 188 50 184 C50 181 48 179 45 180 Z M46 178 L47 174 L46 170"/>
-</svg>''';
+/// 顶层常量导出（便于直接引用）
+const List<String> kBuiltinSilhouetteKeys = BuiltinSilhouettes.keys;
+const Map<String, String> kBuiltinSilhouettes = BuiltinSilhouettes.assetMap;

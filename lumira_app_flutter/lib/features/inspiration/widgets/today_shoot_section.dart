@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 import '../data/inspiration_content.dart';
 import '../data/inspiration_providers.dart';
 
@@ -128,15 +129,11 @@ class _Card extends ConsumerWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: tokens.shadowConvex,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Column(
+      child: LumiraSurface(
+        radius: 14,
+        emphasize: true,
+        clip: true,
+        child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
@@ -183,7 +180,6 @@ class _Card extends ConsumerWidget {
               ),
             ],
           ),
-        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/academy_models.dart';
 import '../providers/academy_providers.dart';
@@ -58,8 +59,8 @@ class _AcademyKnowledgePageState extends ConsumerState<AcademyKnowledgePage> {
                   borderRadius: BorderRadius.circular(12),
                   child: AspectRatio(
                     aspectRatio: 16 / 9,
-                    child: Image.asset(card.coverImage, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt, child: Icon(Icons.image_outlined, color: tokens.textTertiary)),
+                    child: LumiraImage(card.coverImage, fit: BoxFit.cover,
+                      errorWidget:  Container(color: tokens.surfaceAlt, child: Icon(Icons.image_outlined, color: tokens.textTertiary)),
                     ),
                   ),
                 ),
@@ -172,8 +173,8 @@ class _AcademyKnowledgePageState extends ConsumerState<AcademyKnowledgePage> {
                         width: 80,
                         child: AspectRatio(
                           aspectRatio: 4 / 3,
-                          child: Image.asset(kc.coverImage, fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt, child: Icon(Icons.image_outlined, color: tokens.textTertiary)),
+                          child: LumiraImage(kc.coverImage, fit: BoxFit.cover,
+                            errorWidget:  Container(color: tokens.surfaceAlt, child: Icon(Icons.image_outlined, color: tokens.textTertiary)),
                           ),
                         ),
                       ),
@@ -238,8 +239,8 @@ class _RelatedCards extends ConsumerWidget {
                 width: 48,
                 child: AspectRatio(
                   aspectRatio: 4 / 3,
-                  child: Image.asset(kc.coverImage, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(color: tokens.surfaceAlt),
+                  child: LumiraImage(kc.coverImage, fit: BoxFit.cover,
+                    errorWidget:  Container(color: tokens.surfaceAlt),
                   ),
                 ),
               ),

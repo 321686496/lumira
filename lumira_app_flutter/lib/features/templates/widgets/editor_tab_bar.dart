@@ -11,7 +11,9 @@ import '../../../core/theme/theme_tokens.dart';
 /// 派生，不硬编码任何皮肤色、不写死阴影。
 ///
 /// Tab 条位于纯色画布上，按「画布取向」渲染：
-/// - neumorphic：选中/未选中都用 `shadowConvex` 系双向阴影表达浮雕；
+/// - neumorphic：未选中用 `shadowConvexSubtle` 轻凸起，选中使用**标准 `shadowConvex`**
+///   表达更强的新拟态凸起（规则同 `floating_tabbar`：不可用 `shadowConvexBrand`，
+///   品牌色阴影与底色接近会像“发光”；也不可内凹 `shadowPressed`，会显得扁平）。
 /// - flat / glass / female：不使用外阴影，改用「surface + 细边」表达表面。
 class EditorTabBar extends ConsumerWidget {
   const EditorTabBar({
@@ -90,13 +92,14 @@ class _TabChip extends StatelessWidget {
       ),
     );
 
-    // 新拟态：纯色画布上的 chip 使用双向浮雕外阴影（凸起）。
+    // 新拟态：纯色画布上的 chip，未选中轻凸起，选中用标准 shadowConvex 呈现更强凸起。
+    // 不能用 shadowConvexBrand（会“发光”）或内凹 shadowPressed（会扁平）。
     if (style == UIStyle.neumorphic) {
       return Container(
         decoration: BoxDecoration(
           borderRadius: radius,
           boxShadow: selected
-              ? tokens.shadowConvexBrand
+              ? tokens.shadowConvex
               : tokens.shadowConvexSubtle,
         ),
         child: content,

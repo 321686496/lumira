@@ -47,7 +47,7 @@ class AppThemeData {
       case UIStyle.flat:
         return Border.all(color: tokens.divider, width: 1);
       case UIStyle.glass:
-        return Border.all(color: const Color(0xFFFFFFFF).withOpacity(0.3), width: 1);
+        return Border.all(color: ThemeTokens.glassBorder(tokens), width: 1);
       case UIStyle.female:
         return null;
     }
@@ -208,9 +208,12 @@ class AppThemeData {
             );
           case UIStyle.glass:
             return ButtonVisual(
-              background: Colors.white.withOpacity(0.55),
+              background: ThemeTokens.glassFill(tokens),
               foreground: tokens.brandText,
-              border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+              border: Border.all(
+                color: ThemeTokens.glassBorder(tokens),
+                width: 1,
+              ),
               shadows: const [
                 BoxShadow(color: Color(0x14000000), offset: Offset(0, 4), blurRadius: 16),
               ],
@@ -287,8 +290,11 @@ class AppThemeData {
         );
       case UIStyle.glass:
         return InputVisual(
-          background: Colors.white.withOpacity(0.4),
-          border: Border.all(color: borderAccent.withOpacity(0.8), width: isFocused ? 1.5 : 1),
+          background: ThemeTokens.glassFill(tokens),
+          border: Border.all(
+            color: borderAccent.withOpacity(0.8),
+            width: isFocused ? 1.5 : 1,
+          ),
           shadows: const [],
           borderAccent: borderAccent,
           foreground: isDisabled ? tokens.textTertiary : tokens.textPrimary,

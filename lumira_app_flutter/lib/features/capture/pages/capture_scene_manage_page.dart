@@ -14,6 +14,8 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
+import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
 import '../data/scene_manage_providers.dart';
@@ -300,45 +302,50 @@ class _CaptureSceneManagePageState
         ref.watch(favoriteScenesProvider).valueOrNull ?? const [];
     return Scaffold(
       backgroundColor: tokens.canvas,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _Nav(onBack: _back),
-            _TabsRow(
-              current: _tab,
-              onSelect: (t) => setState(() => _tab = t),
-            ),
-            Expanded(
-              child: _tab == _ManageTab.fav
-                  ? _FavTab(
-                      favoriteScenes: favoriteScenes,
-                      onToggleFav: _toggleFav,
-                      onGoGuide: _goGuide,
-                      onTapScene: _goSceneDetail,
-                    )
-                  : _formVisible
-                      ? _CustomForm(
-                          formData: _formData,
-                          editingId: _editingId,
-                          errorText: _formError,
-                          onChange: _onFormChange,
-                          onCancel: _onCancelForm,
-                          onSave: _onSaveForm,
-                          onMutate: (fn) {
-                            setState(fn);
-                            _onFormChange();
-                          },
-                        )
-                      : _CustomTab(
-                          customScenes: customScenes,
-                          onNew: _onNew,
-                          onMore: _onMore,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          SafeArea(
+            child: Column(
+              children: [
+                _Nav(onBack: _back),
+                _TabsRow(
+                  current: _tab,
+                  onSelect: (t) => setState(() => _tab = t),
+                ),
+                Expanded(
+                  child: _tab == _ManageTab.fav
+                      ? _FavTab(
+                          favoriteScenes: favoriteScenes,
+                          onToggleFav: _toggleFav,
+                          onGoGuide: _goGuide,
                           onTapScene: _goSceneDetail,
-                        ),
+                        )
+                      : _formVisible
+                          ? _CustomForm(
+                              formData: _formData,
+                              editingId: _editingId,
+                              errorText: _formError,
+                              onChange: _onFormChange,
+                              onCancel: _onCancelForm,
+                              onSave: _onSaveForm,
+                              onMutate: (fn) {
+                                setState(fn);
+                                _onFormChange();
+                              },
+                            )
+                          : _CustomTab(
+                              customScenes: customScenes,
+                              onNew: _onNew,
+                              onMore: _onMore,
+                              onTapScene: _goSceneDetail,
+                            ),
+                ),
+                const SizedBox(height: 24), // bottom-spacer
+              ],
             ),
-            const SizedBox(height: 24), // bottom-spacer
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -816,16 +823,9 @@ class _CustomTab extends ConsumerWidget {
           GestureDetector(
             onTap: onNew,
             behavior: HitTestBehavior.opaque,
-            child: Container(
+            child: LumiraSurface(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: tokens.divider,
-                  width: 1.5,
-                ),
-                color: tokens.surface,
-                borderRadius: BorderRadius.circular(12),
-              ),
+              radius: 12,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -878,19 +878,9 @@ class _CustomForm extends ConsumerWidget {
     final tokens = ref.watch(appThemeProvider).tokens;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-      child: Container(
+      child: LumiraSurface(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x14000000),
-              offset: Offset(0, 4),
-              blurRadius: 16,
-            ),
-          ],
-        ),
+        radius: 14,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

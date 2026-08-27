@@ -32,19 +32,32 @@ class TemplateGridCard extends ConsumerWidget {
     final tpl = template;
     final isNeu = appTheme.style == UIStyle.neumorphic;
     final isFlat = appTheme.style == UIStyle.flat;
+    final isGlass = appTheme.style == UIStyle.glass;
 
-    // 卡片统一使用不透明表面底色（各风格取各自的表面色/边框），
-    // 使底部标题/分类文字与页面背景形成对比，不再「像嵌在背景里」；
-    // 新拟态保留双向浮雕阴影，扁平化用 surfaceAlt + 细分隔线。
+    // Forced fix(玻璃): 自绘卡片各风格取各自身份化背景——玻璃风格改用半透明
+    // 品牌玻璃面(ThemeTokens.glassFill) + 细白描边(glassBorder)，让背后
+    // GlassBackground 彩色光晕透过表面，形成明显的玻璃卡片；其余风格不变。
     return BreathingTap(
       onTap: onTap,
       pressedScale: appTheme.style == UIStyle.female ? 0.96 : 0.98,
       child: Container(
         decoration: BoxDecoration(
-          color: isFlat ? tokens.surfaceAlt : tokens.surface,
+          color: isGlass
+              ? ThemeTokens.glassFill(tokens)
+              : (isFlat ? tokens.surfaceAlt : tokens.surface),
           borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
-          boxShadow: isNeu ? tokens.shadowConvex : null,
-          border: isFlat ? Border.all(color: tokens.divider, width: 1) : null,
+          boxShadow: isGlass
+              ? const [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    offset: Offset(0, 6),
+                    blurRadius: 20,
+                  ),
+                ]
+              : (isNeu ? tokens.shadowConvex : null),
+          border: isGlass
+              ? Border.all(color: ThemeTokens.glassBorder(tokens), width: 1)
+              : (isFlat ? Border.all(color: tokens.divider, width: 1) : null),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(

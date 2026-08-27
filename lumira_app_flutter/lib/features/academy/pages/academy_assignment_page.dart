@@ -11,6 +11,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/services/file_picker_service.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/lumira/lumira.dart'
     show ButtonVariant, LumiraButton, LumiraProgress, LumiraTextField;
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -236,7 +237,7 @@ class _AcademyAssignmentPageState extends ConsumerState<AcademyAssignmentPage> {
                   child: AspectRatio(
                     aspectRatio: 4 / 3,
                     child: _photoPath != null
-                        ? Image.file(File(_photoPath!), fit: BoxFit.cover)
+                        ? LumiraImage(_photoPath!, fit: BoxFit.cover)
                         : CachedNetworkImage(url: _photoUrl!, fit: BoxFit.cover),
                   ),
                 ),

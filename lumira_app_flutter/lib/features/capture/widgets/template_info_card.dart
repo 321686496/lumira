@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../domain/photo_template.dart';
 
 /// 拍摄页套用模板后的可折叠模板信息卡。
@@ -41,7 +42,8 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = ref.watch(themeTokensProvider);
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
     final template = widget.template;
     final tips = template.sceneGuide.tips;
     // 无简介且无注意点时仅渲染标题条
@@ -74,21 +76,40 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
                 horizontal: 14,
                 vertical: _expanded ? 12 : 10,
               ),
-              decoration: BoxDecoration(
-                color: const Color(0xF0171512).withOpacity(0.92),
-                borderRadius: BorderRadius.circular(_expanded ? 14 : 24),
-                border: Border.all(
-                  color: tokens.brand.withOpacity(0.35),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.30),
-                    offset: const Offset(0, 4),
-                    blurRadius: 12,
-                  ),
-                ],
-              ),
+              decoration: appTheme.style == UIStyle.glass
+                  ? BoxDecoration(
+                      // 玻璃风格：半透明底色 + 细白描边 + 柔和投影
+                      color: ThemeTokens.glassFill(tokens),
+                      borderRadius:
+                          BorderRadius.circular(_expanded ? 14 : 24),
+                      border: Border.all(
+                        color: ThemeTokens.glassBorder(tokens),
+                        width: 1,
+                      ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x1F000000),
+                          offset: Offset(0, 6),
+                          blurRadius: 20,
+                        ),
+                      ],
+                    )
+                  : BoxDecoration(
+                      color: const Color(0xF0171512).withOpacity(0.92),
+                      borderRadius:
+                          BorderRadius.circular(_expanded ? 14 : 24),
+                      border: Border.all(
+                        color: tokens.brand.withOpacity(0.35),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.30),
+                          offset: const Offset(0, 4),
+                          blurRadius: 12,
+                        ),
+                      ],
+                    ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,

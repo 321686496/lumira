@@ -1,11 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../core/utils/image_cache.dart';
+import 'lumira_image.dart';
 
 /// 自适应九宫格图片展示
 ///
@@ -103,18 +101,11 @@ class _ImageCell extends ConsumerWidget {
       color: tokens.divider,
       child: Icon(Icons.broken_image_outlined, color: tokens.textTertiary),
     );
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return CachedNetworkImage(
-        url: url,
-        fit: BoxFit.cover,
-        errorWidget: fallback,
-      );
-    }
-    // 本地文件路径
-    return Image.file(
-      File(url),
+    // 统一加载组件：自动识别 http/本地文件，按格子尺寸×DPR 降采样
+    return LumiraImage(
+      url,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => fallback,
+      errorWidget: fallback,
     );
   }
 }

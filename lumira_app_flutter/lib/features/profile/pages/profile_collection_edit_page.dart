@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
@@ -262,43 +261,52 @@ class _ProfileCollectionEditPageState
       ),
       body: Stack(
         children: [
+          // 整页统一覆盖 GlassBackground，避免保存按钮区露出 canvas（“只有一半 glass 背景”）
           const Positioned.fill(
             child: GlassBackground(variant: GlassBackgroundVariant.profile),
           ),
           SafeArea(
             top: false,
-            child: _isLoading
-                ? Center(child: LumiraProgress.circular())
-                : _loadError != null
-                    ? _ErrorState(
-                        tokens: tokens,
-                        message: _loadError!,
-                        onRetry: _loadInitial,
-                      )
-                    : _buildForm(tokens),
+            bottom: false,
+            child: Column(
+              children: [
+                Expanded(
+                  child: _isLoading
+                      ? Center(child: LumiraProgress.circular())
+                      : _loadError != null
+                          ? _ErrorState(
+                              tokens: tokens,
+                              message: _loadError!,
+                              onRetry: _loadInitial,
+                            )
+                          : _buildForm(tokens),
+                ),
+                if (_isLoading || _loadError != null)
+                  const SizedBox.shrink()
+                else
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
+                      child: LumiraButton(
+                        variant: ButtonVariant.primary,
+                        onPressed: _isSaving ? null : _save,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Text(_isSaving ? '保存中…' : '保存'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
-      bottomNavigationBar: _isLoading || _loadError != null
-          ? null
-          : SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-                child: LumiraButton(
-                  variant: ButtonVariant.primary,
-                  onPressed: _isSaving ? null : _save,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.check_outlined, size: 18),
-                      const SizedBox(width: 8),
-                      Text(_isSaving ? '保存中…' : '保存'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
     );
   }
 
@@ -308,7 +316,7 @@ class _ProfileCollectionEditPageState
     final topPadding = MediaQuery.of(context).viewPadding.top + 48;
     return SingleChildScrollView(
       controller: _scrollController,
-      padding: EdgeInsets.fromLTRB(24, topPadding, 24, 80),
+      padding: EdgeInsets.fromLTRB(24, topPadding, 24, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -636,12 +644,12 @@ class _PhotoEditCell extends StatelessWidget {
                               color: tokens.textTertiary),
                         ),
                       )
-                    : Image.file(
-                        File(url),
+                    : LumiraImage(
+                        url,
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: double.infinity,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorWidget: Container(
                           color: tokens.surfaceAlt,
                           child: Icon(Icons.broken_image_outlined,
                               color: tokens.textTertiary),
@@ -917,8 +925,8 @@ class _PhotoPickerSheetState extends ConsumerState<_PhotoPickerSheet> {
                   child: Icon(Icons.broken_image_outlined,
                       color: tokens.textTertiary, size: 20),
                 ))
-        : Image.file(File(url), fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Container(
+        : LumiraImage(url, fit: BoxFit.cover,
+            errorWidget: Container(
                   color: tokens.surfaceAlt,
                   child: Icon(Icons.broken_image_outlined,
                       color: tokens.textTertiary, size: 20),

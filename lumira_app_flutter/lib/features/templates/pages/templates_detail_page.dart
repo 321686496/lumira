@@ -18,6 +18,7 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/safe_share.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
@@ -546,6 +547,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
+          const Positioned.fill(child: GlassBackground()),
           _BackgroundDecoration(tokens: tokens),
           SafeArea(
             top: false,

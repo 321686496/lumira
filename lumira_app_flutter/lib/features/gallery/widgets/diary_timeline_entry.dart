@@ -1,12 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:lumira_app_flutter/core/utils/image_cache.dart';
-
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../data/gallery_models.dart';
 import 'diary_photo_cell.dart';
 
@@ -264,23 +261,14 @@ class _OverflowImage extends StatelessWidget {
         child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
       );
     }
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return CachedNetworkImage(
-        url: url,
-        fit: BoxFit.cover,
-        errorWidget: Container(
-          color: tokens.surfaceAlt,
-          child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
-        ),
-      );
-    }
-    return Image.file(
-      File(url),
+    final err = Container(
+      color: tokens.surfaceAlt,
+      child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
+    );
+    return LumiraImage(
+      url,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(
-        color: tokens.surfaceAlt,
-        child: Icon(Icons.image_outlined, size: 24, color: tokens.textTertiary),
-      ),
+      errorWidget: err,
     );
   }
 }

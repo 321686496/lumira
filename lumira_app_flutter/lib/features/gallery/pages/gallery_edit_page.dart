@@ -11,6 +11,9 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
+import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/domain/filter_recipe.dart';
@@ -233,28 +236,33 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
           ),
         ],
       ),
-      body: daoAsync.when(
-        loading: () => Center(
-          child: LumiraProgress.circular(),
-        ),
-        error: (e, _) => Center(
-          child: Text(
-            '加载失败：$e',
-            style: TextStyle(color: tokens.textSecondary),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          daoAsync.when(
+            loading: () => Center(
+              child: LumiraProgress.circular(),
+            ),
+            error: (e, _) => Center(
+              child: Text(
+                '加载失败：$e',
+                style: TextStyle(color: tokens.textSecondary),
+              ),
+            ),
+            data: (dao) {
+              if (!_isInitialLoaded) {
+                _isInitialLoaded = true;
+                _loadPhoto(dao);
+              }
+              if (_isLoading) {
+                return Center(child: LumiraProgress.circular());
+              }
+              return _photo == null
+                  ? _EmptyCanvas(tokens: tokens)
+                  : _buildContent(_photo!);
+            },
           ),
-        ),
-        data: (dao) {
-          if (!_isInitialLoaded) {
-            _isInitialLoaded = true;
-            _loadPhoto(dao);
-          }
-          if (_isLoading) {
-            return Center(child: LumiraProgress.circular());
-          }
-          return _photo == null
-              ? _EmptyCanvas(tokens: tokens)
-              : _buildContent(_photo!);
-        },
+        ],
       ),
     );
   }
@@ -393,16 +401,14 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
         break;
     }
 
-    return Container(
-      height: height,
+    return LumiraSurface(
+      radius: 20,
+      clip: true,
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: tokens.shadowFloat,
+      child: SizedBox(
+        height: height,
+        child: panel,
       ),
-      child: panel,
     );
   }
 
@@ -799,14 +805,10 @@ class _EditToolBar extends StatelessWidget {
       _EditTool.crop,
     ];
 
-    return Container(
+    return LumiraSurface(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: tokens.shadowConvexSubtle,
-      ),
+      radius: 20,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -954,31 +956,28 @@ class _CanvasArea extends StatelessWidget {
         : postProcess;
 
     // 强制图片填满取景框，让 BoxFit.contain 居中，避免 InteractiveViewer 左上对齐产生右侧空白
-    Widget imageWidget = url.startsWith('http')
-        ? CachedNetworkImage(url: url, width: double.infinity,
-            height: double.infinity, fit: BoxFit.contain)
-        : Image.file(
-            File(url),
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Container(
-              color: tokens.surfaceAlt,
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.broken_image_outlined,
-                        size: 32, color: tokens.textTertiary),
-                    const SizedBox(height: 8),
-                    Text('图片加载失败',
-                        style: TextStyle(
-                            fontSize: 12, color: tokens.textTertiary)),
-                  ],
-                ),
-              ),
-            ),
-          );
+    Widget imageWidget = LumiraImage(
+      url,
+      width: double.infinity,
+      height: double.infinity,
+      fit: BoxFit.contain,
+      errorWidget: Container(
+        color: tokens.surfaceAlt,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image_outlined,
+                  size: 32, color: tokens.textTertiary),
+              const SizedBox(height: 8),
+              Text('图片加载失败',
+                  style: TextStyle(
+                      fontSize: 12, color: tokens.textTertiary)),
+            ],
+          ),
+        ),
+      ),
+    );
 
     if (!appliedTransform.isIdentity) {
       imageWidget = RotatedBox(

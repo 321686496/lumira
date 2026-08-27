@@ -13,6 +13,7 @@ import '../../../core/utils/image_cache.dart';
 import '../../usage/usage_providers.dart';
 import '../scenes_sync_service.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton, LumiraProgress;
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_scene_mock_data.dart';
 
@@ -176,36 +177,41 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _ScenesNav(
-              title: _navTitle,
-              onBack: _back,
-              onSearch: _onSearch,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          SafeArea(
+            child: Column(
+              children: [
+                _ScenesNav(
+                  title: _navTitle,
+                  onBack: _back,
+                  onSearch: _onSearch,
+                ),
+                Expanded(
+                  child: _isOverview
+                      ? RefreshIndicator(
+                          color: tokens.brand,
+                          backgroundColor: tokens.surface,
+                          onRefresh: _onRefresh,
+                          child: _SceneCategoryOverview(
+                            tokens: tokens,
+                            onSelectCategory: _onCategorySelect,
+                          ),
+                        )
+                      : RefreshIndicator(
+                          color: tokens.brand,
+                          backgroundColor: tokens.surface,
+                          onRefresh: _onRefresh,
+                          child: _isLoading
+                              ? Center(child: LumiraProgress.circular())
+                              : _SceneGrid(scenes: _scenes, onTap: _goDetail),
+                        ),
+                ),
+              ],
             ),
-            Expanded(
-              child: _isOverview
-                  ? RefreshIndicator(
-                      color: tokens.brand,
-                      backgroundColor: tokens.surface,
-                      onRefresh: _onRefresh,
-                      child: _SceneCategoryOverview(
-                        tokens: tokens,
-                        onSelectCategory: _onCategorySelect,
-                      ),
-                    )
-                  : RefreshIndicator(
-                      color: tokens.brand,
-                      backgroundColor: tokens.surface,
-                      onRefresh: _onRefresh,
-                      child: _isLoading
-                          ? Center(child: LumiraProgress.circular())
-                          : _SceneGrid(scenes: _scenes, onTap: _goDetail),
-                    ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
       floatingActionButton: _Fab(onTap: _goCreate),
     );
@@ -620,6 +626,7 @@ class _SceneCard extends ConsumerWidget {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final isNeu = appTheme.style == UIStyle.neumorphic;
+    final isGlass = appTheme.style == UIStyle.glass;
 
     final photoCount = CaptureSceneMockData.getPhotoCountByScene(scene.id);
     final hasBadge = photoCount > 0;
@@ -631,10 +638,20 @@ class _SceneCard extends ConsumerWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          color: tokens.surface,
+          color: isGlass ? ThemeTokens.glassFill(tokens) : tokens.surface,
           borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
-          border: isNeu ? null : Border.all(color: tokens.divider, width: 1),
-          boxShadow: isNeu ? tokens.shadowConvex : null,
+          border: isGlass
+              ? Border.all(color: ThemeTokens.glassBorder(tokens), width: 1)
+              : (isNeu ? null : Border.all(color: tokens.divider, width: 1)),
+          boxShadow: isGlass
+              ? const [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    offset: Offset(0, 6),
+                    blurRadius: 20,
+                  ),
+                ]
+              : (isNeu ? tokens.shadowConvex : null),
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(

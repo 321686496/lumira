@@ -10,6 +10,7 @@ import '../../../shared/searchengine/search_scope.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../scenes/widgets/scene_category_overview.dart';
 import '../data/remote_templates_providers.dart';
@@ -553,10 +554,10 @@ class _AcademyEntrySection extends ConsumerWidget {
                   // 封面图（本地资源，避免网络占位图加载慢/失败）
                   AspectRatio(
                     aspectRatio: 16 / 9,
-                    child: Image.asset(
+                    child: LumiraImage(
                       'assets/images/academy/course_01_cover.jpg',
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorWidget: Container(
                         color: tokens.surfaceAlt,
                         child: Icon(Icons.school_outlined, size: 40, color: tokens.textTertiary),
                       ),

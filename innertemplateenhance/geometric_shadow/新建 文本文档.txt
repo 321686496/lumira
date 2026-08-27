@@ -1,0 +1,177 @@
+{
+  "name": "光影回廊·几何极简",
+  "category": "architecture",
+  "classification": {
+    "type": "architecture",
+    "majorStyle": "极简主义",
+    "subStyle": "光影几何",
+    "method": "单点透视构图"
+  },
+  "shortDesc": "光与影的极致拉扯，柱列如琴键般延伸，静谧中透着秩序的冷峻美感，一眼万年🏛️",
+  "description": "这是一张极具视觉冲击力的建筑摄影模板。利用强烈的侧逆硬光，在长廊中切割出明暗分明的几何色块。画面采用经典的单点透视，重复的圆柱与地面平行的阴影形成强烈的节奏感与纵深感。左侧大面积的深沉阴影与右侧的高光柱列形成极高反差的明暗对比（Chiaroscuro），营造出一种肃穆、冷静且充满秩序感的空间氛围。适合拍摄美术馆、博物馆、古典柱廊或具有重复结构的现代建筑通道。",
+  "ambience": {
+    "seasons": [
+      "全年"
+    ],
+    "weathers": [
+      "晴朗"
+    ],
+    "timeTones": [
+      "上午侧光",
+      "下午侧光"
+    ]
+  },
+  "tags": [
+    "建筑摄影",
+    "光影几何",
+    "极简主义",
+    "高反差",
+    "透视构图"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "强烈的侧光穿过柱列，在地面投下平行的黑白条纹，深邃的透视尽头隐入黑暗，极致的几何秩序感。"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·主构图",
+      "type": "composition",
+      "description": "采用严谨的单点透视构图。消失点位于画面水平居中、垂直略偏下的位置。右侧排列整齐的圆柱作为前景引导线，向左后方无限延伸；地面上平行的阴影条纹与柱列呼应，强化纵深。画面左半部分完全留给深沉的阴影负空间，形成强烈的虚实与明暗对比。",
+      "compositionFrame": "单点透视骨架：消失点定于(0.5, 0.6)。右半部为重复垂直线条（柱列）与水平线条（地影）交织区；左半部为大面积暗部留白区。顶部天花板横梁线条向中心汇聚。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "perspective_corridor"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "leading_lines",
+    "gridType": "perspective_grid",
+    "aspectRatio": "1:1",
+    "opacity": 0.3,
+    "description": "正方形画幅（1:1）。大远景/全景景别，平视机位。主体为整个建筑通道的透视结构。利用右侧柱列和地面阴影作为强力引导线，将视线引向画面中心的消失点。左侧保留约40%的暗部负空间，平衡右侧的高光细节。",
+    "subjectFrame": {
+      "x": 0.45,
+      "y": 0.55,
+      "w": 0.1,
+      "h": 0.1
+    }
+  },
+  "camera": {
+    "exposureCompensation": -0.7,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5500,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光为强烈的自然硬光，从屏幕右侧（柱列外侧）射入，角度较低（约30-45度），光线未被柔化。光比极大（约8:1以上）。阴影投向屏幕左侧及地面，边缘极其锐利清晰，浓度深黑。无需补光，刻意保留左侧死黑以增强戏剧性。",
+    "shootingDistance": "5-10m (需站在通道一端向另一端拍摄)",
+    "background": "具有重复圆柱结构的长廊、美术馆回廊、古典建筑柱廊",
+    "props": [],
+    "bestTime": "09:00-10:30 或 15:00-16:30 (太阳角度较低，能形成长投影时)",
+    "tips": [
+      "寻找具有严格重复结构的建筑空间（如柱廊、长窗走廊）。",
+      "必须在晴天且太阳角度较低时拍摄，确保光线能从侧面穿透柱子形成地面长影。",
+      "机位务必保持绝对水平，使用手机自带的水平仪辅助，确保垂直的柱子不歪斜，水平的阴影平行。",
+      "对焦在画面中后部的柱子上，曝光补偿降低（-0.5至-1.0 EV），压暗整体以保护高光不过曝，让阴影自然沉入纯黑。",
+      "该效果依赖真实建筑的强光影，真机无法通过算法凭空生成如此锐利的硬光阴影，必须实地寻找合适光位。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "1:1",
+    "color": {
+      "brightness": -8,
+      "contrast": 35,
+      "saturation": -85,
+      "temperature": 0,
+      "tint": 0,
+      "highlights": -15,
+      "shadows": -20,
+      "clarity": 25
+    },
+    "smoothStrength": 0,
+    "sharpen": 35,
+    "vignette": 15,
+    "grain": 8,
+    "lut": "fine_art_bw",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "无特定主体，视觉重心在右侧柱列与中心消失点",
+    "bodyFacing": {
+      "type": "不适用",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "不适用",
+      "azimuth": 0
+    },
+    "twist": "不适用",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "不适用"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "囊括整个通道纵深，强调空间透视而非单一物体",
+    "cameraHeight": "平视",
+    "cameraAzimuth": "正拍 (对准通道纵深方向)",
+    "subjectScale": "建筑结构占满全画幅",
+    "environmentRatio": "100% 环境即为主体",
+    "headroom": "顶部保留少量天花板结构，底部切到地面阴影",
+    "framingNote": "严格的中心对称透视变体，利用右侧实体与左侧虚空形成不对称平衡。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕右侧外部强光源，低角度侧逆光",
+      "辅光轮廓光": "无辅光，纯自然光切割",
+      "光型软硬": "极硬光，无漫反射",
+      "光比": "极高，约 10:1",
+      "阴影": "投向屏幕左侧及地面，边缘如刀切般锐利，浓度纯黑",
+      "质感": "石材/混凝土的粗糙哑光质感，在高光下显现纹理，暗部完全丢失细节",
+      "环境光": "无额外环境光，暗部近乎全黑",
+      "色温对比": "整体偏中性微冷，去除色彩干扰以突出明暗结构"
+    },
+    "lightToParams": "高反差映射为 contrast +35, shadows -20；去色处理映射为 saturation -85；硬光质感映射为 sharpen +35, clarity +25；选用 fine_art_bw LUT 强化黑白艺术感并提升对比。"
+  },
+  "styling": {
+    "subjectType": "建筑空间",
+    "clothingLayers": {
+      "上装": "不适用",
+      "下装": "不适用",
+      "衣角处理": "不适用",
+      "袖子": "不适用",
+      "领口": "不适用",
+      "鞋袜": "不适用",
+      "叠穿层次": "不适用"
+    },
+    "accessories": "不适用",
+    "hairMakeup": "不适用",
+    "objectStyle": "重复排列的浅色石质圆柱，平整的石材地面，带有格栅纹理的天花板",
+    "note": "重点在于建筑本身的几何重复性与材质在硬光下的表现，避免画面中出现杂乱的色彩或无关物体破坏极简感。"
+  }
+}
+
+
+来源为小红书

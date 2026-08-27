@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/inspiration_content.dart';
@@ -53,7 +54,10 @@ class InspirationPage extends ConsumerWidget {
       backgroundColor: tokens.canvas,
       extendBodyBehindAppBar: true,
       appBar: const LumiraNav(title: '灵感', transparent: true),
-      body: Container(
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          Container(
         decoration: BoxDecoration(
           gradient: RadialGradient(
             center: const Alignment(-0.8, -0.6),
@@ -117,6 +121,8 @@ class InspirationPage extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+        ],
       ),
     );
   }

@@ -393,6 +393,7 @@ class _AchievementCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final unlockedCount = achievements.where((a) => a.unlocked).length;
     final levelAsync = ref.watch(growthLevelProvider);
+    final style = ref.watch(appThemeProvider).style;
     final levelName = levelAsync.maybeWhen(
       data: (s) => s.levelName,
       orElse: () => '',
@@ -436,6 +437,7 @@ class _AchievementCard extends ConsumerWidget {
                 .map((a) => _AchievementCell(
                       item: a,
                       tokens: tokens,
+                      style: style,
                       levelName: levelName,
                     ))
                 .toList(),
@@ -450,11 +452,13 @@ class _AchievementCell extends StatelessWidget {
   const _AchievementCell({
     required this.item,
     required this.tokens,
+    this.style = UIStyle.neumorphic,
     this.levelName = '',
   });
 
   final AchievementRecord item;
   final ThemeTokens tokens;
+  final UIStyle style;
   final String levelName;
 
   IconData _iconForKey(String key) {
@@ -479,9 +483,22 @@ class _AchievementCell extends StatelessWidget {
     final cell = Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       decoration: BoxDecoration(
-        color: tokens.surface,
+        color: style == UIStyle.glass
+            ? ThemeTokens.glassFill(tokens)
+            : tokens.surface,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: tokens.shadowConvexSubtle,
+        border: style == UIStyle.glass
+            ? Border.all(color: ThemeTokens.glassBorder(tokens), width: 1)
+            : null,
+        boxShadow: style == UIStyle.glass
+            ? const [
+                BoxShadow(
+                  color: Color(0x1F000000),
+                  offset: Offset(0, 6),
+                  blurRadius: 20,
+                ),
+              ]
+            : tokens.shadowConvexSubtle,
       ),
       child: Stack(
         children: [

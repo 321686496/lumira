@@ -1,0 +1,167 @@
+{
+    "name": "咖啡馆暖调下午茶人像",
+    "category": "portrait",
+    "classification": {
+        "type": "portrait",
+        "majorStyle": "胶片氛围感",
+        "subStyle": "下午茶生活感",
+        "method": "室内环境人像"
+    },
+    "shortDesc": "暖光咖啡馆下午茶，甜系松弛，享受惬意悠闲时光☕",
+    "description": "室内咖啡馆环境人像模板，暖黄环境光斑柔光，米色系针织穿搭，结合咖啡甜品道具，捕捉四种不同下午茶互动姿态，适合日常探店记录，营造温柔松弛生活胶片氛围感。",
+    "ambience": {
+        "seasons": ["秋季", "冬季"],
+        "weathers": ["室内不受天气限制"],
+        "timeTones": ["室内暖黄光", "窗边柔和日光"]
+    },
+    "tags": ["咖啡馆", "下午茶", "暖调胶片", "探店人像", "甜品咖啡"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "手持黑咖啡杯面向镜头微笑，桌面摆放多款甜点，背景虚化暖光斑"
+        },
+        {
+            "imageIndex": 1,
+            "role": "效果图",
+            "caption": "俯拍视角，人物前倾，一手拿铁一手叉子，满桌丰富甜品美食"
+        },
+        {
+            "imageIndex": 2,
+            "role": "效果图",
+            "caption": "侧身回眸，手肘撑桌手托下巴，侧脸望向桌面甜品，氛围安静柔和"
+        },
+        {
+            "imageIndex": 3,
+            "role": "效果图",
+            "caption": "窗边侧逆光，手托脸颊抿咖啡，午后金色柔光，马卡龙点心摆于桌面"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "封面·举杯对视镜头",
+            "type": "people",
+            "description": "人物坐在木桌旁，身体略微转向屏幕左45°，面部正对镜头，右手（画面屏幕左侧）举起咖啡杯至胸前高度，手肘搭桌面，手指放松握住杯柄，左手平放桌面；嘴角大幅上扬露出牙齿，笑容明媚，视线直视镜头，情绪松弛愉悦，和咖啡道具互动。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "portrait_sit_raise_cup"
+            },
+            "position": {
+                "x": 0.64,
+                "y": 0.52
+            },
+            "scale": 0.92,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 1,
+            "name": "俯拍·俯身可爱探店",
+            "type": "people",
+            "description": "高机位俯拍，上半身前倾俯向桌面，头部歪向屏幕左侧，右手（画面屏幕左侧）举拿铁咖啡杯，左手（画面屏幕右侧）握着金属餐叉，双手悬空于摆满甜品的桌面上方；脸蛋微微歪靠肩膀，笑容甜美看向镜头，视线直视镜头，与满桌甜点互动。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "portrait_table_lean_forward"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.38
+            },
+            "scale": 0.98,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 2,
+            "name": "侧坐·托腮回眸看甜点",
+            "type": "people",
+            "description": "人物侧身，身体朝向屏幕右90°，面部转回看向屏幕右下方桌面甜点，右手手肘支撑桌面，手掌托住下巴，左手轻握咖啡杯置于碟子上；头颈微微低下，嘴角带淡淡浅笑，视线落向桌面美食，情绪安静温柔。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "portrait_sit_chin_rest"
+            },
+            "position": {
+                "x": 0.34,
+                "y": 0.5
+            },
+            "scale": 0.94,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 3,
+            "name": "窗边·抿咖啡侧颜",
+            "type": "people",
+            "description": "人物身体朝向屏幕右90°完全侧坐，左手托住脸颊，右手举咖啡杯轻触嘴唇，面部朝向屏幕右侧窗外，头颈微微低下，视线望向屏幕外面窗景，表情安静慵懒，享受午后独处下午茶。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "portrait_profile_drink"
+            },
+            "position": {
+                "x": 0.3,
+                "y": 0.54
+            },
+            "scale": 0.96,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "third",
+        "aspectRatio": "1:1",
+        "opacity": 0.3,
+        "description": "1:1正方形画幅；封面图为半身景别，腰部以上入镜，人物放置画面右三分线，画面下半部分留给桌面甜品美食，头顶预留约1/6留白，背景虚化光斑，环境占画面40%，主体人像占60%；俯拍效果图人物上半部分在上半区，下半区铺满美食；侧颜图人物放在画面左侧三分线，右侧留出桌面空间。",
+        "subjectFrame": {
+            "x": 0.42,
+            "y": 0.08,
+            "w": 0.55,
+            "h": 0.88
+        }
+    },
+    "camera": {
+        "exposureCompensation": 0.3,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "custom",
+        "whiteBalanceK": 5800,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光屏幕斜上方45°柔光；部分样片存在窗边侧逆光，背景大量散景暖黄色串灯光斑；室内环境漫反射柔光，光比约2.5:1，阴影柔和不生硬；逆光画面人物面部依靠环境漫反射提亮，不需要强制外置补光灯；发丝边缘有淡淡的轮廓高光。",
+        "shootingDistance": "1.6‑2.2m",
+        "background": "复古木质咖啡馆，木质置物架，玻璃窗，虚化暖黄色串灯散景光斑，深色木质餐桌。",
+        "props": ["白瓷咖啡杯", "拿铁杯", "各式切块蛋糕、水果挞", "马卡龙", "可颂面包", "金属小叉子", "玻璃杯饮品"],
+        "bestTime": "14:00‑17:00，午后窗边自然光 / 晚间室内暖灯环境",
+        "tips": [
+            "尽量拉开人物与背景距离，利用环境制造散景光斑，手机无法实现物理大光圈虚化，依靠构图+后期暗角模拟氛围感。",
+            "道具摆放：桌面丰富摆放蛋糕、挞类、咖啡，错落分布，不要整齐排成一条直线。",
+            "窗边逆光版本：优先利用环境漫反射照亮人脸，人脸不要完全压黑；人脸偏暗可开启软件内部fillLight模拟补光。",
+            "穿搭优先选择米白、燕麦、浅卡其等低饱和浅色系针织毛衣，适配暖黄环境色调。",
+            "拍摄坐姿，身体坐直略微放松，肩膀不要耸起，手指抓握杯子保持松弛状态，避免僵硬用力。"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "1:1",
+        "color": {
+            "brightness": 4,
+            "contrast": -4,
+            "saturation": 8,
+            "temperature": 6,
+            "tint": 1,
+            "highlights": -12,
+            "shadows": 8
+        },
+        "smoothStrength": 32,
+        "sharpen": 20,
+        "vignette": 26,
+        "grain": 24,
+        "lut": "warm_film",
+        "fillLight": {
+            "enabled": false,
+            "color": 4294959028,
+            "intensity": 0.65
+        }
+    }
+}

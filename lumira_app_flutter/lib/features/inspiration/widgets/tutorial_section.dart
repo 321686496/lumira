@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 import '../data/inspiration_providers.dart';
 import '../data/tutorial_models.dart';
 
@@ -93,15 +94,12 @@ class TutorialCard extends ConsumerWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
+      child: SizedBox(
         width: 150,
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: tokens.shadowConvex,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
+        child: LumiraSurface(
+          radius: 14,
+          emphasize: true,
+          clip: true,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

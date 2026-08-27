@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../data/academy_models.dart';
 
 /// 知识卡片（横向滑动展示用）
@@ -41,10 +42,10 @@ class AcademyKnowledgeCard extends ConsumerWidget {
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                     child: AspectRatio(
                       aspectRatio: 4 / 3,
-                      child: Image.asset(
+                      child: LumiraImage(
                         card.coverImage,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorWidget:  Container(
                           color: tokens.surfaceAlt,
                           child: Icon(Icons.image_outlined, color: tokens.textTertiary),
                         ),

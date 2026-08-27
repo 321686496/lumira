@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
+import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
@@ -37,9 +39,13 @@ const _photoSaverChannel = MethodChannel('lumira/photo_saver');
 ///
 /// 编辑能力已迁移至 GalleryEditPage（lib/features/gallery/pages/gallery_edit_page.dart）
 class GalleryDetailPage extends ConsumerStatefulWidget {
-  const GalleryDetailPage({super.key, this.photoId});
+  const GalleryDetailPage({super.key, this.photoId, this.scopeIds});
 
   final String? photoId;
+
+  /// 可选的左右滑动范围：非空时仅在该照片 ID 列表内滑动切换相邻照片
+  /// （用于从拍摄日记进入时，滑动范围跟随拍摄日记的照片列表而非整个相册）
+  final List<String>? scopeIds;
 
   @override
   ConsumerState<GalleryDetailPage> createState() => _GalleryDetailPageState();
@@ -100,8 +106,13 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
         return;
       }
 
-      // 拉取全部照片列表，并定位当前照片（找不到则停留在第一张）
-      final photos = await dao.getAll();
+      // 拉取照片列表并定位当前照片（找不到则停留在第一张）
+      var photos = await dao.getAll();
+      // 指定了滑动范围时，仅保留范围内的照片（拍摄日记进入场景）
+      if (widget.scopeIds != null && widget.scopeIds!.isNotEmpty) {
+        final scope = widget.scopeIds!.toSet();
+        photos = photos.where((p) => scope.contains(p.id)).toList();
+      }
       var index = photos.indexWhere((p) => p.id == widget.photoId);
       if (index < 0) index = 0;
 
@@ -465,23 +476,28 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
             ),
         ],
       ),
-      body: daoAsync.when(
-        loading: () =>
-            Center(child: LumiraProgress.circular()),
-        error: (e, _) => Center(
-          child: Text('加载失败：$e', style: TextStyle(color: tokens.textSecondary)),
-        ),
-        data: (dao) {
-          if (!_isInitialLoaded) {
-            _isInitialLoaded = true;
-            _loadPhoto(dao);
-          }
-          if (_isLoading) {
-            return Center(
-                child: LumiraProgress.circular());
-          }
-          return _photo == null ? _EmptyCanvas(tokens: tokens) : _buildContent(tokens);
-        },
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          daoAsync.when(
+            loading: () =>
+                Center(child: LumiraProgress.circular()),
+            error: (e, _) => Center(
+              child: Text('加载失败：$e', style: TextStyle(color: tokens.textSecondary)),
+            ),
+            data: (dao) {
+              if (!_isInitialLoaded) {
+                _isInitialLoaded = true;
+                _loadPhoto(dao);
+              }
+              if (_isLoading) {
+                return Center(
+                    child: LumiraProgress.circular());
+              }
+              return _photo == null ? _EmptyCanvas(tokens: tokens) : _buildContent(tokens);
+            },
+          ),
+        ],
       ),
       bottomNavigationBar: _photo == null
           ? null
@@ -1096,14 +1112,10 @@ class _PhotoInfoSection extends StatelessWidget {
     final showSource =
         hasCategory || (templateName != null && templateId != null);
 
-    return Container(
+    return LumiraSurface(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: tokens.shadowConvex,
-      ),
+      radius: 12,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

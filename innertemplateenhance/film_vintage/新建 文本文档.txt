@@ -1,0 +1,155 @@
+{
+    "name": "黄昏街拍松弛人像",
+    "category": "portrait",
+    "classification": {
+        "type": "portrait",
+        "majorStyle": "街拍纪实",
+        "subStyle": "落日金调",
+        "method": "环境人像抓拍"
+    },
+    "shortDesc": "落日金辉漫洒老街，随性行走，氛围感慵懒又治愈🌇",
+    "description": "环境人像街拍模板，黄昏侧顺金色暖光，人物行走抓拍姿态，简约休闲穿搭，利用街道建筑做环境层次，适合日常出行、城市街头记录，拍出松弛感生活大片。",
+    "ambience": {
+        "seasons": ["春", "秋", "冬"],
+        "weathers": ["晴天"],
+        "timeTones": ["黄金时刻"]
+    },
+    "tags": ["街拍", "黄昏", "松弛感", "行走人像", "金调光影"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "黄昏老街行走女生，暖金色侧光，松弛随性街拍"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "行走抓拍主姿势",
+            "type": "people",
+            "description": "人物向前行走，身体侧向屏幕右约‑45°，面部转向屏幕右‑90°，头颈微微低头，视线看向屏幕地面方向；屏幕左侧手握住冰咖啡，屏幕右侧手插入裤袋，重心落在屏幕右腿，屏幕左腿向前迈出，脚步呈行走动态，整体状态松弛自然。",
+            "compositionFrame": "",
+            "silhouette": {
+                "type": "builtin",
+                "data": "walking_side"
+            },
+            "position": {
+                "x": 0.44,
+                "y": 0.52
+            },
+            "scale": 0.88,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "thirds",
+        "aspectRatio": "3:4",
+        "opacity": 0.3,
+        "description": "全身景别，机位平视，人物放在画面偏左的九宫格交叉位置；头顶保留约1/5留白，脚底贴近画面底边；虚化前后景路人作为虚实层次，环境建筑背景占画面40%。",
+        "subjectFrame": {
+            "x": 0.24,
+            "y": 0.08,
+            "w": 0.54,
+            "h": 0.92
+        }
+    },
+    "camera": {
+        "exposureCompensation": -0.3,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5800,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕右上方45°黄金侧顺光，属于黄昏硬质感暖光；无明显辅光；光比约3:1；阴影投向屏幕左下方，影子边缘偏硬；墙面投射百叶状条状光影；皮肤呈现哑光质感，保留皮肤纹理，发丝有暖金色高光；环境背景带有店铺橱窗暖调环境光，整体画面主体暖调。",
+        "shootingDistance": "2.0‑2.5m",
+        "background": "石质外墙复古临街商铺，玻璃窗、石板人行道，可利用路过行人做虚化前后景",
+        "props": ["冰咖啡饮品", "帆布托特包"],
+        "bestTime": "17:00‑18:15",
+        "tips": [
+            "抓拍行走瞬间，不要摆僵，脚步要有动态感；",
+            "尽量选择建筑物侧面受光，获取条状墙面光影；",
+            "靠近主体，利用远处行人充当虚化前景后景，模拟浅景深效果；手机无法物理大光圈虚化，靠构图与暗角辅助氛围；",
+            "避开镜头直射强光，防止画面大面积高光过曝；",
+            "可以让包自然垂挂肩头增加生活感。"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "3:4",
+        "color": {
+            "brightness": -2,
+            "contrast": 8,
+            "saturation": 8,
+            "temperature": 6,
+            "tint": 1,
+            "highlights": -14,
+            "shadows": 10,
+            "clarity": 6
+        },
+        "smoothStrength": 25,
+        "sharpen": 20,
+        "vignette": 28,
+        "grain": 24,
+        "lut": "warm_gold"
+    },
+    "orientation": {
+        "framePosition": "画面九宫格左中区域，坐标x0.44,y0.52，主体占画幅54%",
+        "bodyFacing": {
+            "type": "侧向屏幕右",
+            "azimuth": -45
+        },
+        "faceFacing": {
+            "type": "侧向屏幕右",
+            "azimuth": -90
+        },
+        "twist": "身体‑45°，面部‑90°，小幅侧身转头",
+        "headPitch": -16,
+        "headRoll": 0,
+        "gaze": "看向屏幕右下方地面，不看镜头"
+    },
+    "framing": {
+        "shotSize": "全身",
+        "shotSizeNote": "完整保留头顶至脚底全部入画",
+        "cameraHeight": "平视",
+        "cameraAzimuth": "斜侧45°",
+        "subjectScale": "主体占画幅60%",
+        "environmentRatio": "环境背景占40%",
+        "headroom": "头顶距离画面上边缘约1/5画幅留白",
+        "framingNote": "全身平视斜侧街拍，人物行走动态，保留街道建筑环境，前后景路人做虚实层次"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "主光屏幕右上方45°黄昏黄金侧顺光",
+            "辅光轮廓光": "无人工辅光，自然光勾勒发丝边缘高光",
+            "光型软硬": "黄昏硬质感自然光，影子边缘锐利",
+            "光比": "约3:1，明暗反差适中偏高",
+            "阴影": "阴影投向屏幕左下方，边缘偏硬，地面和墙面有条状投影",
+            "质感": "皮肤哑光，保留毛孔纹理，发丝带金色高光，墙面有清晰光影条纹，玻璃有微弱反光",
+            "环境光": "屏幕左侧店铺橱窗暖黄色环境光，做背景氛围",
+            "色温对比": "整体统一暖金色，主体与背景同为暖调，无强冷暖对冲"
+        },
+        "lightToParams": "提高contrast，temperature正向，grain模拟胶片颗粒，highlights压低防止高光溢出，shadows提升保留暗部细节，vignette压暗四角聚焦人物。"
+    },
+    "styling": {
+        "subjectType": "女性人像街拍",
+        "clothingLayers": {
+            "上装": "基础黑色短袖圆领T恤",
+            "下装": "米白色亚麻质感阔腿长裤",
+            "衣角处理": "T恤下摆局部半塞裤腰",
+            "袖子": "短袖完整露出手臂",
+            "领口": "基础圆领",
+            "鞋袜": "黑色帆布低帮板鞋，白色鞋边",
+            "叠穿层次": "无叠穿，极简休闲"
+        },
+        "accessories": "米白帆布印花托特包单肩挎于屏幕右侧肩膀",
+        "hairMakeup": "低丸子头，少量碎发修饰脸颊，淡妆清透感",
+        "objectStyle": "",
+        "note": "穿搭选择低饱和基础色系，更适配黄昏金色光影。"
+    }
+}

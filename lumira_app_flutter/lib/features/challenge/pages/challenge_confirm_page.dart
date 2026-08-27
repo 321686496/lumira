@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show File;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +9,8 @@ import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
+
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
@@ -342,10 +343,10 @@ class _PhotoPreview extends ConsumerWidget {
 
         Widget image;
         if (filePath != null && filePath.isNotEmpty) {
-          image = Image.file(
-            File(filePath),
+          image = LumiraImage(
+            filePath,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _Placeholder(tokens: tokens),
+            errorWidget: _Placeholder(tokens: tokens),
           );
         } else if (dataUrl != null && dataUrl.isNotEmpty) {
           // dataUrl 形如 data:image/png;base64,xxxx
@@ -377,18 +378,11 @@ class _DataUrlImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 简化处理：若以 data: 开头，提取 base64 部分解码
-    try {
-      final idx = dataUrl.indexOf('base64,');
-      if (idx == -1) return _Placeholder(tokens: tokens);
-      final b64 = dataUrl.substring(idx + 7);
-      final bytes = Uri.parse('data:;base64,$b64').data!.contentAsBytes();
-      return Image.memory(bytes,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _Placeholder(tokens: tokens));
-    } catch (_) {
-      return _Placeholder(tokens: tokens);
-    }
+    return LumiraImage(
+      dataUrl,
+      fit: BoxFit.cover,
+      errorWidget: _Placeholder(tokens: tokens),
+    );
   }
 }
 

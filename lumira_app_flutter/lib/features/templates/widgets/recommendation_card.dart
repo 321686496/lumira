@@ -35,12 +35,30 @@ class RecommendationCard extends ConsumerWidget {
       onTap: onTap,
       child: Container(
         width: 130, // 260rpx → 130dp
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
-          boxShadow:
-              appTheme.style == UIStyle.neumorphic ? tokens.shadowConvex : null,
-        ),
+        decoration: appTheme.style == UIStyle.glass
+            ? BoxDecoration(
+                // 玻璃风格：半透明底色 + 细白描边 + 柔和投影
+                color: ThemeTokens.glassFill(tokens),
+                borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
+                border: Border.all(
+                  color: ThemeTokens.glassBorder(tokens),
+                  width: 1,
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    offset: Offset(0, 6),
+                    blurRadius: 20,
+                  ),
+                ],
+              )
+            : BoxDecoration(
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
+                boxShadow: appTheme.style == UIStyle.neumorphic
+                    ? tokens.shadowConvex
+                    : null,
+              ),
         clipBehavior: Clip.antiAlias,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

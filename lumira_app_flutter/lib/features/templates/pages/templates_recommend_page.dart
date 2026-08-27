@@ -1,15 +1,13 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../recommend/recommendation_models.dart';
@@ -559,22 +557,25 @@ class _TemplateCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (item.coverData != null && item.coverData!.isNotEmpty) {
-      return Image.memory(
-        base64Decode(item.coverData!),
+    final cd = item.coverData;
+    if (cd != null && cd.isNotEmpty) {
+      return LumiraImage(
+        _asDataUrl(cd),
         fit: BoxFit.cover,
-        gaplessPlayback: true,
       );
     }
     if (item.cover.isNotEmpty) {
-      return CachedNetworkImage(
-        url: item.cover,
+      return LumiraImage(
+        item.cover,
         fit: BoxFit.cover,
         errorWidget: Container(color: const Color(0xFFF0EDE8)),
       );
     }
     return Container(color: const Color(0xFFF0EDE8));
   }
+
+  static String _asDataUrl(String s) =>
+      s.startsWith('data:') ? s : 'data:image/jpeg;base64,$s';
 }
 
 /// Section 4: 根据最近拍摄

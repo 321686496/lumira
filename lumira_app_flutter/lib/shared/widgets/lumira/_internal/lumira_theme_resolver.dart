@@ -47,17 +47,17 @@ class LumiraThemeResolver {
         );
       case UIStyle.glass:
         return ContainerVisual(
-          background: Colors.white.withOpacity(0.55),
-          border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.2),
+          background: ThemeTokens.glassFill(tokens),
+          border: Border.all(color: ThemeTokens.glassBorder(tokens), width: 1.2),
           shadows: const [
             BoxShadow(color: Color(0x1F000000), offset: Offset(0, 12), blurRadius: 36),
           ],
-          backdropBlurSigma: 25,
+          backdropBlurSigma: 0,
           glassOverlay: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Colors.white.withOpacity(0.45),
+              Colors.white.withOpacity(0.35),
               Colors.white.withOpacity(0.0),
             ],
           ),
@@ -107,6 +107,78 @@ class LumiraThemeResolver {
 
   /// 解析未选中态文字色
   static Color unselectedTextColor(ThemeTokens tokens) => tokens.textTertiary;
+
+  /// 解析通用「卡片/内容块」表面的视觉规格（空态卡、信息卡、分隔块等）。
+  ///
+  /// 与 [containerVisual]（Dialog 弹层）区别：卡片默认走 NeuCard 的浮雕观感
+  /// （新拟态用双向外阴影 [shadowConvex]），而非弹层上浮投影。
+  ///
+  /// - [radiusDp]：已转换为 dp 的圆角值
+  /// - [emphasize]：true 用强浮雕 [shadowConvex]，false 用轻量 [shadowConvexSubtle]
+  static ContainerVisual cardVisual({
+    required ThemeTokens tokens,
+    required UIStyle style,
+    required double radiusDp,
+    bool emphasize = false,
+  }) {
+    final convex = emphasize ? tokens.shadowConvex : tokens.shadowConvexSubtle;
+    switch (style) {
+      case UIStyle.neumorphic:
+        return ContainerVisual(
+          background: tokens.surface,
+          border: null,
+          shadows: convex,
+          backdropBlurSigma: 0,
+          glassOverlay: null,
+        );
+      case UIStyle.flat:
+        return ContainerVisual(
+          background: tokens.surfaceAlt,
+          border: Border.all(color: tokens.divider, width: 1),
+          shadows: const [],
+          backdropBlurSigma: 0,
+          glassOverlay: null,
+        );
+      case UIStyle.glass:
+        return ContainerVisual(
+          background: ThemeTokens.glassFill(tokens),
+          border: Border.all(color: ThemeTokens.glassBorder(tokens), width: 1),
+          shadows: const [
+            BoxShadow(color: Color(0x1F000000), offset: Offset(0, 6), blurRadius: 20),
+          ],
+          backdropBlurSigma: 0,
+          glassOverlay: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withOpacity(0.28),
+              Colors.white.withOpacity(0.0),
+            ],
+          ),
+        );
+      case UIStyle.female:
+        return ContainerVisual(
+          background: tokens.surface,
+          border: Border.all(color: Colors.white.withOpacity(0.7), width: 0.8),
+          shadows: [
+            BoxShadow(
+              color: tokens.brand.withOpacity(0.16),
+              offset: const Offset(0, 10),
+              blurRadius: 28,
+            ),
+          ],
+          backdropBlurSigma: 0,
+          glassOverlay: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              tokens.brandSubtle.withOpacity(0.5),
+              tokens.surface.withOpacity(0.0),
+            ],
+          ),
+        );
+    }
+  }
 
   /// rpx → dp 工具：app_theme 的 radius 字段存储 rpx 原值，widget 内部 /2 转 dp
   static double rpxToDp(double rpx) => rpx / 2;

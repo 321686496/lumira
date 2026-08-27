@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -280,8 +279,8 @@ class _FragmentDetailCard extends StatelessWidget {
                 child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
               ));
     }
-    return Image.file(File(url), fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
+    return LumiraImage(url, fit: BoxFit.cover,
+        errorWidget: Container(
               color: Colors.grey.shade300,
               child: const Icon(Icons.broken_image_outlined, color: Colors.grey),
             ));

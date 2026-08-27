@@ -8,11 +8,13 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_preview_mock_data.dart';
 import '../providers/gallery_diary_providers.dart';
 import '../widgets/diary_timeline_entry.dart';
+import 'gallery_detail_page.dart';
 
 /// 拍摄日记页（接入 GalleryDao）
 ///
@@ -43,11 +45,12 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
     super.dispose();
   }
 
-  void _navigateToPhoto(String photoId) {
-    GoRouter.of(context).push(
-      RouteNames.build(
-        RouteNames.galleryDetail,
-        {RouteNames.paramPhotoId: photoId},
+  /// 点击照片进入详情页。传入该天（entry 内）的全部照片 ID 作为左右滑动范围，
+  /// 保证详情页内左右滑动跟随拍摄日记的照片列表而非整个相册。
+  void _navigateToPhoto(List<String> scopeIds, String photoId) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GalleryDetailPage(photoId: photoId, scopeIds: scopeIds),
       ),
     );
   }
@@ -299,7 +302,10 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                         child: DiaryTimelineEntry(
                           key: _entryKeys[e.value.date],
                           entry: e.value,
-                          onPhotoTap: _navigateToPhoto,
+                          onPhotoTap: (id) => _navigateToPhoto(
+                            e.value.photos.map((p) => p.id).toList(),
+                            id,
+                          ),
                           onPhotoLongPress: _onPhotoLongPress,
                           onViewMore: _navigateToDay,
                         ),
@@ -585,35 +591,36 @@ class _MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return LumiraSurface(
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: tokens.shadowConvexSubtle,
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: tokens.brand,
-              fontFamily: 'Courier New',
-            ),
+      radius: 10,
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          child: Column(
+            children: [
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.brand,
+                  fontFamily: 'Courier New',
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 10, color: tokens.textTertiary),
+              ),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 10, color: tokens.textTertiary),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -9,6 +9,8 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/number_format.dart';
+import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -44,36 +46,41 @@ class CompositionKitsPage extends ConsumerWidget {
         onPressed: () => _showCreateKitSheet(context, ref),
         child: const Icon(Icons.add),
       ),
-      body: SafeArea(
-        child: kitsAsync.when(
-          loading: () => Center(child: LumiraProgress.circular()),
-          error: (e, _) => Center(child: Text('加载失败：$e')),
-          data: (kits) => RefreshIndicator(
-            onRefresh: () async => ref.invalidate(compositionKitsProvider),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
-              children: [
-                _StatsBar(tokens: tokens, stats: statsAsync),
-                const SizedBox(height: 16),
-                if (kits.isEmpty)
-                  _EmptyState(tokens: tokens)
-                else
-                  for (var i = 0; i < kits.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 12),
-                    _KitCard(
-                      tokens: tokens,
-                      kit: kits[i],
-                      onTap: () => GoRouter.of(context).push(
-                        '${RouteNames.profileCompositionKitDetail}'
-                        '?${RouteNames.paramKitId}=${kits[i].id}',
-                      ),
-                      onLongPress: () => _showActionSheet(context, ref, kits[i]),
-                    ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          SafeArea(
+            child: kitsAsync.when(
+              loading: () => Center(child: LumiraProgress.circular()),
+              error: (e, _) => Center(child: Text('加载失败：$e')),
+              data: (kits) => RefreshIndicator(
+                onRefresh: () async => ref.invalidate(compositionKitsProvider),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+                  children: [
+                    _StatsBar(tokens: tokens, stats: statsAsync),
+                    const SizedBox(height: 16),
+                    if (kits.isEmpty)
+                      _EmptyState(tokens: tokens)
+                    else
+                      for (var i = 0; i < kits.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 12),
+                        _KitCard(
+                          tokens: tokens,
+                          kit: kits[i],
+                          onTap: () => GoRouter.of(context).push(
+                            '${RouteNames.profileCompositionKitDetail}'
+                            '?${RouteNames.paramKitId}=${kits[i].id}',
+                          ),
+                          onLongPress: () => _showActionSheet(context, ref, kits[i]),
+                        ),
+                      ],
                   ],
-              ],
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -695,18 +702,18 @@ class _LoadingBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: tokens.shadowConvexSubtle,
-      ),
-      alignment: Alignment.center,
+    return LumiraSurface(
+      radius: 8,
       child: SizedBox(
-        width: 18,
-        height: 18,
-        child: LumiraProgress.circular(strokeWidth: 2, size: 18),
+        height: 48,
+        width: double.infinity,
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: LumiraProgress.circular(strokeWidth: 2, size: 18),
+          ),
+        ),
       ),
     );
   }
@@ -719,17 +726,17 @@ class _HintBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: tokens.shadowConvexSubtle,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 13, color: tokens.textTertiary),
+    return LumiraSurface(
+      radius: 8,
+      child: SizedBox(
+        height: 48,
+        width: double.infinity,
+        child: Center(
+          child: Text(
+            text,
+            style: TextStyle(fontSize: 13, color: tokens.textTertiary),
+          ),
+        ),
       ),
     );
   }

@@ -93,8 +93,8 @@ final diaryEntriesProvider =
   final scenesDao = await ref.watch(scenesDaoProvider.future);
   final templatesDao = await ref.watch(templatesDaoProvider.future);
 
-  // 取最近 50 张，按天分组展示
-  final records = await dao.getRecent(limit: 50);
+  // 读取全部照片（不受数量上限限制），按天分组展示，避免时间线只显示最近几张照片覆盖的几天
+  final records = await dao.getAll();
 
   // 按 tab 过滤：outfit 仅含 sceneId 的照片
   var filtered = filter.tab == kDiaryTabOutfit

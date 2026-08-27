@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../providers/gallery_diary_providers.dart';
 import '../widgets/diary_photo_cell.dart';
+import 'gallery_detail_page.dart';
 
 /// 拍摄日记某一天的当日照片页。
 ///
@@ -68,11 +67,18 @@ class GalleryDiaryDayPage extends ConsumerWidget {
                 photo: photo,
                 aspectRatio: 1,
                 tokens: tokens,
-                onTap: () => GoRouter.of(context).push(
-                  RouteNames.build(RouteNames.galleryDetail, {
-                    RouteNames.paramPhotoId: photo.id,
-                  }),
-                ),
+                onTap: () {
+                  // 传入该天全部照片 ID 作为详情页左右滑动范围，跟随拍摄日记而非整个相册
+                  final scopeIds = photos.map((p) => p.id).toList();
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => GalleryDetailPage(
+                        photoId: photo.id,
+                        scopeIds: scopeIds,
+                      ),
+                    ),
+                  );
+                },
               );
             },
           );

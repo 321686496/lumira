@@ -14,6 +14,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
@@ -190,57 +191,62 @@ class _CaptureSceneDetailPageState
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _DetailNav(
-              tokens: tokens,
-              title: scene?.name ?? '场景详情',
-              isFav: _isFav,
-              onBack: _back,
-              onToggleFav: _toggleFav,
-            ),
-            if (scene != null)
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _Swiper(scene: scene),
-                      _Header(scene: scene),
-                      _AtmosphereSection(scene: scene),
-                      _TagsSection(
-                        scene: scene,
-                        editableTagIds: _editableTagIds,
-                        tagSheetVisible: _tagSheetVisible,
-                        onToggleTagSheet: _openTagSheet,
-                        onToggleTag: _toggleTag,
-                      ),
-                      UserTagsSection(
-                        itemType: TagItemType.scene,
-                        itemId: scene.id,
-                      ),
-                      _FilterSection(scene: scene),
-                      _TipsSection(scene: scene),
-                      _ScenePhotosSection(
-                        sceneName: scene.name,
-                        photos: _scenePhotos,
-                        onOpenViewer: _openViewer,
-                        onCapture: _goCapture,
-                      ),
-                      _AchievementSection(
-                        scene: scene,
-                        photoCount: _scenePhotos.length,
-                      ),
-                      const SizedBox(height: 80), // detail-bottom-space
-                    ],
-                  ),
+      body: Stack(
+        children: [
+          const Positioned.fill(child: GlassBackground()),
+          SafeArea(
+            child: Column(
+              children: [
+                _DetailNav(
+                  tokens: tokens,
+                  title: scene?.name ?? '场景详情',
+                  isFav: _isFav,
+                  onBack: _back,
+                  onToggleFav: _toggleFav,
                 ),
-              )
-            else
-              Expanded(child: _EmptyState(onBack: _back)),
-          ],
-        ),
+                if (scene != null)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _Swiper(scene: scene),
+                          _Header(scene: scene),
+                          _AtmosphereSection(scene: scene),
+                          _TagsSection(
+                            scene: scene,
+                            editableTagIds: _editableTagIds,
+                            tagSheetVisible: _tagSheetVisible,
+                            onToggleTagSheet: _openTagSheet,
+                            onToggleTag: _toggleTag,
+                          ),
+                          UserTagsSection(
+                            itemType: TagItemType.scene,
+                            itemId: scene.id,
+                          ),
+                          _FilterSection(scene: scene),
+                          _TipsSection(scene: scene),
+                          _ScenePhotosSection(
+                            sceneName: scene.name,
+                            photos: _scenePhotos,
+                            onOpenViewer: _openViewer,
+                            onCapture: _goCapture,
+                          ),
+                          _AchievementSection(
+                            scene: scene,
+                            photoCount: _scenePhotos.length,
+                          ),
+                          const SizedBox(height: 80), // detail-bottom-space
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Expanded(child: _EmptyState(onBack: _back)),
+              ],
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar:
           scene == null ? null : _BottomButtons(onCapture: _goCapture, onCreateKit: _goCreateKit),

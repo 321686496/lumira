@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraProgress, LumiraButton, ButtonVariant;
 import '../data/academy_models.dart';
@@ -201,10 +202,10 @@ class _FavoriteRow extends StatelessWidget {
               child: SizedBox(
                 width: 72,
                 height: 54,
-                child: Image.asset(
+                child: LumiraImage(
                   cover,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorWidget:  Container(
                     color: tokens.surfaceAlt,
                     child: Icon(Icons.broken_image_outlined,
                         color: tokens.textTertiary),

@@ -117,12 +117,14 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
     // Forced fix: 按「当前 UI 风格」解析滚动后的背景/描边/阴影
     final BoxDecoration decoration;
     if (isGlass) {
-      // 玻璃拟态：始终半透明毛玻璃，滚动时加深，仅此风格保留 blur 动画
+      // 玻璃拟态：始终半透明毛玻璃，滚动时加深，仅此风格保留 blur 动画；
+      // 填充色跟随主题品牌（白底品牌微染）。
       targetSigma = 28.0;
       decoration = BoxDecoration(
-        color: Colors.white.withOpacity(widget.scrolled ? 0.72 : 0.55),
+        color: Color.lerp(Colors.white, tokens.brandLight, 0.12)!
+            .withOpacity(widget.scrolled ? 0.68 : 0.50),
         border: Border(
-          bottom: BorderSide(color: Colors.white.withOpacity(0.4), width: 0.5),
+          bottom: BorderSide(color: ThemeTokens.glassBorder(tokens), width: 0.5),
         ),
       );
     } else if (widget.scrolled) {

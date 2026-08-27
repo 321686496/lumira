@@ -1,11 +1,8 @@
-import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../data/builtin_silhouettes.dart';
 
 /// 姿势剪影渲染组件
@@ -86,17 +83,29 @@ class PoseSilhouette extends StatelessWidget {
         if (silhouetteData.isEmpty || silhouetteData == 'none') {
           return const SizedBox.shrink();
         }
-        // 渲染模板提供的真实 SVG 剪影（fill="currentColor" → color 参数着色）
-        final svg = BuiltinSilhouettes.svgMap[silhouetteData];
-        if (svg != null && svg.isNotEmpty) {
-          return SvgPicture.string(
-            svg,
-            key: ValueKey('silhouette_svg_$silhouetteData'),
-            color: effectiveColor,
-            fit: BoxFit.contain,
-            width: double.infinity,
-            height: double.infinity,
-            placeholderBuilder: (_) => const SizedBox.shrink(),
+        // 渲染 asset 路径的黑色线条剪影 PNG（透明背景）
+        final assetPath = BuiltinSilhouettes.assetMap[silhouetteData];
+        if (assetPath != null && assetPath.isNotEmpty) {
+          // 黑色线条 → 通过 ColorFiltered 反转为白色（适配暗色照片背景）
+          return ColorFiltered(
+            colorFilter: const ColorFilter.matrix(<double>[
+              -1,  0,  0, 0, 255,
+               0, -1,  0, 0, 255,
+               0,  0, -1, 0, 255,
+               0,  0,  0, 1,   0,
+            ]),
+            child: Image.asset(
+              assetPath,
+              key: ValueKey('silhouette_png_$silhouetteData'),
+              fit: BoxFit.contain,
+              width: double.infinity,
+              height: double.infinity,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.person_outline,
+                color: effectiveColor,
+                size: baseWidth * 0.8,
+              ),
+            ),
           );
         }
         return Icon(
@@ -109,55 +118,24 @@ class PoseSilhouette extends StatelessWidget {
         if (silhouetteData.isEmpty) {
           return const SizedBox.shrink();
         }
-        // image 类型支持三种数据源：
+        // image 类型支持三种数据源（统一委托 LumiraImage，含降采样）：
         // 1. asset 路径 → Image.asset
-        // 2. http(s) URL → Image.network
-        // 3. base64 data URL → Image.memory
-        if (silhouetteData.startsWith('assets/')) {
-          return Image.asset(
-            silhouetteData,
-            key: ValueKey(silhouetteData),
-            gaplessPlayback: true,
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => Icon(
-              Icons.broken_image_outlined,
-              color: effectiveColor,
-              size: baseWidth * 0.8,
-            ),
-          );
-        }
-        if (silhouetteData.startsWith('http://') ||
-            silhouetteData.startsWith('https://')) {
-          return CachedNetworkImage(
-            url: silhouetteData,
-            key: ValueKey(silhouetteData),
-            width: double.infinity,
-            height: double.infinity,
-            fit: BoxFit.contain,
-            errorWidget: Icon(
-              Icons.broken_image_outlined,
-              color: effectiveColor,
-              size: baseWidth * 0.8,
-            ),
-          );
-        }
-        return Image.memory(
-          _decodeBase64DataUrl(silhouetteData),
+        // 2. http(s) URL → 网络缓存
+        // 3. base64 data URL / 纯 base64 → Image.memory（字节级缓存）
+        final isPath = silhouetteData.startsWith('assets/') ||
+            silhouetteData.startsWith('http://') ||
+            silhouetteData.startsWith('https://');
+        return LumiraImage(
+          isPath ? silhouetteData : _asDataUrl(silhouetteData),
           key: ValueKey(silhouetteData),
-          gaplessPlayback: true,
           width: double.infinity,
           height: double.infinity,
           fit: BoxFit.contain,
-          errorBuilder: (_, error, ___) {
-            debugPrint('[PoseSilhouette] Memory image decode error: $error');
-            return Icon(
-              Icons.broken_image_outlined,
-              color: effectiveColor,
-              size: baseWidth * 0.8,
-            );
-          },
+          errorWidget: Icon(
+            Icons.broken_image_outlined,
+            color: effectiveColor,
+            size: baseWidth * 0.8,
+          ),
         );
 
       case 'svg':
@@ -186,19 +164,9 @@ class PoseSilhouette extends StatelessWidget {
     }
   }
 
-  /// 解析 base64 data URL，strip `data:image/...;base64,` 前缀
-  static final Map<String, Uint8List> _cachedBase64 = {};
-
-  static Uint8List _decodeBase64DataUrl(String data) {
-    return _cachedBase64.putIfAbsent(data, () {
-      String raw = data;
-      final commaIdx = data.indexOf(',');
-      if (commaIdx >= 0 && data.startsWith('data:')) {
-        raw = data.substring(commaIdx + 1);
-      }
-      return base64Decode(raw);
-    });
-  }
+  /// 纯 base64（无 `data:` 前缀）时补上 data URL 前缀，交给 [LumiraImage] 识别。
+  static String _asDataUrl(String data) =>
+      data.startsWith('data:') ? data : 'data:image/jpeg;base64,$data';
 }
 
 /// 剪影叠加层（统一渲染规则）

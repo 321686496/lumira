@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/searchengine/search_scope.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../templates/widgets/template_cover_image.dart';
 
 /// 历史搜索区块：词条 pill + 右上「清空」。
@@ -301,44 +302,44 @@ class _RecommendCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
+      child: SizedBox(
         width: 92,
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: tokens.divider, width: 1),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              height: 120,
-              child: hasCover
-                  ? TemplateCoverImage(
-                      cover: item.cover,
-                      coverData: item.coverData,
-                      fit: BoxFit.cover,
-                      fallback: _placeholder(item, tokens),
-                      errorFallback: _placeholder(item, tokens),
-                    )
-                  : _placeholder(item, tokens),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-              child: Text(
-                item.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
+        // Forced fix: 推荐封面卡改用共享 LumiraSurface，按当前 4 种 UI 风格渲染
+        // （neumorphic/glass/female/…），不再固定 surface + divider 细边。
+        child: LumiraSurface(
+          radius: 16,
+          clip: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: 120,
+                child: hasCover
+                    ? TemplateCoverImage(
+                        cover: item.cover,
+                        coverData: item.coverData,
+                        fit: BoxFit.cover,
+                        fallback: _placeholder(item, tokens),
+                        errorFallback: _placeholder(item, tokens),
+                      )
+                    : _placeholder(item, tokens),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.textPrimary,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

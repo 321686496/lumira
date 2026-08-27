@@ -1,0 +1,100 @@
+{
+    "name": "美食拉丝披萨·暖光静物模板",
+    "category": "food",
+    "classification": {
+        "type": "food",
+        "majorStyle": "商业美食",
+        "subStyle": "暖调食欲感",
+        "method": "侧光静物抓拍"
+    },
+    "shortDesc": "暖光裹挟芝士拉丝，烟火美味瞬间，满满治愈食欲感🍕",
+    "description": "美食静物拍摄模板，拍摄被铲起一块的玛格丽特披萨，使用侧上方柔和暖光，突出芝士拉丝流动质感，适合室内餐桌美食拍摄，还原食物诱人的食欲氛围。",
+    "ambience": {
+        "seasons": ["全年"],
+        "weathers": ["室内不限"],
+        "timeTones": ["暖调室内光"]
+    },
+    "tags": ["美食", "披萨", "静物", "暖光", "食欲感"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "铲起披萨展现芝士拉丝，暖光烘托诱人美食质感"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "披萨拉丝主构图",
+            "type": "composition",
+            "description": "披萨主体放置画面下半部分，披萨铲托起切片向上抬起，利用芝士拉丝形成画面视觉引导，拉丝线条纵向贯穿画面中部，焦点落在被抬起的切片上，背景做虚化处理。",
+            "compositionFrame": "画面下半部分放置整份披萨餐盘，趣味焦点（被铲起切片+芝士拉丝）落在右上三分线交叉点；纵向拉丝线条作为引导线，上部留出虚化暗调背景，底部保留完整饼底，餐盘边缘占用画面底边，背景大面积留白虚化。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "food_still_lift"
+            },
+            "position": {
+                "x": 0.52,
+                "y": 0.58
+            },
+            "scale": 0.92,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "third",
+        "aspectRatio": "1:1",
+        "opacity": 0.3,
+        "description": "近景美食静物，斜侧45°机位，主体披萨占画面75%，虚化暗调背景占25%，视觉焦点落在右上方被抬起的披萨切片。",
+        "subjectFrame": {
+            "x": 0.02,
+            "y": 0.08,
+            "w": 0.96,
+            "h": 0.91
+        }
+    },
+    "camera": {
+        "exposureCompensation": -0.15,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "incandescent",
+        "whiteBalanceK": 5200,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕左上方45°入射，柔和漫射光源；无强硬辅光；光比约3:1；阴影投向屏幕右下方，阴影边缘柔和；突出芝士油亮反光、饼皮焦斑纹理；背景环境光偏暗，形成明暗分离；整体主体暖，背景偏冷暗。",
+        "shootingDistance": "0.6‑1.0m",
+        "background": "深色哑光桌面，后方模糊暗调室内环境，无杂乱物体。",
+        "props": ["陶瓷餐盘", "披萨铲", "新鲜罗勒叶点缀", "番茄片"],
+        "bestTime": "12:00‑15:00，窗边柔和自然光环境，也可室内暖台灯模拟",
+        "tips": [
+            "拍摄时刻快速抓拍芝士拉丝瞬间；",
+            "靠近食物、尽量拉远背景，配合暗角模拟浅景深效果，手机无法实现光学虚化；",
+            "避免闪光灯直打，防止芝士出现过曝刺眼反光；",
+            "罗勒、番茄片作为点缀，少量摆放，不要铺满画面。"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "1:1",
+        "color": {
+            "brightness": 2,
+            "contrast": 8,
+            "saturation": 14,
+            "temperature": 6,
+            "tint": 1,
+            "highlights": -12,
+            "shadows": 10,
+            "clarity": 12
+        },
+        "smoothStrength": 8,
+        "sharpen": 26,
+        "vignette": 30,
+        "grain": 14,
+        "lut": "warm_food"
+    }
+}

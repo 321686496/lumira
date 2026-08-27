@@ -20,15 +20,21 @@
 ## 重要设计约定
 
 - App 受硬件/模块限制，**光圈 / ISO / 快门速度（含长曝光、运动模糊、流轨夜景）真机无法调整**。后台结构仍保留 `isoMode / iso / shutterSpeed` 键（结构对齐），填 `auto / null / null`，仅供记录展示，**不依赖它们做效果补偿**。
+- **白平衡已真机实现**（不是参考值）：`camera.whiteBalance`（档位下拉：`daylight / cloudy / shade / tungsten / fluorescent / custom`）+ `camera.whiteBalanceK`（K 值）**可直接精确给出**。AI 应依据原图色温/色偏，给出对应的白平衡档位与 K 值来"还原或刻意保留"色感，**不要再依赖后期 `temperature` 去补偿白平衡**（temperature 只用于细微冷暖微差）。
 - 效果本应由不可调参数产生的：能用现有可调参数补偿就补偿（把"参数名 + 数值 + 具体做法"写进 `sceneGuide.tips`）；复现不了就明确写进 `sceneGuide.tips` 说明"真机无法复现，改用 XX 近似"，绝不硬编无法实现的数值。
 - **多姿势与多效果图**：`poses` 数组的每个元素**对应一张 `images` 图**（用 `imageIndex` 关联）。头图 = 封面 = `poses[0]`。
   - **人物题材**：每个 `pose` 填**人物姿势数据**（动作 + 四肢位置 + 朝向 + 表情，见三），`silhouette` 给**人物剪影**建议。
   - **非人物题材（食物 / 风景 / 静物 / 街景 / 夜景 / 建筑等）**：该图往往考的就是**构图**。此时 `pose.type = "composition"`，由 `compositionFrame` 精确描述构图骨架（主体位置 / 框架 / 留白 / 引导线 / 对称线 / 切割比例），`silhouette` 给**构图剪影**建议——后台会根据该构图剪影在取景时叠加引导，让用户照着摆出/框出同样的构图。
 - **光影**：AI 必须把光影当"结构化分析题"（见二）——拆出光位/辅光轮廓光/软硬/光比/阴影/质感/环境光/色温对比，再**翻译成可调参数的具体数值**放进 `camera` 与 `postProcess`，不能只停在"自然光柔光"这类空话。
+- **补光灯（打正面光）**：很多样片是**逆光 / 背景比主体亮 / 主体面部偏暗**才显得有氛围，这种通常靠补光照亮主体正面。AI 必须判断该图**是否依赖补光**：
+  - 判断依据：主体被置于强背光 / 大亮背景下仍保留清晰细节、面部或主体正面比背景亮、有明显"补亮感"但光源又在后方。
+  - 输出：a) 实拍指引写进 `sceneGuide.tips`——"建议开启补光灯从**屏幕正面**向主体补光，距离约 X m、强度调到 Y"；b) 后期用 `postProcess.fillLight` 模拟打正面光（`enabled:true` + 暖白色 + 强度），作为"没带补光灯时的近似替代"。
+  - 若样片本身是**自然顺光 / 不需要补光**，`fillLight.enabled` 置 `false`，不必强加。
 - **姿势与方位**：AI 必须用"画面方位坐标系"（以你看到的屏幕为基准，0°=面向镜头，+90°=面向屏幕左，180°=背对，−90°=面向屏幕右）把人物位置与身体/面部/头颈朝向按角度说清（见三）。
 - **构图景别与机位**：拍摄前必须先定 `framing`——景别（特写/近景/半身/七分身/全身/大远景）+ 机位（平视/低机位仰拍/高机位俯拍/俯拍平面）+ 主体占比 + 环境分配 + 头顶留白（见三.4）；非人物题材同样要先定景别与机位。
 - **主体造型/穿搭**：这套脚本面向**所有大类**通用。人物题材把穿搭拆到层次（上装/下装/衣角掖入或外放/袖子/领口/鞋袜/叠穿 + 配饰/发型妆容）；非人物题材，换成"主体造型、材质、颜色、陈设关系"，并把要点并入一句到顶层 `description`。
 - **分类**：后台分类为**四级**（`classification.type` ＝一级题材，与 `category` 同值；`majorStyle / subStyle / method` 为二/三/四级，随后台动态分类树而定）。AI 不知道后台分类 key，`majorStyle / subStyle / method` 只给"风格建议关键词"，落地时在后台下拉里选到最接近项；同时从照片推断**适用季节/天气/时段色调**（`ambience`）与**短简介**（`shortDesc`）。
+- **滤镜（重点）**：后台滤镜是**25 个确定的颜色矩阵**（不是抽象名字）。选 `lut` 必须对照「六、滤镜效果参数字典」，按原图"色性/质感"对号入座，并用该表"协同项"去微调 `color`，使成片质感逼近原图；避免 lut 与 color 反向打架。`lut` 与 `systemFilter` 同库、只填其一。
 - 剪影 key、系统滤镜、镜头建议等强依赖内置素材的项目，AI 只给"贴合建议"，落地时在后台手动挑选。
 
 ---
@@ -44,7 +50,7 @@
 
 观察时，请回答下面每一个问题，不允许跳项：
 1. 主体是什么（人/景/食物/街景/夜景/物体）→ 拍摄类型？这决定该图用"人物姿势"还是"构图"来描述。
-2. 画面里"光"长什么样？有几盏/几处光，分别从哪个方向来，软还是硬，明暗比多大，影子落在哪、方向朝哪、边缘是硬是软、浓度多深？呈现什么物质质感（磨皮/颗粒/高光/光斑/反光）？
+2. 画面里"光"长什么样？有几盏/几处光，分别从哪个方向来，软还是硬，明暗比多大，影子落在哪、方向朝哪、边缘是硬是软、浓度多深？呈现什么物质质感（磨皮/颗粒/高光/光斑/反光）？**判断是否靠补光**：主体是否背对强光源/置于大亮背景中仍清晰发亮，如果有——明确这是"逆光+正面补光"（需要建议补光灯打正面光），还是纯自然顺光（无需补光）。
 3. **若主体是人物**：**先定景别**：特写/近景/半身/七分身/全身/大远景，裁到身体哪、主体占多少、头顶留白多少？**再定机位**：平视还是俯拍/仰拍，正面/斜侧/侧面？最后他在画面哪个位置（屏幕左/中/右、上/下、占多大）？用"屏幕"方向说身体朝向、面部朝向——正对镜头还是侧向屏幕左/屏幕右、多大幅度（45/90/135/180）？头颈低/仰/侧没侧？重心在哪条腿，肩线平不平？露在外面的手臂在画面哪一侧、手怎么放、指头放松还是紧张？下肢/腿脚怎么摆？视线看哪、表情流露什么情绪？
    **若主体不是人物（食物/风景/静物等）**：跳过姿势细节，改而抽出"**构图语言**"——主体/趣味点放画面哪个位置、用几分线/对称/框架/引导线组织、留白多少、前后景层次感？
 4. 用什么机位/横竖/比例拍的？**量一量样片真实宽高比**（如 4:3、3:4、16:9、9:16、1:1、2:3），作为 `composition.aspectRatio`。主体放大还是留白？有没有引导线/景深层次暗示？主体在画面中的位置与占比（主体框）？
@@ -55,7 +61,7 @@
 
 0. **先量源图比例，再谈一切**。不能把样片的真实宽高比搞错：4:3 就是 4:3、3:4 就是 3:4。**`fullscreen` 只用于"App 内铺满屏幕全屏展示"的比例（通常是竖屏 9:16 或横屏 16:9）**，绝非"随手选的照片比例"。`composition.aspectRatio` ＝ 模板输出/展示比例（建议与源图一致）；`postProcess.cropRatio` ＝ 后期裁剪目标（默认与 aspectRatio 一致，刻意裁剪才不同）。
 1. **只输出后台真实存在的字段**，字段名必须与下方「输出格式」完全一致，不多不少。`orientation / framing / lighting / styling` 是**分析参考区块**（让你看懂依据、也用于字段互推），其结论已折进 `pose.description / composition.description / sceneGuide.* / 顶层 description`，不要把它们当成额外提交字段。
-2. **只输出 App 真正能生效的参数**。光圈 f 值无此字段；`camera.iso / shutterSpeed` 填 `null`（真机不可调、仅供记录展示），`camera.isoMode` 填 `"auto"`，**不要依赖 ISO / 快门做效果补偿**。
+2. **只输出 App 真正能生效的参数**。光圈 f 值无此字段；`camera.iso / shutterSpeed` 填 `null`（真机不可调、仅供记录展示），`camera.isoMode` 填 `"auto"`，**不要依赖 ISO / 快门做效果补偿**。**例外：白平衡已实现**——`camera.whiteBalance / whiteBalanceK` 要据原图色温**给精确档位与 K 值**（见二·白平衡）。
 3. 效果本应由不可调参数产生的（大光圈浅景深、长曝光流轨等）：
    - 能用现有可调参数接近 → 用 EV/明暗/饱和/颗粒/暗角/拉远背景等补偿，把做法写进 `sceneGuide.tips`（示例："vignette:35 压暗四角聚焦主体；配合构图靠近主体、拉远背景"）；
    - 无法复现 → 明确写进 `sceneGuide.tips` 说明"该效果真机无法实现，改用 XX 近似"，绝不硬编。
@@ -82,6 +88,29 @@
 - 冷调氛围 → whiteBalanceK 调低（如 4500）+ temperature 负向 + 冷调 LUT。
 - 暖调氛围 → whiteBalanceK 调高（如 6500）+ temperature 正向 + 暖调 LUT。
 - 质感：皮肤柔滑 → smoothStrength 提高；要保留纹理 → smoothStrength 压低；要胶片颗粒 → grain 提高到 20-40。
+
+**白平衡（已真机实现，必须据原图色温精确给出 `whiteBalance` 档位 + `whiteBalanceK`）**：
+
+先看样片整体色调倾向再定档位；`whiteBalance` 负责"整体色偏的还原/保留"，`whiteBalanceK` 微调到贴合，`temperature` 只做轻微冷暖微差、**不要拿它替代白平衡**：
+
+| 样片观感 | `whiteBalance` 档位 | `whiteBalanceK`（典型） |
+|---|---|---|
+| 高色温冷调（蓝天、阴影、偏蓝青） | `shade`（阴影） | 7000–7500 |
+| 阴天/多云、偏灰冷的自然光 | `cloudy`（阴天） | 6000–6500 |
+| 正午/明亮自然光、色感正常 | `daylight`（日光） | 5500 |
+| 偏暖、白炽灯/钨丝灯室内 | `tungsten`（白炽灯） | 3200–3500 |
+| 荧光灯/日光灯室内、略带绿 | `fluorescent`（荧光灯） | 4000–4200 |
+| 想刻意保留/精确微调色感 | `custom`（自定义） | 2000–10000（默 5500，步长 50） |
+
+> 提醒（真机约束，务必遵守）：
+> - `whiteBalance` 档位仅 6 个：`daylight / cloudy / shade / tungsten / fluorescent / custom`（无 `auto`）。
+> - `whiteBalanceK` 真机范围 **2000–10000、默认 5500、滑块步长 50**；选 `custom` 档时**必须同时给出具体 K 值**，其它档位也可带 K 作微调。
+> - K 值是"色温"：数值**越低越偏冷（蓝）**、**越高越偏暖（黄）**；想"清冷"给低 K、想"暖黄"给高 K，与"太阳色温高=暖"的直觉相反，别搞反。
+
+**必须单独判断"是否靠补光打正面光"**（在 `lightingDetail.补光/辅光` 与最终 `fillLight` 都要体现）：
+- 若主体处于**强背光 / 大亮背景 / 逆光剪影边缘**却仍被正面照得清晰发亮 → 判定为"**逆光 + 正面补光**"。此时：`sceneGuide.tips` 写"建议开启补光灯，从**屏幕正面**向主体补光"（给出距离与挡位建议，示例"40cm-1m，柔光、亮度约 2000lm"）；同时 `postProcess.fillLight` 开启（`enabled:true` + 暖白或贴合眼色的补光色 + 合适强度），表示"实拍没带补光灯时用它模拟打正面光"。
+- 若主体为**自然顺光 / 顶光 / 侧光**且无需照亮暗面 → `fillLight.enabled:false`，不要为了凑字段而强行开补光。
+- 补光属于"对图片效果的正面补充"，不是让 AI 硬加；只有照片确实透出"主体被专门照亮点亮"的信息时才启用。
 
 ## 三、姿势 / 构图与方位（必须拆到细节）
 
@@ -160,12 +189,52 @@
 - 效果图 images：数组，每项 `{ imageIndex, role(封面|效果图), caption }`
 - 多姿势 poses：数组，每项 `{ imageIndex, name?, type(people|composition), description, compositionFrame?(非人像构图剪影描述), silhouette{type(builtin|image|svg), data}, position{x,y}, scale, rotation }`
 - 构图 composition：overlayType、gridType（可选）、aspectRatio（=样片真实比例）、opacity、subjectFrame{x/y/w/h、相对坐标0-1}、description
-- 相机 camera：exposureCompensation、isoMode(auto)、iso(null)、shutterSpeed(null)、whiteBalance、whiteBalanceK、flashMode、focusMode、lensType、lensSuggestion
-- 场景 sceneGuide：lightDirection、shootingDistance、background、props、bestTime、tips
+- 相机 camera：exposureCompensation、isoMode(auto)、iso(null)、shutterSpeed(null)、**whiteBalance / whiteBalanceK（已实现，按二·白平衡精确给档位+K）**、flashMode、focusMode、lensType、lensSuggestion
+- 场景 sceneGuide：lightDirection、shootingDistance、background、props、bestTime、tips（含**补光灯指引**：需打正面光时写"开启补光灯、从屏幕正面补光、距离/强度"）
 - 后期 postProcess：cropRatio、color{brightness/contrast/saturation/temperature/tint +（可选）highlights/shadows/blackPoint/clarity/vibrance/brilliance}、lut、systemFilter、smoothStrength、sharpen、vignette、grain、fillLight{enabled/color/intensity}
 - （分析参考区块，仅用于理解与互推，不提交）：orientation、framing、lighting、styling
 
-## 六、补偿参考（仅作方向）
+## 六、滤镜效果参数字典（选 lut / systemFilter 与协同微调的依据）
+
+> 后台滤镜库共 **25 个**（`lut` 与 `systemFilter` 共用同一套 key，都是从中选一个；`none`＝原图）。
+> 每个滤镜并非空名，而是**一个确定的颜色矩阵**（亮度/对比/饱和/色相/褐调/灰度的具体改动）。你应根据原图**质感最像你能得到的**选 `lut`，并用本节标出的"协同项"去微调 `color`，让最终成片质感逼近原图，而不是先随便挑再推给参数硬凑。
+>
+> **选滤镜的口诀**：先看原图是"低饱和灰调 / 高饱和浓郁 / 冷暖倾向 / 黑白 / 胶片颗粒"，再对号入座；`lut` 负责"色性骨架"，`color` 负责"细调残余差距"，二者不要重复拉扯同一方向。
+
+| key | 中文 | 矩阵实际改动（量化） | 适合的照片质感 / 特征 | 选后 color 协同项 |
+|---|---|---|---|---|
+| `none` | 原图 | 不套任何滤镜，直出 | 原片色彩已经很好、不想动色调 | — |
+| `cinematic` | 电影感 | 对比+15、饱和−10、色相−8°(略暖)、亮度−3 | 大片感、故事感；街拍、夜景、情绪人像，画面偏"沉寂有质感" | 若已想再厚重可 contrast 再+几；想更清冷可 temperature 负向 |
+| `vintage` | 复古胶片 | 褐调sepia0.35、对比+10、亮+5、饱和−15 | 泛黄怀旧、做旧；老城街拍、旧物、复古穿搭人像 | 想要更旧可加 grain；要清淡可 saturation 再− |
+| `warm_film` | 暖色胶片 | 轻sepia0.2、饱和+15、亮+3、色相−5°(偏暖) | 黄昏、暖光室内、暖色食物、落日人像 | 配 temperature 正向，别再加饱和否则过腻 |
+| `cool_film` | 冷色胶片 | 饱和−10、亮−2、色相+8.8°(偏蓝/紫) | 阴天、冷色场景、清冷人像、冰饮 | 配 temperature 负向加深冷意 |
+| `pastel` | 柔色 | 亮+8、饱和−15、对比−8 | 明亮柔和低对比；清新、少女、浅色布景 | 别再猛提亮度；降对比由滤镜做了 |
+| `fuji` | 富士感 | 饱和+20、对比+5、色相−3.3°、亮+2 | 高饱和略微偏暖的胶片负片感；日系街景、风景 | 想更清亮 temperature 微负，别再加饱和 |
+| `portrait` | 人像 | 饱和+5、对比+5、亮+3、轻sepia0.05 | 通用人像微美化，自然微暖、明艳不过分 | 肤色偏红可 tint 微负 |
+| `japanese` | 日系 | 饱和−15、对比−8、亮+10、色相+3.3°(略冷) | 高亮低饱和低对比的日系清透 | 想更通透可 brightness 再微+，想更稳则不加 |
+| `japanese_fresh` | 日系清新 | 亮+15、对比−12、饱和−18、色相+4.4° | 比日系更亮更淡的清新通透，浅景布光 | 别再大幅提亮，易发白 |
+| `cream` | 奶油感 | 亮+12、对比−6、饱和−5、轻sepia0.1、色相−5.5° | 明亮柔和的奶油/软糯氛围；暖系静物甜品 | 亮与会略损失饱和度，必要时 saturation 微回补 |
+| `cyberpunk` | 赛博朋克 | 饱和+40、对比+20、色相−16.5°(偏洋红/紫)、亮−5 | 高饱和高对比冷紫霓虹；都市夜景 | 配暗角，别再用冷色 LUT 叠加 |
+| `night_cyber` | 夜景赛博 | 亮−15、色相+33°(大幅转色)、对比+15、饱和+35 | 暗调高对比+大幅色偏的夜景霓虹 | 暗场景别再加亮；补 grain 更霓虹 |
+| `hk_neon` | 港风霓虹 | 亮+5、色相−60.5°(大幅转红/橙)、对比+10、饱和+30 | 浓郁港风红橙霓虹、夜市场景 | 配暖 temperature；饱和已高勿再加 |
+| `sepia_classic` | 褐调 | sepia0.7、对比+5、亮+2 | 强棕褐做旧怀旧 | 配 grain+ 更胶片 |
+| `mist` | 薄雾 | 亮+12、对比−12、饱和−10 | 高亮低对比雾感朦胧、晨雾景观 | 别再加亮度避免过曝感 |
+| `rouge` | 胭脂 | sepia0.2、饱和+10、色相−11°(偏红)、亮+2 | 带红润/胭脂感的暖调；复古妆面人像 | 皮肤嫌红则 sat 降、temp 微凉 |
+| `twilight` | 暮光 | 饱和+15、色相+16.5°(偏紫/蓝)、对比+5、亮−5 | 偏紫蓝的暮色、黄昏蓝调时刻 | 配 cool temperature |
+| `cyan` | 青调 | 饱和+10、色相+22°(偏青)、对比+5、亮+2 | 青绿色调清冷、隐绿植场景、青森感 | 留绿可 tint 微+ |
+| `noir` | 黑白 | 灰度 + 对比+30、亮−5 | 硬朗高对比黑白 | 想更软则 contrast 回一点 |
+| `fine_art_bw` | 黑白艺术 | 灰度 + 对比+35、亮+5 | 高对比略带明亮的艺术黑白 | 主体轮廓靠 contrast 已够 |
+| `silver` | 银盐感 | 灰度 + sepia0.2 + 亮+8、对比−5 | 柔和银灰黑白、谈质感 | 偏柔，可 micro sharpen 提细节 |
+| `morandi` | 莫兰迪 | 亮+8、对比+10、sepia0.08、**饱和−35** | 大幅降饱和的高级灰调、莫兰迪低饱和柔和 | 选它后 color.saturation 基本不要再负压，避免灰成一片 |
+| `muted_gray` | 低饱和高级灰 | 亮+4、对比+15、sepia0.1、**饱和−60** | 极低饱和的灰调高级感、性冷淡风 | 同理，饱和度已很低，别再降 |
+| `heavy_film` | 浓厚胶片 | sepia0.45、对比+25、饱和−10、色相−8.8°、亮−2 | 强对比+棕褐的浓郁胶片、粗粝老照片 | 配 grain+，饱和别加否则脏 |
+
+> 使用注意：
+> - `lut` 与 `systemFilter` **同一套库、二选一**即可；一般只在 `lut`（主调色）里选。当原图色性接近 `none`（几乎不偏色、靠后期 detail 调）时 `lut:"none"`。
+> - 选 `lut` 后，`color` 里应只补**滤镜没覆盖的残余差距**（例如选了 `morandi` 就别再 color.saturation −），不要重复同方向、避免用力过猛。
+> - 拿不准时，"宁可用 `lut` 表达主调、`color` 微调"，优先保证 `lut` 与 `color` 同向一致，不要 lut 一个方向、color 反向打架。
+
+## 七、补偿参考（仅作方向）
 
 | 原靠不可调参数获得的效果 | 用可调参数补偿 |
 |---|---|
@@ -174,7 +243,7 @@
 | 高感颗粒、暗光氛围 | grain + 夜色 LUT + 色彩 temperature/色调 |
 | 长曝光 / 夜景 / 流光 | 夜色/霓虹 LUT + grain + tips"固定机位/三脚架"（**近似模拟**，不能真长曝光） |
 
-## 七、输出格式（字段名与后台表单一致；只给模板参数，不输出 price/referenceSource/author/tagIds）
+## 八、输出格式（字段名与后台表单一致；只给模板参数，不输出 price/referenceSource/author/tagIds）
 
 严格输出单个合法 JSON 对象；字符串字段具体量化，满足二、三的光影与姿势/构图深度要求：
 
@@ -219,8 +288,8 @@
   ],
 
   "composition": { "overlayType": "rule_of_thirds", "gridType": "（可选）", "aspectRatio": "3:4", "opacity": 0.3, "description": "（构图定调：景别+机位+主体位置占比+环境占比+头顶留白）", "subjectFrame": { "x": 0.22, "y": 0.05, "w": 0.56, "h": 0.94 } },
-  "camera": { "exposureCompensation": 0.25, "isoMode": "auto", "iso": null, "shutterSpeed": null, "whiteBalance": "daylight", "whiteBalanceK": 5400, "flashMode": "off", "focusMode": "auto", "lensType": "主摄镜头", "lensSuggestion": "main" },
-  "sceneGuide": { "lightDirection": "（光源类型+从屏幕哪侧来+角度+软硬+光比+阴影落点）", "shootingDistance": "1.8-2.2m", "background": "（具体可执行）", "props": ["（道具，无则空）"], "bestTime": "14:30-16:00", "tips": ["（逐条动作/构图要领，含补偿/无法复现说明）"] },
+  "camera": { "exposureCompensation": 0.25, "isoMode": "auto", "iso": null, "shutterSpeed": null, "whiteBalance": "shade", "whiteBalanceK": 7000, "flashMode": "off", "focusMode": "auto", "lensType": "主摄镜头", "lensSuggestion": "main" },
+  "sceneGuide": { "lightDirection": "（光源类型+从屏幕哪侧来+角度+软硬+光比+阴影落点+是否需补光）", "shootingDistance": "1.8-2.2m", "background": "（具体可执行）", "props": ["（道具，无则空）"], "bestTime": "14:30-16:00", "tips": ["（逐条动作/构图要领，含补偿/无法复现说明；需补光时写'开启补光灯，从屏幕正面补光，距离约X m、强度Y'）"] },
   "postProcess": { "cropRatio": "3:4", "color": { "brightness": 3, "contrast": -6, "saturation": 12, "temperature": 4, "tint": 2 }, "smoothStrength": 35, "sharpen": 22, "vignette": 22, "grain": 18, "lut": "pastel", "systemFilter": "none", "fillLight": { "enabled": false, "color": 4294959028, "intensity": 0.8 } },
 
   "orientation": { "framePosition": "", "bodyFacing": { "type": "", "azimuth": 0 }, "faceFacing": { "type": "", "azimuth": 0 }, "twist": "", "headPitch": 0, "headRoll": 0, "gaze": "" },
@@ -237,11 +306,12 @@
 > - `orientation / framing / lighting / styling` 是**分析参考区块**，供你核对与互推字段用，其结论已折进 `pose.description / composition.description / sceneGuide.* / 顶层 description`，**不写入后台表单**。
 
 补充：
+- 白平衡已实现：`camera.whiteBalance / whiteBalanceK` 按二·白平衡据原图色温**给精确档位 + K 值**（档位仅 `daylight / cloudy / shade / tungsten / fluorescent / custom`），不要用 temperature 替代白平衡；temperature 只做微差。
 - 高级色彩字段（highlights/shadows/blackPoint/clarity/vibrance/brilliance）只有照片能明确看出该调整倾向才**输出该键**，否则**省略**（后台只在有值时存储）。
-- `systemFilter` 只有意图用非"原图"系统滤镜时才加该键；`fillLight.enabled=true` 时才保留 `fillLight`。
+- `systemFilter` 只有意图用非"原图"系统滤镜时才加该键；`fillLight.enabled=true` 时才保留 `fillLight`（当"需打正面光/实拍用了补光但没带灯/主体被背景压制"时开启，作为后期模拟补光）。
 - `composition.subjectFrame` 四个值都有时才输出。
 - `sceneGuide.props` / `tips`、`tags` 是数组。
-- `lut` 选最贴近整张照片一项；照片偏"原片直出"就 `lut:"none"`。
+- `lut` 按**六、滤镜效果参数字典**从 25 个 key 里选最贴近原图色性的一项，并按表内"协同项"微调 `color`；照片色性本就接近原片直出不偏色则 `lut:"none"`。`lut` 与 `systemFilter` 同库、只填其一（一般只填 `lut`）。
 - 剪影 key、系统滤镜、镜头建议等强依赖内置素材项：AI 只给"最贴近建议"，落地时后台手动选到最接近值。
 - 必须输出**单个合法 JSON**，不要加多余的代码块标题或额外解释；必要的补充说明写进 `description` 或 `sceneGuide.tips`。
 - `shortDesc` 与 `description` 是**两种不同定位**：短描述＝情绪化抓眼文案（氛围+情绪+emoji）；长描述＝完整客观定位说明。二者都要写，但**不是详略递进关系**，短描述绝不能只是长描述的压缩。

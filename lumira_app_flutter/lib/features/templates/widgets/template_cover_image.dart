@@ -1,23 +1,19 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
-import '../../../core/utils/image_cache.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 
 /// 模板封面图统一渲染组件。
 ///
 /// 解决：自定义模板的封面图以 base64 data URL 形式存储在 `coverData` 字段，
 /// 内置模板的封面图以 assets 路径存储在 `cover` 字段，远程模板可能用 http URL。
-/// 之前各页面分别用 `Image.network('picsum.photos/seed/...')` 渲染，导致
-/// 自定义模板封面不显示。
+/// 之前各页面分别用不同组件渲染，且 base64 每次 build 都重新解码导致加载慢。
 ///
-/// 本组件按优先级渲染：
-/// 1. [coverData] 非空 → `Image.memory(base64Decode(...))`（自定义模板 base64 data URL）
-/// 2. [cover] 以 `assets/` 开头 → `Image.asset(cover)`（内置模板资产路径）
-/// 3. [cover] 以 `http` 开头 → `Image.network(cover)`（远程模板 URL）
-/// 4. [cover] 以 `data:` 开头 → 解析 base64 后 `Image.memory`
-/// 5. 兜底 → [fallback] 或默认占位图标
+/// 本组件统一委托 [LumiraImage] 加载四种来源：
+/// 1. [coverData] 非空 → base64（字节级缓存 + 按需降采样，不再反复解码）
+/// 2. [cover] 以 `data:` 开头 → base64
+/// 3. [cover] 以 `assets/` 开头 → 打包资源（+ 降采样）
+/// 4. [cover] 以 `http` 开头 → 远程 URL（磁盘缓存 + 降采样）
+/// 5. 其它 → 本地文件路径；兜底 [fallback] 或默认占位
 class TemplateCoverImage extends StatelessWidget {
   const TemplateCoverImage({
     super.key,
@@ -46,111 +42,52 @@ class TemplateCoverImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 1. coverData 优先（自定义模板 base64）
-    if (coverData != null && coverData!.isNotEmpty) {
-      return _buildFromDataUrl(coverData!);
+    final cd = coverData;
+    if (cd != null && cd.isNotEmpty) {
+      return LumiraImage(
+        _asDataUrl(cd),
+        fit: fit,
+        errorWidget: errorFallback ?? _defaultError(context),
+      );
     }
 
-    // 2. cover 字段
-    if (cover != null && cover!.isNotEmpty) {
-      // 2a. data: URL
-      if (cover!.startsWith('data:')) {
-        return _buildFromDataUrl(cover!);
-      }
-      // 2b. assets 路径
-      if (cover!.startsWith('assets/')) {
-        return Image.asset(
-          cover!,
-          fit: fit,
-          frameBuilder: _fadeInFrameBuilder,
-          errorBuilder: (_, __, ___) =>
-              errorFallback ?? _defaultError(context),
-        );
-      }
-      // 2c. http(s) URL → 走统一缓存组件（磁盘缓存 + 按需降采样）
-      if (cover!.startsWith('http')) {
-        return CachedNetworkImage(
-          url: cover!,
-          fit: fit,
-          errorWidget: errorFallback ?? _defaultError(context),
-        );
-      }
+    // 2. cover 字段（LumiraImage 自动识别 data:/assets//http/本地文件）
+    final c = cover;
+    if (c != null && c.isNotEmpty) {
+      return LumiraImage(
+        c,
+        fit: fit,
+        errorWidget: errorFallback ?? _defaultError(context),
+      );
     }
 
     // 3. 兜底
     return fallback ?? _defaultEmpty(context);
   }
 
-  /// 图片解码完成前显示淡入（避免跳变）。
-  static Widget _fadeInFrameBuilder(
-    BuildContext context,
-    Widget child,
-    int? frame,
-    bool wasSynchronouslyLoaded,
-  ) {
-    if (wasSynchronouslyLoaded) return child;
-    return AnimatedOpacity(
-      opacity: frame == null ? 0 : 1,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-      child: child,
+  /// 纯 base64（无 `data:` 前缀）时补上 data URL 前缀，交给 [LumiraImage] 识别。
+  static String _asDataUrl(String s) =>
+      s.startsWith('data:') ? s : 'data:image/jpeg;base64,$s';
+
+  Widget _defaultEmpty(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceVariant,
+      child: Icon(
+        Icons.photo_outlined,
+        color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(128),
+        size: 32,
+      ),
     );
   }
 
-  Widget _buildFromDataUrl(String dataUrl) {
-    try {
-      final bytes = _decodeBase64DataUrl(dataUrl);
-      return Image.memory(
-        bytes,
-        fit: fit,
-        frameBuilder: _fadeInFrameBuilder,
-        errorBuilder: (_, __, ___) =>
-            errorFallback ?? _defaultError(null),
-      );
-    } catch (_) {
-      return errorFallback ?? _defaultError(null);
-    }
-  }
-
-  /// 解析 data URL 中的 base64 数据。
-  /// 支持 `data:image/jpeg;base64,xxx` 和纯 base64 字符串。
-  static Uint8List _decodeBase64DataUrl(String data) {
-    String raw = data;
-    final commaIdx = data.indexOf(',');
-    if (commaIdx >= 0 && data.startsWith('data:')) {
-      raw = data.substring(commaIdx + 1);
-    }
-    return base64Decode(raw);
-  }
-
-  Widget _defaultEmpty(BuildContext? context) {
-    return Builder(
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return Container(
-          color: theme.colorScheme.surfaceVariant,
-          child: Icon(
-            Icons.photo_outlined,
-            color: theme.colorScheme.onSurfaceVariant.withAlpha(128),
-            size: 32,
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _defaultError(BuildContext? context) {
-    return Builder(
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return Container(
-          color: theme.colorScheme.surfaceVariant,
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: theme.colorScheme.onSurfaceVariant.withAlpha(128),
-            size: 32,
-          ),
-        );
-      },
+  Widget _defaultError(BuildContext context) {
+    return Container(
+      color: Theme.of(context).colorScheme.surfaceVariant,
+      child: Icon(
+        Icons.broken_image_outlined,
+        color: Theme.of(context).colorScheme.onSurfaceVariant.withAlpha(128),
+        size: 32,
+      ),
     );
   }
 }

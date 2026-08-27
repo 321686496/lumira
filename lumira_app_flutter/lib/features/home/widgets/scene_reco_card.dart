@@ -1,12 +1,10 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../data/home_mock_data.dart';
 
 /// 场景推荐卡片
@@ -36,20 +34,33 @@ class SceneRecoCard extends ConsumerWidget {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
     final isNeumorphic = appTheme.style == UIStyle.neumorphic;
+    final isGlass = appTheme.style == UIStyle.glass;
 
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         decoration: BoxDecoration(
-          // neumorphic 风格：surface 背景 + 双向凸起阴影，移除 border
-          // 其他风格：canvas 背景 + divider 1dp 边框
-          color: isNeumorphic ? tokens.surface : tokens.canvas,
+          // Forced fix(玻璃): 玻璃风格用半透明品牌玻璃面 + 细白描边 + 柔和投影，
+          // 让背后 GlassBackground 光晕透出形成玻璃卡；其余风格保持不变。
+          color: isGlass
+              ? ThemeTokens.glassFill(tokens)
+              : (isNeumorphic ? tokens.surface : tokens.canvas),
           borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
-          border: isNeumorphic
-              ? null
-              : Border.all(color: tokens.divider, width: 1), // 2rpx → 1dp
-          boxShadow: isNeumorphic ? tokens.shadowConvex : null,
+          border: isGlass
+              ? Border.all(color: ThemeTokens.glassBorder(tokens), width: 1)
+              : (isNeumorphic
+                  ? null
+                  : Border.all(color: tokens.divider, width: 1)), // 2rpx → 1dp
+          boxShadow: isGlass
+              ? const [
+                  BoxShadow(
+                    color: Color(0x1F000000),
+                    offset: Offset(0, 6),
+                    blurRadius: 20,
+                  ),
+                ]
+              : (isNeumorphic ? tokens.shadowConvex : null),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(14),
@@ -159,7 +170,8 @@ class SceneRecoCard extends ConsumerWidget {
     );
   }
 
-  /// 封面图：优先级 data:image/ → http(s)/本地路径 → 统一主题化占位图
+  /// 封面图：data:image/http(s)/本地路径 → LumiraImage 统一加载（自动降采样，
+  /// 避免网格/卡片按全尺寸解码）；网络路径保留原 CachedNetworkImage。
   Widget _buildCoverImage(ThemeTokens tokens) {
     final placeholder = Container(
       color: tokens.surfaceAlt,
@@ -171,36 +183,20 @@ class SceneRecoCard extends ConsumerWidget {
     );
     final cover = scene.coverUrl;
     if (cover.isEmpty) return placeholder;
-    if (cover.startsWith('data:image/')) {
-      // base64Decode 可能 throws；Image.memory 的 errorBuilder 只捕获解码错误，
-      // 故用 try 包裹并在失败时回退占位图
-      Widget decode() {
-        final comma = cover.indexOf(',');
-        final b64 = comma >= 0 ? cover.substring(comma + 1) : cover;
-        return Image.memory(
-          base64Decode(b64),
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => placeholder,
-        );
-      }
-      try {
-        return decode();
-      } catch (_) {
-        return placeholder;
-      }
-    }
-    if (cover.startsWith('http://') || cover.startsWith('https://')) {
-      return CachedNetworkImage(
-        url: cover,
+    // base64 data URL / 本地图片路径 → LumiraImage（自动降采样 + base64 字节级缓存）
+    if (!cover.startsWith('http://') && !cover.startsWith('https://')) {
+      return LumiraImage(
+        cover,
         fit: BoxFit.cover,
-        placeholder: placeholder,
         errorWidget: placeholder,
       );
     }
-    return Image.file(
-      File(cover),
+    // 网络图片：保留原 CachedNetworkImage
+    return CachedNetworkImage(
+      url: cover,
       fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => placeholder,
+      placeholder: placeholder,
+      errorWidget: placeholder,
     );
   }
 }

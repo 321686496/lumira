@@ -25,13 +25,13 @@ const PhotoTemplate cityLightsTrailTemplate = PhotoTemplate(
     aspectRatio: '16:9',
     description: '弯道车流形成贯穿画面对角线的光轨主线条，楼宇灯光作为背景层次',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'cityscape-tripod'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿势，纯夜景长曝光场景',
-  ),
+  // pose: Pose(
+  //   silhouette: SilhouetteResource(type: 'builtin', data: 'cityscape-tripod'),
+  //   position: Position(x: 0.5, y: 0.5),
+  //   scale: 1.0,
+  //   rotation: 0,
+  //   description: '无人物姿势，纯夜景长曝光场景',
+  // ),
   camera: CameraParams(
     exposureCompensation: 0,
     isoMode: 'manual',

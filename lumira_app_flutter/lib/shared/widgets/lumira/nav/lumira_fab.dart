@@ -1,10 +1,9 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
+import '../../../../shared/widgets/common/glass_surface.dart';
 import '../_internal/lumira_theme_resolver.dart';
 
 /// 如画应用统一 FloatingActionButton
@@ -88,20 +87,16 @@ class LumiraFloatingActionButton extends ConsumerWidget {
         );
 
       case UIStyle.glass:
-        // 白透明 0.7 + backdrop blur 15 + brand 边框
-        return ClipRRect(
+        // 玻璃 FAB：FAB 与页面背景同属一个 Stack（无 RepaintBoundary 隔离），
+        // 真模糊可采样到背景，故配合 GlassSurface 的 blur 实现明显毛玻璃。
+        return GlassSurface(
           borderRadius: BorderRadius.circular(radius),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(radius),
-                border: Border.all(color: tokens.brand, width: 1.2),
-              ),
-              child: Center(child: child),
-            ),
-          ),
+          blurSigma: 15,
+          showTopHighlight: true,
+          shadows: const [
+            BoxShadow(color: Color(0x1F000000), offset: Offset(0, 6), blurRadius: 18),
+          ],
+          child: Center(child: child),
         );
 
       case UIStyle.female:

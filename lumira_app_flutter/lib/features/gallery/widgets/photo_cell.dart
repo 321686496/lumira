@@ -1,11 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../core/utils/image_cache.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../data/gallery_models.dart';
 
 class PhotoCell extends ConsumerWidget {
@@ -80,19 +78,11 @@ class PhotoCell extends ConsumerWidget {
     if (url == null || url.isEmpty) {
       return placeholder;
     }
-    // 走统一缓存组件：磁盘缓存 + 自动按格子尺寸×DPR 降采样，避免重新下载与全尺寸解码
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return CachedNetworkImage(
-        url: url,
-        fit: BoxFit.cover,
-        placeholder: placeholder,
-        errorWidget: placeholder,
-      );
-    }
-    return Image.file(
-      File(url),
+    // 走统一加载组件：磁盘缓存 + 按实际渲染尺寸×DPR 降采样（自动识别网络/本地文件）
+    return LumiraImage(
+      url,
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stack) => placeholder,
+      errorWidget: placeholder,
     );
   }
 }

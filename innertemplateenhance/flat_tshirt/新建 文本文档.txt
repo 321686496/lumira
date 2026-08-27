@@ -1,0 +1,224 @@
+{
+    "name": "平铺服饰静物·原木极简",
+    "category": "still_life",
+    "classification": {
+        "type": "still_life",
+        "majorStyle": "日系极简",
+        "subStyle": "服饰平铺静物",
+        "method": "俯拍平面平铺布景"
+    },
+    "shortDesc": "干净柔和的服饰平铺，质朴织物肌理，简约治愈的穿搭展示📦",
+    "description": "服饰静物平铺拍摄模板，高机位垂直俯拍，自然光柔和漫射，适合衬衫、T恤、针织开衫等服装产品平铺展示，搭配少量配饰点缀画面，整体低对比柔和质感，适合服装穿搭样片拍摄。",
+    "ambience": {
+        "seasons": ["春季", "夏季", "秋季"],
+        "weathers": ["阴天", "多云"],
+        "timeTones": ["白日柔光"]
+    },
+    "tags": ["服饰平铺", "静物俯拍", "日系简约", "服装样片", "自然光静物"],
+    "images": [
+        {
+            "imageIndex": 0,
+            "role": "封面",
+            "caption": "米色亚麻长袖衬衫平铺，搭配帆布小包，木质地板背景"
+        },
+        {
+            "imageIndex": 1,
+            "role": "效果图",
+            "caption": "黑白横条纹短袖T恤平铺，搭配墨镜、书本与陶瓷杯"
+        },
+        {
+            "imageIndex": 2,
+            "role": "效果图",
+            "caption": "基础白色圆领短袖T恤平铺，墨镜戒指配饰，浅米色卡纸背景"
+        },
+        {
+            "imageIndex": 3,
+            "role": "效果图",
+            "caption": "浅蓝V领针织开衫平铺，搭配帆布鞋、金属戒指，浅灰毛毡背景"
+        }
+    ],
+    "poses": [
+        {
+            "imageIndex": 0,
+            "name": "封面-亚麻衬衫平铺构图",
+            "type": "composition",
+            "description": "服装主体居中摆放，衬衫自然摊开展开袖子，右下角放置小型帆布挎包作为道具，主体占据画面绝大部分区域，四周保留木地板纹理留白，对称为主局部道具打破完全对称。",
+            "compositionFrame": "垂直俯拍，衬衫主体居中，x:0.03~0.96，y:0.04~0.95；趣味道具放置画面右下九宫格交点；四周保留木质地板纹理作为背景留白，无前景，平面二维构图。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "flat_cloth_01"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 0.94,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 1,
+            "name": "条纹T恤平铺构图",
+            "type": "composition",
+            "description": "条纹T恤居中平铺自然褶皱，画面左下角摆放墨镜与书本，右上角放置陶瓷杯碟，道具分置对角平衡画面，纯白干净背景，主体T恤占画面核心区域。",
+            "compositionFrame": "垂直俯拍，T恤主体居中，x:0.09~0.91，y:0.08~0.91；对角布置小道具；纯白背景，大面积留白，平面平铺构图。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "flat_cloth_02"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 0.92,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 2,
+            "name": "白T卡纸平铺构图",
+            "type": "composition",
+            "description": "纯白色T恤居中平铺，画面左下角摆放墨镜与戒指配饰，浅米色卡纸作为底层背景，T恤自然柔和褶皱，背景卡纸露出斜向边角，简约干净。",
+            "compositionFrame": "垂直俯拍，T恤主体居中，x:0.04~0.94，y:0.09~0.90；小配饰放置画面左下；斜向卡纸形成简单几何框架，平面平铺构图。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "flat_cloth_02"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 0.90,
+            "rotation": 0.0
+        },
+        {
+            "imageIndex": 3,
+            "name": "针织开衫平铺构图",
+            "type": "composition",
+            "description": "浅蓝色针织开衫居中平铺，画面左下角摆放帆布鞋，右上角放置金属戒指，浅灰色毛毡背景，针织面料自然摊开，道具少量点缀不抢夺服装主体。",
+            "compositionFrame": "垂直俯拍，针织开衫主体居中，x:0.05~0.93，y:0.08~0.93；道具分布画面左下与右上角落；哑光毛毡背景，平面平铺构图。",
+            "silhouette": {
+                "type": "builtin",
+                "data": "flat_cloth_01"
+            },
+            "position": {
+                "x": 0.5,
+                "y": 0.5
+            },
+            "scale": 0.93,
+            "rotation": 0.0
+        }
+    ],
+    "composition": {
+        "overlayType": "rule_of_thirds",
+        "gridType": "grid",
+        "aspectRatio": "1:1",
+        "opacity": 0.3,
+        "description": "俯拍平面，1:1正方形画幅；服装主体居中，主体占画幅85‑92%；少量配饰道具放在画面角落九宫格点位；背景材质露出四周，无前后景纵深，二维平面静物构图。",
+        "subjectFrame": {
+            "x": 0.04,
+            "y": 0.05,
+            "w": 0.92,
+            "h": 0.91
+        }
+    },
+    "camera": {
+        "exposureCompensation": 0.3,
+        "isoMode": "auto",
+        "iso": null,
+        "shutterSpeed": null,
+        "whiteBalance": "daylight",
+        "whiteBalanceK": 5400,
+        "flashMode": "off",
+        "focusMode": "auto",
+        "lensType": "主摄镜头",
+        "lensSuggestion": "main"
+    },
+    "sceneGuide": {
+        "lightDirection": "主光从屏幕斜上方45°，漫射柔光，无强烈直射硬阴影；光比约2:1；阴影浅淡柔和，阴影投向屏幕斜下方；保留织物面料细微肌理质感；无逆光，不需要正面补光。",
+        "shootingDistance": "1.2‑1.6m",
+        "background": "可选用实木地板、白色平面、浅米色卡纸、浅灰色毛毡垫，哑光低反射材质。",
+        "props": ["帆布小包、皮带、墨镜、书本、陶瓷杯碟、戒指、帆布鞋", "道具少量摆放画面对角角落，不要遮挡服装主体"],
+        "bestTime": "10:00‑15:00，阴天靠窗柔和自然光，避免阳光直射",
+        "tips": [
+            "相机垂直向下俯拍，保持镜头与平面完全平行，避免透视变形",
+            "衣物不要完全拉平，保留自然轻微褶皱，还原面料真实质感",
+            "道具放在画面四角九宫格位置，不可遮挡服装主体区域",
+            "使用窗边漫射自然光，避开直射阳光，防止生硬深色阴影",
+            "想要模拟虚化：尽量相机靠近衣物、背景远离，配合轻暗角vignette压四角；手机无法实现光学浅景深"
+        ]
+    },
+    "postProcess": {
+        "cropRatio": "1:1",
+        "color": {
+            "brightness": 4,
+            "contrast": -7,
+            "saturation": -8,
+            "temperature": 2,
+            "tint": 0,
+            "highlights": -12,
+            "shadows": 8,
+            "clarity": 6
+        },
+        "smoothStrength": 0,
+        "sharpen": 24,
+        "vignette": 16,
+        "grain": 12,
+        "lut": "cream",
+        "fillLight": {
+            "enabled": false
+        }
+    },
+    "orientation": {
+        "framePosition": "画面居中",
+        "bodyFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "faceFacing": {
+            "type": "正对",
+            "azimuth": 0
+        },
+        "twist": "正身",
+        "headPitch": 0,
+        "headRoll": 0,
+        "gaze": "看镜头"
+    },
+    "framing": {
+        "shotSize": "大远景",
+        "shotSizeNote": "完整收纳全部平铺服装及边角道具",
+        "cameraHeight": "高机位俯拍",
+        "cameraAzimuth": "正拍垂直俯视",
+        "subjectScale": "服装主体占画面85‑92%",
+        "environmentRatio": "背景材质占画面8‑15%",
+        "headroom": "无，平面静物",
+        "framingNote": "垂直俯拍正方形画幅，服装居中完整入镜，小配饰放置角落平衡构图"
+    },
+    "lighting": {
+        "lightingDetail": {
+            "光位": "屏幕斜上方45°漫射自然光",
+            "辅光轮廓光": "无辅光，依靠环境漫反射填充暗部",
+            "光型软硬": "柔光，经过窗户漫反射，阴影边缘柔和模糊",
+            "光比": "约2:1低反差",
+            "阴影": "浅淡，投向屏幕斜下方，边缘柔和，浓度低",
+            "质感": "保留亚麻、针织、棉织物面料纹理，哑光质感，无强烈高光反光",
+            "环境光": "室内窗边环境漫射光",
+            "色温对比": "整体统一中性偏暖，无明显冷暖对比"
+        },
+        "lightToParams": "exposureCompensation+0.3提亮画面；contrast‑7降低反差；highlights‑12压制面料过曝高光；shadows+8提升暗部细节；whiteBalance 5400K中性日光色调"
+    },
+    "styling": {
+        "subjectType": "服饰静物平铺",
+        "clothingLayers": {
+            "上装": "衬衫 / T恤 /针织开衫，完整平铺展开袖子、衣摆",
+            "下装": "无",
+            "衣角处理": "自然摊开，保留原生轻微褶皱，不要完全熨烫紧绷",
+            "袖子": "自然向画面两侧舒展",
+            "领口": "自然摊平，保持衣服原始形态",
+            "鞋袜": "可作为小道具放置角落，不遮挡衣服",
+            "叠穿层次": "单层平铺展示"
+        },
+        "accessories": "小包、皮带、墨镜、杯子、书本、金属戒指等简约配饰，少量点缀画面角落",
+        "hairMakeup": "",
+        "objectStyle": "服装平铺静物，质朴简约，低饱和柔和色彩",
+        "note": "道具仅做氛围点缀，主体永远是服装面料版型"
+    }
+}

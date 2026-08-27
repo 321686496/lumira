@@ -95,6 +95,22 @@ class ThemeTokens {
     }
   }
 
+  // === glass 风格主题色工具（组件复用，跟随品牌色，亮/暗各一套） ===
+
+  /// glass 磨砂填充色（半透明，让背后彩色背景透出）。亮色主题白底品牌微染，
+  /// 暗色主题（ink）暗底品牌微染。
+  static Color glassFill(ThemeTokens t) {
+    final isDark = t.canvas.computeLuminance() < 0.5;
+    final tint = isDark
+        ? Color.lerp(const Color(0xFF26231E), t.brand, 0.12)!
+        : Color.lerp(Colors.white, t.brandLight, 0.10)!;
+    return tint.withOpacity(isDark ? 0.5 : 0.58);
+  }
+
+  /// glass 外描边色（灯下白色细边：亮更白，暗微光）
+  static Color glassBorder(ThemeTokens t) =>
+      Colors.white.withOpacity(t.canvas.computeLuminance() < 0.5 ? 0.20 : 0.55);
+
   // === 暖米白主题（默认） ===
   // 来源: App.vue :root (line 40-80)
   // Neumorphic fix: surface 从纯白 #FFFFFF 改为 canvas 的微亮变体 #FDFBF7，

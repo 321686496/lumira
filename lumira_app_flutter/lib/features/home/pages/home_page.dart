@@ -3,12 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../features/notification/notification_providers.dart';
 import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
+import '../../../shared/widgets/lumira/buttons/lumira_button.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/home_mock_data.dart';
 import '../data/home_providers.dart';
@@ -536,13 +539,10 @@ class _RecentShotsGrid extends ConsumerWidget {
   }
 
   Widget _buildEmpty(ThemeTokens tokens) {
-    return Container(
+    return LumiraSurface(
+      radius: 14,
+      emphasize: true,
       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
-      decoration: BoxDecoration(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: tokens.shadowConvex,
-      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -571,31 +571,19 @@ class _RecentShotsGrid extends ConsumerWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          GestureDetector(
-            onTap: onCapture,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-              decoration: BoxDecoration(
-                color: tokens.brand,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: tokens.shadowConvexBrand,
+          LumiraButton(
+            variant: ButtonVariant.primary,
+            onPressed: onCapture,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+              Icon(Icons.camera_alt_outlined, size: 16),
+              SizedBox(width: 6),
+              Text(
+                '开始拍摄',
+                style: TextStyle(fontSize: 14),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.camera_alt_outlined, size: 16, color: tokens.textInverse),
-                  const SizedBox(width: 6),
-                  Text(
-                    '开始拍摄',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: tokens.textInverse,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+            ],
             ),
           ),
         ],

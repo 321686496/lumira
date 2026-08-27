@@ -103,15 +103,17 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
                     child: Container(
                       height: 54, // 108rpx → 54dp
                       decoration: BoxDecoration(
-                        // Forced fix: glass 用 3 段渐变模拟玻璃边缘反射
+                        // Forced fix: glass 用主题色磨砂渐变 + 白描边（跟随品牌色）
                         gradient: isGlass
                             ? LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                                 colors: [
-                                  Colors.white.withOpacity(0.75),
-                                  Colors.white.withOpacity(0.45),
-                                  Colors.white.withOpacity(0.30),
+                                  Colors.white.withOpacity(0.72),
+                                  Color.lerp(Colors.white, tokens.brandLight, 0.12)!
+                                      .withOpacity(0.46),
+                                  Color.lerp(Colors.white, tokens.brandLight, 0.20)!
+                                      .withOpacity(0.30),
                                 ],
                                 stops: const [0.0, 0.5, 1.0],
                               )
@@ -120,7 +122,7 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
                         borderRadius: BorderRadius.circular(1000),
                         border: isGlass
                             ? Border.all(
-                                color: Colors.white.withOpacity(0.6),
+                                color: ThemeTokens.glassBorder(tokens),
                                 width: 1.0,
                               )
                             : null,

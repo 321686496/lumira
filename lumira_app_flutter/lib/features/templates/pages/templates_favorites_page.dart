@@ -6,6 +6,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/templates_providers.dart';
@@ -33,6 +34,7 @@ class TemplatesFavoritesPage extends ConsumerWidget {
       ),
       body: Stack(
         children: [
+          const Positioned.fill(child: GlassBackground()),
           Container(
             decoration: BoxDecoration(
               gradient: RadialGradient(

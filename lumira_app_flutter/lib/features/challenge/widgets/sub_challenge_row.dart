@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/challenge_models.dart';
 import 'challenge_tag.dart';
@@ -32,34 +32,14 @@ class SubChallengeRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final style = ref.watch(uiStyleProvider);
     final isDone = challenge.status == ChallengeStatus.done;
-    // Forced fix: neumorphic 风格下使用 tokens.shadowConvexSubtle（主题派生色），canvas→surface
-    final isNeumorphic = style == UIStyle.neumorphic;
-
+    // Forced fix: 通用卡片改用共享 LumiraSurface，按当前 4 种 UI 风格渲染
+    // （neumorphic 浮雕 / flat 细边 / glass 玻璃 / female 渐变），不再硬编码成新拟态双向阴影。
     final card = Opacity(
       opacity: isDone ? 0.7 : 1.0,
-      child: Container(
+      child: LumiraSurface(
         padding: const EdgeInsets.all(20), // 40rpx → 20dp
-        decoration: BoxDecoration(
-          color: isNeumorphic ? tokens.surface : tokens.canvas,
-          borderRadius: BorderRadius.circular(14), // 28rpx → 14dp
-          boxShadow: isNeumorphic
-              ? tokens.shadowConvexSubtle
-              : [
-                  // 阴影：convex
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
-                    offset: const Offset(3, 3),
-                    blurRadius: 7,
-                  ),
-                  BoxShadow(
-                    color: Colors.white.withOpacity(0.9),
-                    offset: const Offset(-3, -3),
-                    blurRadius: 7,
-                  ),
-                ],
-        ),
+        radius: 14, // 28rpx → 14dp
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
