@@ -16,6 +16,8 @@ import '../../../features/usage/usage_providers.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/safe_share.dart';
+import '../../../shared/services/poster_generator.dart';
+import '../../../shared/widgets/poster/template_poster_widgets.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
@@ -176,6 +178,13 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
         ),
       ],
       if (isLocked) _CreditBalanceChip(onTap: _goPointsWallet),
+      // 分享海报：所有来源（内置/自定义/远程）模板均可分享
+      LumiraIconButton(
+        icon: Icons.photo_library_outlined,
+        onPressed: _goSharePoster,
+        color: tokens.textPrimary,
+        size: 20,
+      ),
     ];
     if (heart == null && rest.isEmpty) return null;
     return [if (heart != null) heart, ...rest];
@@ -187,6 +196,37 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     GoRouter.of(context).push(
       RouteNames.withTemplateId(RouteNames.templatesEditor, id),
     );
+  }
+
+  /// 分享当前模板：从 DAO 拉取完整 [TemplateRecord]，弹出「模板分享海报」预览
+  /// （封面 + 模板名/分类 + 模板二维码），可导出到相册或分享到系统。
+  Future<void> _goSharePoster() async {
+    final id = _template?.id ?? widget.templateId;
+    if (id == null || id.isEmpty) return;
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final record = await dao.getById(id);
+      if (record == null) {
+        _showSnack('模板未找到');
+        return;
+      }
+      if (!mounted) return;
+      final tokens = ref.read(themeTokensProvider);
+      final shareText = buildAutoShareText(record);
+      final posterKey = GlobalKey();
+      await PosterGenerator.showPoster(
+        context: context,
+        tokens: tokens,
+        title: '分享模板',
+        content: TemplateSharePosterContent(template: record),
+        posterKey: posterKey,
+        shareSubject: '模板 · ${record.name}',
+        shareText: shareText,
+        fileNamePrefix: 'template_share',
+      );
+    } catch (e) {
+      _showSnack('分享失败：$e');
+    }
   }
 
   void _back() {

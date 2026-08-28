@@ -9,6 +9,8 @@ import 'package:go_router/go_router.dart';
 import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/common/lumira_surface.dart';
+import '../../../shared/services/poster_generator.dart';
+import '../../../shared/widgets/poster/template_poster_widgets.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/db/dao/scenes_dao.dart';
@@ -424,6 +426,61 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
     }
   }
 
+  /// 「分享模板海报」：仅套用模板拍摄的照片可生成海报。
+  /// 读取照片本地路径 + 拍摄用模板（用于二维码），弹出海报预览并导出/分享。
+  Future<void> _onSharePoster() async {
+    final photo = _photo;
+    if (photo == null) return;
+    final tplId = photo.templateId;
+    if (tplId == null || tplId.isEmpty) {
+      LumiraToast.show(
+        context,
+        '该照片未使用模板拍摄，无法生成模板海报',
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+    final photoPath = photo.filePath;
+    if (photoPath == null || photoPath.isEmpty) {
+      LumiraToast.show(
+        context,
+        '仅支持本地照片生成模板海报',
+        duration: const Duration(seconds: 2),
+      );
+      return;
+    }
+    try {
+      final dao = await ref.read(templatesDaoProvider.future);
+      final template = await dao.getById(tplId);
+      if (template == null) {
+        if (!mounted) return;
+        LumiraToast.show(context, '模板未找到', duration: const Duration(seconds: 2));
+        return;
+      }
+      if (!mounted) return;
+      final tokens = ref.read(themeTokensProvider);
+      final shareText = buildAutoShareText(template);
+      final posterKey = GlobalKey();
+      await PosterGenerator.showPoster(
+        context: context,
+        tokens: tokens,
+        title: '分享模板海报',
+        content: TemplatePhotoPosterContent(
+          photoPath: photoPath,
+          shareText: shareText,
+          template: template,
+        ),
+        posterKey: posterKey,
+        shareSubject: '模板海报 · ${template.name}',
+        shareText: shareText,
+        fileNamePrefix: 'template_poster',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      LumiraToast.show(context, '分享失败：$e', duration: const Duration(seconds: 2));
+    }
+  }
+
   /// 二次添加水印：读取当前照片路径与当前水印模板，跳转应用模式编辑器。
   /// 编辑器保存后以"另存新照片"入相册，返回后刷新画廊列表 provider。
   Future<void> _onAddWatermark() async {
@@ -469,10 +526,12 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
           if (_photo != null)
             _MoreAction(
               tokens: tokens,
+              canShare: _photo?.templateId != null,
               onCheckin: _onCheckin,
               onDelete: _onDelete,
               onAddWatermark: _onAddWatermark,
               onSaveToAlbum: _onSaveToAlbum,
+              onSharePoster: _onSharePoster,
             ),
         ],
       ),
@@ -599,21 +658,28 @@ class _DarkBackButton extends StatelessWidget {
   }
 }
 
-/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"记录探店" / "保存到系统相册" / "添加水印" / "删除照片"操作。
+/// AppBar "更多"按钮：点击弹出 BottomSheet，提供"记录探店" / "保存到系统相册" /
+/// "分享模板海报"（仅套用模板照片） / "添加水印" / "删除照片"操作。
 class _MoreAction extends StatelessWidget {
   const _MoreAction({
     required this.tokens,
+    required this.canShare,
     required this.onCheckin,
     required this.onDelete,
     required this.onAddWatermark,
     required this.onSaveToAlbum,
+    required this.onSharePoster,
   });
 
   final ThemeTokens tokens;
+
+  /// 当前照片是否套用了模板（决定是否展示"分享模板海报"选项）。
+  final bool canShare;
   final Future<void> Function() onCheckin;
   final Future<void> Function() onDelete;
   final Future<void> Function() onAddWatermark;
   final Future<void> Function() onSaveToAlbum;
+  final Future<void> Function() onSharePoster;
 
   @override
   Widget build(BuildContext context) {
@@ -657,6 +723,15 @@ class _MoreAction extends StatelessWidget {
             onTap: () => Navigator.of(ctx).pop('watermark'),
           ),
           Divider(height: 1, color: tokens.divider),
+          if (canShare)
+            _MoreSheetOption(
+              tokens: tokens,
+              icon: Icons.photo_library_outlined,
+              label: '分享模板海报',
+              color: tokens.brand,
+              onTap: () => Navigator.of(ctx).pop('sharePoster'),
+            ),
+          if (canShare) Divider(height: 1, color: tokens.divider),
           _MoreSheetOption(
             tokens: tokens,
             icon: Icons.delete_outline,
@@ -675,6 +750,8 @@ class _MoreAction extends StatelessWidget {
       await onSaveToAlbum();
     } else if (result == 'watermark') {
       await onAddWatermark();
+    } else if (result == 'sharePoster') {
+      await onSharePoster();
     } else if (result == 'delete') {
       await onDelete();
     }

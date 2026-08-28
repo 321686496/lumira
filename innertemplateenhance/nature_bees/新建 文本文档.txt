@@ -1,0 +1,180 @@
+{
+  "name": "春日微距·蜂舞花间",
+  "category": "nature",
+  "classification": {
+    "type": "nature",
+    "majorStyle": "微距生态",
+    "subStyle": "昆虫花卉",
+    "method": "浅景深特写"
+  },
+  "shortDesc": "暖阳穿透薄翼，绒毛沾满金黄花粉，定格草丛间最灵动的治愈瞬间🐝🌼",
+  "description": "这是一套专为自然微距摄影设计的模板。画面捕捉蜜蜂停驻黄色野花采蜜的瞬间，利用大光圈虚化绿色草地背景，突出主体细节。光线为柔和的自然顺光，完美展现蜜蜂翅膀的通透感与腿部花粉的颗粒质感。色调温暖明亮，充满春日生机。适合户外公园、花园等场景，建议使用手机微距模式或长焦镜头靠近拍摄。",
+  "ambience": {
+    "seasons": [
+      "春季",
+      "夏季"
+    ],
+    "weathers": [
+      "晴朗",
+      "多云"
+    ],
+    "timeTones": [
+      "上午",
+      "午后"
+    ]
+  },
+  "tags": [
+    "微距摄影",
+    "昆虫",
+    "春日氛围",
+    "治愈系",
+    "自然生态"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "蜜蜂后腿挂满金黄花粉团，停驻在黄色雏菊状花朵上，背景绿意盎然虚化柔和。"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·主构图",
+      "type": "composition",
+      "description": "采用中心偏下构图，蜜蜂与花朵作为绝对视觉中心占据画面中下部约60%区域。蜜蜂身体呈对角线趋势（头朝右下，尾朝左上），引导视线聚焦于头部触角与花蕊接触点。背景利用大光圈形成奶油般虚化的绿色光斑，上方留白约1/3以平衡画面呼吸感。",
+      "compositionFrame": "主体位于画面垂直方向40%-85%区间，水平居中略偏左；利用三分法，花蕊中心接近下三分线交点；背景为均匀散景，无杂乱线条干扰。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "macro_insect_flower_center"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.55
+      },
+      "scale": 0.85,
+      "rotation": -15
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "none",
+    "aspectRatio": "3:4",
+    "opacity": 0.3,
+    "description": "竖幅3:4构图，微距特写景别。机位平视略俯，贴近花朵高度。主体（蜜蜂+花）占画幅60%，环境（虚化草地）占40%。头顶（画面上方）留有充足绿色负空间，避免压抑。",
+    "subjectFrame": {
+      "x": 0.15,
+      "y": 0.25,
+      "w": 0.7,
+      "h": 0.65
+    }
+  },
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5600,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "长焦/微距镜头",
+    "lensSuggestion": "tele_macro"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光为自然日光，从屏幕左上方约45°射入，光线柔和漫射（非正午硬光），光比约2:1。阴影落在蜜蜂腹部下方及花瓣右侧，边缘柔和过渡。无需人工补光，纯自然顺光/侧顺光照明。",
+    "shootingDistance": "0.1-0.3m (微距距离)",
+    "background": "远离主体的绿色草坪或低矮植被，确保背景距离主体至少50cm以上以形成虚化。",
+    "props": [
+      "黄色野花（如蒲公英、雏菊类）",
+      "活跃蜜蜂"
+    ],
+    "bestTime": "09:00-11:00 或 14:00-16:00",
+    "tips": [
+      "使用手机‘微距模式’或2x-3x长焦镜头，尽量靠近花朵直至对焦清晰。",
+      "保持手部稳定，可寻找支撑点或使用三脚架，微距下轻微抖动都会导致模糊。",
+      "等待蜜蜂落稳后再按快门，连拍多张以提高成功率。",
+      "真机无法实现光学大光圈虚化时，请尽量让背景远离主体，并在后期适当增加‘人像模式/虚化’强度模拟景深。",
+      "vignette:20 轻微压暗四角，进一步集中视线到中央蜜蜂身上。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 5,
+      "contrast": 8,
+      "saturation": 18,
+      "temperature": 6,
+      "tint": 2,
+      "highlights": -5,
+      "shadows": 10,
+      "clarity": 15,
+      "vibrance": 12
+    },
+    "smoothStrength": 10,
+    "sharpen": 35,
+    "vignette": 20,
+    "grain": 5,
+    "lut": "fuji",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0
+    }
+  },
+  "orientation": {
+    "framePosition": "画面中央偏下",
+    "bodyFacing": {
+      "type": "侧向屏幕右",
+      "azimuth": -60
+    },
+    "faceFacing": {
+      "type": "朝向屏幕右下",
+      "azimuth": -75
+    },
+    "twist": "正身",
+    "headPitch": -25,
+    "headRoll": 0,
+    "gaze": "看向花蕊深处"
+  },
+  "framing": {
+    "shotSize": "特写",
+    "shotSizeNote": "完整包含蜜蜂全身及整朵花，裁剪至花茎上部。",
+    "cameraHeight": "平视",
+    "cameraAzimuth": "斜侧 45°",
+    "subjectScale": "主体占画幅 60%",
+    "environmentRatio": "背景虚化占 40%",
+    "headroom": "上方留白约 25%",
+    "framingNote": "微距特写，平视机位，主体清晰锐利，背景完全虚化分离。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕左上方 45° 自然光",
+      "辅光轮廓光": "无明显人工辅光，翅膀边缘有自然透光高光",
+      "光型软硬": "柔光，漫反射强",
+      "光比": "约 2:1，明暗过渡自然",
+      "阴影": "腹部下方及花瓣右侧，边缘软，浓度浅",
+      "质感": "蜜蜂绒毛清晰可见，翅膀半透明高光，花粉颗粒感强，花瓣哑光柔和",
+      "环境光": "整体环境明亮，绿色背景反光提供微弱底部补光",
+      "色温对比": "主体暖黄，背景嫩绿，整体偏暖调"
+    },
+    "lightToParams": "whiteBalance: daylight 5600K 保留阳光暖意; temperature +6 增强暖调; contrast +8 提升立体感; clarity +15 强化绒毛与花粉纹理; highlights -5 防止翅膀过曝; shadows +10 提亮腹部暗部细节。"
+  },
+  "styling": {
+    "subjectType": "昆虫/植物",
+    "clothingLayers": {
+      "上装": "N/A",
+      "下装": "N/A",
+      "衣角处理": "N/A",
+      "袖子": "N/A",
+      "领口": "N/A",
+      "鞋袜": "N/A",
+      "叠穿层次": "N/A"
+    },
+    "accessories": "后腿携带的金黄色花粉团（天然道具）",
+    "hairMakeup": "N/A",
+    "objectStyle": "蜜蜂：黑黄相间条纹，胸部覆盖浓密金棕色绒毛，翅膀透明带脉络；花朵：鲜黄色舌状花瓣，中心密集管状花蕊。",
+    "note": "选择花瓣舒展、颜色鲜艳且蜜蜂正在活跃采蜜的花朵作为拍摄对象。"
+  }
+}

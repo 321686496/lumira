@@ -1,0 +1,178 @@
+{
+  "name": "莫兰迪灰调·静谧半身肖像",
+  "category": "portrait",
+  "classification": {
+    "type": "portrait",
+    "majorStyle": "极简高级感",
+    "subStyle": "莫兰迪低饱和",
+    "method": "棚拍柔光/窗边漫射"
+  },
+  "shortDesc": "灰调柔光漫染，眉眼间藏着不动声色的温柔，低饱和里的高级静谧感，一眼沦陷的松弛氛围🌫️",
+  "description": "这是一套主打极简高级感的半身人像模板。采用大面积低饱和灰绿色背景，配合柔和的漫射光，营造出静谧、内敛且富有质感的视觉氛围。穿搭上选择同色系莫兰迪灰/米色V领垂坠感上衣，强调面料的哑光质地与线条的流畅。妆容清透自然，保留皮肤真实纹理。适合追求清冷气质、职场形象照或艺术写真的用户，在室内窗边或纯色背景前即可复刻。",
+  "ambience": {
+    "seasons": [
+      "春季",
+      "秋季",
+      "冬季"
+    ],
+    "weathers": [
+      "阴天",
+      "多云"
+    ],
+    "timeTones": [
+      "午后柔光",
+      "全天候室内"
+    ]
+  },
+  "tags": [
+    "莫兰迪色",
+    "极简人像",
+    "高级灰",
+    "清冷感",
+    "半身肖像"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "正身端坐，双手交叠于膝，眼神平静直视镜头，展现极致的静谧与高级灰调质感。"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·静谧端坐",
+      "type": "people",
+      "description": "人物位于画面正中央，身体完全正对镜头（0°），面部正对镜头（0°）。采取坐姿，躯干挺直但放松，肩线水平。双臂自然下垂并在身前交汇，双手轻轻交叠放置于大腿上方（画面下方中央），手指自然舒展放松，无紧张感。头部端正，无侧倾（headRoll 0°），下巴微收（headPitch -5°），视线平视直视镜头，表情平静淡然，嘴角闭合无笑意，眼神清澈聚焦。整体传达出一种沉稳、内敛且疏离的高级情绪。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "portrait_sitting_front_hands_lap"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.45
+      },
+      "scale": 0.85,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "center_composition",
+    "gridType": "none",
+    "aspectRatio": "4:5",
+    "opacity": 0.2,
+    "description": "半身近景，裁剪至大腿中部。机位平视，镜头高度与人物眼睛齐平。主体严格居中，占据画面宽度的约50%，高度的约85%。头顶留白约占画面高度的15%，底部裁切在大腿处。背景为纯净无杂物的灰绿色墙面，环境占比约40%，主要作为负空间衬托主体。",
+    "subjectFrame": {
+      "x": 0.25,
+      "y": 0.08,
+      "w": 0.5,
+      "h": 0.85
+    }
+  },
+  "camera": {
+    "exposureCompensation": 0.0,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "cloudy",
+    "whiteBalanceK": 6200,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光为大面积柔光，从屏幕左前方约45°高位射入，光线极软，无明显硬边阴影。辅光来自屏幕右侧反光板或环境漫反射，填充阴影。光比约1:2，反差极低。鼻下阴影极淡且边缘模糊，投向屏幕右下方。无需额外补光灯，依靠窗边自然光或大型柔光箱即可。",
+    "shootingDistance": "1.5-2.0m",
+    "background": "纯色哑光灰绿色背景墙或挂布，无任何纹理和装饰",
+    "props": [
+      "无"
+    ],
+    "bestTime": "10:00-16:00 (室内窗边) 或 全天候 (影棚)",
+    "tips": [
+      "寻找朝北窗户或在窗户加一层白纱帘，以获得这种无方向的极致柔光。",
+      "背景必须干净，若墙面有纹理，请后期使用smoothStrength轻微磨皮或拉远背景距离。",
+      "真机无法实现大光圈物理虚化，请让人物距离背景至少1.5米以上，利用透视关系弱化背景细节。",
+      "姿态要点：肩膀下沉放松，不要耸肩；手指不要用力扣紧，保持自然弯曲的松弛感。",
+      "眼神要定，想象在看穿镜头后的某一点，保持面部肌肉完全放松。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "4:5",
+    "color": {
+      "brightness": 2,
+      "contrast": -8,
+      "saturation": -25,
+      "temperature": -2,
+      "tint": 3,
+      "highlights": -10,
+      "shadows": 8
+    },
+    "smoothStrength": 25,
+    "sharpen": 15,
+    "vignette": 15,
+    "grain": 12,
+    "lut": "morandi",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "画面正中，垂直居中偏上",
+    "bodyFacing": {
+      "type": "正对",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "正对",
+      "azimuth": 0
+    },
+    "twist": "正身",
+    "headPitch": -5,
+    "headRoll": 0,
+    "gaze": "直视镜头"
+  },
+  "framing": {
+    "shotSize": "半身",
+    "shotSizeNote": "头顶留一掌宽，下裁至大腿中部",
+    "cameraHeight": "平视",
+    "cameraAzimuth": "正拍",
+    "subjectScale": "主体占画幅面积约60%",
+    "environmentRatio": "背景占40%，纯负空间",
+    "headroom": "发顶距上缘约15%",
+    "framingNote": "标准证件照式构图但更宽松，强调对称与稳定感，平视机位消除压迫感。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕左前上方45°大面积柔光源",
+      "辅光轮廓光": "屏幕右侧环境漫反射补光，无硬轮廓光",
+      "光型软硬": "极软光，过渡平滑",
+      "光比": "约 1:2 (低反差)",
+      "阴影": "鼻影极淡投向右下，眼窝阴影柔和，无死黑",
+      "质感": "皮肤呈现哑光丝绒感，保留微弱毛孔纹理，无油光；衣物呈现哑光垂坠质感",
+      "环境光": "均匀灰调环境光，无特定色温倾向",
+      "色温对比": "整体统一中性偏微冷，无冷暖冲突"
+    },
+    "lightToParams": "低反差对应contrast -8；柔光质感对应smoothStrength 25；低饱和灰调对应lut morandi + saturation -25；提亮暗部对应shadows 8。"
+  },
+  "styling": {
+    "subjectType": "青年女性",
+    "clothingLayers": {
+      "上装": "浅灰褐色/米灰色长袖V领裹身式上衣，面料为哑光雪纺或细针织，垂坠感强",
+      "下装": "灰绿色/豆沙绿高腰半身裙或阔腿裤，色调比上衣略深",
+      "衣角处理": "上衣下摆自然掖入或平整覆盖腰部，无堆积",
+      "袖子": "长袖，袖口自然收拢在手腕处",
+      "领口": "深V交叉领，露出锁骨线条",
+      "鞋袜": "未入画",
+      "叠穿层次": "单层，无外套"
+    },
+    "accessories": "小巧的金色/珍珠耳钉，点缀耳垂，不抢眼",
+    "hairMakeup": "黑色头发低盘发或束起，额前留有几缕微卷碎发修饰脸型；妆容为伪素颜，底妆哑光干净，眉形自然野生，眼妆极淡（仅内眼线+睫毛），唇色为低饱和豆沙红/干枯玫瑰色，无腮红或极淡杏色",
+    "objectStyle": "无道具",
+    "note": "核心在于'同色系深浅搭配'与'面料哑光质感'，避免任何高反光材质或鲜艳色彩破坏灰调氛围。"
+  }
+}

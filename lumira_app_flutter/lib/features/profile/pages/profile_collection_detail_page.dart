@@ -12,11 +12,13 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/services/poster_generator.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../providers/collection_providers.dart';
+import '../widgets/collection_poster_generator.dart';
 
 /// 精选集详情页
 ///
@@ -166,6 +168,7 @@ class _DetailContent extends ConsumerWidget {
               tokens: tokens,
               collectionId: collectionId,
               isAuto: isAuto,
+              onExport: () => _showSharePoster(context, ref),
             ),
           ),
           const SizedBox(height: 16),
@@ -178,6 +181,31 @@ class _DetailContent extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// 精选集分享海报：生成「拼图海报」（名称 + 描述 + 照片拼图 + 二维码信息），
+  /// 可导出到相册或分享到系统社交媒体。
+  Future<void> _showSharePoster(BuildContext context, WidgetRef ref) async {
+    final tokens = ref.read(themeTokensProvider);
+    final collection = data.collection;
+    final posterKey = GlobalKey();
+    await PosterGenerator.showPoster(
+      context: context,
+      tokens: tokens,
+      title: '精选集海报',
+      content: CollectionPosterContent(
+        tokens: tokens,
+        name: collection.name,
+        description: collection.description,
+        photoCount: collection.photoCount,
+        createdAt: collection.createdAt,
+        photos: data.photos,
+      ),
+      posterKey: posterKey,
+      shareSubject: '如画 · 精选集：${collection.name}',
+      shareText: '我在如画精选了「${collection.name}」精选集，一起来看吧！',
+      fileNamePrefix: 'lumira_collection_${collection.name}',
     );
   }
 }
@@ -457,10 +485,12 @@ class _ActionsSection extends ConsumerWidget {
     required this.tokens,
     required this.collectionId,
     required this.isAuto,
+    required this.onExport,
   });
   final ThemeTokens tokens;
   final String collectionId;
   final bool isAuto;
+  final VoidCallback onExport;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -492,13 +522,7 @@ class _ActionsSection extends ConsumerWidget {
           padding: const EdgeInsets.only(bottom: 10),
           child: LumiraButton(
             variant: ButtonVariant.primary,
-            onPressed: () {
-              LumiraToast.show(
-                context,
-                '导出功能即将上线',
-                duration: const Duration(milliseconds: 1500),
-              );
-            },
+            onPressed: onExport,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: const [

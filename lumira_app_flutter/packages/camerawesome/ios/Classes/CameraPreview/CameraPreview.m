@@ -654,7 +654,8 @@ static void _freeCapturedFrameData(void *info, const void *data, size_t size) {
     // 持有期间 delegate 已存入更新的帧：保留新帧，只释放取出的一次所有权
     CFRelease(buf);
   }
-  // EXIF orientation 依赖设备方向属性，派发后台前在当前线程算好。
+  // EXIF orientation：video 帧像素已物理竖屏（videoOrientation=Portrait），恒写 1，
+  // 派发后台前在当前线程算好（见 exifOrientationForVideoFrame 注释）。
   const NSInteger exifOrientation = [self exifOrientationForVideoFrame];
 
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
@@ -686,8 +687,8 @@ static void _freeCapturedFrameData(void *info, const void *data, size_t size) {
         if (colorSpace != NULL) CGColorSpaceRelease(colorSpace);
         if (provider != NULL) CGDataProviderRelease(provider);
         if (cgImage != NULL) {
-          // EXIF orientation 与 photoOutput 路径同映射（portrait 后置=6、前置镜像=5 等），
-          // 保证原图备份在系统相册等处的显示行为一致。
+          // 像素已物理竖屏 → EXIF=1（不旋转），避免 dart:ui 解码二次旋转导致 180° 翻转。
+          // 原图备份/系统相册因此也按像素原样竖屏显示，与取景器一致。
           NSDictionary *props = @{
             (id)kCGImageDestinationLossyCompressionQuality: @0.92,
             (id)kCGImagePropertyOrientation: @(exifOrientation),
@@ -715,39 +716,17 @@ static void _freeCapturedFrameData(void *info, const void *data, size_t size) {
   return YES;
 }
 
-/// 直出帧的 EXIF Orientation（1-8），与 CameraPictureController 的
-/// getJpegOrientation + exifOrientationFromJpegOrientation 映射保持一致。
+/// 直出帧的 EXIF Orientation（1-8）。
+///
+/// 这里恒返回 1（不旋转）：本方法只服务于 [captureVideoFrameToJpegAtPath] 的
+/// videoDataOutput 直出路径，而该路径的像素缓冲已经由
+/// `_captureConnection.videoOrientation = AVCaptureVideoOrientationPortrait`
+/// **物理旋转为竖屏**（AVFoundation 会按 videoOrientation 物理旋转 video 帧），
+/// 与取景器显示方向一致。若再写入 EXIF 6（"旋转 90° 显示"），dart:ui 解码时会
+/// 额外旋转一次，加上 Flutter 侧按 isPortrait 的方向对齐，成片/水印动画会被
+/// 双重旋转成 180° 翻转（2026-08-28 实证修复）。
 - (NSInteger)exifOrientationForVideoFrame {
-  UIImageOrientation orientation;
-  switch (_motionController.deviceOrientation) {
-    case UIDeviceOrientationPortrait:
-      if (_cameraSensor == Front && _mirrorFrontCamera) {
-        orientation = UIImageOrientationLeftMirrored;
-      } else {
-        orientation = UIImageOrientationRight;
-      }
-      break;
-    case UIDeviceOrientationLandscapeRight:
-      orientation = (_cameraSensor == Back) ? UIImageOrientationUp : UIImageOrientationDown;
-      break;
-    case UIDeviceOrientationLandscapeLeft:
-      orientation = (_cameraSensor == Back) ? UIImageOrientationDown : UIImageOrientationUp;
-      break;
-    default:
-      orientation = UIImageOrientationLeft;
-      break;
-  }
-  switch (orientation) {
-    case UIImageOrientationDown:          return 3;
-    case UIImageOrientationLeft:          return 8;
-    case UIImageOrientationRight:         return 6;
-    case UIImageOrientationUpMirrored:    return 2;
-    case UIImageOrientationDownMirrored:  return 4;
-    case UIImageOrientationLeftMirrored:  return 5;
-    case UIImageOrientationRightMirrored: return 7;
-    case UIImageOrientationUp:
-    default:                              return 1;
-  }
+  return 1;
 }
 
 /// Take the picture into the given path
