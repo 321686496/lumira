@@ -1,0 +1,181 @@
+{
+  "name": "魔都暮色·镜像天际线",
+  "category": "landscape",
+  "classification": {
+    "type": "landscape",
+    "majorStyle": "城市风光",
+    "subStyle": "夜景倒影",
+    "method": "对称构图/长曝光模拟"
+  },
+  "shortDesc": "紫霞漫染浦江，万家灯火坠入镜面，一半是繁华魔都，一半是静谧梦境，极致对称的浪漫治愈🌆✨",
+  "description": "这是一套专为城市夜景与水面倒影设计的风景摄影模板。捕捉日落蓝调时刻（Blue Hour）与华灯初上的交汇瞬间，利用平静水面形成完美的上下对称构图。画面呈现从深紫到暖橙的梦幻渐变天空，建筑群灯光璀璨且细节丰富。适合在江边、湖畔或雨后积水处拍摄，通过后期强化色彩饱和度与对比度，还原肉眼可见的震撼天际线。适用人群：城市风光摄影师、旅行记录者、夜景爱好者。",
+  "ambience": {
+    "seasons": [
+      "四季皆宜",
+      "晴朗无风"
+    ],
+    "weathers": [
+      "晴朗",
+      "微风"
+    ],
+    "timeTones": [
+      "日落后30分钟内",
+      "蓝调时刻",
+      "华灯初上"
+    ]
+  },
+  "tags": [
+    "城市夜景",
+    "对称倒影",
+    "魔都天际线",
+    "蓝调时刻",
+    "梦幻紫调"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "陆家嘴天际线与完美水面倒影，紫橙渐变天空下的对称美学"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·主构图",
+      "type": "composition",
+      "description": "采用绝对水平对称构图。地平线（水岸交界线）严格置于画面垂直方向的 50% 处（或略偏下以强调天空）。上半部分为实体建筑群与渐变天空，下半部分为完整的水面倒影。主体建筑群横跨画面左右，东方明珠位于右侧三分线附近，高楼群集中在左侧及中部。水面需极度平静以形成镜面效果。",
+      "compositionFrame": "上下二分法对称构图；地平线居中(y=0.5)；建筑群占据上半部主要区域；倒影占据下半部对应区域；天空留白在上部1/4，水面深色区在下部1/4。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "symmetry_horizon_cityscape"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "symmetry_horizontal",
+    "gridType": "rule_of_thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.3,
+    "description": "大远景景别，平视机位。严格遵循上下对称原则，地平线位于画面正中。主体建筑群宽度占画幅 90%，高度占上半部分的 60%。天空与水面各占约 25%-30% 的留白空间，确保倒影完整性。",
+    "subjectFrame": {
+      "x": 0.05,
+      "y": 0.2,
+      "w": 0.9,
+      "h": 0.6
+    }
+  },
+  "camera": {
+    "exposureCompensation": -0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "custom",
+    "whiteBalanceK": 4800,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "环境光为主。自然天光从屏幕后方（日落方向）提供背景照明，形成剪影与渐变；城市人造光（点光源）从建筑群内部及表面发出，照亮主体细节。无明显单一方向硬光，整体为柔和漫射光与点状高光结合。无需正面补光。",
+    "shootingDistance": "50-200m (隔江/隔湖拍摄)",
+    "background": "开阔水域（黄浦江/湖泊/雨后大面积积水），对岸城市天际线",
+    "props": [
+      "三脚架（强烈建议）",
+      "减光镜ND（可选，用于白天长曝光）"
+    ],
+    "bestTime": "18:30-19:15 (日落后20-40分钟，天空尚有余晖且城市灯光已全开)",
+    "tips": [
+      "【核心要领】必须寻找完全平静的水面，若有波纹可尝试低机位贴近水面拍摄，或等待风停间隙。",
+      "【构图铁律】开启相机网格线，确保地平线绝对水平，上下对称是本图灵魂，歪斜会破坏美感。",
+      "【曝光控制】夜景容易过曝，建议降低曝光补偿(-0.3至-0.7)，保留天空紫色层次和建筑灯光细节，避免高光死白。",
+      "【稳定性】真机无法实现光学长曝光，若光线较暗导致噪点多，请务必使用三脚架固定手机，依靠算法多帧合成降噪。",
+      "【白平衡】手动锁定白平衡在4800K左右，防止自动白平衡将紫色天空校正为灰色或过度偏蓝。",
+      "【无法复现说明】原图的极致平滑水面可能依赖长曝光或后期堆栈，普通拍摄若有微波纹，可通过后期'模糊'或'镜面'特效轻微修饰，但尽量前期找静水。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": -2,
+      "contrast": 12,
+      "saturation": 18,
+      "temperature": -3,
+      "tint": 8,
+      "highlights": -15,
+      "shadows": 10,
+      "vibrance": 12
+    },
+    "smoothStrength": 15,
+    "sharpen": 25,
+    "vignette": 15,
+    "grain": 8,
+    "lut": "twilight",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "全景居中，上下对称分布",
+    "bodyFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "twist": "N/A",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "N/A"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "容纳完整天际线宽度及等比例倒影",
+    "cameraHeight": "平视 (与水面齐平或略高)",
+    "cameraAzimuth": "正拍 (垂直于水岸线)",
+    "subjectScale": "建筑群占画幅上部60%，倒影占下部60% (重叠区为地平线)",
+    "environmentRatio": "天空与水面环境占主导，约70%",
+    "headroom": "顶部留白约15%天空，底部留白约15%深水色",
+    "framingNote": "严格水平对称构图，地平线居中，强调天地合一的镜像感"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "背景天光(屏幕后方/上方) + 主体自发光(建筑窗户/景观灯)",
+      "辅光轮廓光": "无额外辅光，依靠天空亮度勾勒建筑顶部轮廓",
+      "光型软硬": "天空为大面积柔光，建筑灯光为点状硬光",
+      "光比": "中高 (约 4:1)，天空亮部与建筑暗部有反差，但灯光填补了暗部",
+      "阴影": "建筑背光面融入夜色，无投射阴影，倒影中阴影向下延伸",
+      "质感": "玻璃幕墙反光锐利，水面呈现丝绸般平滑质感(暗示长曝光或静水)，天空色彩过渡细腻无断层",
+      "环境光": "弥漫的紫红色暮光笼罩全局",
+      "色温对比": "天空冷紫(高色温倾向) vs 灯光暖黄/橙(低色温)，形成经典冷暖对比"
+    },
+    "lightToParams": "whiteBalanceK:4800 (平衡冷暖); temperature:-3 (微冷保紫调); tint:+8 (加洋红强化晚霞); highlights:-15 (压住灯光过曝); shadows:+10 (提亮建筑暗部细节); saturation:+18 (强化紫橙渐变); lut:twilight (奠定暮色基调)"
+  },
+  "styling": {
+    "subjectType": "城市建筑群/自然景观",
+    "clothingLayers": {
+      "上装": "N/A",
+      "下装": "N/A",
+      "衣角处理": "N/A",
+      "袖子": "N/A",
+      "领口": "N/A",
+      "鞋袜": "N/A",
+      "叠穿层次": "N/A"
+    },
+    "accessories": "N/A",
+    "hairMakeup": "N/A",
+    "objectStyle": "现代摩天大楼群，玻璃幕墙材质，点缀金色/白色/红色LED灯光；右侧标志性球体塔楼；水面如黑曜石般平滑深邃",
+    "note": "重点在于建筑灯光的密度与天空色彩的纯净度，避免杂乱前景遮挡倒影"
+  }
+}

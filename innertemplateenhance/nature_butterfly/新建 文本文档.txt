@@ -1,0 +1,204 @@
+{
+  "name": "蝶翼微光·暗调纹理",
+  "category": "still_life",
+  "classification": {
+    "type": "still_life",
+    "majorStyle": "微距自然",
+    "subStyle": "暗调质感",
+    "method": "侧光特写"
+  },
+  "shortDesc": "暗夜里的鳞粉星河，红绿交织的呼吸感，每一道翅脉都藏着宇宙的秘密，静谧又绚烂🦋✨",
+  "description": "这是一组专注于蝴蝶翅膀微观纹理的静物微距模板。利用纯黑背景与高对比度侧光，凸显翅脉的几何线条与鳞粉的虹彩质感。第一张图呈现翠绿与朱红的荧光感，第二张图展现深红与乳白的丝绒光泽。适合自然爱好者、微距摄影玩家及追求极致细节质感的用户。拍摄时需保持绝对稳定，依靠光影而非色彩滤镜来塑造立体感。",
+  "ambience": {
+    "seasons": [
+      "春季",
+      "夏季"
+    ],
+    "weathers": [
+      "室内可控光",
+      "阴天漫射"
+    ],
+    "timeTones": [
+      "任意时段（需遮光环境）"
+    ]
+  },
+  "tags": [
+    "微距摄影",
+    "暗调质感",
+    "自然纹理",
+    "高对比",
+    "极简构图"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "黑底上浮现的翠绿与朱红翅脉，如夜空中的霓虹星河，边缘轮廓清晰锐利。"
+    },
+    {
+      "imageIndex": 1,
+      "role": "效果图",
+      "caption": "深红与乳白渐变的鳞片细节，黑色翅脉分割出几何美感，质感如丝绒般细腻。"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·幽夜荧翅",
+      "type": "composition",
+      "description": "主体为蝴蝶翅膀局部特写，占据画面左侧约 85% 区域，右侧留纯黑负空间。翅脉呈放射状从屏幕左下向右上延伸，形成强烈的引导线。绿色鳞粉散布于黑色底色上，朱红色斑纹沿翅膀边缘排列，形成视觉节奏。构图采用对角线趋势，主体充满张力，无多余背景干扰。",
+      "compositionFrame": "主体位于屏幕左侧及中部，右侧 15% 为纯黑留白；翅脉线条从左下指向右上，形成对角引导；红色斑点沿右边缘曲线分布，打破直线的单调；整体呈不规则扇形填充画面左半部。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "macro_wing_curve"
+      },
+      "position": {
+        "x": 0.45,
+        "y": 0.5
+      },
+      "scale": 1.1,
+      "rotation": -5.0
+    },
+    {
+      "imageIndex": 1,
+      "name": "附加·丝绒红翼",
+      "type": "composition",
+      "description": "主体为另一角度或品种的翅膀特写，充满整个画幅。粗壮的黑色翅脉将画面分割成多个色块，深红色与乳白色/淡黄色渐变填充其间。构图强调色彩的块面分割与纹理的细腻过渡，无明显留白，追求满幅的视觉冲击力。光线柔和地扫过表面，凸显鳞粉的颗粒感。",
+      "compositionFrame": "满幅构图，无留白；黑色翅脉作为骨架贯穿画面，将红、白、黄三色区域分割；色彩过渡自然，从深红渐变至乳白；纹理细节遍布全屏，无单一焦点，强调整体质感。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "macro_texture_full"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "diagonal",
+    "aspectRatio": "9:16",
+    "opacity": 0.2,
+    "description": "竖构图微距特写。图 1 主体偏左，右侧留黑，利用翅脉做对角引导；图 2 满幅填充，利用翅脉做几何分割。机位平视或微俯，紧贴主体，景深极浅（通过后期模拟或物理靠近实现），背景完全压暗。",
+    "subjectFrame": {
+      "x": 0.0,
+      "y": 0.0,
+      "w": 1.0,
+      "h": 1.0
+    }
+  },
+  "camera": {
+    "exposureCompensation": -0.7,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "custom",
+    "whiteBalanceK": 5200,
+    "flashMode": "off",
+    "focusMode": "manual_macro",
+    "lensType": "微距镜头",
+    "lensSuggestion": "macro"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光从屏幕左上方 45° 侧逆光射入，硬光质，勾勒翅脉边缘与鳞粉反光；光比约 8:1，阴影极深且投向屏幕右下方，边缘锐利；无需正面补光，依靠侧光塑造立体感与神秘氛围。",
+    "shootingDistance": "0.05-0.15m",
+    "background": "纯黑吸光布或深色天鹅绒，确保无反光",
+    "props": [
+      "蝴蝶标本或活体（需固定）",
+      "小型 LED 聚光灯",
+      "三脚架",
+      "快门线"
+    ],
+    "bestTime": "任意（需全遮光室内环境）",
+    "tips": [
+      "必须使用三脚架固定手机，微距下任何抖动都会导致模糊。",
+      "关闭所有环境光，仅保留一盏小型聚光灯从侧上方打光，以压暗背景并突出纹理。",
+      "手动对焦锁定在翅脉最清晰处，曝光补偿降低 -0.7 至 -1.0 EV，确保黑色背景纯净不泛灰。",
+      "若手机无原生微距，可外接微距镜头或后期裁剪放大（会损失画质，建议优先用硬件）。",
+      "图 1 效果依赖鳞粉的结构色，光线角度微调几度颜色就会变化，需耐心寻找最佳反光角。",
+      "后期增加 clarity（清晰度）和 sharpen（锐化）以强化鳞片颗粒感，增加 contrast（对比度）压暗暗部。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "9:16",
+    "color": {
+      "brightness": -8,
+      "contrast": 25,
+      "saturation": 15,
+      "temperature": -2,
+      "tint": 3,
+      "highlights": -10,
+      "shadows": -15,
+      "clarity": 30,
+      "vibrance": 10
+    },
+    "smoothStrength": 0,
+    "sharpen": 45,
+    "vignette": 35,
+    "grain": 12,
+    "lut": "none",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "主体占据画面绝大部分，非人物题材无朝向",
+    "bodyFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "twist": "N/A",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "N/A"
+  },
+  "framing": {
+    "shotSize": "特写",
+    "shotSizeNote": "仅展示翅膀局部纹理，无完整生物形态",
+    "cameraHeight": "平视/微俯",
+    "cameraAzimuth": "正拍/微侧",
+    "subjectScale": "主体占画幅 90%-100%",
+    "environmentRatio": "背景<10%（纯黑）",
+    "headroom": "无头顶概念，顶部留极少黑边或填满",
+    "framingNote": "极致微距特写，强调纹理细节与色彩对比，排除一切环境干扰。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕左上方 45° 侧光",
+      "辅光轮廓光": "无专门辅光，靠主光反射形成微弱轮廓",
+      "光型软硬": "硬光（小光源聚光）",
+      "光比": "高 (8:1)",
+      "阴影": "浓重，投向屏幕右下，边缘硬",
+      "质感": "强烈颗粒感（鳞粉），高光点锐利，哑光与虹彩并存",
+      "环境光": "无，全黑环境",
+      "色温对比": "中性偏冷白光，还原真实色彩"
+    },
+    "lightToParams": "高对比 (+25)、低亮度 (-8)、压暗阴影 (-15)、提高清晰度 (+30) 以模拟硬光下的纹理质感；低色温微调 (-2) 保持冷静客观的观察感。"
+  },
+  "styling": {
+    "subjectType": "昆虫翅膀（静物/自然）",
+    "clothingLayers": {
+      "上装": "N/A",
+      "下装": "N/A",
+      "衣角处理": "N/A",
+      "袖子": "N/A",
+      "领口": "N/A",
+      "鞋袜": "N/A",
+      "叠穿层次": "N/A"
+    },
+    "accessories": "N/A",
+    "hairMakeup": "N/A",
+    "objectStyle": "天然生物结构，色彩为结构色（绿/红/黑）与色素色（红/白/黄）结合，表面覆盖细微鳞粉，具有丝绒与金属混合光泽。",
+    "note": "重点在于展现自然造物的几何美与色彩层次，避免人为修饰痕迹。"
+  }
+}

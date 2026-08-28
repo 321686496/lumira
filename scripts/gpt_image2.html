@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多平台图片生成 / 编辑</title>
+<style>
+  :root {
+    --bg: #eceae8;
+    --card: #faf9f6;
+    --card-2: #f4f3ef;
+    --text: #3d4340;
+    --muted: #8a8f8b;
+    --line: #e2e4df;
+    --accent: #8fa3a0;
+    --accent-dark: #738886;
+    --accent-soft: #e3ebe8;
+    --taupe: #b9a794;
+    --danger: #c08880;
+    --radius: 14px;
+    --shadow: 0 6px 22px rgba(90, 96, 92, .10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, #ececea 0%, #e7e9e4 55%, #e9e6e0 100%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 28px 20px 60px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header { margin-bottom: 22px; }
+  header h1 {
+    font-size: 24px; font-weight: 700; letter-spacing: .5px;
+    text-align: left; display: flex; align-items: center; gap: 10px;
+  }
+  header h1 .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+  header p { color: var(--muted); font-size: 13px; margin-top: 8px; line-height: 1.6; }
+  header code {
+    background: var(--accent-soft); color: var(--accent-dark);
+    padding: 1px 7px; border-radius: 6px; font-size: 12px;
+  }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 20px 22px; margin-bottom: 18px;
+  }
+  .card h2 {
+    font-size: 15px; font-weight: 600; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .tag {
+    font-size: 11px; font-weight: 500; color: var(--muted);
+    background: var(--card-2); border: 1px solid var(--line);
+    padding: 2px 8px; border-radius: 999px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 150px; }
+  .field label { font-size: 12.5px; color: var(--muted); }
+  input[type=text], input[type=password], input[type=number], textarea, select {
+    width: 100%; border: 1px solid var(--line); border-radius: 10px;
+    background: #fff; color: var(--text); padding: 9px 12px;
+    font-size: 14px; font-family: inherit; outline: none; transition: border .15s, box-shadow .15s;
+  }
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px rgba(143, 163, 160, .18);
+  }
+  textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
+
+  .tabs { display: inline-flex; background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; padding: 4px; gap: 4px; }
+  .tab {
+    border: 0; background: transparent; padding: 8px 18px; border-radius: 8px;
+    font-size: 14px; color: var(--muted); cursor: pointer; font-family: inherit;
+  }
+  .tab.active { background: #fff; color: var(--text); font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid var(--line); background: #fff; color: var(--text);
+    padding: 6px 12px; border-radius: 999px; font-size: 13px; cursor: pointer; font-family: inherit;
+    transition: all .15s;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip.note { color: var(--muted); font-size: 12px; background: var(--card-2); cursor: default; }
+
+  .drop {
+    border: 1.5px dashed var(--line); border-radius: 12px; padding: 26px;
+    text-align: center; color: var(--muted); cursor: pointer; transition: all .15s;
+    background: var(--card-2);
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  .drop b { color: var(--accent-dark); }
+
+  #thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .thumb { position: relative; width: 96px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #fff; }
+  .thumb img { width: 100%; height: 72px; object-fit: cover; display: block; }
+  .thumb .meta { font-size: 10.5px; color: var(--muted); padding: 5px 6px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .thumb .x {
+    position: absolute; top: 4px; right: 4px; width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(0,0,0,.45); color: #fff; border: 0; font-size: 12px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .radio-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .radio {
+    border: 1px solid var(--line); background: #fff; border-radius: 10px;
+    padding: 10px 14px; cursor: pointer; flex: 1; min-width: 150px; transition: all .15s;
+  }
+  .radio:hover { border-color: var(--accent); }
+  .radio.active { border-color: var(--accent); background: var(--accent-soft); }
+  .radio .t { font-size: 14px; font-weight: 600; }
+  .radio .d { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.6; }
+
+  .btn {
+    border: 0; border-radius: 11px; padding: 13px 30px; font-size: 15px; font-weight: 600;
+    background: var(--accent); color: #fff; cursor: pointer; font-family: inherit;
+    transition: all .15s; letter-spacing: .5px;
+  }
+  .btn:hover { background: var(--accent-dark); transform: translateY(-1px); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+  .btn.big { width: 100%; }
+  .btn.danger { background: #fff; color: var(--danger); border: 1px solid var(--danger); }
+  .btn.danger:hover { background: var(--danger); color: #fff; }
+  .key-box { display: flex; gap: 8px; }
+  .key-box input { flex: 1; }
+  .btn-ghost {
+    border: 1px solid var(--line); background: #fff; border-radius: 10px;
+    padding: 0 14px; cursor: pointer; color: var(--muted); font-size: 13px;
+  }
+  .btn-ghost:hover { color: var(--accent-dark); border-color: var(--accent); }
+
+  #status { margin-top: 14px; font-size: 13px; color: var(--muted); line-height: 1.7; white-space: pre-wrap; }
+  #status.err { color: var(--danger); }
+
+  .result-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+  .result-card {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column; transition: box-shadow .15s;
+  }
+  .result-card:hover { box-shadow: var(--shadow); }
+  .result-card .img-wrap { position: relative; aspect-ratio: 1/1; background: var(--card-2); }
+  .result-card .img-wrap img { width: 100%; height: 100%; object-fit: contain; }
+  .result-card .badge {
+    position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.5); color: #fff;
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+  }
+  .result-card .info { padding: 10px 12px; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 6px; }
+  .result-card .info .fname { color: var(--text); font-weight: 600; font-size: 12.5px; word-break: break-all; }
+  .result-card a.dl {
+    display: block; text-align: center; margin: 0 12px 12px; padding: 8px 0;
+    border-radius: 9px; background: var(--accent-soft); color: var(--accent-dark);
+    text-decoration: none; font-size: 13px; font-weight: 600; transition: all .15s;
+  }
+  .result-card a.dl:hover { background: var(--accent); color: #fff; }
+
+  .task-block { border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--card-2); }
+  .task-block + .task-block { margin-top: 14px; }
+  .task-head { font-weight: 600; font-size: 13px; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; word-break: break-all; }
+  .task-head .pill { font-size: 11px; border-radius: 999px; padding: 2px 8px; flex: none; }
+  .task-head .pill.ok { color: #15803d; background: #dcfce7; }
+  .task-head .pill.bad { color: #b91c1c; background: #fee2e2; }
+  .task-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+  .task-grid .result-card { background: #fff; }
+  .task-grid .result-card .img-wrap { aspect-ratio: 1/1; }
+  .task-grid .result-card .info { padding: 8px 10px; }
+  .task-grid .result-card a.dl { margin: 0 10px 10px; }
+
+  /* ---- 多任务列表 ---- */
+  .task-row { border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); padding: 10px 12px; transition: border-color .15s, opacity .15s; }
+  .task-row + .task-row { margin-top: 10px; }
+  .task-row.running { border-color: var(--accent); }
+  .task-row.done { border-color: #b7d8c0; }
+  .task-row.error { border-color: var(--danger); }
+  .task-row.cancelled { opacity: .65; }
+  .task-row-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .task-row-top .tidx {
+    font-size: 11px; font-weight: 700; color: var(--muted); background: #fff;
+    border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; flex: none;
+  }
+  .task-row-top .tprompt { flex: 1; min-width: 180px; }
+  .task-row-top .btn-ghost { height: 32px; padding: 0 10px; flex: none; }
+  .task-row-top .tdel { color: var(--danger); }
+  .task-row-top .tcancel { color: #0369a1; }
+  #taskList .empty { font-size: 12.5px; color: var(--muted); text-align: center; padding: 20px 0; border: 1px dashed var(--line); border-radius: 12px; background: var(--card-2); }
+  .tstatus { font-size: 11px; border-radius: 999px; padding: 3px 10px; font-weight: 600; flex: none; white-space: nowrap; }
+  .tstatus.idle, .tstatus.pending { color: var(--muted); background: #e8e7e3; }
+  .tstatus.running { color: #0369a1; background: #e0f2fe; }
+  .tstatus.done { color: #15803d; background: #dcfce7; }
+  .tstatus.error { color: #b91c1c; background: #fee2e2; }
+  .tstatus.cancelled { color: #57534e; background: #e7e5e4; }
+  .ttime { font-size: 11px; color: var(--muted); flex: none; min-width: 52px; text-align: right; }
+  .tconfig { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+  .tconfig .row { gap: 10px; }
+  .tconfig label { font-size: 11.5px; }
+  .tconfig input, .tconfig select { font-size: 13px; padding: 6px 9px; }
+  .tresult { margin-top: 10px; }
+  .tresult .task-grid { margin-top: 8px; }
+  .terr { font-size: 12px; color: var(--danger); word-break: break-all; line-height: 1.6; }
+  .terr pre { white-space: pre-wrap; font-family: inherit; font-size: 11.5px; background: #fdf1ef; border: 1px solid #f3d4cf; border-radius: 8px; padding: 8px 10px; margin-top: 4px; max-height: 140px; overflow: auto; }
+
+  details.rev { font-size: 11.5px; color: var(--muted); }
+  details.rev summary { cursor: pointer; }
+  details.rev p { margin-top: 4px; line-height: 1.6; }
+
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 26px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1><span class="dot"></span>多平台图片生成 / 编辑</h1>
+    <p>
+      支持 HAPI gpt-image2、MaaS（mass.hzxmfg.com）、千问 AI（按量付费 / Token Plan）多个平台，在前端一键切换。<br>
+      先启动服务：<code>python gpt_image2.py --server</code>，然后在下方输入对应平台的 API Key（自动按平台保存在浏览器 <code>localStorage</code>，随请求经本地脚本代理转发，不会直接暴露给第三方页面）。
+    </p>
+  </header>
+
+  <!-- 平台选择 -->
+  <div class="card">
+    <h2>平台 <span class="tag">必选</span></h2>
+    <div class="row">
+      <div class="field" style="flex:1; min-width:220px">
+        <label>生成 / 编辑平台</label>
+        <select id="platform">
+          <option value="hapi">HAPI gpt-image2</option>
+          <option value="mass">MaaS · mass.hzxmfg.com</option>
+          <option value="qianwen_payg">千问 AI · 按量付费</option>
+          <option value="qianwen_token">千问 AI · Token Plan</option>
+        </select>
+      </div>
+      <div class="field" style="flex:2; min-width:280px">
+        <label>Base URL（可修改，按平台自动保存）</label>
+        <input type="text" id="baseUrl" placeholder="https://..." autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+    <div class="hint" id="platformHint"></div>
+  </div>
+
+  <!-- API Key -->
+  <div class="card">
+    <h2>API Key <span class="tag">按平台持久化</span></h2>
+    <div class="row">
+      <div class="field" style="flex:1; min-width:280px">
+        <label id="apiKeyLabel">API Key</label>
+        <div class="key-box">
+          <input type="password" id="apiKey" placeholder="sk-…" autocomplete="off" spellcheck="false">
+          <button class="btn-ghost" id="showKey" type="button" title="显示/隐藏">显示</button>
+        </div>
+      </div>
+      <button class="btn danger" id="clearKeyBtn" type="button">清除当前平台 Key</button>
+    </div>
+    <div class="hint" id="keyHint"></div>
+  </div>
+
+  <!-- 模式 -->
+  <div class="card">
+    <h2>处理模式 <span class="tag">第一步</span></h2>
+    <div class="tabs" id="modeTabs">
+      <button class="tab active" data-mode="edit">多图编辑</button>
+      <button class="tab" data-mode="generate">文生图</button>
+    </div>
+    <div class="hint">编辑模式可传入多张参考图；文生图模式不需要上传图片。各平台对多图/多输出数量支持不一，以平台文档为准。</div>
+  </div>
+
+  <!-- 提示词 -->
+  <div class="card">
+    <h2>提示词 <span class="tag">第二步</span></h2>
+    <textarea id="prompt" placeholder="描述主体、场景、构图、风格、光线、修改要求或需要渲染的文字…"></textarea>
+    <div class="row" style="margin-top:14px">
+      <div class="field">
+        <label>模型（可下拉选择或手动输入）</label>
+        <input type="text" id="model" list="modelList" value="gpt-image-2">
+        <datalist id="modelList"></datalist>
+      </div>
+      <div class="field">
+        <label>输出数量 n</label>
+        <input type="number" id="n" value="1" min="1" max="4">
+      </div>
+      <div class="field" id="qualityField">
+        <label>质量 quality（仅部分平台）</label>
+        <select id="quality">
+          <option value="">默认</option>
+          <option value="low">low</option>
+          <option value="medium">medium</option>
+          <option value="high">high</option>
+        </select>
+      </div>
+      <div class="field" id="formatField">
+        <label>输出格式（仅部分平台）</label>
+        <select id="outputFormat">
+          <option value="">上游默认</option>
+          <option value="png">png</option>
+          <option value="jpeg">jpeg</option>
+          <option value="webp">webp</option>
+        </select>
+      </div>
+      <div class="field" id="fidelityField">
+        <label>参考图保真度（编辑，仅部分平台）</label>
+        <select id="inputFidelity">
+          <option value="">默认</option>
+          <option value="low">low</option>
+          <option value="high">high</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- 上传图片 -->
+  <div class="card" id="uploadCard">
+    <h2>参考图片 <span class="tag">第三步 · 可多选</span></h2>
+    <div class="drop" id="drop">点击选择图片，或将图片拖拽到此处<br><b>支持一次选择多张</b></div>
+    <input type="file" id="fileInput" accept="image/*" multiple class="hidden">
+    <div id="thumbs"></div>
+    <div class="hint" id="imgInfo"></div>
+  </div>
+
+  <!-- 处理方式 -->
+  <div class="card" id="processCard">
+    <h2>多图处理方式 <span class="tag">第四步</span></h2>
+    <div class="radio-row" id="modeRow">
+      <div class="radio active" data-m="once">
+        <div class="t">一次处理（多图合并）</div>
+        <div class="d">全部参考图放入同一个请求，模型综合所有图片生成</div>
+      </div>
+      <div class="radio" data-m="batch">
+        <div class="t">批量处理（逐图处理）</div>
+        <div class="d">每张参考图单独发一次请求，各自生成</div>
+      </div>
+    </div>
+    <div class="hint" id="processHint">当前 1 张图，一次处理与批量处理效果相同。</div>
+  </div>
+
+  <!-- 尺寸 -->
+  <div class="card">
+    <h2>输出尺寸 <span class="tag">第五步</span></h2>
+    <div class="chips" id="sizeModeChips">
+      <button class="chip active" data-s="from-image">按输入图自适应</button>
+      <button class="chip" data-s="auto">API 自动 auto</button>
+      <button class="chip" data-s="ratio">指定宽高比</button>
+      <button class="chip" data-s="size">固定尺寸</button>
+    </div>
+
+    <div id="ratioPanel" class="hidden" style="margin-top:14px">
+      <div class="chips" id="ratioPresets">
+        <button class="chip active" data-r="1:1">1:1</button>
+        <button class="chip" data-r="4:3">4:3</button>
+        <button class="chip" data-r="16:9">16:9</button>
+        <button class="chip" data-r="3:4">3:4</button>
+        <button class="chip" data-r="9:16">9:16</button>
+        <button class="chip" data-r="21:9">21:9</button>
+        <span class="chip note">或自定义</span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="field"><label>宽 W</label><input type="number" id="ratioW" value="1" min="1" max="99"></div>
+        <div class="field"><label>高 H</label><input type="number" id="ratioH" value="1" min="1" max="99"></div>
+      </div>
+    </div>
+
+    <div id="sizePanel" class="hidden" style="margin-top:14px">
+      <div class="row">
+        <div class="field"><label>宽 px</label><input type="number" id="sizeW" value="1024" min="16" max="3840" step="16"></div>
+        <div class="field"><label>高 px</label><input type="number" id="sizeH" value="1024" min="16" max="3840" step="16"></div>
+      </div>
+    </div>
+    <div class="hint" id="sizeInfo">根据参考图宽高自动换算合法尺寸（边长 ≤ 3840、16 的倍数、总像素 655360~8294400）。</div>
+  </div>
+
+  <!-- 多任务并发 -->
+  <div class="card">
+    <h2>多任务并发 <span class="tag">一次提交多个提示词</span></h2>
+    <div class="hint" id="batchHint"></div>
+    <div class="row" style="margin-top:14px; align-items:center">
+      <div class="field" style="flex:1; min-width:150px">
+        <label>本批最大并发数</label>
+        <input type="number" id="batchWorkers" value="4" min="1" max="16">
+      </div>
+      <button class="btn-ghost" id="addTaskBtn" type="button" style="height:40px">＋ 添加任务</button>
+      <button class="btn-ghost" id="clearTasksBtn" type="button" style="height:40px">清空全部</button>
+    </div>
+    <div id="taskList" style="margin-top:14px"></div>
+    <div class="row" style="margin-top:14px; align-items:center">
+      <button class="btn" id="batchRunBtn" style="flex:1" disabled>并发提交</button>
+      <button class="btn danger hidden" id="batchCancelAllBtn" type="button" style="flex:0 0 auto">取消全部</button>
+    </div>
+  </div>
+
+  <button class="btn big" id="runBtn">开始生成</button>
+  <div id="status"></div>
+
+  <!-- 结果 -->
+  <div class="card hidden" id="resultCard">
+    <h2>生成结果</h2>
+    <div class="result-grid" id="results"></div>
+  </div>
+
+  <div class="foot">
+    结果图片保存在脚本同目录 <code>results/</code> 下 · 服务端日志可查看完整请求信息<br>
+    文档：<a href="https://hapiopen.cc/docs#image-api" target="_blank" rel="noopener">HAPI</a> ·
+    <a href="https://mass.hzxmfg.com/docs#generation" target="_blank" rel="noopener">MaaS</a> ·
+    <a href="https://platform.qianwenai.com/docs/developer-guides/getting-started/image-models" target="_blank" rel="noopener">千问 AI</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- 平台配置 ----------
+  const PLATFORMS = {
+    hapi: {
+      label: "HAPI gpt-image2",
+      keyLabel: "HAPI API Key",
+      keyPlaceholder: "sk-…",
+      base: "https://image.hapiopen.cc",
+      models: ["gpt-image-2"],
+      maxN: 4,
+      quality: true, format: true, fidelity: true,
+      hint: "基于 HAPI 三方中转调用 gpt-image-2（OpenAI 兼容，同步返回）。文档：hapiopen.cc/docs#image-api",
+    },
+    mass: {
+      label: "MaaS · mass.hzxmfg.com",
+      keyLabel: "MaaS API Key",
+      keyPlaceholder: "sk-ra-…",
+      base: "https://mass.hzxmfg.com/v1",
+      models: ["gpt-image-2", "gpt-image-1", "dall-e-3", "seedream-4.0",
+               "flux-1.1-pro", "wan2.7-image-pro", "qwen-image-2.0-pro"],
+      maxN: 4,
+      quality: false, format: false, fidelity: false,
+      hint: "统一 OpenAI 兼容网关，图片为异步任务（提交后轮询结果）。若调用失败可换 Base URL：https://api.mass.hzxmfg.com/v1",
+    },
+    qianwen_payg: {
+      label: "千问 AI · 按量付费",
+      keyLabel: "千问 API Key（按量，sk-…）",
+      keyPlaceholder: "sk-…",
+      base: "https://dashscope.aliyuncs.com/api/v1",
+      models: ["wan2.7-image-pro", "wan2.7-image", "z-image-turbo",
+               "qwen-image-2.0-pro", "qwen-image-2.0",
+               "qwen-image-3.0-pro", "qwen-image-3.0", "wan2.6-image"],
+      maxN: 6,
+      quality: false, format: false, fidelity: false,
+      hint: "按量付费，Key 以 sk- 开头。走千问 AI 原生接口（multimodal-generation，异步任务），尺寸自动转换为 W*H 格式。文档：platform.qianwenai.com/docs/developer-guides/getting-started/image-models",
+    },
+    qianwen_token: {
+      label: "千问 AI · Token Plan",
+      keyLabel: "千问 Token Plan Key（sk-sp-…）",
+      keyPlaceholder: "sk-sp-…",
+      base: "https://token-plan.cn-beijing.maas.aliyuncs.com/api/v1",
+      models: ["wan2.7-image-pro", "wan2.7-image", "z-image-turbo",
+               "qwen-image-2.0-pro", "qwen-image-2.0",
+               "qwen-image-3.0-pro", "qwen-image-3.0", "wan2.6-image"],
+      maxN: 6,
+      quality: false, format: false, fidelity: false,
+      hint: "Token Plan 专属 Key 以 sk-sp- 开头，走 Token Plan 计费。同样是千问 AI 原生接口（multimodal-generation，异步任务），尺寸自动转换为 W*H 格式。",
+    },
+  };
+
+  // ---------- 状态 ----------
+  const state = {
+    platform: "hapi",
+    mode: "edit",          // edit | generate
+    processMode: "once",   // once | batch
+    sizeMode: "from-image",// from-image | auto | ratio | size
+    ratio: "1:1",
+    images: [],            // {file, url}
+  };
+
+  // ---------- 平台切换 ----------
+  const platformSel = $("platform"), baseUrlInput = $("baseUrl"),
+        keyInput = $("apiKey"), showKeyBtn = $("showKey"), clearKeyBtn = $("clearKeyBtn"),
+        modelInput = $("model"), nInput = $("n");
+  const KEY_PREFIX = "imgtool_key_", BASE_PREFIX = "imgtool_base_";
+
+  function curCfg() { return PLATFORMS[state.platform]; }
+  function keyStore() { return KEY_PREFIX + state.platform; }
+  function baseStore() { return BASE_PREFIX + state.platform; }
+
+  function applyPlatform() {
+    const cfg = curCfg();
+    // 参数可见性
+    $("qualityField").classList.toggle("hidden", !cfg.quality);
+    $("formatField").classList.toggle("hidden", !cfg.format);
+    $("fidelityField").classList.toggle("hidden", !cfg.fidelity);
+    // n 上限
+    nInput.max = cfg.maxN;
+    if (+nInput.value > cfg.maxN) nInput.value = cfg.maxN;
+    // Base URL
+    baseUrlInput.value = localStorage.getItem(baseStore()) || cfg.base;
+    // 模型 datalist
+    const dl = $("modelList");
+    dl.innerHTML = cfg.models.map((m) => `<option value="${m}">`).join("");
+    if (!cfg.models.includes(modelInput.value.trim())) modelInput.value = cfg.models[0];
+    // API Key
+    keyInput.value = localStorage.getItem(keyStore()) || "";
+    keyInput.placeholder = cfg.keyPlaceholder;
+    $("apiKeyLabel").textContent = cfg.keyLabel;
+    $("platformHint").textContent = `当前平台：${cfg.label}。${cfg.hint}`;
+    updateKeyHint();
+  }
+
+  platformSel.addEventListener("change", () => {
+    state.platform = platformSel.value;
+    applyPlatform();
+    showStatus(`已切换到 ${curCfg().label}。`);
+  });
+  baseUrlInput.addEventListener("input", () => {
+    localStorage.setItem(baseStore(), baseUrlInput.value.trim());
+  });
+
+  // ---------- API Key 持久化（按平台） ----------
+  function loadKey() { return keyInput.value.trim(); }
+  function saveKey(v) {
+    if (v) localStorage.setItem(keyStore(), v);
+    else localStorage.removeItem(keyStore());
+  }
+  function getKey() { return loadKey(); }
+
+  keyInput.addEventListener("input", () => { saveKey(getKey()); updateKeyHint(); });
+  showKeyBtn.addEventListener("click", () => {
+    const show = keyInput.type === "password";
+    keyInput.type = show ? "text" : "password";
+    showKeyBtn.textContent = show ? "隐藏" : "显示";
+  });
+  clearKeyBtn.addEventListener("click", () => {
+    saveKey("");
+    keyInput.value = "";
+    updateKeyHint();
+    showStatus(`已清除「${curCfg().label}」保存在本地的 API Key（localStorage 已删除）。`);
+  });
+  function updateKeyHint() {
+    const k = getKey();
+    $("keyHint").textContent = k
+      ? `已从浏览器本地读取「${curCfg().label}」的 Key（…${k.slice(-6)}）。`
+      : `输入后自动保存到浏览器 localStorage（仅用于「${curCfg().label}」）；点击「清除当前平台 Key」可删除该平台的持久化数据。`;
+  }
+
+  // ---------- 模式切换 ----------
+  const modeTabs = $("modeTabs");
+  modeTabs.addEventListener("click", (e) => {
+    const btn = e.target.closest(".tab");
+    if (!btn) return;
+    state.mode = btn.dataset.mode;
+    [...modeTabs.children].forEach((t) => t.classList.toggle("active", t === btn));
+    $("uploadCard").classList.toggle("hidden", state.mode === "generate");
+    $("processCard").classList.toggle("hidden", state.mode === "generate");
+    $("fidelityField").classList.toggle("hidden", state.mode === "generate");
+    updateProcessHint();
+    updateBatchUI();
+  });
+
+  // ---------- 文件选择 ----------
+  const drop = $("drop"), fileInput = $("fileInput");
+  drop.addEventListener("click", () => fileInput.click());
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault(); drop.classList.remove("over");
+    addFiles([...e.dataTransfer.files]);
+  });
+  fileInput.addEventListener("change", () => { addFiles([...fileInput.files]); fileInput.value = ""; });
+
+  function addFiles(files) {
+    const imgs = files.filter((f) => f.type.startsWith("image/"));
+    imgs.forEach((f) => state.images.push({ file: f, url: URL.createObjectURL(f) }));
+    renderThumbs();
+    updateProcessHint();
+    updateBatchUI();
+  }
+  function removeImg(i) {
+    URL.revokeObjectURL(state.images[i].url);
+    state.images.splice(i, 1);
+    renderThumbs();
+    updateProcessHint();
+    updateBatchUI();
+  }
+  function renderThumbs() {
+    const box = $("thumbs");
+    box.innerHTML = "";
+    state.images.forEach((img, i) => {
+      const el = document.createElement("div");
+      el.className = "thumb";
+      el.innerHTML = `<img src="${img.url}"><div class="meta">${esc(img.file.name)}</div>` +
+                     `<button class="x" title="移除">×</button>`;
+      el.querySelector(".x").addEventListener("click", () => removeImg(i));
+      box.appendChild(el);
+    });
+    $("imgInfo").textContent = state.images.length ? `已选择 ${state.images.length} 张图片` : "";
+  }
+
+  // ---------- 处理方式 ----------
+  $("modeRow").addEventListener("click", (e) => {
+    const r = e.target.closest(".radio");
+    if (!r) return;
+    state.processMode = r.dataset.m;
+    [...$("modeRow").children].forEach((c) => c.classList.toggle("active", c === r));
+    updateProcessHint();
+    updateBatchUI();
+  });
+  function updateProcessHint() {
+    const n = state.images.length;
+    const el = $("processHint");
+    if (state.mode === "generate") { el.textContent = ""; return; }
+    if (n <= 1) { el.textContent = "当前 1 张图，一次处理与批量处理效果相同。"; return; }
+    el.textContent = state.processMode === "once"
+      ? `已选 ${n} 张：将全部放入同一个请求一次处理。`
+      : `已选 ${n} 张：将逐张发送请求批量处理（各自按原图尺寸自适应）。`;
+  }
+
+  // ---------- 尺寸 ----------
+  $("sizeModeChips").addEventListener("click", (e) => {
+    const c = e.target.closest(".chip");
+    if (!c || !c.dataset.s) return;
+    state.sizeMode = c.dataset.s;
+    [...$("sizeModeChips").children].forEach((x) => x.classList.toggle("active", x === c));
+    $("ratioPanel").classList.toggle("hidden", state.sizeMode !== "ratio");
+    $("sizePanel").classList.toggle("hidden", state.sizeMode !== "size");
+    updateSizeInfo();
+  });
+  $("ratioPresets").addEventListener("click", (e) => {
+    const c = e.target.closest(".chip");
+    if (!c || !c.dataset.r) return;
+    state.ratio = c.dataset.r;
+    [...$("ratioPresets").children].forEach((x) => {
+      if (x.dataset.r) x.classList.toggle("active", x === c);
+    });
+    const [w, h] = c.dataset.r.split(":");
+    $("ratioW").value = w; $("ratioH").value = h;
+  });
+  ["ratioW", "ratioH"].forEach((id) => {
+    $(id).addEventListener("input", () => { state.ratio = `${$("ratioW").value}:${$("ratioH").value}`; });
+  });
+  function updateSizeInfo() {
+    const el = $("sizeInfo");
+    const s = state.sizeMode;
+    if (s === "from-image") el.textContent = "根据参考图宽高自动换算合法尺寸（边长 ≤ 3840、16 的倍数、总像素 655360~8294400）。";
+    else if (s === "auto") el.textContent = "交由 API 按输入参考图自动判定尺寸。";
+    else if (s === "ratio") el.textContent = `将按宽高比 ${state.ratio || "1:1"} 自动换算为合法像素尺寸。`;
+    else el.textContent = "使用你指定的固定像素尺寸（建议 16 的倍数）。";
+  }
+
+  // ---------- 提交 ----------
+  $("runBtn").addEventListener("click", async () => {
+    if (!getKey()) { showStatus("请先在上方输入当前平台的 API Key。", true); return; }
+    const prompt = $("prompt").value.trim();
+    if (!prompt) { showStatus("请先填写提示词。", true); return; }
+    if (state.mode === "edit" && state.images.length === 0) {
+      showStatus("编辑模式需要至少 1 张参考图。", true); return;
+    }
+
+    const size = buildSize();
+    const btn = $("runBtn");
+    btn.disabled = true;
+    btn.textContent = state.mode === "edit" && state.processMode === "batch" && state.images.length > 1
+      ? `批量处理 ${state.images.length} 张中，请稍候…` : "生成中，请稍候…";
+    showStatus(`正在请求 ${curCfg().label}…\n`);
+
+    try {
+      const t0 = Date.now();
+      if (state.mode === "generate") {
+        await callGenerate(prompt, size);
+      } else {
+        await callEdit(prompt, size);
+      }
+      showStatus(prev => prev + `\n完成，用时 ${((Date.now() - t0) / 1000).toFixed(1)}s。`);
+    } catch (err) {
+      showStatus("请求失败：" + err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "开始生成";
+    }
+  });
+
+  function buildSize() {
+    const s = state.sizeMode;
+    if (s === "auto") return "auto";
+    if (s === "ratio") return `${$("ratioW").value || 1}:${$("ratioH").value || 1}`;
+    if (s === "size") return `${$("sizeW").value || 1024}x${$("sizeH").value || 1024}`;
+    return "from-image";
+  }
+
+  function platformPayload() {
+    return {
+      platform: state.platform,
+      base_url: baseUrlInput.value.trim() || curCfg().base,
+    };
+  }
+
+  async function callGenerate(prompt, size) {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({
+        prompt, model: modelInput.value.trim() || curCfg().models[0],
+        size, n: +nInput.value || 1,
+        quality: $("quality").value, output_format: $("outputFormat").value,
+        api_key: getKey(),
+        timeout: (state.platform === "mass" || state.platform.startsWith("qianwen")) ? 900 : 300,
+      }, platformPayload())),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(fmtErr(data));
+    renderResults(data.results, `尺寸：${data.requested_size || size}`);
+  }
+
+  async function callEdit(prompt, size) {
+    const fd = new FormData();
+    fd.append("prompt", prompt);
+    fd.append("model", modelInput.value.trim() || curCfg().models[0]);
+    fd.append("size", size);
+    fd.append("mode", state.processMode);
+    fd.append("n", nInput.value || "1");
+    fd.append("quality", $("quality").value);
+    fd.append("output_format", $("outputFormat").value);
+    fd.append("input_fidelity", $("inputFidelity").value);
+    fd.append("timeout", (state.platform === "mass" || state.platform.startsWith("qianwen")) ? "900" : "300");
+    fd.append("api_key", getKey());
+    fd.append("platform", state.platform);
+    fd.append("base_url", baseUrlInput.value.trim() || curCfg().base);
+    const name = state.images.length === 1 ? "image" : "image[]";
+    state.images.forEach((img) => fd.append(name, img.file, img.file.name));
+
+    const res = await fetch("/api/edit", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!data.ok) throw new Error(fmtErr(data));
+    renderResults(data.results, data.mode === "batch"
+      ? `批量处理：${data.results.length} 个结果`
+      : `一次处理：${data.results.length} 个结果 · 尺寸：${data.requested_size || size}`);
+  }
+
+  // ---------- 结果 ----------
+  function resultCardHTML(r, label) {
+    const src = r.url || "";
+    const badge = r.input ? `基于 ${esc(r.input)}` : (label || "#");
+    return `
+      <div class="result-card">
+        <div class="img-wrap">
+          <img src="${src}" loading="lazy">
+          <span class="badge">${badge}</span>
+        </div>
+        <div class="info">
+          <div class="fname">${esc(r.name || "result")}</div>
+          ${r.revised_prompt ? `<details class="rev"><summary>查看修正提示词</summary><p>${esc(r.revised_prompt)}</p></details>` : ""}
+        </div>
+        <a class="dl" href="${src}" download="${esc(r.name || "result.png")}">下载</a>
+      </div>`;
+  }
+
+  function appendCard(grid, html) {
+    const el = document.createElement("div");
+    el.innerHTML = html;
+    grid.appendChild(el.firstElementChild);
+  }
+
+  function renderResults(list, note) {
+    const card = $("resultCard"), grid = $("results");
+    card.classList.remove("hidden");
+    grid.innerHTML = "";
+    if (!list || !list.length) {
+      grid.innerHTML = `<div class="muted">无结果。</div>`;
+      return;
+    }
+    const head = document.createElement("div");
+    head.className = "hint";
+    head.textContent = note;
+    grid.appendChild(head);
+    list.forEach((r, i) => {
+      if (!r.url) {
+        const em = document.createElement("div");
+        em.className = "muted";
+        em.textContent = `#${i + 1} ${r.error || "无结果"}`;
+        grid.appendChild(em);
+        return;
+      }
+      appendCard(grid, resultCardHTML(r, `#${r.index || i + 1}`));
+    });
+  }
+
+  // ---------- 多任务并发 ----------
+  const batchWorkers = $("batchWorkers"), batchRunBtn = $("batchRunBtn"),
+        batchCancelAllBtn = $("batchCancelAllBtn"), taskListEl = $("taskList"),
+        addTaskBtn = $("addTaskBtn"), clearTasksBtn = $("clearTasksBtn");
+  const TASK_STATUS_LABEL = { pending: "排队中", running: "生成中", done: "完成", error: "失败", cancelled: "已取消" };
+  let batchSeq = 0;        // 任务本地自增 id
+  let batchRows = [];      // [{id, prompt, cfg:{platform,model,size,n}}]
+  let activeBatch = null;  // {bid, timer, finished} 当前批次
+
+  function rowOf(id) { return taskListEl.querySelector(`.task-row[data-id="${id}"]`); }
+  function collectAllKeys() {
+    const keys = {};
+    Object.keys(PLATFORMS).forEach((p) => {
+      const k = (localStorage.getItem(KEY_PREFIX + p) || "").trim();
+      if (k) keys[p] = k;
+    });
+    if (getKey() && !keys[state.platform]) keys[state.platform] = getKey();
+    return keys;
+  }
+  function taskCfgOf(row) {
+    const c = {};
+    ["platform", "model", "size", "n"].forEach((k) => {
+      const v = String(row.cfg[k] || "").trim();
+      if (v) c[k] = v;
+    });
+    return c;
+  }
+  function addTaskRow(prompt) {
+    const id = batchSeq++;
+    batchRows.push({ id, prompt: prompt || "", cfg: { platform: "", model: "", size: "", n: "" } });
+    renderTaskList();
+  }
+  function removeTaskRow(id) { batchRows = batchRows.filter((r) => r.id !== id); renderTaskList(); }
+  function clearTaskRows() { batchRows = []; renderTaskList(); }
+
+  function renderTaskList() {
+    taskListEl.innerHTML = "";
+    if (!batchRows.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "还没有任务。点击「＋ 添加任务」创建一个任务，每个任务一个提示词，提交后并发执行。";
+      taskListEl.appendChild(empty);
+      updateBatchUI();
+      return;
+    }
+    batchRows.forEach((row, i) => {
+      const el = document.createElement("div");
+      el.className = "task-row";
+      el.dataset.id = row.id;
+      el.dataset.status = "idle";
+      el.innerHTML = `
+        <div class="task-row-top">
+          <span class="tidx">#${i + 1}</span>
+          <input class="tprompt" type="text" value="${esc(row.prompt)}" placeholder="输入该任务的提示词">
+          <span class="tstatus idle">未提交</span>
+          <span class="ttime">—</span>
+          <button class="btn-ghost tcancel hidden" type="button" title="取消此任务">取消</button>
+          <button class="btn-ghost tretry hidden" type="button" title="重试此任务">重试</button>
+          <button class="btn-ghost tcfg-toggle" type="button" title="逐任务独立配置">配置</button>
+          <button class="btn-ghost tdel" type="button" title="删除任务">✕</button>
+        </div>
+        <div class="tconfig hidden">
+          <div class="row">
+            <div class="field">
+              <label>平台（留空=统一用上方）</label>
+              <select class="tc-platform">
+                <option value="">统一</option>
+                ${Object.keys(PLATFORMS).map((k) => `<option value="${k}">${PLATFORMS[k].label}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field" style="flex:2">
+              <label>模型（留空=全局）</label>
+              <input class="tc-model" type="text" list="modelList" placeholder="留空=用上方全局">
+            </div>
+            <div class="field">
+              <label>尺寸（留空=全局）</label>
+              <input class="tc-size" type="text" placeholder="auto / WxH / W:H">
+            </div>
+            <div class="field" style="flex:0 0 84px">
+              <label>n（留空=全局）</label>
+              <input class="tc-n" type="number" min="1" max="6" placeholder="—">
+            </div>
+          </div>
+        </div>
+        <div class="tresult"></div>
+        <div class="terr hidden"><pre></pre></div>`;
+      const p = el.querySelector(".tprompt");
+      p.addEventListener("input", () => { row.prompt = p.value; updateBatchUI(); });
+      p.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTaskRow(""); } });
+      el.querySelector(".tcfg-toggle").addEventListener("click", () => {
+        el.querySelector(".tconfig").classList.toggle("hidden");
+      });
+      el.querySelector(".tdel").addEventListener("click", () => removeTaskRow(row.id));
+      el.querySelector(".tcancel").addEventListener("click", () => cancelTask(row.id));
+      el.querySelector(".tretry").addEventListener("click", () => retryTask(row.id));
+      ["tc-platform", "tc-model", "tc-size", "tc-n"].forEach((cls) => {
+        const inp = el.querySelector("." + cls);
+        const field = cls.slice(3);
+        inp.addEventListener("input", () => { row.cfg[field] = inp.value; });
+      });
+      taskListEl.appendChild(el);
+    });
+    updateBatchUI();
+  }
+
+  function setTasksEditable(editable) {
+    taskListEl.querySelectorAll(".tprompt, .tconfig input, .tconfig select").forEach((e) => { e.disabled = !editable; });
+    addTaskBtn.disabled = !editable;
+    clearTasksBtn.disabled = !editable || !batchRows.length;
+  }
+  function setRowStatus(id, status, elapsed) {
+    const el = rowOf(id);
+    if (!el) return;
+    el.dataset.status = status;
+    el.classList.remove("idle", "pending", "running", "done", "error", "cancelled");
+    el.classList.add(status);
+    const st = el.querySelector(".tstatus");
+    st.className = "tstatus " + status;
+    st.textContent = TASK_STATUS_LABEL[status] || status;
+    const tt = el.querySelector(".ttime");
+    tt.textContent = status === "idle" ? "—" : (typeof elapsed === "number" ? elapsed.toFixed(1) + "s" : "0.0s");
+  }
+  function renderTaskResults(id, t) {
+    const el = rowOf(id);
+    if (!el) return;
+    const errBox = el.querySelector(".terr");
+    if (t.status === "error" && t.error) {
+      errBox.classList.remove("hidden");
+      errBox.querySelector("pre").textContent = typeof t.error === "string" ? t.error : JSON.stringify(t.error);
+    } else {
+      errBox.classList.add("hidden");
+    }
+    const box = el.querySelector(".tresult");
+    box.innerHTML = "";
+    const list = t.results || [];
+    if (!list.length) return;
+    const grid = document.createElement("div");
+    grid.className = "task-grid";
+    list.forEach((r, i) => {
+      if (!r.url) {
+        const em = document.createElement("div");
+        em.className = "muted";
+        em.textContent = "#" + (r.index || i + 1) + " " + (r.error || "无结果");
+        grid.appendChild(em);
+        return;
+      }
+      appendCard(grid, resultCardHTML(r, r.input ? `基于 ${esc(r.input)}` : `#${r.index || i + 1}`));
+    });
+    box.appendChild(grid);
+  }
+
+  function updateBatchUI() {
+    const n = batchRows.length;
+    batchRunBtn.disabled = n === 0 || (activeBatch && !activeBatch.finished);
+    batchRunBtn.textContent = activeBatch && !activeBatch.finished
+      ? `执行中…（${activeBatch.bid}）`
+      : (n ? `并发提交 ${n} 个任务` : "并发提交");
+    batchCancelAllBtn.classList.toggle("hidden", !activeBatch);
+    const imgNote = state.mode === "edit" && !state.images.length
+      ? " <b style='color:#b45309'>未上传参考图，请先在「参考图片」上传！</b>" : "";
+    $("batchHint").innerHTML =
+      `当前 ${n} 个任务：默认全部任务共用上方「平台 / 模型 / 尺寸 / 输出数量 n / ${state.mode === "edit" ? "参考图 / " : ""}处理方式」统一配置，仅提示词不同；` +
+      `点击任务行「配置」可逐任务覆盖 平台 / 模型 / 尺寸 / n。提交后并发执行，可实时查看进度、取消任务、对失败/已取消任务重试。${imgNote}`;
+  }
+
+  addTaskBtn.addEventListener("click", () => addTaskRow(""));
+  clearTasksBtn.addEventListener("click", clearTaskRows);
+  batchWorkers.addEventListener("input", () => { if (+batchWorkers.value < 1) batchWorkers.value = 1; });
+
+  function readAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(new Error("读取图片失败: " + file.name));
+      r.readAsDataURL(file);
+    });
+  }
+
+  // ---------- 提交 / 轮询 / 取消 / 重试 ----------
+  function apiPost(url, body) {
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then((res) => res.json());
+  }
+
+  async function submitBatch() {
+    const rows = batchRows.filter((r) => r.prompt.trim());
+    if (!rows.length) { showStatus("请至少填写一个任务提示词。", true); return null; }
+    if (state.mode === "edit" && !state.images.length) {
+      showStatus("多任务图生图需要先在上方「参考图片」上传图片。", true); return null;
+    }
+    const tasks = rows.map((r) => ({ id: r.id, prompt: r.prompt.trim(), config: taskCfgOf(r) }));
+    const keys = collectAllKeys();
+    if (!Object.keys(keys).length) { showStatus("请先在上方输入当前平台的 API Key。", true); return null; }
+    const payload = Object.assign({
+      tasks, keys,
+      model: modelInput.value.trim() || curCfg().models[0],
+      size: buildSize(), n: +nInput.value || 1,
+      quality: $("quality").value, output_format: $("outputFormat").value,
+      input_fidelity: $("inputFidelity").value,
+      api_key: getKey(),
+      mode: state.mode,
+      batch: state.mode === "edit" && state.processMode === "batch" && state.images.length > 1,
+      max_workers: +batchWorkers.value || 4,
+      timeout: (state.platform === "mass" || state.platform.startsWith("qianwen")) ? 900 : 300,
+    }, platformPayload());
+    if (state.mode === "edit") {
+      payload.images = await Promise.all(state.images.map((img) => readAsDataURL(img.file)));
+    }
+    const res = await fetch("/api/batch", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(fmtErr(data));
+    return data;
+  }
+
+  batchRunBtn.addEventListener("click", async () => {
+    const btn = batchRunBtn;
+    btn.disabled = true;
+    try {
+      const data = await submitBatch();
+      if (!data) { updateBatchUI(); return; }
+      activeBatch = { bid: data.batch_id, timer: null, finished: false };
+      batchRows.forEach((r) => {
+        setRowStatus(r.id, "pending", 0);
+        const el = rowOf(r.id);
+        if (el) {
+          el.querySelector(".tresult").innerHTML = "";
+          el.querySelector(".terr").classList.add("hidden");
+          el.querySelector(".tcancel").classList.remove("hidden");
+          el.querySelector(".tretry").classList.add("hidden");
+        }
+      });
+      setTasksEditable(false);
+      updateBatchUI();
+      showStatus(`批次 ${data.batch_id} 已提交（${data.task_count} 个任务，本批并发上限 ${data.max_workers}，服务全局 ${data.global_max_workers}），开始轮询进度…`);
+      startPoll();
+    } catch (err) {
+      showStatus("多任务提交失败：" + err.message, true);
+      updateBatchUI();
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  batchCancelAllBtn.addEventListener("click", async () => {
+    if (!activeBatch) return;
+    try {
+      await apiPost("/api/batch/cancel", { batch_id: activeBatch.bid });
+      showStatus(`已请求取消批次 ${activeBatch.bid} 的全部任务。`);
+      startPoll();
+    } catch (err) { showStatus("取消失败：" + err.message, true); }
+  });
+
+  async function cancelTask(id) {
+    if (!activeBatch) return;
+    try {
+      await apiPost("/api/batch/cancel", { batch_id: activeBatch.bid, task_ids: [id] });
+      showStatus(`已请求取消任务 #${id + 1}。`);
+      startPoll();
+    } catch (err) { showStatus("取消失败：" + err.message, true); }
+  }
+
+  async function retryTask(id) {
+    if (!activeBatch) return;
+    const row = batchRows.find((r) => r.id === id);
+    const cfg = row ? taskCfgOf(row) : {};
+    try {
+      await apiPost("/api/batch/retry", { batch_id: activeBatch.bid, tasks: [{ id, config: cfg }] });
+      setRowStatus(id, "pending", 0);
+      activeBatch.finished = false;
+      setTasksEditable(false);
+      showStatus(`已重新排队任务 #${id + 1}（批次 ${activeBatch.bid}）。`);
+      startPoll();
+    } catch (err) { showStatus("重试失败：" + err.message, true); }
+  }
+
+  function startPoll() {
+    if (!activeBatch) return;
+    if (activeBatch.timer) clearTimeout(activeBatch.timer);
+    activeBatch.timer = setTimeout(pollOnce, 1000);
+  }
+  function stopPoll() {
+    if (activeBatch && activeBatch.timer) { clearTimeout(activeBatch.timer); activeBatch.timer = null; }
+  }
+
+  async function pollOnce() {
+    if (!activeBatch) return;
+    try {
+      const res = await fetch(`/api/batch/status?batch_id=${encodeURIComponent(activeBatch.bid)}`);
+      const data = await res.json();
+      if (!data.ok) throw new Error(fmtErr(data));
+      const byId = {};
+      (data.tasks || []).forEach((t) => { byId[t.id] = t; });
+      batchRows.forEach((r) => {
+        const t = byId[r.id];
+        if (!t) return;
+        setRowStatus(r.id, t.status, t.elapsed);
+        renderTaskResults(r.id, t);
+        const el = rowOf(r.id);
+        if (el) {
+          el.querySelector(".tcancel").classList.toggle("hidden", !(t.status === "pending" || t.status === "running"));
+          el.querySelector(".tretry").classList.toggle("hidden", !(t.status === "error" || t.status === "cancelled"));
+        }
+      });
+      if (data.finished >= data.total || data.status === "done") {
+        activeBatch.finished = true;
+        stopPoll();
+        setTasksEditable(true);
+        const ok = (data.tasks || []).filter((t) => t.status === "done").length;
+        showStatus(`批次 ${activeBatch.bid} 执行完成：${ok}/${data.total} 成功，${data.total - ok} 个未成功（失败/已取消的任务可点「重试」）。`);
+        updateBatchUI();
+        return;
+      }
+      startPoll();
+    } catch (err) {
+      showStatus("轮询批次状态失败：" + err.message, true);
+      setTimeout(pollOnce, 3000);
+    }
+  }
+
+  // ---------- 工具 ----------
+  function showStatus(text, isErr) {
+    const el = $("status");
+    if (typeof text === "function") el.textContent = text(el.textContent);
+    else el.textContent = text;
+    el.classList.toggle("err", !!isErr);
+  }
+  function fmtErr(data) {
+    const e = data.error;
+    if (typeof e === "string") return e;
+    if (e && typeof e === "object") {
+      return e.message || JSON.stringify(e);
+    }
+    return JSON.stringify(data);
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  // 健康检查提示
+  fetch("/api/health").then((r) => r.json()).then(() => {
+    applyPlatform();
+  }).catch(() => {
+    showStatus("无法连接本地服务。请先运行：python gpt_image2.py --server", true);
+  });
+
+  updateProcessHint();
+  updateSizeInfo();
+  updateBatchUI();
+})();
+</script>
+</body>
+</html>
