@@ -40,6 +40,14 @@ class CameraContext {
   /// Image analysis controller. You may use it to start or stop image analysis.
   final AnalysisController? analysisController;
 
+  /// 修复相机幽灵启动：dispose 后，PreparingCameraState.start() 中挂起的
+  /// 500ms 延迟序列（不可取消）据此中止，避免页面销毁后相机仍被 init+start
+  /// 启动并永久占用（stop() 因状态机早退无法释放）。
+  bool _disposed = false;
+
+  /// 本 context 是否已销毁。
+  bool get isDisposed => _disposed;
+
   /// Preferences concerning Exif (photos metadata)
   ExifPreferences exifPreferences;
 
@@ -150,6 +158,7 @@ class CameraContext {
   bool get imageAnalysisEnabled => analysisController?.enabled == true;
 
   dispose() {
+    _disposed = true;
     sensorConfig.dispose();
     sensorConfigController.close();
     mediaCaptureController.close();

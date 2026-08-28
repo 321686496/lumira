@@ -289,6 +289,23 @@ export class CameraState implements StreamHandler {
       // 提交会话配置
       await this.session.commitConfig();
 
+      // 拍照画质优先策略（API 21+）：单段式拍照默认"速度优先"，系统为降快门时延会在 ISP 侧
+      // 牺牲画质（降噪涂抹/细节丢失），是 OHOS 端成片偏糊的系统侧主因之一。此处显式切到
+      // HIGH_QUALITY，让系统按画质优先出图；设备不支持或 API < 21 时保持默认，行为与现状一致。
+      if (deviceInfo.sdkApiVersion >= 21 && this.photoOutput) {
+        try {
+          if (this.photoOutput.isPhotoQualityPrioritizationSupported(camera.PhotoQualityPrioritization.HIGH_QUALITY)) {
+            this.photoOutput.setPhotoQualityPrioritization(camera.PhotoQualityPrioritization.HIGH_QUALITY);
+            Logger.info(TAG, 'photoOutput quality prioritization set to HIGH_QUALITY');
+          } else {
+            Logger.info(TAG, 'photoOutput HIGH_QUALITY prioritization not supported, keep default');
+          }
+        } catch (error) {
+          let err = error as BusinessError;
+          Logger.error(TAG, 'setPhotoQualityPrioritization failed. errorCode = ' + err.code);
+        }
+      }
+
       // 开启前置录像镜像
       if (deviceInfo.sdkApiVersion >= 15 && this.captureMode === CaptureMode.VIDEO && this._videoPath) {
         const isMirrorSupported = this.videoOutput?.isMirrorSupported();
@@ -357,9 +374,10 @@ export class CameraState implements StreamHandler {
       (b.size.width * b.size.height) - (a.size.width * a.size.height);
     const byAreaAsc = (a: camera.Profile, b: camera.Profile): number =>
       (a.size.width * a.size.height) - (b.size.width * b.size.height);
-    // 拍照档位在像素上限内选择：前端只解码到 ~1600 边长，源图无需 8MP 级，
-    // 全分辨率档位会显著拖慢 capture() 编码与写盘（实测 2106ms）。在 ≤MAX_PHOTO_PIXELS
-    // 内优先取与预览宽高比匹配、面积最大的档位，避免成片取景框被裁切。
+    // 拍照档位在像素上限内选择：上限 8.2M（MAX_PHOTO_PIXELS）保证 capture() 速度
+    //（全分辨率档位实测编码+写盘 2106ms 不可接受），同时为成片管线的 desiredSize 解码
+    // 提供 ~2x 超采样率——3MP 档对 1600 解码目标仅 ~1.3x，下采样后细节不足是成片偏糊主因之一。
+    // 在 ≤MAX_PHOTO_PIXELS 内优先取与预览宽高比匹配、面积最大的档位，避免成片取景框被裁切。
     const underCap: camera.Profile[] = [...photoProfilesArray]
       .filter((p: camera.Profile) => p.size.width * p.size.height <= maxPixels);
     const aspectMatched: camera.Profile[] = [...underCap]

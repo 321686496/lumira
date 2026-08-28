@@ -165,11 +165,14 @@ export class Constants {
 
     static readonly MIN_VIDEO_FRAME: number = 30;
     /**
-     * 拍照输出像素上限（宽×高）。前端仅解码/处理到 ~1600 边长（kDecodeTargetDim=1600），
-     * 源图无需 8MP 级全分辨率，超高分辨率档位会显著拖慢 capture() 编码与写盘（实测 2106ms）。
-     * 取值 ≤3MP：仍覆盖 1600 输出目标，且明显加速拍照。
+     * 拍照输出像素上限（宽×高）。成片管线虽按 desiredSize 硬件解码直达输出边长（~1600/1280），
+     * 但源图分辨率决定下采样超采样率：3MP（如 2048x1536）对 1600 解码目标仅 ~1.3x 超采样，
+     * 下采样后细节不足，对比 iOS（全分辨率源）成片明显偏糊——这是 OHOS 端拍照糊的主因之一。
+     * 提升到 ~8.2M（如 3264x2448=8MP）：超采样率翻倍到 ~2x，下采样后显著更锐；
+     * 且原生 processJpeg 为 desiredSize 解码，源变大几乎不增加处理耗时。
+     * 不取 12MP+ 全分辨率档位：实测全档位 capture() 编码与写盘 2106ms，拍照时延不可接受。
      */
-    static readonly MAX_PHOTO_PIXELS: number = 3000000;
+    static readonly MAX_PHOTO_PIXELS: number = 8200000;
     /**
      * FLASH_POSITION_X.
      */

@@ -89,8 +89,11 @@ class _PreviewEditPanelState extends ConsumerState<PreviewEditPanel>
   PostProcess get _fullForEdit => fullOf(_baked, widget.postProcess);
 
   /// 由新的全量值反推增量并回调上层。
+  /// 传入当前增量（widget.postProcess）以保留裁剪比例/裁剪框字段
+  /// （见 deltaOf 的 current 参数说明）。
   void _updatePostFromFull(PostProcess newFull) =>
-      widget.onPostProcessChanged(deltaOf(_baked, newFull));
+      widget.onPostProcessChanged(
+          deltaOf(_baked, newFull, current: widget.postProcess));
 
   @override
   Widget build(BuildContext context) {

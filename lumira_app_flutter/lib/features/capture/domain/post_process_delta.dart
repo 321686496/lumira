@@ -19,7 +19,13 @@ PostProcess fullOf(PostProcess baked, PostProcess local) => baked.merge(local);
 /// 3. cropRatio / customCropRect：为绝对值，不参与 merge 的增量合并（merge 对 cropRatio
 ///    取 baked 基线 this.cropRatio，对 customCropRect 仅在 delta 非空时覆盖），
 ///    因此互逆对这两个字段不适用。
-PostProcess deltaOf(PostProcess baked, PostProcess full) {
+///
+/// [current] 当前增量（调用方持有的 local）。色彩/细节滑块走「全量 → 反推增量」时，
+/// full 的 cropRatio 恒等于 baked（merge 丢弃 delta 的比例）、customCropRect 在
+/// local 为 null 时会回退成 baked 的烘焙值——若直接采用会把「本轮未框选」污染成
+/// 「沿用上一轮裁剪」，以及把用户刚选的比例冲掉。故这两个字段在 full 与 baked
+/// 一致时优先保留 [current] 的值（无 current 时归 'free'/null 哨兵）。
+PostProcess deltaOf(PostProcess baked, PostProcess full, {PostProcess? current}) {
   final bc = baked.color;
   final fc = full.color;
   return PostProcess(
@@ -40,10 +46,14 @@ PostProcess deltaOf(PostProcess baked, PostProcess full) {
     sharpen: full.sharpen - baked.sharpen,
     vignette: full.vignette - baked.vignette,
     grain: full.grain - baked.grain,
-    cropRatio: full.cropRatio,
+    cropRatio: full.cropRatio == baked.cropRatio
+        ? (current?.cropRatio ?? 'free')
+        : full.cropRatio,
     lut: full.lut == baked.lut ? 'none' : full.lut,
     systemFilter:
         full.systemFilter == baked.systemFilter ? null : full.systemFilter,
-    customCropRect: full.customCropRect,
+    customCropRect: full.customCropRect == baked.customCropRect
+        ? current?.customCropRect
+        : full.customCropRect,
   );
 }

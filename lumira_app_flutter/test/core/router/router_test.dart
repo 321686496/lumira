@@ -224,6 +224,8 @@ void main() {
       // 水印 V2 新增 /profile/watermark 与 /profile/watermark/edit 后为 74 条；
       // 相册「更多→添加水印」新增 /gallery/watermark/apply 后为 75 条；
       // 场景引导页 /capture/scene-guide 与场景详情合并删除后减为 73 条。
+      // （此后多次新增路由未同步本断言，实际已漂移至 81 条；
+      // 修复设置页「默认分辨率」缺注册的 /profile/settings/resolution 后为 82 条。）
       int count = 0;
       void countRoutes(List<RouteBase> routes) {
         for (final route in routes) {
@@ -234,8 +236,8 @@ void main() {
         }
       }
       countRoutes(router.routeConfiguration.routes);
-      expect(count, 73,
-          reason: 'router must declare 73 top-level GoRoute entries (scene guide /capture/scene-guide merged into scene detail dropped the count to 73)');
+      expect(count, 82,
+          reason: 'router must declare 82 top-level GoRoute entries (including the newly registered /profile/settings/resolution)');
     });
 
     test('router resolves all 46 paths without error', () {
@@ -244,6 +246,16 @@ void main() {
         final match = _findRouteForPath(router, path);
         expect(match, isNotNull, reason: 'path $path must match a route');
       }
+    });
+
+    test('profileSettingsResolution is a declared route (settings entry target)', () {
+      // 回归：设置页「默认分辨率」push /profile/settings/resolution，
+      // 该路径必须已注册，否则 GoRouter 报 Route not found
+      // （go_router 6.5.9 的错误页显示的是 matchList 的旧 uri，如 /home，易误导）。
+      final router = container.read(routerProvider);
+      final match = _findRouteForPath(router, RouteNames.profileSettingsResolution);
+      expect(match, isNotNull,
+          reason: '${RouteNames.profileSettingsResolution} must be a declared route');
     });
 
     test('router resolves paths with query parameters', () {

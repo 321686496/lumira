@@ -37,10 +37,11 @@ class CropOverlay extends StatefulWidget {
   final Widget photo;
 
   /// 初始裁剪区域（相对坐标 0.0-1.0）。
-  /// 为 null 时自动计算默认居中区域（按 aspectRatio 居中最大化）。
+  /// 为 null 时自动计算默认区域（自由=满幅；锁定比例=该比例下最大居中矩形），
+  /// 并在首帧后通过 [onChanged] 回传，保证「默认选区」与保存结果一致。
   final Rect? initialRect;
 
-  /// 锁定宽高比（width / height）。
+  /// 锁定宽高比（width / height，框内相对坐标系下的 w/h）。
   /// 为 null 时可自由调整；> 0 时锁定比例。
   final double? aspectRatio;
 
@@ -120,6 +121,11 @@ class _CropOverlayState extends State<CropOverlay> {
   void initState() {
     super.initState();
     _cropRect = widget.initialRect ?? _computeDefaultRect();
+    // 默认选区也视为有效选区：首帧后回传，保证不拖拽直接保存时
+    // 导出内容 == 屏幕上显示的选框内容（WYSIWYG）。
+    if (widget.initialRect == null) {
+      _emitPostFrame();
+    }
   }
 
   @override
@@ -135,9 +141,23 @@ class _CropOverlayState extends State<CropOverlay> {
         !_rectNearEqual(widget.initialRect, oldWidget.initialRect) &&
             !_rectNearEqual(widget.initialRect, _lastEmitted);
     if (ratioChanged || externalRectChanged) {
+      final usedDefault = widget.initialRect == null;
       _cropRect = widget.initialRect ?? _computeDefaultRect();
       _resetPhoto();
+      // 切换比例等重置为默认选区后回传（比例切换后选框变化但用户未拖拽，
+      // 若不回传，保存时会沿用旧选区/无选区，与屏幕选框不一致）。
+      if (usedDefault) {
+        _emitPostFrame();
+      }
     }
+  }
+
+  /// 下一帧回传当前选区（build 期间不可回调上层，故 post-frame）。
+  void _emitPostFrame() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _emit();
+    });
   }
 
   /// 容差比较两个裁剪矩形（相对坐标），忽略 ULP 级浮点误差。
@@ -157,16 +177,19 @@ class _CropOverlayState extends State<CropOverlay> {
     _inPhotoGesture = false;
   }
 
-  /// 计算默认居中裁剪区域
+  /// 计算默认裁剪区域
+  ///
+  /// 自由模式默认满幅（[0,0,1,1]）：进入裁剪模式不拖动时，
+  /// 选框 == 整张展示照片 → 保存结果与烘焙照片一致（无操作 = 无变化）。
+  /// 锁定比例时默认该比例下最大居中矩形（iPhone 原生行为）。
   Rect _computeDefaultRect() {
     if (widget.aspectRatio == null) {
-      // 自由模式：默认占 90% 区域，居中
-      return const Rect.fromLTWH(0.05, 0.05, 0.9, 0.9);
+      return const Rect.fromLTWH(0, 0, 1, 1);
     }
     return _centerMaxRect(widget.aspectRatio!);
   }
 
-  /// 在 0-1 范围内计算给定宽高比的最大居中 Rect
+  /// 在 0-1 范围内计算给定宽高比的最大居中 Rect（不留边距）
   Rect _centerMaxRect(double aspect) {
     double w, h;
     if (aspect >= 1.0) {
@@ -184,9 +207,6 @@ class _CropOverlayState extends State<CropOverlay> {
         h = 1.0 / aspect;
       }
     }
-    // 留 5% 边距
-    w = math.min(w * 0.9, 1.0);
-    h = math.min(h * 0.9, 1.0);
     final x = (1.0 - w) / 2.0;
     final y = (1.0 - h) / 2.0;
     return Rect.fromLTWH(x, y, w, h);

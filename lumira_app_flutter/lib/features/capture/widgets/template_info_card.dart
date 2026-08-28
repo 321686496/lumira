@@ -71,22 +71,35 @@ class _TemplateInfoCardState extends ConsumerState<TemplateInfoCard> {
       );
     }
 
-    // 横屏：整卡按持机方向旋转到可读角（顺时针 quarterTurns 圈），浮在画面中部。
-    // RotatedBox 会交换子项的布局宽高：子项「高度」= 旋转后的视觉宽度、子项「宽度」= 视觉高度。
-    // 故用 maxHeight 限制视觉宽度、maxWidth 限制视觉高度，保证不越出仍保持竖屏的画布。
+    // 横屏：整卡按持机方向旋转到可读角（顺时针 quarterTurns 圈），并贴向用户视角的
+    // 「上方」。旋转后卡片内容的顶部指向哪条画布边缘，哪条边缘就是用户视角的上方：
+    // - quarterTurns=1（逆时针持机，手机顶部在用户左侧）→ 内容顶部指向画布右缘 → 贴右；
+    // - quarterTurns=3（顺时针持机，手机顶部在用户右侧）→ 内容顶部指向画布左缘 → 贴左。
+    // RotatedBox 会交换子项的布局宽高：子项「宽度」= 旋转后在画布上的纵向跨度，
+    // 子项「高度」= 画布横向跨度（用户视角的卡片厚度）。
     final size = MediaQuery.of(context).size;
     final qTurns = (widget.quarterTurns == 0) ? 3 : widget.quarterTurns;
-    return Center(
-      child: RotatedBox(
-        quarterTurns: qTurns,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: size.height * 0.5, // 旋转后为视觉高度，限制避免超高
-            maxHeight: size.width * 0.86, // 旋转后为视觉宽度，限制避免横向越界
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: _buildBody(appTheme),
+    // 距用户上方的留白（约 1/4 横屏视高，与竖屏时卡片距屏顶比例接近）：
+    // 同时避开画布右缘约 40% 高度处的多姿势切换按钮（right:12 + 自宽约 72 + 间隙），
+    // 保证两种持机方向下卡片展开/收起都不会被其遮挡。
+    const double userTopInset = 96;
+    return Align(
+      alignment: qTurns == 1 ? Alignment.centerRight : Alignment.centerLeft,
+      child: Padding(
+        padding: qTurns == 1
+            ? const EdgeInsets.only(right: userTopInset)
+            : const EdgeInsets.only(left: userTopInset),
+        child: RotatedBox(
+          quarterTurns: qTurns,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: size.height * 0.5, // 旋转后为画布纵向跨度，限制避免过长
+              maxHeight: size.width * 0.86, // 旋转后为画布横向跨度，避免越出画布短边
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: _buildBody(appTheme),
+            ),
           ),
         ),
       ),

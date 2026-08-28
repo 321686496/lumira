@@ -728,6 +728,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
       _processCaptureQueue.add(_CaptureProcessParams(
         inputPath: result.filePath,
         targetRatio: targetRatio,
+        ratioId: ratioId,
         isPortrait: isPortrait,
         isFront: facing == 'front',
         postProcess: postProcess,
@@ -1031,7 +1032,11 @@ class _CapturePageState extends ConsumerState<CapturePage>
           id: photoId,
           filePath: finalPath,
           originalPath: originalPath,
-          postProcess: params.postProcess,
+          // cropRatio 持久化拍摄实际使用的比例 id（此前为构造默认 '3:4'，
+          // fullscreen 等成片编辑时基准区域错位 → 裁剪与框选不一致）
+          postProcess: params.postProcess.copyWith(
+            cropRatio: params.ratioId,
+          ),
           dataUrl: null,
           sceneId: sceneId,
           templateId: templateId,
@@ -3767,6 +3772,7 @@ class _CaptureProcessParams {
   const _CaptureProcessParams({
     required this.inputPath,
     required this.targetRatio,
+    required this.ratioId,
     required this.isPortrait,
     required this.isFront,
     required this.postProcess,
@@ -3775,6 +3781,12 @@ class _CaptureProcessParams {
   });
   final String inputPath;
   final double targetRatio; // 目标宽高比（正向像素）
+
+  /// 拍摄实际使用的比例 id（'fullscreen' / '3:4' / '1:1' ...）。
+  /// 落库时写入 postProcess.cropRatio：编辑保存时按它重建比例基准区域，
+  /// 框选与导出才能所见即所得（此前存构造默认 '3:4'，fullscreen 成片
+  /// 编辑时基准区域错位 → 裁剪不一致）。
+  final String ratioId;
   final bool isPortrait;
   final bool isFront;
   final PostProcess postProcess;
@@ -3854,72 +3866,6 @@ List<int> _sampleAvgRgbFromRgba(ByteData byteData) {
   }
   if (cnt == 0) return [0, 0, 0];
   return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
-}
-
-/// 用「成片自身的中性灰区域」做自适应白平衡，构造逐通道增益校正矩阵（5x4）。
-///
-/// 【为什么不用取景器帧做基准】诊断数据（preview_ref.txt R-B=+30）证实：
-/// AVCaptureVideoDataOutput 的原生像素缓冲帧走非显示色管，本身偏黄偏亮，
-/// 把它当"中性基准"是把成片向更黄的地方拉；且一旦增益未正确中和，会连曝光一起动。
-///
-/// 【本方案】取相本帧里饱和度低、亮度适中的像素（灰/浅灰/中性区）的 R/G/B 均值，
-/// 将三通道增益把灰区拉回等量（R=G=B）→ 只抵消相机 ISP 对中性区域的色偏，不偏颇场景真实色彩。
-///
-/// 【曝光守恒铁律】灰区像素校正后其 RGB 应保持与原灰值一致的亮度 → 三通道增益几何均值
-/// （(gr*gg*gb)^(1/3)）必须为 1，这样中性灰像素灰度不变，全局曝光绝不动。仅当通道间
-/// 相对差异足够大（R-B 失衡，即偏黄/偏蓝）时才有非恒等的校正矩阵。
-List<double>? _buildAdaptiveWhiteBalanceMatrixFromRgba(
-    ByteData byteData, int width, int height) {
-  if (width <= 0 || height <= 0) return null;
-
-  // 收集中性灰/浅灰像素（低饱和度 + 中高亮度，避开纯黑/纯白/过曝与强饱和色）。
-  var ir = 0.0, ig = 0.0, ib = 0.0, n = 0;
-  for (var y = 0; y < height; y += 2) {
-    for (var x = 0; x < width; x += 2) {
-      final i = (y * width + x) * 4;
-      if (i + 3 >= byteData.lengthInBytes) continue;
-      final r = byteData.getUint8(i);
-      final g = byteData.getUint8(i + 1);
-      final b = byteData.getUint8(i + 2);
-      // 低饱和度（通道间最大差 ≤ 24），亮度适中（20~235，排除过曝高光与暗部）。
-      final mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
-      final mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
-      if (mx <= 0 || mx - mn > 24) continue;
-      if (mn < 20 || mx > 235) continue;
-      ir += r; ig += g; ib += b; n++;
-    }
-  }
-  if (n < 400) return null; // 灰区样本不足，不冒险校色
-
-  final avgR = ir / n, avgG = ig / n, avgB = ib / n;
-
-  // 目标：把灰区三通道的平均值推到相同（中性）→ 逐通道增益。
-  // 以 G 为亮度锚，R/B 向 G 对齐：若灰区偏黄（R>G>B），则 R 需小幅下降、B 需小幅抬升。
-  var gr = (avgG / avgR).clamp(0.88, 1.12);
-  var gg = 1.0;
-  var gb = (avgG / avgB).clamp(0.88, 1.12);
-
-  // 曝光守恒：三通道几何均值归 1，只保留通道间相对差异。
-  final gmean = math.pow(gr * gg * gb, 1.0 / 3.0).toDouble();
-  if (gmean > 1e-6) {
-    gr /= gmean;
-    gg /= gmean;
-    gb /= gmean;
-  }
-
-  if ((gr - 1).abs() < 0.015 &&
-      (gg - 1).abs() < 0.015 &&
-      (gb - 1).abs() < 0.015) {
-    return null; // 灰区已中性，无需校正
-  }
-  debugPrint('[capture] 自适应白平衡: grayAvg=[${avgR.round()},${avgG.round()},${avgB.round()}] '
-      '(n=$n) → gains=[${gr.toStringAsFixed(3)},${gg.toStringAsFixed(3)},${gb.toStringAsFixed(3)}]');
-  return [
-    gr, 0, 0, 0, 0,
-    0, gg, 0, 0, 0,
-    0, 0, gb, 0, 0,
-    0, 0, 0, 1, 0,
-  ];
 }
 
 /// RGBA 原始字节 → [ui.Image]（ImageDescriptor.raw，避免 JPEG 编解码往返）。
@@ -4021,8 +3967,6 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     late ui.Image srcImage;
     List<int>? nativeAvgRgb;
     List<int>? sourceAvgRgb;
-    // 方案A·预览锚定校色：取景器帧平均值基准构造的校正矩阵（仅 iOS，非 P3 处理的补充）
-    List<double>? previewCorrectionMatrix;
     if (isOhos) {
       // OHOS：flutter_ohos 引擎 dart:ui 的 JPEG 软件解码极慢（1200x1600 实测 ~6s），
       // 改走 OHOS 系统 image.ImageSource（系统/硬件解码）拿 RGBA，
@@ -4112,15 +4056,6 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         if (srcByteData != null) {
           sourceAvgRgb = _sampleAvgRgbFromRgba(srcByteData);
           debugPrint('[capture] 源图解码 rawRgba 平均RGB(dart:ui): $sourceAvgRgb');
-          // 自适应白平衡：仅 iOS（OHOS/Android 无此偏黄问题）。以成片自身的灰区为中性基准
-          // 构造逐通道增益矩阵，抵消相机 ISP 对中性区域的色偏（偏黄）。
-          // 曝光守恒（几何均值归 1），绝不动整体亮度。
-          // 弃用方案A「预览锚定」：诊断证实取景器缓冲帧（preview_ref R-B=+30）本身走非显示
-          // 色管、偏黄偏亮，只会把成片拉向更黄，且增益未中和时还连带改曝光。
-          if (Platform.isIOS) {
-            previewCorrectionMatrix = _buildAdaptiveWhiteBalanceMatrixFromRgba(
-                srcByteData, srcImage.width, srcImage.height);
-          }
         }
       } catch (e) {
         debugPrint('[capture] 源图采样失败: $e');
@@ -4209,12 +4144,9 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         ' Y方向${rotatedImgH >= iOutH - 0.5 ? "✓" : "❌(拉伸!"})');
 
     // 构造色彩矩阵
-    // 自适应白平衡（成片灰区中性化）先行（作用于原始像素，抵消相机 ISP 对中性区色偏），
-    // 再叠加用户色彩矩阵（风格化），避免校正被风格化改变 / 两者混在一起不可控。
+    // iOS 成片已改为「取景器原始帧直出」（原生端 captureVideoFrameToJpegAtPath），
+    // 源像素与取景器同色，无需任何白平衡/偏色补偿矩阵，直接叠加用户色彩矩阵（风格化）。
     var matrix = composePostProcessMatrix(params.postProcess);
-    if (previewCorrectionMatrix != null) {
-      matrix = multiplyColorMatrices(matrix, previewCorrectionMatrix);
-    }
 
     // 单次 Canvas：方向对齐 + cover 裁剪 + 镜像 + 缩放 + ColorMatrix（一步完成）
     //

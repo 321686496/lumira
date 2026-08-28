@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/router.dart';
 import '../../features/capture/data/capture_state.dart';
 import '../../features/capture/services/camera_service_provider.dart';
 import 'route_names.dart';
@@ -34,6 +35,12 @@ class LumiraRouteObserver extends RouteObserver<PageRoute<dynamic>> {
     }
   }
 
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didRemove(route, previousRoute);
+    _handleRouteRemoved(route);
+  }
+
   void _handleRouteChange(Route<dynamic>? from, Route<dynamic>? to) {
     // 关键修复：DropdownButton / showModalBottomSheet / showDialog 等弹出的 PopupRoute
     // 不是 PageRoute，会被 _extractPath 返回 null，从而被误判为"离开拍摄页"，
@@ -65,6 +72,33 @@ class LumiraRouteObserver extends RouteObserver<PageRoute<dynamic>> {
     if (!fromCapture && toCapture) {
       _renewCamera();
     }
+  }
+
+  /// go() 的整栈替换：被替换路由走 didRemove（而非 didPop）。
+  /// 若移除的是拍摄页，且替换后栈顶不再是拍摄页，则释放相机并清理状态。
+  /// 修复 Bug：退出拍摄页用 context.go(home) 时只触发 didRemove，
+  /// 相机不释放导致系统相机一直被占用。
+  void _handleRouteRemoved(Route<dynamic> route) {
+    if (route is! PageRoute) return;
+    if (!_isCapturePage(_extractPath(route))) return;
+
+    // 延迟到微任务：整栈替换完成后读取目标栈栈顶，
+    // 避免拍摄页之间 go() 跳转时误释放相机。
+    Future.microtask(() {
+      final currentName = _currentTopPageName();
+      if (!_isCapturePage(currentName)) {
+        _clearCaptureState();
+        _releaseCamera();
+      }
+    });
+  }
+
+  /// 当前导航栈顶页面名（navigator 的 pages 已反映替换后的目标栈）。
+  String? _currentTopPageName() {
+    final nav = rootNavigatorKey.currentState;
+    final pages = nav?.widget.pages;
+    if (pages == null || pages.isEmpty) return null;
+    return pages.last.name;
   }
 
   /// 离开拍摄页时释放相机（CameraService.dispose → CamerawesomePlugin.stop）。

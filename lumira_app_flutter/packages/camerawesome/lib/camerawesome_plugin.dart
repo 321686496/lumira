@@ -76,6 +76,9 @@ class CamerawesomePlugin {
     try {
       res = await CameraInterface().stop();
     } catch (e) {
+      // 异常路径不得把状态机卡死在 stopping：否则后续所有 stop() 均早退，
+      // 相机一旦被启动便永远无法释放（iOS 未 init 时 stop 会抛 CAMERA_MUST_BE_INIT）
+      currentState = CameraRunningState.stopped;
       return false;
     }
     currentState = CameraRunningState.stopped;

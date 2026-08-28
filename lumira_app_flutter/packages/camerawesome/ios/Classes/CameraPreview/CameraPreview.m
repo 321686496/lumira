@@ -6,6 +6,8 @@
 //
 
 #import "CameraPreview.h"
+#import <ImageIO/ImageIO.h>
+#import <CoreGraphics/CoreGraphics.h>
 
 @implementation CameraPreview {
   dispatch_queue_t _dispatchQueue;
@@ -606,54 +608,174 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
 
 # pragma mark - Camera picture
 
-/// 拍照前把当前取景器帧的中心区域平均色缓存到 Documents/preview_ref.txt。
+/// CGDataProvider 释放回调：释放直出路径 malloc 的像素拷贝。
+static void _freeCapturedFrameData(void *info, const void *data, size_t size) {
+  free((void *)data);
+}
+
+/// 【所见即所得直出】抓取取景器当前帧（AVCaptureVideoDataOutput 的 _latestPixelBuffer）
+/// 原样编码为 JPEG 写盘，替代 AVCapturePhotoOutput。
 ///
-/// 根因（已确认）：iOS 快照（AVCapturePhotoOutput）有独立的白平衡/色调引擎，成片比取景器
-/// 偏暖（偏黄）；而取景器/视频帧（AVCaptureVideoDataOutput 的 _latestPixelBuffer）走中性色管、不黄。
-/// 即使是 iOS 系统「照片」色管正确的查看器下，raw_src（相机原片）依旧偏黄 → P3→sRGB 转换不相关。
+/// 根因（2026-08-28 诊断，debugphotoyellow/ 实测）：photoOutput 的照片 ISP
+/// （Smart HDR/Deep Fusion）产出比 video 管线偏暖的内容（全图 R-B≈+23，暖色内容集中、
+/// 灰区近中性），锁白平衡 / P3→sRGB 色域转换（ImageCms 权威验证）/ 灰区自适应白平衡
+/// 均无法消除。取景器渲染的正是这个 video 帧（FlutterTexture 路径），直出它 =
+/// 成片与取景器同源同色、100% 所见即所得（与 OHOS「原始帧直出」同思路）。
 ///
-/// 方案A「预览锚定校色」：以取景器当前帧平均色为基准，Dart 端据此把成片逐通道增益校正到与取景器一致
-///（所见即所得），且是每张照片实时参考取景器，非常用的固定白平衡，不会被场景冷暖误导。
-- (void)cachePreviewColorReference {
+/// 帧像素为 sensor-native 横屏（与 photoOutput JPEG 一致），EXIF orientation 与
+/// CameraPictureController.getJpegOrientation 同映射，Dart 后处理管线无需改动。
+///
+/// 返回 NO 表示不满足直出条件（无帧/尺寸异常），调用方回退 photoOutput 路径；
+/// 返回 YES 表示已受理，编码结果经 completion 回调（主线程）。
+///
+/// 并发模型（takePhotoPath 在插件串行队列、videoDataOutput delegate 在主队列、
+/// copyPixelBuffer 在光栅线程，三者并发访问 _latestPixelBuffer）：
+/// 不能「load 后再 retain」——load 与 retain 之间 delegate 可能已存新帧并 release
+/// 旧帧（UAF 崩溃）。必须先用 CAS 把帧原子换出（取得所有权），retain 一份供后台
+/// 编码持有，再原子放回存储；若放回时 delegate 已存入更新帧则保留新帧不放回。
+/// memcpy + JPEG 编码（100-300ms）dispatch 到后台，避免阻塞取景器渲染。
+- (BOOL)captureVideoFrameToJpegAtPath:(NSString *)path
+                            completion:(nonnull void (^)(BOOL ok))completion {
   CVPixelBufferRef buf = atomic_load(&_latestPixelBuffer);
-  if (buf == NULL) return;
-  CVPixelBufferLockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
-  unsigned char *base = (unsigned char *)CVPixelBufferGetBaseAddress(buf);
+  while (buf != NULL &&
+         !atomic_compare_exchange_strong(&_latestPixelBuffer, &buf, NULL)) {
+    // CAS 失败时 buf 已被更新为最新存储值，循环自动重试
+  }
+  if (buf == NULL) return NO;
   const int w = (int)CVPixelBufferGetWidth(buf);
   const int h = (int)CVPixelBufferGetHeight(buf);
-  if (base == NULL || w <= 0 || h <= 0) {
-    CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
-    return;
+  if (w <= 0 || h <= 0) {
+    CFRelease(buf);
+    return NO;
   }
-  const size_t rowBytes = CVPixelBufferGetBytesPerRow(buf);
-  // 中心 ~55% 区域平均（取景器与成片共享同一光学中心，避免边缘构图差异干扰色彩评估）
-  const int x0 = (int)(w * 0.225), y0 = (int)(h * 0.225);
-  const int x1 = (int)(w * 0.775), y1 = (int)(h * 0.775);
-  long r = 0, g = 0, b = 0, cnt = 0;
-  int step = MAX(1, (int)((w * h) / 20000));
-  for (int y = y0; y < y1; y += step) {
-    unsigned char *line = base + (size_t)y * rowBytes;
-    for (int x = x0; x < x1; x += step) {
-      unsigned char *p = line + (size_t)x * 4;
-      // BGRA：idx0=B, idx1=G, idx2=R
-      b += p[0];
-      g += p[1];
-      r += p[2];
-      cnt++;
+  CFRetain(buf);
+  CVPixelBufferRef expected = NULL;
+  if (!atomic_compare_exchange_strong(&_latestPixelBuffer, &expected, buf)) {
+    // 持有期间 delegate 已存入更新的帧：保留新帧，只释放取出的一次所有权
+    CFRelease(buf);
+  }
+  // EXIF orientation 依赖设备方向属性，派发后台前在当前线程算好。
+  const NSInteger exifOrientation = [self exifOrientationForVideoFrame];
+
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+    CVPixelBufferLockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
+    void *base = CVPixelBufferGetBaseAddress(buf);
+    const size_t rowBytes = CVPixelBufferGetBytesPerRow(buf);
+    BOOL ok = NO;
+    if (base != NULL && rowBytes >= (size_t)w * 4) {
+      // 锁窗口内只做 memcpy（~10ms）；编码在拷贝上进行，
+      // 避免长时间锁帧阻塞取景器渲染（Flutter copyPixelBuffer 也读这个 buffer）。
+      const size_t dataLen = rowBytes * (size_t)h;
+      void *pixels = malloc(dataLen);
+      if (pixels != NULL) {
+        memcpy(pixels, base, dataLen);
+        CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
+        CFRelease(buf);
+
+        // BGRA 字节直接包装为 CGImage（DeviceRGB，零色彩空间转换）：
+        // 编码出的 JPEG 数值 = 取景器显示数值（Flutter 纹理按 sRGB 语境直出渲染）。
+        CGDataProviderRef provider =
+            CGDataProviderCreateWithData(NULL, pixels, dataLen, _freeCapturedFrameData);
+        CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+        CGImageRef cgImage = NULL;
+        if (provider != NULL && colorSpace != NULL) {
+          cgImage = CGImageCreate(w, h, 8, 32, rowBytes, colorSpace,
+                                  kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little,
+                                  provider, NULL, false, kCGRenderingIntentDefault);
+        }
+        if (colorSpace != NULL) CGColorSpaceRelease(colorSpace);
+        if (provider != NULL) CGDataProviderRelease(provider);
+        if (cgImage != NULL) {
+          // EXIF orientation 与 photoOutput 路径同映射（portrait 后置=6、前置镜像=5 等），
+          // 保证原图备份在系统相册等处的显示行为一致。
+          NSDictionary *props = @{
+            (id)kCGImageDestinationLossyCompressionQuality: @0.92,
+            (id)kCGImagePropertyOrientation: @(exifOrientation),
+          };
+          NSURL *url = [NSURL fileURLWithPath:path];
+          CGImageDestinationRef dest = CGImageDestinationCreateWithURL(
+              (__bridge CFURLRef)url, CFSTR("public.jpeg"), 1, NULL);
+          if (dest != NULL) {
+            CGImageDestinationAddImage(dest, cgImage, (__bridge CFDictionaryRef)props);
+            ok = CGImageDestinationFinalize(dest);
+            CFRelease(dest);
+          }
+          CGImageRelease(cgImage);
+        }
+        NSLog(@"[camerawesome] WYSIWYG video frame capture: %dx%d ok=%d", w, h, ok);
+        dispatch_async(dispatch_get_main_queue(), ^{ completion(ok); });
+        return;
+      }
     }
+    CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
+    CFRelease(buf);
+    NSLog(@"[camerawesome] WYSIWYG video frame capture failed: %dx%d", w, h);
+    dispatch_async(dispatch_get_main_queue(), ^{ completion(NO); });
+  });
+  return YES;
+}
+
+/// 直出帧的 EXIF Orientation（1-8），与 CameraPictureController 的
+/// getJpegOrientation + exifOrientationFromJpegOrientation 映射保持一致。
+- (NSInteger)exifOrientationForVideoFrame {
+  UIImageOrientation orientation;
+  switch (_motionController.deviceOrientation) {
+    case UIDeviceOrientationPortrait:
+      if (_cameraSensor == Front && _mirrorFrontCamera) {
+        orientation = UIImageOrientationLeftMirrored;
+      } else {
+        orientation = UIImageOrientationRight;
+      }
+      break;
+    case UIDeviceOrientationLandscapeRight:
+      orientation = (_cameraSensor == Back) ? UIImageOrientationUp : UIImageOrientationDown;
+      break;
+    case UIDeviceOrientationLandscapeLeft:
+      orientation = (_cameraSensor == Back) ? UIImageOrientationDown : UIImageOrientationUp;
+      break;
+    default:
+      orientation = UIImageOrientationLeft;
+      break;
   }
-  CVPixelBufferUnlockBaseAddress(buf, kCVPixelBufferLock_ReadOnly);
-  if (cnt == 0) return;
-  const int avgR = (int)(r / cnt), avgG = (int)(g / cnt), avgB = (int)(b / cnt);
-  // 写入 app Documents（与 Flutter getApplicationDocumentsDirectory 指向同一目录）
-  NSString *docs = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-  NSString *path = [docs stringByAppendingPathComponent:@"preview_ref.txt"];
-  NSString *content = [NSString stringWithFormat:@"%d %d %d\n", avgR, avgG, avgB];
-  [content writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+  switch (orientation) {
+    case UIImageOrientationDown:          return 3;
+    case UIImageOrientationLeft:          return 8;
+    case UIImageOrientationRight:         return 6;
+    case UIImageOrientationUpMirrored:    return 2;
+    case UIImageOrientationDownMirrored:  return 4;
+    case UIImageOrientationLeftMirrored:  return 5;
+    case UIImageOrientationRightMirrored: return 7;
+    case UIImageOrientationUp:
+    default:                              return 1;
+  }
 }
 
 /// Take the picture into the given path
 - (void)takePictureAtPath:(NSString *)path completion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
+  // 【所见即所得直出】无闪光时优先抓取取景器当前帧（videoDataOutput），
+  // 成片与取景器同源同色，根治「成片比取景器偏黄」（photoOutput 照片 ISP 偏暖，
+  // 详见 captureVideoFrameToJpegAtPath 注释）。闪光模式必须走 photoOutput
+  // （video 帧捕捉不到瞬时闪光）。直出条件不满足或编码失败时回退 photoOutput。
+  if (_flashMode == AVCaptureFlashModeOff) {
+    if ([self captureVideoFrameToJpegAtPath:path
+                                  completion:^(BOOL ok) {
+                                    if (ok) {
+                                      completion(@(YES), nil);
+                                    } else {
+                                      // 编码失败（磁盘异常等），回退 photoOutput 重试
+                                      [self captureWithPhotoOutputAtPath:path completion:completion];
+                                    }
+                                  }]) {
+      return;
+    }
+    // 无可用帧（相机刚启动等），走 photoOutput
+  }
+  [self captureWithPhotoOutputAtPath:path completion:completion];
+}
+
+/// AVCapturePhotoOutput 拍照路径（直出的回退 / 闪光模式）。
+- (void)captureWithPhotoOutputAtPath:(NSString *)path
+                           completion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
   // Instanciate camera picture obj
   CameraPictureController *cameraPicture = [[CameraPictureController alloc] initWithPath:path
                                                                              orientation:_motionController.deviceOrientation
@@ -665,30 +787,32 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
                                                                                 callback:^{
     // 拍照完成后恢复连续自动白平衡（lockWhiteBalanceToCurrentPreview 在拍照前冻结了它）
     [self restoreAutoWhiteBalance];
-    
+
     // If flash mode is always on, restore it back after photo is taken
     if (self->_torchMode == AVCaptureTorchModeOn) {
       [self->_captureDevice lockForConfiguration:nil];
       [self->_captureDevice setTorchMode:AVCaptureTorchModeOn];
       [self->_captureDevice unlockForConfiguration];
     }
-    
+
     completion(@(YES), nil);
   }];
-  
+
   // Create settings instance
   AVCapturePhotoSettings *settings = [AVCapturePhotoSettings photoSettings];
   [settings setFlashMode:_flashMode];
   [settings setHighResolutionPhotoEnabled:YES];
-  
-  // 拍照前缓存取景器帧平均色作色彩基准（方案A：预览锚定校色）
-  [self cachePreviewColorReference];
-  // 拍照前锁定白平衡到当前取景器增益，使快照成片与取景器观感一致（修复「取景器正常、成片偏黄」）
-  [self lockWhiteBalanceToCurrentPreview];
-  
+
+  // 拍照前锁定白平衡到当前取景器增益，使快照成片与取景器观感一致。
+  // 仅无闪光时锁定：闪光模式下快门会闪出与现场环境色温不同的照明，
+  // 系统照片管线需要自行评估闪光白平衡，预锁定环境增益反而会让成片偏色。
+  if (_flashMode == AVCaptureFlashModeOff) {
+    [self lockWhiteBalanceToCurrentPreview];
+  }
+
   [_capturePhotoOutput capturePhotoWithSettings:settings
                                        delegate:cameraPicture];
-  
+
 }
 
 # pragma mark - Camera video
@@ -830,12 +954,25 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
 # pragma mark - Data manipulation
 
 /// Used to copy pixels to in-memory buffer
+///
+/// 【非消费式读取】引擎（光栅线程）每帧渲染取景器纹理都会调用本方法。
+/// 原实现把 _latestPixelBuffer 原子换空（消费），导致每帧渲染后到下一帧
+/// 到来前（~33ms）存储为 nil——拍照直出路径（captureVideoFrameToJpegAtPath）
+/// 将频繁取不到帧而回退偏黄的 photoOutput。改为：原子换出（取得所有权，
+/// 避免与 delegate 的 release 竞争）→ 给引擎 retain 一份 → 原子放回；
+/// 放回失败说明 delegate 已存入更新帧，保留新帧即可。
 - (CVPixelBufferRef _Nullable)copyPixelBuffer {
   CVPixelBufferRef pixelBuffer = atomic_load(&_latestPixelBuffer);
-  while (!atomic_compare_exchange_strong(&_latestPixelBuffer, &pixelBuffer, nil)) {
-    pixelBuffer = atomic_load(&_latestPixelBuffer);
+  while (pixelBuffer != NULL &&
+         !atomic_compare_exchange_strong(&_latestPixelBuffer, &pixelBuffer, NULL)) {
   }
-  
+  if (pixelBuffer == NULL) return NULL;
+  CFRetain(pixelBuffer);
+  CVPixelBufferRef expected = NULL;
+  if (!atomic_compare_exchange_strong(&_latestPixelBuffer, &expected, pixelBuffer)) {
+    // 保留 delegate 存入的新帧；释放我们取出的一次所有权（引擎那份保留）
+    CFRelease(pixelBuffer);
+  }
   return pixelBuffer;
 }
 

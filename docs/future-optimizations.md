@@ -198,3 +198,34 @@
 - **背景/动机**：收藏过滤需要待 `favoriteTemplateIdsProvider` 就绪的收藏集合，且要在收藏后自动刷新列表；简单方案即整页重载。后续收藏体量大时可只重筛、不重拉全量数据。
 - **目标状态**：将收藏过滤从 `_loadData` 拆出，收藏变化仅对已渲染的列表做增量 `where` 收缩/恢复，避开全量 DAO 查询；或在 provider 内缓存收藏集合以避免整页重建。
 - **状态**：⏳ 待优化
+
+---
+
+## OHOS 拍照质量与速度优化（2026-08-27）
+
+### P1 · OHOS 拍照改用分段式拍照（photoAssetAvailable 两阶段出图）
+- **模块**：拍摄 · OHOS（camerawesome_ohos `CameraState.ets` + Flutter `capture_page.dart`）
+- **优化点**：当前为单段式拍照（photoAvailable 单回调，实测全程 ~1900ms）。HarmonyOS 官方分段式拍照先回调低质量快图（FAQ 实测 ~672ms 可用）再回调高质量图，拍摄体验显著更优。
+- **背景/动机**：本次已落地「拍照分辨率上限 3M→8.2M + 画质优先策略（API 21+ HIGH_QUALITY，系统侧）」两项优化；分段式拍照需切换到 photoAssetAvailable 回调 + photoAccessHelper 媒体库链路，媒体库「增强图」存在偏黄复发风险（与 iOS 偏黄问题同源），且 capture_page.dart 正被 iOS 偏黄会话并行修改，为避免冲突与风险叠加延后。
+- **目标状态**：iOS 会话收敛后，改用 photoAssetAvailable 两阶段回调：第一阶段快图先上屏预览，第二阶段高质量图替换落库；同步验证媒体库增强图色彩与 photoAvailable 直出图一致。
+- **状态**：⏳ 待优化
+
+---
+
+## 后期裁剪 WYSIWYG 修复（2026-08-27）
+
+### P1 · TransformParams 烘焙后显示双重应用（跨轮编辑显示层）
+
+- **模块**：后期编辑 · 裁剪/旋转（Flutter `gallery_edit_page.dart` / `capture_preview_page.dart`）
+- **优化点**：保存时 `processFile(transform: _localTransform)` 已把旋转/翻转/拉直烘焙进 JPEG 像素，DB 记录也存了同一 `transform`；下一轮编辑加载时 `_localTransform = photo.transform` 又在显示层（`_CanvasArea` / `CropOverlay._applyTransform`）叠加同一变换，显示双重旋转，且裁剪框坐标基于双重变换视图、与单次变换的导出管线不一致。
+- **背景/动机**：本次裁剪修复聚焦无变换场景的坐标基准（比例基准区域 ⊕ 嵌套裁剪），transform+裁剪跨轮组合的显示层双重应用牵涉「DB transform 语义改为增量/显示层改读烘焙态」的模型调整，超出本轮修复范围，先行登记。
+- **目标状态**：明确 `transform` 存储语义（建议：存「从原图累计的变换」，显示层不再叠加——因为照片已烘焙；或改为存增量、导出时与历史变换合成），`_applyPhotoFromHistory`/`_loadPhoto` 加载烘焙态照片时显示层用恒等变换，裁剪 UI 与导出管线共用同一变换语义。
+- **状态**：⏳ 待优化
+
+### P2 · 拍摄 facing（前/后摄）未持久化到 DB 记录
+
+- **模块**：拍摄落库 · 后期重新处理（Flutter `capture_page.dart` / `photo_post_processor.dart`）
+- **优化点**：落库的 `GalleryItemRecord` 未存拍摄时 facing；编辑保存从原图重新处理时 `processFile` 的 `facing` 入参取默认 `'back'`，前置拍摄的照片在重新处理时方向对齐（`_alignOrientation` 的镜像判定）可能与拍摄时不一致。
+- **背景/动机**：本次裁剪修复把 `cropRatio` 落库自愈（`resolveCropSavePlan` + `resolveBaseRatio`），facing 的持久化同样属于「编辑重建参数不完整」家族问题，但影响面较窄（仅前置摄照片重处理的镜像），先行登记。
+- **目标状态**：`GalleryItemRecord` 增加 facing 字段（或并入 postProcess JSON），拍摄落库时写入；编辑保存 `resolveCropSavePlan` 读取并传给 `processFile(facing:)`。
+- **状态**：⏳ 待优化

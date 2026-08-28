@@ -62,6 +62,13 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
   bool _isLoading = true;
   bool _isInitialLoaded = false;
 
+  /// 裁剪比例的初始值（按展示照片实际比例推断）。
+  ///
+  /// 用于 _loadPhoto / _reset / 保存后的本地增量初始化：让裁剪 Tab
+  /// 选中与照片一致的比例、进入裁剪模式时默认选框 = 满幅
+  /// （不操作即不裁剪，保证 WYSIWYG）。
+  String _initialLocalRatio = 'free';
+
   /// 只读模式标志（originalPath == null 时为 true）
   bool _isReadOnly = false;
 
@@ -93,6 +100,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
           _isReadOnly = photo?.originalPath == null;
           _isLoading = false;
         });
+        await _initLocalCropRatio();
       }
     } catch (e, st) {
       debugPrint('[gallery-edit] _loadPhoto 异常: $e\n$st');
@@ -102,6 +110,39 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// 按展示照片的实际宽高比初始化本地裁剪比例（[PhotoPostProcessor.uiRatioIdForAspect]）。
+  ///
+  /// 不初始化时本地默认 cropRatio='3:4'，进入裁剪模式即按 3:4 锁框并回传
+  /// 默认选区 → 用户未做任何操作保存也会把 fullscreen 等比例照片裁成 3:4。
+  /// 初始化为与照片一致的比例后，默认选框 = 满幅（无操作 = 无裁剪）。
+  /// [path] 为本次保存后的新照片路径（保存后重置场景传入，加载场景传 null
+  /// 自动取当前照片路径）。
+  Future<void> _initLocalCropRatio({String? path}) async {
+    try {
+      final photoPath = path ?? _photo?.filePath;
+      final displayPath = (photoPath != null &&
+              photoPath.isNotEmpty &&
+              !photoPath.startsWith('http'))
+          ? photoPath
+          : null;
+      if (displayPath == null) return;
+      // await 前先取屏幕比例（避免跨 await 使用 context）
+      final screenRatio = MediaQuery.of(context).size.aspectRatio;
+      final size = await PhotoPostProcessor.resolveImageSize(displayPath);
+      if (size == null || size.width <= 0 || size.height <= 0) return;
+      final ratioId = PhotoPostProcessor.uiRatioIdForAspect(
+          size.width / size.height, screenRatio);
+      if (!mounted) return;
+      setState(() {
+        _initialLocalRatio = ratioId;
+        // 仅覆盖比例，不动 customCropRect（null = 默认选区，首帧后回传）
+        _localPostProcess = _localPostProcess.copyWith(cropRatio: ratioId);
+      });
+    } catch (e) {
+      debugPrint('[gallery-edit] 初始化裁剪比例失败（忽略）: $e');
     }
   }
 
@@ -159,17 +200,23 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
       return;
     }
     setState(() {
-      _localPostProcess = const PostProcess(color: PostProcessColor());
+      // 比例重置为照片实际比例（默认选框 = 满幅），而非构造默认 '3:4'
+      _localPostProcess = PostProcess(
+        color: const PostProcessColor(),
+        cropRatio: _initialLocalRatio,
+      );
       _localTransform = const TransformParams();
     });
     HapticFeedback.lightImpact();
   }
 
   /// 将裁剪比例字符串解析为数值宽高比（width/height），null 表示自由裁剪。
-  double? _parseCropAspectRatio(String ratio) {
-    if (ratio == 'free' || ratio == 'none' || ratio == 'fullscreen') {
+  /// [screenRatio] 用于 'fullscreen'（= 取景器/屏幕比例）。
+  double? _parseCropAspectRatio(String ratio, double screenRatio) {
+    if (ratio == 'free' || ratio == 'none' || ratio.isEmpty) {
       return null;
     }
+    if (ratio == 'fullscreen') return screenRatio;
     if (ratio == '1:1') return 1.0;
     final parts = ratio.split(':');
     if (parts.length == 2) {
@@ -269,6 +316,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
 
   Widget _buildContent(GalleryItemRecord photo) {
     final tokens = ref.watch(themeTokensProvider);
+    final screenRatio = MediaQuery.of(context).size.aspectRatio;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -312,7 +360,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
                         )
                       : null,
                   cropAspectRatio: _parseCropAspectRatio(
-                      _localPostProcess.cropRatio),
+                      _localPostProcess.cropRatio, screenRatio),
                   onCropChanged: (rect) => _onPostProcessChanged(
                     _localPostProcess.copyWith(
                       customCropRect: CropRect(
@@ -442,12 +490,7 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
 
     final screenSize = MediaQuery.of(context).size;
     final screenRatio = screenSize.width / screenSize.height;
-    final isPortrait = screenSize.height >= screenSize.width;
-    // 全量参数 = baked + local增量（从原图重新处理时使用）
-    final fullParams = _bakedPostProcess.merge(_localPostProcess);
-    final aspectRatio = fullParams.cropRatio.isNotEmpty
-        ? fullParams.cropRatio
-        : 'fullscreen';
+    final screenIsPortrait = screenSize.height >= screenSize.width;
 
     if (!await File(originalPath).exists()) {
       if (!mounted) return;
@@ -458,6 +501,29 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
     setState(() => _isExporting = true);
 
     try {
+      // 解析裁剪上下文（多轮编辑 WYSIWYG 的关键）：
+      // - baseRatio / isPortrait 按烘焙照片实际尺寸推断（横屏拍摄的照片
+      //   不会被当前竖屏屏幕误判；旧记录 cropRatio 存错时按照片比例自愈）；
+      // - innerCropRect = 本轮 UI 框选（相对当前展示照片）；
+      // - baseCropRect = DB 记录的上一轮裁剪（相对比例基准区域）；
+      // - composedCropRect = 两者嵌套组合，保存后写回 DB 供下一轮编辑。
+      final plan = await PhotoPostProcessor.resolveCropSavePlan(
+        baked: _bakedPostProcess,
+        local: _localPostProcess,
+        displayedPhotoPath: photoPath,
+        originalPath: originalPath,
+        screenRatio: screenRatio,
+        fallbackIsPortrait: screenIsPortrait,
+      );
+
+      // 全量参数 = baked + local 增量；裁剪字段显式覆盖为组合结果
+      // （merge 对 cropRatio 恒取 baked 基线、对 customCropRect 仅在 local
+      // 非空时覆盖，均不符合嵌套组合语义，故用 copyWith 显式覆盖）。
+      final fullParams = _bakedPostProcess.merge(_localPostProcess).copyWith(
+        cropRatio: plan.baseRatio,
+        customCropRect: plan.composedCropRect,
+      );
+
       // 另存为时写入新文件路径，替换原图时覆盖当前照片文件
       final outputPath = isDuplicate
           ? _makeDuplicatePath(photoPath)
@@ -467,13 +533,14 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
         inputPath: originalPath,
         params: fullParams,
         transform: _localTransform,
-        aspectRatio: aspectRatio,
+        aspectRatio: plan.baseRatio,
         screenRatio: screenRatio,
-        isPortrait: isPortrait,
+        isPortrait: plan.isPortrait,
         outputPath: outputPath,
-        // 如果用户调整了裁剪框，传入自定义裁剪 Rect；
-        // 如果未调整（customCropRect 为 null），保持原有按比例裁剪逻辑
-        customCropRect: fullParams.customCropRect,
+        // 本轮框选（相对展示照片），与 baseCropRect 在 processFile 内嵌套
+        // 组合后映射到原图，保证「框选内容 == 导出内容」
+        customCropRect: plan.innerCropRect,
+        baseCropRect: plan.baseCropRect,
       );
 
       try {
@@ -549,8 +616,13 @@ class _GalleryEditPageState extends ConsumerState<GalleryEditPage> {
         // 保存后 JPEG 已用 fullParams 重新处理（烘焙），
         // 更新 _bakedPostProcess 为全量参数，_localPostProcess 重置为增量 0。
         _bakedPostProcess = fullParams;
-        _localPostProcess = const PostProcess(color: PostProcessColor());
+        _localPostProcess = PostProcess(
+          color: const PostProcessColor(),
+          cropRatio: _initialLocalRatio,
+        );
       });
+      // 按新照片实际比例重新初始化裁剪比例（页面 pop 前继续编辑保持 WYSIWYG）
+      await _initLocalCropRatio(path: processedPath);
 
       if (mounted) {
         LumiraToast.show(context, '已保存', duration: const Duration(seconds: 1));

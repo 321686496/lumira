@@ -25,6 +25,8 @@ class PreparingCameraState extends CameraState {
   CaptureMode? get captureMode => null;
 
   Future<void> start() async {
+    // 幽灵启动防护：context 已销毁（页面已退出）时不再启动相机
+    if (cameraContext.isDisposed) return;
     final filter = cameraContext.filterController.valueOrNull;
     if (filter != null) {
       await setFilter(filter);
@@ -43,6 +45,8 @@ class PreparingCameraState extends CameraState {
         await _startAnalysisMode();
         break;
     }
+    // 500ms 延迟 / init 期间页面可能已销毁：不再继续 setup 与按钮监听
+    if (cameraContext.isDisposed) return;
     await cameraContext.analysisController?.setup();
     if (nextCaptureMode == CaptureMode.analysis_only) {
       // Analysis controller needs to be setup before going to AnalysisCameraState
@@ -130,10 +134,13 @@ class PreparingCameraState extends CameraState {
 
   Future _startVideoMode() async {
     await Future.delayed(const Duration(milliseconds: 500));
-    await _init(
+    // 延迟期间页面已销毁：中止，避免相机被 init+start 后无人释放
+    if (cameraContext.isDisposed) return;
+    final ready = await _init(
       enableImageStream: cameraContext.imageAnalysisEnabled,
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
+    if (!ready || cameraContext.isDisposed) return;
     cameraContext.changeState(VideoCameraState.from(cameraContext));
 
     return CamerawesomePlugin.start();
@@ -141,10 +148,13 @@ class PreparingCameraState extends CameraState {
 
   Future _startPhotoMode() async {
     await Future.delayed(const Duration(milliseconds: 500));
-    await _init(
+    // 延迟期间页面已销毁：中止，避免相机被 init+start 后无人释放
+    if (cameraContext.isDisposed) return;
+    final ready = await _init(
       enableImageStream: cameraContext.imageAnalysisEnabled,
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
+    if (!ready || cameraContext.isDisposed) return;
     cameraContext.changeState(PhotoCameraState.from(cameraContext));
 
     return CamerawesomePlugin.start();
@@ -152,10 +162,13 @@ class PreparingCameraState extends CameraState {
 
   Future _startPreviewMode() async {
     await Future.delayed(const Duration(milliseconds: 500));
-    await _init(
+    // 延迟期间页面已销毁：中止，避免相机被 init+start 后无人释放
+    if (cameraContext.isDisposed) return;
+    final ready = await _init(
       enableImageStream: cameraContext.imageAnalysisEnabled,
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
+    if (!ready || cameraContext.isDisposed) return;
     cameraContext.changeState(PreviewCameraState.from(cameraContext));
 
     return CamerawesomePlugin.start();
@@ -163,10 +176,13 @@ class PreparingCameraState extends CameraState {
 
   Future _startAnalysisMode() async {
     await Future.delayed(const Duration(milliseconds: 500));
-    await _init(
+    // 延迟期间页面已销毁：中止，避免相机被 init+start 后无人释放
+    if (cameraContext.isDisposed) return;
+    final ready = await _init(
       enableImageStream: cameraContext.imageAnalysisEnabled,
       enablePhysicalButton: cameraContext.enablePhysicalButton,
     );
+    if (!ready || cameraContext.isDisposed) return;
 
     // On iOS, we need to start the camera to get the first frame because there
     // is no "AnalysisMode" at all.
@@ -182,6 +198,8 @@ class PreparingCameraState extends CameraState {
     required bool enableImageStream,
     required bool enablePhysicalButton,
   }) async {
+    // 已销毁则不再触发原生 init（Android 权限监听回调可能晚于销毁触发）
+    if (cameraContext.isDisposed) return false;
     initPermissions(
       sensorConfig,
       enableImageStream: enableImageStream,
@@ -194,6 +212,13 @@ class PreparingCameraState extends CameraState {
       captureMode: nextCaptureMode,
       exifPreferences: cameraContext.exifPreferences,
     );
+    if (cameraContext.isDisposed) {
+      // init 恰好跨过销毁点：释放刚创建的原生相机，避免泄漏占用
+      try {
+        await CameraInterface().stop();
+      } catch (_) {}
+      return false;
+    }
     _isReady = true;
     return _isReady;
   }

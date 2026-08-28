@@ -23,7 +23,10 @@ class PhotoCropLayer extends StatefulWidget {
   /// 当前裁剪框（相对坐标），null = 使用默认居中
   final Rect? initialCrop;
 
-  /// 锁定宽高比（null = 自由）
+  /// 锁定宽高比（null = 自由）。
+  /// 语义为「裁剪结果的像素宽高比（W/H）」：本层按展示照片的宽高比
+  /// 补偿为框内相对比例后传给 [CropOverlay]，保证选框的像素比例 == 所选比例
+  /// （否则在 9:16 照片上选 1:1，实际裁出的是 9:16）。
   final double? aspectRatio;
 
   /// 裁剪框变化回调（相对坐标）
@@ -159,7 +162,11 @@ class _PhotoCropLayerState extends State<PhotoCropLayer> {
                 child: CropOverlay(
                   photo: photo,
                   initialRect: widget.initialCrop,
-                  aspectRatio: widget.aspectRatio,
+                  // 像素比例 → 框内相对比例补偿：
+                  // 选框像素比 = (w_rel·Fw)/(h_rel·Fh) = relAspect · imageAspect，
+                  // 令其等于所选比例 R → relAspect = R / imageAspect。
+                  // （imageRect 为 contain 适配，其宽高比 == 照片宽高比）
+                  aspectRatio: _frameRelativeLock(),
                   onChanged: widget.onChanged,
                   tokens: widget.tokens,
                   transform: widget.transform,
@@ -170,6 +177,14 @@ class _PhotoCropLayerState extends State<PhotoCropLayer> {
         );
       },
     );
+  }
+
+  /// 计算传给 [CropOverlay] 的框内相对锁定比例（见 [aspectRatio] 文档）。
+  double? _frameRelativeLock() {
+    final r = widget.aspectRatio;
+    final a = _imageAspect;
+    if (r == null || a == null || !a.isFinite || a <= 0) return r;
+    return r / a;
   }
 
   Widget _buildErrorWidget() {

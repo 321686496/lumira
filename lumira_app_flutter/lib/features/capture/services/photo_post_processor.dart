@@ -32,9 +32,13 @@ class PhotoPostProcessor {
   ///
   /// [screenRatio] 屏幕宽高比（width/height），用于 fullscreen 模式按取景器裁剪
   /// [isPortrait] 设备是否为竖屏，用于 '4:3' 等比例的方向自适应裁剪
-  /// [customCropRect] 自定义裁剪框（相对坐标 0.0-1.0，相对比例裁剪后的可见区域）。
-  ///   为 null 时使用默认居中按比例裁剪（向后兼容）；
-  ///   不为 null 时在比例裁剪的基础上进一步裁剪（两步裁剪保证 WYSIWYG）。
+  /// [customCropRect] 自定义裁剪框（相对坐标 0.0-1.0，相对【当前展示的烘焙照片】）。
+  ///   为 null 时表示本次未框选（保持 [baseCropRect] 区域不变）；
+  ///   不为 null 时表示用户本次在展示照片上的新框选，与 [baseCropRect]
+  ///   嵌套组合后应用到比例基准区域（保证多轮编辑 WYSIWYG）。
+  /// [baseCropRect] 烘焙照片已有的自定义裁剪（相对坐标 0.0-1.0，相对【比例基准区域】），
+  ///   即 DB 记录 postProcess.customCropRect。多轮编辑时用于还原当前展示照片
+  ///   在原图中的真实来源区域；为 null 时基准 = 比例裁剪区域（首轮编辑）。
   static Future<String> processFile({
     required String inputPath,
     required PostProcess params,
@@ -47,6 +51,7 @@ class PhotoPostProcessor {
     FillLightState? fillLight,
     String facing = 'back',
     CropRect? customCropRect,
+    CropRect? baseCropRect,
   }) async {
     final sw = Stopwatch()..start();
     try {
@@ -92,23 +97,36 @@ class PhotoPostProcessor {
       );
       debugPrint('[post-process] 裁剪区域（比例）: $ratioCropRect');
 
-      // 2.5. 自定义裁剪
-      // 裁剪 UI（PhotoCropLayer/CropOverlay）叠加在「已烘焙的照片」上，而该照片
-      // 就是原图经方向校正/变换后按比例裁剪的可见区域。因此裁剪框的相对坐标
-      // (0.0-1.0) 是相对【比例裁剪区域】而言的，必须映射到该区域内；若相对整张
-      // 工作图解释，会把裁剪框作用到比例裁剪之外的区域，导致选区与导出不一致
-      // （所见 ≠ 所得）。
-      // 未拖拽过裁剪框（customCropRect == null）时保持整张居中满铺的比例裁剪不变。
-      var cropRect = ratioCropRect;
-      if (customCropRect != null) {
-        cropRect = computeCustomCropRect(
-          customCropRect,
+      // 2.5 组合裁剪（嵌套两步，保证多轮编辑 WYSIWYG）：
+      // - 烘焙基区域 = 比例基准区域 ⊕ baseCropRect（还原当前展示照片的来源区域）
+      //   裁剪 UI（PhotoCropLayer/CropOverlay）叠加在「已烘焙的照片」上，而该照片
+      //   是原图经方向校正/变换后按比例裁剪、再应用上一轮 customCropRect 的结果。
+      //   因此本轮框选必须先与上一轮裁剪嵌套组合，再映射到比例基准区域内；
+      //   若直接相对比例区域解释，会丢失上一轮裁剪基准，选区与导出不一致。
+      // - 最终区域 = 烘焙基区域 ⊕ customCropRect（本次新框选，相对展示照片）
+      // 相对坐标嵌套组合满足结合律：基准 ⊕ (a ⊕ b) == (基准 ⊕ a) ⊕ b。
+      // customCropRect == null 时保持烘焙基区域不变（本次未框选）。
+      var bakedBase = ratioCropRect;
+      if (baseCropRect != null) {
+        bakedBase = computeCustomCropRect(
+          baseCropRect,
           ratioCropRect[0],
           ratioCropRect[1],
           ratioCropRect[2],
           ratioCropRect[3],
         );
-        debugPrint('[post-process] 裁剪区域（自定义●比例区域坐标）: $cropRect');
+        debugPrint('[post-process] 烘焙基区域（比例区域 ⊕ 已有裁剪）: $bakedBase');
+      }
+      var cropRect = bakedBase;
+      if (customCropRect != null) {
+        cropRect = computeCustomCropRect(
+          customCropRect,
+          bakedBase[0],
+          bakedBase[1],
+          bakedBase[2],
+          bakedBase[3],
+        );
+        debugPrint('[post-process] 裁剪区域（烘焙基区域 ⊕ 本次框选）: $cropRect');
       }
 
       // 3. 计算降采样后的输出尺寸
@@ -513,6 +531,200 @@ class PhotoPostProcessor {
     return [x, y, w, h];
   }
 
+  /// 组合两个相对坐标裁剪框：[inner]（相对 [base] 区域）→ 结果相对 base 的基准区域。
+  ///
+  /// 多轮编辑时，DB 记录里的 customCropRect（相对比例基准区域）是上一轮的框选；
+  /// 本轮 UI 框选相对「上一轮裁剪后的展示照片」。两者按相对坐标嵌套组合
+  /// （x' = base.x + inner.x * base.w，w' = inner.w * base.w，y/h 同理），
+  /// 结果仍是相对比例基准区域的相对框，可直接作为新一轮的记录值。
+  ///
+  /// - base 为 null 时视为整图 [0,0,1,1]，结果 = inner；
+  /// - inner 为 null 时表示本次未框选，结果 = base（保持原裁剪不变）；
+  /// - 两者均为 null 时返回 null（无自定义裁剪）。
+  static CropRect? composeCropRects(CropRect? base, CropRect? inner) {
+    if (inner == null) return base;
+    if (base == null) return inner;
+    return CropRect(
+      x: (base.x + inner.x * base.w).clamp(0.0, 1.0),
+      y: (base.y + inner.y * base.h).clamp(0.0, 1.0),
+      w: (inner.w * base.w).clamp(0.0, 1.0),
+      h: (inner.h * base.h).clamp(0.0, 1.0),
+    );
+  }
+
+  /// 仅读取图片头部元数据获取尺寸（不解码像素，开销极小）。
+  /// 失败时返回 null（调用方需自行回退）。
+  static Future<ui.Size?> resolveImageSize(String path) async {
+    try {
+      final data = await File(path).readAsBytes();
+      final buffer = await ui.ImmutableBuffer.fromUint8List(data);
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      final size = ui.Size(
+        descriptor.width.toDouble(),
+        descriptor.height.toDouble(),
+      );
+      buffer.dispose();
+      descriptor.dispose();
+      return size;
+    } catch (e) {
+      debugPrint('[post-process] resolveImageSize 失败（$path）: $e');
+      return null;
+    }
+  }
+
+  /// 推断烘焙照片的基准裁剪比例（ratioId）。
+  ///
+  /// 背景：拍摄落库时 postProcess.cropRatio 曾未持久化实际使用的比例
+  /// （自由模式存的是默认 '3:4'，实际却按 'fullscreen' 等比例裁剪），导致
+  /// 编辑保存时 computeCropRect 用错误比例重算基准区域 → 框选与导出错位。
+  ///
+  /// 方法：无历史自定义裁剪时，展示照片的实际宽高比 == 比例基准区域宽高比，
+  /// 据此在候选比例中挑选与展示照片宽高比最匹配的一项；存储值本身能对上时
+  /// 优先使用存储值。推断结果应随保存写回 DB 记录（自愈旧数据）。
+  ///
+  /// [bakedSize] 当前展示（烘焙）照片的尺寸；[originalSize] 原图尺寸；
+  /// [storedRatio] DB 记录里的 cropRatio；[screenRatio] 当前屏幕宽高比
+  /// （fullscreen 基准与拍摄设备一致，App 锁竖屏时同一设备不变）。
+  static String resolveBaseRatio({
+    required ui.Size bakedSize,
+    required ui.Size originalSize,
+    required String storedRatio,
+    required double screenRatio,
+  }) {
+    if (bakedSize.width <= 0 || bakedSize.height <= 0) return storedRatio;
+    final bakedAspect = bakedSize.width / bakedSize.height;
+    // 竖横方向从烘焙照片推断（拍摄时可能横屏持机，比当前屏幕方向可靠）
+    final isPortrait = bakedSize.height >= bakedSize.width;
+    // 方向对齐后的原图尺寸（与 _alignOrientation 相同的判定）
+    final origLandscape = originalSize.width > originalSize.height;
+    final needRotate = (isPortrait && origLandscape) ||
+        (!isPortrait && !origLandscape);
+    final alignedW =
+        (needRotate ? originalSize.height : originalSize.width).round();
+    final alignedH =
+        (needRotate ? originalSize.width : originalSize.height).round();
+    if (alignedW <= 0 || alignedH <= 0) return storedRatio;
+
+    double aspectOf(String ratioId) {
+      final r = computeCropRect(
+        ratioId,
+        alignedW,
+        alignedH,
+        screenRatio,
+        isPortrait,
+      );
+      return r[2] / r[3];
+    }
+
+    const tol = 0.03;
+    if ((aspectOf(storedRatio) - bakedAspect).abs() <= tol) {
+      return storedRatio;
+    }
+
+    const candidates = <String>{
+      'fullscreen', 'free', '1:1', '4:3', '3:4',
+      '16:9', '9:16', '2:3', '3:2', '4:5', '5:4',
+    };
+    String best = storedRatio;
+    double bestDiff = double.infinity;
+    for (final c in {...candidates, storedRatio}) {
+      final diff = (aspectOf(c) - bakedAspect).abs();
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        best = c;
+      }
+    }
+    return bestDiff <= tol ? best : storedRatio;
+  }
+
+  /// 由照片实际宽高比推断裁剪 UI 应选中/锁定的比例（ratioId）。
+  ///
+  /// 用于编辑会话初始化裁剪 Tab：让选中的比例与展示照片的实际比例一致，
+  /// 进入裁剪模式时的默认选框即满幅（无操作 = 无裁剪）。
+  /// 无匹配（任意裁剪过的怪比例）时返回 'free'。
+  static String uiRatioIdForAspect(double? aspect, double screenRatio) {
+    if (aspect == null || !aspect.isFinite || aspect <= 0) return 'free';
+    final isPortrait = aspect <= 1.0;
+    double aspectOf(String ratioId) =>
+        CaptureState.computeTargetRatio(ratioId, isPortrait) ?? screenRatio;
+    const candidates = <String>[
+      '1:1', '3:4', '16:9', '9:16', '4:5', '3:2', '2:3', '5:4', '4:3',
+    ];
+    for (final c in candidates) {
+      if ((aspectOf(c) - aspect).abs() <= 0.03) return c;
+    }
+    if ((screenRatio - aspect).abs() <= 0.03) return 'fullscreen';
+    return 'free';
+  }
+
+  /// 解析编辑保存所需的裁剪上下文（多轮编辑 WYSIWYG 的统一入口）。
+  ///
+  /// 编辑页的裁剪 UI 叠加在「已烘焙照片」上，本轮框选（local.customCropRect）
+  /// 相对该照片；而照片 = 原图 → 比例基准区域 ⊕ 上一轮裁剪（baked.customCropRect，
+  /// 相对比例基准区域）。保存时需三者齐备才能从原图还原出与选框一致的输出：
+  ///
+  /// - 基准比例 [CropSavePlan.baseRatio]：
+  ///   - 无历史裁剪时用 [resolveBaseRatio] 按烘焙照片实际比例自愈存储值
+  ///     （旧数据拍摄落库时 cropRatio 可能存的是默认 '3:4'，实际按 'fullscreen' 裁剪）；
+  ///   - 有历史裁剪时裁剪框相对「存储比例」的基准区域，直接信任存储值。
+  /// - 方向 [CropSavePlan.isPortrait] 按烘焙照片推断（横屏拍摄的照片不会因
+  ///   当前屏幕竖屏而被误旋）。
+  /// - 记录值 [CropSavePlan.composedCropRect] = base ⊕ inner（相对比例基准区域），
+  ///   保存后写回 DB，供下一轮嵌套。
+  ///
+  /// [displayedPhotoPath] 当前展示（烘焙）照片路径；[originalPath] 原图路径；
+  /// [baked] DB 记录的烘焙参数；[local] 本轮编辑增量（框选在 local.customCropRect）；
+  /// [screenRatio] 屏幕宽高比；[fallbackIsPortrait] 尺寸解析失败时的方向回退；
+  /// [fallbackRatio] baked.cropRatio 为空时的比例回退（如拍摄会话传入的实际比例）。
+  static Future<CropSavePlan> resolveCropSavePlan({
+    required PostProcess baked,
+    required PostProcess local,
+    required String displayedPhotoPath,
+    required String originalPath,
+    required double screenRatio,
+    required bool fallbackIsPortrait,
+    String? fallbackRatio,
+  }) async {
+    final bakedCrop = baked.customCropRect;
+    final localCrop = local.customCropRect;
+
+    final bakedSize = await resolveImageSize(displayedPhotoPath);
+    final origSize = await resolveImageSize(originalPath);
+
+    final isPortrait = bakedSize != null
+        ? bakedSize.height >= bakedSize.width
+        : fallbackIsPortrait;
+
+    var storedRatio = baked.cropRatio;
+    if (storedRatio.isEmpty) {
+      storedRatio =
+          (fallbackRatio != null && fallbackRatio.isNotEmpty) ? fallbackRatio : 'fullscreen';
+    }
+
+    String baseRatio;
+    if (bakedCrop != null) {
+      // 有历史自定义裁剪：裁剪框相对存储比例的基准区域，信任存储值。
+      baseRatio = storedRatio;
+    } else if (bakedSize != null && origSize != null) {
+      baseRatio = resolveBaseRatio(
+        bakedSize: bakedSize,
+        originalSize: origSize,
+        storedRatio: storedRatio,
+        screenRatio: screenRatio,
+      );
+    } else {
+      baseRatio = storedRatio;
+    }
+
+    return CropSavePlan(
+      baseRatio: baseRatio,
+      isPortrait: isPortrait,
+      baseCropRect: bakedCrop,
+      innerCropRect: localCrop,
+      composedCropRect: composeCropRects(bakedCrop, localCrop),
+    );
+  }
+
   /// 写入诊断数据到 Documents 目录（真机可通过「文件」App 访问）
   /// 同时写入临时目录一份
   static Future<void> _writeDiagnosticFile({
@@ -547,6 +759,39 @@ class PhotoPostProcessor {
       debugPrint('[diag] 写入诊断文件失败: $e');
     }
   }
+}
+
+/// 编辑保存时的裁剪上下文（[PhotoPostProcessor.resolveCropSavePlan] 的产物）。
+///
+/// 统一解决多轮编辑的坐标基准问题：
+/// - [baseRatio] / [isPortrait]：重建「比例基准区域」所需的参数
+///   （processFile 的 aspectRatio / isPortrait 入参）；
+/// - [baseCropRect]：DB 记录的上一轮裁剪（相对比例基准区域）；
+/// - [innerCropRect]：本轮 UI 框选（相对当前展示照片）；
+/// - [composedCropRect]：两者嵌套组合后应写回 DB 的 customCropRect。
+class CropSavePlan {
+  const CropSavePlan({
+    required this.baseRatio,
+    required this.isPortrait,
+    required this.baseCropRect,
+    required this.innerCropRect,
+    required this.composedCropRect,
+  });
+
+  /// processFile 的 aspectRatio 入参（重建展示照片来源区域的比例基准）。
+  final String baseRatio;
+
+  /// processFile 的 isPortrait 入参（按烘焙照片实际方向推断，横屏拍摄不误判）。
+  final bool isPortrait;
+
+  /// DB 记录的上一轮自定义裁剪（相对比例基准区域）。
+  final CropRect? baseCropRect;
+
+  /// 本轮 UI 框选（相对当前展示照片）。
+  final CropRect? innerCropRect;
+
+  /// base ⊕ inner 组合结果（相对比例基准区域），保存后写回 DB。
+  final CropRect? composedCropRect;
 }
 
 // ─────────────────────────────────────────────────────────────────────────

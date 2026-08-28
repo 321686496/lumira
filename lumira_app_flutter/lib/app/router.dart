@@ -59,6 +59,7 @@ import '../features/profile/pages/profile_share_code_page.dart';
 import '../features/profile/pages/profile_my_templates_page.dart';
 import '../features/profile/pages/profile_settings_page.dart';
 import '../features/profile/pages/profile_settings_cache_page.dart';
+import '../features/profile/pages/profile_settings_resolution_page.dart';
 import '../features/profile/feedback/pages/feedback_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
 import '../features/points/pages/points_wallet_page.dart';
@@ -479,6 +480,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.profileSettingsCache,
         name: 'profileSettingsCache',
         builder: (context, state) => const ProfileSettingsCachePage(),
+      ),
+      GoRoute(
+        path: RouteNames.profileSettingsResolution,
+        name: 'profileSettingsResolution',
+        builder: (context, state) => const ProfileSettingsResolutionPage(),
       ),
       GoRoute(
         path: RouteNames.accountProtection,

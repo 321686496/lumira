@@ -149,10 +149,12 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   bool _isCropMode = false;
 
   /// 将裁剪比例字符串解析为数值宽高比（width/height），null 表示自由裁剪。
-  static double? _parseCropAspectRatio(String ratio) {
-    if (ratio == 'free' || ratio == 'none' || ratio == 'fullscreen') {
+  /// [screenRatio] 用于 'fullscreen'（= 取景器/屏幕比例，与拍摄语义一致）。
+  static double? _parseCropAspectRatio(String ratio, double screenRatio) {
+    if (ratio == 'free' || ratio == 'none' || ratio.isEmpty) {
       return null;
     }
+    if (ratio == 'fullscreen') return screenRatio;
     if (ratio == '1:1') return 1.0;
     final parts = ratio.split(':');
     if (parts.length == 2) {
@@ -203,11 +205,52 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     // 保存时：全量参数 = _bakedPostProcess.merge(_localPostProcess) 从原图重新处理。
     final initial = ref.read(CaptureState.effectivePostProcessProvider);
     _bakedPostProcess = initial;
-    _localPostProcess = const PostProcess(color: PostProcessColor());
+    // 裁剪比例初值：拍摄比例已知时同步取之（默认选框 = 满幅，无操作 = 无裁剪）；
+    // 未知时置 'free'（同样满幅），并在首帧后按照片实际比例校正。
+    final captureRatio =
+        (widget.aspectRatio != null && widget.aspectRatio!.isNotEmpty)
+            ? widget.aspectRatio!
+            : 'free';
+    _localPostProcess =
+        PostProcess(color: const PostProcessColor(), cropRatio: captureRatio);
     _sheetHeightNotifier = ValueNotifier<double>(_kClosedHeight);
     _currentPhotoId = widget.photoId;
     _pageController = PageController(initialPage: 0);
     _loadHistoryPhotos(); // fire-and-forget; loads DB history + original path
+    // 首帧后按照片实际宽高比校正裁剪比例（兜底：拍摄比例参数缺失/不符时）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initLocalCropRatio();
+    });
+  }
+
+  /// 按照片实际宽高比初始化本地裁剪比例（[PhotoPostProcessor.uiRatioIdForAspect]）。
+  ///
+  /// 不初始化时本地 cropRatio 为构造默认 '3:4'，进入裁剪模式即按 3:4 锁框
+  /// 并回传默认选区 → 用户未做任何操作保存也会把 fullscreen 等比例照片裁成 3:4。
+  /// 初始化为与照片一致的比例后，默认选框 = 满幅（无操作 = 无裁剪，WYSIWYG）。
+  /// [path] 为保存后的新照片路径（保存后重置场景传入；缺省取当前照片）。
+  Future<void> _initLocalCropRatio({String? path}) async {
+    try {
+      final photoPath = path ?? _photoUrl;
+      final displayPath =
+          (photoPath.isNotEmpty && !photoPath.startsWith('http'))
+              ? photoPath
+              : null;
+      if (displayPath == null) return;
+      // await 前先取屏幕比例（避免跨 await 使用 context）
+      final screenRatio = MediaQuery.of(context).size.aspectRatio;
+      final size = await PhotoPostProcessor.resolveImageSize(displayPath);
+      if (size == null || size.width <= 0 || size.height <= 0) return;
+      final ratioId = PhotoPostProcessor.uiRatioIdForAspect(
+          size.width / size.height, screenRatio);
+      if (!mounted) return;
+      setState(() {
+        // 仅覆盖比例，不动 customCropRect（null = 默认选区，首帧后回传）
+        _localPostProcess = _localPostProcess.copyWith(cropRatio: ratioId);
+      });
+    } catch (e) {
+      debugPrint('[preview] 初始化裁剪比例失败（忽略）: $e');
+    }
   }
 
   @override
@@ -293,6 +336,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
           .map((m) => m.copyWith(active: m.name == record.mood))
           .toList();
     });
+    // 按该照片实际宽高比初始化裁剪比例（默认选框 = 满幅，无操作 = 无裁剪）
+    _initLocalCropRatio();
   }
 
   /// PageView 页面切换回调：更新当前索引并恢复该照片的状态
@@ -870,7 +915,6 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
     try {
       final originalPath = _originalPath!;
-      final captureAspectRatio = widget.aspectRatio ?? 'fullscreen';
 
       // 检查原图是否存在
       if (!await File(originalPath).exists()) {
@@ -879,29 +923,50 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
         return;
       }
 
-      // 屏幕比例 / 方向与拍摄烘焙时一致（应用锁竖屏，MediaQuery 即拍摄时比例），
-      // 保证保存时 computeCropRect 得到的比例裁剪区域 == 裁剪 UI 显示的烘焙照片，
-      // 自定义裁剪框（相对该区域）才能所见即所得。
+      // 屏幕比例 / 方向与拍摄烘焙时一致（应用锁竖屏，MediaQuery 即拍摄时比例）
       final screenSize = MediaQuery.of(context).size;
       final screenRatio = screenSize.width / screenSize.height;
-      final isPortrait = screenSize.height >= screenSize.width;
+      final screenIsPortrait = screenSize.height >= screenSize.width;
 
-      // 从原图重新处理（全量参数 = baked + local增量）
+      // 解析裁剪上下文（多轮编辑 WYSIWYG 的关键，与后期修图页一致）：
+      // - baseRatio / isPortrait 按烘焙照片实际尺寸推断（滑动切换到历史照片、
+      //   横屏拍摄等场景不会被当前屏幕方向误判）；
+      // - innerCropRect = 本轮 UI 框选（相对当前展示照片）；
+      // - baseCropRect = DB 记录的上一轮裁剪（相对比例基准区域）；
+      // - composedCropRect = 两者嵌套组合，保存后写回 DB 供下一轮编辑。
+      final plan = await PhotoPostProcessor.resolveCropSavePlan(
+        baked: _bakedPostProcess,
+        local: _localPostProcess,
+        displayedPhotoPath: photoPath,
+        originalPath: originalPath,
+        screenRatio: screenRatio,
+        fallbackIsPortrait: screenIsPortrait,
+        fallbackRatio: widget.aspectRatio,
+      );
+
+      // 从原图重新处理（全量参数 = baked + local增量；裁剪字段显式覆盖为
+      // 组合结果——merge 对 cropRatio 恒取 baked、customCropRect 仅在 local
+      // 非空时覆盖，均不符合嵌套组合语义）
       // - 替换原图：outputPath=photoPath，覆盖当前显示的照片文件
       // - 另存为：写入不冲突的新文件路径，不影响原图
-      final fullParams = _bakedPostProcess.merge(_localPostProcess);
+      final fullParams = _bakedPostProcess.merge(_localPostProcess).copyWith(
+        cropRatio: plan.baseRatio,
+        customCropRect: plan.composedCropRect,
+      );
       final outputPath =
           isDuplicate ? _makeDuplicatePath(photoPath) : photoPath;
       final processedPath = await PhotoPostProcessor.processFile(
         inputPath: originalPath,
         params: fullParams,
         transform: _localTransform,
-        aspectRatio: captureAspectRatio,
+        aspectRatio: plan.baseRatio,
         screenRatio: screenRatio,
-        isPortrait: isPortrait,
+        isPortrait: plan.isPortrait,
         outputPath: outputPath,
-        // 传入裁剪框（未拖拽过则为 null，此时 processFile 沿用比例裁剪）
-        customCropRect: _localPostProcess.customCropRect,
+        // 本轮框选（相对展示照片），与 baseCropRect 在 processFile 内嵌套
+        // 组合后映射到原图，保证「框选内容 == 导出内容」
+        customCropRect: plan.innerCropRect,
+        baseCropRect: plan.baseCropRect,
       );
 
       // Evict FileImage 缓存（避免显示旧版本）
@@ -940,13 +1005,15 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       } else if (currentPhotoId != null) {
         try {
           final dao = await ref.read(galleryDaoProvider.future);
-          // 替换原图：保留原图（可再次编辑），更新当前记录
+          // 替换原图：保留原图（可再次编辑），更新当前记录。
+          // 注意 postProcess 必须存【全量参数】（与 JPEG 烘焙内容一致），
+          // 之前误存 _localPostProcess（增量）会导致下一轮编辑的烘焙基线错乱。
           await dao.updateEdit(
             id: currentPhotoId,
             filePath: processedPath,
             originalPath: originalPath,
             transform: _localTransform,
-            postProcess: _localPostProcess,
+            postProcess: fullParams,
           );
           ref.invalidate(galleryDaoProvider);
           if (mounted) {
@@ -956,7 +1023,10 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
               // 保存后照片已用 fullParams（baked+local）重新处理（烘焙），
               // 更新 _bakedPostProcess 为全量参数，_localPostProcess 重置为增量 0。
               _bakedPostProcess = fullParams;
-              _localPostProcess = const PostProcess(color: PostProcessColor());
+              _localPostProcess = PostProcess(
+                color: const PostProcessColor(),
+                cropRatio: _localPostProcess.cropRatio,
+              );
               _isEdited = false;
               // 同步更新历史列表中的记录
               if (_currentIndex < _historyPhotos.length) {
@@ -978,6 +1048,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                 );
               }
             });
+            // 按新照片实际比例校正裁剪比例（自由裁剪出非标比例时归 'free'）
+            _initLocalCropRatio(path: processedPath);
           }
         } catch (e) {
           debugPrint('[save] 更新数据库记录失败: $e');
@@ -1046,20 +1118,35 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       // 屏幕比例 / 方向与拍摄烘焙时一致（与 _save 的保存路径保持一致）
       final screenSize = MediaQuery.of(context).size;
       final screenRatio = screenSize.width / screenSize.height;
-      final isPortrait = screenSize.height >= screenSize.width;
+      final screenIsPortrait = screenSize.height >= screenSize.width;
+      // 解析裁剪上下文（与 _onSave 同一套组合规则，
+      // 保证保存到系统相册的结果与编辑页框选一致）
+      final plan = await PhotoPostProcessor.resolveCropSavePlan(
+        baked: _bakedPostProcess,
+        local: _localPostProcess,
+        displayedPhotoPath: photoPath,
+        originalPath: _originalPath!,
+        screenRatio: screenRatio,
+        fallbackIsPortrait: screenIsPortrait,
+        fallbackRatio: widget.aspectRatio,
+      );
       // 从原图重新处理（应用当前编辑参数），写出到临时文件
-      final fullParams = _bakedPostProcess.merge(_localPostProcess);
+      final fullParams = _bakedPostProcess.merge(_localPostProcess).copyWith(
+        cropRatio: plan.baseRatio,
+        customCropRect: plan.composedCropRect,
+      );
       tmpPath = _makeDuplicatePath(photoPath);
       final processedPath = await PhotoPostProcessor.processFile(
         inputPath: _originalPath!,
         params: fullParams,
         transform: _localTransform,
-        aspectRatio: widget.aspectRatio ?? 'fullscreen',
+        aspectRatio: plan.baseRatio,
         screenRatio: screenRatio,
-        isPortrait: isPortrait,
+        isPortrait: plan.isPortrait,
         outputPath: tmpPath,
-        // 传入裁剪框，确保保存到系统相册的结果与编辑页框选一致
-        customCropRect: _localPostProcess.customCropRect,
+        // 本轮框选 + 上一轮裁剪嵌套组合，与编辑页框选所见即所得
+        customCropRect: plan.innerCropRect,
+        baseCropRect: plan.baseCropRect,
       );
       final result = await _photoSaverChannel.invokeMethod('saveToAlbum', {
         'path': processedPath,
@@ -1207,7 +1294,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                               )
                             : null,
                         aspectRatio: _parseCropAspectRatio(
-                            _localPostProcess.cropRatio),
+                            _localPostProcess.cropRatio,
+                            MediaQuery.of(context).size.aspectRatio),
                         transform: _localTransform,
                         onChanged: (rect) => setState(() {
                           _localPostProcess = _localPostProcess.copyWith(
