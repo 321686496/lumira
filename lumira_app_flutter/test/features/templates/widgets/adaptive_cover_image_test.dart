@@ -58,12 +58,12 @@ void main() {
         'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
     testWidgets('无来源时显示 fallback', (tester) async {
-      await tester.pumpWidget(MaterialApp(
+      await tester.pumpWidget(const MaterialApp(
         home: Scaffold(
           body: AdaptiveCoverImage(
             cover: null,
             coverData: null,
-            fallback: const Text('EMPTY'),
+            fallback: Text('EMPTY'),
           ),
         ),
       ));
@@ -71,11 +71,11 @@ void main() {
     });
 
     testWidgets('加载中先用默认 3:4，解码完成后用真实比例', (tester) async {
-      await tester.pumpWidget(MaterialApp(
+      await tester.pumpWidget(const MaterialApp(
         home: Scaffold(
           body: AdaptiveCoverImage(
             cover: png1x1,
-            fallback: const Text('EMPTY'),
+            fallback: Text('EMPTY'),
           ),
         ),
       ));
