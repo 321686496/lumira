@@ -16,6 +16,15 @@ abstract class CameraService {
   /// 拍照。返回原始 JPEG 文件路径（传感器直出，未做任何后处理）。
   Future<CaptureResult> capture({required CaptureConfig config});
 
+  /// 抓取取景器当前帧直出 JPEG（水印定格动画内容源）。
+  ///
+  /// - iOS：复用取景器帧直出（快 + 与取景器高度一致），返回动画帧 JPEG 路径；
+  ///   闪光模式下取景器帧捕捉不到瞬时闪光，调用方应回退用成片。
+  /// - OHOS/Android：返回 null（动画源走已拍原片硬解码）。
+  ///
+  /// 无可用帧（相机刚启动）/ 编码失败时返回 null，调用方回退用成片。
+  Future<String?> captureFrameForAnimation();
+
   /// 切换前后摄像头
   Future<void> switchCamera(String facing);
 

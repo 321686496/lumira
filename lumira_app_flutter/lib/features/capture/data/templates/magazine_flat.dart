@@ -14,7 +14,9 @@ const PhotoTemplate magazineFlatTemplate = PhotoTemplate(
     tags: ['静物', '杂志', '平铺', '构图', '设计感'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/magazine_flat.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/magazine_flat.png'),
+    ],
     description: '杂志风平铺静物，将书本、卡片与物件整齐排列，体现设计感与秩序美',
     referenceSource: '样片参考：Pinterest 平铺静物精选；参数参考杂志风布景教程',
   ),
@@ -25,13 +27,6 @@ const PhotoTemplate magazineFlatTemplate = PhotoTemplate(
     opacity: 0.4,
     aspectRatio: '1:1',
     description: '物件在桌面呈整齐网格或对角线排列，图文肌理作为画面纹理',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'food-overhead'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿势，纯俯拍平铺场景',
   ),
   camera: CameraParams(
     exposureCompensation: 0,

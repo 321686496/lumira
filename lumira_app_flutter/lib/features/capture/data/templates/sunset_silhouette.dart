@@ -42,6 +42,7 @@ const PhotoTemplate sunsetSilhouetteTemplate = PhotoTemplate(
           position: Position(x: 0.5, y: 0.45),
           scale: 1.1,
           rotation: 0,
+          cameraDirection: 'front',
           description: '手持设备自拍，微微侧脸看镜头，眼神低垂或望向远方，情绪内敛',
     ),
     Pose(

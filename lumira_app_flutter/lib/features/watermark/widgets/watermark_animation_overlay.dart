@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../../core/services/ohos_image_processor.dart';
 import '../models/watermark_template.dart';
 import '../services/watermark_renderer.dart';
 import '../../capture/services/dart_photo_pipeline.dart'
@@ -142,15 +143,45 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     // 动画启动延后到首帧解码完成，保证各平台时长一致（见 _startAnimation）。
   }
 
+  /// 解码源照片为 [ui.Image]。
+  ///
+  /// OHOS：走系统级硬件解码 [OhosImageProcessor.decodeJpegToRgba]，
+  /// 直接按 [targetDim] 降采样，绕过 flutter_ohos 引擎 dart:ui 慢速 JPEG 软件解码
+  /// （实测 1200x1600 约 6s）；失败自动回退 dart:ui 解码。
+  /// 其他平台：dart:ui 解码完整分辨率。
+  /// 返回 null 表示解码失败（调用方统一异常处理）。
+  Future<ui.Image?> _decodeSource({int targetDim = _decodeTargetDim}) async {
+    if (OhosImageProcessor.isSupported) {
+      final result = await OhosImageProcessor.instance.decodeJpegToRgba(
+        path: widget.photoPath,
+        targetWidth: targetDim,
+        targetHeight: targetDim,
+      );
+      if (result != null) {
+        return _rgbaToImage(result.rgba, result.width, result.height);
+      }
+      debugPrint('[watermark-anim] OHOS 原生解码失败，回退 dart:ui');
+    }
+    try {
+      final bytes = await File(widget.photoPath).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      codec.dispose();
+      return image;
+    } catch (e) {
+      debugPrint('[watermark-anim] dart:ui 解码失败: $e');
+      return null;
+    }
+  }
+
   /// 快速路径：解码原片 → 方向对齐 → 立即显示。
   Future<void> _prepBase() async {
     ui.Image? decoded;
     try {
       final bytes = await File(widget.photoPath).readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      decoded = frame.image;
-      codec.dispose();
+      decoded = await _decodeSource();
+      if (decoded == null) throw Exception('decode failed');
 
       final aligned = await _alignOrientation(decoded);
       if (aligned != decoded) {
@@ -183,10 +214,8 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
     ui.Image? downscaled;
     try {
       final bytes = await File(widget.photoPath).readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      source = frame.image;
-      codec.dispose();
+      source = await _decodeSource();
+      if (source == null) throw Exception('decode failed');
 
       final aligned = await _alignOrientation(source);
       if (aligned != source) {
@@ -194,10 +223,16 @@ class _WatermarkAnimationOverlayState extends State<WatermarkAnimationOverlay>
         source = aligned;
       }
 
-      // 降采样到展示目标尺寸，避免全尺寸合成耗时（仅两次瞬时对齐用图）。
-      downscaled = await _downscale(source, _decodeTargetDim);
-      source.dispose();
-      source = null;
+      if (OhosImageProcessor.isSupported) {
+        // OHOS：原生解码已按 _decodeTargetDim 降采样，无需再次缩放。
+        downscaled = source;
+        source = null;
+      } else {
+        // 其他平台：降采样到展示目标尺寸，避免全尺寸合成耗时（仅两次瞬时对齐用图）。
+        downscaled = await _downscale(source, _decodeTargetDim);
+        source.dispose();
+        source = null;
+      }
 
       // 宽色域原片在降采样后做正确的 P3→sRGB 换算，与成片色彩一致（避免动画偏黄）。
       downscaled = await _p3CorrectIfNeeded(downscaled, bytes);

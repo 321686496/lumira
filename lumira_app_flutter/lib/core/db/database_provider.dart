@@ -32,7 +32,7 @@ import 'dao/templates_favorite_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 44;
+const int _kDbVersion = 45;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -1426,6 +1426,15 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v44 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 45) {
+    try {
+      // v45: 内置模板增强（innertemplateenhance）——按 TemplateRegistry 强制重播内置模板，
+      // 使 39 个「增强文件夹无剪影」模板的姿势数据从 DB 中清除（旧的 poseJson 仍带姿势）。
+      await BuiltinDataSeeder.reseedBuiltinTemplates(db);
+    } catch (e) {
+      debugPrint('v45 migration failed (silent fallback): $e');
     }
   }
 }

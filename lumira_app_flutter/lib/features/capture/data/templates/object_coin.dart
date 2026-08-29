@@ -14,7 +14,9 @@ const PhotoTemplate objectCoinTemplate = PhotoTemplate(
     tags: ['微距', '硬币', '老物件', '细节'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/jewelry_closeup.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/object_coin.png'),
+    ],
     description: '微距放大老硬币的币面纹样、刻字与岁月包浆，复古质感浓厚',
     referenceSource: '样片参考：硬币收藏微距作品；参数参考古物微距曝光合集',
   ),
@@ -24,13 +26,6 @@ const PhotoTemplate objectCoinTemplate = PhotoTemplate(
     opacity: 0.42,
     aspectRatio: '1:1',
     description: '硬币置于画面中心，币面纹样锐利为焦点，柔和背景突出主体',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿态，聚焦硬币细节',
   ),
   camera: CameraParams(
     exposureCompensation: 0.3,

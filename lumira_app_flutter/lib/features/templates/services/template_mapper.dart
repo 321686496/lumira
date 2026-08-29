@@ -318,6 +318,7 @@ class TemplateMapper {
             'scale': p.scale,
             'rotation': p.rotation,
             'description': p.description,
+            if (p.cameraDirection != null) 'cameraDirection': p.cameraDirection,
           },
       ],
       camera: cameraJson,
@@ -427,6 +428,7 @@ class TemplateMapper {
             scale: (p['scale'] as num?)?.toDouble() ?? 1.0,
             rotation: (p['rotation'] as num?)?.toDouble() ?? 0,
             description: (p['description'] as String?) ?? '',
+            cameraDirection: p['cameraDirection'] as String?,
           ),
       ],
       camera: editor.EditorFormCamera(
@@ -613,6 +615,7 @@ class TemplateMapper {
       'scale': p.scale,
       'rotation': p.rotation,
       'description': p.description,
+      if (p.cameraDirection != null) 'cameraDirection': p.cameraDirection,
     };
   }
 
@@ -697,6 +700,7 @@ class TemplateMapper {
       scale: (json['scale'] as num?)?.toDouble() ?? 1.0,
       rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
       description: (json['description'] as String?) ?? '',
+      cameraDirection: json['cameraDirection'] as String?,
     );
   }
 

@@ -143,6 +143,23 @@ class CamerawesomeCameraService implements CameraService {
   }
 
   @override
+  Future<String?> captureFrameForAnimation() async {
+    // 仅 iOS 支持取景器帧直出；OHOS/Android 动画源走已拍原片硬解码，返回 null。
+    if (_delegate.platformTag != 'ios') return null;
+    try {
+      final dir = await getTemporaryDirectory();
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final path = p.join(dir.path, 'anim_frame_$ts.jpg');
+      final ok = await ca.CamerawesomePlugin.captureFrameForAnimation(path);
+      if (!ok) return null;
+      return path;
+    } catch (e) {
+      debugPrint('[camera] captureFrameForAnimation failed: $e');
+      return null;
+    }
+  }
+
+  @override
   Future<void> switchCamera(String facing) async {
     // 切换摄像头后设备缩放范围可能变化，清空缓存强制下次重新查询
     _cachedMaxZoom = null;

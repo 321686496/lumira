@@ -14,7 +14,9 @@ const PhotoTemplate minimalFruitTemplate = PhotoTemplate(
     tags: ['静物', '水果', '极简', '单体'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/indoor_still_life.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/minimal_fruit.png'),
+    ],
     description: '少量水果以极简方式摆放的静物，干净背景与柔和色彩传递宁静',
     referenceSource: '样片参考：极简果盘静物摄影；参数参考食物色彩极简合集',
   ),
@@ -25,13 +27,6 @@ const PhotoTemplate minimalFruitTemplate = PhotoTemplate(
     opacity: 0.4,
     aspectRatio: '1:1',
     description: '少量水果点缀在画面三分区，留白充足，色彩统一简洁',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿态，聚焦果盘静物',
   ),
   camera: CameraParams(
     exposureCompensation: 0.3,

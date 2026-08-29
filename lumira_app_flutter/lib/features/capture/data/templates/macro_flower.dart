@@ -14,7 +14,9 @@ const PhotoTemplate macroFlowerTemplate = PhotoTemplate(
     tags: ['微距', '花卉', '特写', '自然'],
     tagIds: [],
     price: 20,
-    cover: 'assets/images/templates/macro_flower.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/macro_flower.jpg'),
+    ],
     description: '微距镜头捕捉花卉细节，呈现花蕊纹理与娇嫩质感',
     referenceSource: '样片 EXIF: 500px 微距花卉作品；参数参考微距摄影教程',
   ),
@@ -24,13 +26,6 @@ const PhotoTemplate macroFlowerTemplate = PhotoTemplate(
     opacity: 0.4,
     aspectRatio: '1:1',
     description: '花蕊居于画面中心，四周留白突出主体细节，方构图强化稳定感',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'macro-flower'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '微距手持姿势参考，相机贴近花卉，稳定持握避免抖动',
   ),
   camera: CameraParams(
     exposureCompensation: 0,

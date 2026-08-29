@@ -42,6 +42,7 @@ const PhotoTemplate y2kPortraitTemplate = PhotoTemplate(
           position: Position(x: 0.5, y: 0.5),
           scale: 0.9,
           rotation: 0,
+          cameraDirection: 'front',
           description: '手举手机自拍半身入镜，比耶或叉腰，表情酷拽直视镜头',
     ),
     Pose(

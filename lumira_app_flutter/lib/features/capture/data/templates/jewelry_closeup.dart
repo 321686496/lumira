@@ -14,7 +14,9 @@ const PhotoTemplate jewelryCloseupTemplate = PhotoTemplate(
     tags: ['微距', '首饰', '宝石', '质感', '精致'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/jewelry_closeup.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/jewelry_closeup.png'),
+    ],
     description: '戒指/项链等首饰的超近特写，突出金属光泽、宝石切面与精致工艺',
     referenceSource: '样片参考：Pexels 产品微距精选；参数参考珠宝摄影教程',
   ),
@@ -24,13 +26,6 @@ const PhotoTemplate jewelryCloseupTemplate = PhotoTemplate(
     opacity: 0.45,
     aspectRatio: '4:5',
     description: '首饰主体置于黄金分割交点，宝石反光作为亮点，留白营造高级感',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'macro-flower'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿势，静物首饰单独呈现',
   ),
   camera: CameraParams(
     exposureCompensation: 0,

@@ -42,6 +42,7 @@ const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
           position: Position(x: 0.5, y: 0.5),
           scale: 0.8,
           rotation: 0,
+          cameraDirection: 'front',
           description: '手持手机前置，另一手比耶贴脸，歪头俏皮，甜笑',
     ),
     Pose(

@@ -14,7 +14,9 @@ const PhotoTemplate objectLeafTemplate = PhotoTemplate(
     tags: ['微距', '枯叶', '纹理', '细节'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/jewelry_closeup.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/object_leaf.png'),
+    ],
     description: '微距放大枯叶的脉络与肌理，呈现时间留下的织密纹路',
     referenceSource: '样片参考：枯叶纹理微距作品；参数参考自然纹理细节合集',
   ),
@@ -24,13 +26,6 @@ const PhotoTemplate objectLeafTemplate = PhotoTemplate(
     opacity: 0.4,
     aspectRatio: '1:1',
     description: '叶脉沿对角线延展，局部纹路放大为画面主体，虚化边缘',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿态，聚焦枯叶纹理',
   ),
   camera: CameraParams(
     exposureCompensation: 0.3,

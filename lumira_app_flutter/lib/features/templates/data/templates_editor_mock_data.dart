@@ -175,6 +175,7 @@ class EditorFormPose {
     this.scale = 1.0,
     this.rotation = 0,
     this.description = '',
+    this.cameraDirection,
   })  : silhouette = silhouette ?? SilhouetteResource(type: 'builtin', data: 'none'),
         position = position ?? Position(x: 0.5, y: 0.5);
 
@@ -187,6 +188,10 @@ class EditorFormPose {
 
   String description;
 
+  /// 相机方向：'front'（前置）| 'back'（后置）| null（跟随用户）。
+  /// 与 domain Pose.cameraDirection 对齐；套用模板时据此自动切换前后摄像头。
+  String? cameraDirection;
+
   EditorFormPose copy() => EditorFormPose(
         name: name,
         silhouette: silhouette.copy(),
@@ -194,6 +199,7 @@ class EditorFormPose {
         scale: scale,
         rotation: rotation,
         description: description,
+        cameraDirection: cameraDirection,
       );
 }
 

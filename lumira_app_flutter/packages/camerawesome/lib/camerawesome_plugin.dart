@@ -242,6 +242,11 @@ class CamerawesomePlugin {
     return CameraInterface().takePhoto(path);
   }
 
+  /// 抓取取景器当前帧直出 JPEG（水印定格动画内容源，iOS 专用）。
+  static Future<bool> captureFrameForAnimation(String path) async {
+    return CameraInterface().captureFrameForAnimation(path);
+  }
+
   static Future<void> recordVideo(
     String path, {
     CupertinoVideoOptions? cupertinoVideoOptions,

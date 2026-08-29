@@ -279,6 +279,31 @@ class _CapturePageState extends ConsumerState<CapturePage>
         _applyTemplateFillLight(entryTpl);
       }
 
+      // 幂等重应用当前姿势的相机方向（模板驱动）：
+      // 上方的 currentTemplateIdProvider 赋值已触发相机方向监听（可能切到前置），
+      // 但 loadCameraPrefs 随后恢复了用户持久化的默认朝向（可能为 back）会覆盖它。
+      // 这里在朝向稳定后按「当前模板 + 当前姿势」再次主动应用，保证退出重进后
+      // 自拍类模板仍能正确切到前置摄像头。模板驱动不持久化，不污染用户偏好。
+      final poseDir = ref.read(CaptureState.currentPoseCameraDirectionProvider);
+      if (poseDir != null) {
+        _applyPoseCameraDirection(poseDir);
+      }
+
+      // 幂等重应用模板镜头建议：
+      // 与补光/姿势方向同理，在 loadCameraPrefs 稳定朝向后按「当前模板 + 当前朝向」
+      // 主动重应用一次，保证退出重进后镜头建议不丢失。若最终为前置，则不套用镜头
+      // 建议并把缩放归位 1x，避免模板切换时残留后置的长焦/广角倍数。
+      final entryTplForLens = ref.read(CaptureState.originalTemplateProvider);
+      if (entryTplForLens != null) {
+        if (ref.read(CaptureState.cameraFacingProvider) == 'back') {
+          _applyTemplateLens(entryTplForLens);
+        } else {
+          ref.read(CaptureState.apparentZoomProvider.notifier).state = 1.0;
+          ref.read(CaptureState.zoomProvider.notifier).state = 1.0;
+          ref.read(cameraServiceProvider).setZoomMultiplier(1.0);
+        }
+      }
+
       // 修复 Bug（重复进入取景器卡加载）：
       // 1. 订阅相机就绪流，驱动取景器加载看门狗（超时未就绪自动重建）
       // 2. 调用 initialize() 让单例服务清除上一会话残留状态，保证干净起点
@@ -535,6 +560,21 @@ class _CapturePageState extends ConsumerState<CapturePage>
         'intensity=${fl?.intensity ?? 0.8} facing=${onFront ? 'front' : 'back'}');
   }
 
+  /// 按姿势指定的相机方向切换前后摄像头。
+  /// - direction 为 null（模板/姿势未指定）→ 不干预，保持当前朝向
+  /// - direction 与当前朝向相同 → 跳过
+  /// - 模板驱动的切换不持久化（不覆盖用户的前后摄偏好，自由模式仍恢复默认朝向）
+  void _applyPoseCameraDirection(String? direction) {
+    if (direction == null) return;
+    final current = ref.read(CaptureState.cameraFacingProvider);
+    if (current == direction) return;
+    ref.read(CaptureState.cameraFacingProvider.notifier).state = direction;
+    // 复用切换防抖与看门狗：防止与紧随的手动切换重叠导致取景器卡死
+    _cameraSwitchInProgress = true;
+    _startCameraReadyWatchdog();
+    debugPrint('[capture] 模板/姿势指定相机方向，切换至: $direction');
+  }
+
   @override
   void didChangeMetrics() {
     super.didChangeMetrics();
@@ -651,9 +691,31 @@ class _CapturePageState extends ConsumerState<CapturePage>
     final facing = ref.read(CaptureState.cameraFacingProvider);
     final zoom = ref.read(CaptureState.zoomProvider);
 
+    // === 水印相框入场动画条件（快门按下即并行抓帧，动画源与成片互不阻塞） ===
+    final wmSettings = ref.read(watermarkSettingsProvider);
+    final wmTemplate = ref.read(currentWatermarkTemplateProvider);
+    // 挑战模式下不触发水印定格动画（即使水印与动画开关均已开启），
+    // 挑战流程聚焦拍摄本身，避免动画打断确认/完成跳转。
+    final isChallengeMode =
+        widget.challengeId != null && widget.challengeId!.isNotEmpty;
+    final shouldAnimateNow = wmSettings.enabled &&
+        wmSettings.animationEnabled &&
+        wmTemplate != null &&
+        !isChallengeMode;
+
     // 立即反馈：白闪 + 角标 processing 态
     setState(() => _shutterTrigger++);
     ref.read(captureThumbnailProvider.notifier).startCapture();
+
+    // iOS：快门瞬间双路并行 —— 取景器帧直出（水印动画源，快 + WYSIWYG）
+    // 与 photoOutput 成片（质量优先）并行执行，互不阻塞。
+    // 取景器帧捕捉不到瞬时闪光，闪光模式（on/auto/torch）动画源回退用成片。
+    // OHOS/Android：captureFrameForAnimation 返回 null，动画源走已拍原片（原生硬解码）。
+    final isIos = Platform.isIOS;
+    final useViewfinderFrame = isIos && flashMode == CaptureFlashMode.off;
+    final animationFrameFuture = shouldAnimateNow && useViewfinderFrame
+        ? cameraService.captureFrameForAnimation()
+        : Future<String?>.value(null);
 
     // 快照当前比例参数（避免连拍中切换比例导致参数不一致）
     final ratioId = ref.read(CaptureState.aspectRatioProvider);
@@ -685,24 +747,25 @@ class _CapturePageState extends ConsumerState<CapturePage>
       );
       debugPrint('[perf] cameraService.capture: ${sw.elapsedMilliseconds}ms');
 
+      // 等待取景器帧（编码 100-300ms，与成片拍照并行，通常已就绪）；
+      // 失败/无可用帧时回退用成片做动画源。
+      String? animationFramePath;
+      try {
+        animationFramePath = await animationFrameFuture;
+      } catch (e) {
+        debugPrint('[capture] captureFrameForAnimation failed: $e');
+      }
+
       // === 水印相框入场动画（立即触发） ===
-      // 快门按下并拿到原始 JPEG 后立即播放动画，使用原始照片 + CustomPaint
-      // 叠加水印（与最终渲染水印视觉一致），后处理在队列中并行执行。
-      // 这样用户按下快门即可看到水印动画，无需等待 GPU/isolate/落库完成。
-      final wmSettings = ref.read(watermarkSettingsProvider);
-      final wmTemplate = ref.read(currentWatermarkTemplateProvider);
-      // 挑战模式下不触发水印定格动画（即使水印与动画开关均已开启），
-      // 挑战流程聚焦拍摄本身，避免动画打断确认/完成跳转。
-      final isChallengeMode =
-          widget.challengeId != null && widget.challengeId!.isNotEmpty;
-      final shouldAnimateNow = wmSettings.enabled &&
-          wmSettings.animationEnabled &&
-          wmTemplate != null &&
-          !isChallengeMode;
+      // 快门按下即播放动画，使用「动画内容源帧」+ CustomPaint 叠加水印
+      // （与最终渲染水印视觉一致），后处理在队列中并行执行。
+      // - iOS 动画源 = 取景器帧直出（快 + 与取景器高度一致）；
+      // - OHOS 动画源 = 已拍原片（原生硬解码，见 watermark_animation_overlay）；
+      // - 无可用帧 / 闪光模式 / 取景器帧失败 → 回退用成片。
       if (shouldAnimateNow && mounted) {
         setState(() {
           _showWatermarkAnimation = true;
-          _animationPhotoPath = result.filePath;
+          _animationPhotoPath = animationFramePath ?? result.filePath;
           _animationTemplate = wmTemplate;
         });
         _onAnimationComplete = () {
@@ -1242,6 +1305,65 @@ class _CapturePageState extends ConsumerState<CapturePage>
     ref.read(cameraServiceProvider).setZoomMultiplier(clamped);
   }
 
+  /// 模板镜头建议 → 目标真实缩放倍数。
+  ///
+  /// 镜头字段（lensSuggestion/lensType）表达「建议用哪颗物理镜头」。camerawesome
+  /// （原生 + OHOS fork）没有独立的切镜头 API，跨镜头只能靠变焦比实现
+  /// （CameraX / AVFoundation / OHOS 相机底层均按变焦比切换物理镜头），因此这里
+  /// 把镜头建议映射为真实倍数。
+  ///
+  /// - 主摄/标准/1x → 1.0（显式归位，避免残留上一模板的长焦/广角倍数）
+  /// - 广角/超广角 → 0.5x（设备不支持时由下层 clamp 回主摄 1x）
+  /// - 长焦 → 2.0x，长焦 70mm+ → 3.0x
+  /// - 微距 → 1.0（多数设备无法用变焦切换到独立微距镜，退回主摄）
+  /// - 未知值 → null（不干预）
+  static double? _lensToZoomMultiplier(String lens) {
+    final v = lens.trim().toLowerCase();
+    switch (v) {
+      case 'main':
+      case '1x':
+      case '标准镜头':
+      case '主摄镜头':
+        return 1.0;
+      case 'wide':
+      case 'ultra_wide':
+      case 'wide_angle_0.6x':
+      case '广角镜头':
+      case '超广角镜头':
+        return 0.5;
+      case 'telephoto':
+      case '长焦镜头':
+        return 2.0;
+      case 'telephoto_70mm_plus':
+        return 3.0;
+      case 'macro':
+      case 'tele_macro':
+      case '微距镜头':
+      case '长焦/微距镜头':
+        return 1.0;
+      default:
+        return null;
+    }
+  }
+
+  /// 套用模板的镜头建议：把 lensSuggestion/lensType 映射为真实缩放倍数并下发。
+  /// 仅后置摄像头生效（前置无物理镜头切换，避免把前置 1x 拉成广角/长焦）。
+  /// 用户随后仍可手动缩放覆盖（与白平衡/补光一致：模板驱动、可手动调整）。
+  void _applyTemplateLens(PhotoTemplate tpl) {
+    final lens = tpl.camera.lensSuggestion ?? tpl.camera.lensType;
+    if (lens == null || lens.isEmpty) return;
+    final target = _lensToZoomMultiplier(lens);
+    if (target == null) return;
+    // 镜头建议只在后置生效；前置不套用（此处调用方已保证 facing，双保险）
+    final minZoom = ref.read(CaptureState.deviceMinZoomProvider) ?? 0.5;
+    final maxZoom = ref.read(CaptureState.deviceMaxZoomProvider) ?? 10.0;
+    final clamped = target.clamp(minZoom, maxZoom);
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = clamped;
+    ref.read(CaptureState.zoomProvider.notifier).state = clamped;
+    ref.read(cameraServiceProvider).setZoomMultiplier(clamped);
+    debugPrint('[capture] 模板镜头建议「$lens」→ ${clamped}x');
+  }
+
   /// 拍摄成片成功埋点：
   /// - 模板：source∈{builtin,remote} 上报 useShoot；自定义 source 被 Recorder 静默过滤。
   /// - 场景：仅系统内置场景（按 scenes 表 creator=='system' 判定）上报 useShoot。
@@ -1397,6 +1519,17 @@ class _CapturePageState extends ConsumerState<CapturePage>
           '[capture] 模板套用白平衡: ${settings.mode} K=${settings.temperatureK}');
     });
 
+    // 模板切换时按模板「镜头建议」自动切换镜头（通过变焦比实现）。
+    // - 仅后置生效（前置无物理镜头切换，避免把前置 1x 拉成广角/长焦）
+    // - 切到自由模式（next == null）不干预，保留当前缩放
+    // - 用户随后仍可手动缩放覆盖（与白平衡/补光一致：模板驱动、可手动调整）
+    ref.listen<PhotoTemplate?>(
+        CaptureState.originalTemplateProvider, (prev, next) {
+      if (next == null) return;
+      if (ref.read(CaptureState.cameraFacingProvider) == 'front') return;
+      _applyTemplateLens(next);
+    });
+
     // 模板切换时自动套用补光灯配置：
     // 模板启用了补光灯 → 自动开启并应用模板的颜色/强度（与拍摄页补光应用一致，保证所见即所得）；
     // 模板未启用补光灯 → 关闭补光灯（跟随模板参数）。
@@ -1429,6 +1562,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
         ref.read(CaptureState.fillLightViewfinderOffsetProvider.notifier).state =
             Offset.zero;
       }
+    });
+
+    // 模板 / 姿势切换时，按当前姿势的 cameraDirection 自动切换前后摄像头：
+    // - 姿势指定方向（'front'/'back'）且与当前朝向不同 → 切换
+    // - 姿势未指定（null，绝大多数模板）→ 不干预，保留当前朝向
+    // - 切到自由模式（模板为空 → 方向为 null）→ 不干预，保留用户当前朝向
+    ref.listen<String?>(
+        CaptureState.currentPoseCameraDirectionProvider, (prev, next) {
+      if (prev == next) return;
+      _applyPoseCameraDirection(next);
     });
 
     // 挑战模式：照片处理完成（状态变为 final_ 且 photoId 就绪）后，
@@ -3868,6 +4011,67 @@ List<int> _sampleAvgRgbFromRgba(ByteData byteData) {
   return [(r / cnt).round(), (g / cnt).round(), (b / cnt).round()];
 }
 
+/// 【iOS 偏黄修复】内容自适应白平衡：从成片自身的中性灰/浅灰像素统计 R/G/B 均值，
+/// 构造逐通道增益矩阵，把灰区拉回等量（R=G=B）→ 只抵消相机 ISP（Smart HDR/Deep
+/// Fusion）对中性区域的色偏，不动场景真实色彩。灰区近中性时返回 null（无需校正）。
+///
+/// 【曝光守恒铁律】三通道增益几何均值（(gr*gg*gb)^(1/3)）必须为 1，这样中性灰像素
+/// 灰度不变，全局曝光绝不动。仅当通道间相对差异足够大（R-B 失衡，即偏黄/偏蓝）时
+/// 才有非恒等的校正矩阵。
+List<double>? _buildAdaptiveWhiteBalanceMatrixFromRgba(
+    ByteData byteData, int width, int height) {
+  if (width <= 0 || height <= 0) return null;
+
+  // 收集中性灰/浅灰像素（低饱和度 + 中高亮度，避开纯黑/纯白/过曝与强饱和色）。
+  var ir = 0.0, ig = 0.0, ib = 0.0, n = 0;
+  for (var y = 0; y < height; y += 2) {
+    for (var x = 0; x < width; x += 2) {
+      final i = (y * width + x) * 4;
+      if (i + 3 >= byteData.lengthInBytes) continue;
+      final r = byteData.getUint8(i);
+      final g = byteData.getUint8(i + 1);
+      final b = byteData.getUint8(i + 2);
+      // 低饱和度（通道间最大差 ≤ 24），亮度适中（20~235，排除过曝高光与暗部）。
+      final mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      final mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
+      if (mx <= 0 || mx - mn > 24) continue;
+      if (mn < 20 || mx > 235) continue;
+      ir += r; ig += g; ib += b; n++;
+    }
+  }
+  if (n < 400) return null; // 灰区样本不足，不冒险校色
+
+  final avgR = ir / n, avgG = ig / n, avgB = ib / n;
+
+  // 目标：把灰区三通道的平均值推到相同（中性）→ 逐通道增益。
+  // 以 G 为亮度锚，R/B 向 G 对齐：若灰区偏黄（R>G>B），则 R 需小幅下降、B 需小幅抬升。
+  var gr = (avgG / avgR).clamp(0.88, 1.12);
+  var gg = 1.0;
+  var gb = (avgG / avgB).clamp(0.88, 1.12);
+
+  // 曝光守恒：三通道几何均值归 1，只保留通道间相对差异。
+  final gmean = math.pow(gr * gg * gb, 1.0 / 3.0).toDouble();
+  if (gmean > 1e-6) {
+    gr /= gmean;
+    gg /= gmean;
+    gb /= gmean;
+  }
+
+  if ((gr - 1).abs() < 0.015 &&
+      (gg - 1).abs() < 0.015 &&
+      (gb - 1).abs() < 0.015) {
+    return null; // 灰区已中性，无需校正
+  }
+  debugPrint('[capture] 自适应白平衡: grayAvg=[${avgR.round()},${avgG.round()},${avgB.round()}] '
+      '(n=$n) → gains=[${gr.toStringAsFixed(3)},${gg.toStringAsFixed(3)},${gb.toStringAsFixed(3)}]');
+  return [
+    gr, 0, 0, 0, 0,
+    0, gg, 0, 0, 0,
+    0, 0, gb, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
+}
+
 /// RGBA 原始字节 → [ui.Image]（ImageDescriptor.raw，避免 JPEG 编解码往返）。
 Future<ui.Image> _rgbaToUiImage(
   Uint8List rgba,
@@ -3967,6 +4171,8 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
     late ui.Image srcImage;
     List<int>? nativeAvgRgb;
     List<int>? sourceAvgRgb;
+    // iOS photo 管线成片的内容自适应白平衡校正矩阵（抵消相机 ISP 对中性区偏黄）。
+    List<double>? previewCorrectionMatrix;
     if (isOhos) {
       // OHOS：flutter_ohos 引擎 dart:ui 的 JPEG 软件解码极慢（1200x1600 实测 ~6s），
       // 改走 OHOS 系统 image.ImageSource（系统/硬件解码）拿 RGBA，
@@ -4050,12 +4256,24 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
 
       // 诊断：解码后、绘制前，直接采样源图 rawRgba 平均 RGB。
       // 与 worker 收到的 diagBefore（GPU 绘制后）对比，可定位偏黄发生在解码还是绘制。
+      // 同时基于源像素（P3→sRGB 换算后）构造内容自适应白平衡矩阵。
       try {
         final srcByteData =
             await srcImage.toByteData(format: ui.ImageByteFormat.rawRgba);
         if (srcByteData != null) {
           sourceAvgRgb = _sampleAvgRgbFromRgba(srcByteData);
           debugPrint('[capture] 源图解码 rawRgba 平均RGB(dart:ui): $sourceAvgRgb');
+          // 【iOS 偏黄修复】成片已切回 photo 管线（Smart HDR/Deep Fusion），
+          // 其照片 ISP 比 video 管线偏暖。从成片自身中性灰/浅灰像素统计逐通道增益
+          // （灰世界 + 曝光守恒），把灰区拉回等量（R=G=B），只抵消 ISP 对中性区的
+          // 色偏、不动场景真实色彩。仅 iOS 启用（OHOS/Android 无此偏黄问题）。
+          if (Platform.isIOS) {
+            previewCorrectionMatrix = _buildAdaptiveWhiteBalanceMatrixFromRgba(
+              srcByteData,
+              srcImage.width,
+              srcImage.height,
+            );
+          }
         }
       } catch (e) {
         debugPrint('[capture] 源图采样失败: $e');
@@ -4144,9 +4362,13 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         ' Y方向${rotatedImgH >= iOutH - 0.5 ? "✓" : "❌(拉伸!"})');
 
     // 构造色彩矩阵
-    // iOS 成片已改为「取景器原始帧直出」（原生端 captureVideoFrameToJpegAtPath），
-    // 源像素与取景器同色，无需任何白平衡/偏色补偿矩阵，直接叠加用户色彩矩阵（风格化）。
+    // iOS 成片已切回 photo 管线：先叠加内容自适应白平衡（抵消相机 ISP 对中性区
+    // 偏黄，让灰区观感追平取景器），再叠加用户色彩矩阵（风格化）。校正矩阵先行
+    // 作用于原始像素，避免被风格化改变 / 两者混在一起不可控。
     var matrix = composePostProcessMatrix(params.postProcess);
+    if (previewCorrectionMatrix != null) {
+      matrix = multiplyColorMatrices(matrix, previewCorrectionMatrix);
+    }
 
     // 单次 Canvas：方向对齐 + cover 裁剪 + 镜像 + 缩放 + ColorMatrix（一步完成）
     //

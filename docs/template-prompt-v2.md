@@ -150,7 +150,7 @@
 - 基础：name / category（一级题材）/ classification{type(=category), majorStyle, subStyle, method} / shortDesc / description / ambience{seasons/weathers/timeTones} / tags
   - （`price / referenceSource / author / tagIds / sortOrder / isActive` 由我自行定义，**不要输出**）
 - 构图 composition：overlayType、gridType（可选）、aspectRatio（=样片真实比例）、opacity、subjectFrame{x/y/w/h、相对坐标0-1}、description
-- 姿势 pose：description、position{x/y}、scale、rotation、silhouette{type(builtin|image|svg), data}
+- 姿势 pose：description、position{x/y}、scale、rotation、silhouette{type(builtin|image|svg), data}、**cameraDirection（'front'前置|'back'后置|省略=跟随用户——自拍类人像标'front'，套用模板时 App 自动切换前后摄）**
 - 相机 camera：exposureCompensation、isoMode(auto)、iso(null)、shutterSpeed(null)、whiteBalance、whiteBalanceK、flashMode、focusMode、lensType、lensSuggestion
 - 场景 sceneGuide：lightDirection、shootingDistance、background、props、bestTime、tips
 - 后期 postProcess：cropRatio、color{brightness/contrast/saturation/temperature/tint +（可选）highlights/shadows/blackPoint/clarity/vibrance/brilliance}、lut、systemFilter、smoothStrength、sharpen、vignette、grain、fillLight{enabled/color/intensity}
@@ -179,7 +179,7 @@
   "ambience": { "seasons": [], "weathers": [], "timeTones": [] },
   "tags": ["3-5个中文标签"],
   "composition": { "overlayType": "rule_of_thirds", "gridType": "（可选）", "aspectRatio": "3:4", "opacity": 0.3, "description": "（构图定调：景别+机位+主体位置占比+环境占比+头顶留白）", "subjectFrame": { "x": 0.22, "y": 0.05, "w": 0.56, "h": 0.94 } },
-  "pose": { "description": "（可执行姿势描述，含屏慕方向朝向）", "position": { "x": 0.5, "y": 0.48 }, "scale": 0.96, "rotation": 0.0, "silhouette": { "type": "builtin", "data": "（剪影 key）" } },
+  "pose": { "description": "（可执行姿势描述，含屏慕方向朝向）", "position": { "x": 0.5, "y": 0.48 }, "scale": 0.96, "rotation": 0.0, "silhouette": { "type": "builtin", "data": "（剪影 key）" }, "cameraDirection": "（'front'前置/自拍 | 'back'后置 | 省略=跟随用户；仅自拍类人像标 'front'，其余省略该键）" },
   "camera": { "exposureCompensation": 0.25, "isoMode": "auto", "iso": null, "shutterSpeed": null, "whiteBalance": "daylight", "whiteBalanceK": 5400, "flashMode": "off", "focusMode": "auto", "lensType": "主摄镜头", "lensSuggestion": "main" },
   "sceneGuide": { "lightDirection": "（光源类型+从屏幕哪侧来+角度+软硬+光比+阴影落点）", "shootingDistance": "1.8-2.2m", "background": "（具体可执行）", "props": ["（道具，无则空）"], "bestTime": "14:30-16:00", "tips": ["（逐条动作要领，含补偿/无法复现说明）"] },
   "postProcess": { "cropRatio": "3:4", "color": { "brightness": 3, "contrast": -6, "saturation": 12, "temperature": 4, "tint": 2 }, "smoothStrength": 35, "sharpen": 22, "vignette": 22, "grain": 18, "lut": "pastel", "systemFilter": "none", "fillLight": { "enabled": false, "color": "#FFE5B4", "intensity": 0.8 } },
@@ -220,7 +220,7 @@
 | | 标签 | `tags` |
 | Step2 封面与剪影 | 剪影类型/key | `pose.silhouette.type / data`（封面后台传图） |
 | Step3 构图 | 构图/网格/长宽比/透明度/主体框/构图描述 | `composition.overlayType / gridType / aspectRatio / opacity / subjectFrame / description` |
-| Step4 姿势 | 姿势描述 / 位置 / 缩放 / 旋转 | `pose.description / position / scale / rotation` |
+| Step4 姿势 | 姿势描述 / 位置 / 缩放 / 旋转 / 相机方向 | `pose.description / position / scale / rotation / cameraDirection` |
 | Step4 相机 | 相机参数 | `camera.*` |
 | Step5 场景引导 | 光线/距离/背景/道具/时段/技巧 | `sceneGuide.*` |
 | Step6 后期处理 | 裁剪/色彩/LUT/滤镜/磨皮/锐化/暗角/颗粒/补光 | `postProcess.*` |

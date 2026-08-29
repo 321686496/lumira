@@ -187,7 +187,7 @@
 - 基础：name / category（一级题材）/ classification{type(=category), majorStyle, subStyle, method} / shortDesc / description / ambience{seasons/weathers/timeTones} / tags
   - （`price / referenceSource / author / tagIds / sortOrder / isActive` 由我自行定义，**不要输出**）
 - 效果图 images：数组，每项 `{ imageIndex, role(封面|效果图), caption }`
-- 多姿势 poses：数组，每项 `{ imageIndex, name?, type(people|composition), description, compositionFrame?(非人像构图剪影描述), silhouette{type(builtin|image|svg), data}, position{x,y}, scale, rotation }`
+- 多姿势 poses：数组，每项 `{ imageIndex, name?, type(people|composition), description, compositionFrame?(非人像构图剪影描述), silhouette{type(builtin|image|svg), data}, position{x,y}, scale, rotation, cameraDirection?('front'前置|'back'后置|省略=跟随用户——仅自拍类人像标'front'，套用模板时自动切前后摄) }`
 - 构图 composition：overlayType、gridType（可选）、aspectRatio（=样片真实比例）、opacity、subjectFrame{x/y/w/h、相对坐标0-1}、description
 - 相机 camera：exposureCompensation、isoMode(auto)、iso(null)、shutterSpeed(null)、**whiteBalance / whiteBalanceK（已实现，按二·白平衡精确给档位+K）**、flashMode、focusMode、lensType、lensSuggestion
 - 场景 sceneGuide：lightDirection、shootingDistance、background、props、bestTime、tips（含**补光灯指引**：需打正面光时写"开启补光灯、从屏幕正面补光、距离/强度"）
@@ -272,7 +272,8 @@
       "silhouette": { "type": "builtin|image|svg", "data": "（剪影 key 建议；非人像给构图剪影 key/骨架）" },
       "position": { "x": 0.5, "y": 0.48 },
       "scale": 0.96,
-      "rotation": 0.0
+      "rotation": 0.0,
+      "cameraDirection": "（'front'前置/自拍 | 'back'后置 | 省略=跟随用户；仅自拍类人像标 'front'，其余省略该键）"
     },
     {
       "imageIndex": 1,
@@ -333,7 +334,7 @@
 | | 标签 | `tags` |
 | Step2 封面与效果图 | 效果图列表（[0]=封面） | `images`（角色说明） |
 | Step3 构图 | 构图/网格/长宽比/透明度/主体框/构图描述 | `composition.overlayType / gridType / aspectRatio / opacity / subjectFrame / description` |
-| Step3 姿势组 | 每姿势的名称/描述/剪影/位置/缩放/旋转 | `poses[].name / description / silhouette / position / scale / rotation` |
+| Step3 姿势组 | 每姿势的名称/描述/剪影/位置/缩放/旋转/相机方向 | `poses[].name / description / silhouette / position / scale / rotation / cameraDirection` |
 | Step4 相机 | 相机参数 | `camera.*` |
 | Step5 场景引导 | 光线/距离/背景/道具/时段/技巧 | `sceneGuide.*` |
 | Step6 后期处理 | 裁剪/色彩/LUT/滤镜/磨皮/锐化/暗角/颗粒/补光 | `postProcess.*` |

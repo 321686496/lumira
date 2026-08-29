@@ -730,26 +730,29 @@ static void _freeCapturedFrameData(void *info, const void *data, size_t size) {
 }
 
 /// Take the picture into the given path
+///
+/// 【成片一律走 photoOutput 管线】（质量优先：弱光 / 闪光 / Smart HDR / Deep Fusion）。
+/// 成片与取景器的色差由 Dart 侧内容自适应白平衡校正（见 capture_page 的
+/// _buildAdaptiveWhiteBalanceMatrixFromRgba），水印定格动画的内容源改用
+/// [captureFrameForAnimationAtPath:completion:]（取景器帧直出，快 + WYSIWYG）。
 - (void)takePictureAtPath:(NSString *)path completion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
-  // 【所见即所得直出】无闪光时优先抓取取景器当前帧（videoDataOutput），
-  // 成片与取景器同源同色，根治「成片比取景器偏黄」（photoOutput 照片 ISP 偏暖，
-  // 详见 captureVideoFrameToJpegAtPath 注释）。闪光模式必须走 photoOutput
-  // （video 帧捕捉不到瞬时闪光）。直出条件不满足或编码失败时回退 photoOutput。
-  if (_flashMode == AVCaptureFlashModeOff) {
-    if ([self captureVideoFrameToJpegAtPath:path
-                                  completion:^(BOOL ok) {
-                                    if (ok) {
-                                      completion(@(YES), nil);
-                                    } else {
-                                      // 编码失败（磁盘异常等），回退 photoOutput 重试
-                                      [self captureWithPhotoOutputAtPath:path completion:completion];
-                                    }
-                                  }]) {
-      return;
-    }
-    // 无可用帧（相机刚启动等），走 photoOutput
-  }
   [self captureWithPhotoOutputAtPath:path completion:completion];
+}
+
+/// 【水印动画内容源】抓取取景器当前帧（video 管线）直出 JPEG，专供水印定格动画。
+///
+/// 与最终成片（photoOutput 管线）解耦：动画要求「快 + 与取景器高度一致」即可，
+/// 无需 photo 管线的弱光/闪光质量增强。复用 [captureVideoFrameToJpegAtPath] 的
+/// 原子帧换出 + 后台 JPEG 编码逻辑（100–300ms、不阻塞取景器渲染）。
+///
+/// - 无闪光可用（video 帧捕捉不到瞬时闪光）；闪光模式下调用方回退用成片。
+/// - 相机刚启动无帧时返回 NO，调用方回退用成片。
+///
+/// 返回 YES 表示已受理，编码结果经 completion 回调（主线程）；返回 NO 表示
+/// 当前无可用帧（或尺寸异常），调用方应立即回退。
+- (BOOL)captureFrameForAnimationAtPath:(NSString *)path
+                            completion:(nonnull void (^)(BOOL ok))completion {
+  return [self captureVideoFrameToJpegAtPath:path completion:completion];
 }
 
 /// AVCapturePhotoOutput 拍照路径（直出的回退 / 闪光模式）。

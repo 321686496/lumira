@@ -431,6 +431,11 @@ class Pose {
   final double scale;
   final double rotation;
   final String description;
+
+  /// 相机方向：'front'（前置）| 'back'（后置）| null（不强制，跟随用户）。
+  /// 套用模板 / 切换姿势时，拍摄页据此自动切换前后摄像头。
+  final String? cameraDirection;
+
   const Pose({
     this.name = '',
     this.silhouette = const SilhouetteResource(type: 'builtin', data: 'none'),
@@ -440,6 +445,7 @@ class Pose {
     this.scale = 1.0,
     this.rotation = 0,
     this.description = '',
+    this.cameraDirection,
   });
 
   Pose copyWith({
@@ -451,6 +457,7 @@ class Pose {
     double? scale,
     double? rotation,
     String? description,
+    Object? cameraDirection = _unset,
   }) =>
       Pose(
         name: name ?? this.name,
@@ -461,6 +468,9 @@ class Pose {
         scale: scale ?? this.scale,
         rotation: rotation ?? this.rotation,
         description: description ?? this.description,
+        cameraDirection: identical(cameraDirection, _unset)
+            ? this.cameraDirection
+            : cameraDirection as String?,
       );
 
   @override
@@ -474,11 +484,12 @@ class Pose {
           positionY == other.positionY &&
           scale == other.scale &&
           rotation == other.rotation &&
-          description == other.description;
+          description == other.description &&
+          cameraDirection == other.cameraDirection;
 
   @override
-  int get hashCode => Object.hash(
-      name, silhouette, position, positionX, positionY, scale, rotation, description);
+  int get hashCode => Object.hash(name, silhouette, position, positionX, positionY,
+      scale, rotation, description, cameraDirection);
 }
 
 class CameraParams {

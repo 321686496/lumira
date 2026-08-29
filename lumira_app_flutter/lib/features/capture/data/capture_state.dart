@@ -344,6 +344,19 @@ class CaptureState {
         nextPoseIndex(cur, poses.length);
   }
 
+  /// 当前生效姿势的相机方向（'front' | 'back' | null=不强制）。
+  /// 同时 watch [originalTemplateProvider] 与 [currentPoseIndexProvider]：
+  /// 模板切换（含姿势下标复位为 0）或姿势切换都会重新计算，保证拍摄页只需
+  /// 监听本 provider 即可跟随「当前模板 + 当前姿势」的摄像头方向。
+  static final currentPoseCameraDirectionProvider = Provider<String?>((ref) {
+    final template = ref.watch(originalTemplateProvider);
+    final poses = template?.poses ?? const <Pose>[];
+    if (poses.isEmpty) return null;
+    final idx = ref.watch(currentPoseIndexProvider);
+    if (idx < 0 || idx >= poses.length) return null;
+    return poses[idx].cameraDirection;
+  });
+
   /// applied = editableTemplate 与 originalTemplate 是否完全一致
   /// true 表示用户没有修改任何参数（或已重置）
   static final appliedProvider = Provider<bool>((ref) {

@@ -14,7 +14,9 @@ const PhotoTemplate overheadDessertTableTemplate = PhotoTemplate(
     tags: ['美食', '甜品', '俯拍', '蛋糕', '下午茶'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/food_flat_lay.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/overhead_dessert_table.png'),
+    ],
     description: '90 度俯拍的甜品桌，蛋糕、马卡龙与茶具整齐铺陈的仪式感画面',
     referenceSource: '样片参考：美食俯拍甜品桌精选；参数参考甜品摄影布光合集',
   ),
@@ -24,13 +26,6 @@ const PhotoTemplate overheadDessertTableTemplate = PhotoTemplate(
     opacity: 0.42,
     aspectRatio: '1:1',
     description: '主蛋糕置于三分线交点，甜品与茶杯围绕错落摆放，形成对称或不规则节奏',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿势，仅示意手部可辅助摆放甜品',
   ),
   camera: CameraParams(
     exposureCompensation: 0,

@@ -14,7 +14,9 @@ const PhotoTemplate objectWatchTemplate = PhotoTemplate(
     tags: ['微距', '手表', '表盘', '物品'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/jewelry_closeup.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/object_watch.png'),
+    ],
     description: '微距拍摄手表表盘的精细做工，指针、刻度和金属反光的质感',
     referenceSource: '样片参考：手表表盘微距作品；参数参考产品微距布光合集',
   ),
@@ -24,13 +26,6 @@ const PhotoTemplate objectWatchTemplate = PhotoTemplate(
     opacity: 0.4,
     aspectRatio: '1:1',
     description: '表盘占据画面中心，指针与刻度清晰，浅景深虚化表壳',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿态，聚焦表盘细节',
   ),
   camera: CameraParams(
     exposureCompensation: 0,

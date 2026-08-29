@@ -116,6 +116,13 @@ const List<EditorOption> lensOptions = [
   EditorOption('ultra_wide', '超广角'),
 ];
 
+/// 相机方向（姿势级）：空 = 跟随用户（不强制前/后摄）。
+const List<EditorOption> cameraDirectionOptions = [
+  EditorOption('', '跟随用户'),
+  EditorOption('front', '前置'),
+  EditorOption('back', '后置'),
+];
+
 const List<EditorOption> isoModeOptions = [
   EditorOption('auto', '自动'),
   EditorOption('manual', '手动'),
@@ -689,6 +696,13 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     _scheduleAutoSave();
   }
 
+  /// 相机方向切换：''（跟随用户）/ 'front'（前置）/ 'back'（后置）
+  void _onCameraDirectionChanged(String v) {
+    _currentPose().cameraDirection = v.isEmpty ? null : v;
+    _notifyPoseChanged();
+    _scheduleAutoSave();
+  }
+
   // ===== 自动保存草稿（debounce 1000ms） =====
 
   void _scheduleAutoSave() {
@@ -1037,6 +1051,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
           onPosePositionSliderChanged: _onPosePositionSliderChanged,
           onScaleSliderChanged: _onScaleSliderChanged,
           onRotationSliderChanged: _onRotationSliderChanged,
+          onCameraDirectionChanged: _onCameraDirectionChanged,
         ));
         break;
       case 2: // 构图
@@ -2726,6 +2741,7 @@ class _Step3Pose extends StatelessWidget {
     required this.onPosePositionSliderChanged,
     required this.onScaleSliderChanged,
     required this.onRotationSliderChanged,
+    required this.onCameraDirectionChanged,
   });
 
   final ThemeTokens tokens;
@@ -2747,6 +2763,7 @@ class _Step3Pose extends StatelessWidget {
   final void Function(bool isX, double v) onPosePositionSliderChanged;
   final ValueChanged<double> onScaleSliderChanged;
   final ValueChanged<double> onRotationSliderChanged;
+  final ValueChanged<String> onCameraDirectionChanged;
 
   /// 取当前生效姿势的引用。poses 为空时返回占位空姿势用于只读展示。
   /// 返回的是同一 EditorFormPose 对象的引用，故 onChanged 闭包内 `pose.description = v`
@@ -2881,6 +2898,14 @@ class _Step3Pose extends StatelessWidget {
             placeholder: '姿势描述',
             multiline: true,
             onChanged: (v) => onChange(() => pose.description = v),
+          ),
+          const SizedBox(height: 14),
+          _FieldLabel(tokens: tokens, text: '相机方向'),
+          _PillGroup(
+            tokens: tokens,
+            options: cameraDirectionOptions,
+            value: pose.cameraDirection ?? '',
+            onChanged: onCameraDirectionChanged,
           ),
           const SizedBox(height: 14),
           // 预览框（可拖动）—— 用 RepaintBoundary 隔离重绘，

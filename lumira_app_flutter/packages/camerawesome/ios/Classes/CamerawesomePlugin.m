@@ -379,6 +379,24 @@ FlutterEventSink physicalButtonEventSink;
   });
 }
 
+- (void)captureFrameForAnimationAtPath:(nonnull NSString *)path completion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
+  if (path == nil || path.length <= 0) {
+    completion(nil, [FlutterError errorWithCode:@"PATH_NOT_SET" message:@"a file path must be set" details:nil]);
+    return;
+  }
+  
+  dispatch_async(_dispatchQueue, ^{
+    BOOL accepted = [self->_camera captureFrameForAnimationAtPath:path completion:^(BOOL ok) {
+      // captureVideoFrameToJpegAtPath 已在主线程回调
+      completion(@(ok), nil);
+    }];
+    if (!accepted) {
+      // 无可用帧（相机刚启动等）：立即回退，调用方用成片做动画
+      completion(@(NO), nil);
+    }
+  });
+}
+
 - (void)requestPermissionsSaveGpsLocation:(nonnull NSNumber *)saveGpsLocation completion:(nonnull void (^)(NSArray<NSString *> * _Nullable, FlutterError * _Nullable))completion {
   NSMutableArray *permissions = [NSMutableArray new];
   

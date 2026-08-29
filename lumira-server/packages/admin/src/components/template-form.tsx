@@ -35,6 +35,8 @@ const WHITE_BALANCES = ['daylight', 'cloudy', 'shade', 'tungsten', 'fluorescent'
 const FLASH_MODES = ['off', 'on', 'auto', 'torch'] as const;
 const FOCUS_MODES = ['auto', 'manual', 'continuous'] as const;
 const LENS_SUGGESTIONS = ['wide', 'main', 'telephoto', 'ultra_wide'] as const;
+// 相机方向（姿势级，控制套用模板时切换前/后摄；空 = 跟随用户）
+const CAMERA_DIRECTIONS = ['front', 'back'] as const;
 // 统一滤镜库（单一滤镜库，去重合并系统滤镜与 LUT 预设）
 // 既有滤镜合并规则：
 //  - 黑白：mono / noir / bw → fine_art_bw（黑白艺术）+ noir（黑白）
@@ -97,6 +99,8 @@ const NONE_VALUE = '__none__';
 interface PoseFormData {
   name: string;
   description: string;
+  /** 相机方向：'front'（前置）| 'back'（后置）| ''（跟随用户）。套用模板时自动切换前后摄。 */
+  cameraDirection: string;
   silhouetteType: string;
   silhouetteBuiltinKey: string;
   /** 新上传的剪影图片文件（提交时随表单发送） */
@@ -324,6 +328,7 @@ export default function TemplateForm({
       return {
         name: (raw?.name as string) ?? '',
         description: (raw?.description as string) ?? '',
+        cameraDirection: (raw?.cameraDirection as string) ?? '',
         silhouetteType: (silhouette.type as string) ?? 'builtin',
         silhouetteBuiltinKey: silhouette.type === 'image' ? '' : ((silhouette.data as string) ?? ''),
         silhouetteFile: null,
@@ -346,6 +351,7 @@ export default function TemplateForm({
     return [{
       name: '',
       description: '',
+      cameraDirection: '',
       silhouetteType: 'builtin',
       silhouetteBuiltinKey: '',
       silhouetteFile: null,
@@ -688,6 +694,7 @@ export default function TemplateForm({
       {
         name: '',
         description: '',
+        cameraDirection: '',
         silhouetteType: 'builtin',
         silhouetteBuiltinKey: '',
         silhouetteFile: null,
@@ -737,6 +744,7 @@ export default function TemplateForm({
     const posesPayload: Record<string, unknown>[] = poses.map((p, i) => ({
       ...(p.name ? { name: p.name } : {}),
       ...(p.description ? { description: p.description } : {}),
+      ...(p.cameraDirection ? { cameraDirection: p.cameraDirection } : {}),
       silhouette: {
         type: p.silhouetteType,
         ...(p.silhouetteType === 'builtin'
@@ -1426,6 +1434,30 @@ export default function TemplateForm({
                           value={currentPose.description}
                           onChange={(e) => updatePose(poseIndex, { description: e.target.value })}
                         />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>相机方向</Label>
+                        <Select
+                          value={currentPose.cameraDirection || ''}
+                          onValueChange={(v) =>
+                            updatePose(poseIndex, {
+                              cameraDirection: v === '' ? '' : v,
+                            })
+                          }
+                        >
+                          <SelectTrigger><SelectValue placeholder="跟随用户（不强制）" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">跟随用户（不强制）</SelectItem>
+                            {CAMERA_DIRECTIONS.map((v) => (
+                              <SelectItem key={v} value={v}>
+                                {v === 'front' ? '前置（自拍）' : '后置'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   </div>

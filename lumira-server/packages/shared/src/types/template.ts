@@ -55,6 +55,8 @@ export interface TemplateImage {
 export interface TemplatePose {
   name?: string;
   description?: string;
+  /** 相机方向：'front'（前置）| 'back'（后置）| undefined（跟随用户）。套用模板时据此自动切换前后摄。 */
+  cameraDirection?: 'front' | 'back';
   silhouette: { type: string; data?: string; url?: string };
   position: { x: number; y: number };
   scale: number;

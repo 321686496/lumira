@@ -14,7 +14,9 @@ const PhotoTemplate overheadBrunchTemplate = PhotoTemplate(
     tags: ['美食', '早午餐', '俯拍', 'brunch'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/food_flat_lay.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/overhead_brunch.png'),
+    ],
     description: '90 度俯拍的丰盛早午餐，突出咖啡、面包与水果的摆盘构成',
     referenceSource: '样片参考：The Bite Shot 早午餐俯拍；参数参考美食俯拍教程合集',
   ),
@@ -25,13 +27,6 @@ const PhotoTemplate overheadBrunchTemplate = PhotoTemplate(
     opacity: 0.4,
     aspectRatio: '1:1',
     description: '主餐置于画面中心，咖啡杯与配菜沿对角线摆放，餐具点缀留白区',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿势，仅示意手部可辅助摆放餐具',
   ),
   camera: CameraParams(
     exposureCompensation: 0,

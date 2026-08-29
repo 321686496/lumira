@@ -14,7 +14,9 @@ const PhotoTemplate minimalBookTemplate = PhotoTemplate(
     tags: ['静物', '书籍', '极简', '单体'],
     tagIds: [],
     price: 0,
-    cover: 'assets/images/templates/indoor_still_life.jpg',
+    images: [
+      TemplateImage(url: 'assets/images/templates/minimal_book.png'),
+    ],
     description: '单本极简风格书籍置于干净背景上的静物，突出留白与质感的宁静',
     referenceSource: '样片参考：极简书籍静物摄影；参数参考留白构图合集',
   ),
@@ -24,13 +26,6 @@ const PhotoTemplate minimalBookTemplate = PhotoTemplate(
     opacity: 0.4,
     aspectRatio: '1:1',
     description: '书籍置于三分线交点，大面积留白凸显极简氛围',
-  ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿态，聚焦单本静物',
   ),
   camera: CameraParams(
     exposureCompensation: 0.3,

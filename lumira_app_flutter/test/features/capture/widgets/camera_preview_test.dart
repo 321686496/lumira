@@ -66,6 +66,9 @@ class _FakeCameraService implements CameraService {
   Future<void> switchCamera(String facing) async {}
 
   @override
+  Future<String?> captureFrameForAnimation() async => null;
+
+  @override
   void setZoom(double normalized) {}
 
   @override
