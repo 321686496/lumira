@@ -8,7 +8,7 @@ import '../../../shared/widgets/common/fade_up.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../services/template_mapper.dart';
 import 'ambience_badges.dart';
-import 'template_cover_image.dart';
+import 'adaptive_cover_image.dart';
 
 /// TemplateRecord → AllTemplateItem 适配
 /// DAO 模板数据 → 模板网格（TemplateGrid）所需类型
@@ -66,7 +66,7 @@ class TemplateGrid extends StatelessWidget {
   ///
   /// 结构：图(宽×4/3) + 文字区(内边距 24 + 名称 20 + [短描述 3+30] + 间距 6 + 徽标行 22)。
   double _estimateCardHeight(AllTemplateItem t, double cardWidth) {
-    final imageH = cardWidth * 4 / 3;
+    final imageH = cardWidth / kDefaultCoverRatio;
     final hasDesc = t.shortDesc.isNotEmpty || t.description.isNotEmpty;
     final textH = 20 + (hasDesc ? 33 : 0) + 6 + 22 + 24;
     return imageH + textH;
@@ -146,78 +146,71 @@ class TemplateCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 3:4 aspect ratio image
-            AspectRatio(
-              aspectRatio: 3 / 4,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  TemplateCoverImage(
-                    cover: template.cover,
-                    coverData: template.coverData,
-                    fit: BoxFit.cover,
-                    fallback: Container(
-                      color: tokens.surfaceAlt,
-                      child: Icon(
-                        Icons.photo_outlined,
-                        color: tokens.textTertiary,
-                        size: 28,
+            // 封面：真实比例自适应（9:16 温和削减），宽度 100%
+            AdaptiveCoverImage(
+              cover: template.cover,
+              coverData: template.coverData,
+              fallback: Container(
+                color: tokens.surfaceAlt,
+                child: Icon(
+                  Icons.photo_outlined,
+                  color: tokens.textTertiary,
+                  size: 28,
+                ),
+              ),
+              errorFallback: Container(
+                color: tokens.surfaceAlt,
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  color: tokens.textTertiary,
+                ),
+              ),
+              overlay: [
+                if (template.price == 0)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: _FreeBadge(tokens: tokens),
+                  )
+                else
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: _PremiumBadge(
+                        tokens: tokens, price: template.price),
+                  ),
+                // 已拍照片数：叠在封面右下角（半透明深色 pill），
+                // 避免占用下方信息行横向空间，导致季节/天气等氛围标签换行变纵向。
+                if (usageCount > 0)
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.55),
+                        borderRadius: BorderRadius.circular(9999),
                       ),
-                    ),
-                    errorFallback: Container(
-                      color: tokens.surfaceAlt,
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        color: tokens.textTertiary,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.camera_alt_outlined,
+                              size: 12, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text(
+                            '已拍 $usageCount 张',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  if (template.price == 0)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: _FreeBadge(tokens: tokens),
-                    )
-                  else
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: _PremiumBadge(
-                          tokens: tokens, price: template.price),
-                    ),
-                  // 已拍照片数：叠在封面右下角（半透明深色 pill），
-                  // 避免占用下方信息行横向空间，导致季节/天气等氛围标签换行变纵向。
-                  if (usageCount > 0)
-                    Positioned(
-                      bottom: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
-                          borderRadius: BorderRadius.circular(9999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.camera_alt_outlined,
-                                size: 12, color: Colors.white),
-                            const SizedBox(width: 4),
-                            Text(
-                              '已拍 $usageCount 张',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
             Padding(
               padding: const EdgeInsets.all(12),
