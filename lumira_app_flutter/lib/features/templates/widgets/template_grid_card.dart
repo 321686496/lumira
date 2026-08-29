@@ -5,12 +5,12 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/effects/breathing_tap.dart';
 import '../data/templates_mock_data.dart';
-import 'template_cover_image.dart';
+import 'adaptive_cover_image.dart';
 
-/// 模板网格卡片（更多模板 section 2 列网格项）
+/// 模板网格卡片（更多模板 section 瀑布流项）
 ///
 /// 视觉规格来源：lumira-app/src/pages/templates/index.vue line 62-83
-/// - 图片宽高比: 100% (1:1)
+/// - 图片宽高比: 真实比例自适应（宽度 100%，9:16 温和削减）
 /// - 圆角: 24rpx → 12dp
 /// - 免费 badge: 左上角，绿色背景
 /// - name: 26rpx → 13dp，单行 ellipsis
@@ -106,53 +106,46 @@ class _GridImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 1.0, // padding-bottom: 100% → 1:1
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          TemplateCoverImage(
-            cover: tpl.cover,
-            coverData: tpl.coverData,
-            fit: BoxFit.cover,
-            fallback: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    tokens.brandSubtle,
-                    tokens.brand.withOpacity(0.4),
-                  ],
-                ),
-              ),
-              child: Center(
-                child: Icon(
-                  Icons.photo_camera_outlined,
-                  size: 28,
-                  color: tokens.brandDeep.withOpacity(0.6),
-                ),
-              ),
-            ),
-            errorFallback: Container(
-              color: tokens.surfaceAlt,
-              child: Center(
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  size: 24,
-                  color: tokens.textTertiary,
-                ),
-              ),
-            ),
+    return AdaptiveCoverImage(
+      cover: tpl.cover,
+      coverData: tpl.coverData,
+      fallback: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              tokens.brandSubtle,
+              tokens.brand.withOpacity(0.4),
+            ],
           ),
-          if (tpl.price == 0)
-            Positioned(
-              top: 6, // 12rpx → 6dp
-              left: 6,
-              child: _FreeBadge(),
-            ),
-        ],
+        ),
+        child: Center(
+          child: Icon(
+            Icons.photo_camera_outlined,
+            size: 28,
+            color: tokens.brandDeep.withOpacity(0.6),
+          ),
+        ),
       ),
+      errorFallback: Container(
+        color: tokens.surfaceAlt,
+        child: Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            size: 24,
+            color: tokens.textTertiary,
+          ),
+        ),
+      ),
+      overlay: [
+        if (tpl.price == 0)
+          Positioned(
+            top: 6, // 12rpx → 6dp
+            left: 6,
+            child: _FreeBadge(),
+          ),
+      ],
     );
   }
 }

@@ -17,6 +17,7 @@ import '../data/remote_templates_providers.dart';
 import '../data/templates_mock_data.dart';
 import '../data/templates_providers.dart';
 import '../services/template_mapper.dart';
+import '../widgets/adaptive_cover_image.dart';
 import '../widgets/recommendation_card.dart';
 import '../widgets/template_grid_card.dart';
 import '../widgets/user_preference_card.dart';
@@ -451,26 +452,48 @@ class _OtherSection extends ConsumerWidget {
                 return _EmptyState(tokens: tokens);
               }
               final visible = others.length > 6 ? others.sublist(0, 6) : others;
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12, // 24rpx → 12dp
-                  crossAxisSpacing: 12,
-                  // Forced fix: 原 0.78 导致 33px 溢出。
-                  // 文字区 = 8+13*1.2+3+11+10 = 47.6dp，图 1:1 = w
-                  // 设 w=154: 0.70 → h=220dp，图 154 + 文字 47.6 = 201.6 ✓
-                  childAspectRatio: 0.70,
-                ),
-                itemCount: visible.length,
-                itemBuilder: (_, index) {
-                  final tpl = _recordToItem(visible[index]);
-                  return TemplateGridCard(
+              // 瀑布流双列：按估算高度配平（与 TemplateGrid 同模式）
+              final screenW = MediaQuery.of(context).size.width;
+              final cardW = (screenW - 40 - 12) / 2; // 页面左右 padding 20*2 + 列间距 12
+              final left = <Widget>[];
+              final right = <Widget>[];
+              var leftH = 0.0;
+              var rightH = 0.0;
+              for (final rec in visible) {
+                final tpl = _recordToItem(rec);
+                final card = Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: TemplateGridCard(
                     template: tpl,
                     onTap: () => onTap(tpl.id),
-                  );
-                },
+                  ),
+                );
+                final h = _estimateMoreCardHeight(cardW);
+                if (leftH <= rightH) {
+                  left.add(card);
+                  leftH += h;
+                } else {
+                  right.add(card);
+                  rightH += h;
+                }
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: left,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: right,
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -669,4 +692,14 @@ TemplateItem _recordToItem(TemplateRecord r) {
     coverData: r.coverData,
     price: r.price,
   );
+}
+
+/// 估算「更多模板」卡片高度（瀑布流配平用）。
+///
+/// 结构：封面(宽 ÷ kDefaultCoverRatio) + 文字区(上 padding 8 + 名称 13*1.2 +
+/// 间距 3 + 分类 11 + 下 padding 10)。
+double _estimateMoreCardHeight(double cardWidth) {
+  final coverH = cardWidth / kDefaultCoverRatio;
+  const textH = 8 + 13 * 1.2 + 3 + 11 + 10;
+  return coverH + textH;
 }
