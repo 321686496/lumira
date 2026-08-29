@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 分享海报选型总览（7 组比例样式 + 历史归档）</title>
+<style>
+  :root{--gold:#C9A96E;--gold-deep:#B08D4F;--ink:#1A1A1A;--text2:#6B645C;--text3:#8E867B;--surface:#FDFBF7;--line:rgba(201,169,110,.32)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#E9E4DB;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:36px 20px 100px;display:flex;flex-direction:column;align-items:center;gap:24px;-webkit-font-smoothing:antialiased}
+  .page-title{color:#4A4238;font-size:18px;letter-spacing:3px;font-weight:600;display:flex;align-items:center;gap:12px}
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:2px;text-align:center;line-height:1.9}
+  .howto{width:min(960px,100%);background:#F3ECE0;border:1px solid var(--line);border-radius:16px;padding:16px 22px;color:#5C5346;font-size:12px;letter-spacing:1px;line-height:2}
+  .howto b{color:#B08D4F}
+  .nav{position:sticky;top:0;z-index:50;background:rgba(233,228,219,.94);backdrop-filter:blur(6px);display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:12px;border-bottom:1px solid var(--line);margin:6px -20px 0;width:100%}
+  .nav a{text-decoration:none;font-size:12px;color:#5C5346;border:1px solid var(--line);background:#FDFBF7;padding:6px 12px;border-radius:20px;letter-spacing:1px}
+  .nav a:hover{background:#C9A96E;color:#FFF}
+  .symbol{display:inline-block;vertical-align:middle}
+  .qr-grid{display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);gap:1px}
+  .qr-grid i{background:var(--ink);display:block;border-radius:1px}
+
+  /* ===== 选型区 ===== */
+  .sec{width:100%;margin-top:40px}
+  .sec-title{display:flex;align-items:center;gap:12px;color:#4A4238;font-size:15px;letter-spacing:3px;font-weight:600}
+  .sec-title::after{content:"";flex:1;height:1px;background:var(--line)}
+  .ratio-chip{font-family:Georgia,serif;color:#FFF;background:#B08D4F;padding:4px 12px;border-radius:12px;letter-spacing:1px;font-size:12px}
+  .sec-note{color:#9A8F7C;font-size:11px;letter-spacing:1px;margin-top:8px}
+  .style-row{display:flex;gap:44px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-top:22px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .style-label{font-size:10px;color:#A08A5F;letter-spacing:2px;background:#F3ECE0;border:1px solid var(--line);padding:3px 12px;border-radius:12px}
+  .poster{width:330px;position:relative;overflow:hidden;border-radius:22px;background:var(--surface);border:1px solid var(--line);box-shadow:0 24px 60px -28px rgba(60,48,28,.35)}
+
+  /* ================= 样式一 · 大图出血 + 信息面板 ================= */
+  .pA .ph{position:relative;width:100%;overflow:hidden}
+  .pA.r-full .ph{padding-bottom:177.8%}
+  .pA.r-34 .ph{padding-bottom:133.3%}
+  .pA.r-11 .ph{padding-bottom:100%}
+  .pA.r-196 .ph{padding-bottom:31.6%}
+  .pA.r-43 .ph{padding-bottom:75%}
+  .pA .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .pA .ph .grad{position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,14,8,.22) 0%,rgba(20,14,8,0) 30%)}
+  .pA .brand-on{position:absolute;top:16px;left:20px;display:flex;align-items:center;gap:8px;z-index:2}
+  .pA .brand-on .en{font-size:11px;letter-spacing:4px;color:#FFF;font-weight:600;text-shadow:0 1px 6px rgba(0,0,0,.35)}
+  .pA .brand-on .zh{font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.8)}
+  .pA .panel{padding:20px 24px 19px;display:flex;flex-direction:column}
+  .pA .k{font-size:9px;letter-spacing:3px;color:var(--gold-deep);font-weight:600}
+  .pA .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:30px;font-weight:700;color:var(--ink);letter-spacing:2px;line-height:1.25;margin-top:6px}
+  .pA .cat{margin-top:8px;font-size:9px;letter-spacing:3px;color:var(--text2)}
+  .pA .cat b{color:var(--gold-deep)}
+  .pA .meta{display:flex;align-items:center;gap:14px;margin-top:16px;padding-top:15px;border-top:1px solid var(--line)}
+  .pA .qrcode{width:54px;height:54px;flex:none;background:#F6F1E8;padding:5px;border-radius:10px;border:1px solid var(--line)}
+  .pA .qrcode i{background:var(--ink)}
+  .pA .tip{display:flex;flex-direction:column;gap:3px}
+  .pA .tip .t{font-size:11px;color:var(--ink);font-weight:600;letter-spacing:1px}
+  .pA .tip .s{font-size:9px;color:var(--text3);letter-spacing:1px}
+  .pA .foot{margin-top:13px;display:flex;align-items:center;gap:8px}
+  .pA .foot .bname{font-size:10px;letter-spacing:3px;color:var(--gold-deep);font-weight:600}
+  .pA .foot .bzh{font-size:10px;color:var(--text3);letter-spacing:2px}
+  .pA .foot .slogan{margin-left:auto;font-size:9px;color:var(--text3);letter-spacing:1px}
+
+  /* ================= 样式二 · 电影银幕 ================= */
+  .pB{background:#161310;color:#FFF}
+  .pB.port{display:flex;flex-direction:row}
+  .pB.r-full.port{min-height:560px}
+  .pB.r-34.port,.pB.r-11.port{min-height:520px}
+  .pB .screen{position:relative;overflow:hidden}
+  .pB.port .screen{width:51%;margin:20px 0 20px 20px}
+  .pB.port .ph{position:absolute;inset:0}
+  .pB.port .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .pB .sprockets{position:absolute;left:0;top:0;bottom:0;width:18px;background:rgba(0,0,0,.55);display:flex;flex-direction:column;gap:14px;justify-content:center;align-items:center;border-right:1px solid rgba(201,169,110,.4);z-index:2}
+  .pB .sprockets i{width:8px;height:12px;background:rgba(255,255,255,.5);border-radius:1px}
+  .pB.port .screen::after{content:"";position:absolute;inset:0;border:1px solid rgba(201,169,110,.5);pointer-events:none}
+  .pB .side{flex:1;padding:26px 22px 20px;display:flex;flex-direction:column}
+  .pB .k{font-size:9px;letter-spacing:5px;color:var(--gold);font-weight:600}
+  .pB .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:34px;font-weight:700;line-height:1.12;letter-spacing:2px;margin-top:12px}
+  .pB .cat{margin-top:13px;font-size:9px;letter-spacing:3px;color:rgba(255,255,255,.58)}
+  .pB .cat b{color:#E8CFA4}
+  .pB .rule{width:34px;height:2px;background:var(--gold);margin:18px 0 0}
+  .pB .qrwrap{margin-top:auto;padding-top:14px}
+  .pB .qrcode{width:54px;height:54px;background:#fff;padding:5px;border-radius:8px}
+  .pB .qrcode i{background:var(--ink)}
+  .pB .qtip{margin-top:6px;font-size:9px;color:rgba(255,255,255,.55);letter-spacing:1px}
+  .pB .foot{margin-top:15px;padding-top:14px;border-top:1px solid rgba(255,255,255,.16);display:flex;align-items:center;gap:8px}
+  .pB .foot .bname{font-size:10px;letter-spacing:3px;color:#E8CFA4;font-weight:600}
+  .pB .foot .bzh{font-size:10px;color:rgba(255,255,255,.7);letter-spacing:2px}
+  .pB .foot .slogan{margin-left:auto;font-size:9px;color:rgba(255,255,255,.5);letter-spacing:1px}
+  /* 横屏版：银幕带 + 下方文字 */
+  .pB.land{display:flex;flex-direction:column}
+  .pB.land .screen{margin:22px 22px 0}
+  .pB.land .screen .ph{position:relative;overflow:hidden}
+  .pB.land.r-43 .screen .ph{padding-bottom:75%}
+  .pB.land.r-196 .screen .ph{padding-bottom:31.6%}
+  .pB.land .screen .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .pB.land .screen::after{content:"";position:absolute;inset:0;border:1px solid rgba(201,169,110,.55);pointer-events:none}
+  .pB.land .body{padding:22px 24px 21px}
+  .pB.land .body .title{font-size:43px;line-height:1.03}
+  .pB.land .qrrow{margin-top:17px;padding-top:15px;border-top:1px solid rgba(255,255,255,.16);display:flex;align-items:center;gap:13px}
+  .pB.land .tip{display:flex;flex-direction:column;gap:3px}
+  .pB.land .tip .t{font-size:11px;color:#FFF;font-weight:600;letter-spacing:1px}
+  .pB.land .tip .s{font-size:9px;color:rgba(255,255,255,.55);letter-spacing:1px}
+
+  /* ================= 样式三 · 相纸卡片 ================= */
+  .pC{background:#F1EADF;padding:32px 26px 26px;display:flex;flex-direction:column;align-items:center}
+  .pC .print{background:#fff;padding:12px 12px 0;box-shadow:0 20px 44px -20px rgba(70,55,30,.5),0 2px 6px rgba(70,55,30,.14);border-radius:3px;position:relative}
+  .pC.r-full .print{width:72%;transform:rotate(1.5deg)}
+  .pC.r-34 .print{width:78%;transform:rotate(1.2deg)}
+  .pC.r-11 .print{width:82%;transform:rotate(-1deg)}
+  .pC.r-196 .print{width:100%;transform:rotate(-1.5deg)}
+  .pC.r-43 .print{width:100%;transform:rotate(-1.3deg)}
+  .pC .ph{position:relative;overflow:hidden}
+  .pC.r-full .ph{padding-bottom:177.8%}
+  .pC.r-34 .ph{padding-bottom:133.3%}
+  .pC.r-11 .ph{padding-bottom:100%}
+  .pC.r-196 .ph{padding-bottom:31.6%}
+  .pC.r-43 .ph{padding-bottom:75%}
+  .pC .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .pC .sticker{position:absolute;top:10px;left:10px;width:22px;height:22px;border-radius:50%;background:#D9BC8B;box-shadow:inset 0 -2px 4px rgba(0,0,0,.12);opacity:.9;z-index:2}
+  .pC .cap{padding:12px 8px 15px;text-align:center}
+  .pC .k{font-size:8px;letter-spacing:3px;color:var(--gold-deep);font-weight:600}
+  .pC .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:22px;font-weight:700;color:var(--ink);letter-spacing:3px;margin-top:5px}
+  .pC .cat{margin-top:5px;font-size:8px;letter-spacing:2px;color:var(--text3)}
+  .pC .qrrow{margin-top:22px;display:flex;align-items:center;gap:12px;background:#fff;border-radius:16px;padding:10px 14px;border:1px solid rgba(201,169,110,.45);box-shadow:0 12px 26px -18px rgba(70,55,30,.45)}
+  .pC .qrcode{width:50px;height:50px;flex:none;background:#F6F1E8;padding:5px;border-radius:9px}
+  .pC .qrcode i{background:var(--ink)}
+  .pC .tip{display:flex;flex-direction:column;gap:3px}
+  .pC .tip .t{font-size:11px;color:var(--ink);font-weight:600;letter-spacing:1px}
+  .pC .tip .s{font-size:9px;color:var(--text3);letter-spacing:1px}
+  .pC .foot{margin-top:14px;display:flex;align-items:center;gap:8px}
+  .pC .foot .bname{font-size:10px;letter-spacing:3px;color:var(--gold-deep);font-weight:600}
+  .pC .foot .bzh{font-size:10px;color:var(--text3);letter-spacing:2px}
+  .pC .foot .slogan{margin-left:auto;font-size:9px;color:var(--text3);letter-spacing:1px}
+
+  /* ================= 16:9 横屏 · 附加样式 ================= */
+  .poster.r169{width:380px;aspect-ratio:16/9}
+  .poster.r43b{width:380px;aspect-ratio:4/3}
+
+  /* 样式四 · 斜切杂志 */
+  .pD{display:flex;background:#F6F1E8;overflow:hidden}
+  .pD .ph{width:58%;position:relative;clip-path:polygon(0 0,100% 0,76% 100%,0 100%)}
+  .pD .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .pD .txt{width:42%;padding:20px 16px 13px;display:flex;flex-direction:column;justify-content:space-between}
+  .pD .txt .k{font-size:8px;letter-spacing:3px;color:var(--gold-deep);font-weight:600}
+  .pD .txt .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:26px;font-weight:700;color:var(--ink);letter-spacing:2px;line-height:1.1;margin-top:4px}
+  .pD .txt .cat{font-size:8px;letter-spacing:2px;color:var(--text2);margin-top:4px}
+  .pD .txt .cat b{color:var(--gold-deep)}
+  .pD .row2{display:flex;align-items:center;gap:8px;margin-top:10px}
+  .pD .qrcode{width:34px;height:34px;flex:none;background:#fff;padding:4px;border-radius:6px;border:1px solid var(--line)}
+  .pD .qrcode i{background:var(--ink)}
+  .pD .tip{display:flex;flex-direction:column;gap:2px}
+  .pD .tip .t{font-size:8px;color:var(--ink);font-weight:600;letter-spacing:.5px}
+  .pD .tip .s{font-size:7px;color:var(--text3);letter-spacing:.5px}
+  .pD .brand{display:flex;align-items:center;gap:6px;border-top:1px solid var(--line);padding-top:8px}
+  .pD .brand .bname{font-size:8px;letter-spacing:2px;color:var(--gold-deep);font-weight:600}
+  .pD .brand .bzh{font-size:8px;color:var(--text3);letter-spacing:1px}
+
+  /* 样式五 · 大标题压图 */
+  .pE{position:relative;overflow:hidden;background:#161310}
+  .pE .ph{position:absolute;inset:0}
+  .pE .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .pE .ph::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,14,8,.35) 0%,rgba(20,14,8,0) 40%,rgba(20,14,8,.6) 76%,rgba(20,14,8,.82) 100%)}
+  .pE .brand-top{position:absolute;top:12px;left:16px;display:flex;align-items:center;gap:6px;z-index:2}
+  .pE .brand-top .en{font-size:10px;letter-spacing:3px;color:#FFF;font-weight:600;text-shadow:0 1px 6px rgba(0,0,0,.35)}
+  .pE .brand-top .zh{font-size:8px;letter-spacing:2px;color:rgba(255,255,255,.75)}
+  .pE .over{position:absolute;left:18px;right:18px;bottom:15px;z-index:2;display:flex;flex-direction:column}
+  .pE .over .k{font-size:8px;letter-spacing:4px;color:#E8CFA4;font-weight:600}
+  .pE .over .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:32px;font-weight:700;color:#FFF;letter-spacing:3px;line-height:1.05;margin-top:3px;text-shadow:0 2px 12px rgba(0,0,0,.4)}
+  .pE .over .cat{font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.7);margin-top:5px}
+  .pE .over .cat b{color:#E8CFA4}
+  .pE .qrbox{position:absolute;top:12px;right:14px;width:36px;height:36px;background:#fff;padding:4px;border-radius:6px;z-index:2;box-shadow:0 6px 16px -8px rgba(0,0,0,.5)}
+
+  /* 样式六 · 画廊陈列 */
+  .pF{background:#EFE8DB;padding:13px 18px 14px;display:flex;flex-direction:column}
+  .pF .wall{flex:1;display:flex;flex-direction:column;background:#E3D9C8;border-radius:6px;padding:10px}
+  .pF .mat{background:#fff;padding:7px 7px 0;box-shadow:0 8px 20px -12px rgba(60,48,28,.5);border-radius:2px}
+  .pF .mat .ph{position:relative;padding-bottom:56.25%}
+  .pF .mat .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .pF .plaque{background:#fff;margin-top:8px;padding:5px 8px;border-radius:2px;border:1px solid rgba(201,169,110,.5)}
+  .pF .plaque .t{font-size:8px;color:var(--ink);font-weight:600;letter-spacing:1px}
+  .pF .plaque .s{font-size:7px;color:var(--text3);letter-spacing:1px;margin-top:1px}
+  .pF .foot2{margin-top:12px;display:flex;align-items:center;gap:10px}
+  .pF .qrcode{width:38px;height:38px;flex:none;background:#fff;padding:4px;border-radius:6px;border:1px solid var(--line)}
+  .pF .qrcode i{background:var(--ink)}
+  .pF .tip{display:flex;flex-direction:column;gap:2px}
+  .pF .tip .t{font-size:8px;color:var(--ink);font-weight:600;letter-spacing:.5px}
+  .pF .tip .s{font-size:7px;color:var(--text3);letter-spacing:.5px}
+  .pF .bname{margin-left:auto;font-size:8px;letter-spacing:2px;color:var(--gold-deep);font-weight:600}
+
+  /* ================= 4:3 横屏 · 附加样式 ================= */
+
+  /* 样式四 · 左右分栏 */
+  .pG{display:flex;background:#161310;overflow:hidden}
+  .pG .ph{width:56%;position:relative}
+  .pG .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .pG .side2{width:44%;padding:22px 16px 14px;display:flex;flex-direction:column;color:#FFF}
+  .pG .side2 .k{font-size:8px;letter-spacing:4px;color:var(--gold);font-weight:600}
+  .pG .side2 .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:28px;font-weight:700;line-height:1.08;letter-spacing:2px;margin-top:8px}
+  .pG .side2 .cat{font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.6);margin-top:9px}
+  .pG .side2 .cat b{color:#E8CFA4}
+  .pG .side2 .qrwrap{margin-top:auto;display:flex;align-items:center;gap:9px;padding-top:10px;border-top:1px solid rgba(255,255,255,.16)}
+  .pG .qrcode{width:36px;height:36px;flex:none;background:#fff;padding:4px;border-radius:6px}
+  .pG .qrcode i{background:var(--ink)}
+  .pG .qtip{font-size:7px;color:rgba(255,255,255,.55);letter-spacing:.5px;line-height:1.5}
+  .pG .bfoot{margin-top:10px;display:flex;align-items:center;gap:6px}
+  .pG .bfoot .bname{font-size:8px;letter-spacing:2px;color:#E8CFA4;font-weight:600}
+  .pG .bfoot .bzh{font-size:8px;color:rgba(255,255,255,.6);letter-spacing:1px}
+
+  /* 样式五 · 圆角浮层卡 */
+  .pH{position:relative;overflow:hidden;background:#E9E4DB}
+  .pH .ph{position:absolute;inset:0}
+  .pH .ph img{width:100%;height:100%;object-fit:cover;display:block}
+  .pH .ph::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,10,5,.74) 0%,rgba(15,10,5,.2) 46%,rgba(15,10,5,0) 62%)}
+  .pH .card{position:absolute;left:16px;top:50%;transform:translateY(-50%);width:168px;background:#fff;border-radius:14px;padding:13px 15px 12px;box-shadow:0 16px 36px -18px rgba(0,0,0,.55);z-index:2}
+  .pH .card .k{font-size:7px;letter-spacing:3px;color:var(--gold-deep);font-weight:600}
+  .pH .card .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:2px;margin-top:4px}
+  .pH .card .cat{font-size:7px;letter-spacing:2px;color:var(--text2);margin-top:4px}
+  .pH .card .cat b{color:var(--gold-deep)}
+  .pH .card .row2{display:flex;align-items:center;gap:8px;margin-top:9px}
+  .pH .qrcode{width:32px;height:32px;flex:none;background:#F6F1E8;padding:3px;border-radius:5px}
+  .pH .qrcode i{background:var(--ink)}
+  .pH .tip{display:flex;flex-direction:column;gap:1px}
+  .pH .tip .t{font-size:7px;color:var(--ink);font-weight:600;letter-spacing:.5px}
+  .pH .tip .s{font-size:6px;color:var(--text3);letter-spacing:.5px}
+  .pH .brand-rt{position:absolute;top:12px;right:16px;z-index:2;display:flex;align-items:center;gap:5px}
+  .pH .brand-rt .en{font-size:9px;letter-spacing:3px;color:#FFF;font-weight:600;text-shadow:0 1px 6px rgba(0,0,0,.4)}
+  .pH .brand-rt .zh{font-size:8px;letter-spacing:2px;color:rgba(255,255,255,.75)}
+
+  /* 样式六 · 极简留白 */
+  .pI{background:#FBF9F4;padding:18px 22px 15px;display:flex;flex-direction:column;overflow:hidden}
+  .pI .brand{display:flex;align-items:center;gap:7px}
+  .pI .brand .en{font-size:10px;letter-spacing:4px;color:var(--gold-deep);font-weight:600}
+  .pI .brand .zh{font-size:9px;letter-spacing:2px;color:var(--text3)}
+  .pI .mid{flex:1;display:flex;justify-content:center;align-items:center}
+  .pI .polaroid{background:#fff;padding:6px 6px 8px;box-shadow:0 14px 30px -16px rgba(60,48,28,.4);transform:rotate(-2deg);width:56%}
+  .pI .polaroid .ph{position:relative;padding-bottom:66%}
+  .pI .polaroid .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .pI .meta2{margin-top:10px}
+  .pI .meta2 .k{font-size:7px;letter-spacing:3px;color:var(--gold-deep);font-weight:600}
+  .pI .meta2 .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:21px;font-weight:700;color:var(--ink);letter-spacing:3px;margin-top:2px}
+  .pI .meta2 .cat{font-size:8px;letter-spacing:2px;color:var(--text3);margin-top:3px}
+  .pI .meta2 .cat b{color:var(--gold-deep)}
+  .pI .foot3{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);display:flex;align-items:center;gap:9px}
+  .pI .qrcode{width:36px;height:36px;flex:none;background:#F6F1E8;padding:4px;border-radius:6px;border:1px solid var(--line)}
+  .pI .qrcode i{background:var(--ink)}
+  .pI .tip{display:flex;flex-direction:column;gap:2px}
+  .pI .tip .t{font-size:8px;color:var(--ink);font-weight:600;letter-spacing:.5px}
+  .pI .tip .s{font-size:7px;color:var(--text3);letter-spacing:.5px}
+  .pI .slogan{margin-left:auto;font-size:7px;color:var(--text3);letter-spacing:1px}
+
+  /* ===== 历史方案（全部列出 · 分类展开） ===== */
+  .arch-sec{width:min(1400px,100%);margin-top:56px}
+  .arch-title{display:flex;align-items:center;gap:12px;color:#4A4238;font-size:15px;letter-spacing:3px;font-weight:600}
+  .arch-title::after{content:"";flex:1;height:1px;background:var(--line)}
+  .arch-note{color:#9A8F7C;font-size:11px;letter-spacing:1px;margin-top:8px}
+  .arch-group{width:100%;margin-top:30px;background:#F3ECE0;border:1px solid var(--line);border-radius:18px;padding:18px 22px 22px}
+  .arch-group .gtitle{display:flex;align-items:center;gap:12px;font-size:13px;color:#4A4238;letter-spacing:2px;font-weight:600}
+  .arch-group .gtitle .phase{flex:none;font-family:Georgia,serif;color:#FFF;background:#B08D4F;padding:3px 12px;border-radius:12px;letter-spacing:1px;font-size:11px;font-weight:400}
+  .arch-group .gtitle::after{content:"";flex:1;height:1px;background:var(--line)}
+  .arch-group .gnote{color:#9A8F7C;font-size:11px;letter-spacing:1px;margin-top:6px}
+  .arch-group .row{display:flex;gap:30px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-top:18px}
+  .arch-group .cell{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .arch-group .cell .img{width:290px;border-radius:16px;border:1px solid var(--line);box-shadow:0 16px 40px -22px rgba(60,48,28,.4)}
+  .arch-group .cell .lbl{font-size:11px;color:#7A6F5E;letter-spacing:1px;text-align:center;max-width:300px}
+  .ver-block{width:100%;margin-top:16px}
+  .ver-block:first-of-type{margin-top:0}
+  .ver-name{font-size:12px;color:#6B5B42;letter-spacing:2px;font-weight:600;display:flex;align-items:center;gap:10px}
+  .ver-name::before{content:"";width:20px;height:1px;background:var(--gold)}
+  .arch-group iframe{width:100%;height:0;border:1px solid var(--line);border-radius:14px;background:#FDFBF7;margin-top:10px;display:block}
+</style>
+</head>
+<body>
+  <div class="page-title">如画 LUMIRA · 分享海报选型总览</div>
+  <div class="page-sub">5 种照片比例 × 3 种基础样式 + 16:9 / 4:3 横版各 3 种附加样式（共 21 款）· 底部附全部历史方案归档</div>
+  <div class="howto">
+    <b>设计规则：</b>App 内可调 3 种拍摄比例 —— 全屏 / 3:4 / 1:1；横屏拍摄时自动旋转为 19:6 / 4:3 / 1:1，合计 <b>5 种照片比例</b>。
+    每种比例提供 <b>3 种基础分享样式</b>（①经典面板 ②电影银幕 ③相纸卡片）。
+    另有 <b>16:9 / 4:3 横版附加样式</b>（④斜切杂志 ⑤大标题压图 ⑥画廊陈列 ⑦左右分栏 ⑧圆角浮层卡 ⑨极简留白），供横版分享时选择。
+  </div>
+
+  <div class="nav">
+    <a href="#full">① 全屏 9:16</a>
+    <a href="#r34">② 3:4</a>
+    <a href="#r11">③ 1:1</a>
+    <a href="#r196">④ 19:6 横屏</a>
+    <a href="#r43">⑤ 4:3 横屏</a>
+    <a href="#r169">⑥ 16:9 附加</a>
+    <a href="#r43b">⑦ 4:3 附加</a>
+    <a href="#archive" style="background:#C9A96E;color:#FFF;border-color:#C9A96E">历史归档 v1-v11</a>
+  </div>
+
+  <!-- ============ ① 全屏 9:16 ============ -->
+  <div class="sec" id="full">
+    <div class="sec-title"><span class="ratio-chip">① 全屏</span> 9:16 竖屏 <span style="font-size:11px;color:#A08A5F;font-weight:400">（横屏旋转后为 19:6）</span></div>
+    <div class="sec-note">全屏竖拍：照片占主导，三种样式依次为 上图下字 / 左图右栏 / 居中相纸</div>
+    <div class="style-row">
+      <div class="cell">
+        <span class="style-label">样式一 · 经典面板</span>
+        <div class="poster pA r-full">
+          <div class="ph">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=vertical%20portrait%20of%20a%20woman%20in%20soft%20lazy%20french%20style%2C%20warm%20golden%20light%2C%20cream%20and%20gold%20tone%2C%20editorial&image_size=portrait_16_9" alt="">
+            <div class="grad"></div>
+            <div class="brand-on"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          </div>
+          <div class="panel">
+            <div class="k">LUMIRA TEMPLATE · 模板</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="meta">
+              <div class="qrcode qr-grid" data-qr="1"></div>
+              <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+            </div>
+            <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式二 · 电影银幕</span>
+        <div class="poster pB port r-full">
+          <div class="screen">
+            <div class="sprockets"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=vertical%20portrait%20of%20a%20woman%20in%20soft%20lazy%20french%20style%2C%20warm%20golden%20light%2C%20cream%20gold%20tone%2C%20cinematic&image_size=portrait_16_9" alt=""></div>
+          </div>
+          <div class="side">
+            <div class="k">LUMIRA TEMPLATE</div>
+            <div class="title">法式<br>慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="rule"></div>
+            <div class="qrwrap">
+              <div class="qrcode qr-grid" data-qr="2"></div>
+              <div class="qtip">长按识别 · 查看完整模板</div>
+            </div>
+            <div class="foot"><svg class="symbol" width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式三 · 相纸卡片</span>
+        <div class="poster pC r-full">
+          <div class="print">
+            <div class="sticker"></div>
+            <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=vertical%20portrait%20of%20a%20woman%20in%20soft%20lazy%20french%20style%2C%20warm%20golden%20light%2C%20cream%20gold%20tone%2C%20editorial%20print&image_size=portrait_16_9" alt=""></div>
+            <div class="cap"><div class="k">LUMIRA · 模板</div><div class="title">法式慵懒</div><div class="cat">人像写真 · 摄影模板</div></div>
+          </div>
+          <div class="qrrow">
+            <div class="qrcode qr-grid" data-qr="3"></div>
+            <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+          </div>
+          <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ② 3:4 ============ -->
+  <div class="sec" id="r34">
+    <div class="sec-title"><span class="ratio-chip">② 3:4</span> 竖屏 <span style="font-size:11px;color:#A08A5F;font-weight:400">（横屏旋转后为 4:3）</span></div>
+    <div class="sec-note">3:4 竖拍：信息区比全屏略宽，排版更从容</div>
+    <div class="style-row">
+      <div class="cell">
+        <span class="style-label">样式一 · 经典面板</span>
+        <div class="poster pA r-34">
+          <div class="ph">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=vertical%203%3A4%20warm%20portrait%20of%20a%20woman%20in%20golden%20light%2C%20cream%20and%20gold%20tone%2C%20editorial&image_size=portrait_4_3" alt="">
+            <div class="grad"></div>
+            <div class="brand-on"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          </div>
+          <div class="panel">
+            <div class="k">LUMIRA TEMPLATE · 模板</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="meta">
+              <div class="qrcode qr-grid" data-qr="4"></div>
+              <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+            </div>
+            <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式二 · 电影银幕</span>
+        <div class="poster pB port r-34">
+          <div class="screen">
+            <div class="sprockets"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=vertical%203%3A4%20warm%20portrait%20of%20a%20woman%20in%20golden%20light%2C%20cream%20gold%20tone%2C%20cinematic&image_size=portrait_4_3" alt=""></div>
+          </div>
+          <div class="side">
+            <div class="k">LUMIRA TEMPLATE</div>
+            <div class="title">法式<br>慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="rule"></div>
+            <div class="qrwrap">
+              <div class="qrcode qr-grid" data-qr="5"></div>
+              <div class="qtip">长按识别 · 查看完整模板</div>
+            </div>
+            <div class="foot"><svg class="symbol" width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式三 · 相纸卡片</span>
+        <div class="poster pC r-34">
+          <div class="print">
+            <div class="sticker"></div>
+            <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=vertical%203%3A4%20warm%20portrait%20of%20a%20woman%20in%20golden%20light%2C%20cream%20gold%20tone%2C%20editorial%20print&image_size=portrait_4_3" alt=""></div>
+            <div class="cap"><div class="k">LUMIRA · 模板</div><div class="title">法式慵懒</div><div class="cat">人像写真 · 摄影模板</div></div>
+          </div>
+          <div class="qrrow">
+            <div class="qrcode qr-grid" data-qr="6"></div>
+            <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+          </div>
+          <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ③ 1:1 ============ -->
+  <div class="sec" id="r11">
+    <div class="sec-title"><span class="ratio-chip">③ 1:1</span> 方图 <span style="font-size:11px;color:#A08A5F;font-weight:400">（横竖通用，不旋转）</span></div>
+    <div class="sec-note">方形构图：构图对称，三种样式均为「方图适配」，横竖拍摄通用</div>
+    <div class="style-row">
+      <div class="cell">
+        <span class="style-label">样式一 · 经典面板</span>
+        <div class="poster pA r-11">
+          <div class="ph">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=square%20warm%20portrait%20of%20a%20woman%20in%20golden%20light%2C%20cream%20and%20gold%20tone%2C%20editorial&image_size=square_hd" alt="">
+            <div class="grad"></div>
+            <div class="brand-on"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          </div>
+          <div class="panel">
+            <div class="k">LUMIRA TEMPLATE · 模板</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="meta">
+              <div class="qrcode qr-grid" data-qr="7"></div>
+              <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+            </div>
+            <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式二 · 电影银幕</span>
+        <div class="poster pB port r-11">
+          <div class="screen">
+            <div class="sprockets"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=square%20warm%20portrait%20of%20a%20woman%20in%20golden%20light%2C%20cream%20gold%20tone%2C%20cinematic&image_size=square_hd" alt=""></div>
+          </div>
+          <div class="side">
+            <div class="k">LUMIRA TEMPLATE</div>
+            <div class="title">法式<br>慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="rule"></div>
+            <div class="qrwrap">
+              <div class="qrcode qr-grid" data-qr="8"></div>
+              <div class="qtip">长按识别 · 查看完整模板</div>
+            </div>
+            <div class="foot"><svg class="symbol" width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式三 · 相纸卡片</span>
+        <div class="poster pC r-11">
+          <div class="print">
+            <div class="sticker"></div>
+            <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=square%20warm%20portrait%20of%20a%20woman%20in%20golden%20light%2C%20cream%20gold%20tone%2C%20editorial%20print&image_size=square_hd" alt=""></div>
+            <div class="cap"><div class="k">LUMIRA · 模板</div><div class="title">法式慵懒</div><div class="cat">人像写真 · 摄影模板</div></div>
+          </div>
+          <div class="qrrow">
+            <div class="qrcode qr-grid" data-qr="9"></div>
+            <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+          </div>
+          <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ④ 19:6 横屏 ============ -->
+  <div class="sec" id="r196">
+    <div class="sec-title"><span class="ratio-chip">④ 19:6</span> 横屏（全屏旋转） <span style="font-size:11px;color:#A08A5F;font-weight:400">（超宽幅）</span></div>
+    <div class="sec-note">超宽幅：照片呈细长「银幕带」，文字在下方横排，横向叙事感强</div>
+    <div class="style-row">
+      <div class="cell">
+        <span class="style-label">样式一 · 经典面板</span>
+        <div class="poster pA r-196">
+          <div class="ph">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=ultra%20wide%20golden%20hour%20cafe%20interior%20panorama%2C%20cream%20and%20gold%20tone%2C%20editorial&image_size=landscape_16_9" alt="">
+            <div class="grad"></div>
+            <div class="brand-on"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          </div>
+          <div class="panel">
+            <div class="k">LUMIRA TEMPLATE · 模板</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="meta">
+              <div class="qrcode qr-grid" data-qr="10"></div>
+              <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+            </div>
+            <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式二 · 电影银幕</span>
+        <div class="poster pB land r-196">
+          <div class="screen"><div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=ultra%20wide%20cinematic%20golden%20hour%20street%20scene%2C%20cream%20gold%20tone%2C%20film%20panorama&image_size=landscape_16_9" alt=""></div></div>
+          <div class="body">
+            <div class="k">LUMIRA TEMPLATE · 模板</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="qrrow">
+              <div class="qrcode qr-grid" data-qr="11"></div>
+              <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+            </div>
+            <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式三 · 相纸卡片</span>
+        <div class="poster pC r-196">
+          <div class="print">
+            <div class="sticker"></div>
+            <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=ultra%20wide%20warm%20cafe%20interior%20golden%20light%2C%20cream%20gold%20tone%2C%20editorial%20print&image_size=landscape_16_9" alt=""></div>
+            <div class="cap"><div class="k">LUMIRA · 模板</div><div class="title">法式慵懒</div><div class="cat">人像写真 · 摄影模板</div></div>
+          </div>
+          <div class="qrrow">
+            <div class="qrcode qr-grid" data-qr="12"></div>
+            <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+          </div>
+          <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ⑤ 4:3 横屏 ============ -->
+  <div class="sec" id="r43">
+    <div class="sec-title"><span class="ratio-chip">⑤ 4:3</span> 横屏（3:4 旋转） <span style="font-size:11px;color:#A08A5F;font-weight:400">（横版）</span></div>
+    <div class="sec-note">4:3 横拍：照片带较矮，文字区充裕，横向信息排布</div>
+    <div class="style-row">
+      <div class="cell">
+        <span class="style-label">样式一 · 经典面板</span>
+        <div class="poster pA r-43">
+          <div class="ph">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%204%3A3%20warm%20cafe%20interior%20with%20golden%20window%20light%2C%20cream%20gold%20tone%2C%20editorial&image_size=landscape_4_3" alt="">
+            <div class="grad"></div>
+            <div class="brand-on"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          </div>
+          <div class="panel">
+            <div class="k">LUMIRA TEMPLATE · 模板</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="meta">
+              <div class="qrcode qr-grid" data-qr="13"></div>
+              <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+            </div>
+            <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式二 · 电影银幕</span>
+        <div class="poster pB land r-43">
+          <div class="screen"><div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%204%3A3%20cinematic%20golden%20hour%20cafe%20scene%2C%20cream%20gold%20tone%2C%20film%20still&image_size=landscape_4_3" alt=""></div></div>
+          <div class="body">
+            <div class="k">LUMIRA TEMPLATE · 模板</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="qrrow">
+              <div class="qrcode qr-grid" data-qr="14"></div>
+              <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+            </div>
+            <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式三 · 相纸卡片</span>
+        <div class="poster pC r-43">
+          <div class="print">
+            <div class="sticker"></div>
+            <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%204%3A3%20warm%20cafe%20interior%20golden%20light%2C%20cream%20gold%20tone%2C%20editorial%20print&image_size=landscape_4_3" alt=""></div>
+            <div class="cap"><div class="k">LUMIRA · 模板</div><div class="title">法式慵懒</div><div class="cat">人像写真 · 摄影模板</div></div>
+          </div>
+          <div class="qrrow">
+            <div class="qrcode qr-grid" data-qr="15"></div>
+            <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+          </div>
+          <div class="foot"><svg class="symbol" width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span><span class="slogan">如你所见，皆成画卷</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ⑥ 16:9 横屏 · 附加样式 ============ -->
+  <div class="sec" id="r169">
+    <div class="sec-title"><span class="ratio-chip">⑥ 16:9</span> 横屏 · 附加样式 <span style="font-size:11px;color:#A08A5F;font-weight:400">（在 ①-⑤ 基础上补充，用于横版分享）</span></div>
+    <div class="sec-note">16:9 宽幅横图：斜切杂志 / 大标题压图 / 画廊陈列，三种信息型横版</div>
+    <div class="style-row">
+      <div class="cell">
+        <span class="style-label">样式四 · 斜切杂志</span>
+        <div class="poster pD r169">
+          <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%2016%3A9%20warm%20editorial%20photo%20of%20a%20woman%20at%20cafe%20golden%20window%20light%2C%20cream%20and%20gold%20tone%2C%20magazine&image_size=landscape_16_9" alt=""></div>
+          <div class="txt">
+            <div>
+              <div class="k">LUMIRA TEMPLATE</div>
+              <div class="title">法式慵懒</div>
+              <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            </div>
+            <div class="row2">
+              <div class="qrcode qr-grid" data-qr="16"></div>
+              <div class="tip"><span class="t">长按识别 · 查看模板</span><span class="s">打开如画，拍出同款</span></div>
+            </div>
+            <div class="brand"><svg class="symbol" width="12" height="12" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式五 · 大标题压图</span>
+        <div class="poster pE r169">
+          <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%2016%3A9%20cinematic%20golden%20hour%20street%20gold%20tone%2C%20film%20still%2C%20dark%20atmosphere&image_size=landscape_16_9" alt=""></div>
+          <div class="brand-top"><svg class="symbol" width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          <div class="qrbox qr-grid" data-qr="17"></div>
+          <div class="over">
+            <div class="k">LUMIRA TEMPLATE · 模板</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式六 · 画廊陈列</span>
+        <div class="poster pF r169">
+          <div class="wall">
+            <div class="mat"><div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%2016%3A9%20warm%20interior%20gallery%20art%20photo%20golden%20light%2C%20cream%20gold%20tone&image_size=landscape_16_9" alt=""></div></div>
+            <div class="plaque"><div class="t">法式慵懒 · LUMIRA 模板</div><div class="s">人像写真 · 摄影模板</div></div>
+          </div>
+          <div class="foot2">
+            <div class="qrcode qr-grid" data-qr="18"></div>
+            <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+            <span class="bname">LUMIRA · 如画</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ⑦ 4:3 横屏 · 附加样式 ============ -->
+  <div class="sec" id="r43b">
+    <div class="sec-title"><span class="ratio-chip">⑦ 4:3</span> 横屏 · 附加样式 <span style="font-size:11px;color:#A08A5F;font-weight:400">（在 ①-⑤ 基础上补充，用于横版分享）</span></div>
+    <div class="sec-note">4:3 横版：左右分栏 / 圆角浮层卡 / 极简留白，三种轻量横版</div>
+    <div class="style-row">
+      <div class="cell">
+        <span class="style-label">样式四 · 左右分栏</span>
+        <div class="poster pG r43b">
+          <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%204%3A3%20warm%20portrait%20photo%20golden%20light%2C%20cream%20gold%20tone%2C%20editorial%20split&image_size=landscape_4_3" alt=""></div>
+          <div class="side2">
+            <div class="k">LUMIRA TEMPLATE</div>
+            <div class="title">法式<br>慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="qrwrap">
+              <div class="qrcode qr-grid" data-qr="19"></div>
+              <div class="qtip">长按识别 · 查看完整模板</div>
+            </div>
+            <div class="bfoot"><svg class="symbol" width="12" height="12" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="bname">LUMIRA</span><span class="bzh">· 如画</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式五 · 圆角浮层卡</span>
+        <div class="poster pH r43b">
+          <div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%204%3A3%20golden%20hour%20cafe%20scene%2C%20cream%20gold%20tone%2C%20cinematic%20film%20still&image_size=landscape_4_3" alt=""></div>
+          <div class="brand-rt"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          <div class="card">
+            <div class="k">LUMIRA TEMPLATE</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+            <div class="row2">
+              <div class="qrcode qr-grid" data-qr="20"></div>
+              <div class="tip"><span class="t">长按识别 · 查看模板</span><span class="s">打开如画，拍出同款</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="style-label">样式六 · 极简留白</span>
+        <div class="poster pI r43b">
+          <div class="brand"><svg class="symbol" width="13" height="13" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="12"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="12"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="12"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="12"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="12"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="12"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".35"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+          <div class="mid">
+            <div class="polaroid"><div class="ph"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%204%3A3%20minimal%20warm%20still%20life%20golden%20light%2C%20cream%20gold%20tone%2C%20soft&image_size=landscape_4_3" alt=""></div></div>
+          </div>
+          <div class="meta2">
+            <div class="k">LUMIRA TEMPLATE</div>
+            <div class="title">法式慵懒</div>
+            <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+          </div>
+          <div class="foot3">
+            <div class="qrcode qr-grid" data-qr="21"></div>
+            <div class="tip"><span class="t">长按识别 · 查看完整模板</span><span class="s">打开如画，拍出同款</span></div>
+            <span class="slogan">如你所见，皆成画卷</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 历史方案（全部列出 · 分类） ============ -->
+  <div class="arch-sec" id="archive">
+    <div class="arch-title">历史方案全部列出 <span style="font-size:11px;color:#A08A5F;font-weight:400">（共 11 版 + 矩阵，按探索阶段分类，自动展开）</span></div>
+    <div class="arch-note">v1-v3 早期 AI 手绘 → v4-v9 构成/调性/排版探索 → v10-v11 比例自适应系统 → 矩阵（模板/照片两类）。每版内容完整内嵌，可直接滚动对比。</div>
+
+    <!-- 阶段一：早期 AI 手绘 -->
+    <div class="arch-group">
+      <div class="gtitle"><span class="phase">Stage 1</span> 早期 AI 手绘预览 v1 / v2 · 共 5 张</div>
+      <div class="gnote">最初用生图直出的概念稿：相册分享海报 + 模板详情分享海报 + 三个排版方向</div>
+      <div class="row">
+        <div class="cell"><img class="img" src="poster_preview_photo.jpg" alt=""><div class="lbl">v1 · 相册分享海报（早期）</div></div>
+        <div class="cell"><img class="img" src="poster_preview_template.jpg" alt=""><div class="lbl">v1 · 模板详情分享海报（早期）</div></div>
+        <div class="cell"><img class="img" src="poster_v2_viewfinder.jpg" alt=""><div class="lbl">v2-A · 取景器角标</div></div>
+        <div class="cell"><img class="img" src="poster_v2_film.jpg" alt=""><div class="lbl">v2-B · 胶片电影感</div></div>
+        <div class="cell"><img class="img" src="poster_v2_gianttype.jpg" alt=""><div class="lbl">v2-C · 巨型字体排版</div></div>
+      </div>
+    </div>
+
+    <!-- 阶段二：构成方向探索 -->
+    <div class="arch-group">
+      <div class="gtitle"><span class="phase">Stage 2</span> 构成方向探索 v4 / v5 / v6</div>
+      <div class="gnote">从「满版 / 分栏 / 拼贴」起步，再到「取景器 / 层次」与「几何 / 电影 / 水墨」</div>
+      <div class="ver-block">
+        <div class="ver-name">v4 · 三种构成方向（满版照片 / 杂志分栏 / 相纸拼贴）</div>
+        <iframe class="embed" src="poster_mockup_v4.html" loading="lazy"></iframe>
+      </div>
+      <div class="ver-block">
+        <div class="ver-name">v5 · 两种构成方向（取景器镜头 / 层次拼贴）</div>
+        <iframe class="embed" src="poster_mockup_v5.html" loading="lazy"></iframe>
+      </div>
+      <div class="ver-block">
+        <div class="ver-name">v6 · 三种新方向（几何构成 / 电影海报 / 国风水墨）</div>
+        <iframe class="embed" src="poster_mockup_v6.html" loading="lazy"></iframe>
+      </div>
+    </div>
+
+    <!-- 阶段三：调性探索 -->
+    <div class="arch-group">
+      <div class="gtitle"><span class="phase">Stage 3</span> 整体调性探索 v7</div>
+      <div class="gnote">换整体基调：暗夜鎏金 / 渐变潮流 / 复古印刷</div>
+      <div class="ver-block">
+        <div class="ver-name">v7 · 三种整体调性</div>
+        <iframe class="embed" src="poster_mockup_v7.html" loading="lazy"></iframe>
+      </div>
+    </div>
+
+    <!-- 阶段四：排版重构 -->
+    <div class="arch-group">
+      <div class="gtitle"><span class="phase">Stage 4</span> 版面骨架 / 排版结构 v8 / v9</div>
+      <div class="gnote">重构版面骨架：满幅出血 / 大字海报 / 居中极简 → 对角动态 / 底图倒置 / 多图拼贴</div>
+      <div class="ver-block">
+        <div class="ver-name">v8 · 三种版面骨架</div>
+        <iframe class="embed" src="poster_mockup_v8.html" loading="lazy"></iframe>
+      </div>
+      <div class="ver-block">
+        <div class="ver-name">v9 · 三种排版结构</div>
+        <iframe class="embed" src="poster_mockup_v9.html" loading="lazy"></iframe>
+      </div>
+    </div>
+
+    <!-- 阶段五：比例自适应系统 -->
+    <div class="arch-group">
+      <div class="gtitle"><span class="phase">Stage 5</span> 比例自适应系统 v10 / v11</div>
+      <div class="gnote">开始按 16:9 / 9:16 自适应：大图出血+面板 / 左右分栏 / 全出血浮层 → 相纸卡片 / 电影银幕 / 画廊陈列 / 杂志双栏</div>
+      <div class="ver-block">
+        <div class="ver-name">v10 · 比例自适应 3 系统</div>
+        <iframe class="embed" src="poster_mockup_v10.html" loading="lazy"></iframe>
+      </div>
+      <div class="ver-block">
+        <div class="ver-name">v11 · 比例自适应 4 新方向</div>
+        <iframe class="embed" src="poster_mockup_v11.html" loading="lazy"></iframe>
+      </div>
+    </div>
+
+    <!-- 阶段六：矩阵分类 -->
+    <div class="arch-group">
+      <div class="gtitle"><span class="phase">Stage 6</span> 矩阵总览 · 按比例 × 类型</div>
+      <div class="gnote">16:9 / 9:16 × 模板详情分享海报 / 照片详情分享海报，12 张对比</div>
+      <div class="ver-block">
+        <div class="ver-name">矩阵总览</div>
+        <iframe class="embed" src="poster_mockup_matrix.html" loading="lazy"></iframe>
+      </div>
+    </div>
+  </div>
+
+<script>
+  var seed=17;function r(){seed=(seed*9301+49297)%233280;return seed/233280}
+  document.querySelectorAll('.qr-grid').forEach(function(el){
+    var html='';
+    for(var y=0;y<9;y++){for(var x=0;x<9;x++){
+      var corner=(y<3&&x<3)||(y<3&&x>=6)||(y>=6&&x<3);
+      var on=corner?(x%2===0&&y%2===0||x===0||y===0):r()>0.5;
+      html+=on?'<i></i>':'<i style="background:transparent"></i>';
+    }}
+    el.innerHTML=html;
+  });
+  // 自动撑高 iframe：让每版内容完整展开、无需内滚
+  function fitOne(f){
+    try{
+      var d=f.contentDocument||f.contentWindow.document;
+      if(!d) return false;
+      var h=Math.max(d.body.scrollHeight,d.documentElement.scrollHeight);
+      if(h>100){f.style.height=(h+30)+'px';return true;}
+    }catch(e){}
+    return false;
+  }
+  function fitFrames(){
+    var done=true;
+    document.querySelectorAll('iframe.embed').forEach(function(f){
+      if(!fitOne(f)) done=false;
+    });
+    return done;
+  }
+  document.querySelectorAll('iframe.embed').forEach(function(f){
+    f.addEventListener('load',function(){fitOne(f);});
+  });
+  var ticks=0;
+  var t=setInterval(function(){
+    if(fitFrames()||ticks>60){clearInterval(t);}
+    ticks++;
+  },300);
+</script>
+</body>
+</html>

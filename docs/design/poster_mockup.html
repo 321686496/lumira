@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 分享海报设计稿 v3</title>
+<style>
+  :root{
+    --bg:#EFEBE3;            /* 页面底色（比品牌画布深一点，衬托海报） */
+    --canvas:#FAF7F2;        /* 品牌画布 暖白 */
+    --surface:#FDFBF7;       /* 品牌表面 微亮暖白 */
+    --surface-alt:#F6F1E8;   /* 次级表面 */
+    --gold:#C9A96E;          /* 品牌金 */
+    --gold-deep:#B08D4F;     /* 深金 */
+    --ink:#1A1A1A;           /* 主文字 */
+    --text-2:#6B645C;        /* 次级文字 */
+    --text-3:#8E867B;        /* 弱文字 */
+    --line:rgba(201,169,110,.28); /* 金色细线 */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    padding:40px 20px;
+    display:flex;flex-direction:column;align-items:center;gap:28px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page-title{
+    color:#4A4238;font-size:15px;letter-spacing:2px;font-weight:500;
+    display:flex;align-items:center;gap:12px;
+  }
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:var(--line)}
+  .row{display:flex;gap:40px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+
+  /* ===== 海报本体 ===== */
+  .poster{
+    width:330px;
+    background:var(--surface);
+    border-radius:22px;
+    border:1px solid var(--line);
+    box-shadow:0 24px 60px -28px rgba(60,48,28,.35),0 4px 14px -8px rgba(60,48,28,.18);
+    padding:26px 26px 22px;
+    position:relative;
+    overflow:hidden;
+  }
+  /* 品牌对角光束（淡金，贯穿右上→左下） */
+  .poster::before{
+    content:"";position:absolute;top:-60px;right:-70px;width:280px;height:420px;
+    background:linear-gradient(135deg,rgba(201,169,110,.16),rgba(201,169,110,0) 62%);
+    pointer-events:none;
+  }
+  .poster>*{position:relative}
+
+  /* 顶部品牌行 */
+  .brand-top{display:flex;align-items:center;gap:8px;margin-bottom:22px}
+  .brand-top svg{width:16px;height:16px;display:block}
+  .brand-top .en{font-size:11px;letter-spacing:4px;color:var(--gold-deep);font-weight:600}
+  .brand-top .zh{font-size:10px;letter-spacing:2px;color:var(--text-3);margin-left:4px}
+
+  /* hero 图 */
+  .hero{
+    position:relative;border-radius:16px;overflow:visible;
+  }
+  .hero .photo{
+    width:100%;height:340px;border-radius:16px;object-fit:cover;display:block;
+    border:1px solid var(--line);
+  }
+  /* 取景器 L 角标（左上 + 右下） */
+  .hero .corner{position:absolute;width:34px;height:34px}
+  .hero .corner.tl{top:-7px;left:-7px;border-top:2px solid var(--gold);border-left:2px solid var(--gold);border-top-left-radius:14px}
+  .hero .corner.br{bottom:-7px;right:-7px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold);border-bottom-right-radius:14px}
+  .hero .focus{position:absolute;right:12px;bottom:12px;width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 5px rgba(201,169,110,.18)}
+
+  /* 内容 */
+  .content{padding:26px 2px 0}
+  .kicker{font-size:10px;letter-spacing:3px;color:var(--gold-deep);font-weight:600;margin-bottom:10px}
+  .title{
+    font-family:"Noto Serif SC","Songti SC","SimSun",Georgia,serif;
+    font-size:22px;font-weight:700;color:var(--ink);letter-spacing:1px;line-height:1.35;
+  }
+  .cat{margin-top:8px;font-size:11px;letter-spacing:1px;color:var(--text-2)}
+  .cat b{color:var(--gold-deep);font-weight:600}
+  .share{
+    margin-top:16px;font-size:13px;line-height:1.8;color:var(--text-2);
+    padding-left:12px;border-left:2px solid var(--line);
+  }
+
+  /* 金色细线分隔 */
+  .divider{display:flex;align-items:center;gap:10px;margin:22px 0 20px}
+  .divider .line{flex:1;height:1px;background:var(--line)}
+  .divider .dot{width:5px;height:5px;border-radius:50%;background:var(--gold)}
+
+  /* 二维码块 */
+  .qr{
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    background:var(--surface-alt);border:1px solid var(--line);border-radius:14px;
+    padding:18px 22px 14px;
+  }
+  .qr .qrcode{
+    width:104px;height:104px;background:var(--surface);padding:8px;border-radius:8px;
+    display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);gap:1px;
+  }
+  .qr .qrcode i{background:var(--ink);display:block;border-radius:1px}
+  .qr .tip{font-size:10px;letter-spacing:1px;color:var(--text-3)}
+
+  /* 品牌页脚 */
+  .brand-foot{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+  .brand-foot .mid{display:flex;align-items:center;gap:8px}
+  .brand-foot svg{width:20px;height:20px;display:block}
+  .brand-foot .name{font-size:11px;letter-spacing:3px;color:var(--gold-deep);font-weight:600}
+  .brand-foot .zh{font-size:10px;color:var(--text-3);letter-spacing:1px}
+  .brand-foot .slogan{font-size:10px;color:var(--text-3);letter-spacing:2px}
+
+  .label{text-align:center;font-size:12px;color:#7A6F5E;letter-spacing:2px;margin-top:14px}
+</style>
+</head>
+<body>
+  <div class="page-title">如画 LUMIRA · 分享海报设计稿 v3（暖白主题 · 高级感）</div>
+  <div class="row">
+
+    <!-- 海报 1：照片分享海报 -->
+    <div>
+      <div class="poster">
+        <div class="brand-top">
+          <svg viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="10"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="10"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="10"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg>
+          <span class="en">LUMIRA</span><span class="zh">如画</span>
+        </div>
+
+        <div class="hero">
+          <img class="photo" src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20portrait%20photo%20of%20a%20woman%20in%20soft%20lazy%20french%20style%2C%20soft%20natural%20light%2C%20cream%20and%20gold%20tone%2C%20editorial%20photography&image_size=portrait_4_3" alt="法式慵懒">
+          <div class="corner tl"></div>
+          <div class="corner br"></div>
+          <div class="focus"></div>
+        </div>
+
+        <div class="content">
+          <div class="kicker">LUMIRA TEMPLATE · 模板</div>
+          <div class="title">法式慵懒</div>
+          <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+          <div class="share">「我用「法式慵懒」模板拍出了超满意的照片，质感绝了，你也来试试吧！」</div>
+        </div>
+
+        <div class="divider"><span class="line"></span><span class="dot"></span><span class="line"></span></div>
+
+        <div class="qr">
+          <div class="qrcode" id="qr1"></div>
+          <div class="tip">长按识别二维码 · 查看完整模板</div>
+        </div>
+
+        <div class="brand-foot">
+          <div class="mid">
+            <svg viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="10"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="10"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="10"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg>
+            <span class="name">LUMIRA</span><span class="zh">· 如画</span>
+          </div>
+          <div class="slogan">如你所见，皆成画卷</div>
+        </div>
+      </div>
+      <div class="label">① 相册「分享模板海报」（含照片）</div>
+    </div>
+
+    <!-- 海报 2：模板分享海报 -->
+    <div>
+      <div class="poster">
+        <div class="brand-top">
+          <svg viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="10"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="10"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="10"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg>
+          <span class="en">LUMIRA</span><span class="zh">如画</span>
+        </div>
+
+        <div class="hero">
+          <img class="photo" src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=still%20life%20photography%20of%20ceramic%20pottery%20vessels%20in%20morning%20light%2C%20warm%20golden%20brown%20tones%2C%20wabi%20sabi%20minimalist%20aesthetic&image_size=portrait_4_3" alt="晨光器物">
+          <div class="corner tl"></div>
+          <div class="corner br"></div>
+          <div class="focus"></div>
+        </div>
+
+        <div class="content">
+          <div class="kicker">LUMIRA TEMPLATE · 模板</div>
+          <div class="title">晨光器物</div>
+          <div class="cat">静物 <b>·</b> 生活方式</div>
+        </div>
+
+        <div class="divider"><span class="line"></span><span class="dot"></span><span class="line"></span></div>
+
+        <div class="qr">
+          <div class="qrcode" id="qr2"></div>
+          <div class="tip">长按识别二维码 · 查看完整模板</div>
+        </div>
+
+        <div class="brand-foot">
+          <div class="mid">
+            <svg viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="10"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="10"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="10"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg>
+            <span class="name">LUMIRA</span><span class="zh">· 如画</span>
+          </div>
+          <div class="slogan">如你所见，皆成画卷</div>
+        </div>
+      </div>
+      <div class="label">② 模板详情「模板分享海报」</div>
+    </div>
+
+  </div>
+
+<script>
+  // 伪二维码占位：确定性伪随机网格
+  function fillQr(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    var seed=42;function r(){seed=(seed*9301+49297)%233280;return seed/233280}
+    var html='';
+    for(var y=0;y<9;y++){for(var x=0;x<9;x++){
+      var corner=(y<3&&x<3)||(y<3&&x>=6)||(y>=6&&x<3);
+      var on=corner?(x%2===0&&y%2===0||x===0||y===0):r()>0.5;
+      html+=on?'<i></i>':'<i style="background:transparent"></i>';
+    }}
+    el.innerHTML=html;
+  }
+  fillQr('qr1');fillQr('qr2');
+</script>
+</body>
+</html>
