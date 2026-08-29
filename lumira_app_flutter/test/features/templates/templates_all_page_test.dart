@@ -575,6 +575,122 @@ void main() {
   });
 
   // ============================================================
+  // 匹配逻辑：整条路径匹配（回归「光影几何过道」被误归到日系）
+  // ============================================================
+  group('AllTemplateItem — matchesCategoryPath', () {
+    // 影射内置「光影几何过道」：街拍-几何-俯拍（category=street, method=overhead）。
+    // 旧的 matchesSubtree 会因 method='overhead' 命中「日系」子树里的 overhead 而被误归。
+    const streetOverhead = AllTemplateItem(
+      id: 'geometric_shadow',
+      name: '光影几何过道',
+      category: 'street',
+      style: 'geometric',
+      method: 'overhead',
+      coverSeed: 'x',
+      price: 0,
+      isCustom: false,
+    );
+
+    // 典型人像模板：category=portrait, majorStyle=fresh_healing, subStyle=japanese
+    const portraitJapanese = AllTemplateItem(
+      id: 'japanese_portrait',
+      name: '日系人像',
+      category: 'portrait',
+      style: null,
+      majorStyle: 'fresh_healing',
+      subStyle: 'japanese',
+      method: null,
+      coverSeed: 'y',
+      price: 0,
+      isCustom: false,
+    );
+
+    test('street/overhead 模板不命中 portrait / fresh_healing / japanese', () {
+      expect(streetOverhead.matchesCategoryPath('portrait'), isFalse);
+      expect(streetOverhead.matchesCategoryPath('fresh_healing'), isFalse);
+      expect(streetOverhead.matchesCategoryPath('japanese'), isFalse);
+    });
+
+    test('street/overhead 模板命中其真实路径 street / geometric / overhead', () {
+      expect(streetOverhead.matchesCategoryPath('street'), isTrue);
+      expect(streetOverhead.matchesCategoryPath('geometric'), isTrue);
+      expect(streetOverhead.matchesCategoryPath('overhead'), isTrue);
+    });
+
+    test('日系人像模板命中 portrait / fresh_healing / japanese', () {
+      expect(portraitJapanese.matchesCategoryPath('portrait'), isTrue);
+      expect(portraitJapanese.matchesCategoryPath('fresh_healing'), isTrue);
+      expect(portraitJapanese.matchesCategoryPath('japanese'), isTrue);
+    });
+
+    test('分类路径顺序为 category→majorStyle→subStyle→method', () {
+      expect(portraitJapanese.classificationPath,
+          ['portrait', 'fresh_healing', 'japanese']);
+      expect(streetOverhead.classificationPath,
+          ['street', 'geometric', 'overhead']);
+    });
+  });
+
+  // ============================================================
+  // 回归：完整分类路径前缀匹配（修复跨题材共享 key 误归）
+  // ============================================================
+  group('AllTemplateItem — matchesCategoryPathPrefix 前缀匹配', () {
+    // 内置「光影几何过道」：街拍-几何-俯拍 [street, geometric, overhead]
+    const streetOverhead = AllTemplateItem(
+      id: 'geometric_shadow',
+      name: '光影几何过道',
+      category: 'street',
+      style: 'geometric',
+      method: 'overhead',
+      coverSeed: 'x',
+      price: 0,
+      isCustom: false,
+    );
+    // 内置「湖畔清新平拍」：风光-清新-平拍 [landscape, fresh, flat]
+    const landscapeFlat = AllTemplateItem(
+      id: 'fresh_lake',
+      name: '湖畔清新平拍',
+      category: 'landscape',
+      style: 'fresh',
+      method: 'flat',
+      coverSeed: 'l',
+      price: 0,
+      isCustom: false,
+    );
+    // 内置「木质桌面俯拍料理」：美食-俯拍 [food, overhead, ...]
+    const foodOverhead = AllTemplateItem(
+      id: 'food_flat_lay',
+      name: '木质桌面俯拍料理',
+      category: 'food',
+      style: 'overhead',
+      method: 'flat',
+      coverSeed: 'f',
+      price: 0,
+      isCustom: false,
+    );
+
+    test('街拍-几何-俯拍 不命中「美食→俯拍」前缀 [food, overhead]', () {
+      expect(streetOverhead.matchesCategoryPathPrefix(['food', 'overhead']),
+          isFalse);
+    });
+
+    test('风光-清新-平拍 不命中「静物→扁平」前缀 [still-life, flat]', () {
+      expect(landscapeFlat.matchesCategoryPathPrefix(['still-life', 'flat']),
+          isFalse);
+    });
+
+    test('美食-俯拍 命中「美食→俯拍」前缀 [food, overhead]', () {
+      expect(foodOverhead.matchesCategoryPathPrefix(['food', 'overhead']),
+          isTrue);
+    });
+
+    test('街拍-几何-俯拍 命中自己的前缀 [street, geometric]', () {
+      expect(streetOverhead.matchesCategoryPathPrefix(['street', 'geometric']),
+          isTrue);
+    });
+  });
+
+  // ============================================================
   // 分类 4: 跨主题 / 跨风格 smoke test
   // ============================================================
   group('TemplatesAllPage — smoke tests', () {
