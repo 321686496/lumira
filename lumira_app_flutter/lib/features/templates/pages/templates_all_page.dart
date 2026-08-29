@@ -54,19 +54,39 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   bool _showCustom = false;
   bool _showFavorites = false;
   PriceFilter _priceFilter = PriceFilter.all;
+  /// 当前分类的完整路径 segments（根→叶），如 ['food','overhead']。
+  ///
+  /// 从「一级→二级」独立页进入时，category 参数携带完整父级链路（如
+  /// 'food/overhead'），据此过滤模板须以该前缀开头，避免共享叶子 key
+  /// （'overhead'/'flat'）导致跨题材误归。为空表示未选择分类（概览视图）。
+  List<String> _categoryPath = const [];
 
   @override
   void initState() {
     super.initState();
-    // onLoad: 接收 scene 参数映射到 _selectedType
-    final scene = widget.scene;
-    if (scene != null) {
-      final cat = sceneToCategoryMap[scene];
-      if (cat != null) _selectedType = cat;
-    }
-    // 或接收 category 参数直接作为 _selectedType
-    if (widget.category != null) {
-      _selectedType = widget.category;
+    // onLoad: 优先接收 category 参数（可能为完整分类路径 根→叶，如 'food/overhead'）
+    final categoryParam = widget.category;
+    if (categoryParam != null && categoryParam.isNotEmpty) {
+      final segs = categoryParam
+          .split('/')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (segs.isNotEmpty) {
+        _categoryPath = segs;
+        // 叶子段作为当前选择的分类（用于级联查询其子分类）
+        _selectedType = segs.last;
+      }
+    } else {
+      // 退而求其次：接收 scene 参数映射到一级分类
+      final scene = widget.scene;
+      if (scene != null) {
+        final cat = sceneToCategoryMap[scene];
+        if (cat != null) {
+          _categoryPath = [cat];
+          _selectedType = cat;
+        }
+      }
     }
     // 远程模板同步由上游 TemplatesPage（入口页）的 initState 触发，
     // 本页不重复触发，避免在测试环境中因网络调用导致 pumpAndSettle 超时。
@@ -118,43 +138,40 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     final allCount = allItems.length;
     final unlockedCount = allItems.where((t) => t.price == 0).length;
 
-    // 一级分类卡片计数改为「含子孙级」口径，与二级钻取页一致：
-    // 模板（含 custom/imported 全集）分类叶子路径命中该一级分类的子树 key 即算。
+    // 一级分类卡片计数与筛选同口径：模板完整分类路径以该一级 key 为首段即算。
+    // 用前缀匹配（path[0]==c.key 等价于 t.category==c.key），避免共享的下级 key
+    // （如某模板分类 path 含 method='macro'）造成跨题材计数误归。
     final categoryCounts = <String, int>{};
     if (categories.isNotEmpty) {
-      final subtreeByKey = <String, Set<String>>{};
-      for (final c in categories) {
-        subtreeByKey[c.key] = await dao.getSubtreeKeys(c.key);
-      }
       for (final t in allItems) {
         for (final c in categories) {
-          if (t.matchesSubtree(subtreeByKey[c.key]!)) {
+          if (t.matchesCategoryPathPrefix([c.key])) {
             categoryCounts[c.key] = (categoryCounts[c.key] ?? 0) + 1;
           }
         }
       }
     }
 
-    // v17 修复筛选 bug：三级级联过滤（原代码仅按 type 过滤，style/method 不生效）
+    // v17 修复筛选 bug：三级级联过滤（原代码仅按 type 过滤，style/method 不生效）。
+    // 过滤口径改为「完整分类路径前缀匹配」：把当前已确定的分类链路（根→叶）拼成
+    // [prefix]，要求模板的完整分类路径以其为前缀。相比旧「key 在路径任意位置命中」
+    //（matchesCategoryPath）的宽匹配，能避免共享 style/method key
+    // （如 'overhead'/'flat'）导致跨题材误归：街拍-几何-俯拍 `[street,geometric,overhead]`
+    // 不以 `[food, overhead]` 为前缀，不会被「美食→俯拍」误归；
+    // 风光-清新-平拍 `[landscape,fresh,flat]` 不以 `[still-life, flat]` 为前缀，
+    // 不会被「静物→扁平」误归。
     var filtered = _showCustom ? customWithImported : builtinItems;
-    // v4level（spec 2026-08-17-template-category-4level-design.md §6.3）：
-    // 「该分类下的模板」= 包含子孙级。把所选分类的子树 key 集合展开后，
-    // 模板的分类叶子路径（type/style/majorStyle/subStyle/method）命中即算。
-    // 兼容老模板（style 字段）与四级新模板（majorStyle/subStyle）。
-    if (_selectedType != null) {
-      final subtree = await dao.getSubtreeKeys(_selectedType!);
-      filtered =
-          filtered.where((t) => t.matchesSubtree(subtree)).toList();
+    final filterPath = <String>[..._categoryPath];
+    if (_selectedStyle != null && !filterPath.contains(_selectedStyle!)) {
+      filterPath.add(_selectedStyle!);
     }
-    if (_selectedStyle != null) {
-      final subtree = await dao.getSubtreeKeys(_selectedStyle!);
-      filtered =
-          filtered.where((t) => t.matchesSubtree(subtree)).toList();
+    if (_selectedMethod != null && !filterPath.contains(_selectedMethod!)) {
+      filterPath.add(_selectedMethod!);
     }
-    if (_selectedMethod != null) {
-      final subtree = await dao.getSubtreeKeys(_selectedMethod!);
-      filtered =
-          filtered.where((t) => t.matchesSubtree(subtree)).toList();
+    if (filterPath.isNotEmpty) {
+      filtered = filtered
+          .where((t) => t.matchesCategoryPathPrefix(filterPath))
+          .toList();
     }
     // 价格筛选：免费（price == 0）/ 付费（price > 0）/ 全部
     if (_priceFilter == PriceFilter.free) {
