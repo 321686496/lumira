@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 照片详情分享海报 V15（3 套新风格 · 16:9 / 4:3）</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#E9E4DB;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:44px 20px 100px;display:flex;flex-direction:column;align-items:center;gap:26px;-webkit-font-smoothing:antialiased}
+  .page-title{color:#4A4238;font-size:16px;letter-spacing:3px;font-weight:600;display:flex;align-items:center;gap:12px}
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:rgba(176,141,79,.3)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:2px;text-align:center;line-height:1.9}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+  .legend .lg{display:flex;align-items:center;gap:8px;background:#F3ECE0;border:1px solid rgba(176,141,79,.3);padding:8px 14px;border-radius:14px;font-size:11px;color:#5C5346;letter-spacing:1px}
+  .legend .dot{width:12px;height:12px;border-radius:50%;flex:none}
+  .legend .dot.a{background:#A9B49E}.legend .dot.b{background:#26221D}.legend .dot.c{background:#C08A3C}
+  .serif{font-family:"Noto Serif SC","Songti SC","SimSun",Georgia,serif}
+
+  .sec{width:100%;margin-top:38px}
+  .sec-title{display:flex;align-items:center;gap:12px;color:#4A4238;font-size:15px;letter-spacing:3px;font-weight:600}
+  .sec-title::after{content:"";flex:1;height:1px;background:rgba(176,141,79,.3)}
+  .sec-title .ratio{font-family:Georgia,serif;color:#B08D4F;letter-spacing:2px}
+  .sec-note{color:#9A8F7C;font-size:11px;letter-spacing:1px;margin-top:8px}
+  .row{display:flex;gap:56px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-top:24px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .sys-label{font-size:10px;color:#A08A5F;letter-spacing:2px;background:#F3ECE0;border:1px solid rgba(176,141,79,.3);padding:3px 10px;border-radius:12px}
+
+  .symbol{display:inline-block;vertical-align:middle}
+  .qrcode{width:60px;height:60px;background:#FFF;padding:6px;border-radius:8px;display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);gap:1px;box-shadow:0 8px 20px -14px rgba(90,70,30,.5);border:1px solid rgba(176,141,79,.25)}
+  .qrcode i{background:var(--ink, #1A1A1A);display:block;border-radius:1px}
+
+  /* ============================================================
+     SYSTEM A · 莫兰迪柔雾 —— 满版照片 + 底部悬浮信息卡
+     ============================================================ */
+  .sA{width:460px;background:#F7F3EC;border-radius:20px;padding:14px 14px 16px;box-shadow:0 26px 60px -30px rgba(80,70,55,.4);border:1px solid #E7DFD2}
+  .sA .ph-full{position:relative;width:100%;overflow:hidden;border-radius:14px}
+  .sA.r169 .ph-full{aspect-ratio:16/9}
+  .sA.r43 .ph-full{aspect-ratio:4/3}
+  .sA .ph-full img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .sA .brand-on{position:absolute;top:16px;left:18px;display:flex;align-items:center;gap:8px;color:#FFF;text-shadow:0 1px 8px rgba(40,30,20,.4);z-index:2}
+  .sA .brand-on .en{font-size:10px;letter-spacing:4px;font-weight:700}
+  .sA .brand-on .zh{font-size:9px;letter-spacing:2px;opacity:.9}
+  .sA .float{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(250,247,241,.93);border:1px solid rgba(255,255,255,.6);border-radius:13px;padding:13px 15px 11px;box-shadow:0 16px 34px -22px rgba(60,48,28,.55);z-index:2}
+  .sA .float .quote{font-size:11.5px;line-height:1.8;color:#4A4238;letter-spacing:.5px}
+  .sA .float .row2{display:flex;align-items:center;gap:12px;margin-top:10px}
+  .sA .float .who{font-size:9.5px;color:#93876F;letter-spacing:1px}
+  .sA .float .who b{color:#4A4238;font-weight:700}
+  .sA .float .r{margin-left:auto;display:flex;align-items:center;gap:9px}
+  .sA .float .tip{font-size:8.5px;color:#B0A48B;letter-spacing:1.5px;text-align:center;line-height:1.6}
+  .sA .foot{display:flex;align-items:center;justify-content:center;gap:9px;padding-top:14px}
+  .sA .foot .name{font-size:9.5px;letter-spacing:3px;color:#A99D82;font-weight:700}
+  .sA .foot .zh{font-size:8.5px;color:#B7AC97;letter-spacing:1px}
+  .sA .foot .sl{margin-left:6px;font-size:8px;letter-spacing:2px;color:#C2B79E}
+
+  /* ============================================================
+     SYSTEM B · 黑白影集 —— 上部大照片 + 下部左右信息栏
+     ============================================================ */
+  .sB{width:460px;background:#FCFAF6;border-radius:18px;padding:26px 28px 22px;box-shadow:0 26px 60px -30px rgba(50,45,38,.42);border:1px solid #E7E1D5}
+  .sB .plate{display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:9px;letter-spacing:3px;color:#C9A96E;font-weight:600}
+  .sB .plate::after{content:"";flex:1;height:1px;background:#E3DDD1}
+  .sB .plate .num{color:#8C8374;font-weight:400}
+  .sB .ph-top{position:relative;width:100%;overflow:hidden}
+  .sB.r169 .ph-top{aspect-ratio:16/9}
+  .sB.r43 .ph-top{aspect-ratio:4/3}
+  .sB .ph-top img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(1) contrast(1.04)}
+  .sB .ph-top .cap{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,transparent,rgba(10,8,6,.62));color:#F5F2EA;font-size:9px;letter-spacing:3px;padding:26px 16px 10px;display:flex;justify-content:space-between}
+  .sB .cols{display:flex;gap:26px;margin-top:24px;align-items:flex-end}
+  .sB .col-l{flex:1}
+  .sB .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:30px;font-weight:700;letter-spacing:6px;color:#26221D;line-height:1.2}
+  .sB .quote{margin-top:13px;font-size:12.5px;line-height:1.9;color:#6E6559;letter-spacing:.5px}
+  .sB .who{margin-top:11px;font-size:10px;color:#8C8374;letter-spacing:1px}
+  .sB .who b{color:#26221D;font-weight:700}
+  .sB .col-r{flex:none;display:flex;flex-direction:column;align-items:center;gap:8px}
+  .sB .col-r .tip{font-size:9px;color:#A49A86;letter-spacing:2px}
+  .sB .foot{display:flex;align-items:center;gap:9px;margin-top:24px;padding-top:16px;border-top:1px solid #E3DDD1}
+  .sB .foot .name{font-size:9.5px;letter-spacing:3px;color:#C9A96E;font-weight:700}
+  .sB .foot .zh{font-size:8.5px;color:#8C8374;letter-spacing:1px}
+  .sB .foot .sl{margin-left:auto;font-size:8.5px;letter-spacing:2px;color:#B5AC99}
+
+  /* ============================================================
+     SYSTEM C · 胶片冲印 —— 胶片条 + 居中大字
+     ============================================================ */
+  .sC{width:460px;background:#FBF7EF;border-radius:18px;padding:24px 26px 22px;box-shadow:0 26px 60px -30px rgba(70,55,35,.4);border:1px solid #EAE0CE}
+  .sC .sprockets{height:15px;background:#E9E0CE;background-image:radial-gradient(circle 3.5px at 4px center, rgba(43,38,32,.85) 3.5px, transparent 4px);background-size:22px 15px;background-repeat:repeat-x;border-radius:4px}
+  .sC .film{position:relative;margin:5px 0;overflow:hidden;background:#26221D}
+  .sC.r169 .film{aspect-ratio:16/9}
+  .sC.r43 .film{aspect-ratio:4/3}
+  .sC .film img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .sC .edge{position:absolute;top:0;bottom:0;width:9px;background:#C08A3C;opacity:.4;z-index:2}
+  .sC .edge.l{left:0}.sC .edge.r{right:0}
+  .sC .idx{display:flex;justify-content:space-between;font-family:Consolas,Menlo,monospace;font-size:8px;letter-spacing:2px;color:#C08A3C;margin-top:8px}
+  .sC .mid{padding:24px 4px 0;display:flex;flex-direction:column;align-items:center;text-align:center}
+  .sC .title{font-family:"Noto Serif SC","Songti SC",Georgia,serif;font-size:24px;letter-spacing:6px;font-weight:700;color:#2B2620}
+  .sC .quote{margin-top:11px;font-size:11.5px;line-height:1.85;color:#7C7362;letter-spacing:.5px;max-width:360px}
+  .sC .who{margin-top:9px;font-size:9.5px;color:#7C7362;letter-spacing:1px}
+  .sC .who b{color:#2B2620;font-weight:700}
+  .sC .bar{display:flex;align-items:center;gap:12px;margin-top:18px;width:100%}
+  .sC .bar .line{flex:1;height:1px;background:#EAE0CE}
+  .sC .bar .dot{width:5px;height:5px;border-radius:50%;background:#C08A3C}
+  .sC .bar .qwrap{display:flex;align-items:center;gap:9px}
+  .sC .bar .tip{font-size:8.5px;color:#A89D86;letter-spacing:1.5px;line-height:1.6;text-align:center}
+  .sC .foot{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:18px;padding-top:15px;border-top:1px solid #EAE0CE}
+  .sC .foot .name{font-size:9.5px;letter-spacing:3px;color:#C08A3C;font-weight:700}
+  .sC .foot .zh{font-size:8.5px;color:#A89D86}
+  .sC .foot .sl{margin-left:6px;font-size:8px;letter-spacing:2px;color:#B9AF99}
+</style>
+</head>
+<body>
+  <div class="page-title">如画 LUMIRA · 照片详情分享海报 V15</div>
+  <div class="page-sub">3 套全新风格系统 × 横版双尺寸 16:9 / 4:3 · 照片区域严格按尺寸锁定 · 均为照片详情海报（成品照片 + 分享语 + 摄影落款 + 高清原图码）</div>
+  <div class="legend">
+    <span class="lg"><span class="dot a"></span>A · 莫兰迪柔雾</span>
+    <span class="lg"><span class="dot b"></span>B · 黑白影集</span>
+    <span class="lg"><span class="dot c"></span>C · 胶片冲印</span>
+  </div>
+
+  <!-- ============ A · 莫兰迪柔雾 ============ -->
+  <div class="sec">
+    <div class="sec-title">A · 莫兰迪柔雾 <span class="ratio">满版照片 + 底部悬浮信息卡</span></div>
+    <div class="sec-note">照片铺满整张海报，柔雾莫兰迪色调；信息以半透明白卡悬浮在照片底部 —— 排版与 V14（相纸居中/左图右栏）完全不同</div>
+    <div class="row">
+      <div class="cell">
+        <span class="sys-label">A · 16:9</span>
+        <div class="poster sA r169">
+          <div class="ph-full">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%20soft%20morning%20portrait%20of%20a%20woman%2C%20muted%20morandi%20clay%20and%20sage%20tones%2C%20hazy%20soft%20light%2C%20minimal%2C%20high%20fashion%20still&image_size=landscape_16_9" alt="法式慵懒">
+            <div class="brand-on"><svg width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#fff" stroke-width="10"/><path d="M58 40h10" stroke="#fff" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#fff" stroke-width="10"/><path d="M156 132v10" stroke="#fff" stroke-width="10"/><path d="M142 156h-10" stroke="#fff" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#fff" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#fff" opacity=".3"/><circle cx="150" cy="150" r="5" fill="#fff"/></svg><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+            <div class="float">
+              <div class="quote">「我用「法式慵懒」模板拍出了超满意的照片，质感绝了，你也来试试吧！」</div>
+              <div class="row2">
+                <div class="who">摄影 <b>@小满</b> · 用如画拍摄</div>
+                <div class="r">
+                  <div class="qrcode" data-qr="1" style="--ink:#4A4238"></div>
+                  <div class="tip">长按识别<br>查看高清原图</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="foot">
+            <svg width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="10"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="10"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="10"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg>
+            <span class="name">LUMIRA</span><span class="zh">· 如画</span><span class="sl">如你所见，皆成画卷</span>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="sys-label">A · 4:3</span>
+        <div class="poster sA r43">
+          <div class="ph-full">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=4x3%20soft%20morning%20portrait%20of%20a%20woman%2C%20muted%20morandi%20clay%20and%20sage%20tones%2C%20hazy%20soft%20light%2C%20minimal%20high%20fashion%20still&image_size=landscape_4_3" alt="法式慵懒">
+            <div class="brand-on"><svg width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#fff" stroke-width="10"/><path d="M58 40h10" stroke="#fff" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#fff" stroke-width="10"/><path d="M156 132v10" stroke="#fff" stroke-width="10"/><path d="M142 156h-10" stroke="#fff" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#fff" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#fff" opacity=".3"/><circle cx="150" cy="150" r="5" fill="#fff"/></svg><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+            <div class="float">
+              <div class="quote">「我用「法式慵懒」模板拍出了超满意的照片，质感绝了，你也来试试吧！」</div>
+              <div class="row2">
+                <div class="who">摄影 <b>@小满</b> · 用如画拍摄</div>
+                <div class="r">
+                  <div class="qrcode" data-qr="2" style="--ink:#4A4238"></div>
+                  <div class="tip">长按识别<br>查看高清原图</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="foot">
+            <svg width="15" height="15" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="10"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="10"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="10"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg>
+            <span class="name">LUMIRA</span><span class="zh">· 如画</span><span class="sl">如你所见，皆成画卷</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ B · 黑白影集 ============ -->
+  <div class="sec">
+    <div class="sec-title">B · 黑白影集 <span class="ratio">上部大照片 + 下部左右信息栏</span></div>
+    <div class="sec-note">黑白影集书页：照片转黑白、顶部金色档案线 + 编号，下方左大标题右二维码的不对称信息栏</div>
+    <div class="row">
+      <div class="cell">
+        <span class="sys-label">B · 16:9</span>
+        <div class="poster sB r169">
+          <div class="plate">LUMIRA ARCHIVE <span class="num">· 典藏 №0012</span></div>
+          <div class="ph-top">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%20black%20and%20white%20fine%20art%20portrait%20of%20a%20woman%2C%20soft%20window%20light%2C%20film%20grain%2C%20classic%20photography&image_size=landscape_16_9" alt="法式慵懒">
+            <div class="cap"><span>如画 · 影集</span><span>16:9 · 典藏</span></div>
+          </div>
+          <div class="cols">
+            <div class="col-l">
+              <div class="title serif">法式慵懒</div>
+              <div class="quote">「我用「法式慵懒」模板拍出了超满意的照片，质感绝了，你也来试试吧！」</div>
+              <div class="who">摄影 <b>@小满</b> · 用如画拍摄</div>
+            </div>
+            <div class="col-r">
+              <div class="qrcode" data-qr="3" style="--ink:#26221D"></div>
+              <div class="tip">长按识别 · 查看高清原图</div>
+            </div>
+          </div>
+          <div class="foot">
+            <svg width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="10"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="10"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="10"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg>
+            <span class="name">LUMIRA</span><span class="zh">· 如画</span><span class="sl">如你所见，皆成画卷</span>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="sys-label">B · 4:3</span>
+        <div class="poster sB r43">
+          <div class="plate">LUMIRA ARCHIVE <span class="num">· 典藏 №0012</span></div>
+          <div class="ph-top">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=4x3%20black%20and%20white%20fine%20art%20portrait%20of%20a%20woman%2C%20soft%20window%20light%2C%20film%20grain%2C%20classic%20photography&image_size=landscape_4_3" alt="法式慵懒">
+            <div class="cap"><span>如画 · 影集</span><span>4:3 · 典藏</span></div>
+          </div>
+          <div class="cols">
+            <div class="col-l">
+              <div class="title serif">法式慵懒</div>
+              <div class="quote">「我用「法式慵懒」模板拍出了超满意的照片，质感绝了，你也来试试吧！」</div>
+              <div class="who">摄影 <b>@小满</b> · 用如画拍摄</div>
+            </div>
+            <div class="col-r">
+              <div class="qrcode" data-qr="4" style="--ink:#26221D"></div>
+              <div class="tip">长按识别 · 查看高清原图</div>
+            </div>
+          </div>
+          <div class="foot">
+            <svg width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C9A96E" stroke-width="10"/><path d="M58 40h10" stroke="#C9A96E" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C9A96E" stroke-width="10"/><path d="M156 132v10" stroke="#C9A96E" stroke-width="10"/><path d="M142 156h-10" stroke="#C9A96E" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C9A96E" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C9A96E" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C9A96E"/></svg>
+            <span class="name">LUMIRA</span><span class="zh">· 如画</span><span class="sl">如你所见，皆成画卷</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ C · 胶片冲印 ============ -->
+  <div class="sec">
+    <div class="sec-title">C · 胶片冲印 <span class="ratio">胶片条 + 居中大字</span></div>
+    <div class="sec-note">照片嵌在 35mm 胶片条（齿孔 + 琥珀边 + 片号）中，下方居中的衬线大字与分享语</div>
+    <div class="row">
+      <div class="cell">
+        <span class="sys-label">C · 16:9</span>
+        <div class="poster sC r169">
+          <div class="sprockets"></div>
+          <div class="film">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%20golden%20hour%20portrait%20of%20a%20woman%2C%20warm%20amber%20tones%2C%20film%20still%20cinematic%20grain&image_size=landscape_16_9" alt="法式慵懒">
+            <i class="edge l"></i><i class="edge r"></i>
+          </div>
+          <div class="sprockets"></div>
+          <div class="idx"><span>LUMIRA · 如画</span><span>FILM 0012</span><span>35mm</span></div>
+          <div class="mid">
+            <div class="title serif">法式慵懒</div>
+            <div class="quote">「我用「法式慵懒」模板拍出了超满意的照片，质感绝了，你也来试试吧！」</div>
+            <div class="who">摄影 <b>@小满</b> · 用如画拍摄</div>
+          </div>
+          <div class="bar">
+            <span class="line"></span><span class="dot"></span><span class="line"></span>
+            <div class="qwrap">
+              <div class="qrcode" data-qr="5" style="--ink:#2B2620"></div>
+              <div class="tip">长按识别<br>查看高清原图</div>
+            </div>
+            <span class="line"></span><span class="dot"></span><span class="line"></span>
+          </div>
+          <div class="foot">
+            <svg width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C08A3C" stroke-width="10"/><path d="M58 40h10" stroke="#C08A3C" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C08A3C" stroke-width="10"/><path d="M156 132v10" stroke="#C08A3C" stroke-width="10"/><path d="M142 156h-10" stroke="#C08A3C" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C08A3C" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C08A3C" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C08A3C"/></svg>
+            <span class="name">LUMIRA</span><span class="zh">· 如画</span><span class="sl">如你所见，皆成画卷</span>
+          </div>
+        </div>
+      </div>
+      <div class="cell">
+        <span class="sys-label">C · 4:3</span>
+        <div class="poster sC r43">
+          <div class="sprockets"></div>
+          <div class="film">
+            <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=4x3%20golden%20hour%20portrait%20of%20a%20woman%2C%20warm%20amber%20tones%2C%20film%20still%20cinematic%20grain&image_size=landscape_4_3" alt="法式慵懒">
+            <i class="edge l"></i><i class="edge r"></i>
+          </div>
+          <div class="sprockets"></div>
+          <div class="idx"><span>LUMIRA · 如画</span><span>FILM 0012</span><span>35mm</span></div>
+          <div class="mid">
+            <div class="title serif">法式慵懒</div>
+            <div class="quote">「我用「法式慵懒」模板拍出了超满意的照片，质感绝了，你也来试试吧！」</div>
+            <div class="who">摄影 <b>@小满</b> · 用如画拍摄</div>
+          </div>
+          <div class="bar">
+            <span class="line"></span><span class="dot"></span><span class="line"></span>
+            <div class="qwrap">
+              <div class="qrcode" data-qr="6" style="--ink:#2B2620"></div>
+              <div class="tip">长按识别<br>查看高清原图</div>
+            </div>
+            <span class="line"></span><span class="dot"></span><span class="line"></span>
+          </div>
+          <div class="foot">
+            <svg width="14" height="14" viewBox="0 0 200 200" fill="none"><path d="M40 68V58" stroke="#C08A3C" stroke-width="10"/><path d="M58 40h10" stroke="#C08A3C" stroke-width="10"/><path d="M132 40h10a14 14 0 0 1 14 14v14" stroke="#C08A3C" stroke-width="10"/><path d="M156 132v10" stroke="#C08A3C" stroke-width="10"/><path d="M142 156h-10" stroke="#C08A3C" stroke-width="10"/><path d="M68 156H58a14 14 0 0 1-14-14v-10" stroke="#C08A3C" stroke-width="10"/><path d="M24 16h14l124 124h-14Z" fill="#C08A3C" opacity=".25"/><circle cx="150" cy="150" r="5" fill="#C08A3C"/></svg>
+            <span class="name">LUMIRA</span><span class="zh">· 如画</span><span class="sl">如你所见，皆成画卷</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  var seed=17;function r(){seed=(seed*9301+49297)%233280;return seed/233280}
+  document.querySelectorAll('[data-qr]').forEach(function(el){
+    var html='';
+    for(var y=0;y<9;y++){for(var x=0;x<9;x++){
+      var corner=(y<3&&x<3)||(y<3&&x>=6)||(y>=6&&x<3);
+      var on=corner?(x%2===0&&y%2===0||x===0||y===0):r()>0.5;
+      html+=on?'<i></i>':'<i style="background:transparent"></i>';
+    }}
+    el.innerHTML=html;
+  });
+</script>
+</body>
+</html>
