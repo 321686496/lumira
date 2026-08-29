@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'template_cover_image.dart';
+
 /// 模板封面默认展示比例（加载中/未知比例兜底，≈ 3:4）。
 const double kDefaultCoverRatio = 3 / 4;
 
@@ -55,5 +57,129 @@ Uint8List? _decodeBase64Bytes(String data) {
     return base64Decode(raw);
   } catch (_) {
     return null;
+  }
+}
+
+/// 自适应封面组件：按封面真实比例定高，宽度 100%，比例钳制在
+/// [kMinCoverRatio, kMaxCoverRatio]（9:16 温和削减 / 超宽裁切）。
+///
+/// - 通过 `ImageStream.resolve` 取真实宽高（先例：gallery/photo_crop_layer.dart）。
+/// - 渲染仍委托 [TemplateCoverImage]（走 LumiraImage 字节缓存 + 降采样），
+///   本组件只负责外层比例与尺寸。
+/// - [overlay] 作为封面 Stack 内的叠加子组件（免费/积分/已拍等角标）。
+class AdaptiveCoverImage extends StatefulWidget {
+  const AdaptiveCoverImage({
+    super.key,
+    this.cover,
+    this.coverData,
+    this.fit = BoxFit.cover,
+    this.fallback,
+    this.errorFallback,
+    this.overlay = const <Widget>[],
+  });
+
+  final String? cover;
+  final String? coverData;
+  final BoxFit fit;
+  final Widget? fallback;
+  final Widget? errorFallback;
+  final List<Widget> overlay;
+
+  @override
+  State<AdaptiveCoverImage> createState() => _AdaptiveCoverImageState();
+}
+
+class _AdaptiveCoverImageState extends State<AdaptiveCoverImage> {
+  /// 图片真实宽高比（width / height）；null 表示尚未解析（用默认比例）。
+  double? _realAspect;
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(AdaptiveCoverImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.cover != widget.cover ||
+        oldWidget.coverData != widget.coverData) {
+      _realAspect = null;
+      _resolve();
+    }
+  }
+
+  @override
+  void dispose() {
+    final s = _stream;
+    final l = _listener;
+    if (s != null && l != null) {
+      s.removeListener(l);
+    }
+    _stream = null;
+    _listener = null;
+    super.dispose();
+  }
+
+  void _resolve() {
+    final s = _stream;
+    final l = _listener;
+    if (s != null && l != null) {
+      s.removeListener(l);
+    }
+    _stream = null;
+    _listener = null;
+
+    final provider = buildCoverProvider(widget.cover, widget.coverData);
+    if (provider == null) return;
+
+    final stream = provider.resolve(const ImageConfiguration());
+    final listener = ImageStreamListener(
+      (info, _) {
+        if (!mounted) return;
+        final w = info.image.width;
+        final h = info.image.height;
+        if (w > 0 && h > 0) {
+          setState(() => _realAspect = w / h);
+        }
+      },
+      onError: (_, __) {
+        // 解析失败：保持默认比例，画面由 TemplateCoverImage 的 errorFallback 兜底。
+        if (mounted && _realAspect != null) {
+          setState(() => _realAspect = null);
+        }
+      },
+    );
+    stream.addListener(listener);
+    _stream = stream;
+    _listener = listener;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = buildCoverProvider(widget.cover, widget.coverData);
+    if (provider == null) {
+      return widget.fallback ?? const SizedBox.shrink();
+    }
+    final real = _realAspect;
+    final ratio = (real == null) ? kDefaultCoverRatio : clampCoverRatio(real);
+    return AspectRatio(
+      aspectRatio: ratio,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          TemplateCoverImage(
+            cover: widget.cover,
+            coverData: widget.coverData,
+            fit: widget.fit,
+            fallback: widget.fallback,
+            errorFallback: widget.errorFallback,
+          ),
+          ...widget.overlay,
+        ],
+      ),
+    );
   }
 }

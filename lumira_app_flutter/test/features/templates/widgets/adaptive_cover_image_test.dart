@@ -51,4 +51,49 @@ void main() {
       expect(buildCoverProvider('data:image/png;base64,!!!', null), isNull);
     });
   });
+
+  group('AdaptiveCoverImage', () {
+    // 1x1 透明 PNG（base64），解码后真实比例 = 1.0
+    const png1x1 =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+    testWidgets('无来源时显示 fallback', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: AdaptiveCoverImage(
+            cover: null,
+            coverData: null,
+            fallback: const Text('EMPTY'),
+          ),
+        ),
+      ));
+      expect(find.text('EMPTY'), findsOneWidget);
+    });
+
+    testWidgets('加载中先用默认 3:4，解码完成后用真实比例', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: AdaptiveCoverImage(
+            cover: png1x1,
+            fallback: const Text('EMPTY'),
+          ),
+        ),
+      ));
+      // 加载中（未解码）：默认比例 0.75
+      expect(
+        tester.widget<AspectRatio>(find.byType(AspectRatio)).aspectRatio,
+        closeTo(kDefaultCoverRatio, 1e-9),
+      );
+      // 等待真实解码（base64 走 UI isolate 异步，需 runAsync）
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 500)),
+      );
+      await tester.pump();
+      // 1x1 图片真实比例 1.0
+      expect(
+        tester.widget<AspectRatio>(find.byType(AspectRatio)).aspectRatio,
+        closeTo(1.0, 1e-9),
+      );
+    });
+  });
 }
