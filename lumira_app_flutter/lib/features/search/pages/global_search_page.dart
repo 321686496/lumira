@@ -24,6 +24,7 @@ import '../../templates/data/remote_templates_providers.dart';
 import '../../templates/search/template_remote_search_service.dart';
 import '../../templates/search/template_search_service.dart';
 import '../../templates/services/template_mapper.dart';
+import '../../templates/widgets/adaptive_cover_image.dart';
 import '../data/search_result.dart';
 import '../widgets/search_initial_sections.dart';
 import '../widgets/search_result_card.dart';
@@ -897,7 +898,8 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   /// 估算卡片高度（用于瀑布流左右列平衡分配，非精确值）。
   double _estimateCardHeight(SearchResult r, double w) {
     final coverRatio = r.scope == SearchScope.academy ? 4 / 3 : 3 / 4;
-    final coverH = w / coverRatio;
+    // 模板封面走自适应，估算用默认比例；场景/美学院用各自固定比例
+    final coverH = r.template != null ? w / kDefaultCoverRatio : w / coverRatio;
     var body = 46.0; // 上下 padding + 标题行
     if (r.template != null) {
       body += r.shortDesc.isNotEmpty ? 3 + 14 : 0; // 描述行

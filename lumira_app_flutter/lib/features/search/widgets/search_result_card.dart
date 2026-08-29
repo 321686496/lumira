@@ -7,6 +7,7 @@ import '../../../shared/searchengine/search_scope.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../academy/data/academy_models.dart'
     show AcademyLevelExt, AcademyTopicExt;
+import '../../templates/widgets/adaptive_cover_image.dart';
 import '../../templates/widgets/ambience_badges.dart';
 import '../../templates/widgets/template_cover_image.dart';
 import '../data/search_result.dart';
@@ -14,7 +15,7 @@ import '../data/search_result.dart';
 /// 搜索结果卡片（富内容，瀑布流竖卡）。
 ///
 /// 模板卡片视觉完全对齐「全部模板页」卡片：
-/// - 封面：模板/场景 3:4，美学院（课程/知识卡）4:3（与美学院知识卡一致）
+/// - 封面：模板 真实比例自适应（宽度 100%，9:16 温和削减）；场景 3:4；美学院 4:3
 /// - 左上角：类型角标（模板/场景/美学院）+ 模板价格/免费徽标
 /// - [已拍 N 张] 叠在封面右下角（不占信息行空间）
 /// - 信息区：名称 + 短描述 + 两级分类/自定义 + 季节/天气/时段氛围胶囊（Wrap 自动换行，不挤压）
@@ -56,7 +57,70 @@ class SearchResultCard extends ConsumerWidget {
   }
 
   Widget _imageStack(SearchResult r, ThemeTokens tokens) {
-    // 美学院 4:3（对齐美学院知识卡宽高比），模板/场景 3:4（瀑布流竖卡）
+    // 左上角类型角标（模板/场景/美学院）
+    final typeBadge = showTypeBadge
+        ? Positioned(top: 8, left: 8, child: _typeBadge(tokens, r.scope.label))
+        : null;
+    // 模板价格/免费徽标：类型角标在左时放右上，模板专属页放左上（对齐全部模板页）
+    final priceBadge = r.template != null
+        ? Positioned(
+            top: 8,
+            right: showTypeBadge ? 8 : null,
+            left: showTypeBadge ? null : 8,
+            child: r.price == 0
+                ? _priceBadge(tokens, '免费', true)
+                : _priceBadge(tokens, '${r.price}', false),
+          )
+        : null;
+    // 已拍数：叠图角标（模板），不占用下方信息行空间
+    final usageBadge = (r.template != null && r.usageCount > 0)
+        ? Positioned(
+            bottom: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.55),
+                borderRadius: BorderRadius.circular(9999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.camera_alt_outlined,
+                      size: 12, color: Colors.white),
+                  const SizedBox(width: 4),
+                  Text(
+                    '已拍 ${r.usageCount} 张',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        : null;
+
+    final overlay = <Widget>[
+      if (typeBadge != null) typeBadge,
+      if (priceBadge != null) priceBadge,
+      if (usageBadge != null) usageBadge,
+    ];
+
+    // 模板封面：真实比例自适应（宽度 100%，9:16 温和削减）
+    if (r.template != null) {
+      return AdaptiveCoverImage(
+        cover: r.imageUrl,
+        coverData: r.coverData,
+        fallback: _placeholder(tokens, r),
+        errorFallback: _placeholder(tokens, r),
+        overlay: overlay,
+      );
+    }
+
+    // 场景/美学院：保持现有固定比例（美学院 4:3，场景 3:4 瀑布流竖卡）
     final ratio = r.scope == SearchScope.academy ? 4 / 3 : 3 / 4;
     return AspectRatio(
       aspectRatio: ratio,
@@ -64,49 +128,7 @@ class SearchResultCard extends ConsumerWidget {
         fit: StackFit.expand,
         children: [
           _image(r, tokens),
-          // 左上角类型角标（模板/场景/美学院）
-          if (showTypeBadge)
-            Positioned(top: 8, left: 8, child: _typeBadge(tokens, r.scope.label)),
-          // 模板价格/免费徽标：类型角标在左时放右上，模板专属页放左上（对齐全部模板页）
-          if (r.template != null)
-            Positioned(
-              top: 8,
-              right: showTypeBadge ? 8 : null,
-              left: showTypeBadge ? null : 8,
-              child: r.price == 0
-                  ? _priceBadge(tokens, '免费', true)
-                  : _priceBadge(tokens, '${r.price}', false),
-            ),
-          // 已拍数：叠图角标（模板），不占用下方信息行空间，避免挤压季节/天气标签。
-          if (r.template != null && r.usageCount > 0)
-            Positioned(
-              bottom: 8,
-              right: 8,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.55),
-                  borderRadius: BorderRadius.circular(9999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.camera_alt_outlined,
-                        size: 12, color: Colors.white),
-                    const SizedBox(width: 4),
-                    Text(
-                      '已拍 ${r.usageCount} 张',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          ...overlay,
         ],
       ),
     );
