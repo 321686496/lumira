@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
 import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/features/templates/data/templates_editor_mock_data.dart';
+import 'package:lumira_app_flutter/features/templates/services/template_exporter.dart';
 import 'package:lumira_app_flutter/features/templates/services/template_image_store.dart';
 import 'package:lumira_app_flutter/features/templates/services/template_mapper.dart';
 
@@ -243,6 +244,65 @@ void main() {
           reason: 'image 剪影 data 应为本地路径');
       expect(sil, startsWith(tmpDir.path));
       expect(sil.contains('base64'), isFalse);
+
+      // === 回环第 6 步：resolveLocalImages → exportToPptpl → .pptpl 内嵌 base64 ===
+      final resolved = await TemplateExporter.resolveLocalImages(saved);
+
+      // resolveLocalImages 把 coverData/cover/images[].data/剪影全部转回 base64 data URL
+      expect(resolved.coverData, startsWith('data:image/png;base64,'));
+      expect(
+        base64Decode(
+            resolved.coverData!.substring(resolved.coverData!.indexOf(',') + 1)),
+        await File(saved.coverData!).readAsBytes(),
+        reason: 'resolved.coverData 解码字节应与 cover 文件一致',
+      );
+      expect(resolved.cover, startsWith('data:image/png;base64,'));
+      expect(
+        base64Decode(resolved.cover.substring(resolved.cover.indexOf(',') + 1)),
+        await File(saved.coverData!).readAsBytes(),
+        reason: 'resolved.cover 解码字节应与 cover 文件一致',
+      );
+      expect(resolved.images?.length, 2);
+      for (var i = 0; i < resolved.images!.length; i++) {
+        final data = resolved.images![i].data!;
+        expect(data, startsWith('data:image/png;base64,'));
+        expect(
+          base64Decode(data.substring(data.indexOf(',') + 1)),
+          await File(saved.images![i].data!).readAsBytes(),
+          reason: 'resolved.images[$i].data 解码字节应与对应效果图文件一致',
+        );
+      }
+      final resolvedPoses = resolved.pose as List<dynamic>;
+      final resolvedSil =
+          (resolvedPoses.first as Map)['silhouette']['data'] as String;
+      expect(resolvedSil, startsWith('data:image/png;base64,'));
+      expect(
+        base64Decode(resolvedSil.substring(resolvedSil.indexOf(',') + 1)),
+        await File(sil).readAsBytes(),
+        reason: 'resolved 剪影解码字节应与 silhouette 文件一致',
+      );
+
+      // exportToPptpl：解析 JSON，meta.coverData 与 pose 剪影均为可解码 base64 data URL
+      // （.pptpl 六区段格式不含 images 数组；images[].data 已在 resolved record 层验证）
+      final exportJson = TemplateExporter.exportToPptpl(resolved);
+      final data = jsonDecode(exportJson) as Map<String, dynamic>;
+      expect(data['format'], 'pptpl');
+      final jsonCoverData = (data['meta'] as Map)['coverData'] as String;
+      expect(jsonCoverData, startsWith('data:image/png;base64,'));
+      expect(
+        base64Decode(
+            jsonCoverData.substring(jsonCoverData.indexOf(',') + 1)),
+        await File(saved.coverData!).readAsBytes(),
+        reason: '.pptpl meta.coverData 解码字节应与 cover 文件一致',
+      );
+      final jsonSil = (((data['pose'] as List).first as Map)['silhouette']
+          as Map)['data'] as String;
+      expect(jsonSil, startsWith('data:image/png;base64,'));
+      expect(
+        base64Decode(jsonSil.substring(jsonSil.indexOf(',') + 1)),
+        await File(sil).readAsBytes(),
+        reason: '.pptpl pose 剪影解码字节应与 silhouette 文件一致',
+      );
     });
   });
 }

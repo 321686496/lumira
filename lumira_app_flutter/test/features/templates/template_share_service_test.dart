@@ -239,4 +239,160 @@ void main() {
       expect(api.lastDeletePath, '/templates/share/abc123');
     });
   });
+
+  group('downscaleBytes', () {
+    test('未超过阈值时原样返回（不重新编码）', () async {
+      final image = img.Image(width: 4, height: 4);
+      img.fill(image, color: img.ColorRgb8(200, 100, 50));
+      final bytes = img.encodePng(image);
+      final out = await TemplateShareService.downscaleBytes(bytes);
+      expect(out, same(bytes));
+    });
+
+    test('超限大图降采样到 maxDimension 内且变小', () async {
+      // 600x600 噪点图，压到 200x200 以内。
+      final image = img.Image(width: 600, height: 600);
+      final rnd = math.Random(7);
+      for (var y = 0; y < 600; y++) {
+        for (var x = 0; x < 600; x++) {
+          image.setPixelRgb(x, y, rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256));
+        }
+      }
+      final bytes = Uint8List.fromList(img.encodePng(image));
+      const maxBytes = 8000;
+      expect(bytes.length, greaterThan(maxBytes));
+
+      final out = await TemplateShareService.downscaleBytes(
+        bytes,
+        maxDimension: 200,
+        maxBytes: maxBytes,
+      );
+      final decoded = img.decodeImage(out);
+      expect(decoded, isNotNull);
+      expect(decoded!.width, lessThanOrEqualTo(200));
+      expect(decoded.height, lessThanOrEqualTo(200));
+      expect(out.length, lessThan(bytes.length));
+    });
+
+    test('带透明通道的剪影 PNG 重编码后保留 alpha', () async {
+      // 随机 RGBA 噪点：PNG 几乎无法压缩，保证超过 maxBytes 阈值。
+      final image = img.Image(width: 600, height: 600, numChannels: 4);
+      final rnd = math.Random(9);
+      for (var y = 0; y < 600; y++) {
+        for (var x = 0; x < 600; x++) {
+          image.setPixelRgba(
+            x, y,
+            rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256),
+          );
+        }
+      }
+      final bytes = Uint8List.fromList(img.encodePng(image));
+      const maxBytes = 8000;
+      expect(bytes.length, greaterThan(maxBytes));
+
+      final out = await TemplateShareService.downscaleBytes(
+        bytes,
+        maxDimension: 300,
+        maxBytes: maxBytes,
+      );
+      final decoded = img.decodeImage(out);
+      expect(decoded, isNotNull);
+      expect(decoded!.numChannels, 4, reason: '透明剪影不得退化为 JPEG 丢失 alpha');
+      expect(decoded.width, lessThanOrEqualTo(300));
+    });
+
+    test('非法字节原样返回（fail-open）', () async {
+      final junk = Uint8List.fromList(List<int>.filled(400 * 1024, 0xAB));
+      final out = await TemplateShareService.downscaleBytes(junk);
+      expect(out, same(junk));
+    });
+  });
+
+  group('compressDataUrlsToBudget', () {
+    Future<String> noiseDataUrl(int size, {int channels = 3}) async {
+      final image = img.Image(width: size, height: size, numChannels: channels);
+      final rnd = math.Random(42);
+      for (var y = 0; y < size; y++) {
+        for (var x = 0; x < size; x++) {
+          if (channels == 4) {
+            image.setPixelRgba(
+                x, y, rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256));
+          } else {
+            image.setPixelRgb(
+                x, y, rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256));
+          }
+        }
+      }
+      final bytes = img.encodePng(image);
+      return 'data:image/png;base64,${base64Encode(bytes)}';
+    }
+
+    test('预算充足时原样返回（不重新编码）', () async {
+      final urls = <String>['standing-profile', 'data:image/png;base64,AAAA'];
+      final out = await TemplateShareService.compressDataUrlsToBudget(urls);
+      expect(out, urls);
+      expect(out[0], same(urls[0]));
+      expect(out[1], same(urls[1]));
+    });
+
+    test('超预算时多张图按比例压小，总长明显下降', () async {
+      // 6 张 800x800 噪点图，总长远超预算；压缩后每张仍可解码且总体显著变小。
+      final urls = <String>[];
+      for (var i = 0; i < 6; i++) {
+        urls.add(await noiseDataUrl(800));
+      }
+      const budget = 64 * 1024;
+      final totalBefore = urls.fold<int>(0, (s, u) => s + u.length);
+      expect(totalBefore, greaterThan(budget * 6));
+
+      final out = await TemplateShareService.compressDataUrlsToBudget(
+        urls,
+        totalBudgetChars: budget,
+        reserveChars: 4 * 1024,
+      );
+      expect(out.length, urls.length);
+      final totalAfter = out.fold<int>(0, (s, u) => s + u.length);
+      expect(totalAfter, lessThan(totalBefore));
+      // 每张仍应是可解码的图片
+      for (final url in out) {
+        final m = RegExp(r'^data:image/png;base64,(.+)$').firstMatch(url);
+        expect(m, isNotNull);
+        final decoded = img.decodeImage(base64Decode(m!.group(1)!));
+        expect(decoded, isNotNull);
+      }
+    });
+
+    test('非图片字符串与已超预算的图片混排时，非图片原样保留', () async {
+      final big = await noiseDataUrl(600);
+      final urls = <String>['standing-profile', big];
+      const budget = 64 * 1024;
+      expect(urls.fold<int>(0, (s, u) => s + u.length), greaterThan(budget));
+
+      final out = await TemplateShareService.compressDataUrlsToBudget(
+        urls,
+        totalBudgetChars: budget,
+        reserveChars: 4 * 1024,
+      );
+      expect(out[0], 'standing-profile'); // 内置剪影 key 不被压缩
+      expect(out[1], isNot(big));
+      expect(out[1].startsWith('data:image/png;base64,'), isTrue);
+    });
+
+    test('透明剪影 PNG 压缩后保留 alpha', () async {
+      final big = await noiseDataUrl(500, channels: 4);
+      final urls = <String>[big];
+      const budget = 64 * 1024;
+      expect(big.length, greaterThan(budget));
+
+      final out = await TemplateShareService.compressDataUrlsToBudget(
+        urls,
+        totalBudgetChars: budget,
+        reserveChars: 4 * 1024,
+      );
+      final m = RegExp(r'^data:image/png;base64,(.+)$').firstMatch(out[0]);
+      final decoded = img.decodeImage(base64Decode(m!.group(1)!));
+      expect(decoded, isNotNull);
+      expect(decoded!.numChannels, 4, reason: '透明剪影不得退化为 JPEG 丢失 alpha');
+    });
+  });
 }
