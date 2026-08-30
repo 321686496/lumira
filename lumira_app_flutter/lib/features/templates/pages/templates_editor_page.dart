@@ -18,6 +18,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_state.dart';
@@ -30,7 +31,9 @@ import '../data/remote_template_dto.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_editor_mock_data.dart';
 import '../services/template_exporter.dart';
+import '../services/template_image_store.dart';
 import '../services/template_mapper.dart';
+import '../services/template_share_service.dart';
 import '../widgets/composition_overlay.dart';
 import '../widgets/editor_tab_bar.dart';
 import '../widgets/pose_silhouette.dart';
@@ -441,6 +444,20 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     );
   }
 
+  /// 将图片 bytes 降采样压缩后再转 base64 data URL。
+  ///
+  /// 画质已放宽：本地保存走 [_persistFormImagesToFiles] 把图片落盘为文件、RDB 只存
+  /// 路径，不再受 OHOS RDB 2MB 单行上限约束，故这里只需压到 2048px/~1MB 内，
+  /// 避免超大原图占用内存与磁盘。压缩逻辑见 [TemplateShareService.downscaleBytes]。
+  Future<String> _encodeImageDataUrl(Uint8List bytes, String mime) async {
+    final compressed = await TemplateShareService.downscaleBytes(
+      bytes,
+      maxDimension: 2048,
+      maxBytes: 1 * 1024 * 1024,
+    );
+    return 'data:$mime;base64,${base64Encode(compressed)}';
+  }
+
   /// 从相册选一张图，转 data URL 后通过 [onPicked] 回调交由调用方决定如何落地
   /// （设为封面、追加到效果图列表等）。
   ///
@@ -462,7 +479,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         return;
       }
       final mime = _imageMimeFromExtension(fullFile.extension);
-      final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
+      final dataUrl = await _encodeImageDataUrl(Uint8List.fromList(bytes), mime);
       onPicked(dataUrl);
       if (!mounted) return;
       lumira.LumiraToast.show(context, successMessage);
@@ -491,7 +508,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       if (xfile == null) return; // 用户取消拍照
       final bytes = await xfile.readAsBytes();
       // 拍摄结果统一为 jpeg
-      final dataUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      final dataUrl = await _encodeImageDataUrl(bytes, 'image/jpeg');
       onPicked(dataUrl);
       if (!mounted) return;
       lumira.LumiraToast.show(context, successMessage);
@@ -605,8 +622,10 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
         return;
       }
       final mime = _imageMimeFromExtension(fullFile.extension);
-      final dataUrl = 'data:$mime;base64,${base64Encode(bytes)}';
-      final sizeKB = (bytes.length / 1024).round();
+      final compressedBytes =
+          await TemplateShareService.downscaleBytes(Uint8List.fromList(bytes));
+      final dataUrl = 'data:$mime;base64,${base64Encode(compressedBytes)}';
+      final sizeKB = (compressedBytes.length / 1024).round();
       setState(() {
         _currentPose().silhouette = SilhouetteResource(
           type: 'image',
@@ -718,6 +737,28 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
 
   // ===== Footer 操作 =====
 
+  /// 保存前把表单内图片全部落盘为文件，RDB 只存绝对路径。
+  ///
+  /// 封面/效果图写入 `<documents>/lumira/templates/<id>/`（cover / img_<i>），
+  /// 各姿势 image 剪影写入 silhouette_<i>；非 `data:image/...;base64,` 的引用
+  /// （内置剪影 key、SVG、http、assets）原样保留。绕开 OHOS RDB 2MB 单行硬上限，
+  /// 由 [TemplateImageStore] 统一管理落盘与读回。
+  Future<void> _persistFormImagesToFiles(String id) async {
+    for (var i = 0; i < _form.meta.images.length; i++) {
+      final e = _form.meta.images[i];
+      if (e.data.isEmpty) continue;
+      e.data = await TemplateImageStore.saveDataUrl(
+          id, i == 0 ? 'cover' : 'img', i, e.data);
+    }
+    for (var i = 0; i < _form.poses.length; i++) {
+      final p = _form.poses[i];
+      if (p.silhouette.type == 'image' && p.silhouette.data.isNotEmpty) {
+        p.silhouette.data = await TemplateImageStore.saveDataUrl(
+            id, 'silhouette', i, p.silhouette.data);
+      }
+    }
+  }
+
   Future<void> _onSave() async {
     if (_form.meta.name.trim().isEmpty) {
       lumira.LumiraToast.show(context, '请输入模板名称');
@@ -726,6 +767,9 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     final now = DateTime.now().millisecondsSinceEpoch;
     // 编辑模式复用 templateId；新建模式生成 user_<timestamp> 作为持久化主键
     final id = widget.templateId ?? 'user_$now';
+
+    // 先把表单内图片落盘为文件、RDB 只存路径（绕开 OHOS RDB 2MB 单行上限）
+    await _persistFormImagesToFiles(id);
 
     // 编辑模式下保留原 createdAt（避免更新时刷新创建时间）
     int createdAt = now;
@@ -747,18 +791,24 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       createdAt: createdAt,
     ).copyWith(updatedAt: now);
 
-    // 调试日志：追踪封面图和剪影数据保存
+    // 调试日志：追踪封面图和剪影数据保存（落盘后为本地路径，保持可读）
     debugPrint('[Editor] Save: id=$id');
     debugPrint(
-        '[Editor]   coverImage in form: ${_form.meta.coverImage != null ? '${_form.meta.coverImage!.length} chars' : 'null'}');
+        '[Editor]   coverImage in form: ${_form.meta.coverImage != null ? _briefImageRef(_form.meta.coverImage!) : 'null'}');
     debugPrint(
-        '[Editor]   coverData in record: ${record.coverData != null ? '${record.coverData!.length} chars' : 'null'}');
+        '[Editor]   coverData in record: ${record.coverData != null ? _briefImageRef(record.coverData!) : 'null'}');
     debugPrint(
-        '[Editor]   silhouette (current pose $_poseIndex): type=${_currentPose().silhouette.type}, data=${_currentPose().silhouette.data.isNotEmpty ? '${_currentPose().silhouette.data.length} chars' : 'empty'}, total poses=${_form.poses.length}');
+        '[Editor]   silhouette (current pose $_poseIndex): type=${_currentPose().silhouette.type}, data=${_briefImageRef(_currentPose().silhouette.data)}, total poses=${_form.poses.length}');
 
     try {
       final dao = await ref.read(templatesDaoProvider.future);
       await dao.upsert(record);
+      // OHOS 关系型数据库单行上限 2MB：超限记录会「插入成功但读取失败」，
+      // 表现为提示保存成功但模板不显示。写后读回校验，把静默失败转为可见错误。
+      final verify = await dao.getById(record.id);
+      if (verify == null) {
+        throw Exception('模板数据过大无法保存，请更换或减少封面/效果图后重试');
+      }
       // 刷新 My Templates 页数据源，使新保存的模板立即出现
       ref.invalidate(customTemplatesProvider);
       // 刷新 Capture 页模板缓存（系统 + 自定义），使新保存的模板立即出现
@@ -1720,6 +1770,13 @@ Uint8List _cachedCoverDecode(String dataUrl) {
   });
 }
 
+/// 调试用：把图片引用转成可读文本——本地路径直接显示，base64/超长内容只显示长度。
+String _briefImageRef(String s) {
+  if (s.isEmpty) return 'empty';
+  if (s.startsWith('data:') || s.length > 120) return '${s.length} chars';
+  return s;
+}
+
 /// 封面图尺寸缓存（宽高比用于 AspectRatio 约束）
 final Map<String, Future<ui.Image>> _coverImageSizeCache = {};
 
@@ -1728,15 +1785,21 @@ Future<ui.Image> _getCachedCoverImage(String dataUrl) {
       dataUrl, () => _decodeCoverImage(dataUrl));
 }
 
-Future<ui.Image> _decodeCoverImage(String dataUrl) async {
+Future<ui.Image> _decodeCoverImage(String src) async {
   try {
-    final bytes = _cachedCoverDecode(dataUrl);
+    // data URL 走字节级缓存；本地路径读文件字节，缺失/空则抛错触发错误分支。
+    final bytes = src.startsWith('data:')
+        ? _cachedCoverDecode(src)
+        : await TemplateImageStore.readBytes(src);
+    if (bytes == null || bytes.isEmpty) {
+      throw Exception('cover file missing: $src');
+    }
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     return frame.image;
   } catch (e) {
     // 解码失败：移出缓存，避免坏 Future 被永久缓存导致后续重建永远失败
-    _coverImageSizeCache.remove(dataUrl);
+    _coverImageSizeCache.remove(src);
     rethrow;
   }
 }
@@ -1765,10 +1828,7 @@ void _showCoverPreviewDialog(
                   final img = snapshot.data!;
                   return AspectRatio(
                     aspectRatio: img.width / img.height,
-                    child: Image.memory(
-                      _cachedCoverDecode(cover),
-                      fit: BoxFit.contain,
-                    ),
+                    child: LumiraImage(cover, fit: BoxFit.contain),
                   );
                 }
                 if (snapshot.hasError) {
@@ -2472,7 +2532,7 @@ class _ImageTile extends ConsumerWidget {
   });
 
   final ThemeTokens tokens;
-  final String data; // data URL（base64）
+  final String data; // data URL（base64）或本地文件路径
   final bool isCover;
   final VoidCallback onTap;
   final VoidCallback? onDelete;
@@ -2498,13 +2558,12 @@ class _ImageTile extends ConsumerWidget {
             clipBehavior: Clip.hardEdge,
             child: data.isEmpty
                 ? _CoverPlaceholder(tokens: tokens)
-                : Image.memory(
-                    _cachedCoverDecode(data),
+                : LumiraImage(
+                    data,
+                    width: 100,
+                    height: 120,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, _) {
-                      debugPrint('[Editor] Image tile decode error: $error');
-                      return _CoverPlaceholder(tokens: tokens);
-                    },
+                    errorWidget: _CoverPlaceholder(tokens: tokens),
                   ),
           ),
           if (isCover)
