@@ -1,21 +1,18 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:saver_gallery/saver_gallery.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../core/auth/auth_controller.dart';
 import '../../../features/invite/data/invite_models.dart';
 import '../../../features/invite/data/invite_repository.dart';
+import '../../../features/invite/widgets/invite_poster_sheet.dart';
 import '../../../shared/widgets/api_error_banner.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
@@ -41,7 +38,6 @@ class ProfileInvitePage extends ConsumerStatefulWidget {
 
 class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
   final TextEditingController _codeController = TextEditingController();
-  final GlobalKey _posterKey = GlobalKey();
 
   @override
   void dispose() {
@@ -55,8 +51,12 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
       final repo = await ref.read(inviteRepositoryProvider.future);
       final code = await repo.generate();
       if (!mounted) return;
-      // 打开全屏邀请海报
-      await _showInvitePoster(code.code);
+      // 打开邀请卡片分享弹层（跟随当前 UI 风格，复制/保存/分享）
+      await showInvitePosterSheet(
+        context: context,
+        code: code.code,
+        tokens: ref.read(themeTokensProvider),
+      );
       if (!mounted) return;
       ref.invalidate(inviteStatsProvider); // 刷新 myInviteCode
     } on ApiException catch (e) {
@@ -67,16 +67,6 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
       if (!mounted) return;
       LumiraToast.show(toastContext, '生成邀请卡片', duration: const Duration(milliseconds: 1000));
     }
-  }
-
-  Future<void> _showInvitePoster(String code) async {
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _InvitePosterSheet(code: code, posterKey: _posterKey),
-    );
   }
 
   Future<void> _confirmBindCode() async {
@@ -112,6 +102,8 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
     final statsAsync = ref.watch(inviteStatsProvider);
+    // 邀请码绑定仅对「新设备首次使用」开放；老设备不展示绑定输入入口。
+    final isNewDevice = ref.watch(authControllerProvider).isNewDevice;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -190,11 +182,13 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
                 const SizedBox(height: 20),
                 FadeUp(
                   delay: const Duration(milliseconds: 400),
-                  child: _CodeCard(
-                    tokens: tokens,
-                    controller: _codeController,
-                    onConfirm: _confirmBindCode,
-                  ),
+                  child: isNewDevice
+                      ? _CodeCard(
+                          tokens: tokens,
+                          controller: _codeController,
+                          onConfirm: _confirmBindCode,
+                        )
+                      : _BindUnavailableCard(tokens: tokens),
                 ),
                 const SizedBox(height: 20),
                 FadeUp(
@@ -664,6 +658,39 @@ class _ProgressCard extends ConsumerWidget {
   }
 }
 
+/// 老设备（非新用户）看到的占位提示：邀请码绑定入口已关闭。
+///
+/// 绑定邀请码仅对「设备首次注册后的短时间内」开放（裂变初衷：新用户裂变）。
+/// 老设备若本来就没绑定过，也不再提供补填入口，防止老用户互刷/复用他人邀请码。
+class _BindUnavailableCard extends StatelessWidget {
+  const _BindUnavailableCard({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return NeuCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.timer_off_outlined, size: 18, color: tokens.brand),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '邀请码绑定仅限新设备首次使用时填写，当前设备已超过绑定时间。'
+              '如需参与邀请奖励，可将你的邀请码分享给新用户。',
+              style: TextStyle(
+                fontSize: 13,
+                color: tokens.textTertiary,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CodeCard extends StatelessWidget {
   const _CodeCard({
     required this.tokens,
@@ -892,148 +919,6 @@ class _MyInviteCodeCard extends ConsumerWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-/// 全屏邀请海报弹层（可保存到相册）
-class _InvitePosterSheet extends ConsumerWidget {
-  const _InvitePosterSheet({required this.code, required this.posterKey});
-  final String code;
-  final GlobalKey posterKey;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(themeTokensProvider);
-
-    // 复制邀请码
-    void copyCode() async {
-      final messenger = ScaffoldMessenger.of(context);
-      await Clipboard.setData(ClipboardData(text: code));
-      messenger.showSnackBar(
-        SnackBar(content: Text('邀请码已复制：$code'), duration: const Duration(seconds: 1)),
-      );
-    }
-
-    // 保存海报：捕获 RepaintBoundary 为 PNG 存入相册
-    Future<void> savePoster() async {
-      final messenger = ScaffoldMessenger.of(context);
-      try {
-        final boundary = posterKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-        if (boundary == null) return;
-        final image = await boundary.toImage(pixelRatio: 2.0);
-        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-        if (byteData == null) return;
-        await SaverGallery.saveImage(
-          Uint8List.fromList(byteData.buffer.asUint8List()),
-          name: 'lumira_invite_${DateTime.now().millisecondsSinceEpoch}',
-          quality: 95,
-          androidExistNotSave: false,
-        );
-        messenger.showSnackBar(
-          const SnackBar(content: Text('海报已保存到相册'), duration: Duration(seconds: 1)),
-        );
-      } catch (_) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('保存失败，请长按截图保存'), duration: Duration(seconds: 2)),
-        );
-      }
-    }
-
-    return SafeArea(
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.9,
-        margin: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: tokens.canvas,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('邀请卡片', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: tokens.textPrimary)),
-                  IconButton(
-                    icon: Icon(Icons.close, color: tokens.textPrimary),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: RepaintBoundary(
-                  key: posterKey,
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [tokens.brandSubtle, tokens.surface],
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        Text('邀请好友，获得奖励',
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: tokens.textPrimary)),
-                        const SizedBox(height: 8),
-                        Text('输入我的邀请码，一起记录美好时光',
-                            style: TextStyle(fontSize: 13, color: tokens.textSecondary)),
-                        const SizedBox(height: 24),
-                        QrImageView(
-                          data: code,
-                          version: QrVersions.auto,
-                          size: 160,
-                          eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: tokens.textPrimary),
-                          dataModuleStyle: QrDataModuleStyle(
-                            dataModuleShape: QrDataModuleShape.square,
-                            color: tokens.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: tokens.canvas,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(code,
-                              style: TextStyle(
-                                  fontFamily: 'Courier New',
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 4,
-                                  color: tokens.textPrimary)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: LumiraButton(variant: ButtonVariant.secondary, onPressed: copyCode, child: const Text('复制邀请码')),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: LumiraButton(variant: ButtonVariant.primary, onPressed: savePoster, child: const Text('保存海报')),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
