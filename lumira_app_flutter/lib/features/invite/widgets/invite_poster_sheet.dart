@@ -14,12 +14,16 @@ Future<void> showInvitePosterSheet({
   required String code,
   required ThemeTokens tokens,
 }) async {
+  // 卡片级捕获键：导入导出分享严格 3:4（1080×1440）的卡片本体，
+  // 而非整页预览容器（外层 posterKey 自持，二者为不同 GlobalKey 实例）。
+  final plainContentKey = GlobalKey();
   await PosterGenerator.showPoster(
     context: context,
     tokens: tokens,
     title: '邀请卡片',
     content: InvitePosterCard(code: code),
     posterKey: GlobalKey(),
+    plainContentKey: plainContentKey,
     shareSubject: '如画 LUMIRA · 邀请好友',
     shareText: '一起拍照，把生活拍成想要的样子',
     fileNamePrefix: 'lumira_invite',

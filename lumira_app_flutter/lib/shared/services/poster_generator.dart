@@ -43,6 +43,7 @@ class PosterGenerator {
     required String shareText,
     required String fileNamePrefix,
     Widget? extraAction,
+    GlobalKey? plainContentKey,
   }) async {
     await showLumiraBottomSheet<void>(
       context: context,
@@ -56,6 +57,7 @@ class PosterGenerator {
         shareText: shareText,
         fileNamePrefix: fileNamePrefix,
         extraAction: extraAction,
+        plainContentKey: plainContentKey,
       ),
     );
   }
@@ -115,6 +117,7 @@ class _PosterSheet extends StatefulWidget {
     this.content,
     this.posterKey,
     this.stylePicker,
+    this.plainContentKey,
   });
 
   final ThemeTokens tokens;
@@ -126,6 +129,12 @@ class _PosterSheet extends StatefulWidget {
   final String shareSubject;
   final String shareText;
   final String fileNamePrefix;
+
+  /// 可选：普通海报「严格卡片级」导出的捕获键。
+  /// 当此键非空（且未启用样式选择）时，[widget.content] 会被紧包在一个
+  /// [RepaintBoundary] 中，导出/分享改为捕获该边界（保持内容自身 3:4 等
+  /// 固定尺寸、无外层容器背景填充）。缺省为 null 时行为与旧版完全一致。
+  final GlobalKey? plainContentKey;
 
   /// 可选的扩展操作按钮，渲染在底部操作条第一位（保存/分享之前）。
   final Widget? extraAction;
@@ -200,7 +209,15 @@ class _PosterSheetState extends State<_PosterSheet> {
   static const double kPosterExportWidth = 1080;
 
   Future<ui.Image?> _captureImage() async {
-    final boundary = _posterKey.currentContext?.findRenderObject()
+    // 普通海报 + 显式提供 plainContentKey 时，捕获严格卡片级边界
+    // （保持内容自身设计尺寸、无外层容器背景填充）；否则沿用整页预览边界。
+    final GlobalKey targetKey;
+    if (widget.stylePicker == null && widget.plainContentKey != null) {
+      targetKey = widget.plainContentKey!;
+    } else {
+      targetKey = _posterKey;
+    }
+    final boundary = targetKey.currentContext?.findRenderObject()
         as RenderRepaintBoundary?;
     if (boundary == null) return null;
     final size = boundary.size;
@@ -392,15 +409,27 @@ class _PosterSheetState extends State<_PosterSheet> {
                   itemCount: _styles.isEmpty ? 1 : _styles.length,
                   itemBuilder: (ctx, i) {
                     final style = _styles.isEmpty ? null : _styles[i];
+                    // 普通海报（无样式）：按预览区宽度渲染调用方 content 并允许纵向滚动，
+                    // 保持旧版「有界宽度 + 可滚动」语义（部分 content 用 width: Infinity）。
+                    // 样式选择模式：用 FittedBox 适配 5 种设计画布，显示层缩放不影响导出清晰度。
                     return Center(
                       child: Padding(
                         padding: const EdgeInsets.all(14),
-                        child: FittedBox(
-                          fit: BoxFit.contain,
-                          child: style == null
-                              ? (widget.content ?? const SizedBox.shrink())
-                              : style.builder(widget.stylePicker!.data),
-                        ),
+                        child: style == null
+                            ? SingleChildScrollView(
+                                child: widget.plainContentKey != null
+                                    ? RepaintBoundary(
+                                        key: widget.plainContentKey,
+                                        child: widget.content ??
+                                            const SizedBox.shrink(),
+                                      )
+                                    : widget.content ??
+                                        const SizedBox.shrink(),
+                              )
+                            : FittedBox(
+                                fit: BoxFit.contain,
+                                child: style.builder(widget.stylePicker!.data),
+                              ),
                       ),
                     );
                   },
