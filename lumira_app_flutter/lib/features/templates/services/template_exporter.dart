@@ -8,6 +8,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/utils/safe_share.dart';
 import '../../../core/utils/safe_temp_dir.dart';
+import '../../../features/capture/domain/photo_template.dart';
+import 'template_image_store.dart';
 
 /// Asset 加载函数类型（便于测试注入）
 typedef AssetLoader = Future<Uint8List> Function(String assetPath);
@@ -124,6 +126,20 @@ class TemplateExporter {
       }
     }
 
+    // 本地路径 → 读文件字节 → base64 data URL（含 500KB 大小守卫，超限跳过）
+    if (TemplateImageStore.isLocalImageRef(cover)) {
+      final bytes = await TemplateImageStore.readBytes(cover);
+      if (bytes == null) return record; // 文件缺失，保持原值
+      if (bytes.lengthInBytes > 500 * 1024) {
+        // ignore: avoid_print
+        print('Warning: cover local file "$cover" exceeds 500KB, skipping embed');
+        return record;
+      }
+      final mime = _mimeFromPath(cover);
+      final base64Str = base64Encode(bytes);
+      return record.copyWith(coverData: 'data:$mime;base64,$base64Str');
+    }
+
     return record;
   }
 
@@ -147,10 +163,84 @@ class TemplateExporter {
     return record.coverData ?? record.cover;
   }
 
+  /// 将 record 内的本地图片路径解析为 base64 data URL（导出/分享前调用）。
+  ///
+  /// 覆盖：`coverData` / `cover` / `images[].data` / pose 剪影（`type == 'image'`
+  /// 且 data 为本地路径）。非本地引用（data URL / http / 内置 key / assets）
+  /// 原样保留；文件缺失时保持原引用。返回新 record（copyWith），不修改入参。
+  static Future<TemplateRecord> resolveLocalImages(
+    TemplateRecord record,
+  ) async {
+    var coverData = record.coverData;
+    if (coverData != null && TemplateImageStore.isLocalImageRef(coverData)) {
+      coverData = await TemplateImageStore.toDataUrl(coverData);
+    }
+
+    // custom 模板 cover == coverData，双保险
+    var cover = record.cover;
+    if (cover.isNotEmpty && TemplateImageStore.isLocalImageRef(cover)) {
+      cover = await TemplateImageStore.toDataUrl(cover);
+    }
+
+    List<TemplateImage>? images;
+    if (record.images != null) {
+      images = <TemplateImage>[];
+      for (final img in record.images!) {
+        var data = img.data;
+        if (data != null && TemplateImageStore.isLocalImageRef(data)) {
+          data = await TemplateImageStore.toDataUrl(data);
+        }
+        images.add(data == img.data ? img : img.copyWith(data: data));
+      }
+    }
+
+    dynamic pose = record.pose;
+    if (pose is Map) {
+      pose = await _resolvePoseSilhouette(Map<String, dynamic>.from(pose));
+    } else if (pose is List) {
+      final resolved = <dynamic>[];
+      for (final item in pose) {
+        if (item is Map) {
+          resolved.add(
+              await _resolvePoseSilhouette(Map<String, dynamic>.from(item)));
+        } else {
+          resolved.add(item);
+        }
+      }
+      pose = resolved;
+    }
+
+    return record.copyWith(
+      cover: cover,
+      coverData: coverData,
+      images: images,
+      pose: pose,
+    );
+  }
+
+  /// 解析单个 pose Map 的 image 剪影：`type == 'image'` 且 data 为本地路径时
+  /// 替换为 data URL。copyWith 无法改嵌套 map，需重建 Map。
+  static Future<Map<String, dynamic>> _resolvePoseSilhouette(
+    Map<String, dynamic> pose,
+  ) async {
+    final silhouette = pose['silhouette'];
+    if (silhouette is! Map) return pose;
+    if (silhouette['type'] != 'image') return pose;
+    final data = silhouette['data'];
+    if (data is! String || !TemplateImageStore.isLocalImageRef(data)) {
+      return pose;
+    }
+    final resolved = await TemplateImageStore.toDataUrl(data);
+    final newSilhouette = Map<String, dynamic>.from(silhouette)
+      ..['data'] = resolved;
+    return Map<String, dynamic>.from(pose)..['silhouette'] = newSilhouette;
+  }
+
   /// 导出模板到临时文件并返回文件路径。
   /// [usePptpl] 为 true 时使用 .pptpl 完整格式，否则使用 .lumira 简化格式。
   static Future<String> exportToTempFile(TemplateRecord record, {required bool usePptpl}) async {
-    final recordWithCover = usePptpl ? await embedCoverData(record) : record;
+    final resolved = await resolveLocalImages(record);
+    final recordWithCover = usePptpl ? await embedCoverData(resolved) : resolved;
     final json = usePptpl ? exportToPptpl(recordWithCover) : exportToLumira(recordWithCover);
     final fileName = buildFileName(record, usePptpl: usePptpl);
     final tempDir = await getSafeTemporaryDirectory();
@@ -173,7 +263,8 @@ class TemplateExporter {
   /// 保存模板文件到指定目录。
   /// [usePptpl] 为 true 时使用 .pptpl 完整格式，否则使用 .lumira 简化格式。
   static Future<void> saveToFile(TemplateRecord record, {required bool usePptpl, required String dirPath}) async {
-    final json = usePptpl ? exportToPptpl(record) : exportToLumira(record);
+    final resolved = await resolveLocalImages(record);
+    final json = usePptpl ? exportToPptpl(resolved) : exportToLumira(resolved);
     final fileName = buildFileName(record, usePptpl: usePptpl);
     final file = File('$dirPath/$fileName');
     await file.writeAsString(json);

@@ -1,8 +1,32 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
+import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
 import 'package:lumira_app_flutter/features/templates/services/template_exporter.dart';
+import 'package:lumira_app_flutter/features/templates/services/template_image_store.dart';
+
+/// 生成一张 size×size 的随机噪点 PNG data URL（用于落盘真实文件）。
+Future<String> _noisePngDataUrl(int size, {int channels = 3}) async {
+  final image = img.Image(width: size, height: size, numChannels: channels);
+  final rnd = math.Random(42);
+  for (var y = 0; y < size; y++) {
+    for (var x = 0; x < size; x++) {
+      if (channels == 4) {
+        image.setPixelRgba(x, y, rnd.nextInt(256), rnd.nextInt(256),
+            rnd.nextInt(256), rnd.nextInt(256));
+      } else {
+        image.setPixelRgb(
+            x, y, rnd.nextInt(256), rnd.nextInt(256), rnd.nextInt(256));
+      }
+    }
+  }
+  final bytes = img.encodePng(image);
+  return 'data:image/png;base64,${base64Encode(bytes)}';
+}
 
 TemplateRecord _makeRecord() {
   return TemplateRecord(
@@ -31,6 +55,20 @@ TemplateRecord _makeRecord() {
 }
 
 void main() {
+  late Directory tempDir;
+
+  setUp(() async {
+    tempDir = await Directory.systemTemp.createTemp('tpl_exp_');
+    TemplateImageStore.overrideBaseDir = tempDir.path;
+  });
+
+  tearDown(() async {
+    TemplateImageStore.overrideBaseDir = null;
+    if (tempDir.existsSync()) {
+      await tempDir.delete(recursive: true);
+    }
+  });
+
   group('TemplateExporter.exportToPptpl', () {
     test('生成完整 .pptpl JSON（含所有 5 字段）', () {
       final json = TemplateExporter.exportToPptpl(_makeRecord());
@@ -118,6 +156,34 @@ void main() {
       );
       expect(result.coverData, isNull);
     });
+
+    test('local path cover reads file bytes to base64 data URL', () async {
+      final pngUrl = await _noisePngDataUrl(8);
+      final coverPath =
+          await TemplateImageStore.saveDataUrl('emb1', 'cover', 0, pngUrl);
+      final record = _makeRecord().copyWith(cover: coverPath);
+      final result = await TemplateExporter.embedCoverData(record);
+      expect(result.coverData, startsWith('data:image/png;base64,'));
+      final decoded = base64Decode(
+          result.coverData!.substring(result.coverData!.indexOf(',') + 1));
+      expect(decoded, await File(coverPath).readAsBytes());
+    });
+
+    test('local path cover exceeding 500KB is skipped', () async {
+      final bigFile = File('${tempDir.path}/exp_big_cover.png');
+      await bigFile.writeAsBytes(Uint8List(600 * 1024));
+      final record = _makeRecord().copyWith(cover: bigFile.path);
+      final result = await TemplateExporter.embedCoverData(record);
+      expect(result.coverData, isNull);
+    });
+
+    test('local path cover with missing file is skipped', () async {
+      final missing = File('${tempDir.path}/exp_no_such_cover.png');
+      if (missing.existsSync()) await missing.delete();
+      final record = _makeRecord().copyWith(cover: missing.path);
+      final result = await TemplateExporter.embedCoverData(record);
+      expect(result.coverData, isNull);
+    });
   });
 
   group('TemplateExporter.exportToPptpl with coverData', () {
@@ -188,6 +254,104 @@ void main() {
       final f1 = TemplateExporter.buildFileName(r1, usePptpl: true);
       final f2 = TemplateExporter.buildFileName(r2, usePptpl: true);
       expect(f1, isNot(equals(f2)));
+    });
+  });
+
+  group('TemplateExporter.resolveLocalImages', () {
+    test('本地路径 coverData/cover/images/silhouette → data URL 且解码字节与文件一致', () async {
+      final pngUrl = await _noisePngDataUrl(8);
+      final coverPath =
+          await TemplateImageStore.saveDataUrl('exp1', 'cover', 0, pngUrl);
+      final imgPath =
+          await TemplateImageStore.saveDataUrl('exp1', 'img', 1, pngUrl);
+      final silPath = await TemplateImageStore.saveDataUrl(
+          'exp1', 'silhouette', 0, pngUrl);
+
+      final record = _makeRecord().copyWith(
+        cover: coverPath,
+        coverData: coverPath,
+        images: [TemplateImage(url: '', data: imgPath)],
+        pose: <dynamic>[
+          {
+            'silhouette': {'type': 'image', 'data': silPath},
+            'position': {'x': 0.5, 'y': 0.5},
+          },
+        ],
+      );
+
+      final resolved = await TemplateExporter.resolveLocalImages(record);
+
+      expect(resolved.coverData, startsWith('data:image/png;base64,'));
+      expect(
+        base64Decode(resolved.coverData!
+            .substring(resolved.coverData!.indexOf(',') + 1)),
+        await File(coverPath).readAsBytes(),
+      );
+      expect(resolved.cover, startsWith('data:image/png;base64,'));
+      expect(resolved.images!.single.data, startsWith('data:image/png;base64,'));
+      expect(
+        base64Decode(resolved.images!.single.data!
+            .substring(resolved.images!.single.data!.indexOf(',') + 1)),
+        await File(imgPath).readAsBytes(),
+      );
+      final poses = resolved.pose as List<dynamic>;
+      final sil = (poses.first as Map)['silhouette']['data'] as String;
+      expect(sil, startsWith('data:image/png;base64,'));
+      expect(
+        base64Decode(sil.substring(sil.indexOf(',') + 1)),
+        await File(silPath).readAsBytes(),
+      );
+
+      // 入参不被修改
+      expect(record.coverData, coverPath);
+      expect(record.cover, coverPath);
+      expect(record.images!.single.data, imgPath);
+    });
+
+    test('data URL / http / 内置 key / assets 原样保留', () async {
+      final record = _makeRecord().copyWith(
+        cover: 'assets/images/templates/cafe_portrait.jpg',
+        coverData: 'data:image/jpeg;base64,abc123',
+        images: [
+          TemplateImage(url: '', data: 'https://example.com/a.png'),
+          TemplateImage(url: '', data: 'standing-profile'),
+        ],
+        pose: {
+          'silhouette': {'type': 'builtin', 'data': 'standing-profile'},
+        },
+      );
+
+      final resolved = await TemplateExporter.resolveLocalImages(record);
+
+      expect(resolved.coverData, 'data:image/jpeg;base64,abc123');
+      expect(resolved.cover, 'assets/images/templates/cafe_portrait.jpg');
+      expect(resolved.images![0].data, 'https://example.com/a.png');
+      expect(resolved.images![1].data, 'standing-profile');
+      final pose = resolved.pose as Map;
+      expect((pose['silhouette'] as Map)['data'], 'standing-profile');
+    });
+
+    test('本地路径文件缺失时保持原值', () async {
+      const missing = '/data/user/0/xxx/lumira/templates/u1/cover.png';
+      final record = _makeRecord().copyWith(cover: missing, coverData: missing);
+      final resolved = await TemplateExporter.resolveLocalImages(record);
+      expect(resolved.cover, missing);
+      expect(resolved.coverData, missing);
+    });
+
+    test('pose 为单 Map 时剪影同样被解析', () async {
+      final pngUrl = await _noisePngDataUrl(8);
+      final silPath = await TemplateImageStore.saveDataUrl(
+          'exp2', 'silhouette', 0, pngUrl);
+      final record = _makeRecord().copyWith(
+        pose: {
+          'silhouette': {'type': 'image', 'data': silPath},
+        },
+      );
+      final resolved = await TemplateExporter.resolveLocalImages(record);
+      final pose = resolved.pose as Map;
+      final data = (pose['silhouette'] as Map)['data'] as String;
+      expect(data, startsWith('data:image/png;base64,'));
     });
   });
 }

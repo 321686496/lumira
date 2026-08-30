@@ -17,6 +17,8 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/safe_share.dart';
 import '../../../shared/services/poster_generator.dart';
+import '../../../shared/widgets/poster/poster_ratio.dart';
+import '../../../shared/widgets/poster/poster_style_types.dart';
 import '../../../shared/widgets/poster/template_poster_widgets.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
@@ -213,13 +215,34 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
       if (!mounted) return;
       final tokens = ref.read(themeTokensProvider);
       final shareText = buildAutoShareText(record);
-      final posterKey = GlobalKey();
-      await PosterGenerator.showPoster(
+      // 由模板封面解析海报比例（coverData base64 / cover 资源 / 网络图），失败回退 9:16
+      final ratio = await PosterRatio.fromTemplateCover(record);
+      if (!mounted) return;
+      final cover = templateRecordCover(record);
+      await PosterGenerator.showPosterWithStylePicker(
         context: context,
         tokens: tokens,
         title: '分享模板',
-        content: TemplateSharePosterContent(template: record),
-        posterKey: posterKey,
+        kind: PosterKind.template,
+        ratio: ratio,
+        data: PosterStyleData(
+          ratio: ratio,
+          title: record.name,
+          category: record.category,
+          qrData: buildTemplatePosterQrData(record),
+          qrHint: '长按识别 · 查看完整模板',
+          qrSub: '打开如画，拍出同款',
+          shareText: shareText,
+          authorName: '',
+          photoBuilder: (w, h) => templateCoverImage(
+            cover,
+            width: w,
+            height: h,
+            fit: BoxFit.cover,
+            tokens: tokens,
+            cacheWidth: kPosterImageCacheWidth,
+          ),
+        ),
         shareSubject: '模板 · ${record.name}',
         shareText: shareText,
         fileNamePrefix: 'template_share',
@@ -344,6 +367,9 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     try {
       final filePath =
           await TemplateExporter.exportToTempFile(record, usePptpl: usePptpl);
+      // 分享链接内嵌完整 JSON：先解析本地图片路径为 data URL，接收端才能还原图片
+      final linkRecord =
+          usePptpl ? await TemplateExporter.resolveLocalImages(record) : record;
       if (!mounted) return;
       GoRouter.of(context).push(
         RouteNames.templatesExportDetail,
@@ -351,7 +377,8 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
           'filePath': filePath,
           'templateName': record.name,
           'usePptpl': usePptpl,
-          'shareLink': TemplateShareCode.buildShareLink(record, usePptpl: usePptpl),
+          'shareLink':
+              TemplateShareCode.buildShareLink(linkRecord, usePptpl: usePptpl),
           'shareCode':
               record.isBuiltin ? TemplateShareCode.buildShareCode(record) : null,
         },

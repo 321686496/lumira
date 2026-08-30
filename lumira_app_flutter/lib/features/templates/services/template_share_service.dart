@@ -97,7 +97,8 @@ class TemplateShareService {
 
   /// 构建共享 payload：导出 .pptpl JSON 字符串（图片限长压缩由 sharePayloadJson 统一负责）。
   Future<String> _buildPayload(TemplateRecord record) async {
-    final withCover = await TemplateExporter.embedCoverData(record);
+    final resolved = await TemplateExporter.resolveLocalImages(record);
+    final withCover = await TemplateExporter.embedCoverData(resolved);
     return TemplateExporter.exportToPptpl(withCover);
   }
 
@@ -133,6 +134,113 @@ class TemplateShareService {
       }
     }
     return out;
+  }
+
+  /// 降采样压缩图片 bytes：最大边长 [maxDimension]，目标大小 [maxBytes] 以内。
+  ///
+  /// 用于自定义模板落库前压缩：OHOS 关系型数据库（RDB）单行上限 2MB，超限会
+  /// 「插入成功但读取失败」（提示保存成功但模板不显示）。封面/效果图/剪影图
+  /// 统一在此压小，使单条模板记录远低于 2MB。
+  ///
+  /// - 带透明通道（如剪影 PNG）用 PNG 重编码保留 alpha，否则 JPEG。
+  /// - 小于阈值或解码失败时原样返回（fail-open），不抛异常。
+  static Future<Uint8List> downscaleBytes(
+    Uint8List bytes, {
+    int maxDimension = 1024,
+    int maxBytes = 300 * 1024,
+    int quality = 80,
+  }) async {
+    if (bytes.length <= maxBytes) return bytes;
+    try {
+      final image = img.decodeImage(bytes);
+      if (image == null) return bytes;
+      final hasAlpha = image.numChannels == 4;
+      img.Image output = image;
+      if (image.width > maxDimension || image.height > maxDimension) {
+        final ratio = maxDimension /
+            (image.width > image.height ? image.width : image.height);
+        output = img.copyResize(
+          image,
+          width: (image.width * ratio).round(),
+          height: (image.height * ratio).round(),
+        );
+      }
+      var out = hasAlpha
+          ? img.encodePng(output)
+          : img.encodeJpg(output, quality: quality);
+      // 仍超限则迭代降质量（PNG 透明图不降质，避免死循环）
+      var q = quality;
+      while (!hasAlpha && out.length > maxBytes && q > 50) {
+        q -= 8;
+        out = img.encodeJpg(output, quality: q);
+      }
+      final result = Uint8List.fromList(out);
+      return result.length < bytes.length ? result : bytes;
+    } catch (_) {
+      return bytes;
+    }
+  }
+
+  /// 把一组图片 data URL 压缩到「总字符预算」[totalBudgetChars] 以内。
+  ///
+  /// OHOS 关系型数据库（RDB）单条记录**硬上限 2MB**（官方：超出「插入成功但读取
+  /// 失败」，表现为提示保存成功但模板不显示）。选图时已逐张压到 ~300KB，但模板
+  /// 可含多张效果图 + 多姿势剪影，base64 又膨胀 ~33%，多张叠加仍可能超 2MB。
+  /// 此方法在保存前对整组图片做兜底：总长超预算时，按图片数平分预算、逐张压小。
+  ///
+  /// - 非 `data:image/...;base64,` 的字符串（内置剪影 key、SVG 等）原样保留。
+  /// - 解码失败或单张无法再压小时 fail-open 保留原值，交由写后读回校验兜底报错。
+  /// - 预算充足时直接原样返回，不重新编码（省时、无损）。
+  ///
+  /// 注意：2MB 是平台硬约束，无法通过任何配置放大到 5MB，只能靠压缩压到其以内。
+  static Future<List<String>> compressDataUrlsToBudget(
+    List<String> dataUrls, {
+    int totalBudgetChars = 1500 * 1024, // 目标总长 ~1.5MB，远低于 2MB 硬上限
+    int reserveChars = 64 * 1024, // 元数据（pose/camera/description 等）预留
+    int maxDimension = 1024,
+  }) async {
+    if (dataUrls.isEmpty) return List.of(dataUrls);
+
+    // 1. 解析每项：是否为图片 data URL + 原始 bytes；统计当前总字符数。
+    final prefixes = List<String?>.filled(dataUrls.length, null);
+    final payloads = List<Uint8List?>.filled(dataUrls.length, null);
+    final re = RegExp(r'^data:image/[A-Za-z0-9.+\-]+;base64,(.+)$', dotAll: true);
+    var totalChars = 0;
+    for (var i = 0; i < dataUrls.length; i++) {
+      totalChars += dataUrls[i].length;
+      final m = re.firstMatch(dataUrls[i]);
+      if (m == null) continue; // 非图片 data URL（内置 key / SVG / 非 base64），保持原样
+      try {
+        prefixes[i] = dataUrls[i].substring(0, dataUrls[i].indexOf(';base64,') + ';base64,'.length);
+        payloads[i] = base64Decode(m.group(1)!);
+      } catch (_) {
+        // 非法 base64，保持原样
+      }
+    }
+
+    // 2. 预算充足：原样返回，不重新编码。
+    if (totalChars <= totalBudgetChars) return List.of(dataUrls);
+
+    // 3. 超预算：按图片数平分预算；单张预算下限 8KB，避免极端比例下出现 0 预算。
+    final imageCount = payloads.whereType<Uint8List>().length;
+    if (imageCount == 0) return List.of(dataUrls);
+    final imageBudget = totalBudgetChars - reserveChars;
+    final perImageBudgetChars =
+        imageBudget < 0 ? totalBudgetChars ~/ imageCount : imageBudget ~/ imageCount;
+    final perImageMaxBytes = (perImageBudgetChars * 3 ~/ 4).clamp(8 * 1024, 1024 * 1024);
+
+    final results = List<String>.of(dataUrls);
+    for (var i = 0; i < dataUrls.length; i++) {
+      final payload = payloads[i];
+      if (payload == null) continue;
+      final compressed = await downscaleBytes(
+        payload,
+        maxDimension: maxDimension,
+        maxBytes: perImageMaxBytes,
+      );
+      results[i] = '${prefixes[i]}${base64Encode(compressed)}';
+    }
+    return results;
   }
 
   /// 扫描 payload JSON 中的 `data:image/...;base64,`，对解码后 >1MB 的图片压缩替换。
