@@ -7,6 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:lumira_app_flutter/core/auth/auth_controller.dart';
+import 'package:lumira_app_flutter/core/auth/auth_dao.dart';
+import 'package:lumira_app_flutter/core/auth/auth_state.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
@@ -28,6 +31,36 @@ class _FakeInviteRepository implements InviteRepository {
 
   @override
   Future<InviteStats> stats() async => throw UnimplementedError();
+}
+
+/// 测试用 AuthDao stub（避免依赖 sqflite）
+class _NoopDao implements AuthDaoLike {
+  @override
+  Future<AuthRecord?> load() async => null;
+  @override
+  Future<void> save(AuthRecord r) async {}
+  @override
+  Future<void> clear() async {}
+  @override
+  Future<void> clearToken() async {}
+}
+
+/// 测试用 AuthController stub（默认新设备，展示绑定入口）
+class _FakeAuthController extends AuthController {
+  _FakeAuthController()
+      : super(
+          dao: _NoopDao(),
+          resolveDeviceId: () async => '',
+          resolveOs: () => 'android',
+          doRegister: ({required deviceId, required os}) async {
+            return const RegisterResult(token: '', isNewDevice: false);
+          },
+        ) {
+    state = const AuthState(
+      status: AuthStatus.registered,
+      isNewDevice: true,
+    );
+  }
 }
 
 void main() {
@@ -61,6 +94,7 @@ void main() {
   Widget wrap(ThemeKey themeKey, UIStyle uiStyle) {
     return ProviderScope(
       overrides: [
+        authControllerProvider.overrideWith((ref) => _FakeAuthController()),
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
         inviteRepositoryProvider.overrideWith((ref) async => _FakeInviteRepository()),
@@ -259,7 +293,7 @@ void main() {
 
       expect(find.text('邀请卡片'), findsOneWidget);
       expect(find.text('复制邀请码'), findsOneWidget);
-      expect(find.text('保存海报'), findsOneWidget);
+      expect(find.text('保存到相册'), findsOneWidget);
     });
 
     testWidgets('tapping 确认绑定 with empty code shows error SnackBar', (tester) async {
