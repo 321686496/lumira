@@ -768,39 +768,40 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     // 编辑模式复用 templateId；新建模式生成 user_<timestamp> 作为持久化主键
     final id = widget.templateId ?? 'user_$now';
 
-    // 先把表单内图片落盘为文件、RDB 只存路径（绕开 OHOS RDB 2MB 单行上限）
-    await _persistFormImagesToFiles(id);
-
-    // 编辑模式下保留原 createdAt（避免更新时刷新创建时间）
-    int createdAt = now;
-    if (_isEditMode && widget.templateId != null) {
-      try {
-        final dao = await ref.read(templatesDaoProvider.future);
-        final existing = await dao.getById(widget.templateId!);
-        if (existing != null) {
-          createdAt = existing.createdAt;
-        }
-      } catch (e) {
-        debugPrint('Failed to query existing record for createdAt: $e');
-      }
-    }
-
-    final record = TemplateMapper.fromEditorForm(
-      _form,
-      id: id,
-      createdAt: createdAt,
-    ).copyWith(updatedAt: now);
-
-    // 调试日志：追踪封面图和剪影数据保存（落盘后为本地路径，保持可读）
-    debugPrint('[Editor] Save: id=$id');
-    debugPrint(
-        '[Editor]   coverImage in form: ${_form.meta.coverImage != null ? _briefImageRef(_form.meta.coverImage!) : 'null'}');
-    debugPrint(
-        '[Editor]   coverData in record: ${record.coverData != null ? _briefImageRef(record.coverData!) : 'null'}');
-    debugPrint(
-        '[Editor]   silhouette (current pose $_poseIndex): type=${_currentPose().silhouette.type}, data=${_briefImageRef(_currentPose().silhouette.data)}, total poses=${_form.poses.length}');
-
     try {
+      // 先把表单内图片落盘为文件、RDB 只存路径（绕开 OHOS RDB 2MB 单行上限）
+      // 落盘也纳入 try 保护：失败走下方 catch 提示「保存失败」，避免静默失败
+      await _persistFormImagesToFiles(id);
+
+      // 编辑模式下保留原 createdAt（避免更新时刷新创建时间）
+      int createdAt = now;
+      if (_isEditMode && widget.templateId != null) {
+        try {
+          final dao = await ref.read(templatesDaoProvider.future);
+          final existing = await dao.getById(widget.templateId!);
+          if (existing != null) {
+            createdAt = existing.createdAt;
+          }
+        } catch (e) {
+          debugPrint('Failed to query existing record for createdAt: $e');
+        }
+      }
+
+      final record = TemplateMapper.fromEditorForm(
+        _form,
+        id: id,
+        createdAt: createdAt,
+      ).copyWith(updatedAt: now);
+
+      // 调试日志：追踪封面图和剪影数据保存（落盘后为本地路径，保持可读）
+      debugPrint('[Editor] Save: id=$id');
+      debugPrint(
+          '[Editor]   coverImage in form: ${_form.meta.coverImage != null ? _briefImageRef(_form.meta.coverImage!) : 'null'}');
+      debugPrint(
+          '[Editor]   coverData in record: ${record.coverData != null ? _briefImageRef(record.coverData!) : 'null'}');
+      debugPrint(
+          '[Editor]   silhouette (current pose $_poseIndex): type=${_currentPose().silhouette.type}, data=${_briefImageRef(_currentPose().silhouette.data)}, total poses=${_form.poses.length}');
+
       final dao = await ref.read(templatesDaoProvider.future);
       await dao.upsert(record);
       // OHOS 关系型数据库单行上限 2MB：超限记录会「插入成功但读取失败」，
