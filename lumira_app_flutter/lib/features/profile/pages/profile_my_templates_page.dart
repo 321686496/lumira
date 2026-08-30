@@ -13,6 +13,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../capture/data/capture_state.dart';
 import '../../templates/services/template_exporter.dart';
+import '../../templates/services/template_image_store.dart';
 import '../../templates/widgets/template_cover_image.dart';
 import '../../templates/widgets/template_import_sheet.dart';
 import '../../templates/data/templates_providers.dart';
@@ -279,6 +280,12 @@ class _ProfileMyTemplatesPageState extends ConsumerState<ProfileMyTemplatesPage>
     try {
       final dao = await ref.read(templatesDaoProvider.future);
       await dao.delete(tpl.id);
+      // 清理模板图片目录（删除文件失败不阻塞"已删除"提示，包在独立 try/catch）
+      try {
+        await TemplateImageStore.deleteAll(tpl.id);
+      } catch (e) {
+        debugPrint('[MyTemplates] delete images failed for ${tpl.id}: $e');
+      }
       ref.invalidate(customTemplatesProvider);
       // 刷新 Capture 页模板缓存（系统 + 自定义），使删除立即反映
       ref.invalidate(CaptureState.allTemplatesProvider);
