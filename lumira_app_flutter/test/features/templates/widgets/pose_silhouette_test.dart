@@ -47,6 +47,27 @@ void main() {
       expect((box! as SizedBox).width, 200);
       expect((box as SizedBox).height, 320);
     });
+
+    testWidgets(
+        'image type local file path renders via LumiraImage/Image.file '
+        'without throwing', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 200,
+            height: 320,
+            child: PoseSilhouette(
+              silhouetteType: 'image',
+              silhouetteData: '/tmp/xxx/silhouette_0.png',
+            ),
+          ),
+        ),
+      ));
+
+      // 本地路径（非 data:）应原样透传给 LumiraImage，走 Image.file 分支：
+      // 树中出现 Image 组件。若误当 base64 解析，只会得到错误占位（无 Image 组件）。
+      expect(find.byType(Image), findsWidgets);
+    });
   });
 
   group('SilhouetteLayer', () {

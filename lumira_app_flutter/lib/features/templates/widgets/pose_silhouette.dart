@@ -118,13 +118,11 @@ class PoseSilhouette extends StatelessWidget {
         if (silhouetteData.isEmpty) {
           return const SizedBox.shrink();
         }
-        // image 类型支持三种数据源（统一委托 LumiraImage，含降采样）：
-        // 1. asset 路径 → Image.asset
-        // 2. http(s) URL → 网络缓存
-        // 3. base64 data URL / 纯 base64 → Image.memory（字节级缓存）
-        final isPath = silhouetteData.startsWith('assets/') ||
-            silhouetteData.startsWith('http://') ||
-            silhouetteData.startsWith('https://');
+        // image 类型：非 `data:` 的源一律按路径透传给 LumiraImage，由其在内部
+        // 分流（assets 路径 → Image.asset、http(s) URL → 网络缓存、其它 → 本地
+        // 文件路径 Image.file）；`data:`/纯 base64 补前缀后走 Image.memory
+        // （字节级缓存 + 降采样）。
+        final isPath = !silhouetteData.startsWith('data:');
         return LumiraImage(
           isPath ? silhouetteData : _asDataUrl(silhouetteData),
           key: ValueKey(silhouetteData),
