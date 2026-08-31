@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片收集分享海报（3:4 竖版 · 照片全露出）</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--ink:#1A1A1A;
+    --text2:#6B645C;--text3:#9A8F7C;
+    --surface:#FDFBF7;--surface-alt:#F6F1E8;--line:rgba(201,169,110,.32);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#E9E4DB;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:40px 20px 100px;display:flex;flex-direction:column;align-items:center;gap:24px;-webkit-font-smoothing:antialiased}
+  .page-title{color:#4A4238;font-size:18px;letter-spacing:3px;font-weight:600;display:flex;align-items:center;gap:12px}
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:2px;text-align:center;line-height:1.9;max-width:640px}
+  .row{display:flex;gap:52px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-top:26px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10px;color:#A08A5F;letter-spacing:2px;background:#F3ECE0;border:1px solid var(--line);padding:3px 10px;border-radius:12px;text-align:center}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+
+  /* ===== 海报基础（暖白纸感 + 金线外框 + 四角金标） ===== */
+  .poster{width:340px;aspect-ratio:3/4;position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);box-shadow:0 24px 60px -28px rgba(60,48,28,.35);border-radius:3px;display:flex;flex-direction:column;align-items:center;padding:30px 30px 26px}
+  .poster .hairline{position:absolute;inset:10px;border:1px solid var(--line);pointer-events:none}
+  .poster .hairline::before,.poster .hairline::after,.poster .hairline b::before,.poster .hairline b::after{content:"";position:absolute;width:18px;height:18px;border:2px solid var(--gold);pointer-events:none}
+  .poster .hairline::before{top:-2px;left:-2px;border-right:none;border-bottom:none}
+  .poster .hairline::after{top:-2px;right:-2px;border-left:none;border-bottom:none}
+  .poster .hairline b::before{bottom:-2px;left:-2px;border-right:none;border-top:none}
+  .poster .hairline b::after{bottom:-2px;right:-2px;border-left:none;border-top:none}
+
+  .poster .brand{display:inline-flex;align-items:baseline;gap:7px;position:relative;z-index:2}
+  .poster .brand .en{font-size:11px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .poster .brand .zh{font-size:10px;letter-spacing:3px;color:var(--text3)}
+  .poster .title{font-size:32px;font-weight:700;color:var(--ink);letter-spacing:8px;line-height:1.25;margin-top:16px;position:relative;z-index:2}
+  .poster .title-line{width:56px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin-top:14px;position:relative;z-index:2}
+
+  /* ===== 照片格：3+2，全部完整露出，绝不裁切 ===== */
+  .photos{width:100%;margin-top:18px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:2}
+  .photos .row{display:flex;gap:10px}
+  .photos .row.row2{justify-content:center}
+  .photos .slot{position:relative;flex:1;aspect-ratio:4/3;border:1px solid var(--line);background:#EFE9DC;line-height:0}
+  .photos .row.row2 .slot{flex:0 0 calc(50% - 5px)}
+  /* 金线 L 角标（只做边框装饰，不裁照片） */
+  .photos .slot::before,.photos .slot::after{content:"";position:absolute;width:13px;height:13px;pointer-events:none}
+  .photos .slot::before{top:-2px;left:-2px;border-top:2px solid var(--gold);border-left:2px solid var(--gold)}
+  .photos .slot::after{bottom:-2px;right:-2px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold)}
+  .photos .slot img{width:100%;height:100%;object-fit:contain;display:block}
+  .photos .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border:1.5px dashed rgba(201,169,110,.55);background:rgba(246,241,232,.5);color:var(--text3)}
+  .photos .empty .plus{font-size:20px;color:var(--gold);font-weight:300;line-height:1}
+  .photos .empty .lab{font-size:9px;letter-spacing:3px}
+
+  /* 底部：进度 + 签名 */
+  .foot{margin-top:auto;position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:9px;padding-top:18px}
+  .foot .cnt{font-size:11px;letter-spacing:3px;color:var(--text2)}
+  .foot .cnt b{font-family:Georgia,"Times New Roman",serif;font-size:15px;color:var(--gold-deep);font-weight:700;padding:0 2px}
+  .foot .slogan{font-size:9px;letter-spacing:3px;color:var(--text3)}
+
+  /* 集齐完成态 */
+  .done .title{color:var(--gold-deep)}
+  .done .cnt b{color:var(--gold-deep)}
+  .done .seal{position:absolute;top:24px;right:20px;width:56px;height:56px;border:1.5px solid var(--gold-deep);color:var(--gold-deep);font-size:12px;letter-spacing:2px;display:flex;align-items:center;justify-content:center;transform:rotate(8deg);z-index:5;background:rgba(253,251,247,.55)}
+  .done .seal::before{content:"";position:absolute;inset:3px;border:1px solid var(--gold-deep)}
+</style>
+</head>
+<body>
+  <div class="page-title">碎片收集 · 分享海报</div>
+  <div class="page-sub">3:4 竖版 · 暖白纸感 + 金线 + 衬线大标题 + 缺角相框 · 照片全部完整露出（object-fit: contain，不裁切）<br>示例：光线碎片 · 收集进行中 3/5 与 已集齐 5/5</div>
+
+  <div class="row">
+    <!-- 收集进行中 3/5 -->
+    <div class="cell">
+      <span class="sys-label">收集进行中 · 3/5</span>
+      <div class="poster">
+        <div class="hairline"><b></b></div>
+        <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+        <div class="title serif">光线碎片</div>
+        <div class="title-line"></div>
+        <div class="photos">
+          <div class="row">
+            <div class="slot"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></div>
+            <div class="slot"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></div>
+            <div class="slot"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></div>
+          </div>
+          <div class="row row2">
+            <div class="empty slot"><span class="plus">+</span><span class="lab">待收集</span></div>
+            <div class="empty slot"><span class="plus">+</span><span class="lab">待收集</span></div>
+          </div>
+        </div>
+        <div class="foot">
+          <div class="cnt">已集 <b>3</b> / 5</div>
+          <div class="slogan">如画 LUMIRA · 记录每一帧光影</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 已集齐 5/5 -->
+    <div class="cell">
+      <span class="sys-label">已集齐 · 5/5</span>
+      <div class="poster done">
+        <div class="hairline"><b></b></div>
+        <div class="seal">集齐</div>
+        <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+        <div class="title serif">光线碎片</div>
+        <div class="title-line"></div>
+        <div class="photos">
+          <div class="row">
+            <div class="slot"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20golden%20hour%20sunlight%20streaming%20through%20a%20window%2C%20soft%20long%20shadows%20on%20a%20minimalist%20wall%2C%20cozy%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></div>
+            <div class="slot"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sunbeam%20through%20tree%20leaves%20casting%20light%20spots%20on%20the%20ground%2C%20golden%20bokeh%2C%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></div>
+            <div class="slot"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=warm%20lamp%20glow%20in%20a%20cozy%20room%2C%20soft%20golden%20light%20and%20gentle%20shadow%2C%20cinematic%20warm%20tone%2C%20photography&image_size=landscape_4_3" alt=""></div>
+          </div>
+          <div class="row row2">
+            <div class="slot"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=golden%20sunset%20silhouette%20portrait%2C%20warm%20rim%20light%2C%20emotional%20warm%20atmosphere%2C%20photography&image_size=landscape_4_3" alt=""></div>
+            <div class="slot"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=city%20street%20lights%20at%20dusk%20bokeh%2C%20warm%20golden%20glow%2C%20cinematic%20night%2C%20photography&image_size=landscape_4_3" alt=""></div>
+          </div>
+        </div>
+        <div class="foot">
+          <div class="cnt">已集齐 <b>5</b> / 5</div>
+          <div class="slogan">如画 LUMIRA · 记录每一帧光影</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

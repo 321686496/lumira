@@ -1,0 +1,189 @@
+import { Test } from '@nestjs/testing';
+import { NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify';
+import { AppModule } from '../src/app.module';
+import request from 'supertest';
+import { eq } from 'drizzle-orm';
+import { resetTestDatabase } from './test-db';
+import { DatabaseService } from '../src/database/database.service';
+import { devices } from '../src/database/schema';
+
+describe('InviteController (e2e)', () => {
+  let app: NestFastifyApplication;
+  let inviterToken: string;
+  let inviteeToken: string;
+
+  const inviterDeviceId = '11111111-1111-4111-8111-111111111111';
+  const inviteeDeviceId = '22222222-2222-4222-8222-222222222222';
+
+  beforeAll(async () => {
+    process.env.DB_HOST = process.env.DB_HOST || '127.0.0.1';
+    process.env.DB_PORT = process.env.DB_PORT || '3306';
+    process.env.DB_USER = process.env.DB_USER || 'root';
+    process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'root';
+    process.env.DB_NAME = process.env.DB_NAME || 'lumira_test';
+    process.env.JWT_SECRET = 'test-secret';
+    await resetTestDatabase();
+
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
+    app.setGlobalPrefix('api/v1');
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+
+    // 注册两个设备
+    const res1 = await request(app.getHttpServer())
+      .post('/api/v1/device/register')
+      .send({ deviceId: inviterDeviceId });
+    inviterToken = res1.body.token;
+
+    const res2 = await request(app.getHttpServer())
+      .post('/api/v1/device/register')
+      .send({ deviceId: inviteeDeviceId });
+    inviteeToken = res2.body.token;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  let inviteCode: string;
+
+  it('POST /api/v1/invite/generate — should generate invite code', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/invite/generate')
+      .set('Authorization', `Bearer ${inviterToken}`)
+      .expect(201);
+
+    expect(res.body.inviteCode).toBeDefined();
+    expect(res.body.inviteCode).toHaveLength(6);
+    inviteCode = res.body.inviteCode;
+  });
+
+  it('POST /api/v1/invite/generate — should return same code on second call', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/invite/generate')
+      .set('Authorization', `Bearer ${inviterToken}`)
+      .expect(201);
+
+    expect(res.body.inviteCode).toBe(inviteCode);
+  });
+
+  it('POST /api/v1/invite/activate — should activate invite successfully', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/invite/activate')
+      .set('Authorization', `Bearer ${inviteeToken}`)
+      .send({ inviteCode, channel: 'direct' })
+      .expect(201);
+
+    expect(res.body.inviterDeviceId).toBe(inviterDeviceId);
+    expect(res.body.tierReached).toBe(1); // 首次邀请达成阶梯 1
+    expect(res.body.instantPointsGranted).toBe(true); // 邀请人获得即时 +30
+    expect(res.body.rewards).not.toBeNull();
+    // 阶梯 1 奖励构成：积分 + 免费解锁次数 + 成就
+    const items = res.body.rewards.items;
+    expect(items.map((i: any) => i.type)).toEqual(
+      expect.arrayContaining(['points', 'unlock_count', 'achievement']),
+    );
+  });
+
+  it('GET /api/v1/points/balance — 双方各 +30 即时积分，邀请人另得阶梯1 奖励', async () => {
+    // 邀请人：即时 +30 + 阶梯1 积分 +20 = 50；免费解锁 ×1
+    const inviter = await request(app.getHttpServer())
+      .get('/api/v1/points/balance')
+      .set('Authorization', `Bearer ${inviterToken}`)
+      .expect(200);
+    expect(inviter.body.balance).toBe(50);
+    expect(inviter.body.freeUnlockCount).toBe(1);
+
+    // 被邀请人：即时 +30
+    const invitee = await request(app.getHttpServer())
+      .get('/api/v1/points/balance')
+      .set('Authorization', `Bearer ${inviteeToken}`)
+      .expect(200);
+    expect(invitee.body.balance).toBe(30);
+  });
+
+  it('POST /api/v1/invite/activate — should reject duplicate activation', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/invite/activate')
+      .set('Authorization', `Bearer ${inviteeToken}`)
+      .send({ inviteCode })
+      .expect(409);
+  });
+
+  it('POST /api/v1/invite/activate — should reject self-invite', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/invite/activate')
+      .set('Authorization', `Bearer ${inviterToken}`)
+      .send({ inviteCode })
+      .expect(400);
+  });
+
+  it('POST /api/v1/invite/activate — should reject old (non-new) devices beyond binding window', async () => {
+    const oldDeviceId = '33333333-3333-4333-8333-333333333333';
+    const oldRes = await request(app.getHttpServer())
+      .post('/api/v1/device/register')
+      .send({ deviceId: oldDeviceId })
+      .expect(201);
+    const oldToken = oldRes.body.token;
+
+    // 将 first_seen_at 改到 24h 绑定窗口之外，模拟「已使用多日后回来填码」的老设备
+    const db = app.get(DatabaseService).getDb();
+    const past = Math.floor(Date.now() / 1000) - 25 * 60 * 60;
+    await db.update(devices).set({ firstSeenAt: past }).where(eq(devices.deviceId, oldDeviceId));
+
+    await request(app.getHttpServer())
+      .post('/api/v1/invite/activate')
+      .set('Authorization', `Bearer ${oldToken}`)
+      .send({ inviteCode })
+      .expect(400);
+  });
+
+  it('POST /api/v1/invite/activate — should reject invalid code', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/invite/activate')
+      .set('Authorization', `Bearer ${inviteeToken}`)
+      .send({ inviteCode: 'INVALID' })
+      .expect(400);
+  });
+
+  it('GET /api/v1/invite/stats — should return invite stats', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/invite/stats')
+      .set('Authorization', `Bearer ${inviterToken}`)
+      .expect(200);
+
+    expect(res.body.totalInvites).toBe(1);
+    expect(res.body.currentTier).toBe(1);
+    expect(res.body.unlockedRewards).toHaveLength(1);
+  });
+
+  it('GET /api/v1/invite/stats — should include myInviteCode/tiers/invitees', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/invite/stats')
+      .set('Authorization', `Bearer ${inviterToken}`)
+      .expect(200);
+
+    expect(res.body.myInviteCode).toBe(inviteCode);
+    expect(Array.isArray(res.body.tiers)).toBe(true);
+    expect(res.body.tiers.length).toBeGreaterThan(0);
+    expect(res.body.tiers[0]).toHaveProperty('done');
+    expect(res.body.tiers[0]).toHaveProperty('locked');
+    expect(res.body.tiers[0]).toHaveProperty('rewards');
+    // invitees 为真实被邀请记录（inviteeDeviceId 已在激活写入）
+    expect(res.body.invitees).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ inviteeDeviceId, channel: 'direct' }),
+      ]),
+    );
+  });
+
+  it('GET /api/v1/invite/stats — without auth should return 401', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/invite/stats')
+      .expect(401);
+  });
+});

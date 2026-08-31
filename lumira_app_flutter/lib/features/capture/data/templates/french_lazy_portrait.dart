@@ -1,0 +1,87 @@
+// lib/features/capture/data/templates/french_lazy_portrait.dart
+import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
+
+/// 法式慵懒高雅模板
+/// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 6
+const PhotoTemplate frenchLazyPortraitTemplate = PhotoTemplate(
+  meta: TemplateMeta(
+    id: 'french_lazy_portrait',
+    name: '法式慵懒半身人像',
+    author: '如画 Lumira',
+    version: '1.0.0',
+    category: 'portrait',
+    classification: TemplateClassification(type: 'portrait', majorStyle: 'retro_nostalgia', style: 'french_lazy', subStyle: 'french_lazy', method: 'half_body'),
+    tags: ['人像', '法式', '慵懒', '颗粒', '窗光'],
+    tagIds: [],
+    price: 40,
+    images: [
+      TemplateImage(url: 'assets/images/templates/french_lazy_portrait_1.jpg'),
+      TemplateImage(url: 'assets/images/templates/french_lazy_portrait_2.jpg'),
+      TemplateImage(url: 'assets/images/templates/french_lazy_portrait_3.jpg'),
+    ],
+    description: '法式阳台自然光人像模板。场景为爬满常春藤的阳台，木质百叶窗与石栏杆为背景，下午3-5点暖色侧光从屏幕右上方45°斜射，营造慵懒治愈氛围。人物穿白色蕾丝领亚麻衬衫+浅蓝直筒牛仔裤，赤脚坐藤椅，呈现三种松弛姿态：抬手遮阳低头沉思、仰头闭眼享受阳光、盘腿正对镜头。适合日常穿搭、旅行打卡、生活方式类拍摄。',
+    referenceSource: '小红书法式慵懒风格教程；复古颗粒质感；法式写真套图',
+    shortDesc: '午后藤椅上的金色时光，白衫牛仔裤的松弛感，阳光漫过发梢的温柔瞬间🌿',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['summer', 'autumn'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day', 'goldenHour'],
+    ),
+  ),
+  composition: Composition(
+    overlayType: 'rule_of_thirds',
+    gridType: 'three_by_three',
+    subjectFrame: SubjectFrame(x: 0.15, y: 0.08, w: 0.7, h: 0.9),
+    opacity: 0.3,
+    aspectRatio: '3:4',
+    description: '半身景别，腰部以上入画；机位平视略低5°，斜侧30°拍摄；主体居中偏右占画幅60-65%，阳台环境占35-40%；头顶留白约1/6画幅高度；石栏杆横贯画面下部1/4，百叶窗竖线构成右侧引导线。',
+  ),
+  camera: CameraParams(
+    exposureCompensation: 0,
+    isoMode: 'auto',
+    iso: 200,
+    shutterSpeed: '1/100',
+    whiteBalance: 'cloudy',
+    whiteBalanceK: 6200,
+    flashMode: 'off',
+    focusMode: 'auto',
+    lensSuggestion: 'main',
+    lensType: '主摄镜头',
+  ),
+  sceneGuide: SceneGuide(
+    lightDirection: '主光从屏幕右上方约45°斜射而来，暖色午后阳光，光型中等硬度（有明确阴影边缘但非极硬），光比约3:1。阴影投向屏幕左下方，鼻影较淡，下巴与手臂投影清晰可见。质感：皮肤哑光柔滑带自然纹理，头发有高光勾边，亚麻衬衫呈现柔和漫反射，藤椅编织纹理清晰。环境光：常春藤绿叶受光面明亮、背光面深绿，石栏杆灰白色调偏暖。色温对比：主体暖调，背景绿植与石材略偏冷绿灰。无需补光，纯自然顺侧光。',
+    lightDirectionAngle: 45,
+    shootingDistance: '1.5-2.0m',
+    background: '爬满常春藤的白色墙面 + 木质百叶窗（半开）+ 石质栏杆阳台，远景可见城市屋顶（图2）',
+    props: ['米白色藤编椅', '浅色坐垫'],
+    bestTime: '14:30-17:00',
+    bestTimeFrom: '14:30',
+    bestTimeTo: '17:00',
+    tips: [
+      '选择有藤蔓或绿植的阳台/窗台作为背景，确保午后阳光能从侧面斜射入镜',
+      '人物坐藤椅时保持脊柱自然挺直但肩膀放松，避免僵硬',
+      '抬手遮阳动作要自然，手掌距额头约10-15cm，手指微张不要并拢',
+      '仰头闭眼时注意颈部舒展，下巴微抬但不要过度后仰导致双下巴',
+      '盘腿坐姿保持膝盖高度一致，脚掌自然贴合椅面，不要悬空',
+      '拍摄距离1.5-2m，使用主摄镜头，对焦于人物眼部',
+      '若光线过强可适当拉上纱帘柔化，避免面部过曝',
+      '该效果依赖自然侧光，阴天可用白色反光板从屏幕左侧补辅光',
+    ],
+  ),
+  postProcess: PostProcess(
+    cropRatio: '3:4',
+    color: PostProcessColor(
+      brightness: 5,
+      contrast: -4,
+      saturation: -3,
+      temperature: 6,
+      tint: 1,
+    ),
+    smoothStrength: 30,
+    sharpen: 20,
+    vignette: 18,
+    grain: 12,
+    lut: 'cream',
+  ),
+);

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 自定义模板扫码导入海报 · V2 三方向</title>
+<style>
+  :root{--gold:#B08D4F;--gold-soft:#C9A96E;--gold-line:rgba(176,141,79,.45);--ink:#161616;--text2:#5c574f;--text3:#9a948a}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#EFEAE0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:40px 20px 140px;display:flex;flex-direction:column;align-items:center;-webkit-font-smoothing:antialiased}
+  .page-title{color:#3f382c;font-size:17px;letter-spacing:4px;font-weight:600;display:flex;align-items:center;gap:14px}
+  .page-title::before,.page-title::after{content:"";width:46px;height:1px;background:var(--gold-line)}
+  .page-sub{color:#8a7f6e;font-size:12px;letter-spacing:2px;text-align:center;line-height:2;max-width:960px;margin-top:8px}
+  .sec{width:100%;max-width:1320px;margin-top:46px}
+  .sec-head{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .sec-no{font-family:Georgia,serif;color:#fff;background:var(--gold);padding:3px 11px;border-radius:12px;font-size:11px;letter-spacing:1px}
+  .sec-name{color:#3f382c;font-size:15px;letter-spacing:3px;font-weight:600}
+  .sec-desc{color:#9a8f7c;font-size:11px;letter-spacing:1px;margin:4px 0 22px;line-height:1.9;max-width:960px}
+  .row{display:flex;gap:40px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10px;color:#8a6d3b;letter-spacing:2px;background:#f6f0e5;border:1px solid var(--gold-line);padding:5px 14px;border-radius:14px;text-align:center;font-weight:600}
+  .poster{position:relative;width:340px;height:566px;overflow:hidden;flex:none}
+  .poster.shadow{box-shadow:0 26px 60px -26px rgba(48,38,22,.55)}
+  img.cover{display:block;width:100%;height:100%;object-fit:cover}
+  /* ============ 方向 A · 瑞士极简 ============ */
+  .swiss{background:#F7F6F2}
+  .swiss .frame{position:absolute;left:26px;top:30px;width:288px;height:296px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(20,20,20,.14)}
+  .swiss .frame .ph{position:relative;width:calc(100% - 20px);height:calc(100% - 20px);overflow:hidden;background:#EBE7DF}
+  .swiss .frame .ph img{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:block}
+  .swiss .frame::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--gold)}
+  .swiss .wm{position:absolute;left:26px;top:12px;font-size:8px;letter-spacing:4px;color:var(--text3);font-weight:600}
+  .swiss .wm b{color:var(--gold)}
+  .swiss .body{position:absolute;left:26px;right:26px;bottom:22px}
+  .swiss .cat{font-size:8px;letter-spacing:3px;color:var(--text2);margin-bottom:7px}
+  .swiss .title{font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif;font-size:30px;font-weight:700;color:var(--ink);letter-spacing:3px;line-height:1.2}
+  .swiss .meta{display:flex;align-items:center;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(20,20,20,.12)}
+  .swiss .qr{width:52px;height:52px;background:#fff;border:1px solid rgba(20,20,20,.16);padding:5px;flex:none}
+  .swiss .qr-t{font-size:8px;letter-spacing:2px;color:var(--text3);line-height:1.7}
+  .swiss .qr-t b{display:block;font-size:9px;letter-spacing:2px;color:var(--ink)}
+  .swiss .no{margin-left:auto;font-family:Georgia,serif;font-size:9px;color:var(--text3);letter-spacing:1px}
+  /* ============ 方向 B · 美术馆深色 ============ */
+  .gallery{background:#151311}
+  .gallery .halo{position:absolute;inset:0;background:radial-gradient(120% 70% at 50% 20%, rgba(201,169,110,.08), transparent 60%)}
+  .gallery .plate{position:absolute;left:50%;top:34px;transform:translateX(-50%);width:262px;height:312px;background:#fff;padding:14px;box-shadow:0 40px 80px -30px rgba(0,0,0,.8)}
+  .gallery .plate .ph{position:relative;width:100%;height:100%;overflow:hidden;background:#e8e4dc;display:flex;align-items:center;justify-content:center}
+  .gallery .plate .ph img{display:block}
+  .gallery .label{position:absolute;left:0;right:0;bottom:24px;text-align:center;padding:0 26px}
+  .gallery .tag{font-size:8px;letter-spacing:4px;color:var(--gold-soft);font-weight:600}
+  .gallery .title{font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif;font-size:28px;font-weight:600;color:#fff;letter-spacing:3px;margin-top:8px}
+  .gallery .rule{width:26px;height:1px;background:var(--gold);margin:12px auto 0;opacity:.8}
+  .gallery .qr-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:16px}
+  .gallery .qr{width:64px;height:64px;background:#fff;padding:6px}
+  .gallery .qr-t{font-size:8px;letter-spacing:2px;color:rgba(255,255,255,.55)}
+  .gallery .exp{font-family:Georgia,serif;font-size:8px;letter-spacing:2px;color:rgba(255,255,255,.3);margin-top:14px}
+  .gallery .sml{position:absolute;top:16px;left:24px;font-size:8px;letter-spacing:4px;color:rgba(255,255,255,.4)}
+  .gallery .sml b{color:var(--gold-soft)}
+  /* ============ 方向 C · 双色调印刷 ============ */
+  .duo{background:#1B1814}
+  .duo .grain{position:absolute;inset:0;background:radial-gradient(120% 100% at 50% 0%, rgba(201,169,110,.10), transparent 55%)}
+  .duo .crop{position:absolute;width:16px;height:16px;z-index:2}
+  .duo .crop.tl{top:14px;left:14px;border-top:2px solid var(--gold);border-left:2px solid var(--gold)}
+  .duo .crop.tr{top:14px;right:14px;border-top:2px solid var(--gold);border-right:2px solid var(--gold)}
+  .duo .crop.bl{bottom:14px;left:14px;border-bottom:2px solid var(--gold);border-left:2px solid var(--gold)}
+  .duo .crop.br{bottom:14px;right:14px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold)}
+  .duo .ph{position:absolute;left:24px;right:24px;top:26px;height:330px;overflow:hidden;background:#000}
+  .duo .ph img{display:block;width:100%;height:100%;object-fit:contain;filter:grayscale(1) contrast(1.12) brightness(1.06);mix-blend-mode:luminosity}
+  .duo .ph::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg, rgba(176,141,79,.62), rgba(176,141,79,.22) 60%, rgba(176,141,79,.38));mix-blend-mode:overlay;pointer-events:none}
+  .duo .ph::before{content:"";position:absolute;inset:0;background:#151311;mix-blend-mode:multiply;pointer-events:none;opacity:.35}
+  .duo .duo-bar{position:absolute;left:24px;right:24px;top:368px;height:1px;background:linear-gradient(90deg,var(--gold) 0 60px, transparent 60px)}
+  .duo .body{position:absolute;left:24px;right:24px;bottom:24px}
+  .duo .tag{font-size:8px;letter-spacing:4px;color:var(--gold-soft);font-weight:600}
+  .duo .title{font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif;font-size:40px;font-weight:700;color:#fff;letter-spacing:6px;line-height:1.12;margin-top:8px;text-shadow:0 1px 0 rgba(255,255,255,.04)}
+  .duo .title .amp{color:var(--gold-soft)}
+  .duo .bottom{display:flex;align-items:flex-end;gap:16px;margin-top:18px}
+  .duo .qr{width:62px;height:62px;background:#fff;padding:5px;flex:none}
+  .duo .qr-t{font-size:8px;letter-spacing:2px;color:rgba(255,255,255,.5);line-height:1.8}
+  .duo .qr-t b{display:block;font-size:9px;letter-spacing:3px;color:#fff}
+  .duo .foot{margin-left:auto;text-align:right}
+  .duo .foot .en{font-size:8px;letter-spacing:3px;color:rgba(255,255,255,.45)}
+  .duo .foot .zh{font-size:8px;letter-spacing:1px;color:rgba(255,255,255,.3);margin-top:3px}
+  .qr-grid{display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);gap:1px;width:100%;height:100%}
+  .qr-grid i{background:#161616;display:block;border-radius:1px}
+  .duo .qr-grid i{background:#1B1814}
+</style>
+</head>
+<body>
+
+<div class="page-title">如画 LUMIRA · 自定义模板扫码导入海报</div>
+<div class="page-sub">V2 三个全新方向 · 海报画布固定竖版 340×566，封面图按原生比例居中展示（9:16 / 3:4 / 1:1 / 4:3 / 16:9）<br>目标：去掉「装饰感」，以留白、网格、克制与单一视觉概念建立高级感与设计感</div>
+
+<!-- ============ 方向 A ============ -->
+<div class="sec">
+  <div class="sec-head"><span class="sec-no">A</span><span class="sec-name">瑞士极简 · Minimal White</span></div>
+  <div class="sec-desc">全白画布，封面像「印刷样本」被极细线框起，底部一条金色基线压住画面；超大留白 + 精密对齐 + 精小文字。参考高端时尚与瑞士平面设计展的海报气质，二维码缩成小巧精致的角落元素。</div>
+  <div class="row" id="row-a"></div>
+</div>
+
+<!-- ============ 方向 B ============ -->
+<div class="sec">
+  <div class="sec-head"><span class="sec-no">B</span><span class="sec-name">美术馆深色 · Gallery Ink</span></div>
+  <div class="sec-desc">深墨色画布，封面照片如「装裱作品」悬于中央（白色衬边 + 阴影），下方以博物馆铭牌式排版呈现标题与分类，金色细线收束。安静、克制、贵重。</div>
+  <div class="row" id="row-b"></div>
+</div>
+
+<!-- ============ 方向 C ============ -->
+<div class="sec">
+  <div class="sec-head"><span class="sec-no">C</span><span class="sec-name">双色调印刷 · Duotone Press</span></div>
+  <div class="sec-desc">黑金双色印刷质感：封面照片转墨金双色调，四周印刷裁切角标（crop marks），超大衬线标题压底，像一本摄影集的封面。手工印刷的精密与温度。</div>
+  <div class="row" id="row-c"></div>
+</div>
+
+<script>
+  var seed=41;function r(){seed=(seed*9301+49297)%233280;return seed/233280}
+  function qrHtml(cls){var h='';for(var y=0;y<9;y++){for(var x=0;x<9;x++){var corner=(y<3&&x<3)||(y<3&&x>=6)||(y>=6&&x<3);var on=corner?(x%2===0&&y%2===0||x===0||y===0):r()>0.5;h+='<i'+(on?'':' style="opacity:.10"')+'></i>';}}return '<div class="qr-grid '+cls+'">'+h+'</div>'}
+  var ratios=[
+    {label:'9:16 · 全屏竖幅', cls:'pr-916', img:'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tall%20vertical%20warm%20editorial%20portrait%20of%20a%20woman%2C%20golden%20hour%20cream%20and%20gold%20tones%2C%20french%20lazy%20style%2C%20soft%20knit%20window%20light&image_size=portrait_16_9'},
+    {label:'3:4 · 竖幅', cls:'pr-34', img:'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=vertical%20warm%20editorial%20portrait%20of%20a%20woman%2C%20golden%20hour%20cream%20gold%20tones%2C%20french%20lazy%20style&image_size=portrait_4_3'},
+    {label:'1:1 · 方形', cls:'pr-11', img:'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=square%20warm%20editorial%20portrait%20of%20a%20woman%2C%20golden%20hour%20cream%20gold%20tones%2C%20french%20lazy%20style&image_size=square_hd'},
+    {label:'4:3 · 横幅', cls:'pr-43', img:'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%20horizontal%20warm%20editorial%20scene%2C%20golden%20hour%20cream%20gold%20tones%2C%20french%20lazy%20interior%20window%20light&image_size=landscape_4_3'},
+    {label:'16:9 · 宽幅横屏', cls:'pr-169', img:'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%20horizontal%20warm%20editorial%20scene%2C%20golden%20hour%20cream%20gold%20tones%2C%20cinematic%20french%20lazy%20interior&image_size=landscape_16_9'}
+  ];
+  var prs={ 'pr-916':{w:128,h:228},'pr-34':{w:176,h:234},'pr-11':{w:206,h:206},'pr-43':{w:252,h:189},'pr-169':{w:268,h:151} };
+  function imgStyle(cls){var p=prs[cls];return 'width:'+p.w+'px;height:'+p.h+'px;'}
+
+  // 方向 A
+  var rowA=document.getElementById('row-a');
+  ratios.forEach(function(q,i){
+    var cell=document.createElement('div');cell.className='cell';
+    cell.innerHTML='<div class="sys-label">'+q.label+'</div>'+
+    '<div class="poster swiss shadow">'+
+      '<div class="wm"><b>LUMIRA</b> · 如画</div>'+
+      '<div class="frame"><div class="ph"><img src="'+q.img+'" style="'+imgStyle(q.cls)+'"></div></div>'+
+      '<div class="body">'+
+        '<div class="cat">人像写真 · 摄影模板</div>'+
+        '<div class="title">法式慵懒</div>'+
+        '<div class="meta">'+
+          '<div class="qr">'+qrHtml('')+'</div>'+
+          '<div class="qr-t"><b>扫码导入模板</b>打开如画 App · 扫码即可导入</div>'+
+          '<div class="no">№ 011</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+    rowA.appendChild(cell);
+  });
+
+  // 方向 B
+  var rowB=document.getElementById('row-b');
+  ratios.forEach(function(q,i){
+    var cell=document.createElement('div');cell.className='cell';
+    cell.innerHTML='<div class="sys-label">'+q.label+'</div>'+
+    '<div class="poster gallery shadow">'+
+      '<div class="halo"></div>'+
+      '<div class="sml"><b>LUMIRA</b> 如画</div>'+
+      '<div class="plate"><div class="ph"><img src="'+q.img+'" style="'+imgStyle(q.cls)+'"></div></div>'+
+      '<div class="label">'+
+        '<div class="tag">L U M I R A · 模板分享</div>'+
+        '<div class="title">法式慵懒</div>'+
+        '<div class="rule"></div>'+
+        '<div class="qr-wrap">'+
+          '<div class="qr">'+qrHtml('')+'</div>'+
+          '<div class="qr-t">扫码导入模板</div>'+
+        '</div>'+
+        '<div class="exp">EXP 08-29 20:00</div>'+
+      '</div>'+
+    '</div>';
+    rowB.appendChild(cell);
+  });
+
+  // 方向 C
+  var rowC=document.getElementById('row-c');
+  ratios.forEach(function(q,i){
+    var cell=document.createElement('div');cell.className='cell';
+    cell.innerHTML='<div class="sys-label">'+q.label+'</div>'+
+    '<div class="poster duo shadow">'+
+      '<div class="grain"></div>'+
+      '<div class="crop tl"></div><div class="crop tr"></div><div class="crop bl"></div><div class="crop br"></div>'+
+      '<div class="ph"><img src="'+q.img+'" style="'+imgStyle(q.cls)+'"></div>'+
+      '<div class="duo-bar"></div>'+
+      '<div class="body">'+
+        '<div class="tag">LUMIRA · 模板分享</div>'+
+        '<div class="title">法式<span class="amp">慵懒</span></div>'+
+        '<div class="bottom">'+
+          '<div class="qr">'+qrHtml('')+'</div>'+
+          '<div class="qr-t"><b>扫码导入</b>打开如画 App</div>'+
+          '<div class="foot"><div class="en">LUMIRA</div><div class="zh">如你所见 · 皆成画卷</div></div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+    rowC.appendChild(cell);
+  });
+</script>
+</body>
+</html>
