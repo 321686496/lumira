@@ -1,0 +1,185 @@
+{
+  "name": "银河露营·暖光秘境",
+  "category": "landscape",
+  "classification": {
+    "type": "landscape",
+    "majorStyle": "夜景风光",
+    "subStyle": "星空露营",
+    "method": "长曝光模拟/高对比冷暖调"
+  },
+  "shortDesc": "星河垂落山巅，帐篷暖光如豆，篝火跃动间治愈所有孤独，是逃离城市的极致浪漫🏕️✨",
+  "description": "这是一套专为夜景星空露营设计的风景模板。画面以壮丽的银河为顶幕，连绵雪山为远景，前景布置精致的Bell Tent（钟形帐篷）与篝火营地。核心视觉在于极致的冷暖对比：深邃蓝紫的夜空与地面金黄温暖的灯火形成强烈反差。适用于户外爱好者、旅行摄影师，在晴朗无月的夜晚，于高海拔或光污染极少的山区复刻此景。造型重点在于营造'精致野奢'感，通过多点暖光源（马灯、篝火、帐篷内透光）点亮暗部细节。",
+  "ambience": {
+    "seasons": [
+      "夏季",
+      "初秋"
+    ],
+    "weathers": [
+      "晴朗无云",
+      "无月夜"
+    ],
+    "timeTones": [
+      "深夜",
+      "蓝调时刻后"
+    ]
+  },
+  "tags": [
+    "星空摄影",
+    "露营美学",
+    "冷暖对比",
+    "治愈系夜景",
+    "银河"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "银河横跨天际，暖黄帐篷与篝火在雪山脚下熠熠生辉，极致冷暖对比的梦幻露营夜。"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·星空露营构图",
+      "type": "composition",
+      "description": "采用经典三分法构图。画面上部2/3留给浩瀚星空与银河，银河呈对角线从左上延伸至右下中部；下部1/3为地面景观。地平线置于下1/3分割线处。主体帐篷位于画面右下侧黄金分割点附近，内部透出暖光；篝火位于左下侧，与帐篷形成左右平衡。远山轮廓作为中景横贯画面，分隔天地。前景草地微暗，突出中景光源。整体营造宏大而温馨的庇护所氛围。",
+      "compositionFrame": "上2/3星空(银河对角线)，下1/3地景。地平线在下1/3线。帐篷在右下交点，篝火在左下。远山居中横向延伸。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape_mountain_tent"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.65
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "diagonal_galaxy",
+    "aspectRatio": "1:1",
+    "opacity": 0.25,
+    "description": "正方形构图(1:1)。大远景景别。机位平视略低，强调天空的广阔。上部65%为星空，下部35%为地面。银河作为强引导线从左上指向中心。帐篷与篝火作为视觉锚点分布在下方左右两侧，形成稳定的三角构图基底。环境占比极大，突出人与自然的渺小与和谐。",
+    "subjectFrame": {
+      "x": 0.1,
+      "y": 0.65,
+      "w": 0.8,
+      "h": 0.3
+    }
+  },
+  "camera": {
+    "exposureCompensation": -0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "custom",
+    "whiteBalanceK": 4200,
+    "flashMode": "off",
+    "focusMode": "manual_infinity",
+    "lensType": "广角镜头",
+    "lensSuggestion": "wide_angle_16mm"
+  },
+  "sceneGuide": {
+    "lightDirection": "多源混合光。主环境光为天空漫射冷光(来自上方/后方)；局部主光为地面篝火与马灯(来自屏幕左下及右下，暖色硬光/柔光混合)；帐篷内部透光(来自屏幕右侧中下部，大面积暖柔光)。光比极大(约1:8)，阴影浓重投向屏幕外侧及上方。无需正面补光，依靠场景自身光源照明。",
+    "shootingDistance": "5-10m (需容纳帐篷全景与部分前景)",
+    "background": "清晰可见的银河星空 + 连绵雪山剪影 + 远处微弱的地平线辉光",
+    "props": [
+      "米白色钟形帐篷(Bell Tent)",
+      "燃烧旺盛的篝火堆",
+      "复古马灯/煤油灯(至少3-4盏)",
+      "折叠露营椅",
+      "木质小桌",
+      "悬挂式灯架"
+    ],
+    "bestTime": "22:00-02:00 (银河升起且无月光干扰时)",
+    "tips": [
+      "必须使用三脚架固定机位，真机无法手持长曝光，需依赖App夜景模式或后期合成模拟星轨/银河清晰度。",
+      "白平衡设为自定义4200K左右，以平衡天空的冷蓝与灯光的暖黄，避免天空过紫或灯光过白。",
+      "若真机无法拍出如此清晰的银河，建议后期叠加星空素材，或选择光污染极少的地点拍摄。",
+      "vignette:25 压暗四角，聚焦中心营地与银河核心。",
+      "grain:15 增加轻微颗粒感，模拟高感光度下的胶片质感，掩盖夜景噪点。",
+      "确保帐篷内放置强暖光源(如LED灯串)，使其呈现通透发光效果，这是画面的视觉重心之一。",
+      "篝火需保持燃烧状态，火焰动态能增加画面生气，注意防火安全。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "1:1",
+    "color": {
+      "brightness": -2,
+      "contrast": 18,
+      "saturation": 12,
+      "temperature": -8,
+      "tint": 5,
+      "highlights": -15,
+      "shadows": 12,
+      "clarity": 15
+    },
+    "smoothStrength": 10,
+    "sharpen": 35,
+    "vignette": 25,
+    "grain": 15,
+    "lut": "twilight",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "非人物题材，无具体朝向",
+    "bodyFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "N/A",
+      "azimuth": 0
+    },
+    "twist": "N/A",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "N/A"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "完整收录天空银河与地面营地全貌",
+    "cameraHeight": "平视略低",
+    "cameraAzimuth": "正拍",
+    "subjectScale": "营地占下部30%，星空占上部70%",
+    "environmentRatio": "环境(星空/山脉)占85%，主体(帐篷/火)占15%",
+    "headroom": "顶部留足星空空间，银河顶端不裁切",
+    "framingNote": "强调天地对比，利用广角收纳宏大场景，正方形构图稳定庄重。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "天空冷光从上/后漫射；地面暖光从左下(篝火)和右下(帐篷/马灯)向上投射。",
+      "辅光轮廓光": "无额外辅光，依靠雪地/云层微弱反光。帐篷边缘有内部透光形成的轮廓。",
+      "光型软硬": "星空为极柔漫射光；篝火为硬光带跳动阴影；帐篷透光为大面积柔光。",
+      "光比": "极高，约1:10以上。亮部(火/灯)与暗部(山体/草地)反差巨大。",
+      "阴影": "物体阴影投向背离光源方向(屏幕外/上)，浓度深黑，边缘因多光源而略显模糊。",
+      "质感": "星空细腻平滑带颗粒；帆布帐篷纹理在透光下清晰；火焰高光溢出柔和；山体呈哑光剪影质感。",
+      "环境光": "地平线处有微弱橙黄色气辉/光污染渐变，增加层次。",
+      "色温对比": "强烈的冷暖对冲。天空6500K+冷蓝紫，地面光源2800K暖橙黄。"
+    },
+    "lightToParams": "whiteBalanceK:4200折中；temperature:-8强化天空冷感；contrast:18拉开明暗；highlights:-15防止灯火过曝死白；shadows:12提亮暗部细节避免死黑；lut:twilight增强蓝紫暮色氛围。"
+  },
+  "styling": {
+    "subjectType": "静物/风景组合",
+    "clothingLayers": {
+      "上装": "N/A",
+      "下装": "N/A",
+      "衣角处理": "N/A",
+      "袖子": "N/A",
+      "领口": "N/A",
+      "鞋袜": "N/A",
+      "叠穿层次": "N/A"
+    },
+    "accessories": "N/A",
+    "hairMakeup": "N/A",
+    "objectStyle": "米白色棉质钟形帐篷(透光性好)；原木色折叠家具；黑色金属马灯框架配暖黄灯泡；天然石块围砌篝火圈。整体风格：Glamping(精致露营)/ rustic chic(乡村别致)。",
+    "note": "道具颜色需统一在大地色系(米/棕/黑)，以便暖光渲染时不显杂乱。帐篷材质必须有一定透光性，才能拍出内部发光效果。"
+  }
+}

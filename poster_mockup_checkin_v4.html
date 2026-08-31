@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探店足迹分享海报 · 金字招牌留白 v4</title>
+<style>
+  :root{
+    --paper:#FDFBF7;
+    --gold:#C9A96E;
+    --gold-dark:#B08D4F;
+    --ink:#33332F;
+    --ink-2:#6E6A60;
+    --ink-3:#9A9487;
+    --line:rgba(185,158,108,.38);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:"Songti SC","Noto Serif SC","SimSun",serif;
+    background:#EFECE4;color:var(--ink);
+    display:flex;gap:44px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding:52px 28px;
+  }
+  .section-head{width:100%;text-align:center;color:var(--ink-2);letter-spacing:4px;font-size:14px;margin-bottom:6px;}
+  .poster{
+    width:540px;height:760px;background:var(--paper);position:relative;
+    box-shadow:0 28px 58px rgba(60,52,40,.22),0 4px 12px rgba(60,52,40,.10);
+    outline:1px solid var(--line);overflow:hidden;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 46px;
+  }
+  .grain::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+    background-image:radial-gradient(rgba(185,158,108,.05) 1px,transparent 1px);background-size:5px 5px;}
+
+  /* 超大居中主视觉 */
+  .hero{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;}
+  .seal-wrap{display:flex;flex-direction:column;align-items:center;margin-bottom:6px;}
+  .seal{
+    width:52px;height:52px;border:1.6px solid var(--gold-dark);border-radius:50%;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--gold-dark);
+    font-size:11px;letter-spacing:3px;line-height:1.2;transform:rotate(-8deg);
+  }
+  .seal span{letter-spacing:2px;}
+  .mini{font-size:11px;letter-spacing:6px;color:var(--gold-dark);margin-top:18px;font-weight:600;}
+  .wordmark{
+    font-size:66px;font-weight:700;letter-spacing:.18em;line-height:1.05;
+    background:linear-gradient(180deg,#C9A96E,#B08D4F);-webkit-background-clip:text;background-clip:text;
+    color:transparent;margin-top:4px;text-shadow:none;
+  }
+  .word-sub{font-size:12px;letter-spacing:4px;color:var(--ink-3);margin-top:12px;}
+  .hero .rule{width:120px;height:1px;background:var(--gold);margin:24px 0 0;}
+
+  /* 对角照片 */
+  .photo{position:absolute;z-index:1;background:#E9E0CF;box-shadow:0 10px 24px rgba(90,78,60,.16);}
+  .photo .cornerTL,.photo .cornerBR{position:absolute;border-color:var(--gold);border-style:solid;z-index:2;width:14px;height:14px;}
+  .photo .cornerTL{top:-1px;left:-1px;border-width:1.8px 0 0 1.8px;}
+  .photo .cornerBR{bottom:-1px;right:-1px;border-width:0 1.8px 1.8px 0;}
+  .photo img{width:100%;height:100%;object-fit:cover;display:block;}
+  .p-tl{top:44px;left:44px;width:118px;height:170px;
+    clip-path:polygon(20px 0,100% 0,100% calc(100% - 20px),calc(100% - 20px) 100%,0 100%,0 20px);
+    transform:rotate(-3deg);}
+  .p-br{right:44px;left:auto;bottom:52px;width:118px;height:170px;
+    clip-path:polygon(20px 0,100% 0,100% calc(100% - 20px),calc(100% - 20px) 100%,0 100%,0 20px);
+    transform:rotate(3deg);}
+  .p-bl{left:40px;bottom:44px;width:88px;height:88px;
+    clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+    transform:rotate(-5deg);}
+  .p-tr{top:42px;right:40px;width:84px;height:84px;
+    clip-path:polygon(15px 0,100% 0,100% calc(100% - 15px),calc(100% - 15px) 100%,0 100%,0 15px);
+    transform:rotate(5deg);}
+  .p-bl .cornerTL,.p-bl .cornerBR,.p-tr .cornerTL,.p-tr .cornerBR{width:11px;height:11px;}
+
+  /* 底部信息 */
+  .bottom{position:relative;z-index:2;width:100%;display:flex;flex-direction:column;align-items:center;margin-top:18px;}
+  .rating{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:14px;}
+  .stars{color:var(--gold);font-size:18px;letter-spacing:2px;}
+  .rating-num{font-size:24px;font-weight:700;color:var(--gold-dark);letter-spacing:1px;}
+  .meta{display:flex;align-items:center;gap:12px;font-size:12px;letter-spacing:2px;color:var(--ink-3);}
+  .meta i{font-style:normal;color:var(--gold);}
+  .meta .cat{color:var(--gold-dark);border:1px solid var(--gold);border-radius:999px;padding:1px 11px;font-size:11px;letter-spacing:2px;}
+  .wm{margin-top:22px;border-top:1px solid var(--line);padding-top:14px;width:100%;text-align:center;
+    font-size:11px;letter-spacing:4px;color:var(--gold-dark);}
+
+  .legend{max-width:400px;color:var(--ink-2);font-size:13px;line-height:2;padding-top:6px;letter-spacing:.5px;}
+  .legend b{color:var(--gold-dark);}
+</style>
+</head>
+<body>
+  <div class="section-head">金字招牌 · 留白 v4 · 超大店名主视觉 + 对角照片点缀</div>
+
+  <div class="poster grain">
+    <!-- 对角点缀照片 -->
+    <div class="photo p-tl"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=latte%20art%20top%20cafe%20table%20warm&image_size=portrait_16_9"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+    <div class="photo p-tr"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cozy%20cafe%20interior%20warm&image_size=square_hd"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+    <div class="photo p-bl"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=croissant%20window%20light%20cafe&image_size=square_hd"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+    <div class="photo p-br"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cheesecake%20cafe%20dessert&image_size=portrait_16_9"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+
+    <!-- 中央超大金字 -->
+    <div class="hero">
+      <div class="seal-wrap">
+        <div class="seal">探店<br/>足迹</div>
+      </div>
+      <div class="mini">STORE EXPLORATION</div>
+      <div class="wordmark">屿见咖啡</div>
+      <div class="word-sub">愚 园 路 1 2 0 号</div>
+      <span class="rule"></span>
+
+      <!-- 底部信息 -->
+      <div class="bottom">
+        <div class="rating"><span class="stars">★★★★★</span><span class="rating-num">5.0</span></div>
+        <div class="meta">
+          <span>2026 / 08 / 29</span><i>·</i><span>静安区</span><i>·</i><span class="cat">咖啡</span>
+        </div>
+        <div class="wm">如画 · LUMIRA <span style="color:var(--ink-3);letter-spacing:1px;">探店足迹</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>v4 思路（真正不同）</b><br/>
+    · <b>店名超大金字做成视觉主角</b>居中（66px 金色渐变衬线大字）<br/>
+    · 照片退位为<b>四角对角点缀</b>（缺角相框微微斜放，左上大/右下大/另两角小）<br/>
+    · 印章（旋转的「探店足迹」红章感）收掉杂志腔，带传统品牌感<br/>
+    · 底部一行：金色星评分 + 日期·地点·分类 + 水印<br/>
+    · 大量留白，极简，纯原风格
+  </div>
+</body>
+</html>

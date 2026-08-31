@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探店足迹分享海报 · 高级奶油莫兰迪法式</title>
+<style>
+  :root{
+    --bg:#F6F1E9;      /* 燕麦奶油 */
+    --card:#FBF7EF;    /* 浅奶卡纸 */
+    --sage:#A8B5A0;    /* 低饱和莫兰迪绿 */
+    --taupe:#B8A69B;   /* 奶茶棕 */
+    --clay:#C98F78;    /* 陶土橘红点缀 */
+    --ink:#4A4039;
+    --ink-2:#8A7E73;
+    --line:rgba(168,181,160,.35);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",sans-serif;
+    background:#E9E1D5;color:var(--ink);
+    display:flex;gap:44px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding:52px 28px;
+  }
+  .section-head{width:100%;text-align:center;color:var(--taupe);letter-spacing:3px;font-size:14px;margin-bottom:6px;}
+
+  .poster{
+    width:520px;background:var(--bg);border-radius:4px;position:relative;overflow:hidden;
+    box-shadow:0 30px 60px rgba(122,107,95,.22),0 6px 16px rgba(74,64,57,.06);
+    display:flex;flex-direction:column;align-items:center;padding:40px 44px 30px;
+    font-family:"Songti SC","STSong","Noto Serif SC",serif; /* 衬线增加克制感 */
+  }
+  /* 奶油纸纹 */
+  .poster::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+    background-image:radial-gradient(rgba(184,166,155,.06) 1px,transparent 1px);background-size:6px 6px;}
+
+  .frame{border:1px solid var(--line);padding:26px 20px 20px;position:relative;width:100%;}
+  .frame::before,.frame::after{content:"";position:absolute;width:16px;height:16px;border-color:var(--clay);border-style:solid;}
+  .frame::before{top:-1px;left:-1px;border-width:2px 0 0 2px;}
+  .frame::after{bottom:-1px;right:-1px;border-width:0 2px 2px 0;}
+
+  .eyebrow{text-align:center;font-size:11px;letter-spacing:6px;color:var(--taupe);}
+  .eyebrow .line{display:inline-block;width:24px;border-top:1px solid var(--clay);vertical-align:middle;margin:0 10px;}
+
+  .name{text-align:center;font-size:34px;font-weight:600;letter-spacing:4px;margin-top:14px;color:var(--ink);}
+
+  .meta{text-align:center;margin-top:14px;font-size:12px;color:var(--ink-2);letter-spacing:2px;font-family:-apple-system,"PingFang SC",sans-serif;}
+  .meta .sep{margin:0 10px;color:var(--clay);}
+
+  .main{width:100%;height:360px;overflow:hidden;margin-top:26px;box-shadow:0 18px 40px rgba(122,107,95,.22);}
+  .main img{width:100%;height:100%;object-fit:cover;}
+  .rating{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:22px;font-size:16px;}
+  .rating .num{font-size:30px;font-weight:600;color:var(--clay);}
+  .rating .at{color:var(--clay);letter-spacing:2px;font-size:12px;margin-left:2px;}
+  .rating .stars{color:var(--clay);letter-spacing:2px;font-size:15px;}
+
+  .note{margin-top:18px;text-align:center;font-size:14px;line-height:2;color:var(--ink-2);font-style:italic;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 10px;}
+
+  .thumbs{display:flex;gap:12px;margin-top:24px;width:100%;}
+  .t{flex:1;height:100px;overflow:hidden;background:var(--card);border-radius:2px;}
+  .t img{width:100%;height:100%;object-fit:cover;}
+  .t.more{display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--taupe);border:1px dashed var(--line);}
+
+  .foot{width:100%;margin-top:26px;display:flex;justify-content:space-between;align-items:flex-end;font-family:-apple-system,"PingFang SC",sans-serif;}
+  .foot .brand{font-size:11px;letter-spacing:2px;color:var(--taupe);}
+  .foot .brand b{color:var(--clay);font-weight:600;}
+  .foot .wm{font-size:10px;letter-spacing:1px;color:var(--ink-2);}
+
+  .legend{max-width:420px;color:var(--ink-2);font-size:13px;line-height:2;padding-top:6px;letter-spacing:.3px;}
+  .legend b{color:var(--clay);}
+  .legend .sw{display:inline-block;width:16px;height:16px;border-radius:3px;vertical-align:middle;margin-right:4px;}
+</style>
+</head>
+<body>
+  <div class="section-head">高级奶油 · 莫兰迪法式 · 衬线克制 · 卡纸框</div>
+
+  <div class="poster">
+    <div class="frame">
+      <!-- 眉题 -->
+      <div class="eyebrow"><span class="line"></span>STORE EXPLORATION · 探店足迹<span class="line"></span></div>
+      <!-- 店名 -->
+      <div class="name">屿见咖啡</div>
+      <!-- meta -->
+      <div class="meta">
+        <span>愚园路120号</span><span class="sep">·</span>
+        <span>2026.08.29</span><span class="sep">·</span>
+        <span>静安区</span>
+      </div>
+
+      <!-- 主图 -->
+      <div class="main">
+        <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=elegant%20cream%20cafe%20soft%20morandi%20warm%20neutral%20toned%20photorealistic&image_size=landscape_4_3"/>
+      </div>
+
+      <!-- 评分 -->
+      <div class="rating">
+        <span class="stars">★★★★★</span>
+        <span class="num">5.0</span><span class="at">/ 5</span>
+      </div>
+
+      <!-- 心得 -->
+      <div class="note">临窗的拿铁与午后斜阳，克制而不喧嚣，是这条街最安静的浪漫。</div>
+
+      <!-- 小图带 -->
+      <div class="thumbs">
+        <div class="t"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=minimal%20latte%20morandi%20neutral%20table&image_size=square_hd"/></div>
+        <div class="t"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=elegant%20cake%20cream%20tone%20neutral&image_size=square_hd"/></div>
+        <div class="t"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=dried%20flowers%20vase%20cream%20interior&image_size=square_hd"/></div>
+        <div class="t more">+</div>
+      </div>
+    </div>
+
+    <!-- 底部 -->
+    <div class="foot">
+      <span class="brand"><b>如画</b> LUMIRA</span>
+      <span class="wm">LUMIRA · 探店足迹</span>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>高级奶油 · 莫兰迪法式要点</b><br/>
+    · 燕麦奶油底 + <b>莫兰迪低饱和</b>（鼠尾草绿 / 奶茶棕 / 陶土橘点缀），高级内敛<br/>
+    · 细衬线眉题 + 店名，克制排版、留白多，法式优雅感<br/>
+    · 图片/卡纸做细线框 + 陶土色 L 角标，方形圆角 2px（非大圆角，偏成熟）<br/>
+    · 评分陶土色大数字，尾注 /5<br/>
+    · <span class="sw" style="background:#A8B5A0"></span>鼠尾草　<span class="sw" style="background:#B8A69B"></span>奶茶棕　<span class="sw" style="background:#C98F78"></span>陶土橘
+  </div>
+</body>
+</html>

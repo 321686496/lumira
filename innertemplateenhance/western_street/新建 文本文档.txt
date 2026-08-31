@@ -1,0 +1,248 @@
+{
+  "name": "巴黎街头·法式慵懒回眸",
+  "category": "portrait",
+  "classification": {
+    "type": "portrait",
+    "majorStyle": "街拍",
+    "subStyle": "法式优雅",
+    "method": "自然光人像"
+  },
+  "shortDesc": "午后暖阳洒在石墙上，黑色大衣随风轻扬，墨镜后的眼神慵懒又迷人，满是 effortless chic 的法式松弛感🥐",
+  "description": "这是一组典型的法式街头人像模板。场景选在具有古典石材建筑背景的街道（如巴黎圣奥诺雷路），利用下午柔和的侧逆光勾勒发丝与轮廓。穿搭核心为‘黑白极简+质感配饰’：黑色羊毛大衣内搭米白高领针织衫，下着黑色西装裤，点缀玳瑁色墨镜与金色耳环。适合追求高级感、松弛感与都市时尚风格的人群。",
+  "ambience": {
+    "seasons": [
+      "秋季",
+      "冬季",
+      "早春"
+    ],
+    "weathers": [
+      "晴朗",
+      "多云转晴"
+    ],
+    "timeTones": [
+      "午后黄金时刻",
+      "傍晚柔光"
+    ]
+  },
+  "tags": [
+    "法式街拍",
+    "慵懒风",
+    "秋冬穿搭",
+    "城市漫步",
+    "高级感"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "侧身回眸，黑色大衣与米色石墙形成经典对比，路牌点缀增加在地感。"
+    },
+    {
+      "imageIndex": 1,
+      "role": "效果图",
+      "caption": "近景特写，手抚发丝，强调墨镜与金色耳环的细节质感。"
+    },
+    {
+      "imageIndex": 2,
+      "role": "效果图",
+      "caption": "半身街景，斑马线前自然站立，展现整体穿搭层次与自信气场。"
+    },
+    {
+      "imageIndex": 3,
+      "role": "效果图",
+      "caption": "全身大远景，利用街道透视引导线，背影回眸营造电影叙事感。"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·侧身回眸",
+      "type": "people",
+      "description": "人物站在画面右侧约 1/3 处，身体朝向屏幕左前方约 +45°，面部回转面向镜头约 0°~-15°（轻微侧脸）。重心在右腿，左腿微曲放松。左手（画面右侧）背在身后或插兜，右手（画面左侧）自然下垂或轻触腰间。头颈微微向屏幕右倾斜 +5°，下巴微收，眼神透过墨镜直视镜头，表情冷艳松弛。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "standing_side_glance_back"
+      },
+      "position": {
+        "x": 0.65,
+        "y": 0.55
+      },
+      "scale": 0.85,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 1,
+      "name": "附加·抚发特写",
+      "type": "people",
+      "description": "近景构图，人物居中。身体正对镜头 0°，面部微侧向屏幕左 -10°。左手（画面右侧）抬起，手指轻轻插入耳后发丝或触碰耳环，手肘向外打开约 90°。右手（画面左侧）不可见或自然下垂。头颈正直，嘴唇微张，眼神迷离看向镜头下方，营造不经意被抓拍的感觉。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "closeup_hand_hair"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.45
+      },
+      "scale": 1.1,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 2,
+      "name": "附加·街头漫步",
+      "type": "people",
+      "description": "七分身构图，人物位于画面中央。身体正对镜头 0°，略微向屏幕右偏转 +10°。左手（画面右侧）插在裤兜里，肩膀放松下沉。右手（画面左侧）自然垂在身侧，手指放松。双腿自然分开与肩同宽，重心均匀分布。头颈正直，面部朝前，视线平视镜头，表情自信淡然。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "standing_front_hand_pocket"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 0.9,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 3,
+      "name": "附加·背影回眸",
+      "type": "people",
+      "description": "全身大远景，人物位于画面中轴线上。身体背对镜头 180°，正在向前行走。上半身与头部向左后方扭转约 -135°~-150°，形成经典的‘走路回头’姿态。双臂自然摆动或插在大衣口袋中。脚步迈开，左脚在前右脚在后。视线越过左肩看向镜头，营造故事感与离别/召唤的情绪。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "walking_away_glance_back"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.6
+      },
+      "scale": 0.75,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "thirds",
+    "aspectRatio": "3:4",
+    "opacity": 0.3,
+    "description": "竖构图 3:4。封面采用三分法，人物置于右侧垂直分割线附近，左侧留出建筑纹理空间。远景图利用街道透视线汇聚于中心上方，人物置于下方视觉重心。机位多为平视或略低角度仰拍以拉长身形。主体占比随景别变化：封面 60%，特写 80%，全身 40%。头顶留白控制在 1/5 至 1/4 之间，避免压迫感。",
+    "subjectFrame": {
+      "x": 0.25,
+      "y": 0.15,
+      "w": 0.55,
+      "h": 0.75
+    }
+  },
+  "camera": {
+    "exposureCompensation": -0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "cloudy",
+    "whiteBalanceK": 6200,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光为自然散射光混合侧逆光，从屏幕左上方约 45°-60° 射入。光线柔和但有一定方向性，在人物面部右侧（屏幕右侧）形成淡淡阴影，光比约 2:1。头发边缘有轻微轮廓光。无需额外补光灯，依靠环境反射光即可照亮暗部。若遇强逆光导致面部过暗，建议开启补光灯从屏幕正面补光，距离 1m，强度 1500lm 柔光。",
+    "shootingDistance": "1.5-3.0m",
+    "background": "米黄色古典石材建筑墙面、带有法文路牌的街角、欧式街道斑马线、远处圆顶建筑透视景深。",
+    "props": [
+      "玳瑁色窄框墨镜",
+      "金色粗圈耳环",
+      "黑色皮质单肩包",
+      "黑色细皮带"
+    ],
+    "bestTime": "15:00-17:00",
+    "tips": [
+      "穿搭要点：外松内紧，黑色大衣要选挺括羊毛材质，内搭米白高领增加层次感，衣角务必塞进裤腰并系皮带以明确腰线。",
+      "姿势要领：不要僵硬站立，重心放在一条腿上，另一条腿微曲；手部动作要自然，如插兜、抚发、扶墨镜，避免手足无措。",
+      "光影补偿：原图背景略亮于主体，拍摄时可将曝光补偿设为 -0.3 以保留高光细节，后期通过 shadows +15 提亮面部暗部。",
+      "景深模拟：真机无法实现大光圈虚化，请尽量靠近主体（1.5m 内），并选择纵深较深的街道背景，配合后期 vignette:25 压暗四周来突出主体。",
+      "质感增强：皮肤保留一定纹理，smoothStrength 设为 25 即可，不要过度磨皮；grain 设为 15 增加胶片颗粒感。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 2,
+      "contrast": 8,
+      "saturation": -5,
+      "temperature": 3,
+      "tint": 1,
+      "highlights": -10,
+      "shadows": 12,
+      "clarity": 5
+    },
+    "smoothStrength": 25,
+    "sharpen": 18,
+    "vignette": 25,
+    "grain": 15,
+    "lut": "cinematic",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "封面：右中 (0.65, 0.55)；特写：中上 (0.5, 0.45)；半身：正中 (0.5, 0.5)；全身：中下 (0.5, 0.6)",
+    "bodyFacing": {
+      "type": "侧向屏幕左 / 正对 / 背对",
+      "azimuth": 45
+    },
+    "faceFacing": {
+      "type": "面向镜头 / 微侧",
+      "azimuth": -10
+    },
+    "twist": "回眸 / 正身 / 侧身回头",
+    "headPitch": -5,
+    "headRoll": 5,
+    "gaze": "直视镜头 / 看镜头下方 / 越过肩膀看镜头"
+  },
+  "framing": {
+    "shotSize": "七分身 / 近景 / 全身",
+    "shotSizeNote": "封面裁至大腿中部；特写裁至胸部以上；全身包含脚部与地面",
+    "cameraHeight": "平视 / 略低仰拍",
+    "cameraAzimuth": "正拍 / 斜侧 45°",
+    "subjectScale": "封面 60% / 特写 80% / 全身 40%",
+    "environmentRatio": "封面 40% / 特写 20% / 全身 60%",
+    "headroom": "头顶留白约 1/5 画幅高度",
+    "framingNote": "竖构图 3:4，利用建筑线条与街道透视引导视线，主体始终处于视觉重心区域。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕左上方 45°-60° 自然侧逆光",
+      "辅光轮廓光": "环境漫反射补光，发丝边缘有微弱暖色轮廓光",
+      "光型软硬": "柔光为主，带有一定方向性的硬调阴影过渡",
+      "光比": "约 2:1，明暗过渡自然",
+      "阴影": "鼻影与面颊阴影投向屏幕右下方，边缘柔和，浓度中等",
+      "质感": "皮肤哑光细腻保留毛孔，大衣羊毛纹理清晰，墨镜有环境反光，金属耳环有高光点",
+      "环境光": "米色石墙反射的暖调环境光，背景街道略冷",
+      "色温对比": "主体受光面偏暖 (6200K)，背景阴影处略冷，整体色调统一和谐"
+    },
+    "lightToParams": "whiteBalance: cloudy (6200K) 奠定暖调基础；contrast +8 增强立体感；shadows +12 提亮暗部细节；highlights -10 防止天空与浅色墙面过曝；temperature +3 微调暖意；vignette 25 聚焦主体。"
+  },
+  "styling": {
+    "subjectType": "都市女性",
+    "clothingLayers": {
+      "上装": "黑色翻领羊毛大衣 (H 型或茧型) + 米白色罗纹高领针织衫",
+      "下装": "黑色高腰阔腿西装裤",
+      "衣角处理": "针织衫下摆完全塞入裤腰，平整无褶皱",
+      "袖子": "大衣袖口露出少许针织衫袖边，增加层次",
+      "领口": "高领贴合颈部，大衣领口自然敞开",
+      "鞋袜": "黑色厚底切尔西靴或皮鞋 (仅全身图可见)",
+      "叠穿层次": "外黑内白，色彩对比鲜明，材质软硬结合"
+    },
+    "accessories": "玳瑁色椭圆窄框墨镜、金色复古粗圈耳环、黑色细皮带 (银色扣头)、黑色皮质腋下包",
+    "hairMakeup": "深棕色大波浪卷发，蓬松自然，偏分；妆容为哑光底妆，大地色眼影，裸色系口红，强调眉流感与修容立体感",
+    "objectStyle": "无手持道具，依靠服饰与配饰完成造型",
+    "note": "关键在于‘不费力的精致’，衣物需熨烫平整，配饰不宜过多，墨镜与耳环是点睛之笔。"
+  }
+}

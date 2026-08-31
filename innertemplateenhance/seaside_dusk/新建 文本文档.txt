@@ -1,0 +1,178 @@
+{
+  "name": "橘海熔金·海岸落日",
+  "category": "landscape",
+  "classification": {
+    "type": "landscape",
+    "majorStyle": "自然风光",
+    "subStyle": "海滨日落",
+    "method": "广角风光"
+  },
+  "shortDesc": "漫天橘云倾泻入海，浪花吻过礁石碎成金箔，远山静默，这一刻的温柔足以治愈所有疲惫🌅",
+  "description": "这是一套专为海滨日落设计的风光摄影模板。画面以壮丽的火烧云与金色海面为绝对主体，利用广角镜头收纳从前景礁石浪花到远景山脉建筑的完整层次。光线为典型的黄金时刻逆光/侧逆光，色温极暖，饱和度浓郁。构图采用经典三分法，地平线置于中下部，强调天空云彩的张力与海面反光的质感。适合旅行记录、情绪风光片拍摄，建议搭配三脚架以保证画质清晰。",
+  "ambience": {
+    "seasons": [
+      "夏季",
+      "秋季"
+    ],
+    "weathers": [
+      "晴朗",
+      "多云"
+    ],
+    "timeTones": [
+      "黄昏",
+      "日落时分"
+    ]
+  },
+  "tags": [
+    "海边日落",
+    "火烧云",
+    "治愈系风景",
+    "金色时刻",
+    "广角风光"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "漫天橘红色晚霞映照海面，前景浪花拍打礁石，远处山脉剪影与右侧建筑点缀，色彩浓郁温暖。"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·主构图",
+      "type": "composition",
+      "description": "大远景风光构图。太阳位于屏幕左侧约1/4处接近地平线，作为视觉锚点。地平线置于画面垂直方向约1/2偏下位置，留出上部2/3空间展示绚丽的层积云。前景右下角分布深色礁石与白色浪花，形成从右下向左中的引导线，增加画面纵深感。右侧远岸的山脉与建筑作为背景平衡左侧太阳的重量。整体色彩以高饱和的橙、红、金为主，右上角保留少许蓝紫色天空形成冷暖对比。",
+      "compositionFrame": "三分法构图，地平线在下1/2处；太阳在左1/3线与地平线交点附近；前景礁石占据右下1/4区域作为引导；天空占画幅60%，海面占30%，沙滩/前景占10%。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "landscape_horizon_rocks"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "thirds_horizontal",
+    "aspectRatio": "16:9",
+    "opacity": 0.3,
+    "description": "大远景，平视机位。采用16:9宽画幅增强电影感。地平线严格水平，置于画面中线略偏下。主体（太阳与反光带）位于左侧三分线，前景礁石位于右下，形成对角呼应。天空留白充足以展现云层纹理。",
+    "subjectFrame": {
+      "x": 0.0,
+      "y": 0.0,
+      "w": 1.0,
+      "h": 1.0
+    }
+  },
+  "camera": {
+    "exposureCompensation": -0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "custom",
+    "whiteBalanceK": 6800,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "广角镜头",
+    "lensSuggestion": "wide_angle"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光为自然太阳光，从屏幕左侧低角度（约5-10度高度）射入，属于强逆光/侧逆光。光线柔和但方向性强，在海面形成强烈镜面反射。光比极大（约1:8），天空高光与礁石阴影反差明显。无需人工补光，依靠自然光与环境反射。",
+    "shootingDistance": "无限远（风景）",
+    "background": "开阔海面、远处连绵山脉剪影、右侧海岸线建筑群、布满层积云的天空",
+    "props": [],
+    "bestTime": "17:30-18:30",
+    "tips": [
+      "使用三脚架固定机位，确保地平线绝对水平，避免画面倾斜。",
+      "测光点选在太阳旁边的亮部云层，适当降低曝光补偿（-0.3至-0.7EV）以保留云彩层次，避免天空过曝死白。",
+      "对焦模式设为无限远或手动对焦到前景礁石，保证前后景清晰（小光圈效果需靠后期锐化补偿）。",
+      "等待海浪拍打礁石的瞬间按下快门，捕捉白色浪花的动态，增加画面生气。",
+      "注意保护镜头，避免太阳直射产生严重眩光，必要时用手或遮光罩遮挡边缘杂光。",
+      "真机无法实现长曝光丝滑水面效果，本模板依靠高快门凝固浪花，若需丝滑效果需后期APP模拟或物理ND镜。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "16:9",
+    "color": {
+      "brightness": 2,
+      "contrast": 12,
+      "saturation": 18,
+      "temperature": 8,
+      "tint": 4,
+      "highlights": -15,
+      "shadows": 10,
+      "clarity": 15,
+      "vibrance": 12
+    },
+    "smoothStrength": 0,
+    "sharpen": 35,
+    "vignette": 15,
+    "grain": 8,
+    "lut": "warm_film",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "全景无特定主体位置",
+    "bodyFacing": {
+      "type": "无",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "无",
+      "azimuth": 0
+    },
+    "twist": "无",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "无"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "容纳天空、海面、远山、前景礁石的全景",
+    "cameraHeight": "平视",
+    "cameraAzimuth": "正拍",
+    "subjectScale": "环境占100%，无单一主体占比",
+    "environmentRatio": "100%",
+    "headroom": "不适用",
+    "framingNote": "16:9宽幅大远景，强调横向延伸感与天空的壮阔，地平线居中偏下稳定画面。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕左侧低角度太阳直射",
+      "辅光轮廓光": "海面反射光作为底部辅光，天空漫射光作为顶部柔光",
+      "光型软硬": "硬光（太阳直射）与柔光（云层漫射）混合",
+      "光比": "高（约1:8），高光区极亮，礁石阴影深",
+      "阴影": "礁石背光面形成深色剪影，投向屏幕右侧/后方，边缘较硬",
+      "质感": "水面呈现金属般的高光反射质感，云层有丰富的体积感与纹理，礁石粗糙哑光",
+      "环境光": "整体笼罩在金橙色氛围光中，右上角有少量冷色天光",
+      "色温对比": "主体极暖（橙红金），右上角微冷（蓝紫），形成微妙冷暖对比"
+    },
+    "lightToParams": "高对比度(contrast+12)强化光影反差；压低高光(highlights-15)找回云层细节；提亮阴影(shadows+10)让礁石不死黑；高色温(whiteBalanceK 6800 + temperature 8)渲染金黄氛围；高饱和度(saturation+18)增强晚霞浓郁感；清晰度(clarity+15)突出云层与浪花纹理。"
+  },
+  "styling": {
+    "subjectType": "自然景观",
+    "clothingLayers": {
+      "上装": "不适用",
+      "下装": "不适用",
+      "衣角处理": "不适用",
+      "袖子": "不适用",
+      "领口": "不适用",
+      "鞋袜": "不适用",
+      "叠穿层次": "不适用"
+    },
+    "accessories": "不适用",
+    "hairMakeup": "不适用",
+    "objectStyle": "自然元素：层积云、波浪、礁石、远山、建筑剪影",
+    "note": "重点在于捕捉自然光影的色彩过渡与材质对比（水的流动vs石的静止，云的柔软vs山的坚硬）。"
+  }
+}
