@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/indoor_still_life.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 室内静物模板
 /// 来源：lumira-app/src/data/templates/indoor-still-life.ts
@@ -18,8 +19,14 @@ const PhotoTemplate indoorStillLifeTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/indoor_still_life_1.png'),
       TemplateImage(url: 'assets/images/templates/indoor_still_life_2.jpg'),
     ],
-    description: '暖调大面积留白的极简静物，午后侧光勾勒器皿与亚麻布的纹理，宁静治愈。',
+    description: "本模板包含两组极简静物拍摄方案。图一为'暖调大面积留白'风格，利用纯色暖墙与浅木桌，将小巧瓶花置于右下三分点，营造极致空灵的呼吸感；图二为'午后侧光质感'风格，利用窗边硬侧光勾勒陶瓷杯与亚麻布的纹理，干花点缀增添侘寂氛围。适合拍摄家居小物、咖啡茶饮、手作器皿，传达宁静、慢生活的治愈情绪。",
     referenceSource: '样片 EXIF: Pexels 静物摄影作品；参数参考静物摄影教程',
+    shortDesc: '一束柔光，一抹暖墙，瓶花与杯盏间藏着岁月的静谧。极简留白里，是触手可及的松弛与治愈🍂☕️',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'autumn', 'winter'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['warm', 'day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

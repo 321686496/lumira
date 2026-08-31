@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/capture_thumbnail_state.dart';
 
 /// 底部角标缩略图。四态：idle(空)/processing(灰块)/preview(近似图)/final(最终图)
@@ -13,7 +14,14 @@ class CaptureThumbnail extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(captureThumbnailProvider);
     return GestureDetector(
-      onTap: state.status == CaptureThumbnailStatus.idle ? null : onTap,
+      onTap: () {
+        // 无照片时点击给友好提示，而不是无响应
+        if (state.status == CaptureThumbnailStatus.idle) {
+          LumiraToast.show(context, '还没有照片可预览，先拍一张吧');
+          return;
+        }
+        onTap?.call();
+      },
       child: Container(
         width: 48,
         height: 48,
@@ -31,7 +39,14 @@ class CaptureThumbnail extends ConsumerWidget {
   Widget _buildContent(CaptureThumbnailState state) {
     switch (state.status) {
       case CaptureThumbnailStatus.idle:
-        return const SizedBox.shrink();
+        // 暂无照片可预览：用半透明的相机图标占位，避免「黑块+白框」的空洞观感
+        return const Center(
+          child: Icon(
+            Icons.photo_camera_outlined,
+            size: 20,
+            color: Colors.white38,
+          ),
+        );
       case CaptureThumbnailStatus.processing:
         return const Center(
           child: SizedBox(

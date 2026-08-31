@@ -494,6 +494,11 @@ Future<_IsolateResult> _processInIsolate(_IsolateInput input) async {
     }
   }
 
+  // 5.5. 拉腿（几何形变，改变高度；rawMode 下同样应用，与裁剪/变换一致）
+  if (input.params.legStretch > 0) {
+    image = applyLegStretchImg(image, legStretch: input.params.legStretch);
+  }
+
   // 6. 皮肤平滑（rawMode 跳过）—— 直接复用 SkinSmoother（已是纯 image 包实现）
   if (!input.rawMode && input.params.smoothStrength > 0) {
     try {
@@ -689,6 +694,161 @@ void applySmoothSkinImg(img.Image image, {required int smoothStrength}) {
       ..g = (p.g * (1 - mix) + bp.g * mix).clamp(0, 255)
       ..b = (p.b * (1 - mix) + bp.b * mix).clamp(0, 255);
   }
+}
+
+/// 拉腿：对图像下半部做平滑纵向拉伸，仅改变高度（宽度不变）。
+///
+/// 反向映射 + 垂直双线性插值，质量优先：
+/// - [legStretch] 0-100，满档（100）时整图高度最大增幅 20%。
+/// - 锚点位于源图 60% 高度处（约臀部/大腿根部），锚点上方完全不动；
+/// - 拉伸区起点用 smoothstep 过渡带平滑衔接，避免锚点处出现硬折线。
+img.Image applyLegStretchImg(img.Image src, {required int legStretch}) {
+  if (legStretch <= 0) return src;
+  final strength = (legStretch / 100.0).clamp(0.0, 1.0);
+  final stretchFactor = strength * 0.20;
+  if (stretchFactor < 0.001) return src;
+
+  final w = src.width;
+  final h = src.height;
+  final outH = (h * (1 + stretchFactor)).round().clamp(h + 1, 3 * h);
+  if (outH <= h) return src;
+
+  // 锚点：源图 60% 高度处（约臀部/大腿根部），上方保持不动。
+  final anchor = (h * 0.60).round();
+  final srcRegion = h - anchor; // 拉伸区源高度
+  final destRegion = outH - anchor; // 拉伸区目标高度
+  // 过渡带（占拉伸区的比例）：smoothstep 平滑衔接，消除锚点处的硬折线。
+  const featherT = 0.12;
+  final hLast = (h - 1).toDouble();
+
+  final out = img.Image(width: w, height: outH);
+  // 注意：Image(width,height) 初始化全 0（alpha=0 全透明），
+  // 必须用 setPixelRgba 显式写 alpha=255，否则输出整图透明不可见。
+  for (var y = 0; y < outH; y++) {
+    double srcY;
+    if (y <= anchor) {
+      srcY = y.toDouble();
+    } else {
+      final t = (y - anchor) / destRegion; // 0..1
+      final srcYStretched = anchor + t * srcRegion;
+      if (t < featherT) {
+        // 过渡带内与「不拉伸」（srcY = y）平滑混合，避免锚点处硬折线
+        final blend = _smoothstep(t / featherT);
+        srcY = srcYStretched * blend + y * (1 - blend);
+      } else {
+        srcY = srcYStretched;
+      }
+    }
+    srcY = srcY.clamp(0.0, hLast);
+    final y0 = srcY.floor();
+    final y1 = y0 < h - 1 ? y0 + 1 : y0;
+    final fy = srcY - y0;
+    for (var x = 0; x < w; x++) {
+      final p0 = src.getPixel(x, y0);
+      final p1 = src.getPixel(x, y1);
+      out.setPixelRgba(
+        x,
+        y,
+        _lerpByte(p0.r, p1.r, fy),
+        _lerpByte(p0.g, p1.g, fy),
+        _lerpByte(p0.b, p1.b, fy),
+        255,
+      );
+    }
+  }
+  return out;
+}
+
+/// smoothstep 平滑插值（0→1，两端导数为 0）。
+double _smoothstep(double t) {
+  final x = t.clamp(0.0, 1.0);
+  return x * x * (3 - 2 * x);
+}
+
+/// 垂直双线性插值：两整数通道值按 [f] 线性混合。
+int _lerpByte(num a, num b, double f) => (a + (b - a) * f).round();
+
+/// 拉腿（字节级快速实现）的输出：拉伸后的 RGBA 字节流 + 新高度。
+/// 用普通类而非 Dart 3 records（项目 Dart 2.19.6 不支持 records 语法）。
+class LegStretchBytes {
+  const LegStretchBytes({required this.bytes, required this.height});
+  final Uint8List bytes;
+  final int height;
+}
+
+/// 拉腿（字节级快速实现）：对 RGBA 字节流做与 [applyLegStretchImg] 相同的
+/// 平滑纵向拉伸（反向映射 + 垂直双线性插值 + smoothstep 过渡带）。
+///
+/// 用于拉腿实时预览的常驻 worker isolate。直接操作 [Uint8List] 并按行拷贝，
+/// 避免 [img.Image] 逐像素 getPixel/setPixel 的对象分配开销，实测比
+/// [applyLegStretchImg] 快 5-10 倍，使单次抓帧+拉伸能在定时间隔内完成，
+/// 不再叠加 GPU 读回/上传导致拍摄页卡顿。
+///
+/// 输入 [src] 为 RGBA 字节流（length = width*height*4）；返回拉伸后的
+/// 字节流（length = width*outHeight*4）与新的高度。
+LegStretchBytes legStretchRgba(
+  Uint8List src, {
+  required int width,
+  required int height,
+  required int legStretch,
+}) {
+  if (legStretch <= 0) return LegStretchBytes(bytes: src, height: height);
+  final strength = (legStretch / 100.0).clamp(0.0, 1.0);
+  final stretchFactor = strength * 0.20;
+  if (stretchFactor < 0.001) {
+    return LegStretchBytes(bytes: src, height: height);
+  }
+
+  final w = width;
+  final h = height;
+  final outH = (h * (1 + stretchFactor)).round().clamp(h + 1, 3 * h);
+  if (outH <= h) return LegStretchBytes(bytes: src, height: height);
+
+  // 锚点：源图 60% 高度处（约臀部/大腿根部），上方保持不动。
+  final anchor = (h * 0.60).round();
+  final srcRegion = h - anchor; // 拉伸区源高度
+  final destRegion = outH - anchor; // 拉伸区目标高度
+  // 过渡带（占拉伸区的比例）：smoothstep 平滑衔接，消除锚点处的硬折线。
+  const featherT = 0.12;
+  final hLast = (h - 1).toDouble();
+
+  final rowBytes = w * 4;
+  final out = Uint8List(outH * rowBytes);
+
+  for (var y = 0; y < outH; y++) {
+    double srcY;
+    if (y <= anchor) {
+      srcY = y.toDouble();
+    } else {
+      final t = (y - anchor) / destRegion; // 0..1
+      final srcYStretched = anchor + t * srcRegion;
+      if (t < featherT) {
+        // 过渡带内与「不拉伸」（srcY = y）平滑混合，避免锚点处硬折线
+        final blend = _smoothstep(t / featherT);
+        srcY = srcYStretched * blend + y * (1 - blend);
+      } else {
+        srcY = srcYStretched;
+      }
+    }
+    srcY = srcY.clamp(0.0, hLast);
+    final y0 = srcY.floor();
+    final fy = srcY - y0;
+    final dst = y * rowBytes;
+    if (fy < 0.001) {
+      // 整数行（锚点上方等）：整行拷贝，避免逐像素开销。
+      out.setRange(dst, dst + rowBytes, src, y0 * rowBytes);
+    } else {
+      final y1 = y0 < h - 1 ? y0 + 1 : y0;
+      final src0 = y0 * rowBytes;
+      final src1 = y1 * rowBytes;
+      final f0 = 1.0 - fy;
+      for (var x = 0; x < rowBytes; x++) {
+        out[dst + x] =
+            (src[src0 + x] * f0 + src[src1 + x] * fy + 0.5).toInt();
+      }
+    }
+  }
+  return LegStretchBytes(bytes: out, height: outH);
 }
 
 /// 暗角：径向渐变暗化四角（仅 vignette > 0 时调用）

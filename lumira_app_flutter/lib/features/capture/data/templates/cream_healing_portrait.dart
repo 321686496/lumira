@@ -38,6 +38,7 @@ const PhotoTemplate creamHealingPortraitTemplate = PhotoTemplate(
       scale: 0.75,
       rotation: 0,
       description: '正面坐姿，单手托腮，头部微倾，盘腿或屈膝坐，温柔微笑看镜头',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '靠窗侧坐暖光',
@@ -46,6 +47,7 @@ const PhotoTemplate creamHealingPortraitTemplate = PhotoTemplate(
       scale: 0.75,
       rotation: 0,
       description: '靠窗侧坐，微微弯腰靠近窗沿，手搭在窗台，暖光洒在脸上',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '仰面躺坐抬头',
@@ -54,6 +56,7 @@ const PhotoTemplate creamHealingPortraitTemplate = PhotoTemplate(
       scale: 0.7,
       rotation: 0,
       description: '仰面躺或坐地上抬头，双手轻托脸，眉眼弯弯温柔笑',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '侧身逆光发丝透光',
@@ -62,6 +65,7 @@ const PhotoTemplate creamHealingPortraitTemplate = PhotoTemplate(
       scale: 0.75,
       rotation: 0,
       description: '侧身坐或站，侧脸朝向逆光方向，发丝随风透光',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

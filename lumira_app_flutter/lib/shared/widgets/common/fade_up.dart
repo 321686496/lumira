@@ -60,7 +60,8 @@ class _FadeUpState extends State<FadeUp> with SingleTickerProviderStateMixin {
       opacity: _opacity,
       child: SlideTransition(
         position: _offset,
-        child: widget.child,
+        // 动画结束后内容独立成层：外层滚动时只平移该层，不逐帧重光栅化。
+        child: RepaintBoundary(child: widget.child),
       ),
     );
   }

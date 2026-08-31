@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
@@ -16,6 +19,7 @@ import 'package:lumira_app_flutter/features/templates/widgets/pose_silhouette.da
 import '../data/capture_state.dart';
 import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
+import '../services/capture_worker.dart' show LegStretchWorker;
 
 /// 将 EditorFormPostProcess 转换为 domain PostProcess（用于 fromPostProcess）
 ///
@@ -178,6 +182,25 @@ class CameraPreview extends ConsumerWidget {
         ? RepaintBoundary(key: rawCaptureKey, child: cameraWidget)
         : cameraWidget;
 
+    // 拉腿实时预览：legStretch > 0 且存在可捕获帧的 RepaintBoundary 时，
+    // 叠加「取景器帧快照 → 像素拉伸」的结果（半透明幽灵覆盖，下层实时取景始终可见、平滑运行）。
+    // 放在 ColorFiltered 内层，使调色矩阵同样作用于拉伸预览，与成片一致。
+    final legStretchPreview =
+        (effectivePost.legStretch > 0 && rawCaptureKey != null)
+            ? LegStretchPreviewOverlay(
+                rawCaptureKey: rawCaptureKey,
+                legStretch: effectivePost.legStretch,
+              )
+            : const SizedBox.shrink();
+
+    final cameraBody = Stack(
+      fit: StackFit.expand,
+      children: [
+        rawCamera,
+        legStretchPreview,
+      ],
+    );
+
     // 滤镜包裹（修复 Bug 2/3：使用 effectivePost，自由模式也应用）
     // 双指捏合缩放：最外层包 _PinchZoomCamera，在整个取景器上监听捏合手势，
     // 从当前倍数出发按比例缩放并真正下发到相机（替代 camerawesome 内置的
@@ -197,9 +220,9 @@ class CameraPreview extends ConsumerWidget {
       child: applyFilter
           ? ColorFiltered(
               colorFilter: fromPostProcess(effectivePost),
-              child: rawCamera,
+              child: cameraBody,
             )
-          : rawCamera,
+          : cameraBody,
     );
 
     // 构图叠图（修复 Bug 2：使用 effectiveComp，自由模式也显示构图辅助线）
@@ -713,6 +736,183 @@ class _LockBadge extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// 拉腿实时预览（LegStretchPreviewOverlay）
+// ─────────────────────────────────────────────────────────────────────
+// 相机预览是平台 Texture，Flutter 片元着色器只能采样 ui.Image、无法采样
+// 平台纹理做非仿射变形，因此采用「帧快照 + 图像包像素拉伸」方案实现近似实时：
+// 从 rawCaptureKey 的 RepaintBoundary 抓一帧（toImage 降采样 400px），
+// 在后台 isolate 拉伸后以「半透明幽灵」叠加在实时取景之上。
+//
+// 性能与体验原则（取景器 60fps 流畅 + 实时跟随）：
+// - 拉腿激活期间做低频周期性抓帧（200ms ≈ 5fps），让幽灵叠层跟随人物/镜头移动，
+//   不会「调整后定格」；拖动滑块时 on-demand 即时抓帧（80ms 节流），反馈即时。
+//   静态场景读回极轻（400px ≈ 7 万像素），且拉伸在后台 isolate，取景器不掉帧。
+// - 叠加层为半透明幽灵（0.8）而非不透明全覆盖：下层实时取景始终可见、以 60fps
+//   平滑运行，不会出现「快照盖住取景器 → 低帧率幻灯片」的观感；0.8 高不透明度
+//   保证拉伸效果清晰可见，与成片拉腿效果（同一算法、同一锚点/幅度）一致。
+class LegStretchPreviewOverlay extends StatefulWidget {
+  const LegStretchPreviewOverlay({
+    super.key,
+    required this.rawCaptureKey,
+    required this.legStretch,
+  });
+
+  /// 原始相机帧（未经 ColorFiltered）的 RepaintBoundary key，用于抓帧。
+  final GlobalKey? rawCaptureKey;
+
+  /// 拉腿强度 0-100。
+  final int legStretch;
+
+  @override
+  State<LegStretchPreviewOverlay> createState() =>
+      _LegStretchPreviewOverlayState();
+}
+
+class _LegStretchPreviewOverlayState extends State<LegStretchPreviewOverlay> {
+  /// 工作分辨率上限：抓帧后更长边不超过该值。拉腿叠加为「半透明幽灵」，
+  /// 只需看清拉伸趋势即可，无需过高分辨率；400px 时单帧约 7 万像素，
+  /// GPU 读回与后台 isolate 拉伸开销都很小。
+  static const double _maxEdge = 400;
+
+  /// 拖动滑块时允许的最大抓帧频率（时间戳节流）。取景器实时相机流始终以
+  /// 60fps 运行，叠加层只需跟随拖动反馈，无需更高的刷新率。
+  static const Duration _minCaptureInterval = Duration(milliseconds: 80);
+
+  /// 半透明叠加透明度：提高到 0.8，在保证下层取景可见的同时增强拉伸效果清晰度，
+  /// 使预览与成片拉腿效果（同一算法）的视觉感知更一致。
+  static const double _ghostOpacity = 0.8;
+
+  /// 拉腿激活期间的周期性抓帧间隔（200ms ≈ 5fps），平衡实时性与性能开销。
+  /// 让幽灵叠层跟随人物/镜头移动，不会「调整后定格」；400px 单帧约 7 万像素，
+  /// 读回与后台 isolate 拉伸开销都很小，不会拖累取景器帧率。
+  static const Duration _periodicCaptureInterval = Duration(milliseconds: 200);
+
+  ui.Image? _warped;
+  bool _capturing = false;
+  DateTime _lastCaptureStart = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _periodicCaptureTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // 首次进入拉腿模式立即抓一帧（post-frame 保证 RepaintBoundary 已布局）。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
+    // 拉腿激活期间做低频周期性抓帧：让幽灵叠层跟随场景移动（实时），
+    // 即使滑块值不变也能保持「拉长后的画面」与实时取景对齐。
+    // 200ms 低频 + 400px 低分辨率 + 后台 isolate 拉伸 → 开销极小，不拖累取景器。
+    _periodicCaptureTimer = Timer.periodic(
+      _periodicCaptureInterval,
+      (_) => _scheduleCapture(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(LegStretchPreviewOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 拉腿强度变化 → 立即刷新一帧（拖动反馈即时）。
+    if (oldWidget.legStretch != widget.legStretch) {
+      _scheduleCapture();
+    }
+  }
+
+  @override
+  void dispose() {
+    _warped?.dispose();
+    _periodicCaptureTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleCapture() {
+    // 上一帧抓取+拉伸未完成时跳过（天然节流，避免排队堆积）。
+    if (_capturing) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
+  }
+
+  Future<void> _capture() async {
+    if (_capturing) return;
+    // 时间戳节流：拖动事件可能一帧多次触发，限制实际抓帧频率，
+    // 避免高频 GPU 读回/上传持续打断渲染管线导致取景器掉帧。
+    final now = DateTime.now();
+    if (now.difference(_lastCaptureStart) < _minCaptureInterval) return;
+    final boundary = widget.rawCaptureKey?.currentContext?.findRenderObject()
+        as RenderRepaintBoundary?;
+    if (boundary == null || boundary.size.isEmpty) return;
+
+    _capturing = true;
+    _lastCaptureStart = now;
+    try {
+      // 降采样抓帧：限制更长边，保证拉伸耗时可控。
+      final longEdge = math.max(boundary.size.width, boundary.size.height);
+      final pixelRatio = (_maxEdge / longEdge).clamp(0.4, 1.5);
+      final raw = await boundary.toImage(pixelRatio: pixelRatio);
+      final w = raw.width;
+      final h = raw.height;
+      final byteData =
+          await raw.toByteData(format: ui.ImageByteFormat.rawRgba);
+      raw.dispose();
+      if (byteData == null) return;
+
+      // 逐像素拉伸移入常驻后台 isolate（LegStretchWorker），避免阻塞 UI 主线程。
+      final result = await LegStretchWorker.instance.stretch(
+        rgbaBytes: byteData.buffer
+            .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+        width: w,
+        height: h,
+        legStretch: widget.legStretch,
+      );
+      if (!result.ok || result.rgbaBytes == null) return;
+      final outBytes = result.rgbaBytes!;
+      final stretchedW = result.width;
+      final stretchedH = result.height;
+
+      final buffer = await ui.ImmutableBuffer.fromUint8List(outBytes);
+      final descriptor = ui.ImageDescriptor.raw(
+        buffer,
+        width: stretchedW,
+        height: stretchedH,
+        pixelFormat: ui.PixelFormat.rgba8888,
+      );
+      final codec = await descriptor.instantiateCodec();
+      final frame = await codec.getNextFrame();
+      buffer.dispose();
+      descriptor.dispose();
+      codec.dispose();
+
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      setState(() {
+        _warped?.dispose();
+        _warped = frame.image;
+      });
+    } catch (_) {
+      // 抓帧/拉伸失败时静默降级：保留上一帧，不打断取景器。
+    } finally {
+      _capturing = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final warped = _warped;
+    if (warped == null) return const SizedBox.shrink();
+    // 半透明幽灵覆盖：不隐藏实时取景（取景器始终以 60fps 平滑运行），
+    // 拉伸结果作为近似实时预览叠加其上；与取景器同尺寸 fill 对齐。
+    return IgnorePointer(
+      child: Opacity(
+        opacity: _ghostOpacity,
+        child: RawImage(
+          image: warped,
+          fit: BoxFit.fill,
+          filterQuality: FilterQuality.medium,
         ),
       ),
     );

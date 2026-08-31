@@ -60,24 +60,41 @@ class _ProfileSettingsCachePageState
     }
   }
 
-  /// 单独清理某一类缓存：0=图片磁盘 / 1=图片内存 / 2=API 数据
-  Future<void> _clearSingle(int kind) async {
+  /// 清理前的确认弹窗；用户确认后才执行 [task]。
+  Future<void> _confirmAndClear(
+    Future<void> Function() task, {
+    required String title,
+    required String body,
+    required String successMsg,
+  }) async {
     if (_clearing) return;
+    final confirmed = await LumiraAlertDialog.show<bool>(
+      context: context,
+      title: Text(title),
+      content: Text(body),
+      actions: [
+        LumiraButton(
+          variant: ButtonVariant.ghost,
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('取消'),
+        ),
+        LumiraButton(
+          variant: ButtonVariant.primary,
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('清理'),
+        ),
+      ],
+    );
+    if (confirmed != true) return;
+
     setState(() => _clearing = true);
     try {
-      if (kind == 0) {
-        await CacheInfo.clearDiskImageCache();
-      } else if (kind == 1) {
-        CacheInfo.clearMemoryImageCache();
-      } else {
-        final apiDao = await ref.read(apiCacheDaoProvider.future);
-        await CacheInfo.clearApiCache(apiDao);
-      }
+      await task();
       if (!mounted) return;
-      LumiraToast.show(context, '已清理', duration: const Duration(milliseconds: 1000));
+      LumiraToast.show(context, successMsg, duration: const Duration(milliseconds: 1000));
       await _refresh();
     } catch (e) {
-      debugPrint('[cache] clear single failed: $e');
+      debugPrint('[cache] clear failed: $e');
       if (!mounted) return;
       LumiraToast.show(context, '清理失败', duration: const Duration(milliseconds: 1200));
     } finally {
@@ -85,24 +102,43 @@ class _ProfileSettingsCachePageState
     }
   }
 
+  /// 单独清理某一类缓存：0=图片磁盘 / 1=图片内存 / 2=API 数据
+  Future<void> _clearSingle(int kind) async {
+    const labels = {
+      0: '图片缓存（磁盘）',
+      1: '图片缓存（内存）',
+      2: 'API 数据缓存',
+    };
+    final label = labels[kind] ?? '缓存';
+    await _confirmAndClear(
+      () async {
+        if (kind == 0) {
+          await CacheInfo.clearDiskImageCache();
+        } else if (kind == 1) {
+          CacheInfo.clearMemoryImageCache();
+        } else {
+          final apiDao = await ref.read(apiCacheDaoProvider.future);
+          await CacheInfo.clearApiCache(apiDao);
+        }
+      },
+      title: '清理$label',
+      body: '确定清理$label吗？清理后重新加载时会再次下载。',
+      successMsg: '已清理',
+    );
+  }
+
   Future<void> _clearAll() async {
-    if (_clearing) return;
-    setState(() => _clearing = true);
-    try {
-      await CacheInfo.clearDiskImageCache();
-      CacheInfo.clearMemoryImageCache();
-      final apiDao = await ref.read(apiCacheDaoProvider.future);
-      await CacheInfo.clearApiCache(apiDao);
-      if (!mounted) return;
-      LumiraToast.show(context, '缓存已全部清理', duration: const Duration(milliseconds: 1000));
-      await _refresh();
-    } catch (e) {
-      debugPrint('[cache] clear all failed: $e');
-      if (!mounted) return;
-      LumiraToast.show(context, '清理失败', duration: const Duration(milliseconds: 1200));
-    } finally {
-      if (mounted) setState(() => _clearing = false);
-    }
+    await _confirmAndClear(
+      () async {
+        await CacheInfo.clearDiskImageCache();
+        CacheInfo.clearMemoryImageCache();
+        final apiDao = await ref.read(apiCacheDaoProvider.future);
+        await CacheInfo.clearApiCache(apiDao);
+      },
+      title: '全部清理',
+      body: '确定清理全部缓存吗？清理后重新加载时会再次下载。',
+      successMsg: '缓存已全部清理',
+    );
   }
 
   @override

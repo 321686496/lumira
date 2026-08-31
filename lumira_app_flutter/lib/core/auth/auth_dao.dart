@@ -81,4 +81,27 @@ class AuthDao implements AuthDaoLike {
       whereArgs: [1],
     );
   }
+
+  /// 首启一次性邀请码绑定弹层是否已展示过（仅具体实现，不进入 AuthDaoLike 接口，
+  /// 避免改动接口波及测试 fakes）。
+  Future<bool> isInviteBindPromptShown() async {
+    final rows = await _db.query(
+      Tables.auth,
+      columns: [Tables.colInviteBindPromptShown],
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    if (rows.isEmpty) return false;
+    return (rows.first[Tables.colInviteBindPromptShown] as int? ?? 0) == 1;
+  }
+
+  /// 标记首启邀请码绑定弹层已展示（一次性，之后不再弹出）。
+  Future<void> markInviteBindPromptShown() async {
+    await _db.update(
+      Tables.auth,
+      {Tables.colInviteBindPromptShown: 1},
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+  }
 }

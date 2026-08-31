@@ -506,18 +506,44 @@ class AllTemplateItem {
   final String? majorStyle;
   final String? subStyle;
 
-  /// 判断该模板是否命中某个分类子树 key 集合。
+  /// 完整分类路径链条（L1→L4，跳过空级）。
   ///
-  /// 「该分类下的模板 = 包含子孙级」：模板的分类叶子路径（category/type、
-  /// style、majorStyle、subStyle、method）中任意一个 key 命中集合即算。
-  /// 兼容老模板（style 字段）与四级新模板（majorStyle/subStyle）。
-  bool matchesSubtree(Set<String> keys) {
-    if (keys.contains(category)) return true;
-    if (style != null && keys.contains(style)) return true;
-    if (method != null && keys.contains(method)) return true;
-    if (majorStyle != null && keys.contains(majorStyle)) return true;
-    if (subStyle != null && keys.contains(subStyle)) return true;
-    return false;
+  /// - 四级模板（spec 2026-08-17-template-category-4level-design.md）：
+  ///   `[category, majorStyle, subStyle, method]`
+  /// - 旧模板回退：`[category, style, method]`（style 兼作 L2）
+  List<String> get classificationPath {
+    final path = <String>[category];
+    final l2 = majorStyle ?? style;
+    if (l2 != null && l2.isNotEmpty) path.add(l2);
+    if (subStyle?.isNotEmpty == true) path.add(subStyle!);
+    if (method?.isNotEmpty == true) path.add(method!);
+    return path;
+  }
+
+  /// 整条路径匹配：该模板的完整分类路径是否经过 [key]。
+  ///
+  /// 相比旧的「叶子 key 命中目标子树集合」的宽匹配，能避免共享 key
+  /// （如 'overhead' 同时挂多个题材）导致跨题材误归：街拍-几何-俯拍模板的
+  /// 路径 `[street, geometric, overhead]` 不含 'japanese'/'fresh_healing'，
+  /// 故不会被「人像-清新治愈-日系」命中。
+  bool matchesCategoryPath(String key) {
+    return classificationPath.any((node) => node == key);
+  }
+
+  /// 整条路径前缀匹配：该模板的完整分类路径是否以 [prefix] 作为前缀。
+  ///
+  /// 用于从分类父级链路进入（如「美食→俯拍」，prefix=['food','overhead']）时，
+  /// 要求模板的分类路径必须以目标链路的完整 segments（根→叶）开头，而非仅命中
+  /// 某个共享 key。例如街拍-几何-俯拍 `[street, geometric, overhead]` 以
+  /// `[food, overhead]` 为前缀时失败，从而不会被「美食→俯拍」误归；
+  /// 风光-清新-平拍 `[landscape, fresh, flat]` 也不会被「静物→扁平」误归。
+  bool matchesCategoryPathPrefix(List<String> prefix) {
+    final path = classificationPath;
+    if (prefix.length > path.length) return false;
+    for (var i = 0; i < prefix.length; i++) {
+      if (path[i] != prefix[i]) return false;
+    }
+    return true;
   }
 }
 
@@ -1631,6 +1657,17 @@ class TemplatesBrowseMockData {
     FillLightData? fillLight,
   }) {
     final cls = tpl.meta.classification;
+    // 补光灯：优先用调用方显式传入的 fillLight；未传时从 PhotoTemplate 派生。
+    // 仅当模板启用了补光灯才生成，否则详情页不显示补光灯栏。
+    final derivedFillLight = fillLight ??
+        (tpl.postProcess.fillLight != null &&
+                tpl.postProcess.fillLight!.enabled
+            ? FillLightData(
+                enabled: true,
+                color: tpl.postProcess.fillLight!.color,
+                intensity: tpl.postProcess.fillLight!.intensity,
+              )
+            : null);
     return TemplateDetail(
       id: tpl.meta.id,
       name: tpl.meta.name,
@@ -1682,7 +1719,7 @@ class TemplatesBrowseMockData {
         brilliance: tpl.postProcess.color.brilliance?.round(),
         clarity: tpl.postProcess.color.clarity?.round(),
         systemFilter: tpl.postProcess.systemFilter,
-        fillLight: fillLight,
+        fillLight: derivedFillLight,
         smoothStrength: tpl.postProcess.smoothStrength,
         sharpen: tpl.postProcess.sharpen,
         vignette: tpl.postProcess.vignette,

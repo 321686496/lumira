@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -17,9 +16,18 @@ import '../../../features/templates/services/template_share_code.dart';
 /// 二维码统一生成「离线分享链接」（`lumira://tpl/{base64}`，含完整模板 JSON），
 /// 可被 App 首页「扫一扫」识别回详情页 / 导入。样式跟随当前 UI 风格 + 主题 tokens。
 
-/// 海报二维码内容。
+/// 海报二维码内容：优先完整 .pptpl（可容纳时保留全量），
+/// 超 QR 容量（内嵌 base64 封面/剪影）时自动回退简化 .lumira，保证二维码必定可渲染。
 String buildTemplatePosterQrData(TemplateRecord record) =>
-    TemplateShareCode.buildShareLink(record, usePptpl: true);
+    TemplateShareCode.buildPosterQrData(record);
+
+/// 海报照片解码缓存宽度。
+///
+/// 覆盖画布最大宽 380 逻辑 px × 导出倍率上限 4 = 1520 物理 px，
+/// 满足海报导出目标宽度（1080px，见 poster_generator.dart）的清晰度需求；
+/// 同时所有样式预览卡/主预览共享同一张解码缓存（同 provider + 同 cacheWidth），
+/// 大幅降低「每张缩略图各自解码全尺寸图」造成的预览卡顿。
+const int kPosterImageCacheWidth = 1200;
 
 /// 用户未填写分享内容时，按模板动态生成的系统默认文案。
 String buildAutoShareText(TemplateRecord record) {
@@ -29,12 +37,16 @@ String buildAutoShareText(TemplateRecord record) {
 }
 
 /// 渲染模板封面图（兼容 base64 data / 网络 url / 本地资源 / 资源文件）。
+///
+/// [cacheWidth] 不为空时按该宽度解码缓存（配合 [kPosterImageCacheWidth] 使用），
+/// 避免多次全尺寸解码拖慢预览。
 Widget templateCoverImage(
   TemplateImage img, {
   double? width,
   double? height,
   BoxFit fit = BoxFit.cover,
   required ThemeTokens tokens,
+  int? cacheWidth,
 }) {
   final data = img.data;
   if (data != null && data.isNotEmpty) {
@@ -49,6 +61,7 @@ Widget templateCoverImage(
         width: width,
         height: height,
         fit: fit,
+        cacheWidth: cacheWidth,
         gaplessPlayback: true,
         errorBuilder: (_, __, ___) => _PosterImagePlaceholder(tokens: tokens),
       );
@@ -62,6 +75,7 @@ Widget templateCoverImage(
       width: width,
       height: height,
       fit: fit,
+      cacheWidth: cacheWidth,
       gaplessPlayback: true,
       errorBuilder: (_, __, ___) => _PosterImagePlaceholder(tokens: tokens),
     );
@@ -72,6 +86,7 @@ Widget templateCoverImage(
       width: width,
       height: height,
       fit: fit,
+      cacheWidth: cacheWidth,
       gaplessPlayback: true,
       errorBuilder: (_, __, ___) => _PosterImagePlaceholder(tokens: tokens),
     );

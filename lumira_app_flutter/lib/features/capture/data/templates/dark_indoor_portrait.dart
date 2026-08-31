@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/dark_indoor_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 室内暗调氛围模板
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 8
@@ -20,7 +21,13 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/dark_indoor_portrait_3.png'),
       TemplateImage(url: 'assets/images/templates/dark_indoor_portrait_4.png'),
     ],
-    description: '咖啡馆暗调精致高级，锐化质感黑森林氛围，探店氛围感首选。',
+    description: '人像摄影模板，复古咖啡馆室内场景，依靠窗边侧方柔和自然光塑造明暗层次；穿搭优先深色简约大衣、基础黑色上衣，适合喜欢安静文艺、成熟松弛风格的人群拍摄，可搭配咖啡、书本作为道具。',
+    shortDesc: '午后咖啡馆柔窗光，沉静松弛，演绎都市独处氛围感☕',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['autumn', 'winter'],
+      weathers: ['sunny'],
+      timeTones: ['day'],
+    ),
     referenceSource: '小红书黑森林滤镜教程；咖啡馆暗调人像；探店拍照教程',
   ),
   composition: Composition(
@@ -39,6 +46,7 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
       scale: 0.92,
       rotation: 0,
       description: '人物坐在卡座座位，身体侧向屏幕右约45°，面部朝向屏幕右，双手手肘支撑于木桌，双手手掌合拢托住下巴两侧，手指放松；头颈微微后仰，视线看向屏幕右方画面外，表情沉静放空，和桌面咖啡、书籍道具共处，情绪安静沉思。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '侧身扶椅眺望',
@@ -47,6 +55,7 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
       scale: 0.94,
       rotation: 0,
       description: '人物站立，身体侧向屏幕右接近90°，面部同样朝向屏幕右望向窗外；一只手轻搭木椅靠背，手臂自然弯曲，肩膀放松，头颈挺直，视线投向屏幕右侧窗外，神情淡然，捕捉独处眺望的故事感。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '靠窗阅读低头',
@@ -55,6 +64,7 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
       scale: 0.9,
       rotation: 0,
       description: '人物靠窗坐在卡座，身体侧向屏幕右约45°，面部朝向屏幕右，头部向下低头，headPitch-18°，视线垂落看向桌面摊开的书本，手臂收在桌面，姿态松弛安静，与书籍咖啡道具互动。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '站立手插裤袋垂眸',
@@ -63,6 +73,7 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
       scale: 0.96,
       rotation: 0,
       description: '人物站立，身体略微转向屏幕右，头部向下低头，视线看向屏幕下方地面，一只手插入裤袋，手臂藏于身后，另一只手自然垂落，肩膀松弛下沉，情绪内敛沉静。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

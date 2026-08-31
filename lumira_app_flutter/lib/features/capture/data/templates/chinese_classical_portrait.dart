@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/chinese_classical_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 新中式古风模板
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 5
@@ -17,8 +18,14 @@ const PhotoTemplate chineseClassicalPortraitTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/chinese_classical_portrait.png'),
     ],
-    description: '莫兰迪冷调东方意境，侧逆光园林古风，国潮新中式美学。',
+    description: '人物全身古风汉服人像，江南古典园林亭台场景，利用午后侧方柔和自然光，浅青竹纹宋制汉服搭配团扇道具，回眸回望镜头，营造含蓄清冷的东方古典氛围感，适合汉服爱好者拍摄。',
     referenceSource: '小红书古风人像教程；莫兰迪冷色调风格；汉服摄影套图',
+    shortDesc: '亭下回眸执扇轻掩，清冷温婉，浸染江南园林的诗意古风🍃',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',
@@ -36,6 +43,7 @@ const PhotoTemplate chineseClassicalPortraitTemplate = PhotoTemplate(
       scale: 0.92,
       rotation: 0,
       description: '人物身体背对镜头偏向屏幕左约135°，面部回转朝向镜头，头颈微微收下巴；重心落在屏幕右侧腿，屏幕左侧腿微微向后；屏幕右侧手臂抬起，手持竹纹团扇，扇子轻挡口鼻位置，手指放松握住扇柄；屏幕左侧手臂被宽大衣袖遮挡；身体站姿挺拔，肩线松弛，眼神望向镜头，神情温婉含蓄。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

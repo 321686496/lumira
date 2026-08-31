@@ -30,25 +30,32 @@ class GrowthDao {
 
   /// 获取用户累计拍摄照片数（user_progress.total_photos）。
   /// 用于首页 Banner 推荐算法的新老用户分层判断（< 3 视为新用户）。
-  /// 降级：若 user_progress 表无记录或读取失败，返回 gallery_items 表实际行数。
+  ///
+  /// 兜底合并：以 gallery_items 真实行数为准（历史版本 total_photos 从未随拍摄
+  /// 递增，导致该值恒为 0、用户被永远判定为新用户、首槽一直被推"新手友好场景"），
+  /// 此处返回 max(已存值, 实际相册照片数) 作为自愈，避免再出现类似问题。
   Future<int> getTotalPhotos() async {
-    final rows = await _db.query(
-      Tables.userProgress,
-      where: '${Tables.colId} = ?',
-      whereArgs: [1],
-      limit: 1,
-    );
-    if (rows.isNotEmpty) {
-      final v = rows.first[Tables.colTotalPhotos];
-      if (v != null) {
-        return (v as num).toInt();
+    var stored = 0;
+    try {
+      final rows = await _db.query(
+        Tables.userProgress,
+        where: '${Tables.colId} = ?',
+        whereArgs: [1],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) {
+        final v = rows.first[Tables.colTotalPhotos];
+        if (v != null) stored = (v as num).toInt();
       }
+    } catch (_) {
+      // 表/记录异常时忽略已存值，走实际相册行数
     }
-    // 降级：直接 COUNT gallery_items
+    // 兜底：直接 COUNT gallery_items
     final cntRows = await _db.rawQuery(
       'SELECT COUNT(*) AS cnt FROM ${Tables.galleryItems}',
     );
-    return Sqflite.firstIntValue(cntRows) ?? 0;
+    final actual = Sqflite.firstIntValue(cntRows) ?? 0;
+    return stored > actual ? stored : actual;
   }
 
   /// 当前等级（阶梯阈值表 Lv.1–20）。

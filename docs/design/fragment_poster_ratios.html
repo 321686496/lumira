@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 碎片海报 · 混合比例照片展示方案</title>
+<style>
+  :root{
+    --gold:#C9A96E;--gold-deep:#B08D4F;--ink:#1A1A1A;
+    --text2:#6B645C;--text3:#9A8F7C;
+    --surface:#FDFBF7;--mat:#F6F1E8;--line:rgba(201,169,110,.34);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#E9E4DB;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:40px 20px 100px;display:flex;flex-direction:column;align-items:center;gap:24px;-webkit-font-smoothing:antialiased}
+  .page-title{color:#4A4238;font-size:18px;letter-spacing:3px;font-weight:600;display:flex;align-items:center;gap:12px}
+  .page-title::before,.page-title::after{content:"";width:44px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:2px;text-align:center;line-height:1.9;max-width:680px}
+  .ratio-note{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+  .ratio-note .rg{display:flex;align-items:center;gap:6px;background:#F3ECE0;border:1px solid var(--line);padding:6px 12px;border-radius:12px;font-size:10px;color:#5C5346;letter-spacing:1px}
+  .ratio-note .sw{width:16px;height:16px;border:1px solid #C9A96E;background:#fff;flex:none}
+  .sw.p{width:10px;height:16px}.sw.l{width:16px;height:12px}.sw.s{width:13px;height:13px}.sw.w{width:16px;height:9px}.sw.pl{width:7px;height:16px}
+  .row{display:flex;gap:56px;flex-wrap:wrap;justify-content:center;align-items:flex-start;margin-top:26px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10px;color:#A08A5F;letter-spacing:2px;background:#F3ECE0;border:1px solid var(--line);padding:3px 10px;border-radius:12px;text-align:center;line-height:1.6}
+  .sys-label b{color:#8C6B33}
+  .why{font-size:11px;color:#8A7F6E;letter-spacing:1px;text-align:center;line-height:1.8;max-width:300px}
+  .serif{font-family:"Noto Serif SC","Songti SC",Georgia,serif}
+
+  /* ===== 海报基础 ===== */
+  .poster{width:340px;aspect-ratio:3/4;position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);box-shadow:0 24px 60px -28px rgba(60,48,28,.35);border-radius:3px;display:flex;flex-direction:column;align-items:center;padding:26px 26px 22px}
+  .poster .hairline{position:absolute;inset:9px;border:1px solid var(--line);pointer-events:none}
+  .poster .hairline::before,.poster .hairline::after,.poster .hairline b::before,.poster .hairline b::after{content:"";position:absolute;width:16px;height:16px;border:2px solid var(--gold);pointer-events:none}
+  .poster .hairline::before{top:-2px;left:-2px;border-right:none;border-bottom:none}
+  .poster .hairline::after{top:-2px;right:-2px;border-left:none;border-bottom:none}
+  .poster .hairline b::before{bottom:-2px;left:-2px;border-right:none;border-top:none}
+  .poster .hairline b::after{bottom:-2px;right:-2px;border-left:none;border-top:none}
+  .poster .brand{display:inline-flex;align-items:baseline;gap:7px;position:relative;z-index:2}
+  .poster .brand .en{font-size:11px;letter-spacing:4px;color:var(--gold-deep);font-weight:700}
+  .poster .brand .zh{font-size:10px;letter-spacing:3px;color:var(--text3)}
+  .poster .title{font-size:30px;font-weight:700;color:var(--ink);letter-spacing:8px;line-height:1.25;margin-top:12px;position:relative;z-index:2}
+  .poster .title-line{width:52px;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin-top:10px;position:relative;z-index:2}
+  .foot{margin-top:auto;position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:14px}
+  .foot .cnt{font-size:11px;letter-spacing:3px;color:var(--text2)}
+  .foot .cnt b{font-family:Georgia,"Times New Roman",serif;font-size:15px;color:var(--gold-deep);font-weight:700;padding:0 2px}
+  .foot .slogan{font-size:9px;letter-spacing:3px;color:var(--text3)}
+  .done .seal{position:absolute;top:20px;right:16px;width:54px;height:54px;border:1.5px solid var(--gold-deep);color:var(--gold-deep);font-size:12px;letter-spacing:2px;display:flex;align-items:center;justify-content:center;transform:rotate(8deg);z-index:5;background:rgba(253,251,247,.55)}
+  .done .seal::before{content:"";position:absolute;inset:3px;border:1px solid var(--gold-deep)}
+  .done .title{color:var(--gold-deep)}
+
+  /* 通用金框 + 角标 */
+  .frame{position:relative;background:#FFF;border:1px solid var(--line);line-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .frame::before,.frame::after{content:"";position:absolute;width:11px;height:11px;pointer-events:none;z-index:2}
+  .frame::before{top:-1px;left:-1px;border-top:2px solid var(--gold);border-left:2px solid var(--gold)}
+  .frame::after{bottom:-1px;right:-1px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold)}
+  .frame img{width:100%;height:100%;object-fit:contain;display:block}
+  /* 编号小签（方案③） */
+  .frame .idx{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);z-index:3;font-family:"Noto Serif SC","Songti SC",serif;font-size:9px;color:#FFF;background:rgba(176,141,79,.9);letter-spacing:1px;padding:1px 7px;border-radius:8px;line-height:1.5}
+
+  /* ===== 方案① 等高画廊带（每行等高，宽度随比例） ===== */
+  .s1 .photos{width:100%;margin-top:14px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:2}
+  .s1 .r{display:flex;gap:10px;align-items:stretch}
+  .s1 .r .frame{flex:0 0 auto;height:var(--H);aspect-ratio:var(--R)}
+
+  /* ===== 方案② 装裱衬纸（统一 3+2 网格，contain 完整露出） ===== */
+  .s2 .photos{width:100%;margin-top:14px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:2}
+  .s2 .r{display:flex;gap:10px}
+  .s2 .r.r2{justify-content:center}
+  .s2 .slot{flex:1;aspect-ratio:4/3;background:var(--mat);border:1px solid var(--line);position:relative;line-height:0;display:flex;align-items:center;justify-content:center}
+  .s2 .r.r2 .slot{flex:0 0 calc(50% - 5px)}
+  .s2 .slot::before,.s2 .slot::after{content:"";position:absolute;width:12px;height:12px;pointer-events:none;z-index:2}
+  .s2 .slot::before{top:-2px;left:-2px;border-top:2px solid var(--gold);border-left:2px solid var(--gold)}
+  .s2 .slot::after{bottom:-2px;right:-2px;border-bottom:2px solid var(--gold);border-right:2px solid var(--gold)}
+  .s2 .slot img{width:100%;height:100%;object-fit:contain;display:block}
+</style>
+</head>
+<body>
+  <div class="page-title">碎片海报 · 混合比例照片展示</div>
+  <div class="page-sub">同一组 5 张「光线碎片」，比例各不相同（竖 3:4 / 横 4:3 / 方 1:1 / 宽 16:9 / 长竖 9:16）。<br>三套方案都保证每张照片<b>完整露出、绝不裁切</b>；区别在于「照片如何放大、留白如何分配」。</div>
+  <div class="ratio-note">
+    <span class="rg"><span class="sw p"></span>3:4 竖</span>
+    <span class="rg"><span class="sw l"></span>4:3 横</span>
+    <span class="rg"><span class="sw s"></span>1:1 方</span>
+    <span class="rg"><span class="sw w"></span>16:9 宽</span>
+    <span class="rg"><span class="sw pl"></span>9:16 长竖</span>
+  </div>
+
+  <div class="row">
+    <!-- ===== 方案① 等高画廊带（推荐） ===== -->
+    <div class="cell">
+      <span class="sys-label"><b>① 等高画廊带 · 每行照片等高（推荐）</b><br>宽度随比例自适应，照片最大、零空白浪费</span>
+      <div class="poster s1 done">
+        <div class="hairline"><b></b></div>
+        <div class="seal">集齐</div>
+        <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+        <div class="title serif">光线碎片</div>
+        <div class="title-line"></div>
+        <div class="photos">
+          <div class="r">
+            <div class="frame" style="--R:1.3333;--H:87px"><img src="_frag/f2.jpg" alt=""></div>
+            <div class="frame" style="--R:1;--H:87px"><img src="_frag/f3.jpg" alt=""></div>
+            <div class="frame" style="--R:0.75;--H:87px"><img src="_frag/f1.jpg" alt=""></div>
+          </div>
+          <div class="r">
+            <div class="frame" style="--R:1.7778;--H:118px"><img src="_frag/f4.jpg" alt=""></div>
+            <div class="frame" style="--R:0.5625;--H:118px"><img src="_frag/f5.jpg" alt=""></div>
+          </div>
+        </div>
+        <div class="foot">
+          <div class="cnt">已集齐 <b>5</b> / 5</div>
+          <div class="slogan">如画 LUMIRA · 记录每一帧光影</div>
+        </div>
+      </div>
+      <div class="why">同一行内所有照片<b>高度一致</b>，像一条画廊胶片带；每张宽度按自身比例换算，<b>没有多余留白</b>，16:9 横幅与 9:16 长竖各得其所。</div>
+    </div>
+
+    <!-- ===== 方案② 装裱衬纸 ===== -->
+    <div class="cell">
+      <span class="sys-label"><b>② 装裱衬纸 · 统一 3+2 网格</b><br>照片 contain 完整露出，衬纸留白规整</span>
+      <div class="poster s2 done">
+        <div class="hairline"><b></b></div>
+        <div class="seal">集齐</div>
+        <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+        <div class="title serif">光线碎片</div>
+        <div class="title-line"></div>
+        <div class="photos">
+          <div class="r">
+            <div class="slot"><img src="_frag/f1.jpg" alt=""></div>
+            <div class="slot"><img src="_frag/f2.jpg" alt=""></div>
+            <div class="slot"><img src="_frag/f3.jpg" alt=""></div>
+          </div>
+          <div class="r r2">
+            <div class="slot"><img src="_frag/f4.jpg" alt=""></div>
+            <div class="slot"><img src="_frag/f5.jpg" alt=""></div>
+          </div>
+        </div>
+        <div class="foot">
+          <div class="cnt">已集齐 <b>5</b> / 5</div>
+          <div class="slogan">如画 LUMIRA · 记录每一帧光影</div>
+        </div>
+      </div>
+      <div class="why">每张照片放进<b>统一大小的衬纸格子</b>，像博物馆装裱，整体最规整；但 16:9 / 9:16 等极端比例会在格子里留白，照片显得偏小。</div>
+    </div>
+
+    <!-- ===== 方案③ 等高画廊带 · 收藏编号版 ===== -->
+    <div class="cell">
+      <span class="sys-label"><b>③ 等高画廊带 · 收藏编号版</b><br>每张照片下加「壹贰叁肆伍」金签，收藏册感</span>
+      <div class="poster s1 s3 done">
+        <div class="hairline"><b></b></div>
+        <div class="seal">集齐</div>
+        <div class="brand"><span class="en">LUMIRA</span><span class="zh">如画</span></div>
+        <div class="title serif">光线碎片</div>
+        <div class="title-line"></div>
+        <div class="photos">
+          <div class="r">
+            <div class="frame" style="--R:1.3333;--H:87px"><img src="_frag/f2.jpg" alt=""><span class="idx">壹</span></div>
+            <div class="frame" style="--R:1;--H:87px"><img src="_frag/f3.jpg" alt=""><span class="idx">贰</span></div>
+            <div class="frame" style="--R:0.75;--H:87px"><img src="_frag/f1.jpg" alt=""><span class="idx">叁</span></div>
+          </div>
+          <div class="r">
+            <div class="frame" style="--R:1.7778;--H:118px"><img src="_frag/f4.jpg" alt=""><span class="idx">肆</span></div>
+            <div class="frame" style="--R:0.5625;--H:118px"><img src="_frag/f5.jpg" alt=""><span class="idx">伍</span></div>
+          </div>
+        </div>
+        <div class="foot">
+          <div class="cnt">已集齐 <b>5</b> / 5</div>
+          <div class="slogan">如画 LUMIRA · 记录每一帧光影</div>
+        </div>
+      </div>
+      <div class="why">与①同款等高布局，额外在每张照片底部叠一枚<b>金色序号签</b>，强调「集齐 5 张」的收藏仪式感。</div>
+    </div>
+  </div>
+</body>
+</html>

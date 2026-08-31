@@ -134,16 +134,25 @@ class LumiraRouteObserver extends RouteObserver<PageRoute<dynamic>> {
   /// go_router 6.5.9 在 GoRoute 设置了 name: 时，settings.name 返回 NAME（如 'capture'）
   /// 而非 PATH（如 '/capture'）。_isCapturePage 同时匹配两者。
   /// 修复 Minor finding #1。
+  ///
+  /// 除拍摄页本体外，还包含拍摄页常见的「临时子页」——它们是从拍摄页 push 上来、
+  /// 用户会返回继续拍摄的页面（如付费模板的详情/解锁页）。这些页面本身不持有相机，
+  /// 但从拍摄页进入时并不会「真正离开」，返回后应沿用进入前的全部拍摄参数与朝向；
+  /// 因此把它们一并视为 capture 子流，避免触发 resetAll / 释放相机。
   static const _capturePaths = <String>{
     RouteNames.capture,           // '/capture'
     RouteNames.capturePreview,    // '/capture/preview'
     RouteNames.capturePreviewTemplate, // '/capture/preview-template'
+    RouteNames.templatesDetail,   // '/templates/detail'（付费模板详情）
+    RouteNames.templatesUnlock,   // '/templates/unlock'（付费模板解锁）
   };
 
   static const _captureNames = <String>{
     'capture',
     'capturePreview',
     'capturePreviewTemplate',
+    'templatesDetail',
+    'templatesUnlock',
   };
 
   bool _isCapturePage(String? pathOrName) {

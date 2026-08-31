@@ -44,6 +44,9 @@ class CamerawesomePlugin {
   static const EventChannel _cameraDeviceChangeChannel =
       EventChannel('camerawesome/camera_device_change');
 
+  static const EventChannel _photoEarlyFrameChannel =
+      EventChannel('camerawesome/photo_early_frame');
+
   static Stream<CameraOrientations>? _orientationStream;
 
   static Stream<CameraPhysicalButton>? _physicalButtonStream;
@@ -51,6 +54,8 @@ class CamerawesomePlugin {
   static Stream<CameraDisplayRotation>? _displayRotationStream;
 
   static Stream<Sensors>? _cameraDeviceChangeStream;
+
+  static Stream<String>? _photoEarlyFrameStream;
 
   static Stream<bool>? _permissionsStream;
 
@@ -200,6 +205,15 @@ class CamerawesomePlugin {
       sink.add(newSensors!);
     }));
     return _cameraDeviceChangeStream;
+  }
+
+  /// 分阶段拍照早帧通知：OHOS 一阶段低质量帧（水印动画源，~672ms）送达的临时 JPEG 路径。
+  /// 早于成片 capture()（~1.9s）返回，Dart 收到后即可提前触发水印动画。
+  static Stream<String>? listenPhotoEarlyFrame() {
+    _photoEarlyFrameStream ??= _photoEarlyFrameChannel
+        .receiveBroadcastStream('photoEarlyFrameChannel')
+        .map((data) => data as String);
+    return _photoEarlyFrameStream;
   }
 
   static Future<void> setupAnalysis({

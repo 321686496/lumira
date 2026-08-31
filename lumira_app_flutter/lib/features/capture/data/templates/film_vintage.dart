@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/film_vintage.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 胶片复古人像模板
 /// 来源：lumira-app/src/data/templates/film-vintage.ts
@@ -17,8 +18,14 @@ const PhotoTemplate filmVintageTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/film_vintage.png'),
     ],
-    description: '模拟胶片质感的复古人像，暖调褪色感营造怀旧氛围',
+    description: '这是一套主打黄昏暖调与复古质感的街头人像模板。利用下午4-5点的低角度硬侧光，在粗糙石墙上投下百叶窗般的条纹阴影，营造强烈的明暗对比与故事感。穿搭建议采用深蓝针织背心搭配米白高腰阔腿裤，简约法式风。适合喜欢胶片质感、追求自然松弛氛围的用户。',
     referenceSource: '样片 EXIF: 500px 胶片人像作品；参数参考胶片摄影作品',
+    shortDesc: '金色夕阳洒在石墙，手捧冰咖漫步街头，光影斑驳间尽是慵懒松弛的复古电影感🎞️',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn'],
+      weathers: ['sunny'],
+      timeTones: ['goldenHour', 'day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',
@@ -36,6 +43,7 @@ const PhotoTemplate filmVintageTemplate = PhotoTemplate(
       scale: 0.88,
       rotation: 0,
       description: '人物向前行走，身体侧向屏幕右约-45°，面部转向屏幕右-90°，头颈微微低头，视线看向屏幕地面方向；屏幕左侧手握住冰咖啡，屏幕右侧手插入裤袋，重心落在屏幕右腿，屏幕左腿向前迈出，脚步呈行走动态，整体状态松弛自然。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

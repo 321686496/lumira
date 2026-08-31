@@ -49,12 +49,16 @@ Future<T?> showLumiraDialog<T>({
     builder: (dialogContext) {
       return SafeArea(
         child: Center(
-          // TextField / Button 等 Material 组件需要 Material ancestor；
-          // LumiraDialogContainer 是纯 Container（DecoratedBox），这里补一层透明 Material
-          child: Material(
-            type: MaterialType.transparency,
-            child: LumiraDialogContainer(
-              child: Builder(builder: builder),
+          // 限制最大宽度，避免大屏/平板上弹窗内容被拉得过宽、影响阅读
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 400),
+            // TextField / Button 等 Material 组件需要 Material ancestor；
+            // LumiraDialogContainer 是纯 Container（DecoratedBox），这里补一层透明 Material
+            child: Material(
+              type: MaterialType.transparency,
+              child: LumiraDialogContainer(
+                child: Builder(builder: builder),
+              ),
             ),
           ),
         ),
@@ -132,9 +136,10 @@ class LumiraDialogContainer extends ConsumerWidget {
 ///
 /// 提供标准 `title` + `content` + `actions` 结构，颜色随主题变化。
 ///
-/// - 标题：`Theme.of(context).textTheme.titleMedium` 加粗，颜色 = textPrimary
-/// - 正文：`Theme.of(context).textTheme.bodyMedium`，颜色 = textSecondary
+/// - 标题：17dp 半粗（w600）+ 1.35 行高，颜色 = textPrimary
+/// - 正文：14dp 常规 + 1.5 行高，颜色 = textSecondary
 /// - actions：横向排列，右对齐，间距 8
+/// - 间距层级：标题→正文 12dp，正文/标题→按钮区 20dp
 ///
 /// 用法：
 /// ```dart
@@ -182,19 +187,27 @@ class LumiraAlertDialog extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
-    final textTheme = Theme.of(context).textTheme;
-    final titleStyle = (textTheme.titleMedium ??
-            const TextStyle(fontSize: 18, fontWeight: FontWeight.w600))
-        .copyWith(
-      fontWeight: FontWeight.bold,
-      color: tokens.textPrimary,
-    );
-    final contentStyle = (textTheme.bodyMedium ??
-            const TextStyle(fontSize: 14, fontWeight: FontWeight.w400))
-        .copyWith(color: tokens.textSecondary);
+
+    // 标题/正文采用显式 dp 字号（不依赖 textTheme：主题 textTheme 的
+    // bodyMedium 为 rpx 原值，直接使用会出现「正文比标题大」的问题），
+    // 字号与全局组件保持一致（按钮 14 / 列表标题 16）。
+    final titleStyle = const TextStyle(
+      fontSize: 17,
+      fontWeight: FontWeight.w600,
+      height: 1.35,
+    ).copyWith(color: tokens.textPrimary);
+    final contentStyle = const TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w400,
+      height: 1.5,
+    ).copyWith(color: tokens.textSecondary);
+
+    final hasTitle = title != null;
+    final hasContent = content != null;
+    final hasActions = actions.isNotEmpty;
 
     final children = <Widget>[];
-    if (title != null) {
+    if (hasTitle) {
       children.add(
         DefaultTextStyle.merge(
           style: titleStyle,
@@ -203,26 +216,34 @@ class LumiraAlertDialog extends ConsumerWidget {
         ),
       );
     }
-    if (content != null) {
+    if (hasContent) {
       children.add(
-        DefaultTextStyle.merge(
-          style: contentStyle,
-          textAlign: TextAlign.start,
-          child: content!,
+        Padding(
+          // 有标题时正文下方留 12dp，单独弹正文时不额外留白
+          padding: EdgeInsets.only(top: hasTitle ? 12 : 0),
+          child: DefaultTextStyle.merge(
+            style: contentStyle,
+            textAlign: TextAlign.start,
+            child: content!,
+          ),
         ),
       );
     }
-    if (actions.isNotEmpty) {
+    if (hasActions) {
       children.add(
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            for (int i = 0; i < actions.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              actions[i],
+        Padding(
+          // 按钮区与正文/标题保持 20dp 间距
+          padding: EdgeInsets.only(top: (hasTitle || hasContent) ? 20 : 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              for (int i = 0; i < actions.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                actions[i],
+              ],
             ],
-          ],
+          ),
         ),
       );
     }
@@ -230,12 +251,7 @@ class LumiraAlertDialog extends ConsumerWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (int i = 0; i < children.length; i++) ...[
-          if (i > 0) const SizedBox(height: 16),
-          children[i],
-        ],
-      ],
+      children: children,
     );
   }
 }

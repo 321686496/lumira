@@ -66,7 +66,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
    *   isPortrait / isFront: 是否竖屏 / 是否前置（需镜像）
    *   matrix: 20 元素 ColorMatrix（由 Dart composePostProcessMatrix 产出，保证颜色与
    *           取景器/编辑页完全一致）
-   *   sharpen: 有效锐化值（>=kMinLiveSharpen，未锐化需为 0）
+   *   sharpen: 锐化值（0 表示不锐化；严格用用户/模板真实值，应用层不做强制下限）
    *   maxDim: 输出最大边（默认 1280）
    *
    * 返回: { ok: true, width, height, timing: {...} } 或 { ok: false, error }

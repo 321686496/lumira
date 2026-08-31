@@ -98,6 +98,11 @@ export class CameraState implements StreamHandler {
   private _photoResult: Result<boolean> | undefined = undefined
   // photoAvailable 已直出写盘成功标记，photoAssetAvailable 同帧应跳过避免重复/覆盖
   private _photoDirectDone: boolean = false
+  // 分阶段拍照：一阶段低质量帧（水印动画源）数据请求 id 与早帧监听器引用。
+  // 每次拍照复位，防止上一帧残留导致本帧早帧请求被误跳过。
+  private _earlyFrameRequestId: string | undefined = undefined
+  // 惰性解析：早帧送达时才取 listener.events（Dart 拍照前订阅通道后才非空）。
+  private _photoEarlyFrameListener: PhotoEarlyFrameStreamListener | null = null
   private videoFd: number | undefined = undefined
   private degree: number = 0;
   private previewProfile: camera.Profile | undefined = undefined
@@ -949,6 +954,8 @@ export class CameraState implements StreamHandler {
     };
     // 每次拍摄前复位直出标记，避免上一帧残留状态导致本帧被误跳过/误覆盖。
     this._photoDirectDone = false
+    // 复位分阶段拍照早帧请求 id，允许本帧重新发起 FAST_MODE 早帧交付。
+    this._earlyFrameRequestId = undefined
 
     if (this._exifPreferences.getSaveGPSLocation()) {
       try {
@@ -1052,7 +1059,11 @@ export class CameraState implements StreamHandler {
           // 则跳过相册增强图的 saveCameraPhoto，避免其异步回调覆盖直出文件。
           // 仅当直出失败（_photoDirectDone 为 false）时才走增强图回退。
           if (this._photoDirectDone) {
-            Logger.info(TAG, 'photoAssetAvailable skipped: raw JPEG already written');
+            // 分阶段拍照：成片已由 photoAvailable 直出，另发起 FAST_MODE 早帧交付，
+            // 一阶段低质量图（~672ms）作为水印动画源提前送达 Dart 触发动画，
+            // 二阶段全质量图因成片已写出而跳过。
+            Logger.info(TAG, 'photoAssetAvailable: raw JPEG written, request early anim frame');
+            this.requestEarlyFrameForAnimation(photoAsset);
             this._photoDirectDone = false
             return;
           }
@@ -1087,6 +1098,50 @@ export class CameraState implements StreamHandler {
       let error = err as BusinessError
       Logger.error(TAG, `apply saveCameraPhoto failed with error: ${error.code}, ${error.message}`);
       result.success(false)
+    }
+  }
+
+  /**
+   * 分阶段拍照：一阶段低质量帧（水印动画源）快速交付。
+   *
+   * 成片已由 photoAvailable 原始 JPEG 直出，此处单独用 FAST_MODE 请求同一
+   * photoAsset 的低质量图（官方"分段式拍照"一阶段，实测 ~672ms 先于成片到达）。
+   * 低质量图写入 cacheDir 临时文件后，经 EventChannel 'camerawesome/photo_early_frame'
+   * 通知 Dart 提前触发水印动画，无需等待成片 capture()（~1.9s）返回。
+   *
+   * FAST_MODE 下 onDataPrepared 回调两次：第一次低质量（写动画源 + 发事件），
+   * 第二次全质量（成片已由 photoAvailable 写出，直接跳过）。
+   * 注意：此路径经过相册增强管线，仅用作短暂动画源；最终成片仍走 photoAvailable 直出。
+   */
+  private requestEarlyFrameForAnimation(photoAsset: photoAccessHelper.PhotoAsset): void {
+    if (this._earlyFrameRequestId) {
+      Logger.info(TAG, 'requestEarlyFrameForAnimation: already requested, skip');
+      return
+    }
+    const context = this.uiAbility?.context
+    if (!context) {
+      Logger.error(TAG, 'requestEarlyFrameForAnimation: uiAbility context missing');
+      return
+    }
+    const earlyPath = `${context.cacheDir}/anim_early_${Date.now()}.jpg`
+    let requestOptions: photoAccessHelper.RequestOptions = {
+      deliveryMode: photoAccessHelper.DeliveryMode.FAST_MODE,
+    }
+    const handler = new EarlyFrameHandler(earlyPath, this._photoEarlyFrameListener?.events ?? null)
+    try {
+      photoAccessHelper.MediaAssetManager.requestImageData(context, photoAsset, requestOptions, handler)
+        .then((id: string) => {
+          this._earlyFrameRequestId = id
+          Logger.info(TAG, `requestEarlyFrameForAnimation: requestId=${id} path=${earlyPath}`)
+        })
+        .catch((err: BusinessError) => {
+          Logger.error(TAG, `requestEarlyFrameForAnimation failed: ${err.code}, ${err.message}`)
+          this._earlyFrameRequestId = undefined
+        })
+    } catch (err) {
+      let e = err as BusinessError
+      Logger.error(TAG, `requestEarlyFrameForAnimation exception: ${e.code}, ${e.message}`)
+      this._earlyFrameRequestId = undefined
     }
   }
 
@@ -1341,6 +1396,11 @@ export class CameraState implements StreamHandler {
     this._photoResult = value.result
   }
 
+  // 分阶段拍照早帧监听器引用（由插件在 initCamera 时注入，Dart 订阅通道后才非空）
+  public set photoEarlyFrameListener(value: PhotoEarlyFrameStreamListener | null) {
+    this._photoEarlyFrameListener = value
+  }
+
   public set mirrorFrontCamera(value: boolean) {
     this._mirrorFrontCamera = value
   }
@@ -1473,5 +1533,63 @@ class MediaDataHandler implements photoAccessHelper.MediaAssetDataHandler<ArrayB
     } finally {
       photoRequestId = undefined;
     }
+  }
+}
+
+// 分阶段拍照早帧交付 handler：FAST_MODE 下 onDataPrepared 回调两次。
+// 第一次（一阶段低质量图，~672ms）写入 cacheDir 动画源文件并通知 Dart 提前触发水印动画；
+// 第二次（二阶段全质量图）因成片已由 photoAvailable 直出，直接跳过避免重复/覆盖。
+class EarlyFrameHandler implements photoAccessHelper.MediaAssetDataHandler<ArrayBuffer> {
+  private path: string
+  private sink: EventSink | null
+  private delivered: boolean = false
+
+  constructor(path: string, sink: EventSink | null) {
+    this.path = path
+    this.sink = sink
+  }
+
+  async onDataPrepared(data: ArrayBuffer) {
+    if (data === undefined || data.byteLength === 0) {
+      Logger.error('EarlyFrameHandler: data is empty');
+      return;
+    }
+    if (this.delivered) {
+      Logger.info(`[perf-cam] EarlyFrameHandler: full-quality skipped elapsed=${Date.now() - takePhotoStartAt}ms`);
+      return;
+    }
+    this.delivered = true
+    try {
+      const file = await fileIo.open(this.path, fileIo.OpenMode.CREATE | fileIo.OpenMode.READ_WRITE);
+      const written = fileIo.writeSync(file.fd, data);
+      fileIo.closeSync(file);
+      Logger.info(`[perf-cam] EarlyFrameHandler: saved early anim frame bytes=${written} ` +
+        `elapsed=${Date.now() - takePhotoStartAt}ms to ${this.path}`);
+      this.sink?.success(this.path)
+    } catch (error) {
+      Logger.error(`EarlyFrameHandler: write failed. code ${(error as BusinessError).code}, ` +
+        `message ${(error as BusinessError).message}`);
+    }
+  }
+}
+
+// EventChannel 'camerawesome/photo_early_frame' 的 StreamHandler：仅持有 events sink，
+// 由插件在 initCamera 时注入 CameraState.photoEarlyFrameSink，早帧路径经此通知 Dart。
+export class PhotoEarlyFrameStreamListener implements StreamHandler {
+  private _events: EventSink | null = null
+
+  onListen(args: Any, events: EventSink): void {
+    this._events = events
+  }
+
+  onCancel(args: Any): void {
+    if (this._events) {
+      this._events.endOfStream()
+      this._events = null
+    }
+  }
+
+  public get events(): EventSink | null {
+    return this._events
   }
 }

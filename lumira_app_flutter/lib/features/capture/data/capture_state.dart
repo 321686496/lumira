@@ -78,33 +78,34 @@ class CaptureState {
   /// 计算目标宽高比（width / height），取景器显示与照片裁剪共用此逻辑以确保一致。
   ///
   /// 返回 null 表示 'fullscreen' 模式（应使用屏幕实际宽高比）。
-  /// 方向自适应：'4:3' 在竖屏下显示为 3:4（标准相机 App 行为），
-  /// '3:4' 始终为竖版 3:4（即使横屏也显示竖版长条）。
+  /// 支持任意 "W:H" 格式（如 '4:3'、'3:4'、'16:9'、'9:16'、'2:3'），
+  /// 用于模板的 cropRatio 字段。
   ///
-  /// 支持任意 "W:H" 格式（如 '4:5'、'16:9'、'9:16'、'2:3'），
-  /// 用于模板的 cropRatio 字段。'W:H' 始终按字面比例计算（不做方向自适应），
-  /// 因为模板的 cropRatio 已经表达了作者期望的最终画面方向。
+  /// 与原生相机一致：比例随设备方向旋转。
+  /// - 竖摄取「短边/长边」（3:4→3/4，9:16→9/16，4:3→3/4，16:9→9/16）
+  /// - 横摄取「长边/短边」（3:4→4/3，9:16→16/9，4:3→4/3，16:9→16/9）
+  /// 即竖屏 3:4 在横屏时翻成 4:3、9:16 在横屏时翻成 16:9。
   static double? computeTargetRatio(String ratioId, bool isPortrait) {
-    switch (ratioId) {
-      case 'fullscreen':
-        return null;
-      case '4:3':
-        // 标准相机比例，按设备方向自适应：竖屏→3:4，横屏→4:3
-        return isPortrait ? 3.0 / 4.0 : 4.0 / 3.0;
-      case '1:1':
-        return 1.0;
-      default:
-        // 解析任意 "W:H" 格式（如 '4:5'、'16:9'、'9:16'、'2:3'）
-        final parts = ratioId.split(':');
-        if (parts.length == 2) {
-          final w = double.tryParse(parts[0]);
-          final h = double.tryParse(parts[1]);
-          if (w != null && h != null && w > 0 && h > 0) {
-            return w / h;
-          }
-        }
-        return null;
+    if (ratioId == 'fullscreen') {
+      // 全屏：返回 null，调用方用屏幕实际宽高比
+      return null;
     }
+    // 解析任意 "W:H" 格式（如 '4:3'、'3:4'、'16:9'、'9:16'、'1:1'、'2:3'）。
+    // 与原生相机一致：比例随设备方向旋转，取「短边/长边」或「长边/短边」：
+    // - 竖摄：短边/长边（3:4→3/4，9:16→9/16，4:3→3/4，16:9→9/16）
+    // - 横摄：长边/短边（3:4→4/3，9:16→16/9，4:3→4/3，16:9→16/9）
+    // 即竖屏 3:4 → 横屏 4:3、9:16 → 16:9 的方向自适应；'1:1' 恒为 1.0。
+    final parts = ratioId.split(':');
+    if (parts.length == 2) {
+      final w = double.tryParse(parts[0]);
+      final h = double.tryParse(parts[1]);
+      if (w != null && h != null && w > 0 && h > 0) {
+        final low = w < h ? w : h;
+        final high = w < h ? h : w;
+        return isPortrait ? low / high : high / low;
+      }
+    }
+    return null;
   }
 
   /// 计算指定比例相对于 4:3 传感器基准的裁切系数。

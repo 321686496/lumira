@@ -91,6 +91,18 @@ class ChallengeDao {
     return rows.first['cnt'] as int? ?? 0;
   }
 
+  /// 所有完成过挑战的日期（去重）。用于挑战页"连续打卡"统计，
+  /// 以挑战完成记录为准，避免仅"拍过照片但未完成挑战"的日子被误计为打卡。
+  Future<Set<String>> getDoneDates() async {
+    final rows = await _db.query(
+      ChallengeHistoryTable.name,
+      columns: [ChallengeHistoryTable.colDate],
+      where: '${ChallengeHistoryTable.colStatus} = ?',
+      whereArgs: ['done'],
+    );
+    return rows.map((r) => r[ChallengeHistoryTable.colDate] as String).toSet();
+  }
+
   Future<int> countByCategory(String category) async {
     final rows = await _db.rawQuery(
         'SELECT COUNT(*) as cnt FROM ${ChallengeHistoryTable.name} WHERE ${ChallengeHistoryTable.colCategory} = ? AND ${ChallengeHistoryTable.colStatus} = ?',

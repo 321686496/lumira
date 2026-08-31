@@ -2,23 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../features/capture/data/capture_state.dart';
-import '../../../features/capture/data/template_registry.dart';
-import '../../../features/templates/services/template_import_service.dart';
-import '../../../features/templates/services/template_mapper.dart';
-import '../../../features/templates/services/template_share_code.dart';
-import '../../../features/templates/widgets/template_qr_scanner_page.dart';
 import '../../../features/notification/notification_providers.dart';
 import '../../../shared/widgets/brand/home_brand_title.dart';
 import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/common/lumira_surface.dart';
-import '../../../shared/widgets/lumira/buttons/lumira_button.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/home_mock_data.dart';
@@ -139,10 +130,21 @@ class _HomePageState extends ConsumerState<HomePage> {
       ),
       body: Stack(
         children: [
-          // 1. 径向渐变背景装饰（glass 风格 backdrop-filter 可见性必需）
-          _BackgroundDecoration(tokens: tokens),
-          // Forced fix: glass 风格彩色斑点背景（让毛玻璃效果可见）
-          const Positioned.fill(child: GlassBackground()),
+          // 背景层整体栅格化隔离：`_onScroll` 阈值翻越 setState 时，
+          // 合成器直接复用背景层（渐变 + 玻璃光斑），避免每帧重绘全屏背景。
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // 1. 径向渐变背景装饰（glass 风格 backdrop-filter 可见性必需）
+                  _BackgroundDecoration(tokens: tokens),
+                  // Forced fix: glass 风格彩色斑点背景（让毛玻璃效果可见）
+                  const GlassBackground(),
+                ],
+              ),
+            ),
+          ),
           // 2. 主内容层（可滚动）
           // Forced fix: appBar 已处理顶部 inset，body 内 SafeArea 顶部对 ListView 无实际效果，
           // 仅保留 bottom（系统导航栏 inset）
@@ -463,10 +465,11 @@ class _SceneRecoGrid extends ConsumerWidget {
           crossAxisSpacing: 12,
           childAspectRatio: 0.50,
           children: scenes
-              .map((scene) => SceneRecoCard(
+              .map((scene) => RepaintBoundary(
+                  child: SceneRecoCard(
                     scene: scene,
                     onTap: () => onTap(scene.id),
-                  ))
+                  )))
               .toList(),
         );
       },
@@ -517,10 +520,12 @@ class _RecentShotsGrid extends ConsumerWidget {
           crossAxisSpacing: 12,
           childAspectRatio: 0.56,
           children: recents
-              .map((recent) => RecentShotCard(
-                    recent: recent,
-                    onTap: onTap,
-                    onRetake: () => onRetake(recent),
+              .map((recent) => RepaintBoundary(
+                    child: RecentShotCard(
+                      recent: recent,
+                      onTap: onTap,
+                      onRetake: () => onRetake(recent),
+                    ),
                   ))
               .toList(),
         );

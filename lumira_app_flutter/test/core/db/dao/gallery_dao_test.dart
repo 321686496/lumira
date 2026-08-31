@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 
 import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/core/db/dao/gallery_dao.dart';
+import 'package:lumira_app_flutter/features/capture/domain/photo_template.dart';
 
 void main() {
   late Database db;
@@ -275,6 +276,72 @@ void main() {
       await dao.insert(_makePhoto('p1', createdAt: 1705276800000));
       final result = await dao.getByMonth(2023, 6);
       expect(result, isEmpty);
+    });
+  });
+
+  // ── 回归：postProcess 持久化必须保留 legStretch 与 customCropRect ──
+  // 旧实现 _postProcessToJson/_parsePostProcess 丢失这两个字段，导致：
+  // 1) 拉腿参数不落库 → 下次打开再剪裁时从原图重处理但 legStretch=0 → 成片丢拉腿；
+  // 2) 上一轮 customCropRect 不落库 → 二次裁剪把它当作整幅比例区域 → 选区与成片错位。
+  group('postProcess settle', () {
+    test('legStretch 与 customCropRect 写入后读回不回填默认', () async {
+      const pp = PostProcess(
+        color: PostProcessColor(),
+        cropRatio: '3:4',
+        legStretch: 42,
+        customCropRect: CropRect(x: 0.1, y: 0.2, w: 0.5, h: 0.6),
+      );
+      await dao.insert(GalleryItemRecord(
+        id: 'p1',
+        filePath: '/tmp/p1.jpg',
+        originalPath: '/tmp/raw.jpg',
+        postProcess: pp,
+        createdAt: 1000,
+      ));
+
+      final fetched = (await dao.getById('p1'))!;
+      final restored = fetched.postProcess!;
+      expect(restored.legStretch, 42,
+          reason: '拉腿参数必须持久化，二次剪裁才不丢拉腿');
+      expect(restored.customCropRect, isNotNull);
+      expect(restored.customCropRect!.x, closeTo(0.1, 1e-9));
+      expect(restored.customCropRect!.y, closeTo(0.2, 1e-9));
+      expect(restored.customCropRect!.w, closeTo(0.5, 1e-9));
+      expect(restored.customCropRect!.h, closeTo(0.6, 1e-9),
+          reason: '上一轮裁剪框必须持久化，二次裁剪才不至于选区错位');
+    });
+
+    test('row 落库 JSON 包含 legStretch 与 customCropRect', () async {
+      const pp = PostProcess(
+        color: PostProcessColor(),
+        cropRatio: 'free',
+        legStretch: 12,
+        customCropRect: CropRect(x: 0.25, y: 0.25, w: 0.5, h: 0.5),
+      );
+      await dao.insert(GalleryItemRecord(
+        id: 'p1',
+        filePath: '/tmp/p1.jpg',
+        postProcess: pp,
+        createdAt: 1000,
+      ));
+
+      final rows = await db.query(Tables.galleryItems,
+          where: '${Tables.colId} = ?', whereArgs: ['p1']);
+      final json = rows.first[Tables.colPostProcess] as String;
+      expect(json, contains('"legStretch":12'));
+      expect(json, contains('"customCropRect"'));
+    });
+
+    test('旧记录缺字段时回退默认（向后兼容）', () async {
+      await db.insert(Tables.galleryItems, {
+        Tables.colId: 'p1',
+        Tables.colPostProcess:
+            '{"cropRatio":"3:4","smoothStrength":0,"sharpen":0}',
+        Tables.colCreatedAt: 1000,
+      });
+      final restored = (await dao.getById('p1'))!.postProcess!;
+      expect(restored.legStretch, 0);
+      expect(restored.customCropRect, isNull);
     });
   });
 }

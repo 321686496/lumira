@@ -1,184 +1,117 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/services/poster_generator.dart';
+import '../../../shared/widgets/lumira/lumira.dart';
+import '../../../shared/widgets/poster/poster_ratio.dart';
+import '../../../shared/widgets/poster/poster_style_types.dart';
 import '../data/checkin_categories.dart';
 import '../data/checkin_models.dart';
+import '../data/checkin_providers.dart';
 import 'checkin_common.dart';
+import 'checkin_poster_photo_picker.dart';
+import 'checkin_poster_widgets.dart';
 
-/// 展示海报：可直接调用 [showCheckinPoster] 生成/导出/分享探店足迹海报。
+/// 展示海报：直接调用 [showCheckinPoster] 生成/导出/分享探店足迹海报。
+///
+/// 会异步加载该次探店全部照片；照片 >5 张时先弹选图面板（最多 5 张，首位为大图），
+/// 再进入样式选择器预览（温柔手帐 / 原版足迹 / 金字招牌 / 克制奢华）。
 Future<void> showCheckinPoster({
   required BuildContext context,
   required ThemeTokens tokens,
   required CheckinListItem item,
-  required GlobalKey posterKey,
-}) {
-  return PosterGenerator.showPoster(
+  required WidgetRef ref,
+}) async {
+  final detail = await ref.read(checkinDetailProvider(item.record.id).future);
+  final record = detail?.record ?? item.record;
+
+  final all = (detail?.photos ?? const <dynamic>[])
+      .map((p) => _photoUrl(p))
+      .where((u) => u.isNotEmpty)
+      .toList();
+  final base = all.isEmpty
+      ? [item.coverPhotoUrl ?? ''].where((u) => u.isNotEmpty).toList()
+      : all;
+
+  if (!context.mounted) return;
+  if (base.isEmpty) {
+    LumiraToast.show(context, '暂无可分享的照片');
+    return;
+  }
+
+  final List<String> urls;
+  if (base.length > 5) {
+    final picked =
+        await showCheckinPhotoPicker(context: context, tokens: tokens, photoUrls: base);
+    if (picked == null || picked.isEmpty) return; // 用户取消
+    urls = picked;
+  } else {
+    urls = base.take(5).toList(growable: false);
+  }
+
+  if (!context.mounted) return;
+  if (urls.isEmpty || urls.first.isEmpty) {
+    LumiraToast.show(context, '暂无可分享的照片');
+    return;
+  }
+
+  final data = buildCheckinData(record: record, photoUrls: urls, tokens: tokens);
+
+  if (!context.mounted) return;
+  await PosterGenerator.showPosterWithStylePicker(
     context: context,
     tokens: tokens,
     title: '探店足迹海报',
-    content: CheckinPosterContent(tokens: tokens, item: item),
-    posterKey: posterKey,
+    kind: PosterKind.checkin,
+    ratio: PosterRatio.ratio34,
+    data: data,
     shareSubject: '如画 LUMIRA · 探店足迹',
-    shareText: '推荐你这家店：${item.record.name}',
-    fileNamePrefix: 'checkin_${item.record.id}',
+    shareText: '推荐你这家店：${record.name}',
+    fileNamePrefix: 'checkin_${record.id}',
   );
 }
 
-/// 探店足迹海报内容 Widget（公开，供 PosterGenerator 包裹渲染）
-///
-/// 顶部品牌标 + 封面大图 + 店名 / 评分 / 分类 / 地点 / 打卡时间 + 品牌水印。
-class CheckinPosterContent extends StatelessWidget {
-  const CheckinPosterContent({
-    super.key,
-    required this.tokens,
-    required this.item,
-  });
+/// 组装海报数据：首位照片为大图，其余为小图（至多 4 张）。
+/// 发布于测试可见：供 Widget/单测直接构造数据。
+@visibleForTesting
+PosterStyleData buildCheckinData({
+  required CheckinRecord record,
+  required List<String> photoUrls,
+  required ThemeTokens tokens,
+}) {
+  final big = photoUrls.isNotEmpty ? photoUrls.first : '';
+  final thumbs = photoUrls.skip(1).take(4).toList(growable: false);
+  return PosterStyleData(
+    ratio: PosterRatio.ratio34,
+    title: record.name,
+    category: checkinCategoryOf(record.category).label,
+    qrData: '',
+    qrHint: '',
+    qrSub: '',
+    shareText: '推荐你这家店：${record.name}',
+    photoBuilder: (w, h) => checkinPhoto(url: big, tokens: tokens, width: w, height: h),
+    note: record.note,
+    place: record.place,
+    dateText: formatCheckinDate(record.visitedAt),
+    rating: record.rating.toDouble(),
+    thumbBuilders: [
+      for (final u in thumbs)
+        (w, h) => checkinPhoto(url: u, tokens: tokens, width: w, height: h),
+    ],
+  );
+}
 
-  final ThemeTokens tokens;
-  final CheckinListItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = tokens;
-    final record = item.record;
-    final category = checkinCategoryOf(record.category);
-    final rating = record.rating;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [t.brandSubtle, t.canvas],
-        ),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 品牌标
-          Row(
-            children: [
-              Icon(Icons.camera_alt_outlined, size: 18, color: t.brand),
-              const SizedBox(width: 6),
-              Text(
-                'LUMIRA · 如画',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 2,
-                  color: t.brand,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          // 封面大图
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: AspectRatio(
-              aspectRatio: 4 / 3,
-              child: CheckinPhotoImage(
-                url: item.coverPhotoUrl,
-                tokens: t,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          // 店名
-          Text(
-            record.name,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              height: 1.3,
-              color: t.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 12),
-          // 评分 + 分类
-          Row(
-            children: [
-              if (rating > 0) ...[
-                Text(
-                  '$rating.0',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: t.brand,
-                    fontFamily: 'Courier New',
-                  ),
-                ),
-                const SizedBox(width: 8),
-                CheckinRatingStars(rating: rating, tokens: t, size: 16),
-                const SizedBox(width: 12),
-              ],
-              CheckinCategoryTag(category: category, tokens: t),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // 地点
-          Row(
-            children: [
-              Icon(Icons.place_outlined, size: 16, color: t.textTertiary),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  record.place,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.4,
-                    color: t.textSecondary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (record.note.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              record.note,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.5,
-                color: t.textSecondary,
-              ),
-            ),
-          ],
-          const SizedBox(height: 20),
-          // 打卡时间 + 水印
-          Row(
-            children: [
-              Icon(Icons.calendar_today_outlined, size: 12, color: t.textTertiary),
-              const SizedBox(width: 4),
-              Text(
-                formatCheckinDate(record.visitedAt),
-                style: TextStyle(fontSize: 12, color: t.textTertiary),
-              ),
-              const Spacer(),
-              Text(
-                '如画 LUMIRA · 探店足迹',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: t.brand.withOpacity(0.6),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+String _photoUrl(Object? photo) {
+  // GalleryItemRecord：优先 dataUrl，其次 filePath，最后空。
+  try {
+    final d = (photo as dynamic);
+    final dataUrl = d.dataUrl;
+    if (dataUrl is String && dataUrl.isNotEmpty) return dataUrl;
+    final f = d.filePath;
+    if (f is String && f.isNotEmpty) return f;
+  } catch (_) {
+    return '';
   }
+  return '';
 }

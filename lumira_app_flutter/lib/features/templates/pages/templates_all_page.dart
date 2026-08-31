@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
@@ -110,6 +111,13 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
   /// v18 修复：默认视图使用 getBuiltinAndRemote 包含服务器下发的远程模板，
   /// getCustomOnly 严格按 source='custom' 过滤，不再把远程模板误归为自定义。
   Future<_AllPageData> _loadData(
+    TemplatesDao dao,
+    List<AllTemplateItem> imported,
+  ) async {
+    return _loadDataInner(dao, imported);
+  }
+
+  Future<_AllPageData> _loadDataInner(
     TemplatesDao dao,
     List<AllTemplateItem> imported,
   ) async {
@@ -272,6 +280,40 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
     );
   }
 
+  /// 模板网格瀑布流：双列 Masonry 的 Sliver（懒加载）。
+  ///
+  /// 底层是 `SliverChildBuilderDelegate`，只构建进入视口 + cacheExtent 的卡片
+  /// （含其封面图），用户滑到哪卡才真正 build——天然实现「滚动到哪、加载到哪」。
+  /// 卡片高度由其内容（`AdaptiveCoverImage` 自适应封面 + 文字）固有决定，
+  /// 无需手工估算高度与占位。
+  Widget _templateGridSliver(
+    ThemeTokens tokens,
+    List<AllTemplateItem> templates,
+    Map<String, int> usageCounts,
+  ) {
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+      sliver: SliverMasonryGrid.count(
+        crossAxisCount: 2,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childCount: templates.length,
+        itemBuilder: (_, i) {
+          final t = templates[i];
+          // OHOS 滚动优化：把整张卡片（含新拟态双层模糊阴影 + 封面）隔离成独立图层，
+          // 卡片仅光栅化一次，滚动时合成器直接搬移缓存层，避免每帧重绘阴影导致掉帧。
+          return RepaintBoundary(
+            child: _TplCard(
+              tokens: tokens,
+              template: t,
+              usageCount: usageCounts[t.id] ?? 0,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
@@ -339,59 +381,69 @@ class _TemplatesAllPageState extends ConsumerState<TemplatesAllPage> {
                           color: tokens.brand,
                           backgroundColor: tokens.surface,
                           onRefresh: _onRefresh,
-                          child: SingleChildScrollView(
+                          child: CustomScrollView(
                             physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.only(bottom: 32),
-                            child: isOverview
-                                ? _CategoryOverview(
+                            slivers: [
+                              if (isOverview)
+                                SliverToBoxAdapter(
+                                  child: _CategoryOverview(
                                     tokens: tokens,
                                     allCount: data.allCount,
                                     unlockedCount: data.unlockedCount,
                                     categoryCounts: data.categoryCounts,
                                     onSelectCategory: _selectCategory,
                                     categories: data.categories,
-                                  )
-                                : Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      _HeroCard(
-                                        tokens: tokens,
-                                        allCount: data.allCount,
-                                        unlockedCount: data.unlockedCount,
-                                      ),
-                                      _FilterSection(
-                                        tokens: tokens,
-                                        categories: data.categories,
-                                        styleOptions: data.styleOptions,
-                                        methodOptions: data.methodOptions,
-                                        selectedType: _selectedType,
-                                        selectedStyle: _selectedStyle,
-                                        selectedMethod: _selectedMethod,
-                                        showCustom: _showCustom,
-                                        priceFilter: _priceFilter,
-                                        onLayerSelect: _onLayerSelect,
-                                        onToggleCustom: _toggleCustom,
-                                        onPriceFilter: _onPriceFilter,
-                                        showFavorites: _showFavorites,
-                                        onToggleFavorites: _toggleFavorites,
-                                      ),
-                                      if (_showCustom)
-                                        _ActionRow(
-                                          tokens: tokens,
-                                          onImport: _showImportSheet,
-                                          onCreate: _goEditor,
-                                        ),
-                                      if (filtered.isEmpty)
-                                        _EmptyState(tokens: tokens)
-                                      else
-                                        _TemplateGrid(
-                                          tokens: tokens,
-                                          templates: filtered,
-                                          usageCounts: data.usageCounts,
-                                        ),
-                                    ],
                                   ),
+                                )
+                              else ...[
+                                SliverToBoxAdapter(
+                                  child: _HeroCard(
+                                    tokens: tokens,
+                                    allCount: data.allCount,
+                                    unlockedCount: data.unlockedCount,
+                                  ),
+                                ),
+                                SliverToBoxAdapter(
+                                  child: _FilterSection(
+                                    tokens: tokens,
+                                    categories: data.categories,
+                                    styleOptions: data.styleOptions,
+                                    methodOptions: data.methodOptions,
+                                    selectedType: _selectedType,
+                                    selectedStyle: _selectedStyle,
+                                    selectedMethod: _selectedMethod,
+                                    showCustom: _showCustom,
+                                    priceFilter: _priceFilter,
+                                    onLayerSelect: _onLayerSelect,
+                                    onToggleCustom: _toggleCustom,
+                                    onPriceFilter: _onPriceFilter,
+                                    showFavorites: _showFavorites,
+                                    onToggleFavorites: _toggleFavorites,
+                                  ),
+                                ),
+                                if (_showCustom)
+                                  SliverToBoxAdapter(
+                                    child: _ActionRow(
+                                      tokens: tokens,
+                                      onImport: _showImportSheet,
+                                      onCreate: _goEditor,
+                                    ),
+                                  ),
+                                if (filtered.isEmpty)
+                                  SliverToBoxAdapter(
+                                    child: _EmptyState(tokens: tokens),
+                                  )
+                                else
+                                  _templateGridSliver(
+                                    tokens,
+                                    filtered,
+                                    data.usageCounts,
+                                  ),
+                              ],
+                              const SliverToBoxAdapter(
+                                child: SizedBox(height: 32),
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -1024,73 +1076,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _TemplateGrid extends StatelessWidget {
-  const _TemplateGrid({
-    required this.tokens,
-    required this.templates,
-    required this.usageCounts,
-  });
-
-  final ThemeTokens tokens;
-  final List<AllTemplateItem> templates;
-  final Map<String, int> usageCounts;
-
-  /// 估算单张模板卡片总高度，用于瀑布流双列按高度配平（仅分配用，非精确值）。
-  ///
-  /// 结构：图(宽×4/3) + 文字区(内边距 24 + 名称 20 + [短描述 3+30] + 间距 6 + 徽标行 22)。
-  double _estimateCardHeight(AllTemplateItem t, double cardWidth) {
-    final imageH = cardWidth / kDefaultCoverRatio;
-    final hasDesc = t.shortDesc.isNotEmpty || t.description.isNotEmpty;
-    final textH = 20 + (hasDesc ? 33 : 0) + 6 + 22 + 24;
-    return imageH + textH;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = (screenWidth - 40 - 12) / 2; // 页面左右 padding 20 + 列间距 12
-
-    // 瀑布流双列：按估算高度累加，把下一张卡放到当前更矮的一列，视觉上近似等高收尾。
-    final left = <Widget>[];
-    final right = <Widget>[];
-    var leftH = 0.0;
-    var rightH = 0.0;
-    for (final t in templates) {
-      final card = Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: _TplCard(
-          tokens: tokens,
-          template: t,
-          usageCount: usageCounts[t.id] ?? 0,
-        ),
-      );
-      final h = _estimateCardHeight(t, cardWidth);
-      if (leftH <= rightH) {
-        left.add(card);
-        leftH += h;
-      } else {
-        right.add(card);
-        rightH += h;
-      }
-    }
-
-    return FadeUp(
-      delay: const Duration(milliseconds: 160),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: left)),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: right)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _TplCard extends StatelessWidget {
   const _TplCard({
     required this.tokens,
@@ -1553,27 +1538,30 @@ class _CategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        height: meta.height,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: meta.gradient.last.withOpacity(0.25),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+    // OHOS 滚动优化：分类大卡（渐变 + 投影 + 封面图）隔离成独立图层，滚动不逐帧重绘。
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          height: meta.height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: meta.gradient.last.withOpacity(0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          // 有封面图：整卡平铺为封面大图；无封面图：保留渐变占位内容
+          child: meta.iconUrl.isNotEmpty
+              ? _buildCoverStack()
+              : _buildGradientStack(),
         ),
-        clipBehavior: Clip.antiAlias,
-        // 有封面图：整卡平铺为封面大图；无封面图：保留渐变占位内容
-        child: meta.iconUrl.isNotEmpty
-            ? _buildCoverStack()
-            : _buildGradientStack(),
       ),
     );
   }

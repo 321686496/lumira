@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/foodie_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 探店美食人像模板
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 15
@@ -20,7 +21,13 @@ const PhotoTemplate foodiePortraitTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/foodie_portrait_3.jpg'),
       TemplateImage(url: 'assets/images/templates/foodie_portrait_4.jpg'),
     ],
-    description: '暖调咖啡馆下午茶人像，甜系松弛，捕捉惬意悠闲的探店时光。',
+    description: '室内咖啡馆环境人像模板，暖黄环境光斑柔光，米色系针织穿搭，结合咖啡甜品道具，捕捉四种不同下午茶互动姿态，适合日常探店记录，营造温柔松弛生活胶片氛围感。',
+    shortDesc: '暖光咖啡馆下午茶，甜系松弛，享受惬意悠闲时光☕',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['autumn', 'winter'],
+      weathers: [],
+      timeTones: ['warm', 'day'],
+    ),
     referenceSource: '小红书探店下午茶拍照；Foodie 滤镜风格；咖啡馆人像教程',
   ),
   composition: Composition(

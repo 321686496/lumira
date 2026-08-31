@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/closeup_soup.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 汤面热气特写模板（美食 / 特写 / 微距）
 /// 内置模板补充：美食大类非人像模板
@@ -17,8 +18,14 @@ const PhotoTemplate closeupSoupTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/closeup_soup.png'),
     ],
-    description: '热气氤氲的暖汤乌冬，柔和暖光下捕捉面条热气与居酒屋烟火感',
+    description: '美食静物拍摄模板，适用于面馆居酒屋桌面实拍，柔和暖环境光捕捉面食热气，突出面条汤面质感，背景虚化交代餐厅环境，适合拍摄热汤面、日式简餐类食物。',
     referenceSource: '样片参考：美食特写蒸汽摄影精选；参数参考热气特写曝光合集',
+    shortDesc: '热气氤氲的暖汤乌冬，居酒屋烟火感，温柔治愈🍜',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['winter', 'autumn'],
+      weathers: [],
+      timeTones: ['warm'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

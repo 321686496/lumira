@@ -662,6 +662,7 @@ class TemplateMapper {
       'sharpen': p.sharpen,
       'vignette': p.vignette,
       'grain': p.grain,
+      'legStretch': p.legStretch,
       'lut': p.lut,
       if (p.fillLight != null) 'fillLight': p.fillLight!.toJson(),
     };
@@ -787,6 +788,7 @@ class TemplateMapper {
       sharpen: (json['sharpen'] as num?)?.toInt() ?? 0,
       vignette: (json['vignette'] as num?)?.toInt() ?? 0,
       grain: (json['grain'] as num?)?.toInt() ?? 0,
+      legStretch: (json['legStretch'] as num?)?.toInt() ?? 0,
       lut: (json['lut'] as String?) ?? 'none',
       fillLight: (json['fillLight'] as Map<String, dynamic>?) != null
           ? FillLightParams.fromJson(json['fillLight'] as Map<String, dynamic>)

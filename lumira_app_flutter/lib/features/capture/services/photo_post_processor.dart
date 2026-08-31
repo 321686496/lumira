@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart' as pp;
 
+import 'dart_photo_pipeline.dart' show applyLegStretchImg;
 import 'skin_smoother.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
@@ -76,22 +77,16 @@ class PhotoPostProcessor {
             '${alignedImage.width}x${alignedImage.height}, ${sw.elapsedMilliseconds}ms');
       }
 
-      // 1.6. 应用用户变换
-      var workingImage = alignedImage;
-      if (transform != null && !transform.isIdentity) {
-        workingImage = await _applyTransform(alignedImage, transform);
-        alignedImage.dispose();
-        debugPrint('[post-process] 变换: rotation=${transform.rotation}, '
-            'flipH=${transform.flipH}, flipV=${transform.flipV}, '
-            'straighten=${transform.straighten}, '
-            '${sw.elapsedMilliseconds}ms');
-      }
-
-      // 2. 计算裁剪区域（比例裁剪 = 裁剪 UI 显示的烘焙图对应的参考区域）
+      // 2. 计算裁剪区域（比例裁剪 = 裁剪 UI 显示的烘焙图对应的参考区域）。
+      //    裁剪发生在旋转/翻转【之前】：customCropRect 相对「未变换的对齐图」
+      //    解释，先裁剪出所框区域，再应用用户变换（旋转/翻转/拉直），与裁剪面板
+      //    所见即所得一致（见 specs/2026-08-24-preview-edit-crop-exif-save-design.md）。
+      //    旧实现先变换后裁剪，把相对对齐图的选区错套到旋转后的工作图上，
+      //    导致框选区域与最终成片不一致。
       final ratioCropRect = computeCropRect(
         aspectRatio,
-        workingImage.width,
-        workingImage.height,
+        alignedImage.width,
+        alignedImage.height,
         screenRatio,
         isPortrait,
       );
@@ -157,7 +152,7 @@ class PhotoPostProcessor {
         paint.colorFilter = ui.ColorFilter.matrix(matrix);
       }
       canvas.drawImageRect(
-        workingImage,
+        alignedImage,
         ui.Rect.fromLTWH(
           cropRect[0].toDouble(),
           cropRect[1].toDouble(),
@@ -193,7 +188,30 @@ class PhotoPostProcessor {
       final picture = recorder.endRecording();
       var resultImage = await picture.toImage(outW, outH);
       picture.dispose();
-      workingImage.dispose();
+      alignedImage.dispose();
+      debugPrint(
+          '[post-process] GPU裁剪: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
+
+      // 1.6. 应用用户变换（旋转/翻转/拉直）——裁剪【之后】应用，
+      // 保证 customCropRect 相对未变换的对齐图解释，框选与成片一致。
+      if (transform != null && !transform.isIdentity) {
+        final transformed = await _applyTransform(resultImage, transform);
+        resultImage.dispose();
+        resultImage = transformed;
+        debugPrint('[post-process] 变换: rotation=${transform.rotation}, '
+            'flipH=${transform.flipH}, flipV=${transform.flipV}, '
+            'straighten=${transform.straighten}, '
+            '${sw.elapsedMilliseconds}ms');
+      }
+
+      // 1.7. 拉腿：对图像下半部做平滑纵向拉伸（仅改变高度）。
+      //      在裁剪/变换【之后】作为最终几何调整应用，随后再叠加逐像素效果。
+      if (params.legStretch > 0) {
+        resultImage = await _applyLegStretch(resultImage, params.legStretch);
+        debugPrint('[post-process] 拉腿: legStretch=${params.legStretch}, '
+            '${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
+      }
+
       debugPrint(
           '[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
 
@@ -279,6 +297,40 @@ class PhotoPostProcessor {
           '[post-process] ⚠️ 失败 (${sw.elapsedMilliseconds}ms), WYSIWYG 已破坏: $e\n$st');
       return outputPath ?? inputPath;
     }
+  }
+
+  /// 拉腿：把 ui.Image 转为 image 包像素做纵向拉伸，再转回 ui.Image。
+  static Future<ui.Image> _applyLegStretch(ui.Image input, int legStretch) async {
+    final width = input.width;
+    final height = input.height;
+    final byteData = await input.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (byteData == null) return input;
+
+    final imgImage = img.Image.fromBytes(
+      width: width,
+      height: height,
+      bytes: byteData.buffer.asUint8List().buffer,
+      numChannels: 4,
+      order: img.ChannelOrder.rgba,
+    );
+
+    final stretched = applyLegStretchImg(imgImage, legStretch: legStretch);
+
+    final outBytes = stretched.getBytes(order: img.ChannelOrder.rgba);
+    final buffer = await ui.ImmutableBuffer.fromUint8List(outBytes);
+    final descriptor = ui.ImageDescriptor.raw(
+      buffer,
+      width: stretched.width,
+      height: stretched.height,
+      pixelFormat: ui.PixelFormat.rgba8888,
+    );
+    final codec = await descriptor.instantiateCodec();
+    final frame = await codec.getNextFrame();
+    buffer.dispose();
+    descriptor.dispose();
+    codec.dispose();
+    input.dispose();
+    return frame.image;
   }
 
   /// 逐像素效果：Sharpen + Clarity + Grain
@@ -529,6 +581,44 @@ class PhotoPostProcessor {
     final w = (relativeRect.w * refW).round().clamp(1, refX + refW - x);
     final h = (relativeRect.h * refH).round().clamp(1, refY + refH - y);
     return [x, y, w, h];
+  }
+
+  /// 将裁剪框从「叠了变换预览的展示坐标」反算回「未变换照片坐标」（相对 0-1）。
+  ///
+  /// 裁剪叠加层会把照片包一层变换预览（Rot(rotation)∘Flip∘Rot(straighten)，见
+  /// CropOverlay._applyTransform），用户看到的框选区域是变换后的展示。而
+  /// processFile 采用「先按原图裁剪、后应用变换」的语义，即 customCropRect 相对
+  /// 【未变换】的照片解释。因此裁剪框需先逆变换回来（撤销 rotation→flip→straighten），
+  /// 才能保证「框选内容 == 导出内容」（WYSIWYG）。恒等变换时原样返回。
+  ///
+  /// [frame] 裁剪框相对坐标（0-1，展示空间，已反算缩放/平移）。
+  /// 取逆变换后四角的包围盒，作为未变换照片空间里应保留的轴对齐区域。
+  static ui.Rect invertCropTransform(ui.Rect frame, TransformParams? t) {
+    if (t == null || t.isIdentity) return frame;
+
+    ui.Offset rotateOffset(ui.Offset v, double deg) {
+      final rad = deg * math.pi / 180.0;
+      final co = math.cos(rad);
+      final si = math.sin(rad);
+      return ui.Offset(v.dx * co - v.dy * si, v.dx * si + v.dy * co);
+    }
+
+    ui.Offset undo(ui.Offset p) {
+      const c = ui.Offset(0.5, 0.5);
+      // 正变换 = R(rotation)∘Flip∘R(straighten)，逆序撤销。
+      final d1 = rotateOffset(p - c, -t.rotation.toDouble());
+      final d2 = ui.Offset(t.flipH ? -d1.dx : d1.dx, t.flipV ? -d1.dy : d1.dy);
+      final d3 = rotateOffset(d2, -t.straighten);
+      return d3 + c;
+    }
+
+    final a = undo(frame.topLeft);
+    final b = undo(frame.bottomRight);
+    final left = math.min(a.dx, b.dx).clamp(0.0, 1.0).toDouble();
+    final top = math.min(a.dy, b.dy).clamp(0.0, 1.0).toDouble();
+    final right = math.max(a.dx, b.dx).clamp(0.0, 1.0).toDouble();
+    final bottom = math.max(a.dy, b.dy).clamp(0.0, 1.0).toDouble();
+    return ui.Rect.fromLTRB(left, top, right, bottom);
   }
 
   /// 组合两个相对坐标裁剪框：[inner]（相对 [base] 区域）→ 结果相对 base 的基准区域。

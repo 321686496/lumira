@@ -8,24 +8,23 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_providers.dart';
-import '../../gallery/providers/gallery_diary_providers.dart';
 
-/// 翻牌页下方：连续拍摄进度条
+/// 翻牌页下方：连续打卡进度条
 ///
-/// 数据源：shootingCheckinProvider（统一拍摄打卡状态）
+/// 数据源：challengeCheckinProvider（基于挑战完成记录，区别于相册照片拍摄打卡）
 class FlipStreakBar extends ConsumerWidget {
   const FlipStreakBar({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(themeTokensProvider);
-    final checkinAsync = ref.watch(shootingCheckinProvider);
+    final checkinAsync = ref.watch(challengeCheckinProvider);
 
     return checkinAsync.when(
       loading: () => _SkeletonBar(tokens: tokens),
       error: (_, __) => _SkeletonBar(tokens: tokens),
       data: (checkin) {
-        // 本周完成数 = 本周已拍天数
+        // 本周完成数 = 本周已完成挑战天数
         final weeklyDone = checkin.weekDays.where((d) => d.done).length;
         const weeklyTotal = 7;
         final progress = (weeklyDone / weeklyTotal).clamp(0.0, 1.0);
@@ -43,7 +42,7 @@ class FlipStreakBar extends ConsumerWidget {
                       size: 18, color: tokens.brand),
                   const SizedBox(width: 6),
                   Text(
-                    '连续拍摄 ${checkin.streakDays} 天',
+                    '连续打卡 ${checkin.streakDays} 天',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -52,7 +51,7 @@ class FlipStreakBar extends ConsumerWidget {
                   ),
                   const Spacer(),
                   Text(
-                    '本周拍摄 $weeklyDone/$weeklyTotal',
+                    '本周完成 $weeklyDone/$weeklyTotal',
                     style: TextStyle(
                       fontSize: 12,
                       color: tokens.textSecondary,
@@ -81,7 +80,7 @@ class FlipStreakBar extends ConsumerWidget {
   }
 
   String _buildTipMessage(int streak, int weeklyDone) {
-    if (streak == 0) return '今天拍摄一张照片开启打卡';
+    if (streak == 0) return '今天完成一个挑战开启打卡';
     if (streak >= 7) return '已坚持一周，再接再厉！';
     final remain = 7 - streak;
     return '再坚持 $remain 天获得额外 50 XP';
@@ -100,7 +99,7 @@ class _SkeletonBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '连续拍摄 - 天',
+            '连续打卡 - 天',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,

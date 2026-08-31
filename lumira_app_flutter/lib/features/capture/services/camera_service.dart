@@ -25,6 +25,12 @@ abstract class CameraService {
   /// 无可用帧（相机刚启动）/ 编码失败时返回 null，调用方回退用成片。
   Future<String?> captureFrameForAnimation();
 
+  /// OHOS 分阶段拍照早帧流：一阶段低质量帧（水印动画源，~672ms）送达的临时 JPEG 路径。
+  ///
+  /// 早于成片 [capture] 返回（OHOS 单阶段成片 ~1.9s），收到事件即可提前触发水印动画。
+  /// 非 OHOS 平台返回空流（无早帧机制，动画源回退成片）。
+  Stream<String> photoEarlyFrames();
+
   /// 切换前后摄像头
   Future<void> switchCamera(String facing);
 

@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/fresh_flower_field.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 花田清新远景模板（风光 / 清新 / 远景）
 /// 内置模板补充：风光大类非人像模板
@@ -20,8 +21,14 @@ const PhotoTemplate freshFlowerFieldTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/fresh_flower_field_3.png'),
       TemplateImage(url: 'assets/images/templates/fresh_flower_field_4.png'),
     ],
-    description: '晨雾中的彩虹色花田大远景，低角度柔光下的治愈系田园油画质感。',
+    description: '这是一套专为广阔花海/梯田景观设计的风景摄影模板。利用起伏的地形与人工种植的色彩条带（薰衣草紫、樱花粉、油菜黄等），构建出极具纵深感的视觉引导线。光影上捕捉日出或日落时分的低角度柔光，营造朦胧、梦幻的油画质感。适用于春季或初夏的花田、公园、郊野拍摄，适合追求治愈系、ins风、大片感的摄影爱好者。',
     referenceSource: '样片参考：500px 花田清风景精选；参数参考风光摄影清新色彩合集',
+    shortDesc: '晨雾漫过起伏丘陵，彩虹色花带如绸缎铺展，治愈系田园梦境，把春天装进镜头里🌸',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer'],
+      weathers: ['sunny', 'fog', 'cloudy'],
+      timeTones: ['goldenHour'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

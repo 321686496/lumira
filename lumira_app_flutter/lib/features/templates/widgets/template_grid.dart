@@ -9,6 +9,7 @@ import '../data/templates_browse_mock_data.dart';
 import '../services/template_mapper.dart';
 import 'ambience_badges.dart';
 import 'adaptive_cover_image.dart';
+import 'template_badges.dart';
 
 /// TemplateRecord → AllTemplateItem 适配
 /// DAO 模板数据 → 模板网格（TemplateGrid）所需类型
@@ -170,14 +171,13 @@ class TemplateCard extends StatelessWidget {
                   Positioned(
                     top: 8,
                     left: 8,
-                    child: _FreeBadge(tokens: tokens),
+                    child: FreeBadge(tokens: tokens),
                   )
                 else
                   Positioned(
                     top: 8,
                     left: 8,
-                    child: _PremiumBadge(
-                        tokens: tokens, price: template.price),
+                    child: PremiumBadge(tokens: tokens, price: template.price),
                   ),
                 // 已拍照片数：叠在封面右下角（半透明深色 pill），
                 // 避免占用下方信息行横向空间，导致季节/天气等氛围标签换行变纵向。
@@ -185,30 +185,7 @@ class TemplateCard extends StatelessWidget {
                   Positioned(
                     bottom: 8,
                     right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.55),
-                        borderRadius: BorderRadius.circular(9999),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.camera_alt_outlined,
-                              size: 12, color: Colors.white),
-                          const SizedBox(width: 4),
-                          Text(
-                            '已拍 $usageCount 张',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    child: UsageCountBadge(count: usageCount),
                   ),
               ],
             ),
@@ -289,57 +266,6 @@ class TemplateCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FreeBadge extends StatelessWidget {
-  const _FreeBadge({required this.tokens});
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        // 免费徽标绿（色值跟随主题 success 色）
-        color: tokens.success.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: const Text(
-        '免费',
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
-
-class _PremiumBadge extends StatelessWidget {
-  const _PremiumBadge({required this.tokens, required this.price});
-  final ThemeTokens tokens;
-  final int price;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        // 硬编码颜色，与 uni-app 一致 (gradient brand → brandDeep)
-        gradient: LinearGradient(colors: [tokens.brand, tokens.brandDeep]),
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Text(
-        '$price 积分',
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
         ),
       ),
     );

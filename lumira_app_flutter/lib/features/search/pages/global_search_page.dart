@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/dao/scenes_dao.dart';
@@ -24,7 +25,7 @@ import '../../templates/data/remote_templates_providers.dart';
 import '../../templates/search/template_remote_search_service.dart';
 import '../../templates/search/template_search_service.dart';
 import '../../templates/services/template_mapper.dart';
-import '../../templates/widgets/adaptive_cover_image.dart';
+
 import '../data/search_result.dart';
 import '../widgets/search_initial_sections.dart';
 import '../widgets/search_result_card.dart';
@@ -849,67 +850,39 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     return false;
   }
 
-  /// 瀑布流：双列等高平衡，卡片各自固有高度（解决固定高网格导致的溢出）。
+  /// 瀑布流：双列 Masonry，卡片各自固有高度（解决固定高网格导致的溢出）。
+  ///
+  /// 懒加载：底层是 `SliverChildBuilderDelegate` 的 Sliver 懒容器，只构建进入
+  /// 视口 + cacheExtent 的卡片（含其图片），用户滑到哪卡片才真正 build——
+  /// 天然实现「滚动到哪、加载到哪」，无需手工估算高度与占位。
   Widget _buildWaterfallView(ThemeTokens tokens) {
-    final screenW = MediaQuery.of(context).size.width;
-    final cardW = (screenW - 40 - 12) / 2; // 左右 padding 20*2 + 列间距 12
     final n = _pager.visible.clamp(0, _results.length);
-
-    final left = <Widget>[];
-    final right = <Widget>[];
-    double lh = 0, rh = 0;
-    for (var i = 0; i < n; i++) {
-      final r = _results[i];
-      final card = SearchResultCard(
-        result: r,
-        showTypeBadge: _scope == SearchScope.all,
-        onTap: () => _openResult(r),
-      );
-      final h = _estimateCardHeight(r, cardW) + 12;
-      final item = Padding(
-          padding: const EdgeInsets.only(bottom: 12), child: card);
-      if (lh <= rh) {
-        left.add(item);
-        lh += h;
-      } else {
-        right.add(item);
-        rh += h;
-      }
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: Column(children: left)),
-              const SizedBox(width: 12),
-              Expanded(child: Column(children: right)),
-            ],
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+          sliver: SliverMasonryGrid.count(
+            crossAxisCount: 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childCount: n,
+            itemBuilder: (_, i) {
+              final r = _results[i];
+              // OHOS 滚动优化：结果卡片（含新拟态阴影 + 封面）隔离成独立图层，
+              // 滚动时合成器直接搬移缓存层，避免每帧重绘阴影掉帧。
+              return RepaintBoundary(
+                child: SearchResultCard(
+                  result: r,
+                  showTypeBadge: _scope == SearchScope.all,
+                  onTap: () => _openResult(r),
+                ),
+              );
+            },
           ),
-          _buildFooter(tokens),
-        ],
-      ),
+        ),
+        SliverToBoxAdapter(child: _buildFooter(tokens)),
+      ],
     );
-  }
-
-  /// 估算卡片高度（用于瀑布流左右列平衡分配，非精确值）。
-  double _estimateCardHeight(SearchResult r, double w) {
-    final coverRatio = r.scope == SearchScope.academy ? 4 / 3 : 3 / 4;
-    // 模板封面走自适应，估算用默认比例；场景/美学院用各自固定比例
-    final coverH = r.template != null ? w / kDefaultCoverRatio : w / coverRatio;
-    var body = 46.0; // 上下 padding + 标题行
-    if (r.template != null) {
-      body += r.shortDesc.isNotEmpty ? 3 + 14 : 0; // 描述行
-      body += 6 + 16; // 标签行
-    } else if (r.scene != null) {
-      body += 6 + 22;
-    } else {
-      body += 6 + 20;
-    }
-    return coverH + body;
   }
 
   /// 列表布局：单列横向卡。
@@ -921,10 +894,12 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (_, i) {
         final r = _results[i];
-        return SearchResultListTile(
-          result: r,
-          showTypeBadge: _scope == SearchScope.all,
-          onTap: () => _openResult(r),
+        return RepaintBoundary(
+          child: SearchResultListTile(
+            result: r,
+            showTypeBadge: _scope == SearchScope.all,
+            onTap: () => _openResult(r),
+          ),
         );
       },
     );

@@ -69,10 +69,17 @@ class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
   }
 
   void _goTemplates(String categoryKey) {
+    // 传入完整父级链路（根→叶），如 'food/overhead'，供模板列表页按前缀匹配过滤。
+    // 仅传叶子 key 会失去根题材上下文，导致共享 style/method key（'overhead'/'flat'）
+    // 时跨题材误归（如街拍-几何-俯拍模板混入「美食→俯拍」）。
+    final parent = widget.category;
+    final path = (parent != null && parent.isNotEmpty && parent != categoryKey)
+        ? '$parent/$categoryKey'
+        : categoryKey;
     GoRouter.of(context).push(
       RouteNames.build(
         RouteNames.templatesAll,
-        {RouteNames.paramCategory: categoryKey},
+        {RouteNames.paramCategory: path},
       ),
     );
   }
@@ -144,6 +151,7 @@ class _TemplatesCategoryPageState extends ConsumerState<TemplatesCategoryPage> {
                             tokens: tokens,
                             typeName: _typeName,
                             typeDesc: _typeDesc,
+                            parentCategory: typeKey,
                             categories: children,
                             onTap: _goTemplates,
                           );
@@ -218,6 +226,7 @@ class _SubCategoryGrid extends ConsumerWidget {
     required this.tokens,
     required this.typeName,
     required this.typeDesc,
+    required this.parentCategory,
     required this.categories,
     required this.onTap,
   });
@@ -225,6 +234,9 @@ class _SubCategoryGrid extends ConsumerWidget {
   final ThemeTokens tokens;
   final String typeName;
   final String typeDesc;
+  /// 当前题材一级分类 key（如 'food'），用于二级分类计数按「根→叶」前缀匹配，
+  /// 避免共享下级 key（'overhead'/'flat'）时跨题材计数误归。
+  final String? parentCategory;
   final List<TemplateCategoryRecord> categories;
   final void Function(String categoryKey) onTap;
 
@@ -253,7 +265,13 @@ class _SubCategoryGrid extends ConsumerWidget {
           Center(child: LumiraProgress.circular()),
       error: (e, _) => Center(child: Text('加载失败', style: TextStyle(color: tokens.textTertiary))),
       data: (dao) => FutureBuilder<Map<String, int>>(
-        future: dao.countTemplatesBySubtree(subKeys),
+        future: dao.countTemplatesBySubtree(
+          subKeys,
+          parentPath: [
+            if (parentCategory != null && parentCategory!.isNotEmpty)
+              parentCategory!,
+          ],
+        ),
         builder: (context, snap) {
           final counts = snap.data ?? const <String, int>{};
           return SingleChildScrollView(

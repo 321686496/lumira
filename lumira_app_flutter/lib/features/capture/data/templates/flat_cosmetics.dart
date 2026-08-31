@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/flat_cosmetics.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 化妆品扁平展架模板（静物 / 扁平 / 平拍）
 /// 内置模板补充：静物大类非人像模板
@@ -18,7 +19,13 @@ const PhotoTemplate flatCosmeticsTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/flat_cosmetics_1.png'),
       TemplateImage(url: 'assets/images/templates/flat_cosmetics_2.png'),
     ],
-    description: '90 度俯拍的化妆品扁平陈列，瓶罐轮廓与品牌色调在平面上排列',
+    description: '静物美妆拍摄模板，适用于粉底液、眼影、唇釉、化妆刷等彩妆产品；采用高机位俯拍平铺摆盘，柔和漫射自然光，低对比奶油裸色调，适合大理石、浅米色、透明玻璃台面，电商产品、美妆博主静物拍摄使用。',
+    shortDesc: '温柔裸调彩妆平铺，柔光质感，高级干净的美妆氛围感✨',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer'],
+      weathers: ['cloudy', 'overcast'],
+      timeTones: ['day'],
+    ),
     referenceSource: '样片参考：化妆品扁平陈列摄影；参数参考美妆产品摆拍合集',
   ),
   composition: Composition(

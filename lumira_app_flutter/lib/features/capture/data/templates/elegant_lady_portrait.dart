@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/elegant_lady_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 知性优雅轻熟女模板
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 17
@@ -20,7 +21,13 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_3.png'),
       TemplateImage(url: 'assets/images/templates/elegant_lady_portrait_4.png'),
     ],
-    description: '莫兰迪淡雅三分法，知性优雅轻熟女，成熟大气的品质感。',
+    description: '都市建筑外墙户外人像模板，利用午后硬调自然光拍摄，穿搭为交叉扭结针织上衣+垂感阔腿长裤，手拿外套做道具，包含站立回眸、侧身、静坐多组姿势，适合轻熟气质女生，晴天下午户外建筑墙面场景使用。',
+    shortDesc: '秋日午后金阳洒落，温柔知性，演绎慵懒高级都市感🍂',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['autumn', 'winter'],
+      weathers: ['sunny'],
+      timeTones: ['warm'],
+    ),
     referenceSource: '小红书轻熟女穿搭拍照；莫兰迪淡雅风格；城市街拍人像',
   ),
   composition: Composition(
@@ -39,6 +46,7 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
       scale: 0.94,
       rotation: 0,
       description: '身体略微转向屏幕左45°，面部朝向镜头，头颈端正微收下巴；重心落在屏幕右侧腿，屏幕左侧腿微微放松；屏幕右手抱着深色外套，手臂弯曲收于腰腹位置；屏幕左手自然垂落；视线看向镜头，表情柔和松弛，身体轻靠石质墙面。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '侧身回眸插兜',
@@ -47,6 +55,7 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
       scale: 0.92,
       rotation: 0,
       description: '身体侧向屏幕左，面部转向屏幕右约90°回眸，下巴微微抬起；重心放在屏幕右腿，屏幕左腿微松；屏幕左手插入裤兜，手肘向后；屏幕右手挎拿外套与小包；视线望向屏幕画面外侧，不看镜头，姿态慵懒舒展。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '石阶静坐低头',
@@ -55,6 +64,7 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
       scale: 0.98,
       rotation: 0,
       description: '人物坐在石阶上，身体微微前倾；身体朝向屏幕左前方，面部向下低头headPitch-20°；屏幕左手撑在石阶台面上，手指放松张开；屏幕右手收拢放在腿上；头发散落，视线看向地面，不看镜头，情绪安静内敛。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '行走动态抓拍',
@@ -63,6 +73,7 @@ const PhotoTemplate elegantLadyPortraitTemplate = PhotoTemplate(
       scale: 0.96,
       rotation: 0,
       description: '身体正对镜头略微侧转，头部微仰；模拟向前行走，重心落在屏幕左腿；屏幕右手自然下垂，屏幕左手拎住深色外套下摆；手臂随行走自然摆动，视线看向镜头，姿态洒脱舒展。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

@@ -10,6 +10,8 @@ import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/common/lumira_surface.dart';
 import '../../../shared/services/poster_generator.dart';
+import '../../../shared/widgets/poster/poster_ratio.dart';
+import '../../../shared/widgets/poster/poster_style_types.dart';
 import '../../../shared/widgets/poster/template_poster_widgets.dart';
 
 import '../../../core/db/dao/gallery_dao.dart';
@@ -460,20 +462,42 @@ class _GalleryDetailPageState extends ConsumerState<GalleryDetailPage> {
       if (!mounted) return;
       final tokens = ref.read(themeTokensProvider);
       final shareText = buildAutoShareText(template);
-      final posterKey = GlobalKey();
-      await PosterGenerator.showPoster(
+      // 由照片本地文件解析海报比例（9:16 / 3:4 / 1:1 / 4:3 / 16:9），失败回退 9:16
+      final ratio = await PosterRatio.fromFile(photoPath);
+      if (!mounted) return;
+      // 照片详情分享海报：落款 @小满，二维码沿用拍摄模板链接（可扫码拍同款/查看模板）。
+      await PosterGenerator.showPosterWithStylePicker(
         context: context,
         tokens: tokens,
-        title: '分享模板海报',
-        content: TemplatePhotoPosterContent(
-          photoPath: photoPath,
+        title: '分享照片海报',
+        kind: PosterKind.photo,
+        ratio: ratio,
+        data: PosterStyleData(
+          ratio: ratio,
+          title: template.name,
+          category: template.category,
+          qrData: buildTemplatePosterQrData(template),
+          qrHint: '长按识别 · 查看高清原图',
+          qrSub: '打开如画 · 保存原图',
           shareText: shareText,
-          template: template,
+          authorName: '小满',
+          photoBuilder: (w, h) => Image.file(
+            File(photoPath),
+            width: w,
+            height: h,
+            fit: BoxFit.cover,
+            cacheWidth: kPosterImageCacheWidth,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => Container(
+              color: tokens.brandSubtle,
+              alignment: Alignment.center,
+              child: Icon(Icons.photo_outlined, size: 40, color: tokens.brand),
+            ),
+          ),
         ),
-        posterKey: posterKey,
-        shareSubject: '模板海报 · ${template.name}',
+        shareSubject: '照片海报 · ${template.name}',
         shareText: shareText,
-        fileNamePrefix: 'template_poster',
+        fileNamePrefix: 'photo_poster',
       );
     } catch (e) {
       if (!mounted) return;

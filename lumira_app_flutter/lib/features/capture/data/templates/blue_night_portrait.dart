@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/blue_night_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 蓝色之夜七分身人像模板
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 13
@@ -20,8 +21,14 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/blue_night_portrait_3.png'),
       TemplateImage(url: 'assets/images/templates/blue_night_portrait_4.png'),
     ],
-    description: '黄昏逆光暗夜蓝冷峻浪漫，天空大海的背影剪影诗。',
+    description: '人像摄影模板，蓝调暮色黄昏海边环境，依靠日落环境逆光塑造人物剪影，适合长裙、西装深色系穿搭，捕捉安静疏离的海边氛围感，适合情绪人像拍摄。',
     referenceSource: '小红书爱乐之城深色滤镜；逆光剪影人像；黄昏海边摄影',
+    shortDesc: '蓝调暮色漫染大海，静默剪影诉说晚风心事🌊',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['cool'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',
@@ -39,6 +46,7 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
       scale: 0.22,
       rotation: 0,
       description: '人物背对镜头，身体朝向屏幕正远方海面180°，头部保持正直，双脚平稳站立，双臂自然垂落在身体两侧，全身笔直站立，视线望向屏幕正前方海平面落日，情绪沉静放空。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '斜侧回眸半身',
@@ -47,6 +55,7 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
       scale: 0.64,
       rotation: 0,
       description: '人物身体侧向屏幕左约+45°，面部回转朝向镜头方向约-45°，头颈正直，肩膀微微放松，画面可见的屏幕右侧手臂自然弯曲，手部松弛悬于腰侧，手指自然放松，重心稳定站立，视线看向镜头，气质清冷疏离。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '侧面侧脸剪影',
@@ -55,6 +64,7 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
       scale: 0.74,
       rotation: 0,
       description: '人物身体侧向屏幕右约-90°，面部同样朝向屏幕右-90°纯侧面，头部微微抬升，一缕发丝被海风吹起，双臂自然垂于身体，双手手指松弛，重心单腿支撑站立，视线望向屏幕右侧远方海面，安静忧郁。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '背身仰头望天际',
@@ -63,6 +73,7 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
       scale: 0.68,
       rotation: 0,
       description: '人物身体背对镜头朝向屏幕正前方海面180°，头部向上仰起headPitch+18°，面部转向屏幕右侧约-45°，双肩放松下沉，双臂垂在身体两侧，双手自然下垂，视线看向屏幕右上方黄昏云霞，情绪温柔怅然。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

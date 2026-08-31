@@ -14,12 +14,13 @@ import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../scenes/widgets/scene_category_overview.dart';
 import '../data/remote_templates_providers.dart';
+import '../data/templates_browse_mock_data.dart';
 import '../data/templates_mock_data.dart';
 import '../data/templates_providers.dart';
 import '../services/template_mapper.dart';
 import '../widgets/adaptive_cover_image.dart';
 import '../widgets/recommendation_card.dart';
-import '../widgets/template_grid_card.dart';
+import '../widgets/template_grid.dart';
 import '../widgets/user_preference_card.dart';
 
 /// 模板页（Tab 页，FloatingTabBar active="templates"）
@@ -184,9 +185,9 @@ class _BodyContent extends ConsumerWidget {
             delay: const Duration(milliseconds: 80),
             child: _PreferenceSection(),
           ),
-        FadeUp(
-          delay: const Duration(milliseconds: 120),
-          child: _OtherSection(onTap: onTap),
+        const FadeUp(
+          delay: Duration(milliseconds: 120),
+          child: _OtherSection(),
         ),
         const SizedBox(height: 28),
         // === 场景 section（下）===
@@ -311,6 +312,8 @@ class _HeroSection extends ConsumerWidget {
     // 缓存查询结果避免每次 build 反复进入 loading 状态导致 SizedBox(244) 持续显示 loading 圈。
     // loading/error/空数据时不渲染 SizedBox(244)，避免标题下方出现大空白。
     final asyncList = ref.watch(recommendedBuiltinTemplatesProvider);
+    // 已拍照片数（Hero 卡右下角角标，与模板库卡片一致）
+    final usageCounts = ref.watch(templateUsageCountsProvider).valueOrNull ?? const <String, int>{};
     return FadeUp(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(0, 4, 0, 12), // 减小底部留白避免与"更多模板"间距过大
@@ -335,7 +338,9 @@ class _HeroSection extends ConsumerWidget {
               data: (list) {
                 if (list.isEmpty) return const SizedBox.shrink();
                 return SizedBox(
-                  height: 252, // 244 + 8px 阴影空间（shadowConvex blurRadius 14 + offset 6 → 阴影延伸 ~20px）
+                  // Hero 卡内容与模板库一致（封面自适应 + 名称 + 短简介 + 标签行）后整体变高，
+                  // 高度从 244 上调预留阴影空间。
+                  height: 300,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     clipBehavior: Clip.none, // 允许阴影溢出裁剪边界
@@ -346,6 +351,7 @@ class _HeroSection extends ConsumerWidget {
                       final rec = _recordToRecommendation(list[index]);
                       return RecommendationCard(
                         recommendation: rec,
+                        usageCount: usageCounts[rec.id] ?? 0,
                         onTap: () => onTap(rec.id),
                       );
                     },
@@ -398,14 +404,15 @@ class _PreferenceSection extends ConsumerWidget {
 
 /// 更多模板 section
 class _OtherSection extends ConsumerWidget {
-  const _OtherSection({required this.onTap});
-
-  final void Function(String templateId) onTap;
+  const _OtherSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
     final asyncOthers = ref.watch(hotAndNewTemplatesProvider);
+    // 已拍照片数（「更多模板」卡右下角角标，与模板库卡片一致）
+    final usageCounts =
+        ref.watch(templateUsageCountsProvider).valueOrNull ?? const <String, int>{};
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
       child: Column(
@@ -441,7 +448,7 @@ class _OtherSection extends ConsumerWidget {
               ],
             ),
           ),
-          // Forced fix: 用 freeBuiltinTemplatesProvider 替代 FutureBuilder，
+          // Forced fix: 用 hotAndNewTemplatesProvider 替代 FutureBuilder，
           // 缓存查询结果避免每次 build 反复进入 loading 状态导致标题下方出现大空白。
           // loading 时用 SizedBox.shrink() 避免占位空白，数据到达后自然填充。
           asyncOthers.when(
@@ -459,16 +466,18 @@ class _OtherSection extends ConsumerWidget {
               final right = <Widget>[];
               var leftH = 0.0;
               var rightH = 0.0;
-              for (final rec in visible) {
-                final tpl = _recordToItem(rec);
+              for (final r in visible) {
+                // 与「全部模板页」卡片同构：TemplateCard + 共享徽标（免费/积分/已拍）
+                final item = templateGridItemFromRecord(r, isCustom: false);
                 final card = Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: TemplateGridCard(
-                    template: tpl,
-                    onTap: () => onTap(tpl.id),
+                  child: TemplateCard(
+                    tokens: tokens,
+                    template: item,
+                    usageCount: usageCounts[item.id] ?? 0,
                   ),
                 );
-                final h = _estimateMoreCardHeight(cardW);
+                final h = _estimateMoreCardHeight(item, cardW);
                 if (leftH <= rightH) {
                   left.add(card);
                   leftH += h;
@@ -677,29 +686,20 @@ TemplateRecommendation _recordToRecommendation(TemplateRecord r) {
     category: r.category,
     cover: r.cover.isEmpty ? null : TemplateMapper.normalizeAssetUrl(r.cover),
     coverData: r.coverData,
-  );
-}
-
-/// TemplateRecord → TemplateItem 适配
-/// DAO 免费模板数据 → TemplateGridCard 所需类型
-TemplateItem _recordToItem(TemplateRecord r) {
-  return TemplateItem(
-    id: r.id,
-    name: r.name,
-    category: r.category,
-    imageSeed: r.id,
-    cover: r.cover.isEmpty ? null : TemplateMapper.normalizeAssetUrl(r.cover),
-    coverData: r.coverData,
+    // 与「全部模板页」卡片对齐的徽标数据：价格/自定义/氛围
     price: r.price,
+    isCustom: r.source == 'custom',
+    ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
   );
 }
 
 /// 估算「更多模板」卡片高度（瀑布流配平用）。
 ///
-/// 结构：封面(宽 ÷ kDefaultCoverRatio) + 文字区(上 padding 8 + 名称 13*1.2 +
-/// 间距 3 + 分类 11 + 下 padding 10)。
-double _estimateMoreCardHeight(double cardWidth) {
+/// 结构与 [TemplateCard] 一致：封面(宽 ÷ kDefaultCoverRatio) + 文字区
+/// (内边距 24 + 名称 20 + [短描述 3+30] + 间距 6 + 徽标行 22)。
+double _estimateMoreCardHeight(AllTemplateItem t, double cardWidth) {
   final coverH = cardWidth / kDefaultCoverRatio;
-  const textH = 8 + 13 * 1.2 + 3 + 11 + 10;
+  final hasDesc = t.shortDesc.isNotEmpty || t.description.isNotEmpty;
+  final textH = 20 + (hasDesc ? 33 : 0) + 6 + 22 + 24;
   return coverH + textH;
 }

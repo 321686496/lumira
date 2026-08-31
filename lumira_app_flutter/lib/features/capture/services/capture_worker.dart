@@ -23,7 +23,11 @@ import 'dart:typed_data' show Uint8List;
 import 'package:image/image.dart' as img;
 
 import 'dart_photo_pipeline.dart'
-    show applyPerPixelEffectsImg, applySmoothSkinImg, applyVignetteImg;
+    show
+        applyPerPixelEffectsImg,
+        applySmoothSkinImg,
+        applyVignetteImg,
+        legStretchRgba;
 
 /// worker 处理请求参数（跨 isolate 可传递：仅基础类型 + Uint8List + String）。
 class CaptureWorkerRequest {
@@ -263,4 +267,135 @@ List<int> _sampleAvgRgb(img.Image image, {int step = 8}) {
     (g / cnt).round(),
     (b / cnt).round(),
   ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 拉腿实时预览 worker（LegStretchWorker）
+// ─────────────────────────────────────────────────────────────────────────
+// 与 CaptureWorker 同源的常驻 isolate：把拉腿预览的逐像素拉伸移出 UI 主线程。
+// 主 isolate 只做 GPU 抓帧（toImage/toByteData）与结果 codec 解码显示，
+// 拉伸（legStretchRgba，600px 时约 40 万像素的字节级快速循环）在后台 isolate
+// 执行，避免拍摄页 UI 被逐像素循环阻塞而卡顿。
+
+/// 拉腿预览拉伸结果。
+class LegStretchResult {
+  const LegStretchResult({
+    required this.ok,
+    this.rgbaBytes,
+    required this.width,
+    required this.height,
+  });
+  final bool ok;
+  final Uint8List? rgbaBytes;
+  final int width;
+  final int height;
+}
+
+/// 常驻拉腿预览 worker isolate 单例。
+class LegStretchWorker {
+  LegStretchWorker._();
+
+  static final LegStretchWorker instance = LegStretchWorker._();
+
+  Isolate? _isolate;
+  SendPort? _sendPort;
+  bool _started = false;
+
+  /// 惰性启动常驻 isolate（仅首次调用真正创建）。
+  Future<void> ensureStarted() async {
+    if (_started) return;
+    final mainPort = ReceivePort();
+    final isolate =
+        await Isolate.spawn(_legStretchWorkerEntry, mainPort.sendPort);
+    _isolate = isolate;
+    // 等 worker 回传它的 ReceivePort.sendPort，握手完成
+    _sendPort = await mainPort.first as SendPort;
+    _started = true;
+  }
+
+  /// 提交一次拉腿拉伸，等待结果返回。
+  Future<LegStretchResult> stretch({
+    required Uint8List rgbaBytes,
+    required int width,
+    required int height,
+    required int legStretch,
+  }) async {
+    if (legStretch <= 0) {
+      return LegStretchResult(
+        ok: true,
+        rgbaBytes: rgbaBytes,
+        width: width,
+        height: height,
+      );
+    }
+    await ensureStarted();
+    final replyPort = ReceivePort();
+    _sendPort!.send({
+      'reply': replyPort.sendPort,
+      'rgbaBytes': rgbaBytes,
+      'width': width,
+      'height': height,
+      'legStretch': legStretch,
+    });
+    try {
+      final result = await replyPort.first as Map;
+      return LegStretchResult(
+        ok: result['ok'] as bool? ?? false,
+        rgbaBytes: result['rgbaBytes'] as Uint8List?,
+        width: result['width'] as int,
+        height: result['height'] as int,
+      );
+    } finally {
+      replyPort.close();
+    }
+  }
+
+  /// 释放常驻 isolate（页面销毁时调用，避免泄漏）。
+  void dispose() {
+    _isolate?.kill(priority: Isolate.immediate);
+    _isolate = null;
+    _sendPort = null;
+    _started = false;
+  }
+}
+
+/// 拉腿 worker 入口（必须在顶层函数，Isolate.spawn 要求）。
+void _legStretchWorkerEntry(SendPort mainPort) async {
+  final port = ReceivePort();
+  mainPort.send(port.sendPort);
+  await for (final msg in port) {
+    final reply = msg['reply'] as SendPort;
+    try {
+      final rgbaBytes = msg['rgbaBytes'] as Uint8List;
+      final width = msg['width'] as int;
+      final height = msg['height'] as int;
+      final legStretch = msg['legStretch'] as int;
+
+      // 字节级快速拉伸：直接操作 Uint8List + 整行拷贝，避免 img.Image
+      // 逐像素 getPixel/setPixel 的对象开销，大幅缩短单次拉伸耗时，
+      // 使抓帧在定时间隔内完成，不再叠加 GPU 读回导致拍摄页卡顿。
+      final stretched = legStretchRgba(
+        rgbaBytes,
+        width: width,
+        height: height,
+        legStretch: legStretch,
+      );
+
+      reply.send({
+        'ok': true,
+        'rgbaBytes': stretched.bytes,
+        'width': width,
+        'height': stretched.height,
+      });
+    } catch (e, st) {
+      stderr.writeln('[leg-stretch-worker] stretch failed: $e\n$st');
+      // 失败回退：原样回传原始 rgba（等效不拉伸，保留实时画面）。
+      reply.send({
+        'ok': false,
+        'rgbaBytes': msg['rgbaBytes'] as Uint8List?,
+        'width': msg['width'] as int,
+        'height': msg['height'] as int,
+      });
+    }
+  }
 }

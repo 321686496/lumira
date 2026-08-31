@@ -1,4 +1,4 @@
-// lumira-server/packages/backend/src/modules/invite/invite.service.ts
+﻿// lumira-server/packages/backend/src/modules/invite/invite.service.ts
 
 import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import { eq, and, count, desc, gte } from 'drizzle-orm';
@@ -11,6 +11,10 @@ import { getUtc8DayStart } from '../../common/utils/date.util';
 // 邀请即时奖励：双方各 +30 积分；邀请人每日上限 3 次（90 分/天）
 const INVITE_INSTANT_POINTS = 30;
 const INVITE_DAILY_LIMIT = 3;
+
+// 邀请绑定窗口：仅设备「首次注册后的短时间内」允许绑定邀请码（即新用户定义）。
+// 超过该窗口视为老用户，禁止再绑定，防止老用户互刷/复用（违背裂变初衷）。
+const INVITE_BIND_WINDOW_SECONDS = 24 * 60 * 60; // 24h
 
 // 里程碑奖励 item 结构
 interface MilestoneRewardItem {
@@ -103,7 +107,16 @@ export class InviteService {
       throw new BadRequestException('Cannot use your own invite code');
     }
 
-    // 3. 检查被邀请人是否已激活过
+    // 3. 新用户门槛：仅设备首次注册后的绑定窗口内允许绑定邀请码。
+    //     老设备（如已使用多日再回来填码）一律拒绝，防止互刷/复用破坏裂变初衷。
+    const inviteeDevice = await db.query.devices.findFirst({
+      where: eq(devices.deviceId, inviteeDeviceId),
+    });
+    if (inviteeDevice && now - inviteeDevice.firstSeenAt > INVITE_BIND_WINDOW_SECONDS) {
+      throw new BadRequestException('仅限新用户首次使用时可绑定邀请码');
+    }
+
+    // 4. 检查被邀请人是否已激活过
     const existingActivation = await db.query.inviteRecords.findFirst({
       where: eq(inviteRecords.inviteeDeviceId, inviteeDeviceId),
     });
@@ -111,11 +124,11 @@ export class InviteService {
       throw new ConflictException('This device has already activated an invite');
     }
 
-    // Anti-fraud check 4: 2-cycle detection (A→B then B→A).
+    // Anti-fraud check 5: 2-cycle detection (A→B then B→A).
     // Note: Longer cycles (A→B→C→A) are NOT prevented by this check.
     // This is an accepted MVP limitation — three colluding devices could mutually inflate counts.
     // Extend to transitive closure if fraud becomes a problem at scale.
-    // 4. 防回流：检查被邀请人是否曾邀请过当前邀请人
+    // 5. 防回流：检查被邀请人是否曾邀请过当前邀请人
     const reverseRecord = await db.query.inviteRecords.findFirst({
       where: and(
         eq(inviteRecords.inviterDeviceId, inviteeDeviceId),
@@ -126,7 +139,7 @@ export class InviteService {
       throw new BadRequestException('Invite cycle detected');
     }
 
-    // 5. 写入邀请记录
+    // 6. 写入邀请记录
     await db.insert(inviteRecords).values({
       inviterDeviceId,
       inviteeDeviceId,
@@ -137,7 +150,7 @@ export class InviteService {
       inviteeIp,
     });
 
-    // 6. 重新计算邀请人累计邀请数
+    // 7. 重新计算邀请人累计邀请数
     const countResult = await db.select({ value: count() })
       .from(inviteRecords)
       .where(eq(inviteRecords.inviterDeviceId, inviterDeviceId));
@@ -170,7 +183,7 @@ export class InviteService {
       console.error('[invite] instant points failed', e);
     }
 
-    // 7. 检查是否达到新的奖励阶梯（一次性：积分 + 免费解锁次数 + 成就）
+    // 8. 检查是否达到新的奖励阶梯（一次性：积分 + 免费解锁次数 + 成就）
     const tiers = await db.query.rewardTiers.findMany({
       where: eq(rewardTiers.isActive, 1),
     });

@@ -31,6 +31,15 @@ class TemplateShareCode {
     return 'lumira://tpl/$encoded';
   }
 
+  /// 构建海报二维码内容：统一使用低密度简化 .lumira 链接。
+  ///
+  /// 完整 .pptpl JSON（尤其内嵌 base64 封面/剪影后约 2261 字节）会生成
+  /// 157 模块的高密度二维码，在分享海报的小尺寸二维码（28~84px）上渲染成
+  /// 一团黑点/糊块；简化 .lumira 仅约 445 字节（73 模块），小尺寸下仍
+  /// 清晰可辨、可被首页「扫一扫」识别并导入基础模板。
+  static String buildPosterQrData(TemplateRecord record) =>
+      buildShareLink(record, usePptpl: false);
+
   /// 解析分享链接。
   /// 支持：`lumira://tpl/{base64}` / `https://lumira.app/tpl/{base64}` / `https://lumira.app/tpl?name=...&category=...`
   static Map<String, dynamic>? parseLink(String url) {

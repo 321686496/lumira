@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/router/route_names.dart';
@@ -15,6 +14,7 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/safe_share.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/poster/template_import_poster.dart';
 import '../models/share_token.dart';
 import '../services/template_share_service.dart';
 
@@ -524,6 +524,40 @@ class _ShareQrSheetState extends ConsumerState<_ShareQrSheet> {
   ShareToken? _shareToken;
   String? _error;
 
+  /// 导出 payload 解析结果（用于取封面 / 分类）。
+  Map<String, dynamic>? _payload;
+  ImportPosterCover? _cover;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _payload = jsonDecode(widget.rawContent) as Map<String, dynamic>;
+    } catch (_) {
+      _payload = null;
+    }
+    _resolveCover();
+  }
+
+  Future<void> _resolveCover() async {
+    final payload = _payload;
+    if (payload == null) return;
+    final cover = await resolveImportPosterCover(payload);
+    if (!mounted) return;
+    setState(() {
+      _cover = cover;
+    });
+  }
+
+  String get _category {
+    final meta = _payload?['meta'];
+    if (meta is Map<String, dynamic>) {
+      final cat = meta['category'];
+      if (cat is String) return cat;
+    }
+    return '';
+  }
+
   Future<void> _createShare(int ttl) async {
     setState(() {
       _phase = _SharePhase.loading;
@@ -661,92 +695,93 @@ class _ShareQrSheetState extends ConsumerState<_ShareQrSheet> {
     if (token == null) return const SizedBox.shrink();
     final link = TemplateShareService.buildQrText(token.token);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Center(
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // V3 画幅自适应分享海报（二维码内置于海报，按封面比例切换五种排版）
+          Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: TemplateImportPoster(
+                cover: _cover,
+                templateName: widget.templateName,
+                category: _category,
+                qrData: link,
+                expiryText: _formatExpiry(token.expiresAt),
+              ),
             ),
-            child: QrImageView(
-              data: link,
-              size: 180,
-              backgroundColor: Colors.white,
-            ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          widget.templateName,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: tokens.textPrimary,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          _formatExpiry(token.expiresAt),
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, color: tokens.textSecondary),
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: tokens.surfaceAlt,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            link,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 16),
+          Text(
+            widget.templateName,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 13,
-              fontFamily: 'monospace',
-              color: tokens.textSecondary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
             ),
           ),
-        ),
-        if (_error != null) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
-            _error!,
-            style: TextStyle(fontSize: 13, color: tokens.danger),
+            _formatExpiry(token.expiresAt),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: tokens.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: tokens.surfaceAlt,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              link,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontFamily: 'monospace',
+                color: tokens.textSecondary,
+              ),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _error!,
+              style: TextStyle(fontSize: 13, color: tokens.danger),
+            ),
+          ],
+          const SizedBox(height: 16),
+          LumiraButton(
+            variant: ButtonVariant.secondary,
+            onPressed: () => _copyLink(link),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.link_outlined, size: 20),
+                SizedBox(width: 8),
+                Text('复制链接'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          LumiraButton(
+            variant: ButtonVariant.danger,
+            onPressed: _revoke,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.close, size: 20),
+                SizedBox(width: 8),
+                Text('撤回分享'),
+              ],
+            ),
           ),
         ],
-        const SizedBox(height: 16),
-        LumiraButton(
-          variant: ButtonVariant.secondary,
-          onPressed: () => _copyLink(link),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.link_outlined, size: 20),
-              SizedBox(width: 8),
-              Text('复制链接'),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        LumiraButton(
-          variant: ButtonVariant.danger,
-          onPressed: _revoke,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.close, size: 20),
-              SizedBox(width: 8),
-              Text('撤回分享'),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

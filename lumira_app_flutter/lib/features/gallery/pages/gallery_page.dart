@@ -14,7 +14,6 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/safe_temp_dir.dart';
 import '../../profile/providers/collection_providers.dart';
-import '../../../shared/widgets/common/fade_up.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/gallery_models.dart';
@@ -67,6 +66,32 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   bool _isLoading = true;
   bool _isInitialLoaded = false;
 
+  /// 派生数据缓存：仅当 `_photos`/`_allPhotos` 真正变化时重算。
+  ///
+  /// 相册有多选/搜索/过滤，这些操作都会 `setState` 重建 body。若每次重建都重新
+  /// `map(→GalleryPhoto)`、`_buildPills`、`_groupByTime`（对大相册均为 O(n)），
+  /// 在频繁点选/滑动时会成为卡顿来源。这里按数据身份缓存，避免重复 O(n) 派生。
+  _GalleryDerivedData? _derived;
+
+  _GalleryDerivedData _ensureDerived() {
+    final cached = _derived;
+    if (cached != null) return cached;
+    final photoViews = _photos.map(GalleryPhoto.fromRecord).toList();
+    final grouped = _groupByTime(_photos);
+    final keys = grouped.keys.toList();
+    final sectionViews = keys
+        .map((k) => grouped[k]!.map(GalleryPhoto.fromRecord).toList())
+        .toList();
+    _derived = _GalleryDerivedData(
+      photoViews: photoViews,
+      grouped: grouped,
+      pills: _buildPills(_allPhotos),
+      sectionKeys: keys,
+      sectionViews: sectionViews,
+    );
+    return _derived!;
+  }
+
   Future<List<GalleryItemRecord>> _fetchPhotos(GalleryDao dao) async {
     if (_activeFilter == 'all') {
       return dao.getAll();
@@ -92,6 +117,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
       final all = await dao.getAll();
       if (mounted) {
         setState(() {
+          _derived = null;
           _photos = photos;
           _allPhotos = all;
           _isLoading = false;
@@ -100,6 +126,7 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
     } catch (_) {
       if (mounted) {
         setState(() {
+          _derived = null;
           _photos = const [];
           _allPhotos = const [];
           _isLoading = false;
@@ -138,12 +165,14 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
     dao.search(value).then((results) {
       if (!mounted) return;
       setState(() {
+        _derived = null;
         _photos = results;
         _isLoading = false;
       });
     }).catchError((_) {
       if (!mounted) return;
       setState(() {
+        _derived = null;
         _photos = const [];
         _isLoading = false;
       });
@@ -452,9 +481,10 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   }
 
   Widget _buildBody(ThemeTokens tokens) {
-    final photoViews = _photos.map(GalleryPhoto.fromRecord).toList();
-    final pills = _buildPills(_allPhotos);
-    final grouped = _groupByTime(_photos);
+    final d = _ensureDerived();
+    final photoViews = d.photoViews;
+    final pills = d.pills;
+    final grouped = d.grouped;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -722,33 +752,30 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
   Widget _buildPhotoCell(ThemeTokens tokens, List<GalleryPhoto> photoViews, int i) {
     final photo = photoViews[i];
     final isSelected = _selectedIds.contains(photo.id);
-    return FadeUp(
-      delay: Duration(milliseconds: (i % 6) * 50),
-      child: PhotoCell(
-        key: ValueKey('photo_cell_$i'),
-        photo: photo,
-        isSelected: isSelected,
-        isMultiSelectMode: _isMultiSelectMode,
-        onTap: () {
-          if (_isMultiSelectMode) {
-            setState(() {
-              if (isSelected) {
-                _selectedIds.remove(photo.id);
-              } else {
-                _selectedIds.add(photo.id);
-              }
-            });
-          } else {
-            _openDetail(photo);
-          }
-        },
-        onLongPress: () {
+    return PhotoCell(
+      key: ValueKey('photo_cell_$i'),
+      photo: photo,
+      isSelected: isSelected,
+      isMultiSelectMode: _isMultiSelectMode,
+      onTap: () {
+        if (_isMultiSelectMode) {
           setState(() {
-            _isMultiSelectMode = true;
-            _selectedIds.add(photo.id);
+            if (isSelected) {
+              _selectedIds.remove(photo.id);
+            } else {
+              _selectedIds.add(photo.id);
+            }
           });
-        },
-      ),
+        } else {
+          _openDetail(photo);
+        }
+      },
+      onLongPress: () {
+        setState(() {
+          _isMultiSelectMode = true;
+          _selectedIds.add(photo.id);
+        });
+      },
     );
   }
 
@@ -773,31 +800,28 @@ class _GalleryPageState extends ConsumerState<GalleryPage> {
       physics: const NeverScrollableScrollPhysics(),
       itemBuilder: (_, i, isSelected, startSweep) {
         final photo = photos[i];
-        return FadeUp(
-          delay: Duration(milliseconds: (i % 6) * 50),
-          child: PhotoCell(
-            key: ValueKey('photo_cell_$i'),
-            photo: photo,
-            isSelected: isSelected,
-            isMultiSelectMode: _isMultiSelectMode,
-            onTap: () {
-              if (_isMultiSelectMode) {
-                setState(() {
-                  if (!_selectedIds.remove(photo.id)) {
-                    _selectedIds.add(photo.id);
-                  }
-                });
-              } else {
-                _openDetail(photo);
-              }
-            },
-            onLongPress: () {
-              if (!_isMultiSelectMode) {
-                setState(() => _isMultiSelectMode = true);
-              }
-              startSweep();
-            },
-          ),
+        return PhotoCell(
+          key: ValueKey('photo_cell_$i'),
+          photo: photo,
+          isSelected: isSelected,
+          isMultiSelectMode: _isMultiSelectMode,
+          onTap: () {
+            if (_isMultiSelectMode) {
+              setState(() {
+                if (!_selectedIds.remove(photo.id)) {
+                  _selectedIds.add(photo.id);
+                }
+              });
+            } else {
+              _openDetail(photo);
+            }
+          },
+          onLongPress: () {
+            if (!_isMultiSelectMode) {
+              setState(() => _isMultiSelectMode = true);
+            }
+            startSweep();
+          },
         );
       },
     );
@@ -1315,4 +1339,26 @@ class _AddToCollectionSheetState extends ConsumerState<_AddToCollectionSheet> {
       ),
     );
   }
+}
+
+/// 相册页派生的 O(n) 计算结果缓存。
+///
+/// `build` 每次 setState 都会触发，而相册有多选/搜索/过滤等高频重建场景。
+/// 若每次重建都重新 `map(→GalleryPhoto)` / `_buildPills` / `_groupByTime`
+/// （对大相册均为 O(n)），会成为滚动与点选时的卡顿来源。此缓存按数据身份
+/// 失效：数据变化（`_derived = null`）才重算，否则复用上次结果。
+class _GalleryDerivedData {
+  _GalleryDerivedData({
+    required this.photoViews,
+    required this.grouped,
+    required this.pills,
+    required this.sectionKeys,
+    required this.sectionViews,
+  });
+
+  final List<GalleryPhoto> photoViews;
+  final Map<String, List<GalleryItemRecord>> grouped;
+  final List<SceneFilterPill> pills;
+  final List<String> sectionKeys;
+  final List<List<GalleryPhoto>> sectionViews;
 }

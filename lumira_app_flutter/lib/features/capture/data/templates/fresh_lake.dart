@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/fresh_lake.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 湖畔清新平拍模板（风光 / 清新 / 平拍）
 /// 内置模板补充：风光大类非人像模板
@@ -17,8 +18,14 @@ const PhotoTemplate freshLakeTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/fresh_lake.jpg'),
     ],
-    description: '平视角的湖畔风光，水面镜面倒影配上清澈天空，营造清新宁静的氛围',
+    description: '这是一张典型的夏日自然风光摄影模板。采用经典的框架式构图，利用前景上方垂下的绿叶作为天然画框，将视线聚焦于中景高饱和度的碧蓝湖面与远景的林带。画面色彩明快，以青、绿、蓝为主色调，对比强烈且通透。光线为晴朗正午的硬调自然光，阴影清晰。适合在天气晴好的湖畔公园、度假村草坪拍摄，无需复杂道具，重在捕捉色彩与光影的层次感。',
     referenceSource: '样片参考：Pexels 湖畔清新风光精选；参数参考风光摄影清新色调合集',
+    shortDesc: '碧蓝湖水与翠绿草坪撞色，树荫斑驳洒落，夏日午后的治愈系明信片，一眼万年🌿💙',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['summer', 'autumn'],
+      weathers: ['sunny'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/flat_sonboc.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 扁平桌面摆件模板（静物 / 扁平 / 平拍）
 /// 内置模板补充：静物大类非人像模板
@@ -20,8 +21,14 @@ const PhotoTemplate flatSonbocTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/flat_sonboc_3.png'),
       TemplateImage(url: 'assets/images/templates/flat_sonboc_4.png'),
     ],
-    description: '90 度俯拍的桌面摆件扁平陈列，几何与色彩在平面上形成秩序',
+    description: '静物平铺俯拍模板，适合桌面摆件、软装物料、品牌物料样片拍摄；采用柔和漫射自然光，低饱和莫兰迪色调，几何物件有序排布，适合拍摄家居软装、物料色卡、文创静物，无需强光闪光灯。',
     referenceSource: '样片参考：扁平桌面静物作品；参数参考平面排版静物合集',
+    shortDesc: '低饱和莫兰迪静物平铺，质感物件有序排布，安静高级氛围感🤍',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn', 'winter'],
+      weathers: ['overcast', 'cloudy'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

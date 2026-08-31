@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/casual_crosswalk.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 斑马线随拍模板（街拍 / 随性 / 远景）
 /// 内置模板补充：街拍大类非人像模板
@@ -20,8 +21,14 @@ const PhotoTemplate casualCrosswalkTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/casual_crosswalk_3.png'),
       TemplateImage(url: 'assets/images/templates/casual_crosswalk_4.png'),
     ],
-    description: '城市路口黑白纪实，斑马线透视延伸出充满烟火与人文气息的街头决定性瞬间',
+    description: '街拍非人像模板，大远景抓拍行人穿行斑马线的生活决定性瞬间；利用斑马线透视引导线构建画面，侧光/顶光塑造路面线条质感，黑白高对比胶片质感，适合记录城市人文纪实场景。',
     referenceSource: '样片参考：Magnum 街拍斑马线作品；参数参考人文街头抓拍合集',
+    shortDesc: '城市路口黑白纪实，斑马线延伸出充满烟火的街头故事📷',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn'],
+      weathers: ['sunny'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'leading_lines',

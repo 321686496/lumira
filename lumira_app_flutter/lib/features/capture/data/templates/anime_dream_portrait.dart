@@ -42,6 +42,7 @@ const PhotoTemplate animeDreamPortraitTemplate = PhotoTemplate(
           scale: 0.88,
           rotation: 0,
           description: '人物背对镜头，双脚腾空跳跃，屏幕左侧手臂竖直向上高举握拳，屏幕右侧手臂向身体侧后方张开握拳，双腿屈膝，一条腿向上抬，一条腿向下，呈现起跳腾空姿态。',
+          cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

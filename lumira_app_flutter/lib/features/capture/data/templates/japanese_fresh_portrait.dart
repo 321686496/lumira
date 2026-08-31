@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/japanese_fresh_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 日系小清新模板（japanese_fresh 子风格）
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 3
@@ -19,8 +20,14 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait_2.png'),
       TemplateImage(url: 'assets/images/templates/japanese_fresh_portrait_3.png'),
     ],
-    description: '干净清透的日系空气感，低对比微冷调，樱花校园的青春记忆。',
+    description: '这是一套主打夏日清新森系风格的户外/室内人像模板。利用强烈的自然逆光勾勒发丝金边，配合正面柔和补光打造通透无瑕的奶油肌质感。穿搭以蓝白格纹吊带裙为主，搭配浅棕微卷长发，营造慵懒随性的少女氛围。适合春夏季节晴朗天气拍摄，尤其推荐在树荫下或明亮窗边取景，通过大光圈虚化背景突出主体，成片色调明亮低对比，充满呼吸感与氧气感。',
     referenceSource: '小红书日系小清新教程；日系写真风格；轻颜/醒图清新滤镜',
+    shortDesc: '林间碎金洒落发梢，蓝白格裙摇曳生姿，清透氧气感拉满，是夏日午后最治愈的松弛瞬间🌿💙',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',
@@ -38,6 +45,7 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
       scale: 0.85,
       rotation: 0,
       description: '人物位于画面中央偏右，身体侧向屏幕左约45°，面部几乎正对镜头（微偏屏幕右-15°）。右手抬起轻抚头顶右侧发丝，手肘向外打开，手指自然弯曲放松；左臂自然下垂于身侧不可见。重心落在双腿中间，肩线平稳。头颈微微向屏幕右倾斜+5°，下巴微收。视线直视镜头，表情平静略带懵懂，嘴唇微张。整体呈现一种不经意被抓拍的松弛感。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '附加·持花侧坐',
@@ -46,6 +54,7 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
       scale: 0.9,
       rotation: 0,
       description: '人物位于画面右侧，身体侧向屏幕左约90°，面部转向镜头约-45°。双手捧着一束蓝色绣球花置于画面左侧前景，手臂自然弯曲支撑。坐姿，背部挺直微前倾，露出肩背线条。头颈向屏幕左微倾-5°，面带甜美微笑，嘴角上扬，眼神柔和看向镜头。光线从屏幕右上方打入，在肩膀和头发上形成高光。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '附加·阳光回眸',
@@ -54,6 +63,7 @@ const PhotoTemplate japaneseFreshPortraitTemplate = PhotoTemplate(
       scale: 0.88,
       rotation: 0,
       description: '人物位于画面中央，身体背对镜头侧向屏幕左约135°，面部大幅度回转朝向镜头约-160°（经典回眸）。双臂自然下垂或微微向后摆动，未在画面主要区域展示手部动作。重心略微前倾，呈现动态行走中回头的瞬间。头颈向屏幕右倾斜+10°，笑容灿烂露齿，眼睛弯成月牙状，情绪高昂愉悦。强烈的逆光从屏幕后方打来，发丝边缘发光。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

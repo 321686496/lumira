@@ -2,7 +2,10 @@ import { Test } from '@nestjs/testing';
 import { NestFastifyApplication, FastifyAdapter } from '@nestjs/platform-fastify';
 import { AppModule } from '../src/app.module';
 import request from 'supertest';
+import { eq } from 'drizzle-orm';
 import { resetTestDatabase } from './test-db';
+import { DatabaseService } from '../src/database/database.service';
+import { devices } from '../src/database/schema';
 
 describe('InviteController (e2e)', () => {
   let app: NestFastifyApplication;
@@ -115,6 +118,26 @@ describe('InviteController (e2e)', () => {
     await request(app.getHttpServer())
       .post('/api/v1/invite/activate')
       .set('Authorization', `Bearer ${inviterToken}`)
+      .send({ inviteCode })
+      .expect(400);
+  });
+
+  it('POST /api/v1/invite/activate — should reject old (non-new) devices beyond binding window', async () => {
+    const oldDeviceId = '33333333-3333-4333-8333-333333333333';
+    const oldRes = await request(app.getHttpServer())
+      .post('/api/v1/device/register')
+      .send({ deviceId: oldDeviceId })
+      .expect(201);
+    const oldToken = oldRes.body.token;
+
+    // 将 first_seen_at 改到 24h 绑定窗口之外，模拟「已使用多日后回来填码」的老设备
+    const db = app.get(DatabaseService).getDb();
+    const past = Math.floor(Date.now() / 1000) - 25 * 60 * 60;
+    await db.update(devices).set({ firstSeenAt: past }).where(eq(devices.deviceId, oldDeviceId));
+
+    await request(app.getHttpServer())
+      .post('/api/v1/invite/activate')
+      .set('Authorization', `Bearer ${oldToken}`)
       .send({ inviteCode })
       .expect(400);
   });

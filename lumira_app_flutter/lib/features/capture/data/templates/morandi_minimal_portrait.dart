@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/morandi_minimal_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 莫兰迪高级冷淡模板（morandi_minimal 子风格）
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 7
@@ -17,8 +18,14 @@ const PhotoTemplate morandiMinimalPortraitTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/morandi_minimal_portrait.png'),
     ],
-    description: '莫兰迪低饱和高级冷淡，纯色极简知性风，轻熟女的品质感。',
+    description: '这是一套主打极简高级感的半身人像模板。采用大面积低饱和灰绿色背景，配合柔和的漫射光，营造出静谧、内敛且富有质感的视觉氛围。穿搭上选择同色系莫兰迪灰/米色V领垂坠感上衣，强调面料的哑光质地与线条的流畅。妆容清透自然，保留皮肤真实纹理。适合追求清冷气质、职场形象照或艺术写真的用户，在室内窗边或纯色背景前即可复刻。',
     referenceSource: '莫兰迪色系人像；轻熟女知性风；小红书极简人像教程',
+    shortDesc: '灰调柔光漫染，眉眼间藏着不动声色的温柔，低饱和里的高级静谧感，一眼沦陷的松弛氛围🌫️',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'autumn', 'winter'],
+      weathers: ['overcast', 'cloudy'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'center',
@@ -36,6 +43,7 @@ const PhotoTemplate morandiMinimalPortraitTemplate = PhotoTemplate(
       scale: 0.85,
       rotation: 0,
       description: '人物位于画面正中央，身体完全正对镜头（0°），面部正对镜头（0°）。采取坐姿，躯干挺直但放松，肩线水平。双臂自然下垂并在身前交汇，双手轻轻交叠放置于大腿上方（画面下方中央），手指自然舒展放松，无紧张感。头部端正，无侧倾（headRoll 0°），下巴微收（headPitch -5°），视线平视直视镜头，表情平静淡然，嘴角闭合无笑意，眼神清澈聚焦。整体传达出一种沉稳、内敛且疏离的高级情绪。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

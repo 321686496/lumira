@@ -465,16 +465,22 @@ class TemplatesDao {
   /// 用于分类全量同步流程：拉取后端分类后，比对本地 template_categories，
   /// 删除后端已删除/已停用的分类，避免本地缓存膨胀、分类页残留已删除分类。
   /// 分类 key 全局唯一（作为路由参数与模板引用），按 key 集合比对即可。
-  /// 当 [validKeys] 为空集时，删除所有本地分类（后端清空场景）。
+  /// **保留系统内置分类**（is_system=1，如 micro 微距）：即使后端分类树未下发
+  /// 这些 key，也不能删除，保证内置题材与分类概览始终可用。
+  /// 当 [validKeys] 为空集时，删除除系统分类外的所有本地分类（后端清空场景）。
   Future<int> pruneStaleCategories(Set<String> validKeys) async {
     final rows = await _db.query(
       Tables.templateCategories,
-      columns: [Tables.colKey],
+      columns: [Tables.colKey, Tables.colIsSystem],
     );
-    final localKeys =
-        rows.map((r) => r[Tables.colKey] as String).toSet().toList();
-    final toDelete =
-        localKeys.where((k) => !validKeys.contains(k)).toList();
+    final toDelete = rows
+        .where((r) {
+          final k = r[Tables.colKey] as String;
+          final isSystem = (r[Tables.colIsSystem] as num?)?.toInt() == 1;
+          return !validKeys.contains(k) && !isSystem;
+        })
+        .map((r) => r[Tables.colKey] as String)
+        .toList();
     if (toDelete.isEmpty) return 0;
     // 分批删除（SQLite IN 子句参数上限考虑）
     var deleted = 0;
@@ -531,7 +537,17 @@ class TemplatesDao {
       whereArgs: args.isNotEmpty ? args : null,
       orderBy: '${Tables.colSortOrder} ASC',
     );
-    return rows.map(TemplateCategoryRecord.fromRow).toList();
+    // 去重：按 (key, parent) 归并，防止残留的重复分类行造成 UI 重复卡片。
+    // 背景：schema 的 UNIQUE(key, parent_key) 对 parent_key 为 NULL 的一级分类
+    // 不生效（SQLite 中 NULL != NULL），seedCategories 每次重播都会多插一行，
+    // 导致一级分类重复。此处按 key+parent 收敛为一行（保留首条）。
+    final seen = <String>{};
+    final result = <TemplateCategoryRecord>[];
+    for (final r in rows.map(TemplateCategoryRecord.fromRow)) {
+      final dedupeKey = '${r.key}|${r.parentKey ?? ''}';
+      if (seen.add(dedupeKey)) result.add(r);
+    }
+    return result;
   }
 
   /// 按层级查询分类。
@@ -600,25 +616,24 @@ class TemplatesDao {
     return result;
   }
 
-  /// 统计每个候选分类 key 下（含子孙级）的模板数量。
+  /// 统计每个候选分类 key 下对应的模板数量。
   ///
-  /// 统计口径与模板列表过滤保持一致：模板的分类叶子路径
-  /// （category / style / majorStyle / subStyle / method）中任意一个 key
-  /// 命中该分类的子树 key 集合即算（spec-4level §6.3）。
+  /// 统计口径与模板列表过滤保持一致（spec-4level §6.3）：模板的完整分类路径
+  /// （category → majorStyle|style → subStyle → method）以 `[parentPath..., key]`
+  /// 为前缀即算。相比「key 在路径任意位置命中」（旧 path.contains(k)），能避免
+  /// 共享 method/style key（如 'overhead'/'flat'）导致跨题材误归计数。
+  /// [parentPath] 传入父级链路（根→叶，不含待统计的 key 本身），例如美食题材下
+  /// 统计二级分类时传 ['food']，则某个 key 的目标前缀为 ['food', key]；
+  /// 街拍-几何-俯拍 `[street,geometric,overhead]` 的目标前缀 ['food','overhead'] 不匹配。
   /// 模板来源：builtin + remote（与模板库概览一致）。
-  /// 用于分类卡片下方的「N 套模板」展示。
+  /// 用于一级分类下的二级分类卡片「N 套模板」展示。
   Future<Map<String, int>> countTemplatesBySubtree(
     List<String> categoryKeys, {
+    List<String> parentPath = const [],
     bool activeOnly = true,
   }) async {
     final result = <String, int>{for (final k in categoryKeys) k: 0};
     if (categoryKeys.isEmpty) return result;
-
-    // 逐个候选分类展开子树 key 集合
-    final subtreeByKey = <String, Set<String>>{};
-    for (final k in categoryKeys) {
-      subtreeByKey[k] = await getSubtreeKeys(k, activeOnly: activeOnly);
-    }
 
     final items = await getBuiltinAndRemote();
     for (final t in items) {
@@ -627,18 +642,32 @@ class TemplatesDao {
       final method = cls['method'] as String?;
       final majorStyle = cls['majorStyle'] as String?;
       final subStyle = cls['subStyle'] as String?;
+      final l2 = (majorStyle != null && majorStyle.isNotEmpty)
+          ? majorStyle
+          : style;
+      final path = <String>[
+        t.category,
+        if (l2 != null && l2.isNotEmpty) l2,
+        if (subStyle != null && subStyle.isNotEmpty) subStyle,
+        if (method != null && method.isNotEmpty) method,
+      ];
       for (final k in categoryKeys) {
-        final set = subtreeByKey[k]!;
-        if (set.contains(t.category) ||
-            (style != null && set.contains(style)) ||
-            (method != null && set.contains(method)) ||
-            (majorStyle != null && set.contains(majorStyle)) ||
-            (subStyle != null && set.contains(subStyle))) {
+        final prefix = <String>[...parentPath, k];
+        if (path.length >= prefix.length && _startsWith(path, prefix)) {
           result[k] = result[k]! + 1;
         }
       }
     }
     return result;
+  }
+
+  /// 判断 [path] 是否以 [prefix] 为前缀。
+  static bool _startsWith(List<String> path, List<String> prefix) {
+    if (prefix.length > path.length) return false;
+    for (var i = 0; i < prefix.length; i++) {
+      if (path[i] != prefix[i]) return false;
+    }
+    return true;
   }
   /// 获取完整的三级分类树。
   ///

@@ -161,7 +161,18 @@ class _AdaptiveCoverImageState extends State<AdaptiveCoverImage> {
   Widget build(BuildContext context) {
     final provider = buildCoverProvider(widget.cover, widget.coverData);
     if (provider == null) {
-      return widget.fallback ?? const SizedBox.shrink();
+      // 无封面（空 cover + 无 coverData）时仍要展示 overlay（免费/积分/已拍等角标），
+      // 否则空封面模板会丢失价格/已拍徽标，与有封面卡片不一致。
+      // 用默认比例定高（与"有封面"路径一致），避免 Stack 在无界高度约束下崩 layout。
+      final fb = widget.fallback ?? const SizedBox.shrink();
+      if (widget.overlay.isEmpty) return fb;
+      return AspectRatio(
+        aspectRatio: kDefaultCoverRatio,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [fb, ...widget.overlay],
+        ),
+      );
     }
     final real = _realAspect;
     final ratio = (real == null) ? kDefaultCoverRatio : clampCoverRatio(real);

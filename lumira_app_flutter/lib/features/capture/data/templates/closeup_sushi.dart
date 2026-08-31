@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/closeup_sushi.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 寿司鱼生特写模板（美食 / 特写 / 细节）
 /// 内置模板补充：美食大类非人像模板
@@ -17,7 +18,13 @@ const PhotoTemplate closeupSushiTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/closeup_sushi.png'),
     ],
-    description: '暖调居酒屋光影下的鱼生握寿司，肉质鲜润通透，高级日料静物氛围',
+    description: '美食静物拍摄模板，适用于日料握寿司菜品拍摄，侧方柔和暖光塑造鱼肉通透肌理，深色哑光餐盘搭配原木桌面，突出生鱼食材新鲜质感，适合探店、美食记录使用；画面无人物、无手部出镜。',
+    shortDesc: '暖调居酒屋光影，鱼肉鲜润通透，高级日式料理静物氛围感🍣',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'autumn', 'winter'],
+      weathers: [],
+      timeTones: ['warm'],
+    ),
     referenceSource: '样片参考：日料寿司特写摄影；参数参考食物微距曝光教程合集',
   ),
   composition: Composition(

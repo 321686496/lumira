@@ -669,6 +669,10 @@ class PostProcess {
   final int sharpen;
   final int vignette;
   final int grain;
+
+  /// 拉腿强度 0-100（0 表示不拉伸）。对图像下半部做平滑纵向拉伸，仅改变高度。
+  final int legStretch;
+
   final String lut;
   final String? systemFilter;
 
@@ -687,6 +691,7 @@ class PostProcess {
     this.sharpen = 0,
     this.vignette = 0,
     this.grain = 0,
+    this.legStretch = 0,
     this.lut = 'none',
     this.systemFilter,
     this.customCropRect,
@@ -703,6 +708,7 @@ class PostProcess {
     int? sharpen,
     int? vignette,
     int? grain,
+    int? legStretch,
     String? lut,
     Object? systemFilter = _unset,
     Object? customCropRect = _unset,
@@ -715,6 +721,7 @@ class PostProcess {
         sharpen: sharpen ?? this.sharpen,
         vignette: vignette ?? this.vignette,
         grain: grain ?? this.grain,
+        legStretch: legStretch ?? this.legStretch,
         lut: lut ?? this.lut,
         systemFilter: identical(systemFilter, _unset)
             ? this.systemFilter
@@ -737,6 +744,7 @@ class PostProcess {
           sharpen == other.sharpen &&
           vignette == other.vignette &&
           grain == other.grain &&
+          legStretch == other.legStretch &&
           lut == other.lut &&
           systemFilter == other.systemFilter &&
           customCropRect == other.customCropRect &&
@@ -744,7 +752,7 @@ class PostProcess {
 
   @override
   int get hashCode => Object.hash(cropRatio, color, smoothStrength, sharpen,
-      vignette, grain, lut, systemFilter, customCropRect, fillLight);
+      vignette, grain, legStretch, lut, systemFilter, customCropRect, fillLight);
 
   Map<String, dynamic> toJson() => {
         'cropRatio': cropRatio,
@@ -753,6 +761,7 @@ class PostProcess {
         'sharpen': sharpen,
         'vignette': vignette,
         'grain': grain,
+        'legStretch': legStretch,
         'lut': lut,
         if (systemFilter != null) 'systemFilter': systemFilter,
         if (customCropRect != null) 'customCropRect': customCropRect!.toJson(),
@@ -773,6 +782,7 @@ class PostProcess {
         sharpen: sharpen + delta.sharpen,
         vignette: vignette + delta.vignette,
         grain: grain + delta.grain,
+        legStretch: legStretch + delta.legStretch,
         lut: delta.lut != 'none' ? delta.lut : lut,
         systemFilter: delta.systemFilter ?? systemFilter,
         customCropRect: delta.customCropRect ?? customCropRect,
@@ -786,6 +796,7 @@ class PostProcess {
         sharpen: (json['sharpen'] as num?)?.toInt() ?? 0,
         vignette: (json['vignette'] as num?)?.toInt() ?? 0,
         grain: (json['grain'] as num?)?.toInt() ?? 0,
+        legStretch: (json['legStretch'] as num?)?.toInt() ?? 0,
         lut: json['lut'] as String? ?? 'none',
         systemFilter: json['systemFilter'] as String?,
         customCropRect: (json['customCropRect'] as Map<String, dynamic>?) != null

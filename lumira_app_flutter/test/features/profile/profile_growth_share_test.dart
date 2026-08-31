@@ -57,8 +57,7 @@ void main() {
     await tester.tap(shareIcons);
     await tester.pumpAndSettle();
 
-    // 验证 PosterGenerator 底部 Sheet 出现
-    expect(find.text('导出海报'), findsOneWidget);
+    expect(find.text('保存到相册'), findsOneWidget);
     expect(find.text('分享海报'), findsOneWidget);
   });
 }

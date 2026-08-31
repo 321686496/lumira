@@ -9,6 +9,7 @@ import '../../academy/data/academy_models.dart'
     show AcademyLevelExt, AcademyTopicExt;
 import '../../templates/widgets/adaptive_cover_image.dart';
 import '../../templates/widgets/ambience_badges.dart';
+import '../../templates/widgets/template_badges.dart';
 import '../../templates/widgets/template_cover_image.dart';
 import '../data/search_result.dart';
 
@@ -61,45 +62,24 @@ class SearchResultCard extends ConsumerWidget {
     final typeBadge = showTypeBadge
         ? Positioned(top: 8, left: 8, child: _typeBadge(tokens, r.scope.label))
         : null;
-    // 模板价格/免费徽标：类型角标在左时放右上，模板专属页放左上（对齐全部模板页）
+    // 模板价格/免费徽标：与「全部模板页」卡片共享组件（绿色胶囊 / 品牌渐变积分），
+    // 类型角标在左时放右上，模板专属页放左上（对齐全部模板页）
     final priceBadge = r.template != null
         ? Positioned(
             top: 8,
             right: showTypeBadge ? 8 : null,
             left: showTypeBadge ? null : 8,
             child: r.price == 0
-                ? _priceBadge(tokens, '免费', true)
-                : _priceBadge(tokens, '${r.price}', false),
+                ? FreeBadge(tokens: tokens)
+                : PremiumBadge(tokens: tokens, price: r.price),
           )
         : null;
-    // 已拍数：叠图角标（模板），不占用下方信息行空间
+    // 已拍数：叠图角标（模板），与「全部模板页」卡片共享组件，不占用下方信息行空间
     final usageBadge = (r.template != null && r.usageCount > 0)
         ? Positioned(
             bottom: 8,
             right: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.55),
-                borderRadius: BorderRadius.circular(9999),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.camera_alt_outlined,
-                      size: 12, color: Colors.white),
-                  const SizedBox(width: 4),
-                  Text(
-                    '已拍 ${r.usageCount} 张',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child: UsageCountBadge(count: r.usageCount),
           )
         : null;
 
@@ -153,7 +133,7 @@ class SearchResultCard extends ConsumerWidget {
         const SizedBox(height: 3),
         Text(
           r.shortDesc,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 11,
@@ -289,26 +269,6 @@ class SearchResultCard extends ConsumerWidget {
           size: 28,
         ),
       );
-
-  Widget _priceBadge(ThemeTokens tokens, String text, bool free) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: free
-            ? tokens.success.withOpacity(0.85)
-            : Colors.black.withOpacity(0.55),
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
 
   Widget _typeBadge(ThemeTokens tokens, String label) {
     return Container(

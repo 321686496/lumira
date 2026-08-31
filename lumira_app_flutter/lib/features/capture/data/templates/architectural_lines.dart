@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/architectural_lines.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 几何建筑线构模板（街拍 / 几何 / 远景）
 /// 内置模板补充：街拍大类非人像模板
@@ -17,7 +18,13 @@ const PhotoTemplate architecturalLinesTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/architectural_lines.png'),
     ],
-    description: '晴日硬光下现代几何建筑的线条与体块，锐利阴影切割出高对比黑白极简质感',
+    description: '建筑风景拍摄模板，适合拍摄现代简约几何体块建筑，利用晴天侧方硬阳光制造锐利阴影切割画面，输出高对比黑白质感，适合城市建筑、美术馆、极简外立面拍摄。',
+    shortDesc: '硬朗几何建筑，锐利光影切割，高级黑白极简美学🖤',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn', 'winter'],
+      weathers: ['sunny'],
+      timeTones: ['day'],
+    ),
     referenceSource: '样片参考：500px 建筑摄影精选；参数参考极简建筑构图教程',
   ),
   composition: Composition(

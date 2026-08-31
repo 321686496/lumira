@@ -39,7 +39,7 @@ import { BusinessError } from '@ohos.base';
 import UIAbility from '@ohos.app.ability.UIAbility';
 import { CameraPermissions } from '../cameraX/CameraPermissions';
 import { CameraAbilityLifecycle } from '../cameraX/CameraAbilityLifecycle';
-import { CameraState, CaptureMode } from '../cameraX/CameraState';
+import { CameraState, CaptureMode, PhotoEarlyFrameStreamListener } from '../cameraX/CameraState';
 import { PhysicalButtonsHandler } from '../cameraX/PhysicalButtonsHandler';
 import { camera } from '@kit.CameraKit';
 import { abilityAccessCtrl } from '@kit.AbilityKit';
@@ -69,6 +69,8 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
   private sensorOrientationListener: SensorOrientationListener = new SensorOrientationListener()
   private displayRotationListener: DisplayRotationListener = new DisplayRotationListener()
   private cameraDeviceChangeListener: CameraDeviceChangeListener = new CameraDeviceChangeListener()
+  // 分阶段拍照早帧通知通道（一阶段低质量帧 → Dart 提前触发水印动画）
+  private photoEarlyFrameStreamListener: PhotoEarlyFrameStreamListener = new PhotoEarlyFrameStreamListener()
   private lastWindowStatusType: window.WindowStatusType | undefined = undefined
   private displayRotation: number = 0;
   // 监听折叠屏状态
@@ -123,6 +125,10 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
       }
 
       this.imageStreamChannel?.setStreamHandler(this.cameraState)
+
+      // 注入分阶段拍照早帧监听器引用（惰性解析 sink：Dart 在拍照前订阅通道，
+      // onListen 才写入 events，故必须注入监听器而非固定 EventSink，否则 events 恒为 null）
+      this.cameraState!!.photoEarlyFrameListener = this.photoEarlyFrameStreamListener
 
       this.cameraState?.getCameraManager()?.on('foldStatusChange', this.foldStatusCallback);
 
@@ -469,6 +475,9 @@ export default class CameraAwesomeX extends CameraInterface implements FlutterPl
     )
     new EventChannel(binding.getBinaryMessenger(), "camerawesome/camera_device_change").setStreamHandler(
       this.cameraDeviceChangeListener
+    )
+    new EventChannel(binding.getBinaryMessenger(), "camerawesome/photo_early_frame").setStreamHandler(
+      this.photoEarlyFrameStreamListener
     )
   }
 

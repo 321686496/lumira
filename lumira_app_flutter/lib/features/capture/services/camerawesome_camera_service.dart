@@ -160,6 +160,13 @@ class CamerawesomeCameraService implements CameraService {
   }
 
   @override
+  Stream<String> photoEarlyFrames() {
+    // 仅 OHOS 支持分阶段拍照早帧；iOS 走取景器帧直出，Android 无早帧机制。
+    if (_delegate.platformTag != 'ohos') return Stream<String>.empty();
+    return ohos.CamerawesomePlugin.listenPhotoEarlyFrame() ?? Stream<String>.empty();
+  }
+
+  @override
   Future<void> switchCamera(String facing) async {
     // 切换摄像头后设备缩放范围可能变化，清空缓存强制下次重新查询
     _cachedMaxZoom = null;

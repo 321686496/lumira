@@ -670,6 +670,16 @@ class _DetailTab extends ConsumerWidget {
               onChanged: (v) => CaptureState.updatePostProcess(
                   ref, (p) => p.copyWith(grain: v.round())),
             ),
+            _SliderRow(
+              label: '拉腿',
+              value: post.legStretch.toDouble(),
+              min: 0,
+              max: 100,
+              divisions: 100,
+              display: post.legStretch.toString(),
+              onChanged: (v) => CaptureState.updatePostProcess(
+                  ref, (p) => p.copyWith(legStretch: v.round())),
+            ),
           ],
         ),
         const SizedBox(height: 16),

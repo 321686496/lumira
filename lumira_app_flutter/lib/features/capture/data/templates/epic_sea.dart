@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/epic_sea.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 海天一色远景模板（风光 / 大气 / 远景）
 /// 内置模板补充：风光大类非人像模板
@@ -17,8 +18,14 @@ const PhotoTemplate epicSeaTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/epic_sea.jpg'),
     ],
-    description: '海天相接的壮阔远景，广阔海面与天空融为一体，气势磅礴',
+    description: '海岸风景模板，高机位俯拍沙滩海洋，自然光日间户外场景，利用海岸线作为引导线，呈现碧海金滩远山白云的开阔海景，适合海边度假记录自然风光。',
     referenceSource: '样片参考：500px 海天一色大气风光精选；参数参考海洋风光黄金时刻合集',
+    shortDesc: '澄澈蓝海伴着绵长沙滩，海风辽阔治愈，夏日海边氛围感🌊',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['summer', 'autumn'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

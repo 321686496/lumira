@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/casual_market.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 市集日常抓拍模板（街拍 / 随性 / 常规）
 /// 内置模板补充：街拍大类非人像模板
@@ -17,7 +18,13 @@ const PhotoTemplate casualMarketTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/casual_market.png'),
     ],
-    description: '暖光落在热闹菜摊间，低头挑菜、轻声交谈，鲜活松弛的市井烟火气',
+    description: '纪实感环境人像模板，以传统市集菜摊为场景，主角站在画面中部偏左整理新鲜蔬菜，采用平视近距离抓拍，利用棚顶缝隙透入的偏暖自然光和摊位灯形成柔中带硬的生活光影。人物适合穿深色碎花衬衫、围裙等朴素日常服装，前景用蔬菜形成自然层次，适合喜欢市井纪实、生活感街拍与自然抓拍氛围的用户。',
+    shortDesc: '暖光落在热闹菜摊间，低头挑菜、轻声交谈，满满都是鲜活松弛的市井烟火气🥬✨',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day', 'warm'],
+    ),
     referenceSource: '样片参考：人文市集抓拍作品；参数参考街头生活叙事合集',
   ),
   composition: Composition(

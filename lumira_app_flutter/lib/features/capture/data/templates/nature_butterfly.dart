@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/nature_butterfly.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 蝴蝶翅膀微距模板（微距 / 自然 / 微距）
 /// 内置模板补充：微距大类非人像模板
@@ -18,8 +19,14 @@ const PhotoTemplate natureButterflyTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/nature_butterfly_1.jpg'),
       TemplateImage(url: 'assets/images/templates/nature_butterfly_2.jpg'),
     ],
-    description: '微距捕捉蝴蝶翅膀的鳞片纹理与色彩渐层，展现自然界的精致细节',
+    description: '这是一组专注于蝴蝶翅膀微观纹理的静物微距模板。利用纯黑背景与高对比度侧光，凸显翅脉的几何线条与鳞粉的虹彩质感。第一张图呈现翠绿与朱红的荧光感，第二张图展现深红与乳白的丝绒光泽。适合自然爱好者、微距摄影玩家及追求极致细节质感的用户。拍摄时需保持绝对稳定，依靠光影而非色彩滤镜来塑造立体感。',
     referenceSource: '样片参考：蝴蝶微距摄影精选；参数参考微距细节曝光合集',
+    shortDesc: '暗夜里的鳞粉星河，红绿交织的呼吸感，每一道翅脉都藏着宇宙的秘密，静谧又绚烂🦋✨',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer'],
+      weathers: ['overcast'],
+      timeTones: [],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

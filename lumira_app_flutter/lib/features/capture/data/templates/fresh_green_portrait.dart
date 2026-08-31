@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/fresh_green_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 清新淡雅绿模板（fresh_green 子风格）
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 10
@@ -20,8 +21,14 @@ const PhotoTemplate freshGreenPortraitTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/fresh_green_portrait_3.png'),
       TemplateImage(url: 'assets/images/templates/fresh_green_portrait_4.png'),
     ],
-    description: '户外森系净白空气感，清新淡雅绿调，草地森林的自然治愈。',
+    description: '这是一组充满呼吸感的森系逆光人像模板。场景设定在阳光穿透树叶的林间草地，利用强烈的自然逆光勾勒人物发丝与轮廓，配合正面柔和补光保留面部细节。穿搭以浅豆绿针织衫搭配多层碎花蛋糕裙为主，赤足踩在草地上，营造慵懒、自由、治愈的少女氛围。适合春夏季节晴朗午后拍摄，追求日系清透与胶片质感的人群。',
     referenceSource: '小红书净白滤镜教程；户外森系露营；清新淡雅绿调人像',
+    shortDesc: '林间碎金洒落，裙摆轻扬，捕捉那一抹松弛治愈的森系氧气感🌿✨',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['warm', 'goldenHour'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',
@@ -39,6 +46,7 @@ const PhotoTemplate freshGreenPortraitTemplate = PhotoTemplate(
       scale: 0.85,
       rotation: 0,
       description: '人物蹲在画面中央偏下，身体侧向屏幕左约45°，面部完全转向屏幕左上方仰视（headPitch +25°）。双手抬起至下巴处，指尖轻轻捏住蕾丝头巾的系带，手肘自然下垂。视线看向屏幕左上方的光源，嘴唇微张，表情宁静憧憬。头顶留白约1/5，前景有虚化草叶遮挡。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '附加·旋转裙摆',
@@ -47,6 +55,7 @@ const PhotoTemplate freshGreenPortraitTemplate = PhotoTemplate(
       scale: 0.95,
       rotation: 0,
       description: '人物全身站立于画面中央，身体背对镜头略偏屏幕左（azimuth +135°），面部回转看向屏幕右后方（faceFacing azimuth -45°），形成回眸笑。双臂向身体两侧水平张开（约90°），手掌放松。双腿赤足踩在草地上，重心在右腿，左腿微曲脚尖点地，呈现旋转中的动态平衡。裙摆因离心力呈伞状散开。视线看向镜头方向，笑容灿烂。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '附加·伸手触光',
@@ -55,6 +64,7 @@ const PhotoTemplate freshGreenPortraitTemplate = PhotoTemplate(
       scale: 0.95,
       rotation: 0,
       description: '人物全身侧立，身体面向屏幕左（azimuth +90°），面部仰起朝向屏幕左上方（headPitch +30°）。左臂（画面远端）自然下垂，右臂（画面近端）高高举起伸向屏幕左上方的阳光，手指自然舒展试图触碰光斑。双腿并拢站立，赤足。视线追随手指方向，表情虔诚享受。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '附加·回眸触叶',
@@ -63,6 +73,7 @@ const PhotoTemplate freshGreenPortraitTemplate = PhotoTemplate(
       scale: 0.95,
       rotation: 0,
       description: '人物全身背对镜头略偏屏幕右（azimuth -135°），面部回转看向屏幕右上方（faceFacing azimuth -45°，headPitch +10°）。右臂抬起伸向屏幕右侧的树枝，指尖轻触绿叶；左臂自然下垂于身侧。双腿赤足站立，重心平稳。视线看向树叶或远方，神情温柔恬淡。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

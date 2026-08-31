@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/golden_landscape.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 黄金时刻风光模板
 /// 来源：lumira-app/src/data/templates/golden-landscape.ts
@@ -17,8 +18,14 @@ const PhotoTemplate goldenLandscapeTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/golden_landscape.jpg'),
     ],
-    description: '黄金时刻拍摄风光，色调温暖柔和，强调自然光影层次',
+    description: '这是一套专为广阔自然风光设计的拍照模板。画面以大面积的金黄色成熟麦田为前景，中景过渡至深色林带，远景为连绵的巍峨雪山，右侧天空点缀一抹彩虹。采用经典三分法构图，色彩上呈现强烈的冷暖对比（金黄麦浪 vs 湛蓝天空/白雪）。适合在秋季晴朗天气、光线充足的时段拍摄，无需复杂布光，依靠自然顺光即可还原高饱和度的通透质感。',
     referenceSource: '样片 EXIF: 500px 风光精选；参数参考 500px 风光摄影黄金时刻合集',
+    shortDesc: '金黄麦浪翻涌至雪山脚下，一道彩虹悄然挂在天际，治愈又辽阔的丰收画卷🌾🏔️',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['autumn', 'summer'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

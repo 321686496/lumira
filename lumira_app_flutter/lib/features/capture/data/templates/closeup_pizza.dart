@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/closeup_pizza.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 披萨拉丝特写模板（美食 / 特写 / 微距）
 /// 内置模板补充：美食大类非人像模板
@@ -17,7 +18,13 @@ const PhotoTemplate closeupPizzaTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/closeup_pizza.png'),
     ],
-    description: '暖光裹挟披萨芝士拉丝，定格烟火美味瞬间，满满治愈食欲感',
+    description: '美食静物拍摄模板，拍摄被铲起一块的玛格丽特披萨，使用侧上方柔和暖光，突出芝士拉丝流动质感，适合室内餐桌美食拍摄，还原食物诱人的食欲氛围。',
+    shortDesc: '暖光裹挟芝士拉丝，烟火美味瞬间，满满治愈食欲感🍕',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn', 'winter'],
+      weathers: [],
+      timeTones: ['warm'],
+    ),
     referenceSource: '样片参考：美食拉丝特写摄影；参数参考动态特写快门合集',
   ),
   composition: Composition(

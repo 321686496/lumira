@@ -180,10 +180,12 @@ class SearchRecommendTemplateSection extends ConsumerWidget {
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, i) => _RecommendCard(
-                item: items[i],
-                tokens: tokens,
-                onTap: () => onTap(items[i]),
+              itemBuilder: (_, i) => RepaintBoundary(
+                child: _RecommendCard(
+                  item: items[i],
+                  tokens: tokens,
+                  onTap: () => onTap(items[i]),
+                ),
               ),
             ),
           ),
@@ -225,10 +227,12 @@ class SearchRecommendSceneSection extends ConsumerWidget {
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, i) => _RecommendCard(
-                item: items[i],
-                tokens: tokens,
-                onTap: () => onTap(items[i]),
+              itemBuilder: (_, i) => RepaintBoundary(
+                child: _RecommendCard(
+                  item: items[i],
+                  tokens: tokens,
+                  onTap: () => onTap(items[i]),
+                ),
               ),
             ),
           ),
@@ -270,10 +274,12 @@ class SearchRecommendAcademySection extends ConsumerWidget {
               scrollDirection: Axis.horizontal,
               itemCount: items.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, i) => _RecommendCard(
-                item: items[i],
-                tokens: tokens,
-                onTap: () => onTap(items[i]),
+              itemBuilder: (_, i) => RepaintBoundary(
+                child: _RecommendCard(
+                  item: items[i],
+                  tokens: tokens,
+                  onTap: () => onTap(items[i]),
+                ),
               ),
             ),
           ),

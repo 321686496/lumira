@@ -61,6 +61,7 @@ void main() {
     test('新用户槽位 1：totalPhotos < 3 → 第一条为新用户引导', () async {
       // Seed: 5 个不同分类的 recommended 模板（保证 fallback 充足）
       await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '适合新手的自然光人像模板');
+      await _seedTemplate(db, id: 'tpl_p2', name: '人像进阶', category: 'portrait', isRecommended: true, description: '进阶质感人像模板');
       await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光摄影模板');
       await _seedTemplate(db, id: 'tpl_f1', name: '美食模板', category: 'food', isRecommended: true, description: '美食摄影模板');
       await _seedTemplate(db, id: 'tpl_s1', name: '街拍模板', category: 'street', isRecommended: true, description: '街拍模板');
@@ -88,12 +89,12 @@ void main() {
       expect(banners.first.subtitle, '从咖啡馆开始你的拍摄之旅');
       expect(banners.first.route, '/capture/scene-detail?sceneId=preset_cafe');
 
-      // 槽位 2：基于最近拍摄分类（portrait）
-      // 应使用 tpl_p1（portrait 类别 recommended 模板）
+      // 槽位 2：基于最近拍摄分类（portrait），但应排除"最近用过的模板" tpl_p1，
+      // 改推同分类里未用过的新模板 tpl_p2
       expect(banners[1].id, 'banner_recent_category');
       expect(banners[1].tag, '常拍分类');
       expect(banners[1].title, '继续拍人像');
-      expect(banners[1].route, '/templates/detail?templateId=tpl_p1');
+      expect(banners[1].route, '/templates/detail?templateId=tpl_p2');
     });
 
     test('老用户槽位 5 重复：totalPhotos >= 3 → 2 条探索 banner', () async {
@@ -234,6 +235,32 @@ void main() {
       expect(favBanner.title, '我的咖啡馆灵感');
       expect(favBanner.tag, '收藏场景');
       expect(favBanner.route, '/capture/scene-detail?sceneId=scene_user_1');
+    });
+
+    test('老用户判定自愈：user_progress.total_photos 恒 0（历史 Bug）但有≥3张相册照片 → 不再推新手友好场景', () async {
+      // 模拟历史版本 Bug：total_photos 从未递增（保持 0），但相册里其实已有照片
+      await _seedTemplate(db, id: 'tpl_p1', name: '人像基础', category: 'portrait', isRecommended: true, description: '人像模板');
+      await _seedTemplate(db, id: 'tpl_l1', name: '风光基础', category: 'landscape', isRecommended: true, description: '风光模板');
+      await _seedTemplate(db, id: 'tpl_f1', name: '美食模板', category: 'food', isRecommended: true, description: '美食模板');
+      await _seedTemplate(db, id: 'tpl_s1', name: '街拍模板', category: 'street', isRecommended: true, description: '街拍模板');
+      await _seedTemplate(db, id: 'tpl_n1', name: '夜景模板', category: 'night', isRecommended: true, description: '夜景模板');
+
+      await _seedScene(db, id: 'scene_p1', name: '咖啡馆', category: 'cafe', relatedCategory: 'portrait', isFavorite: false);
+      // 相册里有 4 张照片，但 user_progress.total_photos 未更新（保持 0）
+      for (var i = 0; i < 4; i++) {
+        await _seedGalleryItem(db, id: 'g$i', sceneId: 'scene_p1', templateId: 'tpl_p1');
+      }
+      // 不更新 user_progress，total_photos 保持默认 0
+
+      final banners = await service.buildBanners();
+
+      // 应被判定为老用户：首槽不再是新手友好场景
+      expect(banners.first.id, isNot('banner_new_user_guide'));
+      // 5 条，且老用户有 2 条探索
+      expect(banners.length, 5);
+      final exploration =
+          banners.where((b) => b.id.startsWith('banner_exploration')).toList();
+      expect(exploration.length, 2);
     });
 
     test('HomeBannerItem 字段完整性：每条 banner 字段非空', () async {

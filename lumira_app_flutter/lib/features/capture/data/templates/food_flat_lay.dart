@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/food_flat_lay.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 美食俯拍模板
 /// 来源：lumira-app/src/data/templates/food-flat-lay.ts
@@ -17,7 +18,13 @@ const PhotoTemplate foodFlatLayTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/food_flat_lay.jpg'),
     ],
-    description: '高机位垂直俯拍蒲烧鳗鱼定食，色彩浓郁、质感诱人的日式简餐美食大片。',
+    description: '美食静物拍摄模板，日式蒲烧鳗鱼盖饭，高机位垂直俯拍；采用柔和漫射顶光，保留食材油润光泽，蓝黑纹理深盘做背景，色彩浓郁对比强烈，适合拍摄精致日式简餐、摆盘料理。',
+    shortDesc: '高级氛围感鳗鱼定食俯拍，色彩浓郁诱人，质感满满的美食大片🍱',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn', 'winter'],
+      weathers: [],
+      timeTones: ['warm'],
+    ),
     referenceSource: '样片 EXIF: 食物摄影教程；参数参考 YouTube 频道 The Bite Shot',
   ),
   composition: Composition(

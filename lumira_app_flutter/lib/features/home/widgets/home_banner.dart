@@ -27,36 +27,58 @@ class HomeBanner extends ConsumerStatefulWidget {
 }
 
 class _HomeBannerState extends ConsumerState<HomeBanner> {
-  final PageController _controller = PageController();
+  /// 无限轮播使用的虚拟倍数（PageView itemCount = count*_kRepeat，
+  /// 初始页取中间值，保证前后都能无限滑动而不越界）。
+  static const int _kRepeat = 10000;
+
+  PageController? _controller;
   int _current = 0;
   Timer? _timer;
-  int _lastBannerCount = 0;
+  int _bannerCount = 0;
 
   @override
   void dispose() {
     _timer?.cancel();
-    _controller.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
-  /// banner 数量变化时重启定时器（避免越界 / 旧索引残留）
-  void _ensureTimer(int count) {
-    if (count == _lastBannerCount) return;
-    _lastBannerCount = count;
+  /// banner 数量变化时重建控制器（居中初始化以实现无限滑动），并（重）启自动轮播。
+  void _initController(int count) {
+    if (_controller != null && count == _bannerCount) return;
+    _bannerCount = count;
+    final old = _controller;
+    _current = (count * _kRepeat) ~/ 2;
+    _controller = count > 0
+        ? PageController(initialPage: _current)
+        : null;
+    old?.dispose();
+    _restartTimer(count);
+  }
+
+  /// 取消并重新启动自动轮播定时器（count<=1 不轮播）。
+  void _restartTimer(int count) {
     _timer?.cancel();
     _timer = null;
-    if (count > 1) {
-      _timer = Timer.periodic(const Duration(seconds: 5), (_) {
-        if (!_controller.hasClients) return;
-        if (_current >= count) _current = 0;
-        final next = (_current + 1) % count;
-        _controller.animateToPage(
-          next,
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeInOut,
-        );
-      });
+    if (count <= 1) return;
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) {
+      final c = _controller;
+      if (c == null || !c.hasClients) return;
+      // 无限模式：始终向后滑一页即可无缝循环
+      c.animateToPage(
+        _current + 1,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  /// 用户手动拖动开始 → 重置自动轮播计时（避免刚滑动完立刻被自动切走）。
+  bool _onManualScroll(ScrollNotification n) {
+    if (n is ScrollStartNotification && n.dragDetails != null) {
+      _restartTimer(_bannerCount);
     }
+    return false;
   }
 
   @override
@@ -69,48 +91,54 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
       error: (_, __) {
         // fallback 到 mock 数据第 1 条，保证不空白
         final banners = <HomeBannerItem>[HomeMockData.banners.first];
-        _ensureTimer(banners.length);
+        _initController(banners.length);
         return _buildCarousel(banners, tokens);
       },
       data: (banners) {
         final list =
             banners.isEmpty ? <HomeBannerItem>[HomeMockData.banners.first] : banners;
-        _ensureTimer(list.length);
+        _initController(list.length);
         return _buildCarousel(list, tokens);
       },
     );
   }
 
   Widget _buildCarousel(List<HomeBannerItem> banners, ThemeTokens tokens) {
+    if (banners.isEmpty) return const SizedBox.shrink();
+    final count = banners.length;
     return Column(
       children: [
         SizedBox(
           height: 150,
-          child: PageView.builder(
-            controller: _controller,
-            onPageChanged: (i) => setState(() => _current = i),
-            itemCount: banners.length,
-            itemBuilder: (_, index) {
-              final banner = banners[index];
-              return _BannerCard(
-                banner: banner,
-                tokens: tokens,
-                onTap: () => GoRouter.of(context).push(banner.route),
-              );
-            },
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onManualScroll,
+            child: PageView.builder(
+              controller: _controller,
+              onPageChanged: (i) => setState(() => _current = i),
+              // 无限模式：足够大的虚拟 itemCount，index%count 映射到真实 banner
+              itemCount: count * _kRepeat,
+              itemBuilder: (_, index) {
+                final banner = banners[index % count];
+                return _BannerCard(
+                  banner: banner,
+                  tokens: tokens,
+                  onTap: () => GoRouter.of(context).push(banner.route),
+                );
+              },
+            ),
           ),
         ),
         const SizedBox(height: 8),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            for (int i = 0; i < banners.length; i++)
+            for (int i = 0; i < count; i++)
               Container(
-                width: i == _current ? 16 : 6,
+                width: i == (_current % count) ? 16 : 6,
                 height: 4,
                 margin: const EdgeInsets.symmetric(horizontal: 2),
                 decoration: BoxDecoration(
-                  color: i == _current
+                  color: i == (_current % count)
                       ? tokens.brand
                       : tokens.brand.withOpacity(0.25),
                   borderRadius: BorderRadius.circular(2),

@@ -384,4 +384,134 @@ void main() {
     expect(ratio, closeTo(9.0 / 19.5, 0.02),
         reason: '自定义框 (0,0,1,1) 应等于比例裁剪区域，输出须保持 fullscreen 比例');
   });
+
+  // ── 变换 + 自定义裁剪的组合顺序（所见即所得）──
+  // 裁剪框相对「未变换的对齐图」解释，裁剪发生在旋转/翻转【之前】，
+  // 先裁剪出所框区域，再应用用户变换（见 specs/2026-08-24 设计）。
+  // 旧实现先变换再裁剪，把相对对齐图的选区错套到旋转后的工作图上，
+  // 导致框选区域与最终成片不一致。此测试锁定正确顺序。
+  test('transform 90° + custom crop: rect is relative to PRE-transform image',
+      () async {
+    final input = makeSensorJpeg(); // 1080x1440 竖图
+    final output = await PhotoPostProcessor.processFile(
+      inputPath: input.path,
+      params: const PostProcess(color: PostProcessColor()),
+      aspectRatio: 'free',
+      screenRatio: 9.0 / 19.5,
+      isPortrait: true,
+      transform: const TransformParams(rotation: 90),
+      customCropRect: const CropRect(x: 0, y: 0, w: 0.5, h: 1),
+    );
+    final bytes = await File(output).readAsBytes();
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final w = frame.image.width;
+    final h = frame.image.height;
+    codec.dispose();
+    // 正确顺序：先在对齐图上取左半 (540x1440)，旋转 90° → 横向 1440x540
+    expect(w, 1440,
+        reason: '先裁剪对齐图左半再旋转90°，输出应为横向 1440x540');
+    expect(h, 540,
+        reason: '先裁剪对齐图左半再旋转90°，输出应为横向 1440x540');
+  });
+
+  // ── 裁剪框逆变换（WYSIWYG 的另一半）──
+  // processFile 以「先按原图裁剪、后应用变换」解释 customCropRect，即该矩形相对
+  // 【未变换】的对齐图。而裁剪 UI（CropOverlay）把照片包一层变换预览（旋转/翻转/
+  // 拉直，见 _applyTransform），用户框选的是【变换后】的展示。因此 UI 必须把裁剪框
+  // 逆变换回未变换坐标（invertCropTransform），否则一旦叠加旋转/翻转，选区与导出错位
+  // —— 这正是「旋转之后裁剪不对」「对剪裁过的图二次裁剪不对」的根因。
+  // 本组测试锁定 invertCropTransform 的映射语义（与 _applyTransform 互为逆运算）。
+
+  test('invertCropTransform: identity transform returns frame unchanged', () {
+    const frame = Rect.fromLTRB(0.2, 0.1, 0.8, 0.9);
+    expect(PhotoPostProcessor.invertCropTransform(frame, null), frame);
+    expect(PhotoPostProcessor.invertCropTransform(
+        frame, const TransformParams()), frame);
+  });
+
+  test('invertCropTransform: 90° right-half display maps to top-half image', () {
+    // 用户看到旋转 90° 的展示，在屏幕右侧框选（x∈[0.5,1]）。
+    // 旋转 90°（Transform.rotate，y 向下）的逆映射下，该区域对应未变换照片的
+    // 【上半】（绕中心 (0.5,0.5) 旋转）。
+    {
+      const t = TransformParams(rotation: 90);
+      final inverted = PhotoPostProcessor.invertCropTransform(
+          const Rect.fromLTRB(0.5, 0, 1, 1), t);
+      // 期望 ≈ 未变换图像的上半（x 全幅，y 上半）
+      expect(inverted.top, closeTo(0.0, 1e-9));
+      expect(inverted.bottom, closeTo(0.5, 1e-6));
+      expect(inverted.left, closeTo(0.0, 1e-9));
+      expect(inverted.right, closeTo(1.0, 1e-6));
+    }
+  });
+
+  test('invertCropTransform: center square is rotation-invariant', () {
+    const center = Rect.fromLTRB(0.25, 0.25, 0.75, 0.75);
+    for (final rot in [90, 180, 270]) {
+      final inverted = PhotoPostProcessor.invertCropTransform(
+          center, TransformParams(rotation: rot));
+      expect(inverted.left, closeTo(0.25, 1e-6));
+      expect(inverted.top, closeTo(0.25, 1e-6));
+      expect(inverted.right, closeTo(0.75, 1e-6));
+      expect(inverted.bottom, closeTo(0.75, 1e-6),
+          reason: '中心对称矩形在 90/180/270° 旋转下应不变（包围盒）');
+    }
+  });
+
+  test('invertCropTransform: flipH maps left-half display to right-half image',
+      () {
+    // 水平翻转后的展示：屏幕左半对应未变换照片的【右半】（绕中心镜像）。
+    final inverted = PhotoPostProcessor.invertCropTransform(
+        const Rect.fromLTRB(0, 0, 0.5, 1), const TransformParams(flipH: true));
+    expect(inverted.left, closeTo(0.5, 1e-6));
+    expect(inverted.right, closeTo(1.0, 1e-9));
+  });
+
+  // ── 多轮编辑（对已裁剪过的图二次裁剪）嵌套组合 ──
+  // 二次裁剪时，bakedBase = 比例区域 ⊕ 上一轮 customCropRect（DB 记录，相对比例区域），
+  // 本轮 inner = 相对【当前展示照片】的框选，最终区域 = 比例区域 ⊕ base ⊕ inner。
+  // 相对坐标组合满足结合律，须保证 base⊕inner 与逐层映射等价。
+
+  test('composeCropRects: 2nd crop nests inside 1st crop (associative)', () {
+    // 第一轮：框出左上 1/4 → 相对比例区域的 (0,0,0.5,0.5)
+    const first = CropRect(x: 0, y: 0, w: 0.5, h: 0.5);
+    // 第二轮：在展示照片（= 第一轮结果）上框出左上 1/4
+    const second = CropRect(x: 0, y: 0, w: 0.5, h: 0.5);
+    final composed = PhotoPostProcessor.composeCropRects(first, second)!;
+    // 组合后 = 比例区域的左上 1/4 的左上 1/4 = 整个比例区域的左上 1/16
+    expect(composed.x, closeTo(0.0, 1e-9));
+    expect(composed.y, closeTo(0.0, 1e-9));
+    expect(composed.w, closeTo(0.25, 1e-9));
+    expect(composed.h, closeTo(0.25, 1e-9));
+  });
+
+  test('processFile: 2nd crop on already-cropped photo maps to correct region',
+      () async {
+    // 1080x1440 3:4 传感器，baseRatio=fullscreen → 比例区域 = 水平居中竖条。
+    // 第一轮框左上 1/4（相对比例区域），第二轮框左上 1/2（相对第一轮结果）：
+    // 最终相对比例区域 = (0,0,0.25,0.25)。用 computeCustomCropRect 验证落点。
+    final ratio = PhotoPostProcessor.computeCropRect(
+        'fullscreen', 1080, 1440, 9.0 / 19.5, true);
+    final first = PhotoPostProcessor.computeCustomCropRect(
+        const CropRect(x: 0, y: 0, w: 0.5, h: 0.5),
+        ratio[0], ratio[1], ratio[2], ratio[3]);
+    final second = PhotoPostProcessor.computeCustomCropRect(
+        const CropRect(x: 0, y: 0, w: 0.5, h: 0.5),
+        first[0], first[1], first[2], first[3]);
+    final viaCompose = PhotoPostProcessor.computeCustomCropRect(
+        PhotoPostProcessor.composeCropRects(
+                const CropRect(x: 0, y: 0, w: 0.5, h: 0.5),
+                const CropRect(x: 0, y: 0, w: 0.5, h: 0.5))!,
+        ratio[0], ratio[1], ratio[2], ratio[3]);
+    // 「先映射上一轮再映射本轮」与「嵌套组合后一次映射」在数学上等价；
+    // 由于两段式逐步取整（.round()）与单次组合取整的舍入差异，允许 ±1px。
+    for (var i = 0; i < 4; i++) {
+      expect(second[i], closeTo(viaCompose[i], 1),
+          reason: '「先映射上一轮再映射本轮」与「嵌套组合后一次映射」应一致（±1px 取整）');
+    }
+    expect(second[2],
+        closeTo(first[2] * 0.5, 1),
+        reason: '二次裁剪应落在一轮结果的 1/2 内，而非整张比例区域');
+  });
 }

@@ -520,7 +520,7 @@ class _RulesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final rules = <String>[
       '好友通过你的邀请码首次激活，双方各得积分奖励',
-      '每位好友仅可激活一次邀请码，激活后即绑定邀请关系',
+      '仅新设备首次使用时可绑定邀请码，激活后即绑定邀请关系',
       '邀请奖励积分将自动计入积分余额，可在「我的积分」查看',
       '禁止恶意刷邀请行为，一经发现将回收奖励并封禁账号',
     ];

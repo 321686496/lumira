@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/neon_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 霓虹人像模板
 /// 来源：lumira-app/src/data/templates/neon-portrait.ts
@@ -17,8 +18,14 @@ const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/neon_portrait_1.png'),
     ],
-    description: '利用城市霓虹灯光拍摄赛博朋克风格人像',
+    description: '这是一套专为雨夜繁华街头设计的赛博港风人像模板。场景选取霓虹灯牌密集的湿润街道，利用地面反光增强氛围。光线以背景高饱和霓虹为主，主体需正面补光以从暗背景中剥离。穿搭建议黑色系露肤度适中的吊带或外套，营造冷艳疏离感。适合喜欢电影感、夜景街拍及情绪大片的用户。',
     referenceSource: '样片 EXIF: 赛博朋克人像作品集；参数参考 500px Neon Portrait 专题',
+    shortDesc: '雨夜霓虹倒映湿漉街面，紫红光影交错，回眸一瞬清冷又迷离，满是赛博都市的孤独浪漫感🌃✨',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn'],
+      weathers: ['rain'],
+      timeTones: ['night'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',
@@ -36,6 +43,7 @@ const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
       scale: 0.85,
       rotation: 0,
       description: '人物位于画面中下部居中位置。身体背对镜头略向屏幕左侧转约135°（侧背），面部完全回转面向镜头（0°），形成经典的\'侧身回眸\'姿态。头颈微微向屏幕右侧倾斜约5°，下巴微收。视线直视镜头，眼神平静带有一丝疏离感。左肩（屏幕右侧）略微下沉，右肩（屏幕左侧）被头发遮挡。手臂自然下垂或被衣物遮挡，重心看似在双腿之间，姿态放松但挺拔。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

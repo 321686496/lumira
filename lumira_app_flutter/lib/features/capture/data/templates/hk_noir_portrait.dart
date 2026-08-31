@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/hk_noir_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 港风夜景人像模板
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 2
@@ -20,8 +21,14 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/hk_noir_portrait_3.png'),
       TemplateImage(url: 'assets/images/templates/hk_noir_portrait_4.png'),
     ],
-    description: '王家卫式港风夜景，霓虹暖黄低对比，街头浪漫故事感。',
+    description: '这是一组极具电影质感的夜景情绪人像模板。场景设定在深夜的城市街角或高架桥下，利用粗糙的水泥墙面作为背景。光线采用强烈的冷暖对比：主光源为屏幕侧上方的暖黄色硬光（模拟路灯），背景辅以青蓝色的环境冷光与远处的霓虹散景。穿搭建议黑色宽松斜肩卫衣搭配豹纹长裤，营造慵懒、叛逆又带点颓废的都市夜归人氛围。适合喜欢港风、赛博朋克或情绪片风格的用户，在夜晚有单一强光源的街头拍摄。',
     referenceSource: '小红书港风夜景教程；王家卫电影风格；醒图/美图秀秀港风滤镜',
+    shortDesc: '城市深夜的冷暖交锋，一束暖黄路灯切开青蓝夜色。靠在斑驳水泥墙边，手握微凉酒瓶，眼神迷离又清醒，满是王家卫式的孤独电影感🎬✨',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['autumn', 'winter', 'spring'],
+      weathers: ['sunny'],
+      timeTones: ['night'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',
@@ -39,6 +46,7 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
       scale: 0.95,
       rotation: 0,
       description: '人物站在画面中央偏右，背部轻靠水泥柱。身体朝向屏幕左前方约+45°，面部完全转向屏幕左侧约+90°，呈现完美侧颜。头颈微微上扬+5°，下巴微收。双手在腹部前方自然交握，持有一个深色玻璃酒瓶，手指放松弯曲。重心落在右腿，左腿微曲放松。视线看向屏幕左侧远处的虚焦灯光，表情清冷疏离，嘴唇微张。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '附加·坐姿低眉',
@@ -47,6 +55,7 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
       scale: 1.0,
       rotation: 0,
       description: '人物坐于地面或低矮处，背靠墙壁。身体朝向屏幕左前方+30°，面部朝下偏向屏幕左下方，头颈明显低头-20°。双臂自然下垂或搭在膝盖上（画面主要展示上半身），肩膀微微内扣放松。视线垂落看向地面，表情沉静忧郁，眼睑低垂。光线从屏幕右上方打下，在鼻梁和脸颊形成明显的明暗交界线。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '附加·仰头沐光',
@@ -55,6 +64,7 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
       scale: 0.98,
       rotation: 0,
       description: '人物站立靠墙，身体正对镜头略偏右-15°。头部大幅后仰+25°，面部朝向屏幕左上方光源，双眼轻闭。下巴抬起，颈部线条拉伸。双臂自然下垂于身体两侧（画面外或边缘）。头发因仰头动作自然向后散落，发梢被顶光照亮。表情享受且陶醉，仿佛在感受夜风或灯光的温度。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '附加·侧身回眸',
@@ -63,6 +73,7 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
       scale: 0.96,
       rotation: 0,
       description: '人物侧身站立，背部靠近右侧墙壁。身体朝向屏幕左侧+90°（纯侧面），但面部回转朝向镜头方向约-45°（回眸）。左手（画面可见侧）持酒瓶垂于身前。头颈微低-10°，视线看向屏幕左下方。身后墙壁上投射出清晰的人物剪影。表情淡漠，眼神略带迷离。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

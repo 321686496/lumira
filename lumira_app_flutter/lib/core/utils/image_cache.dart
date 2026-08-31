@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../config/app_config.dart';
@@ -293,18 +294,142 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
   bool _loading = true;
   bool _failed = false;
 
+  /// 实际承载滚动的 ScrollPosition（见 [_findEffectivePosition]）。
+  ScrollPosition? _pos;
+
+  /// 是否已开始拉取，避免重复触发下载。
+  bool _started = false;
+
+  /// 是否已登记过 post-frame 回调，防止重复登记。
+  bool _pendingFrameEval = false;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    // 不再在 initState 立即下载。若无有效滚动容器（图片直接展示在屏上），
+    // 会在 didChangeDependencies 里 fail-open 直接拉取；否则等进入视口再拉取。
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncPosition();
+  }
+
+  @override
+  void dispose() {
+    _pos?.removeListener(_onScrollChanged);
+    super.dispose();
   }
 
   @override
   void didUpdateWidget(CachedNetworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
-      _load();
+      // URL 变化视为进入新图：重新走可见性判定（已在屏上则立即拉取新图）。
+      _started = false;
+      _bytes = null;
+      _failed = false;
+      _pendingFrameEval = false;
+      _evaluateVisibility();
     }
+  }
+
+  /// 绑定「实际生效」的滚动位置，并在首次布局后评估一次可见性。
+  void _syncPosition() {
+    final p = _findEffectivePosition();
+    if (!identical(p, _pos)) {
+      _pos?.removeListener(_onScrollChanged);
+      _pos = p;
+      p?.addListener(_onScrollChanged);
+    }
+    _scheduleFrameEval();
+  }
+
+  void _scheduleFrameEval() {
+    if (_pendingFrameEval) return;
+    _pendingFrameEval = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingFrameEval = false;
+      if (mounted) _evaluateVisibility();
+    });
+  }
+
+  void _onScrollChanged() => _evaluateVisibility();
+
+  /// 从内到外找「真实可滚动」的滚动容器位置。
+  ///
+  /// 许多页面用 `SingleChildScrollView + Column / shrinkWrap GridView` 包裹，
+  /// 这类容器会把整体一次性 build（非懒加载）。这里取第一个实际可滚动的位置，
+  /// 用于按滚动偏移判定本组件是否接近视口。固定尺寸（shrinkWrap）的内层
+  /// GridView 不参与，直接穿透到外层真正滚动的容器，从而让内层图片也跟随
+  /// 外层滚动懒加载。没有可滚动祖先时返回 null（视为直接展示，立即拉取）。
+  ScrollPosition? _findEffectivePosition() {
+    ScrollPosition? nearest;
+    ScrollableState? s = context.findAncestorStateOfType<ScrollableState>();
+    while (s != null) {
+      final p = s.position;
+      nearest ??= p;
+      final hasScrollableContent =
+          p.hasContentDimensions && p.maxScrollExtent > p.minScrollExtent;
+      if (hasScrollableContent) return p;
+      s = s.context.findAncestorStateOfType<ScrollableState>();
+    }
+    return nearest;
+  }
+
+  /// 依据滚动偏移判断本组件是否进入「视口 + 预加载余量」，是则开始拉取。
+  /// 任何不确定/计算失败都 fail-open（立即拉取），保证图片一定能显示。
+  void _evaluateVisibility() {
+    if (_started || !mounted) return;
+
+    final pos = _pos;
+    if (pos == null) {
+      // 不在任何滚动容器内 → 就在屏上，直接拉取。
+      _startFetch();
+      return;
+    }
+
+    final box = context.findRenderObject();
+    if (box == null || box is! RenderBox) {
+      // 尚未布局，等下一帧再判定。
+      _scheduleFrameEval();
+      return;
+    }
+
+    try {
+      final viewport = _viewportFor(pos);
+      if (viewport == null) {
+        _startFetch();
+        return;
+      }
+      // getOffsetToReveal 会自行累加嵌套滚动层的偏移，得到外层滚动坐标。
+      final revealed = viewport.getOffsetToReveal(box, 0.0);
+      final top = revealed.offset;
+      final bottom = top + box.size.height;
+      final vp = pos.pixels;
+      final viewportH = pos.viewportDimension;
+      final margin = viewportH * 0.5; // 前后各预加载半屏，改善快速滚动的加载延迟
+      final inView = bottom >= vp - margin && top <= vp + viewportH + margin;
+      if (inView) _startFetch();
+    } catch (_) {
+      // 几何计算异常：安全回退为立即拉取。
+      _startFetch();
+    }
+  }
+
+  /// 从滚动位置的 storageContext 向上找其所属的 RenderAbstractViewport，
+  /// 保证用「与滚动位置一致的视口」来计算，正确处理嵌套（shrinkWrap 内层）场景。
+  /// 找不到时返回 null，由调用方 fail-open 立即拉取。
+  RenderAbstractViewport? _viewportFor(ScrollPosition pos) {
+    return pos.context.storageContext
+        .findAncestorRenderObjectOfType<RenderAbstractViewport>();
+  }
+
+  void _startFetch() {
+    if (_started) return;
+    _started = true;
+    _load();
   }
 
   Future<void> _load() async {
@@ -402,7 +527,9 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
             child: image,
           );
         }
-        return image;
+        // 栅格化隔离：把图片独立成一层。滚动/外层动画时，合成器只平移/变换
+        // 这一层，而不必每帧重新光栅化整张照片（OHOS 上多图滚动卡顿的主因）。
+        return RepaintBoundary(child: image);
       },
     );
   }

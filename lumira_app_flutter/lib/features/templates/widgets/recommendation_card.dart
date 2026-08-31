@@ -3,26 +3,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/cards/neu_card.dart';
+import '../data/templates_browse_mock_data.dart';
 import '../data/templates_mock_data.dart';
-import 'template_cover_image.dart';
+import 'adaptive_cover_image.dart';
+import 'ambience_badges.dart';
+import 'template_badges.dart';
 
 /// 推荐模板卡片（Hero 推荐区横向滚动项）
 ///
-/// 视觉规格来源：lumira-app/src/pages/templates/index.vue line 17-37
-/// - 宽度: 260rpx → 130dp
-/// - 图片宽高比: 133.33% (3:4)
-/// - 圆角: 24rpx → 12dp
-/// - source badge: 左上角，圆角胶囊
-/// - name: 26rpx → 13dp，单行 ellipsis
-/// - reason: 22rpx → 11dp，最多 2 行
+/// 内容排版与「全部模板页」卡片对齐：
+/// - 封面：真实比例自适应（宽度 100%，9:16 温和削减），叠 来源角标(左上) + 价格徽标(右上) + 已拍徽标(右下)
+/// - 信息区：名称 + 推荐理由(短简介) + 分类/自定义/氛围标签（Wrap 自动换行）
+/// - 保留来源角标与推荐理由（Hero 专属信息）
 class RecommendationCard extends ConsumerWidget {
   const RecommendationCard({
     super.key,
     required this.recommendation,
+    required this.usageCount,
     required this.onTap,
   });
 
   final TemplateRecommendation recommendation;
+  final int usageCount;
   final VoidCallback onTap;
 
   @override
@@ -31,64 +34,88 @@ class RecommendationCard extends ConsumerWidget {
     final tokens = appTheme.tokens;
     final rec = recommendation;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 130, // 260rpx → 130dp
-        decoration: appTheme.style == UIStyle.glass
-            ? BoxDecoration(
-                // 玻璃风格：半透明底色 + 细白描边 + 柔和投影
-                color: ThemeTokens.glassFill(tokens),
-                borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
-                border: Border.all(
-                  color: ThemeTokens.glassBorder(tokens),
-                  width: 1,
-                ),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x1F000000),
-                    offset: Offset(0, 6),
-                    blurRadius: 20,
-                  ),
-                ],
-              )
-            : BoxDecoration(
-                color: tokens.surface,
-                borderRadius: BorderRadius.circular(12), // 24rpx → 12dp
-                boxShadow: appTheme.style == UIStyle.neumorphic
-                    ? tokens.shadowConvex
-                    : null,
-              ),
-        clipBehavior: Clip.antiAlias,
+    return SizedBox(
+      width: 130, // 260rpx → 130dp
+      child: NeuCard(
+        padding: EdgeInsets.zero,
+        onTap: onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _RecImage(rec: rec, tokens: tokens),
+            _RecImage(rec: rec, tokens: tokens, usageCount: usageCount),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 4), // 20rpx 16rpx 20rpx 4rpx → 10 8 10 2
-              child: Text(
-                rec.name,
-                style: TextStyle(
-                  fontSize: 13, // 26rpx → 13dp
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                  height: 1.2,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10), // 20rpx 0 20rpx 20rpx → 10 0 10 10
-              child: Text(
-                rec.reason,
-                style: TextStyle(
-                  fontSize: 11, // 22rpx → 11dp
-                  color: tokens.textSecondary,
-                  height: 1.4,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    rec.name,
+                    style: TextStyle(
+                      fontFamily: 'Noto Serif SC',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (rec.reason.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      rec.reason,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.3,
+                        color: tokens.textSecondary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              TemplatesBrowseMockData.categoryLabel(rec.category),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: tokens.brand,
+                              ),
+                            ),
+                            if (rec.isCustom)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: tokens.brandSubtle,
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: Text(
+                                  '自定义',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: tokens.brandText,
+                                  ),
+                                ),
+                              ),
+                            AmbienceBadges(
+                              ambience: rec.ambience,
+                              tokens: tokens,
+                              maxItems: 2,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -99,59 +126,78 @@ class RecommendationCard extends ConsumerWidget {
 }
 
 class _RecImage extends StatelessWidget {
-  const _RecImage({required this.rec, required this.tokens});
+  const _RecImage({
+    required this.rec,
+    required this.tokens,
+    required this.usageCount,
+  });
 
   final TemplateRecommendation rec;
   final ThemeTokens tokens;
+  final int usageCount;
 
   @override
   Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 3 / 4, // padding-bottom: 133.33% → 3:4
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          TemplateCoverImage(
-            cover: rec.cover,
-            coverData: rec.coverData,
-            fit: BoxFit.cover,
-            fallback: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    tokens.brand.withOpacity(0.6),
-                    tokens.brandDeep.withOpacity(0.8),
-                  ],
-                ),
-              ),
-              child: Center(
-                child: Icon(
-                  Icons.image_outlined,
-                  size: 32,
-                  color: tokens.textInverse.withOpacity(0.6),
-                ),
-              ),
-            ),
-            errorFallback: Container(
-              color: tokens.surfaceAlt,
-              child: Center(
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  size: 28,
-                  color: tokens.textTertiary,
-                ),
-              ),
-            ),
+    return AdaptiveCoverImage(
+      cover: rec.cover,
+      coverData: rec.coverData,
+      fallback: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              tokens.brand.withOpacity(0.6),
+              tokens.brandDeep.withOpacity(0.8),
+            ],
           ),
-          Positioned(
-            top: 6, // 12rpx → 6dp
-            left: 6,
-            child: _SourceBadge(source: rec.source),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.image_outlined,
+            size: 32,
+            color: tokens.textInverse.withOpacity(0.6),
           ),
-        ],
+        ),
       ),
+      errorFallback: Container(
+        color: tokens.surfaceAlt,
+        child: Center(
+          child: Icon(
+            Icons.broken_image_outlined,
+            size: 28,
+            color: tokens.textTertiary,
+          ),
+        ),
+      ),
+      overlay: [
+        // 来源角标（Hero 专属）：左上
+        Positioned(
+          top: 8,
+          left: 8,
+          child: _SourceBadge(source: rec.source),
+        ),
+        // 价格/免费徽标：右上（与来源角标同行，避免重叠）
+        if (rec.price == 0)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: FreeBadge(tokens: tokens),
+          )
+        else
+          Positioned(
+            top: 8,
+            right: 8,
+            child: PremiumBadge(tokens: tokens, price: rec.price),
+          ),
+        // 已拍照片数：右下（与模板库卡片一致）
+        if (usageCount > 0)
+          Positioned(
+            bottom: 8,
+            right: 8,
+            child: UsageCountBadge(count: usageCount),
+          ),
+      ],
     );
   }
 }

@@ -45,7 +45,8 @@ import '../services/camera_service.dart';
 import '../services/camera_service_provider.dart';
 import '../services/level_sensor_service.dart';
 import '../services/capture_worker.dart';
-import '../services/dart_photo_pipeline.dart' show applyP3ToSrgbRgba, isDisplayP3Jpeg;
+import '../services/dart_photo_pipeline.dart'
+    show applyP3ToSrgbRgba, isDisplayP3Jpeg, legStretchRgba;
 import '../services/white_balance.dart';
 import '../../watermark/data/watermark_providers.dart';
 import '../../watermark/models/watermark_template.dart';
@@ -75,8 +76,31 @@ import '../widgets/template_strip.dart';
 /// - 全屏仅隐藏装饰性 UI（ParamPillBar、底部抽屉栏的模板/场景条）
 /// - 保留 CaptureNav（含退出全屏按钮）和底部核心交互（拍摄按钮、缩略图、切换摄像头）
 /// - 确保用户在全屏下仍能拍照、退出全屏
+/// 套用模板前的用户参数快照，用于取消套用时还原。
+/// 仅保存「套用模板会覆盖」的实时参数：补光灯、白平衡、缩放、照片比例。
+class _TemplateParamSnapshot {
+  const _TemplateParamSnapshot({
+    required this.aspectRatio,
+    required this.wb,
+    required this.zoom,
+    required this.apparentZoom,
+    required this.fillLightEnabled,
+    required this.fillLightColor,
+    required this.fillLightIntensity,
+  });
+
+  final String aspectRatio;
+  final WhiteBalanceSettings wb;
+  final double zoom;
+  final double apparentZoom;
+  final bool fillLightEnabled;
+  final Color fillLightColor;
+  final double fillLightIntensity;
+}
+
 class CapturePage extends ConsumerStatefulWidget {
-  const CapturePage({super.key, this.templateId, this.sceneId, this.kitId, this.challengeId, this.trialMode = false});
+  const CapturePage({super.key,
+      this.templateId, this.sceneId, this.kitId, this.challengeId, this.trialMode = false});
 
   /// 来自 URL ?templateId=xxx，null 表示自由拍摄
   final String? templateId;
@@ -154,6 +178,10 @@ class _CapturePageState extends ConsumerState<CapturePage>
   /// 补光关闭或页面退出时恢复此值；null 表示未保存（补光未开启或已恢复）。
   double? _originalScreenBrightness;
 
+  /// 套用模板前记录的用户自由模式参数快照，取消套用时还原。
+  /// null 表示当前不在模板模式（无可还原快照）。
+  _TemplateParamSnapshot? _preTemplateParams;
+
   /// 相机就绪流订阅：驱动取景器加载看门狗。
   /// readyStream 收到 true 表示相机已就绪（CameraAwesomeBuilder 状态脱离 Preparing）。
   StreamSubscription<bool>? _cameraReadySub;
@@ -189,6 +217,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
   String? _animationPhotoPath;
   WatermarkTemplate? _animationTemplate;
   VoidCallback? _onAnimationComplete;
+
+  /// OHOS 分阶段拍照早帧订阅：一阶段低质量帧（~672ms）先于成片到达，
+  /// 收到即提前触发水印动画（无需等待成片 capture() ~1.9s 返回）。
+  StreamSubscription<String>? _earlyFrameSub;
+
+  /// 当前拍摄是否期望 OHOS 早帧（用于忽略上一帧残留事件，避免误触发动画）。
+  bool _expectingEarlyFrame = false;
 
   /// 角标缩略图的 GlobalKey：水印动画淡出后跳预览页之前，
   /// 需要确保后处理落库完成（读取 finalPath/photoId）。
@@ -509,6 +544,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
     _cameraReadySub?.cancel();
     _cameraReadyWatchdog?.cancel();
     _devicePortraitSub?.cancel();
+    _earlyFrameSub?.cancel();
+    _earlyFrameSub = null;
     // 释放常驻 worker isolate（性能优化 A：避免 isolate 泄漏）
     CaptureWorker.instance.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -539,6 +576,42 @@ class _CapturePageState extends ConsumerState<CapturePage>
         debugPrint('[capture] restore brightness failed: $e');
       }
     }();
+  }
+
+  /// 记录当前模板相关的实时参数快照（套用模板前的用户自由模式状态），
+  /// 供取消套用时还原。快照只覆盖套用模板会覆盖的实时参数：
+  /// 补光灯（开关/颜色/强度）、白平衡、缩放、照片比例。
+  _TemplateParamSnapshot _captureTemplateParams() {
+    return _TemplateParamSnapshot(
+      aspectRatio: ref.read(CaptureState.aspectRatioProvider),
+      wb: ref.read(whiteBalanceSessionProvider),
+      zoom: ref.read(CaptureState.zoomProvider),
+      apparentZoom: ref.read(CaptureState.apparentZoomProvider),
+      fillLightEnabled: ref.read(CaptureState.fillLightEnabledProvider),
+      fillLightColor: ref.read(CaptureState.fillLightColorProvider),
+      fillLightIntensity: ref.read(CaptureState.fillLightIntensityProvider),
+    );
+  }
+
+  /// 取消套用模板时，把上面快照记下的参数还原回套用前的用户状态。
+  void _restoreTemplateParams(_TemplateParamSnapshot s) {
+    ref.read(CaptureState.aspectRatioProvider.notifier).state = s.aspectRatio;
+    ref.read(whiteBalanceSessionProvider.notifier).state = s.wb;
+    ref.read(cameraServiceProvider).setWhiteBalance(s.wb);
+    ref.read(CaptureState.zoomProvider.notifier).state = s.zoom;
+    ref.read(CaptureState.apparentZoomProvider.notifier).state = s.apparentZoom;
+    ref.read(cameraServiceProvider).setZoomMultiplier(s.zoom);
+    ref
+        .read(CaptureState.fillLightEnabledProvider.notifier)
+        .state = s.fillLightEnabled;
+    ref.read(CaptureState.fillLightColorProvider.notifier).state =
+        s.fillLightColor;
+    ref.read(CaptureState.fillLightIntensityProvider.notifier).state =
+        s.fillLightIntensity;
+    debugPrint(
+        '[capture] 取消套用模板，还原参数: ratio=${s.aspectRatio} '
+        'wb=${s.wb} zoom=${s.zoom} fillLightEnabled=${s.fillLightEnabled} '
+        'fillLightColor=$s.fillLightColor intensity=${s.fillLightIntensity}');
   }
 
   /// 依据当前摄像头朝向，把模板的补光灯配置应用到补光状态。
@@ -710,12 +783,33 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // iOS：快门瞬间双路并行 —— 取景器帧直出（水印动画源，快 + WYSIWYG）
     // 与 photoOutput 成片（质量优先）并行执行，互不阻塞。
     // 取景器帧捕捉不到瞬时闪光，闪光模式（on/auto/torch）动画源回退用成片。
-    // OHOS/Android：captureFrameForAnimation 返回 null，动画源走已拍原片（原生硬解码）。
+    // OHOS：captureFrameForAnimation 返回 null，改由「分阶段拍照早帧」提前触发动画
+    //   （见下方 photoEarlyFrames 订阅）；Android 动画源回退用成片（原生硬解码）。
     final isIos = Platform.isIOS;
     final useViewfinderFrame = isIos && flashMode == CaptureFlashMode.off;
     final animationFrameFuture = shouldAnimateNow && useViewfinderFrame
         ? cameraService.captureFrameForAnimation()
         : Future<String?>.value(null);
+
+    // OHOS 分阶段拍照：订阅早帧通道（常驻一次）。一阶段低质量帧（~672ms）先于成片
+    // capture()（~1.9s）返回到达，收到即提前触发水印动画，无需等成片落盘。
+    // _expectingEarlyFrame 标记本次拍摄期望早帧，防止上一帧残留事件误触发动画。
+    final isOhos = !isIos && !Platform.isAndroid;
+    _expectingEarlyFrame = shouldAnimateNow && isOhos;
+    if (_expectingEarlyFrame) {
+      try {
+        _earlyFrameSub ??= cameraService.photoEarlyFrames().listen((path) {
+          if (!_expectingEarlyFrame || _showWatermarkAnimation || path.isEmpty) {
+            return;
+          }
+          _expectingEarlyFrame = false;
+          debugPrint('[capture] OHOS early frame arrived: $path');
+          _startWatermarkAnimation(path, wmTemplate!);
+        });
+      } catch (e) {
+        debugPrint('[capture] listen OHOS early frame failed: $e');
+      }
+    }
 
     // 快照当前比例参数（避免连拍中切换比例导致参数不一致）
     final ratioId = ref.read(CaptureState.aspectRatioProvider);
@@ -760,21 +854,16 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 快门按下即播放动画，使用「动画内容源帧」+ CustomPaint 叠加水印
       // （与最终渲染水印视觉一致），后处理在队列中并行执行。
       // - iOS 动画源 = 取景器帧直出（快 + 与取景器高度一致）；
-      // - OHOS 动画源 = 已拍原片（原生硬解码，见 watermark_animation_overlay）；
-      // - 无可用帧 / 闪光模式 / 取景器帧失败 → 回退用成片。
+      // - OHOS 动画源 = 分阶段拍照早帧（~672ms 提前触发，无需等成片）；
+      // - 无可用帧 / 闪光模式 / 取景器帧失败 / 早帧未到 → 回退用成片。
       if (shouldAnimateNow && mounted) {
-        setState(() {
-          _showWatermarkAnimation = true;
-          _animationPhotoPath = animationFramePath ?? result.filePath;
-          _animationTemplate = wmTemplate;
-        });
-        _onAnimationComplete = () {
-          if (!mounted) return;
-          setState(() => _showWatermarkAnimation = false);
-          // 动画淡出后直接跳转到拍摄预览页；
-          // 后处理为异步，需等最终照片落库完成后才能带上 finalPath 打开预览页。
-          _goToPreviewWhenReady();
-        };
+        // OHOS 早帧已触发动画（_showWatermarkAnimation 为 true）则跳过，
+        // 成片仅作后处理落库；否则回退用成片做动画源。
+        if (!_showWatermarkAnimation) {
+          _startWatermarkAnimation(
+              animationFramePath ?? result.filePath, wmTemplate);
+        }
+        _expectingEarlyFrame = false;
       }
 
       // 后处理异步执行，不阻塞下次 capture 调用（支持连拍）
@@ -856,6 +945,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
     // GPU+isolate 管线（该管线按 isPortrait 做真正的 90° 旋转），竖屏才走原生快速路径。
     final fastNative = _isOhos &&
         params.isPortrait &&
+        // 拉腿尚未在 OHOS 原生 processJpeg 实现，开拉腿时走 Dart 管线应用。
+        params.postProcess.legStretch == 0 &&
         params.postProcess.smoothStrength == 0 &&
         params.postProcess.vignette == 0 &&
         params.postProcess.grain == 0 &&
@@ -873,9 +964,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
           isPortrait: params.isPortrait,
           isFront: params.isFront,
           matrix: composePostProcessMatrix(params.postProcess),
-          sharpen: params.postProcess.sharpen >= kMinLiveSharpen
-              ? params.postProcess.sharpen
-              : kMinLiveSharpen,
+          // 拍摄成片锐化严格用用户/模板真实值，禁止代码层强制最小锐化。
+          // 防糊由系统层解决：OHOS 8.2MP 档位 + PhotoQualityPrioritization.HIGH_QUALITY。
+          sharpen: params.postProcess.sharpen,
           maxDim: params.maxDim,
           timing: nativeTiming,
         );
@@ -1184,6 +1275,27 @@ class _CapturePageState extends ConsumerState<CapturePage>
     }
   }
 
+  /// 触发水印定格动画（用指定「动画内容源帧」路径 + 水印模板）。
+  /// 动画淡出后跳转拍摄预览页；后处理为异步，需等最终照片落库完成
+  /// 后才带上 finalPath 打开预览页（见 [_goToPreviewWhenReady]）。
+  ///
+  /// - iOS：动画源 = 取景器帧直出（快 + WYSIWYG），闪光模式回退用成片；
+  /// - OHOS：动画源 = 分阶段拍照早帧（~672ms 提前触发），早帧未到回退用成片。
+  void _startWatermarkAnimation(
+      String photoPath, WatermarkTemplate template) {
+    if (!mounted) return;
+    setState(() {
+      _showWatermarkAnimation = true;
+      _animationPhotoPath = photoPath;
+      _animationTemplate = template;
+    });
+    _onAnimationComplete = () {
+      if (!mounted) return;
+      setState(() => _showWatermarkAnimation = false);
+      _goToPreviewWhenReady();
+    };
+  }
+
   /// 水印动画淡出后跳转拍摄预览页前的等待逻辑。
   /// 后处理（GPU + worker isolate + 水印渲染 + 落库）为异步执行，动画播放期间
   /// 通常已经完成；此处轮询 [captureThumbnailProvider] 直到 finalPath/photoId 就绪，
@@ -1480,6 +1592,23 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
     });
 
+    // ── 模板参数快照（取消套用还原）──
+    // 本 listener 必须注册在所有模板套用 listener 之前：套用模板（prev==null && next!=null）
+    // 时先记录用户自由模式参数快照，之后各套用 listener 才会把模板参数写进去；
+    // 取消套用（prev!=null && next==null）时，其余套用 listener 都以 next==null 提前返回
+    // 不写参数，因此此处把快照还原回用户原参数。快照在模板切换（prev/next 均非空）时不更新，
+    // 保证取消后回到最初套用模板前的用户状态。
+    ref.listen<PhotoTemplate?>(
+        CaptureState.originalTemplateProvider, (prev, next) {
+      if (prev == null && next != null) {
+        _preTemplateParams = _captureTemplateParams();
+      } else if (prev != null && next == null) {
+        final s = _preTemplateParams;
+        _preTemplateParams = null;
+        if (s != null) _restoreTemplateParams(s);
+      }
+    });
+
     // 模板切换时同步 aspectRatioProvider 为模板的 cropRatio
     // 修复：之前模板的 cropRatio 字段被完全忽略，导致不同模板拍出来比例都一样
     // （永远使用 aspectRatioProvider 的默认值 'fullscreen'）。
@@ -1682,6 +1811,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
                   ChallengeOverlayBar(
                     challengeId: widget.challengeId!,
                     captureInProgress: captureInProgress,
+                    isLandscape: _isLandscape,
+                    quarterTurns: _landscapeQuarterTurns,
                   ),
                 // 套用模板时显示可折叠模板信息卡（移至下方，避免挤压比例/参数选项）
                 // 试用模式隐藏（仅展示效果，不暴露参数）
@@ -3949,14 +4080,6 @@ class _CaptureProcessParams {
 /// - 解码目标长边 1600：略高于输出，避免全尺寸解码后再 GPU 缩小，可省 0.4-1.0s。
 ///   【性能优化 B / C】
 
-/// 拍摄（live capture）成片的最小锐化下限。
-/// 自由/默认模式下用户 sharpen=0 时，纯下采样（滤镜 quality low）+ 无锐化会让成片变糊
-/// （手抖 + 缩图）。强制一个最小锐化基线，保证成片不软。模板自带锐化 > 该值时不受影响。
-///
-/// 注意：OHOS 拍照档位限制到 ≤3MP 后源图仅有 ~1.92MP（1200x1600），相对 8MP 时
-/// 失去大量"下采样自带锐化"，故 20 的 unsharp 强度（a=0.2）已显软，抬高到 30 找回锐度。
-const int kMinLiveSharpen = 30;
-
 /// GPU 处理后的 rawRgba 数据 + 尺寸，传给 worker isolate 做后续 CPU 处理。
 class _GpuProcessedData {
   const _GpuProcessedData({
@@ -4409,22 +4532,37 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         'toByteData(rawRgba): ${swRgba.elapsedMilliseconds}ms (out=$iOutW x $iOutH)');
     if (byteData == null) return null;
 
+    // 拉腿：成片方向对齐/裁剪后，在导出 rawRgba 前做字节级纵向拉伸，与取景器
+    // 实时预览（LegStretchPreviewOverlay）一致。此前拍摄管线一直忽略 legStretch
+    // （实时预览显示拉长但成片完全没有拉腿效果），此处补齐使成片 WYSIWYG。
+    // 注意：函数内已有 double 型 outW/outH（cover 缩放用），此处用 stretchW/H
+    // 表示拉伸后的 int 输出尺寸，避免重名冲突导致编译失败。
+    var outRgba = byteData.buffer.asUint8List();
+    var stretchW = iOutW;
+    var stretchH = iOutH;
+    final leg = params.postProcess.legStretch;
+    if (leg > 0) {
+      final stretched = legStretchRgba(
+        outRgba,
+        width: stretchW,
+        height: stretchH,
+        legStretch: leg,
+      );
+      outRgba = stretched.bytes;
+      stretchH = stretched.height;
+      debugPrint(
+          '[capture] 拉腿: legStretch=$leg, $iOutW x $iOutH -> $stretchW x $stretchH');
+    }
+
     return _GpuProcessedData(
-      rgbaBytes: byteData.buffer.asUint8List(),
-      width: iOutW,
-      height: iOutH,
+      rgbaBytes: outRgba,
+      width: stretchW,
+      height: stretchH,
       outputPath: params.inputPath,
-      // 拍摄成片强制最小锐化：仅 OHOS 生效。
-      // 背景：用户 sharpen=0（自由模式）时若不放一个基线，OHOS 纯缩图+无锐化会让成片明显发糊
-      //（kDeblur 结论，2026-08-24）。此处强制 kMinLiveSharpen 基线只为 OHOS 保清晰。
-      // iOS/Android 相机 ISP 直出已足够清晰，若也强制该基线，会让共享 worker 的无差别
-      // 3x3 锐化把平坦区域噪点一并放大成"颗粒感"，故非 OHOS 一律用用户真实 sharpen 值。
-      // 顶层函数，无法访问 State 上的 _isOhos，用同样的平台判断内联。
-      sharpen: (!Platform.isAndroid && !Platform.isIOS)
-          ? ((params.postProcess.sharpen >= kMinLiveSharpen)
-              ? params.postProcess.sharpen
-              : kMinLiveSharpen)
-          : params.postProcess.sharpen,
+      // 拍摄成片锐化严格使用用户/模板的真实 sharpen 值，禁止代码层强制最小锐化。
+      // 防糊由系统层解决：OHOS 拍照档位 8.2MP + PhotoQualityPrioritization.HIGH_QUALITY
+      //（project_memory 硬约束），应用层不得再叠加锐化补偿。
+      sharpen: params.postProcess.sharpen,
       clarity: params.postProcess.color.clarity,
       grain: params.postProcess.grain,
       smoothStrength: params.postProcess.smoothStrength,

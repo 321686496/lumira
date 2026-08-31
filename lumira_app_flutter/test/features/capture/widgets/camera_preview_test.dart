@@ -69,6 +69,9 @@ class _FakeCameraService implements CameraService {
   Future<String?> captureFrameForAnimation() async => null;
 
   @override
+  Stream<String> photoEarlyFrames() => const Stream<String>.empty();
+
+  @override
   void setZoom(double normalized) {}
 
   @override
@@ -248,11 +251,12 @@ void main() {
 
       final layer =
           tester.widget<SilhouetteLayer>(find.byType(SilhouetteLayer));
-      // soft_portrait: silhouette 'soft-portrait', position (0.5, 0.45)
-      expect(layer.silhouetteData, 'soft-portrait');
-      expect(layer.positionX, 0.5);
+      // soft_portrait: 默认姿势 pose1（asset 路径, x0.55 y0.45 scale0.85）
+      expect(layer.silhouetteData,
+          'assets/images/silhouettes/soft_portrait_pose1.png');
+      expect(layer.positionX, 0.55);
       expect(layer.positionY, 0.45);
-      expect(layer.scale, 1.0);
+      expect(layer.scale, 0.85);
       expect(layer.rotation, 0);
     });
   });

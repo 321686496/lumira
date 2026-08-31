@@ -187,10 +187,16 @@ class BuiltinDataSeeder {
     ];
     final batch = db.batch();
     for (final c in categories) {
+      // 用 OR IGNORE 而非 REPLACE：仅补种「缺失」的 7 个系统分类。
+      // - 已存在的行（含后台配置的 icon_url 封面 / 描述 / 名称）不被覆盖，
+      //   避免每次后端同步后封面被清空、卡片回退为渐变占位；
+      // - 被误删的系统分类（如 macro）仍会被重补；
+      // - 依赖 v47 引入的 NULL 安全唯一索引 (key, IFNULL(parent_key,''))，
+      //   一级分类也能命中冲突，天然幂等，不再产生重复行。
       batch.insert(
         Tables.templateCategories,
         c,
-        conflictAlgorithm: ConflictAlgorithm.replace,
+        conflictAlgorithm: ConflictAlgorithm.ignore,
       );
     }
     await batch.commit(noResult: true);

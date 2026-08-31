@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/night_cityscape.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 夜景城市模板
 /// 来源：lumira-app/src/data/templates/night-cityscape.ts
@@ -17,8 +18,14 @@ const PhotoTemplate nightCityscapeTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/night_cityscape.png'),
     ],
-    description: '城市夜景长曝光拍摄，捕捉灯光车轨与建筑天际线',
+    description: "这是一套专为城市夜景设计的长曝光风格模板。捕捉日落后30分钟的'蓝调时刻'，利用高机位俯瞰跨江大桥与CBD天际线。画面强调冷暖对比：深邃的蓝紫色天空与暖橙色的车流光轨、璀璨的建筑灯光形成强烈视觉冲击。适合拥有广角镜头的用户，在立交桥、高楼观景台或无人机视角下拍摄，展现城市的宏大叙事与流动美感。",
     referenceSource: '样片 EXIF: 城市夜景摄影集；参数参考 500px 城市夜景精选作品',
+    shortDesc: '暮色四合，蓝调天空与霓虹灯火交织，车流光轨如丝带般穿梭于江畔，定格这座不夜城的赛博浪漫与流动诗意🌃✨',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn', 'winter'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['cool', 'night'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

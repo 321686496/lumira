@@ -16,6 +16,15 @@ import '../data/templates_mock_data.dart';
 import '../data/templates_browse_mock_data.dart';
 import '../widgets/template_grid.dart';
 
+/// 各模板在本机已拍摄的照片数（模板卡片「已拍 N 张」角标）。
+///
+/// 与「全部模板页 / 我的收藏页」同源（GalleryDao.countByTemplate），
+/// 供发现页 Hero 推荐卡与「更多模板」卡共用，保证四处卡片角标口径一致。
+final templateUsageCountsProvider = FutureProvider<Map<String, int>>((ref) async {
+  final galleryDao = await ref.watch(galleryDaoProvider.future);
+  return galleryDao.countByTemplate();
+});
+
 /// 用户拍摄偏好 Provider
 /// 实现：从 GalleryDao 统计照片总数和按模板分类的拍摄数，计算最常用分类及其占比。
 /// 对照 Vue 版 useRecommendation.ts line 37-54 (topCategory) + line 173-186 (userPreference)。

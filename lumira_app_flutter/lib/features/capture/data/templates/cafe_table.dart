@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/cafe_table.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 餐桌氛围模板（美食 / 俯拍 / 平面）
 /// 内置模板补充：美食大类非人像模板
@@ -20,8 +21,14 @@ const PhotoTemplate cafeTableTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/cafe_table_3.png'),
       TemplateImage(url: 'assets/images/templates/cafe_table_4.png'),
     ],
-    description: '咖啡馆餐桌的 90 度俯拍，咖啡、甜点与桌面物件构成温暖的生活画面',
+    description: '静物美食模板，适用于咖啡馆桌面咖啡甜品拍摄，依靠窗边柔和侧方自然光，俯拍桌面陈设，搭配书籍小花道具，胶片颗粒氛围感，适合记录下午茶，无需人像出镜。',
     referenceSource: '样片参考：Pexels 咖啡馆俯拍精选；参数参考美食平铺摄影教程',
+    shortDesc: '窗边暖光漫落，咖啡与甜点，慢享慵懒午后时光☕',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'autumn', 'winter'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['warm'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',
@@ -39,6 +46,7 @@ const PhotoTemplate cafeTableTemplate = PhotoTemplate(
       scale: 0.94,
       rotation: 0,
       description: '高角度45度俯拍桌面，咖啡杯、草莓挞为视觉双主体，刀叉放置画面底部，翻开旧书放在画面左上，单支小白花在咖啡杯右侧；桌面斜线形成从屏幕左下向屏幕右上延伸引导线，利用九宫格分割摆放物体，适当留白。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '大理石桌明亮构图',
@@ -47,6 +55,7 @@ const PhotoTemplate cafeTableTemplate = PhotoTemplate(
       scale: 0.92,
       rotation: 0,
       description: '高角度俯拍大理石桌面，咖啡杯居于画面中下，甜点马卡龙布置屏幕左侧，小雏菊花朵放在画面左下角，刀叉餐巾放在屏幕右下；阳光在桌面形成清晰条状光影，物体沿九宫格交叉点摆放。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '手冲咖啡复古构图',
@@ -55,6 +64,7 @@ const PhotoTemplate cafeTableTemplate = PhotoTemplate(
       scale: 0.96,
       rotation: 0,
       description: '45度俯拍木质窗台桌面，手冲壶、水杯布置屏幕左上，黑咖啡杯画面中下，肉桂卷吐司餐盘屏幕右侧，杂志书本放在画面右下角；利用窗台做框架边缘，桌面散落少量水渍增加真实生活感。',
+      cameraDirection: 'back',
     ),
     Pose(
       name: '亚麻桌布法式构图',
@@ -63,6 +73,7 @@ const PhotoTemplate cafeTableTemplate = PhotoTemplate(
       scale: 0.93,
       rotation: 0,
       description: '俯拍亚麻布艺桌面，咖啡杯位于画面中心，两个可颂分别放置屏幕左上金属托盘、屏幕右上方餐巾，旧书放在屏幕左下角，金属小勺在咖啡杯左侧；亚麻布料褶皱作为画面肌理，阳光投下物体轮廓硬阴影。',
+      cameraDirection: 'back',
     ),
   ],
   camera: CameraParams(

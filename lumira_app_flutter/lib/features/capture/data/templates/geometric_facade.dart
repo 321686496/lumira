@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/geometric_facade.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 立面几何结构模板（街拍 / 几何 / 远景）
 /// 内置模板补充：街拍大类非人像模板
@@ -17,7 +18,13 @@ const PhotoTemplate geometricFacadeTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/geometric_facade.png'),
     ],
-    description: '规整的建筑立面几何，重复的窗户与线条构成抽象秩序',
+    description: '这是一套面向现代主义/极简建筑外立面的黑白摄影模板。画面以大面积留白的混凝土或涂料墙面为底，依靠强烈直射阳光在建筑体块转折处投下边缘锐利的硬阴影，形成强烈的明暗几何分割。横向贯通的黑色长条窗带与局部竖向凹凸肌理构成节奏感。适合拍摄美术馆、办公楼、极简住宅等具有干净体块与重复元素的建筑。无需人物，靠构图与光影本身说话；建议晴天正午前后拍摄以获得最硬的阴影边缘。',
+    shortDesc: '纯白立面被烈日切出锐利对角阴影，竖向线条与黑色窗带交织成冷静秩序，高级灰调里藏着建筑的呼吸感🏛️',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn', 'winter'],
+      weathers: ['sunny'],
+      timeTones: ['day'],
+    ),
     referenceSource: '样片参考：建筑立面抽象摄影；参数参考秩序构图合集',
   ),
   composition: Composition(

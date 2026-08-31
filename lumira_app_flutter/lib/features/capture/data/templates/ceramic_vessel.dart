@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/ceramic_vessel.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 素陶瓷器模板（静物 / 极简 / 单体）
 /// 内置模板补充：静物大类非人像模板
@@ -20,7 +21,13 @@ const PhotoTemplate ceramicVesselTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/ceramic_vessel_3.png'),
       TemplateImage(url: 'assets/images/templates/ceramic_vessel_4.png'),
     ],
-    description: '素陶器物沐着温柔窗光，质朴安静，满是松弛侘寂的氛围感',
+    description: '静物拍摄模板，适配素色粗陶器皿，利用窗边柔和漫射自然光，搭配棉麻织物与素色背景，低饱和暖米色调，呈现质朴安静的侘寂静物效果，适合陶器、摆件、家居小物拍摄。',
+    shortDesc: '素陶器物沐着温柔窗光，质朴安静，满是松弛侘寂氛围感🍂',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'autumn', 'winter'],
+      weathers: ['sunny'],
+      timeTones: ['warm'],
+    ),
     referenceSource: '样片参考：Pexels 静物摄影精选；参数参考极简静物教程',
   ),
   composition: Composition(

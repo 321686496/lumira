@@ -1,3 +1,5 @@
+import 'remote_template_dto.dart';
+
 /// 模板推荐来源类型
 enum TemplateSource {
   /// 最近使用
@@ -21,6 +23,9 @@ class TemplateRecommendation {
     required this.category,
     this.cover,
     this.coverData,
+    this.price = 0,
+    this.isCustom = false,
+    this.ambience,
   });
 
   final String id;
@@ -33,6 +38,12 @@ class TemplateRecommendation {
   final String? cover;
   /// 自定义模板 base64 data URL
   final String? coverData;
+  /// 模板价格（0 = 免费），对齐模板库卡片徽标
+  final int price;
+  /// 是否为自定义模板（对齐模板库卡片「自定义」标签）
+  final bool isCustom;
+  /// 季节/天气/时段氛围元数据（卡片标签展示用，对齐模板库卡片）
+  final RemoteTemplateAmbienceDto? ambience;
 }
 
 /// 模板卡片项（更多模板 section）

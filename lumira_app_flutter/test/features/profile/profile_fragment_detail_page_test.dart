@@ -7,7 +7,7 @@ import 'package:lumira_app_flutter/features/profile/providers/fragments_provider
 
 void main() {
   testWidgets(
-      'tapping share button on fragment card opens PosterGenerator sheet',
+      'tapping share button opens style picker, then poster sheet',
       (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -31,8 +31,18 @@ void main() {
     await tester.tap(shareButtons.first);
     await tester.pumpAndSettle();
 
-    // 验证 PosterGenerator 底部 Sheet 出现（包含「导出海报」和「分享海报」按钮）
-    expect(find.text('导出海报'), findsOneWidget);
+    // 验证「选择分享卡片」面板出现，含三套布局
+    expect(find.text('选择分享卡片'), findsOneWidget);
+    expect(find.text('等高画廊带'), findsOneWidget);
+    expect(find.text('装裱衬纸'), findsOneWidget);
+    expect(find.text('收藏编号版'), findsOneWidget);
+
+    // 选择「等高画廊带」，进入海报预览
+    await tester.tap(find.text('等高画廊带'));
+    await tester.pumpAndSettle();
+
+    // 验证 PosterGenerator 底部 Sheet 出现（包含「保存到相册」和「分享海报」按钮）
+    expect(find.text('保存到相册'), findsOneWidget);
     expect(find.text('分享海报'), findsOneWidget);
   });
 }

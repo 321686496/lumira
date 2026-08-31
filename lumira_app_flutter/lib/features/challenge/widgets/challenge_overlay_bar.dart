@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/challenge_models.dart';
 import '../data/challenge_pool.dart';
 
@@ -16,12 +17,20 @@ class ChallengeOverlayBar extends ConsumerStatefulWidget {
     super.key,
     required this.challengeId,
     required this.captureInProgress,
+    this.isLandscape = false,
+    this.quarterTurns = 0,
   });
 
   final String challengeId;
 
   /// 是否正在拍照（用于自动折叠）
   final bool captureInProgress;
+
+  /// 横持手机时为 true：面板旋转到可读方向（由传感器驱动，UI 整体仍保持竖屏）。
+  final bool isLandscape;
+
+  /// 横屏时面板需**顺时针**旋转的 90° 圈数（0/1/3），保证文字正向（左/右横适配）。
+  final int quarterTurns;
 
   @override
   ConsumerState<ChallengeOverlayBar> createState() =>
@@ -58,25 +67,61 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
   @override
   Widget build(BuildContext context) {
     if (_item == null) return const SizedBox.shrink();
-
     final tokens = ref.watch(themeTokensProvider);
-    final item = _item!;
 
+    // 竖屏：整卡顶部居中，占满屏宽。
+    if (!widget.isLandscape) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: _buildCard(tokens),
+      );
+    }
+
+    // 横屏：整卡按持机方向旋转到可读角（顺时针 quarterTurns 圈），并贴向用户视角的
+    // 「上方」。旋转后卡片内容顶部指向哪条画布边缘，哪条边缘就是用户视角的上方：
+    // - quarterTurns=1（顶部在右）→ 内容顶部指向画布右缘 → 贴右；
+    // - quarterTurns=3（顶部在左）→ 内容顶部指向画布左缘 → 贴左。
+    // RotatedBox 会交换子项布局宽高，因此子项「宽度」= 旋转后画布纵向跨度、
+    // 「高度」= 画布横向跨度（用户视角的卡片厚度）。
+    final size = MediaQuery.of(context).size;
+    final qTurns = (widget.quarterTurns == 0) ? 3 : widget.quarterTurns;
+    // 距用户上方的留白（约 1/4 横屏视高，与竖屏时卡片距屏顶比例接近）
+    const double userTopInset = 96;
     return Align(
-      alignment: Alignment.topCenter,
-      child: Material(
-        color: Colors.transparent,
-        child: AnimatedSize(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child: GestureDetector(
-            onTap: _toggle,
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              padding: EdgeInsets.symmetric(
-                horizontal: 14,
+      alignment: qTurns == 1 ? Alignment.centerRight : Alignment.centerLeft,
+      child: Padding(
+        padding: qTurns == 1
+            ? const EdgeInsets.only(right: userTopInset)
+            : const EdgeInsets.only(left: userTopInset),
+        child: RotatedBox(
+          quarterTurns: qTurns,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: size.height * 0.5, // 旋转后为画布纵向跨度，限制避免过长
+              maxHeight: size.width * 0.86, // 旋转后为画布横向跨度，避免越出画布短边
+            ),
+            child: _buildCard(tokens),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard(ThemeTokens tokens) {
+    final item = _item!;
+    return Material(
+      color: Colors.transparent,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: GestureDetector(
+          onTap: _toggle,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: 14,
                 vertical: _expanded ? 12 : 10,
               ),
               decoration: BoxDecoration(
@@ -206,7 +251,6 @@ class _ChallengeOverlayBarState extends ConsumerState<ChallengeOverlayBar>
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }

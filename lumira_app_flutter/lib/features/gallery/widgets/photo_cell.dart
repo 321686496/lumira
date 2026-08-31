@@ -26,43 +26,47 @@ class PhotoCell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = ref.watch(appThemeProvider).tokens;
 
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      behavior: HitTestBehavior.opaque,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: AspectRatio(
-          aspectRatio: 1 / 1,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              _buildImage(context, tokens),
-              if (isMultiSelectMode)
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? tokens.brand
-                          : Colors.black.withOpacity(0.4),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white70, width: 1.5),
+    // OHOS 滚动优化：把整格照片（含裁切圆角 + 可选遮罩）隔离成独立图层，
+    // 滚动时复用缓存层，避免每帧重新合成，降低相册/flutter 网格滚动掉帧。
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        behavior: HitTestBehavior.opaque,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: AspectRatio(
+            aspectRatio: 1 / 1,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _buildImage(context, tokens),
+                if (isMultiSelectMode)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? tokens.brand
+                            : Colors.black.withOpacity(0.4),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white70, width: 1.5),
+                      ),
+                      child: isSelected
+                          ? const Icon(Icons.check,
+                              size: 14, color: Colors.white)
+                          : null,
                     ),
-                    child: isSelected
-                        ? const Icon(Icons.check,
-                            size: 14, color: Colors.white)
-                        : null,
                   ),
-                ),
-              if (isSelected)
-                Container(
-                  color: tokens.brand.withOpacity(0.2),
-                ),
-            ],
+                if (isSelected)
+                  Container(
+                    color: tokens.brand.withOpacity(0.2),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

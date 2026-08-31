@@ -167,6 +167,8 @@ class Tables {
   static const String colToken = 'token';
   static const String colIsNewDevice = 'is_new_device';
   static const String colRegisteredAt = 'registered_at';
+  // === auth 表扩展列（v49 迁移新增，首启邀请码绑定弹层一次性标记） ===
+  static const String colInviteBindPromptShown = 'invite_bind_prompt_shown';
 
   // === api_cache 表（v5） ===
   static const String apiCache = 'api_cache';

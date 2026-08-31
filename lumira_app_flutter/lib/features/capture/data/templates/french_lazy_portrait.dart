@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/french_lazy_portrait.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 法式慵懒高雅模板
 /// 来源：docs/superpowers/specs/2026-08-04-portrait-template-redesign-design.md 模板 6
@@ -19,8 +20,14 @@ const PhotoTemplate frenchLazyPortraitTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/french_lazy_portrait_2.jpg'),
       TemplateImage(url: 'assets/images/templates/french_lazy_portrait_3.jpg'),
     ],
-    description: '午后阳台藤椅上的法式慵懒人像，暖阳漫过发梢，白衫松弛、温柔治愈。',
+    description: '法式阳台自然光人像模板。场景为爬满常春藤的阳台，木质百叶窗与石栏杆为背景，下午3-5点暖色侧光从屏幕右上方45°斜射，营造慵懒治愈氛围。人物穿白色蕾丝领亚麻衬衫+浅蓝直筒牛仔裤，赤脚坐藤椅，呈现三种松弛姿态：抬手遮阳低头沉思、仰头闭眼享受阳光、盘腿正对镜头。适合日常穿搭、旅行打卡、生活方式类拍摄。',
     referenceSource: '小红书法式慵懒风格教程；复古颗粒质感；法式写真套图',
+    shortDesc: '午后藤椅上的金色时光，白衫牛仔裤的松弛感，阳光漫过发梢的温柔瞬间🌿',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['summer', 'autumn'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day', 'goldenHour'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

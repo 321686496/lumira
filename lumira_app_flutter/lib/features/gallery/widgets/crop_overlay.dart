@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_tokens.dart';
 import '../../capture/domain/photo_template.dart';
+import '../../capture/services/photo_post_processor.dart';
 
 /// 可拖拽裁剪框 + 可缩放照片叠加层（iPhone 原生风格）
 ///
@@ -379,18 +380,26 @@ class _CropOverlayState extends State<CropOverlay> {
     );
   }
 
-  /// 计算最终保留的照片区域（裁剪框经照片变换反算，相对 0-1）
+  /// 计算最终保留的照片区域（裁剪框经照片变换反算，相对 0-1）。
+  ///
+  /// 展示层把照片先缩放/平移（[_photoMatrix]）再叠加旋转/翻转/拉直
+  /// （[_applyTransform]）。用户框选的是变换后的展示坐标，因此：
+  /// 1. 先反算缩放/平移，得到照片经过旋转/翻转后所在盒内的轴对齐区域；
+  /// 2. 再逆变换（撤销 rotation→flip→straighten），映射回【未变换照片】的
+  ///    0-1 坐标——与 processFile「先按原图裁剪、后应用变换」的 customCropRect
+  ///    语义一致，保证「框选内容 == 导出内容」（WYSIWYG）。
   Rect _photoRectInFrame() {
     final s = _photoScale;
     final ox = _photoOffset.dx;
     final oy = _photoOffset.dy;
     final f = _cropRect;
-    return Rect.fromLTRB(
+    final frame = Rect.fromLTRB(
       (f.left - 0.5 - ox) / s + 0.5,
       (f.top - 0.5 - oy) / s + 0.5,
       (f.right - 0.5 - ox) / s + 0.5,
       (f.bottom - 0.5 - oy) / s + 0.5,
     );
+    return PhotoPostProcessor.invertCropTransform(frame, widget.transform);
   }
 
   /// 回调上层当前保留区域

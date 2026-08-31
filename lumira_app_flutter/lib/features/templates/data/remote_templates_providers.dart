@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
+import '../../../core/db/seeders/builtin_data_seeder.dart';
 import '../../../core/network/api_client.dart';
 import '../../capture/domain/photo_template.dart';
 import '../services/template_mapper.dart';
@@ -67,6 +68,12 @@ final remoteCategoriesSyncProvider = FutureProvider<void>((ref) async {
   // 避免分类页残留已删除分类（与 remoteTemplatesSyncProvider 的 prune 一致）。
   final validKeys = cats.map((c) => c.key).toSet();
   await dao.pruneStaleCategories(validKeys);
+  // 兜底：重种 7 个系统内置分类及其 style/method 子树（INSERT OR REPLACE / OR IGNORE 幂等）。
+  // 即使后端分类树未下发这些 key（如历史误删的 micro 微距），也能恢复一级分类概览，
+  // 保证离线兜底题材始终可用（spec 2026-08-17-template-category-4level-design.md）。
+  final db = await ref.watch(databaseProvider.future);
+  await BuiltinDataSeeder.seedCategories(db);
+  await BuiltinDataSeeder.seedStyleMethodCategories(db);
 });
 
 /// 拉取后端模板 meta 列表 → upsert 到 sqflite custom_templates（source='remote'）

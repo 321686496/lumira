@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/mountain_dawn.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 山岳晨光模板（风光 / 大气应急 / 远景）
 /// 内置模板补充：风光大类非人像模板
@@ -17,8 +18,14 @@ const PhotoTemplate mountainDawnTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/mountain_dawn.jpg'),
     ],
-    description: '黄金时刻侧逆光将雪峰染成金橙，与冷调云海森林形成强烈冷暖对比的日照金山奇观。',
+    description: "这是一套专为捕捉'日照金山'奇观设计的风景摄影模板。画面以巍峨雪山为主体，利用黄金时刻的侧逆光将雪顶渲染成耀眼的金橙色，与下方冷调的云雾、森林形成强烈冷暖对比。构图采用经典的三分法与中心对称结合，强调山体的金字塔形稳定感。适合在晴朗无风的日出或日落时分，使用长焦镜头拍摄，无需人物出镜，纯粹展现大自然的磅礴气势与光影魔术。",
     referenceSource: '样片参考：500px 高山日出云海精选；参数参考风光摄影黄金时刻合集',
+    shortDesc: '夕阳熔金染透雪峰，云海翻涌于林梢之上，壮丽神圣，一眼万年的治愈系山河大片🏔️✨',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['autumn', 'winter', 'spring'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['goldenHour'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

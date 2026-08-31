@@ -32,7 +32,7 @@ import 'dao/templates_favorite_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 45;
+const int _kDbVersion = 48;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -376,6 +376,9 @@ Future<void> _onCreate(Database db, int version) async {
   ''');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_template_categories_parent ON ${Tables.templateCategories}(${Tables.colParentKey})');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_template_categories_level ON ${Tables.templateCategories}(${Tables.colLevel})');
+  // NULL 安全唯一索引（解决一级分类 parent_key=NULL 时 UNIQUE(key,parent) 不生效，
+  // seedCategories 重复插入导致大分类卡片重复的问题）。见 v47 迁移注释。
+  batch.execute('CREATE UNIQUE INDEX IF NOT EXISTS uq_category_key_parent_null_safe ON ${Tables.templateCategories}(${Tables.colKey}, IFNULL(${Tables.colParentKey}, \'\'))');
 
   // === scenes ===
   // 仅存储用户自定义场景 + 内置场景的 is_favorite 标记
@@ -533,7 +536,8 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colOs} TEXT NOT NULL,
       ${Tables.colToken} TEXT NOT NULL,
       ${Tables.colIsNewDevice} INTEGER NOT NULL DEFAULT 0,
-      ${Tables.colRegisteredAt} INTEGER NOT NULL
+      ${Tables.colRegisteredAt} INTEGER NOT NULL,
+      ${Tables.colInviteBindPromptShown} INTEGER NOT NULL DEFAULT 0
     )
   ''');
   await db.execute('''
@@ -1435,6 +1439,72 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       await BuiltinDataSeeder.reseedBuiltinTemplates(db);
     } catch (e) {
       debugPrint('v45 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 46) {
+    try {
+      // v46: 分类误归/缺失自愈。既有安装（DB<46）可能因早期 pruneStaleCategories
+      // 误删了 is_system=1 的系统分类（如 macro 微距），或保留了 v45 之前旧模板的
+      // 错误 category/classification，导致「街拍跑进美食、风光跑进静物、微距大类缺失」。
+      // DB 版本未曾 bump，代码级匹配修复对存量 DB 不生效。故升级时幂等重种 7 个系统
+      // 分类 + style/method 子树（restore macro），并按 TemplateRegistry 重播内置模板
+      // 恢复正确分类路径。这些种子方法均为 INSERT OR REPLACE / ignore 幂等。
+      await BuiltinDataSeeder.seedCategories(db);
+      await BuiltinDataSeeder.seedStyleMethodCategories(db);
+      await BuiltinDataSeeder.reseedBuiltinTemplates(db);
+    } catch (e) {
+      debugPrint('v46 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 47) {
+    try {
+      // v47: 修复一级分类重复。schema 的 UNIQUE(key, parent_key) 对 parent_key 为
+      // NULL 的一级分类不生效（SQLite 中 NULL != NULL），seedCategories 每次重播
+      // 都多插一行，导致 6 个大分类卡片各出现两次（微距因曾被误删只回补一行而不重复）。
+      // 1) 清理残留重复行（每个 (key, parent) 仅保留 MIN(id)）
+      await db.execute('''
+        DELETE FROM ${Tables.templateCategories}
+        WHERE ${Tables.colId} NOT IN (
+          SELECT MIN(${Tables.colId})
+          FROM ${Tables.templateCategories}
+          GROUP BY ${Tables.colKey},
+                   IFNULL(${Tables.colParentKey}, '')
+        )
+      ''');
+      // 2) 建立 NULL 安全的唯一索引，从根上保证 seedCategories 幂等去重。
+      //    sqflite 不支持 COALESCE 表达式索引，用 IFNULL 计算列式表达式亦可。
+      await db.execute('''
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_category_key_parent_null_safe
+        ON ${Tables.templateCategories}(
+          ${Tables.colKey}, IFNULL(${Tables.colParentKey}, '')
+        )
+      ''');
+    } catch (e) {
+      debugPrint('v47 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 48) {
+    try {
+      // v48: 内置模板增强（第二批 innertemplateenhance，14 个新增强文件夹）。
+      // 按 TemplateRegistry 强制重播内置模板，使新封面/剪影/参数/姿势数据覆盖
+      // 存量 DB 中的旧模板数据（新增 7 套带剪影姿势 + 7 套无剪影需清除姿势）。
+      await BuiltinDataSeeder.reseedBuiltinTemplates(db);
+    } catch (e) {
+      debugPrint('v48 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 49) {
+    try {
+      // v49: auth 表新增 invite_bind_prompt_shown 列（首启一次性邀请码绑定弹层标记）。
+      // 非空默认 0（=未弹过），老用户升级后保持未弹，但 UI 同时以 isNewDevice 门控。
+      await _addColumnIfNotExists(
+        db,
+        Tables.auth,
+        Tables.colInviteBindPromptShown,
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+    } catch (e) {
+      debugPrint('v49 migration failed (silent fallback): $e');
     }
   }
 }

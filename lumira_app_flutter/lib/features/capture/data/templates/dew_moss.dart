@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/dew_moss.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 露珠苔藓模板（微距 / 自然 / 微距）
 /// 内置模板补充：微距大类非人像模板
@@ -19,7 +20,13 @@ const PhotoTemplate dewMossTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/dew_moss_2.png'),
       TemplateImage(url: 'assets/images/templates/dew_moss_3.png'),
     ],
-    description: '雨后清晨苔藓与露珠的微距特写，晨光通透晶莹，展现微观森林的治愈之美。',
+    description: '静物微距模板，拍摄雨后清晨苔藓与水珠，使用侧逆晨光勾勒水珠通透高光，突出苔藓细密肌理与水珠晶莹质感，适合户外林间、潮湿石头苔藓场景拍摄。',
+    shortDesc: '林间晨露凝于青苔，微光通透，感受微观森林的治愈力量🌱',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn'],
+      weathers: ['rain', 'fog'],
+      timeTones: ['warm'],
+    ),
     referenceSource: '样片参考：Pexels 微距自然精选；参数参考自然微距教程',
   ),
   composition: Composition(

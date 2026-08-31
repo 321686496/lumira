@@ -412,24 +412,28 @@ class _PosterSheetState extends State<_PosterSheet> {
                     // 普通海报（无样式）：按预览区宽度渲染调用方 content 并允许纵向滚动，
                     // 保持旧版「有界宽度 + 可滚动」语义（部分 content 用 width: Infinity）。
                     // 样式选择模式：用 FittedBox 适配 5 种设计画布，显示层缩放不影响导出清晰度。
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: style == null
-                            ? SingleChildScrollView(
-                                child: widget.plainContentKey != null
-                                    ? RepaintBoundary(
-                                        key: widget.plainContentKey,
-                                        child: widget.content ??
-                                            const SizedBox.shrink(),
-                                      )
-                                    : widget.content ??
-                                        const SizedBox.shrink(),
-                              )
-                            : FittedBox(
-                                fit: BoxFit.contain,
-                                child: style.builder(widget.stylePicker!.data),
-                              ),
+                    return RepaintBoundary(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: style == null
+                              ? SingleChildScrollView(
+                                  child: widget.plainContentKey != null
+                                      ? RepaintBoundary(
+                                          key: widget.plainContentKey,
+                                          child: widget.content ??
+                                              const SizedBox.shrink(),
+                                        )
+                                      : widget.content ??
+                                          const SizedBox.shrink(),
+                                )
+                              : FittedBox(
+                                  fit: BoxFit.contain,
+                                  child: UnconstrainedBox(
+                                    child: style.builder(widget.stylePicker!.data),
+                                  ),
+                                ),
+                        ),
                       ),
                     );
                   },
@@ -437,9 +441,21 @@ class _PosterSheetState extends State<_PosterSheet> {
               ),
             ),
           ),
+          // 样式切换条（操作按钮与效果卡片之间，视觉重心仍在主效果卡片）
+          if (widget.stylePicker != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 2),
+              child: PosterStylePicker(
+                styles: _styles,
+                data: widget.stylePicker!.data,
+                selectedId: _selectedStyleId,
+                onSelect: _onSelectStyle,
+              ),
+            ),
+
           // 底部操作条：两个主操作（保存到相册 / 分享），简洁不冗余
           Padding(
-            padding: const EdgeInsets.only(top: 14, bottom: 4),
+            padding: const EdgeInsets.only(top: 10, bottom: 4),
             child: Row(
               children: [
                 if (widget.extraAction != null) ...[
@@ -473,17 +489,6 @@ class _PosterSheetState extends State<_PosterSheet> {
               ],
             ),
           ),
-          // 样式切换条（下移到底部，尺寸收紧，视觉重心留给上方主卡片）
-          if (widget.stylePicker != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: PosterStylePicker(
-                styles: _styles,
-                data: widget.stylePicker!.data,
-                selectedId: _selectedStyleId,
-                onSelect: _onSelectStyle,
-              ),
-            ),
         ],
       ),
     );

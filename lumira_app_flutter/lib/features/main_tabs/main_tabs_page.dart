@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/auth_controller.dart';
+import '../../core/db/database_provider.dart';
+import '../../core/network/api_error.dart';
 import '../../core/theme/theme_controller.dart';
+import '../../features/invite/data/invite_models.dart';
+import '../../features/invite/data/invite_repository.dart';
+import '../../shared/widgets/lumira/lumira.dart';
 import '../../shared/widgets/tabbar/floating_tabbar.dart';
 import '../challenge/pages/challenge_page.dart';
 import '../home/pages/home_page.dart';
@@ -40,6 +46,8 @@ class _MainTabsPageState extends ConsumerState<MainTabsPage> {
     final initial = widget.initialIndex.clamp(0, _tabs.length - 1);
     _index = initial;
     _pageController = PageController(initialPage: initial);
+    // 首启一次性邀请码绑定入口：仅新设备首次使用展示一次（跳过/绑定后不再弹）。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowFirstUseInvite());
   }
 
   @override
@@ -64,6 +72,31 @@ class _MainTabsPageState extends ConsumerState<MainTabsPage> {
     const map = <int, int>{0: 0, 1: 1, 3: 2, 4: 3};
     final pageIndex = map[tabIndex];
     if (pageIndex != null) _goToPage(pageIndex);
+  }
+
+  /// 首启一次性邀请码绑定入口：仅新设备首次使用展示一次。
+  ///
+  /// 用本地 auth 表的 invite_bind_prompt_shown 标记保证「只弹一次」；
+  /// 后端同时以 first_seen_at + 24h 绑定窗口做权威校验，二者互为兜底。
+  Future<void> _maybeShowFirstUseInvite() async {
+    if (!mounted) return;
+    final auth = ref.read(authControllerProvider);
+    if (!auth.isNewDevice) return;
+    try {
+      final dao = await ref.read(authDaoProvider.future);
+      if (await dao.isInviteBindPromptShown()) return;
+      // 先置标记再弹，避免解析/展示期间重复弹出。
+      await dao.markInviteBindPromptShown();
+    } catch (_) {
+      return; // DAO 失败静默，不阻塞首页
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _FirstUseInviteSheet(),
+    );
   }
 
   @override
@@ -126,5 +159,143 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   Widget build(BuildContext context) {
     super.build(context);
     return widget.child;
+  }
+}
+
+/// 首启一次性邀请码绑定弹层（可跳过）。
+///
+/// 视觉跟随当前 UI 风格 / 主题；绑定逻辑复用 [inviteRepositoryProvider]。
+/// 仅作入口呈现，后端以新设备绑定窗口权威校验（非新用户会被拒绝）。
+class _FirstUseInviteSheet extends ConsumerStatefulWidget {
+  const _FirstUseInviteSheet();
+
+  @override
+  ConsumerState<_FirstUseInviteSheet> createState() =>
+      _FirstUseInviteSheetState();
+}
+
+class _FirstUseInviteSheetState extends ConsumerState<_FirstUseInviteSheet> {
+  final TextEditingController _codeController = TextEditingController();
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final code = _codeController.text.trim();
+    if (code.isEmpty) {
+      _toast('请输入邀请码（可稍后在「邀请有礼」页或跳过）');
+      return;
+    }
+    if (_submitting) return;
+    setState(() => _submitting = true);
+    final toastContext = context;
+    try {
+      final repo = await ref.read(inviteRepositoryProvider.future);
+      final resp = await repo.activate(ActivateInviteRequest(inviteCode: code));
+      if (!mounted) return;
+      final msg = resp.rewards != null
+          ? '邀请码已激活，解锁 ${resp.rewards!.items.length} 项奖励'
+          : '邀请码已激活';
+      Navigator.of(context).pop();
+      _toast(msg, toastContext);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      _toast('激活失败：${e.message}', toastContext);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      _toast('绑定成功', toastContext);
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _toast(String message, [BuildContext? override]) {
+    final ctx = override ?? context;
+    if (!mounted && override == null) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(milliseconds: 1500),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        decoration: BoxDecoration(
+          color: tokens.surface,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.card_giftcard, size: 20, color: tokens.brand),
+                  const SizedBox(width: 8),
+                  Text(
+                    '好友邀请你了吗？',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '输入好友的邀请码，绑定成功后双方各得积分奖励。'
+                '仅新设备首次使用时开放，可随时跳过。',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: tokens.textTertiary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 14),
+              LumiraTextField(
+                controller: _codeController,
+                hintText: '粘贴好友的邀请码...',
+              ),
+              const SizedBox(height: 14),
+              LumiraButton(
+                variant: ButtonVariant.primary,
+                onPressed: _submitting ? null : _submit,
+                child: _submitting
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('确认绑定'),
+              ),
+              const SizedBox(height: 8),
+              LumiraButton(
+                variant: ButtonVariant.ghost,
+                onPressed: _submitting
+                    ? null
+                    : () => Navigator.of(context).pop(),
+                child: const Text('暂不绑定'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

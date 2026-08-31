@@ -156,6 +156,15 @@ List<AdjustDef> detailAdjustDefs() => [
         getValue: (p) => p.grain.toDouble(),
         setValue: (p, v) => p.copyWith(grain: v.round()),
       ),
+      AdjustDef(
+        label: '拉腿',
+        icon: Icons.accessibility_new,
+        min: 0,
+        max: 100,
+        hint: '导出后生效',
+        getValue: (p) => p.legStretch.toDouble(),
+        setValue: (p, v) => p.copyWith(legStretch: v.round()),
+      ),
     ];
 
 // =============================================================================

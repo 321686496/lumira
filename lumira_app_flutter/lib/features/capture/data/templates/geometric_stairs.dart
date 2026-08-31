@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/geometric_stairs.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 旋转楼梯几何模板（街拍 / 几何 / 远景）
 /// 内置模板补充：街拍大类非人像模板
@@ -17,7 +18,13 @@ const PhotoTemplate geometricStairsTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/geometric_stairs.jpg'),
     ],
-    description: '俯拍或仰拍的旋转楼梯，螺旋曲线与同心结构构成强烈的几何韵律',
+    description: '这是一张极具视觉冲击力的现代建筑内部仰拍模板。主体为环绕上升的螺旋楼梯，利用广角镜头从底部垂直向上拍摄，形成完美的同心圆与螺旋引导线。光线由楼梯侧边的暖橙色LED灯带提供主照明，营造温暖包裹感；中心圆形天窗引入自然冷白光，形成强烈的冷暖色温对比。画面强调金属栏杆的硬朗线条与光影的柔和过渡，适合喜欢极简主义、几何美学及空间摄影的用户。无需人物出镜，纯靠建筑结构本身讲故事。',
+    shortDesc: '暖橙光带缠绕螺旋阶梯，中心天窗透入冷白天光，几何线条无限延伸，静谧又充满未来感的建筑诗意🌀',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn', 'winter'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day', 'warm'],
+    ),
     referenceSource: '样片参考：旋转楼梯几何摄影作品；参数参考建筑抽象构图合集',
   ),
   composition: Composition(

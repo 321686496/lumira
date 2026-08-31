@@ -168,7 +168,8 @@ class LumiraImage extends StatelessWidget {
         if (radius != null && radius != BorderRadius.zero) {
           img = ClipRRect(borderRadius: radius, child: img);
         }
-        return img;
+        // 栅格化隔离：把图片独立成一层，滚动/外层动画时不逐帧重光栅化照片。
+        return RepaintBoundary(child: img);
       },
     );
   }

@@ -109,6 +109,32 @@ class StreakInfo {
   final String tipMessage;
 }
 
+/// 挑战打卡状态（以挑战完成记录为准，区别于相册照片的"拍摄打卡"）
+class ChallengeCheckin {
+  final int streakDays;
+  final List<ChallengeCheckinDay> weekDays;
+  final bool completedToday;
+
+  const ChallengeCheckin({
+    required this.streakDays,
+    required this.weekDays,
+    required this.completedToday,
+  });
+}
+
+/// 本周某一天挑战打卡状态
+class ChallengeCheckinDay {
+  final String label;
+  final bool done;
+  final bool today;
+
+  const ChallengeCheckinDay({
+    required this.label,
+    required this.done,
+    required this.today,
+  });
+}
+
 /// 挑战详情数据
 class ChallengeDetail {
   const ChallengeDetail({

@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/geometric_shadow.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 光影几何过道模板（街拍 / 几何 / 俯角）
 /// 内置模板补充：街拍大类非人像模板
@@ -17,8 +18,14 @@ const PhotoTemplate geometricShadowTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/geometric_shadow.jpg'),
     ],
-    description: '俯角捕捉过道里的光影分割，几何形状与明暗交织的极简画面',
+    description: '这是一张极具视觉冲击力的建筑摄影模板。利用强烈的侧逆硬光，在长廊中切割出明暗分明的几何色块。画面采用经典的单点透视，重复的圆柱与地面平行的阴影形成强烈的节奏感与纵深感。左侧大面积的深沉阴影与右侧的高光柱列形成极高反差的明暗对比（Chiaroscuro），营造出一种肃穆、冷静且充满秩序感的空间氛围。适合拍摄美术馆、博物馆、古典柱廊或具有重复结构的现代建筑通道。',
     referenceSource: '样片参考：极简光影几何摄影；参数参考明暗对比构图合集',
+    shortDesc: '光与影的极致拉扯，柱列如琴键般延伸，静谧中透着秩序的冷峻美感，一眼万年🏛️',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn', 'winter'],
+      weathers: ['sunny'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'leading_lines',

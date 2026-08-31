@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/epic_valley.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 峡谷晨雾俯拍模板（风光 / 大气 / 俯拍）
 /// 内置模板补充：风光大类非人像模板
@@ -17,8 +18,14 @@ const PhotoTemplate epicValleyTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/epic_valley.jpg'),
     ],
-    description: '高空俯视的峡谷与晨雾，层次分明的山脊与流动雾海展现壮阔地貌',
+    description: '自然风光大远景模板，高山石阶作为引导线通向远方云海落日，暖金色黄昏侧光打亮山石松林，适合山顶观景台拍摄山川云海风光，可容纳游人作为环境点缀，日落黄金时段出片效果最佳。',
     referenceSource: '样片参考：500px 高山俯拍峡谷晨雾精选；参数参考风光摄影航拍视角合集',
+    shortDesc: '金辉漫过山巅云海，石阶向天际延伸，山河壮阔氛围感🌄',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'autumn'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['goldenHour'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

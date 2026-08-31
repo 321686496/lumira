@@ -107,8 +107,12 @@ class GalleryItemRecord {
         sharpen: (map['sharpen'] as num?)?.toInt() ?? 0,
         vignette: (map['vignette'] as num?)?.toInt() ?? 0,
         grain: (map['grain'] as num?)?.toInt() ?? 0,
+        legStretch: (map['legStretch'] as num?)?.toInt() ?? 0,
         lut: map['lut'] as String? ?? 'none',
         systemFilter: map['systemFilter'] as String?,
+        customCropRect: (map['customCropRect'] as Map<String, dynamic>?) != null
+            ? CropRect.fromJson(map['customCropRect'] as Map<String, dynamic>)
+            : null,
       );
     } catch (_) {
       return null;
@@ -133,8 +137,10 @@ class GalleryItemRecord {
       'sharpen': p.sharpen,
       'vignette': p.vignette,
       'grain': p.grain,
+      'legStretch': p.legStretch,
       'lut': p.lut,
       'systemFilter': p.systemFilter,
+      if (p.customCropRect != null) 'customCropRect': p.customCropRect!.toJson(),
     };
   }
 }

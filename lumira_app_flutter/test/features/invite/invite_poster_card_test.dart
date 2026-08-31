@@ -12,7 +12,17 @@ Widget wrap(Widget child) {
       themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
       uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
     ],
-    child: MaterialApp(home: Scaffold(body: Center(child: child))),
+    // 与 PosterGenerator 底部 Sheet 一致：卡片在可纵向滚动的容器中渲染，
+    // 否则固定高度预览区会裁剪海报自然高度导致 RenderFlex overflow。
+    child: MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SingleChildScrollView(
+            child: child,
+          ),
+        ),
+      ),
+    ),
   );
 }
 

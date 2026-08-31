@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/neon_river.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 河岸霓虹倒影模板（夜景 / 霓虹 / 远景）
 /// 内置模板补充：夜景大类非人像模板
@@ -17,8 +18,14 @@ const PhotoTemplate neonRiverTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/neon_river.jpg'),
     ],
-    description: '河岸两岸霓虹在城市水面的斑斓倒影，横向开阔的夜间景观',
+    description: '这是一套专为城市夜景与水面倒影设计的风景摄影模板。捕捉日落蓝调时刻（Blue Hour）与华灯初上的交汇瞬间，利用平静水面形成完美的上下对称构图。画面呈现从深紫到暖橙的梦幻渐变天空，建筑群灯光璀璨且细节丰富。适合在江边、湖畔或雨后积水处拍摄，通过后期强化色彩饱和度与对比度，还原肉眼可见的震撼天际线。适用人群：城市风光摄影师、旅行记录者、夜景爱好者。',
     referenceSource: '样片参考：城市河道霓虹夜景；参数参考夜景长曝光倒影合集',
+    shortDesc: '紫霞漫染浦江，万家灯火坠入镜面，一半是繁华魔都，一半是静谧梦境，极致对称的浪漫治愈🌆✨',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn', 'winter'],
+      weathers: ['sunny'],
+      timeTones: ['goldenHour', 'cool'],
+    ),
   ),
   composition: Composition(
     overlayType: 'symmetry_horizontal',

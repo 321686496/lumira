@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/flat_tshirt.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 扁平衣物陈列模板（静物 / 扁平 / 平拍）
 /// 内置模板补充：静物大类非人像模板
@@ -20,7 +21,13 @@ const PhotoTemplate flatTshirtTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/flat_tshirt_3.png'),
       TemplateImage(url: 'assets/images/templates/flat_tshirt_4.png'),
     ],
-    description: '90 度俯拍的衣物扁平陈列，材质纹理与配色在平面上呈现',
+    description: '服饰静物平铺拍摄模板，高机位垂直俯拍，自然光柔和漫射，适合衬衫、T恤、针织开衫等服装产品平铺展示，搭配少量配饰点缀画面，整体低对比柔和质感，适合服装穿搭样片拍摄。',
+    shortDesc: '干净柔和的服饰平铺，质朴织物肌理，简约治愈的穿搭展示📦',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn'],
+      weathers: ['overcast', 'cloudy'],
+      timeTones: ['day'],
+    ),
     referenceSource: '样片参考：扁平衣物陈列摄影；参数参考服装平铺摆拍合集',
   ),
   composition: Composition(

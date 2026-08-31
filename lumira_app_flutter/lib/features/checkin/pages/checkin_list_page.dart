@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -30,8 +30,6 @@ class _CheckinListPageState extends ConsumerState<CheckinListPage> {
   /// 当前选中的分类（null 表示全部）
   String? _selectedCategory;
 
-  /// 海报捕获用的全局 key（列表页单次只展示一个海报 Sheet）
-  final GlobalKey _posterKey = GlobalKey();
 
   void _goAdd() {
     GoRouter.of(context).push(RouteNames.checkinEdit);
@@ -51,7 +49,7 @@ class _CheckinListPageState extends ConsumerState<CheckinListPage> {
       context: context,
       tokens: tokens,
       item: item,
-      posterKey: _posterKey,
+      ref: ref,
     );
   }
 
@@ -535,3 +533,5 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
+
+

@@ -46,6 +46,7 @@ PostProcess deltaOf(PostProcess baked, PostProcess full, {PostProcess? current})
     sharpen: full.sharpen - baked.sharpen,
     vignette: full.vignette - baked.vignette,
     grain: full.grain - baked.grain,
+    legStretch: full.legStretch - baked.legStretch,
     cropRatio: full.cropRatio == baked.cropRatio
         ? (current?.cropRatio ?? 'free')
         : full.cropRatio,

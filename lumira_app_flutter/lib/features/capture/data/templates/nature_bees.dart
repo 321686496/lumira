@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/nature_bees.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 蜜蜂采蜜微距模板（微距 / 自然 / 微距）
 /// 内置模板补充：微距大类非人像模板
@@ -17,8 +18,14 @@ const PhotoTemplate natureBeesTemplate = PhotoTemplate(
     images: [
       TemplateImage(url: 'assets/images/templates/nature_bees.jpg'),
     ],
-    description: '暖阳穿透薄翼，绒毛沾满金黄花粉，定格春日花间最灵动的微距采蜜瞬间。',
+    description: '这是一套专为自然微距摄影设计的模板。画面捕捉蜜蜂停驻黄色野花采蜜的瞬间，利用大光圈虚化绿色草地背景，突出主体细节。光线为柔和的自然顺光，完美展现蜜蜂翅膀的通透感与腿部花粉的颗粒质感。色调温暖明亮，充满春日生机。适合户外公园、花园等场景，建议使用手机微距模式或长焦镜头靠近拍摄。',
     referenceSource: '样片参考：蜜蜂采蜜微距作品；参数参考虫类微距高速拍摄合集',
+    shortDesc: '暖阳穿透薄翼，绒毛沾满金黄花粉，定格草丛间最灵动的治愈瞬间🐝🌼',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['day'],
+    ),
   ),
   composition: Composition(
     overlayType: 'rule_of_thirds',

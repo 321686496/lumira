@@ -14,7 +14,8 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../../shared/services/poster_generator.dart';
 import '../data/profile_mock_data.dart';
 import '../providers/fragments_providers.dart';
-import '../widgets/fragment_poster_generator.dart' show FragmentPosterContent;
+import '../widgets/fragment_poster_generator.dart'
+    show FragmentPosterContent, buildFragmentShareText, showFragmentPosterStylePicker;
 
 /// 碎片收集详情页
 ///
@@ -85,7 +86,10 @@ class _ProfileFragmentDetailPageState
                         tokens: tokens,
                         item: entry.value,
                         posterKey: _keyFor(entry.key),
-                        onSharePoster: () {
+                        onSharePoster: () async {
+                          final layout =
+                              await showFragmentPosterStylePicker(context: context);
+                          if (layout == null || !mounted) return;
                           PosterGenerator.showPoster(
                             context: context,
                             tokens: tokens,
@@ -93,11 +97,11 @@ class _ProfileFragmentDetailPageState
                             content: FragmentPosterContent(
                               tokens: tokens,
                               fragment: entry.value,
+                              layout: layout,
                             ),
                             posterKey: _keyFor(entry.key),
                             shareSubject: '如画 · 碎片收集：${entry.value.name}',
-                            shareText:
-                                '我在如画收集了「${entry.value.name}」碎片 ${entry.value.current}/${entry.value.max}，快来一起收集吧！',
+                            shareText: buildFragmentShareText(entry.value),
                             fileNamePrefix:
                                 'lumira_fragment_${entry.value.name}',
                           );

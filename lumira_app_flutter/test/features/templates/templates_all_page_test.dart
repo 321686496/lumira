@@ -8,7 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:lumira_app_flutter/core/db/dao/gallery_dao.dart';
 import 'package:lumira_app_flutter/core/db/dao/templates_dao.dart';
+import 'package:lumira_app_flutter/core/db/dao/templates_favorite_dao.dart';
 import 'package:lumira_app_flutter/core/db/database_provider.dart';
 import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
@@ -17,6 +19,7 @@ import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
 import 'package:lumira_app_flutter/features/templates/data/templates_browse_mock_data.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_all_page.dart';
 import 'package:lumira_app_flutter/features/templates/pages/templates_category_page.dart';
+import 'package:lumira_app_flutter/shared/widgets/lumira/lumira.dart';
 import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 
 import '../../../test/helpers/test_http_overrides.dart';
@@ -113,6 +116,15 @@ void main() {
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
         templatesDaoProvider.overrideWith((ref) async => TemplatesDao(db)),
+        // 页面 _loadData 读取 galleryDaoProvider 计算各模板已拍数（countByTemplate），
+        // 未 override 会走真实 path_provider → MissingPluginException。
+        // 空表即可：已拍数角标不参与本测试断言。
+        galleryDaoProvider.overrideWith((ref) async => GalleryDao(db)),
+        // 页面 build 监听 favoriteTemplateIdsProvider（收藏状态），其依赖
+        // templatesFavoriteDaoProvider → databaseProvider（path_provider）。
+        // 直接 override DAO 避免触发真实 path_provider。
+        templatesFavoriteDaoProvider
+            .overrideWith((ref) async => TemplatesFavoriteDao(db)),
       ],
       child: MaterialApp.router(routerConfig: goRouter),
     );
@@ -122,42 +134,34 @@ void main() {
   // 在 FakeAsync 环境下 pump(Duration) 无法让真实 Future 完成。
   // 必须用 tester.runAsync 让真实 async 操作（DAO 查询）完成。
   //
-  // Forced fix: 原 50ms 单次延迟在跨主题/风格循环测试中不够稳定——
-  // 页面有两次 async 屏障（templatesDaoProvider + _loadData DAO 查询），
-  // 累积 GC 压力或 DB 锁等待时容易让"浏览分类"未渲染就断言。
-  // 改为轮询方式：每轮 pump+runAsync 让真实 async 推进，检测内容已渲染后退出。
-  //
-  // 关键问题：点击分类卡片后，_selectedType 改变触发 setState 重建，
-  // 但 FutureBuilder 在新 _loadData future 完成前仍会渲染旧数据
-  // （旧数据包含全部 7 个 builtin 模板，而非仅 portrait 1 个），
-  // 导致 '风光' 出现 3 次（pill + tag + landscape 卡片）而非 2 次。
-  // 解决：在内容出现后，再轮询等待数据稳定（widget 数量不再变化）。
-  // 本页不含 FloatingTabBar / DailyFlipCard，无 repeat() 动画，pumpAndSettle 安全。
+  // Forced fix（与 templates_page_test.dart 同源）：不能按「首个内容标志」过早 break——
+  // '选择一个子分类继续'、导航标题等静态文本会在数据加载完成前就出现；提前退出会让
+  // 尚未完成的 DB 查询（sqflite 内部 10s 超时 Timer）残留，触发 "!timersPending"。
+  // 改为：内容就绪且 LumiraProgress 消失（lumiProg==0）后，再连续两轮确认数据稳定
+  // （避免最后一批卡片刚渲染时其 count 查询尚未完成）才 break。
+  // 末尾：非 female 用 pumpAndSettle 收尾 FadeUp 等一次性动画（此时无 repeat 动画，
+  // 不会超时）；female 用固定 pump 规避其他 repeat 动画导致超时。
   Future<void> settleOrPump(WidgetTester tester, UIStyle style) async {
-    // 阶段 1：轮询等待内容渲染（最多 ~1.5s）。
-    // 内容出现的标志：找到 '浏览分类' 文本（overview 模式）、
-    // '全部模板' LumiraNav（category 模式）、'选择一个子分类继续'/'该题材暂无子分类'
-    // （二级分类独立页）、或 '加载失败'（error 状态）。
-    for (var i = 0; i < 15; i++) {
+    var stable = false;
+    for (var i = 0; i < 30; i++) {
       await tester.pump();
-      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
       await tester.pump();
-      final loaded = find.text('浏览分类').evaluate().isNotEmpty ||
+      final contentReady = find.text('浏览分类').evaluate().isNotEmpty ||
           find.widgetWithText(LumiraNav, '全部模板').evaluate().isNotEmpty ||
           find.text('选择一个子分类继续').evaluate().isNotEmpty ||
           find.text('该题材暂无子分类').evaluate().isNotEmpty ||
           find.text('加载失败').evaluate().isNotEmpty;
-      if (loaded) break;
+      final lumiProg = find.byType(LumiraProgress).evaluate().length;
+      if (stable && contentReady && lumiProg == 0) break;
+      stable = contentReady && lumiProg == 0;
     }
-    // 阶段 2：等待 FutureBuilder 用最终结果重建。
-    // 页面存在多次 async 屏障（templatesDaoProvider + DAO 查询 + push 导航过渡），
-    // FutureBuilder 在旧 future 快照完成前仍会渲染旧数据；轮询若干轮
-    // 让真实 future 完成并触发重建。
-    for (var i = 0; i < 10; i++) {
-      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+    if (style == UIStyle.female) {
+      await tester.pump(const Duration(milliseconds: 200));
+    } else {
+      await tester.pumpAndSettle();
     }
-    await tester.pumpAndSettle();
   }
 
   void setLargeViewport(WidgetTester tester) {
@@ -770,6 +774,32 @@ Future<void> _onCreate(Database db, int version) async {
       ${Tables.colIsActive} INTEGER NOT NULL DEFAULT 1,
       ${Tables.colUpdatedAt} INTEGER NOT NULL,
       UNIQUE(${Tables.colKey}, ${Tables.colParentKey})
+    )
+  ''');
+  // gallery_items：GalleryDao.countByTemplate 读取列
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.galleryItems} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colDataUrl} TEXT,
+      ${Tables.colFilePath} TEXT,
+      ${Tables.colOriginalPath} TEXT,
+      ${Tables.colTransform} TEXT,
+      ${Tables.colPostProcess} TEXT,
+      ${Tables.colSceneId} TEXT,
+      ${Tables.colTemplateId} TEXT,
+      ${Tables.colKitId} TEXT,
+      ${Tables.colMood} TEXT,
+      ${Tables.colLut} TEXT,
+      ${Tables.colGalleryItemIsFavorite} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colGalleryItemHidden} INTEGER NOT NULL DEFAULT 0,
+      ${Tables.colCreatedAt} INTEGER NOT NULL
+    )
+  ''');
+  // template_favorites：TemplatesFavoriteDao 读取列
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS ${Tables.templateFavorites} (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colCreatedAt} INTEGER NOT NULL
     )
   ''');
 }

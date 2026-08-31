@@ -1,5 +1,6 @@
 // lib/features/capture/data/templates/dessert_closeup.dart
 import '../../domain/photo_template.dart';
+import '../../../templates/data/remote_template_dto.dart';
 
 /// 甜点特写模板（美食 / 特写 / 微距）
 /// 内置模板补充：美食大类非人像模板
@@ -20,7 +21,13 @@ const PhotoTemplate dessertCloseupTemplate = PhotoTemplate(
       TemplateImage(url: 'assets/images/templates/dessert_closeup_3.png'),
       TemplateImage(url: 'assets/images/templates/dessert_closeup_4.png'),
     ],
-    description: '窗边午后柔光下的甜点静物特写，通透柔和、暖调治愈，适合记录慵懒下午茶时光。',
+    description: '美食静物拍照模板，适用于蛋糕、泡芙、慕斯、提拉米苏等甜品拍摄，利用窗边柔和午后侧方日光，打造通透柔和明暗层次，搭配简约浅色系餐盘、木质桌面与薄荷叶装饰，适合记录下午茶甜点。',
+    shortDesc: '窗边暖调日光洒落，甜点点缀温柔光影，慵懒治愈下午茶时光☕',
+    ambience: RemoteTemplateAmbienceDto(
+      seasons: ['spring', 'summer', 'autumn'],
+      weathers: ['sunny', 'cloudy'],
+      timeTones: ['warm'],
+    ),
     referenceSource: '样片参考：Pexels 甜品摄影精选；参数参考美食微距教程',
   ),
   composition: Composition(
