@@ -30,7 +30,10 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 /// 5. CodeCard（邀请码输入 + 确认按钮）
 /// 6. RecordCard（3 项邀请记录）
 class ProfileInvitePage extends ConsumerStatefulWidget {
-  const ProfileInvitePage({super.key});
+  const ProfileInvitePage({super.key, this.presetCode});
+
+  /// 外部（如首页「扫一扫」）扫码到邀请码后预填的邀请码；由用户确认后再激活。
+  final String? presetCode;
 
   @override
   ConsumerState<ProfileInvitePage> createState() => _ProfileInvitePageState();
@@ -38,6 +41,15 @@ class ProfileInvitePage extends ConsumerStatefulWidget {
 
 class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
   final TextEditingController _codeController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    final preset = widget.presetCode;
+    if (preset != null && preset.isNotEmpty) {
+      _codeController.text = preset;
+    }
+  }
 
   @override
   void dispose() {

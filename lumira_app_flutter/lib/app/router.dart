@@ -504,7 +504,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.accountRecover,
         name: 'accountRecover',
-        builder: (context, state) => const RecoverAccountPage(),
+        builder: (context, state) =>
+            RecoverAccountPage(presetSecret: state.queryParams['secret']),
       ),
       GoRoute(
         path: RouteNames.profileSettingsWatermark,
@@ -533,7 +534,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.profileInvite,
         name: 'profileInvite',
-        builder: (context, state) => const ProfileInvitePage(),
+        builder: (context, state) =>
+            ProfileInvitePage(presetCode: state.queryParams['code']),
       ),
       GoRoute(
         path: RouteNames.profileShareCode,
@@ -686,7 +688,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.invite,
         name: 'invite',
-        builder: (context, state) => const ProfileInvitePage(),
+        builder: (context, state) =>
+            ProfileInvitePage(presetCode: state.queryParams['code']),
       ),
 
       // === 场景 ===

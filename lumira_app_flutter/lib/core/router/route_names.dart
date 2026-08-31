@@ -111,6 +111,9 @@ class RouteNames {
   static const String paramFrom = 'from';
   static const String paramTrial = 'trial';
   static const String paramScope = 'scope';
+  // 首页「扫一扫」跳转预填用：恢复码 secret、邀请码 code
+  static const String paramSecret = 'secret';
+  static const String paramInviteCode = 'code';
 
   // === 工具方法 ===
   /// 构建 templateId 查询参数 URL

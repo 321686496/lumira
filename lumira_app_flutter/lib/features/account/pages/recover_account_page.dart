@@ -29,7 +29,10 @@ import '../widgets/account_common.dart';
 enum _RecoverMethod { qrCode, email }
 
 class RecoverAccountPage extends ConsumerStatefulWidget {
-  const RecoverAccountPage({super.key});
+  const RecoverAccountPage({super.key, this.presetSecret});
+
+  /// 外部（如首页「扫一扫」）扫码到恢复码后预填的 secret；由用户确认后再触发找回。
+  final String? presetSecret;
 
   @override
   ConsumerState<RecoverAccountPage> createState() => _RecoverAccountPageState();
@@ -47,6 +50,10 @@ class _RecoverAccountPageState extends ConsumerState<RecoverAccountPage> {
   @override
   void initState() {
     super.initState();
+    final preset = widget.presetSecret;
+    if (preset != null && preset.isNotEmpty) {
+      _secretCtrl.text = preset;
+    }
     Future.microtask(() async {
       final api = AccountApi(await ref.read(apiClientProvider.future));
       if (mounted) setState(() => _api = api);
