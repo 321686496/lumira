@@ -14,11 +14,13 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/home_mock_data.dart';
 import '../data/home_providers.dart';
+import '../services/scan_code_dispatcher.dart';
 import '../widgets/hero_card.dart';
 import '../widgets/home_banner.dart';
 import '../widgets/quick_actions.dart';
 import '../widgets/recent_shot_card.dart';
 import '../widgets/scene_reco_card.dart';
+import '../widgets/scan_qr_page.dart';
 import '../widgets/stats_card.dart';
 import '../widgets/streak_card.dart';
 import '../widgets/tip_card.dart';
@@ -96,6 +98,19 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
+  /// 首页「扫一扫」：push 全屏扫码页，拿到文本后按类型分发执行。
+  Future<void> _onScanTap() async {
+    final text = await Navigator.of(context).push<String>(MaterialPageRoute(
+      builder: (_) => const ScanQrPage(),
+    ));
+    if (!mounted || text == null || text.trim().isEmpty) return;
+    await ScanCodeDispatcher.execute(
+      context,
+      ref,
+      ScanCodeDispatcher.classify(text),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -115,6 +130,11 @@ class _HomePageState extends ConsumerState<HomePage> {
         horizontalPadding: 24,
         leading: const HomeBrandTitle(),
         actions: [
+          _NavAction(
+            icon: Icons.qr_code_scanner,
+            tokens: tokens,
+            onTap: _onScanTap,
+          ),
           _NavAction(
             icon: Icons.notifications_outlined,
             tokens: tokens,
