@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../lib/features/home/services/scan_code_dispatcher.dart';
+import 'package:lumira_app_flutter/features/home/services/scan_code_dispatcher.dart';
 
 void main() {
   group('ScanCodeDispatcher.classify', () {
