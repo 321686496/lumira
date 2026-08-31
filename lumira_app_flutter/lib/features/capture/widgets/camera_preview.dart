@@ -799,17 +799,22 @@ class _LegStretchPreviewOverlayState extends State<LegStretchPreviewOverlay> {
   DateTime _lastCaptureStart = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _periodicCaptureTimer;
 
+  // ── 诊断打点（临时，验证 OHOS 卡顿/重影根因后移除）──
+  int _captureSeq = 0; // 抓帧序号，用于日志定位
+  int _dropped = 0; // 因上一帧未完成被跳过次数（管线超负载信号）
+  DateTime? _lastCaptureAt; // 上次实际抓帧开始时刻（测真实节拍）
+
   @override
   void initState() {
     super.initState();
     // 首次进入拉腿模式立即抓一帧（post-frame 保证 RepaintBoundary 已布局）。
-    WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _capture(reason: 'init'));
     // 拉腿激活期间做低频周期性抓帧：让幽灵叠层跟随场景移动（实时），
     // 即使滑块值不变也能保持「拉长后的画面」与实时取景对齐。
     // 200ms 低频 + 400px 低分辨率 + 后台 isolate 拉伸 → 开销极小，不拖累取景器。
     _periodicCaptureTimer = Timer.periodic(
       _periodicCaptureInterval,
-      (_) => _scheduleCapture(),
+      (_) => _scheduleCapture(reason: 'periodic'),
     );
   }
 
@@ -818,7 +823,7 @@ class _LegStretchPreviewOverlayState extends State<LegStretchPreviewOverlay> {
     super.didUpdateWidget(oldWidget);
     // 拉腿强度变化 → 立即刷新一帧（拖动反馈即时）。
     if (oldWidget.legStretch != widget.legStretch) {
-      _scheduleCapture();
+      _scheduleCapture(reason: 'drag');
     }
   }
 
@@ -829,13 +834,17 @@ class _LegStretchPreviewOverlayState extends State<LegStretchPreviewOverlay> {
     super.dispose();
   }
 
-  void _scheduleCapture() {
+  void _scheduleCapture({String reason = 'periodic'}) {
     // 上一帧抓取+拉伸未完成时跳过（天然节流，避免排队堆积）。
-    if (_capturing) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _capture());
+    // 诊断：若 dropped 持续增长，说明单帧耗时已超过抓帧周期（管线超负载）。
+    if (_capturing) {
+      _dropped++;
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _capture(reason: reason));
   }
 
-  Future<void> _capture() async {
+  Future<void> _capture({String reason = 'periodic'}) async {
     if (_capturing) return;
     // 时间戳节流：拖动事件可能一帧多次触发，限制实际抓帧频率，
     // 避免高频 GPU 读回/上传持续打断渲染管线导致取景器掉帧。
@@ -847,19 +856,29 @@ class _LegStretchPreviewOverlayState extends State<LegStretchPreviewOverlay> {
 
     _capturing = true;
     _lastCaptureStart = now;
+    // 诊断：实际抓帧间隔（与目标周期 200ms / 拖拽 80ms 对比，反映回读是否拖慢节拍）。
+    final lastAt = _lastCaptureAt;
+    final intervalMs = lastAt == null ? -1 : now.difference(lastAt).inMilliseconds;
+    _lastCaptureAt = now;
+    final seq = ++_captureSeq;
     try {
       // 降采样抓帧：限制更长边，保证拉伸耗时可控。
       final longEdge = math.max(boundary.size.width, boundary.size.height);
       final pixelRatio = (_maxEdge / longEdge).clamp(0.4, 1.5);
+      final swImage = Stopwatch()..start();
       final raw = await boundary.toImage(pixelRatio: pixelRatio);
+      swImage.stop();
       final w = raw.width;
       final h = raw.height;
+      final swBytes = Stopwatch()..start();
       final byteData =
           await raw.toByteData(format: ui.ImageByteFormat.rawRgba);
+      swBytes.stop();
       raw.dispose();
       if (byteData == null) return;
 
       // 逐像素拉伸移入常驻后台 isolate（LegStretchWorker），避免阻塞 UI 主线程。
+      final swStretch = Stopwatch()..start();
       final result = await LegStretchWorker.instance.stretch(
         rgbaBytes: byteData.buffer
             .asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
@@ -867,11 +886,13 @@ class _LegStretchPreviewOverlayState extends State<LegStretchPreviewOverlay> {
         height: h,
         legStretch: widget.legStretch,
       );
+      swStretch.stop();
       if (!result.ok || result.rgbaBytes == null) return;
       final outBytes = result.rgbaBytes!;
       final stretchedW = result.width;
       final stretchedH = result.height;
 
+      final swUpload = Stopwatch()..start();
       final buffer = await ui.ImmutableBuffer.fromUint8List(outBytes);
       final descriptor = ui.ImageDescriptor.raw(
         buffer,
@@ -881,6 +902,7 @@ class _LegStretchPreviewOverlayState extends State<LegStretchPreviewOverlay> {
       );
       final codec = await descriptor.instantiateCodec();
       final frame = await codec.getNextFrame();
+      swUpload.stop();
       buffer.dispose();
       descriptor.dispose();
       codec.dispose();
@@ -893,8 +915,18 @@ class _LegStretchPreviewOverlayState extends State<LegStretchPreviewOverlay> {
         _warped?.dispose();
         _warped = frame.image;
       });
-    } catch (_) {
+      final tImage = swImage.elapsedMilliseconds;
+      final tBytes = swBytes.elapsedMilliseconds;
+      final tStretch = swStretch.elapsedMilliseconds;
+      final tUpload = swUpload.elapsedMilliseconds;
+      debugPrint(
+          '[leg-stretch][diag] #$seq reason=$reason src=${w}x$h '
+          'interval=${intervalMs}ms total=${tImage + tBytes + tStretch + tUpload}ms '
+          '(toImage=$tImage, toByteData=$tBytes, stretch=$tStretch, '
+          'upload=$tUpload) dropped=$_dropped');
+    } catch (e) {
       // 抓帧/拉伸失败时静默降级：保留上一帧，不打断取景器。
+      debugPrint('[leg-stretch][diag] #$seq reason=$reason ⚠️ 失败: $e');
     } finally {
       _capturing = false;
     }

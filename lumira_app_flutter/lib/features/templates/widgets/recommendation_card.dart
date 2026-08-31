@@ -4,17 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
-import '../data/templates_browse_mock_data.dart';
 import '../data/templates_mock_data.dart';
 import 'adaptive_cover_image.dart';
-import 'ambience_badges.dart';
 import 'template_badges.dart';
 
 /// 推荐模板卡片（Hero 推荐区横向滚动项）
 ///
 /// 内容排版与「全部模板页」卡片对齐：
 /// - 封面：真实比例自适应（宽度 100%，9:16 温和削减），叠 来源角标(左上) + 价格徽标(右上) + 已拍徽标(右下)
-/// - 信息区：名称 + 推荐理由(短简介) + 分类/自定义/氛围标签（Wrap 自动换行）
+/// - 信息区：名称 + 推荐理由(短简介)。卡片较窄（130dp），标签行会被挤压，故推荐卡片不带分类/氛围标签
 /// - 保留来源角标与推荐理由（Hero 专属信息）
 class RecommendationCard extends ConsumerWidget {
   const RecommendationCard({
@@ -42,7 +40,18 @@ class RecommendationCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _RecImage(rec: rec, tokens: tokens, usageCount: usageCount),
+            // 封面固定宽高（高 172 ≈ 宽 130 的 3:4 竖版），
+            // 卡片高度稳定、布局整齐；真实比例由 BoxFit.cover 在固定框内轻微裁切，
+            // 底部信息区固定贴底，不留白。
+            SizedBox(
+              width: double.infinity,
+              height: 172,
+              child: _RecImage(
+                rec: rec,
+                tokens: tokens,
+                usageCount: usageCount,
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -59,6 +68,7 @@ class RecommendationCard extends ConsumerWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  // 封面固定高 172 + 信息区 ~76 = 卡片高约 248，列表高度贴合，底部紧凑无大量留白。
                   if (rec.reason.isNotEmpty) ...[
                     const SizedBox(height: 3),
                     Text(
@@ -72,49 +82,6 @@ class RecommendationCard extends ConsumerWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 6),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              TemplatesBrowseMockData.categoryLabel(rec.category),
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: tokens.brand,
-                              ),
-                            ),
-                            if (rec.isCustom)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: tokens.brandSubtle,
-                                  borderRadius: BorderRadius.circular(9999),
-                                ),
-                                child: Text(
-                                  '自定义',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: tokens.brandText,
-                                  ),
-                                ),
-                              ),
-                            AmbienceBadges(
-                              ambience: rec.ambience,
-                              tokens: tokens,
-                              maxItems: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),

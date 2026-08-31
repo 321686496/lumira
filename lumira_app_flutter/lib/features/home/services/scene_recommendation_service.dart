@@ -61,16 +61,28 @@ class SceneRecommendationService {
   /// 构建 4 条场景推荐
   Future<List<SceneReco>> build() async {
     try {
-      // 1. 收集所有场景：自定义（DB 完整数据）+ 预设
-      final customScenes = await _scenesDao.getAll();
+      // 1. 收集所有场景：用户自定义（DB creator='user'）+ 内置预设（代码常量）
+      final dbScenes = await _scenesDao.getAll();
+
+      // 内置系统场景的收藏标记从 DB 读取（内置场景 DB 仅持久化 is_favorite）。
+      final presetFavorites = <String>{
+        for (final s in dbScenes)
+          if (s.creator == 'system' && s.isFavorite) s.id,
+      };
+
+      // 真正由用户创建的自定义场景（creator='user'，跳过空名占位行）。
+      // 注意：不能把 getAll() 里所有 name 非空的行都当作自定义——种子内置场景
+      // 以 creator='system' 写入同一张表，若误判会带上 "我的场景" 徽章、且其
+      // coverUrl 为空导致封面不显示。
+      final userScenes = dbScenes
+          .where((s) => s.creator == 'user' && s.name.isNotEmpty)
+          .toList();
       const presetScenes = ScenePresetsData.allScenePresets;
 
       // 2. 统计每场景照片数
       final sceneCounts = <String, int>{};
-      for (final s in customScenes) {
-        if (s.name.isNotEmpty) {
-          sceneCounts[s.id] = await _galleryDao.countByScene(s.id);
-        }
+      for (final s in userScenes) {
+        sceneCounts[s.id] = await _galleryDao.countByScene(s.id);
       }
       for (final s in presetScenes) {
         sceneCounts[s.id] = await _galleryDao.countByScene(s.id);
@@ -78,8 +90,8 @@ class SceneRecommendationService {
 
       // 3. 构建统一场景列表
       final allScenes = <_SceneInfo>[];
-      for (final s in customScenes) {
-        if (s.name.isEmpty) continue; // 跳过仅收藏标记的内置场景
+      // 用户自定义场景（DB 完整数据，含用户上传封面）
+      for (final s in userScenes) {
         allScenes.add(_SceneInfo(
           id: s.id,
           name: s.name,
@@ -91,8 +103,9 @@ class SceneRecommendationService {
           coverUrl: s.coverUrl,
         ));
       }
+      // 内置预设场景（数据来自代码常量；不再叠加 DB 中 creator='system' 的行，
+      // 避免身份歧义 / 空封面，收藏态统一取自 presetFavorites）
       for (final s in presetScenes) {
-        // 去重：自定义场景与预设 id 不会重复
         allScenes.add(_SceneInfo(
           id: s.id,
           name: s.name,
@@ -100,7 +113,7 @@ class SceneRecommendationService {
           category: s.category,
           isCustom: false,
           isPreset: true,
-          isFavorite: customScenes.any((c) => c.id == s.id && c.isFavorite),
+          isFavorite: presetFavorites.contains(s.id),
           coverUrl: s.exampleImages.isNotEmpty ? s.exampleImages.first : '',
         ));
       }

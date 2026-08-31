@@ -12,6 +12,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../recommend/recommendation_models.dart';
 import '../recommend/recommendation_providers.dart';
+import '../services/template_image_store.dart';
 
 /// 为你推荐页
 ///
@@ -574,8 +575,11 @@ class _TemplateCover extends StatelessWidget {
     return Container(color: const Color(0xFFF0EDE8));
   }
 
-  static String _asDataUrl(String s) =>
-      s.startsWith('data:') ? s : 'data:image/jpeg;base64,$s';
+  static String _asDataUrl(String s) {
+    if (s.startsWith('data:')) return s;
+    if (TemplateImageStore.isLocalImageRef(s)) return s;
+    return 'data:image/jpeg;base64,$s';
+  }
 }
 
 /// Section 4: 根据最近拍摄

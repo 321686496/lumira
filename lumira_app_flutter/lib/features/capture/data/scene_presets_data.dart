@@ -23,9 +23,7 @@ class ScenePresetsData {
       vibe: '慵懒午后，把光调成蜜糖色',
       description: '适合下午 2-5 点，当阳光斜照进落地窗，整个世界都慢了下来。咖啡馆的木质桌椅、暖色墙面和飘散的咖啡香，构成最治愈的拍摄空间。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-cafe-window-1/600/800',
-        'https://picsum.photos/seed/scene-cafe-window-2/600/800',
-        'https://picsum.photos/seed/scene-cafe-window-3/600/800',
+        'assets/images/scenes/scene_cafe-window.jpg',
       ],
       tips: [
         '让模特面朝窗户，利用柔光均匀照亮面部',
@@ -63,9 +61,7 @@ class ScenePresetsData {
       vibe: '静谧书海，让时间在指尖慢下来',
       description: '适合午后或周末，光线穿过书架的缝隙洒在书页与脸庞上。木质书架、烫金书脊和安静的氛围，最适合沉静的肖像。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-library-quiet-1/600/800',
-        'https://picsum.photos/seed/scene-library-quiet-2/600/800',
-        'https://picsum.photos/seed/scene-library-quiet-3/600/800',
+        'assets/images/scenes/scene_library-quiet.jpg',
       ],
       tips: [
         '利用书架做背景虚化，营造纵深感',
@@ -103,9 +99,7 @@ class ScenePresetsData {
       vibe: '慵懒清晨，把日子过成一首慢歌',
       description: '适合上午或周末午后，窗边的阳光洒在沙发和地毯上。家中的毛毯、绿植和马克杯，是最真实的治愈系拍摄空间。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-home-cozy-1/600/800',
-        'https://picsum.photos/seed/scene-home-cozy-2/600/800',
-        'https://picsum.photos/seed/scene-home-cozy-3/600/800',
+        'assets/images/scenes/scene_home-cozy.jpg',
       ],
       tips: [
         '利用窗光做侧光，营造柔和的明暗',
@@ -143,9 +137,7 @@ class ScenePresetsData {
       vibe: '把人放进夕阳里，剪成一帧诗',
       description: '适合日落前后 30 分钟，逆光下的人物轮廓被金色光线勾勒。天空的晚霞和地平线，是这张照片最壮阔的舞台。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-sunset-silhouette-1/600/800',
-        'https://picsum.photos/seed/scene-sunset-silhouette-2/600/800',
-        'https://picsum.photos/seed/scene-sunset-silhouette-3/600/800',
+        'assets/images/scenes/scene_sunset-silhouette.jpg',
       ],
       tips: [
         '对天空测光锁定，拍摄人物剪影',
@@ -183,9 +175,7 @@ class ScenePresetsData {
       vibe: '夕阳描边，把发丝染成蜜金',
       description: '适合日落前 1 小时，太阳低角度逆光打亮人物轮廓，发丝边缘会出现金色光晕。柔和的前侧光补面，皮肤透亮有质感。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-golden-rim-portrait-1/600/800',
-        'https://picsum.photos/seed/scene-golden-rim-portrait-2/600/800',
-        'https://picsum.photos/seed/scene-golden-rim-portrait-3/600/800',
+        'assets/images/scenes/scene_golden-rim-portrait.jpg',
       ],
       tips: [
         '让太阳位于人物侧后方，避免直射镜头',
@@ -223,9 +213,7 @@ class ScenePresetsData {
       vibe: '赛博夜行，让霓虹流过脸颊',
       description: '适合夜晚 19:00 后，城市的霓虹招牌、车流光轨和橱窗灯箱，是天然的赛博朋克布景。潮湿的柏油路反光更是绝佳镜面。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-night-street-1/600/800',
-        'https://picsum.photos/seed/scene-night-street-2/600/800',
-        'https://picsum.photos/seed/scene-night-street-3/600/800',
+        'assets/images/scenes/scene_night-street.jpg',
       ],
       tips: [
         '寻找霓虹招牌做轮廓光或发丝光',
@@ -303,9 +291,7 @@ class ScenePresetsData {
       vibe: '凌晨三点，把便利店的灯拍成港湾',
       description: '适合深夜或凌晨，便利店刺眼的白光与窗外夜色形成强烈对比。货架、便当、收银台，是城市里最孤独又最温暖的存在。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-convenience-store-1/600/800',
-        'https://picsum.photos/seed/scene-convenience-store-2/600/800',
-        'https://picsum.photos/seed/scene-convenience-store-3/600/800',
+        'assets/images/scenes/scene_convenience-store.jpg',
       ],
       tips: [
         '从店内向外拍，利用大光比剪影',
@@ -383,9 +369,7 @@ class ScenePresetsData {
       vibe: '黑礁拍浪，把海拍成史诗',
       description: '适合阴天或日落，深色礁石与翻涌的白浪形成强烈对比。壮阔的海岸线和孤独的人物，是史诗感照片的最佳舞台。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-seaside-rocks-1/600/800',
-        'https://picsum.photos/seed/scene-seaside-rocks-2/600/800',
-        'https://picsum.photos/seed/scene-seaside-rocks-3/600/800',
+        'assets/images/scenes/scene_seaside-rocks.jpg',
       ],
       tips: [
         '长曝光拍摄海浪，柔化水面',
@@ -463,9 +447,7 @@ class ScenePresetsData {
       vibe: '红叶纷飞，把秋拍成一封旧信',
       description: '适合深秋 10-11 月，红黄相间的枫叶与斑驳的树皮，构成温暖的复古画面。落叶铺满的小径，是最诗意的拍摄背景。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-forest-maple-1/600/800',
-        'https://picsum.photos/seed/scene-forest-maple-2/600/800',
-        'https://picsum.photos/seed/scene-forest-maple-3/600/800',
+        'assets/images/scenes/scene_forest-maple.jpg',
       ],
       tips: [
         '拾起枫叶做前景或道具',
@@ -503,9 +485,7 @@ class ScenePresetsData {
       vibe: '站在天台，把城市踩在脚下',
       description: '适合黄昏或夜晚，天台是俯瞰城市的最佳视角。远处的天际线、近处的空调外机和水泥围栏，构成冷峻的都市感。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-urban-rooftop-1/600/800',
-        'https://picsum.photos/seed/scene-urban-rooftop-2/600/800',
-        'https://picsum.photos/seed/scene-urban-rooftop-3/600/800',
+        'assets/images/scenes/scene_urban-rooftop.jpg',
       ],
       tips: [
         '黄昏拍摄，天空与城市灯光同时亮起',
@@ -583,9 +563,7 @@ class ScenePresetsData {
       vibe: '醒在晨雾里，把梦拍成一片白',
       description: '适合清晨 7-9 点，透过窗帘的晨光带有薄雾感。白色的床单、凌乱的枕头和慵懒的身影，是治愈系照片的最佳画面。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-bedroom-morning-1/600/800',
-        'https://picsum.photos/seed/scene-bedroom-morning-2/600/800',
-        'https://picsum.photos/seed/scene-bedroom-morning-3/600/800',
+        'assets/images/scenes/scene_bedroom-morning.jpg',
       ],
       tips: [
         '拉开一半窗帘，让光线有方向感',
@@ -703,9 +681,7 @@ class ScenePresetsData {
       vibe: '听雨落窗，把心放慢半拍',
       description: '适合雨天，窗外的雨滴在玻璃上形成水珠，模糊的世界透着宁静。一杯热茶、一本旧书、模糊的窗外，是治愈系照片最经典的画面。',
       exampleImages: [
-        'https://picsum.photos/seed/scene-rainy-window-1/600/800',
-        'https://picsum.photos/seed/scene-rainy-window-2/600/800',
-        'https://picsum.photos/seed/scene-rainy-window-3/600/800',
+        'assets/images/scenes/scene_rainy-window.jpg',
       ],
       tips: [
         '对焦在玻璃水珠上，让窗外虚化',
@@ -736,4 +712,18 @@ class ScenePresetsData {
   };
 
   static ScenePreset? getScenePreset(String id) => _map[id];
+
+  /// 内置预设场景的本地打包封面（按 scene id 映射）。
+  ///
+  /// 返回 `assets/images/scenes/scene_<id>.jpg`（即该预设 exampleImages 的首张本地资源）。
+  /// 用于场景库/详情等可能读取 DB 中陈旧网络地址入口的封面兜底：只要场景 id 命中本地
+  /// 预设（内置 18 个），无论 DB 的 exampleImages 是否还是 picsum / 已联网覆写，都能
+  /// 稳定显示本地打包封面。非内置预设或暂无本地封面返回空字符串，调用方应回退到数据
+  /// 自身的 exampleImages 首图。
+  static String localCoverOf(String id) {
+    final p = _map[id];
+    if (p == null || p.exampleImages.isEmpty) return '';
+    final cover = p.exampleImages.first;
+    return cover.startsWith('assets/') ? cover : '';
+  }
 }

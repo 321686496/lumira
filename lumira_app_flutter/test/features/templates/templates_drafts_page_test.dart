@@ -1,8 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:lumira_app_flutter/core/db/database_provider.dart';
+import 'package:lumira_app_flutter/core/db/tables.dart';
 import 'package:lumira_app_flutter/core/router/route_names.dart';
 import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
 import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
@@ -13,19 +18,111 @@ import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
 /// Task 2.8B — TemplatesDraftsPage 测试
 ///
 /// 覆盖 brief 第 5.1 节 ≥10 项断言 + cross-theme/cross-style smoke test。
+/// 草稿列表读取真实 template_drafts 表（v51），测试用 ffi 内存库种子 3 条草稿。
 void main() {
-  Widget wrap({
-    required ThemeKey themeKey,
-    required UIStyle uiStyle,
-    List<DraftItem>? initialDrafts,
-  }) {
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfiNoIsolate;
+
+  late Database _db;
+
+  /// 构造一条 template_drafts 行载荷（TemplateRecord.toRow 期望的列结构）。
+  Map<String, Object?> draftRow(
+    String id,
+    String name,
+    String category,
+    double ev,
+    int iso,
+    String shutter,
+    int updatedAt,
+  ) {
+    return {
+      Tables.colId: id,
+      Tables.colName: name,
+      Tables.colAuthor: '',
+      Tables.colVersion: '1.0.0',
+      Tables.colCategory: category,
+      Tables.colClassificationJson: jsonEncode({'type': category}),
+      Tables.colTagsJson: '[]',
+      Tables.colTagIdsJson: '[]',
+      Tables.colPrice: 0,
+      Tables.colCover: '',
+      Tables.colCoverData: null,
+      Tables.colImagesJson: '[]',
+      Tables.colDescription: '',
+      Tables.colReferenceSource: '',
+      Tables.colShortDesc: '',
+      Tables.colAmbienceJson: '{}',
+      Tables.colCompositionJson: '{}',
+      Tables.colPoseJson: '[]',
+      Tables.colCameraJson: jsonEncode({
+        'exposureCompensation': ev,
+        'isoMode': 'auto',
+        'iso': iso,
+        'shutterSpeed': shutter,
+        'whiteBalance': 'daylight',
+        'whiteBalanceK': 5500,
+        'flashMode': 'off',
+        'focusMode': 'auto',
+        'lensSuggestion': 'main',
+      }),
+      Tables.colSceneGuideJson: '{}',
+      Tables.colPostProcessJson: '{}',
+      Tables.colIsBuiltin: 0,
+      Tables.colIsRecommended: 0,
+      Tables.colSource: 'custom',
+      Tables.colCreatedAt: updatedAt,
+      Tables.colUpdatedAt: updatedAt,
+    };
+  }
+
+  Future<void> seedDraft(
+    String id,
+    String name,
+    String category,
+    double ev,
+    int iso,
+    String shutter,
+    int updatedAt,
+  ) async {
+    final payload = jsonEncode(
+      draftRow(id, name, category, ev, iso, shutter, updatedAt),
+    );
+    await _db.insert(Tables.templateDrafts, {
+      Tables.colId: id,
+      Tables.colPayload: payload,
+      Tables.colUpdatedAt: updatedAt,
+    });
+  }
+
+  setUpAll(() async {
+    _db = await openDatabase(
+      inMemoryDatabasePath,
+      version: 1,
+      onCreate: (db, v) async {
+        await db.execute(TemplatesDraftsTable.createSql);
+      },
+    );
+  });
+
+  setUp(() async {
+    await _db.delete(Tables.templateDrafts);
+    final now = DateTime.now().millisecondsSinceEpoch;
+    await seedDraft('draft-1', '咖啡馆人像草稿', 'portrait', 0.7, 400, '1/125s',
+        now - 2 * 60 * 60 * 1000);
+    await seedDraft('draft-2', '日落风光草稿', 'landscape', -0.3, 200, '1/60s',
+        now - 3 * 24 * 60 * 60 * 1000);
+    await seedDraft('draft-3', '街拍黑白草稿', 'street', 1.0, 800, '1/250s',
+        now - 15 * 24 * 60 * 60 * 1000);
+  });
+
+  Widget wrap({required ThemeKey themeKey, required UIStyle uiStyle}) {
     final goRouter = GoRouter(
       initialLocation: '/templates/drafts',
       routes: [
         GoRoute(
           path: '/templates/drafts',
           name: 'templatesDrafts',
-          builder: (_, __) => TemplatesDraftsPage(initialDrafts: initialDrafts),
+          builder: (_, __) => const TemplatesDraftsPage(),
         ),
         GoRoute(
           path: RouteNames.templatesEditor,
@@ -43,6 +140,7 @@ void main() {
     );
     return ProviderScope(
       overrides: [
+        databaseProvider.overrideWith((ref) async => _db),
         themeKeyProvider.overrideWith((ref) => themeKey),
         uiStyleProvider.overrideWith((ref) => uiStyle),
       ],
@@ -68,10 +166,10 @@ void main() {
   group('TemplatesDraftsPage', () {
     testWidgets('renders empty state when drafts list is empty', (tester) async {
       setLargeViewport(tester);
+      await _db.delete(Tables.templateDrafts);
       await tester.pumpWidget(wrap(
         themeKey: ThemeKey.warmWhite,
         uiStyle: UIStyle.neumorphic,
-        initialDrafts: const [],
       ));
       await settleOrPump(tester, UIStyle.neumorphic);
 
@@ -172,7 +270,7 @@ void main() {
       expect(find.text('确认'), findsOneWidget);
     });
 
-    testWidgets('confirming delete removes draft and shows SnackBar',
+    testWidgets('confirming delete removes draft and shows toast',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
@@ -192,7 +290,7 @@ void main() {
       await tester.tap(find.text('确认'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // SnackBar '已删除' 出现，'咖啡馆人像草稿' 消失
+      // Toast '已删除' 出现，'咖啡馆人像草稿' 消失
       expect(find.text('已删除'), findsOneWidget);
       expect(find.text('咖啡馆人像草稿'), findsNothing);
     });
@@ -222,7 +320,7 @@ void main() {
       expect(find.text('确认'), findsOneWidget);
     });
 
-    testWidgets('confirming clear all empties drafts and shows SnackBar',
+    testWidgets('confirming clear all empties drafts and shows toast',
         (tester) async {
       setLargeViewport(tester);
       await tester.pumpWidget(wrap(
@@ -232,7 +330,6 @@ void main() {
       await settleOrPump(tester, UIStyle.neumorphic);
 
       // 点击 LumiraNav 中的 trash 按钮（LumiraNav 的 actions 区域）
-      // LumiraNav 内部的 trash icon：通过 LumiraNav 子树查找
       final navTrash = find.descendant(
         of: find.byType(LumiraNav),
         matching: find.byIcon(Icons.delete_outline),
@@ -248,7 +345,7 @@ void main() {
       await tester.tap(find.text('确认'));
       await settleOrPump(tester, UIStyle.neumorphic);
 
-      // SnackBar '已清空' + 空状态出现
+      // Toast '已清空' + 空状态出现
       expect(find.text('已清空'), findsOneWidget);
       expect(find.text('还没有草稿'), findsOneWidget);
     });

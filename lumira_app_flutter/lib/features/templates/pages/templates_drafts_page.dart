@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/templates_browse_mock_data.dart';
+import '../data/templates_drafts_providers.dart';
 import '../data/templates_management_mock_data.dart';
 
 /// 草稿箱页
@@ -17,11 +20,7 @@ import '../data/templates_management_mock_data.dart';
 /// 视觉规格来源：lumira-app/src/pages/templates/drafts.vue (152 行)
 /// 4 个 section：StatsBar / DraftList / EmptyState（二选一）+ LumiraNav
 class TemplatesDraftsPage extends ConsumerStatefulWidget {
-  const TemplatesDraftsPage({super.key, this.initialDrafts});
-
-  /// 测试用注入草稿列表（默认 null → 用 [DraftsMockData.drafts]）
-  /// 生产环境由路由构造时不传该参数
-  final List<DraftItem>? initialDrafts;
+  const TemplatesDraftsPage({super.key});
 
   @override
   ConsumerState<TemplatesDraftsPage> createState() =>
@@ -29,16 +28,12 @@ class TemplatesDraftsPage extends ConsumerStatefulWidget {
 }
 
 class _TemplatesDraftsPageState extends ConsumerState<TemplatesDraftsPage> {
-  late List<DraftItem> _drafts;
   final ScrollController _scrollController = ScrollController();
   bool _isScrolled = false;
 
   @override
   void initState() {
     super.initState();
-    _drafts = List<DraftItem>.from(
-      widget.initialDrafts ?? DraftsMockData.drafts,
-    );
     _scrollController.addListener(_onScroll);
   }
 
@@ -72,61 +67,74 @@ class _TemplatesDraftsPageState extends ConsumerState<TemplatesDraftsPage> {
     GoRouter.of(context).push(RouteNames.templatesEditor);
   }
 
-  void _onDelete(String draftId, String name) {
-    lumira.LumiraAlertDialog.show<void>(
+  Future<void> _onDelete(String draftId, String name) async {
+    final confirmed = await lumira.LumiraAlertDialog.show<bool>(
       context: context,
       title: const Text('删除草稿'),
       content: Text('确定删除草稿"$name"吗？'),
       actions: [
         lumira.LumiraButton(
           variant: ButtonVariant.ghost,
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, false),
           child: const Text('取消'),
         ),
         lumira.LumiraButton(
           variant: ButtonVariant.danger,
-          onPressed: () {
-            Navigator.pop(context);
-            setState(() {
-              _drafts.removeWhere((d) => d.id == draftId);
-            });
-            lumira.LumiraToast.show(context, '已删除');
-          },
+          onPressed: () => Navigator.pop(context, true),
           child: const Text('确认'),
         ),
       ],
     );
+    if (confirmed != true || !mounted) return;
+    try {
+      final dao = await ref.read(templatesDraftsDaoProvider.future);
+      await dao.delete(draftId);
+      ref.invalidate(draftsListProvider);
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '已删除');
+    } catch (e) {
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '删除失败');
+      debugPrint('delete draft failed: $e');
+    }
   }
 
-  void _onClearAll() {
-    lumira.LumiraAlertDialog.show<void>(
+  Future<void> _onClearAll() async {
+    final confirmed = await lumira.LumiraAlertDialog.show<bool>(
       context: context,
       title: const Text('清空草稿箱'),
       content: const Text('确定删除所有草稿吗？此操作不可恢复。'),
       actions: [
         lumira.LumiraButton(
           variant: ButtonVariant.ghost,
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, false),
           child: const Text('取消'),
         ),
         lumira.LumiraButton(
           variant: ButtonVariant.danger,
-          onPressed: () {
-            Navigator.pop(context);
-            setState(() {
-              _drafts.clear();
-            });
-            lumira.LumiraToast.show(context, '已清空');
-          },
+          onPressed: () => Navigator.pop(context, true),
           child: const Text('确认'),
         ),
       ],
     );
+    if (confirmed != true || !mounted) return;
+    try {
+      final dao = await ref.read(templatesDraftsDaoProvider.future);
+      await dao.clearAll();
+      ref.invalidate(draftsListProvider);
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '已清空');
+    } catch (e) {
+      if (!mounted) return;
+      lumira.LumiraToast.show(context, '清空失败');
+      debugPrint('clear drafts failed: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
+    final draftsAsync = ref.watch(draftsListProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -134,49 +142,114 @@ class _TemplatesDraftsPageState extends ConsumerState<TemplatesDraftsPage> {
       body: Stack(
         children: [
           _BackgroundDecoration(tokens: tokens),
-          SafeArea(
-            top: false,
-            bottom: false,
-            child: Column(
-              children: [
-                LumiraNav(
-                  title: '草稿箱',
-                  transparent: true,
-                  scrolled: _isScrolled,
-                  leading: _BackButton(tokens: tokens, onTap: _back),
-                  actions: _drafts.isNotEmpty
-                      ? [
-                          _TrashButton(
+          draftsAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (e, _) => _DraftsLoadingError(
+              tokens: tokens,
+              onRetry: () => ref.invalidate(draftsListProvider),
+            ),
+            data: (drafts) => SafeArea(
+              top: false,
+              bottom: false,
+              child: Column(
+                children: [
+                  LumiraNav(
+                    title: '草稿箱',
+                    transparent: true,
+                    scrolled: _isScrolled,
+                    leading: _BackButton(tokens: tokens, onTap: _back),
+                    actions: drafts.isNotEmpty
+                        ? [
+                            _TrashButton(
+                              tokens: tokens,
+                              onTap: _onClearAll,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  Expanded(
+                    child: drafts.isEmpty
+                        ? _EmptyState(
                             tokens: tokens,
-                            onTap: _onClearAll,
+                            onCreate: _onCreate,
+                          )
+                        : ListView(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.only(bottom: 32),
+                            children: [
+                              _StatsBar(
+                                tokens: tokens,
+                                count: drafts.length,
+                              ),
+                              _DraftList(
+                                tokens: tokens,
+                                drafts: drafts,
+                                onResume: _onResume,
+                                onDelete: _onDelete,
+                              ),
+                            ],
                           ),
-                        ]
-                      : null,
-                ),
-                Expanded(
-                  child: _drafts.isEmpty
-                      ? _EmptyState(
-                          tokens: tokens,
-                          onCreate: _onCreate,
-                        )
-                      : ListView(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.only(bottom: 32),
-                          children: [
-                            _StatsBar(
-                              tokens: tokens,
-                              count: _drafts.length,
-                            ),
-                            _DraftList(
-                              tokens: tokens,
-                              drafts: _drafts,
-                              onResume: _onResume,
-                              onDelete: _onDelete,
-                            ),
-                          ],
-                        ),
-                ),
-              ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 草稿加载失败态（读库失败时展示，含重试）。
+class _DraftsLoadingError extends StatelessWidget {
+  const _DraftsLoadingError({required this.tokens, required this.onRetry});
+  final ThemeTokens tokens;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: Column(
+        children: [
+          LumiraNav(
+            title: '草稿箱',
+            transparent: true,
+            leading: _BackButton(
+              tokens: tokens,
+              onTap: () {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  GoRouter.of(context).go(RouteNames.profileMyTemplates);
+                }
+              },
+            ),
+          ),
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline,
+                      size: 40, color: tokens.textTertiary),
+                  const SizedBox(height: 10),
+                  Text(
+                    '草稿加载失败',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: tokens.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  lumira.LumiraButton(
+                    variant: ButtonVariant.ghost,
+                    onPressed: onRetry,
+                    child: const Text('重试'),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -400,6 +473,28 @@ class _DraftContent extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (draft.cover.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: LumiraImage(
+                    draft.cover,
+                    width: 44,
+                    height: 44,
+                    fit: BoxFit.cover,
+                    errorWidget: Container(
+                      width: 44,
+                      height: 44,
+                      color: tokens.surfaceAlt,
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 18,
+                        color: tokens.textTertiary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
               Expanded(
                 child: Text(
                   draft.name,

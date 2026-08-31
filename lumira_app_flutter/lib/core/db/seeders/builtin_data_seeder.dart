@@ -389,7 +389,10 @@ class BuiltinDataSeeder {
 
   /// 插入预置场景数据
   static Future<void> _seedScenes(Database db, int now) async {
-    final scenes = CaptureSceneMockData.allScenes;
+    // 仅播种内置预设场景，排除 CaptureSceneMockData.customSceneExample
+    // （demo「我的咖啡馆」）。该 demo 属 mock 演示数据，不应以 system 行写入生产 DB，
+    // 否则会被首页推荐误判为"我的场景"。与迁移 v50 的清理保持一致。
+    const scenes = CaptureSceneMockData.presetScenes;
     final batch = db.batch();
     for (final s in scenes) {
       batch.insert(

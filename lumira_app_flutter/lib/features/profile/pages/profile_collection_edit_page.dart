@@ -4,10 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
 import '../../../shared/widgets/images/lumira_image.dart';
+import '../../../shared/widgets/photos/lumira_photo_picker_sheet.dart';
 import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
-import '../../../core/db/database_provider.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
@@ -134,7 +133,7 @@ class _ProfileCollectionEditPageState
     final picked = await showLumiraBottomSheet<List<GalleryItemRecord>>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _PhotoPickerSheet(
+      builder: (ctx) => LumiraPhotoPickerSheet(
         tokens: tokens,
         excludeIds: _photoIds.toSet(),
       ),
@@ -284,28 +283,54 @@ class _ProfileCollectionEditPageState
                 if (_isLoading || _loadError != null)
                   const SizedBox.shrink()
                 else
-                  SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 12),
-                      child: LumiraButton(
-                        variant: ButtonVariant.primary,
-                        onPressed: _isSaving ? null : _save,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.check_outlined, size: 18),
-                            const SizedBox(width: 8),
-                            Text(_isSaving ? '保存中…' : '保存'),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                  _buildSaveBar(tokens),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 底部保存操作栏：
+  ///
+  /// - 实体表面（[tokens.surface] + 顶部分隔线），替代原先“悬空居中”的小按钮，
+  ///   让操作区有明确的落点，也避免新拟态按钮浮动在透明玻璃上。
+  /// - 新拟态下按钮用 [ButtonVariant.secondary]：组件与背景同色 + 双向外阴影，
+  ///   在实体表面上形成清晰的“凸起”浮雕（项目 §3 规则）；其余风格保留品牌主按钮。
+  Widget _buildSaveBar(ThemeTokens tokens) {
+    final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.surface,
+        border: Border(
+          top: BorderSide(color: tokens.divider.withOpacity(0.5)),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
+          child: SizedBox(
+            width: double.infinity,
+            child: LumiraButton(
+              variant: isNeumorphic
+                  ? ButtonVariant.secondary
+                  : ButtonVariant.primary,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              onPressed: _isSaving ? null : _save,
+              child: Row(
+                mainAxisSize: MainAxisSize.max,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.check_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  Text(_isSaving ? '保存中…' : '保存'),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -432,24 +457,46 @@ class _PhotosSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+        Container(
+          padding: const EdgeInsets.only(bottom: 12),
           child: Row(
             children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: tokens.brand.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.photo_library_outlined,
+                  size: 16,
+                  color: tokens.brand,
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(
                 '照片',
                 style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: tokens.textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                '${photoIds.length} 张',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.textTertiary,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: tokens.surfaceAlt,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${photoIds.length} 张',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: tokens.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
               const Spacer(),
@@ -457,20 +504,23 @@ class _PhotosSection extends StatelessWidget {
                 GestureDetector(
                   onTap: onAdd,
                   behavior: HitTestBehavior.opaque,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: tokens.brand.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.add_photo_alternate_outlined,
-                            size: 16, color: tokens.brand),
-                        const SizedBox(width: 4),
+                        Icon(Icons.add, size: 14, color: tokens.brand),
+                        const SizedBox(width: 2),
                         Text(
                           '添加',
                           style: TextStyle(
                             fontSize: 12,
                             color: tokens.brand,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -489,8 +539,8 @@ class _PhotosSection extends StatelessWidget {
             padding: const EdgeInsets.only(top: 4),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
               childAspectRatio: 1.0,
             ),
             itemCount: photoIds.length + 1,
@@ -542,26 +592,53 @@ class _AddPhotoPrompt extends StatelessWidget {
       onTap: onAdd,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        height: 96,
+        height: 120,
         decoration: BoxDecoration(
           color: tokens.surface,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: tokens.brand.withOpacity(0.3),
+            width: 1.5,
+          ),
           boxShadow: tokens.shadowConvexSubtle,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_photo_alternate_outlined,
-                size: 28, color: tokens.textTertiary),
-            const SizedBox(height: 6),
-            Text(
-              '添加照片',
-              style: TextStyle(
-                fontSize: 12,
-                color: tokens.textTertiary,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: tokens.brand.withOpacity(0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.add_photo_alternate_outlined,
+                  size: 24,
+                  color: tokens.brand,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                '添加照片',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: tokens.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '从相册选择',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.textTertiary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -581,19 +658,42 @@ class _AddPhotoCell extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: tokens.surface,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: tokens.brand.withOpacity(0.25),
+            width: 1.5,
+          ),
           boxShadow: tokens.shadowConvexSubtle,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add, size: 22, color: tokens.textTertiary),
-            const SizedBox(height: 2),
-            Text(
-              '添加',
-              style: TextStyle(fontSize: 10, color: tokens.textTertiary),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: tokens.brand.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.add,
+                  size: 19,
+                  color: tokens.brand,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '添加',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.brand,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -623,7 +723,7 @@ class _PhotoEditCell extends StatelessWidget {
       child: Stack(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             child: url == null || url.isEmpty
                 ? Container(
                     color: tokens.surfaceAlt,
@@ -740,196 +840,4 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-/// 照片选择器底部 Sheet
-class _PhotoPickerSheet extends ConsumerStatefulWidget {
-  const _PhotoPickerSheet({
-    required this.tokens,
-    required this.excludeIds,
-  });
-  final ThemeTokens tokens;
-  final Set<String> excludeIds;
 
-  @override
-  ConsumerState<_PhotoPickerSheet> createState() => _PhotoPickerSheetState();
-}
-
-class _PhotoPickerSheetState extends ConsumerState<_PhotoPickerSheet> {
-  List<GalleryItemRecord> _photos = const [];
-  final Set<String> _selected = <String>{};
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPhotos();
-  }
-
-  Future<void> _loadPhotos() async {
-    try {
-      final db = await ref.read(databaseProvider.future);
-      final photos = await GalleryDao(db).getAll(limit: 200);
-      if (mounted) {
-        setState(() {
-          _photos = photos.where((p) => !widget.excludeIds.contains(p.id)).toList();
-          _isLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _photos = const [];
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = widget.tokens;
-    final height = MediaQuery.of(context).size.height * 0.7;
-    return SizedBox(
-      height: height,
-      child: Column(
-        children: [
-          // 标题栏
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-            child: Row(
-              children: [
-                Text(
-                  '选择照片',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '已选 ${_selected.length} 张',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: tokens.textTertiary,
-                  ),
-                ),
-                const Spacer(),
-                LumiraButton(
-                  variant: ButtonVariant.ghost,
-                  onPressed: _selected.isEmpty
-                      ? null
-                      : () => Navigator.of(context).pop(_selected
-                          .map((id) => _photos.firstWhere((p) => p.id == id))
-                          .toList()),
-                  child: const Text('确定'),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          // 内容
-          Expanded(
-            child: _isLoading
-                ? Center(child: LumiraProgress.circular())
-                : _photos.isEmpty
-                    ? Center(
-                        child: Text(
-                          '相册暂无可选照片',
-                          style: TextStyle(
-                              color: tokens.textTertiary, fontSize: 13),
-                        ),
-                      )
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(8),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          mainAxisSpacing: 6,
-                          crossAxisSpacing: 6,
-                          childAspectRatio: 1.0,
-                        ),
-                        itemCount: _photos.length,
-                        itemBuilder: (_, i) {
-                          final p = _photos[i];
-                          final selected = _selected.contains(p.id);
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                if (selected) {
-                                  _selected.remove(p.id);
-                                } else {
-                                  _selected.add(p.id);
-                                }
-                              });
-                            },
-                            behavior: HitTestBehavior.opaque,
-                            child: Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(6),
-                                  child: _buildThumb(p, tokens),
-                                ),
-                                if (selected)
-                                  Positioned.fill(
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: tokens.brand.withOpacity(0.3),
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(
-                                            color: tokens.brand, width: 2),
-                                      ),
-                                    ),
-                                  ),
-                                Positioned(
-                                  top: 4,
-                                  right: 4,
-                                  child: Container(
-                                    width: 18,
-                                    height: 18,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: selected
-                                          ? tokens.brand
-                                          : Colors.black45,
-                                    ),
-                                    child: selected
-                                        ? const Icon(Icons.check,
-                                            size: 12, color: Colors.white)
-                                        : null,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildThumb(GalleryItemRecord p, ThemeTokens tokens) {
-    final url = p.dataUrl ?? p.filePath;
-    if (url == null || url.isEmpty) {
-      return Container(
-        color: tokens.surfaceAlt,
-        child: Icon(Icons.broken_image_outlined,
-            color: tokens.textTertiary, size: 20),
-      );
-    }
-    return url.startsWith('http')
-        ? CachedNetworkImage(url: url, fit: BoxFit.cover,
-            errorWidget: Container(
-                  color: tokens.surfaceAlt,
-                  child: Icon(Icons.broken_image_outlined,
-                      color: tokens.textTertiary, size: 20),
-                ))
-        : LumiraImage(url, fit: BoxFit.cover,
-            errorWidget: Container(
-                  color: tokens.surfaceAlt,
-                  child: Icon(Icons.broken_image_outlined,
-                      color: tokens.textTertiary, size: 20),
-                ));
-  }
-}

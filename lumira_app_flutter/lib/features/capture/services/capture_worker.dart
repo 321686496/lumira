@@ -374,12 +374,19 @@ void _legStretchWorkerEntry(SendPort mainPort) async {
       // 字节级快速拉伸：直接操作 Uint8List + 整行拷贝，避免 img.Image
       // 逐像素 getPixel/setPixel 的对象开销，大幅缩短单次拉伸耗时，
       // 使抓帧在定时间隔内完成，不再叠加 GPU 读回导致拍摄页卡顿。
+      final sw = Stopwatch()..start();
       final stretched = legStretchRgba(
         rgbaBytes,
         width: width,
         height: height,
         legStretch: legStretch,
       );
+      sw.stop();
+      // 诊断：isolate 内拉伸纯 CPU 耗时（不含 SendPort 消息往返），
+      // 与主 isolate 侧 stretch= 耗时相减可得消息拷贝开销。
+      stderr.writeln(
+          '[leg-stretch-worker][diag] stretch ${sw.elapsedMilliseconds}ms '
+          '${width}x$height -> ${width}x${stretched.height}');
 
       reply.send({
         'ok': true,

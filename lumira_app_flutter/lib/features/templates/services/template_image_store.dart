@@ -77,6 +77,43 @@ class TemplateImageStore {
     return file.absolute.path;
   }
 
+  /// 把图片引用落盘到指定模板目录，返回该目录下的绝对路径。
+  ///
+  /// - `data:image/...;base64,` → 解码写入（等价 [saveDataUrl]）
+  /// - 本地文件路径（如从草稿恢复的照片，已存在于草稿目录）→ 拷贝到目标目录，
+  ///   避免最终保存引用草稿目录、草稿被删后模板图片失效
+  /// - 其它（http / assets / 内置 key / 空）→ 原样返回
+  static Future<String> saveDataUrlOrCopy(
+      String templateId, String kind, int index, String ref) async {
+    if (!isLocalImageRef(ref)) {
+      return saveDataUrl(templateId, kind, index, ref);
+    }
+    final src = File(ref);
+    if (!await src.exists()) return ref;
+    final ext = _extForPath(ref);
+    final fileName = kind == 'cover' ? 'cover$ext' : '${kind}_$index$ext';
+    final root = await _templatesRoot();
+    final dir = Directory('${root.path}/$templateId');
+    await dir.create(recursive: true);
+    final dest = File('${dir.path}/$fileName');
+    try {
+      if (dest.path == src.path) return dest.path;
+      await src.copy(dest.path);
+    } catch (_) {
+      return ref;
+    }
+    return dest.absolute.path;
+  }
+
+  /// 从文件路径尾缀推断扩展名；未知类型回退 `.png`。
+  static String _extForPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return '.jpg';
+    if (lower.endsWith('.webp')) return '.webp';
+    if (lower.endsWith('.png')) return '.png';
+    return '.png';
+  }
+
   /// 读文件字节，路径不存在返回 null。
   static Future<Uint8List?> readBytes(String path) async {
     final file = File(path);

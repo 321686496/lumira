@@ -11,6 +11,7 @@ class DraftItem {
     required this.exposureCompensation,
     required this.iso,
     required this.shutterSpeed,
+    this.cover = '',
   });
 
   final String id;
@@ -20,6 +21,9 @@ class DraftItem {
   final double exposureCompensation; // EV 值
   final int iso;
   final String shutterSpeed; // '1/125s' 等
+  /// 封面引用（本地文件路径 / data URL / 空）。真实数据由草稿 payload 解析，
+  /// mock 草稿沿用原空值（不展示缩略图）。
+  final String cover;
 }
 
 /// 草稿箱 mock 数据

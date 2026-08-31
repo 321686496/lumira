@@ -29,10 +29,11 @@ import '../../features/notification/data/notification_dao.dart';
 import 'dao/search_history_dao.dart';
 import 'dao/user_interests_dao.dart';
 import 'dao/templates_favorite_dao.dart';
+import 'dao/templates_drafts_dao.dart';
 import '../../features/templates/recommend/user_interests.dart';
 
 const String _kDbName = 'lumira.db';
-const int _kDbVersion = 48;
+const int _kDbVersion = 51;
 
 /// 数据库 Provider
 /// 使用 sqflite 原生插件（CPF-Flutter 鸿蒙适配版）的 getDatabasesPath()
@@ -219,6 +220,12 @@ final templatesFavoriteDaoProvider =
   return TemplatesFavoriteDao(db);
 });
 
+final templatesDraftsDaoProvider =
+    FutureProvider<TemplatesDraftsDao>((ref) async {
+  final db = await ref.watch(databaseProvider.future);
+  return TemplatesDraftsDao(db);
+});
+
 final scenesDaoProvider = FutureProvider<ScenesDao>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return ScenesDao(db);
@@ -346,6 +353,9 @@ Future<void> _onCreate(Database db, int version) async {
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_category ON ${Tables.customTemplates}(${Tables.colCategory})');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_created_at ON ${Tables.customTemplates}(${Tables.colCreatedAt} DESC)');
   batch.execute('CREATE INDEX IF NOT EXISTS idx_custom_templates_source ON ${Tables.customTemplates}(${Tables.colSource})');
+
+  // === template_drafts（v51 新增，编辑器草稿持久化） ===
+  batch.execute(TemplatesDraftsTable.createSql);
 
   // === template_favorites（v42 新增，模板收藏独立关系表） ===
   batch.execute('''
@@ -1505,6 +1515,29 @@ Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
       );
     } catch (e) {
       debugPrint('v49 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 50) {
+    try {
+      // v50: 清理种子数据误写入的 demo 自定义场景「我的咖啡馆」(custom_demo_001)。
+      // 该行源自 CaptureSceneMockData.customSceneExample 被 _seedScenes 全量写入 DB，
+      // creator 存为 'system' 后，在旧版本首页推荐中被误判为 "我的场景"。
+      // 删除后内置场景统一由 ScenePresetsData.presetScenes 代码常量提供，DB 不再残留该 demo 行。
+      await db.delete(
+        Tables.scenes,
+        where: '${Tables.colId} = ?',
+        whereArgs: ['custom_demo_001'],
+      );
+    } catch (e) {
+      debugPrint('v50 migration failed (silent fallback): $e');
+    }
+  }
+  if (oldVersion < 51) {
+    try {
+      // v51: 新增 template_drafts 表（编辑器草稿持久化）。
+      await db.execute(TemplatesDraftsTable.createSql);
+    } catch (e) {
+      debugPrint('v51 migration failed (silent fallback): $e');
     }
   }
 }

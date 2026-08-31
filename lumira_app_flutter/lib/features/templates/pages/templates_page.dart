@@ -338,9 +338,8 @@ class _HeroSection extends ConsumerWidget {
               data: (list) {
                 if (list.isEmpty) return const SizedBox.shrink();
                 return SizedBox(
-                  // Hero 卡内容与模板库一致（封面自适应 + 名称 + 短简介 + 标签行）后整体变高，
-                  // 高度从 244 上调预留阴影空间。
-                  height: 300,
+                  // 卡片 = 固定封面 172 + 信息区约 76 ≈ 248，高度贴合并预留阴影空间。
+                  height: 256,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     clipBehavior: Clip.none, // 允许阴影溢出裁剪边界

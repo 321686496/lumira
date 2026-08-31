@@ -32,6 +32,10 @@ class Tables {
   // 复用 colId / colCreatedAt 常量。
   static const String templateFavorites = 'template_favorites';
 
+  // === template_drafts（v51 新增，编辑器草稿持久化） ===
+  // payload 列复用 api_cache 段声明的 colPayload（值 'payload'），存 TemplateRecord.toRow() 的 JSON。
+  static const String templateDrafts = 'template_drafts';
+
   // === scenes ===
   static const String scenes = 'scenes';
   static const String colIcon = 'icon';
@@ -461,4 +465,21 @@ class UserInterestsTable {
   ''';
   static const String indexScopeSql =
       'CREATE INDEX IF NOT EXISTS idx_user_interests_scope ON $name ($colScope)';
+}
+
+/// 编辑器草稿表（v51 迁移新增）。
+/// payload 存 TemplateRecord.toRow() JSON（含图片落盘后的本地路径，绕开 RDB 2MB 单行上限）。
+/// 复用 Tables.colId / Tables.colPayload / Tables.colUpdatedAt 常量。
+class TemplatesDraftsTable {
+  TemplatesDraftsTable._();
+
+  static const String name = Tables.templateDrafts;
+
+  static const String createSql = '''
+    CREATE TABLE IF NOT EXISTS $name (
+      ${Tables.colId} TEXT PRIMARY KEY,
+      ${Tables.colPayload} TEXT NOT NULL,
+      ${Tables.colUpdatedAt} INTEGER NOT NULL
+    )
+  ''';
 }

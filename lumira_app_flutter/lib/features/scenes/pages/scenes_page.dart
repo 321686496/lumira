@@ -9,13 +9,14 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/searchengine/search_scope.dart';
-import '../../../core/utils/image_cache.dart';
 import '../../usage/usage_providers.dart';
 import '../scenes_sync_service.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton, LumiraProgress;
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../capture/data/capture_scene_mock_data.dart';
+import '../../capture/data/scene_presets_data.dart';
 
 /// Scenes 独立场景库页（Task 2.11）
 ///
@@ -630,8 +631,7 @@ class _SceneCard extends ConsumerWidget {
 
     final photoCount = CaptureSceneMockData.getPhotoCountByScene(scene.id);
     final hasBadge = photoCount > 0;
-    final firstImage =
-        scene.exampleImages.isNotEmpty ? scene.exampleImages.first : null;
+    final firstImage = _effectiveCover(scene);
 
     return GestureDetector(
       onTap: onTap,
@@ -663,8 +663,8 @@ class _SceneCard extends ConsumerWidget {
                 fit: StackFit.expand,
                 children: [
                   firstImage != null
-                      ? CachedNetworkImage(
-                          url: firstImage,
+                      ? LumiraImage(
+                          firstImage,
                           fit: BoxFit.cover,
                           errorWidget: const _ImgPlaceholder(),
                         )
@@ -784,4 +784,15 @@ class _Fab extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 场景卡片封面：优先用内置预设的本地打包封面（按 scene id 映射）。
+///
+/// 内置 18 个预设场景无论 DB 里 exampleImages 是 picsum / 已联网覆写为网络地址，
+/// 都用本地 `assets/images/scenes/scene_<id>.jpg` 兜底，保证离线稳定显示；
+/// 自定义场景 / 后端新增场景无本地封面时回退到数据自身的 exampleImages 首图。
+String? _effectiveCover(SceneRecord scene) {
+  final local = ScenePresetsData.localCoverOf(scene.id);
+  if (local.isNotEmpty) return local;
+  return scene.exampleImages.isNotEmpty ? scene.exampleImages.first : null;
 }

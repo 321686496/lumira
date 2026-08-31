@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert' show base64Encode, base64Decode;
+import 'dart:convert';
 import 'dart:typed_data' show Uint8List;
 import 'dart:io' as io;
 import 'dart:ui' as ui;
@@ -30,6 +30,7 @@ import '../data/custom_tag_options_provider.dart';
 import '../data/remote_template_dto.dart';
 import '../data/remote_templates_providers.dart';
 import '../data/templates_editor_mock_data.dart';
+import '../data/templates_drafts_providers.dart';
 import '../services/template_exporter.dart';
 import '../services/template_image_store.dart';
 import '../services/template_mapper.dart';
@@ -233,6 +234,10 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     // 异步从 DAO 加载（若 DAO 命中则覆盖 mock 数据，用于用户自建模板编辑）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadFromDaoIfNeeded();
+      if (widget.templateId == null || widget.templateId!.isEmpty) {
+        // 恢复草稿：从 template_drafts 表加载真实草稿（v51）
+        _loadDraftFromDaoIfNeeded();
+      }
     });
   }
 
@@ -348,6 +353,29 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     } catch (e) {
       debugPrint('Failed to load template from DAO: $e');
       if (mounted) setState(() => _isLoadingFromDao = false);
+    }
+  }
+
+  /// 从 template_drafts 表恢复草稿（draftId 非空时调用）。
+  /// DAO 未命中（草稿不存在/解析失败）时保持现有表单，不阻塞编辑。
+  Future<void> _loadDraftFromDaoIfNeeded() async {
+    if (widget.draftId == null || widget.draftId!.isEmpty) return;
+    try {
+      final dao = await ref.read(templatesDraftsDaoProvider.future);
+      final loaded = await dao.loadById(widget.draftId!);
+      if (loaded == null || !mounted) return;
+      setState(() {
+        _form = loaded;
+        _currentDraftId = widget.draftId!;
+        _tagsController.text = _form.meta.tags.join(', ');
+        _propsController.text = _form.sceneGuide.props.join(', ');
+        _tipsController.text = _form.sceneGuide.tips.join('\n');
+        _ensurePoseIndex();
+        _notifyPoseChanged();
+      });
+      debugPrint('[Editor] Draft restored: id=${widget.draftId}');
+    } catch (e) {
+      debugPrint('Failed to load draft from DAO: $e');
     }
   }
 
@@ -722,17 +750,41 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     _scheduleAutoSave();
   }
 
-  // ===== 自动保存草稿（debounce 1000ms） =====
+  // ===== 草稿自动保存（debounce 1000ms） =====
 
   void _scheduleAutoSave() {
     _autoSaveTimer?.cancel();
     _autoSaveTimer = Timer(const Duration(milliseconds: 1000), () {
-      // mock 自动保存（Task 2.9+ 接入真实 DAO）
-      if (_currentDraftId.isEmpty) {
-        _currentDraftId =
-            'draft-editor-${DateTime.now().millisecondsSinceEpoch}';
-      }
+      if (!mounted) return;
+      _persistDraft();
     });
+  }
+
+  /// 把当前表单持久化为草稿（template_drafts 表 + 图片落盘到草稿目录）。
+  ///
+  /// - 图片先经 [_persistFormImagesToFiles] 落盘到 `<templates>/<草稿id>/`，
+  ///   payload 只存本地路径，绕开 OHOS RDB 2MB 单行上限。
+  /// - 没有名称也没有图片的纯空白草稿不落库。
+  Future<void> _persistDraft() async {
+    if (_form.meta.name.trim().isEmpty && _form.meta.images.isEmpty) return;
+    if (_currentDraftId.isEmpty) {
+      _currentDraftId =
+          'draft-editor-${DateTime.now().millisecondsSinceEpoch}';
+    }
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await _persistFormImagesToFiles(_currentDraftId);
+      final record = TemplateMapper.fromEditorForm(
+        _form,
+        id: _currentDraftId,
+        createdAt: now,
+      );
+      final dao = await ref.read(templatesDraftsDaoProvider.future);
+      await dao.upsert(_currentDraftId, jsonEncode(record.toRow()), now);
+      ref.invalidate(draftsListProvider);
+    } catch (e) {
+      debugPrint('[Editor] persist draft failed: $e');
+    }
   }
 
   // ===== Footer 操作 =====
@@ -747,13 +799,13 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
     for (var i = 0; i < _form.meta.images.length; i++) {
       final e = _form.meta.images[i];
       if (e.data.isEmpty) continue;
-      e.data = await TemplateImageStore.saveDataUrl(
+      e.data = await TemplateImageStore.saveDataUrlOrCopy(
           id, i == 0 ? 'cover' : 'img', i, e.data);
     }
     for (var i = 0; i < _form.poses.length; i++) {
       final p = _form.poses[i];
       if (p.silhouette.type == 'image' && p.silhouette.data.isNotEmpty) {
-        p.silhouette.data = await TemplateImageStore.saveDataUrl(
+        p.silhouette.data = await TemplateImageStore.saveDataUrlOrCopy(
             id, 'silhouette', i, p.silhouette.data);
       }
     }
@@ -814,6 +866,17 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
       ref.invalidate(customTemplatesProvider);
       // 刷新 Capture 页模板缓存（系统 + 自定义），使新保存的模板立即出现
       ref.invalidate(CaptureState.allTemplatesProvider);
+      // 保存成功后清理草稿（如果是从草稿恢复/编辑）：删除数据库记录和本地图片目录
+      if (_currentDraftId.isNotEmpty) {
+        try {
+          final draftsDao = await ref.read(templatesDraftsDaoProvider.future);
+          await draftsDao.delete(_currentDraftId);
+          await TemplateImageStore.deleteAll(_currentDraftId);
+          ref.invalidate(draftsListProvider);
+        } catch (e) {
+          debugPrint('failed to cleanup draft after save: $e');
+        }
+      }
       _currentDraftId = '';
       if (!mounted) return;
       lumira.LumiraToast.show(context, '保存成功');
@@ -832,10 +895,7 @@ class _TemplatesEditorPageState extends ConsumerState<TemplatesEditorPage> {
   }
 
   void _onSaveDraft() {
-    // 简化：mock 草稿保存
-    if (_currentDraftId.isEmpty) {
-      _currentDraftId = 'draft-editor-${DateTime.now().millisecondsSinceEpoch}';
-    }
+    _persistDraft();
     lumira.LumiraToast.show(context, '草稿已保存');
   }
 

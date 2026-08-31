@@ -52,12 +52,16 @@ class TutorialSection extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 150,
+          // 高度多留出阴影余量（卡身 150 + 底部阴影约 10）。
+          height: 160,
           child: async.when(
             loading: () => _placeholder(tokens),
             error: (_, __) => _placeholder(tokens),
             data: (list) => ListView.separated(
               scrollDirection: Axis.horizontal,
+              // ListView 默认 Clip.hardEdge 会把卡片向下溢出的 boxShadow 裁掉，
+              // 导致卡片底部成硬直线、下方出现"分界线"；改为 Clip.none 保留阴影。
+              clipBehavior: Clip.none,
               itemCount: list.length,
               separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (context, index) => TutorialCard(
@@ -99,57 +103,61 @@ class TutorialCard extends ConsumerWidget {
         child: LumiraSurface(
           radius: 14,
           emphasize: true,
-          clip: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: 90,
-                width: double.infinity,
-                child: Image.asset(
-                  tutorial.coverImage,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stack) => Container(
-                    color: tokens.surfaceAlt,
-                    child: Icon(Icons.photo_outlined,
-                        size: 24, color: tokens.textTertiary),
+          // clip:true 会连外层 boxShadow 一起裁掉，导致卡片阴影被裁剪、底部成硬直线
+          //（下方"灵感图集"标题上方出现分界线）；改由内层 ClipRRect 单独裁圆角内容，外层阴影得以保留。
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 90,
+                  width: double.infinity,
+                  child: Image.asset(
+                    tutorial.coverImage,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stack) => Container(
+                      color: tokens.surfaceAlt,
+                      child: Icon(Icons.photo_outlined,
+                          size: 24, color: tokens.textTertiary),
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            tutorial.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.textPrimary,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              tutorial.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: tokens.textPrimary,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            tutorial.readMinutes,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 10, color: tokens.textTertiary),
-                          ),
-                        ],
+                            const SizedBox(height: 3),
+                            Text(
+                              tutorial.readMinutes,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 10, color: tokens.textTertiary),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    _ReadBadge(tutorialId: tutorial.id),
-                  ],
+                      _ReadBadge(tutorialId: tutorial.id),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

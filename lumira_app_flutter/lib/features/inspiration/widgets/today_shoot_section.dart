@@ -132,8 +132,10 @@ class _Card extends ConsumerWidget {
       child: LumiraSurface(
         radius: 14,
         emphasize: true,
-        clip: true,
-        child: Column(
+        // clip:true 会裁掉外层 boxShadow，改由内层 ClipRRect 裁圆角内容、保留外层阴影。
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
@@ -180,6 +182,7 @@ class _Card extends ConsumerWidget {
               ),
             ],
           ),
+        ),
       ),
     );
   }

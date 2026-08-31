@@ -17,6 +17,7 @@ import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
+import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/tags/tag_chip.dart' show TagChip, TagChipKind;
 import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 import '../data/capture_scene_mock_data.dart';
@@ -326,12 +327,13 @@ class _Swiper extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 主题 token：占位底色 / 占位图标色跟随主题 brand
     final ThemeTokens tokens = ref.watch(appThemeProvider).tokens;
-    // 自定义场景封面优先展示；内置场景走 exampleImages。
+    // 自定义场景封面优先展示；内置预设场景优先取本地打包封面（稳定显示无需网络）。
     // 将封面放入 images 首项（cover 可能为空，需过滤）。
     final images = <String>[
       if (scene is CustomScenePreset && (scene as CustomScenePreset).cover.isNotEmpty)
         (scene as CustomScenePreset).cover,
-      ...scene.exampleImages,
+      // 内置预设：首图优先替换为本地打包封面，其余保持不变（保证稳定离线）
+      ..._effectiveExampleImages(scene),
     ];
     if (images.isEmpty) {
       return Container(
@@ -351,8 +353,8 @@ class _Swiper extends ConsumerWidget {
       height: 240, // 480rpx → 240dp
       child: PageView.builder(
         itemCount: images.length,
-        itemBuilder: (context, idx) => CachedNetworkImage(
-          url: images[idx],
+        itemBuilder: (context, idx) => LumiraImage(
+          images[idx],
           fit: BoxFit.cover,
           errorWidget: Container(
             color: tokens.brand.withOpacity(0.12),
@@ -368,6 +370,20 @@ class _Swiper extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 场景示例图：内置预设首图优先替换为本地打包封面。
+///
+/// DB / 记录的 exampleImages[0] 可能是 picsum / 后端 URL，内置 18 个预设场景统一改为
+/// 本地 `assets/images/scenes/scene_<id>.jpg`（稳定离线显示）；非内置场景原样返回。
+List<String> _effectiveExampleImages(ScenePreset scene) {
+  final list = List<String>.from(scene.exampleImages);
+  if (list.isEmpty) return list;
+  final local = ScenePresetsData.localCoverOf(scene.id);
+  if (local.isNotEmpty) {
+    list[0] = local;
+  }
+  return list;
 }
 
 /// 标题区（图标 + 名称 + vibe）

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/widgets/images/lumira_image.dart';
+import '../services/template_image_store.dart';
 
 /// 模板封面图统一渲染组件。
 ///
@@ -65,9 +66,16 @@ class TemplateCoverImage extends StatelessWidget {
     return fallback ?? _defaultEmpty(context);
   }
 
-  /// 纯 base64（无 `data:` 前缀）时补上 data URL 前缀，交给 [LumiraImage] 识别。
-  static String _asDataUrl(String s) =>
-      s.startsWith('data:') ? s : 'data:image/jpeg;base64,$s';
+  /// 封面来源归一化：
+  /// - `data:` 前缀 → 原样返回（LumiraImage 走 base64 内存解码）
+  /// - 本地文件路径（自定义模板图片落盘后 coverData 存绝对路径）→ 原样返回，
+  ///   交 [LumiraImage] 走 Image.file，避免误加 data URL 前缀导致解码失败
+  /// - 其它（纯 base64，无前缀）→ 补上 data URL 前缀
+  static String _asDataUrl(String s) {
+    if (s.startsWith('data:')) return s;
+    if (TemplateImageStore.isLocalImageRef(s)) return s;
+    return 'data:image/jpeg;base64,$s';
+  }
 
   Widget _defaultEmpty(BuildContext context) {
     return Container(

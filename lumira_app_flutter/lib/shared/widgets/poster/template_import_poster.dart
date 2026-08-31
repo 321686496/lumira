@@ -601,11 +601,11 @@ class _PortraitLayout extends StatelessWidget {
           bottom: 22,
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            child: SizedBox(
-              width: 300,
-              height: 208,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 300),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   const _Kicker(),
                   const SizedBox(height: 10),
@@ -663,7 +663,7 @@ class _SquareLayout extends StatelessWidget {
           child: _PhotoFrame(d.cover),
         ),
         Positioned(
-          left: 248,
+          left: 240,
           right: 22,
           top: 118,
           bottom: 44,
