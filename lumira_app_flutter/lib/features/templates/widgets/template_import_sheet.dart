@@ -237,13 +237,14 @@ class TemplateImportSheet extends ConsumerWidget {
   Future<void> _importOfflineTemplate(
     BuildContext context,
     WidgetRef ref,
-    String rawLink,
-  ) async {
+    String rawLink, {
+    bool popWhenDone = true,
+  }) async {
     final navigator = Navigator.of(context);
     final parsed = TemplateShareCode.parseLink(rawLink.trim());
     if (parsed == null) {
       if (context.mounted) {
-        navigator.pop();
+        if (popWhenDone) navigator.pop();
         _showToast(context, '链接格式无效，请输入有效的分享链接');
       }
       return;
@@ -254,21 +255,22 @@ class TemplateImportSheet extends ConsumerWidget {
         parsed.containsKey('coverSeed') &&
         !parsed.containsKey('meta')) {
       if (context.mounted) {
-        navigator.pop();
+        if (popWhenDone) navigator.pop();
         _showToast(context, '该分享链接不包含完整模板参数，请使用文件导入');
       }
       return;
     }
 
-    await _importParsedJson(context, ref, parsed);
+    await _importParsedJson(context, ref, parsed, popWhenDone: popWhenDone);
   }
 
   // ===== 落库（importJson + 刷新 + 结果处理；文件/链接/token 共用）=====
   Future<void> _importParsedJson(
     BuildContext context,
     WidgetRef ref,
-    Map<String, dynamic> parsed,
-  ) async {
+    Map<String, dynamic> parsed, {
+    bool popWhenDone = true,
+  }) async {
     final navigator = Navigator.of(context);
     try {
       final dao = await ref.read(templatesDaoProvider.future);
@@ -281,7 +283,7 @@ class TemplateImportSheet extends ConsumerWidget {
 
       if (!result.ok) {
         if (context.mounted) {
-          navigator.pop();
+          if (popWhenDone) navigator.pop();
           _showToast(context, '导入失败：${result.error}');
         }
         return;
@@ -292,13 +294,13 @@ class TemplateImportSheet extends ConsumerWidget {
         if (result.warnings.isNotEmpty) {
           _showWarningsDialog(context, result.warnings);
         }
-        navigator.pop();
+        if (popWhenDone) navigator.pop();
       }
       onImported(result.id!);
     } catch (e, st) {
       debugPrint('[TemplateImport] import FAILED: $e\n$st');
       if (context.mounted) {
-        navigator.pop();
+        if (popWhenDone) navigator.pop();
         _showToast(context, '导入失败：$e');
       }
     }
@@ -308,8 +310,6 @@ class TemplateImportSheet extends ConsumerWidget {
   Future<void> _handleQrImport(BuildContext context, WidgetRef ref) async {
     final navigator = Navigator.of(context);
     debugPrint('[TemplateImport] code-version: v3-qr-scanner');
-    // 与 _handleFileImport 同理：不提前关闭 BottomSheet，全程保持 sheet active。
-    // 先跳转全屏相机扫码页拿原始识别文本。
     final scanned = await Navigator.of(context).push<String>(MaterialPageRoute(
       builder: (_) => const TemplateQrScannerPage(),
     ));
@@ -322,11 +322,35 @@ class TemplateImportSheet extends ConsumerWidget {
       return;
     }
 
-    final text = scanned.trim();
+    await _dispatchImportText(context, ref, scanned.trim());
+  }
 
-    // 分享码文本（LUMIRA-分类-名称）→ 沿用既有 parseCode 逻辑
+  /// 用已有扫码/粘贴文本直接导入模板（供首页「扫一扫」等外部入口复用）。
+  ///
+  /// 与「扫码导入」走完全相同的分发逻辑（分享码 / 离线链接 / 在线 token），
+  /// 但**不关闭 BottomSheet**（外部入口没有 BottomSheet，由调用方管理导航栈）。
+  static Future<void> importScannedText(
+    BuildContext context,
+    WidgetRef ref,
+    String text, {
+    void Function(String newTemplateId)? onImported,
+  }) async {
+    final instance = TemplateImportSheet(onImported: onImported ?? (_) {});
+    await instance._dispatchImportText(context, ref, text.trim(), popWhenDone: false);
+  }
+
+  /// 按文本分类分发导入（分享码 / 离线 tpl / 在线 token）。
+  ///
+  /// [popWhenDone] 为 true 时（BottomSheet 内扫码导入）在结束时关闭 BottomSheet；
+  /// 外部入口（首页「扫一扫」）传 false，由调用方管理导航栈，不 pop。
+  Future<void> _dispatchImportText(
+    BuildContext context,
+    WidgetRef ref,
+    String text, {
+    bool popWhenDone = true,
+  }) async {
     if (text.startsWith('LUMIRA-')) {
-      await _handleShareCodeImport(context, ref, text);
+      await _handleShareCodeImport(context, ref, text, popWhenDone: popWhenDone);
       return;
     }
 
@@ -334,21 +358,19 @@ class TemplateImportSheet extends ConsumerWidget {
     //  - 返回 token → imp 在线拉取；null → 离线 tpl；'' → 无效
     final token = TemplateShareService.parseTokenFromScannedText(text);
     if (token == null) {
-      // 离线 tpl 链接 → 复用离线解析管线
-      await _importOfflineTemplate(context, ref, text);
+      await _importOfflineTemplate(context, ref, text, popWhenDone: popWhenDone);
       return;
     }
     if (token.isEmpty) {
-      // 无效内容，或不支持平台引导返回的空串 → 提示后进入手动输入兜底
       if (text.isNotEmpty && context.mounted) {
         _showToast(context, '未能识别有效的分享内容，请手动输入或改用「从链接导入」');
       }
-      await _handleManualImport(context, ref);
+      if (popWhenDone && context.mounted) {
+        await _handleManualImport(context, ref);
+      }
       return;
     }
-
-    // token 型（lumira://imp/xxx）→ 后端拉取导入
-    await _handleTokenImport(context, ref, token);
+    await _handleTokenImport(context, ref, token, popWhenDone: popWhenDone);
   }
 
   // ===== 手动输入兜底（分享码 / 链接）=====
@@ -382,13 +404,14 @@ class TemplateImportSheet extends ConsumerWidget {
   Future<void> _handleShareCodeImport(
     BuildContext context,
     WidgetRef ref,
-    String code,
-  ) async {
+    String code, {
+    bool popWhenDone = true,
+  }) async {
     final navigator = Navigator.of(context);
     final parsed = TemplateShareCode.parseCode(code);
     if (parsed == null) {
       if (context.mounted) {
-        navigator.pop();
+        if (popWhenDone) navigator.pop();
         _showToast(context, '分享码无效，请检查后重试');
       }
       return;
@@ -427,13 +450,13 @@ class TemplateImportSheet extends ConsumerWidget {
 
       if (context.mounted) {
         _showToast(context, '已导入模板：$name');
-        navigator.pop();
+        if (popWhenDone) navigator.pop();
       }
       onImported(record.id);
     } catch (e, st) {
       debugPrint('[TemplateImport] qr FAILED: $e\n$st');
       if (context.mounted) {
-        navigator.pop();
+        if (popWhenDone) navigator.pop();
         _showToast(context, '导入失败：$e');
       }
     }
@@ -443,8 +466,9 @@ class TemplateImportSheet extends ConsumerWidget {
   Future<void> _handleTokenImport(
     BuildContext context,
     WidgetRef ref,
-    String token,
-  ) async {
+    String token, {
+    bool popWhenDone = true,
+  }) async {
     final navigator = Navigator.of(context);
     try {
       final service = await ref.read(templateShareServiceProvider.future);
@@ -460,7 +484,7 @@ class TemplateImportSheet extends ConsumerWidget {
               .ensureRegistered();
           if (!ok) {
             if (context.mounted) {
-              navigator.pop();
+              if (popWhenDone) navigator.pop();
               _showToast(context, '设备未完成注册，无法在线导入');
             }
             return;
@@ -469,19 +493,19 @@ class TemplateImportSheet extends ConsumerWidget {
         } else if (e.kind == ApiErrorKind.notFound) {
           // 404：分享不存在或已过期
           if (context.mounted) {
-            navigator.pop();
+            if (popWhenDone) navigator.pop();
             _showToast(context, '该分享已过期或不存在');
           }
           return;
         } else if (e.kind == ApiErrorKind.network) {
           if (context.mounted) {
-            navigator.pop();
+            if (popWhenDone) navigator.pop();
             _showToast(context, '网络异常，请检查网络后重试');
           }
           return;
         } else {
           if (context.mounted) {
-            navigator.pop();
+            if (popWhenDone) navigator.pop();
             _showToast(context, '导入失败：${e.message}');
           }
           return;
@@ -491,7 +515,7 @@ class TemplateImportSheet extends ConsumerWidget {
       final payload = share['payload'];
       if (payload is! String || payload.isEmpty) {
         if (context.mounted) {
-          navigator.pop();
+          if (popWhenDone) navigator.pop();
           _showToast(context, '分享内容无效，请稍后重试');
         }
         return;
@@ -500,7 +524,7 @@ class TemplateImportSheet extends ConsumerWidget {
       final decoded = jsonDecode(payload);
       if (decoded is! Map<String, dynamic>) {
         if (context.mounted) {
-          navigator.pop();
+          if (popWhenDone) navigator.pop();
           _showToast(context, '分享内容无效，请稍后重试');
         }
         return;
@@ -509,11 +533,11 @@ class TemplateImportSheet extends ConsumerWidget {
       // ignore: use_build_context_synchronously
       if (!context.mounted) return;
 
-      await _importParsedJson(context, ref, decoded);
+      await _importParsedJson(context, ref, decoded, popWhenDone: popWhenDone);
     } catch (e, st) {
       debugPrint('[TemplateImport] token FETCH FAILED: $e\n$st');
       if (context.mounted) {
-        navigator.pop();
+        if (popWhenDone) navigator.pop();
         _showToast(context, '导入失败：$e');
       }
     }
