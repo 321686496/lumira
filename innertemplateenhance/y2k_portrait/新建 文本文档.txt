@@ -1,0 +1,156 @@
+{
+  "name": "千禧辣妹·直闪酷感四连拍",
+  "category": "portrait",
+  "classification": { "type": "portrait", "majorStyle": "街头潮流", "subStyle": "Y2K千禧辣妹", "method": "机顶直闪夜景人像" },
+  "shortDesc": "直闪一打，酷感拉满🖤 黑超短背心+铆钉链条裤，灰墙涂鸦都是你的秀场，拽一点才够味😎⛓️",
+  "description": "Y2K千禧辣妹风直闪人像模板，含叉腰仰头、对镜比耶、涂鸦墙蹲姿、卷帘门回眸四种姿势。正面机顶直闪硬光压暗背景、人物清晰发亮，低饱和冷灰调+细颗粒胶片感。穿搭核心：哥特字体短款背心（Rock More/Baddie/Hysteria）露腰+黑灰阔腿牛仔裤+铆钉皮带裤链+多层银项链+窄框黑墨镜+银色发夹。适合想拍酷飒街头辣妹感的女生，夜景或室内灰墙皆可复刻。",
+  "ambience": { "seasons": ["春", "夏", "秋"], "weathers": ["晴夜", "室内"], "timeTones": ["夜间", "室内 anytime"] },
+  "tags": ["Y2K", "辣妹", "直闪", "街头酷感", "千禧风"],
+  "images": [
+    { "imageIndex": 0, "role": "封面", "caption": "灰墙前叉腰微仰头，黑背心Rock More+铆钉皮带，直闪硬光酷感封面" },
+    { "imageIndex": 1, "role": "效果图", "caption": "海报墙前对镜自拍，白背心Baddie比耶，千禧房间氛围" },
+    { "imageIndex": 2, "role": "效果图", "caption": "粉黑涂鸦墙前蹲姿比耶，黑背心Hysteria+阔腿裤老爹鞋" },
+    { "imageIndex": 3, "role": "效果图", "caption": "涂鸦卷帘门前回身抬眸，露背背心+裤链背影杀" }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·叉腰仰头",
+      "type": "people",
+      "description": "正面站姿，双手叉腰、手肘向屏幕两侧外撑，身体正对镜头(0°)，面部正对镜头但下巴微抬+10°仰头，头颈略向屏幕右倾+5°；视线透过墨镜俯视镜头，表情冷拽微嘟唇；重心居中，肩线平展，露腰露脐。",
+      "compositionFrame": "",
+      "silhouette": { "type": "builtin", "data": "standing_hands_on_hips" },
+      "position": { "x": 0.5, "y": 0.5 },
+      "scale": 0.95,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 1,
+      "name": "对镜比耶自拍",
+      "type": "people",
+      "description": "对镜自拍：举手机的手臂在屏幕右侧、手机略高于眼平挡半脸，另一只手在屏幕左侧胸前比耶(V字)，手指放松；身体正对镜头微向屏幕左转约15°，头向屏幕左倾−8°，嘟唇酷脸；肩带滑落感更松弛。",
+      "compositionFrame": "",
+      "silhouette": { "type": "builtin", "data": "mirror_selfie_peace" },
+      "position": { "x": 0.5, "y": 0.5 },
+      "scale": 0.95,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 2,
+      "name": "涂鸦墙蹲姿比耶",
+      "type": "people",
+      "description": "全蹲姿势：蹲低重心，屏幕左腿屈膝立起、屏幕右腿跪蹲贴地；屏幕左侧手臂抬起在脸旁比耶，手背朝外手指放松，屏幕右侧手臂垂搭在右膝上；身体正对镜头，头微向屏幕右倾+5°，视线透过墨镜看镜头，表情松弛酷感。",
+      "compositionFrame": "",
+      "silhouette": { "type": "builtin", "data": "squat_peace" },
+      "position": { "x": 0.5, "y": 0.62 },
+      "scale": 0.9,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 3,
+      "name": "卷帘门回眸",
+      "type": "people",
+      "description": "侧身回眸：身体背对镜头偏屏幕左约135°~160°，露背与肩胛线条朝向镜头，面部回转约−135°看向镜头形成回眸；头颈微低−5°、抬眸上视，嘴唇微张；屏幕左侧手臂自然下垂、指尖轻搭大腿侧，重心在屏幕右腿，肩线斜向屏幕右下方。",
+      "compositionFrame": "",
+      "silhouette": { "type": "builtin", "data": "over_shoulder_glance" },
+      "position": { "x": 0.5, "y": 0.5 },
+      "scale": 0.95,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "center",
+    "gridType": "none",
+    "aspectRatio": "1:1",
+    "opacity": 0.3,
+    "description": "四张均为1:1方幅。封面/图1/图3为半身至七分身：主体居中占画幅60-70%，头顶留白约1/8-1/10，机位平视略低5°显气场；图2为全身蹲姿：低机位仰拍约10°，主体居中占70%，涂鸦墙满铺作背景；图3侧面回眸主体居中偏下，卷帘门横线条作引导线。",
+    "subjectFrame": { "x": 0.25, "y": 0.05, "w": 0.5, "h": 0.93 }
+  },
+  "camera": {
+    "exposureCompensation": -0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "custom",
+    "whiteBalanceK": 5200,
+    "flashMode": "on",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "机顶直闪硬光，从屏幕正前方位打向主体；光型硬、光源小，光比约4:1；阴影浓黑边缘锐利，落在主体身后墙面（封面影子投向屏幕右后方）；皮肤哑光带轻微闪光灯高光，金属饰品（项链/耳环/铆钉/链条）出现锐利高光点；背景因闪光衰减自然压暗。无需额外补光灯——闪光灯即正面主光。",
+    "shootingDistance": "1.2-1.8m",
+    "background": "素灰水泥墙 / 贴满千禧风海报的白墙 / 粉黑涂鸦墙 / 灰白涂鸦卷帘门",
+    "props": ["窄框黑墨镜", "多层银色项链", "铆钉皮带+裤链", "手机(对镜自拍用)", "银色发夹"],
+    "bestTime": "19:00-23:00 夜间或室内任意时段",
+    "tips": [
+      "开启闪光灯直打正面（机顶直闪是核心质感），距离1.2-1.8m，太近易过曝、太远背景全黑。",
+      "背景选灰墙/涂鸦墙/卷帘门等粗糙质感面，闪光才能压出'背景暗、人物亮'的酷感层次。",
+      "曝光补偿-0.3压住闪光高光，避免脸部与露腰皮肤过曝发白。",
+      "姿势切换按四张图顺序：叉腰仰头→对镜比耶→蹲姿比耶→回眸，每换姿势微调头颈倾角保持'拽而不僵'。",
+      "皮肤要哑光质感：妆面用哑光底妆，后期smoothStrength只给轻磨皮保留纹理。",
+      "浅景深非本风格需求——直闪小光圈反而清晰锐利，无需虚化补偿。",
+      "夜间户外拍蹲姿/回眸时注意脚下安全，卷帘门/涂鸦墙前避免反光刺眼。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "1:1",
+    "color": { "brightness": 2, "contrast": 12, "saturation": -12, "temperature": -3, "tint": 1, "highlights": -8, "shadows": -6, "clarity": 8 },
+    "smoothStrength": 25,
+    "sharpen": 30,
+    "vignette": 25,
+    "grain": 22,
+    "lut": "cinematic",
+    "systemFilter": "none",
+    "fillLight": { "enabled": false, "color": 4294967295, "intensity": 0 }
+  },
+  "orientation": {
+    "framePosition": "主体居中，归一化(0.5,0.5)，占画幅60-70%",
+    "bodyFacing": { "type": "正对(图0/1/2)；背对偏屏幕左(图3)", "azimuth": 0 },
+    "faceFacing": { "type": "正对镜头(图0/1/2)；回眸看镜头(图3)", "azimuth": 0 },
+    "twist": "图3为侧身回头扭转约135°，其余正身",
+    "headPitch": 10,
+    "headRoll": 5,
+    "gaze": "透过墨镜俯视/直视镜头，图3抬眸上视"
+  },
+  "framing": {
+    "shotSize": "半身至七分身(图0/1/3)；全身(图2)",
+    "shotSizeNote": "图0裁到大腿上部露腰；图1裁到腰际；图2全身入画脚踩下缘；图3裁到大腿",
+    "cameraHeight": "平视略低5°(图0/1/3)；低机位仰拍10°(图2)",
+    "cameraAzimuth": "正拍(图0/1/2)；斜侧45°拍背影(图3)",
+    "subjectScale": "主体占画幅60-70%",
+    "environmentRatio": "背景占30-40%，满铺墙面",
+    "headroom": "头顶留白约1/8-1/10，紧凑酷感",
+    "framingNote": "方幅居中构图，主体大、留白少，直闪压暗背景突出人物"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕正前方机顶直闪，正面平打",
+      "辅光轮廓光": "无辅光，闪光单灯直打",
+      "光型软硬": "硬光，光源小、边缘锐利",
+      "光比": "约4:1，背景明显压暗",
+      "阴影": "身后墙面浓黑硬边影，投向屏幕右后方",
+      "质感": "皮肤哑光带闪光高光，金属饰品锐利高光，头发顶部闪光亮边",
+      "环境光": "环境光极弱，靠闪光曝光",
+      "色温对比": "主体中性微冷，背景灰墙偏冷灰"
+    },
+    "lightToParams": "contrast+12、exposureCompensation-0.3压高光；saturation-12+temperature-3做冷灰调；grain22+sharpen30做胶片锐利感；vignette25聚焦主体；whiteBalance custom 5200K中性微冷。"
+  },
+  "styling": {
+    "subjectType": "人物·年轻女性",
+    "clothingLayers": {
+      "上装": "短款露脐背心：黑底哥特字Rock More(图0)/白底黑边Baddie 2010s(图1)/黑底粉字Hysteria(图2)/黑白边露背款(图3)",
+      "下装": "黑灰阔腿牛仔裤/工装裤，低腰露脐",
+      "衣角处理": "背心自然下摆露腰，不掖不结",
+      "袖子": "无袖",
+      "领口": "圆领/细肩带/露背",
+      "鞋袜": "米白老爹鞋(图2可见)",
+      "叠穿层次": "单层背心+多层银项链叠戴"
+    },
+    "accessories": "窄框黑墨镜、银色圈形耳环、多层银项链(含十字架坠)、铆钉皮带+垂坠裤链、银色发夹、白表带手表、银戒指手链",
+    "hairMakeup": "黑色长卷发挑染银灰(图0)/高马尾碎发(图3)；哑光底妆、红棕唇釉、微醺腮红",
+    "objectStyle": "",
+    "note": "四张图穿搭统一在'短背心+阔腿裤+银饰+墨镜'公式内，换字换色即可复刻系列感"
+  }
+}

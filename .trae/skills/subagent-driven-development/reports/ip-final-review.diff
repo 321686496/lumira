@@ -1,0 +1,1680 @@
+﻿diff --git a/lumira_app_flutter/lib/features/invite/widgets/invite_card_scene.dart b/lumira_app_flutter/lib/features/invite/widgets/invite_card_scene.dart
+new file mode 100644
+index 0000000..6083028
+--- /dev/null
++++ b/lumira_app_flutter/lib/features/invite/widgets/invite_card_scene.dart
+@@ -0,0 +1,28 @@
++import 'package:flutter/material.dart';
++import 'package:flutter/services.dart';
++
++/// 复制邀请码：写入系统剪贴板并 toast 反馈。
++Future<void> showInviteCopyToast(BuildContext context, String code) async {
++  await Clipboard.setData(ClipboardData(text: code));
++  if (context.mounted) {
++    ScaffoldMessenger.of(context).showSnackBar(
++      SnackBar(content: Text('邀请码已复制：$code'), duration: const Duration(seconds: 1)),
++    );
++  }
++}
++
++/// 复制测试夹具（避免直接打开 bottom sheet）。
++class InviteCardScene extends StatelessWidget {
++  const InviteCardScene({super.key, required this.code, required this.onCopy});
++  final String code;
++  final VoidCallback onCopy;
++
++  @override
++  Widget build(BuildContext context) {
++    return GestureDetector(
++      onTap: onCopy,
++      behavior: HitTestBehavior.opaque,
++      child: Container(color: Colors.white, alignment: Alignment.center, child: const Text('邀请卡片场景')),
++    );
++  }
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/features/invite/widgets/invite_poster_card.dart b/lumira_app_flutter/lib/features/invite/widgets/invite_poster_card.dart
+new file mode 100644
+index 0000000..da74667
+--- /dev/null
++++ b/lumira_app_flutter/lib/features/invite/widgets/invite_poster_card.dart
+@@ -0,0 +1,486 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++import 'package:qr_flutter/qr_flutter.dart';
++
++import '../../../core/theme/app_theme.dart';
++import '../../../core/theme/theme_controller.dart';
++import '../../../core/theme/theme_tokens.dart';
++
++/// 邀请卡片分享海报
++///
++/// 固定 300×400（3:4），完全跟随「设置里的 UI 风格 + 主题」（`appThemeProvider`）。
++/// 覆盖 4 套 UI 风格（neumorphic / flat / glass / female），无手动风格切换器，
++/// 无硬编码颜色（仅二维码白底 `Colors.white` 为「白底可扫」合法例外）。
++///
++/// Task 3（底部弹出分享面板）将以 `InvitePosterCard(code: code)` 复用此组件。
++class InvitePosterCard extends ConsumerWidget {
++  const InvitePosterCard({super.key, required this.code});
++
++  /// 邀请码原始串（如 'LUMIRA-7K2A'），直接作为二维码数据与大字显示。
++  final String code;
++
++  @override
++  Widget build(BuildContext context, WidgetRef ref) {
++    final appTheme = ref.watch(appThemeProvider);
++    return SizedBox(
++      width: 300,
++      height: 400,
++      child: ClipRRect(
++        borderRadius: BorderRadius.circular(22),
++        child: Stack(
++          fit: StackFit.expand,
++          children: [
++            _SceneBackground(appTheme: appTheme),
++            Center(
++              child: Padding(
++                padding: const EdgeInsets.all(18),
++                child: _InviteCard(appTheme: appTheme, code: code),
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
++
++/// 4 场景底：风格化背景（金色细边 / 品牌光斑 / 品牌氛围光）
++class _SceneBackground extends StatelessWidget {
++  const _SceneBackground({required this.appTheme});
++  final AppThemeData appTheme;
++
++  @override
++  Widget build(BuildContext context) {
++    final t = appTheme.tokens;
++    switch (appTheme.style) {
++      case UIStyle.neumorphic:
++        return DecoratedBox(
++          decoration: BoxDecoration(
++            gradient: LinearGradient(
++              begin: Alignment.topLeft,
++              end: Alignment.bottomRight,
++              colors: [t.canvas, t.canvasDeep],
++            ),
++            border: Border.all(color: t.brand.withOpacity(0.35), width: 1),
++          ),
++        );
++      case UIStyle.flat:
++        return DecoratedBox(
++          decoration: BoxDecoration(
++            gradient: LinearGradient(
++              begin: Alignment.topCenter,
++              end: Alignment.bottomCenter,
++              colors: [t.canvasDeep, t.surfaceAlt],
++            ),
++            border: Border.all(color: t.divider, width: 1),
++          ),
++        );
++      case UIStyle.glass:
++        return _GlassScene(tokens: t);
++      case UIStyle.female:
++        return DecoratedBox(
++          decoration: BoxDecoration(
++            gradient: RadialGradient(
++              center: const Alignment(-0.7, -0.8),
++              radius: 1.1,
++              colors: [
++                t.brandLight.withOpacity(0.28),
++                t.brandLight.withOpacity(0.0),
++              ],
++            ),
++          ),
++        );
++    }
++  }
++}
++
++/// glass 场景底：纯色画布 + 3~4 个品牌光斑，让半透明玻璃透出色彩
++class _GlassScene extends StatelessWidget {
++  const _GlassScene({required this.tokens});
++  final ThemeTokens tokens;
++
++  @override
++  Widget build(BuildContext context) {
++    return Stack(
++      children: [
++        Positioned.fill(child: ColoredBox(color: tokens.canvas)),
++        Positioned(
++          top: -60,
++          left: -50,
++          child: _SceneBlob(size: 180, color: tokens.brand, opacity: 0.7),
++        ),
++        Positioned(
++          bottom: 120,
++          right: -50,
++          child: _SceneBlob(size: 170, color: tokens.brandLight, opacity: 0.6),
++        ),
++        Positioned(
++          bottom: -50,
++          left: 30,
++          child: _SceneBlob(size: 190, color: tokens.brandSubtle, opacity: 0.7),
++        ),
++        Positioned(
++          top: 160,
++          left: -40,
++          child: _SceneBlob(size: 120, color: tokens.brandLight, opacity: 0.5),
++        ),
++      ],
++    );
++  }
++}
++
++/// 柔和品牌光斑（径向渐变圆，边缘完全融入）
++class _SceneBlob extends StatelessWidget {
++  const _SceneBlob({
++    required this.size,
++    required this.color,
++    required this.opacity,
++  });
++  final double size;
++  final Color color;
++  final double opacity;
++
++  @override
++  Widget build(BuildContext context) {
++    final base = color.withOpacity(opacity);
++    return IgnorePointer(
++      child: Container(
++        width: size,
++        height: size,
++        decoration: BoxDecoration(
++          shape: BoxShape.circle,
++          gradient: RadialGradient(
++            center: const Alignment(0, 0),
++            radius: 0.85,
++            colors: [base, base.withOpacity(0.5), base.withOpacity(0)],
++            stops: const [0.0, 0.5, 1.0],
++          ),
++        ),
++      ),
++    );
++  }
++}
++
++/// 邀请卡片主卡：风格自适应表面 + 固定内容列
++class _InviteCard extends StatelessWidget {
++  const _InviteCard({required this.appTheme, required this.code});
++  final AppThemeData appTheme;
++  final String code;
++
++  @override
++  Widget build(BuildContext context) {
++    final mg = appTheme.multiGradient;
++    return Container(
++      width: double.infinity,
++      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 26),
++      decoration: _cardSurface(),
++      child: Stack(
++        fit: StackFit.expand,
++        children: [
++          // 女性美学专属：径向高光氛围（叠加于卡片底，置于内容之下）
++          if (mg != null)
++            Positioned.fill(
++              child: IgnorePointer(
++                child: DecoratedBox(
++                  decoration:
++                      BoxDecoration(gradient: mg.radialHighlight),
++                ),
++              ),
++            ),
++          Center(
++            child: Column(
++              mainAxisSize: MainAxisSize.min,
++              crossAxisAlignment: CrossAxisAlignment.stretch,
++              children: [
++                _buildBrandRow(),
++                const SizedBox(height: 5),
++                _buildTitle(),
++                const SizedBox(height: 1),
++                _buildSubtitle(),
++                const SizedBox(height: 6),
++                _buildGainPill(),
++                const SizedBox(height: 4),
++                _buildQrBox(),
++                const SizedBox(height: 4),
++                _buildCodeBlock(),
++                const SizedBox(height: 5),
++                _buildFooter(),
++              ],
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++
++  BoxDecoration _cardSurface() {
++    final t = appTheme.tokens;
++    switch (appTheme.style) {
++      case UIStyle.neumorphic:
++        return BoxDecoration(
++          color: t.surface,
++          borderRadius: BorderRadius.circular(22),
++          boxShadow: t.shadowConvex,
++        );
++      case UIStyle.flat:
++        return BoxDecoration(
++          color: t.surfaceAlt,
++          borderRadius: BorderRadius.circular(18),
++          border: Border.all(color: t.divider, width: 1),
++        );
++      case UIStyle.glass:
++        return BoxDecoration(
++          color: ThemeTokens.glassFill(t),
++          borderRadius: BorderRadius.circular(20),
++          border: Border.all(color: ThemeTokens.glassBorder(t), width: 1),
++        );
++      case UIStyle.female:
++        final mg = appTheme.multiGradient!;
++        return BoxDecoration(
++          gradient: mg.linear,
++          borderRadius: BorderRadius.circular(24),
++          border: mg.hairlineBorder,
++          boxShadow: appTheme.cardShadow,
++        );
++    }
++  }
++
++  Widget _buildBrandRow() {
++    final t = appTheme.tokens;
++    return Row(
++      children: [
++        Text(
++          'LUMIRA',
++          style: TextStyle(
++            fontSize: 15,
++            fontWeight: FontWeight.w800,
++            letterSpacing: 3,
++            color: t.brandDeep,
++          ),
++        ),
++        const SizedBox(width: 10),
++        Expanded(
++          child: Container(
++            height: 1,
++            decoration: BoxDecoration(
++              gradient: LinearGradient(
++                colors: [t.brand.withOpacity(0.9), t.brandLight.withOpacity(0.3)],
++              ),
++            ),
++          ),
++        ),
++        const SizedBox(width: 10),
++        Text(
++          '如画',
++          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: t.brandText),
++        ),
++      ],
++    );
++  }
++
++  Widget _buildTitle() {
++    return Text(
++      '邀请好友 · 一起来拍照',
++      textAlign: TextAlign.center,
++      style: TextStyle(
++        fontSize: 16,
++        fontWeight: FontWeight.w700,
++        height: 1.1,
++        color: appTheme.tokens.textPrimary,
++      ),
++    );
++  }
++
++  Widget _buildSubtitle() {
++    return Text(
++      '和你一起，把生活拍成想要的样子',
++      textAlign: TextAlign.center,
++      style: TextStyle(
++        fontSize: 10,
++        color: appTheme.tokens.textSecondary,
++      ),
++    );
++  }
++
++  Widget _buildGainPill() {
++    final t = appTheme.tokens;
++    Color bg;
++    Border? border;
++    switch (appTheme.style) {
++      case UIStyle.neumorphic:
++      case UIStyle.female:
++        bg = t.brandSubtle;
++        border = null;
++        break;
++      case UIStyle.flat:
++        bg = t.surfaceAlt;
++        border = Border.all(color: t.divider, width: 1);
++        break;
++      case UIStyle.glass:
++        bg = Colors.white.withOpacity(0.55);
++        border = Border.all(color: Colors.white, width: 0.8);
++        break;
++    }
++    return Align(
++      alignment: Alignment.center,
++      child: Container(
++        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
++        decoration: BoxDecoration(
++          color: bg,
++          borderRadius: BorderRadius.circular(999),
++          border: border,
++        ),
++        child: Text(
++          '好友首次激活，双方各得 +30 积分',
++          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: t.brandText),
++        ),
++      ),
++    );
++  }
++
++  Widget _buildQrBox() {
++    final t = appTheme.tokens;
++    Border? border;
++    List<BoxShadow> shadow;
++    switch (appTheme.style) {
++      case UIStyle.neumorphic:
++        border = null;
++        shadow = t.shadowFloat;
++        break;
++      case UIStyle.flat:
++        border = Border.all(color: t.divider, width: 1);
++        shadow = const [];
++        break;
++      case UIStyle.glass:
++        border = Border.all(color: Colors.white, width: 0.8);
++        shadow = [
++          BoxShadow(
++            color: Colors.black.withOpacity(0.10),
++            offset: const Offset(0, 4),
++            blurRadius: 12,
++          ),
++        ];
++        break;
++      case UIStyle.female:
++        border = Border.all(color: t.brand.withOpacity(0.4), width: 0.8);
++        shadow = [
++          BoxShadow(
++            color: t.brand.withOpacity(0.12),
++            offset: const Offset(0, 4),
++            blurRadius: 12,
++          ),
++        ];
++        break;
++    }
++    return Container(
++      padding: const EdgeInsets.all(8),
++      decoration: BoxDecoration(
++        color: Colors.white, // 白底可扫（合法例外）
++        borderRadius: BorderRadius.circular(12),
++        border: border,
++        boxShadow: shadow,
++      ),
++      child: Column(
++        mainAxisSize: MainAxisSize.min,
++        children: [
++          // 二维码模块用黑色（非主题色）而非 textPrimary：保证任意主题下白底均可扫描
++          QrImageView(
++            data: code,
++            size: 132,
++            backgroundColor: Colors.white,
++            eyeStyle: const QrEyeStyle(
++              eyeShape: QrEyeShape.square,
++              color: Colors.black,
++            ),
++            dataModuleStyle: const QrDataModuleStyle(
++              dataModuleShape: QrDataModuleShape.square,
++              color: Colors.black,
++            ),
++          ),
++          const SizedBox(height: 4),
++          Text(
++            '长按识别二维码 · 立即加入',
++            textAlign: TextAlign.center,
++            style: TextStyle(
++              fontSize: 9,
++              color: t.textTertiary,
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++
++  Widget _buildCodeBlock() {
++    final t = appTheme.tokens;
++    Color bg;
++    Border? border;
++    List<BoxShadow> shadow;
++    switch (appTheme.style) {
++      case UIStyle.neumorphic:
++        bg = t.surfaceAlt;
++        border = null;
++        shadow = t.shadowConcaveSubtle;
++        break;
++      case UIStyle.flat:
++        bg = Colors.white;
++        border = Border.all(color: t.divider, width: 1);
++        shadow = const [];
++        break;
++      case UIStyle.glass:
++        bg = Colors.white.withOpacity(0.45);
++        border = Border.all(color: Colors.white, width: 0.8);
++        shadow = const [];
++        break;
++      case UIStyle.female:
++        bg = Colors.white.withOpacity(0.7);
++        border = Border.all(color: t.brand.withOpacity(0.25), width: 0.8);
++        shadow = const [
++          BoxShadow(color: Color(0x14000000), offset: Offset(0, 3), blurRadius: 8),
++        ];
++        break;
++    }
++    return Container(
++      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
++      decoration: BoxDecoration(
++        color: bg,
++        borderRadius: BorderRadius.circular(10),
++        border: border,
++        boxShadow: shadow,
++      ),
++      child: Column(
++        mainAxisSize: MainAxisSize.min,
++        children: [
++          Text(
++            '我的邀请码',
++            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: t.brandText),
++          ),
++          const SizedBox(height: 1),
++          Text(
++            code,
++            textAlign: TextAlign.center,
++            style: TextStyle(
++              fontSize: 16,
++              fontWeight: FontWeight.w800,
++              fontFamily: 'Courier New',
++              letterSpacing: 5,
++              color: t.textPrimary,
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++
++  Widget _buildFooter() {
++    return Text(
++      'LUMIRA · 如画 · 记录每一帧美好',
++      textAlign: TextAlign.center,
++      style: TextStyle(
++        fontSize: 9,
++        letterSpacing: 1,
++        color: appTheme.tokens.textTertiary,
++      ),
++    );
++  }
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/features/invite/widgets/invite_poster_sheet.dart b/lumira_app_flutter/lib/features/invite/widgets/invite_poster_sheet.dart
+new file mode 100644
+index 0000000..0ee5af3
+--- /dev/null
++++ b/lumira_app_flutter/lib/features/invite/widgets/invite_poster_sheet.dart
+@@ -0,0 +1,64 @@
++import 'package:flutter/material.dart';
++
++import '../../../core/theme/theme_tokens.dart';
++import '../../../shared/services/poster_generator.dart';
++import 'invite_card_scene.dart';
++import 'invite_poster_card.dart';
++
++/// 打开邀请卡片分享海报底部弹层。
++///
++/// 复用 [PosterGenerator.showPoster] 的捕获/保存/分享能力；底部操作条最前
++/// 插入「复制邀请码」按钮。卡片内容为 [InvitePosterCard]（跟随当前 UI 风格）。
++Future<void> showInvitePosterSheet({
++  required BuildContext context,
++  required String code,
++  required ThemeTokens tokens,
++}) async {
++  await PosterGenerator.showPoster(
++    context: context,
++    tokens: tokens,
++    title: '邀请卡片',
++    content: InvitePosterCard(code: code),
++    posterKey: GlobalKey(),
++    shareSubject: '如画 LUMIRA · 邀请好友',
++    shareText: '一起拍照，把生活拍成想要的样子',
++    fileNamePrefix: 'lumira_invite',
++    extraAction: _CopyAction(code: code, tokens: tokens),
++  );
++}
++
++/// 复制邀请码操作按钮（紧邻保存/分享）。
++class _CopyAction extends StatelessWidget {
++  const _CopyAction({required this.code, required this.tokens});
++  final String code;
++  final ThemeTokens tokens;
++
++  @override
++  Widget build(BuildContext context) {
++    return GestureDetector(
++      onTap: () => showInviteCopyToast(context, code),
++      behavior: HitTestBehavior.opaque,
++      child: AnimatedContainer(
++        duration: const Duration(milliseconds: 160),
++        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
++        decoration: BoxDecoration(
++          color: tokens.surfaceAlt,
++          borderRadius: BorderRadius.circular(12),
++        ),
++        child: Row(
++          mainAxisAlignment: MainAxisAlignment.center,
++          children: [
++            Icon(Icons.copy_rounded, size: 16, color: tokens.brandText),
++            const SizedBox(width: 5),
++            Text(
++              '复制邀请码',
++              maxLines: 1,
++              overflow: TextOverflow.ellipsis,
++              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: tokens.brandText),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/lib/features/profile/pages/profile_invite_page.dart b/lumira_app_flutter/lib/features/profile/pages/profile_invite_page.dart
+index 4d26970..205fccb 100644
+--- a/lumira_app_flutter/lib/features/profile/pages/profile_invite_page.dart
++++ b/lumira_app_flutter/lib/features/profile/pages/profile_invite_page.dart
+@@ -1,28 +1,25 @@
+-import 'dart:ui' as ui;
+-
+ import 'package:flutter/material.dart';
+-import 'package:flutter/rendering.dart';
+ import 'package:flutter/services.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:go_router/go_router.dart';
+ import 'package:lumira_app_flutter/core/utils/image_cache.dart';
+-import 'package:qr_flutter/qr_flutter.dart';
+-import 'package:saver_gallery/saver_gallery.dart';
+ 
+ import '../../../core/network/api_error.dart';
+ import '../../../core/router/route_names.dart';
+ import '../../../core/theme/app_theme.dart';
+ import '../../../core/theme/theme_controller.dart';
+ import '../../../core/theme/theme_tokens.dart';
++import '../../../core/auth/auth_controller.dart';
+ import '../../../features/invite/data/invite_models.dart';
+ import '../../../features/invite/data/invite_repository.dart';
++import '../../../features/invite/widgets/invite_poster_sheet.dart';
+ import '../../../shared/widgets/api_error_banner.dart';
+ import '../../../shared/widgets/cards/neu_card.dart';
+ import '../../../shared/widgets/common/fade_up.dart';
+ import '../../../shared/widgets/lumira/lumira.dart';
+ import '../../../shared/widgets/nav/lumira_nav.dart';
+ 
+ /// 邀请有礼页
+ ///
+ /// 视觉规格来源：lumira-app/src/pages/profile/invite.vue（394 行）
+ /// 6 个 section：
+@@ -34,58 +31,51 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
+ /// 6. RecordCard（3 项邀请记录）
+ class ProfileInvitePage extends ConsumerStatefulWidget {
+   const ProfileInvitePage({super.key});
+ 
+   @override
+   ConsumerState<ProfileInvitePage> createState() => _ProfileInvitePageState();
+ }
+ 
+ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
+   final TextEditingController _codeController = TextEditingController();
+-  final GlobalKey _posterKey = GlobalKey();
+ 
+   @override
+   void dispose() {
+     _codeController.dispose();
+     super.dispose();
+   }
+ 
+   Future<void> _generateInviteCard() async {
+     final toastContext = context;
+     try {
+       final repo = await ref.read(inviteRepositoryProvider.future);
+       final code = await repo.generate();
+       if (!mounted) return;
+-      // 打开全屏邀请海报
+-      await _showInvitePoster(code.code);
++      // 打开邀请卡片分享弹层（跟随当前 UI 风格，复制/保存/分享）
++      await showInvitePosterSheet(
++        context: context,
++        code: code.code,
++        tokens: ref.read(themeTokensProvider),
++      );
+       if (!mounted) return;
+       ref.invalidate(inviteStatsProvider); // 刷新 myInviteCode
+     } on ApiException catch (e) {
+       if (!mounted) return;
+       LumiraToast.show(toastContext, '生成失败：${e.message}', duration: const Duration(milliseconds: 1500));
+     } catch (_) {
+       // 离线/未注册环境兜底：保留原占位 SnackBar 行为
+       if (!mounted) return;
+       LumiraToast.show(toastContext, '生成邀请卡片', duration: const Duration(milliseconds: 1000));
+     }
+   }
+ 
+-  Future<void> _showInvitePoster(String code) async {
+-    if (!mounted) return;
+-    await showModalBottomSheet<void>(
+-      context: context,
+-      isScrollControlled: true,
+-      backgroundColor: Colors.transparent,
+-      builder: (_) => _InvitePosterSheet(code: code, posterKey: _posterKey),
+-    );
+-  }
+-
+   Future<void> _confirmBindCode() async {
+     final code = _codeController.text.trim();
+     final toastContext = context;
+     if (code.isEmpty) {
+       LumiraToast.show(toastContext, '请输入邀请码', duration: const Duration(milliseconds: 1000));
+       return;
+     }
+     try {
+       final repo = await ref.read(inviteRepositoryProvider.future);
+       final resp = await repo.activate(ActivateInviteRequest(inviteCode: code));
+@@ -105,20 +95,22 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
+       if (!mounted) return;
+       LumiraToast.show(toastContext, '绑定成功：$code', duration: const Duration(milliseconds: 1000));
+       _codeController.clear();
+     }
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+     final tokens = ref.watch(themeTokensProvider);
+     final statsAsync = ref.watch(inviteStatsProvider);
++    // 邀请码绑定仅对「新设备首次使用」开放；老设备不展示绑定输入入口。
++    final isNewDevice = ref.watch(authControllerProvider).isNewDevice;
+ 
+     return Scaffold(
+       backgroundColor: tokens.canvas,
+       extendBodyBehindAppBar: true,
+       appBar: LumiraNav(
+         title: '邀请有礼',
+         transparent: true,
+         leading: _BackButton(tokens: tokens),
+       ),
+       body: Container(
+@@ -183,25 +175,27 @@ class _ProfileInvitePageState extends ConsumerState<ProfileInvitePage> {
+                         Icon(Icons.brush_outlined, size: 18),
+                         SizedBox(width: 8),
+                         Text('生成邀请卡片'),
+                       ],
+                     ),
+                   ),
+                 ),
+                 const SizedBox(height: 20),
+                 FadeUp(
+                   delay: const Duration(milliseconds: 400),
+-                  child: _CodeCard(
+-                    tokens: tokens,
+-                    controller: _codeController,
+-                    onConfirm: _confirmBindCode,
+-                  ),
++                  child: isNewDevice
++                      ? _CodeCard(
++                          tokens: tokens,
++                          controller: _codeController,
++                          onConfirm: _confirmBindCode,
++                        )
++                      : _BindUnavailableCard(tokens: tokens),
+                 ),
+                 const SizedBox(height: 20),
+                 FadeUp(
+                   delay: const Duration(milliseconds: 500),
+                   child: _RecordCard(tokens: tokens),
+                 ),
+                 const SizedBox(height: 16),
+               ],
+             ),
+           ),
+@@ -657,20 +651,53 @@ class _ProgressCard extends ConsumerWidget {
+               fontSize: 12,
+               color: tokens.textTertiary,
+             ),
+           ),
+         ],
+       ),
+     );
+   }
+ }
+ 
++/// 老设备（非新用户）看到的占位提示：邀请码绑定入口已关闭。
++///
++/// 绑定邀请码仅对「设备首次注册后的短时间内」开放（裂变初衷：新用户裂变）。
++/// 老设备若本来就没绑定过，也不再提供补填入口，防止老用户互刷/复用他人邀请码。
++class _BindUnavailableCard extends StatelessWidget {
++  const _BindUnavailableCard({required this.tokens});
++  final ThemeTokens tokens;
++
++  @override
++  Widget build(BuildContext context) {
++    return NeuCard(
++      child: Row(
++        crossAxisAlignment: CrossAxisAlignment.start,
++        children: [
++          Icon(Icons.timer_off_outlined, size: 18, color: tokens.brand),
++          const SizedBox(width: 10),
++          Expanded(
++            child: Text(
++              '邀请码绑定仅限新设备首次使用时填写，当前设备已超过绑定时间。'
++              '如需参与邀请奖励，可将你的邀请码分享给新用户。',
++              style: TextStyle(
++                fontSize: 13,
++                color: tokens.textTertiary,
++                height: 1.5,
++              ),
++            ),
++          ),
++        ],
++      ),
++    );
++  }
++}
++
+ class _CodeCard extends StatelessWidget {
+   const _CodeCard({
+     required this.tokens,
+     required this.controller,
+     required this.onConfirm,
+   });
+   final ThemeTokens tokens;
+   final TextEditingController controller;
+   final VoidCallback onConfirm;
+ 
+@@ -889,152 +916,10 @@ class _MyInviteCodeCard extends ConsumerWidget {
+                   borderRadius: BorderRadius.circular(1000),
+                 ),
+                 child: Text('复制', style: TextStyle(fontSize: 12, color: tokens.brandText)),
+               ),
+             ),
+         ],
+       ),
+     );
+   }
+ }
+-
+-/// 全屏邀请海报弹层（可保存到相册）
+-class _InvitePosterSheet extends ConsumerWidget {
+-  const _InvitePosterSheet({required this.code, required this.posterKey});
+-  final String code;
+-  final GlobalKey posterKey;
+-
+-  @override
+-  Widget build(BuildContext context, WidgetRef ref) {
+-    final tokens = ref.watch(themeTokensProvider);
+-
+-    // 复制邀请码
+-    void copyCode() async {
+-      final messenger = ScaffoldMessenger.of(context);
+-      await Clipboard.setData(ClipboardData(text: code));
+-      messenger.showSnackBar(
+-        SnackBar(content: Text('邀请码已复制：$code'), duration: const Duration(seconds: 1)),
+-      );
+-    }
+-
+-    // 保存海报：捕获 RepaintBoundary 为 PNG 存入相册
+-    Future<void> savePoster() async {
+-      final messenger = ScaffoldMessenger.of(context);
+-      try {
+-        final boundary = posterKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+-        if (boundary == null) return;
+-        final image = await boundary.toImage(pixelRatio: 2.0);
+-        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+-        if (byteData == null) return;
+-        await SaverGallery.saveImage(
+-          Uint8List.fromList(byteData.buffer.asUint8List()),
+-          name: 'lumira_invite_${DateTime.now().millisecondsSinceEpoch}',
+-          quality: 95,
+-          androidExistNotSave: false,
+-        );
+-        messenger.showSnackBar(
+-          const SnackBar(content: Text('海报已保存到相册'), duration: Duration(seconds: 1)),
+-        );
+-      } catch (_) {
+-        messenger.showSnackBar(
+-          const SnackBar(content: Text('保存失败，请长按截图保存'), duration: Duration(seconds: 2)),
+-        );
+-      }
+-    }
+-
+-    return SafeArea(
+-      child: Container(
+-        height: MediaQuery.of(context).size.height * 0.9,
+-        margin: const EdgeInsets.all(16),
+-        decoration: BoxDecoration(
+-          color: tokens.canvas,
+-          borderRadius: BorderRadius.circular(20),
+-        ),
+-        child: Column(
+-          children: [
+-            Padding(
+-              padding: const EdgeInsets.all(16),
+-              child: Row(
+-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+-                children: [
+-                  Text('邀请卡片', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: tokens.textPrimary)),
+-                  IconButton(
+-                    icon: Icon(Icons.close, color: tokens.textPrimary),
+-                    onPressed: () => Navigator.of(context).pop(),
+-                  ),
+-                ],
+-              ),
+-            ),
+-            Expanded(
+-              child: SingleChildScrollView(
+-                padding: const EdgeInsets.all(16),
+-                child: RepaintBoundary(
+-                  key: posterKey,
+-                  child: Container(
+-                    padding: const EdgeInsets.all(24),
+-                    decoration: BoxDecoration(
+-                      gradient: LinearGradient(
+-                        begin: Alignment.topLeft,
+-                        end: Alignment.bottomRight,
+-                        colors: [tokens.brandSubtle, tokens.surface],
+-                      ),
+-                      borderRadius: BorderRadius.circular(16),
+-                    ),
+-                    child: Column(
+-                      children: [
+-                        Text('邀请好友，获得奖励',
+-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: tokens.textPrimary)),
+-                        const SizedBox(height: 8),
+-                        Text('输入我的邀请码，一起记录美好时光',
+-                            style: TextStyle(fontSize: 13, color: tokens.textSecondary)),
+-                        const SizedBox(height: 24),
+-                        QrImageView(
+-                          data: code,
+-                          version: QrVersions.auto,
+-                          size: 160,
+-                          eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: tokens.textPrimary),
+-                          dataModuleStyle: QrDataModuleStyle(
+-                            dataModuleShape: QrDataModuleShape.square,
+-                            color: tokens.textPrimary,
+-                          ),
+-                        ),
+-                        const SizedBox(height: 20),
+-                        Container(
+-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+-                          decoration: BoxDecoration(
+-                            color: tokens.canvas,
+-                            borderRadius: BorderRadius.circular(12),
+-                          ),
+-                          child: Text(code,
+-                              style: TextStyle(
+-                                  fontFamily: 'Courier New',
+-                                  fontSize: 26,
+-                                  fontWeight: FontWeight.bold,
+-                                  letterSpacing: 4,
+-                                  color: tokens.textPrimary)),
+-                        ),
+-                      ],
+-                    ),
+-                  ),
+-                ),
+-              ),
+-            ),
+-            Padding(
+-              padding: const EdgeInsets.all(16),
+-              child: Row(
+-                children: [
+-                  Expanded(
+-                    child: LumiraButton(variant: ButtonVariant.secondary, onPressed: copyCode, child: const Text('复制邀请码')),
+-                  ),
+-                  const SizedBox(width: 12),
+-                  Expanded(
+-                    child: LumiraButton(variant: ButtonVariant.primary, onPressed: savePoster, child: const Text('保存海报')),
+-                  ),
+-                ],
+-              ),
+-            ),
+-          ],
+-        ),
+-      ),
+-    );
+-  }
+-}
+diff --git a/lumira_app_flutter/lib/shared/services/poster_generator.dart b/lumira_app_flutter/lib/shared/services/poster_generator.dart
+index 0b773de..5686405 100644
+--- a/lumira_app_flutter/lib/shared/services/poster_generator.dart
++++ b/lumira_app_flutter/lib/shared/services/poster_generator.dart
+@@ -4,20 +4,23 @@ import 'dart:ui' as ui;
+ import 'package:flutter/material.dart';
+ import 'package:flutter/rendering.dart';
+ import 'package:flutter/services.dart';
+ import 'package:saver_gallery/saver_gallery.dart';
+ import 'package:share_plus/share_plus.dart';
+ 
+ import '../../core/theme/theme_tokens.dart';
+ import '../../core/utils/safe_share.dart';
+ import '../../core/utils/safe_temp_dir.dart';
+ import '../widgets/lumira/lumira.dart' show LumiraProgress, LumiraToast, showLumiraBottomSheet;
++import '../widgets/poster/poster_ratio.dart';
++import '../widgets/poster/poster_style_picker.dart';
++import '../widgets/poster/poster_style_registry.dart';
+ 
+ /// 通用海报生成器
+ ///
+ /// 提供统一的「生成海报 / 导出海报 / 分享海报」三件套底部 Sheet。
+ /// 调用方传入 [content] Widget 作为海报内容，内部用 [RepaintBoundary]
+ /// 包裹并在导出/分享时通过 [toImage] 捕获为 PNG。
+ ///
+ /// 平台兼容：
+ /// - 导出（保存到相册）：iOS/Android 用 `SaverGallery.saveImage`；
+ ///   HarmonyOS 降级到 `MethodChannel('lumira/photo_saver')` 调用原生 photoAccessHelper。
+@@ -32,69 +35,185 @@ class PosterGenerator {
+   /// [fileNamePrefix] 用于导出/分享时的文件名前缀。
+   static Future<void> showPoster({
+     required BuildContext context,
+     required ThemeTokens tokens,
+     required String title,
+     required Widget content,
+     required GlobalKey posterKey,
+     required String shareSubject,
+     required String shareText,
+     required String fileNamePrefix,
++    Widget? extraAction,
+   }) async {
+     await showLumiraBottomSheet<void>(
+       context: context,
+       isScrollControlled: true,
+       builder: (ctx) => _PosterSheet(
+         tokens: tokens,
+         title: title,
+         content: content,
+         posterKey: posterKey,
+         shareSubject: shareSubject,
+         shareText: shareText,
+         fileNamePrefix: fileNamePrefix,
++        extraAction: extraAction,
+       ),
+     );
+   }
++
++  /// 弹出「带样式选择」的海报预览底部 Sheet
++  ///
++  /// 顶部为样式切换条，按 [kind] + [ratio] 从 [PosterStyleRegistry] 取可选样式，
++  /// 实时切换预览；导出/分享按当前选中样式出图。海报内容由样式构建器依据
++  /// [data] 渲染，内部自持 [GlobalKey] 用于捕获。
++  static Future<void> showPosterWithStylePicker({
++    required BuildContext context,
++    required ThemeTokens tokens,
++    required String title,
++    required PosterKind kind,
++    required PosterRatio ratio,
++    required PosterStyleData data,
++    required String shareSubject,
++    required String shareText,
++    required String fileNamePrefix,
++  }) async {
++    await showLumiraBottomSheet<void>(
++      context: context,
++      isScrollControlled: true,
++      builder: (ctx) => _PosterSheet(
++        tokens: tokens,
++        title: title,
++        shareSubject: shareSubject,
++        shareText: shareText,
++        fileNamePrefix: fileNamePrefix,
++        stylePicker: _StylePickerConfig(kind: kind, ratio: ratio, data: data),
++      ),
++    );
++  }
++}
++
++/// 样式选择配置（传此配置时 Sheet 启用样式切换条并持选中态）。
++class _StylePickerConfig {
++  const _StylePickerConfig({
++    required this.kind,
++    required this.ratio,
++    required this.data,
++  });
++
++  final PosterKind kind;
++  final PosterRatio ratio;
++  final PosterStyleData data;
+ }
+ 
+ class _PosterSheet extends StatefulWidget {
+   const _PosterSheet({
+     required this.tokens,
+     required this.title,
+-    required this.content,
+-    required this.posterKey,
+     required this.shareSubject,
+     required this.shareText,
+     required this.fileNamePrefix,
++    this.extraAction,
++    this.content,
++    this.posterKey,
++    this.stylePicker,
+   });
+ 
+   final ThemeTokens tokens;
+   final String title;
+-  final Widget content;
+-  final GlobalKey posterKey;
++
++  /// 普通海报正文（[showPoster] 模式）；样式选择模式传 [stylePicker] 即可。
++  final Widget? content;
++  final GlobalKey? posterKey;
+   final String shareSubject;
+   final String shareText;
+   final String fileNamePrefix;
+ 
++  /// 可选的扩展操作按钮，渲染在底部操作条第一位（保存/分享之前）。
++  final Widget? extraAction;
++
++  /// 样式选择配置，非空时启用样式切换条。
++  final _StylePickerConfig? stylePicker;
++
+   @override
+   State<_PosterSheet> createState() => _PosterSheetState();
+ }
+ 
+ class _PosterSheetState extends State<_PosterSheet> {
+   bool _exporting = false;
+   bool _sharing = false;
+ 
++  late final GlobalKey _posterKey;
++  late String _selectedStyleId;
++
++  /// 主效果卡片翻页控制器（左右滑动切换版式）。
++  late final PageController _pageController;
++
++  @override
++  void initState() {
++    super.initState();
++    _posterKey = widget.posterKey ?? GlobalKey();
++    final cfg = widget.stylePicker;
++    String selectedId = '';
++    if (cfg != null) {
++      selectedId =
++          PosterStyleRegistry.defaultFor(cfg.kind, cfg.ratio)?.id ?? '';
++    }
++    _selectedStyleId = selectedId;
++    // showPoster 模式无样式选择（_styles 为空），创建兜底单页控制器。
++    _pageController = PageController(
++      initialPage: _styles.isEmpty
++          ? 0
++          : (_styles.indexWhere((s) => s.id == selectedId)).clamp(0, _styles.length - 1),
++    );
++  }
++
++  @override
++  void dispose() {
++    _pageController.dispose();
++    super.dispose();
++  }
++
++  /// 从底部缩略条选择样式：同步选中态并按需翻页到对应主卡片。
++  void _onSelectStyle(String id) {
++    final idx = _styles.indexWhere((s) => s.id == id);
++    if (idx < 0) return;
++    setState(() => _selectedStyleId = id);
++    if (_pageController.hasClients && idx != _pageController.page?.round()) {
++      _pageController.animateToPage(
++        idx,
++        duration: const Duration(milliseconds: 260),
++        curve: Curves.easeOutCubic,
++      );
++    }
++  }
++
++  /// 当前 kind + ratio 下的可选样式列表。
++  List<PosterStyle> get _styles {
++    final cfg = widget.stylePicker;
++    if (cfg == null) return const [];
++    return PosterStyleRegistry.stylesFor(cfg.kind, cfg.ratio);
++  }
++
++  /// 海报导出目标宽度（物理 px）。
++  ///
++  /// 按「目标宽度 / 画布逻辑宽」计算导出倍率，5 种比例海报统一以 ≥1080px
++  /// 宽度出图（9:16 竖图 1080×1920），比固定 3x（9:16 仅 900 宽）更清晰。
++  static const double kPosterExportWidth = 1080;
++
+   Future<ui.Image?> _captureImage() async {
+-    final boundary = widget.posterKey.currentContext?.findRenderObject()
++    final boundary = _posterKey.currentContext?.findRenderObject()
+         as RenderRepaintBoundary?;
+     if (boundary == null) return null;
+-    return boundary.toImage(pixelRatio: 2.0);
++    final size = boundary.size;
++    if (size.isEmpty) return null;
++    final pixelRatio = (kPosterExportWidth / size.width).clamp(2.0, 4.0);
++    return boundary.toImage(pixelRatio: pixelRatio);
+   }
+ 
+   Future<List<int>?> _captureBytes() async {
+     final image = await _captureImage();
+     if (image == null) return null;
+     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+     if (byteData == null) return null;
+     return byteData.buffer.asUint8List().toList();
+   }
+ 
+@@ -181,147 +300,234 @@ class _PosterSheetState extends State<_PosterSheet> {
+   void _toast(String msg) {
+     LumiraToast.show(context, msg);
+   }
+ 
+   @override
+   Widget build(BuildContext context) {
+     final t = widget.tokens;
+     final screenHeight = MediaQuery.of(context).size.height;
+ 
+     return ConstrainedBox(
+-      constraints: BoxConstraints(maxHeight: screenHeight * 0.85),
++      constraints: BoxConstraints(maxHeight: screenHeight * 0.70),
+       child: Column(
+         mainAxisSize: MainAxisSize.min,
+         children: [
+-          // 标题行
++          // 标题行：标题 + 副文案 + 关闭
+           Padding(
+-            padding: const EdgeInsets.symmetric(vertical: 8),
++            padding: const EdgeInsets.only(bottom: 4),
+             child: Row(
++              crossAxisAlignment: CrossAxisAlignment.center,
+               children: [
+-                Text(
+-                  widget.title,
+-                  style: TextStyle(
+-                    fontSize: 16,
+-                    fontWeight: FontWeight.w600,
+-                    color: t.textPrimary,
++                Expanded(
++                  child: Column(
++                    crossAxisAlignment: CrossAxisAlignment.start,
++                    mainAxisSize: MainAxisSize.min,
++                    children: [
++                      Text(
++                        widget.title,
++                        style: TextStyle(
++                          fontSize: 17,
++                          fontWeight: FontWeight.w700,
++                          color: t.textPrimary,
++                          height: 1.2,
++                        ),
++                      ),
++                      if (widget.stylePicker != null) ...[
++                        const SizedBox(height: 2),
++                        Text(
++                          '切换版式，预览后导出或分享 · 左右滑动卡片切换',
++                          style: TextStyle(
++                            fontSize: 11,
++                            color: t.textTertiary,
++                            height: 1.3,
++                          ),
++                        ),
++                      ],
++                    ],
+                   ),
+                 ),
+-                const Spacer(),
++                const SizedBox(width: 12),
++                // 圆形关闭按钮，扩大点击热区
+                 GestureDetector(
+                   onTap: () => Navigator.of(context).pop(),
+-                  child: Icon(Icons.close, size: 20, color: t.textTertiary),
++                  behavior: HitTestBehavior.opaque,
++                  child: Container(
++                    width: 34,
++                    height: 34,
++                    decoration: BoxDecoration(
++                      color: t.surfaceAlt,
++                      shape: BoxShape.circle,
++                    ),
++                    child: Icon(Icons.close_rounded, size: 18, color: t.textSecondary),
++                  ),
+                 ),
+               ],
+             ),
+           ),
+-          // 海报内容
+-          Flexible(
+-            child: SingleChildScrollView(
+-              padding: const EdgeInsets.symmetric(vertical: 8),
++          // 主效果卡片：整页满视图展示当前版式，可左右滑动切换。
++          // RepaintBoundary 捕获的是海报设计尺寸（300~380 逻辑宽），
++          // PageView/FittedBox 的缩放只作用于显示层，不影响导出清晰度。
++          Expanded(
++            child: Container(
++              width: double.infinity,
++              clipBehavior: Clip.antiAlias,
++              decoration: BoxDecoration(
++                color: t.surfaceAlt,
++                borderRadius: BorderRadius.circular(18),
++              ),
+               child: RepaintBoundary(
+-                key: widget.posterKey,
+-                child: widget.content,
++                key: _posterKey,
++                child: PageView.builder(
++                  controller: _pageController,
++                  // 样式选择模式打开翻页；普通海报（无样式）禁用滑动仅单页。
++                  physics: widget.stylePicker == null
++                      ? const NeverScrollableScrollPhysics()
++                      : null,
++                  onPageChanged: (i) {
++                    if (widget.stylePicker != null && i >= 0 && i < _styles.length) {
++                      if (_styles[i].id != _selectedStyleId) {
++                        setState(() => _selectedStyleId = _styles[i].id);
++                      }
++                    }
++                  },
++                  itemCount: _styles.isEmpty ? 1 : _styles.length,
++                  itemBuilder: (ctx, i) {
++                    final style = _styles.isEmpty ? null : _styles[i];
++                    return Center(
++                      child: Padding(
++                        padding: const EdgeInsets.all(14),
++                        child: FittedBox(
++                          fit: BoxFit.contain,
++                          child: style == null
++                              ? (widget.content ?? const SizedBox.shrink())
++                              : style.builder(widget.stylePicker!.data),
++                        ),
++                      ),
++                    );
++                  },
++                ),
+               ),
+             ),
+           ),
+-          // 底部三按钮
++          // 底部操作条：两个主操作（保存到相册 / 分享），简洁不冗余
+           Padding(
+-            padding: const EdgeInsets.only(top: 8, bottom: 24),
++            padding: const EdgeInsets.only(top: 14, bottom: 4),
+             child: Row(
+               children: [
++                if (widget.extraAction != null) ...[
++                  Expanded(child: widget.extraAction!),
++                  const SizedBox(width: 10),
++                ],
+                 Expanded(
+-                  child: _PosterButton(
+-                    tokens: t,
+-                    icon: Icons.visibility_outlined,
+-                    label: '生成海报',
+-                    color: t.surfaceAlt,
+-                    textColor: t.textPrimary,
+-                    onTap: () => _toast('海报已生成'),
+-                  ),
+-                ),
+-                const SizedBox(width: 8),
+-                Expanded(
+-                  child: _PosterButton(
++                  child: _PosterAction(
+                     tokens: t,
+-                    icon: _exporting
+-                        ? null
+-                        : Icons.save_alt_outlined,
+-                    label: _exporting ? '导出中...' : '导出海报',
++                    icon: _exporting ? null : Icons.save_alt_outlined,
++                    label: _exporting ? '导出中...' : '保存到相册',
+                     color: t.brandSubtle,
+                     textColor: t.brandText,
+                     loading: _exporting,
+                     onTap: _exporting ? null : _onExport,
+                   ),
+                 ),
+-                const SizedBox(width: 8),
++                const SizedBox(width: 10),
+                 Expanded(
+-                  child: _PosterButton(
++                  child: _PosterAction(
+                     tokens: t,
+                     icon: _sharing ? null : Icons.ios_share_outlined,
+                     label: _sharing ? '分享中...' : '分享海报',
+                     color: t.brand,
+                     textColor: Colors.white,
++                    elevated: true,
+                     loading: _sharing,
+                     onTap: _sharing ? null : _onShare,
+                   ),
+                 ),
+               ],
+             ),
+           ),
++          // 样式切换条（下移到底部，尺寸收紧，视觉重心留给上方主卡片）
++          if (widget.stylePicker != null)
++            Padding(
++              padding: const EdgeInsets.only(top: 10),
++              child: PosterStylePicker(
++                styles: _styles,
++                data: widget.stylePicker!.data,
++                selectedId: _selectedStyleId,
++                onSelect: _onSelectStyle,
++              ),
++            ),
+         ],
+       ),
+     );
+   }
+ }
+ 
+-class _PosterButton extends StatelessWidget {
+-  const _PosterButton({
++/// 底部操作按钮：紧凑横排（图标 + 文案），弱化高度、强化可读。
++class _PosterAction extends StatelessWidget {
++  const _PosterAction({
+     required this.tokens,
+     required this.icon,
+     required this.label,
+     required this.color,
+     required this.textColor,
++    this.elevated = false,
+     this.loading = false,
+     this.onTap,
+   });
+ 
+   final ThemeTokens tokens;
+   final IconData? icon;
+   final String label;
+   final Color color;
+   final Color textColor;
++
++  /// 主按钮：叠加品牌色投影突出主操作。
++  final bool elevated;
+   final bool loading;
+   final VoidCallback? onTap;
+ 
+   @override
+   Widget build(BuildContext context) {
+     return GestureDetector(
+       onTap: onTap,
+       behavior: HitTestBehavior.opaque,
+-      child: Container(
+-        padding: const EdgeInsets.symmetric(vertical: 14),
++      child: AnimatedContainer(
++        duration: const Duration(milliseconds: 160),
++        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 6),
+         decoration: BoxDecoration(
+           color: color,
+           borderRadius: BorderRadius.circular(12),
++          boxShadow: elevated
++              ? [
++                  BoxShadow(
++                    color: tokens.brand.withOpacity(.35),
++                    blurRadius: 10,
++                    offset: const Offset(0, 4),
++                  ),
++                ]
++              : null,
+         ),
+-        child: Column(
+-          mainAxisSize: MainAxisSize.min,
++        child: Row(
++          mainAxisAlignment: MainAxisAlignment.center,
+           children: [
+             if (loading)
+-              LumiraProgress.circular(strokeWidth: 2, size: 18)
+-            else if (icon != null)
+-              Icon(icon, size: 18, color: textColor),
+-            const SizedBox(height: 4),
++              LumiraProgress.circular(strokeWidth: 2, size: 16)
++            else if (icon != null) ...[
++              Icon(icon, size: 16, color: textColor),
++              const SizedBox(width: 5),
++            ],
+             Text(
+               label,
++              maxLines: 1,
++              overflow: TextOverflow.ellipsis,
+               style: TextStyle(
+-                fontSize: 12,
++                fontSize: 13,
+                 fontWeight: FontWeight.w600,
+                 color: textColor,
+               ),
+             ),
+           ],
+         ),
+       ),
+     );
+   }
+ }
+diff --git a/lumira_app_flutter/test/features/invite/invite_poster_card_test.dart b/lumira_app_flutter/test/features/invite/invite_poster_card_test.dart
+new file mode 100644
+index 0000000..1ee171b
+--- /dev/null
++++ b/lumira_app_flutter/test/features/invite/invite_poster_card_test.dart
+@@ -0,0 +1,28 @@
++import 'package:flutter/material.dart';
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
++import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
++import 'package:lumira_app_flutter/features/invite/widgets/invite_poster_card.dart';
++import 'package:qr_flutter/qr_flutter.dart';
++
++Widget wrap(Widget child) {
++  return ProviderScope(
++    overrides: [
++      themeKeyProvider.overrideWith((ref) => ThemeKey.warmWhite),
++      uiStyleProvider.overrideWith((ref) => UIStyle.neumorphic),
++    ],
++    child: MaterialApp(home: Scaffold(body: Center(child: child))),
++  );
++}
++
++void main() {
++  testWidgets('InvitePosterCard 渲染标题、邀请码与二维码（默认暖白/新拟态）', (tester) async {
++    await tester.pumpWidget(wrap(const InvitePosterCard(code: 'LUMIRA-7K2A')));
++    await tester.pump();
++    expect(find.text('邀请好友 · 一起来拍照'), findsOneWidget);
++    expect(find.text('LUMIRA-7K2A'), findsOneWidget);
++    expect(find.text('我的邀请码'), findsOneWidget);
++    expect(find.byType(QrImageView), findsOneWidget);
++  });
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/test/features/invite/invite_poster_sheet_test.dart b/lumira_app_flutter/test/features/invite/invite_poster_sheet_test.dart
+new file mode 100644
+index 0000000..653c80a
+--- /dev/null
++++ b/lumira_app_flutter/test/features/invite/invite_poster_sheet_test.dart
+@@ -0,0 +1,50 @@
++import 'package:flutter/material.dart';
++import 'package:flutter/services.dart';
++import 'package:flutter_riverpod/flutter_riverpod.dart';
++import 'package:flutter_test/flutter_test.dart';
++import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
++import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
++import 'package:lumira_app_flutter/features/invite/widgets/invite_card_scene.dart';
++
++String? captured;
++
++void main() {
++  TestWidgetsFlutterBinding.ensureInitialized();
++  setUp(() {
++    captured = null;
++    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
++        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
++      if (call.method == 'Clipboard.setData') {
++        final arg = (call.arguments as Map)['text'] as String?;
++        captured = arg;
++      }
++      return null;
++    });
++  });
++  tearDown(() {
++    TestDefaultBinaryMessengerBinding.instance!.defaultBinaryMessenger
++        .setMockMethodCallHandler(SystemChannels.platform, null);
++  });
++  testWidgets('复制按钮将邀请码写入剪贴板', (tester) async {
++    await tester.pumpWidget(
++      ProviderScope(
++        overrides: [
++          themeKeyProvider.overrideWith((_) => ThemeKey.warmWhite),
++          uiStyleProvider.overrideWith((_) => UIStyle.neumorphic),
++        ],
++        child: MaterialApp(
++          home: Scaffold(
++            body: InviteCardScene(
++              code: 'LUMIRA-9KX2',
++              onCopy: () => showInviteCopyToast(
++                  tester.element(find.byType(InviteCardScene)), 'LUMIRA-9KX2'),
++            ),
++          ),
++        ),
++      ),
++    );
++    await tester.tap(find.byType(InviteCardScene));
++    await tester.pump();
++    expect(captured, 'LUMIRA-9KX2');
++  });
++}
+\ No newline at end of file
+diff --git a/lumira_app_flutter/test/features/profile/profile_invite_page_test.dart b/lumira_app_flutter/test/features/profile/profile_invite_page_test.dart
+index 44824c8..df40068 100644
+--- a/lumira_app_flutter/test/features/profile/profile_invite_page_test.dart
++++ b/lumira_app_flutter/test/features/profile/profile_invite_page_test.dart
+@@ -1,19 +1,22 @@
+ import 'dart:io';
+ 
+ import 'package:flutter/foundation.dart';
+ import 'package:flutter/material.dart';
+ import 'package:flutter/services.dart';
+ import 'package:flutter_riverpod/flutter_riverpod.dart';
+ import 'package:flutter_test/flutter_test.dart';
+ import 'package:go_router/go_router.dart';
+ 
++import 'package:lumira_app_flutter/core/auth/auth_controller.dart';
++import 'package:lumira_app_flutter/core/auth/auth_dao.dart';
++import 'package:lumira_app_flutter/core/auth/auth_state.dart';
+ import 'package:lumira_app_flutter/core/router/route_names.dart';
+ import 'package:lumira_app_flutter/core/theme/theme_controller.dart';
+ import 'package:lumira_app_flutter/core/theme/theme_tokens.dart';
+ import 'package:lumira_app_flutter/features/profile/pages/profile_invite_page.dart';
+ import 'package:lumira_app_flutter/features/invite/data/invite_models.dart';
+ import 'package:lumira_app_flutter/features/invite/data/invite_repository.dart';
+ import 'package:lumira_app_flutter/features/rewards/data/rewards_models.dart';
+ import 'package:lumira_app_flutter/shared/widgets/nav/lumira_nav.dart';
+ 
+ import '../../../test/helpers/test_http_overrides.dart';
+@@ -23,20 +26,50 @@ class _FakeInviteRepository implements InviteRepository {
+   Future<InviteCode> generate() async => const InviteCode(code: 'ABC234');
+ 
+   @override
+   Future<ActivateInviteResponse> activate(ActivateInviteRequest req) async =>
+       const ActivateInviteResponse(inviterDeviceId: 'device');
+ 
+   @override
+   Future<InviteStats> stats() async => throw UnimplementedError();
+ }
+ 
++/// 测试用 AuthDao stub（避免依赖 sqflite）
++class _NoopDao implements AuthDaoLike {
++  @override
++  Future<AuthRecord?> load() async => null;
++  @override
++  Future<void> save(AuthRecord r) async {}
++  @override
++  Future<void> clear() async {}
++  @override
++  Future<void> clearToken() async {}
++}
++
++/// 测试用 AuthController stub（默认新设备，展示绑定入口）
++class _FakeAuthController extends AuthController {
++  _FakeAuthController()
++      : super(
++          dao: _NoopDao(),
++          resolveDeviceId: () async => '',
++          resolveOs: () => 'android',
++          doRegister: ({required deviceId, required os}) async {
++            return const RegisterResult(token: '', isNewDevice: false);
++          },
++        ) {
++    state = const AuthState(
++      status: AuthStatus.registered,
++      isNewDevice: true,
++    );
++  }
++}
++
+ void main() {
+   late GoRouter router;
+   FlutterExceptionHandler? originalErrorHandler;
+ 
+   setUp(() {
+     router = GoRouter(
+       initialLocation: RouteNames.profileInvite,
+       routes: [
+         GoRoute(
+           path: RouteNames.profileInvite,
+@@ -54,20 +87,21 @@ void main() {
+   });
+ 
+   tearDown(() {
+     HttpOverrides.global = null;
+     FlutterError.onError = originalErrorHandler;
+   });
+ 
+   Widget wrap(ThemeKey themeKey, UIStyle uiStyle) {
+     return ProviderScope(
+       overrides: [
++        authControllerProvider.overrideWith((ref) => _FakeAuthController()),
+         themeKeyProvider.overrideWith((ref) => themeKey),
+         uiStyleProvider.overrideWith((ref) => uiStyle),
+         inviteRepositoryProvider.overrideWith((ref) async => _FakeInviteRepository()),
+         inviteStatsProvider.overrideWith((ref) async => const InviteStats(
+               totalInvites: 3,
+               currentTier: 1,
+               myInviteCode: 'ABC234',
+               tiers: [
+                 InviteTierEntry(
+                   tier: 1,
+@@ -252,21 +286,21 @@ void main() {
+       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+       await settleOrPump(tester, UIStyle.neumorphic);
+ 
+       expect(find.text('生成邀请卡片'), findsOneWidget);
+ 
+       await tester.tap(find.text('生成邀请卡片'));
+       await settleOrPump(tester, UIStyle.neumorphic);
+ 
+       expect(find.text('邀请卡片'), findsOneWidget);
+       expect(find.text('复制邀请码'), findsOneWidget);
+-      expect(find.text('保存海报'), findsOneWidget);
++      expect(find.text('保存到相册'), findsOneWidget);
+     });
+ 
+     testWidgets('tapping 确认绑定 with empty code shows error SnackBar', (tester) async {
+       setLargeViewport(tester);
+       await tester.pumpWidget(wrap(ThemeKey.warmWhite, UIStyle.neumorphic));
+       await settleOrPump(tester, UIStyle.neumorphic);
+ 
+       // 不输入任何内容直接点击确认绑定
+       await tester.tap(find.text('确认绑定'));
+       await settleOrPump(tester, UIStyle.neumorphic);
