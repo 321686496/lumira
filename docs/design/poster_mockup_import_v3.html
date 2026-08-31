@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 自定义模板扫码导入海报 · V3 画幅自适应排版</title>
+<style>
+  :root{--paper:#FDFBF7;--ink:#1A1A1A;--ink-soft:#3A332B;--gold:#C9A96E;--gold-deep:#B08D4F;--text2:#6B645C;--text3:#979080;--line:rgba(201,169,110,.38);--line-soft:rgba(201,169,110,.20)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#E9E2D5;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:40px 20px 140px;display:flex;flex-direction:column;align-items:center;gap:26px;-webkit-font-smoothing:antialiased}
+  .page-title{color:#463E32;font-size:17px;letter-spacing:4px;font-weight:600;display:flex;align-items:center;gap:14px}
+  .page-title::before,.page-title::after{content:"";width:46px;height:1px;background:var(--line)}
+  .page-sub{color:#8A7F6E;font-size:12px;letter-spacing:2px;text-align:center;line-height:2;max-width:940px}
+  .serif{font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif}
+
+  /* 排版索引条 */
+  .index{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+  .idx{width:118px;border:1px solid var(--line);border-radius:10px;padding:10px;background:rgba(255,255,255,.5);display:flex;flex-direction:column;gap:8px;align-items:center}
+  .idx .thumb{width:92px;height:130px;background:#FDFBF7;border:1px solid rgba(201,169,110,.3);position:relative}
+  .idx .thumb i{position:absolute;background:#D8CDB8;display:block}
+  .idx .thumb b{position:absolute;background:#C9A96E;display:block}
+  .idx .lb{font-size:10px;color:#6B645C;letter-spacing:1px;font-weight:600}
+  .idx .nm{font-size:9px;color:#979080;letter-spacing:1px}
+
+  .sec{width:100%;max-width:1280px;margin-top:20px}
+  .row{display:flex;gap:44px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .sys-label{font-size:10px;color:#8A6D3B;letter-spacing:2px;background:#F3ECE0;border:1px solid var(--line);padding:5px 14px;border-radius:14px;text-align:center;font-weight:600}
+
+  /* ===== 海报画布 ===== */
+  .poster{position:relative;width:340px;height:566px;background:var(--paper);overflow:hidden;flex:none;
+    box-shadow:0 30px 70px -30px rgba(56,44,26,.5), inset 0 0 0 1px rgba(255,255,255,.6)}
+  .poster .wm{position:absolute;top:16px;left:22px;z-index:4;font-family:Georgia,serif;font-size:9px;letter-spacing:3px;color:var(--gold-deep);font-weight:700}
+  .poster .wm .zh{font-family:-apple-system,"PingFang SC",sans-serif;font-weight:500;color:var(--text3);letter-spacing:2px}
+  .poster .serial{position:absolute;top:18px;right:22px;z-index:4;font-family:Georgia,serif;font-size:9px;color:var(--text3);letter-spacing:1px}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:9px;letter-spacing:3px;color:var(--gold-deep);font-weight:600}
+  .kicker::before,.kicker::after{content:"";width:14px;height:1px;background:var(--line)}
+  .qr{position:relative;background:#fff;border:1px solid var(--line);box-shadow:0 14px 30px -20px rgba(60,48,28,.5)}
+  .qr-grid{display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);gap:1px;width:100%;height:100%}
+  .qr-grid i{background:var(--ink);display:block;border-radius:1px}
+
+  /* ========== 构图 1 · 9:16 左图满高 + 右列竖文 ========== */
+  .c1 .img{position:absolute;left:24px;top:78px;width:196px;height:348px;background:#EFEAE0;border:1px solid rgba(201,169,110,.4);z-index:2}
+  .c1 .img img{display:block;width:100%;height:100%;object-fit:cover}
+  .c1 .img::after{content:"";position:absolute;inset:6px;border:1px solid rgba(255,255,255,.55);pointer-events:none}
+  .c1 .side{position:absolute;left:240px;top:78px;bottom:40px;right:20px;z-index:3;display:flex;flex-direction:column;align-items:center}
+  .c1 .side .k{color:var(--gold-deep);font-size:8px;letter-spacing:3px;font-weight:600}
+  .c1 .vt{writing-mode:vertical-rl;font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif;font-size:32px;font-weight:700;color:var(--ink);letter-spacing:8px;margin:22px 0 26px;line-height:1}
+  .c1 .vt .g{color:var(--gold-deep)}
+  .c1 .side .rule{width:26px;height:1px;background:var(--gold);opacity:.7}
+  .c1 .side .cat{writing-mode:vertical-rl;font-size:8px;letter-spacing:4px;color:var(--text2);margin-top:20px}
+  .c1 .side .qr{width:74px;height:74px;padding:6px;margin-top:auto}
+  .c1 .side .tip{font-size:8px;letter-spacing:1px;color:var(--text3);margin-top:9px;text-align:center;line-height:1.7}
+  .c1 .exp{position:absolute;left:24px;bottom:26px;font-size:8px;letter-spacing:2px;color:var(--text3)}
+  .c1 .exp b{color:var(--gold-deep);font-weight:600}
+
+  /* ========== 构图 2 · 3:4 上居中图 + 下居中文字 ========== */
+  .c2 .img{position:absolute;left:50%;top:64px;transform:translateX(-50%);width:184px;height:246px;background:#EFEAE0;border:1px solid rgba(201,169,110,.4);z-index:2}
+  .c2 .img img{display:block;width:100%;height:100%;object-fit:cover}
+  .c2 .img::after{content:"";position:absolute;inset:6px;border:1px solid rgba(255,255,255,.55);pointer-events:none}
+  .c2 .center{position:absolute;left:0;right:0;top:342px;bottom:30px;z-index:3;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 40px}
+  .c2 .title{font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif;font-size:32px;font-weight:700;color:var(--ink);letter-spacing:4px;margin-top:10px;line-height:1.2}
+  .c2 .cat{font-size:9px;letter-spacing:3px;color:var(--text2);margin-top:8px}
+  .c2 .cat b{color:var(--gold-deep);font-weight:600;padding:0 2px}
+  .c2 .rule{width:46px;height:1px;background:var(--gold);margin-top:14px;opacity:.7}
+  .c2 .qr{width:86px;height:86px;padding:7px;margin-top:16px}
+  .c2 .tip{font-size:8px;letter-spacing:1.5px;color:var(--text3);margin-top:9px}
+  .c2 .exp{font-size:8px;letter-spacing:2px;color:var(--gold-deep);margin-top:8px;font-weight:600}
+
+  /* ========== 构图 3 · 1:1 左右分栏 ========== */
+  .c3 .img{position:absolute;left:28px;top:118px;width:196px;height:196px;background:#EFEAE0;border:1px solid rgba(201,169,110,.4);z-index:2}
+  .c3 .img img{display:block;width:100%;height:100%;object-fit:cover}
+  .c3 .img::after{content:"";position:absolute;inset:6px;border:1px solid rgba(255,255,255,.55);pointer-events:none}
+  .c3 .right{position:absolute;left:248px;right:22px;top:118px;bottom:44px;z-index:3;display:flex;flex-direction:column}
+  .c3 .k{color:var(--gold-deep);font-size:8px;letter-spacing:3px;font-weight:600}
+  .c3 .title{font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif;font-size:26px;font-weight:700;color:var(--ink);letter-spacing:3px;margin-top:10px;line-height:1.3}
+  .c3 .cat{font-size:8px;letter-spacing:2px;color:var(--text2);margin-top:8px;line-height:1.8}
+  .c3 .cat b{color:var(--gold-deep);font-weight:600}
+  .c3 .rule{width:26px;height:1px;background:var(--gold);margin-top:14px;opacity:.7}
+  .c3 .qr{width:76px;height:76px;padding:6px;margin-top:auto}
+  .c3 .tip{font-size:8px;letter-spacing:1px;color:var(--text3);margin-top:9px;line-height:1.7}
+
+  /* ========== 构图 4 · 4:3 文字在上 + 横幅图在下 ========== */
+  .c4 .top{position:absolute;left:0;right:0;top:74px;z-index:3;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 44px}
+  .c4 .title{font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif;font-size:30px;font-weight:700;color:var(--ink);letter-spacing:4px;margin-top:10px;line-height:1.2}
+  .c4 .cat{font-size:9px;letter-spacing:3px;color:var(--text2);margin-top:8px}
+  .c4 .cat b{color:var(--gold-deep);font-weight:600}
+  .c4 .img{position:absolute;left:50%;top:180px;transform:translateX(-50%);width:288px;height:216px;background:#EFEAE0;border:1px solid rgba(201,169,110,.4);z-index:2}
+  .c4 .img img{display:block;width:100%;height:100%;object-fit:cover}
+  .c4 .img::after{content:"";position:absolute;inset:6px;border:1px solid rgba(255,255,255,.55);pointer-events:none}
+  .c4 .bottom{position:absolute;left:0;right:0;bottom:30px;z-index:3;display:flex;flex-direction:column;align-items:center}
+  .c4 .qr{width:80px;height:80px;padding:7px}
+  .c4 .tip{font-size:8px;letter-spacing:1.5px;color:var(--text3);margin-top:8px}
+  .c4 .exp{font-size:8px;letter-spacing:2px;color:var(--gold-deep);margin-top:7px;font-weight:600}
+
+  /* ========== 构图 5 · 16:9 电影通栏 + 标题压图 ========== */
+  .c5 .img{position:absolute;left:0;right:0;top:58px;height:186px;background:#000;z-index:2;overflow:hidden}
+  .c5 .img img{display:block;width:100%;height:100%;object-fit:cover}
+  .c5 .img::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,16,10,.28),transparent 40%,rgba(20,16,10,.05));pointer-events:none}
+  .c5 .img .film{position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--gold);opacity:.8}
+  .c5 .img .track{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;padding:0 14px;transform:translateY(-2px)}
+  .c5 .img .track span{width:14px;height:1px;background:var(--gold);opacity:.7}
+  .c5 .title{position:absolute;left:24px;top:226px;z-index:3;font-family:"Noto Serif SC","Songti SC","STSong",Georgia,serif;font-size:40px;font-weight:700;color:var(--ink);letter-spacing:6px;line-height:1.15}
+  .c5 .title .g{color:var(--gold-deep)}
+  .c5 .meta{position:absolute;left:26px;right:26px;top:300px;z-index:3;display:flex;align-items:center;gap:12px}
+  .c5 .meta .cat{font-size:9px;letter-spacing:3px;color:var(--text2)}
+  .c5 .meta .cat b{color:var(--gold-deep);font-weight:600}
+  .c5 .meta .rule{flex:1;height:1px;background:var(--line-soft)}
+  .c5 .meta .exp{font-size:8px;letter-spacing:2px;color:var(--gold-deep);font-weight:600}
+  .c5 .bottom{position:absolute;left:26px;right:26px;bottom:28px;z-index:3;display:flex;align-items:flex-end;gap:14px}
+  .c5 .qr{width:78px;height:78px;padding:6px}
+  .c5 .tip{font-size:8px;letter-spacing:1.5px;color:var(--text3);line-height:1.8;padding-bottom:6px}
+  .c5 .tip b{display:block;font-size:9px;letter-spacing:2px;color:var(--ink)}
+  .c5 .slogan{margin-left:auto;text-align:right;padding-bottom:4px}
+  .c5 .slogan .en{font-family:Georgia,serif;font-size:9px;letter-spacing:2px;color:var(--gold-deep);font-weight:700}
+  .c5 .slogan .zh{font-size:8px;letter-spacing:1px;color:var(--text3);margin-top:3px}
+</style>
+</head>
+<body>
+
+<div class="page-title">如画 LUMIRA · 自定义模板扫码导入海报</div>
+<div class="page-sub">V3 · 画幅自适应排版 —— 海报画布固定竖版 340×566，<b>封面图比例决定整套排版构图</b>，5 种比例 = 5 种完全不同布局</div>
+
+<!-- 排版索引 -->
+<div class="index">
+  <div class="idx"><div class="thumb" style="overflow:hidden"><i style="left:2px;top:8px;width:58%;height:calc(100% - 16px)"></i><b style="right:4px;top:10px;width:26%;height:14px"></b><b style="right:4px;top:28px;width:18%;height:36px"></b><b style="right:4px;bottom:8px;width:20px;height:20px"></b></div><div class="lb">9:16 竖幅</div><div class="nm">左图满高 · 右列竖文</div></div>
+  <div class="idx"><div class="thumb"><i style="left:24%;top:14px;width:52%;height:42%"></i><b style="left:32%;top:64%;width:36%;height:8px"></b><b style="left:38%;top:76%;width:24%;height:6px"></b><b style="left:38%;bottom:10%;width:24%;height:18px"></b></div><div class="lb">3:4 竖幅</div><div class="nm">上居中图 · 下居中文</div></div>
+  <div class="idx"><div class="thumb"><i style="left:10%;top:24%;width:40%;height:40%"></i><b style="right:8%;top:30%;width:30%;height:9px"></b><b style="right:10%;top:44%;width:20%;height:26px"></b><b style="right:10%;bottom:12%;width:22px;height:22px"></b></div><div class="lb">1:1 方形</div><div class="nm">左方图 · 右栏文</div></div>
+  <div class="idx"><div class="thumb"><b style="left:32%;top:8%;width:36%;height:7px"></b><b style="left:34%;top:20%;width:32%;height:8px"></b><i style="left:12%;top:34%;width:76%;height:38%"></i><b style="left:38%;bottom:9%;width:24%;height:17px"></b></div><div class="lb">4:3 横幅</div><div class="nm">文在上 · 图在下</div></div>
+  <div class="idx"><div class="thumb"><i style="left:0;top:12%;width:100%;height:40%"></i><b style="left:8%;top:56%;width:60%;height:12px"></b><b style="left:10%;bottom:10%;width:22px;height:22px"></b></div><div class="lb">16:9 宽幅</div><div class="nm">电影通栏 · 标题压图</div></div>
+</div>
+
+<div class="sec">
+  <div class="row">
+
+    <!-- 9:16 -->
+    <div class="cell">
+      <div class="sys-label">封面 9:16 · 全屏竖幅</div>
+      <div class="poster c1">
+        <div class="wm">LUMIRA<span class="zh"> · 如画</span></div><div class="serial">№ 011</div>
+        <div class="img"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=tall%20vertical%20warm%20editorial%20portrait%20of%20a%20woman%2C%20golden%20hour%20cream%20and%20gold%20tones%2C%20french%20lazy%20style%2C%20soft%20knit%20window%20light&image_size=portrait_16_9" alt=""></div>
+        <div class="side">
+          <div class="k">模板分享</div>
+          <div class="vt">法式<span class="g">慵懒</span></div>
+          <div class="rule"></div>
+          <div class="cat">人像写真 · 摄影模板</div>
+          <div class="qr qr-grid" data-qr="1"></div>
+          <div class="tip">扫码导入模板<br>打开如画 App</div>
+        </div>
+        <div class="exp">有效期至 <b>08-29 20:00</b></div>
+      </div>
+    </div>
+
+    <!-- 3:4 -->
+    <div class="cell">
+      <div class="sys-label">封面 3:4 · 竖幅</div>
+      <div class="poster c2">
+        <div class="wm">LUMIRA<span class="zh"> · 如画</span></div><div class="serial">№ 011</div>
+        <div class="img"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=vertical%20warm%20editorial%20portrait%20of%20a%20woman%2C%20golden%20hour%20cream%20gold%20tones%2C%20french%20lazy%20style&image_size=portrait_4_3" alt=""></div>
+        <div class="center">
+          <div class="kicker">模板分享</div>
+          <div class="title">法式慵懒</div>
+          <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+          <div class="rule"></div>
+          <div class="qr qr-grid" data-qr="2"></div>
+          <div class="tip">扫码导入模板 · 打开如画 App</div>
+          <div class="exp">有效期至 08-29 20:00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1:1 -->
+    <div class="cell">
+      <div class="sys-label">封面 1:1 · 方形</div>
+      <div class="poster c3">
+        <div class="wm">LUMIRA<span class="zh"> · 如画</span></div><div class="serial">№ 011</div>
+        <div class="img"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=square%20warm%20editorial%20portrait%20of%20a%20woman%2C%20golden%20hour%20cream%20gold%20tones%2C%20french%20lazy%20style&image_size=square_hd" alt=""></div>
+        <div class="right">
+          <div class="k">模板分享</div>
+          <div class="title">法式<br>慵懒</div>
+          <div class="cat">人像写真<br><b>摄影模板</b></div>
+          <div class="rule"></div>
+          <div class="qr qr-grid" data-qr="3"></div>
+          <div class="tip">扫码导入模板<br>打开如画 App</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4:3 -->
+    <div class="cell">
+      <div class="sys-label">封面 4:3 · 横幅</div>
+      <div class="poster c4">
+        <div class="wm">LUMIRA<span class="zh"> · 如画</span></div><div class="serial">№ 011</div>
+        <div class="top">
+          <div class="kicker">模板分享</div>
+          <div class="title">法式慵懒</div>
+          <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+        </div>
+        <div class="img"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%20horizontal%20warm%20editorial%20scene%2C%20golden%20hour%20cream%20gold%20tones%2C%20french%20lazy%20interior%20window%20light&image_size=landscape_4_3" alt=""></div>
+        <div class="bottom">
+          <div class="qr qr-grid" data-qr="4"></div>
+          <div class="tip">扫码导入模板 · 打开如画 App</div>
+          <div class="exp">有效期至 08-29 20:00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 16:9 -->
+    <div class="cell">
+      <div class="sys-label">封面 16:9 · 宽幅横屏</div>
+      <div class="poster c5">
+        <div class="wm" style="color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.4)">LUMIRA<span class="zh" style="color:rgba(255,255,255,.7)"> · 如画</span></div><div class="serial" style="color:rgba(255,255,255,.6)">№ 011</div>
+        <div class="img"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=wide%20horizontal%20warm%20editorial%20scene%2C%20golden%20hour%20cream%20gold%20tones%2C%20cinematic%20french%20lazy%20interior&image_size=landscape_16_9" alt=""><div class="film"></div><div class="track"><span></span><span></span></div></div>
+        <div class="title">法式<span class="g">慵懒</span></div>
+        <div class="meta">
+          <div class="cat">人像写真 <b>·</b> 摄影模板</div>
+          <div class="rule"></div>
+          <div class="exp">有效期至 08-29 20:00</div>
+        </div>
+        <div class="bottom">
+          <div class="qr qr-grid" data-qr="5"></div>
+          <div class="tip"><b>扫码导入模板</b>打开如画 App 扫码即可导入</div>
+          <div class="slogan"><div class="en">LUMIRA</div><div class="zh">如你所见 · 皆成画卷</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  var seed=41;function r(){seed=(seed*9301+49297)%233280;return seed/233280}
+  document.querySelectorAll('.qr-grid').forEach(function(el){
+    var html='';
+    for(var y=0;y<9;y++){for(var x=0;x<9;x++){
+      var corner=(y<3&&x<3)||(y<3&&x>=6)||(y>=6&&x<3);
+      var on=corner?(x%2===0&&y%2===0||x===0||y===0):r()>0.5;
+      html+='<i'+(on?'':' style="opacity:.12"')+'></i>';
+    }}
+    el.innerHTML=html;
+  });
+</script>
+</body>
+</html>
