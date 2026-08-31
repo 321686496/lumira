@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探店足迹分享海报 · 女性向温柔手帐</title>
+<style>
+  :root{
+    --bg1:#FFF9F2;    /* 燕麦奶油底 */
+    --bg2:#FFF3F1;    /* 晨曦粉 */
+    --rose:#F4B8B0;   /* 柔和玫瑰粉 */
+    --rose-deep:#D9958D;
+    --sage:#AFC4A4;   /* 鼠尾草绿点缀 */
+    --ink:#5B4A44;
+    --ink-2:#9A867E;
+    --card:rgba(255,255,255,.78); /* 玻璃拟态 */
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",sans-serif;
+    background:#F0E7DE;color:var(--ink);
+    display:flex;gap:44px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding:52px 28px;
+  }
+  .section-head{width:100%;text-align:center;color:var(--rose-deep);letter-spacing:3px;font-size:14px;margin-bottom:6px;}
+
+  .poster{
+    width:520px;background:linear-gradient(160deg,var(--bg1),var(--bg2)); /* 扁平微渐变 */
+    border-radius:34px;position:relative;overflow:hidden;
+    box-shadow:0 30px 60px rgba(217,149,141,.28),0 6px 16px rgba(90,74,68,.08);
+    display:flex;flex-direction:column;align-items:center;padding:32px 30px 26px;
+  }
+
+  /* 柔和圆点装饰 */
+  .dot{position:absolute;border-radius:50%;filter:blur(6px);}
+  .dot1{width:220px;height:220px;background:#FBE3DF;top:-60px;right:-50px;}
+  .dot2{width:180px;height:180px;background:#F4EEE0;bottom:-70px;left:-60px;}
+
+  /* 品牌标 */
+  .brand{width:100%;display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;font-size:12px;color:var(--rose-deep);letter-spacing:1px;font-weight:600;}
+  .brand .chip{background:var(--card);border-radius:999px;padding:6px 14px;font-weight:500;}
+
+  /* 主图 */
+  .main{width:100%;height:330px;border-radius:26px;overflow:hidden;margin-top:20px;position:relative;z-index:1;
+    box-shadow:0 16px 34px rgba(217,149,141,.25);}
+  .main img{width:100%;height:100%;object-fit:cover;}
+  .main .rating-chip{position:absolute;left:16px;bottom:16px;background:rgba(255,255,255,.85);
+    backdrop-filter:blur(6px);border-radius:999px;padding:6px 14px;display:flex;align-items:center;gap:6px;
+    font-weight:700;font-size:16px;color:var(--ink);}
+  .main .rating-chip .star{color:#F5B85A;}
+
+  /* 标题区 */
+  .title-block{width:100%;margin-top:18px;position:relative;z-index:1;}
+  .name{font-size:26px;font-weight:700;letter-spacing:.5px;}
+  .name small{font-size:13px;color:var(--ink-2);font-weight:500;margin-left:8px;}
+  .meta-row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);}
+  .pill{background:var(--card);border-radius:999px;padding:5px 12px;font-size:12px;color:var(--ink);}
+  .pill.sage{color:var(--rose-deep);}
+
+  /* 心得卡 */
+  .note{width:100%;margin-top:16px;background:var(--card);border-radius:20px;padding:14px 18px;
+    font-size:14px;line-height:1.9;color:var(--ink-2);border:1px solid rgba(255,255,255,.9);}
+
+  /* 小图带 */
+  .thumbs{width:100%;display:flex;gap:10px;margin-top:16px;position:relative;z-index:1;}
+  .t{flex:1;height:96px;border-radius:16px;overflow:hidden;background:var(--card);}
+  .t img{width:100%;height:100%;object-fit:cover;}
+
+  /* 底部 */
+  .foot{width:100%;margin-top:18px;display:flex;justify-content:space-between;align-items:center;
+    font-size:11px;color:var(--ink-2);letter-spacing:1px;position:relative;z-index:1;}
+  .foot .wm{color:var(--rose-deep);font-weight:600;}
+
+  .legend{max-width:420px;color:var(--ink-2);font-size:13px;line-height:2;padding-top:6px;letter-spacing:.3px;}
+  .legend b{color:var(--rose-deep);}
+  .legend .sw{display:inline-block;width:16px;height:16px;border-radius:6px;vertical-align:middle;margin-right:4px;}
+</style>
+</head>
+<body>
+  <div class="section-head">女性向·温柔手帐 · 微渐变 · 大圆角 · 玻璃拟态</div>
+
+  <div class="poster">
+    <span class="dot dot1"></span><span class="dot dot2"></span>
+
+    <!-- 品牌 -->
+    <div class="brand">
+      <span>如画 · LUMIRA</span>
+      <span class="chip">探店足迹</span>
+    </div>
+
+    <!-- 主图 + 评分浮胶 -->
+    <div class="main">
+      <img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cozy%20brunch%20cafe%20golden%20hour%20soft%20natural%20light%2C%20photorealistic%2C%20warm%20and%20gentle&image_size=landscape_4_3" />
+      <span class="rating-chip"><span class="star">★</span>5.0</span>
+    </div>
+
+    <!-- 标题 -->
+    <div class="title-block">
+      <div class="name">屿见咖啡<small>愚园路 120 号</small></div>
+      <div class="meta-row">
+        <span class="pill">2026 · 08 · 29</span>
+        <span class="pill sage">咖啡</span>
+        <span class="pill">静安区</span>
+        <span class="pill">★★★★★</span>
+      </div>
+    </div>
+
+    <!-- 心得 -->
+    <div class="note">临窗的一杯拿铁，配上午后斜阳，是这座城市里最温柔、最安静的时刻，想一直待下去。</div>
+
+    <!-- 小图带 -->
+    <div class="thumbs">
+      <div class="t"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=latte%20art%20top%20view%20soft%20pastel&image_size=square_hd"/></div>
+      <div class="t"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=pastel%20cake%20dessert%20soft%20pink&image_size=square_hd"/></div>
+      <div class="t"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=flowers%20vase%20cafe%20table%20soft&image_size=square_hd"/></div>
+      <div class="t"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cozy%20cafe%20corner%20armchair%20soft&image_size=square_hd"/></div>
+    </div>
+
+    <!-- 底部 -->
+    <div class="foot">
+      <span>如画 LUMIRA · 探店足迹</span>
+      <span class="wm">每一帧都是心动</span>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>女性向 · 温柔手帐要点</b><br/>
+    · <b>微渐变</b>底（燕麦奶油 → 晨曦粉，160°），柔和圆点光晕装饰<br/>
+    · <b>大圆角</b>（主图 26 / 卡片 20 / 胶囊 999），无尖锐直角<br/>
+    · <b>玻璃拟态</b>：评分浮于图上的半透明白+毛玻璃，胶囊/标签用半透明卡片<br/>
+    · 无衬线 + 粗细层级，柔和玫瑰粉 / 鼠尾草绿点缀<br/>
+    · <span class="sw" style="background:#F4B8B0"></span>玫瑰粉　<span class="sw" style="background:#AFC4A4"></span>鼠尾草绿　<span class="sw" style="background:#F5B85A"></span>暖星光
+  </div>
+</body>
+</html>

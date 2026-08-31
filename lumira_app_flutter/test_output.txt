@@ -1,0 +1,372 @@
+﻿flutter : Flutter assets will be downloaded from https://storage.flutter-io.cn. Make sure you trust this source!
+At line:15 char:2429
++ ... pgrep\bin'; flutter test test/features/templates/templates_page_test. ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Flutter assets ...st this source!:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The plugin `screen` uses a deprecated version of the Android embedding.
+To avoid unexpected runtime failures, or future build failures, try to see if this plugin supports the Android V2 embed
+ding. Otherwise, consider removing it since a future release of Flutter will remove these deprecated APIs.
+If you are plugin author, take a look at the docs for migrating the plugin to the V2 embedding: https://flutter.dev/go/
+android-plugin-migration.
+00:00 +0: (setUpAll)
+00:00 +0: renders all main sections
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly 2 matching nodes in the widget tree
+  Actual: _TextFinder:<zero widgets with text "咖啡馆人像" (ignoring offstage widgets)>
+   Which: means none were found but some were expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart:156:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart line 156
+The test description was:
+  renders all main sections
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +0 -1: renders all main sections [E]
+  Test failed. See exception logs above.
+  The test description was: renders all main sections
+  
+00:02 +0 -1: recommendation card displays source badge label
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly 3 matching nodes in the widget tree
+  Actual: _TextFinder:<zero widgets with text "为你推荐" (ignoring offstage widgets)>
+   Which: means none were found but some were expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart:169:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart line 169
+The test description was:
+  recommendation card displays source badge label
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +0 -2: recommendation card displays source badge label [E]
+  Test failed. See exception logs above.
+  The test description was: recommendation card displays source badge label
+  
+00:02 +0 -2: free badge shows on price=0 templates
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly 8 matching nodes in the widget tree
+  Actual: _TextFinder:<6 widgets with text "免费" (ignoring offstage widgets): Text("免费", inherit:
+true, color: Color(0xffffffff), size: 10.0, weight: 600, dependencies: [DefaultSelectionStyle,
+DefaultTextStyle, MediaQuery]), Text("免费", inherit: true, color: Color(0xffffffff), size: 10.0,
+weight: 600, dependencies: [DefaultSelectionStyle, DefaultTextStyle, MediaQuery]), Text("免费",
+inherit: true, color: Color(0xffffffff), size: 10.0, weight: 600, dependencies:
+[DefaultSelectionStyle, DefaultTextStyle, MediaQuery]), ...>
+   Which: is not enough
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart:181:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart line 181
+The test description was:
+  free badge shows on price=0 templates
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:03 +0 -3: free badge shows on price=0 templates [E]
+  Test failed. See exception logs above.
+  The test description was: free badge shows on price=0 templates
+  
+00:03 +0 -3: renders across 4 UI styles
+[recommend] today recommend ranking failed (silent fallback): SqfliteFfiException(error, Bad state: This database has already been closed}) DatabaseException(Bad state: This database has already been closed) sql 'SELECT * FROM usage_stats WHERE item_type = ? AND item_id IN (?,?,?)' args [template, cafe_portrait, street_bw, macro_flower] {details: {database: {path: E:\Project\photo_post\lumira_app_flutter\.dart_tool\sqflite_common_ffi\databases\lumira.db, id: 5, readOnly: false, singleInstance: true}}}
+[recommend] today recommend ranking failed (silent fallback): SqfliteFfiException(error, Bad state: This database has already been closed}) DatabaseException(Bad state: This database has already been closed) sql 'SELECT * FROM usage_stats WHERE item_type = ? AND item_id IN (?,?,?)' args [template, cafe_portrait, street_bw, macro_flower] {details: {database: {path: E:\Project\photo_post\lumira_app_flutter\.dart_tool\sqflite_common_ffi\databases\lumira.db, id: 6, readOnly: false, singleInstance: true}}}
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following MissingPluginException was thrown running a test:
+MissingPluginException(No implementation found for method getApplicationDocumentsDirectory on
+channel plugins.flutter.io/path_provider)
+
+When the exception was thrown, this was the stack:
+#0      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:313:7)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+The test description was:
+  renders across 4 UI styles
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:04 +0 -4: renders across 4 UI styles [E]
+  Test failed. See exception logs above.
+  The test description was: renders across 4 UI styles
+  
+00:04 +0 -4: renders across 8 themes
+00:05 +0 -4: renders across 4 UI styles
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test (but after the test had completed):
+'package:flutter_test/src/binding.dart': Failed assertion: line 1172 pos 14: 'inTest': is not true.
+
+When the exception was thrown, this was the stack:
+#2      AutomatedTestWidgetsFlutterBinding.pump.<anonymous closure> (package:flutter_test/src/binding.dart:1172:14)
+#5      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:71:41)
+#6      AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1171:27)
+#7      WidgetTester.pump.<anonymous closure> (package:flutter_test/src/widget_tester.dart:619:53)
+#10     TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:71:41)
+#11     WidgetTester.pump (package:flutter_test/src/widget_tester.dart:619:27)
+#12     main.settleOrPump (file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart:118:18)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 7 frames from class _AssertionError, dart:async, and package:stack_trace)
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:05 +0 -4: renders across 8 themes
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+Guarded function conflict.
+You must use "await" with all Future-returning test APIs.
+The guarded method "pump" from class WidgetTester was called from
+file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart on
+line 118.
+Then, the "pump" method from class AutomatedTestWidgetsFlutterBinding was called from
+package:flutter_test/src/binding.dart on line 924.
+The first method (WidgetTester.pump) had not yet finished executing at the time that the second
+method (AutomatedTestWidgetsFlutterBinding.pump) was called. Since both are guarded, and the second
+was not a nested call inside the first, the first must complete its execution before the second can
+be called. Typically, this is achieved by putting an "await" statement in front of the call to the
+first.
+
+When the first method (WidgetTester.pump) was called, this was the stack:
+#0      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:69:54)
+#1      WidgetTester.pump (package:flutter_test/src/widget_tester.dart:619:27)
+#2      main.settleOrPump (file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart:118:18)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+When the exception was thrown, this was the stack:
+#0      TestAsyncUtils.guardSync (package:flutter_test/src/test_async_utils.dart:271:5)
+#1      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:63:5)
+#2      AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1171:27)
+#3      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:924:11)
+#6      TestWidgetsFlutterBinding._runTest (package:flutter_test/src/binding.dart:913:14)
+#7      AutomatedTestWidgetsFlutterBinding.runTest.<anonymous closure> (package:flutter_test/src/binding.dart:1398:24)
+#8      FakeAsync.run.<anonymous closure>.<anonymous closure> (package:fake_async/fake_async.dart:182:54)
+#13     withClock (package:clock/src/default.dart:52:10)
+#14     FakeAsync.run.<anonymous closure> (package:fake_async/fake_async.dart:182:22)
+#19     FakeAsync.run (package:fake_async/fake_async.dart:182:7)
+#20     AutomatedTestWidgetsFlutterBinding.runTest (package:flutter_test/src/binding.dart:1395:15)
+#21     testWidgets.<anonymous closure> (package:flutter_test/src/widget_tester.dart:164:24)
+#22     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:215:19)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 11 frames from dart:async and package:stack_trace)
+
+The test description was:
+  renders across 8 themes
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:05 +0 -5: renders across 8 themes [E]
+  Test failed. See exception logs above.
+  The test description was: renders across 8 themes
+  
+00:05 +0 -5: renders across 4 UI styles
+[recommend] today recommend ranking failed (silent fallback): SqfliteFfiException(error, Bad state: This database has already been closed}) DatabaseException(Bad state: This database has already been closed) sql 'SELECT * FROM usage_stats WHERE item_type = ? AND item_id IN (?,?,?)' args [template, cafe_portrait, street_bw, macro_flower] {details: {database: {path: E:\Project\photo_post\lumira_app_flutter\.dart_tool\sqflite_common_ffi\databases\lumira.db, id: 7, readOnly: false, singleInstance: true}}}
+00:05 +0 -5: nav "查看全部" button pushes /templates/all
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+Guarded function conflict.
+You must use "await" with all Future-returning test APIs.
+The guarded method "pump" from class WidgetTester was called from
+file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart on
+line 118.
+Then, the "pump" method from class AutomatedTestWidgetsFlutterBinding was called from
+package:flutter_test/src/binding.dart on line 924.
+The first method (WidgetTester.pump) had not yet finished executing at the time that the second
+method (AutomatedTestWidgetsFlutterBinding.pump) was called. Since both are guarded, and the second
+was not a nested call inside the first, the first must complete its execution before the second can
+be called. Typically, this is achieved by putting an "await" statement in front of the call to the
+first.
+
+When the first method (WidgetTester.pump) was called, this was the stack:
+#0      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:69:54)
+#1      WidgetTester.pump (package:flutter_test/src/widget_tester.dart:619:27)
+#2      main.settleOrPump (file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart:118:18)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+When the exception was thrown, this was the stack:
+#0      TestAsyncUtils.guardSync (package:flutter_test/src/test_async_utils.dart:271:5)
+#1      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:63:5)
+#2      AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1171:27)
+#3      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:924:11)
+#6      TestWidgetsFlutterBinding._runTest (package:flutter_test/src/binding.dart:913:14)
+#7      AutomatedTestWidgetsFlutterBinding.runTest.<anonymous closure> (package:flutter_test/src/binding.dart:1398:24)
+#8      FakeAsync.run.<anonymous closure>.<anonymous closure> (package:fake_async/fake_async.dart:182:54)
+#13     withClock (package:clock/src/default.dart:52:10)
+#14     FakeAsync.run.<anonymous closure> (package:fake_async/fake_async.dart:182:22)
+#19     FakeAsync.run (package:fake_async/fake_async.dart:182:7)
+#20     AutomatedTestWidgetsFlutterBinding.runTest (package:flutter_test/src/binding.dart:1395:15)
+#21     testWidgets.<anonymous closure> (package:flutter_test/src/widget_tester.dart:164:24)
+#22     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:215:19)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 11 frames from dart:async and package:stack_trace)
+
+The test description was:
+  nav "查看全部" button pushes /templates/all
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:05 +0 -6: nav "查看全部" button pushes /templates/all [E]
+  Test failed. See exception logs above.
+  The test description was: nav "查看全部" button pushes /templates/all
+  
+00:05 +0 -6: section link "查看全部 ›" pushes /templates/all
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+Guarded function conflict.
+You must use "await" with all Future-returning test APIs.
+The guarded method "pump" from class WidgetTester was called from
+file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart on
+line 118.
+Then, the "pump" method from class AutomatedTestWidgetsFlutterBinding was called from
+package:flutter_test/src/binding.dart on line 924.
+The first method (WidgetTester.pump) had not yet finished executing at the time that the second
+method (AutomatedTestWidgetsFlutterBinding.pump) was called. Since both are guarded, and the second
+was not a nested call inside the first, the first must complete its execution before the second can
+be called. Typically, this is achieved by putting an "await" statement in front of the call to the
+first.
+
+When the first method (WidgetTester.pump) was called, this was the stack:
+#0      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:69:54)
+#1      WidgetTester.pump (package:flutter_test/src/widget_tester.dart:619:27)
+#2      main.settleOrPump (file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart:118:18)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+When the exception was thrown, this was the stack:
+#0      TestAsyncUtils.guardSync (package:flutter_test/src/test_async_utils.dart:271:5)
+#1      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:63:5)
+#2      AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1171:27)
+#3      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:924:11)
+#6      TestWidgetsFlutterBinding._runTest (package:flutter_test/src/binding.dart:913:14)
+#7      AutomatedTestWidgetsFlutterBinding.runTest.<anonymous closure> (package:flutter_test/src/binding.dart:1398:24)
+#8      FakeAsync.run.<anonymous closure>.<anonymous closure> (package:fake_async/fake_async.dart:182:54)
+#13     withClock (package:clock/src/default.dart:52:10)
+#14     FakeAsync.run.<anonymous closure> (package:fake_async/fake_async.dart:182:22)
+#19     FakeAsync.run (package:fake_async/fake_async.dart:182:7)
+#20     AutomatedTestWidgetsFlutterBinding.runTest (package:flutter_test/src/binding.dart:1395:15)
+#21     testWidgets.<anonymous closure> (package:flutter_test/src/widget_tester.dart:164:24)
+#22     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:215:19)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 11 frames from dart:async and package:stack_trace)
+
+The test description was:
+  section link "查看全部 ›" pushes /templates/all
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:05 +0 -7: section link "查看全部 ›" pushes /templates/all [E]
+  Test failed. See exception logs above.
+  The test description was: section link "查看全部 ›" pushes /templates/all
+  
+00:05 +0 -7: scroll toggles LumiraNav scrolled state
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+Guarded function conflict.
+You must use "await" with all Future-returning test APIs.
+The guarded method "pump" from class WidgetTester was called from
+file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart on
+line 118.
+Then, the "pump" method from class AutomatedTestWidgetsFlutterBinding was called from
+package:flutter_test/src/binding.dart on line 924.
+The first method (WidgetTester.pump) had not yet finished executing at the time that the second
+method (AutomatedTestWidgetsFlutterBinding.pump) was called. Since both are guarded, and the second
+was not a nested call inside the first, the first must complete its execution before the second can
+be called. Typically, this is achieved by putting an "await" statement in front of the call to the
+first.
+
+When the first method (WidgetTester.pump) was called, this was the stack:
+#0      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:69:54)
+#1      WidgetTester.pump (package:flutter_test/src/widget_tester.dart:619:27)
+#2      main.settleOrPump (file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart:118:18)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+When the exception was thrown, this was the stack:
+#0      TestAsyncUtils.guardSync (package:flutter_test/src/test_async_utils.dart:271:5)
+#1      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:63:5)
+#2      AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1171:27)
+#3      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:924:11)
+#6      TestWidgetsFlutterBinding._runTest (package:flutter_test/src/binding.dart:913:14)
+#7      AutomatedTestWidgetsFlutterBinding.runTest.<anonymous closure> (package:flutter_test/src/binding.dart:1398:24)
+#8      FakeAsync.run.<anonymous closure>.<anonymous closure> (package:fake_async/fake_async.dart:182:54)
+#13     withClock (package:clock/src/default.dart:52:10)
+#14     FakeAsync.run.<anonymous closure> (package:fake_async/fake_async.dart:182:22)
+#19     FakeAsync.run (package:fake_async/fake_async.dart:182:7)
+#20     AutomatedTestWidgetsFlutterBinding.runTest (package:flutter_test/src/binding.dart:1395:15)
+#21     testWidgets.<anonymous closure> (package:flutter_test/src/widget_tester.dart:164:24)
+#22     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:215:19)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 11 frames from dart:async and package:stack_trace)
+
+The test description was:
+  scroll toggles LumiraNav scrolled state
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:05 +0 -8: scroll toggles LumiraNav scrolled state [E]
+  Test failed. See exception logs above.
+  The test description was: scroll toggles LumiraNav scrolled state
+  
+00:05 +0 -8: recommendation card tap pushes /templates/detail
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following assertion was thrown running a test:
+Guarded function conflict.
+You must use "await" with all Future-returning test APIs.
+The guarded method "pump" from class WidgetTester was called from
+file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart on
+line 118.
+Then, the "pump" method from class AutomatedTestWidgetsFlutterBinding was called from
+package:flutter_test/src/binding.dart on line 924.
+The first method (WidgetTester.pump) had not yet finished executing at the time that the second
+method (AutomatedTestWidgetsFlutterBinding.pump) was called. Since both are guarded, and the second
+was not a nested call inside the first, the first must complete its execution before the second can
+be called. Typically, this is achieved by putting an "await" statement in front of the call to the
+first.
+
+When the first method (WidgetTester.pump) was called, this was the stack:
+#0      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:69:54)
+#1      WidgetTester.pump (package:flutter_test/src/widget_tester.dart:619:27)
+#2      main.settleOrPump (file:///E:/Project/photo_post/lumira_app_flutter/test/features/templates/templates_page_test.dart:118:18)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+When the exception was thrown, this was the stack:
+#0      TestAsyncUtils.guardSync (package:flutter_test/src/test_async_utils.dart:271:5)
+#1      TestAsyncUtils.guard (package:flutter_test/src/test_async_utils.dart:63:5)
+#2      AutomatedTestWidgetsFlutterBinding.pump (package:flutter_test/src/binding.dart:1171:27)
+#3      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:924:11)
+#6      TestWidgetsFlutterBinding._runTest (package:flutter_test/src/binding.dart:913:14)
+#7      AutomatedTestWidgetsFlutterBinding.runTest.<anonymous closure> (package:flutter_test/src/binding.dart:1398:24)
+#8      FakeAsync.run.<anonymous closure>.<anonymous closure> (package:fake_async/fake_async.dart:182:54)
+#13     withClock (package:clock/src/default.dart:52:10)
+#14     FakeAsync.run.<anonymous closure> (package:fake_async/fake_async.dart:182:22)
+#19     FakeAsync.run (package:fake_async/fake_async.dart:182:7)
+#20     AutomatedTestWidgetsFlutterBinding.runTest (package:flutter_test/src/binding.dart:1395:15)
+#21     testWidgets.<anonymous closure> (package:flutter_test/src/widget_tester.dart:164:24)
+#22     Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:215:19)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided 11 frames from dart:async and package:stack_trace)
+
+The test description was:
+  recommendation card tap pushes /templates/detail
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:05 +0 -9: recommendation card tap pushes /templates/detail [E]
+  Test failed. See exception logs above.
+  The test description was: recommendation card tap pushes /templates/detail
+  
+00:05 +0 -9: (tearDownAll)
+00:05 +0 -9: Some tests failed.

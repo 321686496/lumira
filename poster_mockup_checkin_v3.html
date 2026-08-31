@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探店足迹分享海报 · 报纸头条风 v3</title>
+<style>
+  :root{
+    --paper:#FDFBF7;
+    --gold:#C9A96E;
+    --gold-dark:#B08D4F;
+    --ink:#2F2F2C;
+    --ink-2:#6E6A60;
+    --ink-3:#9A9487;
+    --line:rgba(185,158,108,.4);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:"Songti SC","Noto Serif SC","SimSun",serif;
+    background:#EFECE4;color:var(--ink);
+    display:flex;gap:44px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding:52px 28px;
+  }
+  .section-head{width:100%;text-align:center;color:var(--ink-2);letter-spacing:4px;font-size:14px;margin-bottom:6px;}
+  .poster{
+    width:540px;min-height:820px;background:var(--paper);position:relative;
+    box-shadow:0 28px 58px rgba(60,52,40,.22),0 4px 12px rgba(60,52,40,.10);
+    overflow:hidden;display:flex;flex-direction:column;padding:0;margin:0;
+  }
+  .poster.grain::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+    background-image:radial-gradient(rgba(185,158,108,.05) 1px,transparent 1px);background-size:5px 5px;opacity:.4;}
+
+  .masthead{border-bottom:2px solid var(--ink);padding:22px 34px 12px;text-align:center;position:relative;}
+  .masthead .topline{display:flex;justify-content:space-between;font-size:10px;letter-spacing:3px;color:var(--ink-3);padding-bottom:8px;}
+  .masthead .headline{font-size:60px;font-weight:700;letter-spacing:6px;line-height:1;margin-top:6px;}
+  .masthead .sub{font-size:12px;letter-spacing:6px;color:var(--gold-dark);margin-top:10px;padding-bottom:6px;}
+  .masthead .rule{display:block;height:1px;background:var(--gold);width:100%;margin-top:2px;}
+
+  /* 胶片带：5张竖图等高并排 */
+  .film{display:flex;padding:26px 34px 6px;gap:8px;}
+  .film .f{flex:1;height:210px;position:relative;background:#E9E0CF;
+    clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);}
+  .film .f img{width:100%;height:100%;object-fit:cover;display:block;}
+  .film .f .cornerTL,.film .f .cornerBR{position:absolute;border-color:var(--gold);border-style:solid;z-index:2;width:11px;height:11px;}
+  .film .f .cornerTL{top:-1px;left:-1px;border-width:1.5px 0 0 1.5px;}
+  .film .f .cornerBR{bottom:-1px;right:-1px;border-width:0 1.5px 1.5px 0;}
+
+  .body{padding:20px 40px 0;color:var(--ink-2);text-align:center;flex:1;display:flex;flex-direction:column;}
+  .rating{display:flex;align-items:center;justify-content:center;gap:10px;}
+  .stars{color:var(--gold);font-size:19px;letter-spacing:1px;}
+  .rating-num{font-size:26px;font-weight:700;color:var(--gold-dark);letter-spacing:1px;}
+  .place-line{display:flex;justify-content:center;gap:12px;align-items:center;margin-top:16px;font-size:13px;letter-spacing:2px;color:var(--ink-2);}
+  .place-line i{font-style:normal;color:var(--gold);}
+  .place-line .cat{color:var(--gold-dark);border:1px solid var(--gold);border-radius:999px;padding:1px 12px;font-size:11px;letter-spacing:2px;}
+  .note{margin:22px auto 0;font-size:14px;font-style:italic;line-height:2;max-width:380px;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:13px 0;}
+
+  .footer{margin-top:auto;border-top:2px solid var(--ink);padding:12px 34px;display:flex;justify-content:space-between;align-items:center;
+    font-size:10px;letter-spacing:3px;color:var(--ink-3);}
+  .footer .br{border-top:1px solid var(--gold);padding-top:10px;margin-top:1px;}
+  .footer b{color:var(--gold-dark);font-weight:600;letter-spacing:2px;}
+  .footer .right{color:var(--ink-2);}
+
+  .legend{max-width:400px;color:var(--ink-2);font-size:13px;line-height:2;padding-top:6px;letter-spacing:.5px;}
+  .legend b{color:var(--gold-dark);}
+</style>
+</head>
+<body>
+  <div class="section-head">报纸头条风 v3 · 大头条 + 胶片带照片 · 版心分栏</div>
+
+  <div class="poster grain">
+    <!-- 报头 -->
+    <div class="masthead">
+      <div class="topline"><span>如 画 · LUMIRA</span><span>COFFEE ATLAS</span></div>
+      <div class="headline">屿见咖啡</div>
+      <div class="sub">探 店 足 迹 · STORE EXPLORATION</div>
+      <span class="rule"></span>
+    </div>
+
+    <!-- 胶片带（5张） -->
+    <div class="film">
+      <div class="f"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=latte%20art%20top%20cafe%20table%20warm&image_size=portrait_16_9"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+      <div class="f"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cozy%20cafe%20interior%20plants%20warm&image_size=portrait_16_9"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+      <div class="f"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cappuccino%20croissant%20window%20light&image_size=portrait_16_9"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+      <div class="f"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cheesecake%20dessert%20cafe%20table&image_size=portrait_16_9"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+      <div class="f"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=sandwich%20ceramic%20plate%20cafe&image_size=portrait_16_9"/><span class="cornerTL"></span><span class="cornerBR"></span></div>
+    </div>
+
+    <!-- 正文区 -->
+    <div class="body">
+      <div class="rating"><span class="stars">★★★★★</span><span class="rating-num">5.0</span></div>
+      <div class="place-line">
+        <span>愚园路 120 号</span><i>·</i>
+        <span>2026/08/29</span><i>·</i>
+        <span class="cat">咖啡</span>
+      </div>
+      <div class="note">临窗的一杯拿铁，配上午后斜阳，是这座城市里最安静的时刻。</div>
+    </div>
+
+    <!-- 页脚 -->
+    <div class="footer">
+      <div><span class="br"><b>如画</b> · LUMIRA</span></div>
+      <div class="right">LUMIRA · 探店足迹</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>v3 完全不同的版面</b><br/>
+    · <b>报头式</b>：顶部细字行 + 60px 超大衬线店名头条 + 中英文副题，粗黑线与金线分隔<br/>
+    · <b>胶片带</b>：5 张等高竖图并排贯穿版面（不再是拼块），缺角相框＋金角标<br/>
+    · 正文小版心：评分大数字 + 地点·日期·分类 + 金线夹住的心得<br/>
+    · 页脚粗黑线 + 左右品牌，杂志报纸腔
+  </div>
+</body>
+</html>

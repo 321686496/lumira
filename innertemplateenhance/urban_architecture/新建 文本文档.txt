@@ -1,0 +1,178 @@
+{
+  "name": "云端巨塔·冷调都市",
+  "category": "landscape",
+  "classification": {
+    "type": "landscape",
+    "majorStyle": "现代建筑",
+    "subStyle": "摩天大楼",
+    "method": "低角度仰拍"
+  },
+  "shortDesc": "湛蓝穹顶下银蓝玻璃幕墙直插云霄，流云如丝掠过塔尖，清冷通透的现代都市力量感扑面而来🏙️",
+  "description": "这是一套专为现代超高层建筑群设计的风景/建筑摄影模板。采用极低机位广角仰拍，强化主塔楼的垂直延伸感与视觉压迫力。画面以冷调银蓝为主色，利用晴朗天气下的自然顺侧光展现玻璃幕墙的镜面反射质感与天空卷云的流动纹理。适合在晴朗白天拍摄城市地标、CBD建筑群，传达清冷、宏大、秩序井然的都市美学。",
+  "ambience": {
+    "seasons": [
+      "春季",
+      "秋季",
+      "冬季"
+    ],
+    "weathers": [
+      "晴朗",
+      "少云"
+    ],
+    "timeTones": [
+      "上午",
+      "下午"
+    ]
+  },
+  "tags": [
+    "现代建筑",
+    "城市风光",
+    "冷调",
+    "仰拍",
+    "摩天楼"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "低角度仰拍超高层玻璃幕墙主塔，尖顶直指蓝天卷云，两侧副楼对称簇拥，底部绿树广场 grounding，银蓝冷调通透大气。"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·主构图",
+      "type": "composition",
+      "description": "采用中心对称式构图结合垂直引导线。主塔楼严格置于画面水平中轴线，从底部基座一直延伸至顶部留白处，形成强烈的垂直向上引导线。两侧副楼呈阶梯状向中心聚拢，强化透视汇聚感。天空占据画面上部约 55% 作为负空间留白，衬托建筑高度；底部广场与绿化带占下部约 15% 提供视觉重心 grounding。利用广角镜头的近大远小畸变，让塔尖显得极为高耸。",
+      "compositionFrame": "中心垂直轴构图；主体主塔位于 x:0.35-0.65, y:0.05-0.90；天空留白占上部 55%；底部前景占 15%；两侧建筑形成向心引导线。",
+      "silhouette": {
+        "type": "builtin",
+        "data": "skyscraper_low_angle_symmetric"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.45
+      },
+      "scale": 0.95,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "center_vertical",
+    "gridType": "rule_of_thirds",
+    "aspectRatio": "1:1",
+    "opacity": 0.3,
+    "description": "大远景景别，低机位仰拍（相机高度接近地面，仰角约 60-70 度）。正拍机位，确保主塔楼垂直居中不变形（或保留轻微广角透视）。主体建筑群占画幅约 70%，天空环境占 55%（含重叠），底部前景占 15%。头顶（塔尖）留白约 5-8%，避免切顶。",
+    "subjectFrame": {
+      "x": 0.15,
+      "y": 0.05,
+      "w": 0.7,
+      "h": 0.9
+    }
+  },
+  "camera": {
+    "exposureCompensation": -0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "daylight",
+    "whiteBalanceK": 5200,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "广角镜头",
+    "lensSuggestion": "wide_angle_0.5x_or_main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光为自然日光，从屏幕左上方约 45°-60° 高位射入（顺侧光）。光线较硬但经大气散射略柔，光比中等（约 3:1）。建筑左侧面受光明亮呈银白色，右侧面及凹陷处形成冷蓝色阴影，阴影边缘清晰。玻璃幕墙产生强烈镜面高光反射天空。无需人工补光，纯自然光拍摄。",
+    "shootingDistance": "50-100m (需后退至广场开阔处以容纳全貌)",
+    "background": "晴朗深蓝色天空 + 高空卷云/丝状云",
+    "props": [],
+    "bestTime": "09:00-11:00 或 14:00-16:00 (太阳高度角较高，天空最蓝)",
+    "tips": [
+      "务必使用广角镜头（0.5x 或更广），并尽量贴近地面仰拍，以最大化建筑的巍峨感。",
+      "保持手机绝对水平且正对主楼，利用 App 内置水平仪确保垂直线条不歪斜（除非刻意追求夸张透视）。",
+      "曝光补偿略微降低 (-0.3 至 -0.7)，防止天空过曝发白，同时压暗建筑阴影增加立体感。",
+      "寻找有丝状卷云的天气拍摄，云层纹理能打破大面积蓝天的单调，增加画面动感。",
+      "该效果依赖广角镜头的物理透视，真机无法通过后期完全模拟超广角的边缘拉伸感，请尽量用硬件广角拍摄。",
+      "无需开启补光灯，自然光已足够明亮。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "1:1",
+    "color": {
+      "brightness": 2,
+      "contrast": 12,
+      "saturation": 8,
+      "temperature": -6,
+      "tint": -3,
+      "highlights": -15,
+      "shadows": 5,
+      "clarity": 18
+    },
+    "smoothStrength": 0,
+    "sharpen": 35,
+    "vignette": 15,
+    "grain": 5,
+    "lut": "cyan",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": false,
+      "color": 4294967295,
+      "intensity": 0.0
+    }
+  },
+  "orientation": {
+    "framePosition": "主体居中，垂直贯穿画面",
+    "bodyFacing": {
+      "type": "正对",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "正对",
+      "azimuth": 0
+    },
+    "twist": "无",
+    "headPitch": 0,
+    "headRoll": 0,
+    "gaze": "无"
+  },
+  "framing": {
+    "shotSize": "大远景",
+    "shotSizeNote": "完整收录主塔及周边建筑群，塔尖接近上边缘，基座接近下边缘",
+    "cameraHeight": "低机位仰拍",
+    "cameraAzimuth": "正拍",
+    "subjectScale": "建筑群占画幅约 70%，主塔占垂直高度 85%",
+    "environmentRatio": "天空占 55%，地面前景占 15%",
+    "headroom": "塔尖距上边缘约 5% 留白",
+    "framingNote": "超低角度广角仰拍，强调垂直线条的汇聚与建筑的高耸入云感，中心对称构图。"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "屏幕左上方高位顺侧光 (约 10-11 点钟方向)",
+      "辅光轮廓光": "天空漫反射作为天然补光，照亮背光面细节",
+      "光型软硬": "硬光为主，略带大气柔化，阴影边缘清晰",
+      "光比": "中等偏高 (约 3:1 至 4:1)",
+      "阴影": "建筑右侧面及结构凹陷处投射深冷蓝色阴影，方向朝屏幕右下方",
+      "质感": "玻璃幕墙呈现高反光镜面质感，金属结构锐利，天空云层细腻丝滑",
+      "环境光": "整体环境为高色温冷调日光，背景天空亮度高",
+      "色温对比": "整体统一冷调，受光面偏银白微暖，背光面偏深蓝青"
+    },
+    "lightToParams": "白平衡设为 daylight/5200K 保留清冷感；temperature -6 强化冷调；contrast +12 增强玻璃与天空的反差；highlights -15 找回天空云层细节；clarity +18 强化建筑结构锐度；lut 选 cyan 统一青蓝影调。"
+  },
+  "styling": {
+    "subjectType": "现代超高层玻璃幕墙建筑群",
+    "clothingLayers": {
+      "上装": "N/A",
+      "下装": "N/A",
+      "衣角处理": "N/A",
+      "袖子": "N/A",
+      "领口": "N/A",
+      "鞋袜": "N/A",
+      "叠穿层次": "N/A"
+    },
+    "accessories": "N/A",
+    "hairMakeup": "N/A",
+    "objectStyle": "银蓝色 Low-E 玻璃幕墙 + 钢结构框架；主塔为锥形收分尖顶造型，副楼为矩形平顶造型；底部配有规则排列的绿色行道树与灰色石材铺装广场。",
+    "note": "建筑表面需保持清洁以呈现最佳反光质感；选择晴天拍摄以确保玻璃反射出纯净的蓝天色彩。"
+  }
+}

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探店足迹分享海报 · 克制奢华绅士</title>
+<style>
+  :root{
+    --canvas:#FAF7F2;   /* App warmWhite canvas */
+    --surface:#FDFBF7;
+    --brand:#C9A96E;    /* App 金主色 */
+    --brandDeep:#A88550;
+    --brandL:#E9DCC0;
+    --ink:#1A1A1A;
+    --ink2:#5C5852;
+    --ink3:#A29A8A;
+    --hairline:rgba(168,133,80,.38);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:"Songti SC","STSong","Noto Serif SC",serif;
+    background:#ECE7DC;color:var(--ink);
+    display:flex;gap:44px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding:52px 28px;
+  }
+  .section-head{width:100%;text-align:center;color:var(--brandDeep);letter-spacing:4px;font-size:14px;margin-bottom:6px;}
+
+  .poster{
+    width:520px;min-height:780px;background:var(--surface);position:relative;
+    box-shadow:0 30px 60px rgba(122,107,95,.18),0 4px 12px rgba(26,26,26,.05);
+    outline:1px solid var(--hairline);outline-offset:-14px;
+    display:flex;flex-direction:column;align-items:center;padding:0;margin:0;
+  }
+  /* 纸纹 */
+  .poster::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.4;
+    background-image:radial-gradient(rgba(168,133,80,.06) 1px,transparent 1px);background-size:7px 7px;}
+  /* 内细金框 */
+  .poster::after{content:"";position:absolute;inset:14px;border:1px solid rgba(201,169,110,.16);pointer-events:none;}
+
+  /* 顶部 */
+  .top{display:flex;flex-direction:column;align-items:center;padding-top:52px;z-index:1;}
+  .diamond{width:9px;height:9px;background:var(--brand);transform:rotate(45deg);}
+  .brand{font-size:12px;letter-spacing:9px;color:var(--brandDeep);margin-top:20px;font-weight:600;}
+  .rule{width:56px;height:1px;background:var(--brand);margin:18px 0 0;position:relative;}
+  .rule::before{content:"";position:absolute;left:50%;top:-3px;width:7px;height:7px;background:var(--surface);
+    border:1px solid var(--brand);transform:translateX(-50%) rotate(45deg);}
+  .eyebrow{margin-top:22px;font-size:11px;letter-spacing:6px;color:var(--ink3);}
+
+  /* 主图：极细金框、广留白、衬线 */
+  .main{position:relative;margin-top:26px;width:388px;height:300px;padding:9px;z-index:1;
+    outline:1px solid rgba(201,169,110,.45);outline-offset:0;}
+  .main::before{content:"";position:absolute;top:0;left:0;width:18px;height:18px;
+    border-top:1px solid var(--brandDeep);border-left:1px solid var(--brandDeep);}
+  .main .img{width:100%;height:100%;overflow:hidden;}
+  .main .img img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(.95);}
+
+  /* 店名 */
+  .name-wrap{display:flex;flex-direction:column;align-items:center;margin-top:38px;z-index:1;}
+  .name{font-size:44px;font-weight:600;letter-spacing:12px;color:var(--ink);padding-left:12px;}
+  .name-en{font-size:10px;letter-spacing:5px;color:var(--ink3);margin-top:12px;}
+
+  /* 评分 + 地点 + 日期 一行，居中，菱形分行 */
+  .info{display:flex;align-items:center;gap:14px;margin-top:22px;z-index:1;
+    font-size:12px;letter-spacing:2px;color:var(--ink2);}
+  .info .stars{color:var(--brand);letter-spacing:2px;}
+  .info .score{font-size:20px;font-weight:600;color:var(--brandDeep);margin-left:2px;}
+  .info .d{width:5px;height:5px;background:var(--brandL);transform:rotate(45deg);}
+  .info .tag{color:var(--brandDeep);letter-spacing:3px;}
+
+  /* 心得：极简，金线上下 */
+  .note{margin-top:34px;font-size:14px;line-height:2.2;color:var(--ink2);text-align:center;z-index:1;
+    max-width:360px;font-style:italic;padding:0 6px;}
+
+  /* 底部 */
+  .foot{position:relative;margin-top:auto;width:100%;padding:30px 0 44px;display:flex;flex-direction:column;align-items:center;z-index:1;}
+  .foot .rule{border:1px solid var(--brand);border-radius:1px;}
+  .foot .wm{font-size:11px;letter-spacing:6px;color:var(--brandDeep);margin-top:16px;}
+  .foot .wm small{letter-spacing:2px;color:var(--ink3);font-size:10px;}
+
+  .legend{max-width:420px;color:var(--ink2);font-size:13px;line-height:2;padding-top:6px;letter-spacing:.3px;}
+  .legend b{color:var(--brandDeep);}
+  .legend .sw{display:inline-block;width:16px;height:16px;vertical-align:middle;margin-right:4px;}
+</style>
+</head>
+<body>
+  <div class="section-head">克制奢华 · 绅士内敛 · 超大留白 · 衬线 · 极细金线</div>
+
+  <div class="poster">
+    <!-- 顶部 -->
+    <div class="top">
+      <span class="diamond"></span>
+      <div class="brand">如 画 · L U M I R A</div>
+      <div class="rule"></div>
+      <div class="eyebrow">探 店 足 迹</div>
+    </div>
+
+    <!-- 主图（极细金框） -->
+    <div class="main">
+      <div class="img"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=refined%20cafe%20window%20seat%20golden%20light%20serene%20editorial%20photorealistic&image_size=landscape_4_3"/></div>
+    </div>
+
+    <!-- 店名 -->
+    <div class="name-wrap">
+      <div class="name">屿见咖啡</div>
+      <div class="name-en">Y V · JIAN  SPECIALTY  COFFEE</div>
+    </div>
+
+    <!-- 评分 / 地点 / 日期 -->
+    <div class="info">
+      <span class="stars">★★★★★</span>
+      <span class="score">5.0</span>
+      <span class="d"></span>
+      <span>愚园路 120 号</span>
+      <span class="d"></span>
+      <span>2026 · 08 · 29</span>
+      <span class="d"></span>
+      <span class="tag">咖啡</span>
+    </div>
+
+    <!-- 心得 -->
+    <div class="note">临窗的拿铁，午后斜阳正好。<br/>出品安静而笃定，值得反复抵达。</div>
+
+    <!-- 底部 -->
+    <div class="foot">
+      <div class="rule"></div>
+      <div class="wm">如画 · 探店足迹 <small>LUMIRA</small></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>克制奢华 · 绅士克制</b><br/>
+    · 暖白金三色，<b>超大留白</b>，几乎每段都被留白包围<br/>
+    · 衬线大字「屿见咖啡」居中，字距 12px，安静有气场<br/>
+    · 极细金线 + 金色菱形 + L 角标，克制点缀不张扬<br/>
+    · 图片外挑细金框，整体像一张高级名片 / 首版书扉页<br/>
+    · 评分·地点·日期一行，用菱形颗粒间隔，居中均衡
+  </div>
+</body>
+</html>

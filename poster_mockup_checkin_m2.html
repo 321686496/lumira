@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探店足迹分享海报 · App金色系·高级男性向</title>
+<style>
+  :root{
+    --canvas:#FAF7F2;   /* App warmWhite canvas */
+    --surface:#FDFBF7;
+    --surfaceAlt:#F2EEE6;
+    --brand:#C9A96E;    /* App 金色主色 */
+    --brandDeep:#A88550;
+    --brandL:#D4B57A;
+    --brandSubtle:#F5EDDB;
+    --ink:#1A1A1A;
+    --ink2:#5C5852;
+    --ink3:#9C9690;
+    --divider:#EAE5DC;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:-apple-system,"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",sans-serif;
+    background:#ECE7DC;color:var(--ink);
+    display:flex;gap:44px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding:52px 28px;
+  }
+  .section-head{width:100%;text-align:center;color:var(--brandDeep);letter-spacing:4px;font-size:14px;margin-bottom:6px;}
+
+  .poster{
+    width:520px;background:var(--canvas);position:relative;overflow:hidden;
+    box-shadow:0 30px 60px rgba(122,107,95,.22),0 6px 16px rgba(26,26,26,.06);
+    display:flex;flex-direction:column;padding:0;border:1px solid var(--divider);
+  }
+  /* 金色顶切带 */
+  .poster::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--brand);z-index:5;}
+
+  /* 顶部品牌条 */
+  .topbar{width:100%;display:flex;justify-content:space-between;align-items:center;padding:22px 30px 14px;font-size:11px;letter-spacing:3px;color:var(--ink3);}
+  .topbar b{color:var(--brandDeep);font-weight:700;letter-spacing:2px;font-size:12px;}
+
+  /* 主图区：吸满宽 + 下部切角，叠信息条 */
+  .visual{position:relative;margin:4px 30px 0;border-radius:2px;overflow:hidden;}
+  .visual .img{width:100%;height:340px;}
+  .visual .img img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(.98);}
+  .visual::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(26,26,26,.5));}
+
+  /* 主图底部信息条 */
+  .visual .overlay{position:absolute;left:0;right:0;bottom:0;padding:20px 24px;color:#fff;z-index:2;}
+  .visual .overlay .idxnum{font-size:11px;letter-spacing:3px;color:#E7D3A5;}
+  .visual .overlay .name{font-size:30px;font-weight:800;letter-spacing:2px;margin-top:6px;}
+  .visual .overlay .en{font-size:11px;letter-spacing:3px;color:#D8C8A8;margin-top:4px;}
+  .visual .price{position:absolute;top:18px;right:18px;z-index:2;background:rgba(250,247,242,.92);border-radius:2px;
+    padding:8px 14px;font-size:12px;color:var(--brandDeep);letter-spacing:1px;font-weight:700;}
+
+  /* 数据条：评分表格化 */
+  .stats{display:grid;grid-template-columns:1fr 1fr auto;align-items:stretch;margin:18px 30px 0;border-top:1px solid var(--brand);
+    border-bottom:1px solid var(--brand);}
+  .stat{padding:14px 6px 12px;border-right:1px solid var(--divider);}
+  .stat:last-child{border-right:none;}
+  .stat .k{font-size:11px;color:var(--ink3);letter-spacing:2px;}
+  .stat .v{font-size:16px;font-weight:700;color:var(--ink);margin-top:4px;}
+  .stat .v.gold{color:var(--brandDeep);font-size:22px;}
+  .stat .stars{color:var(--brand);letter-spacing:2px;font-size:13px;margin-top:2px;}
+
+  /* 心得 */
+  .note{margin:20px 30px 0;font-size:13.5px;line-height:1.9;color:var(--ink2);
+    border-left:3px solid var(--brand);padding-left:14px;font-style:italic;}
+
+  /* 小图带 */
+  .thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:20px 30px 0;}
+  .t{height:92px;overflow:hidden;background:var(--surfaceAlt);position:relative;}
+  .t img{width:100%;height:100%;object-fit:cover;}
+  .t.more{display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--brandDeep);border:1px solid var(--brand);}
+  .t .g{position:absolute;left:0;top:0;width:100%;height:3px;background:var(--brand);}
+
+  /* 底部 */
+  .foot{width:100%;display:flex;justify-content:space-between;align-items:center;margin-top:24px;
+    padding:18px 30px 22px;border-top:3px double var(--brand);font-size:10px;letter-spacing:2px;color:var(--ink3);}
+  .foot .en{letter-spacing:3px;}
+  .foot .gold{color:var(--brandDeep);font-weight:700;}
+
+  .legend{max-width:420px;color:var(--ink2);font-size:13px;line-height:2;padding-top:6px;letter-spacing:.3px;}
+  .legend b{color:var(--brandDeep);}
+  .legend .sw{display:inline-block;width:16px;height:16px;bborder:none;vertical-align:middle;margin-right:4px;}
+</style>
+</head>
+<body>
+  <div class="section-head">App暖白金 · 高级男性向 · 杂志几何切角</div>
+
+  <div class="poster">
+    <!-- 顶部品牌条 -->
+    <div class="topbar">
+      <span><b>如画</b> LUMIRA</span>
+      <span>探店足迹 · EXPLORATION</span>
+    </div>
+
+    <!-- 主图 -->
+    <div class="visual">
+      <div class="img"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=premium%20cafe%20espresso%20tool%20golden%20bronze%20macaron%20tone%20editorial%20photorealistic&image_size=landscape_4_3"/></div>
+      <span class="price">愚园路 120℃</span>
+      <div class="overlay">
+        <div class="idxnum">NO.001 — DESTINATION</div>
+        <div class="name">屿见咖啡</div>
+        <div class="en">YVJIAN · SPECIALTY COFFEE</div>
+      </div>
+    </div>
+
+    <!-- 数据条 -->
+    <div class="stats">
+      <div class="stat"><div class="k">评分</div><div class="v gold">5.0</div><div class="stars">★★★★★</div></div>
+      <div class="stat"><div class="k">分类</div><div class="v">咖啡 · 静安</div></div>
+      <div class="stat"><div class="k">探访日期</div><div class="v" style="font-size:13px;">08 / 2026</div></div>
+    </div>
+
+    <!-- 心得 -->
+    <div class="note">临窗拿铁 + 午后斜阳，出品稳定、氛围到位，这家会常来。</div>
+
+    <!-- 小图带 -->
+    <div class="thumbs">
+      <div class="t"><span class="g"></span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=espresso%20machine%20brass%20gold%20detail&image_size=square_hd"/></div>
+      <div class="t"><span class="g"></span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=latte%20minimal%20cream%20table&image_size=square_hd"/></div>
+      <div class="t"><span class="g"></span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=cafe%20interior%20architectural%20gold%20light&image_size=square_hd"/></div>
+      <div class="t more">+</div>
+    </div>
+
+    <!-- 底部 -->
+    <div class="foot">
+      <span class="gold">如画 LUMIRA</span>
+      <span class="en">LUMIRA · 探店足迹</span>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>高级男性向· App色板要点</b><br/>
+    · 用 <b>warmWhite 原色板</b>：米白 <span class="sw" style="background:#FAF7F2"></span>#FAF7F2 · 金色主色 <span class="sw" style="background:#C9A96E"></span>#C9A96E · 深墨 <span class="sw" style="background:#1A1A1A"></span>#1A1A1A，无黑色背景<br/>
+    · 杂志几何：大图吸满 + 底部信息条、金色切角、双金线页脚<br/>
+    · 评分/分类/日期做成<b>表格化数据条</b>，量化、理性<br/>
+    · 重字重 + 英文副题 + 序号（NO.001），克制的高级感
+  </div>
+</body>
+</html>

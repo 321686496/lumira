@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探店足迹海报 · 非对称五图 · 克制奢华</title>
+<style>
+  :root{
+    --canvas:#FAF7F2;
+    --surface:#FDFBF7;
+    --brand:#C9A96E;
+    --brandDeep:#A88550;
+    --brandL:#E9DCC0;
+    --ink:#1A1A1A;
+    --ink2:#5C5852;
+    --ink3:#A29A8A;
+    --hair:rgba(168,133,80,.38);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    font-family:"Songti SC","STSong","Noto Serif SC",serif;
+    background:#ECE7DC;color:var(--ink);
+    display:flex;gap:44px;justify-content:center;align-items:flex-start;flex-wrap:wrap;padding:52px 28px;
+  }
+  .section-head{width:100%;text-align:center;color:var(--brandDeep);letter-spacing:4px;font-size:14px;margin-bottom:6px;}
+  .poster{
+    width:520px;min-height:820px;background:var(--surface);position:relative;
+    box-shadow:0 30px 60px rgba(122,107,95,.18),0 4px 12px rgba(26,26,26,.05);
+    outline:1px solid var(--hair);outline-offset:-12px;
+    display:flex;flex-direction:column;align-items:stretch;padding:32px 34px 28px;
+  }
+  .poster::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.4;
+    background-image:radial-gradient(rgba(168,133,80,.06) 1px,transparent 1px);background-size:7px 7px;}
+
+  /* 左上主图 + 右侧信息列（横向构图） */
+  .hero{display:grid;grid-template-columns:1.35fr 1fr;gap:22px;align-items:stretch;}
+  .hero .big{position:relative;}
+  .hero .big .img{width:100%;height:300px;overflow:hidden;}
+  .hero .big .img img{width:100%;height:100%;object-fit:cover;filter:saturate(.95);}
+  .hero .big::after{content:"";position:absolute;top:0;left:0;width:16px;height:16px;
+    border-top:1px solid var(--brandDeep);border-left:1px solid var(--brandDeep);}
+  .hero .side{display:flex;flex-direction:column;justify-content:space-between;padding-top:4px;}
+  .hero .side .eyebrow{font-size:9px;letter-spacing:4px;color:var(--ink3);}
+  .hero .side .rule{width:34px;height:1px;background:var(--brand);margin:12px 0 0;position:relative;}
+  .hero .side .rule::before{content:"";position:absolute;left:0;top:-3px;width:7px;height:7px;
+    background:var(--surface);border:1px solid var(--brand);transform:rotate(45deg);}
+  .hero .side .name{font-size:40px;font-weight:600;letter-spacing:7px;margin-top:16px;line-height:1.15;}
+  .hero .side .en{font-size:8px;letter-spacing:2px;color:var(--ink3);margin-top:12px;line-height:1.8;}
+  .hero .side .stars{color:var(--brand);letter-spacing:2px;font-size:13px;margin-top:14px;}
+  .hero .side .score{font-size:24px;font-weight:600;color:var(--brandDeep);margin-top:2px;}
+  .hero .side .meta{margin-top:14px;font-size:11px;letter-spacing:1px;color:var(--ink2);line-height:1.9;}
+  .hero .side .tag{display:inline-block;border:1px solid var(--brand);color:var(--brandDeep);
+    padding:2px 12px;letter-spacing:3px;font-size:10px;margin-top:6px;}
+
+  /* 左侧竖排四小图（错落） */
+  .gallery{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-top:22px;}
+  .g{position:relative;height:120px;overflow:hidden;}
+  .g img{width:100%;height:100%;object-fit:cover;filter:saturate(.95);}
+  .g1{margin-top:26px;}
+  .g2{margin-top:0;}
+  .g3{margin-top:14px;}
+  .g4{margin-top:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border:1px solid var(--brand);color:var(--brandDeep);font-size:11px;letter-spacing:2px;background:var(--surface);}
+  .g4 b{font-size:24px;font-weight:400;margin-bottom:2px;}
+  .g .lt{position:absolute;top:0;left:0;width:12px;height:12px;border-top:1px solid var(--brandDeep);border-left:1px solid var(--brandDeep);}
+
+  /* 心得 + 底部 */
+  .note{margin-top:24px;font-size:13px;line-height:2.1;color:var(--ink2);text-align:justify;
+    border-top:1px solid var(--hair);border-bottom:1px solid var(--hair);padding:14px 2px;font-style:italic;}
+  .foot{display:flex;justify-content:space-between;align-items:center;margin-top:22px;
+    font-size:10px;letter-spacing:3px;color:var(--ink3);}
+  .foot .wm{color:var(--brandDeep);letter-spacing:4px;font-size:11px;}
+  .foot .wm small{color:var(--ink3);font-size:9px;letter-spacing:2px;}
+
+  .legend{max-width:420px;color:var(--ink2);font-size:13px;line-height:2;padding-top:6px;letter-spacing:.3px;}
+  .legend b{color:var(--brandDeep);}
+  .legend .swpl{display:inline-block;width:16px;height:16px;vertical-align:middle;margin-right:4px;}
+</style>
+</head>
+<body>
+  <div class="section-head">非对称 5 图 · 左大图右信息 · 下四图错落 · 克制奢华</div>
+
+  <div class="poster">
+    <!-- 上排：左大图 + 右信息列 -->
+    <div class="hero">
+      <div class="big"><div class="img"><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=refined%20cafe%20window%20seat%20golden%20serene%20editorial&image_size=portrait_4_3"/></div></div>
+      <div class="side">
+        <div class="eyebrow">STORE DIARY · NO.001</div>
+        <div class="rule"></div>
+        <div class="name">屿见咖啡</div>
+        <div class="en">YVJIAN<br/>SPECIALTY COFFEE</div>
+        <div class="stars">★★★★★</div>
+        <div class="score">5.0</div>
+        <div class="meta">愚园路 120 号<br/>静安区 · 2026.08.29</div>
+        <span class="tag">咖啡</span>
+      </div>
+    </div>
+
+    <!-- 下排：四张错落小图 -->
+    <div class="gallery">
+      <div class="g g1"><span class="lt"></span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=latte%20minimal%20cream%20gold&image_size=square_hd"/></div>
+      <div class="g g2"><span class="lt"></span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=espresso%20machine%20brass%20detail&image_size=square_hd"/></div>
+      <div class="g g3"><span class="lt"></span><img src="https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=architectural%20cafe%20golden%20light&image_size=square_hd"/></div>
+      <div class="g g4"><b>＋</b>更多</div>
+    </div>
+
+    <!-- 心得 -->
+    <div class="note">临窗的拿铁，午后斜阳正好。出品安静而笃定，值得反复抵达。</div>
+
+    <!-- 底部 -->
+    <div class="foot">
+      <span class="wm">如画 · 探店足迹 <small>LUMIRA</small></span>
+      <span>LUMIRA · 如画</span>
+    </div>
+  </div>
+
+  <div class="legend">
+    <b>非对称构图</b><br/>
+    · 上排「<b>左大图 + 右信息列</b>」破开居中感，信息靠右排版<br/>
+    · 下排四小图<b>错落排布</b>（首图下沉 26，依次错位），破活对称网格<br/>
+    · 每格/主图左上角金色 L 角标，克制点缀<br/>
+    · 五图 = 1 大主图 + 4 错落小图，暖白金配色不变
+  </div>
+</body>
+</html>

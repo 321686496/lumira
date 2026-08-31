@@ -1,0 +1,245 @@
+{
+  "name": "粉色梦境·甜系少女",
+  "category": "portrait",
+  "classification": {
+    "type": "portrait",
+    "majorStyle": "甜美少女风",
+    "subStyle": "梦幻洛丽塔/软妹风",
+    "method": "棚拍/主题乐园外景"
+  },
+  "shortDesc": "坠入粉色棉花糖云朵里，双马尾扬起甜度满分的笑容，每一帧都是心动的初恋感🎀✨",
+  "description": "这是一组高饱和度的粉色系甜美人像模板。场景设定在粉色花墙、旋转木马或纯粉背景前，利用大面积柔光营造梦幻氛围。主体穿着粉色格纹泡泡袖连衣裙，搭配双麻花辫与粉色发饰，妆容强调清透底妆与元气腮红。光线采用正面大柔光或漫反射自然光，消除面部阴影，突出皮肤磨皮后的瓷娃娃质感。适合想要拍摄生日写真、游乐园打卡或日常甜美风格的用户。",
+  "ambience": {
+    "seasons": [
+      "春季",
+      "夏季"
+    ],
+    "weathers": [
+      "晴朗",
+      "多云"
+    ],
+    "timeTones": [
+      "上午柔光",
+      "下午漫射光"
+    ]
+  },
+  "tags": [
+    "粉色系",
+    "甜美少女",
+    "梦幻",
+    "双马尾",
+    "游乐园"
+  ],
+  "images": [
+    {
+      "imageIndex": 0,
+      "role": "封面",
+      "caption": "粉色花墙与气球环绕，双手提裙摆展示全身造型，笑容灿烂极具感染力"
+    },
+    {
+      "imageIndex": 1,
+      "role": "效果图",
+      "caption": "旋转木马背景下的自拍视角，比耶手势增加互动感，特写展示妆容细节"
+    },
+    {
+      "imageIndex": 2,
+      "role": "效果图",
+      "caption": "纯粉背景前的半身照，单手比心靠近脸颊，头微侧展现俏皮感"
+    },
+    {
+      "imageIndex": 3,
+      "role": "效果图",
+      "caption": "户外粉色建筑旁，侧身回眸抓拍，展示背部绑带设计与发饰细节"
+    }
+  ],
+  "poses": [
+    {
+      "imageIndex": 0,
+      "name": "封面·提裙微笑",
+      "type": "people",
+      "description": "人物位于画面正中，全身入画。身体正对镜头（0°），面部正对镜头（0°）。双手向两侧下方伸展，手指轻轻捏住裙摆边缘向外提起，展示裙子蓬松度。双腿并拢站立，重心均匀，脚尖朝前。头部端正，下巴微收，视线直视镜头，嘴巴张开露出牙齿大笑，眼睛弯成月牙状。情绪：极度开心、活泼、欢迎感。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "standing_full_body_happy"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "scale": 0.95,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 1,
+      "name": "附加·自拍比耶",
+      "type": "people",
+      "description": "近景/特写构图。模拟自拍视角，画面左侧手臂向前延伸持机（隐含），画面右侧手臂抬起，手肘弯曲约90°，手掌在脸颊右侧比出'V'字手势（剪刀手），指尖靠近眼角。身体略微侧向屏幕左（+15°），面部正对镜头（0°）。头部微微向屏幕右倾斜（+5°）。视线直视镜头，嘴角上扬微笑，眼神明亮。情绪：俏皮、亲密、记录当下。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "selfie_v_sign_closeup"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.45
+      },
+      "scale": 1.1,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 2,
+      "name": "附加·脸颊比心",
+      "type": "people",
+      "description": "半身像，腰部以上入画。身体正对镜头（0°），面部正对镜头（0°）。画面左侧手臂抬起，手肘弯曲，手指在左脸颊旁比出半个爱心形状（或C形手势），指尖轻触或靠近脸颊。画面右侧手臂自然下垂不可见。头部向屏幕左轻微倾斜（-5°）。视线直视镜头，露齿甜笑。情绪：可爱、撒娇、甜蜜。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "half_body_cheek_heart"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.4
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    },
+    {
+      "imageIndex": 3,
+      "name": "附加·侧身回眸",
+      "type": "people",
+      "description": "七分身/半身像。身体背对镜头略偏屏幕左（+135°），展示背部细节。面部回转面向镜头（-45°~-90°之间，形成回眸）。画面左侧手臂抬起，手轻轻握住左侧麻花辫的发尾。头部向屏幕左微倾。视线看向镜头，嘴角含笑，表情温柔恬静。情绪：温婉、不经意的美、故事感。",
+      "compositionFrame": "",
+      "silhouette": {
+        "type": "builtin",
+        "data": "back_view_looking_back"
+      },
+      "position": {
+        "x": 0.5,
+        "y": 0.45
+      },
+      "scale": 1.0,
+      "rotation": 0.0
+    }
+  ],
+  "composition": {
+    "overlayType": "rule_of_thirds",
+    "gridType": "none",
+    "aspectRatio": "3:4",
+    "opacity": 0.3,
+    "description": "竖构图 3:4。封面图为全身像，头顶留白约1/5，脚底接近下边缘，主体居中占画幅70%，背景充满粉色元素。附加图多为半身或特写，主体占比增大至80%-90%，强调面部表情与上半身姿态，背景适当虚化或作为色块衬托。",
+    "subjectFrame": {
+      "x": 0.2,
+      "y": 0.1,
+      "w": 0.6,
+      "h": 0.85
+    }
+  },
+  "camera": {
+    "exposureCompensation": 0.3,
+    "isoMode": "auto",
+    "iso": null,
+    "shutterSpeed": null,
+    "whiteBalance": "custom",
+    "whiteBalanceK": 5800,
+    "flashMode": "off",
+    "focusMode": "auto",
+    "lensType": "主摄镜头",
+    "lensSuggestion": "main"
+  },
+  "sceneGuide": {
+    "lightDirection": "主光为大面积柔光，从屏幕正前方略偏上45°照射，光质极软，无明显硬阴影。光比低（约1.5:1），面部受光均匀。背景光与环境光融合，整体明亮。无需额外硬补光，若室内拍摄建议开启柔光箱或环形灯从正面补光。",
+    "shootingDistance": "1.5-2.5m",
+    "background": "粉色仿真花墙、粉色气球簇、旋转木马设施、纯粉色墙面、粉色欧式建筑外墙",
+    "props": [
+      "粉色气球",
+      "无手持道具（依靠手势）"
+    ],
+    "bestTime": "10:00-15:00 (室内全天可控)",
+    "tips": [
+      "光线必须柔和均匀，避免阳光直射造成面部硬阴影，建议在阴天或 shaded 区域拍摄，或使用大型柔光板。",
+      "背景尽量保持纯净的粉色调，避免杂乱颜色破坏梦幻感。",
+      "皮肤需要重度磨皮处理，追求瓷娃娃般的无瑕质感，smoothStrength 需调高。",
+      "整体曝光略微过曝（+0.3 EV），营造高调（High-key）明亮氛围。",
+      "若实拍环境较暗，务必开启补光灯，从屏幕正面距离1米左右补光，色温选暖白（约5500K），强度适中以填平阴影。",
+      "浅景深效果通过后期算法或大光圈镜头实现，若手机拍摄请靠近主体并让背景远离主体至少2米。"
+    ]
+  },
+  "postProcess": {
+    "cropRatio": "3:4",
+    "color": {
+      "brightness": 8,
+      "contrast": -5,
+      "saturation": 15,
+      "temperature": 5,
+      "tint": 8,
+      "highlights": -10,
+      "shadows": 15
+    },
+    "smoothStrength": 45,
+    "sharpen": 15,
+    "vignette": 10,
+    "grain": 5,
+    "lut": "pastel",
+    "systemFilter": "none",
+    "fillLight": {
+      "enabled": true,
+      "color": 4294967295,
+      "intensity": 0.6
+    }
+  },
+  "orientation": {
+    "framePosition": "居中",
+    "bodyFacing": {
+      "type": "正对/侧身/背对",
+      "azimuth": 0
+    },
+    "faceFacing": {
+      "type": "正对/回眸",
+      "azimuth": 0
+    },
+    "twist": "颈部扭转随姿势变化",
+    "headPitch": -5,
+    "headRoll": 5,
+    "gaze": "直视镜头"
+  },
+  "framing": {
+    "shotSize": "全身/半身/特写",
+    "shotSizeNote": "封面全身，其余半身或特写",
+    "cameraHeight": "平视",
+    "cameraAzimuth": "正拍/斜侧",
+    "subjectScale": "70%-90%",
+    "environmentRatio": "10%-30%",
+    "headroom": "头顶留白1/5-1/4",
+    "framingNote": "竖构图，主体突出，背景作为氛围色块"
+  },
+  "lighting": {
+    "lightingDetail": {
+      "光位": "正面漫射光，屏幕前方",
+      "辅光轮廓光": "无明显轮廓光，整体包裹式柔光",
+      "光型软硬": "极软光，无硬边",
+      "光比": "低光比 1.5:1",
+      "阴影": "阴影极淡，几乎不可见，落在身后",
+      "质感": "皮肤高光柔和，磨皮感强，头发有光泽但不过曝",
+      "环境光": "粉色环境反光映在皮肤上",
+      "色温对比": "整体统一暖粉调，无强烈冷暖对比"
+    },
+    "lightToParams": "高亮度(+8)，低对比(-5)，提亮阴影(+15)，压低高光(-10)防过曝，高磨皮(45)， pastel LUT增强粉嫩感"
+  },
+  "styling": {
+    "subjectType": "年轻女性",
+    "clothingLayers": {
+      "上装": "粉色白格纹泡泡袖连衣裙，方领/心形领，胸前有排扣装饰",
+      "下装": "裙摆蓬松，多层纱质内衬，长度至大腿中部",
+      "衣角处理": "自然垂落，封面图中被双手提起",
+      "袖子": "短款泡泡袖，松紧收口",
+      "领口": "蕾丝花边装饰的方领",
+      "鞋袜": "白色堆堆袜/蕾丝袜，粉色玛丽珍鞋/厚底鞋（封面可见）",
+      "叠穿层次": "单层连衣裙，颈部佩戴粉色细项圈/项链"
+    },
+    "accessories": "粉色蝴蝶结/花朵发夹（别在麻花辫侧面），粉色细项链，耳坠",
+    "hairMakeup": "深棕色长发，编成两条低麻花辫垂在胸前，空气刘海。妆容：清透底妆，明显粉色腮红打在眼下/苹果肌，水光唇釉，眼妆干净强调卧蚕",
+    "objectStyle": "无",
+    "note": "整体造型强调'软妹'、'洛丽塔'元素，色彩高度统一在粉色系"
+  }
+}

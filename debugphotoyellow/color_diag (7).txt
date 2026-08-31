@@ -1,0 +1,7 @@
+拍照偏黄诊断 2026-08-27T21:08:17.157426
+platform=iOS
+diagSource(dart:ui解码+P3→sRGB后, 色彩矩阵前, 平均RGB)=[148, 131, 121]
+diagBefore(色彩矩阵后/worker收到, 平均RGB)=[149, 132, 121]
+diagAfter(worker效果处理后, 平均RGB)=[]
+判断：diagSource≈diagBefore 且 R>B → 偏黄在解码前（相机片源）；diagSource≈中性而 diagBefore R>B → 偏黄连色彩矩阵引入。
+请对照打开 raw_src.jpg 与 final_out.jpg（final_out=最终成片）：哪一个偏黄？
