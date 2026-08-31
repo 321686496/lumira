@@ -331,8 +331,14 @@ class QRViewController {
   }
 
   /// Stops the camera and disposes the barcode stream.
+  ///
+  /// 版本修复：不只 iOS 需要停相机。Android / OHOS 若在退出时不停相机，
+  /// 相机硬件会一直被占用（平台视图销毁晚于流资源释放，且只靠生命周期钩子
+  /// 释放不可靠），导致退出扫码页后相机无法再次打开、页面卡死。
+  /// 这里统一在各平台显式 stopCamera，并用 catchError 吞掉平台视图已销毁
+  /// 时的无实现/无响应错误，避免退出过程产生未捕获异步异常。
   void dispose() {
-    if (defaultTargetPlatform == TargetPlatform.iOS) stopCamera();
+    unawaited(stopCamera().catchError((Object _) {}));
     _scanUpdateController.close();
   }
 
