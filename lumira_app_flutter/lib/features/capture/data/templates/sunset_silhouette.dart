@@ -39,8 +39,8 @@ const PhotoTemplate sunsetSilhouetteTemplate = PhotoTemplate(
     Pose(
       name: '封面·侧身望日剪影',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sunset_silhouette_pose1.png'),
-      position: Position(x: 0.4, y: 0.62),
-      scale: 0.95,
+      position: Position(x: 0.43, y: 0.62),
+      scale: 2.5,
       rotation: 0,
       description: '站姿，身体约135°斜背对镜头（肩背朝向镜头、肩线略偏屏幕左），面部完全转向屏幕右约-90°呈标准侧脸，形成\u2018背身侧脸回眸望日\u2019；头颈保持水平不低不仰、下巴微收，头颈几乎无侧倾；双肩放松下沉、背部挺直；双臂自然垂落身体两侧，画面右侧手臂贴近躯干、手指放松微曲；重心均匀落于双腿、站姿稳定；视线平视屏幕右方的落日，表情安静松弛，侧脸轮廓（额头-鼻尖-唇-下巴）保持清晰锐利的剪影线条。',
       cameraDirection: 'back',

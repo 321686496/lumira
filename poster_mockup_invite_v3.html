@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 邀请有礼 分享海报</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --serif:'Playfair Display','Noto Serif SC','Songti SC','STSong',Georgia,serif;
+    --sans:'PingFang SC','HarmonyOS Sans','Helvetica Neue',system-ui,sans-serif;
+    --gold:#C9A96E;
+    --gold-deep:#A88550;
+    --ink:#2B2722;
+    --ink2:#6E6558;
+    --ink3:#9C948A;
+    --surface:#FDFBF7;
+    --subtle:#F4ECDB;
+  }
+  body{font-family:var(--sans);background:#EAE4D8;padding:60px 24px 100px;display:flex;flex-direction:column;align-items:center;}
+  .head{width:100%;max-width:1300px;text-align:center;margin-bottom:46px;}
+  .head .eyb{font-size:11px;letter-spacing:6px;color:#8b8174;text-transform:uppercase;}
+  .head h1{font-family:var(--serif);font-size:30px;font-weight:500;letter-spacing:4px;color:#2B2722;margin-top:14px;}
+  .head p{margin-top:10px;font-size:12.5px;letter-spacing:2px;color:#968a79;}
+  .shelf{display:flex;flex-wrap:wrap;justify-content:center;gap:60px;max-width:1200px;}
+  .shot{width:400px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;}
+  .shot .tag{width:100%;margin-bottom:16px;display:flex;align-items:baseline;justify-content:space-between;}
+  .shot .tag b{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:3px;color:#2B2722;display:flex;align-items:center;gap:10px;}
+  .shot .tag b .badge{font-family:var(--sans);font-size:9px;font-weight:500;letter-spacing:2px;color:#fff;background:#B89A5E;padding:3px 10px;border-radius:999px;}
+  .shot .tag span{font-size:11px;letter-spacing:1.5px;color:#968a79;}
+  .poster{width:400px;height:711px;position:relative;overflow:hidden;border-radius:22px;box-shadow:0 30px 60px -20px rgba(60,45,20,.35);background:linear-gradient(168deg,#FBF7F0 0%,#F6F0E3 62%,#F2EBDC 100%);color:var(--ink);}
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:99;opacity:.04;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .qr{background:#fff;padding:7px;border-radius:8px;box-shadow:0 4px 14px -6px rgba(0,0,0,.22);}
+  .qr svg{width:100%;height:100%;display:block;}
+
+  .p{height:100%;display:flex;flex-direction:column;padding:26px 26px 22px;position:relative;}
+  .halo{position:absolute;top:-70px;right:-70px;width:230px;height:230px;border-radius:50%;background:radial-gradient(circle at 40% 40%,rgba(201,169,110,.30),rgba(201,169,110,0) 65%);}
+
+  .brand{display:flex;align-items:center;justify-content:space-between;position:relative;z-index:2;}
+  .brand .left{display:flex;align-items:center;gap:10px;}
+  .brand .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#D8BE8C,#BE9C60);box-shadow:inset 0 1px 1px rgba(255,255,255,.5);position:relative;}
+  .brand .logo span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:13px;color:#4a3a20;}
+  .brand .name{font-family:var(--serif);font-size:17px;letter-spacing:3px;color:var(--ink);}
+  .brand .name small{font-size:10px;letter-spacing:5px;color:var(--gold-deep);margin-left:6px;}
+  .brand .tag{font-size:9px;letter-spacing:3px;color:var(--gold-deep);border:1px solid rgba(168,133,80,.4);padding:5px 12px;border-radius:999px;text-transform:uppercase;}
+
+  .hero{margin-top:26px;text-align:center;position:relative;z-index:2;}
+  .hero .eyeb{font-size:9px;letter-spacing:6px;color:var(--gold-deep);text-transform:uppercase;}
+  .hero h2{font-family:var(--serif);font-size:34px;font-weight:600;line-height:1.22;letter-spacing:2px;color:var(--ink);margin-top:12px;}
+  .hero h2 em{font-style:normal;color:var(--gold-deep);}
+  .hero .sub{margin-top:12px;font-size:12px;letter-spacing:2.5px;color:var(--ink2);line-height:1.8;}
+
+  .feats{display:flex;justify-content:center;gap:10px;margin-top:22px;position:relative;z-index:2;}
+  .feat{flex:1;background:var(--surface);border-radius:14px;padding:12px 8px;text-align:center;box-shadow:0 3px 10px -5px rgba(60,45,20,.22);}
+  .feat .ic{font-family:var(--serif);font-size:18px;color:var(--gold-deep);}
+  .feat .nm{font-size:11px;letter-spacing:1px;color:var(--ink);margin-top:4px;}
+  .feat .ds{font-size:8px;letter-spacing:1.5px;color:var(--ink3);margin-top:3px;}
+
+  .divider{display:flex;align-items:center;gap:14px;margin-top:26px;position:relative;z-index:2;}
+  .divider::before,.divider::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(168,133,80,.35),transparent);}
+  .divider span{font-size:10px;letter-spacing:5px;color:var(--gold-deep);text-transform:uppercase;white-space:nowrap;}
+
+  .reward{margin-top:16px;background:var(--surface);border-radius:18px;padding:16px 18px 14px;box-shadow:0 6px 18px -8px rgba(60,45,20,.22);position:relative;z-index:2;}
+  .reward .rt{display:flex;align-items:center;justify-content:center;gap:10px;font-size:9px;letter-spacing:4px;color:var(--gold-deep);text-transform:uppercase;}
+  .reward .rt i{width:20px;height:20px;border-radius:50%;background:var(--gold);color:#fff;font-style:normal;font-size:10px;display:flex;align-items:center;justify-content:center;}
+  .reward .rows{margin-top:12px;}
+  .rrow{display:flex;align-items:center;gap:12px;padding:9px 0;}
+  .rrow+.rrow{border-top:1px dashed rgba(168,133,80,.22);}
+  .rrow .ic{width:34px;height:34px;border-radius:10px;background:var(--subtle);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:16px;color:var(--gold-deep);flex:0 0 auto;}
+  .rrow .tx{flex:1;display:flex;flex-direction:column;gap:2px;}
+  .rrow .tx b{font-size:14px;font-weight:600;letter-spacing:1px;color:var(--ink);}
+  .rrow .tx b em{font-style:normal;color:var(--gold-deep);}
+  .rrow .tx span{font-size:9.5px;letter-spacing:1.5px;color:var(--ink3);}
+  .rrow .val{font-family:var(--serif);font-size:22px;color:var(--gold-deep);font-weight:600;}
+
+  .codebox{margin-top:16px;background:linear-gradient(120deg,var(--surface),#FAF5E9);border:1px solid rgba(168,133,80,.28);border-radius:18px;padding:16px;display:flex;align-items:center;gap:16px;position:relative;z-index:2;}
+  .codebox .qr{width:96px;height:96px;flex:0 0 auto;}
+  .codeinfo{flex:1;display:flex;flex-direction:column;gap:8px;min-width:0;}
+  .codeinfo .lab{font-size:8.5px;letter-spacing:3px;color:var(--ink3);text-transform:uppercase;}
+  .codeinfo .cd{display:flex;align-items:center;gap:10px;}
+  .codeinfo .cd .code{font-family:var(--serif);font-size:21px;letter-spacing:6px;color:var(--ink);}
+  .codeinfo .cd .cp{font-size:9px;letter-spacing:1px;color:#fff;background:var(--gold-deep);border-radius:999px;padding:4px 11px;white-space:nowrap;}
+  .codeinfo .cta{font-size:10.5px;letter-spacing:1px;color:var(--ink2);}
+  .codeinfo .cta b{color:var(--gold-deep);font-weight:600;}
+
+  .stores{display:flex;justify-content:center;gap:10px;margin-top:20px;position:relative;z-index:2;}
+  .store{display:flex;align-items:center;gap:8px;border:1px solid rgba(168,133,80,.35);border-radius:10px;padding:7px 14px;}
+  .store svg{width:16px;height:16px;}
+  .store .s{display:flex;flex-direction:column;line-height:1.1;}
+  .store .s small{font-size:7px;letter-spacing:1px;color:var(--ink3);}
+  .store .s b{font-size:10px;letter-spacing:1px;color:var(--ink);}
+
+  .foot{margin-top:auto;padding-top:14px;display:flex;align-items:center;justify-content:center;gap:12px;position:relative;z-index:2;}
+  .foot .sp{flex:1;height:1px;background:rgba(168,133,80,.25);}
+  .foot .fl{font-family:var(--serif);font-size:11px;letter-spacing:5px;color:var(--gold-deep);}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="head">
+  <div class="eyb">Lumira · 邀请有礼 · 9 : 16</div>
+  <h1>把生活，装裱成画</h1>
+  <p>分享海报 · 品牌暖米白 × 香槟金 · 内容齐整</p>
+</div>
+
+<svg width="0" height="0" style="position:absolute"><symbol id="qr" viewBox="0 0 100 100"><rect width="100" height="100" fill="#12100e"/><g fill="#1c1a1a"><rect x="8" y="8" width="22" height="22"/><rect x="10" y="10" width="18" height="18" fill="#fff"/><rect x="13" y="13" width="12" height="12"/><rect x="70" y="8" width="22" height="22"/><rect x="72" y="10" width="18" height="18" fill="#fff"/><rect x="75" y="13" width="12" height="12"/><rect x="8" y="70" width="22" height="22"/><rect x="10" y="72" width="18" height="18" fill="#fff"/><rect x="13" y="75" width="12" height="12"/><rect x="34" y="34" width="5" height="5"/><rect x="41" y="34" width="5" height="5"/><rect x="55" y="34" width="5" height="10"/><rect x="62" y="34" width="5" height="5"/><rect x="34" y="41" width="5" height="5"/><rect x="41" y="41" width="5" height="5"/><rect x="48" y="41" width="5" height="5"/><rect x="55" y="41" width="5" height="5"/><rect x="62" y="41" width="5" height="5"/><rect x="34" y="48" width="5" height="5"/><rect x="48" y="48" width="5" height="5"/><rect x="62" y="48" width="5" height="5"/><rect x="34" y="55" width="5" height="5"/><rect x="41" y="55" width="5" height="5"/><rect x="48" y="55" width="5" height="5"/><rect x="55" y="55" width="5" height="5"/><rect x="62" y="55" width="5" height="5"/><rect x="34" y="62" width="5" height="5"/><rect x="41" y="62" width="5" height="5"/><rect x="55" y="62" width="5" height="10"/><rect x="34" y="69" width="5" height="5"/><rect x="48" y="69" width="5" height="5"/><rect x="62" y="69" width="5" height="5"/><rect x="34" y="76" width="5" height="5"/><rect x="41" y="76" width="5" height="5"/><rect x="48" y="76" width="5" height="5"/><rect x="62" y="76" width="5" height="5"/><rect x="34" y="83" width="5" height="5"/><rect x="41" y="83" width="5" height="5"/><rect x="48" y="83" width="5" height="5"/><rect x="62" y="83" width="5" height="5"/></g></symbol></svg>
+
+<div class="shelf">
+  <div class="shot">
+    <div class="tag"><b><span class="badge">分享海报</span>如画 · 邀请有礼</b><span>暖米白 × 香槟金</span></div>
+    <div class="poster">
+      <div class="halo"></div>
+      <div class="p">
+        <div class="brand">
+          <div class="left">
+            <div class="logo"><span>画</span></div>
+            <div class="name">Lumira<small>如 画</small></div>
+          </div>
+          <div class="tag">邀请有礼</div>
+        </div>
+
+        <div class="hero">
+          <div class="eyeb">INVITE · 邀请有礼</div>
+          <h2>把生活<br>拍成<em>想要的样子</em></h2>
+          <div class="sub">一键生成氛围感写真 · 生活海报<br>与好友同行，把美好刻进时光</div>
+        </div>
+
+        <div class="feats">
+          <div class="feat"><div class="ic">照</div><div class="nm">氛围写真</div><div class="ds">人像大片</div></div>
+          <div class="feat"><div class="ic">绘</div><div class="nm">生活海报</div><div class="ds">高级排版</div></div>
+          <div class="feat"><div class="ic">AI</div><div class="nm">一键生成</div><div class="ds">智能出片</div></div>
+        </div>
+
+        <div class="divider"><span>绑定邀请码 · 双份好礼</span></div>
+
+        <div class="reward">
+          <div class="rt"><i>礼</i> 新用户绑定即得 <i>礼</i></div>
+          <div class="rows">
+            <div class="rrow">
+              <div class="ic">积</div>
+              <div class="tx"><b>双方各得 <em>+30</em> 积分</b><span>积分可解锁更多付费模板与灵感</span></div>
+              <div class="val">+30</div>
+            </div>
+            <div class="rrow">
+              <div class="ic">解</div>
+              <div class="tx"><b>免费解锁<em>付费</em>模板</b><span>不耗积分 · 永久拥有</span></div>
+              <div class="val">0元</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="codebox">
+          <div class="qr"><svg viewBox="0 0 100 100"><use href="#qr"/></svg></div>
+          <div class="codeinfo">
+            <span class="lab">邀请码 · Invitation Code</span>
+            <div class="cd"><span class="code">ABC 123</span><span class="cp">复制</span></div>
+            <span class="cta">下载 App，<b>扫一扫</b>绑定领礼</span>
+          </div>
+        </div>
+
+        <div class="stores">
+          <div class="store">
+            <svg viewBox="0 0 24 24" fill="#2B2722"><path d="M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zm.6 5v8h1.8v-4.6l2.7 4.6h1.7l-2.9-4.9 2.6-3.1H10.5l-1.7 2.3V8H6.6zm7 0v8h1.8v-2h2a2 2 0 0 0 0-4h-2.6v-.6h3V8h-4.2zm1.8 1.4h1.4a.6.6 0 0 1 0 1.2H15.4V9.4z"/></svg>
+            <div class="s"><small>GET IT ON</small><b>App Store</b></div>
+          </div>
+          <div class="store">
+            <svg viewBox="0 0 24 24" fill="#2B2722"><path d="M8 21V11h8v10h3V3h-3v6H8V3H5v18h3z"/></svg>
+            <div class="s"><small>支持</small><b>鸿蒙应用市场</b></div>
+          </div>
+        </div>
+
+        <div class="foot"><span class="sp"></span><span class="fl">把生活 装裱成画 · LUMIRA</span><span class="sp"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -143,8 +143,8 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 6),
     ],
     shadowConvexBrand: [
-      BoxShadow(color: Color(0xFFB89A5E), offset: Offset(4, 4), blurRadius: 10),
-      BoxShadow(color: Color(0xFFDABB82), offset: Offset(-4, -4), blurRadius: 10),
+      BoxShadow(color: Color(0xFFA88550), offset: Offset(4, 4), blurRadius: 10),
+      BoxShadow(color: Color(0xFFD4B57A), offset: Offset(-4, -4), blurRadius: 10),
     ],
     shadowConcave: [
       BoxShadow(color: Color(0xFFE0DCD4), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
@@ -246,8 +246,8 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFFFFDF7), offset: Offset(-3, -3), blurRadius: 6),
     ],
     shadowConvexBrand: [
-      BoxShadow(color: Color(0xFFB08560), offset: Offset(4, 4), blurRadius: 10),
-      BoxShadow(color: Color(0xFFDAA577), offset: Offset(-4, -4), blurRadius: 10),
+      BoxShadow(color: Color(0xFF9A6A42), offset: Offset(4, 4), blurRadius: 10),
+      BoxShadow(color: Color(0xFFD4A57A), offset: Offset(-4, -4), blurRadius: 10),
     ],
     shadowConcave: [
       BoxShadow(color: Color(0xFFD0C1AC), offset: Offset(4, 4), blurRadius: 8, blurStyle: BlurStyle.inner),
@@ -300,8 +300,8 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 6),
     ],
     shadowConvexBrand: [
-      BoxShadow(color: Color(0xFF6A9058), offset: Offset(4, 4), blurRadius: 10),
-      BoxShadow(color: Color(0xFF92BA80), offset: Offset(-4, -4), blurRadius: 10),
+      BoxShadow(color: Color(0xFF5E8348), offset: Offset(4, 4), blurRadius: 10),
+      BoxShadow(color: Color(0xFFA8D8A0), offset: Offset(-4, -4), blurRadius: 10),
     ],
     shadowConcave: [
       BoxShadow(color: Color(0xFFCED5C7), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),

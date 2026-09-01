@@ -1,4 +1,4 @@
-﻿"""
+"""
 纯色背景去除脚本
 将图片中的纯色背景（如白色、绿色、蓝色）去除，输出透明背景 PNG。
 
@@ -49,7 +49,9 @@ def detect_bg_color(img):
         img.crop((0, h - size, size, h)),
         img.crop((w - size, h - size, w, h)),
     ]
-    arr = np.concatenate([np.asarray(c, dtype=np.int16).reshape(-1, 3) for c in corners])
+    arr = np.concatenate([
+        np.asarray(c.convert("RGB"), dtype=np.int16).reshape(-1, 3) for c in corners
+    ])
     return tuple(int(x) for x in arr.mean(axis=0))
 
 

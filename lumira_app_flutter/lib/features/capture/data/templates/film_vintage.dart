@@ -39,8 +39,8 @@ const PhotoTemplate filmVintageTemplate = PhotoTemplate(
     Pose(
       name: '行走抓拍主姿势',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/film_vintage_pose1.png'),
-      position: Position(x: 0.44, y: 0.52),
-      scale: 0.88,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物向前行走，身体侧向屏幕右约-45°，面部转向屏幕右-90°，头颈微微低头，视线看向屏幕地面方向；屏幕左侧手握住冰咖啡，屏幕右侧手插入裤袋，重心落在屏幕右腿，屏幕左腿向前迈出，脚步呈行走动态，整体状态松弛自然。',
       cameraDirection: 'back',

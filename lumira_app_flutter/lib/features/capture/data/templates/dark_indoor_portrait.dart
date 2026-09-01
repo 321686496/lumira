@@ -42,8 +42,8 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
     Pose(
       name: '封面·托腮静坐',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait_pose1.png'),
-      position: Position(x: 0.44, y: 0.42),
-      scale: 0.92,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物坐在卡座座位，身体侧向屏幕右约45°，面部朝向屏幕右，双手手肘支撑于木桌，双手手掌合拢托住下巴两侧，手指放松；头颈微微后仰，视线看向屏幕右方画面外，表情沉静放空，和桌面咖啡、书籍道具共处，情绪安静沉思。',
       cameraDirection: 'back',
@@ -51,8 +51,8 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
     Pose(
       name: '侧身扶椅眺望',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait_pose2.png'),
-      position: Position(x: 0.36, y: 0.46),
-      scale: 0.94,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物站立，身体侧向屏幕右接近90°，面部同样朝向屏幕右望向窗外；一只手轻搭木椅靠背，手臂自然弯曲，肩膀放松，头颈挺直，视线投向屏幕右侧窗外，神情淡然，捕捉独处眺望的故事感。',
       cameraDirection: 'back',
@@ -60,8 +60,8 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
     Pose(
       name: '靠窗阅读低头',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait_pose3.png'),
-      position: Position(x: 0.48, y: 0.4),
-      scale: 0.9,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物靠窗坐在卡座，身体侧向屏幕右约45°，面部朝向屏幕右，头部向下低头，headPitch-18°，视线垂落看向桌面摊开的书本，手臂收在桌面，姿态松弛安静，与书籍咖啡道具互动。',
       cameraDirection: 'back',
@@ -69,8 +69,8 @@ const PhotoTemplate darkIndoorPortraitTemplate = PhotoTemplate(
     Pose(
       name: '站立手插裤袋垂眸',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/dark_indoor_portrait_pose4.png'),
-      position: Position(x: 0.48, y: 0.5),
-      scale: 0.96,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物站立，身体略微转向屏幕右，头部向下低头，视线看向屏幕下方地面，一只手插入裤袋，手臂藏于身后，另一只手自然垂落，肩膀松弛下沉，情绪内敛沉静。',
       cameraDirection: 'back',

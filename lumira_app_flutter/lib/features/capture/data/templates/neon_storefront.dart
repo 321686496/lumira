@@ -25,13 +25,6 @@ const PhotoTemplate neonStorefrontTemplate = PhotoTemplate(
     aspectRatio: '16:9',
     description: '霓虹招牌置于三分线交点，招牌灯光作为主体，背景暗部衬托氛围',
   ),
-  pose: Pose(
-    silhouette: SilhouetteResource(type: 'builtin', data: 'landscape-wide'),
-    position: Position(x: 0.5, y: 0.5),
-    scale: 1.0,
-    rotation: 0,
-    description: '无人物姿态，聚焦招牌与光影',
-  ),
   camera: CameraParams(
     exposureCompensation: -0.3,
     isoMode: 'auto',

@@ -42,8 +42,8 @@ const PhotoTemplate cafeTableTemplate = PhotoTemplate(
     Pose(
       name: '封面构图-木桌咖啡甜点',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cafe_table_pose1.png'),
-      position: Position(x: 0.52, y: 0.54),
-      scale: 0.94,
+      position: Position(x: 0.50, y: 0.50),
+      scale: 2.5,
       rotation: 0,
       description: '高角度45度俯拍桌面，咖啡杯、草莓挞为视觉双主体，刀叉放置画面底部，翻开旧书放在画面左上，单支小白花在咖啡杯右侧；桌面斜线形成从屏幕左下向屏幕右上延伸引导线，利用九宫格分割摆放物体，适当留白。',
       cameraDirection: 'back',
@@ -51,8 +51,8 @@ const PhotoTemplate cafeTableTemplate = PhotoTemplate(
     Pose(
       name: '大理石桌明亮构图',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cafe_table_pose2.png'),
-      position: Position(x: 0.48, y: 0.51),
-      scale: 0.92,
+      position: Position(x: 0.5, y: 0.51),
+      scale: 2.5,
       rotation: 0,
       description: '高角度俯拍大理石桌面，咖啡杯居于画面中下，甜点马卡龙布置屏幕左侧，小雏菊花朵放在画面左下角，刀叉餐巾放在屏幕右下；阳光在桌面形成清晰条状光影，物体沿九宫格交叉点摆放。',
       cameraDirection: 'back',
@@ -60,8 +60,8 @@ const PhotoTemplate cafeTableTemplate = PhotoTemplate(
     Pose(
       name: '手冲咖啡复古构图',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cafe_table_pose3.png'),
-      position: Position(x: 0.5, y: 0.53),
-      scale: 0.96,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '45度俯拍木质窗台桌面，手冲壶、水杯布置屏幕左上，黑咖啡杯画面中下，肉桂卷吐司餐盘屏幕右侧，杂志书本放在画面右下角；利用窗台做框架边缘，桌面散落少量水渍增加真实生活感。',
       cameraDirection: 'back',
@@ -69,8 +69,8 @@ const PhotoTemplate cafeTableTemplate = PhotoTemplate(
     Pose(
       name: '亚麻桌布法式构图',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/cafe_table_pose4.png'),
-      position: Position(x: 0.5, y: 0.49),
-      scale: 0.93,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '俯拍亚麻布艺桌面，咖啡杯位于画面中心，两个可颂分别放置屏幕左上金属托盘、屏幕右上方餐巾，旧书放在屏幕左下角，金属小勺在咖啡杯左侧；亚麻布料褶皱作为画面肌理，阳光投下物体轮廓硬阴影。',
       cameraDirection: 'back',

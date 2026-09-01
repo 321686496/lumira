@@ -42,8 +42,8 @@ const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
     Pose(
       name: '封面·提裙微笑',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait_pose1.png'),
-      position: Position(x: 0.5, y: 0.5),
-      scale: 0.95,
+      position: Position(x: 0.49, y: 0.46),
+      scale: 2.5,
       rotation: 0,
       description: '人物位于画面正中，全身入画。身体正对镜头（0°），面部正对镜头（0°）。双手向两侧下方伸展，手指轻轻捏住裙摆边缘向外提起，展示裙子蓬松度。双腿并拢站立，重心均匀，脚尖朝前。头部端正，下巴微收，视线直视镜头，嘴巴张开露出牙齿大笑，眼睛弯成月牙状。情绪：极度开心、活泼、欢迎感。',
       cameraDirection: 'back',
@@ -51,8 +51,8 @@ const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
     Pose(
       name: '附加·自拍比耶',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait_pose2.png'),
-      position: Position(x: 0.5, y: 0.45),
-      scale: 1.1,
+      position: Position(x: 0.42, y: 0.5),
+      scale: 2.04,
       rotation: 0,
       description: "近景/特写构图。模拟自拍视角，画面左侧手臂向前延伸持机（隐含），画面右侧手臂抬起，手肘弯曲约90°，手掌在脸颊右侧比出'V'字手势（剪刀手），指尖靠近眼角。身体略微侧向屏幕左（+15°），面部正对镜头（0°）。头部微微向屏幕右倾斜（+5°）。视线直视镜头，嘴角上扬微笑，眼神明亮。情绪：俏皮、亲密、记录当下。",
       cameraDirection: 'front',
@@ -60,8 +60,8 @@ const PhotoTemplate sweetGirlPortraitTemplate = PhotoTemplate(
     Pose(
       name: '附加·脸颊比心',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/sweet_girl_portrait_pose3.png'),
-      position: Position(x: 0.5, y: 0.4),
-      scale: 1.0,
+      position: Position(x: 0.49, y: 0.4),
+      scale: 2.25,
       rotation: 0,
       description: '半身像，腰部以上入画。身体正对镜头（0°），面部正对镜头（0°）。画面左侧手臂抬起，手肘弯曲，手指在左脸颊旁比出半个爱心形状（或C形手势），指尖轻触或靠近脸颊。画面右侧手臂自然下垂不可见。头部向屏幕左轻微倾斜（-5°）。视线直视镜头，露齿甜笑。情绪：可爱、撒娇、甜蜜。',
       cameraDirection: 'back',

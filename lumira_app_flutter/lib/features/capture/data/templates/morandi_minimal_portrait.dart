@@ -39,8 +39,8 @@ const PhotoTemplate morandiMinimalPortraitTemplate = PhotoTemplate(
     Pose(
       name: '封面·静谧端坐',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/morandi_minimal_portrait_pose1.png'),
-      position: Position(x: 0.5, y: 0.45),
-      scale: 0.85,
+      position: Position(x: 0.5, y: 0.53),
+      scale: 1.99,
       rotation: 0,
       description: '人物位于画面正中央，身体完全正对镜头（0°），面部正对镜头（0°）。采取坐姿，躯干挺直但放松，肩线水平。双臂自然下垂并在身前交汇，双手轻轻交叠放置于大腿上方（画面下方中央），手指自然舒展放松，无紧张感。头部端正，无侧倾（headRoll 0°），下巴微收（headPitch -5°），视线平视直视镜头，表情平静淡然，嘴角闭合无笑意，眼神清澈聚焦。整体传达出一种沉稳、内敛且疏离的高级情绪。',
       cameraDirection: 'back',

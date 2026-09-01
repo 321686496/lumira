@@ -42,8 +42,8 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
     Pose(
       name: '封面·倚墙持瓶',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose1.png'),
-      position: Position(x: 0.5, y: 0.48),
-      scale: 0.95,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物站在画面中央偏右，背部轻靠水泥柱。身体朝向屏幕左前方约+45°，面部完全转向屏幕左侧约+90°，呈现完美侧颜。头颈微微上扬+5°，下巴微收。双手在腹部前方自然交握，持有一个深色玻璃酒瓶，手指放松弯曲。重心落在右腿，左腿微曲放松。视线看向屏幕左侧远处的虚焦灯光，表情清冷疏离，嘴唇微张。',
       cameraDirection: 'back',
@@ -51,8 +51,8 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
     Pose(
       name: '附加·坐姿低眉',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose2.png'),
-      position: Position(x: 0.5, y: 0.55),
-      scale: 1.0,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物坐于地面或低矮处，背靠墙壁。身体朝向屏幕左前方+30°，面部朝下偏向屏幕左下方，头颈明显低头-20°。双臂自然下垂或搭在膝盖上（画面主要展示上半身），肩膀微微内扣放松。视线垂落看向地面，表情沉静忧郁，眼睑低垂。光线从屏幕右上方打下，在鼻梁和脸颊形成明显的明暗交界线。',
       cameraDirection: 'back',
@@ -60,8 +60,8 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
     Pose(
       name: '附加·仰头沐光',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose3.png'),
-      position: Position(x: 0.5, y: 0.45),
-      scale: 0.98,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物站立靠墙，身体正对镜头略偏右-15°。头部大幅后仰+25°，面部朝向屏幕左上方光源，双眼轻闭。下巴抬起，颈部线条拉伸。双臂自然下垂于身体两侧（画面外或边缘）。头发因仰头动作自然向后散落，发梢被顶光照亮。表情享受且陶醉，仿佛在感受夜风或灯光的温度。',
       cameraDirection: 'back',
@@ -69,8 +69,8 @@ const PhotoTemplate hkNoirPortraitTemplate = PhotoTemplate(
     Pose(
       name: '附加·侧身回眸',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/hk_noir_portrait_pose4.png'),
-      position: Position(x: 0.45, y: 0.5),
-      scale: 0.96,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物侧身站立，背部靠近右侧墙壁。身体朝向屏幕左侧+90°（纯侧面），但面部回转朝向镜头方向约-45°（回眸）。左手（画面可见侧）持酒瓶垂于身前。头颈微低-10°，视线看向屏幕左下方。身后墙壁上投射出清晰的人物剪影。表情淡漠，眼神略带迷离。',
       cameraDirection: 'back',

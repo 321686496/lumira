@@ -39,8 +39,8 @@ const PhotoTemplate chineseClassicalPortraitTemplate = PhotoTemplate(
     Pose(
       name: '封面·回眸执扇站姿',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/chinese_classical_portrait_pose1.png'),
-      position: Position(x: 0.54, y: 0.46),
-      scale: 0.92,
+      position: Position(x: 0.51, y: 0.56),
+      scale: 2.16,
       rotation: 0,
       description: '人物身体背对镜头偏向屏幕左约135°，面部回转朝向镜头，头颈微微收下巴；重心落在屏幕右侧腿，屏幕左侧腿微微向后；屏幕右侧手臂抬起，手持竹纹团扇，扇子轻挡口鼻位置，手指放松握住扇柄；屏幕左侧手臂被宽大衣袖遮挡；身体站姿挺拔，肩线松弛，眼神望向镜头，神情温婉含蓄。',
       cameraDirection: 'back',

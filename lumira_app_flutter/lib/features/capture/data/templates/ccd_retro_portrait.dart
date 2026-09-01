@@ -39,8 +39,8 @@ const PhotoTemplate ccdRetroPortraitTemplate = PhotoTemplate(
     Pose(
       name: '行走动态主姿势',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/ccd_retro_portrait_pose1.png'),
-      position: Position(x: 0.44, y: 0.52),
-      scale: 0.92,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物向前行走，身体朝向屏幕左约45°，面部转向屏幕左约90°，低头；屏幕右侧手插裤袋，屏幕左侧手握冰咖啡；重心落在屏幕右侧腿，屏幕左侧腿向前迈出；视线看向屏幕左下方，神情松弛淡然，帆布包搭在屏幕右肩膀。',
       cameraDirection: 'back',

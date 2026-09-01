@@ -42,8 +42,8 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
     Pose(
       name: '封面·远景背对伫立',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/blue_night_portrait_pose1.png'),
-      position: Position(x: 0.5, y: 0.72),
-      scale: 0.22,
+      position: Position(x: 0.50, y: 0.68),
+      scale: 2.5,
       rotation: 0,
       description: '人物背对镜头，身体朝向屏幕正远方海面180°，头部保持正直，双脚平稳站立，双臂自然垂落在身体两侧，全身笔直站立，视线望向屏幕正前方海平面落日，情绪沉静放空。',
       cameraDirection: 'back',
@@ -51,8 +51,8 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
     Pose(
       name: '斜侧回眸半身',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/blue_night_portrait_pose2.png'),
-      position: Position(x: 0.34, y: 0.54),
-      scale: 0.64,
+      position: Position(x: 0.37, y: 0.64),
+      scale: 1.55,
       rotation: 0,
       description: '人物身体侧向屏幕左约+45°，面部回转朝向镜头方向约-45°，头颈正直，肩膀微微放松，画面可见的屏幕右侧手臂自然弯曲，手部松弛悬于腰侧，手指自然放松，重心稳定站立，视线看向镜头，气质清冷疏离。',
       cameraDirection: 'back',
@@ -60,8 +60,8 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
     Pose(
       name: '侧面侧脸剪影',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/blue_night_portrait_pose3.png'),
-      position: Position(x: 0.32, y: 0.58),
-      scale: 0.74,
+      position: Position(x: 0.31, y: 0.63),
+      scale: 1.58,
       rotation: 0,
       description: '人物身体侧向屏幕右约-90°，面部同样朝向屏幕右-90°纯侧面，头部微微抬升，一缕发丝被海风吹起，双臂自然垂于身体，双手手指松弛，重心单腿支撑站立，视线望向屏幕右侧远方海面，安静忧郁。',
       cameraDirection: 'back',
@@ -69,8 +69,8 @@ const PhotoTemplate blueNightPortraitTemplate = PhotoTemplate(
     Pose(
       name: '背身仰头望天际',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/blue_night_portrait_pose4.png'),
-      position: Position(x: 0.34, y: 0.62),
-      scale: 0.68,
+      position: Position(x: 0.34, y: 0.73),
+      scale: 1.02,
       rotation: 0,
       description: '人物身体背对镜头朝向屏幕正前方海面180°，头部向上仰起headPitch+18°，面部转向屏幕右侧约-45°，双肩放松下沉，双臂垂在身体两侧，双手自然下垂，视线看向屏幕右上方黄昏云霞，情绪温柔怅然。',
       cameraDirection: 'back',

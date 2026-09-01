@@ -42,8 +42,8 @@ const PhotoTemplate purpleDuskPortraitTemplate = PhotoTemplate(
     Pose(
       name: '封面·静谧背影',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/purple_dusk_portrait_pose1.png'),
-      position: Position(x: 0.5, y: 0.65),
-      scale: 0.85,
+      position: Position(x: 0.49, y: 0.56),
+      scale: 1.9,
       rotation: 0,
       description: '人物背对镜头站立于画面水平居中、垂直偏下位置（脚部接近底边）。身体完全正对屏幕深处（180°），面部不可见。双臂自然下垂，双手在身后轻轻交握于腰际下方。双腿并拢直立，重心均匀分布。整体姿态静止、内敛，传达凝视远方的孤独与宁静感。',
       cameraDirection: 'back',
@@ -51,8 +51,8 @@ const PhotoTemplate purpleDuskPortraitTemplate = PhotoTemplate(
     Pose(
       name: '附加·温柔正视',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/purple_dusk_portrait_pose2.png'),
-      position: Position(x: 0.5, y: 0.45),
-      scale: 1.1,
+      position: Position(x: 0.54, y: 0.6),
+      scale: 1.8,
       rotation: 0,
       description: '人物位于画面中央，身体略微侧向屏幕右约15°，但面部完全转正面向镜头（0°）。头部轻微向屏幕左倾斜约5°。眼神直视镜头，嘴角上扬露出温和微笑。双肩放松下沉，手臂自然垂于身体两侧（画面外或被裁切）。头发被海风吹向屏幕右侧，增加动态感。',
       cameraDirection: 'back',
@@ -60,8 +60,8 @@ const PhotoTemplate purpleDuskPortraitTemplate = PhotoTemplate(
     Pose(
       name: '附加·侧颜仰望',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/purple_dusk_portrait_pose3.png'),
-      position: Position(x: 0.6, y: 0.5),
-      scale: 1.0,
+      position: Position(x: 0.61, y: 0.58),
+      scale: 2.0,
       rotation: 0,
       description: '人物位于画面右侧三分之一处，身体侧向屏幕左约90°，面部同步朝向屏幕左上方（-90°至-135°之间，呈仰望状）。右手抬起，手掌轻触后脑勺/颈部区域，手肘向外打开。左手自然下垂或置于身侧。头部微微后仰（headPitch +10°），下巴抬高，展现颈部线条。视线投向屏幕左上方的落日方向，表情舒展愉悦。',
       cameraDirection: 'back',
@@ -69,8 +69,8 @@ const PhotoTemplate purpleDuskPortraitTemplate = PhotoTemplate(
     Pose(
       name: '附加·沉浸闭目',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/purple_dusk_portrait_pose4.png'),
-      position: Position(x: 0.55, y: 0.48),
-      scale: 1.05,
+      position: Position(x: 0.47, y: 0.68),
+      scale: 1.63,
       rotation: 0,
       description: '人物位于画面中央偏右，身体侧向屏幕左约45°，面部朝向屏幕左上方（-45°）。双眼闭合，神情陶醉。左手抬起，手指插入屏幕右侧的发丝中，做出撩发动作，手肘弯曲约90°。头部微微后仰（headPitch +15°），感受海风。背景中海平面的太阳反光正好位于人物胸部前方，形成视觉引导。',
       cameraDirection: 'back',

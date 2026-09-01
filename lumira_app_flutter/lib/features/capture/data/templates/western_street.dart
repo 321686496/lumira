@@ -41,8 +41,8 @@ const PhotoTemplate westernStreetTemplate = PhotoTemplate(
     Pose(
       name: '封面·侧身回眸',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/western_street_pose1.png'),
-      position: Position(x: 0.65, y: 0.55),
-      scale: 0.85,
+      position: Position(x: 0.54, y: 0.65),
+      scale: 1.71,
       rotation: 0,
       description: '人物站在画面右侧约 1/3 处，身体朝向屏幕左前方约 +45°，面部回转面向镜头约 0°~-15°（轻微侧脸）。重心在右腿，左腿微曲放松。左手（画面右侧）背在身后或插兜，右手（画面左侧）自然下垂或轻触腰间。头颈微微向屏幕右倾斜 +5°，下巴微收，眼神透过墨镜直视镜头，表情冷艳松弛。',
       cameraDirection: 'back',
@@ -50,8 +50,8 @@ const PhotoTemplate westernStreetTemplate = PhotoTemplate(
     Pose(
       name: '附加·抚发特写',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/western_street_pose2.png'),
-      position: Position(x: 0.5, y: 0.45),
-      scale: 1.1,
+      position: Position(x: 0.47, y: 0.58),
+      scale: 2.5,
       rotation: 0,
       description: '近景构图，人物居中。身体正对镜头 0°，面部微侧向屏幕左 -10°。左手（画面右侧）抬起，手指轻轻插入耳后发丝或触碰耳环，手肘向外打开约 90°。右手（画面左侧）不可见或自然下垂。头颈正直，嘴唇微张，眼神迷离看向镜头下方，营造不经意被抓拍的感觉。',
       cameraDirection: 'back',
@@ -59,8 +59,8 @@ const PhotoTemplate westernStreetTemplate = PhotoTemplate(
     Pose(
       name: '附加·街头漫步',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/western_street_pose3.png'),
-      position: Position(x: 0.5, y: 0.5),
-      scale: 0.9,
+      position: Position(x: 0.46, y: 0.6),
+      scale: 1.69,
       rotation: 0,
       description: '七分身构图，人物位于画面中央。身体正对镜头 0°，略微向屏幕右偏转 +10°。左手（画面右侧）插在裤兜里，肩膀放松下沉。右手（画面左侧）自然垂在身侧，手指放松。双腿自然分开与肩同宽，重心均匀分布。头颈正直，面部朝前，视线平视镜头，表情自信淡然。',
       cameraDirection: 'back',
@@ -68,8 +68,8 @@ const PhotoTemplate westernStreetTemplate = PhotoTemplate(
     Pose(
       name: '附加·背影回眸',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/western_street_pose4.png'),
-      position: Position(x: 0.5, y: 0.6),
-      scale: 0.75,
+      position: Position(x: 0.54, y: 0.64),
+      scale: 1.45,
       rotation: 0,
       description: '全身大远景，人物位于画面中轴线上。身体背对镜头 180°，正在向前行走。上半身与头部向左后方扭转约 -135°~-150°，形成经典的‘走路回头’姿态。双臂自然摆动或插在大衣口袋中。脚步迈开，左脚在前右脚在后。视线越过左肩看向镜头，营造故事感与离别/召唤的情绪。',
       cameraDirection: 'back',

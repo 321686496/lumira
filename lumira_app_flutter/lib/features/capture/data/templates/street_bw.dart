@@ -39,8 +39,8 @@ const PhotoTemplate streetBwTemplate = PhotoTemplate(
     Pose(
       name: '封面·斑马线独行',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/street_bw_pose1.png'),
-      position: Position(x: 0.52, y: 0.55),
-      scale: 0.85,
+      position: Position(x: 0.48, y: 0.63),
+      scale: 1.79,
       rotation: 0,
       description: '人物位于画面中央略偏右，全身入画。身体朝向屏幕左前方约+45°行进，但面部完全转向屏幕左侧约-90°，形成自然的\u2018行走中侧视\u2019。头颈微微上扬+5°，下巴微收，视线看向屏幕左方远处，表情清冷平静。双手插在大衣口袋中，肩线随步伐自然倾斜，重心落在右腿（画面右侧腿），左腿（画面左侧腿）向前迈出，脚尖朝屏幕左下方。大衣下摆随动作微微飘动，斜挎包带从右肩斜跨至左腰。',
       cameraDirection: 'back',

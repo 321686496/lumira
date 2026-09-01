@@ -39,8 +39,8 @@ const PhotoTemplate neonPortraitTemplate = PhotoTemplate(
     Pose(
       name: '封面·侧身回眸',
       silhouette: SilhouetteResource(type: 'image', data: 'assets/images/silhouettes/neon_portrait_pose1.png'),
-      position: Position(x: 0.5, y: 0.65),
-      scale: 0.85,
+      position: Position(x: 0.5, y: 0.5),
+      scale: 2.5,
       rotation: 0,
       description: '人物位于画面中下部居中位置。身体背对镜头略向屏幕左侧转约135°（侧背），面部完全回转面向镜头（0°），形成经典的\'侧身回眸\'姿态。头颈微微向屏幕右侧倾斜约5°，下巴微收。视线直视镜头，眼神平静带有一丝疏离感。左肩（屏幕右侧）略微下沉，右肩（屏幕左侧）被头发遮挡。手臂自然下垂或被衣物遮挡，重心看似在双腿之间，姿态放松但挺拔。',
       cameraDirection: 'back',
