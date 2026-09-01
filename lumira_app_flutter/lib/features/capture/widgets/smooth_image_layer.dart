@@ -57,7 +57,10 @@ class _SmoothImageLayerState extends State<SmoothImageLayer> {
     // 仅来源变化才重新解码；strength 变化复用已解码 _image，
     // build 会自动以新 strength 触发 shader 重绘（不每帧解码）。
     if (old.url != widget.url) {
+      // 释放旧 _image，避免其被 _image=null 丢弃而泄漏 GPU 内存。
+      final old = _image;
       _image = null;
+      old?.dispose();
       _decode();
     }
   }
@@ -73,7 +76,11 @@ class _SmoothImageLayerState extends State<SmoothImageLayer> {
     _decodingUrl = targetUrl;
     final next = await _decodeToUiImage(targetUrl);
     // 已卸载，或被更新的 url 解码取代 → 丢弃结果，避免竞态覆盖。
-    if (!mounted || _decodingUrl != targetUrl) return;
+    // 早退前释放 next，防止其被 return 丢弃而泄漏 GPU 内存。
+    if (!mounted || _decodingUrl != targetUrl) {
+      next?.dispose();
+      return;
+    }
     setState(() => _image = next);
   }
 
