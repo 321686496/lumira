@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/file_picker_service.dart';
 
 import '../../../core/auth/auth_controller.dart';
+import '../../profile/pages/profile_my_templates_page.dart'
+    show customTemplatesProvider;
 import '../../../core/db/database_provider.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/theme/app_theme.dart';
@@ -337,6 +339,11 @@ class TemplateImportSheet extends ConsumerWidget {
   }) async {
     final instance = TemplateImportSheet(onImported: onImported ?? (_) {});
     await instance._dispatchImportText(context, ref, text.trim(), popWhenDone: false);
+    // 首页「扫一扫」导入后同步刷新「我的模板」页缓存。
+    // customTemplatesProvider 是缓存的 FutureProvider，仅 invalidate
+    // allTemplatesProvider 不足以让 My Templates 页刷新——若不 invalidate，
+    // 该页在重启前一直显示旧数据（看不到新导入的模板）。
+    ref.invalidate(customTemplatesProvider);
   }
 
   /// 按文本分类分发导入（分享码 / 离线 tpl / 在线 token）。

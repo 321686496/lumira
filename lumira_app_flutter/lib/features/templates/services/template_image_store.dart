@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
 
 import '../../../core/utils/safe_temp_dir.dart';
 
@@ -22,11 +23,26 @@ class TemplateImageStore {
   static final RegExp _dataUrlRe =
       RegExp(r'^data:image/([A-Za-z0-9.+\-]+);base64,(.+)$', dotAll: true);
 
-  /// 图片根目录：<documents>/lumira/templates
+  /// 图片根目录：与数据库同级的持久目录下 `lumira/templates/`。
+  ///
+  /// OHOS 上 `path_provider` 的 `getApplicationDocumentsDirectory()` 缺少原生
+  /// 实现，回退到 `Directory.systemTemp`（热重启后路径变化 → 图片丢失）。
+  /// sqflite 的 `getDatabasesPath()` 有 CPF-Flutter 鸿蒙适配版，返回**持久**
+  /// 路径（相册照片也存于此 `getDatabasesPath()/photos/`）。模板图片与之对齐，
+  /// 存放于 `getDatabasesPath()/lumira/templates/`。
   static Future<Directory> _templatesRoot() async {
     if (overrideBaseDir != null) {
       return Directory('$overrideBaseDir/lumira/templates');
     }
+    try {
+      final dbPath = await getDatabasesPath();
+      if (dbPath.isNotEmpty) {
+        return Directory('$dbPath/lumira/templates');
+      }
+    } catch (e) {
+      debugPrint('TemplateImageStore: getDatabasesPath failed: $e');
+    }
+    // 回退（iOS/Android 正常路径 / OHOS 异常兜底）
     final docs = await getSafeDocumentsDirectory();
     return Directory('${docs.path}/lumira/templates');
   }

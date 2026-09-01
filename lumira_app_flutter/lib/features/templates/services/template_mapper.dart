@@ -6,6 +6,7 @@ import '../../capture/domain/photo_template.dart';
 import '../data/builtin_silhouettes.dart';
 import '../data/templates_editor_mock_data.dart' as editor;
 import '../data/remote_template_dto.dart';
+import 'template_image_store.dart';
 
 /// 模板领域对象与 [TemplateRecord] / [editor.EditorForm] 之间的双向映射。
 ///
@@ -563,7 +564,19 @@ class TemplateMapper {
   /// 服务 origin 替换，保证图片/剪影在 App 端可加载。
   /// 也处理相对路径（以 / 开头）：自动补全服务 origin，避免 TemplateCoverImage
   /// 和 PoseSilhouette 因 URL 不满足 startsWith('http') 而无法加载。
+  ///
+  /// **例外**：自定义模板图片落盘后的本地绝对路径（如
+  /// `/data/user/0/.../silhouette_0.png`、`/var/mobile/.../cover.png`）
+  /// 不得被拼接服务端 origin——否则会变成无法访问的
+  /// `https://lumira.iwtle.top/data/user/0/...`，导致剪影/封面图加载失败。
+  /// 通过 [TemplateImageStore.isLocalImageRef] 识别本地路径并原样返回。
+  /// 服务端相对路径（`/uploads/...`）不命中 isLocalImageRef 的排除规则，
+  /// 仍走下方的 origin 补全逻辑。
   static String normalizeAssetUrl(String url) {
+    // 本地文件路径（自定义模板图片落盘后的绝对路径）原样返回，不做规范化
+    if (TemplateImageStore.isLocalImageRef(url) && !url.startsWith('/uploads/')) {
+      return url;
+    }
     // 相对路径：补全服务器 origin
     if (url.startsWith('/')) {
       final base = Uri.tryParse(AppConfig.baseUrl);
