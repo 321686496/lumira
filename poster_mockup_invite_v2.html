@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 邀请有礼 v2 高质感海报</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --serif:'Playfair Display','Noto Serif SC','Songti SC','STSong',Georgia,serif;
+    --sans:'PingFang SC','HarmonyOS Sans','Helvetica Neue',system-ui,sans-serif;
+    --gold:#b78a3e;
+    --gold-lt:#d8b26b;
+    --ink:#221d17;
+    --cream:#f5f0e6;
+    --espresso:#201a15;
+  }
+  body{font-family:var(--sans);background:#eae4d9;padding:56px 24px 100px;display:flex;flex-direction:column;align-items:center;}
+  .head{width:100%;max-width:1300px;text-align:center;margin-bottom:46px;}
+  .head .eyb{font-size:11px;letter-spacing:6px;color:#8b8174;text-transform:uppercase;}
+  .head h1{font-family:var(--serif);font-size:32px;font-weight:500;letter-spacing:6px;color:#26201a;margin-top:14px;}
+  .head p{margin-top:10px;font-size:13px;letter-spacing:2px;color:#968a79;}
+  .shelf{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:60px;max-width:1400px;}
+  .shot{width:400px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;}
+  .shot .tag{width:100%;margin-bottom:16px;display:flex;align-items:baseline;justify-content:space-between;}
+  .shot .tag b{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:3px;color:#26201a;display:flex;align-items:center;gap:10px;}
+  .shot .tag b .badge{font-family:var(--sans);font-size:9px;font-weight:500;letter-spacing:2px;color:#fff;background:#8a7040;padding:3px 10px;border-radius:999px;}
+  .shot .tag span{font-size:11px;letter-spacing:1.5px;color:#968a79;}
+  .poster{width:400px;height:711px;position:relative;overflow:hidden;border-radius:6px;box-shadow:0 30px 60px -20px rgba(0,0,0,.35);}
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:99;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .qr{background:#fff;padding:6px;box-shadow:0 2px 8px -2px rgba(0,0,0,.2);}
+  .qr svg{width:100%;height:100%;display:block;}
+  .storeline{font-size:8.5px;letter-spacing:2px;opacity:.75;}
+
+  /* ============ A 暗金画廊邀请函 ============ */
+  .a{background:
+      radial-gradient(120% 90% at 50% -12%, rgba(183,138,62,.28) 0%, rgba(183,138,62,0) 55%),
+      radial-gradient(140% 120% at 50% 115%, rgba(120,86,40,.22) 0%, rgba(120,86,40,0) 60%),
+      linear-gradient(180deg,#29211a 0%,#201a15 50%,#1a1510 100%);
+    display:flex;flex-direction:column;padding:42px 40px 34px;color:#ece3d2;}
+  .a-frame{position:absolute;inset:18px;border:1px solid rgba(216,178,107,.30);border-radius:3px;pointer-events:none;}
+  .a-frame::after{content:'';position:absolute;inset:6px;border:1px solid rgba(216,178,107,.12);border-radius:2px;pointer-events:none;}
+  .a-top{display:flex;align-items:center;gap:14px;position:relative;z-index:2;}
+  .a-top .ln{flex:1;height:1px;background:linear-gradient(90deg,rgba(216,178,107,.5),rgba(216,178,107,0));}
+  .a-top .word{font-family:var(--serif);font-size:15px;letter-spacing:8px;color:#d8b26b;}
+  .a-top .cn{font-size:8px;letter-spacing:4px;color:#a99775;}
+  .a-archwrap{position:relative;flex:1;display:flex;align-items:center;justify-content:center;margin:34px 0 26px;z-index:2;}
+  .a-arch{position:relative;width:240px;height:280px;}
+  .a-arch .iono{position:absolute;inset:0;border-radius:140px 140px 6px 6px;background:linear-gradient(175deg,#3a3027 0%,#2b231b 60%,#241d16 100%);box-shadow:inset 0 0 40px rgba(0,0,0,.5);}
+  .a-arch .iono::after{content:'';position:absolute;inset:0;border-radius:inherit;border:1px solid rgba(216,178,107,.35);}
+  .a-arch .aro{position:absolute;inset:-11px;border-radius:152px 152px 10px 10px;border:1px solid rgba(216,178,107,.4);}
+  .a-arch .aro2{position:absolute;inset:-22px;border-radius:164px 164px 16px 16px;border:1px solid rgba(216,178,107,.18);}
+  .a-arch .inner{position:absolute;inset:14px;border-radius:112px 112px 0 0;background:radial-gradient(80% 62% at 50% 6%,#4a3d2e 0%,#2e261d 100%);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:0 12px 20px;text-align:center;}
+  .a-arch .inner .ig{font-size:9px;letter-spacing:5px;color:#c9a15f;text-transform:uppercase;}
+  .a-arch .inner .in{font-family:var(--serif);font-size:26px;color:#f0e7d6;margin-top:10px;line-height:1.3;}
+  .a-arch .inner .in em{font-style:normal;color:#d8b26b;}
+  .a-arch .fl{position:absolute;top:-28px;left:50%;transform:translateX(-50%);font-family:var(--serif);font-size:11px;letter-spacing:7px;color:#c9a15f;white-space:nowrap;}
+  .a-arch .f2{position:absolute;bottom:-24px;left:50%;transform:translateX(-50%);font-size:8px;letter-spacing:6px;color:#93805c;white-space:nowrap;text-transform:uppercase;}
+  .a-rule{height:1px;background:linear-gradient(90deg,transparent,rgba(216,178,107,.4),transparent);margin:6px 0 18px;position:relative;z-index:2;}
+  .a-feat{display:flex;align-items:center;justify-content:center;gap:16px;font-size:9.5px;letter-spacing:3px;color:#bfb29a;position:relative;z-index:2;}
+  .a-feat .dot{width:3px;height:3px;border-radius:50%;background:#c9a15f;}
+  .a-vouch{margin-top:26px;position:relative;z-index:2;border:1px solid rgba(216,178,107,.42);background:linear-gradient(120deg,rgba(183,138,62,.14),rgba(183,138,62,.04));padding:18px 18px 16px;}
+  .a-vouch .vt{display:flex;align-items:center;justify-content:center;gap:10px;font-size:8px;letter-spacing:5px;color:#c9a15f;text-transform:uppercase;position:relative;}
+  .a-vouch .vt::before,.a-vouch .vt::after{content:'';flex:1;height:1px;background:rgba(216,178,107,.22);}
+  .a-vouch .vm{display:flex;align-items:center;justify-content:center;gap:22px;margin-top:16px;}
+  .a-vouch .zero{font-family:var(--serif);font-size:64px;font-weight:400;line-height:1;color:#e9c783;}
+  .a-vouch .zero small{font-size:20px;letter-spacing:1px;color:#c9a15f;}
+  .a-vouch .ztxt{display:flex;flex-direction:column;gap:9px;}
+  .a-vouch .zr{display:flex;align-items:center;gap:9px;font-size:11.5px;letter-spacing:2px;color:#ece3d2;}
+  .a-vouch .zr i{width:18px;height:18px;border:1px solid rgba(216,178,107,.5);border-radius:50%;font-style:normal;display:flex;align-items:center;justify-content:center;font-size:9px;color:#d8b26b;}
+  .a-vouch .zr s{text-decoration:none;font-size:8px;letter-spacing:2px;color:#b19f7f;margin-left:2px;}
+  .a-qrrow{display:flex;align-items:center;gap:18px;margin-top:30px;position:relative;z-index:2;}
+  .a .qr{width:90px;height:90px;}
+  .a-codeblk{flex:1;display:flex;flex-direction:column;gap:6px;}
+  .a-codeblk .lab{font-size:8px;letter-spacing:3px;color:#a99775;text-transform:uppercase;}
+  .a-codeblk .cd{display:flex;align-items:center;gap:12px;}
+  .a-codeblk .cd .code{font-family:var(--serif);font-size:22px;letter-spacing:5px;color:#f0e7d6;}
+  .a-codeblk .cd .cp{font-size:8px;letter-spacing:2px;color:#1a1510;background:#d8b26b;border-radius:999px;padding:4px 10px;}
+  .a-codeblk .hint{font-size:9px;letter-spacing:1px;color:#93805c;line-height:1.7;}
+  .a-foot{margin-top:auto;padding-top:14px;border-top:1px solid rgba(216,178,107,.16);display:flex;align-items:center;gap:10px;position:relative;z-index:2;color:#a99775;}
+  .a-foot .sp{flex:1;}
+  .a-foot .fl{font-family:var(--serif);font-size:10px;letter-spacing:5px;color:#c9a15f;}
+
+  /* ============ B 奶油艺廊票 ============ */
+  .b{background:linear-gradient(170deg,#f7f2e9 0%,#f0eadc 100%);display:flex;flex-direction:column;padding:40px 46px 34px;color:#262019;}
+  .b-frame{position:absolute;inset:16px;border:1px solid #d8cfbd;border-radius:4px;pointer-events:none;}
+  .b-masthead{display:flex;align-items:baseline;justify-content:space-between;position:relative;z-index:2;}
+  .b-masthead .en{font-family:var(--serif);font-size:14px;letter-spacing:7px;color:#262019;}
+  .b-masthead .ln{font-size:9px;letter-spacing:3px;color:#9a8a6e;text-transform:uppercase;}
+  .b-hero{position:relative;z-index:2;margin-top:36px;text-align:center;}
+  .b-badge{display:inline-flex;align-items:center;gap:8px;font-size:8px;letter-spacing:4px;color:#9a8a6e;text-transform:uppercase;border:1px solid #d8cfbd;padding:5px 12px;border-radius:999px;}
+  .b-title{font-family:var(--serif);font-size:46px;font-weight:500;line-height:1.14;letter-spacing:2px;color:#262019;margin-top:20px;}
+  .b-title em{font-style:normal;font-weight:600;}
+  .b-sub{margin-top:16px;font-size:11.5px;letter-spacing:3px;color:#8a7b62;line-height:2;}
+  .b-archwrap{position:relative;z-index:1;display:flex;justify-content:center;margin:16px 0 0;}
+  .b-arch{position:relative;width:246px;height:150px;}
+  .b-arch .aro{position:absolute;left:0;right:0;top:0;height:150px;border-radius:150px 150px 0 0;border:1px solid #c9a15f;}
+  .b-arch .aro2{position:absolute;left:12px;right:12px;top:12px;height:126px;border-radius:126px 126px 0 0;border:1px solid rgba(201,161,95,.5);}
+  .b-arch .aro3{position:absolute;left:24px;right:24px;top:24px;height:102px;border-radius:102px 102px 0 0;border:1px solid rgba(201,161,95,.28);}
+  .b-arch .sun{position:absolute;top:44px;left:50%;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 30%,#e9c783,#c9a15f);opacity:.9;}
+  .b-arch .cap{position:absolute;bottom:-2px;left:12px;right:12px;font-size:8px;letter-spacing:8px;color:#b89a5e;text-align:center;text-transform:uppercase;}
+  .b-feat{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;gap:26px;margin-top:26px;}
+  .b-feat .it{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10px;letter-spacing:3px;color:#6f5f48;}
+  .b-feat .k{font-size:9px;letter-spacing:2px;color:#b89a5e;text-transform:uppercase;}
+  .b-perf{position:relative;z-index:2;display:flex;align-items:center;gap:14px;margin-top:30px;}
+  .b-perf::before,.b-perf::after{content:'';flex:1;height:1px;background:#c8bca4;}
+  .b-perf .perfrow{display:flex;align-items:center;gap:6px;font-size:8px;letter-spacing:3px;color:#9a8a6e;text-transform:uppercase;}
+  .b-perf .seal{font-family:var(--serif);font-size:9px;letter-spacing:2px;color:#fff;background:#b78a3e;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.25;box-shadow:0 6px 14px -4px rgba(183,138,62,.5);}
+  .b-vouch{margin-top:22px;position:relative;z-index:2;background:linear-gradient(120deg,#efe6d6 0%,#eee4d2 100%);border:1px solid #d8cbb0;padding:16px 18px 15px;box-shadow:0 8px 20px -12px rgba(0,0,0,.12);}
+  .b-vouch .vm{display:flex;align-items:center;gap:18px;}
+  .b-vouch .zero{font-family:var(--serif);font-size:62px;font-weight:400;line-height:1;color:#926d2c;}
+  .b-vouch .zero small{font-size:18px;color:#b78a3e;}
+  .b-vouch .ztxt{display:flex;flex-direction:column;gap:10px;flex:1;}
+  .b-vouch .zr{display:flex;align-items:center;gap:9px;font-size:12px;letter-spacing:2px;color:#3a3128;}
+  .b-vouch .zr i{width:18px;height:18px;border:1px solid #b78a3e;border-radius:50%;font-style:normal;display:flex;align-items:center;justify-content:center;font-size:9px;color:#b78a3e;}
+  .b-vouch .zr s{text-decoration:none;font-size:8px;letter-spacing:2px;color:#9a8a6e;margin-left:2px;}
+  .b-qrrow{display:flex;align-items:center;gap:18px;margin-top:26px;position:relative;z-index:2;}
+  .b .qr{width:86px;height:86px;}
+  .b-codeblk{flex:1;display:flex;flex-direction:column;gap:6px;}
+  .b-codeblk .lab{font-size:8px;letter-spacing:3px;color:#9a8a6e;text-transform:uppercase;}
+  .b-codeblk .cd{display:flex;align-items:center;gap:12px;}
+  .b-codeblk .cd .code{font-family:var(--serif);font-size:21px;letter-spacing:5px;color:#262019;}
+  .b-codeblk .cd .cp{font-size:8px;letter-spacing:2px;color:#fff;background:#262019;border-radius:999px;padding:4px 10px;}
+  .b-codeblk .hint{font-size:9px;letter-spacing:1px;color:#9a8a6e;line-height:1.7;}
+  .b-foot{margin-top:auto;padding-top:14px;border-top:1px solid #d8cfbd;display:flex;align-items:center;gap:10px;position:relative;z-index:2;color:#6f5f48;}
+  .b-foot .sp{flex:1;}
+  .b-foot .fl{font-family:var(--serif);font-size:10px;letter-spacing:5px;color:#b78a3e;}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="head">
+  <div class="eyb">Lumira · 2.0 · 9 : 16</div>
+  <h1>把生活，装裱成画</h1>
+  <p>暗金画廊邀请函 A　·　奶油艺廊票 B — 全新视觉</p>
+</div>
+
+<svg width="0" height="0" style="position:absolute"><symbol id="qr" viewBox="0 0 100 100"><rect width="100" height="100" fill="#12100e"/><g fill="#ededee"><rect x="8" y="8" width="22" height="22"/><rect x="10" y="10" width="18" height="18" fill="#fff"/><rect x="13" y="13" width="12" height="12"/><rect x="70" y="8" width="22" height="22"/><rect x="72" y="10" width="18" height="18" fill="#fff"/><rect x="75" y="13" width="12" height="12"/><rect x="8" y="70" width="22" height="22"/><rect x="10" y="72" width="18" height="18" fill="#fff"/><rect x="13" y="75" width="12" height="12"/><rect x="48" y="34" width="5" height="5"/><rect x="34" y="41" width="5" height="5"/><rect x="41" y="41" width="5" height="5"/><rect x="48" y="41" width="5" height="5"/><rect x="55" y="34" width="5" height="5"/><rect x="55" y="41" width="5" height="10"/><rect x="62" y="34" width="5" height="5"/><rect x="62" y="41" width="5" height="5"/><rect x="34" y="48" width="5" height="5"/><rect x="48" y="48" width="5" height="5"/><rect x="62" y="48" width="5" height="5"/><rect x="34" y="55" width="5" height="5"/><rect x="41" y="55" width="5" height="5"/><rect x="48" y="55" width="5" height="5"/><rect x="55" y="55" width="10" height="5"/><rect x="34" y="62" width="5" height="5"/><rect x="55" y="62" width="5" height="5"/><rect x="62" y="62" width="5" height="5"/><rect x="34" y="69" width="5" height="5"/><rect x="41" y="69" width="5" height="5"/><rect x="48" y="69" width="5" height="5"/><rect x="55" y="69" width="5" height="5"/><rect x="62" y="69" width="5" height="5"/><rect x="34" y="76" width="5" height="5"/><rect x="48" y="76" width="5" height="5"/><rect x="62" y="76" width="5" height="5"/><rect x="34" y="83" width="5" height="5"/><rect x="41" y="83" width="5" height="5"/><rect x="48" y="83" width="5" height="5"/><rect x="55" y="83" width="5" height="5"/><rect x="62" y="83" width="5" height="5"/></g></symbol></svg>
+
+<div class="shelf">
+
+  <!-- A 暗金画廊邀请函 -->
+  <div class="shot">
+    <div class="tag"><b><span class="badge">A</span>暗金画廊邀请函</b><span>Espresso × Gold · 拱门焦点</span></div>
+    <div class="poster a">
+      <div class="a-frame"></div>
+      <div class="a-top"><span class="ln"></span><span class="word">LUMIRA</span><span class="cn">如 画</span></div>
+      <div class="a-archwrap">
+        <div class="a-arch">
+          <div class="fl">新客礼遇 · GIFT</div>
+          <div class="aro2"></div>
+          <div class="aro"></div>
+          <div class="iono">
+            <div class="inner">
+              <span class="ig">把生活</span>
+              <span class="in">装裱成<em>画</em></span>
+            </div>
+          </div>
+          <div class="f2">Atmosphere · Poster</div>
+        </div>
+      </div>
+      <div class="a-rule"></div>
+      <div class="a-feat"><span>氛围写真</span><span class="dot"></span><span>生活海报</span><span class="dot"></span><span>一键生成</span></div>
+      <div class="a-vouch">
+        <div class="vt">新客立领 · Newcomer Gift</div>
+        <div class="vm">
+          <div class="zero">0<small>元</small></div>
+          <div class="ztxt">
+            <div class="zr"><i>01</i>免费解锁付费模板 <s>不耗积分 · 永久</s></div>
+            <div class="zr"><i>02</i>双方各 +30 积分 <s>积分解锁更多模板</s></div>
+          </div>
+        </div>
+      </div>
+      <div class="a-qrrow">
+        <div class="qr"><svg viewBox="0 0 100 100"><use href="#qr"/></svg></div>
+        <div class="a-codeblk">
+          <span class="lab">邀请码 Invitation Code</span>
+          <div class="cd"><span class="code">ABC 123</span><span class="cp">复制</span></div>
+          <span class="hint">下载后 App 内「扫一扫」绑定领礼</span>
+        </div>
+      </div>
+      <div class="a-foot"><span class="storeline">App Store · 鸿蒙应用市场</span><span class="sp"></span><span class="fl">如 画</span></div>
+    </div>
+  </div>
+
+  <!-- B 奶油艺廊票 -->
+  <div class="shot">
+    <div class="tag"><b><span class="badge">B</span>奶油艺廊票</b><span>Ivory × 墨黑 · 票据式</span></div>
+    <div class="poster b">
+      <div class="b-frame"></div>
+      <div class="b-masthead"><span class="en">LUMIRA</span><span class="ln">如画 · Invitation 2026</span></div>
+      <div class="b-hero">
+        <span class="b-badge">Invite &amp; 互相赠礼</span>
+        <div class="b-title">把日子<br>装裱成<em>一帧画</em></div>
+        <div class="b-sub">一键生成氛围感写真 · 生活海报<br>与好友同行，把美好刻进时光</div>
+      </div>
+      <div class="b-archwrap">
+        <div class="b-arch">
+          <div class="aro"></div>
+          <div class="aro2"></div>
+          <div class="aro3"></div>
+          <div class="sun"></div>
+          <div class="cap">N e w C o m e r</div>
+        </div>
+      </div>
+      <div class="b-feat">
+        <div class="it"><span class="k">写真</span>氛围感人像</div>
+        <div class="it"><span class="k">海报</span>高级感排版</div>
+        <div class="it"><span class="k">一键</span>AI 自动生成</div>
+      </div>
+      <div class="b-perf">
+        <span></span>
+        <div class="perfrow">新客礼遇 · 0元解锁</div>
+        <div class="seal">新客<br>礼遇</div>
+      </div>
+      <div class="b-vouch">
+        <div class="vm">
+          <div class="zero">0<small>元</small></div>
+          <div class="ztxt">
+            <div class="zr"><i>01</i>免费解锁付费模板 <s>不耗积分 · 永久</s></div>
+            <div class="zr"><i>02</i>双方各 +30 积分 <s>积分解锁更多模板</s></div>
+          </div>
+        </div>
+      </div>
+      <div class="b-qrrow">
+        <div class="qr"><svg viewBox="0 0 100 100"><use href="#qr"/></svg></div>
+        <div class="b-codeblk">
+          <span class="lab">邀请码</span>
+          <div class="cd"><span class="code">ABC 123</span><span class="cp">复制</span></div>
+          <span class="hint">下载后 App 内扫一扫绑定领礼<br>iOS · 鸿蒙应用市场</span>
+        </div>
+      </div>
+      <div class="b-foot"><span class="storeline">App Store · 鸿蒙应用市场</span><span class="sp"></span><span class="fl">如 画</span></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
