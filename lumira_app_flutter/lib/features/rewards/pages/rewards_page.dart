@@ -144,41 +144,46 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return NeuCard(
       padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-      child: Column(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: tokens.brandSubtle,
-              shape: BoxShape.circle,
+      child: SizedBox(
+        // 账号占满卡片整宽，否则 Column 会收缩到最宽子元素宽度，导致内容整体左偏
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: tokens.brandSubtle,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.card_giftcard_outlined,
+                size: 36,
+                color: tokens.brand,
+              ),
             ),
-            child: Icon(
-              Icons.card_giftcard_outlined,
-              size: 36,
-              color: tokens.brand,
+            const SizedBox(height: 16),
+            Text(
+              '暂无奖励',
+              style: TextStyle(
+                fontFamily: 'Noto Serif SC',
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: tokens.textPrimary,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            '暂无奖励',
-            style: TextStyle(
-              fontFamily: 'Noto Serif SC',
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: tokens.textPrimary,
+            const SizedBox(height: 8),
+            Text(
+              '邀请好友或输入兑换码即可解锁专属奖励',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: tokens.textSecondary,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '邀请好友或输入兑换码即可解锁专属奖励',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: tokens.textSecondary,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -278,8 +283,7 @@ class _RewardCardState extends ConsumerState<_RewardCard> {
   Widget build(BuildContext context) {
     final r = widget.reward;
     final tokens = ref.watch(themeTokensProvider);
-    final sourceLabel =
-        r.source == RewardSource.invite ? '邀请奖励' : '兑换奖励';
+    final sourceLabel = r.source == RewardSource.invite ? '邀请奖励' : '兑换奖励';
     final title = r.sourceDetail ?? sourceLabel;
     final canClaim = r.status == UnlockStatus.unlocked;
 
