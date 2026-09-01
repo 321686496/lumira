@@ -10,6 +10,7 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart' as pp;
 
 import 'dart_photo_pipeline.dart' show applyLegStretchImg;
+import 'skin_smooth_shader.dart';
 import 'skin_smoother.dart';
 import '../data/capture_state.dart';
 import '../domain/filter_recipe.dart';
@@ -215,41 +216,52 @@ class PhotoPostProcessor {
       debugPrint(
           '[post-process] GPU合并: ${resultImage.width}x${resultImage.height}, ${sw.elapsedMilliseconds}ms');
 
-      // 4.5. 皮肤平滑
+      // 4.5. 皮肤平滑（GPU shader 优先，与预览同一 shader，保证 WYSIWYG）
       if (!rawMode && params.smoothStrength > 0) {
+        final int smoothW = resultImage.width;
+        final int smoothH = resultImage.height;
+        ui.FragmentProgram? program;
         try {
-          final byteData =
-              await resultImage.toByteData(format: ui.ImageByteFormat.rawRgba);
-          if (byteData != null) {
-            final imgImage = img.Image.fromBytes(
-              width: resultImage.width,
-              height: resultImage.height,
-              bytes: byteData.buffer.asUint8List().buffer,
-              numChannels: 4,
-              order: img.ChannelOrder.rgba,
+          // 载荷失败/渲染异常一律回退 CPU 路径，不抛出、不阻塞成片。
+          program = await ui.FragmentProgram.fromAsset(
+              'shaders/skin_smooth.frag');
+        } catch (_) {
+          program = null;
+        }
+        if (program != null) {
+          try {
+            final recorder = ui.PictureRecorder();
+            final canvas = ui.Canvas(recorder);
+            // 与 SkinSmoothPainter 相同的 uniform 索引约定：
+            // - float 域：uSize(vec2)→0,1；uStrength→2。
+            // - sampler 域：uTexture→0（sampler 独立索引空间）。
+            final shader = program.fragmentShader()
+              ..setFloat(0, smoothW.toDouble())
+              ..setFloat(1, smoothH.toDouble())
+              ..setFloat(2, skinStrength(params))
+              ..setImageSampler(0, resultImage);
+            canvas.drawRect(
+              ui.Rect.fromLTWH(
+                  0, 0, smoothW.toDouble(), smoothH.toDouble()),
+              ui.Paint()..shader = shader,
             );
-            final smoothed =
-                SkinSmoother.smooth(imgImage, params.smoothStrength);
-            final completer = ui.PictureRecorder();
-            final canvas = ui.Canvas(completer);
-            final paint = ui.Paint();
-            final smoothedBytes = img.encodePng(smoothed);
-            final codec = await ui.instantiateImageCodec(smoothedBytes);
-            final frame = await codec.getNextFrame();
-            canvas.drawImage(frame.image, ui.Offset.zero, paint);
-            final picture = completer.endRecording();
-            final newImage =
-                await picture.toImage(smoothed.width, smoothed.height);
+            final picture = recorder.endRecording();
+            final newImage = await picture.toImage(smoothW, smoothH);
             resultImage.dispose();
             resultImage = newImage;
-            frame.image.dispose();
-            codec.dispose();
             picture.dispose();
             debugPrint(
-                '[post-process] 皮肤平滑: smoothStrength=${params.smoothStrength}, ${sw.elapsedMilliseconds}ms');
+                '[post-process] 皮肤平滑 (GPU): smoothStrength=${params.smoothStrength}, ${sw.elapsedMilliseconds}ms');
+          } catch (e) {
+            debugPrint(
+                '[post-process] 皮肤平滑 (GPU) 渲染异常，回退 CPU: $e');
+            resultImage =
+                await _applyCpuSkinSmoothing(resultImage, params, sw);
           }
-        } catch (e) {
-          debugPrint('[post-process] 皮肤平滑失败（静默跳过）: $e');
+        } else {
+          debugPrint('[post-process] 磨皮 shader 加载失败，回退 CPU');
+          resultImage =
+              await _applyCpuSkinSmoothing(resultImage, params, sw);
         }
       }
 
@@ -331,6 +343,47 @@ class PhotoPostProcessor {
     codec.dispose();
     input.dispose();
     return frame.image;
+  }
+
+  /// 皮肤平滑 CPU 回退路径（GPU shader 加载/渲染失败时使用）。
+  /// 消费并回收 [input]，返回磨皮后的新图。
+  static Future<ui.Image> _applyCpuSkinSmoothing(
+    ui.Image input,
+    PostProcess params,
+    Stopwatch sw,
+  ) async {
+    try {
+      final byteData =
+          await input.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (byteData == null) return input;
+      final imgImage = img.Image.fromBytes(
+        width: input.width,
+        height: input.height,
+        bytes: byteData.buffer.asUint8List().buffer,
+        numChannels: 4,
+        order: img.ChannelOrder.rgba,
+      );
+      final smoothed = SkinSmoother.smooth(imgImage, params.smoothStrength);
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      final paint = ui.Paint();
+      final smoothedBytes = img.encodePng(smoothed);
+      final codec = await ui.instantiateImageCodec(smoothedBytes);
+      final frame = await codec.getNextFrame();
+      canvas.drawImage(frame.image, ui.Offset.zero, paint);
+      final picture = recorder.endRecording();
+      final newImage = await picture.toImage(smoothed.width, smoothed.height);
+      input.dispose();
+      frame.image.dispose();
+      codec.dispose();
+      picture.dispose();
+      debugPrint(
+          '[post-process] 皮肤平滑 (CPU): smoothStrength=${params.smoothStrength}, ${sw.elapsedMilliseconds}ms');
+      return newImage;
+    } catch (e) {
+      debugPrint('[post-process] 皮肤平滑 (CPU) 失败（静默跳过）: $e');
+      return input;
+    }
   }
 
   /// 逐像素效果：Sharpen + Clarity + Grain
