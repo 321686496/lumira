@@ -189,6 +189,9 @@ dependency_overrides:
 flutter:
   uses-material-design: true
 
+  shaders:
+    - assets/shaders/skin_smooth.frag
+
   assets:
     - assets/images/
     - assets/images/templates/
