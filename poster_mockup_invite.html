@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>如画 LUMIRA · 邀请有礼 9:16 纯排版海报</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --serif:'Playfair Display','Songti SC','STSong','Noto Serif SC',Georgia,serif;
+    --sans:'PingFang SC','HarmonyOS Sans','Helvetica Neue',system-ui,sans-serif;
+  }
+  body{font-family:var(--sans);background:#e6e1d8;padding:56px 24px 96px;display:flex;flex-direction:column;align-items:center;}
+  .head{width:100%;max-width:1300px;text-align:center;margin-bottom:46px;}
+  .head .eyb{font-size:11px;letter-spacing:6px;color:#7f766a;text-transform:uppercase;}
+  .head h1{font-family:var(--serif);font-size:32px;font-weight:500;letter-spacing:6px;color:#26211a;margin-top:14px;}
+  .head p{margin-top:10px;font-size:13px;letter-spacing:2px;color:#92887b;}
+  .shelf{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:56px;max-width:1400px;}
+  .shot{width:400px;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;}
+  .shot .tag{width:100%;margin-bottom:16px;display:flex;align-items:baseline;justify-content:space-between;}
+  .shot .tag b{font-family:var(--serif);font-size:16px;font-weight:500;letter-spacing:3px;color:#26211a;display:flex;align-items:center;gap:10px;}
+  .shot .tag b .badge{font-family:var(--sans);font-size:9px;font-weight:500;letter-spacing:2px;color:#fff;background:#8f7d57;padding:3px 10px;border-radius:999px;}
+  .shot .tag span{font-size:11px;letter-spacing:1.5px;color:#92887b;}
+  .poster{width:400px;height:711px; position:relative;overflow:hidden;}
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:99;opacity:.04;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");}
+  .qr{background:#fff;padding:10px;}
+  .qr svg{width:100%;height:100%;display:block;}
+  .codeblk{display:flex;flex-direction:column;gap:6px;}
+  .codeblk .lab{font-size:8px;letter-spacing:3px;color:inherit;opacity:.55;text-transform:uppercase;}
+  .codeblk .cd{display:flex;align-items:center;gap:10px;}
+  .codeblk .cd .code{font-family:var(--serif);font-size:20px;letter-spacing:4px;color:inherit;}
+  .codeblk .cd .cp{font-size:8px;letter-spacing:2px;opacity:.6;border:1px solid;border-radius:999px;padding:2px 7px;margin-left:6px;}
+  .codeblk .hint{font-size:9px;letter-spacing:1px;opacity:.55;line-height:1.7;}
+  .storeline{font-size:8.5px;letter-spacing:2px;opacity:.7;}
+
+  /* ==== G 拱形当代 ==== */
+  .g{background:linear-gradient(160deg,#f3ece2 0%,#efe6d8 55%,#e9dcca 100%);display:flex;flex-direction:column;padding:30px 30px 26px;}
+  .g-top{display:flex;align-items:center;gap:12px;}
+  .g-top .en{font-family:var(--serif);font-size:15px;letter-spacing:7px;color:#2b2419;}
+  .g-top .ln{flex:1;height:1px;background:#cdbfaa;}
+  .g-top .cn{font-size:9px;letter-spacing:4px;color:#8f7d57;}
+  .g-center{position:relative;margin-top:24px;display:flex;flex-direction:column;justify-content:flex-end;height:330px;}
+  .g-arch{position:absolute;left:50%;transform:translateX(-50%);bottom:0;width:280px;height:330px;border-radius:140px 140px 10px 10px;background:linear-gradient(165deg,#c9b48c 0%,#c3a877 60%,#b5955f 100%);box-shadow:0 30px 60px -30px rgba(120,90,45,.55);}
+  .g-arch::after{content:'';position:absolute;inset:6px;border-radius:134px 134px 6px 6px;border:1px solid rgba(255,255,255,.28);}
+  .g-orbit{position:absolute;left:-16px;top:34px;width:116px;height:116px;border-radius:50%;border:1px solid rgba(143,125,87,.42);}
+  .g-orbit2{position:absolute;right:-22px;top:-18px;width:74px;height:74px;border-radius:50%;border:1px solid rgba(143,125,87,.35);}
+  .g-title{position:relative;z-index:2;margin-top:26px;}
+  .g-title .ln1{font-family:var(--serif);font-size:15px;letter-spacing:6px;color:#8f7d57;text-transform:uppercase;}
+  .g-title .ln2{font-family:var(--serif);font-size:40px;font-weight:600;line-height:1.22;letter-spacing:2px;color:#2b2419;margin-top:10px;}
+  .g-title .ln2 em{font-style:normal;color:#a08046;}
+  .g-title .ln3{margin-top:14px;font-size:11.5px;letter-spacing:3px;color:#7d7263;line-height:1.9;}
+  .g-rule{height:1px;background:#cdbfaa;margin:24px 0 20px;}
+  .g-reward-label{font-size:8.5px;letter-spacing:5px;color:#8f7d57;text-transform:uppercase;}
+  .g-rw{display:flex;align-items:baseline;gap:12px;padding:9px 0;}
+  .g-rw .num{font-family:var(--serif);font-size:22px;color:#a08046;min-width:22px;}
+  .g-rw .t{font-size:13.5px;letter-spacing:1px;color:#2b2419;}
+  .g-rw .m{margin-left:auto;font-size:8.5px;letter-spacing:1.5px;color:#8f8577;}
+  .g-qrrow{display:flex;align-items:center;gap:16px;margin-top:14px;}
+  .g .qr{width:84px;height:84px;border:1px solid #d6c8b2;border-radius:8px;}
+  .g .codeblk{color:#2b2419;}
+  .g-foot{margin-top:auto;padding-top:16px;border-top:1px solid #cdbfaa;display:flex;align-items:center;gap:10px;}
+  .g-foot .storeline{color:#6f6355;}
+  .g-foot .sp{flex:1;}
+  .g-foot .fl{font-family:var(--serif);font-size:10px;letter-spacing:4px;color:#a08046;}
+
+  /* ==== H 负空间杂志 ==== */
+  .h{background:#f6f2ea;display:flex;flex-direction:column;padding:36px 34px 28px;}
+  .h-top{display:flex;justify-content:flex-start;align-items:baseline;gap:12px;}
+  .h-top .en{font-family:var(--serif);font-size:13px;letter-spacing:6px;color:#231e17;}
+  .h-top .ln{flex:1;height:1px;background:#ddd6c8;margin-left:8px;}
+  .h-brand-cn{font-size:9px;letter-spacing:6px;color:#9a9183;margin-top:20px;}
+  .h-void{flex:1;min-height:70px;}
+  .h-kicker{margin-top:6px;font-size:9px;letter-spacing:6px;color:#b08d52;text-transform:uppercase;}
+  .h-title{font-family:var(--serif);font-size:46px;font-weight:500;line-height:1.16;letter-spacing:3px;color:#231e17;margin-top:18px;}
+  .h-title em{font-style:normal;color:#a08046;}
+  .h-sub{margin-top:18px;font-size:12.5px;letter-spacing:3px;color:#7c7468;line-height:2.1;}
+  .h-void2{flex:1;}
+  .h-divider{display:flex;align-items:center;gap:14px;}
+  .h-divider .ln{flex:1;height:1px;background:#d9d2c4;}
+  .h-divider span{font-size:8.5px;letter-spacing:4px;color:#9a9183;text-transform:uppercase;}
+  .h-rw{display:flex;align-items:baseline;gap:14px;padding:14px 0;border-bottom:1px solid #e6e0d4;}
+  .h-rw .num{font-family:var(--serif);font-size:20px;color:#a08046;min-width:20px;}
+  .h-rw .t{font-size:14px;letter-spacing:1px;color:#231e17;}
+  .h-rw .m{margin-left:auto;font-size:8px;letter-spacing:2px;color:#9a9183;text-transform:uppercase;}
+  .h-qrrow{display:flex;align-items:center;gap:16px;margin-top:20px;}
+  .h .qr{width:78px;height:78px;border:1px solid #ddd6c8;border-radius:6px;}
+  .h .codeblk{color:#231e17;}
+  .h-foot{margin-top:auto;padding-top:14px;display:flex;align-items:center;gap:10px;}
+  .h-foot .storeline{color:#6f665b;}
+  .h-foot .sp{flex:1;}
+  .h-foot .fl{font-family:var(--serif);font-size:10px;letter-spacing:4px;color:#a08046;}
+
+  /* ==== I 几何光晕 ==== */
+  .i{background:linear-gradient(180deg,#2a2320 0%,#312a24 60%,#372e27 100%);display:flex;flex-direction:column;padding:32px 30px 28px;}
+  .i-top{display:flex;align-items:center;gap:12px;}
+  .i-top .en{font-family:var(--serif);font-size:15px;letter-spacing:7px;color:#ece4d4;}
+  .i-top .ln{flex:1;height:1px;background:rgba(205,170,110,.26);}
+  .i-top .cn{font-size:9px;letter-spacing:4px;color:#c9a15f;}
+  .i-art{position:relative;flex:1;min-height:150px;margin-top:20px;}
+  .i-orbitA{position:absolute;right:6px;top:18px;width:220px;height:220px;border-radius:50%;overflow:hidden;}
+  .i-orbitA::before{content:'';position:absolute;inset:0;background:conic-gradient(from 200deg,#8a7456,#5c534a,#8a7456);opacity:.35;filter:blur(2px);}
+  .i-orbitA::after{content:'';position:absolute;inset:12px;border-radius:50%;background:#2f2823;}
+  .i-ring{position:absolute;right:6px;top:18px;width:220px;height:220px;border-radius:50%;border:1px solid rgba(205,170,110,.4);}
+  .i-ring2{position:absolute;right:56px;top:18px;width:120px;height:120px;border-radius:50%;border:1px solid rgba(205,170,110,.28);}
+  .i-diamond{position:absolute;right:110px;top:108px;width:16px;height:16px;background:#c9a15f;transform:rotate(45deg);z-index:2;}
+  .i-body{position:relative;z-index:2;margin-top:16px;}
+  .i-kicker{font-size:9px;letter-spacing:6px;color:#c9a15f;text-transform:uppercase;}
+  .i-title{font-family:var(--serif);font-size:40px;font-weight:500;line-height:1.24;letter-spacing:3px;color:#f0e9db;margin-top:14px;}
+  .i-title em{font-style:normal;color:#d8b26b;}
+  .i-sub{margin-top:14px;font-size:11.5px;letter-spacing:3px;color:#b7ac98;line-height:2;}
+  .i-rule{height:1px;background:rgba(205,170,110,.2);margin:22px 0 16px;}
+  .i-reward-label{font-size:8px;letter-spacing:5px;color:#c9a15f;text-transform:uppercase;}
+  .i-rw{display:flex;align-items:baseline;gap:12px;padding:8px 0;}
+  .i-rw .num{font-family:var(--serif);font-size:20px;color:#d8b26b;min-width:20px;}
+  .i-rw .t{font-size:13px;letter-spacing:1px;color:#eee6d7;}
+  .i-rw .m{margin-left:auto;font-size:8px;letter-spacing:1.5px;color:#a89c88;}
+  .i-qrrow{display:flex;align-items:center;gap:16px;margin-top:12px;}
+  .i .qr{width:82px;height:82px;border:1px solid rgba(205,170,110,.3);border-radius:6px;}
+  .i .codeblk{color:#f0e9db;}
+  .i-foot{margin-top:auto;padding-top:14px;border-top:1px solid rgba(205,170,110,.18);display:flex;align-items:center;gap:10px;}
+  .i-foot .storeline{color:#a89c88;}
+  .i-foot .sp{flex:1;}
+  .i-foot .fl{font-family:var(--serif);font-size:10px;letter-spacing:4px;color:#d8b26b;}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="head">
+  <div class="eyb">Lumira · 9 : 16</div>
+  <h1>把生活，做成画</h1>
+  <p>拱形当代 G　·　负空间杂志 H　·　几何光晕 I　— 纯排版版式</p>
+</div>
+
+<svg width="0" height="0" style="position:absolute"><symbol id="qr" viewBox="0 0 100 100"><rect width="100" height="100" fill="#12100e"/><g fill="#12100e"><rect x="8" y="8" width="22" height="22"/><rect x="10" y="10" width="18" height="18" fill="#fff"/><rect x="13" y="13" width="12" height="12"/><rect x="70" y="8" width="22" height="22"/><rect x="72" y="10" width="18" height="18" fill="#fff"/><rect x="75" y="13" width="12" height="12"/><rect x="8" y="70" width="22" height="22"/><rect x="10" y="72" width="18" height="18" fill="#fff"/><rect x="13" y="75" width="12" height="12"/><rect x="34" y="34" width="5" height="5"/><rect x="41" y="34" width="5" height="5"/><rect x="34" y="41" width="5" height="5"/><rect x="41" y="41" width="5" height="5"/><rect x="48" y="34" width="5" height="5"/><rect x="48" y="41" width="5" height="5"/><rect x="34" y="48" width="5" height="5"/><rect x="41" y="48" width="5" height="5"/><rect x="48" y="48" width="5" height="5"/><rect x="55" y="34" width="5" height="5"/><rect x="55" y="48" width="5" height="5"/><rect x="34" y="55" width="5" height="5"/><rect x="48" y="55" width="5" height="5"/><rect x="55" y="41" width="5" height="10"/><rect x="34" y="62" width="5" height="5"/><rect x="41" y="62" width="5" height="5"/><rect x="55" y="62" width="5" height="5"/><rect x="62" y="62" width="5" height="5"/><rect x="34" y="69" width="5" height="5"/><rect x="48" y="69" width="5" height="5"/><rect x="62" y="69" width="5" height="5"/><rect x="34" y="76" width="5" height="5"/><rect x="41" y="76" width="5" height="5"/><rect x="48" y="76" width="5" height="5"/><rect x="55" y="76" width="5" height="5"/><rect x="62" y="76" width="5" height="5"/><rect x="34" y="83" width="5" height="5"/><rect x="48" y="83" width="5" height="5"/><rect x="55" y="83" width="5" height="5"/><rect x="62" y="83" width="5" height="5"/></g></symbol></svg>
+
+<div class="shelf">
+
+  <!-- G 拱形当代 -->
+  <div class="shot">
+    <div class="tag"><b><span class="badge">G</span>拱形当代</b><span>莫兰迪 · 拱门焦点</span></div>
+    <div class="poster g">
+      <div class="g-top"><span class="en">LUMIRA</span><span class="ln"></span><span class="cn">如 画</span></div>
+      <div class="g-center">
+        <div class="g-arch"></div>
+        <div class="g-orbit"></div>
+        <div class="g-orbit2"></div>
+      </div>
+      <div class="g-title">
+        <div class="ln1">Invitation · 邀请有礼</div>
+        <div class="ln2">把生活<br>拍成<em>想要的样子</em></div>
+        <div class="ln3">一键生成氛围感写真 · 生活海报<br>与好友同行，把美好刻进时光</div>
+      </div>
+      <div class="g-rule"></div>
+      <div class="g-reward-label">— 绑定即得好礼 · Reward —</div>
+      <div class="g-rw"><span class="num">01</span><span class="t">双方各 +30 积分</span><span class="m">积分解锁更多模板</span></div>
+      <div class="g-rw"><span class="num">02</span><span class="t">免费解锁付费模板</span><span class="m">不耗积分 · 永久拥有</span></div>
+      <div class="g-qrrow">
+        <div class="qr"><svg viewBox="0 0 100 100"><use href="#qr"/></svg></div>
+        <div class="codeblk">
+          <span class="lab">邀请码 Invitation Code</span>
+          <div class="cd"><span class="code">ABC 123</span><span class="cp">复制</span></div>
+          <span class="hint">下载后 App 内「扫一扫」绑定领礼</span>
+        </div>
+      </div>
+      <div class="g-foot"><span class="storeline">App Store · 鸿蒙应用市场</span><span class="sp"></span><span class="fl">如 画</span></div>
+    </div>
+  </div>
+
+  <!-- H 负空间杂志 -->
+  <div class="shot">
+    <div class="tag"><b><span class="badge">H</span>负空间杂志</b><span>留白 · 版式</span></div>
+    <div class="poster h">
+      <div class="h-top"><span class="en">LUMIRA</span><span class="ln"></span></div>
+      <div class="h-brand-cn">如 画 · 2 0 2 6</div>
+      <div class="h-void"></div>
+      <div class="h-kicker">Invitation Collection</div>
+      <div class="h-title">把日子<br>拍成<em>一幅画</em></div>
+      <div class="h-sub">一键生成氛围感写真 · 生活海报<br>记录每一帧值得装裱的美好</div>
+      <div class="h-void2"></div>
+      <div class="h-divider"><span class="ln"></span><span>绑定即得好礼 Reward</span><span class="ln"></span></div>
+      <div class="h-rw"><span class="num">01</span><span class="t">双方各 +30 积分</span><span class="m">积分解锁模板</span></div>
+      <div class="h-rw"><span class="num">02</span><span class="t">免费解锁付费模板</span><span class="m">不耗积分 · 永久</span></div>
+      <div class="h-qrrow">
+        <div class="qr"><svg viewBox="0 0 100 100"><use href="#qr"/></svg></div>
+        <div class="codeblk">
+          <span class="lab">邀请码</span>
+          <div class="cd"><span class="code">ABC 123</span><span class="cp">复制</span></div>
+          <span class="hint">下载后 App 内扫一扫绑定领礼<br>iOS · 鸿蒙应用市场</span>
+        </div>
+      </div>
+      <div class="h-foot"><span class="storeline">App Store · 鸿蒙应用市场</span><span class="sp"></span><span class="fl">如 画</span></div>
+    </div>
+  </div>
+
+  <!-- I 几何光晕 -->
+  <div class="shot">
+    <div class="tag"><b><span class="badge">I</span>几何光晕</b><span>暗调 · 金顶</span></div>
+    <div class="poster i">
+      <div class="i-top"><span class="en">LUMIRA</span><span class="ln"></span><span class="cn">如 画</span></div>
+      <div class="i-art">
+        <div class="i-orbitA"></div>
+        <div class="i-ring"></div>
+        <div class="i-ring2"></div>
+        <div class="i-diamond"></div>
+      </div>
+      <div class="i-body">
+        <div class="i-kicker">Invitation · 双份心意</div>
+        <div class="i-title">把生活<br>拍成<em>想要的样子</em></div>
+        <div class="i-sub">一键生成氛围感写真 · 生活海报<br>与好友同行，把美好刻进时光</div>
+      </div>
+      <div class="i-rule"></div>
+      <div class="i-reward-label">— 绑定即得好礼 · Reward —</div>
+      <div class="i-rw"><span class="num">01</span><span class="t">双方各 +30 积分</span><span class="m">积分解锁模板</span></div>
+      <div class="i-rw"><span class="num">02</span><span class="t">免费解锁付费模板</span><span class="m">不耗积分 · 永久</span></div>
+      <div class="i-qrrow">
+        <div class="qr"><svg viewBox="0 0 100 100"><use href="#qr"/></svg></div>
+        <div class="codeblk">
+          <span class="lab">邀请码 Invitation Code</span>
+          <div class="cd"><span class="code">ABC 123</span><span class="cp">复制</span></div>
+          <span class="hint">下载后 App 内「扫一扫」绑定领礼</span>
+        </div>
+      </div>
+      <div class="i-foot"><span class="storeline">App Store · 鸿蒙应用市场</span><span class="sp"></span><span class="fl">如 画</span></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
