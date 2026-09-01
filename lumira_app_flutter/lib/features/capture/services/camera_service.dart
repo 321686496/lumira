@@ -121,11 +121,16 @@ class CameraPreviewConfig {
     this.fit = CameraPreviewFit.cover,
     this.onReady,
     this.onTapFocus,
+    this.legStretch = 0,
   });
   final String facing;
   final CameraPreviewFit fit;
   final VoidCallback? onReady;
   final void Function(Offset, Size)? onTapFocus;
+
+  /// 拉腿强度 0-100。>0 时取景器以「双层 GPU 合成」实时预览拉腿效果
+  /// （零读回、零 CPU 拉伸、零半透明叠层，不卡顿、无重影，与成片几何一致）。
+  final int legStretch;
 }
 
 enum CameraPreviewFit { cover, contain }

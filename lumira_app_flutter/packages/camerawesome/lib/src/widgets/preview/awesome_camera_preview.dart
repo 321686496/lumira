@@ -28,6 +28,9 @@ class AwesomeCameraPreview extends StatefulWidget {
   final EdgeInsets padding;
   final Alignment alignment;
 
+  /// 拉腿强度（0-100）。>0 时以「双层 GPU 合成」渲染取景器纹理（见 [_AwesomeCameraPreviewState._buildTexture]）。
+  final int legStretch;
+
   const AwesomeCameraPreview({
     super.key,
     this.loadingWidget,
@@ -39,6 +42,7 @@ class AwesomeCameraPreview extends StatefulWidget {
     this.previewDecoratorBuilder,
     required this.padding,
     required this.alignment,
+    this.legStretch = 0,
   });
 
   @override
@@ -179,7 +183,7 @@ class AwesomeCameraPreviewState extends State<AwesomeCameraPreview> {
             _previousCroppedSize ??=
                 Size(_croppedSize!.width, _croppedSize!.height);
 
-            final previewTexture = Texture(textureId: _textureId!);
+            final previewTexture = _buildTexture();
 
             final preview = SizedBox(
               width: constrainedSize.width,
@@ -343,6 +347,60 @@ class AwesomeCameraPreviewState extends State<AwesomeCameraPreview> {
     );
   }
 
+  /// 构建取景器纹理。
+  ///
+  /// `legStretch > 0` 时使用「双层 GPU 合成」实时预览拉腿：
+  /// - 以取景器 60% 高度为锚点；
+  /// - 锚点上方：恒等显示原纹理（第 1 层）；
+  /// - 锚点下方：用 [Transform] 以锚点为轴纵向放大 k 倍（第 2 层），
+  ///   k = destRegion / srcRegion，与成片 legStretchRgba 的几何完全一致；
+  /// - 超出取景框的部分由外层 [ClipRect] 裁掉。
+  ///
+  /// 全程纯 GPU 合成：零 GPU 读回（无 toImage/toByteData）、零 CPU 逐像素拉伸、
+  /// 零半透明叠层，因此取景器帧率不受影响（无卡顿），也不会出现新旧帧重影。
+  /// 与旧「帧快照 + isolate 拉伸 + 半透明幽灵叠加」方案相比，这是根本性替换。
+  Widget _buildTexture() {
+    final texture = Texture(textureId: _textureId!);
+    if (widget.legStretch <= 0) return texture;
+
+    final size = _flutterPreviewSize!;
+    final w = size.width;
+    final h = size.height;
+    final anchor = h * 0.60;
+    final strength = (widget.legStretch / 100.0).clamp(0.0, 1.0);
+    final stretchFactor = strength * 0.20;
+    if (stretchFactor < 0.001) return texture;
+
+    final outH = h * (1 + stretchFactor);
+    final srcRegion = h - anchor;
+    final destRegion = outH - anchor;
+    final k = destRegion / srcRegion;
+
+    return Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.hardEdge,
+      children: [
+        // 第 1 层：锚点上方，恒等。源 [0, anchor] → 目标 [0, anchor]。
+        ClipRect(
+          clipper: _PreviewRectClipper(Rect.fromLTRB(0, 0, w, anchor)),
+          child: texture,
+        ),
+        // 第 2 层：锚点下方，以锚点为轴纵向放大 k。源 [anchor, h] → 目标 [anchor, outH]。
+        // 目标 y = k*srcY + anchor*(1-k)；超出取景框(0..h) 的部分由外层 ClipRect 裁掉，
+        // 恰好对应成片「锚点下方拉伸、底部内容被推出画面」的 WYSIWYG 效果。
+        ClipRect(
+          clipper: _PreviewRectClipper(Rect.fromLTRB(0, anchor, w, outH)),
+          child: Transform(
+            transform: Matrix4.identity()
+              ..setEntry(1, 1, k)
+              ..setEntry(1, 3, anchor * (1 - k)),
+            child: texture,
+          ),
+        ),
+      ],
+    );
+  }
+
   PreviewSize _croppedPreviewSize(Size constrainedSize, double aspectRatio) {
     // 修复（移植自 camerawesome_ohos 1.0.2）：
     // 按 previewFit 计算实际可见区域，供手势/对焦坐标换算使用，
@@ -439,4 +497,18 @@ class _CenterCropClipper extends CustomClipper<Path> {
   bool shouldReclip(covariant _CenterCropClipper oldClipper) {
     return width != oldClipper.width || height != oldClipper.height;
   }
+}
+
+/// 拉腿双层合成用矩形裁剪器：把同源纹理裁剪到指定矩形区域。
+class _PreviewRectClipper extends CustomClipper<Rect> {
+  final Rect rect;
+
+  const _PreviewRectClipper(this.rect);
+
+  @override
+  Rect getClip(Size size) => rect;
+
+  @override
+  bool shouldReclip(covariant _PreviewRectClipper oldClipper) =>
+      rect != oldClipper.rect;
 }

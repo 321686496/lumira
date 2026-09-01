@@ -117,6 +117,12 @@ class CameraAwesomeBuilder extends StatefulWidget {
   /// do image analysis
   final bool showPreview;
 
+  /// 拉腿强度（0-100）。>0 时取景器使用「双层 GPU 合成」实时预览拉腿效果：
+  /// 锚点（60% 高度）上方恒等、下方以锚点为轴纵向放大，全程零 GPU 读回、
+  /// 零 CPU 逐像素拉伸、零半透明叠层，因此不影响取景器帧率、无重影，
+  /// 且与成片 legStretchRgba 的几何一致（WYSIWYG）。
+  final int legStretch;
+
   const CameraAwesomeBuilder._({
     required this.sensor,
     required this.flashMode,
@@ -141,6 +147,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
     this.previewPadding = EdgeInsets.zero,
     this.previewAlignment = Alignment.center,
     this.showPreview = true,
+    this.legStretch = 0,
   });
 
   /// Use the camera with the built-in interface.
@@ -192,6 +199,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
     Widget Function(CameraState state)? middleContentBuilder,
     EdgeInsets previewPadding = EdgeInsets.zero,
     Alignment previewAlignment = Alignment.center,
+    int legStretch = 0,
   }) : this._(
           sensor: sensor,
           flashMode: flashMode,
@@ -223,6 +231,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
           theme: theme ?? AwesomeTheme(),
           previewPadding: previewPadding,
           previewAlignment: previewAlignment,
+          legStretch: legStretch,
         );
 
   /// 🚧 Experimental
@@ -249,6 +258,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
     AwesomeTheme? theme,
     EdgeInsets previewPadding = EdgeInsets.zero,
     Alignment previewAlignment = Alignment.center,
+    int legStretch = 0,
   }) : this._(
           sensor: sensor,
           flashMode: flashMode,
@@ -272,6 +282,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
           theme: theme ?? AwesomeTheme(),
           previewPadding: previewPadding,
           previewAlignment: previewAlignment,
+          legStretch: legStretch,
         );
 
   /// Use this constructor when you don't want to take pictures or record videos.
@@ -291,6 +302,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
     CameraPreviewFit? previewFit,
     EdgeInsets previewPadding = EdgeInsets.zero,
     Alignment previewAlignment = Alignment.center,
+    int legStretch = 0,
   }) : this._(
           sensor: sensor,
           flashMode: flashMode,
@@ -314,6 +326,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
           theme: AwesomeTheme(),
           previewPadding: previewPadding,
           previewAlignment: previewAlignment,
+          legStretch: legStretch,
         );
 
   /// Use this constructor when you only want to do image analysis.
@@ -356,6 +369,7 @@ class CameraAwesomeBuilder extends StatefulWidget {
           previewPadding: EdgeInsets.zero,
           previewAlignment: Alignment.center,
           showPreview: false,
+          legStretch: 0,
         );
 
   @override
@@ -466,6 +480,7 @@ class _CameraWidgetBuilder extends State<CameraAwesomeBuilder>
                         state: snapshot.requireData,
                         padding: widget.previewPadding,
                         alignment: widget.previewAlignment,
+                        legStretch: widget.legStretch,
                         onPreviewTap: widget.onPreviewTapBuilder
                                 ?.call(snapshot.requireData) ??
                             OnPreviewTap(

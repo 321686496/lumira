@@ -409,6 +409,7 @@ class CamerawesomeCameraService implements CameraService {
       ),
       sensor: config.facing == 'front' ? ohos.Sensors.front : ohos.Sensors.back,
       previewFit: _mapPreviewFitOhos(config.fit),
+      legStretch: config.legStretch,
       builder: (cameraState, previewSize, previewRect) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _cameraState = cameraState;
@@ -439,6 +440,7 @@ class CamerawesomeCameraService implements CameraService {
       ),
       sensor: config.facing == 'front' ? ca.Sensors.front : ca.Sensors.back,
       previewFit: _mapPreviewFitNative(config.fit),
+      legStretch: config.legStretch,
       builder: (cameraState, previewSize, previewRect) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _cameraState = cameraState;
