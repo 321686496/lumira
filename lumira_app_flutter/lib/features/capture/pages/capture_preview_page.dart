@@ -19,6 +19,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
 import '../widgets/preview_edit_panel.dart';
+import '../widgets/smooth_image_layer.dart';
 import '../../gallery/widgets/photo_crop_layer.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
@@ -30,6 +31,7 @@ import '../../../shared/services/poster_generator.dart';
 import '../services/exif_card_generator.dart';
 import '../services/photo_exif_reader.dart';
 import '../services/photo_post_processor.dart';
+import '../services/skin_smooth_shader.dart';
 
 /// HarmonyOS 原生照片保存通道（PhotoSaverPlugin.ets）
 const _photoSaverChannel = MethodChannel('lumira/photo_saver');
@@ -591,6 +593,17 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       );
     }
 
+    // 磨皮实时预览：非对比、启用磨皮、且本地文件（非 http）→ 底层图片切为 GPU shader 磨皮层。
+    // 解码未就绪/失败时 SmoothImageLayer 自动回退到 buildImage()（http 无法本地解码 → 直接原图）。
+    final useSkin = !isComparing && needsSkin(postProcess) && !isNetworkUrl;
+    final Widget baseImage = useSkin
+        ? SmoothImageLayer(
+            url: photoUrl,
+            strength: skinStrength(postProcess),
+            fallback: buildImage,
+          )
+        : buildImage();
+
     return RotatedBox(
       quarterTurns: transform.rotation ~/ 90,
       child: Transform(
@@ -605,7 +618,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
           angle: transform.straighten * math.pi / 180.0,
           child: ColorFiltered(
             colorFilter: fromPostProcess(postProcess),
-            child: buildImage(),
+            child: baseImage,
           ),
         ),
       ),
@@ -1742,6 +1755,10 @@ class _PhotoFrame extends StatelessWidget {
             errorBuilder: (_, __, ___) => _PhotoEmptyState(tokens: tokens),
           );
 
+    // 磨皮实时预览：非对比、启用磨皮、且本地文件（非 http）→ 底层图片切为 GPU shader 磨皮层。
+    // 解码未就绪/失败时 SmoothImageLayer 自动回退到 buildImage()（http 无法本地解码 → 直接原图）。
+    final bool useSkin = !isComparing && needsSkin(postProcess) && !isNetworkUrl;
+
     return Padding(
       padding: const EdgeInsets.all(8),
       child: ClipRRect(
@@ -1768,7 +1785,13 @@ class _PhotoFrame extends StatelessWidget {
                             angle: transform.straighten * math.pi / 180.0,
                             child: ColorFiltered(
                               colorFilter: fromPostProcess(postProcess),
-                              child: buildImage(),
+                              child: useSkin
+                                  ? SmoothImageLayer(
+                                      url: photoUrl,
+                                      strength: skinStrength(postProcess),
+                                      fallback: buildImage,
+                                    )
+                                  : buildImage(),
                             ),
                           ),
                         ),
