@@ -219,7 +219,7 @@ export default function SilhouettePreview({
           <Input
             type="range"
             min={0.3}
-            max={2.5}
+            max={4.0}
             step={0.01}
             value={scale}
             onChange={(e) => onScaleChange(Number(e.target.value))}
