@@ -188,13 +188,14 @@ class SkinSmoothPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     try {
       final shader = program.fragmentShader()
-        // uniform 索引必须与 `assets/shaders/skin_smooth.frag` 声明顺序一致：
-        // uSize(vec2)→占 0,1 两个浮点位；uStrength(float)→2；uTexture(sampler2D)→3。
+        // float 与 sampler 是两套独立的索引空间：
+        // - float：setFloat 索引只数 float uniform（uSize→vec2，占 0,1；uStrength→2）。
+        // - sampler：setImageSampler 索引从 0 重新开始，只数 sampler（uTexture→0）。
         // 本 Flutter 版本 setFloat 每次仅写入一个值，vec2 需按分量调用。
         ..setFloat(0, size.width)
         ..setFloat(1, size.height)
         ..setFloat(2, strength)
-        ..setImageSampler(3, image);
+        ..setImageSampler(0, image);
       canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
     } catch (_) {
       _fallback(canvas, size);
