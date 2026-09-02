@@ -35,6 +35,9 @@ class _ScanQrPageState extends ConsumerState<ScanQrPage> {
   QRViewController? _controller;
   bool _picking = false;
 
+  /// 是否已识别到有效码并回传（防止原生端每帧回调导致重复 pop，损坏导航栈）。
+  bool _resolved = false;
+
   /// 支持原生相机扫码的平台：android / iOS / ohos；其余（含 web）走主题化回退。
   bool get _canScanNative {
     if (kIsWeb) return false;
@@ -133,8 +136,12 @@ class _ScanQrPageState extends ConsumerState<ScanQrPage> {
                         onQRViewCreated: (c) {
                           _controller = c;
                           c.scannedDataStream.listen((barcode) {
+                            // 原生端（尤其 iOS MTBBarcodeScanner）会每帧回调同一
+                            // 二维码，若不拦截会连续 pop，弹掉下方页面导致卡死。
+                            if (_resolved) return;
                             final code = barcode.code;
                             if (code != null && code.isNotEmpty) {
+                              _resolved = true;
                               Navigator.of(context).pop(code);
                             }
                           });

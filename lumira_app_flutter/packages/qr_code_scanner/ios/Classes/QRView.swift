@@ -14,6 +14,9 @@ public class QRView:NSObject,FlutterPlatformView {
     var registrar: FlutterPluginRegistrar
     var channel: FlutterMethodChannel
     var cameraFacing: MTBCamera
+
+    /// setDimensions 阶段缓存、会话启动后应用的扫描区域（仅识别框内二维码）。
+    var pendingScanRect: CGRect?
     
     // Codabar, maxicode, rss14 & rssexpanded not supported. Replaced with qr.
     // UPCa uses ean13 object.
@@ -103,18 +106,21 @@ public class QRView:NSObject,FlutterPlatformView {
             scanner = MTBBarcodeScanner(previewView: previewView)
         }
 
-        // Set scanArea if provided.
+        // Set scanArea if provided. 不在这里直接挂 didStartScanningBlock——
+        // 该回调会被 startScan 里 configureHighQualityScanning 覆盖，导致扫描区域失效；
+        // 这里仅缓存待应用的扫描区域，由 configureHighQualityScanning 在会话启动后统一应用。
         if (scanAreaWidth != 0 && scanAreaHeight != 0) {
-            scanner?.didStartScanningBlock = {
-                self.scanner?.scanRect = CGRect(x: Double(midX) - (scanAreaWidth / 2), y: Double(midY) - (scanAreaHeight / 2), width: scanAreaWidth, height: scanAreaHeight)
+            var rect = CGRect(x: Double(midX) - (scanAreaWidth / 2),
+                              y: Double(midY) - (scanAreaHeight / 2),
+                              width: scanAreaWidth,
+                              height: scanAreaHeight)
 
-                // Set offset if provided.
-                if (scanAreaOffset != 0) {
-                    let reversedOffset = -scanAreaOffset
-                    self.scanner?.scanRect = (self.scanner?.scanRect.offsetBy(dx: 0, dy: CGFloat(reversedOffset)))!
-
-                }
+            // Set offset if provided.
+            if (scanAreaOffset != 0) {
+                let reversedOffset = -scanAreaOffset
+                rect = rect.offsetBy(dx: 0, dy: CGFloat(reversedOffset))
             }
+            pendingScanRect = rect
         }
         return result(width)
         
@@ -132,6 +138,11 @@ public class QRView:NSObject,FlutterPlatformView {
             self.channel.invokeMethod("onPermissionSet", arguments: permissionGranted)
 
             if permissionGranted {
+                // 在会话启动完成后立刻提升取景清晰度：提高 sessionPreset 分辨率
+                // + 开启连续自动对焦/自动曝光，避免靠近二维码时画面越拉越模糊。
+                self.scanner?.didStartScanningBlock = { [weak self] in
+                    self?.configureHighQualityScanning()
+                }
                 do {
                     try self.scanner?.startScanning(with: self.cameraFacing, resultBlock: { [weak self] codes in
                         if let codes = codes {
@@ -211,6 +222,67 @@ public class QRView:NSObject,FlutterPlatformView {
         })
     }
     
+    /// 会话启动后配置高清晰度取景（提升拉近时的清晰度）。
+    ///
+    /// MTBBarcodeScanner 默认 sessionPreset = High（720p），在 2x/3x 高分屏上
+    /// 放大预览会明显发虚；且默认未开启连续自动对焦，手机靠近二维码时相机
+    /// 不会重新对焦，导致画面越拉越模糊。这里：
+    /// 1. 通过 previewLayer 拿到 session（MTBBarcodeScanner 未公开 session），
+    ///    把 preset 提升到 .photo（不支持时回退 1080p）；
+    /// 2. 对当前摄像头开启连续自动对焦/自动曝光，让相机随距离变化持续对焦；
+    /// 3. 聚焦点锁定在取景中央 + 近距对焦优先（.near），改善靠近二维码失焦；
+    /// 4. 应用 setDimensions 缓存的扫描区域（scanRect），保证只识别框内码。
+    func configureHighQualityScanning() {
+        guard let scanner = self.scanner else { return }
+
+        // 1. 提高取景分辨率
+        if let previewLayer = scanner.previewLayer as? AVCaptureVideoPreviewLayer,
+           let session = previewLayer.session {
+            let preferred: AVCaptureSession.Preset = .photo
+            if session.canSetSessionPreset(preferred) {
+                session.beginConfiguration()
+                session.sessionPreset = preferred
+                session.commitConfiguration()
+            } else if session.canSetSessionPreset(.hd1920x1080) {
+                session.beginConfiguration()
+                session.sessionPreset = .hd1920x1080
+                session.commitConfiguration()
+            }
+        }
+
+        // 2-3. 连续自动对焦 + 自动曝光 + 中央聚焦 + 近距优先（iOS 10+）
+        if #available(iOS 10.0, *) {
+            let position: AVCaptureDevice.Position =
+                (self.cameraFacing == MTBCamera.front) ? .front : .back
+            guard let device = AVCaptureDevice.default(
+                .builtInWideAngleCamera, for: .video, position: position)
+            else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusModeSupported(.continuousAutoFocus) {
+                    device.focusMode = .continuousAutoFocus
+                }
+                if device.isExposureModeSupported(.continuousAutoExposure) {
+                    device.exposureMode = .continuousAutoExposure
+                }
+                if device.isFocusPointOfInterestSupported {
+                    device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                }
+                if device.isAutoFocusRangeRestrictionSupported {
+                    device.autoFocusRangeRestriction = .near
+                }
+                device.unlockForConfiguration()
+            } catch {
+                // 配置失败（如设备忙）时保持默认行为，不阻断扫码
+            }
+        }
+
+        // 4. 应用扫描区域限制（setDimensions 阶段缓存）
+        if let scanRect = self.pendingScanRect {
+            scanner.scanRect = scanRect
+        }
+    }
+
     func stopCamera(_ result: @escaping FlutterResult) {
         if let sc: MTBBarcodeScanner = self.scanner {
             if sc.isScanning() {
