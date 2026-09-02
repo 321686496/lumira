@@ -213,7 +213,7 @@ public class QRView:NSObject,FlutterPlatformView {
                                     }
                                     return ["code": stringValue, "type": typeString, "rawBytes": safeBytes]
                                 }()
-                                guard result != nil else { continue }
+                                guard let result = result else { continue }
                                 if allowedBarcodeTypes.count == 0 || allowedBarcodeTypes.contains(code.type) {
                                     self?.emitOnce(result)
                                 }
