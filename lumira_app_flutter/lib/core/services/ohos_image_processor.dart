@@ -93,15 +93,18 @@ class OhosImageProcessor {
     }
   }
 
-  /// OHOS 单次原生拍照后处理：解码→几何变换→色彩矩阵→锐化→JPEG硬编码→写文件。
+  /// OHOS 单次原生拍照后处理：解码→几何变换→色彩矩阵→磨皮→锐化→JPEG硬编码→写文件。
   ///
-  /// 只要「带暂未原生实现的复杂效果（磨皮/暗角/颗粒/Clarity）」时为 false，
+  /// 只要「带暂未原生实现的复杂效果（暗角/颗粒/Clarity）」时为 false，
   /// 调用方走现有 GPU+isolate 管线；本方法负责原生产出"底片"。开水印时底片随后由
   /// 调用方用原生解码+水印渲染+原生编码合成（见 capture_page 水印分支），因此
-  /// 水印不再导致回退慢管线。失败一律返回 false 并由调用方回退原有管线，绝不阻塞拍照。
+  /// 水印不再导致回退慢管线。磨皮已由原生 C++ 全分辨率实现（肤色掩膜+边缘保护，
+  /// 非皮肤保留原值），不再导致回退。失败一律返回 false 并由调用方回退原有管线，
+  /// 绝不阻塞拍照。
   ///
   /// - [matrix]：20 元素 ColorMatrix（由 `composePostProcessMatrix` 产出，保证与取景器一致）
   /// - [sharpen]：锐化值（0 表示不锐化；严格使用用户/模板真实值，应用层不做强制下限）
+  /// - [smoothStrength]：磨皮强度 0-100（0 表示不磨皮）
   /// - [maxDim]：输出最大边（默认 [kMaxProcessDim]=1280）
   ///
   /// 成功写文件后返回 true；任何失败（原生报错 / 非 OHOS）返回 false（调用方回退原管线）。
@@ -115,6 +118,7 @@ class OhosImageProcessor {
     required bool isFront,
     required List<double> matrix,
     required int sharpen,
+    int smoothStrength = 0,
     int maxDim = 1280,
     Map<String, int>? timing,
   }) async {
@@ -130,6 +134,7 @@ class OhosImageProcessor {
           'isFront': isFront,
           'matrix': matrix,
           'sharpen': sharpen,
+          'smooth': smoothStrength.clamp(0, 100),
           'maxDim': maxDim,
         },
       );

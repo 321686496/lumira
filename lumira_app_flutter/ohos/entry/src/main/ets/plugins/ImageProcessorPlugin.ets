@@ -67,6 +67,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
    *   matrix: 20 元素 ColorMatrix（由 Dart composePostProcessMatrix 产出，保证颜色与
    *           取景器/编辑页完全一致）
    *   sharpen: 锐化值（0 表示不锐化；严格用用户/模板真实值，应用层不做强制下限）
+   *   smooth: 磨皮强度 0-100（0 表示不磨皮；原生 C++ 全分辨率肤色掩膜平滑，非皮肤保留）
    *   maxDim: 输出最大边（默认 1280）
    *
    * 返回: { ok: true, width, height, timing: {...} } 或 { ok: false, error }
@@ -90,6 +91,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       const isFront: boolean = call.argument('isFront');
       const matrixArr = call.argument('matrix') as number[];
       const sharpen: number = call.argument('sharpen') ?? 0;
+      const smooth: number = call.argument('smooth') ?? 0;
       const maxDim: number = call.argument('maxDim') ?? 1280;
       if (!matrixArr || matrixArr.length < 20) {
         result.success({ ok: false, error: 'matrix invalid (need 20)' });
@@ -154,16 +156,18 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       await srcPixelMap.readPixelsToBuffer(srcBuf);
       const tDecode = Date.now();
 
-      // ── 3+4) 色彩矩阵 + 前置镜像 + R/B 复原 + 边缘自适应锐化 —— 下沉 C++ NAPI ──
+      // ── 3+4) 色彩矩阵 + 前置镜像 + R/B 复原 + 磨皮 + 边缘自适应锐化 —— 下沉 C++ NAPI ──
       // ArkTS 逐像素循环在 170 万像素下实测 ~5s（JIT/AOT 无法进 800ms 目标），改在
-      // 原生 C++ 里一次性完成（~10-30ms）。颜色/锐化语义与旧实现逐位一致：
+      // 原生 C++ 里一次性完成（~10-30ms）。颜色/磨皮/锐化语义与旧实现逐位一致：
       //   - 矩阵：Flutter ColorFilter.matrix，clamp 0-255；
       //   - R/B 复原：补偿 createPixelMap(RGBA_8888)+ImagePacker 的红蓝对调怪癖；
+      //   - 磨皮：肤色掩膜 + 边缘保护，全分辨率仅平滑皮肤像素，非皮肤/强边缘保留原值
+      //     （不降采样/放大，杜绝"一开磨皮整张照片都糊"）；
       //   - 锐化：Unsharp 死区版（仅锐化超阈值的边缘，平坦区不放大颗粒）。
       const matrixF64 = new Float64Array(20);
       for (let i = 0; i < 20; i++) { matrixF64[i] = matrixArr[i]; }
       const finBuf = nativeProcessor.processRgba(
-        new Uint8Array(srcBuf), pw, ph, matrixF64, Math.max(0, sharpen), isFront) as ArrayBuffer;
+        new Uint8Array(srcBuf), pw, ph, matrixF64, Math.max(0, sharpen), isFront, Math.max(0, smooth)) as ArrayBuffer;
       if (!finBuf) {
         result.success({ ok: false, error: 'native processRgba failed' });
         return;
@@ -187,7 +191,7 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       wfd = -1;
       const tEncode = Date.now();
 
-      console.info(`[ImageProcessor] processJpeg ok ${pw}x${ph} src=${srcW}x${srcH} crop=${region.size.width}x${region.size.height} mirror=${isFront} `
+      console.info(`[ImageProcessor] processJpeg ok ${pw}x${ph} src=${srcW}x${srcH} crop=${region.size.width}x${region.size.height} mirror=${isFront} smooth=${smooth} `
         + `decode=${tDecode - tStart}ms transform=${tTransform - tDecode}ms sharpen=${tSharpen - tTransform}ms encode=${tEncode - tSharpen}ms`);
       result.success({
         ok: true,

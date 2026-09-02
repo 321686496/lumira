@@ -668,31 +668,21 @@ void applyPerPixelEffectsImg(
   }
 }
 
-/// 磨皮：降采样模糊 + 原图混合（仅 smoothStrength > 0 时调用）
-/// 通过降采样到 1/4 尺寸后高斯模糊，再与原图按比例混合，实现快速磨皮。
+/// 磨皮：边缘感知的皮肤平滑（仅 smoothStrength > 0 时调用）
+/// 统一复用 [SkinSmoother.smooth]（与 image 包原生管线同源），
+/// 平坦/皮肤区域平滑、强边缘（眼睛/发丝/衣物/背景）保留细节，避免整图变糊。
 void applySmoothSkinImg(img.Image image, {required int smoothStrength}) {
   if (smoothStrength <= 0) return;
-  final mix = (smoothStrength / 100.0).clamp(0.0, 0.8);
+  final smoothed = SkinSmoother.smooth(image, smoothStrength);
+  if (identical(smoothed, image)) return;
 
-  // 降采样到 1/4 尺寸
-  final smallW = (image.width / 4).clamp(1, image.width).toInt();
-  final smallH = (image.height / 4).clamp(1, image.height).toInt();
-  final small = img.copyResize(image, width: smallW, height: smallH);
-
-  // 高斯模糊（radius 根据 smoothStrength 映射 2-6）
-  final radius = 2 + (smoothStrength / 100 * 4).round();
-  final blurred = img.gaussianBlur(small, radius: radius);
-
-  // 放大回原尺寸
-  final upscaled = img.copyResize(blurred, width: image.width, height: image.height);
-
-  // 与原图混合
+  // 将结果写回原图（原地修改，worker 复用像素缓冲）
   for (final p in image) {
-    final bp = upscaled.getPixel(p.x, p.y);
+    final sp = smoothed.getPixel(p.x, p.y);
     p
-      ..r = (p.r * (1 - mix) + bp.r * mix).clamp(0, 255)
-      ..g = (p.g * (1 - mix) + bp.g * mix).clamp(0, 255)
-      ..b = (p.b * (1 - mix) + bp.b * mix).clamp(0, 255);
+      ..r = sp.r
+      ..g = sp.g
+      ..b = sp.b;
   }
 }
 

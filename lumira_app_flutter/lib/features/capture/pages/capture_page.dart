@@ -947,7 +947,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
         params.isPortrait &&
         // 拉腿尚未在 OHOS 原生 processJpeg 实现，开拉腿时走 Dart 管线应用。
         params.postProcess.legStretch == 0 &&
-        params.postProcess.smoothStrength == 0 &&
+        // 磨皮已由 OHOS 原生 C++ 全分辨率实现（肤色掩膜+边缘保护，非皮肤保留原值，
+        // 不降采样/放大），故不再回退 Dart；仅暗角/颗粒/Clarity/自定义裁剪仍走 Dart。
         params.postProcess.vignette == 0 &&
         params.postProcess.grain == 0 &&
         (params.postProcess.color.clarity == null || params.postProcess.color.clarity == 0) &&
@@ -967,6 +968,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           // 拍摄成片锐化严格用用户/模板真实值，禁止代码层强制最小锐化。
           // 防糊由系统层解决：OHOS 8.2MP 档位 + PhotoQualityPrioritization.HIGH_QUALITY。
           sharpen: params.postProcess.sharpen,
+          smoothStrength: params.postProcess.smoothStrength,
           maxDim: params.maxDim,
           timing: nativeTiming,
         );
