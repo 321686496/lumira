@@ -300,8 +300,12 @@ class _LinearProgressState extends State<_LinearProgress>
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(widget.minHeight / 2),
-      child: SizedBox(
+      child: Container(
         height: widget.minHeight,
+        decoration: style == UIStyle.neumorphic
+            // 新拟态：轨道为「凹陷凹槽」（inset 双向阴影），progress fill 凸出于凹槽内
+            ? BoxDecoration(boxShadow: tokens.shadowConcaveSubtle)
+            : null,
         child: Stack(
           children: [
             // 轨道

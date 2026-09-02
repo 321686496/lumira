@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../common/glass_surface.dart';
+import '../lumira/_internal/lumira_theme_resolver.dart';
 
 /// 阴影变体选择
 enum NeuShadowVariant {
@@ -95,12 +96,22 @@ class NeuCard extends ConsumerWidget {
         // 叠在照片上（overlayOnImage）时放弃双向浮雕阴影（照片无法承接），
         // 改用实心 surface + 细描边表达表面，避免阴影在照片上"发光/发散"。
         if (overlayOnImage) {
+          // 改良悬浮新拟态（Neumorphism 双轨「图片上」浮层）：
+          // 叠在照片/封面等非纯色底上时，标准同色双向浮雕阴影无法被背景承接，
+          // 会像光晕糊在图上显脏。改用「半透明 surface + 仅暗色投影 + 细描边」，
+          // 禁用 inset，按压反馈由外层 _ScaleTap 用 scale 承担。
+          final visual = LumiraThemeResolver.overlayOnImageVisual(
+            tokens: tokens,
+            radiusDp: radius,
+          );
+          final surfaceColor = backgroundColor ?? visual.background;
           return Container(
             padding: padding,
             decoration: BoxDecoration(
-              color: backgroundColor ?? tokens.surface,
+              color: surfaceColor.withOpacity(visual.background.opacity),
               borderRadius: BorderRadius.circular(radius),
-              border: Border.all(color: tokens.divider, width: 1),
+              border: visual.border,
+              boxShadow: visual.shadows,
             ),
             child: child,
           );

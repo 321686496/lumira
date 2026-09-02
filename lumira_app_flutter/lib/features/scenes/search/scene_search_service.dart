@@ -36,7 +36,7 @@ class SceneSearchService {
     var list =
         all.where((s) => matchesKeyword(s, keyword)).toList();
 
-    final category = filters.category;
+    final category = filters.sceneCategory ?? filters.category;
     if (category != null && category.isNotEmpty) {
       list = list.where((s) => s.category == category).toList();
     }

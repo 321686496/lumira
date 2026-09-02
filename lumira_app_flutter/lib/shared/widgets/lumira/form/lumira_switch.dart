@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/theme_controller.dart';
+import '../../../../core/theme/theme_tokens.dart';
 
 /// Lumira 全局开关
 ///
@@ -42,24 +43,32 @@ class _LumiraSwitchState extends ConsumerState<LumiraSwitch> {
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
     final tokens = appTheme.tokens;
+    final style = appTheme.style;
     final value = widget.value;
     final enabled = widget.enabled;
 
-    // 关闭态 track 颜色
-    final Color trackColorOff = enabled
-        ? tokens.surfaceAlt
-        : tokens.surfaceAlt.withOpacity(0.5);
-    // 开启态 track 颜色
-    final Color trackColorOn = enabled
-        ? tokens.brand
-        : tokens.brand.withOpacity(0.5);
+    // 关闭态 track 颜色/阴影
+    final Color trackColorOff = enabled ? tokens.surface : tokens.surface.withOpacity(0.5);
+    List<BoxShadow> trackShadowsOff = [];
+    Border? borderOff;
+    if (style == UIStyle.neumorphic) {
+      // 新拟态：关闭态 track 是「凹陷凹槽」，用 inset 阴影，无边框
+      trackShadowsOff = tokens.shadowConcaveSubtle;
+      borderOff = null;
+    } else {
+      trackShadowsOff = [];
+      borderOff = Border.all(color: tokens.divider, width: 1);
+    }
 
-    // thumb 颜色
+    // 开启态 track 颜色
+    final Color trackColorOn = enabled ? tokens.brand : tokens.brand.withOpacity(0.5);
+
+    // thumb 颜色与阴影：关闭态也略微凸起（在凹槽中），开启态白色凸起
     final Color thumbColorOff = enabled ? tokens.surface : tokens.surface.withOpacity(0.7);
     const Color thumbColorOn = Colors.white;
-
-    // thumb 阴影：开启态使用 shadowConvexSubtle，关闭态无阴影
-    const List<BoxShadow> thumbShadowsOff = [];
+    final List<BoxShadow> thumbShadowsOff = (style == UIStyle.neumorphic && enabled)
+        ? tokens.shadowConvexSubtle
+        : [];
     final List<BoxShadow> thumbShadowsOn = enabled ? tokens.shadowConvexSubtle : const [];
 
     return Semantics(
@@ -75,7 +84,8 @@ class _LumiraSwitchState extends ConsumerState<LumiraSwitch> {
           decoration: BoxDecoration(
             color: value ? trackColorOn : trackColorOff,
             borderRadius: BorderRadius.circular(_trackHeight / 2),
-            border: value ? null : Border.all(color: tokens.divider, width: 1),
+            border: value ? null : borderOff,
+            boxShadow: value ? null : trackShadowsOff,
           ),
           child: AnimatedAlign(
             duration: _duration,

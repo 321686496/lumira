@@ -7,6 +7,7 @@ import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/images/lumira_image.dart';
+import '../../../shared/widgets/lumira/_internal/lumira_theme_resolver.dart';
 import '../data/home_mock_data.dart';
 
 /// 最近拍摄卡片
@@ -80,39 +81,7 @@ class RecentShotCard extends ConsumerWidget {
                     Positioned(
                       top: 8,
                       left: 8,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(1000),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            color: Colors.white.withOpacity(0.9),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  recent.icon,
-                                  size: 10, // 20rpx → 10dp
-                                  color: tokens.brand,
-                                ),
-                                const SizedBox(width: 3),
-                                Text(
-                                  recent.category,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: tokens.brand,
-                                    height: 1.2,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                      child: _buildCategoryChip(tokens, isNeumorphic, recent),
                     ),
                     // 再拍一次（右上角）
                     if (onRetake != null)
@@ -236,6 +205,63 @@ class RecentShotCard extends ConsumerWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 分类标签（叠在封面图上的浮层角标）。
+  ///
+  /// neumorphic 风格：图片属非纯色底，改用「半透明 surface + 细白描边 + 仅暗色投影」
+  /// 的 overlayOnImageVisual，禁用毛玻璃与双向浮雕阴影（避免光晕糊图显脏）。
+  /// 其余风格保留原「白 0.9 + BackdropFilter 模糊」的玻璃角标。
+  Widget _buildCategoryChip(ThemeTokens tokens, bool isNeumorphic, RecentShot recent) {
+    final label = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          recent.icon,
+          size: 10, // 20rpx → 10dp
+          color: tokens.brand,
+        ),
+        const SizedBox(width: 3),
+        Text(
+          recent.category,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: tokens.brand,
+            height: 1.2,
+          ),
+        ),
+      ],
+    );
+
+    if (isNeumorphic) {
+      final visual = LumiraThemeResolver.overlayOnImageVisual(
+        tokens: tokens,
+        radiusDp: 12,
+      );
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: visual.background,
+          borderRadius: BorderRadius.circular(1000),
+          border: visual.border,
+          boxShadow: visual.shadows,
+        ),
+        child: label,
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(1000),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          color: Colors.white.withOpacity(0.9),
+          child: label,
         ),
       ),
     );

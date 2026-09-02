@@ -13,7 +13,9 @@ class InspirationGuideBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
     final async = ref.watch(homeInspirationProvider);
 
     return GestureDetector(
@@ -21,16 +23,22 @@ class InspirationGuideBar extends ConsumerWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.all(16),
+        // neumorphic 风格：画布上卡片用 surface 同源底色 + 双向外阴影表达凸起，
+        // 去掉品牌渐变（渐变属于画布上非拟态混合）；其余风格保留原渐变。
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              tokens.brandSubtle,
-              tokens.brandLight.withOpacity(0.45),
-            ],
-          ),
+          color: isNeumorphic ? tokens.surface : null,
+          gradient: isNeumorphic
+              ? null
+              : LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    tokens.brandSubtle,
+                    tokens.brandLight.withOpacity(0.45),
+                  ],
+                ),
           borderRadius: BorderRadius.circular(14),
+          boxShadow: isNeumorphic ? tokens.shadowConvex : null,
         ),
         child: async.when(
           loading: () => _content(tokens, HeroInspiration.fallback),

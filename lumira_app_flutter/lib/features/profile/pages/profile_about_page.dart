@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,7 +13,7 @@ import '../data/profile_mock_data.dart';
 /// 关于如画页
 ///
 /// Forced fix: 之前"关于如画"点击只弹 SnackBar，不符合用户预期。
-/// 改为独立页面，展示 App 信息、版本号、设计理念、联系方式、开源许可等。
+/// 改为独立页面，展示 App 信息、版本号、设计理念、联系方式等。
 class ProfileAboutPage extends ConsumerWidget {
   const ProfileAboutPage({super.key});
 
@@ -105,72 +104,18 @@ class ProfileAboutPage extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // 4. 联系我们
+                  // 4. 联系我们（跳转独立联系页：群聊/邮箱反馈/添加微信）
                   _SectionCard(
                     tokens: tokens,
-                    icon: Icons.mail_outlined,
+                    icon: Icons.headset_mic_outlined,
                     title: '联系我们',
                     children: [
                       _InfoRow(
-                        label: '官方邮箱',
-                        value: '15575712021@163.com',
+                        label: '加入群聊 · 邮箱反馈 · 添加微信',
+                        value: '去看看',
                         tokens: tokens,
-                        onTap: () => Clipboard.setData(
-                          const ClipboardData(text: '15575712021@163.com'),
-                        ),
-                      ),
-                      _InfoRow(
-                        label: '微信号',
-                        value: 'h15575712021',
-                        tokens: tokens,
-                        onTap: () => Clipboard.setData(
-                          const ClipboardData(text: 'h15575712021'),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      GestureDetector(
-                        onTap: () => GoRouter.of(context).push(RouteNames.feedback),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: tokens.brandSubtle,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: tokens.brand.withOpacity(0.25)),
-                          ),
-                          child: Text(
-                            '去反馈',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.brand,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  // 5. 开源许可
-                  _SectionCard(
-                    tokens: tokens,
-                    icon: Icons.code_outlined,
-                    title: '开源许可',
-                    children: [
-                      _InfoRow(
-                        label: 'Flutter',
-                        value: 'BSD-style License',
-                        tokens: tokens,
-                      ),
-                      _InfoRow(
-                        label: 'Riverpod',
-                        value: 'MIT License',
-                        tokens: tokens,
-                      ),
-                      _InfoRow(
-                        label: 'go_router',
-                        value: 'BSD-2-Clause',
-                        tokens: tokens,
+                        onTap: () =>
+                            GoRouter.of(context).push(RouteNames.profileContact),
                         isLast: true,
                       ),
                     ],

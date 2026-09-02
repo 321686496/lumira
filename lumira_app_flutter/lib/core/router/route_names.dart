@@ -67,6 +67,7 @@ class RouteNames {
   static const String profileFragmentDetail = '/profile/fragment-detail';
   static const String profileNotifications = '/profile/notifications';
   static const String profileAbout = '/profile/about';
+  static const String profileContact = '/profile/contact';
   static const String feedback = '/profile/feedback';
   static const String profileComplianceAgreement = '/profile/settings/agreement';
   static const String profileCompliancePrivacy = '/profile/settings/privacy';
@@ -82,6 +83,7 @@ class RouteNames {
   static const String profileRewards = '/profile/rewards';
   static const String profileRedeem = '/profile/redeem';
   static const String pointsWallet = '/points/wallet';
+  static const String pointsTransactions = '/points/transactions';
   static const String invite = '/invite';
 
   // === 账号保护 / 恢复 ===

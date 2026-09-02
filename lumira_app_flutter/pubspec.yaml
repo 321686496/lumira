@@ -97,6 +97,10 @@ dependencies:
   # 设备信息（brief ^12.3.0 → CPF-Flutter 3.7 Harmony 适配版本 9.1.2；未回合上游，见 dependency_overrides）
   device_info_plus: 9.1.2  # Harmony 3.7 适配版本 (CPF-Flutter)
 
+  # 打开外部链接/邮件（mailto 反馈用）。用 pub.dev 版（兼容 Dart 2.19）。
+  # OHOS 端无原生实现时 launchUrl 抛异常，业务层已做 try/catch + 复制兜底。
+  url_launcher: 6.1.11
+
   # 工具（brief path ^1.9.0 / intl ^0.19.0 → 调整为兼容 Dart 2.19 的版本）
   path: ^1.8.2
   intl: ^0.18.0

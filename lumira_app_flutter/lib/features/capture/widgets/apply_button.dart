@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
-import '../../../core/theme/theme_tokens.dart';
 import '../data/capture_state.dart';
 
 /// 按钮：有模板且未应用时显示"应用参数"，点击重置 editableTemplate 为 original 副本。
@@ -16,9 +15,7 @@ class ApplyButton extends ConsumerWidget {
     final applied = ref.watch(CaptureState.appliedProvider);
     if (original == null || applied) return const SizedBox.shrink();
 
-    final appTheme = ref.watch(appThemeProvider);
-    final tokens = appTheme.tokens;
-    final isNeu = appTheme.style == UIStyle.neumorphic;
+    final tokens = ref.watch(appThemeProvider).tokens;
 
     return GestureDetector(
       onTap: () {
@@ -30,7 +27,9 @@ class ApplyButton extends ConsumerWidget {
         decoration: BoxDecoration(
           color: tokens.brand,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: isNeu ? tokens.shadowConvexBrand : null,
+          // 浮在取景器/预览图上：禁用品牌浮雕内嵌/双向投影（动态画面光影易错乱），
+          // 保持实心品牌色，不挂浮雕阴影。
+          boxShadow: null,
         ),
         child: Text(
           '应用',

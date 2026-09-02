@@ -13,6 +13,7 @@ import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../../sign_in/data/sign_in_repository.dart';
 import '../data/points_models.dart';
 import '../data/points_repository.dart';
+import '../widgets/point_transaction_tile.dart';
 import '../widgets/points_earn_ways.dart';
 
 /// 积分钱包页
@@ -64,8 +65,9 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
-    final balanceAsync = ref.watch(pointsRepositoryProvider);
-    final signInAsync = ref.watch(signInRepositoryProvider);
+    final balanceAsync = ref.watch(pointsBalanceProvider);
+    final signInAsync = ref.watch(signInStatusProvider);
+    final txAsync = ref.watch(pointsRecentTransactionsProvider);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -93,7 +95,7 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
                     FadeUp(
                       child: _BalanceCard(
                         tokens: tokens,
-                        asyncValue: balanceAsync,
+                        balanceAsync: balanceAsync,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -101,7 +103,7 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
                       delay: const Duration(milliseconds: 80),
                       child: _SignInCard(
                         tokens: tokens,
-                        asyncValue: signInAsync,
+                        statusAsync: signInAsync,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -123,7 +125,7 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
                       delay: const Duration(milliseconds: 240),
                       child: _TransactionsCard(
                         tokens: tokens,
-                        asyncValue: balanceAsync,
+                        txAsync: txAsync,
                       ),
                     ),
                   ],
@@ -139,36 +141,20 @@ class _PointsWalletPageState extends ConsumerState<PointsWalletPage> {
 
 /// 余额卡：大字号显示当前余额 + 累计获得 / 累计消耗
 class _BalanceCard extends StatelessWidget {
-  const _BalanceCard({required this.tokens, required this.asyncValue});
+  const _BalanceCard({required this.tokens, required this.balanceAsync});
   final ThemeTokens tokens;
-  final AsyncValue<PointsRepository> asyncValue;
+  final AsyncValue<PointsBalance> balanceAsync;
 
   @override
   Widget build(BuildContext context) {
     return NeuCard(
-      child: Consumer(
-        builder: (context, ref, _) {
-          final future = asyncValue.maybeWhen(
-            data: (repo) => repo.getBalance(),
-            orElse: () => null,
-          );
-          if (future == null) {
-            return _BalanceSkeleton(tokens: tokens);
-          }
-          return FutureBuilder<PointsBalance>(
-            future: future,
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return _BalanceSkeleton(tokens: tokens);
-              }
-              if (snap.hasError) {
-                return _BalanceError(tokens: tokens, msg: '加载失败');
-              }
-              final b = snap.data!;
-              return _BalanceBody(tokens: tokens, balance: b);
-            },
-          );
-        },
+      child: balanceAsync.when(
+        loading: () => _BalanceSkeleton(tokens: tokens),
+        error: (e, _) => _BalanceError(
+          tokens: tokens,
+          msg: e is ApiException ? e.message : '加载失败',
+        ),
+        data: (balance) => _BalanceBody(tokens: tokens, balance: balance),
       ),
     );
   }
@@ -370,39 +356,20 @@ class _BalanceError extends StatelessWidget {
 
 /// 签到卡：连签天数 + 自动签到状态
 class _SignInCard extends StatelessWidget {
-  const _SignInCard({required this.tokens, required this.asyncValue});
+  const _SignInCard({required this.tokens, required this.statusAsync});
   final ThemeTokens tokens;
-  final AsyncValue<SignInRepository> asyncValue;
+  final AsyncValue<SignInStatus> statusAsync;
 
   @override
   Widget build(BuildContext context) {
     return NeuCard(
-      child: asyncValue.when(
+      child: statusAsync.when(
         loading: () => _RowSkeleton(tokens: tokens),
         error: (e, _) => _SignInError(
           tokens: tokens,
           msg: e is ApiException ? e.message : '加载失败',
         ),
-        data: (repo) {
-          return FutureBuilder<SignInStatus>(
-            future: repo.getStatus(),
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return _RowSkeleton(tokens: tokens);
-              }
-              if (snap.hasError) {
-                return _SignInError(
-                  tokens: tokens,
-                  msg: snap.error is ApiException
-                      ? (snap.error as ApiException).message
-                      : '加载失败',
-                );
-              }
-              final status = snap.data!;
-              return _SignInRow(tokens: tokens, status: status);
-            },
-          );
-        },
+        data: (status) => _SignInRow(tokens: tokens, status: status),
       ),
     );
   }
@@ -599,7 +566,8 @@ class _EarnWaysCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          PointsEarnWaysList(tokens: tokens),
+          // stacked：标题 + 说明上下排布，避免「每日签到」等长文案在右侧被挤压换行/变形
+          PointsEarnWaysList(tokens: tokens, stacked: true),
         ],
       ),
     );
@@ -608,171 +576,91 @@ class _EarnWaysCard extends StatelessWidget {
 
 /// 积分流水卡
 class _TransactionsCard extends StatelessWidget {
-  const _TransactionsCard({required this.tokens, required this.asyncValue});
+  const _TransactionsCard({required this.tokens, required this.txAsync});
   final ThemeTokens tokens;
-  final AsyncValue<PointsRepository> asyncValue;
+  final AsyncValue<PointsTransactions> txAsync;
 
   @override
   Widget build(BuildContext context) {
     return NeuCard(
-      child: Consumer(
-        builder: (context, ref, _) {
-          final future = asyncValue.maybeWhen(
-            data: (repo) => repo.listTransactions(limit: 50, offset: 0),
-            orElse: () => null,
-          );
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Icon(Icons.receipt_long_outlined,
-                      size: 18, color: tokens.brand),
-                  const SizedBox(width: 8),
-                  Text(
-                    '积分流水',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.textPrimary,
+              Icon(Icons.receipt_long_outlined,
+                  size: 18, color: tokens.brand),
+              const SizedBox(width: 8),
+              Text(
+                '积分流水',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => GoRouter.of(context)
+                    .push(RouteNames.pointsTransactions),
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  children: [
+                    Text(
+                      '查看全部',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: tokens.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 16,
+                      color: tokens.textTertiary,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          txAsync.when(
+            loading: () => _TxSkeleton(tokens: tokens),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                '加载失败：${e is ApiException ? e.message : '未知错误'}',
+                style: TextStyle(fontSize: 13, color: tokens.danger),
+              ),
+            ),
+            data: (data) {
+              final list = data.transactions;
+              if (list.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      '暂无积分流水',
+                      style: TextStyle(
+                          fontSize: 13, color: tokens.textTertiary),
                     ),
                   ),
+                );
+              }
+              return Column(
+                children: [
+                  for (var i = 0; i < list.length; i++) ...[
+                    if (i > 0) Divider(height: 1, color: tokens.divider),
+                    PointTransactionTile(
+                      tokens: tokens,
+                      tx: list[i],
+                    ),
+                    if (i < list.length - 1) const SizedBox(height: 4),
+                  ],
                 ],
-              ),
-              const SizedBox(height: 12),
-              if (future == null)
-                _TxSkeleton(tokens: tokens)
-              else
-                FutureBuilder<PointsTransactions>(
-                  future: future,
-                  builder: (context, snap) {
-                    if (snap.connectionState != ConnectionState.done) {
-                      return _TxSkeleton(tokens: tokens);
-                    }
-                    if (snap.hasError) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Text(
-                          '加载失败：${snap.error is ApiException ? (snap.error as ApiException).message : '未知错误'}',
-                          style:
-                              TextStyle(fontSize: 13, color: tokens.danger),
-                        ),
-                      );
-                    }
-                    final list = snap.data?.transactions ?? const [];
-                    if (list.isEmpty) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: Center(
-                          child: Text(
-                            '暂无积分流水',
-                            style: TextStyle(
-                                fontSize: 13, color: tokens.textTertiary),
-                          ),
-                        ),
-                      );
-                    }
-                    return Column(
-                      children: [
-                        for (var i = 0; i < list.length; i++) ...[
-                          if (i > 0)
-                            Divider(
-                                height: 1, color: tokens.divider),
-                          _TxRow(
-                            tokens: tokens,
-                            tx: list[i],
-                          ),
-                          if (i < list.length - 1) const SizedBox(height: 4),
-                        ],
-                      ],
-                    );
-                  },
-                ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _TxRow extends StatelessWidget {
-  const _TxRow({required this.tokens, required this.tx});
-  final ThemeTokens tokens;
-  final PointTransaction tx;
-
-  String get _typeLabel => pointSourceLabel(tx.source);
-
-  String get _deltaText {
-    final v = tx.delta;
-    return v > 0 ? '+$v' : '$v';
-  }
-
-  Color get _deltaColor {
-    if (tx.delta > 0) return tokens.success;
-    if (tx.delta < 0) return tokens.danger;
-    return tokens.textSecondary;
-  }
-
-  String _formatTime(int ts) {
-    if (ts <= 0) return '';
-    final dt = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-        '${two(dt.hour)}:${two(dt.minute)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: tx.delta >= 0
-                  ? tokens.successSubtle
-                  : tokens.dangerSubtle,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              tx.delta >= 0
-                  ? Icons.arrow_downward
-                  : Icons.arrow_upward,
-              size: 16,
-              color: tx.delta >= 0 ? tokens.success : tokens.danger,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _typeLabel,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: tokens.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _formatTime(tx.createdAt),
-                  style: TextStyle(fontSize: 11, color: tokens.textTertiary),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            _deltaText,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: _deltaColor,
-            ),
+              );
+            },
           ),
         ],
       ),

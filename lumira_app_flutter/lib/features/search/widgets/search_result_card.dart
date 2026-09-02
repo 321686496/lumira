@@ -276,7 +276,7 @@ class SearchResultCard extends ConsumerWidget {
       decoration: BoxDecoration(
         color: tokens.surface.withOpacity(0.85),
         borderRadius: BorderRadius.circular(9999),
-        border: Border.all(color: tokens.divider, width: 1),
+        border: Border.all(color: Colors.white.withOpacity(0.35), width: 0.6),
       ),
       child: Text(
         label,
@@ -429,7 +429,7 @@ class SearchResultListTile extends ConsumerWidget {
       decoration: BoxDecoration(
         color: tokens.surface.withOpacity(0.85),
         borderRadius: BorderRadius.circular(9999),
-        border: Border.all(color: tokens.divider, width: 1),
+        border: Border.all(color: Colors.white.withOpacity(0.35), width: 0.6),
       ),
       child: Text(label, style: TextStyle(fontSize: 9, color: tokens.textPrimary)),
     );

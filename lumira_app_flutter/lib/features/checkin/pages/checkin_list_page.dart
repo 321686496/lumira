@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -121,7 +121,6 @@ class _CheckinListPageState extends ConsumerState<CheckinListPage> {
                         categories: categoriesAsync.valueOrNull ?? const [],
                         selected: _selectedCategory,
                         onSelect: _selectCategory,
-                        tokens: tokens,
                       ),
                       const SizedBox(height: 12),
                       _SortToggle(
@@ -248,20 +247,19 @@ class _CategoryPills extends StatelessWidget {
     required this.categories,
     required this.selected,
     required this.onSelect,
-    required this.tokens,
   });
 
   final List<String> categories;
   final String? selected;
   final void Function(String) onSelect;
-  final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 36,
+      height: 38,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         itemCount: categories.length + 1,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
@@ -270,26 +268,12 @@ class _CategoryPills extends StatelessWidget {
               isAll ? selected == null : selected == categories[i - 1];
           final label =
               isAll ? '全部' : checkinCategoryOf(categories[i - 1]).label;
-          return GestureDetector(
-            onTap: () => onSelect(isAll ? 'all' : categories[i - 1]),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: active ? tokens.brand : tokens.surface,
-                borderRadius: BorderRadius.circular(1000),
-                border: Border.all(
-                  color: active ? tokens.brand : tokens.divider,
-                  width: 1,
-                ),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: active ? tokens.textInverse : tokens.textSecondary,
-                ),
-              ),
+          // 复用 LumiraFilterChip：选中态在中（新拟态下呈凹陷内阴影），全风格一致
+          return Center(
+            child: LumiraFilterChip(
+              label: label,
+              active: active,
+              onTap: () => onSelect(isAll ? 'all' : categories[i - 1]),
             ),
           );
         },

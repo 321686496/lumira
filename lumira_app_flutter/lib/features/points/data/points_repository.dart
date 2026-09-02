@@ -64,3 +64,20 @@ final pointsRepositoryProvider = FutureProvider<PointsRepository>((ref) async {
   final api = await ref.watch(apiClientProvider.future);
   return RemotePointsRepository(api);
 });
+
+/// 当前积分余额（自动缓存，避免在 build 内重复请求导致骨架屏闪烁）
+///
+/// 依赖 [pointsRepositoryProvider]，上游被 invalidate 时会级联刷新（下拉刷新）。
+final pointsBalanceProvider = FutureProvider.autoDispose<PointsBalance>(
+  (ref) async {
+    final repo = await ref.watch(pointsRepositoryProvider.future);
+    return repo.getBalance();
+  },
+);
+
+/// 积分流水预览（钱包页「积分流水」卡片；明细页自行管理全量加载）
+final pointsRecentTransactionsProvider =
+    FutureProvider.autoDispose<PointsTransactions>((ref) async {
+  final repo = await ref.watch(pointsRepositoryProvider.future);
+  return repo.listTransactions(limit: 50, offset: 0);
+});

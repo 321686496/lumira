@@ -833,7 +833,11 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
           ),
           IconButton(
             visualDensity: VisualDensity.compact,
-            icon: Icon(Icons.tune, size: 20, color: tokens.textSecondary),
+            icon: Icon(Icons.tune,
+                size: 20,
+                color: _filters.hasActiveConditions
+                    ? tokens.brand
+                    : tokens.textSecondary),
             tooltip: '筛选',
             onPressed: _openFilter,
           ),

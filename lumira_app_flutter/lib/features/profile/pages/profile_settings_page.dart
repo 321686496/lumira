@@ -382,6 +382,12 @@ class _ProfileSettingsPageState extends ConsumerState<ProfileSettingsPage> {
                         tokens: tokens,
                       ),
                       _SettingItem(
+                        icon: Icons.headset_mic_outlined,
+                        label: '联系我们',
+                        onTap: () => GoRouter.of(context).push(RouteNames.profileContact),
+                        tokens: tokens,
+                      ),
+                      _SettingItem(
                         icon: Icons.info_outline,
                         label: '关于如画',
                         onTap: () => GoRouter.of(context).push(RouteNames.profileAbout),

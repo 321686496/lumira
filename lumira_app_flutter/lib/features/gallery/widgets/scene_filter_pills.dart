@@ -50,7 +50,9 @@ class SceneFilterPills extends ConsumerWidget {
                         color: isActive ? tokens.brand : tokens.divider,
                         width: 1,
                       ),
-                boxShadow: isNeu && !isActive ? tokens.shadowConvexSubtle : null,
+                boxShadow: isNeu
+                    ? (isActive ? tokens.shadowPressed : tokens.shadowConvexSubtle)
+                    : null,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

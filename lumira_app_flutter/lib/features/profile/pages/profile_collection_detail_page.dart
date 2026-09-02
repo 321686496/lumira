@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lumira_app_flutter/core/utils/image_cache.dart';
 
+import '../../../shared/widgets/images/fullscreen_image_gallery.dart';
 import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../core/db/dao/collections_dao.dart';
 import '../../../core/db/dao/gallery_dao.dart';
@@ -152,12 +153,16 @@ class _DetailContent extends ConsumerWidget {
               isAuto: isAuto,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           // 九宫格预览
           if (photos.isNotEmpty) ...[
             FadeUp(
               delay: const Duration(milliseconds: 160),
-              child: _PhotoGrid(tokens: tokens, photos: photos),
+              child: _PhotoGrid(
+                tokens: tokens,
+                photos: photos,
+                onTapPhoto: (index) => _openFullscreen(context, index),
+              ),
             ),
             const SizedBox(height: 20),
           ],
@@ -206,6 +211,24 @@ class _DetailContent extends ConsumerWidget {
       shareSubject: '如画 · 精选集：${collection.name}',
       shareText: '我在如画精选了「${collection.name}」精选集，一起来看吧！',
       fileNamePrefix: 'lumira_collection_${collection.name}',
+    );
+  }
+
+  /// 点击九宫格照片 → 打开全屏大图查看器（支持双指缩放 + 左右滑动切换）
+  void _openFullscreen(BuildContext context, int initialIndex) {
+    final urls = <String>[];
+    for (final p in data.photos) {
+      final u = p.dataUrl ?? p.filePath;
+      if (u != null && u.isNotEmpty) urls.add(u);
+    }
+    if (urls.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => FullscreenImageGallery(
+          urls: urls,
+          initialIndex: initialIndex.clamp(0, urls.length - 1),
+        ),
+      ),
     );
   }
 }
@@ -417,9 +440,14 @@ class _StatsSection extends StatelessWidget {
 }
 
 class _PhotoGrid extends StatelessWidget {
-  const _PhotoGrid({required this.tokens, required this.photos});
+  const _PhotoGrid({
+    required this.tokens,
+    required this.photos,
+    required this.onTapPhoto,
+  });
   final ThemeTokens tokens;
   final List<GalleryItemRecord> photos;
+  final ValueChanged<int> onTapPhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -434,7 +462,11 @@ class _PhotoGrid extends StatelessWidget {
         for (var i = 0; i < photos.length; i++)
           FadeUp(
             delay: Duration(milliseconds: i * 50),
-            child: _PhotoCell(tokens: tokens, photo: photos[i]),
+            child: _PhotoCell(
+              tokens: tokens,
+              photo: photos[i],
+              onTap: () => onTapPhoto(i),
+            ),
           ),
       ],
     );
@@ -442,40 +474,49 @@ class _PhotoGrid extends StatelessWidget {
 }
 
 class _PhotoCell extends StatelessWidget {
-  const _PhotoCell({required this.tokens, required this.photo});
+  const _PhotoCell({
+    required this.tokens,
+    required this.photo,
+    required this.onTap,
+  });
   final ThemeTokens tokens;
   final GalleryItemRecord photo;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final url = photo.dataUrl ?? photo.filePath;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: url == null || url.isEmpty
-          ? Container(
-              color: tokens.surfaceAlt,
-              child: Icon(Icons.broken_image_outlined,
-                  color: tokens.textTertiary),
-            )
-          : url.startsWith('http')
-              ? CachedNetworkImage(
-                  url: url,
-                  fit: BoxFit.cover,
-                  errorWidget: Container(
-                    color: tokens.surfaceAlt,
-                    child: Icon(Icons.broken_image_outlined,
-                        color: tokens.textTertiary),
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: url == null || url.isEmpty
+            ? Container(
+                color: tokens.surfaceAlt,
+                child: Icon(Icons.broken_image_outlined,
+                    color: tokens.textTertiary),
+              )
+            : url.startsWith('http')
+                ? CachedNetworkImage(
+                    url: url,
+                    fit: BoxFit.cover,
+                    errorWidget: Container(
+                      color: tokens.surfaceAlt,
+                      child: Icon(Icons.broken_image_outlined,
+                          color: tokens.textTertiary),
+                    ),
+                  )
+                : LumiraImage(
+                    url,
+                    fit: BoxFit.cover,
+                    errorWidget: Container(
+                      color: tokens.surfaceAlt,
+                      child: Icon(Icons.broken_image_outlined,
+                          color: tokens.textTertiary),
+                    ),
                   ),
-                )
-              : LumiraImage(
-                  url,
-                  fit: BoxFit.cover,
-                  errorWidget: Container(
-                    color: tokens.surfaceAlt,
-                    child: Icon(Icons.broken_image_outlined,
-                        color: tokens.textTertiary),
-                  ),
-                ),
+      ),
     );
   }
 }

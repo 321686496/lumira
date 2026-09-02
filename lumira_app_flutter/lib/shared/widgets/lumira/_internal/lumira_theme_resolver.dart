@@ -180,6 +180,47 @@ class LumiraThemeResolver {
     }
   }
 
+  /// 解析「叠在图片/动态画面上」的浮层视觉规格（改良悬浮新拟态）。
+  ///
+  /// 依据 Neumorphism 双轨体系：组件落点是非纯色底（照片/封面/预览图）时，
+  /// 标准同色双向浮雕阴影无法被背景承接，会像光晕一样糊在图上、显脏。
+  /// 因此改用「半透明 surface 底色 + 仅暗色投影（不含纯白高光）+ 细描边」表达
+  /// 表面；禁用 inset 内嵌阴影（动态画面光影易错乱），按压反馈交由外层用 scale。
+  ///
+  /// - [radiusDp]：已转换为 dp 的圆角值
+  /// - [tokens]：当前主题 tokens
+  /// - [overlayAlpha]：半透明底色透明度（默认 0.85，位于图片上足够通透又保可读）
+  /// - [shadowOpacity]：暗色投影不透明度（默认 0.45，柔和不脏）
+  static ContainerVisual overlayOnImageVisual({
+    required ThemeTokens tokens,
+    required double radiusDp,
+    double overlayAlpha = 0.85,
+    double shadowOpacity = 0.45,
+  }) {
+    // 暗色投影基色：亮色主题用灰色、暗色主题用更深灰，保证浮层与底层略有分离
+    final shadowBase = tokens.canvas.computeLuminance() > 0.5
+        ? const Color(0xFF4A4742)
+        : const Color(0xFF000000);
+    return ContainerVisual(
+      background: tokens.surface.withOpacity(overlayAlpha),
+      border: Border.all(
+        color: Colors.white.withOpacity(
+          tokens.canvas.computeLuminance() > 0.5 ? 0.35 : 0.14,
+        ),
+        width: 0.6,
+      ),
+      shadows: [
+        BoxShadow(
+          color: shadowBase.withOpacity(shadowOpacity),
+          offset: const Offset(0, 6),
+          blurRadius: 18,
+        ),
+      ],
+      backdropBlurSigma: 0,
+      glassOverlay: null,
+    );
+  }
+
   /// rpx → dp 工具：app_theme 的 radius 字段存储 rpx 原值，widget 内部 /2 转 dp
   static double rpxToDp(double rpx) => rpx / 2;
 }

@@ -101,6 +101,10 @@ class _LumiraSliderState extends ConsumerState<LumiraSlider> {
                         color: tokens.divider,
                         borderRadius:
                             BorderRadius.circular(trackHeight / 2),
+                        // 新拟态：轨道为「凹陷凹槽」（inset 双向阴影），模拟滑入
+                        boxShadow: appTheme.style == UIStyle.neumorphic
+                            ? tokens.shadowConcaveSubtle
+                            : null,
                       ),
                     ),
                   ),

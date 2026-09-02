@@ -20,7 +20,9 @@ class TutorialDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeumorphic = appTheme.style == UIStyle.neumorphic;
     final tutorial = tutorialId != null
         ? TutorialContent.getById(tutorialId!)
         : null;
@@ -112,7 +114,11 @@ class TutorialDetailPage extends ConsumerWidget {
                         const SizedBox(height: 16),
                       ],
                       const SizedBox(height: 8),
-                      _TipsBlock(tips: tutorial.tips, tokens: tokens),
+                      _TipsBlock(
+                        tips: tutorial.tips,
+                        tokens: tokens,
+                        isNeumorphic: isNeumorphic,
+                      ),
                       const SizedBox(height: 24),
                       _CtaButton(tutorial: tutorial, tokens: tokens),
                       if (tutorial.academyCourseId != null) ...[
@@ -125,6 +131,7 @@ class TutorialDetailPage extends ConsumerWidget {
                             ),
                           ),
                           tokens: tokens,
+                          isNeumorphic: isNeumorphic,
                         ),
                       ],
                       const SizedBox(height: 24),
@@ -227,16 +234,24 @@ class _StepBlock extends StatelessWidget {
 }
 
 class _TipsBlock extends StatelessWidget {
-  const _TipsBlock({required this.tips, required this.tokens});
+  const _TipsBlock({
+    required this.tips,
+    required this.tokens,
+    this.isNeumorphic = false,
+  });
   final List<String> tips;
   final ThemeTokens tokens;
+  final bool isNeumorphic;
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
+      // neumorphic 风格：画布上信息卡用 surface 同源底 + 轻量双向凸起阴影；
+      // 其余风格保留原品牌淡色信息底。
       decoration: BoxDecoration(
-        color: tokens.brandSubtle.withOpacity(0.5),
+        color: isNeumorphic ? tokens.surface : tokens.brandSubtle.withOpacity(0.5),
         borderRadius: BorderRadius.circular(14),
+        boxShadow: isNeumorphic ? tokens.shadowConvexSubtle : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -293,9 +308,14 @@ class _CtaButton extends StatelessWidget {
 }
 
 class _AcademyBanner extends StatelessWidget {
-  const _AcademyBanner({required this.onTap, required this.tokens});
+  const _AcademyBanner({
+    required this.onTap,
+    required this.tokens,
+    this.isNeumorphic = false,
+  });
   final VoidCallback onTap;
   final ThemeTokens tokens;
+  final bool isNeumorphic;
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -303,9 +323,15 @@ class _AcademyBanner extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.all(14),
+        // neumorphic 风格：画布上卡片用 surface 同源底 + 轻量凸起阴影，去品牌描边；
+        // 其余风格保留原「品牌细描边」透明卡片。
         decoration: BoxDecoration(
-          border: Border.all(color: tokens.brand.withOpacity(0.4)),
+          color: isNeumorphic ? tokens.surface : null,
+          border: isNeumorphic
+              ? null
+              : Border.all(color: tokens.brand.withOpacity(0.4)),
           borderRadius: BorderRadius.circular(14),
+          boxShadow: isNeumorphic ? tokens.shadowConvexSubtle : null,
         ),
         child: Row(
           children: [

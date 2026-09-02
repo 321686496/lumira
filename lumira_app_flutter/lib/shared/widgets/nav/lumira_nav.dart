@@ -30,6 +30,7 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
     this.showBackButton = true,
     this.useWordmark = false,
     this.horizontalPadding = 24.0,
+    this.actionsSpacing = 0,
   });
 
   final String? title;
@@ -38,6 +39,10 @@ class LumiraNav extends ConsumerStatefulWidget implements PreferredSizeWidget {
   final bool centerTitle;
   final bool scrolled;
   final bool transparent;
+
+  /// 右侧操作按钮组之间的水平间距（dp）。默认 0（兼容旧行为，按钮紧贴），
+  /// 页面可通过传值调整，避免多个按钮挤在一起。
+  final double actionsSpacing;
 
   /// 是否在 leading 为 null 且 canPop 时自动显示返回按钮。
   /// Tab 页（home/templates/challenge/profile）应传 false，
@@ -101,6 +106,20 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// 计算右侧操作按钮列表：按 [actionsSpacing] 在按钮之间插入间距。
+  /// 无操作按钮时返回一个宽度占位，维持标题居中不变形（与旧行为一致）。
+  List<Widget> _actionsList() {
+    final actions = widget.actions;
+    if (actions == null || actions.isEmpty) return const [SizedBox(width: 40)];
+    if (widget.actionsSpacing <= 0) return actions;
+    final spaced = <Widget>[];
+    for (var i = 0; i < actions.length; i++) {
+      if (i > 0) spaced.add(SizedBox(width: widget.actionsSpacing));
+      spaced.add(actions[i]);
+    }
+    return spaced;
   }
 
   @override
@@ -225,7 +244,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
                         right: widget.horizontalPadding,
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
-                          children: widget.actions ?? [const SizedBox(width: 40)],
+                          children: _actionsList(),
                         ),
                       ),
                     ],
@@ -242,7 +261,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
                         const Spacer(),
                         Row(
                           mainAxisSize: MainAxisSize.min,
-                          children: widget.actions ?? [const SizedBox(width: 40)],
+                          children: _actionsList(),
                         ),
                       ],
                     ),

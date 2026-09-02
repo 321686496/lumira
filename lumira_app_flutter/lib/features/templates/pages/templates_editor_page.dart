@@ -1705,7 +1705,7 @@ class _PillGroup extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              // neumorphic 风格下：激活用 brand + shadowConvex，非激活用 surface + shadowConvexSubtle
+              // neumorphic 风格下：激活用 brand + shadowConcave，非激活用 surface + shadowConvexSubtle
               color: active
                   ? tokens.brand
                   : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
@@ -1717,7 +1717,7 @@ class _PillGroup extends ConsumerWidget {
                       width: 1,
                     ),
               boxShadow: isNeumorphic
-                  ? (active ? tokens.shadowConvex : tokens.shadowConvexSubtle)
+                  ? (active ? tokens.shadowConcave : tokens.shadowConvexSubtle)
                   : null,
             ),
             child: Text(
@@ -2434,7 +2434,7 @@ class _ToggleChip extends ConsumerWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          // neumorphic 风格下：激活用 brand + shadowConvex，非激活用 surface + shadowConvexSubtle
+          // neumorphic 风格下：激活用 brand + shadowConcave，非激活用 surface + shadowConvexSubtle
           color: active
               ? tokens.brand
               : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
@@ -2446,7 +2446,7 @@ class _ToggleChip extends ConsumerWidget {
                   width: 1,
                 ),
           boxShadow: isNeumorphic
-              ? (active ? tokens.shadowConvex : tokens.shadowConvexSubtle)
+              ? (active ? tokens.shadowConcave : tokens.shadowConvexSubtle)
               : null,
         ),
         child: Text(
@@ -2712,7 +2712,7 @@ class _PosePill extends ConsumerWidget {
                   width: 1,
                 ),
           boxShadow: isNeumorphic
-              ? (active ? tokens.shadowConvex : tokens.shadowConvexSubtle)
+              ? (active ? tokens.shadowConcave : tokens.shadowConvexSubtle)
               : null,
         ),
         child: Text(
@@ -3173,7 +3173,7 @@ class _BuiltinSilhouetteThumbnails extends ConsumerWidget {
               width: 64,
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
               decoration: BoxDecoration(
-                // neumorphic 风格下：激活用 brandSubtle + shadowConvex，非激活用 surface + shadowConvexSubtle
+                // neumorphic 风格下：激活用 brandSubtle + shadowConcave，非激活用 surface + shadowConvexSubtle
                 color: active
                     ? tokens.brandSubtle
                     : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
@@ -3185,7 +3185,7 @@ class _BuiltinSilhouetteThumbnails extends ConsumerWidget {
                         width: 1,
                       ),
                 boxShadow: isNeumorphic
-                    ? (active ? tokens.shadowConvex : tokens.shadowConvexSubtle)
+                    ? (active ? tokens.shadowConcave : tokens.shadowConvexSubtle)
                     : null,
               ),
               child: Column(

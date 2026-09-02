@@ -4,6 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../widgets/lumira/lumira.dart'
+    show
+        ButtonVariant,
+        LumiraBottomSheetContainer,
+        LumiraButton,
+        LumiraFilterChip;
 import 'search_filters.dart';
 import 'search_scope.dart';
 
@@ -30,15 +36,19 @@ Future<SearchFilters?> showSearchFilterSheet({
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _FilterSheet(
-      scope: scope,
-      initial: current,
-      userTags: userTags,
-      categoryOptions: categoryOptions,
-      sceneStyleOptions: sceneStyleOptions,
-      sceneCategoryOptions: sceneCategoryOptions,
-      academyTopicOptions: academyTopicOptions,
-      academyLevelOptions: academyLevelOptions,
+    builder: (_) => LumiraBottomSheetContainer(
+      isScrollControlled: true,
+      padding: EdgeInsets.zero,
+      child: _FilterSheet(
+        scope: scope,
+        initial: current,
+        userTags: userTags,
+        categoryOptions: categoryOptions,
+        sceneStyleOptions: sceneStyleOptions,
+        sceneCategoryOptions: sceneCategoryOptions,
+        academyTopicOptions: academyTopicOptions,
+        academyLevelOptions: academyLevelOptions,
+      ),
     ),
   );
   return result;
@@ -81,49 +91,53 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
-    final scope = widget.scope;
-    return SafeArea(
-      child: Container(
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.8,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _header(tokens),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (scope == SearchScope.template) ...[
-                      _categorySection(tokens),
-                      _priceSection(tokens),
-                      _sourceSection(tokens),
+    final isAll = widget.scope == SearchScope.all;
+
+    return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _header(tokens),
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 「全部」统一合并面板：一次展示所有类型的维度。
+                  if (isAll) ...[
+                    _section(tokens, '模板 · 分类', _categoryItems()),
+                    _section(tokens, '模板 · 价格', _priceItems()),
+                    _section(tokens, '模板 · 来源', _sourceItems()),
+                    _section(tokens, '场景 · 分类', _sceneCategoryItems()),
+                    _section(tokens, '场景 · 风格', _sceneStyleItems()),
+                    _section(tokens, '美学院 · 主题', _topicItems()),
+                    _section(tokens, '美学院 · 等级', _levelItems()),
+                    if (widget.userTags.isNotEmpty)
+                      _section(tokens, '用户标签', _userTagItems()),
+                  ] else ...[
+                    if (widget.scope == SearchScope.template) ...[
+                      _section(tokens, '分类', _categoryItems()),
+                      _section(tokens, '价格', _priceItems()),
+                      _section(tokens, '来源', _sourceItems()),
                     ],
-                    if (scope == SearchScope.scene) ...[
-                      _sceneCategorySection(tokens),
-                      _styleSection(tokens),
+                    if (widget.scope == SearchScope.scene) ...[
+                      _section(tokens, '分类', _sceneCategoryItems()),
+                      _section(tokens, '风格', _sceneStyleItems()),
                     ],
-                    if (scope == SearchScope.academy) ...[
-                      _topicSection(tokens),
-                      _levelSection(tokens),
+                    if (widget.scope == SearchScope.academy) ...[
+                      _section(tokens, '主题', _topicItems()),
+                      _section(tokens, '等级', _levelItems()),
                     ],
-                    if (scope != SearchScope.academy && widget.userTags.isNotEmpty)
-                      _userTagSection(tokens),
+                    if (widget.scope != SearchScope.academy &&
+                        widget.userTags.isNotEmpty)
+                      _section(tokens, '用户标签', _userTagItems()),
                   ],
-                ),
+                ],
               ),
             ),
-            _footer(tokens),
-          ],
-        ),
-      ),
+          ),
+          _footer(tokens),
+        ],
     );
   }
 
@@ -138,7 +152,7 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: tokens.textSecondary)),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Wrap(spacing: 8, runSpacing: 8, children: children),
         ],
       ),
@@ -147,14 +161,9 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
 
   Widget _header(ThemeTokens tokens) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      padding: const EdgeInsets.fromLTRB(20, 2, 20, 4),
       child: Row(
         children: [
-          TextButton(
-            onPressed: () => setState(() => _draft = _draft.reset()),
-            child: Text('重置',
-                style: TextStyle(color: tokens.textSecondary)),
-          ),
           const Spacer(),
           Text('筛选',
               style: TextStyle(
@@ -162,153 +171,135 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
                   fontWeight: FontWeight.w600,
                   color: tokens.textPrimary)),
           const Spacer(),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(_draft),
-            child: Text('确定',
-                style: TextStyle(
-                    color: tokens.brand, fontWeight: FontWeight.w600)),
-          ),
         ],
       ),
     );
   }
 
-  Widget _categorySection(ThemeTokens tokens) {
-    return _section(tokens, '分类', [
-      _Pill(
+  // === 各分组选项（返回 LumiraFilterChip 列表） ===
+
+  List<Widget> _categoryItems() {
+    return [
+      LumiraFilterChip(
         label: '全部',
         active: _draft.category == null,
-        tokens: tokens,
         onTap: () =>
             setState(() => _draft = _draft.copyWith(category: () => null)),
       ),
       for (final o in widget.categoryOptions)
-        _Pill(
+        LumiraFilterChip(
           label: o.label,
           active: _draft.category == o.key,
-          tokens: tokens,
           onTap: () =>
               setState(() => _draft = _draft.copyWith(category: () => o.key)),
         ),
-    ]);
+    ];
   }
 
-  Widget _sceneCategorySection(ThemeTokens tokens) {
-    return _section(tokens, '分类', [
-      _Pill(
+  List<Widget> _sceneCategoryItems() {
+    return [
+      LumiraFilterChip(
         label: '全部',
-        active: _draft.category == null,
-        tokens: tokens,
-        onTap: () =>
-            setState(() => _draft = _draft.copyWith(category: () => null)),
+        active: _draft.sceneCategory == null,
+        onTap: () => setState(() =>
+            _draft = _draft.copyWith(sceneCategory: () => null)),
       ),
       for (final c in widget.sceneCategoryOptions)
-        _Pill(
+        LumiraFilterChip(
           label: c,
-          active: _draft.category == c,
-          tokens: tokens,
+          active: _draft.sceneCategory == c,
           onTap: () =>
-              setState(() => _draft = _draft.copyWith(category: () => c)),
+              setState(() => _draft = _draft.copyWith(sceneCategory: () => c)),
         ),
-    ]);
+    ];
   }
 
-  Widget _styleSection(ThemeTokens tokens) {
-    return _section(tokens, '风格', [
-      _Pill(
+  List<Widget> _sceneStyleItems() {
+    return [
+      LumiraFilterChip(
         label: '全部',
         active: _draft.sceneStyle == null,
-        tokens: tokens,
         onTap: () =>
             setState(() => _draft = _draft.copyWith(sceneStyle: () => null)),
       ),
       for (final s in widget.sceneStyleOptions)
-        _Pill(
+        LumiraFilterChip(
           label: s,
           active: _draft.sceneStyle == s,
-          tokens: tokens,
           onTap: () =>
               setState(() => _draft = _draft.copyWith(sceneStyle: () => s)),
         ),
-    ]);
+    ];
   }
 
-  Widget _topicSection(ThemeTokens tokens) {
-    return _section(tokens, '主题', [
-      _Pill(
+  List<Widget> _topicItems() {
+    return [
+      LumiraFilterChip(
         label: '全部',
         active: _draft.academyTopic == null,
-        tokens: tokens,
         onTap: () =>
             setState(() => _draft = _draft.copyWith(academyTopic: () => null)),
       ),
       for (final o in widget.academyTopicOptions)
-        _Pill(
+        LumiraFilterChip(
           label: o.label,
           active: _draft.academyTopic == o.key,
-          tokens: tokens,
           onTap: () => setState(
               () => _draft = _draft.copyWith(academyTopic: () => o.key)),
         ),
-    ]);
+    ];
   }
 
-  Widget _levelSection(ThemeTokens tokens) {
-    return _section(tokens, '等级', [
-      _Pill(
+  List<Widget> _levelItems() {
+    return [
+      LumiraFilterChip(
         label: '全部',
         active: _draft.academyLevel == null,
-        tokens: tokens,
         onTap: () =>
             setState(() => _draft = _draft.copyWith(academyLevel: () => null)),
       ),
       for (final o in widget.academyLevelOptions)
-        _Pill(
+        LumiraFilterChip(
           label: o.label,
           active: _draft.academyLevel == o.key,
-          tokens: tokens,
           onTap: () => setState(
               () => _draft = _draft.copyWith(academyLevel: () => o.key)),
         ),
-    ]);
+    ];
   }
 
-  Widget _priceSection(ThemeTokens tokens) {
-    return _section(tokens, '价格', [
+  List<Widget> _priceItems() {
+    return [
       for (final p in SearchPriceFilter.values)
-        _Pill(
+        LumiraFilterChip(
           label: _priceLabel(p),
           active: _draft.price == p,
-          tokens: tokens,
           onTap: () => setState(() => _draft = _draft.copyWith(price: p)),
         ),
-    ]);
+    ];
   }
 
-  Widget _sourceSection(ThemeTokens tokens) {
-    return _section(tokens, '来源', [
-      _Pill(
+  List<Widget> _sourceItems() {
+    return [
+      LumiraFilterChip(
         label: '全部',
         active: !_draft.ownedOnly,
-        tokens: tokens,
         onTap: () => setState(() => _draft = _draft.copyWith(ownedOnly: false)),
       ),
-      _Pill(
+      LumiraFilterChip(
         label: '我拥有的',
         active: _draft.ownedOnly,
-        tokens: tokens,
         onTap: () => setState(() => _draft = _draft.copyWith(ownedOnly: true)),
       ),
-    ]);
+    ];
   }
 
-  Widget _userTagSection(ThemeTokens tokens) {
-    return _section(tokens, '用户标签', [
+  List<Widget> _userTagItems() {
+    return [
       for (final e in widget.userTags)
-        _Pill(
+        LumiraFilterChip(
           label: '${e.tag.name} (${e.count})',
           active: _draft.userTagIds.contains(e.tag.id),
-          tokens: tokens,
           onTap: () {
             setState(() {
               final ids = {..._draft.userTagIds};
@@ -317,7 +308,7 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
             });
           },
         ),
-    ]);
+    ];
   }
 
   Widget _footer(ThemeTokens tokens) {
@@ -330,15 +321,21 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
       child: Row(
         children: [
           Expanded(
-            child: OutlinedButton(
+            child: LumiraButton(
+              variant: ButtonVariant.secondary,
               onPressed: () => setState(() => _draft = _draft.reset()),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: const Text('重置'),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: FilledButton(
+            child: LumiraButton(
+              variant: ButtonVariant.primary,
               onPressed: () => Navigator.of(context).pop(_draft),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: const Text('确定'),
             ),
           ),
@@ -356,43 +353,5 @@ class _FilterSheetState extends ConsumerState<_FilterSheet> {
       case SearchPriceFilter.paid:
         return '付费';
     }
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.label,
-    required this.active,
-    required this.tokens,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final ThemeTokens tokens;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: active ? tokens.brand : tokens.surfaceAlt,
-          borderRadius: BorderRadius.circular(9999),
-          border: active
-              ? null
-              : Border.all(color: tokens.divider, width: 1),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: active ? tokens.textInverse : tokens.textSecondary,
-          ),
-        ),
-      ),
-    );
   }
 }

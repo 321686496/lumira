@@ -975,6 +975,7 @@ class _MenuCard extends ConsumerWidget {
       _MenuItem(icon: Icons.account_balance_wallet_outlined, title: '我的积分'),
       _MenuItem(icon: Icons.redeem_outlined, title: '兑换码'),
       _MenuItem(icon: Icons.info_outline, title: '关于如画'),
+      _MenuItem(icon: Icons.headset_mic_outlined, title: '联系我们'),
     ];
 
     // 路由跳转在 _MenuItemRow.onTap 中根据 title 触发，避免 lambda 无法 const 化
@@ -1018,6 +1019,8 @@ class _MenuCard extends ConsumerWidget {
       onNav(RouteNames.profileRedeem);
     } else if (title == '关于如画') {
       onNav(RouteNames.profileAbout);
+    } else if (title == '联系我们') {
+      onNav(RouteNames.profileContact);
     }
   }
 }
@@ -1114,18 +1117,25 @@ class _FeedbackEntryCard extends StatelessWidget {
             Icon(Icons.feedback_outlined, size: 22, color: tokens.brand),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                '意见反馈',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.textPrimary,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '意见反馈',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '有 Bug / 想法 / 想要的模板？告诉我们',
+                    style: TextStyle(fontSize: 12, color: tokens.textSecondary),
+                  ),
+                ],
               ),
-            ),
-            Text(
-              '有 Bug / 想法 / 想要的模板？告诉我们',
-              style: TextStyle(fontSize: 12, color: tokens.textSecondary),
             ),
             const SizedBox(width: 8),
             Icon(Icons.chevron_right, size: 18, color: tokens.textTertiary),

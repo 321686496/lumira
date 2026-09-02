@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/capture_state.dart';
 import '../domain/photo_template.dart';
 import 'apply_button.dart';
@@ -27,47 +29,49 @@ class ParamPillBar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 修复 Bug 2：使用 effectiveCameraProvider，自由模式下也能获取参数
     final cam = ref.watch(CaptureState.effectiveCameraProvider);
+    // 新拟态双轨：叠在相机/动态画面上禁止 blur(毛玻璃)，退回半透明暗底浮层
+    final isNeu = ref.watch(appThemeProvider).style == UIStyle.neumorphic;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF141416).withOpacity(0.72),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.1),
-              width: 0.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 12,
-                offset: const Offset(0, 2),
-              ),
-              BoxShadow(
-                color: Colors.white.withOpacity(0.04),
-                blurRadius: 1,
-                offset: const Offset(0, 0.5),
-              ),
-            ],
+    final Widget capsule = Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416).withOpacity(0.72),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.1),
+          width: 0.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
           ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            child: Row(
-              children: [
-                _Pill(text: _evDisplay(cam), onTap: () => _openPanel(ref)),
-                _Pill(text: _isoDisplay(cam), onTap: () => _openPanel(ref)),
-                const ApplyButton(),
-                const RawModeToggle(),
-              ].map((w) => Padding(padding: const EdgeInsets.only(right: 4), child: w)).toList(),
-            ),
-          ),
+        ],
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+        child: Row(
+          children: [
+            _Pill(text: _evDisplay(cam), onTap: () => _openPanel(ref)),
+            _Pill(text: _isoDisplay(cam), onTap: () => _openPanel(ref)),
+            const ApplyButton(),
+            const RawModeToggle(),
+          ].map((w) => Padding(padding: const EdgeInsets.only(right: 4), child: w)).toList(),
         ),
       ),
     );
+
+    // 新拟态不引入毛玻璃；其余风格保留玻璃胶囊
+    return isNeu
+        ? capsule
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: capsule,
+            ),
+          );
   }
 
   /// 打开参数面板

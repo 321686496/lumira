@@ -47,6 +47,7 @@ import '../features/profile/pages/profile_about_page.dart';
 import '../features/profile/pages/profile_collection_detail_page.dart';
 import '../features/profile/pages/profile_collection_edit_page.dart';
 import '../features/profile/pages/profile_collections_page.dart';
+import '../features/profile/pages/profile_contact_page.dart';
 import '../features/profile/pages/profile_edit_page.dart';
 import '../features/profile/pages/composition_kit_detail_page.dart';
 import '../features/profile/pages/composition_kits_page.dart';
@@ -63,6 +64,7 @@ import '../features/profile/pages/profile_settings_resolution_page.dart';
 import '../features/profile/feedback/pages/feedback_page.dart';
 import '../features/profile/pages/profile_theme_page.dart';
 import '../features/points/pages/points_wallet_page.dart';
+import '../features/points/pages/points_transactions_page.dart';
 import '../features/redeem/pages/redeem_page.dart';
 import '../features/rewards/pages/rewards_page.dart';
 import '../features/scenes/pages/scenes_page.dart';
@@ -637,6 +639,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ProfileAboutPage(),
       ),
       GoRoute(
+        path: RouteNames.profileContact,
+        name: 'profileContact',
+        builder: (context, state) => const ProfileContactPage(),
+      ),
+      GoRoute(
         path: RouteNames.feedback,
         name: 'feedback',
         builder: (context, state) => const FeedbackPage(),
@@ -684,6 +691,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RouteNames.pointsWallet,
         name: 'pointsWallet',
         builder: (context, state) => const PointsWalletPage(),
+      ),
+      GoRoute(
+        path: RouteNames.pointsTransactions,
+        name: 'pointsTransactions',
+        builder: (context, state) => const PointsTransactionsPage(),
       ),
       GoRoute(
         path: RouteNames.invite,

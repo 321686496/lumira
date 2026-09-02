@@ -753,7 +753,7 @@ class _PricePill extends ConsumerWidget {
               : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
           boxShadow: active
-              ? (isNeumorphic ? tokens.shadowConvex : tokens.shadowPressed)
+              ? (isNeumorphic ? tokens.shadowConcave : tokens.shadowPressed)
               : tokens.shadowConvexSubtle,
         ),
         child: Center(
@@ -831,7 +831,7 @@ class _Pill extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           // active: linear gradient brand→brandDeep（硬编码颜色，与 uni-app 一致）
-          // neumorphic 风格下：移除渐变，激活态用 brand 纯色 + shadowConvex
+          // neumorphic 风格下：移除渐变，激活态用 brand 纯色 + shadowConcave
           gradient: active
               ? (isNeumorphic
                   ? null
@@ -842,7 +842,7 @@ class _Pill extends ConsumerWidget {
               : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
           boxShadow: active
-              ? (isNeumorphic ? tokens.shadowConvex : tokens.shadowPressed)
+              ? (isNeumorphic ? tokens.shadowConcave : tokens.shadowPressed)
               : tokens.shadowConvexSubtle,
         ),
         child: Center(
@@ -888,7 +888,7 @@ class _CustomToggle extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           // active: linear gradient brand→brandDeep（硬编码颜色，与 uni-app 一致）
-          // neumorphic 风格下：移除渐变，激活态用 brand 纯色 + shadowConvex
+          // neumorphic 风格下：移除渐变，激活态用 brand 纯色 + shadowConcave
           gradient: active
               ? (isNeumorphic
                   ? null
@@ -899,7 +899,7 @@ class _CustomToggle extends ConsumerWidget {
               : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
           boxShadow: active
-              ? (isNeumorphic ? tokens.shadowConvex : tokens.shadowPressed)
+              ? (isNeumorphic ? tokens.shadowConcave : tokens.shadowPressed)
               : tokens.shadowConvexSubtle,
         ),
         child: Row(

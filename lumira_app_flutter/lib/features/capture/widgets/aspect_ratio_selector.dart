@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
+import '../../../core/theme/theme_tokens.dart';
 import '../data/capture_state.dart';
 
 /// 照片比例切换器（毛玻璃胶囊设计）
@@ -27,88 +28,89 @@ class AspectRatioSelector extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = ref.watch(CaptureState.aspectRatioProvider);
-    final tokens = ref.watch(themeTokensProvider);
+    // 新拟态双轨：叠在相机/动态画面上禁止 blur(毛玻璃)，退回半透明暗底浮层
+    final isNeu = ref.watch(appThemeProvider).style == UIStyle.neumorphic;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-          decoration: BoxDecoration(
-            color: const Color(0xFF141416).withOpacity(0.72),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.1),
-              width: 0.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 12,
-                offset: const Offset(0, 2),
-              ),
-              BoxShadow(
-                color: Colors.white.withOpacity(0.04),
-                blurRadius: 1,
-                offset: const Offset(0, 0.5),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: _options.map((opt) {
-              final active = opt.id == current;
-              return GestureDetector(
-                onTap: () {
-                  ref.read(CaptureState.aspectRatioProvider.notifier).state = opt.id;
-                  CaptureState.persistAspectRatio(
-                      ProviderScope.containerOf(context, listen: false), opt.id);
-                },
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: active
-                        ? const Color(0xFFC9A96E)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: active
-                        ? [
-                            BoxShadow(
-                              color: const Color(0xFFC9A96E).withOpacity(0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        opt.icon,
-                        size: 12,
-                        color: active ? Colors.black : Colors.white.withOpacity(0.5),
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        opt.label,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                          color: active ? Colors.black : Colors.white.withOpacity(0.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
+    final Widget capsule = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141416).withOpacity(0.72),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.1),
+          width: 0.5,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: _options.map((opt) {
+          final active = opt.id == current;
+          return GestureDetector(
+            onTap: () {
+              ref.read(CaptureState.aspectRatioProvider.notifier).state = opt.id;
+              CaptureState.persistAspectRatio(
+                  ProviderScope.containerOf(context, listen: false), opt.id);
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: active
+                    ? const Color(0xFFC9A96E)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFFC9A96E).withOpacity(0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    opt.icon,
+                    size: 12,
+                    color: active ? Colors.black : Colors.white.withOpacity(0.5),
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    opt.label,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                      color: active ? Colors.black : Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
+
+    // 新拟态不引入毛玻璃；其余风格保留玻璃胶囊
+    return isNeu
+        ? capsule
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: capsule,
+            ),
+          );
   }
 }
 

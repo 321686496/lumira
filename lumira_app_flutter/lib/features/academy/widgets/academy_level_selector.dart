@@ -46,7 +46,9 @@ class AcademyLevelSelector extends ConsumerWidget {
               decoration: BoxDecoration(
                 color: isSelected ? tokens.brand : tokens.surface,
                 borderRadius: BorderRadius.circular(9999),
-                boxShadow: isNeu && !isSelected ? tokens.shadowConvexSubtle : null,
+                boxShadow: isNeu
+                    ? (isSelected ? tokens.shadowPressed : tokens.shadowConvexSubtle)
+                    : null,
               ),
               child: Text(
                 item.label,

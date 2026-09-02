@@ -39,6 +39,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
   String? _activeCategoryId;
   /// 已加载的场景列表
   List<SceneRecord> _scenes = [];
+  /// 每个场景对应的真实拍摄照片数（来自 gallery_items 表 scene_id 统计）
+  Map<String, int> _scenePhotoCounts = {};
   /// 是否正在加载
   bool _isLoading = false;
   /// 是否通过路由 category 参数直接进入分类（如发现页点场景分类卡片）。
@@ -92,9 +94,16 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
       } else {
         scenes = await dao.getAllByCategory(_activeCategoryId!);
       }
+      // 用 gallery_items 真实数据统计每个场景的拍摄照片数
+      final galleryDao = await ref.read(galleryDaoProvider.future);
+      final counts = <String, int>{};
+      for (final s in scenes) {
+        counts[s.id] = await galleryDao.countByScene(s.id);
+      }
       if (mounted) {
         setState(() {
           _scenes = scenes;
+          _scenePhotoCounts = counts;
           _isLoading = false;
         });
       }
@@ -102,6 +111,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
       if (mounted) {
         setState(() {
           _scenes = [];
+          _scenePhotoCounts = {};
           _isLoading = false;
         });
       }
@@ -206,7 +216,11 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                           onRefresh: _onRefresh,
                           child: _isLoading
                               ? Center(child: LumiraProgress.circular())
-                              : _SceneGrid(scenes: _scenes, onTap: _goDetail),
+                              : _SceneGrid(
+                                  scenes: _scenes,
+                                  photoCounts: _scenePhotoCounts,
+                                  onTap: _goDetail,
+                                ),
                         ),
                 ),
               ],
@@ -560,9 +574,14 @@ class _SceneCategoryCard extends StatelessWidget {
 
 /// 场景 grid 2 列
 class _SceneGrid extends ConsumerWidget {
-  const _SceneGrid({required this.scenes, required this.onTap});
+  const _SceneGrid({
+    required this.scenes,
+    required this.photoCounts,
+    required this.onTap,
+  });
 
   final List<SceneRecord> scenes;
+  final Map<String, int> photoCounts;
   final ValueChanged<String> onTap;
 
   @override
@@ -608,6 +627,7 @@ class _SceneGrid extends ConsumerWidget {
         final scene = scenes[index];
         return _SceneCard(
           scene: scene,
+          photoCount: photoCounts[scene.id] ?? 0,
           onTap: () => onTap(scene.id),
         );
       },
@@ -617,9 +637,14 @@ class _SceneGrid extends ConsumerWidget {
 
 /// 场景卡片（对应 uni-app ScenePresetView variant="card"）
 class _SceneCard extends ConsumerWidget {
-  const _SceneCard({required this.scene, required this.onTap});
+  const _SceneCard({
+    required this.scene,
+    required this.photoCount,
+    required this.onTap,
+  });
 
   final SceneRecord scene;
+  final int photoCount;
   final VoidCallback onTap;
 
   @override
@@ -629,7 +654,6 @@ class _SceneCard extends ConsumerWidget {
     final isNeu = appTheme.style == UIStyle.neumorphic;
     final isGlass = appTheme.style == UIStyle.glass;
 
-    final photoCount = CaptureSceneMockData.getPhotoCountByScene(scene.id);
     final hasBadge = photoCount > 0;
     final firstImage = _effectiveCover(scene);
 

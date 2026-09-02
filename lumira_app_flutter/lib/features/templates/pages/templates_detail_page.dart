@@ -9,9 +9,9 @@ import '../../../core/db/dao/usage_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/db/dao/gallery_dao.dart';
 import '../../../core/router/route_names.dart';
-import '../../../features/gallery/data/gallery_models.dart';
 import '../../../features/points/data/points_models.dart';
 import '../../../features/points/data/points_repository.dart';
+import '../../../features/gallery/data/gallery_models.dart';
 import '../../../features/usage/usage_providers.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
@@ -143,26 +143,28 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
     );
   }
 
-  /// 跳转积分钱包页（右上角积分数点击入口）。
-  void _goPointsWallet() {
-    GoRouter.of(context).push(RouteNames.pointsWallet);
-  }
-
   /// 顶部导航右侧操作组：
-  /// - 我的模板（自定义/导入）→ 导出 + 编辑
-  /// - 付费模板未解锁 → 右上角展示用户积分数（点击跳转积分钱包页）
-  /// - 其余（免费模板 / 已解锁付费模板）→ 无右侧操作
+  /// - 付费未解锁模板 → 右侧「积分余额」胶囊 + 「更多」菜单（收藏/分享/导出/编辑收纳其中）
+  /// - 免费 / 已解锁模板 → 直接铺开「收藏心」+「分享海报」等 icon 按钮，不折叠
   ///
-  /// `[effectiveId]` 来自 mock/异步解析后的有效模板 id；本地（内置/自定义）与远程
-  /// 模板都会展示收藏心。@gallery: 收藏按钮覆盖全部来源，不只内置模板。
-  List<Widget>? _navActions(ThemeTokens tokens, bool isLocked, String? effectiveId) {
+  /// 仅付费模板需要多放积分胶囊，才用「更多」收纳避免挤压居中标题；免费模板直接
+  /// 平铺高频 icon，不需要「更多」。
+  List<Widget>? _navActions(
+      ThemeTokens tokens, bool isLocked, String? effectiveId) {
     final id = effectiveId ?? widget.templateId ?? '';
+
+    // 付费未解锁：积分胶囊 + 「更多」菜单
+    if (isLocked) {
+      return <Widget>[
+        _CreditBalanceChip(onTap: _goPointsWallet),
+        _buildMoreMenu(tokens, id),
+      ];
+    }
+
+    // 免费 / 已解锁：恢复原来的直接 icon 按钮
     final heart = id.isEmpty
         ? null
-        : _FavoriteToggle(
-            templateId: id,
-            tokens: tokens,
-          );
+        : _FavoriteToggle(templateId: id, tokens: tokens);
     final rest = <Widget>[
       if (_isMyTemplate) ...[
         if (_isCustomTemplate)
@@ -171,25 +173,132 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
             onPressed: _goExport,
             color: tokens.textPrimary,
             size: 20,
+            variant: LumiraIconButtonVariant.filled,
           ),
         LumiraIconButton(
           icon: Icons.edit_outlined,
           onPressed: _goEdit,
           color: tokens.textPrimary,
           size: 20,
+          variant: LumiraIconButtonVariant.filled,
         ),
       ],
-      if (isLocked) _CreditBalanceChip(onTap: _goPointsWallet),
       // 分享海报：所有来源（内置/自定义/远程）模板均可分享
       LumiraIconButton(
         icon: Icons.photo_library_outlined,
         onPressed: _goSharePoster,
         color: tokens.textPrimary,
         size: 20,
+        variant: LumiraIconButtonVariant.filled,
       ),
     ];
     if (heart == null && rest.isEmpty) return null;
     return [if (heart != null) heart, ...rest];
+  }
+
+  /// 「更多」下拉菜单按钮：仅付费未解锁模板使用，收纳收藏/分享海报/导出/编辑。
+  ///
+  /// 注意：不要用 [LumiraIconButton] 作 [PopupMenuButton.child]，其内部 InkWell 会
+  /// 消费点击导致菜单无法弹出；改用无手势的 [Container]（新拟态凸起圆钮）+ [Icon]。
+  Widget _buildMoreMenu(ThemeTokens tokens, String id) {
+    final favoriteIds =
+        ref.watch(favoriteTemplateIdsProvider).valueOrNull ?? const <String>{};
+    final isFav = id.isNotEmpty && favoriteIds.contains(id);
+
+    return PopupMenuButton<_MoreAction>(
+      tooltip: '更多',
+      offset: const Offset(0, 10),
+      color: tokens.surface,
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      onSelected: (action) => _onMoreAction(action, id),
+      itemBuilder: (ctx) => [
+        PopupMenuItem(
+          value: _MoreAction.favorite,
+          enabled: id.isNotEmpty,
+          child: Row(
+            children: [
+              Icon(
+                isFav ? Icons.favorite : Icons.favorite_border,
+                size: 18,
+                color: isFav ? tokens.brand : tokens.textSecondary,
+              ),
+              const SizedBox(width: 10),
+              Text(isFav ? '取消收藏' : '收藏',
+                  style: TextStyle(color: tokens.textPrimary)),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: _MoreAction.sharePoster,
+          child: Row(children: [
+            Icon(Icons.photo_library_outlined,
+                size: 18, color: tokens.textSecondary),
+            const SizedBox(width: 10),
+            Text('分享海报', style: TextStyle(color: tokens.textPrimary)),
+          ]),
+        ),
+        if (_isCustomTemplate)
+          PopupMenuItem(
+            value: _MoreAction.export,
+            child: Row(children: [
+              Icon(Icons.ios_share, size: 18, color: tokens.textSecondary),
+              const SizedBox(width: 10),
+              Text('导出为图片', style: TextStyle(color: tokens.textPrimary)),
+            ]),
+          ),
+        if (_isMyTemplate)
+          PopupMenuItem(
+            value: _MoreAction.edit,
+            child: Row(children: [
+              Icon(Icons.edit_outlined, size: 18, color: tokens.textSecondary),
+              const SizedBox(width: 10),
+              Text('编辑模板', style: TextStyle(color: tokens.textPrimary)),
+            ]),
+          ),
+      ],
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: tokens.surface,
+          shape: BoxShape.circle,
+          boxShadow: tokens.shadowConvexSubtle,
+        ),
+        child: Icon(Icons.more_horiz, size: 22, color: tokens.textPrimary),
+      ),
+    );
+  }
+
+  /// 分发「更多」菜单项：收藏切换 / 分享海报 / 导出 / 编辑。
+  Future<void> _onMoreAction(_MoreAction action, String id) async {
+    switch (action) {
+      case _MoreAction.favorite:
+        if (id.isEmpty) return;
+        final dao = await ref.read(templatesFavoriteDaoProvider.future);
+        await dao.toggleFavorite(id);
+        ref.invalidate(favoriteTemplateIdsProvider);
+        final nowFav = await dao.isFavorite(id);
+        _showSnack(nowFav ? '已收藏' : '已取消收藏');
+        break;
+      case _MoreAction.sharePoster:
+        await _goSharePoster();
+        break;
+      case _MoreAction.export:
+        await _goExport();
+        break;
+      case _MoreAction.edit:
+        _goEdit();
+        break;
+    }
+  }
+
+  /// 跳转积分钱包页（右上角积分数点击入口）。
+  void _goPointsWallet() {
+    GoRouter.of(context).push(RouteNames.pointsWallet);
   }
 
   void _goEdit() {
@@ -603,7 +712,7 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
         ? ref.watch(templateDetailProvider(widget.templateId!))
         : const AsyncValue<TemplateDetail?>.data(null);
 
-    // 当前模板是否处于「付费未解锁」锁定态（决定右上角是否展示积分余额）
+    // 有效模板 id：mock 优先，其次异步解析结果
     final TemplateDetail? effectiveTemplate =
         mockTemplate ?? asyncDetail.value;
     final effectiveLocked =
@@ -624,8 +733,13 @@ class _TemplatesDetailPageState extends ConsumerState<TemplatesDetailPage> {
                 LumiraNav(
                   title: '模板详情',
                   transparent: true,
+                  actionsSpacing: 10,
                   leading: _BackButton(tokens: tokens, onTap: _back),
-                  actions: _navActions(tokens, effectiveLocked, effectiveTemplate?.id),
+                  actions: _navActions(
+                    tokens,
+                    effectiveLocked,
+                    effectiveTemplate?.id,
+                  ),
                 ),
                 Expanded(
                   child: mockTemplate != null
@@ -701,24 +815,49 @@ class _BackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          Icons.arrow_back_ios_new,
-          size: 20,
-          color: tokens.textPrimary,
-        ),
-      ),
+    // 返回钮：新拟态下滑面凸起表面（surface + 双向浮雕），保留浮雕凹凸感
+    return LumiraIconButton(
+      icon: Icons.arrow_back_ios_new,
+      size: 20,
+      onPressed: onTap,
+      color: tokens.textPrimary,
+      variant: LumiraIconButtonVariant.filled,
+    );
+  }
+}
+
+/// 顶部导航「更多」菜单可执行的操作。
+enum _MoreAction { favorite, sharePoster, export, edit }
+
+/// 详情页红心收藏按钮（免费/已解锁模板直接平铺显示）：跟随收藏状态切换空心/实心。
+class _FavoriteToggle extends ConsumerWidget {
+  const _FavoriteToggle({required this.templateId, required this.tokens});
+
+  final String templateId;
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final favoriteIds =
+        ref.watch(favoriteTemplateIdsProvider).valueOrNull ?? const <String>{};
+    final isFav = favoriteIds.contains(templateId);
+    return LumiraIconButton(
+      icon: isFav ? Icons.favorite : Icons.favorite_border,
+      onPressed: () async {
+        final dao = await ref.read(templatesFavoriteDaoProvider.future);
+        await dao.toggleFavorite(templateId);
+        ref.invalidate(favoriteTemplateIdsProvider);
+      },
+      color: isFav ? tokens.brand : tokens.textSecondary,
+      size: 20,
+      variant: LumiraIconButtonVariant.filled,
     );
   }
 }
 
 /// 右上角积分余额胶囊：付费模板未解锁时展示当前积分数，点击跳转积分钱包页。
-///
-/// 余额来自 [pointsRepositoryProvider]（GET /points/balance），加载中显示占位「…」。
+/// 紧凑形态（星星图标 + 数字），占位小，避免挤压标题栏其他操作钮。
+/// 余额来自 [pointsRepositoryProvider]（GET /points/balance），加载中显示「…」。
 class _CreditBalanceChip extends ConsumerWidget {
   const _CreditBalanceChip({required this.onTap});
 
@@ -733,7 +872,8 @@ class _CreditBalanceChip extends ConsumerWidget {
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: tokens.brandSubtle,
               borderRadius: BorderRadius.circular(9999),
@@ -742,12 +882,12 @@ class _CreditBalanceChip extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.stars_outlined, size: 14, color: tokens.brand),
-                const SizedBox(width: 4),
+                const SizedBox(width: 5),
                 Text(
                   label,
                   style: TextStyle(
                     fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: tokens.brandText,
                   ),
                 ),
@@ -999,7 +1139,7 @@ class _PageIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surface.withOpacity(0.7),
         borderRadius: BorderRadius.circular(9999),
-        border: Border.all(color: tokens.divider.withOpacity(0.5)),
+        border: Border.all(color: Colors.white.withOpacity(0.35), width: 0.6),
       ),
       child: Text(
         '${current + 1}/$total',
@@ -1727,33 +1867,19 @@ class _FixedCta extends StatelessWidget {
       child: isLocked
           ? Row(
               children: [
-                // 试用按钮（描边）
+                // 试用按钮：secondary variant，贴合当前 UI 风格（新拟态凸起/扁平描边等），
+                // 并自动获得按压态反馈。
                 Expanded(
-                  child: GestureDetector(
-                    onTap: onTrial,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: tokens.brand, width: 1),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.visibility_outlined,
-                              size: 18, color: tokens.brand),
-                          const SizedBox(width: 6),
-                          Text(
-                            '试用',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.brand,
-                            ),
-                          ),
-                        ],
-                      ),
+                  child: LumiraButton(
+                    variant: ButtonVariant.secondary,
+                    onPressed: onTrial,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.visibility_outlined, size: 18),
+                        SizedBox(width: 6),
+                        Text('试用'),
+                      ],
                     ),
                   ),
                 ),
@@ -2045,31 +2171,6 @@ class _TemplatePhotosSection extends ConsumerWidget {
           );
         },
       ),
-    );
-  }
-}
-
-/// 详情页红心收藏按钮：跟随收藏状态切换空心/实心，点击切换收藏并刷新收藏集。
-class _FavoriteToggle extends ConsumerWidget {
-  const _FavoriteToggle({required this.templateId, required this.tokens});
-
-  final String templateId;
-  final ThemeTokens tokens;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final favoriteIds =
-        ref.watch(favoriteTemplateIdsProvider).valueOrNull ?? const <String>{};
-    final isFav = favoriteIds.contains(templateId);
-    return LumiraIconButton(
-      icon: isFav ? Icons.favorite : Icons.favorite_border,
-      onPressed: () async {
-        final dao = await ref.read(templatesFavoriteDaoProvider.future);
-        await dao.toggleFavorite(templateId);
-        ref.invalidate(favoriteTemplateIdsProvider);
-      },
-      color: isFav ? tokens.brand : tokens.textSecondary,
-      size: 20,
     );
   }
 }

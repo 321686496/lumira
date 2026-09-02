@@ -209,7 +209,6 @@ class _GalleryDiaryPageState extends ConsumerState<GalleryDiaryPage> {
                             _selectedMoods = {..._selectedMoods}..remove(mood);
                           }
                         }),
-                        tokens: tokens,
                       ),
                     ),
                   ),
@@ -421,12 +420,10 @@ class _MoodFilterRow extends StatelessWidget {
   const _MoodFilterRow({
     required this.selectedMoods,
     required this.onToggle,
-    required this.tokens,
   });
 
   final Set<String> selectedMoods;
   final void Function(String mood, bool active) onToggle;
-  final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
@@ -441,35 +438,13 @@ class _MoodFilterRow extends StatelessWidget {
         itemBuilder: (context, index) {
           final mood = moods[index];
           final active = selectedMoods.contains(mood.name);
-          return GestureDetector(
-            onTap: () => onToggle(mood.name, !active),
-            behavior: HitTestBehavior.opaque,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: active ? tokens.brand : tokens.surface,
-                borderRadius: BorderRadius.circular(1000),
-                border: Border.all(
-                  color: active ? tokens.brand : tokens.divider,
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(mood.icon,
-                      size: 14,
-                      color: active ? tokens.textInverse : tokens.textSecondary),
-                  const SizedBox(width: 4),
-                  Text(
-                    mood.name,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: active ? tokens.textInverse : tokens.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
+          // 复用 LumiraFilterChip：选中态（新拟态下呈凹陷内阴影），全风格一致
+          return Center(
+            child: LumiraFilterChip(
+              label: mood.name,
+              active: active,
+              leading: Icon(mood.icon, size: 14),
+              onTap: () => onToggle(mood.name, !active),
             ),
           );
         },

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
+import '../../../../core/theme/theme_tokens.dart';
+import '../_internal/lumira_theme_resolver.dart';
 
 /// Lumira 通用按钮组件
 ///
@@ -30,6 +32,7 @@ class LumiraButton extends ConsumerStatefulWidget {
     required this.child,
     this.padding = const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
     this.radius,
+    this.overlay = false,
     this.enableHoverScale = false,
   });
 
@@ -47,6 +50,11 @@ class LumiraButton extends ConsumerStatefulWidget {
 
   /// 圆角（dp），为 null 时使用 `appTheme.buttonRadius / 2`
   final double? radius;
+
+  /// 是否为「悬浮/叠图」形态（按钮落在封面/照片/悬浮浮层等非纯色底上）。
+  /// 新拟态双轨下，overlay 按钮走改良漂浮悬浮：半透明表面 + 细描边 + 仅暗色投影，
+  /// 而非画布上的双向浮雕外阴影，避免在图片上形成光晕/脏边。
+  final bool overlay;
 
   /// 是否启用悬停/按压缩放反馈，默认 false
   final bool enableHoverScale;
@@ -80,6 +88,39 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
     if (!_disabled) setState(() => _pressed = false);
   }
 
+  /// 悬浮/叠图形态的按钮视觉（仅在新拟态 overlay 场景使用）。
+  ///
+  /// 依据 Neumorphism 双轨体系：按钮落在图片/浮层等非纯色底上时，
+  /// 标准同色双向浮雕阴影无法被背景承接，会像光晕一样糊在图上显脏。
+  /// 因此改用「半透明表面 + 细描边 + 仅暗色投影」，去掉双向浮雕外阴影。
+  ButtonVisual _overlayVisual(
+    ThemeTokens tokens,
+    double radius,
+    ButtonVisual base,
+  ) {
+    final ov = LumiraThemeResolver.overlayOnImageVisual(
+      tokens: tokens,
+      radiusDp: radius,
+      overlayAlpha: 0.9,
+      shadowOpacity: 0.4,
+    );
+    if (widget.variant == ButtonVariant.primary) {
+      // 主按钮叠图时保留品牌半透明表面，保证品牌识别度与可读性
+      return ButtonVisual(
+        background: tokens.brand.withOpacity(0.9),
+        foreground: tokens.textInverse,
+        border: ov.border,
+        shadows: ov.shadows,
+      );
+    }
+    return ButtonVisual(
+      background: ov.background,
+      foreground: base.foreground,
+      border: ov.border,
+      shadows: ov.shadows,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -88,11 +129,17 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
 
     final radius = (widget.radius ?? appTheme.buttonRadius / 2);
 
-    Color background = visual.background;
-    Color foreground = visual.foreground;
-    Border? border = visual.border;
-    List<BoxShadow> shadows = visual.shadows;
-    LinearGradient? gradient = visual.gradient;
+    // 悬浮/叠图形态：新拟态下用改良漂浮浮层视觉（半透明表面 + 细边 + 仅暗投影），
+    // 覆盖画布上的双向浮雕，避免在图片/浮层上形成光晕脏边。
+    final effectiveVisual = (widget.overlay && appTheme.style == UIStyle.neumorphic)
+        ? _overlayVisual(tokens, radius, visual)
+        : visual;
+
+    Color background = effectiveVisual.background;
+    Color foreground = effectiveVisual.foreground;
+    Border? border = effectiveVisual.border;
+    List<BoxShadow> shadows = effectiveVisual.shadows;
+    LinearGradient? gradient = effectiveVisual.gradient;
 
     if (_disabled) {
       // disabled 态：背景降透明度 0.5，文字 textTertiary
@@ -100,6 +147,13 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
       foreground = tokens.textTertiary;
       shadows = const [];
       gradient = null;
+    } else if (appTheme.style == UIStyle.neumorphic &&
+        _pressed &&
+        !widget.overlay) {
+      // 新拟态按压态：将外凸浮雕阴影切换为内阴影（凹陷），
+      // 模拟手指按下去被压进画布的物理反馈。overlay（叠图）场景保持
+      // 仅按压缩放，禁用 inset，避免在图片上形成脏边（Neumorphism §4）。
+      shadows = tokens.shadowPressed;
     } else if (widget.variant == ButtonVariant.ghost && _pressed) {
       // ghost 按下时加 brandSubtle 背景
       background = tokens.brandSubtle;

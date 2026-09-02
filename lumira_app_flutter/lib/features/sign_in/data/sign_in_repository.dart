@@ -19,7 +19,9 @@ class SignInStatus {
   factory SignInStatus.fromJson(Map<String, dynamic> j) => SignInStatus(
         signedToday: j['signedToday'] as bool? ?? false,
         consecutiveDays: (j['consecutiveDays'] as num?)?.toInt() ?? 0,
-        lastSignInDate: j['lastSignInDate'] as String?,
+        // 后端 lastSignInDate 是 INT 时间戳（sign_in_date），统一转成字符串展示，
+        // 避免 `as String?` 对 int 强转抛 TypeError 导致“签到状态加载失败”。
+        lastSignInDate: j['lastSignInDate']?.toString(),
       );
 }
 
@@ -81,3 +83,12 @@ final signInRepositoryProvider = FutureProvider<SignInRepository>((ref) async {
   final api = await ref.watch(apiClientProvider.future);
   return RemoteSignInRepository(api);
 });
+
+/// 签到状态（自动缓存，避免在 build 内重复请求导致骨架屏闪烁）
+/// 上游 [signInRepositoryProvider] 被 invalidate 时会级联刷新。
+final signInStatusProvider = FutureProvider.autoDispose<SignInStatus>(
+  (ref) async {
+    final repo = await ref.watch(signInRepositoryProvider.future);
+    return repo.getStatus();
+  },
+);

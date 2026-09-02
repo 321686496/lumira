@@ -36,6 +36,7 @@ export 'form/lumira_dropdown.dart';
 export 'form/lumira_slider.dart';
 export 'form/lumira_switch.dart';
 export 'form/lumira_checkbox.dart';
+export 'form/lumira_filter_chip.dart';
 
 // === Phase 4：日期选择器 ===
 export 'picker/lumira_date_picker.dart';
