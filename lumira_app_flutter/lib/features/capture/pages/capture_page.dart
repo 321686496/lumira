@@ -884,6 +884,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
         isPortrait: isPortrait,
         isFront: facing == 'front',
         postProcess: postProcess,
+        isWysiwyg: result.isWysiwyg,
         // 默认分辨率档位决定成片输出/解码尺寸（设置页可切换）
         maxDim: CaptureResolutions.byId(
                 ref.read(CaptureState.defaultResolutionProvider))
@@ -4054,6 +4055,7 @@ class _CaptureProcessParams {
     required this.postProcess,
     required this.maxDim,
     required this.decodeDim,
+    this.isWysiwyg = false,
   });
   final String inputPath;
   final double targetRatio; // 目标宽高比（正向像素）
@@ -4072,6 +4074,11 @@ class _CaptureProcessParams {
 
   /// JPEG 降采样解码目标长边（px），略高于输出留画质余量
   final int decodeDim;
+
+  /// 成片是否与取景器同源直出（iOS 非闪光 WYSIWYG）。
+  /// true 时后处理**不**做内容自适应白平衡/ISP 校色，仅叠加与取景器相同的
+  /// 用户色彩矩阵（见 _applyColorMatrixOnGpu）。
+  final bool isWysiwyg;
 }
 
 /// 后处理输出/解码尺寸来源说明：
@@ -4388,11 +4395,13 @@ Future<_GpuProcessedData?> _applyColorMatrixOnGpu(_CaptureProcessParams params, 
         if (srcByteData != null) {
           sourceAvgRgb = _sampleAvgRgbFromRgba(srcByteData);
           debugPrint('[capture] 源图解码 rawRgba 平均RGB(dart:ui): $sourceAvgRgb');
-          // 【iOS 偏黄修复】成片已切回 photo 管线（Smart HDR/Deep Fusion），
-          // 其照片 ISP 比 video 管线偏暖。从成片自身中性灰/浅灰像素统计逐通道增益
-          // （灰世界 + 曝光守恒），把灰区拉回等量（R=G=B），只抵消 ISP 对中性区的
-          // 色偏、不动场景真实色彩。仅 iOS 启用（OHOS/Android 无此偏黄问题）。
-          if (Platform.isIOS) {
+          // 【iOS 偏黄修复】非 WYSIWYG（photo 管线成片：Smart HDR/Deep Fusion）
+          // 时，其照片 ISP 比 video 管线偏暖。从成片自身中性灰/浅灰像素统计逐通道
+          // 增益（灰世界 + 曝光守恒），把灰区拉回等量（R=G=B），只抵消 ISP 对中性
+          // 区的色偏、不动场景真实色彩。仅 iOS 启用（OHOS/Android 无此偏黄问题）。
+          // 【WYSIWYG】iOS 非闪光成片=取景器 video 帧直出，本身就是取景器画面，
+          // 无需也不应做该启发式校色（灰区少/强色场景会误判），跳过以免偏离所见。
+          if (Platform.isIOS && !params.isWysiwyg) {
             previewCorrectionMatrix = _buildAdaptiveWhiteBalanceMatrixFromRgba(
               srcByteData,
               srcImage.width,

@@ -731,11 +731,32 @@ static void _freeCapturedFrameData(void *info, const void *data, size_t size) {
 
 /// Take the picture into the given path
 ///
-/// 【成片一律走 photoOutput 管线】（质量优先：弱光 / 闪光 / Smart HDR / Deep Fusion）。
-/// 成片与取景器的色差由 Dart 侧内容自适应白平衡校正（见 capture_page 的
-/// _buildAdaptiveWhiteBalanceMatrixFromRgba），水印定格动画的内容源改用
-/// [captureFrameForAnimationAtPath:completion:]（取景器帧直出，快 + WYSIWYG）。
+/// 【成片切取景器 video 帧直出（WYSIWYG）】非闪光模式优先用 [captureVideoFrameToJpegAtPath]
+/// 直接抓取取景器当前帧编码为成片——成片与取景器是**同一帧**，根因级消除「预览≠成片」
+/// 的色差（此前依赖 photo 管线 + Dart 内容自适应白平衡启发式猜测，灰区少/强色场景会误判）。
+/// 取景器帧已带 sensor 白平衡/曝光/色温，物理竖屏（EXIF=1），Dart 侧只需叠加与取景器
+/// ColorFiltered 完全相同的用户色彩矩阵即可所见即所得。
+///
+/// 回退条件（保留 photoOutput 管线，质量优先：弱光 / Smart HDR / Deep Fusion）：
+/// - 闪光模式（On/Auto/Always/Torch）：video 帧捕捉不到瞬时闪光，回退 photo 管线；
+/// - 相机刚启动无可用帧 / 帧尺寸异常 / JPEG 编码失败：立即回退 photo 管线。
 - (void)takePictureAtPath:(NSString *)path completion:(nonnull void (^)(NSNumber * _Nullable, FlutterError * _Nullable))completion {
+  // 非闪光模式走取景器帧直出；闪光模式直接 photo 管线（video 帧捕捉不到瞬时闪光）
+  if (_flashMode == AVCaptureFlashModeOff) {
+    BOOL accepted = [self captureVideoFrameToJpegAtPath:path completion:^(BOOL ok) {
+      if (ok) {
+        completion(@(YES), nil);
+      } else {
+        // 编码失败：回退 photo 管线（captureVideoFrameToJpegAtPath 已持有有效帧，
+        // 说明相机正常，photoOutput 拍照线程安全，但统一回到串行队列保证顺序）
+        dispatch_async(self->_dispatchQueue, ^{
+          [self captureWithPhotoOutputAtPath:path completion:completion];
+        });
+      }
+    }];
+    if (accepted) return;
+  }
+  // 无可用帧（相机刚启动）/ 闪光模式：直接 photo 管线
   [self captureWithPhotoOutputAtPath:path completion:completion];
 }
 

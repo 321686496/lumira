@@ -111,6 +111,10 @@ class CamerawesomeCameraService implements CameraService {
           sensorWidth: 0,
           sensorHeight: 0,
           orientation: SensorOrientation.portrait,
+          // iOS 非闪光模式成片=取景器 video 帧直出（WYSIWYG），与 _mapFlashMode
+          // 的 iOS 映射（off→none→原生 FlashOff）保持一致。
+          isWysiwyg: _delegate.platformTag == 'ios' &&
+              config.flashMode == CameraFlashMode.off,
         ));
       }
     });

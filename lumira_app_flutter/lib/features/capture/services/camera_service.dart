@@ -89,12 +89,19 @@ class CaptureResult {
     required this.sensorHeight,
     required this.orientation,
     this.timestampMs,
+    this.isWysiwyg = false,
   });
   final String filePath;
   final int sensorWidth;
   final int sensorHeight;
   final SensorOrientation orientation;
   final int? timestampMs;
+
+  /// 成片是否与取景器同源直出（所见即所得）。
+  /// iOS 非闪光模式成片切「取景器 video 帧直出」时为 true；此时 Dart 后处理
+  /// 只需叠加与取景器相同的用户色彩矩阵，**不再**做内容自适应白平衡/ISP 校色。
+  /// 闪光模式 / 无可用帧回退 photo 管线，以及 OHOS/Android 均为 false。
+  final bool isWysiwyg;
 }
 
 /// 拍照配置快照（按下快门时的状态）
