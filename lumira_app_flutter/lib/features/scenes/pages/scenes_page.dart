@@ -35,12 +35,19 @@ class ScenesPage extends ConsumerStatefulWidget {
 }
 
 class _ScenesPageState extends ConsumerState<ScenesPage> {
+  /// 4 个一级分类 id（与 _SceneCategoryOverview 的分类展示一一对应）
+  static const List<String> _categoryIds = ['light', 'outdoor', 'indoor', 'mood'];
+
   /// null = 分类概览模式；非 null = 二级分类页面（显示该分类下的场景）
   String? _activeCategoryId;
   /// 已加载的场景列表
   List<SceneRecord> _scenes = [];
   /// 每个场景对应的真实拍摄照片数（来自 gallery_items 表 scene_id 统计）
   Map<String, int> _scenePhotoCounts = {};
+  /// 分类概览卡片的真实场景数：category -> 该分类下可用的场景数（来自 scenes 表）
+  Map<String, int> _categoryCounts = {};
+  /// 分类概览可探索的场景总数（4 个一级分类之和）
+  int _totalScenes = 0;
   /// 是否正在加载
   bool _isLoading = false;
   /// 是否通过路由 category 参数直接进入分类（如发现页点场景分类卡片）。
@@ -56,6 +63,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
     if (widget.category != null) {
       _activeCategoryId = widget.category;
       _loadScenes();
+    } else {
+      _loadOverviewStats();
     }
   }
 
@@ -80,7 +89,37 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
       // 同步失败静默，本地种子仍可用
     }
     if (mounted) {
-      await _loadScenes();
+      if (_isOverview) {
+        await _loadOverviewStats();
+      } else {
+        await _loadScenes();
+      }
+    }
+  }
+
+  /// 加载分类概览的场景数：从 scenes 表统计每个一级分类下的真实可用场景数。
+  /// 只统计 4 个一级分类（light/outdoor/indoor/mood），总数为这 4 类之和，
+  /// 与卡片展示一致、与点击进入分类后看到的列表一致（同一数据源）。
+  Future<void> _loadOverviewStats() async {
+    try {
+      final dao = await ref.read(scenesDaoProvider.future);
+      final scenes = await dao.getAll();
+      final counts = <String, int>{};
+      for (final s in scenes) {
+        if (s.category.isEmpty) continue;
+        counts[s.category] = (counts[s.category] ?? 0) + 1;
+      }
+      if (mounted) {
+        setState(() {
+          _categoryCounts = counts;
+          _totalScenes = _categoryIds.fold(
+            0,
+            (sum, c) => sum + (counts[c] ?? 0),
+          );
+        });
+      }
+    } catch (_) {
+      // 失败保持既有数据不变（本地种子/已有缓存兜底）
     }
   }
 
@@ -126,6 +165,7 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
         _scenes = [];
         _isLoading = false;
       });
+      _loadOverviewStats();
       return;
     }
     if (Navigator.of(context).canPop()) {
@@ -207,6 +247,8 @@ class _ScenesPageState extends ConsumerState<ScenesPage> {
                           onRefresh: _onRefresh,
                           child: _SceneCategoryOverview(
                             tokens: tokens,
+                            categoryCounts: _categoryCounts,
+                            totalScenes: _totalScenes,
                             onSelectCategory: _onCategorySelect,
                           ),
                         )
@@ -265,10 +307,14 @@ class _ScenesNav extends StatelessWidget {
 class _SceneCategoryOverview extends StatelessWidget {
   const _SceneCategoryOverview({
     required this.tokens,
+    required this.categoryCounts,
+    required this.totalScenes,
     required this.onSelectCategory,
   });
 
   final ThemeTokens tokens;
+  final Map<String, int> categoryCounts;
+  final int totalScenes;
   final void Function(String category) onSelectCategory;
 
   /// 4 个一级分类的展示元数据（id 与 SceneCategory 字符串常量对应）
@@ -307,19 +353,12 @@ class _SceneCategoryOverview extends StatelessWidget {
     ),
   ];
 
-  int _countForCategory(String categoryId) {
-    final group = CaptureSceneMockData.categories.firstWhere(
-      (g) => g.category == categoryId,
-      orElse: () => CaptureSceneMockData.categories.first,
-    );
-    return CaptureSceneMockData.allScenes
-        .where((s) => s.category == group.category)
-        .length;
-  }
+  int _countForCategory(String categoryId) => categoryCounts[categoryId] ?? 0;
 
   @override
   Widget build(BuildContext context) {
-    final totalScenes = CaptureSceneMockData.allScenes.length;
+    // 场景总数来自真实数据（4 个一级分类之和）
+    final totalScenes = this.totalScenes;
 
     // 瀑布流：两列交替分布
     final left = <Widget>[];
