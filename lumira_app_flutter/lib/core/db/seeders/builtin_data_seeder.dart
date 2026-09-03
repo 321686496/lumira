@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../tables.dart';
 import '../../../features/capture/data/capture_scene_mock_data.dart';
+import '../../../features/capture/data/scene_presets_data.dart';
 import '../../../features/capture/data/template_registry.dart';
 import '../../../features/templates/services/template_mapper.dart';
 
@@ -389,10 +390,11 @@ class BuiltinDataSeeder {
 
   /// 插入预置场景数据
   static Future<void> _seedScenes(Database db, int now) async {
-    // 仅播种内置预设场景，排除 CaptureSceneMockData.customSceneExample
-    // （demo「我的咖啡馆」）。该 demo 属 mock 演示数据，不应以 system 行写入生产 DB，
-    // 否则会被首页推荐误判为"我的场景"。与迁移 v50 的清理保持一致。
-    const scenes = CaptureSceneMockData.presetScenes;
+    // 播种内置预设场景（allScenePresets，覆盖全部 18+24 个场景）。
+    // 注意：ScenePresetsData.allScenePresets 包含全部内置场景；CaptureSceneMockData.customSceneExample
+    // （demo「我的咖啡馆」）是 mock 演示数据，不在其中，不会被误写为 system 行。
+    // 与迁移 v50 的清理保持一致。
+    const scenes = ScenePresetsData.allScenePresets;
     final batch = db.batch();
     for (final s in scenes) {
       batch.insert(
