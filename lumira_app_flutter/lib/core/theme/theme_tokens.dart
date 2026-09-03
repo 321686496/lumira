@@ -74,6 +74,27 @@ class ThemeTokens {
     required this.shadowFloat,
   });
 
+  /// 内凹表面渐变（选中/按压/嵌入态，复现 CSS `inset` 内阴影）。
+  ///
+  /// 对应规范 `box-shadow: inset 4px 4px 9px var(--shadow-dk), inset -4px -4px 9px var(--shadow-lt)`：
+  /// 左上内边缘压暗、右下内边缘泛白高光、中间保持平表面（内凹的"地板"）。
+  /// 鉴于此 SDK 中 `BoxShadow` 的 `BlurStyle.inner` 不按内阴影渲染（实测被当外阴影画，
+  /// 视觉仍是「凸」），故用多段对角渐变模拟 inset 的"边缘明/暗描边 + 中部平底"，
+  /// 颜色均派生自当前主题色、随 8 主题 × 4 风格自适应。
+  /// 用法：置于选中/按压态的 `BoxDecoration.gradient`。
+  static LinearGradient recessedGradient(ThemeTokens t, {double depth = 0.65}) {
+    // 左上：内边缘阴影描边；右下：内边缘高光描边；二者随 depth 同步缩放，
+    // 胶囊/选中(深)用大 depth、宽沟槽(浅)用小 depth，明暗始终对称不至于失衡。
+    final sd = Color.lerp(t.surface, t.shadowConcave.first.color, depth)!;
+    final hl = Color.lerp(t.surface, t.shadowConcave[1].color, depth)!;
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [sd, t.surface, t.surface, hl],
+      stops: const [0.0, 0.22, 0.78, 1.0],
+    );
+  }
+
   static ThemeTokens of(ThemeKey theme) {
     switch (theme) {
       case ThemeKey.warmWhite:
@@ -147,16 +168,16 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFE0DCD4), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF8A7F70), offset: Offset(5, 5), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFE5E0D8), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFADA497), offset: Offset(3, 3), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFE0DCD4), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF7E7466), offset: Offset(5, 5), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
       BoxShadow(color: Color(0x141A1A1A), offset: Offset(0, 8), blurRadius: 32),
@@ -197,16 +218,16 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFF36322C), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFF141210), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFF302C25), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF000000), offset: Offset(5, 5), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF4F4940), offset: Offset(-5, -5), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFF1A1714), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFF2E2B24), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF0A0908), offset: Offset(3, 3), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF3E3932), offset: Offset(-3, -3), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFF141210), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFF302C25), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF000000), offset: Offset(5, 5), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF565047), offset: Offset(-5, -5), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
       BoxShadow(color: Color(0x4D000000), offset: Offset(0, 8), blurRadius: 32),
@@ -250,16 +271,16 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFD0C1AC), offset: Offset(4, 4), blurRadius: 8, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFDF7), offset: Offset(-4, -4), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF8D7E61), offset: Offset(5, 5), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFDF7), offset: Offset(-5, -5), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFD5C6B0), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFDF7), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFAD9C7F), offset: Offset(3, 3), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFDF7), offset: Offset(-3, -3), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFD0C1AC), offset: Offset(3, 3), blurRadius: 6, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFDF7), offset: Offset(-3, -3), blurRadius: 6, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF7C6D52), offset: Offset(5, 5), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFDF7), offset: Offset(-5, -5), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
       BoxShadow(color: Color(0x1A3D2817), offset: Offset(0, 8), blurRadius: 32),
@@ -304,16 +325,16 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFCED5C7), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF879275), offset: Offset(5, 5), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFD2D9CB), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF9CA88E), offset: Offset(3, 3), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFCED5C7), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF7B8767), offset: Offset(5, 5), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
       BoxShadow(color: Color(0x143D352B), offset: Offset(0, 8), blurRadius: 32),
@@ -357,16 +378,16 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFEADADA), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF9C7F7F), offset: Offset(5, 5), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFEDDDDD), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFB9A0A0), offset: Offset(3, 3), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFEADADA), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF8C7070), offset: Offset(5, 5), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
       BoxShadow(color: Color(0x143D2E2E), offset: Offset(0, 8), blurRadius: 32),
@@ -410,16 +431,16 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFE2D7C2), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF91805F), offset: Offset(5, 5), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFE5DAC5), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFAF9F83), offset: Offset(3, 3), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFE2D7C2), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF80705A), offset: Offset(5, 5), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
       BoxShadow(color: Color(0x144A3D3D), offset: Offset(0, 8), blurRadius: 32),
@@ -460,16 +481,16 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFF6F3EE), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFD5D0CA), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFF2EFEA), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF877F74), offset: Offset(5, 5), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFBF8F3), offset: Offset(-5, -5), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFD8D3CD), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFF2EFEA), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFABA298), offset: Offset(3, 3), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFBF8F3), offset: Offset(-3, -3), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFD5D0CA), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFF2EFEA), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF787067), offset: Offset(5, 5), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFBF8F3), offset: Offset(-5, -5), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
       BoxShadow(color: Color(0x144A4540), offset: Offset(0, 8), blurRadius: 32),
@@ -513,16 +534,16 @@ class ThemeTokens {
       BoxShadow(color: Color(0xFFFFFDF7), offset: Offset(-6, -6), blurRadius: 14),
     ],
     shadowConcave: [
-      BoxShadow(color: Color(0xFFE8D8CE), offset: Offset(4, 4), blurRadius: 10, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-4, -4), blurRadius: 10, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF9C8470), offset: Offset(5, 5), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 5, blurStyle: BlurStyle.inner),
     ],
     shadowConcaveSubtle: [
-      BoxShadow(color: Color(0xFFEADAD0), offset: Offset(2, 2), blurRadius: 5, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-2, -2), blurRadius: 5, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFBEA896), offset: Offset(3, 3), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowPressed: [
-      BoxShadow(color: Color(0xFFE8D8CE), offset: Offset(3, 3), blurRadius: 8, blurStyle: BlurStyle.inner),
-      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-3, -3), blurRadius: 8, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFF8A7565), offset: Offset(5, 5), blurRadius: 4, blurStyle: BlurStyle.inner),
+      BoxShadow(color: Color(0xFFFFFFFF), offset: Offset(-5, -5), blurRadius: 4, blurStyle: BlurStyle.inner),
     ],
     shadowFloat: [
       BoxShadow(color: Color(0x143D2825), offset: Offset(0, 8), blurRadius: 32),

@@ -16,7 +16,16 @@ import '../../redeem/data/redeem_repository.dart';
 import '../../redeem/data/redeem_models.dart';
 import '../data/owned_templates_repository.dart';
 import '../data/templates_browse_mock_data.dart';
+import '../data/templates_editor_mock_data.dart' show parseAspectRatio;
 import '../widgets/template_cover_image.dart';
+
+/// 模板封面宽高比：按模板 aspectRatio 字面解析；fullscreen 回退屏幕比例。
+double _coverAspectRatio(TemplateDetail? template, Size screenSize) {
+  if (template == null) return 16 / 9;
+  final ratio = parseAspectRatio(template.aspectRatio);
+  if (ratio < 0) return screenSize.width / screenSize.height;
+  return ratio;
+}
 
 /// 解锁模板页
 ///
@@ -304,10 +313,10 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = ref.watch(themeTokensProvider);
-    // 使用真实模板封面（本地资源），替代原 picsum 网络占位图
-    final cover = widget.templateId == null
+    // 使用真实模板数据（封面/标题/简介/标签），替代原写死的示例文案
+    final template = widget.templateId == null
         ? null
-        : TemplatesBrowseMockData.findDetailById(widget.templateId!)?.cover;
+        : TemplatesBrowseMockData.findDetailById(widget.templateId!);
 
     return Scaffold(
       backgroundColor: tokens.canvas,
@@ -331,6 +340,7 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
                     child: _unlocked
                         ? _SuccessCard(
                             tokens: tokens,
+                            templateName: template?.name,
                             onStartUse: _onStartUse,
                           )
                         : Column(
@@ -339,7 +349,7 @@ class _TemplatesUnlockPageState extends ConsumerState<TemplatesUnlockPage> {
                               _PreviewCard(
                                 tokens: tokens,
                                 unlocked: _unlocked,
-                                cover: cover,
+                                template: template,
                               ),
                               _SubtitleWrap(tokens: tokens),
                               _OptionsList(
@@ -416,15 +426,21 @@ class _PreviewCard extends ConsumerWidget {
   const _PreviewCard({
     required this.tokens,
     required this.unlocked,
-    this.cover,
+    this.template,
   });
   final ThemeTokens tokens;
   final bool unlocked;
-  final String? cover;
+  final TemplateDetail? template;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
+    // 真实模板字段：标题用 name，简介用 shortDesc（空则回退 description），标签取前 3 个
+    final title = template?.name ?? '';
+    final subtitle = (template?.shortDesc.isNotEmpty == true)
+        ? template!.shortDesc
+        : (template?.description ?? '');
+    final tags = template?.tags ?? const <String>[];
     return FadeUp(
       child: Container(
         decoration: BoxDecoration(
@@ -441,12 +457,14 @@ class _PreviewCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 16 / 9,
+              // 封面高度随模板宽高比自适应（如 4:3 / 1:1 / 3:4 / 16:9）
+              aspectRatio: _coverAspectRatio(template, MediaQuery.of(context).size),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
                   TemplateCoverImage(
-                    cover: cover,
+                    cover: template?.cover,
+                    coverData: template?.coverData,
                     fit: BoxFit.cover,
                     fallback: Container(
                       color: tokens.surfaceAlt,
@@ -492,45 +510,49 @@ class _PreviewCard extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.star, size: 16, color: tokens.brand),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          '日系胶片 · 精选模板',
-                          style: TextStyle(
-                            fontFamily: 'Noto Serif SC',
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            color: tokens.textPrimary,
+                  if (title.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.star, size: 16, color: tokens.brand),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontFamily: 'Noto Serif SC',
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '包含 12 级胶片颗粒 · 暖调偏移 · 柔光晕影',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: tokens.textTertiary,
+                      ],
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      _PreviewTag.gold(tokens: tokens, label: '胶片'),
-                      _PreviewTag.green(tokens: tokens, label: '日系'),
-                      _PreviewTag.neutral(tokens: tokens, label: '人像'),
-                    ],
-                  ),
+                    if (subtitle.isNotEmpty) const SizedBox(height: 4),
+                  ],
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: tokens.textTertiary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  if (tags.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (var i = 0; i < tags.length && i < 3; i++)
+                          _tagAt(i, tags[i], tokens),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -538,6 +560,18 @@ class _PreviewCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// 标签配色按序号轮换（gold / green / neutral），避免写死固定标签与颜色
+  Widget _tagAt(int index, String label, ThemeTokens tokens) {
+    switch (index % 3) {
+      case 0:
+        return _PreviewTag.gold(tokens: tokens, label: label);
+      case 1:
+        return _PreviewTag.green(tokens: tokens, label: label);
+      default:
+        return _PreviewTag.neutral(tokens: tokens, label: label);
+    }
   }
 }
 
@@ -778,7 +812,6 @@ class _OptionCard extends ConsumerWidget {
     required this.title,
     required this.desc,
     required this.button,
-    this.progress,
     this.titleStrong = false,
     this.brandBorder = false,
   });
@@ -790,7 +823,6 @@ class _OptionCard extends ConsumerWidget {
   final String title;
   final String desc;
   final Widget button;
-  final double? progress;
   final bool titleStrong;
   final bool brandBorder;
 
@@ -858,13 +890,6 @@ class _OptionCard extends ConsumerWidget {
               button,
             ],
           ),
-          if (progress != null) ...[
-            const SizedBox(height: 12),
-            lumira.LumiraProgress.linear(
-              value: progress,
-              minHeight: 6,
-            ),
-          ],
         ],
       ),
     );
@@ -884,9 +909,8 @@ class _SmallBrandButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return _PressTap(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
@@ -922,20 +946,19 @@ class _SmallOutlineButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isNeumorphic = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
-    return GestureDetector(
+    return _PressTap(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         decoration: BoxDecoration(
           // neumorphic 风格下：移除 border，用 canvasDeep 背景 + shadowConcaveSubtle 内凹阴影
-          color: isNeumorphic ? tokens.canvasDeep : Colors.transparent,
+          color: isNeumorphic ? null : Colors.transparent,
+          gradient: isNeumorphic ? ThemeTokens.recessedGradient(tokens, depth: 0.18) : null,
           borderRadius: BorderRadius.circular(8),
           border: isNeumorphic
               ? null
               : Border.all(color: tokens.divider, width: 1),
-          boxShadow:
-              isNeumorphic ? tokens.shadowConcaveSubtle : null,
+          boxShadow: null,
         ),
         child: Text(
           label,
@@ -946,6 +969,55 @@ class _SmallOutlineButton extends ConsumerWidget {
             height: 1,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 通用按压反馈包装：按下时轻微缩放 + 松手弹性回弹。
+/// 仅提供跨 UI 风格通用的「物理按压感」，不干预各风格的浮雕细节
+/// （新拟态的凹陷由各按钮自身在按压态通过 recessedGradient 表达）。
+class _PressTap extends StatefulWidget {
+  const _PressTap({required this.onTap, required this.child});
+
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  State<_PressTap> createState() => _PressTapState();
+}
+
+class _PressTapState extends State<_PressTap> {
+  bool _pressed = false;
+
+  void _onDown(TapDownDetails _) {
+    if (mounted) setState(() => _pressed = true);
+  }
+
+  void _onUp(TapUpDetails _) {
+    if (!mounted) return;
+    setState(() => _pressed = false);
+    widget.onTap();
+  }
+
+  void _onCancel() {
+    if (mounted) setState(() => _pressed = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: _onDown,
+      onTapUp: _onUp,
+      onTapCancel: _onCancel,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: _pressed ? 0.97 : 1.0),
+        duration: Duration(milliseconds: _pressed ? 120 : 240),
+        curve: _pressed ? Curves.easeIn : Curves.easeOutBack,
+        builder: (context, scale, child) =>
+            Transform.scale(scale: scale, child: child),
+        child: widget.child,
       ),
     );
   }
@@ -979,8 +1051,13 @@ class _BottomNote extends StatelessWidget {
 }
 
 class _SuccessCard extends StatelessWidget {
-  const _SuccessCard({required this.tokens, required this.onStartUse});
+  const _SuccessCard({
+    required this.tokens,
+    required this.templateName,
+    required this.onStartUse,
+  });
   final ThemeTokens tokens;
+  final String? templateName;
   final VoidCallback onStartUse;
 
   @override
@@ -1015,7 +1092,7 @@ class _SuccessCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '日系胶片 · 精选模板已永久解锁',
+              '${(templateName?.isNotEmpty == true) ? templateName : '该模板'}已永久解锁',
               style: TextStyle(
                 fontSize: 13,
                 color: tokens.textTertiary,
@@ -1089,23 +1166,21 @@ class _PayPopupContent extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: GestureDetector(
+              child: _PressTap(
                 onTap: onCancel,
-                behavior: HitTestBehavior.opaque,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
                     // neumorphic 风格下：移除 border，用 canvasDeep + shadowConcaveSubtle
-                    color: isNeumorphic
-                        ? tokens.canvasDeep
-                        : Colors.transparent,
+                    color: isNeumorphic ? null : Colors.transparent,
+                    gradient: isNeumorphic
+                        ? ThemeTokens.recessedGradient(tokens, depth: 0.18)
+                        : null,
                     borderRadius: BorderRadius.circular(8),
                     border: isNeumorphic
                         ? null
                         : Border.all(color: tokens.divider, width: 1),
-                    boxShadow: isNeumorphic
-                        ? tokens.shadowConcaveSubtle
-                        : null,
+                    boxShadow: null,
                   ),
                   child: Center(
                     child: Text(
@@ -1123,9 +1198,8 @@ class _PayPopupContent extends ConsumerWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: GestureDetector(
+              child: _PressTap(
                 onTap: onConfirm,
-                behavior: HitTestBehavior.opaque,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
@@ -1209,16 +1283,15 @@ class _FreeUnlockPopupContent extends ConsumerWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
-                    color: isNeumorphic
-                        ? tokens.canvasDeep
-                        : Colors.transparent,
+                    color: isNeumorphic ? null : Colors.transparent,
+                    gradient: isNeumorphic
+                        ? ThemeTokens.recessedGradient(tokens, depth: 0.18)
+                        : null,
                     borderRadius: BorderRadius.circular(8),
                     border: isNeumorphic
                         ? null
                         : Border.all(color: tokens.divider, width: 1),
-                    boxShadow: isNeumorphic
-                        ? tokens.shadowConcaveSubtle
-                        : null,
+                    boxShadow: null,
                   ),
                   child: Center(
                     child: Text(
@@ -1236,9 +1309,8 @@ class _FreeUnlockPopupContent extends ConsumerWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: GestureDetector(
+              child: _PressTap(
                 onTap: onConfirm,
-                behavior: HitTestBehavior.opaque,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
@@ -1324,19 +1396,19 @@ class _UnlockMethodContent extends ConsumerWidget {
           onTap: onPoints,
         ),
         const SizedBox(height: 16),
-        GestureDetector(
+        _PressTap(
           onTap: onCancel,
-          behavior: HitTestBehavior.opaque,
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
               // neumorphic 风格下：移除 border，用 canvasDeep + shadowConcaveSubtle
-              color: isNeumorphic ? tokens.canvasDeep : Colors.transparent,
+              color: isNeumorphic ? null : Colors.transparent,
+          gradient: isNeumorphic ? ThemeTokens.recessedGradient(tokens, depth: 0.18) : null,
               borderRadius: BorderRadius.circular(8),
               border: isNeumorphic
                   ? null
                   : Border.all(color: tokens.divider, width: 1),
-              boxShadow: isNeumorphic ? tokens.shadowConcaveSubtle : null,
+              boxShadow: null,
             ),
             child: Center(
               child: Text(
@@ -1378,9 +1450,8 @@ class _MethodChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return _PressTap(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -1544,23 +1615,21 @@ class _InsufficientCreditsContent extends ConsumerWidget {
         Row(
           children: [
             Expanded(
-              child: GestureDetector(
+              child: _PressTap(
                 onTap: onCancel,
-                behavior: HitTestBehavior.opaque,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
                     // neumorphic 风格下：移除 border，用 canvasDeep + shadowConcaveSubtle
-                    color: isNeumorphic
-                        ? tokens.canvasDeep
-                        : Colors.transparent,
+                    color: isNeumorphic ? null : Colors.transparent,
+                    gradient: isNeumorphic
+                        ? ThemeTokens.recessedGradient(tokens, depth: 0.18)
+                        : null,
                     borderRadius: BorderRadius.circular(8),
                     border: isNeumorphic
                         ? null
                         : Border.all(color: tokens.divider, width: 1),
-                    boxShadow: isNeumorphic
-                        ? tokens.shadowConcaveSubtle
-                        : null,
+                    boxShadow: null,
                   ),
                   child: Center(
                     child: Text(
@@ -1578,9 +1647,8 @@ class _InsufficientCreditsContent extends ConsumerWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: GestureDetector(
+              child: _PressTap(
                 onTap: onGoWallet,
-                behavior: HitTestBehavior.opaque,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(

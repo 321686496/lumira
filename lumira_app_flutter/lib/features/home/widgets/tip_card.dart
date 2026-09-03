@@ -129,15 +129,16 @@ class _TipCardState extends ConsumerState<TipCard> {
                     width: 36, // 72rpx → 36dp
                     height: 36,
                     decoration: BoxDecoration(
-                      // neumorphic 风格：canvasDeep 内凹阴影方块
+                      // neumorphic 风格：canvasDeep 内凹（recessedGradient）方块
                       // 其他风格：brand 12% 半透明背景
                       color: isNeumorphic
-                          ? tokens.canvasDeep
+                          ? null
                           : tokens.brand.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10), // 20rpx → 10dp
-                      boxShadow: isNeumorphic
-                          ? tokens.shadowConcaveSubtle
+                      gradient: isNeumorphic
+                          ? ThemeTokens.recessedGradient(tokens, depth: 0.18)
                           : null,
+                      borderRadius: BorderRadius.circular(10), // 20rpx → 10dp
+                      boxShadow: null,
                     ),
                     child: Icon(
                       Icons.lightbulb_outline,

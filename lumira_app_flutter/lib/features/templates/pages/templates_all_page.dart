@@ -753,7 +753,7 @@ class _PricePill extends ConsumerWidget {
               : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
           boxShadow: active
-              ? (isNeumorphic ? tokens.shadowConcave : tokens.shadowPressed)
+              ? (isNeumorphic ? null : tokens.shadowPressed)
               : tokens.shadowConvexSubtle,
         ),
         child: Center(
@@ -830,19 +830,18 @@ class _Pill extends ConsumerWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          // active: linear gradient brand→brandDeep（硬编码颜色，与 uni-app 一致）
-          // neumorphic 风格下：移除渐变，激活态用 brand 纯色 + shadowConcave
+          // 新拟态方案 B：选中与未选中同为表面色，仅凸起↔凹陷翻转，品牌色只在文字上
           gradient: active
               ? (isNeumorphic
-                  ? null
+                  ? ThemeTokens.recessedGradient(tokens)
                   : LinearGradient(colors: [tokens.brand, tokens.brandDeep]))
               : null,
           color: active
-              ? (isNeumorphic ? tokens.brand : null)
+              ? (isNeumorphic ? null : null)
               : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
           boxShadow: active
-              ? (isNeumorphic ? tokens.shadowConcave : tokens.shadowPressed)
+              ? (isNeumorphic ? null : tokens.shadowPressed)
               : tokens.shadowConvexSubtle,
         ),
         child: Center(
@@ -851,7 +850,9 @@ class _Pill extends ConsumerWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-              color: active ? Colors.white : tokens.textSecondary,
+              color: active
+                  ? (isNeumorphic ? tokens.brandText : Colors.white)
+                  : tokens.textSecondary,
             ),
           ),
         ),
@@ -899,7 +900,7 @@ class _CustomToggle extends ConsumerWidget {
               : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
           boxShadow: active
-              ? (isNeumorphic ? tokens.shadowConcave : tokens.shadowPressed)
+              ? (isNeumorphic ? null : tokens.shadowPressed)
               : tokens.shadowConvexSubtle,
         ),
         child: Row(

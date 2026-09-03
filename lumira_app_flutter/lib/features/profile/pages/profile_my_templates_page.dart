@@ -650,7 +650,7 @@ class _FilterPill extends StatelessWidget {
           color: active ? null : tokens.surfaceAlt,
           borderRadius: BorderRadius.circular(9999),
           boxShadow: active
-              ? tokens.shadowPressed
+              ? const []
               : tokens.shadowConvexSubtle,
         ),
         child: Text(

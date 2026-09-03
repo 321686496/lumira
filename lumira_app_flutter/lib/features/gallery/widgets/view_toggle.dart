@@ -27,9 +27,13 @@ class ViewToggle extends ConsumerWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isNeu ? tokens.surface : tokens.surfaceAlt,
+        // 新拟态：凹槽轨道用浅凹陷渐变表达（内阴影在本 SDK 不渲染，见 recessedGradient）
+        color: isNeu ? null : tokens.surfaceAlt,
+        gradient: isNeu
+            ? ThemeTokens.recessedGradient(tokens, depth: 0.18)
+            : null,
         borderRadius: BorderRadius.circular(1000),
-        boxShadow: isNeu ? tokens.shadowConcaveSubtle : null,
+        boxShadow: null,
       ),
       padding: const EdgeInsets.all(3), // 6rpx → 3dp
       child: Row(

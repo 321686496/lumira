@@ -16,6 +16,7 @@ import '../../../core/utils/image_cache.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/common/glass_background.dart';
 import '../../../shared/widgets/common/lumira_surface.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_scene_mock_data.dart';
 import '../data/scene_manage_providers.dart';
@@ -520,22 +521,46 @@ class _TabPill extends ConsumerWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? tokens.brand : tokens.surface,
-          borderRadius: BorderRadius.circular(9999),
-          boxShadow: isNeu && !active ? tokens.shadowConvexSubtle : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: active ? tokens.textInverse : tokens.textSecondary,
-          ),
-        ),
-      ),
+      child: isNeu && active
+          ? RecessedSurface(
+              tokens: tokens,
+              borderRadius: 9999,
+              depth: 0.7,
+              rimFraction: 0.32,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: active
+                        ? (isNeu ? tokens.brandText : tokens.textInverse)
+                        : tokens.textSecondary,
+                  ),
+                ),
+              ),
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              decoration: BoxDecoration(
+                // neumorphic：方案 B 选中/未选中同为 surface，仅凸起↔凹陷翻转，品牌色只在文字
+                color: active ? tokens.brand : tokens.surface,
+                borderRadius: BorderRadius.circular(9999),
+                boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: active
+                      ? (isNeu ? tokens.brandText : tokens.textInverse)
+                      : tokens.textSecondary,
+                ),
+              ),
+            ),
     );
   }
 }
@@ -1512,7 +1537,9 @@ class _PillPicker extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tokens = ref.watch(appThemeProvider).tokens;
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
@@ -1532,33 +1559,52 @@ class _PillPicker extends ConsumerWidget {
             runSpacing: 6,
             children: options.map((o) {
               final active = o.value == selected;
+              final labelStyle = TextStyle(
+                fontSize: 13,
+                fontWeight: active ? FontWeight.w500 : FontWeight.normal,
+                color: active
+                    ? (isNeu ? tokens.brandText : tokens.brand)
+                    : tokens.textSecondary,
+              );
+
               return GestureDetector(
                 onTap: () => onSelect(o.value),
                 behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: active
-                        ? tokens.brand.withOpacity(0.12)
-                        : tokens.surfaceAlt,
-                    border: Border.all(
-                      color: active ? tokens.brand : Colors.transparent,
-                      width: 1,
-                    ),
-                    borderRadius: BorderRadius.circular(9999),
-                  ),
-                  child: Text(
-                    o.label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: active ? FontWeight.w500 : FontWeight.normal,
-                      color: active
-                          ? tokens.brand
-                          : tokens.textSecondary,
-                    ),
-                  ),
-                ),
+                child: isNeu && active
+                    ? RecessedSurface(
+                        tokens: tokens,
+                        borderRadius: 9999,
+                        depth: 0.7,
+                        rimFraction: 0.32,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          child: Text(o.label, style: labelStyle),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          // neumorphic：方案 B 选中/未选中同为 surface，仅凸起↔凹陷翻转；品牌色只在文字
+                          color: isNeu
+                              ? tokens.surface
+                              : (active
+                                  ? tokens.brand.withOpacity(0.12)
+                                  : tokens.surfaceAlt),
+                          border: isNeu
+                              ? null
+                              : Border.all(
+                                  color: active
+                                      ? tokens.brand
+                                      : Colors.transparent,
+                                  width: 1,
+                                ),
+                          borderRadius: BorderRadius.circular(9999),
+                          boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
+                        ),
+                        child: Text(o.label, style: labelStyle),
+                      ),
               );
             }).toList(),
           ),

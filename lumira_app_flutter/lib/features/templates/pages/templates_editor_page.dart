@@ -18,6 +18,7 @@ import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/images/lumira_image.dart';
 import '../../../shared/widgets/lumira/lumira.dart' as lumira;
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -1702,34 +1703,65 @@ class _PillGroup extends ConsumerWidget {
         return GestureDetector(
           onTap: () => onChanged(o.value),
           behavior: HitTestBehavior.opaque,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              // neumorphic 风格下：激活用 brand + shadowConcave，非激活用 surface + shadowConvexSubtle
-              color: active
-                  ? tokens.brand
-                  : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
-              borderRadius: BorderRadius.circular(9999),
-              border: isNeumorphic
-                  ? null
-                  : Border.all(
-                      color: active ? tokens.brand : Colors.transparent,
-                      width: 1,
+          child: isNeumorphic && active
+                ? RecessedSurface(
+                    tokens: tokens,
+                    borderRadius: 9999,
+                    depth: 0.7,
+                    rimFraction: 0.32,
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      child: Text(
+                        o.label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: active
+                              ? (isNeumorphic
+                                  ? tokens.brandText
+                                  : tokens.textInverse)
+                              : tokens.textSecondary,
+                          height: 1,
+                        ),
+                      ),
                     ),
-              boxShadow: isNeumorphic
-                  ? (active ? tokens.shadowConcave : tokens.shadowConvexSubtle)
-                  : null,
-            ),
-            child: Text(
-              o.label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: active ? tokens.textInverse : tokens.textSecondary,
-                height: 1,
-              ),
-            ),
-          ),
+                  )
+                : Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      // neumorphic：方案 B 选中与未选中同为 surface，仅凸起↔凹陷翻转，品牌色只在文字
+                      color: active
+                          ? (isNeumorphic ? null : tokens.brand)
+                          : (isNeumorphic
+                              ? tokens.surface
+                              : tokens.canvasDeep),
+                      borderRadius: BorderRadius.circular(9999),
+                      border: isNeumorphic
+                          ? null
+                          : Border.all(
+                              color: active ? tokens.brand : Colors.transparent,
+                              width: 1,
+                            ),
+                      boxShadow: isNeumorphic
+                          ? (active ? null : tokens.shadowConvexSubtle)
+                          : null,
+                    ),
+                    child: Text(
+                      o.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: active
+                            ? (isNeumorphic
+                                ? tokens.brandText
+                                : tokens.textInverse)
+                            : tokens.textSecondary,
+                        height: 1,
+                      ),
+                    ),
+                  ),
         );
       }).toList(),
     );
@@ -2431,34 +2463,57 @@ class _ToggleChip extends ConsumerWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          // neumorphic 风格下：激活用 brand + shadowConcave，非激活用 surface + shadowConvexSubtle
-          color: active
-              ? tokens.brand
-              : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
-          borderRadius: BorderRadius.circular(9999),
-          border: isNeumorphic
-              ? null
-              : Border.all(
-                  color: active ? tokens.brand : Colors.transparent,
-                  width: 1,
+      child: isNeumorphic && active
+        ? RecessedSurface(
+            tokens: tokens,
+            borderRadius: 9999,
+            depth: 0.7,
+            rimFraction: 0.32,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: active
+                      ? (isNeumorphic ? tokens.brandText : tokens.textInverse)
+                      : tokens.textSecondary,
+                  height: 1,
                 ),
-          boxShadow: isNeumorphic
-              ? (active ? tokens.shadowConcave : tokens.shadowConvexSubtle)
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: active ? tokens.textInverse : tokens.textSecondary,
-            height: 1,
+              ),
+            ),
+          )
+        : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              // neumorphic：方案 B 选中与未选中同为 surface，仅凸起↔凹陷翻转，品牌色只在文字
+              color: active
+                  ? (isNeumorphic ? null : tokens.brand)
+                  : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
+              borderRadius: BorderRadius.circular(9999),
+              border: isNeumorphic
+                  ? null
+                  : Border.all(
+                      color: active ? tokens.brand : Colors.transparent,
+                      width: 1,
+                    ),
+              boxShadow: isNeumorphic
+                  ? (active ? null : tokens.shadowConvexSubtle)
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: active
+                    ? (isNeumorphic ? tokens.brandText : tokens.textInverse)
+                    : tokens.textSecondary,
+                height: 1,
+              ),
+            ),
           ),
-        ),
-      ),
     );
   }
 }
@@ -2678,7 +2733,8 @@ class _ImageTile extends ConsumerWidget {
 }
 
 /// 姿势胶囊：姿势列表条中的单个姿势切换按钮，主题与 UI 风格自适应。
-/// 选中态用 tokens.brand 高亮 + textInverse 文字；非选中态用 surface/canvasDeep。
+/// neumorphic 选中态：同表面色 + 凹陷内阴影 + 品牌色文字（方案 B）；
+/// 其它风格选中态用 tokens.brand 高亮 + textInverse 文字。
 class _PosePill extends ConsumerWidget {
   const _PosePill({
     required this.tokens,
@@ -2698,33 +2754,57 @@ class _PosePill extends ConsumerWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: active
-              ? tokens.brand
-              : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
-          borderRadius: BorderRadius.circular(9999),
-          border: isNeumorphic
-              ? null
-              : Border.all(
-                  color: active ? tokens.brand : Colors.transparent,
-                  width: 1,
+      child: isNeumorphic && active
+        ? RecessedSurface(
+            tokens: tokens,
+            borderRadius: 9999,
+            depth: 0.7,
+            rimFraction: 0.32,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: active
+                      ? (isNeumorphic ? tokens.brandText : tokens.textInverse)
+                      : tokens.textSecondary,
+                  height: 1,
                 ),
-          boxShadow: isNeumorphic
-              ? (active ? tokens.shadowConcave : tokens.shadowConvexSubtle)
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: active ? tokens.textInverse : tokens.textSecondary,
-            height: 1,
+              ),
+            ),
+          )
+        : Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              // neumorphic：方案 B 选中与未选中同为 surface，仅凸起↔凹陷翻转，品牌色只在文字
+              color: active
+                  ? (isNeumorphic ? null : tokens.brand)
+                  : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
+              borderRadius: BorderRadius.circular(9999),
+              border: isNeumorphic
+                  ? null
+                  : Border.all(
+                      color: active ? tokens.brand : Colors.transparent,
+                      width: 1,
+                    ),
+              boxShadow: isNeumorphic
+                  ? (active ? null : tokens.shadowConvexSubtle)
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: active
+                    ? (isNeumorphic ? tokens.brandText : tokens.textInverse)
+                    : tokens.textSecondary,
+                height: 1,
+              ),
+            ),
           ),
-        ),
-      ),
     );
   }
 }
@@ -3166,50 +3246,70 @@ class _BuiltinSilhouetteThumbnails extends ConsumerWidget {
         itemBuilder: (context, index) {
           final key = index == 0 ? 'none' : kBuiltinSilhouetteKeys[index - 1];
           final active = selectedKey == key;
+          final contentColumn = Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                key == 'none' ? Icons.close : Icons.person_outline,
+                size: 32,
+                color: active
+                    ? (isNeumorphic ? tokens.brandText : tokens.brandDeep)
+                    : tokens.textSecondary,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                key,
+                style: TextStyle(
+                  fontSize: 9,
+                  color: tokens.textTertiary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          );
+
           return GestureDetector(
             onTap: () => onSelect(key),
             behavior: HitTestBehavior.opaque,
-            child: Container(
-              width: 64,
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              decoration: BoxDecoration(
-                // neumorphic 风格下：激活用 brandSubtle + shadowConcave，非激活用 surface + shadowConvexSubtle
-                color: active
-                    ? tokens.brandSubtle
-                    : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
-                borderRadius: BorderRadius.circular(8),
-                border: isNeumorphic
-                    ? null
-                    : Border.all(
-                        color: active ? tokens.brand : Colors.transparent,
-                        width: 1,
+            child: isNeumorphic && active
+                ? RecessedSurface(
+                    tokens: tokens,
+                    borderRadius: 8,
+                    depth: 0.7,
+                    rimFraction: 0.32,
+                    child: SizedBox(
+                      width: 64,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 8),
+                        child: contentColumn,
                       ),
-                boxShadow: isNeumorphic
-                    ? (active ? tokens.shadowConcave : tokens.shadowConvexSubtle)
-                    : null,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    key == 'none' ? Icons.close : Icons.person_outline,
-                    size: 32,
-                    color: active ? tokens.brandDeep : tokens.textSecondary,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    key,
-                    style: TextStyle(
-                      fontSize: 9,
-                      color: tokens.textTertiary,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
+                  )
+                : Container(
+                    width: 64,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 8),
+                    decoration: BoxDecoration(
+                      // neumorphic：方案 B 选中与未选中同为 surface，仅凸起↔凹陷翻转，品牌色只在图标
+                      color: active
+                          ? (isNeumorphic ? null : tokens.brandSubtle)
+                          : (isNeumorphic ? tokens.surface : tokens.canvasDeep),
+                      borderRadius: BorderRadius.circular(8),
+                      border: isNeumorphic
+                          ? null
+                          : Border.all(
+                              color: active ? tokens.brand : Colors.transparent,
+                              width: 1,
+                            ),
+                      boxShadow: isNeumorphic
+                          ? (active ? null : tokens.shadowConvexSubtle)
+                          : null,
+                    ),
+                    child: contentColumn,
                   ),
-                ],
-              ),
-            ),
           );
         },
       ),

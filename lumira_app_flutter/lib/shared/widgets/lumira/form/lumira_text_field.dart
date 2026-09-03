@@ -180,9 +180,10 @@ class _LumiraTextFieldState extends ConsumerState<LumiraTextField> {
   ) {
     switch (appTheme.style) {
       case UIStyle.neumorphic:
-        // surface + shadowConcaveSubtle 凹陷阴影，无边框
+        // 嵌入态：surface 打底 + recessedGradient 表达凹陷，无阴影无边框
         return BoxDecoration(
-          color: visual.background,
+          color: visual.gradient == null ? visual.background : null,
+          gradient: visual.gradient,
           borderRadius: BorderRadius.circular(radius),
           boxShadow: visual.shadows,
         );

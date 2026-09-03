@@ -98,12 +98,14 @@ class _LumiraSliderState extends ConsumerState<LumiraSlider> {
                     child: Container(
                       height: trackHeight,
                       decoration: BoxDecoration(
-                        color: tokens.divider,
+                        color: appTheme.style == UIStyle.neumorphic
+                            ? null
+                            : tokens.divider,
                         borderRadius:
                             BorderRadius.circular(trackHeight / 2),
-                        // 新拟态：轨道为「凹陷凹槽」（inset 双向阴影），模拟滑入
-                        boxShadow: appTheme.style == UIStyle.neumorphic
-                            ? tokens.shadowConcaveSubtle
+                        // 新拟态：轨道为「凹陷凹槽」（recessedGradient），模拟滑入
+                        gradient: appTheme.style == UIStyle.neumorphic
+                            ? ThemeTokens.recessedGradient(tokens, depth: 0.18)
                             : null,
                       ),
                     ),

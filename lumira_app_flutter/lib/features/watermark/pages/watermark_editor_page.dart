@@ -932,21 +932,10 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
             ],
           ),
         ),
-        // Tab 行
+        // Tab 行（iOS 分段控件：整块轨道 + 内滑选中块，比三个独立胶囊更精致）
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Row(
-            children: [
-              _buildTabButton(_EditorTab.element, '元素',
-                  'wm-tab-element', tokens, style),
-              const SizedBox(width: 6),
-              _buildTabButton(_EditorTab.style, '样式', 'wm-tab-style', tokens,
-                  style),
-              const SizedBox(width: 6),
-              _buildTabButton(_EditorTab.border, '边框',
-                  'wm-tab-border', tokens, style),
-            ],
-          ),
+          child: _buildSegmentedTabs(tokens, style),
         ),
         Divider(height: 1, color: tokens.divider),
         ConstrainedBox(
@@ -962,20 +951,65 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
     );
   }
 
-  Widget _buildTabButton(_EditorTab tab, String label, String key,
+  /// iOS 分段控件：整块轨道底 + 等宽选中块内滑（风格自适应）。
+  Widget _buildSegmentedTabs(ThemeTokens tokens, UIStyle style) {
+    final double radius = style == UIStyle.flat ? 10 : 14;
+    final Color track =
+        style == UIStyle.female ? tokens.brandSubtle : tokens.surfaceAlt;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: track,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: Row(
+        children: [
+          _segTab(_EditorTab.element, '元素', 'wm-tab-element', radius, tokens,
+              style),
+          _segTab(
+              _EditorTab.style, '样式', 'wm-tab-style', radius, tokens, style),
+          _segTab(_EditorTab.border, '边框', 'wm-tab-border', radius, tokens,
+              style),
+        ],
+      ),
+    );
+  }
+
+  /// 分段控件内的单个等宽选项。
+  Widget _segTab(_EditorTab tab, String label, String key, double radius,
       ThemeTokens tokens, UIStyle style) {
     final active = _tab == tab;
-    final double radius = style == UIStyle.flat ? 8 : 12;
     return Expanded(
       child: BreathingTap(
         onTap: () => setState(() => _tab = tab),
         pressedScale: _scaleFor(style),
-        child: Container(
+        child: AnimatedContainer(
           key: ValueKey(key),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(vertical: 9),
           alignment: Alignment.center,
-          decoration: _chipDeco(tokens, style,
-              active: active, radius: radius, raised: true),
+          decoration: BoxDecoration(
+            color: active
+                ? (style == UIStyle.glass
+                    ? Colors.white.withOpacity(0.4)
+                    : tokens.surface)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(radius - 4),
+            boxShadow: active
+                ? (style == UIStyle.female
+                    ? [
+                        BoxShadow(
+                          color: tokens.brand.withOpacity(0.15),
+                          offset: const Offset(0, 4),
+                          blurRadius: 12,
+                        ),
+                      ]
+                    : style == UIStyle.neumorphic
+                        ? tokens.shadowConvexSubtle
+                        : const [])
+                : const [],
+          ),
           child: Text(
             label,
             style: TextStyle(
@@ -1005,10 +1039,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   Widget _buildElementTab(ThemeTokens tokens, UIStyle style) {
     final selected = _selectedElement;
     if (_template.elements.isEmpty) {
-      return Text(
-        '暂无元素，点「＋文本」新增',
-        style: TextStyle(fontSize: 12, color: tokens.textTertiary),
-      );
+      return _emptyHint('暂无元素，点「＋文本」新增', Icons.text_fields, tokens);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1102,10 +1133,7 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
   Widget _buildStyleTab(ThemeTokens tokens, UIStyle style) {
     final el = _selectedElement;
     if (el == null) {
-      return Text(
-        '先在上方选中一个元素，再编辑样式',
-        style: TextStyle(fontSize: 12, color: tokens.textTertiary),
-      );
+      return _emptyHint('先在上方选中一个元素，再编辑样式', Icons.tune, tokens);
     }
     final frame = _template.frame;
     final frameReady =
@@ -1142,7 +1170,9 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
               style: TextStyle(fontSize: 11, color: tokens.textTertiary),
             ),
           ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
+        _sectionLabel('字形与排版', tokens: tokens),
+        const SizedBox(height: 2),
         _sliderRow(
           label: '字号',
           value: el.fontSize * 400,
@@ -1179,9 +1209,13 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
           onChanged: (v) => setState(() => el.letterSpacing = v),
           tokens: tokens,
         ),
+        const SizedBox(height: 10),
+        _sectionLabel('文字颜色', tokens: tokens),
         const SizedBox(height: 6),
         _buildElementPalette(el, tokens),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
+        _sectionLabel('对齐与字形', tokens: tokens),
+        const SizedBox(height: 6),
         Row(
           children: [
             _toggleChip('粗体', el.bold, (v) => setState(() => el.bold = v),
@@ -1599,6 +1633,35 @@ class WatermarkEditorPageState extends ConsumerState<WatermarkEditorPage> {
         fontSize: 12,
         fontWeight: FontWeight.w600,
         color: tk.textSecondary,
+      ),
+    );
+  }
+
+  /// 柔和空态提示：图标 + 文案，居中展示。
+  Widget _emptyHint(String message, IconData icon, ThemeTokens tokens) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 26),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: tokens.surfaceAlt,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 22, color: tokens.textTertiary),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: tokens.textTertiary),
+            ),
+          ],
+        ),
       ),
     );
   }

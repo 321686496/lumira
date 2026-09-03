@@ -8,6 +8,7 @@ import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/db/dao/templates_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/searchengine/filter_sheet.dart';
@@ -15,6 +16,7 @@ import '../../../shared/searchengine/paged_results_controller.dart';
 import '../../../shared/searchengine/search_filters.dart';
 import '../../../shared/searchengine/search_scope.dart';
 import '../../../shared/searchengine/search_store.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton;
 import '../../academy/data/academy_content.dart';
 import '../../academy/data/academy_models.dart';
@@ -808,7 +810,6 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
                     _SortChip(
                       label: _sortLabel(s),
                       active: _filters.sort == s,
-                      tokens: tokens,
                       onTap: () {
                         if (_filters.sort == s) return;
                         setState(() => _filters = _filters.copyWith(sort: s));
@@ -1023,42 +1024,218 @@ class SearchInitialData {
 }
 
 /// 排序 chip（工具栏用）。
-class _SortChip extends StatelessWidget {
+///
+/// 视觉随 4 套 UI 风格自适应（对齐 [LumiraFilterChip]）：
+/// 新拟态下选中态与按压态均呈现「凹陷」内阴影（方案 B），品牌色只体现在文字上。
+class _SortChip extends ConsumerStatefulWidget {
   const _SortChip({
     required this.label,
     required this.active,
-    required this.tokens,
     required this.onTap,
   });
 
   final String label;
   final bool active;
-  final ThemeTokens tokens;
   final VoidCallback onTap;
 
   @override
+  ConsumerState<_SortChip> createState() => _SortChipState();
+}
+
+class _SortChipState extends ConsumerState<_SortChip> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final visual = _resolveVisual(appTheme, tokens, _pressed);
+    final radius = appTheme.buttonRadius / 2;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
+    // 新拟态：选中与按压态均呈现凹陷（RecessedSurface 沿四边叠加明暗）。
+    final recessed = isNeu && (widget.active || _pressed);
+
     return GestureDetector(
-      onTap: onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? tokens.brand : tokens.surfaceAlt,
-          borderRadius: BorderRadius.circular(16),
-          border: active
-              ? null
-              : Border.all(color: tokens.divider, width: 1),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-            color: active ? tokens.textInverse : tokens.textSecondary,
-          ),
-        ),
-      ),
+      child: recessed
+          ? RecessedSurface(
+              tokens: tokens,
+              borderRadius: radius,
+              depth: 0.7,
+              rimFraction: 0.32,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text(
+                  widget.label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: widget.active
+                        ? FontWeight.w600
+                        : FontWeight.w500,
+                    color: visual.foreground,
+                  ),
+                ),
+              ),
+            )
+          : Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: visual.background,
+                gradient: visual.gradient,
+                borderRadius: BorderRadius.circular(radius),
+                border: visual.border,
+                boxShadow: visual.shadows,
+              ),
+              child: Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: widget.active
+                      ? FontWeight.w600
+                      : FontWeight.w500,
+                  color: visual.foreground,
+                ),
+              ),
+            ),
     );
   }
+
+  /// 解析 4 风格 × 选中/未选中 的视觉。新拟态选中态与按压态均为「凹陷」内阴影。
+  _SortChipVisual _resolveVisual(
+      AppThemeData appTheme, ThemeTokens tokens, bool pressed) {
+    final style = appTheme.style;
+    final active = widget.active;
+
+    if (active) {
+      switch (style) {
+        case UIStyle.female:
+          return _SortChipVisual(
+            background: tokens.brand,
+            foreground: tokens.textInverse,
+            border: null,
+            shadows: [
+              BoxShadow(
+                color: tokens.brand.withOpacity(0.25),
+                offset: const Offset(0, 4),
+                blurRadius: 12,
+              ),
+            ],
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.lerp(tokens.brandLight, Colors.white, 0.3)!,
+                tokens.brandLight,
+                tokens.brand,
+              ],
+              stops: const [0.0, 0.32, 1.0],
+            ),
+          );
+        case UIStyle.neumorphic:
+          // 方案 B：选中与未选中同为浅色表面，仅把外凸阴影翻转为凹陷渐变，
+          // 品牌色只体现在文字上，避免品牌实底+内影造成的"发光"感。
+          return _SortChipVisual(
+            background: tokens.surface,
+            foreground: tokens.brandText,
+            border: null,
+            shadows: const [],
+            gradient: ThemeTokens.recessedGradient(tokens),
+          );
+        case UIStyle.glass:
+          return _SortChipVisual(
+            background: tokens.brand,
+            foreground: tokens.textInverse,
+            border: null,
+            shadows: const [
+              BoxShadow(
+                color: Color(0x22000000),
+                offset: Offset(0, 4),
+                blurRadius: 12,
+              ),
+            ],
+          );
+        case UIStyle.flat:
+          return _SortChipVisual(
+            background: tokens.brand,
+            foreground: tokens.textInverse,
+            border: null,
+            shadows: const [],
+          );
+      }
+    }
+
+    // 未选中态：各风格专属表面。
+    switch (style) {
+      case UIStyle.neumorphic:
+        return _SortChipVisual(
+          background: tokens.surface,
+          foreground: tokens.textSecondary,
+          border: null,
+          // 未选中常态凸起；按压时切换为凹陷渐变，模拟按下去的物理反馈
+          shadows: const [],
+          gradient: pressed ? ThemeTokens.recessedGradient(tokens) : null,
+        );
+      case UIStyle.flat:
+        return _SortChipVisual(
+          background: tokens.surfaceAlt,
+          foreground: tokens.textSecondary,
+          border: Border.all(color: tokens.divider, width: 1),
+          shadows: const [],
+        );
+      case UIStyle.glass:
+        return _SortChipVisual(
+          background: ThemeTokens.glassFill(tokens),
+          foreground: tokens.textSecondary,
+          border: Border.all(
+            color: ThemeTokens.glassBorder(tokens),
+            width: 1,
+          ),
+          shadows: const [
+            BoxShadow(
+              color: Color(0x14000000),
+              offset: Offset(0, 4),
+              blurRadius: 12,
+            ),
+          ],
+        );
+      case UIStyle.female:
+        return _SortChipVisual(
+          background: tokens.brandSubtle,
+          foreground: tokens.brandText,
+          border: Border.all(color: Colors.white.withOpacity(0.7), width: 0.8),
+          shadows: [
+            BoxShadow(
+              color: tokens.brand.withOpacity(0.12),
+              offset: const Offset(0, 4),
+              blurRadius: 12,
+            ),
+          ],
+        );
+    }
+  }
+}
+
+/// 排序 chip 视觉规格（背景/前景/边框/阴影/可选渐变）
+class _SortChipVisual {
+  final Color background;
+  final Color foreground;
+  final Border? border;
+  final List<BoxShadow> shadows;
+  final LinearGradient? gradient;
+
+  const _SortChipVisual({
+    required this.background,
+    required this.foreground,
+    required this.border,
+    required this.shadows,
+    this.gradient,
+  });
 }

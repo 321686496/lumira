@@ -276,7 +276,11 @@ class AppThemeData {
         return InputVisual(
           background: tokens.surface,
           border: null,
-          shadows: isDisabled ? const [] : tokens.shadowConcaveSubtle,
+          // 嵌入态改为 recessedGradient 表达凹陷，去掉坏掉的内阴影
+          shadows: const [],
+          gradient: isDisabled
+              ? null
+              : ThemeTokens.recessedGradient(tokens, depth: 0.18),
           borderAccent: borderAccent,
           foreground: isDisabled ? tokens.textTertiary : tokens.textPrimary,
         );
@@ -422,6 +426,10 @@ class InputVisual {
   final Border? border;
   final List<BoxShadow> shadows;
 
+  /// 可选表面渐变（新拟态输入嵌入态的「凹陷」表达）。
+  /// 非空时优先于 [background] 作为输入框底色；非新拟态为 null 保持纯色。
+  final LinearGradient? gradient;
+
   /// 边框强调色（focused=brand, error=danger, default=divider）
   /// 用于 flat/glass/female 风格的边框颜色，neumorphic 风格可忽略
   final Color borderAccent;
@@ -435,5 +443,6 @@ class InputVisual {
     required this.shadows,
     required this.borderAccent,
     required this.foreground,
+    this.gradient,
   });
 }

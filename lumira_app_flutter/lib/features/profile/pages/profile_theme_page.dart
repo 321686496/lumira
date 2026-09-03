@@ -9,6 +9,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/router/route_names.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/profile_mock_data.dart';
@@ -459,15 +460,24 @@ class _StyleCard extends StatelessWidget {
         child: content,
       );
     } else if (isNeu) {
-      // 新拟态：同色 + 双向阴影
-      card = Container(
-        decoration: BoxDecoration(
-          color: tokens.surface,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: selected ? tokens.shadowConcaveSubtle : tokens.shadowConvexSubtle,
-        ),
-        child: content,
-      );
+      // 新拟态：未选中同色 + 双向凸起阴影；选中转凹陷表面（RecessedSurface 沿
+      // 四边叠加明暗、中心平底，比单条对角渐变更贴合内凹）
+      card = selected
+          ? RecessedSurface(
+              tokens: tokens,
+              borderRadius: 14,
+              depth: 0.7,
+              rimFraction: 0.32,
+              child: content,
+            )
+          : Container(
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: tokens.shadowConvexSubtle,
+              ),
+              child: content,
+            );
     } else {
       // 扁平化：纯色 + 边框
       card = Container(

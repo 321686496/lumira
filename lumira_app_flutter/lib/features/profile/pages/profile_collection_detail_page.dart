@@ -42,10 +42,9 @@ class ProfileCollectionDetailPage extends ConsumerWidget {
     if (collectionId == null) {
       return Scaffold(
         backgroundColor: tokens.canvas,
-        extendBodyBehindAppBar: true,
         appBar: const LumiraNav(
           title: '精选集详情',
-          transparent: true,
+          transparent: false,
           showBackButton: true,
         ),
         body: Stack(
@@ -69,13 +68,12 @@ class ProfileCollectionDetailPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      extendBodyBehindAppBar: true,
       appBar: LumiraNav(
         title: asyncDetail.maybeWhen(
           data: (d) => d.collection.name,
           orElse: () => '精选集详情',
         ),
-        transparent: true,
+        transparent: false,
         showBackButton: true,
       ),
       body: Stack(
@@ -83,22 +81,18 @@ class ProfileCollectionDetailPage extends ConsumerWidget {
           const Positioned.fill(
             child: GlassBackground(variant: GlassBackgroundVariant.profile),
           ),
-          SafeArea(
-            top: false,
-            child: asyncDetail.when(
-              loading: () =>
-                  Center(child: LumiraProgress.circular()),
-              error: (e, _) => _ErrorState(
-                tokens: tokens,
-                message: '加载失败：$e',
-                onRetry: () => ref.invalidate(
-                    collectionDetailProvider(collectionId!)),
-              ),
-              data: (data) => _DetailContent(
-                tokens: tokens,
-                data: data,
-                collectionId: collectionId!,
-              ),
+          asyncDetail.when(
+            loading: () => Center(child: LumiraProgress.circular()),
+            error: (e, _) => _ErrorState(
+              tokens: tokens,
+              message: '加载失败：$e',
+              onRetry: () =>
+                  ref.invalidate(collectionDetailProvider(collectionId!)),
+            ),
+            data: (data) => _DetailContent(
+              tokens: tokens,
+              data: data,
+              collectionId: collectionId!,
             ),
           ),
         ],
@@ -126,11 +120,10 @@ class _DetailContent extends ConsumerWidget {
       DateTime.fromMillisecondsSinceEpoch(collection.createdAt),
     );
 
-    // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
-    // 用 viewPadding.top（状态栏） + 48（nav 内容高度） 精确占位
-    final topPadding = MediaQuery.of(context).viewPadding.top + 48;
+    // 非透明实心导航栏 + 未 extendBodyBehindAppBar：
+    // body 从 0 开始即位于导航栏下方，无需再手动占位（topPadding）
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(24, topPadding, 24, 32),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -164,7 +157,7 @@ class _DetailContent extends ConsumerWidget {
                 onTapPhoto: (index) => _openFullscreen(context, index),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
           ],
           // 操作按钮
           FadeUp(

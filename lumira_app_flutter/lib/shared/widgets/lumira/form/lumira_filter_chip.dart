@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
+import '../../effects/recessed_surface.dart';
 
 /// Lumira 筛选 chip（多选 pill）
 ///
@@ -55,46 +56,63 @@ class _LumiraFilterChipState extends ConsumerState<LumiraFilterChip> {
 
     final radius = appTheme.buttonRadius / 2;
 
-    final chip = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: visual.background,
-        gradient: visual.gradient,
-        borderRadius: BorderRadius.circular(radius),
-        border: visual.border,
-        boxShadow: visual.shadows,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.leading != null) ...[
-            DefaultTextStyle.merge(
-              style: TextStyle(
-                color: visual.foreground,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-              child: IconTheme(
-                data: IconThemeData(
-                  color: visual.foreground,
-                  size: 14,
-                ),
-                child: widget.leading!,
-              ),
-            ),
-            const SizedBox(width: 6),
-          ],
-          Text(
-            widget.label,
+    const pad = EdgeInsets.symmetric(horizontal: 14, vertical: 8);
+
+    final row = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (widget.leading != null) ...[
+          DefaultTextStyle.merge(
             style: TextStyle(
               color: visual.foreground,
               fontSize: 12,
-              fontWeight: widget.active ? FontWeight.w600 : FontWeight.w500,
+              fontWeight: FontWeight.w500,
+            ),
+            child: IconTheme(
+              data: IconThemeData(
+                color: visual.foreground,
+                size: 14,
+              ),
+              child: widget.leading!,
             ),
           ),
+          const SizedBox(width: 6),
         ],
-      ),
+        Text(
+          widget.label,
+          style: TextStyle(
+            color: visual.foreground,
+            fontSize: 12,
+            fontWeight: widget.active ? FontWeight.w600 : FontWeight.w500,
+          ),
+        ),
+      ],
     );
+
+    // 新拟态：选中/按压态 = 凹陷。用 RecessedSurface 沿四边叠加明暗，中心保持平底，
+    // 比单条对角渐变更接近 CSS inset（上/左暗、下/右亮、中部平坦、整条上边都有阴影）。
+    final isNeu = appTheme.style == UIStyle.neumorphic;
+    final recessed = isNeu && (widget.active || _pressed);
+
+    final Widget chip = recessed
+        ? RecessedSurface(
+            tokens: tokens,
+            borderRadius: radius,
+            depth: 0.7,
+            rimFraction: 0.34,
+            child: Padding(padding: pad, child: row),
+          )
+        : Container(
+            padding: pad,
+            decoration: BoxDecoration(
+              color: visual.background,
+              gradient: visual.gradient,
+              borderRadius: BorderRadius.circular(radius),
+              border: visual.border,
+              boxShadow: visual.shadows,
+            ),
+            child: row,
+          );
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -152,12 +170,15 @@ class _LumiraFilterChipState extends ConsumerState<LumiraFilterChip> {
             ),
           );
         case UIStyle.neumorphic:
+          // 方案 B：选中与未选中同为浅色表面，仅把外凸阴影翻转为凹陷；
+          // 品牌色只体现在文字上。凹陷用明暗反转的表面渐变表达（本 SDK 的
+          // Inner box shadow 不按内阴影渲染，见 recessedGradient 说明）。
           return _ChipVisual(
-            background: tokens.brand,
-            foreground: tokens.textInverse,
+            background: tokens.surface,
+            foreground: tokens.brandText,
             border: null,
-            // 选中=激活=凹陷内阴影（原为 shadowConvexBrand 凸起，改为向内按压）
-            shadows: tokens.shadowPressed,
+            shadows: const [],
+            gradient: ThemeTokens.recessedGradient(tokens),
           );
         case UIStyle.glass:
           return _ChipVisual(
@@ -189,8 +210,9 @@ class _LumiraFilterChipState extends ConsumerState<LumiraFilterChip> {
           background: tokens.surface,
           foreground: tokens.textSecondary,
           border: null,
-          // 未选中常态凸起；按压时切换为凹陷内阴影，模拟按下去的物理反馈
-          shadows: pressed ? tokens.shadowPressed : tokens.shadowConvexSubtle,
+          // 未选中常态凸起；按压时切换为凹陷渐变，模拟按下去的物理反馈
+          shadows: pressed ? const [] : tokens.shadowConvexSubtle,
+          gradient: pressed ? ThemeTokens.recessedGradient(tokens) : null,
         );
       case UIStyle.flat:
         return _ChipVisual(

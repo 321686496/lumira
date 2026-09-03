@@ -5,6 +5,7 @@ import '../../../core/db/dao/tags_dao.dart';
 import '../../../core/db/database_provider.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart' show LumiraIconButton;
 import '../../../shared/widgets/nav/lumira_nav.dart';
 
@@ -108,14 +109,12 @@ class _MyTagsPageState extends ConsumerState<MyTagsPage> {
                     label: '模板',
                     active: _itemType == TagItemType.template,
                     onTap: () => _switch(TagItemType.template),
-                    tokens: tokens,
                   ),
                   const SizedBox(width: 8),
                   _Tab(
                     label: '场景',
                     active: _itemType == TagItemType.scene,
                     onTap: () => _switch(TagItemType.scene),
-                    tokens: tokens,
                   ),
                 ],
               ),
@@ -177,38 +176,69 @@ class _MyTagsPageState extends ConsumerState<MyTagsPage> {
   }
 }
 
-class _Tab extends StatelessWidget {
+class _Tab extends ConsumerWidget {
   const _Tab({
     required this.label,
     required this.active,
     required this.onTap,
-    required this.tokens,
   });
 
   final String label;
   final bool active;
   final VoidCallback onTap;
-  final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? tokens.brand : Colors.transparent,
-          borderRadius: BorderRadius.circular(9999),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-            color: active ? Colors.white : tokens.textSecondary,
-          ),
-        ),
-      ),
+      behavior: HitTestBehavior.opaque,
+      child: isNeu && active
+          ? RecessedSurface(
+              tokens: tokens,
+              borderRadius: 9999,
+              depth: 0.7,
+              rimFraction: 0.32,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                    color: active
+                        ? (isNeu ? tokens.brandText : Colors.white)
+                        : tokens.textSecondary,
+                  ),
+                ),
+              ),
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              decoration: BoxDecoration(
+                // neumorphic：方案 B 选中/未选中同为 surface，仅凸起↔凹陷翻转；品牌色只在文字
+                color: isNeu
+                    ? (active ? null : tokens.surface)
+                    : (active ? tokens.brand : Colors.transparent),
+                borderRadius: BorderRadius.circular(9999),
+                boxShadow: isNeu
+                    ? (active ? null : tokens.shadowConvexSubtle)
+                    : null,
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                  color: active
+                      ? (isNeu ? tokens.brandText : Colors.white)
+                      : tokens.textSecondary,
+                ),
+              ),
+            ),
     );
   }
 }

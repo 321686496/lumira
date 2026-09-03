@@ -91,7 +91,8 @@ class LumiraDropdown<T> extends ConsumerWidget {
     switch (appTheme.style) {
       case UIStyle.neumorphic:
         return BoxDecoration(
-          color: visual.background,
+          color: visual.gradient == null ? visual.background : null,
+          gradient: visual.gradient,
           borderRadius: BorderRadius.circular(radius),
           boxShadow: visual.shadows,
         );

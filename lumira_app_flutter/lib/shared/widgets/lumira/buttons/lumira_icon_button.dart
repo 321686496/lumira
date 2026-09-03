@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
+import '../../effects/recessed_surface.dart';
 import '../_internal/lumira_theme_resolver.dart';
 
 /// Lumira 图标按钮 variant
@@ -110,6 +111,8 @@ class _LumiraIconButtonState extends ConsumerState<LumiraIconButton> {
     Color? background;
     Border? border;
     List<BoxShadow> shadows = const [];
+    LinearGradient? gradient;
+    bool useRecessedSurface = false;
 
     switch (widget.variant) {
       case LumiraIconButtonVariant.standard:
@@ -132,13 +135,17 @@ class _LumiraIconButtonState extends ConsumerState<LumiraIconButton> {
           shadows = ov.shadows;
         } else {
           // 画布上的标准 filled：surface 背景 + shadowConvexSubtle 阴影；
-          // 新拟态按压时切换为内阴影（凹陷），模拟手指按下去的物理反馈。
+          // 新拟态按压时切换为凹陷表面（模拟按下去被压进画布）。
+          // Inner box shadow 在本 SDK 不按内阴影渲染，故用 RecessedSurface 边缘渐变。
           background = _disabled ? tokens.surfaceAlt : tokens.surface;
-          shadows = _disabled
-              ? const []
-              : (appTheme.style == UIStyle.neumorphic && _pressed)
-                  ? tokens.shadowPressed
-                  : tokens.shadowConvexSubtle;
+          if (!_disabled &&
+              appTheme.style == UIStyle.neumorphic &&
+              _pressed) {
+            shadows = const [];
+            useRecessedSurface = true;
+          } else {
+            shadows = _disabled ? const [] : tokens.shadowConvexSubtle;
+          }
         }
         break;
       case LumiraIconButtonVariant.outlined:
@@ -148,20 +155,31 @@ class _LumiraIconButtonState extends ConsumerState<LumiraIconButton> {
         break;
     }
 
-    Widget content = Container(
-      padding: widget.padding,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(radius),
-        border: border,
-        boxShadow: shadows,
-      ),
-      child: Icon(
-        widget.icon,
-        size: widget.size,
-        color: iconColor,
-      ),
+    final Widget icon = Icon(
+      widget.icon,
+      size: widget.size,
+      color: iconColor,
     );
+
+    Widget content = useRecessedSurface
+        ? RecessedSurface(
+            tokens: tokens,
+            borderRadius: radius,
+            depth: 0.68,
+            rimFraction: 0.3,
+            child: Padding(padding: widget.padding, child: icon),
+          )
+        : Container(
+            padding: widget.padding,
+            decoration: BoxDecoration(
+              color: gradient == null ? background : null,
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(radius),
+              border: border,
+              boxShadow: shadows,
+            ),
+            child: icon,
+          );
 
     // 按压缩放 0.95（disabled 不响应）
     if (!_disabled) {

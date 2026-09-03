@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../data/academy_models.dart';
 
 /// 难度等级横向选择器（pill 样式）
@@ -39,26 +40,50 @@ class AcademyLevelSelector extends ConsumerWidget {
         itemBuilder: (context, index) {
           final item = items[index];
           final isSelected = item.level == selected;
+          // 方案 B：新拟态选中与未选中同为表面色，仅凸起↔凹陷翻转，品牌色只在文字上
+          final fg = isNeu
+              ? (isSelected ? tokens.brandText : tokens.textSecondary)
+              : (isSelected ? tokens.textInverse : tokens.textSecondary);
           return GestureDetector(
             onTap: () => onChanged(item.level),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: isSelected ? tokens.brand : tokens.surface,
-                borderRadius: BorderRadius.circular(9999),
-                boxShadow: isNeu
-                    ? (isSelected ? tokens.shadowPressed : tokens.shadowConvexSubtle)
-                    : null,
-              ),
-              child: Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: isSelected ? tokens.textInverse : tokens.textSecondary,
-                ),
-              ),
-            ),
+            child: isNeu && isSelected
+                ? RecessedSurface(
+                    tokens: tokens,
+                    borderRadius: 9999,
+                    depth: 0.7,
+                    rimFraction: 0.32,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      child: Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: fg,
+                        ),
+                      ),
+                    ),
+                  )
+                : Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isNeu
+                          ? tokens.surface
+                          : (isSelected ? tokens.brand : tokens.surface),
+                      borderRadius: BorderRadius.circular(9999),
+                      boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
+                    ),
+                    child: Text(
+                      item.label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: fg,
+                      ),
+                    ),
+                  ),
           );
         },
       ),

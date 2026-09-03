@@ -7,6 +7,7 @@ import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/common/fade_up.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/checkin_categories.dart';
@@ -126,7 +127,6 @@ class _CheckinListPageState extends ConsumerState<CheckinListPage> {
                       _SortToggle(
                         sortBy: _sortBy,
                         onToggle: (s) => setState(() => _sortBy = s),
-                        tokens: tokens,
                       ),
                       const SizedBox(height: 4),
                       if (filtered.isEmpty)
@@ -282,56 +282,77 @@ class _CategoryPills extends StatelessWidget {
   }
 }
 
-class _SortToggle extends StatelessWidget {
+class _SortToggle extends ConsumerWidget {
   const _SortToggle({
     required this.sortBy,
     required this.onToggle,
-    required this.tokens,
   });
 
   final String sortBy;
   final void Function(String) onToggle;
-  final ThemeTokens tokens;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final appTheme = ref.watch(appThemeProvider);
+    final tokens = appTheme.tokens;
+    final isNeu = appTheme.style == UIStyle.neumorphic;
     return Row(
       children: [
-        _sortChip('按时间', 'time', sortBy == 'time'),
+        _sortChip('按时间', 'time', sortBy == 'time', tokens, isNeu),
         const SizedBox(width: 8),
-        _sortChip('按评分', 'rating', sortBy == 'rating'),
+        _sortChip('按评分', 'rating', sortBy == 'rating', tokens, isNeu),
       ],
     );
   }
 
-  Widget _sortChip(String label, String key, bool active) {
+  Widget _sortChip(
+      String label, String key, bool active, ThemeTokens tokens, bool isNeu) {
+    final rowContent = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          key == 'time' ? Icons.access_time : Icons.star,
+          size: 12,
+          color: active ? tokens.brandText : tokens.textTertiary,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: active ? tokens.brandText : tokens.textTertiary,
+          ),
+        ),
+      ],
+    );
+
     return GestureDetector(
       onTap: () => onToggle(key),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        decoration: BoxDecoration(
-          color: active ? tokens.brandSubtle : Colors.transparent,
-          borderRadius: BorderRadius.circular(1000),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              key == 'time' ? Icons.access_time : Icons.star,
-              size: 12,
-              color: active ? tokens.brandText : tokens.textTertiary,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: active ? tokens.brandText : tokens.textTertiary,
+      child: isNeu && active
+          ? RecessedSurface(
+              tokens: tokens,
+              borderRadius: 1000,
+              depth: 0.7,
+              rimFraction: 0.32,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                child: rowContent,
               ),
+            )
+          : Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                // neumorphic：方案 B 选中/未选中同为 surface，仅凸起↔凹陷翻转；
+                // 非新拟态保持品牌淡底选中态
+                color: isNeu
+                    ? tokens.surface
+                    : (active ? tokens.brandSubtle : Colors.transparent),
+                borderRadius: BorderRadius.circular(1000),
+                boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
+              ),
+              child: rowContent,
             ),
-          ],
-        ),
-      ),
     );
   }
 }

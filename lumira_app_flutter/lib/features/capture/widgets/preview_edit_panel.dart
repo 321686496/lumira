@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../core/utils/image_cache.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../domain/filter_recipe.dart';
 import '../domain/photo_template.dart';
@@ -438,7 +439,7 @@ class FilterThumbnail extends StatelessWidget {
 }
 
 // === Crop Tab ===
-class CropTab extends StatelessWidget {
+class CropTab extends ConsumerWidget {
   final TransformParams transform;
   final ValueChanged<TransformParams> onChanged;
 
@@ -465,7 +466,7 @@ class CropTab extends StatelessWidget {
   });
 
   /// 裁剪比例选择器：自由 / 1:1 / 4:3 / 3:4 / 16:9 / 全屏
-  Widget _buildRatioSelector() {
+  Widget _buildRatioSelector(bool isNeu) {
     const ratios = <MapEntry<String, String>>[
       MapEntry('free', '自由'),
       MapEntry('1:1', '1:1'),
@@ -498,6 +499,19 @@ class CropTab extends StatelessWidget {
               final ratio = ratios[i].key;
               final label = ratios[i].value;
               final selected = postProcess.cropRatio == ratio;
+              final labelContent = Center(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: selected
+                        ? (isNeu ? tokens.brandText : tokens.textInverse)
+                        : tokens.textPrimary,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              );
+
               return GestureDetector(
                 onTap: () {
                   // 切换比例时重置自定义裁剪框（null = 使用默认居中）
@@ -507,30 +521,38 @@ class CropTab extends StatelessWidget {
                   ));
                 },
                 behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: selected ? tokens.brand : tokens.surfaceAlt,
-                    borderRadius: BorderRadius.circular(1000),
-                    border: Border.all(
-                        color: selected ? tokens.brand : tokens.divider,
-                        width: 1),
-                  ),
-                  child: Center(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: selected
-                            ? tokens.textInverse
-                            : tokens.textPrimary,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w400,
+                child: isNeu && selected
+                    ? RecessedSurface(
+                        tokens: tokens,
+                        borderRadius: 1000,
+                        depth: 0.7,
+                        rimFraction: 0.32,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          child: labelContent,
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          // neumorphic：方案 B 选中/未选中同为 surface，仅凸起↔凹陷翻转；品牌色只在文字
+                          color: isNeu
+                              ? tokens.surface
+                              : (selected ? tokens.brand : tokens.surfaceAlt),
+                          borderRadius: BorderRadius.circular(1000),
+                          border: isNeu
+                              ? null
+                              : Border.all(
+                                  color: selected
+                                      ? tokens.brand
+                                      : tokens.divider,
+                                  width: 1),
+                          boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
+                        ),
+                        child: labelContent,
                       ),
-                    ),
-                  ),
-                ),
               );
             },
           ),
@@ -541,13 +563,14 @@ class CropTab extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // 裁剪框已迁移到照片本体上（PhotoCropLayer 叠加），
     // 底部面板不再显示小预览框，保留比例选择 / 旋转翻转 / 拉直。
+    final isNeu = ref.watch(uiStyleProvider) == UIStyle.neumorphic;
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       children: [
-        _buildRatioSelector(),
+        _buildRatioSelector(isNeu),
         // 旋转 / 翻转 控制组：圆角容器内一字排开的图标操作
         Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -562,6 +585,7 @@ class CropTab extends StatelessWidget {
                 icon: Icons.rotate_left,
                 label: '逆时针',
                 tokens: tokens,
+                isNeu: isNeu,
                 onTap: () => onChanged(transform.copyWith(
                   rotation: (transform.rotation - 90) % 360,
                 )),
@@ -570,6 +594,7 @@ class CropTab extends StatelessWidget {
                 icon: Icons.rotate_right,
                 label: '顺时针',
                 tokens: tokens,
+                isNeu: isNeu,
                 onTap: () => onChanged(transform.copyWith(
                   rotation: (transform.rotation + 90) % 360,
                 )),
@@ -579,6 +604,7 @@ class CropTab extends StatelessWidget {
                 label: '水平',
                 active: transform.flipH,
                 tokens: tokens,
+                isNeu: isNeu,
                 onTap: () =>
                     onChanged(transform.copyWith(flipH: !transform.flipH)),
               ),
@@ -588,6 +614,7 @@ class CropTab extends StatelessWidget {
                 active: transform.flipV,
                 quarterTurns: 1,
                 tokens: tokens,
+                isNeu: isNeu,
                 onTap: () =>
                     onChanged(transform.copyWith(flipV: !transform.flipV)),
               ),
@@ -614,6 +641,7 @@ class _CropAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.tokens,
+    required this.isNeu,
     required this.onTap,
     this.active = false,
     this.quarterTurns = 0,
@@ -624,32 +652,63 @@ class _CropAction extends StatelessWidget {
   final bool active;
   final int quarterTurns;
   final ThemeTokens tokens;
+  final bool isNeu;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? tokens.brand : tokens.textSecondary;
+    final color = active
+        ? (isNeu ? tokens.brandText : tokens.brand)
+        : tokens.textSecondary;
+
+    final Widget iconCircle;
+    if (isNeu && active) {
+      // 新拟态圆底选中态用 RecessedSurface 沿四边叠加明暗呈凹陷（40×40 → 圆角 20）
+      iconCircle = RecessedSurface(
+        tokens: tokens,
+        borderRadius: 20,
+        depth: 0.7,
+        rimFraction: 0.32,
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+            child: RotatedBox(
+              quarterTurns: quarterTurns,
+              child: Icon(icon, size: 20, color: color),
+            ),
+          ),
+        ),
+      );
+    } else {
+      iconCircle = AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          // neumorphic：方案 B 选中/未选中同为 surface 圆底，选中态由 RecessedSurface 凹陷表达
+          color: isNeu
+              ? tokens.surface
+              : (active ? tokens.brandSubtle : Colors.transparent),
+          shape: BoxShape.circle,
+          boxShadow: isNeu ? tokens.shadowConvexSubtle : null,
+        ),
+        alignment: Alignment.center,
+        child: RotatedBox(
+          quarterTurns: quarterTurns,
+          child: Icon(icon, size: 20, color: color),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: active ? tokens.brandSubtle : Colors.transparent,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: RotatedBox(
-              quarterTurns: quarterTurns,
-              child: Icon(icon, size: 20, color: color),
-            ),
-          ),
+          iconCircle,
           const SizedBox(height: 2),
           Text(
             label,

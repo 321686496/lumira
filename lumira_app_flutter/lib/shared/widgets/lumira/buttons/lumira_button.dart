@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/theme_controller.dart';
 import '../../../../core/theme/theme_tokens.dart';
+import '../../effects/recessed_surface.dart';
 import '../_internal/lumira_theme_resolver.dart';
 
 /// Lumira 通用按钮组件
@@ -140,6 +141,7 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
     Border? border = effectiveVisual.border;
     List<BoxShadow> shadows = effectiveVisual.shadows;
     LinearGradient? gradient = effectiveVisual.gradient;
+    bool useRecessedSurface = false;
 
     if (_disabled) {
       // disabled 态：背景降透明度 0.5，文字 textTertiary
@@ -150,37 +152,51 @@ class _LumiraButtonState extends ConsumerState<LumiraButton> {
     } else if (appTheme.style == UIStyle.neumorphic &&
         _pressed &&
         !widget.overlay) {
-      // 新拟态按压态：将外凸浮雕阴影切换为内阴影（凹陷），
+      // 新拟态按压态：将外凸浮雕切换为凹陷表面，
       // 模拟手指按下去被压进画布的物理反馈。overlay（叠图）场景保持
-      // 仅按压缩放，禁用 inset，避免在图片上形成脏边（Neumorphism §4）。
-      shadows = tokens.shadowPressed;
+      // 仅按压缩放，避免在图片上形成脏边（Neumorphism §4）。
+      // 凹陷用 RecessedSurface 沿四边叠加明/暗（上/左暗、下/右亮、中心平底）。
+      gradient = null;
+      shadows = const [];
+      useRecessedSurface = true;
     } else if (widget.variant == ButtonVariant.ghost && _pressed) {
       // ghost 按下时加 brandSubtle 背景
       background = tokens.brandSubtle;
       gradient = null;
     }
 
-    Widget content = Container(
-      padding: widget.padding,
-      decoration: BoxDecoration(
-        color: gradient == null ? background : null,
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(radius),
-        border: border,
-        boxShadow: shadows,
+    // 内容（文字/图标）统一包一层，供凹陷表面承载。
+    final Widget body = DefaultTextStyle.merge(
+      style: TextStyle(
+        color: foreground,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
       ),
-      child: DefaultTextStyle.merge(
-        style: TextStyle(
-          color: foreground,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
-        child: IconTheme(
-          data: IconThemeData(color: foreground, size: 18),
-          child: widget.child,
-        ),
+      child: IconTheme(
+        data: IconThemeData(color: foreground, size: 18),
+        child: widget.child,
       ),
     );
+
+    Widget content = useRecessedSurface
+        ? RecessedSurface(
+            tokens: tokens,
+            borderRadius: radius,
+            depth: 0.68,
+            rimFraction: 0.3,
+            child: Padding(padding: widget.padding, child: body),
+          )
+        : Container(
+            padding: widget.padding,
+            decoration: BoxDecoration(
+              color: gradient == null ? background : null,
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(radius),
+              border: border,
+              boxShadow: shadows,
+            ),
+            child: body,
+          );
 
     // 按压缩放反馈（disabled 不响应）。`enableHoverScale` 保留为 API 选项，
     // 移动端无 hover 概念，press 反馈始终启用。

@@ -407,7 +407,8 @@ class _LayoutSegments extends StatelessWidget {
   }
 }
 
-/// 双列网格卡片：照片底缩略 + 名称 + 类型标签 + 选中描边 / ⋮ 菜单
+/// 双列网格卡片：照片底缩略 + 名称 + 类型标签 + 使用中角标 / ⋮ 菜单。
+/// 整张卡片可点选（底层铺满透明命中区），菜单按钮叠在上层、独立处理点击不与选中冲突。
 class _GridCard extends StatelessWidget {
   const _GridCard({
     required this.template,
@@ -428,62 +429,86 @@ class _GridCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget card = NeuCard(
-      padding: const EdgeInsets.all(10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: onSelect,
-            behavior: HitTestBehavior.opaque,
-            child: WatermarkPreview(
-              template: template,
-              width: double.infinity,
-              height: 150,
-              background: background,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  template.name,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+      padding: const EdgeInsets.all(9),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          children: [
+            // 整卡内容可点选：选中心路由手势直接包裹内容区（菜单为独立顶层节点，不与选中冲突）
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onSelect,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                    // 缩略图 + 使用中角标
+                    Stack(
+                      children: [
+                        WatermarkPreview(
+                          template: template,
+                          width: double.infinity,
+                          height: 150,
+                          background: background,
+                        ),
+                        if (selected)
+                          Positioned(
+                            top: 7,
+                            right: 7,
+                            child: _UsingCheck(tokens: tokens),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 9),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            template.name,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        _TypeTag(type: template.type, tokens: tokens),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        if (selected)
+                          _UsingLabel(tokens: tokens)
+                        else
+                          const SizedBox.shrink(),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              _TypeTag(type: template.type, tokens: tokens),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              if (selected)
-                _SelectedBadge(tokens: tokens)
-              else
-                const SizedBox.shrink(),
-              const Spacer(),
-              _MenuButton(
+            // ⋮ 菜单：独立叠加在卡片右下角，命中优先且不触发选中
+            Positioned(
+              bottom: 4,
+              right: 6,
+              child: _MenuButton(
                 isCustom: template.type == WatermarkTemplateType.custom,
                 tokens: tokens,
                 onAction: onMenuAction,
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
 
     if (selected) {
       card = Container(
+        padding: const EdgeInsets.all(1.2),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: tokens.brand, width: 2),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: tokens.brand, width: 1.6),
         ),
         child: card,
       );
@@ -492,7 +517,8 @@ class _GridCard extends StatelessWidget {
   }
 }
 
-/// 单列横向卡片：左侧照片底缩略，右侧名称 + 类型标签，选中✓ / ⋮ 菜单
+/// 单列横向卡片：左侧照片底缩略，右侧名称 + 类型标签 + 使用状态 / ⋮ 菜单。
+/// 整卡可点选，选中角标叠在缩略图右上角。
 class _ListCard extends StatelessWidget {
   const _ListCard({
     required this.template,
@@ -513,65 +539,88 @@ class _ListCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget card = NeuCard(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          GestureDetector(
-            onTap: onSelect,
-            behavior: HitTestBehavior.opaque,
-            child: Row(
-              children: [
-                WatermarkPreview(
-                  template: template,
-                  width: 96,
-                  height: 124,
-                  background: background,
-                ),
-                const SizedBox(width: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 180),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        template.name,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.textPrimary,
+      padding: const EdgeInsets.all(9),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Stack(
+          children: [
+            // 整卡内容可点选：命中手势包裹内容区（菜单独立顶层节点不与选中冲突）
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onSelect,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                    Stack(
+                      children: [
+                        WatermarkPreview(
+                          template: template,
+                          width: 96,
+                          height: 124,
+                          background: background,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        if (selected)
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: _UsingCheck(tokens: tokens),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            template.name,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 7),
+                          Row(
+                            children: [
+                              _TypeTag(type: template.type, tokens: tokens),
+                              const SizedBox(width: 10),
+                              if (selected) _UsingLabel(tokens: tokens),
+                            ],
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 6),
-                      _TypeTag(type: template.type, tokens: tokens),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            // ⋮ 菜单：独立叠加在卡片右侧中部，命中优先且不触发选中
+            Positioned(
+              right: 4,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: _MenuButton(
+                  isCustom: template.type == WatermarkTemplateType.custom,
+                  tokens: tokens,
+                  onAction: onMenuAction,
+                ),
+              ),
             ),
-          ),
-          const Spacer(),
-          if (selected) ...[
-            _SelectedBadge(tokens: tokens),
-            const SizedBox(width: 8),
           ],
-          _MenuButton(
-            isCustom: template.type == WatermarkTemplateType.custom,
-            tokens: tokens,
-            onAction: onMenuAction,
-          ),
-        ],
+        ),
       ),
     );
 
     if (selected) {
       card = Container(
+        padding: const EdgeInsets.all(1.2),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: tokens.brand, width: 2),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: tokens.brand, width: 1.6),
         ),
         child: card,
       );
@@ -606,20 +655,39 @@ class _TypeTag extends StatelessWidget {
   }
 }
 
-class _SelectedBadge extends StatelessWidget {
-  const _SelectedBadge({required this.tokens});
+/// 使用中角标：缩略图右上角小型品牌色圆勾。
+class _UsingCheck extends StatelessWidget {
+  const _UsingCheck({required this.tokens});
   final ThemeTokens tokens;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 24,
-      height: 24,
       decoration: BoxDecoration(
         color: tokens.brand,
         shape: BoxShape.circle,
+        boxShadow: tokens.shadowFloat,
       ),
-      child: const Icon(Icons.check, size: 16, color: Colors.white),
+      padding: const EdgeInsets.all(3),
+      child: const Icon(Icons.check, size: 12, color: Colors.white),
+    );
+  }
+}
+
+/// 使用中状态标签：底部信息区的小字「使用中」。
+class _UsingLabel extends StatelessWidget {
+  const _UsingLabel({required this.tokens});
+  final ThemeTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      '使用中',
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: tokens.brandText,
+      ),
     );
   }
 }

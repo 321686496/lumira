@@ -52,8 +52,8 @@ class _LumiraSwitchState extends ConsumerState<LumiraSwitch> {
     List<BoxShadow> trackShadowsOff = [];
     Border? borderOff;
     if (style == UIStyle.neumorphic) {
-      // 新拟态：关闭态 track 是「凹陷凹槽」，用 inset 阴影，无边框
-      trackShadowsOff = tokens.shadowConcaveSubtle;
+      // 新拟态：关闭态 track 是「凹陷凹槽」，用 recessedGradient，无边框
+      trackShadowsOff = const <BoxShadow>[];
       borderOff = null;
     } else {
       trackShadowsOff = [];
@@ -71,6 +71,11 @@ class _LumiraSwitchState extends ConsumerState<LumiraSwitch> {
         : [];
     final List<BoxShadow> thumbShadowsOn = enabled ? tokens.shadowConvexSubtle : const [];
 
+    // 新拟态关闭态：track 以 recessedGradient 表达「凹陷凹槽」
+    final Gradient? trackGradientOff = (style == UIStyle.neumorphic && !value)
+        ? ThemeTokens.recessedGradient(tokens, depth: 0.18)
+        : null;
+
     return Semantics(
       toggled: value,
       child: GestureDetector(
@@ -82,9 +87,12 @@ class _LumiraSwitchState extends ConsumerState<LumiraSwitch> {
           width: _trackWidth,
           height: _trackHeight,
           decoration: BoxDecoration(
-            color: value ? trackColorOn : trackColorOff,
+            color: value
+                ? trackColorOn
+                : (trackGradientOff != null ? null : trackColorOff),
             borderRadius: BorderRadius.circular(_trackHeight / 2),
             border: value ? null : borderOff,
+            gradient: value ? null : trackGradientOff,
             boxShadow: value ? null : trackShadowsOff,
           ),
           child: AnimatedAlign(

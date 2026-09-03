@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/widgets/effects/recessed_surface.dart';
 
 /// 模板编辑页顶部的横向滚动 Tab 条。
 ///
@@ -11,9 +12,8 @@ import '../../../core/theme/theme_tokens.dart';
 /// 派生，不硬编码任何皮肤色、不写死阴影。
 ///
 /// Tab 条位于纯色画布上，按「画布取向」渲染：
-/// - neumorphic：未选中用 `shadowConvexSubtle` 轻凸起，选中使用**内凹 `shadowPressed`**
-///   表达"被按压下去"的激活态（规则同筛选 chip：不可用 `shadowConvexBrand`，
-///   品牌色阴影与底色接近会像“发光”）。
+/// - neumorphic：未选中用 `shadowConvexSubtle` 轻凸起，选中使用**内凹 `shadowConcave`**
+///   表达"被按压下去"的激活态（方案 B：与未选中同为表面色，品牌色只在文字）。
 /// - flat / glass / female：不使用外阴影，改用「surface + 细边」表达表面。
 class EditorTabBar extends ConsumerWidget {
   const EditorTabBar({
@@ -71,41 +71,60 @@ class _TabChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const pad = EdgeInsets.symmetric(horizontal: 16, vertical: 8);
     final radius = BorderRadius.circular(9999);
     final textColor = _textColor();
-    final deco = _decoration(radius);
 
-    final content = GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: deco,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            color: textColor,
-          ),
-        ),
+    final labelText = Text(
+      label,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+        color: textColor,
       ),
     );
 
-    // 新拟态：纯色画布上的 chip，未选中轻凸起；选中呈内凹（按压下去）的凹陷内阴影，
-    // 符合"单击/选中=凹陷激活态"的语义（Neumorphism §1.3）。
+    // 新拟态方案 B：未选中轻凸起，选中用凹陷表面（RecessedSurface 沿四边叠加
+    // 明暗、中心平底，比单条对角渐变更贴合内凹），品牌色只在文字
     if (style == UIStyle.neumorphic) {
+      final Widget chipContent = selected
+          ? RecessedSurface(
+              tokens: tokens,
+              borderRadius: 9999,
+              depth: 0.7,
+              rimFraction: 0.32,
+              child: Padding(padding: pad, child: labelText),
+            )
+          : Container(
+              padding: pad,
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: radius,
+              ),
+              child: labelText,
+            );
       return Container(
         decoration: BoxDecoration(
           borderRadius: radius,
-          boxShadow: selected
-              ? tokens.shadowPressed
-              : tokens.shadowConvexSubtle,
+          boxShadow: selected ? null : tokens.shadowConvexSubtle,
         ),
-        child: content,
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: chipContent,
+        ),
       );
     }
-    return content;
+
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: pad,
+        decoration: _decoration(radius),
+        child: labelText,
+      ),
+    );
   }
 
   Color _textColor() {
@@ -118,12 +137,12 @@ class _TabChip extends StatelessWidget {
   BoxDecoration _decoration(BorderRadius radius) {
     switch (style) {
       case UIStyle.neumorphic:
+        // neumorphic 已在 build 中提前处理（选中用 RecessedSurface 凹陷表面），
+        // 此分支不会被调用，仅保留一个等效表面装饰以维持 switch 穷尽性。
         return BoxDecoration(
-          color: selected ? tokens.brandSubtle : tokens.surface,
+          color: tokens.surface,
           borderRadius: radius,
-          border: selected
-              ? Border.all(color: tokens.brand, width: 1)
-              : null,
+          border: null,
         );
       case UIStyle.flat:
         return BoxDecoration(
