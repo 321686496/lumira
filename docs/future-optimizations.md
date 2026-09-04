@@ -261,3 +261,40 @@
 - **背景/动机**：苹果不允许 video 与 photo 输出同时满规格，二者是折中选择；颜色一致性（用户核心诉求）优先于极限分辨率。
 - **目标状态**：若未来开放「全尺寸」分辨率档位，权衡在固定 video 输出规格下取到 App 所需最高分辨率，或按分辨率档位决定 photoOutput（牺牲一致性）与 video 直出（保一致性）的取舍开关。
 - **状态**：⏳ 待优化
+
+---
+
+## 拍摄页延迟拍照（2026-09-04）
+
+### P2 · resetAll 可选复位延迟拍照时长
+
+- **模块**：拍摄（capture_state.dart 的 CaptureState.resetAll）
+- **优化点**：esetAll 重置了 zoomProvider/spectRatioProvider 等相机 UI 状态，但未重置新加的 delayTimerProvider（保留上次用户所选时长）。
+- **背景/动机**：当前设计未要求；保留已选时长属合理 UX（跨会话持续）。若希望跟随返回拍摄页复位，只需在 esetAll 补 delayTimerProvider = 0，成本极低。
+- **目标状态**：按产品语义决定是否在 esetAll 一并复位延迟档位。
+- **状态**：⏳ 待优化
+
+### P2 · 倒计时节拍跟随快门声开关
+
+- **模块**：拍摄（capture_page.dart _startDelayCountdown）
+- **优化点**：延时倒计时每 tick 无条件 SystemSound.click，不尊重 CaptureState.shutterSoundProvider；用户关闭快门声后节拍仍响。
+- **背景/动机**：设计未明确节拍是否跟随该开关。
+- **目标状态**：节拍是否播放跟随 shutterSoundProvider，或提供独立开关。
+- **状态**：⏳ 待优化
+
+### P2 · 比例/模板切换时取消倒计时（spec 边界语义补齐）
+
+- **模块**：拍摄（capture_page.dart）
+- **优化点**：设计「边界」第 4 条声明「切换前后摄像头/比例/模板 → 取消倒计时」，当前仅实现了前后摄像头（_switchCamera）取消，比例切换与模板切换未接；倒计时浮层用 IgnorePointer 全屏穿透，顶部 AspectRatioSelector 仍可触达，倒计时归零读取新 ratio 成片。
+- **背景/动机**：非破坏性偏差，评审定为 Minor。
+- **目标状态**：按设计在各比例/模板切换入口补 _cancelDelayCountdown()，或明确改为「倒计时仅由摄像头切换/dispose 取消」。
+- **状态**：⏳ 待优化
+
+### P2 · 延迟拍照菜单 4 风格自适应
+
+- **模块**：拍摄（widgets/delay_timer_button.dart）
+- **优化点**：DelayTimerButton 的菜单/胶囊为 iOS 风格硬编码（暗底  xFF141416、菜单  xFF26262A、白字、强调色  xFFC9A96E），当前不随 4 套 UI 风格/主题变化（符合设计 brief 的「叠相机浮层的 iOS 风格」规定，且 iOS 浮层本就主题无感）。
+- **背景/动机**：后续若希望延迟按钮在多风格下表现一致，需要接入 token。
+- **目标状态**：按需从 ppThemeProvider 派生菜单/胶囊配色，或在 4 风格下均采用 iOS 统一浮层观感并弱化当前无用的 	heme_controller 依赖残留情况。
+- **状态**：⏳ 待优化
+
