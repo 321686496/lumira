@@ -2,9 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image/image.dart' as img;
 import 'package:qr_code_scanner/qr_code_scanner.dart';
-import 'package:zxing2/qrcode.dart';
 
 import '../../../core/auth/auth_controller.dart';
 import '../../../core/services/file_picker_service.dart';
@@ -13,6 +11,7 @@ import '../../../core/network/api_error.dart';
 import '../../../core/router/route_names.dart';
 import '../../../core/theme/theme_controller.dart';
 import '../../../core/theme/theme_tokens.dart';
+import '../../../shared/services/qr_decoder.dart';
 import '../../../shared/widgets/cards/neu_card.dart';
 import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
@@ -466,7 +465,8 @@ class _ScannerPageState extends ConsumerState<_ScannerPage> {
         if (mounted) LumiraToast.show(context, '读取图片失败，请重试');
         return;
       }
-      final secret = _decodeQrFromBytes(bytes);
+      // 解码移入后台 isolate，避免在 UI 线程执行耗时解码导致界面卡顿。
+      final secret = await compute(decodeQrFromBytes, bytes);
       if (!mounted) return;
       if (secret != null && secret.isNotEmpty) {
         Navigator.of(context).pop(secret);
@@ -475,26 +475,6 @@ class _ScannerPageState extends ConsumerState<_ScannerPage> {
       }
     } finally {
       if (mounted) setState(() => _picking = false);
-    }
-  }
-
-  /// 从图片字节解码二维码文本，未识别到返回 null。
-  String? _decodeQrFromBytes(List<int> bytes) {
-    final image = img.decodeImage(Uint8List.fromList(bytes));
-    if (image == null) return null;
-    try {
-      final pixels = image
-          .convert(numChannels: 4)
-          .getBytes(order: img.ChannelOrder.rgba);
-      final source =
-          RGBLuminanceSource(image.width, image.height, pixels.buffer.asInt32List());
-      final bitmap = BinaryBitmap(HybridBinarizer(source));
-      final result = QRCodeReader().decode(bitmap);
-      final text = result.text;
-      return text.isNotEmpty ? text : null;
-    } catch (_) {
-      // 图片中无二维码，或解码失败
-      return null;
     }
   }
 

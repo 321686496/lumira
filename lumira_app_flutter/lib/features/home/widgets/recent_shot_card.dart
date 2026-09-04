@@ -81,7 +81,7 @@ class RecentShotCard extends ConsumerWidget {
                     Positioned(
                       top: 8,
                       left: 8,
-                      child: _buildCategoryChip(tokens, isNeumorphic, recent),
+                      child: _buildCategoryChip(tokens, isGlass, recent),
                     ),
                     // 再拍一次（右上角）
                     if (onRetake != null)
@@ -212,10 +212,16 @@ class RecentShotCard extends ConsumerWidget {
 
   /// 分类标签（叠在封面图上的浮层角标）。
   ///
-  /// neumorphic 风格：图片属非纯色底，改用「半透明 surface + 细白描边 + 仅暗色投影」
-  /// 的 overlayOnImageVisual，禁用毛玻璃与双向浮雕阴影（避免光晕糊图显脏）。
-  /// 其余风格保留原「白 0.9 + BackdropFilter 模糊」的玻璃角标。
-  Widget _buildCategoryChip(ThemeTokens tokens, bool isNeumorphic, RecentShot recent) {
+  /// 性能(Forced fix): 之前非新拟态在照片上叠「白 0.9 + BackdropFilter blur 8」的角标，
+  /// 每张可见卡片的 BackdropFilter 在滚动时每帧都要重新采样/模糊其背后的照片，
+  /// 多张卡片叠加后是 OHOS 首页滚动掉帧的主要成本之一。
+  /// 按「叠图表面」规范改为：非玻璃风格一律用半透明 surface + 细边（不做模糊、不做玻璃），
+  /// 仅玻璃风格保留毛玻璃角标（模糊属该风格设计语言）。视觉与原实现高度一致。
+  Widget _buildCategoryChip(
+    ThemeTokens tokens,
+    bool isGlass,
+    RecentShot recent,
+  ) {
     final label = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -237,7 +243,7 @@ class RecentShotCard extends ConsumerWidget {
       ],
     );
 
-    if (isNeumorphic) {
+    if (!isGlass) {
       final visual = LumiraThemeResolver.overlayOnImageVisual(
         tokens: tokens,
         radiusDp: 12,
@@ -254,6 +260,7 @@ class RecentShotCard extends ConsumerWidget {
       );
     }
 
+    // 玻璃风格：保留毛玻璃角标（模糊属于玻璃风格设计语言）
     return ClipRRect(
       borderRadius: BorderRadius.circular(1000),
       child: BackdropFilter(

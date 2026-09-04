@@ -25,6 +25,9 @@
   
   _completion = completion;
   _dispatchQueue = dispatchQueue;
+
+  // 取景器逐帧效果处理器（锐化/磨皮/暗角/颗粒 + 全屏均匀色矩阵）。
+  _previewEffectProcessor = [[PreviewEffectProcessor alloc] init];
   
   // Creating capture session
   _captureSession = [[AVCaptureSession alloc] init];
@@ -214,6 +217,7 @@
 
 /// Dispose camera inputs & outputs
 - (void)dispose {
+  [self.previewEffectProcessor dispose];
   [self stop];
   [self.physicalButtonController stopListening];
   
@@ -325,6 +329,29 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
   return gains;
 }
 
+// 温和钳制（手动色温/预设锁定用）：比 ClampWhiteBalanceGains 多留 15% 增益余量。
+// 目的：阻止极端色温（如 3000K 或 8000K 档）把蓝/红通道增益顶到
+// maxWhiteBalanceGain 饱和区——该区间镜头渐晕（lens shading）校正在中心与边缘
+// 会出现明显色差，表现为「白平衡最低值时取景器画面中间出现一片与其他位置
+// 颜色不同的色斑」。软封顶后效果仍是强冷/暖色偏（观感与成片一致），但避开
+// 饱和带 → 无中心色斑，且不改变取景器/成片的一致性（两侧复用同一组原生增益）。
+static AVCaptureWhiteBalanceGains SoftClampWhiteBalanceGains(AVCaptureWhiteBalanceGains gains, float maxGain) {
+  const float margin = 0.85f;
+  float cap = maxGain * margin;
+  gains.redGain   = MAX(1.0f, MIN(cap, gains.redGain));
+  gains.greenGain = MAX(1.0f, MIN(cap, gains.greenGain));
+  gains.blueGain  = MAX(1.0f, MIN(cap, gains.blueGain));
+  return gains;
+}
+
+// 手动色温（k != nil）与预设模式分支共用：目标 K → gains → 温和软封顶。
+static AVCaptureWhiteBalanceGains GainsForTemperature(CGFloat k, AVCaptureDevice *device) {
+  AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = k, .tint = 0.0f };
+  AVCaptureWhiteBalanceGains gains =
+      [device deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
+  return SoftClampWhiteBalanceGains(gains, device.maxWhiteBalanceGain);
+}
+
 - (void)setWhiteBalance:(NSString *)mode temperatureK:(NSNumber *_Nullable)k
                   error:(FlutterError *_Nullable __autoreleasing *_Nonnull)error {
   NSError *e = nil;
@@ -334,11 +361,8 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
   }
 
   if (k != nil) {
-    // 手动色温：用目标 K 得到 gains，锁定（渐进钳制避免越界崩溃）
-    AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = [k floatValue], .tint = 0.0f };
-    AVCaptureWhiteBalanceGains gains =
-        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
-    gains = ClampWhiteBalanceGains(gains, _captureDevice.maxWhiteBalanceGain);
+    // 手动色温：用目标 K 得到 gains，锁定（温和钳制避免越界崩溃 + 规避中心色斑）
+    AVCaptureWhiteBalanceGains gains = GainsForTemperature([k floatValue], _captureDevice);
     if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
       [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
     } else {
@@ -350,16 +374,13 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
     if ([_captureDevice isWhiteBalanceModeSupported:wbMode]) _captureDevice.whiteBalanceMode = wbMode;
     else *error = [FlutterError errorWithCode:@"WB_MODE_UNSUPPORTED" message:@"continuous auto white balance not supported" details:nil];
   } else {
-    // 模式预设：映射到目标 K 再锁定（渐进钳制避免越界崩溃）
+    // 模式预设：映射到目标 K 再锁定（温和钳制避免越界崩溃 + 规避中心色斑）
     float presetK = 5500.0f;
     if      ([mode isEqualToString:@"daylight"])     presetK = 5500.0f;
     else if ([mode isEqualToString:@"cloudy"])       presetK = 6500.0f;
     else if ([mode isEqualToString:@"fluorescent"])  presetK = 4200.0f;
     else if ([mode isEqualToString:@"incandescent"]) presetK = 3000.0f;
-    AVCaptureWhiteBalanceTemperatureAndTintValues tt = { .temperature = presetK, .tint = 0.0f };
-    AVCaptureWhiteBalanceGains gains =
-        [_captureDevice deviceWhiteBalanceGainsForTemperatureAndTintValues:tt];
-    gains = ClampWhiteBalanceGains(gains, _captureDevice.maxWhiteBalanceGain);
+    AVCaptureWhiteBalanceGains gains = GainsForTemperature(presetK, _captureDevice);
     if ([_captureDevice isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked]) {
       [_captureDevice setWhiteBalanceModeLockedWithDeviceWhiteBalanceGains:gains completionHandler:nil];
     } else {
@@ -368,6 +389,11 @@ static AVCaptureWhiteBalanceGains ClampWhiteBalanceGains(AVCaptureWhiteBalanceGa
   }
 
   [_captureDevice unlockForConfiguration];
+}
+
+/// 更新取景器逐帧效果参数（线程安全，可任意线程调用）。
+- (void)updatePreviewEffects:(PreviewEffectsParams)params {
+  [_previewEffectProcessor updateEffects:params];
 }
 
 /// 拍照前把设备白平衡锁定到「当前取景器白平衡增益」。
@@ -938,6 +964,10 @@ static void _freeCapturedFrameData(void *info, const void *data, size_t size) {
     if (old != nil) {
       CFRelease(old);
     }
+
+    // 取景器逐帧效果：投递到处理器内部 GPU 串行队列渲染（无效果时内部直通，零开销）。
+    [_previewEffectProcessor render:newBuffer];
+
     if (_onFrameAvailable) {
       _onFrameAvailable();
     }
@@ -959,12 +989,20 @@ static void _freeCapturedFrameData(void *info, const void *data, size_t size) {
 /// Used to copy pixels to in-memory buffer
 ///
 /// 【非消费式读取】引擎（光栅线程）每帧渲染取景器纹理都会调用本方法。
+///
+/// 取景器效果处理器激活时（有任一锐化/磨皮/暗角/颗粒/色彩矩阵生效），
+/// 优先返回处理器最新成帧（GPU 渲染、所见即所得预览）；否则走【非消费式读取】
+/// 原始帧快路径：
 /// 原实现把 _latestPixelBuffer 原子换空（消费），导致每帧渲染后到下一帧
 /// 到来前（~33ms）存储为 nil——拍照直出路径（captureVideoFrameToJpegAtPath）
 /// 将频繁取不到帧而回退偏黄的 photoOutput。改为：原子换出（取得所有权，
 /// 避免与 delegate 的 release 竞争）→ 给引擎 retain 一份 → 原子放回；
 /// 放回失败说明 delegate 已存入更新帧，保留新帧即可。
 - (CVPixelBufferRef _Nullable)copyPixelBuffer {
+  // 效果激活时返回 GPU 处理帧（每帧全新缓冲，所有权转移给引擎释放，无覆盖风险）。
+  CVPixelBufferRef processed = [_previewEffectProcessor copyDisplayBuffer];
+  if (processed != NULL) return processed;
+
   CVPixelBufferRef pixelBuffer = atomic_load(&_latestPixelBuffer);
   while (pixelBuffer != NULL &&
          !atomic_compare_exchange_strong(&_latestPixelBuffer, &pixelBuffer, NULL)) {

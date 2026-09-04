@@ -99,8 +99,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       ),
       body: Stack(
         children: [
-          // Forced fix: glass 风格彩色斑点背景
-          const Positioned.fill(child: GlassBackground(variant: GlassBackgroundVariant.profile)),
+          // Forced fix: glass 风格彩色斑点背景（RepaintBoundary 隔离，滚动时不重绘）
+          const Positioned.fill(
+            child: RepaintBoundary(
+              child: GlassBackground(variant: GlassBackgroundVariant.profile),
+            ),
+          ),
           // 主内容层
           Container(
             // 径向渐变背景装饰（glass 风格可见性）
@@ -117,19 +121,22 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             child: SafeArea(
               top: false,
               bottom: false,
-              child: SingleChildScrollView(
+              child: CustomScrollView(
                 controller: _scrollController,
-                // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
-                // 用 viewPadding.top（不被 widget 消费）+ nav 内容高度 48dp 精确占位
-                padding: EdgeInsets.fromLTRB(
-                  24,
-                  MediaQuery.of(context).viewPadding.top + 48 + 12,
-                  24,
-                  100,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+                cacheExtent: 480, // 提前约一屏预构建，让卡片更早触发图片下载/解码
+                slivers: [
+                  SliverPadding(
+                    // Forced fix: extendBodyBehindAppBar=true 时 body 从 y=0 开始，
+                    // 用 viewPadding.top（不被 widget 消费）+ nav 内容高度 48dp 精确占位
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      MediaQuery.of(context).viewPadding.top + 48 + 12,
+                      24,
+                      100,
+                    ),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate(
+                        [
                     // 1. 头部信息条（头像+名字+等级/偏好签名+数据区）
                     FadeUp(
                       child: _ProfileHeader(onEdit: (p) => _goPage(p)),
@@ -165,14 +172,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
                       tokens: tokens,
                     ),
                     const SizedBox(height: 16),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-        ],
-      ),
-    );
+        ),
+      ],
+    ),
+  );
   }
 }
 

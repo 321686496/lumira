@@ -26,6 +26,7 @@
 #import "CameraSensorType.h"
 #import "PhysicalButtonController.h"
 #import "InputAnalysisImageFormat.h"
+#import "PreviewEffectProcessor.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -59,6 +60,7 @@ AVCaptureAudioDataOutputSampleBufferDelegate>
 @property(readonly, nonatomic) PhysicalButtonController *physicalButtonController;
 @property(readonly, copy) void (^completion)(NSNumber * _Nullable, FlutterError * _Nullable);
 @property(nonatomic, copy) void (^onFrameAvailable)(void);
+@property(readonly, nonatomic) PreviewEffectProcessor *previewEffectProcessor;
 
 - (instancetype)initWithCameraSensor:(CameraSensor)sensor
                         streamImages:(BOOL)streamImages
@@ -100,6 +102,7 @@ AVCaptureAudioDataOutputSampleBufferDelegate>
 - (void)setUpCaptureSessionForAudioError:(nonnull void (^)(NSError *))error;
 - (void)setBrightness:(NSNumber *)brightness error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
 - (void)setWhiteBalance:(NSString *)mode temperatureK:(NSNumber * _Nullable)k error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
+- (void)updatePreviewEffects:(PreviewEffectsParams)params;
 @end
 
 NS_ASSUME_NONNULL_END

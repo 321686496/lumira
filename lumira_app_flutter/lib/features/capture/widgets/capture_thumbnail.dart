@@ -54,6 +54,19 @@ class CaptureThumbnail extends ConsumerWidget {
             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
           ),
         );
+      case CaptureThumbnailStatus.interim:
+        // 先快后真：早帧（低质量）先作为可见缩略图，full-res 后升级到 final_。
+        final ip = state.interimPath;
+        if (ip != null && File(ip).existsSync()) {
+          return Image.file(File(ip), fit: BoxFit.cover);
+        }
+        // 早帧文件尚未就绪：退回转圈态
+        return const Center(
+          child: SizedBox(
+            width: 20, height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+          ),
+        );
       case CaptureThumbnailStatus.preview:
       case CaptureThumbnailStatus.final_:
         final Uint8List? bytes = state.quickBytes;

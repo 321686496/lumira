@@ -105,6 +105,8 @@ class OhosImageProcessor {
   /// - [matrix]：20 元素 ColorMatrix（由 `composePostProcessMatrix` 产出，保证与取景器一致）
   /// - [sharpen]：锐化值（0 表示不锐化；严格使用用户/模板真实值，应用层不做强制下限）
   /// - [smoothStrength]：磨皮强度 0-100（0 表示不磨皮）
+  /// - [vignette]：暗角强度 0-100（0 表示不施加暗角）
+  /// - [grain]：颗粒强度 0-100（0 表示不施加颗粒）
   /// - [maxDim]：输出最大边（默认 [kMaxProcessDim]=1280）
   ///
   /// 成功写文件后返回 true；任何失败（原生报错 / 非 OHOS）返回 false（调用方回退原管线）。
@@ -119,6 +121,8 @@ class OhosImageProcessor {
     required List<double> matrix,
     required int sharpen,
     int smoothStrength = 0,
+    int vignette = 0,
+    int grain = 0,
     int maxDim = 1280,
     Map<String, int>? timing,
   }) async {
@@ -135,6 +139,8 @@ class OhosImageProcessor {
           'matrix': matrix,
           'sharpen': sharpen,
           'smooth': smoothStrength.clamp(0, 100),
+          'vignette': vignette.clamp(0, 100),
+          'grain': grain.clamp(0, 100),
           'maxDim': maxDim,
         },
       );
@@ -145,6 +151,9 @@ class OhosImageProcessor {
           if (v is int) timing[k.toString()] = v;
         });
       }
+      final srcW = result['srcW'];
+      final srcH = result['srcH'];
+      debugPrint('[OhosImageProcessor] processJpeg src=${srcW}x$srcH out=${result['width']}x${result['height']} timing=$timing');
       return result['ok'] == true;
     } catch (e) {
       debugPrint('[OhosImageProcessor] processJpeg failed: $e');

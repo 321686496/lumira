@@ -18,6 +18,7 @@ import '../../../shared/widgets/lumira/lumira.dart';
 import '../../../shared/widgets/nav/lumira_nav.dart';
 import '../data/capture_preview_mock_data.dart';
 import '../data/capture_state.dart';
+import '../data/capture_thumbnail_state.dart';
 import '../widgets/preview_edit_panel.dart';
 import '../widgets/smooth_image_layer.dart';
 import '../../gallery/widgets/photo_crop_layer.dart';
@@ -60,10 +61,15 @@ class CapturePreviewPage extends ConsumerStatefulWidget {
     this.photoId,
     this.aspectRatio,
     this.challengeId,
+    this.pendingFinal = false,
   });
 
   /// 路由参数：photoUrl（拍摄后的照片 URL）
   final String? photoUrl;
+
+  /// 先快后真：本次以 early 早帧（低质量）打开、full-res 后台完成后需原位升级。
+  /// true 时预览页监听 [captureThumbnailProvider] 从 interim→final，替换 _photoUrl。
+  final bool pendingFinal;
 
   /// 路由参数：photoId（拍摄时自动保存到 DB 的记录 id）
   /// 用于在预览页修改场景时同步更新 DB 记录
@@ -131,6 +137,16 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
   /// 是否已修改照片（编辑态右上角保存按钮出现条件）
   bool _isEdited = false;
+
+  /// 先快后真：以 early 早帧打开、等 full-res 原位升级的挂起标记。
+  /// 为 true 时禁止编辑/保存（避免用低清早帧落库），升级完成后置 false。
+  bool _isPendingFinal = false;
+
+  /// 打开时的 early 早帧路径（升级后 evict 其 FileImage 缓存）。
+  String? _interimUrl;
+
+  /// 监听 captureThumbnailProvider 从 interim→final 的升级订阅。
+  ProviderSubscription<CaptureThumbnailState>? _upgradeSub;
 
   /// 抽屉栏实时高度（拖拽时直接更新，实现跟手效果）
   late final ValueNotifier<double> _sheetHeightNotifier;
@@ -219,6 +235,22 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
     _currentPhotoId = widget.photoId;
     _pageController = PageController(initialPage: 0);
     _loadHistoryPhotos(); // fire-and-forget; loads DB history + original path
+    // 先快后真：以 early 早帧打开时，监听 full-res 完成 → 原位升级 _photoUrl。
+    _isPendingFinal = widget.pendingFinal;
+    if (_isPendingFinal) {
+      _interimUrl = _photoUrl.isNotEmpty ? _photoUrl : null;
+      _upgradeSub = ref.listenManual<CaptureThumbnailState>(
+        captureThumbnailProvider,
+        (prev, next) {
+          if (!_isPendingFinal) return;
+          if (next.status == CaptureThumbnailStatus.final_ &&
+              next.finalPath != null &&
+              !_isEdited) {
+            _upgradeInterimToFinal(next.finalPath!);
+          }
+        },
+      );
+    }
     // 首帧后按照片实际宽高比校正裁剪比例（兜底：拍摄比例参数缺失/不符时）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _initLocalCropRatio();
@@ -257,6 +289,8 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
 
   @override
   void dispose() {
+    _upgradeSub?.close();
+    _upgradeSub = null;
     _sheetHeightNotifier.dispose();
     _pageController.dispose();
     super.dispose();
@@ -381,6 +415,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 本地后期参数更新（仅影响预览和保存，不回写 CaptureState）
   void _updateLocalPostProcess(PostProcess next) {
     if (!mounted) return;
+    if (_guardPendingFinal()) return;
     if (_isReadOnly) {
       _showReadOnlyToast();
       return;
@@ -394,6 +429,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 本地变换参数更新（旋转/翻转/拉直）
   void _updateLocalTransform(TransformParams t) {
     if (!mounted) return;
+    if (_guardPendingFinal()) return;
     if (_isReadOnly) {
       _showReadOnlyToast();
       return;
@@ -402,6 +438,39 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
       _localTransform = t;
       _isEdited = true;
     });
+  }
+
+  /// 先快后真门控：full-res 尚未生成完（_isPendingFinal 仍为 true）时，禁止用低清
+  /// 早帧做编辑/保存/裁剪，避免"编辑了却以低清落库"。返回 true 表示已被拦截。
+  bool _guardPendingFinal() {
+    if (!_isPendingFinal || !mounted) return false;
+    LumiraToast.show(
+      context,
+      '高清照片生成中，稍后再编辑',
+      duration: const Duration(milliseconds: 1500),
+    );
+    return true;
+  }
+
+  /// 先快后真：full-res 后台处理完成，把预览页从 early 早帧原位升级为高清成片。
+  void _upgradeInterimToFinal(String finalPath) {
+    if (!mounted || finalPath.isEmpty || finalPath == _photoUrl) return;
+    final prevUrl = _photoUrl;
+    final interimUrl = _interimUrl;
+    setState(() {
+      _photoUrl = finalPath;
+      _isPendingFinal = false;
+      _interimUrl = null;
+    });
+    // evict 旧图缓存（早帧 + 旧路径），避免旧低清帧残留
+    if (interimUrl != null && interimUrl.isNotEmpty) {
+      PaintingBinding.instance.imageCache.evict(FileImage(File(interimUrl)));
+    }
+    if (prevUrl != null && prevUrl.isNotEmpty && prevUrl != finalPath) {
+      PaintingBinding.instance.imageCache.evict(FileImage(File(prevUrl)));
+    }
+    // full-res 已落库：重载历史，恢复 originalPath / bakedPostProcess / 只读位
+    _loadHistoryPhotos();
   }
 
   /// 计算预览页显示用的增量参数（current - baked）。
@@ -905,6 +974,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 8. 延迟返回相册页
   Future<void> _onSave() async {
     if (_isSaving) return;
+    if (_guardPendingFinal()) return;
 
     // 只读模式：原图未保留，无法重新处理
     if (_isReadOnly || _originalPath == null) {
@@ -1116,6 +1186,7 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
   /// 不弹出替换/另存选择、不改数据库、不跳转。
   Future<void> _onSaveToAlbum() async {
     if (_isSaving) return;
+    if (_guardPendingFinal()) return;
     final photoPath = _photoUrl;
     if (photoPath.isEmpty || photoPath.startsWith('http')) {
       LumiraToast.show(context, '网络图片不支持保存到系统相册');
@@ -1498,8 +1569,11 @@ class _CapturePreviewPageState extends ConsumerState<CapturePreviewPage> {
                         onDragUpdate: _onSheetDragUpdate,
                         onDragEnd: (details) =>
                             _onSheetDragEnd(context, details),
-                        onCropModeChanged: (isCrop) =>
-                            setState(() => _isCropMode = isCrop),
+                        onCropModeChanged: (isCrop) {
+                          // 先快后真：full-res 未生成完时禁止进入裁剪，避免低清落库
+                          if (isCrop && _guardPendingFinal()) return;
+                          setState(() => _isCropMode = isCrop);
+                        },
                       ),
                     ),
                   );

@@ -98,6 +98,12 @@ class _TemplateParamSnapshot {
   final double fillLightIntensity;
 }
 
+// OHOS 原生（C++）快速路径的成片输出上限。C++ 后处理各阶段都快，不受 Dart 逐像素
+// CPU 管线的性能约束，故不再用设置里的 maxDim（默认 1280 → 成片被压到 960x1280 会糊）。
+// 传一个足够覆盖 5MP 竖屏档的大值，插件端「防放大糊」guard 会自动 fit 回源分辨率，
+// 让成片保持源图清晰度（960px 宽成片在现代屏幕上放大 1.4x+ 是「糊」的主因）。
+const int _ohosNativeMaxDim = 2560;
+
 class CapturePage extends ConsumerStatefulWidget {
   const CapturePage({super.key,
       this.templateId, this.sceneId, this.kitId, this.challengeId, this.trialMode = false});
@@ -224,6 +230,13 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 当前拍摄是否期望 OHOS 早帧（用于忽略上一帧残留事件，避免误触发动画）。
   bool _expectingEarlyFrame = false;
+
+  /// 先快后真：当前这次快门的 photoId（提前生成，interim→final→DB→预览升级复用）。
+  String? _currentShutterPhotoId;
+
+  /// 当前这次快门是否需要水印动画（回调用实例字段，防连拍/中途开关串值）。
+  bool _currentShouldAnimate = false;
+  WatermarkTemplate? _currentWmTemplate;
 
   /// 角标缩略图的 GlobalKey：水印动画淡出后跳预览页之前，
   /// 需要确保后处理落库完成（读取 finalPath/photoId）。
@@ -776,9 +789,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
         wmTemplate != null &&
         !isChallengeMode;
 
+    // === 先快后真：快门即生成 photoId 并快照本次水印参数（供早帧回调使用） ===
+    final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+    _currentShutterPhotoId = photoId;
+    _currentShouldAnimate = shouldAnimateNow;
+    _currentWmTemplate = wmTemplate;
+
     // 立即反馈：白闪 + 角标 processing 态
     setState(() => _shutterTrigger++);
-    ref.read(captureThumbnailProvider.notifier).startCapture();
+    ref.read(captureThumbnailProvider.notifier).startCapture(photoId: photoId);
 
     // iOS：快门瞬间双路并行 —— 取景器帧直出（水印动画源，快 + WYSIWYG）
     // 与 photoOutput 成片（质量优先）并行执行，互不阻塞。
@@ -792,19 +811,29 @@ class _CapturePageState extends ConsumerState<CapturePage>
         : Future<String?>.value(null);
 
     // OHOS 分阶段拍照：订阅早帧通道（常驻一次）。一阶段低质量帧（~672ms）先于成片
-    // capture()（~1.9s）返回到达，收到即提前触发水印动画，无需等成片落盘。
-    // _expectingEarlyFrame 标记本次拍摄期望早帧，防止上一帧残留事件误触发动画。
+    // capture()（~1.9s）返回到达。
+    // 先快后真：早帧无条件作为 interim 先顶屏（缩略图/预览），有水印时同时触发动画。
+    // _expectingEarlyFrame 标记本次拍摄期望早帧，防止上一帧残留事件误触发动画/interim。
     final isOhos = !isIos && !Platform.isAndroid;
-    _expectingEarlyFrame = shouldAnimateNow && isOhos;
-    if (_expectingEarlyFrame) {
+    _expectingEarlyFrame = isOhos;
+    if (isOhos) {
       try {
         _earlyFrameSub ??= cameraService.photoEarlyFrames().listen((path) {
           if (!_expectingEarlyFrame || _showWatermarkAnimation || path.isEmpty) {
             return;
           }
           _expectingEarlyFrame = false;
-          debugPrint('[capture] OHOS early frame arrived: $path');
-          _startWatermarkAnimation(path, wmTemplate!);
+          final pid = _currentShutterPhotoId;
+          debugPrint('[capture] OHOS early frame arrived: $path pid=$pid');
+          // 1) 先快后真：早帧即可见缩略图/预览（interim）
+          if (pid != null) {
+            ref.read(captureThumbnailProvider.notifier)
+                .setInterimResult(path, photoId: pid);
+          }
+          // 2) 需水印动画时才触发水印定格动画（回调用实例字段，防连拍串值）
+          if (_currentShouldAnimate && _currentWmTemplate != null) {
+            _startWatermarkAnimation(path, _currentWmTemplate!);
+          }
         });
       } catch (e) {
         debugPrint('[capture] listen OHOS early frame failed: $e');
@@ -879,6 +908,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           'vibrance=${postProcess.color.vibrance}');
       _processCaptureQueue.add(_CaptureProcessParams(
         inputPath: result.filePath,
+        photoId: photoId,
         targetRatio: targetRatio,
         ratioId: ratioId,
         isPortrait: isPortrait,
@@ -948,11 +978,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
         params.isPortrait &&
         // 拉腿尚未在 OHOS 原生 processJpeg 实现，开拉腿时走 Dart 管线应用。
         params.postProcess.legStretch == 0 &&
-        // 磨皮已由 OHOS 原生 C++ 全分辨率实现（肤色掩膜+边缘保护，非皮肤保留原值，
-        // 不降采样/放大），故不再回退 Dart；仅暗角/颗粒/Clarity/自定义裁剪仍走 Dart。
-        params.postProcess.vignette == 0 &&
-        params.postProcess.grain == 0 &&
-        (params.postProcess.color.clarity == null || params.postProcess.color.clarity == 0) &&
+        // 磨皮/暗角/颗粒/Clarity 已全部由 OHOS 原生 C++ 实现（矩阵含 clarity、
+        // 锐化→颗粒→磨皮→暗角 逐像素），与慢管线同序同语义，故不再回退 Dart。
+        // 仅自定义裁剪（需几何裁窗，原生 processJpeg 用 center-cover 近似）仍回退 Dart。
         params.postProcess.customCropRect == null;
     bool nativeFastDone = false;
     if (fastNative) {
@@ -970,7 +998,14 @@ class _CapturePageState extends ConsumerState<CapturePage>
           // 防糊由系统层解决：OHOS 8.2MP 档位 + PhotoQualityPrioritization.HIGH_QUALITY。
           sharpen: params.postProcess.sharpen,
           smoothStrength: params.postProcess.smoothStrength,
-          maxDim: params.maxDim,
+          vignette: params.postProcess.vignette,
+          grain: params.postProcess.grain,
+          // OHOS 原生 C++ 后处理各阶段都很快（解码/矩阵/锐化/磨皮/暗角/颗粒/编码），
+          // 不受制于 Dart 逐像素 CPU 管线的 maxDim 限制。此处把输出推到「源分辨率」
+          // （maxDim=2560 足够覆盖 5MP 竖屏档，插件端有「防放大糊」guard 会自动 fit
+          // 回源尺寸），成片不再被 1280 硬压到 960x1280——那正是「成片发糊、拉不回来」的
+          // 主因：960px 宽成片在现代屏幕上会被放大 1.4x+，软。
+          maxDim: _ohosNativeMaxDim,
           timing: nativeTiming,
         );
         swNative.stop();
@@ -1163,7 +1198,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
         }
       }
 
-      final photoId = 'photo_${DateTime.now().millisecondsSinceEpoch}';
+      // 先快后真：photoId 已在快门处生成，interim→final→DB→预览升级全程复用同一 id。
+      final photoId = params.photoId;
 
       // [偏黄诊断] 把原始图 / 处理结果 / 分阶段 RGB 报告写入 Documents，
       // 便于在 iOS「文件」App 中人工核对黄色从哪一步进入（无需看控制台日志）。
@@ -1250,6 +1286,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
       // 动画已在 _onCapture() 中立即触发（使用原始照片 + 水印 overlay），
       // 后处理完成后直接更新角标，无需等待动画结束。
       // 动画 overlay 覆盖在角标上方，用户在动画结束后才看到更新后的角标。
+      // 先快后真：这里是 full-res 完成 → 原位升级（interim→final）的触发点。
+      debugPrint('[perf] setFinalResult(final_) at ${DateTime.now().millisecondsSinceEpoch}ms');
       ref.read(captureThumbnailProvider.notifier)
           .setFinalResult(finalPath, photoId);
       ref.read(CaptureState.lastPhotoPathProvider.notifier).state =
@@ -1301,14 +1339,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
 
   /// 水印动画淡出后跳转拍摄预览页前的等待逻辑。
   /// 后处理（GPU + worker isolate + 水印渲染 + 落库）为异步执行，动画播放期间
-  /// 通常已经完成；此处轮询 [captureThumbnailProvider] 直到 finalPath/photoId 就绪，
-  /// 若在上限内未就绪（处理失败等异常场景）则静默停留拍摄页，避免打开无效预览。
+  /// 通常已经完成；此处轮询 [captureThumbnailProvider] 直到 photoId 且（finalPath 或
+  /// interimPath）就绪——先快后真：interim（早帧，~672ms）即可打开预览，full-res 后原位升级。
   Future<void> _goToPreviewWhenReady() async {
     const maxWait = Duration(milliseconds: 3000);
     final sw = Stopwatch()..start();
     while (mounted && sw.elapsed < maxWait) {
       final state = ref.read(captureThumbnailProvider);
-      if (state.finalPath != null && state.photoId != null) {
+      if ((state.finalPath != null || state.interimPath != null) &&
+          state.photoId != null) {
         _onThumbnailTap();
         return;
       }
@@ -1715,11 +1754,12 @@ class _CapturePageState extends ConsumerState<CapturePage>
         if (_hasNavigatedToChallenge) return;
         if (next.status != CaptureThumbnailStatus.final_) return;
         if (next.photoId == null || next.finalPath == null) return;
-        // 必须从 processing 或 preview 过渡到 final_ 才触发，避免：
+        // 必须从 processing / preview / interim 过渡到 final_ 才触发，避免：
         // 1. prev 为 null（首次监听/重建后 provider 残留 final_ 状态）时误触发
         // 2. 状态一直为 final_ 时重复触发
         if (prev?.status != CaptureThumbnailStatus.processing &&
-            prev?.status != CaptureThumbnailStatus.preview) return;
+            prev?.status != CaptureThumbnailStatus.preview &&
+            prev?.status != CaptureThumbnailStatus.interim) return;
         _hasNavigatedToChallenge = true;
         final cid = widget.challengeId!;
         final pid = next.photoId!;
@@ -1903,13 +1943,15 @@ class _CapturePageState extends ConsumerState<CapturePage>
   }
 
   /// 角标缩略图点击跳预览页。
-  /// 从 `captureThumbnailProvider` 读取最终图路径和 photoId，
-  /// 仅在 fullProcess 完成（finalPath/photoId 非 null）时响应。
+  /// 从 `captureThumbnailProvider` 读取最终图路径和 photoId。
+  /// 先快后真：finalPath 或 interimPath（早帧）均可打开预览；interim 打开时带
+  /// pendingFinal 标记，预览页等 full-res 完成后原位升级。
   void _onThumbnailTap() {
     final state = ref.read(captureThumbnailProvider);
-    final path = state.finalPath;
+    final path = state.finalPath ?? state.interimPath;
     final photoId = state.photoId;
     if (path == null || photoId == null) return;
+    final pendingFinal = state.finalPath == null && state.interimPath != null;
     final aspectRatio = ref.read(CaptureState.aspectRatioProvider);
     if (_returnResult) {
       context.pop(path);
@@ -1921,6 +1963,9 @@ class _CapturePageState extends ConsumerState<CapturePage>
         '&photoId=$photoId'
         '&aspectRatio=${Uri.encodeComponent(aspectRatio)}',
       );
+      if (pendingFinal) {
+        buf.write('&pendingFinal=1');
+      }
       final cid = widget.challengeId;
       if (cid != null && cid.isNotEmpty) {
         buf.write('&${RouteNames.paramChallengeId}=${Uri.encodeComponent(cid)}');
@@ -4048,6 +4093,7 @@ class _CameraPermissionGuide extends StatelessWidget {
 class _CaptureProcessParams {
   const _CaptureProcessParams({
     required this.inputPath,
+    required this.photoId,
     required this.targetRatio,
     required this.ratioId,
     required this.isPortrait,
@@ -4058,6 +4104,10 @@ class _CaptureProcessParams {
     this.isWysiwyg = false,
   });
   final String inputPath;
+
+  /// 快门时提前生成的 photoId，interim→final→DB→预览升级全程复用。
+  final String photoId;
+
   final double targetRatio; // 目标宽高比（正向像素）
 
   /// 拍摄实际使用的比例 id（'fullscreen' / '3:4' / '1:1' ...）。

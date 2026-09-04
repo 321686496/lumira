@@ -114,13 +114,25 @@ class _MainTabsPageState extends ConsumerState<MainTabsPage> {
             onPageChanged: (i) {
               if (_index != i) setState(() => _index = i);
             },
-            // 允许左右滑动切换相邻 Tab
+            // 允许左右滑动切换到相邻 Tab
             physics: const PageScrollPhysics(),
-            children: const [
-              _KeepAlivePage(child: HomePage()),
-              _KeepAlivePage(child: TemplatesPage()),
-              _KeepAlivePage(child: ChallengePage()),
-              _KeepAlivePage(child: ProfilePage()),
+            children: [
+              // 每页独立成层：本页滚动/重绘不会牵引相邻常驻页面，降低 OHOS 合成器压力
+              RepaintBoundary(
+                child: _KeepAlivePage(active: _index == 0, child: const HomePage()),
+              ),
+              RepaintBoundary(
+                child:
+                    _KeepAlivePage(active: _index == 1, child: const TemplatesPage()),
+              ),
+              RepaintBoundary(
+                child:
+                    _KeepAlivePage(active: _index == 2, child: const ChallengePage()),
+              ),
+              RepaintBoundary(
+                child:
+                    _KeepAlivePage(active: _index == 3, child: const ProfilePage()),
+              ),
             ],
           ),
           // 共享 Tab 栏（覆盖在 4 页之上，中间按钮仍 push 拍摄页）
@@ -141,9 +153,12 @@ class _MainTabsPageState extends ConsumerState<MainTabsPage> {
 
 /// 让 PageView 的每一项在滑出可视区后仍常驻不销毁，
 /// 从而保留各 Tab 页的滚动位置与已加载的 Provider 状态。
+///
+/// [active] 表示当前是否是该 Tab（决定 TickerMode 是否启用）。
 class _KeepAlivePage extends StatefulWidget {
-  const _KeepAlivePage({required this.child});
+  const _KeepAlivePage({required this.active, required this.child});
 
+  final bool active;
   final Widget child;
 
   @override
@@ -158,7 +173,15 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return widget.child;
+    // 性能(Forced fix): 4 个 Tab 都常驻（KeepAlive），非激活页内部的持续动画
+    // （挑战页翻牌流光 repeat、首页 Banner 轮播、女性呼吸光晕等）会持续驱动帧，
+    // 把 OHOS 光栅线程占满，导致任意 Tab 滚动都掉帧。
+    // 用 TickerMode 在 Tab 非激活时静音其子树内全部 Ticker：动画暂停、不再产生帧；
+    // 切回该 Tab 时自动恢复，视觉与功能完全不受影响。
+    return TickerMode(
+      enabled: widget.active,
+      child: widget.child,
+    );
   }
 }
 

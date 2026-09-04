@@ -41,11 +41,26 @@ class _HeroCardState extends ConsumerState<HeroCard> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(_refreshInterval, (_) {
-      if (!mounted) return;
-      // invalidate 触发重算；配合 skipLoadingOnReload 刷新时保留旧数据，不闪 loading。
-      ref.invalidate(homeInspirationProvider);
-    });
+    // 定时器改为在 didChangeDependencies 里按 TickerMode 启停（见下），
+    // 避免 keep-alive 的首页在非激活时仍每分钟重建灵感卡。
+  }
+
+  /// 跟随 TickerMode：首页 Tab 非激活时暂停 1 分钟刷新定时器，激活时恢复，
+  /// 避免后台持续 rebuild 占帧。数据在回到首页时自动重新拉取。
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final enabled = TickerMode.of(context);
+    if (enabled && _timer == null) {
+      _timer = Timer.periodic(_refreshInterval, (_) {
+        if (!mounted) return;
+        // invalidate 触发重算；配合 skipLoadingOnReload 刷新时保留旧数据，不闪 loading。
+        ref.invalidate(homeInspirationProvider);
+      });
+    } else if (!enabled && _timer != null) {
+      _timer?.cancel();
+      _timer = null;
+    }
   }
 
   @override

@@ -36,6 +36,9 @@ class CamerawesomePlugin {
   static const EventChannel _physicalButtonChannel =
       EventChannel('camerawesome/physical_button');
 
+  static const MethodChannel _previewEffectsChannel =
+      MethodChannel('camerawesome/preview_effects');
+
   static Stream<CameraOrientations>? _orientationStream;
 
   static Stream<CameraPhysicalButton>? _physicalButtonStream;
@@ -356,6 +359,26 @@ class CamerawesomePlugin {
   static Future<void> setWhiteBalance(String mode, int? k) {
     // 共享 Pigeon 通道（iOS 已由 Task 2 实现；Android 端由 Task 3 实现）。
     return CameraInterface().setWhiteBalance(mode, k);
+  }
+
+  /// 更新取景器逐帧效果（iOS 原生 GPU 实时预览）。参数源自 Dart effectivePost：
+  /// matrix 为 Flutter ColorFilter 20 元素（含白平衡温度折叠，全屏均匀）；vignette/
+  /// smooth/sharpen/grain 为 0..100 强度（0 = 关闭）。仅在 iOS 生效，Android 为 no-op。
+  static Future<void> updatePreviewEffects({
+    List<double>? matrix,
+    double vignette = 0,
+    double smooth = 0,
+    double sharpen = 0,
+    double grain = 0,
+  }) {
+    if (!Platform.isIOS) return Future.value();
+    return _previewEffectsChannel.invokeMethod<void>('setPreviewEffects', {
+      'matrix': matrix,
+      'vignette': vignette,
+      'smooth': smooth,
+      'sharpen': sharpen,
+      'grain': grain,
+    });
   }
 
   /// 锁定/解锁对焦与曝光（长按锁定 AE/AF）。iOS 传归一化坐标，Android 传像素坐标。

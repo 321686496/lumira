@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -43,6 +44,22 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
     super.dispose();
   }
 
+  /// Tab 非激活时（MainTabsPage 用 TickerMode 静音整页）自动暂停轮播定时器，
+  /// 避免 keep-alive 后台继续驱动轮播动画占帧；恢复激活时按需重启。
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final enabled = TickerMode.of(context);
+    if (enabled) {
+      if (_controller != null && _timer == null) {
+        _restartTimer(_bannerCount);
+      }
+    } else {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
   /// banner 数量变化时重建控制器（居中初始化以实现无限滑动），并（重）启自动轮播。
   void _initController(int count) {
     if (_controller != null && count == _bannerCount) return;
@@ -61,9 +78,12 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
     _timer?.cancel();
     _timer = null;
     if (count <= 1) return;
+    if (!TickerMode.of(context)) return; // Tab 非激活时不启动
     _timer = Timer.periodic(const Duration(seconds: 5), (_) {
       final c = _controller;
-      if (c == null || !c.hasClients) return;
+      if (c == null || !c.hasClients || !mounted) return;
+      // 已滚出可视区时不自动轮播（省掉不可见的离屏重绘）
+      if (!_isInViewport()) return;
       // 无限模式：始终向后滑一页即可无缝循环
       c.animateToPage(
         _current + 1,
@@ -71,6 +91,34 @@ class _HomeBannerState extends ConsumerState<HomeBanner> {
         curve: Curves.easeInOut,
       );
     });
+  }
+
+  /// 判断 banner 是否处于「外层滚动容器（首页 ListView）」的可视区内。
+  /// 穿透 banner 自身的 PageView，取最外层真实滚动位置计算；任何不确定都 fail-open。
+  bool _isInViewport() {
+    try {
+      final box = context.findRenderObject();
+      if (box == null || box is! RenderBox) return true;
+      // banner 自身 PageView 永远"可视"；取最外层滚动容器（首页 ListView）判定。
+      ScrollableState? s = context.findAncestorStateOfType<ScrollableState>();
+      ScrollPosition? outer;
+      while (s != null) {
+        outer = s.position;
+        s = s.context.findAncestorStateOfType<ScrollableState>();
+      }
+      if (outer == null) return true;
+      final viewport = outer.context.storageContext
+          .findAncestorRenderObjectOfType<RenderAbstractViewport>();
+      if (viewport == null) return true;
+      final reveal = viewport.getOffsetToReveal(box, 0.0);
+      final top = reveal.offset;
+      final bottom = top + box.size.height;
+      final vp = outer.pixels;
+      final vh = outer.viewportDimension;
+      return bottom >= vp && top <= vp + vh;
+    } catch (_) {
+      return true;
+    }
   }
 
   /// 用户手动拖动开始 → 重置自动轮播计时（避免刚滑动完立刻被自动切走）。

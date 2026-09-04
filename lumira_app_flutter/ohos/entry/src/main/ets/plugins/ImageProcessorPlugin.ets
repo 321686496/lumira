@@ -92,6 +92,8 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       const matrixArr = call.argument('matrix') as number[];
       const sharpen: number = call.argument('sharpen') ?? 0;
       const smooth: number = call.argument('smooth') ?? 0;
+      const vignette: number = call.argument('vignette') ?? 0;
+      const grain: number = call.argument('grain') ?? 0;
       const maxDim: number = call.argument('maxDim') ?? 1280;
       if (!matrixArr || matrixArr.length < 20) {
         result.success({ ok: false, error: 'matrix invalid (need 20)' });
@@ -124,36 +126,58 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
           outW = maxDim * targetRatio;
         }
       }
-      const iOutW = Math.round(outW);
-      const iOutH = Math.round(outH);
+      // ── 防放大糊 ──
+      // 源图太小（如 1:1 方形图窄边 < maxDim，或设备源图档位较低）时，若直接按
+      // desiredSize 输出，系统会对源图做拉伸放大 → 成片发糊且锐化救不回
+      //（死区锐化只提边缘、补不了缺失像素）。缩放到能完整落在源图内（保持比例），
+      // 让每个输出像素都取自真实源像素，绝不放大。
+      if (outW > srcW || outH > srcH) {
+        const fit = Math.min(1, srcW / outW, srcH / outH);
+        outW = Math.round(outW * fit);
+        outH = Math.round(outH * fit);
+      }
+      const iOutW = Math.max(1, Math.round(outW));
+      const iOutH = Math.max(1, Math.round(outH));
 
-      // ── 2) 系统原生几何变换：解码时一步完成「cover 居中裁切 + 缩放到输出」 ──
-      // 原实现是先整图解码成 RGBA，再在 ArkTS 里做逐像素反向映射 + 双线性回采样，
-      // 120 万输出像素的软件循环是 processJpeg 5s 级的性能瓶颈。
-      // 改由 ImageSource 硬件解码的 desiredRegion + desiredSize 一次裁切缩放到位。
-      // 源与目标纵横比不同时，一个目标纵横比的居中裁窗天然等价于旋转，故不再需要
-      // alignRotation 分支；前置镜像改在下方颜色耦合阶段处理。
+      // ── 2) 系统原生几何变换：高质「cover 居中裁切」──
+      // 关键：不用 createPixelMap 的 desiredRegion+desiredSize 做"裁剪+缩放"（该路径的
+      // 缩放滤镜偏软，成片发糊且死区锐化提不回）。改为：
+      //   ① 整图用 desiredSize 做 DCT 高质量下采样解码（解码器 DCT 缩放，锐度远高于
+      //      后续任意像素缩放器）；
+      //   ② 在 RGBA 缓冲区里做纯像素中心裁剪（无缩放、无插值，绝对锐利）；
+      //   ③ 裁剪结果直接进 C++ 做色彩/锐化/磨皮/暗角/颗粒。
+      // 源与目标纵横比不同时，居中裁窗天然等价于旋转；前置镜像仍在颜色阶段处理。
       const coverScale = Math.max(outW / srcW, outH / srcH);
-      const cropW = outW / coverScale;
-      const cropH = outH / coverScale;
-      let region: image.Region = {
-        x: Math.round((srcW - cropW) / 2),
-        y: Math.round((srcH - cropH) / 2),
-        size: { width: Math.round(cropW), height: Math.round(cropH) }
-      };
-      if (region.x < 0) { region.x = 0; }
-      if (region.y < 0) { region.y = 0; }
+      const decodeW = Math.max(1, Math.round(srcW * coverScale));
+      const decodeH = Math.max(1, Math.round(srcH * coverScale));
       srcPixelMap = await source.createPixelMap({
-        desiredSize: { width: iOutW, height: iOutH },
-        desiredRegion: region,
-        desiredPixelFormat: image.PixelMapFormat.RGBA_8888,
-        cropAndScaleStrategy: image.CropAndScaleStrategy.CROP_FIRST
+        desiredSize: { width: decodeW, height: decodeH },
+        desiredPixelFormat: image.PixelMapFormat.RGBA_8888
       });
-      const geoInfo: image.ImageInfo = await srcPixelMap.getImageInfo();
-      const pw = geoInfo.size.width;
-      const ph = geoInfo.size.height;
-      const srcBuf = new ArrayBuffer(pw * ph * 4);
-      await srcPixelMap.readPixelsToBuffer(srcBuf);
+      const gdInfo: image.ImageInfo = await srcPixelMap.getImageInfo();
+      const aDecW = gdInfo.size.width;
+      const aDecH = gdInfo.size.height;
+      const decBuf = new ArrayBuffer(aDecW * aDecH * 4);
+      await srcPixelMap.readPixelsToBuffer(decBuf);
+      // 输出尺寸 = cover 裁窗经 coverScale 映射后的精确大小（即使缩放比例来自 max 也会收敛到 iOutW×iOutH）
+      const pw = iOutW;
+      const ph = iOutH;
+      // 中心裁窗：在解码缓冲区中截取 iOutW×iOutH；因解码尺寸按 coverScale 生成，裁窗恰好等于输出边长（纯裁剪，无再采样）。
+      const cropX = Math.max(0, Math.round((aDecW - pw) / 2));
+      const cropY = Math.max(0, Math.round((aDecH - ph) / 2));
+      let cropBuf: ArrayBuffer;
+      if (cropX === 0 && cropY === 0 && aDecW === pw && aDecH === ph) {
+        cropBuf = decBuf; // 已精确等于输出，直接复用，零拷贝
+      } else {
+        cropBuf = new ArrayBuffer(pw * ph * 4);
+        const srcU8 = new Uint8Array(decBuf);
+        const cropU8 = new Uint8Array(cropBuf);
+        const rowBytes = pw * 4;
+        for (let y = 0; y < ph; y++) {
+          const srcOff = ((y + cropY) * aDecW + cropX) * 4;
+          cropU8.set(srcU8.subarray(srcOff, srcOff + rowBytes), y * rowBytes);
+        }
+      }
       const tDecode = Date.now();
 
       // ── 3+4) 色彩矩阵 + 前置镜像 + R/B 复原 + 磨皮 + 边缘自适应锐化 —— 下沉 C++ NAPI ──
@@ -167,7 +191,8 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       const matrixF64 = new Float64Array(20);
       for (let i = 0; i < 20; i++) { matrixF64[i] = matrixArr[i]; }
       const finBuf = nativeProcessor.processRgba(
-        new Uint8Array(srcBuf), pw, ph, matrixF64, Math.max(0, sharpen), isFront, Math.max(0, smooth)) as ArrayBuffer;
+        new Uint8Array(cropBuf), pw, ph, matrixF64, Math.max(0, sharpen), isFront, Math.max(0, smooth),
+        Math.max(0, vignette), Math.max(0, grain)) as ArrayBuffer;
       if (!finBuf) {
         result.success({ ok: false, error: 'native processRgba failed' });
         return;
@@ -191,12 +216,14 @@ export default class ImageProcessorPlugin implements FlutterPlugin, MethodCallHa
       wfd = -1;
       const tEncode = Date.now();
 
-      console.info(`[ImageProcessor] processJpeg ok ${pw}x${ph} src=${srcW}x${srcH} crop=${region.size.width}x${region.size.height} mirror=${isFront} smooth=${smooth} `
+      console.info(`[ImageProcessor] processJpeg ok ${pw}x${ph} src=${srcW}x${srcH} dec=${aDecW}x${aDecH} crop=${cropX},${cropY} mirror=${isFront} smooth=${smooth} `
         + `decode=${tDecode - tStart}ms transform=${tTransform - tDecode}ms sharpen=${tSharpen - tTransform}ms encode=${tEncode - tSharpen}ms`);
       result.success({
         ok: true,
         width: pw,
         height: ph,
+        srcW: srcW,
+        srcH: srcH,
         timing: {
           decode: tDecode - tStart,
           transform: tTransform - tDecode,

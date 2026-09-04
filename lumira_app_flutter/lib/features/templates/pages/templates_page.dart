@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/db/dao/templates_dao.dart';
@@ -135,10 +136,20 @@ class _TemplatesPageState extends ConsumerState<TemplatesPage> {
       ),
       body: Stack(
         children: [
-          // 背景装饰（glass 风格可见性）
-          _BackgroundDecoration(tokens: tokens),
-          // Forced fix: glass 风格彩色斑点背景
-          const Positioned.fill(child: GlassBackground(variant: GlassBackgroundVariant.templates)),
+          // 背景层整体栅格化隔离：滚动/内容重绘时不牵引全屏背景（对齐首页结构）
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // 背景装饰（glass 风格可见性）
+                  _BackgroundDecoration(tokens: tokens),
+                  // Forced fix: glass 风格彩色斑点背景
+                  const GlassBackground(variant: GlassBackgroundVariant.templates),
+                ],
+              ),
+            ),
+          ),
           // 主内容（extendBodyBehindAppBar 让内容延伸到 nav 下方，需 top padding 占位避免被遮挡）
           RefreshIndicator(
             color: tokens.brand,
@@ -171,41 +182,72 @@ class _BodyContent extends ConsumerWidget {
       orElse: () => false,
     );
 
-    return ListView(
+    // 性能(Forced fix): 原 ListView(children:) + shrinkWrap 瀑布流会把「更多模板」的全部
+    // 卡片一次性 build/layout、封面一次性解码，在 OHOS 上滚动到网格区时产生连续解码突刺
+    // → 掉帧。改为 CustomScrollView：固定小节用 SliverList，瀑布流网格用
+    // SliverMasonryGrid 懒加载，按滚动位置只 build/解码视口内的卡片。
+    return CustomScrollView(
       controller: scrollController,
       physics: const AlwaysScrollableScrollPhysics(), // 支持下拉刷新
-      // 顶部留 12 与标题栏做间距，避免内容顶在导航栏下。
-      padding: const EdgeInsets.only(top: 12),
-      children: [
+      cacheExtent: 480, // 提前约一屏预构建，让网格卡片更早触发图片下载/解码
+      slivers: [
         // === 模板库 section（上）===
-        FadeUp(child: _TemplateSectionHeader()),
-        _HeroSection(onTap: onTap),
-        if (showPreference)
-          FadeUp(
-            delay: const Duration(milliseconds: 80),
-            child: _PreferenceSection(),
+        // 固定小节（体积小，一次性构建即可）
+        SliverPadding(
+          padding: const EdgeInsets.only(top: 12),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(
+              [
+                FadeUp(child: _TemplateSectionHeader()),
+                _HeroSection(onTap: onTap),
+                if (showPreference)
+                  FadeUp(
+                    delay: const Duration(milliseconds: 80),
+                    child: _PreferenceSection(),
+                  ),
+                // 「更多模板」标题行（网格本身是懒加载 sliver，紧跟其后）
+                const _MoreTemplatesHeader(),
+              ],
+            ),
           ),
-        const FadeUp(
-          delay: Duration(milliseconds: 120),
-          child: _OtherSection(),
         ),
-        const SizedBox(height: 28),
+        // 「更多模板」瀑布流网格（懒加载 SliverMasonryGrid）
+        const _MoreTemplatesGridSliver(),
         // === 场景 section（下）===
-        FadeUp(
-          delay: const Duration(milliseconds: 160),
-          child: _SceneSectionHeader(),
+        SliverPadding(
+          padding: const EdgeInsets.only(top: 28),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(
+              [
+                FadeUp(
+                  delay: const Duration(milliseconds: 160),
+                  child: _SceneSectionHeader(),
+                ),
+              ],
+            ),
+          ),
         ),
-        const FadeUp(
-          delay: Duration(milliseconds: 200),
-          child: SceneCategoryOverview(compact: true),
+        const SliverToBoxAdapter(
+          child: FadeUp(
+            delay: Duration(milliseconds: 200),
+            child: SceneCategoryOverview(compact: true),
+          ),
         ),
-        const SizedBox(height: 28),
         // === 摄影美学院 section ===
-        FadeUp(
-          delay: const Duration(milliseconds: 240),
-          child: _AcademyEntrySection(),
+        SliverPadding(
+          padding: const EdgeInsets.only(top: 28),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate(
+              [
+                FadeUp(
+                  delay: const Duration(milliseconds: 240),
+                  child: _AcademyEntrySection(),
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 140), // bottom spacer 避开 FloatingTabBar
+        const SliverToBoxAdapter(child: SizedBox(height: 140)), // bottom spacer 避开 FloatingTabBar
       ],
     );
   }
@@ -401,9 +443,52 @@ class _PreferenceSection extends ConsumerWidget {
   }
 }
 
-/// 更多模板 section
-class _OtherSection extends ConsumerWidget {
-  const _OtherSection();
+/// 「更多模板」标题行（网格由懒加载 sliver 紧跟其后）
+class _MoreTemplatesHeader extends ConsumerWidget {
+  const _MoreTemplatesHeader();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tokens = ref.watch(appThemeProvider).tokens;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '更多模板',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: tokens.textPrimary,
+              letterSpacing: -0.01 * 16,
+              height: 1.2,
+            ),
+          ),
+          GestureDetector(
+            onTap: () => GoRouter.of(context).push(RouteNames.templatesAll),
+            child: Text(
+              '查看全部 ›',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: tokens.brand,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 「更多模板」瀑布流网格（懒加载 SliverMasonryGrid）
+///
+/// 性能(Forced fix): 原 shrinkWrap Row/Column 双列配平会把全部卡片一次性 build/layout、
+/// 封面一次性解码；改为 SliverMasonryGrid 后按滚动位置只 build/解码视口内的卡片。
+/// 卡片高度由内容（AdaptiveCoverImage 自适应封面 + 文字）固有决定，无需手工估算。
+class _MoreTemplatesGridSliver extends ConsumerWidget {
+  const _MoreTemplatesGridSliver();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -412,101 +497,41 @@ class _OtherSection extends ConsumerWidget {
     // 已拍照片数（「更多模板」卡右下角角标，与模板库卡片一致）
     final usageCounts =
         ref.watch(templateUsageCountsProvider).valueOrNull ?? const <String, int>{};
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12), // 24rpx → 12dp，标题与卡片间距
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '更多模板',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.textPrimary,
-                    letterSpacing: -0.01 * 16,
-                    height: 1.2,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () =>
-                      GoRouter.of(context).push(RouteNames.templatesAll),
-                  child: Text(
-                    '查看全部 ›',
-                    style: TextStyle(
-                      fontSize: 12, // 24rpx → 12dp
-                      fontWeight: FontWeight.w500,
-                      color: tokens.brand,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Forced fix: 用 hotAndNewTemplatesProvider 替代 FutureBuilder，
-          // 缓存查询结果避免每次 build 反复进入 loading 状态导致标题下方出现大空白。
-          // loading 时用 SizedBox.shrink() 避免占位空白，数据到达后自然填充。
-          asyncOthers.when(
-            loading: () => const SizedBox.shrink(),
-            error: (e, _) => _EmptyState(tokens: tokens),
-            data: (others) {
-              if (others.isEmpty) {
-                return _EmptyState(tokens: tokens);
-              }
-              final visible = others.length > 6 ? others.sublist(0, 6) : others;
-              // 瀑布流双列：按估算高度配平（与 TemplateGrid 同模式）
-              final screenW = MediaQuery.of(context).size.width;
-              final cardW = (screenW - 40 - 12) / 2; // 页面左右 padding 20*2 + 列间距 12
-              final left = <Widget>[];
-              final right = <Widget>[];
-              var leftH = 0.0;
-              var rightH = 0.0;
-              for (final r in visible) {
-                // 与「全部模板页」卡片同构：TemplateCard + 共享徽标（免费/积分/已拍）
-                final item = templateGridItemFromRecord(r, isCustom: false);
-                final card = Padding(
+
+    return asyncOthers.when(
+      loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+      error: (e, _) => SliverToBoxAdapter(child: _EmptyState(tokens: tokens)),
+      data: (others) {
+        if (others.isEmpty) {
+          return SliverToBoxAdapter(child: _EmptyState(tokens: tokens));
+        }
+        final visible = others.length > 6 ? others.sublist(0, 6) : others;
+        return SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          sliver: SliverMasonryGrid.count(
+            crossAxisCount: 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childCount: visible.length,
+            itemBuilder: (_, i) {
+              final r = visible[i];
+              // 与「全部模板页」卡片同构：TemplateCard + 共享徽标（免费/积分/已拍）
+              final item = templateGridItemFromRecord(r, isCustom: false);
+              // 整卡隔离成独立图层，滚动时合成器直接搬移缓存层，避免每帧重绘阴影
+              return RepaintBoundary(
+                child: Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: TemplateCard(
                     tokens: tokens,
                     template: item,
                     usageCount: usageCounts[item.id] ?? 0,
                   ),
-                );
-                final h = _estimateMoreCardHeight(item, cardW);
-                if (leftH <= rightH) {
-                  left.add(card);
-                  leftH += h;
-                } else {
-                  right.add(card);
-                  rightH += h;
-                }
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: left,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: right,
-                    ),
-                  ),
-                ],
+                ),
               );
             },
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -690,15 +715,4 @@ TemplateRecommendation _recordToRecommendation(TemplateRecord r) {
     isCustom: r.source == 'custom',
     ambience: TemplateMapper.ambienceFromJson(r.ambienceJson),
   );
-}
-
-/// 估算「更多模板」卡片高度（瀑布流配平用）。
-///
-/// 结构与 [TemplateCard] 一致：封面(宽 ÷ kDefaultCoverRatio) + 文字区
-/// (内边距 24 + 名称 20 + [短描述 3+30] + 间距 6 + 徽标行 22)。
-double _estimateMoreCardHeight(AllTemplateItem t, double cardWidth) {
-  final coverH = cardWidth / kDefaultCoverRatio;
-  final hasDesc = t.shortDesc.isNotEmpty || t.description.isNotEmpty;
-  final textH = 20 + (hasDesc ? 33 : 0) + 6 + 22 + 24;
-  return coverH + textH;
 }

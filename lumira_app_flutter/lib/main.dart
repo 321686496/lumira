@@ -50,6 +50,13 @@ class MyApp extends ConsumerWidget {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 性能(OHOS): 调大解码位图缓存上限（Flutter 默认 100MB / 1000 张）。
+  // 四个 Tab 页常驻 + 图片密集，默认上限会在滚动时频繁淘汰已解码缩略图；
+  // 而 ln 引擎 dart:ui 图片解码慢，滚动回看/新卡入屏会因重新解码掉帧。
+  // 提到 200MB / 600 张：既容纳 4 页缩略图避免频繁淘汰，又不至于撑爆 OHOS 内存。
+  PaintingBinding.instance.imageCache.maximumSize = 600;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 200 * 1024 * 1024;
+
   // 锁定竖屏方向：UI 整体保持竖屏，绝不随设备旋转到横屏（避免 iOS 横屏后整体布局
   // 被拉伸挤压、取景器都看不全）。
   // 横屏拍摄的适配不依赖整屏旋转，而是走加速度传感器（见 capture_page/level_sensor_service）：

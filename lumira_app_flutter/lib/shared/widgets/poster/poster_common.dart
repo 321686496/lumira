@@ -272,6 +272,14 @@ class PosterThumbnailScope extends InheritedWidget {
 /// 海报二维码（白底黑模块，外框品牌色）。
 ///
 /// 在 [PosterThumbnailScope] 缩略图作用域内改渲染品牌占位 QR 图形。
+///
+/// **渲染说明（识别可靠性）**：直接以 ~54px 的小逻辑尺寸用 `QrPainter`
+/// 渲染，再经海报导出（≈3.6x 放大）后，模块只有 0.7px 左右，`QrPainter`
+/// 的 0.5px 取整会破坏模块几何（finder 比例失真），导致扫一扫的 `zxing2`
+/// 无法识别（微信能识别，但 App 不行）。因此这里改为 **高分辨率矢量渲染**：
+/// 以 ≥260px 的逻辑尺寸放 `QrPainter`（CustomPaint 矢量绘制），再经
+/// [FittedBox] 缩到当前显示尺寸。海报导出时 [RepaintBoundary] 以高倍率
+/// 重采样，矢量模块始终锐利、无异步加载竞态，可被可靠识别。
 class PosterQr extends StatelessWidget {
   const PosterQr({
     super.key,
@@ -292,42 +300,59 @@ class PosterQr extends StatelessWidget {
   final Color? borderColor;
   final double paddingAll;
 
+  /// 高分辨率逻辑边长：保证每个模块 ≥3px，导出降采样后仍锐利。
+  static double _renderSide(double displaySize) =>
+      (displaySize * 6).clamp(260.0, 640.0);
+
+  QrPainter _buildPainter() {
+    return QrPainter(
+      data: data,
+      version: QrVersions.auto,
+      eyeStyle: const QrEyeStyle(
+        eyeShape: QrEyeShape.square,
+        color: PosterPalette.ink,
+      ),
+      dataModuleStyle: const QrDataModuleStyle(
+        dataModuleShape: QrDataModuleShape.square,
+        color: PosterPalette.ink,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final renderSide = _renderSide(size);
     return Container(
-      width: size + paddingAll * 2,
-      height: size + paddingAll * 2,
+      width: size + widgetPadding,
+      height: size + widgetPadding,
       padding: EdgeInsets.all(padding + paddingAll),
       decoration: BoxDecoration(
         color: background ?? PosterPalette.surfaceAlt,
         borderRadius: BorderRadius.circular(radius),
-        border: borderColor != null ? Border.all(color: borderColor!) : null,
+        border: borderColor != null
+            ? Border.all(color: borderColor!)
+            : null,
       ),
       child: PosterThumbnailScope.isThumbnail(context)
           // 缩略图模式：占位 QR 图形，避免真实二维码缩成一点
           ? _QrThumbnailGlyph(size: size)
-          : QrImageView(
-              data: data,
-              version: QrVersions.auto,
-              size: size,
-              // 关闭 QrImageView 自带 10px 内边距（双重 padding 会把有效二维码缩小
-              // size-30，小尺寸下糊成一点）；静区由外层 Container 的浅色 padding 承担。
-              padding: EdgeInsets.zero,
-              backgroundColor: Colors.white,
-              errorStateBuilder: (_, __) => Center(
-                child: PosterLogo(size: size * 0.4),
-              ),
-              eyeStyle: const QrEyeStyle(
-                eyeShape: QrEyeShape.square,
-                color: PosterPalette.ink,
-              ),
-              dataModuleStyle: const QrDataModuleStyle(
-                dataModuleShape: QrDataModuleShape.square,
-                color: PosterPalette.ink,
+          : SizedBox(
+              width: size,
+              height: size,
+              child: FittedBox(
+                fit: BoxFit.contain,
+                // 同步矢量渲染：无异步加载竞态，导出高倍率重采样保持锐利
+                child: SizedBox(
+                  width: renderSide,
+                  height: renderSide,
+                  child: CustomPaint(painter: _buildPainter()),
+                ),
               ),
             ),
     );
   }
+
+  double get widgetPadding => paddingAll * 2;
 }
 
 /// 缩略图模式下的二维码占位：白底圆角方块 + 占满的迷你 QR 图形。

@@ -63,6 +63,95 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
         break;
     }
   }
+  /// tab bar 表面（底色/描边/阴影 + 5 个 item 的 Row）。
+  /// 与玻璃模糊解耦，便于在非玻璃风格跳过 BackdropFilter，只保留纯静态表面。
+  Widget _barContent(ThemeTokens tokens, bool isFemale, bool isGlass) {
+    return Container(
+      height: 54, // 108rpx → 54dp
+      decoration: BoxDecoration(
+        // Forced fix: glass 用主题色磨砂渐变 + 白描边（跟随品牌色）
+        gradient: isGlass
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withOpacity(0.72),
+                  Color.lerp(Colors.white, tokens.brandLight, 0.12)!
+                      .withOpacity(0.46),
+                  Color.lerp(Colors.white, tokens.brandLight, 0.20)!
+                      .withOpacity(0.30),
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              )
+            : null,
+        color: isGlass ? null : tokens.canvas,
+        borderRadius: BorderRadius.circular(1000),
+        border: isGlass
+            ? Border.all(
+                color: ThemeTokens.glassBorder(tokens),
+                width: 1.0,
+              )
+            : null,
+        boxShadow: isGlass
+            ? const [
+                BoxShadow(
+                  color: Color(0x29000000),
+                  offset: Offset(0, 10),
+                  blurRadius: 30,
+                ),
+              ]
+            : isFemale
+                ? [
+                    BoxShadow(
+                      color: tokens.brand.withOpacity(0.15),
+                      offset: const Offset(0, 4),
+                      blurRadius: 16,
+                    ),
+                  ]
+                : tokens.shadowConvex,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _TabItem(
+            icon: Icons.home_outlined,
+            label: '首页',
+            active: widget.active == 'home',
+            onTap: () => _handleTabTap(0),
+            tokens: tokens,
+            isFemale: isFemale,
+          ),
+          _TabItem(
+            icon: Icons.grid_view_outlined,
+            label: '发现',
+            active: widget.active == 'templates',
+            onTap: () => _handleTabTap(1),
+            tokens: tokens,
+            isFemale: isFemale,
+          ),
+          // 中间占位（capture button 由 Stack 顶层渲染）
+          const SizedBox(width: 60),
+          _TabItem(
+            icon: Icons.flag_outlined,
+            label: '挑战',
+            active: widget.active == 'challenge',
+            onTap: () => _handleTabTap(3),
+            tokens: tokens,
+            isFemale: isFemale,
+          ),
+          _TabItem(
+            icon: Icons.person_outline,
+            label: '我的',
+            active: widget.active == 'profile',
+            onTap: () => _handleTabTap(4),
+            tokens: tokens,
+            isFemale: isFemale,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appTheme = ref.watch(appThemeProvider);
@@ -88,102 +177,25 @@ class _FloatingTabBarState extends ConsumerState<FloatingTabBar> {
             clipBehavior: Clip.none,
             alignment: Alignment.bottomCenter,
             children: [
-              // 底层：tab bar（带 ClipRRect + BackdropFilter）
+              // 底层：tab bar
+              // 性能(Forced fix): BackdropFilter 会令引擎把其背后的滚动内容单独成层，
+              // 并在内容滚动时每帧重新光栅/合成整条区域——这是四个 Tab 页在 OHOS 上滚动掉帧的
+              // 共性根因（sigma=0 无可见模糊，却依然承担 backdrop 分层开销）。因此仅在玻璃风格
+              // 真正需要模糊时包裹 BackdropFilter；其余风格直接 ClipRRect。并对整栏加
+              // RepaintBoundary，让静态表面不被反复重绘。视觉与原实现完全一致。
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(1000),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: isGlass ? 25 : 0,
-                      sigmaY: isGlass ? 25 : 0,
-                    ),
-                    child: Container(
-                      height: 54, // 108rpx → 54dp
-                      decoration: BoxDecoration(
-                        // Forced fix: glass 用主题色磨砂渐变 + 白描边（跟随品牌色）
-                        gradient: isGlass
-                            ? LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [
-                                  Colors.white.withOpacity(0.72),
-                                  Color.lerp(Colors.white, tokens.brandLight, 0.12)!
-                                      .withOpacity(0.46),
-                                  Color.lerp(Colors.white, tokens.brandLight, 0.20)!
-                                      .withOpacity(0.30),
-                                ],
-                                stops: const [0.0, 0.5, 1.0],
-                              )
-                            : null,
-                        color: isGlass ? null : tokens.canvas,
-                        borderRadius: BorderRadius.circular(1000),
-                        border: isGlass
-                            ? Border.all(
-                                color: ThemeTokens.glassBorder(tokens),
-                                width: 1.0,
-                              )
-                            : null,
-                        boxShadow: isGlass
-                            ? const [
-                                BoxShadow(
-                                  color: Color(0x29000000),
-                                  offset: Offset(0, 10),
-                                  blurRadius: 30,
-                                ),
-                              ]
-                            : isFemale
-                                ? [
-                                    BoxShadow(
-                                      color: tokens.brand.withOpacity(0.15),
-                                      offset: const Offset(0, 4),
-                                      blurRadius: 16,
-                                    ),
-                                  ]
-                                : tokens.shadowConvex,
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          _TabItem(
-                            icon: Icons.home_outlined,
-                            label: '首页',
-                            active: widget.active == 'home',
-                            onTap: () => _handleTabTap(0),
-                            tokens: tokens,
-                            isFemale: isFemale,
-                          ),
-                          _TabItem(
-                            icon: Icons.grid_view_outlined,
-                            label: '发现',
-                            active: widget.active == 'templates',
-                            onTap: () => _handleTabTap(1),
-                            tokens: tokens,
-                            isFemale: isFemale,
-                          ),
-                          // 中间占位（capture button 由 Stack 顶层渲染）
-                          const SizedBox(width: 60),
-                          _TabItem(
-                            icon: Icons.flag_outlined,
-                            label: '挑战',
-                            active: widget.active == 'challenge',
-                            onTap: () => _handleTabTap(3),
-                            tokens: tokens,
-                            isFemale: isFemale,
-                          ),
-                          _TabItem(
-                            icon: Icons.person_outline,
-                            label: '我的',
-                            active: widget.active == 'profile',
-                            onTap: () => _handleTabTap(4),
-                            tokens: tokens,
-                            isFemale: isFemale,
-                          ),
-                        ],
-                      ),
-                    ),
+                child: RepaintBoundary(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(1000),
+                    child: isGlass
+                        ? BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+                            child: _barContent(tokens, isFemale, isGlass),
+                          )
+                        : _barContent(tokens, isFemale, isGlass),
                   ),
                 ),
               ),

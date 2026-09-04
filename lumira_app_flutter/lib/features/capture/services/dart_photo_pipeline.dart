@@ -441,6 +441,20 @@ Future<_IsolateResult> _processInIsolate(_IsolateInput input) async {
   }
   var image = decoded;
 
+  // 0. 尽早降采样到输出上限尺寸，避免在 8.2MP 等高分辨率原图上做昂贵的
+  //    方向对齐/旋转/裁剪/磨皮等逐像素运算（纯 Dart image 包在 OHOS 端极慢）。
+  //    成片最终本就固定压到 ≤ maxDimension（见步骤 4），提前降采样对最终
+  //    逐像素结果完全等价、画质零损失，仅省掉「大图白算」的开销。
+  const maxDimension = 1536;
+  if (image.width > maxDimension || image.height > maxDimension) {
+    final scale = maxDimension / math.max(image.width, image.height);
+    image = img.copyResize(
+      image,
+      width: (image.width * scale).round(),
+      height: (image.height * scale).round(),
+    );
+  }
+
   // 1.2 iOS 宽色域照片的色域校正：宽色域 iPhone 相机 JPEG 内嵌 Display P3 的 ICC
   //     配置文件，而 image 包纯 Dart 解码忽略 ICC，直接以 sRGB 解释 P3 数值，导致
   //     肤色偏黄（取景器走 dart:ui / 系统色管，渲染 P3 正确，故两者不一致）。
@@ -475,8 +489,8 @@ Future<_IsolateResult> _processInIsolate(_IsolateInput input) async {
     height: cropRect[3],
   );
 
-  // 4. 降采样到长边 ≤ 1536
-  const maxDimension = 1536;
+  // 4. 降采样兜底（前序变换如「拉直」小角度旋转会扩展画布，可能把尺寸推回上限之上，
+  //    此处复用步骤 0 的 maxDimension 做最终收敛，保证输出长边恒 ≤ 1536）。
   if (image.width > maxDimension || image.height > maxDimension) {
     final scale = maxDimension / math.max(image.width, image.height);
     image = img.copyResize(

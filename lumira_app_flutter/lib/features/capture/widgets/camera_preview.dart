@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:camerawesome/camerawesome_plugin.dart'
+    show CamerawesomePlugin;
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -202,12 +205,25 @@ class CameraPreview extends ConsumerWidget {
       onLongPressEnd: () {
         // 锁定常驻，抬手不隐藏（避免动画闪烁）
       },
-      child: applyFilter
-          ? ColorFiltered(
-              colorFilter: fromPostProcess(effectivePost),
+      child: Platform.isIOS
+          // iOS：锐化/磨皮/暗角/颗粒 + 色彩矩阵改由原生 GPU 逐帧渲染
+          //（_PostEffectSync 把参数推给 PreviewEffectProcessor），
+          // 取景器 == 成片通道，因此不再叠加 Dart ColorFiltered（避免双重矩阵）。
+          // rawMode 时 enabled=false → 推全零参数关闭原生处理，恢复原始取景。
+          ? _PostEffectSync(
+              enabled: applyFilter,
+              post: effectivePost,
               child: cameraBody,
             )
-          : cameraBody,
+          // Android/OHOS：无逐帧像素通道，取景器仅实时呈现色彩矩阵（ColorFiltered）。
+          // 磨皮/锐化/颗粒/清晰度等需逐像素处理的效果，在 OHOS 上没有零读回的真实现，
+          // 暂不伪造预览（伪模糊既不是磨皮又拖帧），保持成片时才真实生效。
+          : applyFilter
+              ? ColorFiltered(
+                  colorFilter: fromPostProcess(effectivePost),
+                  child: cameraBody,
+                )
+              : cameraBody,
     );
 
     // 构图叠图（修复 Bug 2：使用 effectiveComp，自由模式也显示构图辅助线）
@@ -725,6 +741,101 @@ class _LockBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+/// iOS 取景器逐帧效果同步器。
+///
+/// 监听 [PostProcess] 变化（微节流 16ms 去抖），把完整色彩矩阵 + 锐化/磨皮/
+/// 暗角/颗粒参数推给原生 `PreviewEffectProcessor`（GPU 逐帧渲染），使取景器
+/// 实时呈现与成片一致的细节效果（WYSIWYG）。仅 iOS 生效（调用方已按平台分支，
+/// Android/OHOS 不走本组件，仍用 Dart ColorFiltered 矩阵叠加）。
+class _PostEffectSync extends StatefulWidget {
+  const _PostEffectSync({
+    required this.enabled,
+    required this.post,
+    required this.child,
+  });
+
+  /// 是否启用取景器效果。为 false（rawMode）时推全零参数关闭原生处理。
+  final bool enabled;
+  final PostProcess post;
+  final Widget child;
+
+  @override
+  State<_PostEffectSync> createState() => _PostEffectSyncState();
+}
+
+class _PostEffectSyncState extends State<_PostEffectSync> {
+  Timer? _debounce;
+  PostProcess? _lastPushed;
+  bool? _lastEnabled;
+
+  @override
+  void initState() {
+    super.initState();
+    _push();
+  }
+
+  @override
+  void didUpdateWidget(_PostEffectSync oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _push();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _push() {
+    if (identical(widget.post, _lastPushed) &&
+        widget.enabled == _lastEnabled) {
+      return;
+    }
+    _lastPushed = widget.post;
+    _lastEnabled = widget.enabled;
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 16), _applyLatest);
+  }
+
+  Future<void> _applyLatest() async {
+    try {
+      if (!widget.enabled) {
+        // rawMode：全零 → 原生处理器关闭，恢复原始取景帧（免 GPU）。
+        await CamerawesomePlugin.updatePreviewEffects(
+          matrix: null, vignette: 0, smooth: 0, sharpen: 0, grain: 0,
+        );
+        return;
+      }
+      final p = widget.post;
+      final matrix = composePostProcessMatrix(p);
+      await CamerawesomePlugin.updatePreviewEffects(
+        // 全中性时传 null → 原生处理器保持不激活、走免 GPU 直通快路径。
+        matrix: _isIdentityMatrix(matrix) ? null : matrix,
+        vignette: p.vignette.toDouble(),
+        smooth: p.smoothStrength.toDouble(),
+        sharpen: p.sharpen.toDouble(),
+        grain: p.grain.toDouble(),
+      );
+    } catch (e) {
+      debugPrint('[camera] updatePreviewEffects failed: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// 判断 20 元素 ColorMatrix 是否为恒等（无任何色彩调整）。
+bool _isIdentityMatrix(List<double> m) {
+  for (var i = 0; i < 20; i++) {
+    final row = i ~/ 5;
+    final col = i % 5;
+    final expected = col == 4 ? 0.0 : (row == col ? 1.0 : 0.0);
+    if ((m[i] - expected).abs() > 1e-9) return false;
+  }
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────

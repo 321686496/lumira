@@ -193,8 +193,78 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
               )
             : null);
 
-    // Forced fix: 用 AnimatedBuilder 包裹 BackdropFilter，让 sigma 实时跟随动画值。
-    // child（AnimatedContainer + 内部布局）是静态的，不随 sigma 重绘。
+    // 性能(Forced fix): BackdropFilter 会令引擎把其背后的滚动内容单独成层，
+    // 并在滚动时每帧重新捕获/合成该条区域——这是四个 Tab 页在 OHOS 上滚动掉帧的
+    // 共性成本之一（sigma=0 无可见模糊，却依然承担 backdrop 分层开销）。
+    // 因此仅在玻璃风格（sigma 恒为 28，真正需要模糊）时包裹 BackdropFilter；
+    // 其余风格 sigma 恒为 0，直接渲染静态表面，视觉与原实现完全一致。
+    final Widget surface = AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+      decoration: decoration,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 48, // min-height 96rpx → 48dp
+          child: widget.centerTitle
+              ? Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // 左侧
+                    Positioned(
+                      left: widget.horizontalPadding,
+                      child: leadingWidget,
+                    ),
+                    // 居中标题 / wordmark
+                    // 用水平内边距预留两侧 leading/actions 的空间，
+                    // 避免标题与较宽的右侧按钮（如编辑页的收藏+保存）重叠。
+                    if (centerWidget != null)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: widget.horizontalPadding + 72,
+                            ),
+                            child: centerWidget,
+                          ),
+                        ),
+                      ),
+                    // 右侧
+                    Positioned(
+                      right: widget.horizontalPadding,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: _actionsList(),
+                      ),
+                    ),
+                  ],
+                )
+              : Padding(
+                  padding: EdgeInsets.symmetric(horizontal: widget.horizontalPadding),
+                  child: Row(
+                    children: [
+                      leadingWidget,
+                      if (centerWidget != null) ...[
+                        const SizedBox(width: 4),
+                        Flexible(child: centerWidget),
+                      ],
+                      const Spacer(),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: _actionsList(),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ),
+    );
+
+    // 玻璃风格：保留实时模糊（sigma 随滚动动画变化），其余风格跳过。
+    if (!isGlass) return surface;
+
     return AnimatedBuilder(
       animation: _sigmaCurve,
       builder: (context, child) => ClipRect(
@@ -206,69 +276,7 @@ class _LumiraNavState extends ConsumerState<LumiraNav>
           child: child,
         ),
       ),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
-        decoration: decoration,
-        child: SafeArea(
-          bottom: false,
-          child: SizedBox(
-            height: 48, // min-height 96rpx → 48dp
-            child: widget.centerTitle
-                ? Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // 左侧
-                      Positioned(
-                        left: widget.horizontalPadding,
-                        child: leadingWidget,
-                      ),
-                      // 居中标题 / wordmark
-                      // 用水平内边距预留两侧 leading/actions 的空间，
-                      // 避免标题与较宽的右侧按钮（如编辑页的收藏+保存）重叠。
-                      if (centerWidget != null)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: widget.horizontalPadding + 72,
-                              ),
-                              child: centerWidget,
-                            ),
-                          ),
-                        ),
-                      // 右侧
-                      Positioned(
-                        right: widget.horizontalPadding,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: _actionsList(),
-                        ),
-                      ),
-                    ],
-                  )
-                : Padding(
-                    padding: EdgeInsets.symmetric(horizontal: widget.horizontalPadding),
-                    child: Row(
-                      children: [
-                        leadingWidget,
-                        if (centerWidget != null) ...[
-                          const SizedBox(width: 4),
-                          Flexible(child: centerWidget),
-                        ],
-                        const Spacer(),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: _actionsList(),
-                        ),
-                      ],
-                    ),
-                  ),
-          ),
-        ),
-      ),
+      child: surface,
     );
   }
 

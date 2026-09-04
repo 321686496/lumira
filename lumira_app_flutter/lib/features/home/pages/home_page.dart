@@ -166,113 +166,133 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           ),
           // 2. 主内容层（可滚动）
-          // Forced fix: appBar 已处理顶部 inset，body 内 SafeArea 顶部对 ListView 无实际效果，
-          // 仅保留 bottom（系统导航栏 inset）
+          // 性能(Forced fix): 原 ListView(children:) + shrinkWrap GridView 会把整页
+          // （含两张数据网格的全部卡片）一次性 build/layout，且每张卡片的图片同时解码，
+          // 在 OHOS（Skia 软件解码 JPEG 慢）上滚动到网格区时产生连续解码突刺 → 掉帧。
+          // 改为 CustomScrollView + SliverGrid：网格单元按滚动位置懒构建、图片按需解码，
+          // 大幅削减 raster 线程每帧工作量。所有 box 段沿用 FadeUp（入场动画不变），
+          // 仅网格自身不再包 FadeUp（标题段动画保留）。
+          // appBar 已处理顶部 inset，body 内 SafeArea 顶部无实际效果，仅保留 bottom。
           SafeArea(
             top: false,
             bottom: false,
-            child: ListView(
+            child: CustomScrollView(
               controller: _scrollController,
-              // 给 FloatingTabBar 留空间；顶部留 12 与标题栏做间距，避免内容顶在导航栏下
-              padding: const EdgeInsets.fromLTRB(0, 12, 0, 100),
-              children: [
-                // Section 0: Banner 轮播
-                // Forced fix: 改为 const HomeBanner()，由 widget 内部 watch
-                // bannerRecommendationProvider 获取真实推荐数据
-                const FadeUp(
-                  child: HomeBanner(),
-                ),
-                const SizedBox(height: 20),
-                // Section 1: Hero
-                FadeUp(
-                  child: HeroCard(onCapture: _goCapture),
-                ),
-                const SizedBox(height: 20), // section margin-bottom 40rpx → 20dp
-                // Section 2: QuickActions
-                FadeUp(
-                  delay: const Duration(milliseconds: 100),
-                  child: QuickActions(
-                    onCapture: _goCapture,
-                    onTemplates: _goTemplates,
-                    onInspiration: _goInspiration,
-                    onGallery: _goGallery,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Section 3: Streak
-                const FadeUp(
-                  delay: Duration(milliseconds: 200),
-                  child: StreakCard(),
-                ),
-                const SizedBox(height: 20),
-                // Section 4: Tip
-                FadeUp(
-                  delay: const Duration(milliseconds: 300),
-                  child: TipCard(onTry: _goCapture),
-                ),
-                const SizedBox(height: 20),
-                // Section 5: Scene recommendations
-                FadeUp(
-                  delay: const Duration(milliseconds: 400),
-                  child: _SectionTitle(
-                    title: '场景推荐',
-                    tagText: '为你而选',
-                    tagColor: tokens.success,
-                    tagBgColor: tokens.successSubtle,
-                    tokens: tokens,
-                    links: const ['查看全部', '收藏', '管理'],
-                    onLinkTap: (label) {
-                      switch (label) {
-                        case '查看全部':
-                          GoRouter.of(context).push(RouteNames.scenes);
-                          break;
-                        case '收藏':
-                        case '管理':
-                          GoRouter.of(context).push(RouteNames.build(
-                            RouteNames.captureSceneManage,
-                            {RouteNames.paramTab: sceneManageTabFor(label)},
-                          ));
-                          break;
-                      }
-                    },
-                  ),
-                ),
-                FadeUp(
-                  delay: const Duration(milliseconds: 400),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _SceneRecoGrid(onTap: _goSceneGuide),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Section 6: Recent shots
-                FadeUp(
-                  child: _SectionTitle(
-                    title: '最近拍摄',
-                    tagText: '为你甄选',
-                    tagColor: tokens.brand,
-                    tagBgColor: tokens.brandSubtle,
-                    tokens: tokens,
-                    tagIcon: Icons.auto_awesome_outlined,
-                    links: const ['全部'],
-                    onLinkTap: (_) => _goGallery(),
-                  ),
-                ),
-                FadeUp(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _RecentShotsGrid(
-                      onTap: () => _goGallery(),
-                      onCapture: _goCapture,
-                      onRetake: _goRetake,
+              cacheExtent: 480, // 提前约一屏预构建，让卡片更早触发图片下载/解码（ln 引擎解码慢）
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate(
+                      [
+                        // Section 0: Banner 轮播
+                        // Forced fix: 改为 const HomeBanner()，由 widget 内部 watch
+                        // bannerRecommendationProvider 获取真实推荐数据
+                        const FadeUp(
+                          child: HomeBanner(),
+                        ),
+                        const SizedBox(height: 20),
+                        // Section 1: Hero
+                        FadeUp(
+                          child: HeroCard(onCapture: _goCapture),
+                        ),
+                        const SizedBox(height: 20), // section margin-bottom 40rpx → 20dp
+                        // Section 2: QuickActions
+                        FadeUp(
+                          delay: const Duration(milliseconds: 100),
+                          child: QuickActions(
+                            onCapture: _goCapture,
+                            onTemplates: _goTemplates,
+                            onInspiration: _goInspiration,
+                            onGallery: _goGallery,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        // Section 3: Streak
+                        const FadeUp(
+                          delay: Duration(milliseconds: 200),
+                          child: StreakCard(),
+                        ),
+                        const SizedBox(height: 20),
+                        // Section 4: Tip
+                        FadeUp(
+                          delay: const Duration(milliseconds: 300),
+                          child: TipCard(onTry: _goCapture),
+                        ),
+                        const SizedBox(height: 20),
+                        // Section 5 标题：Scene recommendations
+                        FadeUp(
+                          delay: const Duration(milliseconds: 400),
+                          child: _SectionTitle(
+                            title: '场景推荐',
+                            tagText: '为你而选',
+                            tagColor: tokens.success,
+                            tagBgColor: tokens.successSubtle,
+                            tokens: tokens,
+                            links: const ['查看全部', '收藏', '管理'],
+                            onLinkTap: (label) {
+                              switch (label) {
+                                case '查看全部':
+                                  GoRouter.of(context).push(RouteNames.scenes);
+                                  break;
+                                case '收藏':
+                                case '管理':
+                                  GoRouter.of(context).push(RouteNames.build(
+                                    RouteNames.captureSceneManage,
+                                    {RouteNames.paramTab: sceneManageTabFor(label)},
+                                  ));
+                                  break;
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                // Section 7: Stats
-                const FadeUp(
-                  delay: Duration(milliseconds: 100),
-                  child: StatsCard(),
+                // Section 5 网格：场景推荐（懒加载 SliverGrid）
+                _SceneRecoGridSliver(onTap: _goSceneGuide),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(0, 20, 0, 0),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate(
+                      [
+                        // Section 6 标题：Recent shots
+                        FadeUp(
+                          child: _SectionTitle(
+                            title: '最近拍摄',
+                            tagText: '为你甄选',
+                            tagColor: tokens.brand,
+                            tagBgColor: tokens.brandSubtle,
+                            tokens: tokens,
+                            tagIcon: Icons.auto_awesome_outlined,
+                            links: const ['全部'],
+                            onLinkTap: (_) => _goGallery(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Section 6 网格：最近拍摄（懒加载 SliverGrid）
+                _RecentShotsGridSliver(
+                  onTap: () => _goGallery(),
+                  onCapture: _goCapture,
+                  onRetake: _goRetake,
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(0, 20, 0, 100),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate(
+                      const [
+                        // Section 7: Stats
+                        FadeUp(
+                          delay: Duration(milliseconds: 100),
+                          child: StatsCard(),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -459,12 +479,14 @@ class _BackgroundDecoration extends StatelessWidget {
   }
 }
 
-/// 场景推荐网格（真实数据）
+/// 场景推荐网格（真实数据，懒加载 SliverGrid）
 ///
 /// 数据来源：homeSceneRecosProvider（按用户拍摄数排序的场景列表）
 /// loading 时显示占位骨架，无数据时显示内置预设兜底
-class _SceneRecoGrid extends ConsumerWidget {
-  const _SceneRecoGrid({required this.onTap});
+/// 性能(Forced fix): 作为 sliver 直接嵌入 CustomScrollView，网格单元按滚动位置
+/// 懒构建/懒解码，避免整页一次性 build 全部卡片。
+class _SceneRecoGridSliver extends ConsumerWidget {
+  const _SceneRecoGridSliver({required this.onTap});
 
   final void Function(String sceneId) onTap;
 
@@ -473,30 +495,48 @@ class _SceneRecoGrid extends ConsumerWidget {
     final asyncScenes = ref.watch(homeSceneRecosProvider);
 
     return asyncScenes.when(
-      loading: () => _buildSkeleton(),
-      error: (_, __) => _buildSkeleton(),
+      loading: () => const SliverToBoxAdapter(
+        child: _SceneGridSkeleton(),
+      ),
+      error: (_, __) => const SliverToBoxAdapter(
+        child: _SceneGridSkeleton(),
+      ),
       data: (scenes) {
-        if (scenes.isEmpty) return const SizedBox.shrink(); // 空态
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.50,
-          children: scenes
-              .map((scene) => RepaintBoundary(
+        if (scenes.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink()); // 空态
+        return SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.50,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (_, i) {
+                final scene = scenes[i];
+                return RepaintBoundary(
                   child: SceneRecoCard(
                     scene: scene,
                     onTap: () => onTap(scene.id),
-                  )))
-              .toList(),
+                  ),
+                );
+              },
+              childCount: scenes.length,
+            ),
+          ),
         );
       },
     );
   }
+}
 
-  Widget _buildSkeleton() {
+/// 场景网格加载占位（box，外层用 SliverToBoxAdapter 承载）
+class _SceneGridSkeleton extends StatelessWidget {
+  const _SceneGridSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
     // 通用加载占位，不再使用 mock 场景数据
     return const SizedBox(
       height: 120,
@@ -505,12 +545,12 @@ class _SceneRecoGrid extends ConsumerWidget {
   }
 }
 
-/// 最近拍摄网格（真实数据）
+/// 最近拍摄网格（真实数据，懒加载 SliverGrid）
 ///
 /// 数据来源：homeRecentShotsProvider（来自 GalleryDao.getRecent）
 /// 无照片时显示空状态引导拍摄
-class _RecentShotsGrid extends ConsumerWidget {
-  const _RecentShotsGrid({
+class _RecentShotsGridSliver extends ConsumerWidget {
+  const _RecentShotsGridSliver({
     required this.onTap,
     required this.onCapture,
     required this.onRetake,
@@ -530,44 +570,59 @@ class _RecentShotsGrid extends ConsumerWidget {
       error: (_, __) => _buildSkeleton(),
       data: (recents) {
         if (recents.isEmpty) {
-          return _buildEmpty(tokens);
+          return SliverToBoxAdapter(child: _buildEmpty(tokens));
         }
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.56,
-          children: recents
-              .map((recent) => RepaintBoundary(
-                    child: RecentShotCard(
-                      recent: recent,
-                      onTap: onTap,
-                      onRetake: () => onRetake(recent),
-                    ),
-                  ))
-              .toList(),
+        return SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.56,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (_, i) {
+                final recent = recents[i];
+                return RepaintBoundary(
+                  child: RecentShotCard(
+                    recent: recent,
+                    onTap: onTap,
+                    onRetake: () => onRetake(recent),
+                  ),
+                );
+              },
+              childCount: recents.length,
+            ),
+          ),
         );
       },
     );
   }
 
+  /// loading/error 骨架：与旧 shrinkWrap GridView 一致（mock 数据占位）。
   Widget _buildSkeleton() {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 0.56,
-      children: HomeMockData.recents
-          .map((recent) => RecentShotCard(
-                recent: recent,
-                onTap: onTap,
-                onRetake: () => onRetake(recent),
-              ))
-          .toList(),
+    final mocks = HomeMockData.recents;
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.56,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (_, i) => RepaintBoundary(
+            child: RecentShotCard(
+              recent: mocks[i],
+              onTap: onTap,
+              onRetake: () => onRetake(mocks[i]),
+            ),
+          ),
+          childCount: mocks.length,
+        ),
+      ),
     );
   }
 

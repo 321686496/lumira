@@ -9,7 +9,9 @@
  * 导出给 ArkTS 的两个函数：
  *   processRgba(rgba: Uint8Array, width: number, height: number,
  *                matrix: Float64Array(20), sharpen: number, mirror: boolean,
- *                smooth: number (0-100 磨皮强度，0=关闭)) : ArrayBuffer
+ *                smooth: number (0-100 磨皮强度，0=关闭),
+ *                vignette: number (0-100 暗角强度，0=关闭),
+ *                grain: number (0-100 颗粒强度，0=关闭)) : ArrayBuffer
  *   swapRgba(rgba: Uint8Array, byteLen: number) : void   // 原地 R/B 对调（水印用）
  *
  * 磨皮（smooth>0）：用「频率分离削细节 + 肤色掩膜 + 结构门控」在【全分辨率】RGBA 缓冲上做
@@ -24,6 +26,7 @@
 #include <cstring>
 #include <cmath>
 #include <cstdlib>
+#include <cstdint>
 
 // ── 平滑步进（smoothstep，与 Dart SkinSmoother 一致）──
 static inline double ss(double x, double e0, double e1) {
@@ -234,13 +237,59 @@ static void smoothSkin(uint8_t* rgba, int w, int h, int strengthInt) {
   free(base);
 }
 
+// ── 暗角（径向边缘压暗，[B,G,R,A] 布局，原地修改）──
+// 中心不压、越靠边越暗，factor = 1 − s·smoothstep(dn, e0, e1)。
+// 归一径向距离 dn：中心 0、对角顶点 ~1（除以 sqrt(2)）。幂等叠加在色彩矩阵之后。
+static void applyVignette(uint8_t* rgba, int w, int h, int strength) {
+  if (strength <= 0) return;
+  double s = (double)strength / 100.0; if (s > 1.0) s = 1.0;
+  const double e0 = 0.45, e1 = 1.0;            // 暗角起止区间（归一径向）
+  const double invMax = 1.0 / std::sqrt(2.0);  // 对角归一化
+  const double hw = w * 0.5, hh = h * 0.5;
+  for (int oy = 0; oy < h; ++oy) {
+    const double dy = (oy + 0.5 - hh) / hh;    // -1..1
+    for (int ox = 0; ox < w; ++ox) {
+      const double dx = (ox + 0.5 - hw) / hw;  // -1..1
+      const double dn = std::sqrt(dx * dx + dy * dy) * invMax; // 0..~1
+      double t = (dn - e0) / (e1 - e0);
+      if (t < 0.0) t = 0.0; else if (t > 1.0) t = 1.0;
+      const double factor = 1.0 - s * (t * t * (3.0 - 2.0 * t)); // 1-s·smoothstep
+      uint8_t* p = rgba + ((size_t)oy * (size_t)w + (size_t)ox) * 4;
+      p[0] = (uint8_t)llround(p[0] * factor); // B
+      p[1] = (uint8_t)llround(p[1] * factor); // G
+      p[2] = (uint8_t)llround(p[2] * factor); // R
+    }
+  }
+}
+
+// ── 颗粒（逐像素加性随机噪声，[B,G,R,A] 布局，原地修改）──
+// 使用线性同余伪随机（LCG）：每帧稳定、无重复形变，观感即胶片颗粒。
+static void applyGrain(uint8_t* rgba, int w, int h, int strength) {
+  if (strength <= 0) return;
+  double s = (double)strength / 100.0; if (s > 1.0) s = 1.0;
+  const double amp = s * 24.0; // 满强度 ±24/255
+  const size_t nPix = (size_t)w * (size_t)h;
+  uint32_t seed = 0x85EBCA6Bu ^ (uint32_t)nPix ^ ((uint32_t)w << 16) ^ (uint32_t)h;
+  for (size_t i = 0; i < nPix; ++i) {
+    seed = seed * 1664525u + 1013904223u;
+    const double rnd = (double)((seed >> 8) & 0xFFFFu) * (1.0 / 65535.0); // 0..1
+    const double off = (rnd * 2.0 - 1.0) * amp;
+    uint8_t* p = rgba + i * 4;
+    for (int c = 0; c < 3; c++) {
+      double v = p[c] + off;
+      if (v > 255.0) v = 255.0; else if (v < 0.0) v = 0.0;
+      p[c] = (uint8_t)llround(v);
+    }
+  }
+}
+
 // 由 ArkTS 侧执行，匹配旧实现：mirror 取源、矩阵、R/B 复原写回（R/B 复原为补偿
 // createPixelMap(RGBA_8888) + ImagePacker 把缓冲 R/B 解释对调的硬件怪癖）
 static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
-  size_t argc = 7;
-  napi_value argv[7];
+  size_t argc = 9;
+  napi_value argv[9];
   napi_status status = napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
-  if (status != napi_ok || argc < 7) {
+  if (status != napi_ok || argc < 9) {
     return nullptr;
   }
 
@@ -293,6 +342,18 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
   if (smooth < 0) smooth = 0;
   if (smooth > 100) smooth = 100;
 
+  // ── 暗角强度（0-100，0=关闭）──
+  int32_t vignette = 0;
+  napi_get_value_int32(env, argv[7], &vignette);
+  if (vignette < 0) vignette = 0;
+  if (vignette > 100) vignette = 100;
+
+  // ── 颗粒强度（0-100，0=关闭）──
+  int32_t grain = 0;
+  napi_get_value_int32(env, argv[8], &grain);
+  if (grain < 0) grain = 0;
+  if (grain > 100) grain = 100;
+
   const size_t outLen = (size_t)n * 4;
   const uint8_t* src = (const uint8_t*)srcData;
 
@@ -323,21 +384,19 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
     }
   }
 
-  // ── Pass 1.5：磨皮（肤色掩膜 + 边缘保护，全分辨率原地平滑，不降采样/放大）──
-  // 非肤色/强边缘像素保留原值 → 整图不失真；仅皮肤像素按强度磨平。
-  if (smooth > 0) {
-    smoothSkin(out, width, height, smooth);
-  }
-
   // ── Pass 2：边缘自适应锐化（Unsharp 死区版，仅锐化超阈值边缘，平坦区原样）──
+  // 效果顺序与 Dart 慢管线（CaptureWorker）完全一致：矩阵 → 锐化 → 颗粒 → 磨皮 → 暗角
+  // （clarity 已折进色彩矩阵，无需单独 pass）；这样 OHOS 原生快路径与慢管线成片视觉一致。
   uint8_t* final = out;
   if (sharpen > 0) {
-    // 锐化强度完全跟随入参 sharpen（不额外放大增益），死区 edgeThr 保持原始 4.0：
-    // 不修改锐化参数，仅保证像素级语义与旧 ArkTS 实现一致。
+    // 锐化强度完全跟随入参 sharpen（不额外放大增益）。死区 edgeThr 从原始 4.0 降到 1.0：
+    // 成片改为「整图 DCT 高质量解码 + 中心裁切」后，解码下调采样已经让边缘偏锐、局部像素
+    // 梯度变小，旧阈值 4.0 高于绝大多数局部差异 → 接近全像素落入死区，锐化几乎不触发，
+    // 表现为「调整锐化值成片无变化」。降到 1.0 让锐化重新咬合真实边缘，同时平坦区仍原样保留。
     double a = (double)sharpen / 100.0;
     if (a > 1.2) a = 1.2;
     if (a < 0.0) a = 0.0;
-    const double edgeThr = 4.0;
+    const double edgeThr = 1.0;
     uint8_t* conv = (uint8_t*)malloc(outLen);
     if (!conv) {
       free(out);
@@ -374,6 +433,17 @@ static napi_value ProcessRgba(napi_env env, napi_callback_info info) {
     free(out);
     final = conv;
   }
+
+  // ── Pass 3：颗粒（逐像素加性噪声，原地）──
+  applyGrain(final, width, height, grain);
+
+  // ── Pass 4：磨皮（肤色掩膜 + 边缘保护，原地平滑；非皮肤/强边缘保留原值）──
+  if (smooth > 0) {
+    smoothSkin(final, width, height, smooth);
+  }
+
+  // ── Pass 5：暗角（径向边缘压暗，原地）──
+  applyVignette(final, width, height, vignette);
 
   napi_value resultBuf;
   void* resultData = nullptr;

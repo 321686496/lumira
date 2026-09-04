@@ -379,9 +379,9 @@ export class CameraState implements StreamHandler {
       (b.size.width * b.size.height) - (a.size.width * a.size.height);
     const byAreaAsc = (a: camera.Profile, b: camera.Profile): number =>
       (a.size.width * a.size.height) - (b.size.width * b.size.height);
-    // 拍照档位在像素上限内选择：上限 8.2M（MAX_PHOTO_PIXELS）保证 capture() 速度
-    //（全分辨率档位实测编码+写盘 2106ms 不可接受），同时为成片管线的 desiredSize 解码
-    // 提供 ~2x 超采样率——3MP 档对 1600 解码目标仅 ~1.3x，下采样后细节不足是成片偏糊主因之一。
+    // 拍照档位在像素上限内选择：上限 5M（MAX_PHOTO_PIXELS）保证 capture() 编码+写盘速度
+    //（老 8.2M 档实测拖慢拍照 ~2.6s，是 OHOS 出片慢主因），同时为成片管线 desiredSize 解码
+    // 提供 ~1.6x 超采样（5MP 档对 1600 目标 1.62x，锐度接近旧 8.2M 的 ~2x，不明显掉画质）。
     // 在 ≤MAX_PHOTO_PIXELS 内优先取与预览宽高比匹配、面积最大的档位，避免成片取景框被裁切。
     const underCap: camera.Profile[] = [...photoProfilesArray]
       .filter((p: camera.Profile) => p.size.width * p.size.height <= maxPixels);

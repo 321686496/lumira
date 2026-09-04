@@ -409,7 +409,10 @@ class _CachedNetworkImageState extends State<CachedNetworkImage> {
       final bottom = top + box.size.height;
       final vp = pos.pixels;
       final viewportH = pos.viewportDimension;
-      final margin = viewportH * 0.5; // 前后各预加载半屏，改善快速滚动的加载延迟
+      // 性能(OHOS): 预加载余量 0.5 屏 → 1.2 屏。ln 引擎 dart:ui 图片解码慢，
+      // 若只在"刚好滚进视口"才拉取，解码会直接占用滚动帧导致掉帧；
+      // 提前约 1.2 屏拉取，让下载/解码发生在离屏期间，滚到可见时已就绪。
+      final margin = viewportH * 1.2;
       final inView = bottom >= vp - margin && top <= vp + viewportH + margin;
       if (inView) _startFetch();
     } catch (_) {

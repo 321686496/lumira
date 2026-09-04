@@ -143,11 +143,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           final photoId = state.queryParams[RouteNames.paramPhotoId];
           final aspectRatio = state.queryParams['aspectRatio'];
           final challengeId = state.queryParams[RouteNames.paramChallengeId];
+          final pendingFinal = state.queryParams['pendingFinal'] == '1';
           return CapturePreviewPage(
             photoUrl: photoUrl,
             photoId: photoId,
             aspectRatio: aspectRatio,
             challengeId: challengeId,
+            pendingFinal: pendingFinal,
           );
         },
       ),

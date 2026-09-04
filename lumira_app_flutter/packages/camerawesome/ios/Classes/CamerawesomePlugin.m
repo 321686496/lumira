@@ -1,5 +1,6 @@
 #import "CamerawesomePlugin.h"
 #import "CameraPreview.h"
+#import <string.h>
 #import "Pigeon/Pigeon.h"
 #import "Permissions.h"
 #import "AnalysisController.h"
@@ -48,7 +49,47 @@ FlutterEventSink physicalButtonEventSink;
   [orientationChannel setStreamHandler:instance];
   [imageStreamChannel setStreamHandler:instance];
   [physicalButtonChannel setStreamHandler:instance];
-  
+
+  // 取景器逐帧效果（锐化/磨皮/暗角/颗粒 + 色彩矩阵）参数通道（iOS 专用）。
+  FlutterMethodChannel *previewEffectsChannel =
+      [FlutterMethodChannel methodChannelWithName:@"camerawesome/preview_effects"
+                                  binaryMessenger:[registrar messenger]];
+  [previewEffectsChannel setMethodCallHandler:^(FlutterMethodCall *call, FlutterResult result) {
+    if (![call.method isEqualToString:@"setPreviewEffects"]) {
+      result(FlutterMethodNotImplemented);
+      return;
+    }
+    if (instance.camera != nil) {
+      NSDictionary *args = call.arguments;
+      PreviewEffectsParams params;
+      params.hasMatrix = NO;
+      params.hasVignette = NO;
+      params.hasSmooth = NO;
+      params.hasSharpen = NO;
+      params.hasGrain = NO;
+      memset(params.matrix, 0, sizeof(params.matrix));
+
+      NSArray *matrix = args[@"matrix"];
+      if ([matrix isKindOfClass:[NSArray class]] && matrix.count >= 20) {
+        params.hasMatrix = YES;
+        for (int i = 0; i < 20; i++) {
+          params.matrix[i] = [matrix[i] doubleValue];
+        }
+      }
+      NSNumber *vignette = args[@"vignette"];
+      if (vignette != nil && [vignette doubleValue] > 0) { params.hasVignette = YES; params.vignette = [vignette doubleValue]; }
+      NSNumber *smooth = args[@"smooth"];
+      if (smooth != nil && [smooth doubleValue] > 0) { params.hasSmooth = YES; params.smooth = [smooth doubleValue]; }
+      NSNumber *sharpen = args[@"sharpen"];
+      if (sharpen != nil && [sharpen doubleValue] > 0) { params.hasSharpen = YES; params.sharpen = [sharpen doubleValue]; }
+      NSNumber *grain = args[@"grain"];
+      if (grain != nil && [grain doubleValue] > 0) { params.hasGrain = YES; params.grain = [grain doubleValue]; }
+
+      [instance.camera updatePreviewEffects:params];
+    }
+    result(nil);
+  }];
+
   CameraInterfaceSetup(registrar.messenger, instance);
   AnalysisImageUtilsSetup(registrar.messenger, instance);
 }

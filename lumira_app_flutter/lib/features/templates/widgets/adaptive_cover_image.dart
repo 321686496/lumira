@@ -135,7 +135,13 @@ class _AdaptiveCoverImageState extends State<AdaptiveCoverImage> {
     final provider = buildCoverProvider(widget.cover, widget.coverData);
     if (provider == null) return;
 
-    final stream = provider.resolve(const ImageConfiguration());
+    // 性能(Forced fix): 原先 provider.resolve(ImageConfiguration()) 会按原图全尺寸解码
+    // 只为读取宽高比（模板封面 4000px 级别的全量解码），且该全尺寸结果还会留在
+    // ImageCache 里占内存 —— 瀑布流里每张卡都做一次 = OHOS 上模板页解码突刺的主要来源。
+    // 改用 ResizeImage(64) 探测：只需解码 64px 宽的缩略图即可拿到真实宽高比，
+    // 解码量与内存占用都降到 1/60 以下，展示路径仍由 TemplateCoverImage 按需降采样解码。
+    final probe = ResizeImage(provider, width: 64);
+    final stream = probe.resolve(const ImageConfiguration());
     final listener = ImageStreamListener(
       (info, _) {
         if (!mounted) return;
